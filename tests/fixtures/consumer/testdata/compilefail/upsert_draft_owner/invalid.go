@@ -2,7 +2,7 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _, _ = models.QueryUsers().Upsert(nil, nil, models.OrderDraft{}, query.OnConflict[models.User]().DoNothing())
+var _, _ = orm.Upsert(nil, nil, models.Users.Query(), orm.OnConflict[models.User]().DoNothing(), models.Orders.TotalCents.Set(1))

@@ -39,7 +39,28 @@ and `ReadValues` for their corresponding adapters. No methods are added to
 outer limit or offset. Counts retain the selected window, grouping and distinct
 semantics; simple pages use a lookahead without a count. Complete model reads
 retain their retrieval lifecycle. These adapters collect complete batches;
-streaming projections use the package function `rows.Each(ctx, executor, query, yield)`; see [report reads](README.md#report-reads).
+use `rows.CompileRead(read)` or `rows.PreflightRead(ctx, read)` to inspect any
+ordinary read adapter, and `rows.EachRead(ctx, executor, read, yield)` to iterate
+with bounded memory. A `RecordRead` can be passed directly. `ReadScalar`,
+`ReadRecord`, `ReadSet` and `ReadValues` retain their concrete result types.
+
+Complete models with possible retrieval hooks/observers use batches of 100,
+closing rows before constructing factories, dispatching retrieval and yielding
+models. Each nonempty batch constructs factories once. Primary-only orders use
+keyset continuation when the complete source preserves unique model keys.
+Nested joins, sets and recursion use offsets to retain repeated model IDs;
+other non-keyable orders also advance by offset. The
+original window and nested SELECT boundaries remain intact. Batches do not share
+a snapshot. A failed batch delivers no models; previously delivered batches
+remain delivered. Early callback errors retain identity and stop further reads.
+Unknown executor wrappers cannot suppress model callbacks.
+
+Scalars, declared DTOs and models whose concrete owner proves callbacks absent
+stream one decoded row at a time. Cancellation, panic and Goexit close the rows;
+iteration waits for a running callback to exit. Existing projection inspection
+and `rows.Each(ctx, executor, query, yield)` retain their signatures; see
+[report reads](README.md#report-reads). Transaction-only sources are rejected by
+these ordinary terminals before I/O.
 
 `SelectTransactionValue(source, expr.Select(field))` keeps the scalar type and
 requires `*database.Tx` for every terminal. `TransactionRead` and

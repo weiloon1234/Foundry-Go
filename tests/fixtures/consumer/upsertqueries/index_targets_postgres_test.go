@@ -8,7 +8,9 @@ import (
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 func TestPostgresExpressionAndPartialConflictTargets(t *testing.T) {
@@ -21,11 +23,11 @@ func TestPostgresExpressionAndPartialConflictTargets(t *testing.T) {
 				return err
 			}
 		}
-		q, f := models.QueryUsers(), models.UserFields()
-		policy := query.OnConflictKeys(query.Lower(f.Email).Group(), f.Level.Group()).
-			TargetWhere(f.Status.Eq(models.StatusActive)).Update(f.Age)
+		q, f := models.Users, models.Users
+		policy := rows.OnConflictKeys(expr.Group(expr.Lower(expr.Value(f.Email))), expr.Group(expr.Value(f.Level))).
+			TargetWhere(f.Status.Eq(models.StatusActive)).DoUpdate(orm.ConflictIncoming(f.Age))
 		for age := 30; age < 38; age++ {
-			result, err := q.Upsert(t.Context(), tx, userDraft(strings.ToUpper(users[0].Email), age), policy)
+			result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, userDraft(strings.ToUpper(users[0].Email), age)...)
 			if err != nil {
 				return err
 			}
@@ -35,7 +37,7 @@ func TestPostgresExpressionAndPartialConflictTargets(t *testing.T) {
 			}
 		}
 		// The index predicate selects eligible conflicts, not eligible inserts.
-		inactive, err := q.Upsert(t.Context(), tx, userDraft(users[0].Email, 70).SetStatus(models.StatusDisabled), policy)
+		inactive, err := orm.Upsert(t.Context(), tx, q.Query(), policy, f.Email.Set(users[0].Email), f.Age.Set(70), f.Status.Set(models.StatusDisabled), f.Level.Set(models.LevelBasic))
 		if err != nil {
 			return err
 		}
@@ -43,18 +45,18 @@ func TestPostgresExpressionAndPartialConflictTargets(t *testing.T) {
 		if !ok || actual.ID == users[0].ID {
 			t.Fatal("row outside partial index did not insert independently")
 		}
-		skipped, err := q.Upsert(t.Context(), tx, userDraft(users[0].Email, 80), policy.Where(f.Age.Gt(100)))
+		skipped, err := orm.Upsert(t.Context(), tx, q.Query(), policy.Where(f.Age.Gt(100)), userDraft(users[0].Email, 80)...)
 		if err != nil || skipped.IsSet() {
 			t.Fatal("update condition confused with index predicate", err)
 		}
 		// The compiler does not invent or silently substitute a physical index.
-		_, err = q.Upsert(t.Context(), tx, userDraft(users[0].Email, 90),
-			query.OnConflictKeys(query.Upper(f.Email).Group(), f.Level.Group()).TargetWhere(f.Status.Eq(models.StatusActive)).Update(f.Age))
+		_, err = orm.Upsert(t.Context(), tx, q.Query(),
+			rows.OnConflictKeys(expr.Group(expr.Upper(expr.Value(f.Email))), expr.Group(expr.Value(f.Level))).TargetWhere(f.Status.Eq(models.StatusActive)).DoUpdate(orm.ConflictIncoming(f.Age)), userDraft(users[0].Email, 90)...)
 		var dbErr *database.Error
 		if !errors.As(err, &dbErr) || dbErr.SQLState() != "42P10" {
 			t.Fatal("unmatched index did not report inference failure", err)
 		}
-		current, err := q.RequireFind(t.Context(), tx, users[0].ID)
+		current, err := q.Require(t.Context(), tx, users[0].ID)
 		if err != nil || current.Age != 37 {
 			t.Fatal("failed inference changed model or left transaction unusable", err)
 		}
@@ -74,17 +76,17 @@ func TestPostgresIndexConstantsStayIndependentOfExecutionBindings(t *testing.T) 
 				return err
 			}
 		}
-		q, f := models.QueryWriteRecords(), models.WriteRecordFields()
+		q, f := models.WriteRecords, models.WriteRecords
 		suffix := "'\\κ"
 		note := "O'Reilly\\path"
-		key := query.Concat(query.Lower(f.Name), query.Param(f.Name, suffix))
-		policy := query.OnConflictKeys(key.Group()).TargetWhere(f.Enabled.Eq(true), f.Note.Eq(note)).Update(f.Name)
-		initial, err := q.Create(t.Context(), tx, models.WriteRecordDraft{}.SetName("Case").SetNote(note))
+		key := expr.Concat(expr.Lower(expr.Value(f.Name)), expr.Param(f.Name, suffix))
+		policy := rows.OnConflictKeys(expr.Group(key)).TargetWhere(f.Enabled.Eq(true), f.Note.Eq(note)).DoUpdate(orm.ConflictIncoming(f.Name))
+		initial, err := q.Insert(t.Context(), tx, models.WriteRecords.Name.Set("Case"), models.WriteRecords.Note.Set(note))
 		if err != nil {
 			return err
 		}
 		for _, name := range []string{"CASE", "case"} {
-			result, err := q.Upsert(t.Context(), tx, models.WriteRecordDraft{}.SetName(name).SetNote(note), policy)
+			result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, models.WriteRecords.Name.Set(name), models.WriteRecords.Note.Set(note))
 			if err != nil {
 				return err
 			}
@@ -93,11 +95,11 @@ func TestPostgresIndexConstantsStayIndependentOfExecutionBindings(t *testing.T) 
 				t.Fatal("index literal or execution binding lost value")
 			}
 		}
-		skipped, err := q.Upsert(t.Context(), tx, models.WriteRecordDraft{}.SetName("cAsE").SetNote(note), policy.DoNothing())
+		skipped, err := orm.Upsert(t.Context(), tx, q.Query(), policy.DoNothing(), models.WriteRecords.Name.Set("cAsE"), models.WriteRecords.Note.Set(note))
 		if err != nil || skipped.IsSet() {
 			t.Fatal("expression target did not support DO NOTHING", err)
 		}
-		outside, err := q.Upsert(t.Context(), tx, models.WriteRecordDraft{}.SetName("CASE").SetNote(note).SetEnabled(false), policy)
+		outside, err := orm.Upsert(t.Context(), tx, q.Query(), policy, models.WriteRecords.Name.Set("CASE"), models.WriteRecords.Note.Set(note), models.WriteRecords.Enabled.Set(false))
 		if err != nil {
 			return err
 		}

@@ -2,7 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = query.SelectValue(models.QueryUsers(), query.Count[models.User]().Value()).GroupBy(query.Count[models.User]().Value().Key())
+var _ = rows.GroupByScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Count[models.User]().Value()), expr.Count[models.User]().Value().Key())

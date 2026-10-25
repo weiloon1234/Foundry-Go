@@ -8,6 +8,17 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add rows.CompileRead, PreflightRead and EachRead for ordinary scalar, record and
+  set results. Complete-model iteration shares the legacy/ORM batch owner, retains
+  retrieval callbacks and duplicate IDs, and preserves returned callback errors
+  without formatting them.
+- Add expr.RelationFilter for expression-constrained relations, retaining target
+  ownership and construction errors. Add scalar GROUP BY/HAVING/DISTINCT/DISTINCT ON
+  and record/set DISTINCT package functions through the existing clause owners.
+- Migrate shared-model upsert consumers and extend DISTINCT/conditional-expression
+  consumers without changing persisted models or wire contracts. Remaining caller
+  cutovers and generated-output retirement remain separate Stage 9 work.
+
 - Continue Stage 9 consumer migration with shared model/catalog/report declarations,
   ORM query fixtures, lifecycle consumers and the query families recorded in the
   blueprint. Generated callers and ownership manifests remain until their cleanup

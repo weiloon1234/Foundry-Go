@@ -1,0 +1,3296 @@
+{
+  "slice": "stage9-laneA-A3-and-HTTP",
+  "base_commit": "6d801119400fab31a6f9bd66bc2988ada795bf2d",
+  "worktree": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r6",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "status": "targeted acceptance passed; 25 retained packages ready; 2 positives and 26 negative ports await declarations",
+  "packages": [
+    {
+      "package": "../plugin_base",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/plugin_base/base.go",
+        "tests/fixtures/plugin_base/base_test.go",
+        "tests/fixtures/plugin_base/trace.go"
+      ]
+    },
+    {
+      "package": "../plugin_dep",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/plugin_dep/reports.go",
+        "tests/fixtures/plugin_dep/reports_test.go",
+        "tests/fixtures/plugin_dep/scaffold.go"
+      ]
+    },
+    {
+      "package": "pluginusage",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/pluginusage/bootstrap.go",
+        "tests/fixtures/consumer/pluginusage/migrations_postgres_test.go",
+        "tests/fixtures/consumer/pluginusage/plugins_test.go"
+      ]
+    },
+    {
+      "package": "background",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/background/module.go",
+        "tests/fixtures/consumer/background/module_test.go",
+        "tests/fixtures/consumer/background/operations.go",
+        "tests/fixtures/consumer/background/operations_test.go",
+        "tests/fixtures/consumer/background/welcome.go",
+        "tests/fixtures/consumer/background/welcome_test.go"
+      ]
+    },
+    {
+      "package": "scheduling",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/scheduling/reports.go",
+        "tests/fixtures/consumer/scheduling/reports_test.go"
+      ]
+    },
+    {
+      "package": "tooling",
+      "queue": "A3",
+      "status": "blocked on declarations",
+      "source_rewrites_needed": true,
+      "handwritten_files": [
+        "tests/fixtures/consumer/tooling/commands.go",
+        "tests/fixtures/consumer/tooling/database.go",
+        "tests/fixtures/consumer/tooling/helpers_test.go",
+        "tests/fixtures/consumer/tooling/production.go",
+        "tests/fixtures/consumer/tooling/production_test.go",
+        "tests/fixtures/consumer/tooling/routing.go",
+        "tests/fixtures/consumer/tooling/tooling_test.go"
+      ]
+    },
+    {
+      "package": "configured",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/configured/settings.go",
+        "tests/fixtures/consumer/configured/settings_test.go"
+      ]
+    },
+    {
+      "package": "developeroperations",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/developeroperations/operations.go"
+      ]
+    },
+    {
+      "package": "httpassets",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpassets/assets.go",
+        "tests/fixtures/consumer/httpassets/assets_test.go"
+      ]
+    },
+    {
+      "package": "spaportals",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/spaportals/portals.go",
+        "tests/fixtures/consumer/spaportals/portals_test.go"
+      ]
+    },
+    {
+      "package": "startupconfig",
+      "queue": "A3",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/startupconfig/settings.go",
+        "tests/fixtures/consumer/startupconfig/settings_test.go"
+      ]
+    },
+    {
+      "package": "httpcompression",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpcompression/compression.go",
+        "tests/fixtures/consumer/httpcompression/compression_test.go"
+      ]
+    },
+    {
+      "package": "httpcookies",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpcookies/cookies.go",
+        "tests/fixtures/consumer/httpcookies/cookies_test.go"
+      ]
+    },
+    {
+      "package": "httpcors",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpcors/router.go",
+        "tests/fixtures/consumer/httpcors/router_test.go"
+      ]
+    },
+    {
+      "package": "httpdownloads",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpdownloads/downloads.go",
+        "tests/fixtures/consumer/httpdownloads/downloads_test.go",
+        "tests/fixtures/consumer/httpdownloads/example.go"
+      ]
+    },
+    {
+      "package": "httpdto",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpdto/custom_code.go",
+        "tests/fixtures/consumer/httpdto/custom_code_test.go",
+        "tests/fixtures/consumer/httpdto/dto.go",
+        "tests/fixtures/consumer/httpdto/dto_test.go",
+        "tests/fixtures/consumer/httpdto/encoding_test.go",
+        "tests/fixtures/consumer/httpdto/map_keys.go",
+        "tests/fixtures/consumer/httpdto/map_keys_test.go",
+        "tests/fixtures/consumer/httpdto/stream.go",
+        "tests/fixtures/consumer/httpdto/stream_test.go"
+      ]
+    },
+    {
+      "package": "httpendpoints",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpendpoints/deadline_test.go",
+        "tests/fixtures/consumer/httpendpoints/endpoints.go",
+        "tests/fixtures/consumer/httpendpoints/endpoints_test.go",
+        "tests/fixtures/consumer/httpendpoints/errors.go",
+        "tests/fixtures/consumer/httpendpoints/errors_test.go",
+        "tests/fixtures/consumer/httpendpoints/retry_errors_test.go"
+      ]
+    },
+    {
+      "package": "httpetags",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpetags/etags.go",
+        "tests/fixtures/consumer/httpetags/etags_test.go"
+      ]
+    },
+    {
+      "package": "httpkernel",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpkernel/generated_routes_test.go",
+        "tests/fixtures/consumer/httpkernel/kernel_test.go",
+        "tests/fixtures/consumer/httpkernel/path_declarations.go",
+        "tests/fixtures/consumer/httpkernel/request_test.go",
+        "tests/fixtures/consumer/httpkernel/routes_test.go"
+      ]
+    },
+    {
+      "package": "httpmiddleware",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpmiddleware/router.go",
+        "tests/fixtures/consumer/httpmiddleware/router_test.go"
+      ]
+    },
+    {
+      "package": "httpmodels",
+      "queue": "HTTP I-only",
+      "status": "blocked on declarations",
+      "source_rewrites_needed": true,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpmodels/bindings.go",
+        "tests/fixtures/consumer/httpmodels/bindings_postgres_test.go",
+        "tests/fixtures/consumer/httpmodels/bindings_test.go"
+      ]
+    },
+    {
+      "package": "httpproxy",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpproxy/router.go",
+        "tests/fixtures/consumer/httpproxy/router_test.go"
+      ]
+    },
+    {
+      "package": "httpquery",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpquery/composition.go",
+        "tests/fixtures/consumer/httpquery/composition_test.go",
+        "tests/fixtures/consumer/httpquery/floats.go",
+        "tests/fixtures/consumer/httpquery/floats_test.go",
+        "tests/fixtures/consumer/httpquery/json_contract.go",
+        "tests/fixtures/consumer/httpquery/query.go",
+        "tests/fixtures/consumer/httpquery/query_test.go",
+        "tests/fixtures/consumer/httpquery/scalar_metadata.go",
+        "tests/fixtures/consumer/httpquery/scalar_metadata_test.go",
+        "tests/fixtures/consumer/httpquery/source_identity.go",
+        "tests/fixtures/consumer/httpquery/source_identity_test.go"
+      ]
+    },
+    {
+      "package": "httpsecurity",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpsecurity/csp.go",
+        "tests/fixtures/consumer/httpsecurity/csp_test.go",
+        "tests/fixtures/consumer/httpsecurity/public_urls.go",
+        "tests/fixtures/consumer/httpsecurity/public_urls_test.go",
+        "tests/fixtures/consumer/httpsecurity/router.go",
+        "tests/fixtures/consumer/httpsecurity/router_test.go"
+      ]
+    },
+    {
+      "package": "httpsigned",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpsigned/links.go",
+        "tests/fixtures/consumer/httpsigned/links_test.go"
+      ]
+    },
+    {
+      "package": "httpstreams",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpstreams/streams.go",
+        "tests/fixtures/consumer/httpstreams/streams_test.go"
+      ]
+    },
+    {
+      "package": "httpvalidation",
+      "queue": "HTTP I-only",
+      "status": "publish-ready retained; build/vet/tests/races passed",
+      "source_rewrites_needed": false,
+      "handwritten_files": [
+        "tests/fixtures/consumer/httpvalidation/async.go",
+        "tests/fixtures/consumer/httpvalidation/async_test.go",
+        "tests/fixtures/consumer/httpvalidation/validation.go",
+        "tests/fixtures/consumer/httpvalidation/validation_test.go"
+      ]
+    }
+  ],
+  "A2_deferred_until_A1_integrated": [
+    "officequeries",
+    "pivothooks",
+    "relationshipfilters",
+    "productionprofile",
+    "productionprofile/cmd/profile",
+    "productionprofile/cmd/queryresources",
+    "configuredprofile",
+    "configuredprofile/cmd/profile",
+    "bootstrap",
+    "bootstrap/cmd/serve"
+  ],
+  "negative_cases": [
+    {
+      "case": "aggregate_input",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "does not match inferred type"
+    },
+    {
+      "case": "aggregate_nonnullable_result",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "aggregate_owner",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "in argument to models.QueryOrders().With"
+    },
+    {
+      "case": "aggregate_pivot_input",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "does not match inferred type"
+    },
+    {
+      "case": "aggregate_result",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "application_event_outbox_key",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "application_timezone",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "cli_command_name",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "cli_handler_arguments",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "cli_registry_key",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "config_owner",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not implement config.Field[second]"
+    },
+    {
+      "case": "config_value",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "contribution_result_type",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "email_address_type",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "email_attachment_key",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "email_idempotency_key",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "email_job_payload",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "email_stored_source",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not implement"
+    },
+    {
+      "case": "email_template_data",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "email_upload_source",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not implement"
+    },
+    {
+      "case": "event_listener_payload",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "event_model_id",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "event_payload_type",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "event_topic_conversion",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot convert"
+    },
+    {
+      "case": "form_actor",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "form_handler",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "form_optional_actor",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "form_prepare_input",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "form_prepare_output",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "generated_config_owner",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "generated_config_value",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "generic_dto_argument",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "generic_dto_handler",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "generic_dto_rule",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "health_probe_callback",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "health_probe_identity",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_asset_media",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_asset_path",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_asset_service_key",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_asset_source",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_compression_encoders",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_compression_level",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_cookie_model",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_cookie_name",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_cookie_value",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_cors_header",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_cors_origin",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_csp_hash",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_csp_sandbox",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_csp_source",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_download_body",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_download_disposition",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_download_handler",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_download_media",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_download_model_id",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_download_source",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_dto_descriptor_conversion",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot convert"
+    },
+    {
+      "case": "http_dto_descriptor_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_dto_encode_nullable_value",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_dto_encode_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_dto_encode_slice_items",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_dto_enum_value",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_dto_model_id",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_dto_nullable_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot convert"
+    },
+    {
+      "case": "http_dto_patch_state",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_dto_result_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_dto_slice_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot convert"
+    },
+    {
+      "case": "http_endpoint_body",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_endpoint_body_descriptor",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_endpoint_path",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_endpoint_query",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_endpoint_response",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_endpoint_url_query",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_enum_codec_descriptor",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_error_code",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_error_declaration",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_etag_config",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_float_integer",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not satisfy"
+    },
+    {
+      "case": "http_float_named",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_float_width",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_generated_path_enum",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_generated_path_model",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_generated_path_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_header_value",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_json_codec_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_json_key_conversion",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot convert"
+    },
+    {
+      "case": "http_json_key_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_json_map_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not satisfy ~map[K]V"
+    },
+    {
+      "case": "http_json_scalar_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_middleware_id",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_multipart_file_slice",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not satisfy"
+    },
+    {
+      "case": "http_multipart_file_value",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_multipart_handler",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_multipart_json_value",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_multipart_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_path_codec_value",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_path_field_value",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_proxy_header",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_proxy_network",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_proxy_origin",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_public_origin",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_query_conversion",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot convert"
+    },
+    {
+      "case": "http_query_default_value",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_query_embed_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_query_merge_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_query_model_id",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_query_optional_field",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_query_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_query_repeated_field",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_query_scalar_field",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_route_handler",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_route_model_id",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_route_path_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_scalar_conversion",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot convert"
+    },
+    {
+      "case": "http_scalar_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_security_policy",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_signed_handler",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_signed_model",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_signed_origin",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_signed_query",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_signing_key_id",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_spa_index",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_stream_body",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_stream_disposition",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_stream_handler",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_stream_length",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_stream_media",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_stream_source",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_test_response_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_text_path_pointer",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not satisfy"
+    },
+    {
+      "case": "http_url_source_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_validation_body",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_validation_input",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_validation_path",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "http_validation_query",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "inspection_section_type",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "job_envelope_version_type",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "job_handler_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "job_identity_conversion",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot convert"
+    },
+    {
+      "case": "job_identity_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "job_middleware_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "job_options_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "job_payload_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "job_retry_identity",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "job_test_identity_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not match inferred type"
+    },
+    {
+      "case": "job_unique_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "job_with_middleware_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not match inferred type"
+    },
+    {
+      "case": "job_workflow_payload",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "migration_identity",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "as migrate.Origin value in struct literal"
+    },
+    {
+      "case": "named_cache_store",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "named_config_collection",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "named_database_connection",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "nested_field_owner",
+      "area": "Core reads, writes and codecs",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "D: nestedbindings",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "nested_policy_actor",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "nested_relation_owner",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "D: nestedbindings",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "observation_operation_name",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "observation_reporter_payload",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "pivot_key",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "does not match inferred type"
+    },
+    {
+      "case": "pivot_model",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "does not match inferred type"
+    },
+    {
+      "case": "pivot_order",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "in argument to models.UserRelations().Groups.OrderByPivot"
+    },
+    {
+      "case": "pivot_payload",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "pivot_scope",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "in argument to models.UserRelations().Groups.WherePivot"
+    },
+    {
+      "case": "plugin_asset_identity",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "plugin_collection_schema",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not match inferred type"
+    },
+    {
+      "case": "plugin_config_override",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "plugin_identity",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "plugin_job_schema",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "plugin_migration_registry",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "plugin_provider_wrapper",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "missing method Manifest"
+    },
+    {
+      "case": "plugin_requirement",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "plugin_route_scope",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "plugin_scaffold_input",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "relation_attach_draft",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "B: linkqueries",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "relation_attach_source",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "B: linkqueries",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "relation_attach_target",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "B: linkqueries",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "relation_create_defaults_owner",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "B: linkqueries",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "relation_detach_result",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "B: linkqueries",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "relation_exists_owner",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "as query.Predicate[models.Order] value"
+    },
+    {
+      "case": "relation_key",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "does not match inferred type"
+    },
+    {
+      "case": "relation_owner",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "in argument to models.QueryUsers().With"
+    },
+    {
+      "case": "relation_scope",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "in argument to models.UserRelations().Orders.Where"
+    },
+    {
+      "case": "relation_target",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "in struct literal"
+    },
+    {
+      "case": "routing_endpoint_role",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "routing_read_config",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "schedule_id_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "schedule_job_payload",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "does not match inferred type"
+    },
+    {
+      "case": "schedule_occurrence_owner",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "scoped_connection_name",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "scoped_database_settings",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "service_value",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "as int value in argument to foundation.Provide"
+    },
+    {
+      "case": "settings_value_contract",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "soft_pivot_scope",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "B: softqueries",
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "startup_broker_name",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "startup_browser_actor",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "startup_http_name",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "startup_job_payload",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "startup_log_name",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "startup_mail_name",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "trace_exporter_payload",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "trace_identity_type",
+      "area": "Other framework services and contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "union_constructor",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "union_handler",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "union_owner",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "union_visitor",
+      "area": "HTTP, DTOs and transport contracts",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "not enough arguments"
+    },
+    {
+      "case": "webhook_account",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "webhook_verifier",
+      "area": "Events, jobs and messaging",
+      "catalogue_disposition": "unaffected",
+      "status": "retained current contract",
+      "supplier": null,
+      "expected_diagnostic": "cannot use"
+    },
+    {
+      "case": "where_doesnt_have_owner",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "does not implement query.ExistenceRelation[models.User]"
+    },
+    {
+      "case": "where_has_aggregate",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "missing method Exists"
+    },
+    {
+      "case": "where_has_find_owner",
+      "area": "Core reads, writes and codecs",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "in argument to models.QueryUsers().WhereHas(models.UserRelations().Orders).Find"
+    },
+    {
+      "case": "where_has_owner",
+      "area": "Relations and pivots",
+      "catalogue_disposition": "ported",
+      "status": "blocked on supplier",
+      "supplier": "C: models",
+      "expected_diagnostic": "does not implement query.ExistenceRelation[models.User]"
+    }
+  ],
+  "counts": {
+    "positive_packages_audited": 27,
+    "retained_ready": 25,
+    "blocked_positive": 2,
+    "negative_cases_assigned": 210,
+    "retained_current_negatives": 184,
+    "blocked_negative_ports": 26,
+    "new_rows_ported": 0
+  },
+  "catalogue_reconciliation": {
+    "ported": 548,
+    "unaffected": 444,
+    "pending_stage7": 34,
+    "pending_assigned_to_A": 0
+  },
+  "source_sha256": {
+    "tests/fixtures/plugin_base/base.go": "d4e8a5935bbdef63217362958f2726305cfe9e1bf5c12d28b3f9a30f52b36fb4",
+    "tests/fixtures/plugin_base/base_test.go": "1bf1c477a54d9f4b5586ed6df1c75a322915e4eacf3ffbac204f7663dd47e2ff",
+    "tests/fixtures/plugin_base/trace.go": "3f30e62ad29dfebe38e8524c6ed6646dd4a3ec0e94189d4a641778ab19662fed",
+    "tests/fixtures/plugin_dep/reports.go": "cdb835ddac1dc11c0604a3ca33851f04ec17558bd82bdbe8f230eb627f0db9b3",
+    "tests/fixtures/plugin_dep/reports_test.go": "c167d9ea7b669f74ab66437494ce5597e1b944f4870f629adc48d9af710e7669",
+    "tests/fixtures/plugin_dep/scaffold.go": "8e840ec886974ab7b7fe0b710590a0fa45cf8b1110666c5ed96193f0029d8329",
+    "tests/fixtures/consumer/pluginusage/bootstrap.go": "252d8fab2e29bbcf8ff47d80fb2faf0762f715ecbf484a7b45a4d3d0eb27a145",
+    "tests/fixtures/consumer/pluginusage/migrations_postgres_test.go": "bdde9a3d4ae6014d4f4c65315317dea2d2d265bdb78324377650fcd247544852",
+    "tests/fixtures/consumer/pluginusage/plugins_test.go": "b0fef92b37d616bfa991919f5520bab9a8d38bb12b66696d000fe016db481e5f",
+    "tests/fixtures/consumer/background/module.go": "2f2bdb688d6211c7713c55ee0d9f8fb0a0458a197c6cf54b1eba04d85d46cc23",
+    "tests/fixtures/consumer/background/module_test.go": "df8cf2b87ecdda19f8c781d1c51dcb51e09f14d23ad1a3915a15605183823dd5",
+    "tests/fixtures/consumer/background/operations.go": "400389d74c62816f8d1dcbf199a9ba40327d8dd89619a28273a4e311d15d81ac",
+    "tests/fixtures/consumer/background/operations_test.go": "9862346849041dd56f8a04ec5a49dac01417f174acd356c53b0ed985a93f52f3",
+    "tests/fixtures/consumer/background/welcome.go": "fb8ebb054af03afef54cfa92eb40610920013f1b76c7fc3cb67b9de3cf918611",
+    "tests/fixtures/consumer/background/welcome_test.go": "13e2c84744e0ae26bd75478841a3039faaac31f5b6f7f6694f02a71e726cf627",
+    "tests/fixtures/consumer/scheduling/reports.go": "b5a63514e39e97965f4a136bbdd54cdb05490bc6e8ab62bdbff87a19b235fd84",
+    "tests/fixtures/consumer/scheduling/reports_test.go": "005abdcd4cdb39705cf88105e70dcf32246fbf6727bb5f1bf85e51986c601573",
+    "tests/fixtures/consumer/tooling/commands.go": "9018dd245ab56229ea66fe7f22d9012650db831e2eb37c2db0d5b5aa99f9955f",
+    "tests/fixtures/consumer/tooling/database.go": "677485bfe34d2442bf95f715a84217d0f5e1b9865fff1d01771e32f4768de3ae",
+    "tests/fixtures/consumer/tooling/helpers_test.go": "5f719adf991859da535a917ea27587af3178762f0bfdb0f530e87d8e857a136d",
+    "tests/fixtures/consumer/tooling/production.go": "f6d62c12f24d27577c3264369e4579e4dae316ab49eb6720652ac5db17b51a44",
+    "tests/fixtures/consumer/tooling/production_test.go": "f3d911efe7de1319d7b06d010b441f1a727ad0aa0cc5788a147da116033a537b",
+    "tests/fixtures/consumer/tooling/routing.go": "a0291cdc8f3ba785aa029ce5004967dfa0670e62fdb31f3376591a50f6b0f153",
+    "tests/fixtures/consumer/tooling/tooling_test.go": "237837ce73d32f90d520f717dfeec219beb9b8a7b90b8e7c4064204977cbfead",
+    "tests/fixtures/consumer/configured/settings.go": "ba7f3a45b8a780976e382a3b4f378a948f165cc5756c05cb129ac0ce422bfe6e",
+    "tests/fixtures/consumer/configured/settings_foundry.gen.go": "145ab8aaf2a1225cc5e43fb4cc2b77f5a5ca3a7888cc6873a6b889199e527fe6",
+    "tests/fixtures/consumer/configured/settings_test.go": "3020023c8a44f0879af74c7c90bb86b3b2810b23910745a73aaa7c595749b446",
+    "tests/fixtures/consumer/developeroperations/operations.go": "e47135f98b39e77b379600ba5fbef83b2e6a98aa283f0e69d66679a7f76623c8",
+    "tests/fixtures/consumer/httpassets/assets.go": "943f608fa79e334ddb2135fa267c99b2980f4ca2e2bef336b9c2ea80dd059629",
+    "tests/fixtures/consumer/httpassets/assets_test.go": "70f219ed6efa9ab4d52f089bc1d136bbdff5d1148c0bb870590d4128d11946d4",
+    "tests/fixtures/consumer/spaportals/portals.go": "a08546f4ec6cea47e9b72a1cb102557cc879397feab9a01f19a342591ee14ac4",
+    "tests/fixtures/consumer/spaportals/portals_test.go": "86ad8c8c10ba803f82efa83b10bcf64933dceacb6a9770295989d1169db6f661",
+    "tests/fixtures/consumer/startupconfig/environment_foundry.gen.go": "7dfbd70f41268e99a814c939a2ff39137a1db17eb70bec581a2f6c7f04749736",
+    "tests/fixtures/consumer/startupconfig/settings.go": "1c66556aa9aa78b5f892dab5893a1259e1bf456fac4d66038052e366cf032827",
+    "tests/fixtures/consumer/startupconfig/settings_foundry.gen.go": "70aad5fde966b8769a28e267d981dcb1506b8524187a90e31a07472b0d41f8ee",
+    "tests/fixtures/consumer/startupconfig/settings_test.go": "26d057aeeb907d1c7ad72c93bc3b0f33de7ae2a21c45ffd2d58d9935ace5669a",
+    "tests/fixtures/consumer/httpcompression/compression.go": "96983789f891f498208cbf6d01c7a808f9bff61aa2f649722fdadc9a604b84d8",
+    "tests/fixtures/consumer/httpcompression/compression_test.go": "1af3d40feb1529d8f01845a93ef42a3d72f3083a4c5e122d9edcef201e0daf29",
+    "tests/fixtures/consumer/httpcookies/cookies.go": "8a2cb5f93756e20798a40e7d49655b93d0a68f23c190432fb4349cf8a7660c64",
+    "tests/fixtures/consumer/httpcookies/cookies_test.go": "210b1eea37f7c005f162534f7663c9c6982c7f97c4f6922b5c6e269f10511652",
+    "tests/fixtures/consumer/httpcors/router.go": "bc064cbfd33695b6cc63d464287b8d92aa74ac5bdb56d37fbb029ab00a9df299",
+    "tests/fixtures/consumer/httpcors/router_test.go": "e29259d7b74a948ee4236821f89556ef2e2cbc5b17de595cb7248d6862e9d2a0",
+    "tests/fixtures/consumer/httpdownloads/downloads.go": "8c746b86e40c3f6c04e639a44b2e528a145b105d5683cc1f54ac1bd4d04c54d7",
+    "tests/fixtures/consumer/httpdownloads/downloads_test.go": "0ddfe8f3288522ee975d1dc1782a891a4bde60fbb7f5d41deec2b7b8f0759efe",
+    "tests/fixtures/consumer/httpdownloads/example.go": "5552efeee146ebbec572d57a5ba51e0731d5b639e9718ab90901ee8bd387e710",
+    "tests/fixtures/consumer/httpdto/custom_code.go": "9d06e5ae7f6d3f284f4bd44565433ec4886667d25e55e39675c61074b9e1ce56",
+    "tests/fixtures/consumer/httpdto/custom_code_test.go": "68f716d694eaf5c4680a0e4b3be45ad73221ec028b7f3a98ba6fca059f64a782",
+    "tests/fixtures/consumer/httpdto/dto.go": "7fd275107447da5224ad7156b02a13770d742828fdf23fc789038c97a6cb2bcd",
+    "tests/fixtures/consumer/httpdto/dto_test.go": "42417f77686e2989f790ca133492860bcc8a9c912978a11f08ac9b81c8af7532",
+    "tests/fixtures/consumer/httpdto/encoding_test.go": "5825f232cac0b7f4ff0d43c31d242c3cd6841a88cba8c6b209db55e8ed9e3ff4",
+    "tests/fixtures/consumer/httpdto/inventory_response_foundry.gen.go": "20cc3ab00101c0019ed1780e00f51da1fee84c6b907c271d2448bd903b21f72c",
+    "tests/fixtures/consumer/httpdto/map_keys.go": "66d9fcd96a36462258103fc64348c2ca73d98c057525dc68d0915d418abd5eb9",
+    "tests/fixtures/consumer/httpdto/map_keys_test.go": "697a3a3247c9ba785f91614700a23889e751fe40e43adf3c71215704a059a659",
+    "tests/fixtures/consumer/httpdto/order_response_foundry.gen.go": "6ae2ceec532ba705d499ca3679374822be261d630ab596970e41d628d8d70fd2",
+    "tests/fixtures/consumer/httpdto/stream.go": "32e4c5dac6255e8639c90ed090b095cf9354398db73afb14a588596bcf34d9eb",
+    "tests/fixtures/consumer/httpdto/stream_response_foundry.gen.go": "f557a458aede5a2c9a18a4ef1aa20dda42d2d49abd8474215ff8a5db8dd0d65a",
+    "tests/fixtures/consumer/httpdto/stream_test.go": "dff56135241d36550cd8c00a06a8146a043b9ac766f305d25145684b67efc95c",
+    "tests/fixtures/consumer/httpdto/tracking_response_foundry.gen.go": "ca0228bb6d3293356cbfc3c986a33e89cdc57be17e15548b8784d74c3e7ab7e2",
+    "tests/fixtures/consumer/httpdto/update_user_foundry.gen.go": "59a5e8273144e4d781684e4b42898ceb0a466c9b5d0a2611105890f5af19aad6",
+    "tests/fixtures/consumer/httpdto/user_response_foundry.gen.go": "d8de8105791d02f751c888e215c87706bbe4457c5ba7eaf7f149427ec84da31c",
+    "tests/fixtures/consumer/httpendpoints/deadline_test.go": "264272d4105a586049f1241ce012f6bce7dca15fe9472d634171849e825dd59a",
+    "tests/fixtures/consumer/httpendpoints/endpoints.go": "884735497c55c1dd5f7e9595b435911f418486d1951771b09a220f795c889cf8",
+    "tests/fixtures/consumer/httpendpoints/endpoints_test.go": "a62e1cd8425adea3e25633aa4c548c990a0216b5a0a05864ab864ce964fa403f",
+    "tests/fixtures/consumer/httpendpoints/errors.go": "4f1efc50067f70539f5ee0852ab61fd520aa7115d219c001493ba44ae487d971",
+    "tests/fixtures/consumer/httpendpoints/errors_test.go": "b0b95e720b82c44aa032ec53dda7f320bcf4eef26f7d5d1d1e00b03a7e826c64",
+    "tests/fixtures/consumer/httpendpoints/retry_errors_test.go": "f9b8169048f4f9ce636253b25da79b5b19acfe8fb1482682f76f7204fcae8a4e",
+    "tests/fixtures/consumer/httpetags/etags.go": "ec4966987705844d72dc1528dd5548b8e051153099c77642abc2ab2ec00cd667",
+    "tests/fixtures/consumer/httpetags/etags_test.go": "d80c3a5fb1317a7bc93081314c53f6925bf0662db9d920985f7c5124ee24a24c",
+    "tests/fixtures/consumer/httpkernel/asset_path_foundry.gen.go": "e760d3df725412ec124aea11ab187bef2a8f5461a670d543c7aae5c41eb2cd6f",
+    "tests/fixtures/consumer/httpkernel/generated_routes_test.go": "d34051f0d539db51c7895d2080b82dcfd8afdd0887ea20eb4d89c6124e7e2aff",
+    "tests/fixtures/consumer/httpkernel/kernel_test.go": "e97d615934e4290cc079b0110885a61cfbb3a62ce29f54655b6c8e21c9687a80",
+    "tests/fixtures/consumer/httpkernel/path_declarations.go": "8b4a1df4c17237fc311d337949bce61ae6727214f09a40cd904e5224d3cce41c",
+    "tests/fixtures/consumer/httpkernel/request_test.go": "911bfafd61db71f2508f7cd77b6a94fa7395f694e3a692f7e161e29dbb2864e4",
+    "tests/fixtures/consumer/httpkernel/routes_test.go": "b4da12df365c56000988fb0e9c84ba32f99fdcc0d678364e7e7249735a3937c0",
+    "tests/fixtures/consumer/httpkernel/user_feed_path_foundry.gen.go": "c29cbce0e77694df7ab6634ef1fb7da42dbbf197d7caf95233258591aec13da4",
+    "tests/fixtures/consumer/httpkernel/user_path_foundry.gen.go": "312f16089eb607df7419d97cdbc7b6d934144f38a7367a6c5af91efc50648a92",
+    "tests/fixtures/consumer/httpmiddleware/router.go": "27664bd674cf58160cf5dcee7ba28c5c9bd6e4c5c382a255d43d2b8ed8c76782",
+    "tests/fixtures/consumer/httpmiddleware/router_test.go": "21fcbc98346a697ba53e4170240572ad33ff24b7fcb6980ae3e499a11a81b1ee",
+    "tests/fixtures/consumer/httpmodels/bindings.go": "22bc0ed7f410a24a4552d2786108beb21d3ed2f47d61ca1b8baceb70fd926a99",
+    "tests/fixtures/consumer/httpmodels/bindings_postgres_test.go": "aef3dd54b55ac1090568ac55308130c83a25be2f6436bb13982b407d181055f2",
+    "tests/fixtures/consumer/httpmodels/bindings_test.go": "014a94b27a37acaba0c28e7851217b31c067deb5103982068121bb8972f8bfba",
+    "tests/fixtures/consumer/httpproxy/router.go": "940321d71b4844f85209daf7a34c724fa907561b2f9af732a21b48e782515026",
+    "tests/fixtures/consumer/httpproxy/router_test.go": "8e6ebbb506d43e66dd8773a6d8bddd13b9c9f125398408c48bcdb36f2712ac21",
+    "tests/fixtures/consumer/httpquery/composition.go": "7de7cc88725be6906981a6eaed83ec418c0f69b7820562e5463745d1ca5467db",
+    "tests/fixtures/consumer/httpquery/composition_test.go": "1d0a316a41cf811257e13e16d2f30ed3fc72d425bda235a84273dbca18cadcdf",
+    "tests/fixtures/consumer/httpquery/floats.go": "29c304ea20737fe5d9c4822492952939ac21ed8348c8b6f0018c5428e8dba968",
+    "tests/fixtures/consumer/httpquery/floats_test.go": "866bbc734f0f258e7ba69058fb21519988e586f4c036385da445bb11c1aeff5f",
+    "tests/fixtures/consumer/httpquery/json_contract.go": "2103d1f65362cb926255ef9436760f845c0dc0c7ec6205c57e8dbf34afa14206",
+    "tests/fixtures/consumer/httpquery/nearby_input_foundry.gen.go": "e4f6f49239c0f59f137f4abb50f63383efe4e91c56fc4eb6474c93eda2e7ff24",
+    "tests/fixtures/consumer/httpquery/position_path_foundry.gen.go": "73eb7587cc47d22bba58af2d28a29479f82656ff52b30bbd346196f077059b1d",
+    "tests/fixtures/consumer/httpquery/priority_path_foundry.gen.go": "fc912569594e8671b1d12e36c0bb1d65d95c1b19088c207a7f3b0b856b829139",
+    "tests/fixtures/consumer/httpquery/priority_query_foundry.gen.go": "748cc8064904fa53afdf67a3adc8e703ba8316c14e86dcbbe6da9120074ffd63",
+    "tests/fixtures/consumer/httpquery/priority_response_foundry.gen.go": "cdda3d3a1f6b158db313f7fba92cc03db183c509ed3b7cc90ec2b8c4488ee767",
+    "tests/fixtures/consumer/httpquery/query.go": "e313de4e4ae0d00e47c0891b988ac197ba77387b0fd6c16f70f274fb7462b823",
+    "tests/fixtures/consumer/httpquery/query_test.go": "406a1f6a4709ec6b85ff561f73f88924785186c9a2b78fb50fc80bf5186fd561",
+    "tests/fixtures/consumer/httpquery/scalar_metadata.go": "7baaa70df31b36c33bb2e95fe50c3ae77323b72bc03333b4e2a063262a7655b3",
+    "tests/fixtures/consumer/httpquery/scalar_metadata_test.go": "66bef09f5f80bd308ecf3f24101dcd40ce64cd1ad24f9ae2fdaf32f70a7da218",
+    "tests/fixtures/consumer/httpquery/search_input_foundry.gen.go": "3980fc9c1fa8b391e101816ff283e1fa05379c2233d7542d0bad5965e8e6f4cb",
+    "tests/fixtures/consumer/httpquery/source_identity.go": "b2f388a07ef41e138a84bc3b80ca599b87eb6742ed695ea2f86b72a035470009",
+    "tests/fixtures/consumer/httpquery/source_identity_test.go": "9a7d52374ef4bc82a2c1d6fa32b43d4bae66dd42c66d5aab8c7004b43788fc80",
+    "tests/fixtures/consumer/httpsecurity/csp.go": "13d2e87c90b57fdf6dc63e8cb718ef171fa29a680034baf60ea49e197b29e16e",
+    "tests/fixtures/consumer/httpsecurity/csp_test.go": "4632ffbc30c66115525eab635d40f48136317f42aab300b894358242e33a329e",
+    "tests/fixtures/consumer/httpsecurity/public_urls.go": "1f474a4434d80332e890fc8813c97084526dfd29e289b518db9594033a63d589",
+    "tests/fixtures/consumer/httpsecurity/public_urls_test.go": "06be5a033ba21cf41962e007f4e6a6405472e0346fc3ad37d969346110df00eb",
+    "tests/fixtures/consumer/httpsecurity/router.go": "08c984bfbb364a7579f031d345e3c5780d00cfd642ef3871eb15131fae44afd9",
+    "tests/fixtures/consumer/httpsecurity/router_test.go": "494cadb2c8361f1477bf817b343052f9a68eb7b139522cad3f61b676c96cd52f",
+    "tests/fixtures/consumer/httpsigned/links.go": "49fbc92c3814938ab67645b98def34f9081b98f7b640cf5e871ee2f735cc465f",
+    "tests/fixtures/consumer/httpsigned/links_test.go": "a1043345ac44e501c51ab9ab5029cf194e60c7c1a86ba9c229b5c21c84eb00ce",
+    "tests/fixtures/consumer/httpstreams/streams.go": "6f67ccccadebf28604a1fe11bcda68e4fd9af8774fcc313a0b7b3245ecef799e",
+    "tests/fixtures/consumer/httpstreams/streams_test.go": "3b7daffd6b28ec998d640b0ed46e70cc6c6b5e3fec7c0eed18984b5cb74d219b",
+    "tests/fixtures/consumer/httpvalidation/async.go": "8a1df963910b73630b2eb2494929b7e12beac1c10576e59e11f11da4415f2e02",
+    "tests/fixtures/consumer/httpvalidation/async_test.go": "5866d92cb0dff5275187251ab5d4243b2ed047e046e46cf1481a5ad49da5c487",
+    "tests/fixtures/consumer/httpvalidation/validation.go": "e3cd34387a058030adb41d0c402b6950e10927b390230ff201d5689606aa03e5",
+    "tests/fixtures/consumer/httpvalidation/validation_test.go": "27a88d5dd879bb12227b8ead9063ca0411482be6a877717e781a14a239837446",
+    "tests/fixtures/consumer/testdata/compilefail/aggregate_input/invalid.go": "0d7c54ccaf86c2808e2316158d762633aa0f11154b14315d3a29953e44faebfb",
+    "tests/fixtures/consumer/testdata/compilefail/aggregate_nonnullable_result/invalid.go": "9e2ee9a390f520d1ba32c7025be36c0e0f9a8a841c06892adf1295f954a069cd",
+    "tests/fixtures/consumer/testdata/compilefail/aggregate_owner/invalid.go": "92f77adbf4fbe1f4f09167394aaa732e72812e077ec2391a2263e0c1f4f3ecf2",
+    "tests/fixtures/consumer/testdata/compilefail/aggregate_pivot_input/invalid.go": "06fdce3692f2ff2ffe5ec9b0e6054c376a8c438c4197c24105c3c52b4ad0fc28",
+    "tests/fixtures/consumer/testdata/compilefail/aggregate_result/invalid.go": "917bec71fe1016e4fed4a6606c2eb2c28eb8ef07b1eb46b5263d3626a229f195",
+    "tests/fixtures/consumer/testdata/compilefail/application_event_outbox_key/invalid.go": "ce5f20812ca3476a51017bfd4b3c7c30ce62d74d67034be3f0791f9aee309a5d",
+    "tests/fixtures/consumer/testdata/compilefail/application_timezone/invalid.go": "ff0b84b46338ee07b9dbac7f5fa92f2e66ffcc67969c9c0b8db53a2897118281",
+    "tests/fixtures/consumer/testdata/compilefail/cli_command_name/invalid.go": "d9e2ebd886ddc6ca5f25d19e01dd3a92aad6272a16abed67de192deb7d53cbff",
+    "tests/fixtures/consumer/testdata/compilefail/cli_handler_arguments/invalid.go": "d7e8c073a41bc7dc520d68b6acb602292060d7a940c142b4bd7045dbab8efb44",
+    "tests/fixtures/consumer/testdata/compilefail/cli_registry_key/invalid.go": "34d0eb4c89be4e227d27c736725e5e846fb17f3d6677e6687f42ec54b0775260",
+    "tests/fixtures/consumer/testdata/compilefail/config_owner/invalid.go": "51373f723d55090937f8afc4a8bb04a05c74449255a827a775b2c5ec579a63a1",
+    "tests/fixtures/consumer/testdata/compilefail/config_value/invalid.go": "91cd40ee866b6d332d0fbd90abd30852e520518daeb2fdc5e4175cf6cb34f7d4",
+    "tests/fixtures/consumer/testdata/compilefail/contribution_result_type/invalid.go": "969f911872fffae4ce439aa70912bbdbeda396461e0e5fbc0f1d79bf9b8f5ba6",
+    "tests/fixtures/consumer/testdata/compilefail/email_address_type/invalid.go": "fcf58fa0b5b4c1afb8c8395e4989adef9923292ece480eec8870de577a627d43",
+    "tests/fixtures/consumer/testdata/compilefail/email_attachment_key/invalid.go": "811d706a0283e5679c62821762d8adc3925f4ca67ad6750d2f28329067508854",
+    "tests/fixtures/consumer/testdata/compilefail/email_idempotency_key/invalid.go": "57bc766e33ec6baf7f216a09ad25b56e97a82f5b39fda2bb1350c8659d121153",
+    "tests/fixtures/consumer/testdata/compilefail/email_job_payload/invalid.go": "0f8b1eac480bea5d436f1c7c9f4323498fc05f130f2a753c6f5450b5773afe72",
+    "tests/fixtures/consumer/testdata/compilefail/email_stored_source/invalid.go": "0b6606fa7a3a612deb09cc177bb1016ab9abfe3856956993cd1224b2de5fb6cf",
+    "tests/fixtures/consumer/testdata/compilefail/email_template_data/invalid.go": "dd0cbd668d4d5053d075f2c2f88b7b78c1004da6a1443a87dc1d77d8cdc799d9",
+    "tests/fixtures/consumer/testdata/compilefail/email_upload_source/invalid.go": "db4ac270d74e165efc7e57509fc08a86914e0e651e64eb316926a020476e3fc5",
+    "tests/fixtures/consumer/testdata/compilefail/event_listener_payload/invalid.go": "a0b6e0508a2112fee1f287a065110f528caac3f7c1f51087f5f30cdf883440f3",
+    "tests/fixtures/consumer/testdata/compilefail/event_model_id/invalid.go": "b186863281a2573033000d4ec66300f64cf5f6aa75fa949cec981d35d919e335",
+    "tests/fixtures/consumer/testdata/compilefail/event_payload_type/invalid.go": "8bf13490077abbb2466f948d999f4418dff19ea10235e8e258c11b1631fde18d",
+    "tests/fixtures/consumer/testdata/compilefail/event_topic_conversion/invalid.go": "008ec8a2a080edcdb6f292979188f90c9c5bbc29f1f05f1c2ec899dd65969a77",
+    "tests/fixtures/consumer/testdata/compilefail/form_actor/invalid.go": "d386d3f0a28d89ff1a99df2386a2e2dfa932c78f35df4f2717b491c975e25fae",
+    "tests/fixtures/consumer/testdata/compilefail/form_handler/invalid.go": "25dfb0a39eb8a05004eda5174fc06f23b23bec3794bf2b6ee9b2685f85b91f5b",
+    "tests/fixtures/consumer/testdata/compilefail/form_optional_actor/invalid.go": "70aae3b04da38bd292562f165972d5ef551f6f171f76c9d2d73d36091c489ac5",
+    "tests/fixtures/consumer/testdata/compilefail/form_prepare_input/invalid.go": "ccb084842623a5d34b81f3fad89b5843b45b94b2887e065fbabfd45eba2018fb",
+    "tests/fixtures/consumer/testdata/compilefail/form_prepare_output/invalid.go": "629795455da651c9b6790dbb5210482194a126e5efc9b7f32b7b4b4077eb3431",
+    "tests/fixtures/consumer/testdata/compilefail/generated_config_owner/invalid.go": "74f339cf978f96f9e1f682d80cdbd49d70d72ef1af804c9bce16c8f8f9565809",
+    "tests/fixtures/consumer/testdata/compilefail/generated_config_value/invalid.go": "8398dee7d3c8fbf1e884884e3bff054c41d00f9ca15792900d9c8285eb8cf3bf",
+    "tests/fixtures/consumer/testdata/compilefail/generic_dto_argument/invalid.go": "04b165f35a3b3b57035c64ef9166102aa9dabc4b01163e5e4cb7061908ec3a49",
+    "tests/fixtures/consumer/testdata/compilefail/generic_dto_handler/invalid.go": "aa386ba8520f9b0f7af8a90e3bba2b972d7b5ae31e2fbdafbaf591de397ce7e3",
+    "tests/fixtures/consumer/testdata/compilefail/generic_dto_rule/invalid.go": "983566933aecc7507d6494842b14bd715391f99bbe937229d6b97c90ab2444f8",
+    "tests/fixtures/consumer/testdata/compilefail/health_probe_callback/invalid.go": "13596f49a51c0b13e738a3ceda40daf8e8fd5e39ac310b5480954c674657d328",
+    "tests/fixtures/consumer/testdata/compilefail/health_probe_identity/invalid.go": "58b8c74d4e7b780b128f00bacc2d4b1016afb845ce3baa723f6827f8dbe29686",
+    "tests/fixtures/consumer/testdata/compilefail/http_asset_media/invalid.go": "910c143e5264cc13d0c8f05ed39237d74089dbdd7af42007c43b587e81cc8d85",
+    "tests/fixtures/consumer/testdata/compilefail/http_asset_path/invalid.go": "e78291de4e12404503aec3a99a13be7ea46abe1d53ae40666d6d5908147af58b",
+    "tests/fixtures/consumer/testdata/compilefail/http_asset_service_key/invalid.go": "a7ea92add3614b082cc897d9cb9c949635e10643df94717d0e3ffb730c90f14c",
+    "tests/fixtures/consumer/testdata/compilefail/http_asset_source/invalid.go": "a93862f2148c022c69f4f4148027eccfb2c51b3a9dff361b78b79b3a1c343bd1",
+    "tests/fixtures/consumer/testdata/compilefail/http_compression_encoders/invalid.go": "b983e2ff860b29a296770c15d98492666074df136eba836e58537f16c6b54bbd",
+    "tests/fixtures/consumer/testdata/compilefail/http_compression_level/invalid.go": "1c2c766854315f006d5d61b3564bf299a5f7cbaa85400999e8426dcc67d60e0b",
+    "tests/fixtures/consumer/testdata/compilefail/http_cookie_model/invalid.go": "c923392fa6ec2d42da9538774460ee8c6c131a91fff5dca0ca6d6382558065f5",
+    "tests/fixtures/consumer/testdata/compilefail/http_cookie_name/invalid.go": "711af61ef6b8f950565eae75fa3057c6e69939f46aa034ebb41b112af405699e",
+    "tests/fixtures/consumer/testdata/compilefail/http_cookie_value/invalid.go": "9f5436efd875ea7dfd1f7b389aaaa1b8f7929005fbe6ae6561cc49e6b0294b27",
+    "tests/fixtures/consumer/testdata/compilefail/http_cors_header/invalid.go": "8342242f2cce22f6ac3b523997550960be1a239e00343b97c8013a10e08e2a44",
+    "tests/fixtures/consumer/testdata/compilefail/http_cors_origin/invalid.go": "2f691d5194a858c9e564d2376eb58ec23ea9769b8b12e2360f7be74c1ee65973",
+    "tests/fixtures/consumer/testdata/compilefail/http_csp_hash/invalid.go": "eb28e05464e522292e22c36ef19b77ea754c8aff1d41b55d7cb6166bd214c80d",
+    "tests/fixtures/consumer/testdata/compilefail/http_csp_sandbox/invalid.go": "53581105a886e121f7a25cc6ea5d427341ebd78b57021257c5b9f493890e81fb",
+    "tests/fixtures/consumer/testdata/compilefail/http_csp_source/invalid.go": "0ace0218934b6496cd3a1e69e7ece5faa1fc64e29e26ede5e69ed3f1363e1795",
+    "tests/fixtures/consumer/testdata/compilefail/http_download_body/invalid.go": "564b54f8cddeba19908ef4dcb64f69d9ee5d57cc5d139abc0cf2e23ae85d3d33",
+    "tests/fixtures/consumer/testdata/compilefail/http_download_disposition/invalid.go": "862479b63c67292d467312339a97e64b97166f3226d49f4872b961caef73fae4",
+    "tests/fixtures/consumer/testdata/compilefail/http_download_handler/invalid.go": "134f1dfb94eb2ac656545531096f72b9c2038733362fd72d64b362fc90616a2a",
+    "tests/fixtures/consumer/testdata/compilefail/http_download_media/invalid.go": "8e441f530838978d4ab02d76c61c017ad12ad4202fab0d3c5b3f8baf3a5493ec",
+    "tests/fixtures/consumer/testdata/compilefail/http_download_model_id/invalid.go": "84887bb48c5aa4f39faa8e03eca673afc8bd7692ffa41df7c5d9618d91a1a7cb",
+    "tests/fixtures/consumer/testdata/compilefail/http_download_source/invalid.go": "17b1ca26f7d8b9df72dba628c6e3bf32dfe9a6a9f38de5beade3a5b34b5f0bf6",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_descriptor_conversion/invalid.go": "53baa9c59c0e9d5451b778c62ddb22d9175b2c8b210f002d4acd024b345c2dab",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_descriptor_owner/invalid.go": "8d3266c0d19c4b625e1d773a7b207d15b3c4053981f258543c4b329a1cd7d5a8",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_encode_nullable_value/invalid.go": "4156aab128e1cd83262ac4674d890fc55663e4957e67e131e2ff6118486ee403",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_encode_owner/invalid.go": "f52d84e22c4f76b78db47b3432aa0ee022c81dbe748632c23a0a12e161efc135",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_encode_slice_items/invalid.go": "20e3647e6e118d28869dee976c02aa8a106a90ba13c427897e21a9656d1c13d0",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_enum_value/invalid.go": "176882b04dc1a4d72060c619ef48a4c0224e0fbe9c61fb6f50c1aa46591642b0",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_model_id/invalid.go": "0dba8736828edfc42607044da264241a8edd110d9bf0e5022cbd3302b1fb577f",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_nullable_owner/invalid.go": "cd7374a97cd1293f137ad28b752576a8e138f43aa520c25c94d190a21cb8d944",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_patch_state/invalid.go": "9f87c0b4aa615852fac55af4c8c91fe68ed086daeeef76f8d9094ffcd6d0bd8c",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_result_owner/invalid.go": "3406d949e64d859d895bdff740352bae3e52e613ad1404daa70bc53c73d9fca1",
+    "tests/fixtures/consumer/testdata/compilefail/http_dto_slice_owner/invalid.go": "355bcb19495de1a304e4e0519c40f1979706fb6aa2475af39c408e61119ccb6f",
+    "tests/fixtures/consumer/testdata/compilefail/http_endpoint_body/invalid.go": "16d71d310f71f5e9b8ccec6f95657c2ebccf76e94106d95ecc364bcddcb0c5f4",
+    "tests/fixtures/consumer/testdata/compilefail/http_endpoint_body_descriptor/invalid.go": "90cee497c9d3731a48ba695e2d20e40afcba1e0f9b684cec076b9dcbcb9de159",
+    "tests/fixtures/consumer/testdata/compilefail/http_endpoint_path/invalid.go": "17d54627b162c9124967af79c28add291587bc8f5a5aa390f4e7f593bf4e715d",
+    "tests/fixtures/consumer/testdata/compilefail/http_endpoint_query/invalid.go": "d4a39df239183ac4f7f5fb1a4c60f7663eeecbd7068e6fca29f32970ff52a72c",
+    "tests/fixtures/consumer/testdata/compilefail/http_endpoint_response/invalid.go": "bdc222d3bd5e35a97a0bc0a9a4c182994efcbe13eb7e4d80a093c26f8679c9be",
+    "tests/fixtures/consumer/testdata/compilefail/http_endpoint_url_query/invalid.go": "db93b598badc020e92b214a3870323085a2d673f0565e5ce1c61c4d47c353deb",
+    "tests/fixtures/consumer/testdata/compilefail/http_enum_codec_descriptor/invalid.go": "fb303de6ce914e0592adc3078597f44c25356a96f555243fe1d22eabe682f5f1",
+    "tests/fixtures/consumer/testdata/compilefail/http_error_code/invalid.go": "84a6420e097cf96ec4735697e582df03a4bc4a18f759e53374c060c90593757b",
+    "tests/fixtures/consumer/testdata/compilefail/http_error_declaration/invalid.go": "680aeecca70061d4042e96212c27a9fa1480d781aa9d3eed78878f8a15de635d",
+    "tests/fixtures/consumer/testdata/compilefail/http_etag_config/invalid.go": "d1c4af25bbd56502deee7a9ba9c64e54dffefeae9c4fc3863320ecb1b3cb8ef6",
+    "tests/fixtures/consumer/testdata/compilefail/http_float_integer/invalid.go": "3b2f85a47824bc7159c284a8bcf9e24420b624f13dfbec9af45ff6b2718ae39f",
+    "tests/fixtures/consumer/testdata/compilefail/http_float_named/invalid.go": "782999410e05fffa15add5af6b60e5cf8f44efe46ff3bf85eff085cbd2883c92",
+    "tests/fixtures/consumer/testdata/compilefail/http_float_width/invalid.go": "6b73a640d019f1608decf75a97db1f0b26136b0becbb0e8743a2afeed926a78c",
+    "tests/fixtures/consumer/testdata/compilefail/http_generated_path_enum/invalid.go": "414a64b1361766d39e85e560f2b244c34fb499c7d0dfd8322837d6143028baa6",
+    "tests/fixtures/consumer/testdata/compilefail/http_generated_path_model/invalid.go": "8cdaaa3c6b33d1176e3a3499aee5f608c6d0d34eedac3449d0ec5e290f541c62",
+    "tests/fixtures/consumer/testdata/compilefail/http_generated_path_owner/invalid.go": "d5ab8a4968f01065ac57b7441e019f97234f54a4fc034af774ad7ea6fe95bd86",
+    "tests/fixtures/consumer/testdata/compilefail/http_header_value/invalid.go": "9b570e23167d5993b27f94ea66d336e3028b9540ec148f90d064843d3368bab0",
+    "tests/fixtures/consumer/testdata/compilefail/http_json_codec_owner/invalid.go": "4ea8a1fae08649d7c221df824d41cfa25cb061fe5dbad603f47f5f7d6d82b83d",
+    "tests/fixtures/consumer/testdata/compilefail/http_json_key_conversion/invalid.go": "74d4f4faa3df9ed3d0a8da567265ddc1567781168cf735acd6f3e97967c91cdc",
+    "tests/fixtures/consumer/testdata/compilefail/http_json_key_owner/invalid.go": "4d93d4ab369919792902fc4131abc06da00b5a535d3cab1bf3109b497a762605",
+    "tests/fixtures/consumer/testdata/compilefail/http_json_map_owner/invalid.go": "61b3e873d436b78d24ac6fb2625eee48a44d9e811ce990cfb9aa78cf86144fc6",
+    "tests/fixtures/consumer/testdata/compilefail/http_json_scalar_owner/invalid.go": "d99d7aec581bcccea55de475e95562da9e06652153a31b3323e3c4186c55a894",
+    "tests/fixtures/consumer/testdata/compilefail/http_middleware_id/invalid.go": "59453bdd7a9377fe6bec452651bd54adfe68805e54be3d07670745cf5912f91c",
+    "tests/fixtures/consumer/testdata/compilefail/http_multipart_file_slice/invalid.go": "822d4229f716c3289a99d5ab53bf25824bad7fda33f8dc13fbca84d97b5fbe70",
+    "tests/fixtures/consumer/testdata/compilefail/http_multipart_file_value/invalid.go": "e8baedd002006629a4e9e0e1763e0061e6b1d567438e7205ea2e7fa47291fcbd",
+    "tests/fixtures/consumer/testdata/compilefail/http_multipart_handler/invalid.go": "7896a2eb4dcb2b15d4f75fe742a20ffadd83bc5fac52a8a6cd055988bb0938cc",
+    "tests/fixtures/consumer/testdata/compilefail/http_multipart_json_value/invalid.go": "d7a5e2efd1ebe4e45812cfc0ec7c84a5e51b00ffffa23caef13be6a0d549450a",
+    "tests/fixtures/consumer/testdata/compilefail/http_multipart_owner/invalid.go": "1cbe5d7fafff4cd6453c15dc5e67a051c7cfb842c6fe2097363c079c10dda601",
+    "tests/fixtures/consumer/testdata/compilefail/http_path_codec_value/invalid.go": "250ff30d41a4618edff12efe151bc061d560c0036910fadbdf6717b84426e9e9",
+    "tests/fixtures/consumer/testdata/compilefail/http_path_field_value/invalid.go": "29abac24164af67b26522c7b6358d065d0922519bb635611edf6b637fc3e903a",
+    "tests/fixtures/consumer/testdata/compilefail/http_proxy_header/invalid.go": "7673804e11a4c2b40b74dcfc6b8c71650c35caca43d1c7292b538f839b1cdf82",
+    "tests/fixtures/consumer/testdata/compilefail/http_proxy_network/invalid.go": "eb2e6c48b8086cb8194d9b1cac178b8d3986d271bed98e4818ac6758dcfd64d5",
+    "tests/fixtures/consumer/testdata/compilefail/http_proxy_origin/invalid.go": "21ffe985e6b8d90d3c4f0e38822bd514fe5885fcfefa10f3ceef7e0fe57508a1",
+    "tests/fixtures/consumer/testdata/compilefail/http_public_origin/invalid.go": "a5d32330cc789923344228471831165a41044e49495b6b97443bfc94342fb13b",
+    "tests/fixtures/consumer/testdata/compilefail/http_query_conversion/invalid.go": "52c1976cedfea3240ae6f42f5c13e4cd1d8e77280cfd272adf5ada89ca4820e9",
+    "tests/fixtures/consumer/testdata/compilefail/http_query_default_value/invalid.go": "c174e2c5a031ddeb0510b22894fcd886e144616f514c276f307f11047ceff3fa",
+    "tests/fixtures/consumer/testdata/compilefail/http_query_embed_owner/invalid.go": "d48c2f9b919dcb4feb6045e9a6b7dbe891d278592b5f12f95c79079b47fe5335",
+    "tests/fixtures/consumer/testdata/compilefail/http_query_merge_owner/invalid.go": "b2d97f4963c8ca18f3a4c228e2fd7835ac9e05109f6597a56560150092fa1d46",
+    "tests/fixtures/consumer/testdata/compilefail/http_query_model_id/invalid.go": "4771e67775db75c11230a57279d4306f0fc17c7cad58ffc4c3e19cc1732319ab",
+    "tests/fixtures/consumer/testdata/compilefail/http_query_optional_field/invalid.go": "4d4eba13a8f0357788b933679123c12bb9d2529108041b22d67596006005a171",
+    "tests/fixtures/consumer/testdata/compilefail/http_query_owner/invalid.go": "0685837391b6467226c09bfee862558185d5884deff71b17a8daa03b17e90788",
+    "tests/fixtures/consumer/testdata/compilefail/http_query_repeated_field/invalid.go": "0cec2b9907aadf88450b80ad8ac95731262ba22e80cec21f7fb7b0006709c2d1",
+    "tests/fixtures/consumer/testdata/compilefail/http_query_scalar_field/invalid.go": "bfa1a782412fcfead64099c608ade8dc8d13a9dd4a45ce1527addd0b428f5c7d",
+    "tests/fixtures/consumer/testdata/compilefail/http_route_handler/invalid.go": "a376fda75583a4645f976ddea93432dcfdd454fd234f234240011a51558865bf",
+    "tests/fixtures/consumer/testdata/compilefail/http_route_model_id/invalid.go": "a67fc37b0e118157fd79a98dc8b3266a01adfa5a646ac5c9a0a96116923e3f13",
+    "tests/fixtures/consumer/testdata/compilefail/http_route_path_owner/invalid.go": "22cf03deaf62a4779b4859951475a327de0120f6ceb85c7105dd015ede1abc57",
+    "tests/fixtures/consumer/testdata/compilefail/http_scalar_conversion/invalid.go": "93b0a82695a82c1b2ac0d9556bb67c8f73837fdf66374cfbd276129fa2c1f592",
+    "tests/fixtures/consumer/testdata/compilefail/http_scalar_owner/invalid.go": "9d6a013ce6b3fa813af9a37e2593ab78495249b5799bb055cb8c26d27f09d8f8",
+    "tests/fixtures/consumer/testdata/compilefail/http_security_policy/invalid.go": "3291b88534cf5b026f0917e9e733d1fb0836b5d3b6c3f7942544eb5b86a762da",
+    "tests/fixtures/consumer/testdata/compilefail/http_signed_handler/invalid.go": "a28fc4913d445229a20935084d33ddb4eb3a12bcf3ed4420fbd21fcee631fd5a",
+    "tests/fixtures/consumer/testdata/compilefail/http_signed_model/invalid.go": "784ace00856c75250135cb78c64b77a57cbff3028146708e6b2580641f750b52",
+    "tests/fixtures/consumer/testdata/compilefail/http_signed_origin/invalid.go": "0ab8b445681613f47088707c2b219748d985facdc4ba398eefc0df68d73b4c89",
+    "tests/fixtures/consumer/testdata/compilefail/http_signed_query/invalid.go": "7eb6a8332e7e4a28843cfa0d8895edcfc5fb4a3a3b33d3546f9ce35049fd9e4c",
+    "tests/fixtures/consumer/testdata/compilefail/http_signing_key_id/invalid.go": "6c3ca4a08acfea79149b29054c98a26cddd3be98a04423c3f9488705f77abc20",
+    "tests/fixtures/consumer/testdata/compilefail/http_spa_index/invalid.go": "f68bb6d0c2cdf13dcf92cfe7044dc19edb9fe7bbb8816db1bf0687c61dd66c1a",
+    "tests/fixtures/consumer/testdata/compilefail/http_stream_body/invalid.go": "3f5ac040990339afe04accbe9eabcc63ad588e57ca77182271bbee4c83ef3d54",
+    "tests/fixtures/consumer/testdata/compilefail/http_stream_disposition/invalid.go": "a467f3d8841ec162407b5026edf83c8527c8638561a3d7e060e8458591cf9e34",
+    "tests/fixtures/consumer/testdata/compilefail/http_stream_handler/invalid.go": "63f885774552dee324a4c61a90341b2130c96566e2d53bdba534fa0f066a2f88",
+    "tests/fixtures/consumer/testdata/compilefail/http_stream_length/invalid.go": "e3e291ab834e92e84851e6ca4d9beda453c9f6c5f118a2ab833326a91f13d3ec",
+    "tests/fixtures/consumer/testdata/compilefail/http_stream_media/invalid.go": "eff5c59047ee7ad9ac01f65e46577a50db9f72fc4163a3d63b96386b5ae35144",
+    "tests/fixtures/consumer/testdata/compilefail/http_stream_source/invalid.go": "f8f58cb036fa4c77947ac534344a2f4aa212c6afc44ef6eb08691b803c2e9879",
+    "tests/fixtures/consumer/testdata/compilefail/http_test_response_owner/invalid.go": "fe567af8e378844356d702d4f1e73016ce0e8a1f63dd064f6a22bf6ac16625b7",
+    "tests/fixtures/consumer/testdata/compilefail/http_text_path_pointer/invalid.go": "78282a86a76f86985ae3d5309c528804f9da51fb70cd64d3d568353471ed7534",
+    "tests/fixtures/consumer/testdata/compilefail/http_url_source_owner/invalid.go": "1fbf2c831b4cf2c210f466adbb82c3da51f0f607a8491a367665aa26a51ea648",
+    "tests/fixtures/consumer/testdata/compilefail/http_validation_body/invalid.go": "949333bb972e24d05c32a930d77a93e21d25515924dec7d241758a0294130909",
+    "tests/fixtures/consumer/testdata/compilefail/http_validation_input/invalid.go": "8e90844527b31d57c3b5989e0c2376276ced4491897208b2fbfb80a36ec1cc47",
+    "tests/fixtures/consumer/testdata/compilefail/http_validation_path/invalid.go": "32e91df6d5121167d45663811f454455f5629ffaec94cfdf1147ca380d1c569a",
+    "tests/fixtures/consumer/testdata/compilefail/http_validation_query/invalid.go": "557ffa4e4c8886403f148c8c463ada4aad998a9adb0df0fa7f14128fe8d7f284",
+    "tests/fixtures/consumer/testdata/compilefail/inspection_section_type/invalid.go": "434a86e82a3d4eda0349dfa5c7f1d4636412001624d592e20620a511d9719460",
+    "tests/fixtures/consumer/testdata/compilefail/job_envelope_version_type/invalid.go": "2966797d7710a3561527a89ff246edf7659fb197090884ff49930912467c0826",
+    "tests/fixtures/consumer/testdata/compilefail/job_handler_owner/invalid.go": "485e14bea884b53d93d5c8176ec1d15b0ebbf878faea92e1aa6aa56877963b2b",
+    "tests/fixtures/consumer/testdata/compilefail/job_identity_conversion/invalid.go": "2767e8301443fb293fd33911f1c16254e845ad67550df74f0789faef8d2dda2d",
+    "tests/fixtures/consumer/testdata/compilefail/job_identity_owner/invalid.go": "e45194cf2ec998d116c59c0568d6ececb54377f0843708a0947a3c84c744c02e",
+    "tests/fixtures/consumer/testdata/compilefail/job_middleware_owner/invalid.go": "3daeed0c4140b6bfa6c85ab59a09b224a9fb0613bce06ee803c7c85c5ff05d44",
+    "tests/fixtures/consumer/testdata/compilefail/job_options_owner/invalid.go": "b34f3059b17e8f99eb248f5c196b5996f7991fe3079b3a0a89ee31bb3be51b93",
+    "tests/fixtures/consumer/testdata/compilefail/job_payload_owner/invalid.go": "019c4d9fa7564d53d4d4726de82dce3fac25e54477ef43de4e63addf3b889ffd",
+    "tests/fixtures/consumer/testdata/compilefail/job_retry_identity/invalid.go": "e2bb9eb7495874c766cca09fc4f8f94d6e3b59fe801951a857b6b283218b331a",
+    "tests/fixtures/consumer/testdata/compilefail/job_test_identity_owner/invalid.go": "53d6a5d2287bb5b3b1805d2fdffbe5a0326894008fd4a9c077eb3070cd82f793",
+    "tests/fixtures/consumer/testdata/compilefail/job_unique_owner/invalid.go": "1528fdd4299a3eb507299e76eb55bfd0ab495241d8aecf2ceed74a9e782cab14",
+    "tests/fixtures/consumer/testdata/compilefail/job_with_middleware_owner/invalid.go": "cc9684f75082293dd973ab69637bd3209ef683aa76bb1561b82217b027cad01e",
+    "tests/fixtures/consumer/testdata/compilefail/job_workflow_payload/invalid.go": "717db09f3aedb1f71bd3fa576249ebf36c6c16267ae010e5f93aa9adbf6afc0d",
+    "tests/fixtures/consumer/testdata/compilefail/migration_identity/invalid.go": "71a9cdca03592db9d7b812727662f165b8daf6a308ecad3690e61d16da28eceb",
+    "tests/fixtures/consumer/testdata/compilefail/named_cache_store/invalid.go": "fd949abad99b88d90d3b996003855c3b429cbda9d190a0cafcd40427d4c6696f",
+    "tests/fixtures/consumer/testdata/compilefail/named_config_collection/invalid.go": "8c53723e5cd08b98b9bf43634a314e54ddd01b19a06191b7f204bcb53b30b711",
+    "tests/fixtures/consumer/testdata/compilefail/named_database_connection/invalid.go": "434aa95e6a17c1b9a742f73839013ceefaa77fe8167aa68df84bef58cb5d4d0b",
+    "tests/fixtures/consumer/testdata/compilefail/nested_field_owner/invalid.go": "aa44e32338198d19e9483d10e8dcc784b40cc7def9493e65f5358483f340f201",
+    "tests/fixtures/consumer/testdata/compilefail/nested_policy_actor/invalid.go": "b5f7c899ffc7bb816074ea2d14ac702b249272d44b7440984c663480c6d9ac1b",
+    "tests/fixtures/consumer/testdata/compilefail/nested_relation_owner/invalid.go": "a0ccd66c4420c636891df0eb3789f9968a7c4593d67a51f053bfdfa7c20a812a",
+    "tests/fixtures/consumer/testdata/compilefail/observation_operation_name/invalid.go": "111d06089b2e95c8e726616879879530ad269d94f5aa90c5642145d9b4cc55e3",
+    "tests/fixtures/consumer/testdata/compilefail/observation_reporter_payload/invalid.go": "eb89595465ff8beeeddc1ab160cf99f42e50290d3b285b535b01e6a5353931bb",
+    "tests/fixtures/consumer/testdata/compilefail/pivot_key/invalid.go": "a8e9d599378d6d57006a71cdfb8b4efd16c482ae0ea22051f1cc16e97cf897e9",
+    "tests/fixtures/consumer/testdata/compilefail/pivot_model/invalid.go": "e23af78b8f3b65835bc5c17a599a3b6dfd9e3ea4d5bec036aca3985864811139",
+    "tests/fixtures/consumer/testdata/compilefail/pivot_order/invalid.go": "6e73264d0bf99acc0fa3fafdc4ef8b7fcf03625523cf9a975ddddc13ea59b47f",
+    "tests/fixtures/consumer/testdata/compilefail/pivot_payload/invalid.go": "d91b9fe35a6c549a50024aa0bf1667cdb70521f5428a427b31995f7c6d2b80cc",
+    "tests/fixtures/consumer/testdata/compilefail/pivot_scope/invalid.go": "fed41cd6668aec8070cd09992300ea8aedcb658baacac11263a67baa1ecdf8ff",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_asset_identity/invalid.go": "a8635165c6a91c18a819c0932a1223846eed0e625672bc2478a242bc51da34ed",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_collection_schema/invalid.go": "e5d7ea3dd7b3a48a2a8bb8991a79539aee1752f6e963c2ddad67bbb3e1979bb9",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_config_override/invalid.go": "189ce31495a05cf0345e5f00c3299768ee50a8980c6e179ae6b941d76c0c1c24",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_identity/invalid.go": "f2c8a51d54126f98bcb0e4c98d8c4c0fcef859baac3ced5c0e4bf2f713504faf",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_job_schema/invalid.go": "7b464cfcc271a4fadeef52d15ae30ff2e4a2eb46f9b0931bd292d310bee6f1b0",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_migration_registry/invalid.go": "b3d91fbd5b67b3d35806cc3bb704f4ea2f776694e20dd90db3bbf36ab3d27336",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_provider_wrapper/invalid.go": "b16699bc9bd617eb8cdc3728b81a0665903793b80100efb4d52f09436fdd5518",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_requirement/invalid.go": "b428e1bd49728b0264d3829e1e8725b4332346285375bf26b430e31916c8da98",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_route_scope/invalid.go": "fdc9ba55b96d3eb89453d21a91f1c8c8d7e3bc3ee5b8495ec32cb379ce7225aa",
+    "tests/fixtures/consumer/testdata/compilefail/plugin_scaffold_input/invalid.go": "0614911086e84749796bd17f5240e5369400ac0a286bf695c9c8b1cf20d32b3e",
+    "tests/fixtures/consumer/testdata/compilefail/relation_attach_draft/invalid.go": "546bc310d8f03b8690b889ef867e87eaddbef774644f01ae795331e94ccae96d",
+    "tests/fixtures/consumer/testdata/compilefail/relation_attach_source/invalid.go": "2de311addfbc1692f3502754d0bdf67f13c4831189a32d3863d4f38981500b92",
+    "tests/fixtures/consumer/testdata/compilefail/relation_attach_target/invalid.go": "a3de008a43ff49fbc4d391c766168d93d2095121a062a3c0015c48f202443af1",
+    "tests/fixtures/consumer/testdata/compilefail/relation_create_defaults_owner/invalid.go": "91e9b352c3983d400fdb798739c0b5f48ec56252ca050906b0fd13fa62f790e3",
+    "tests/fixtures/consumer/testdata/compilefail/relation_detach_result/invalid.go": "cec0a1a645dee755143d4b0ee206f67014a5f4b1c10d3b9002b32ffde551b9a2",
+    "tests/fixtures/consumer/testdata/compilefail/relation_exists_owner/invalid.go": "21ef0b574e33dc5cb7ca3aebe487ac029b58a5d54c16179f2acb20e5a567e68e",
+    "tests/fixtures/consumer/testdata/compilefail/relation_key/invalid.go": "d43369431e44df1a544b18be19a7336ce2cf1b455d5bdb3ffc62701d93c911e6",
+    "tests/fixtures/consumer/testdata/compilefail/relation_owner/invalid.go": "18a28b17834bc6740816990ef7321aea483dba1d143a0912f1281c3794657b5b",
+    "tests/fixtures/consumer/testdata/compilefail/relation_scope/invalid.go": "5021f4ce91587b0ad75869b948e843d88c765e82dd7602082a05bca29b6a5053",
+    "tests/fixtures/consumer/testdata/compilefail/relation_target/invalid.go": "f094e335382932c6fe9b09ebadc2bec874f6f4e2fe22309d84e41b71b1551ef9",
+    "tests/fixtures/consumer/testdata/compilefail/routing_endpoint_role/invalid.go": "45b382a3c67a82780343790c08c702cea15e9dffa42349a371f31be8fdba0f71",
+    "tests/fixtures/consumer/testdata/compilefail/routing_read_config/invalid.go": "760cae88dc65b28526c10c67c674ba436f9c11e3695218f40e1d3670c920fe81",
+    "tests/fixtures/consumer/testdata/compilefail/schedule_id_owner/invalid.go": "8221ea568ae2213f2a6d777bc903ad5487d0e07ac5be08d1e09a01bf0d232dce",
+    "tests/fixtures/consumer/testdata/compilefail/schedule_job_payload/invalid.go": "4c072a6ab2b441d4d0a95419e75d1120735762c25b55c424ecfcf42e77f4b078",
+    "tests/fixtures/consumer/testdata/compilefail/schedule_occurrence_owner/invalid.go": "8506a4a33ad4a4d027af80893e0ffb76c3bc5f484a6b67ec2710c42110655ba7",
+    "tests/fixtures/consumer/testdata/compilefail/scoped_connection_name/invalid.go": "5ee8c76bf849e6e2a7a38e60602485d1a0db9a298002243da8d3096836bf33d4",
+    "tests/fixtures/consumer/testdata/compilefail/scoped_database_settings/invalid.go": "e52e57c9d9b7d3046d784fd44df7cdcf9e0511104cdddc884927d82da146586d",
+    "tests/fixtures/consumer/testdata/compilefail/service_value/invalid.go": "cd0fb395bab3a4756fbc879a9181ffbb58aa619d83bad274b9d5111a9615bbb2",
+    "tests/fixtures/consumer/testdata/compilefail/settings_value_contract/invalid.go": "52ae1eb23149c4ed737a33f06277f924d3b8f0effb1453699df47859742562ad",
+    "tests/fixtures/consumer/testdata/compilefail/soft_pivot_scope/invalid.go": "83bbb60833842d330c598f8717855149c85c083148f2160074843f9e9765a250",
+    "tests/fixtures/consumer/testdata/compilefail/startup_broker_name/invalid.go": "728ebb07e344cc88541930f3b0e416a67b6ccee826d20ee26666cfea39287506",
+    "tests/fixtures/consumer/testdata/compilefail/startup_browser_actor/invalid.go": "8afae30eb9063779a399990a7a6a225cf1b993729490030fc143a463e0051dac",
+    "tests/fixtures/consumer/testdata/compilefail/startup_http_name/invalid.go": "df2a4e6ed1a13f24e4d63776aaad6d85e8ab413a01b2b911cc25693deeb149c7",
+    "tests/fixtures/consumer/testdata/compilefail/startup_job_payload/invalid.go": "5f68210979bc1cea73375b10c0b1ff59f06136d0fab012fc91ccc8ee9b0513d0",
+    "tests/fixtures/consumer/testdata/compilefail/startup_log_name/invalid.go": "55c21ea860cf273d610813cf1a59ff6ea39605edba516aa4f26b644227f8d173",
+    "tests/fixtures/consumer/testdata/compilefail/startup_mail_name/invalid.go": "26a33b980a8bb371a1a0f003d1ed34e8b0cfeb7d1ee1b09acaab8643ca6d63be",
+    "tests/fixtures/consumer/testdata/compilefail/trace_exporter_payload/invalid.go": "c21070415cdd2fd5cbfa18d6f428e4efa47cb284d13fe4047436f61274cdcfe5",
+    "tests/fixtures/consumer/testdata/compilefail/trace_identity_type/invalid.go": "6bcbf996bc55aa37471069f003f18d75fdc6e95fe9d044530541199f1bf59ade",
+    "tests/fixtures/consumer/testdata/compilefail/union_constructor/invalid.go": "a752389d2e54792e92c9873c24909b771311f1a2d4779bceee1e445a2ab31217",
+    "tests/fixtures/consumer/testdata/compilefail/union_handler/invalid.go": "ed63ef92419e8f7570c2872eeb6f1ba04cab74d6cc6dae75a42cd08171a1dbc6",
+    "tests/fixtures/consumer/testdata/compilefail/union_owner/invalid.go": "a7178791f6ba6a5cc10e39b99fedba3c4365bddeeed7b924ebfe3696a8b9d387",
+    "tests/fixtures/consumer/testdata/compilefail/union_visitor/invalid.go": "914f104899b64d2ea407a9c3f51ce1c25eb4ea13a69475b28454af48ca4feaca",
+    "tests/fixtures/consumer/testdata/compilefail/webhook_account/invalid.go": "6e10753e54a254ed0f2eac5b51e8d0796a8d918fa53a637fece6dfe4b6397c9e",
+    "tests/fixtures/consumer/testdata/compilefail/webhook_verifier/invalid.go": "da93eb593123a745f01a3aa7eb68fc4c74055307d519adf4e4ac20b776b3ff9a",
+    "tests/fixtures/consumer/testdata/compilefail/where_doesnt_have_owner/invalid.go": "75e5af5940fa3814f33e899c07ce492a43d7d22289cfc4f9436ebd9075d07af7",
+    "tests/fixtures/consumer/testdata/compilefail/where_has_aggregate/invalid.go": "7bbd526239e76f1b7e35ddfdd4b0791f7f6c240b89375e66a7a611a5afb02678",
+    "tests/fixtures/consumer/testdata/compilefail/where_has_find_owner/invalid.go": "95f808a55662e8f3f4ed5b29a53f354b45119a8513fdb289b8aeb0268afe9181",
+    "tests/fixtures/consumer/testdata/compilefail/where_has_owner/invalid.go": "cfb6416e191026d228dd436b237b45ad39b384f4b8cdd9a39e03c2078c6a5956",
+    "blueprint/00-master-architecture-and-parity.md": "0a9b7f63805d0332f12e16244c2f42bdbcd61200bdf1411f74e2e189df78398a",
+    "tests/fixtures/goway/footprint_test.go": "ae9e0878002d541207b5b2e9ad934eab9ae36ca5802e8ca9cb5aa56b90df8b19",
+    "tools/release/release_test.go": "9064b9fef31b7875ce8eb02aec24f0cd6cf76d7ed553e49406b332a1dca5afce",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "ecfea7af36902396758ff1c429f18eddbc7a38bd73018aac364870a6b62d733a",
+    "internal/agent/gopls_acceptance_test.go": "3b2ecde81c88908b139ac1d4104f31c83f1e6a865928604d1149620c31fb93aa",
+    "database/orm/method_surface_test.go": "d0c7bfd32a40388d46ee93e45088b228b210133eb73c56b9292bc4871ab5a1d3",
+    "blueprint/goway-data-layer/README.md": "a3f0278717966ee8a27f40d5a50ffd14dd3af2bc65d1b0fe68309189451ea1d8",
+    "tests/fixtures/goway/compiler_cases_test.go": "5f2e336beeca0c0c480407c4d93cd23b2c1bae573b91aab9014e0be878c7306e",
+    "database/orm/testdata/public-methods.txt": "06775763b7f87f044a0ad59cc27964764dbf51ff31270cac64e6b1944672dfb6",
+    "CHANGELOG.md": "6c9744c1c13c875ffd7aebfc74b57b4173fede5797de6e78063a882cce06cd6d"
+  },
+  "generated_or_pin_changes": false,
+  "footprint_changes": false,
+  "logs": "/private/tmp/goway-stage9-a3",
+  "checks": [
+    {
+      "name": "plugin-base-build",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/plugin_base",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.13
+    },
+    {
+      "name": "plugin-base-vet",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/plugin_base",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.17
+    },
+    {
+      "name": "plugin-base-test",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/plugin_base",
+      "command": [
+        "go",
+        "test",
+        "./..."
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 1.27
+    },
+    {
+      "name": "plugin-base-race",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/plugin_base",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./..."
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 2.76
+    },
+    {
+      "name": "plugin-dep-build",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/plugin_dep",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.1
+    },
+    {
+      "name": "plugin-dep-vet",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/plugin_dep",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.35
+    },
+    {
+      "name": "plugin-dep-test",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/plugin_dep",
+      "command": [
+        "go",
+        "test",
+        "./..."
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 1.25
+    },
+    {
+      "name": "plugin-dep-race",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/plugin_dep",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./..."
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 3.02
+    },
+    {
+      "name": "pluginusage-build",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./pluginusage"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.11
+    },
+    {
+      "name": "pluginusage-vet",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./pluginusage"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.32
+    },
+    {
+      "name": "pluginusage-test",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "./pluginusage"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 1.51
+    },
+    {
+      "name": "pluginusage-race",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./pluginusage"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 2.87
+    },
+    {
+      "name": "consumer-build",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./background",
+        "./scheduling",
+        "./tooling",
+        "./configured",
+        "./developeroperations",
+        "./httpassets",
+        "./spaportals",
+        "./startupconfig",
+        "./httpcompression",
+        "./httpcookies",
+        "./httpcors",
+        "./httpdownloads",
+        "./httpdto",
+        "./httpendpoints",
+        "./httpetags",
+        "./httpkernel",
+        "./httpmiddleware",
+        "./httpmodels",
+        "./httpproxy",
+        "./httpquery",
+        "./httpsecurity",
+        "./httpsigned",
+        "./httpstreams",
+        "./httpvalidation"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 4.84
+    },
+    {
+      "name": "consumer-vet",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./background",
+        "./scheduling",
+        "./tooling",
+        "./configured",
+        "./developeroperations",
+        "./httpassets",
+        "./spaportals",
+        "./startupconfig",
+        "./httpcompression",
+        "./httpcookies",
+        "./httpcors",
+        "./httpdownloads",
+        "./httpdto",
+        "./httpendpoints",
+        "./httpetags",
+        "./httpkernel",
+        "./httpmiddleware",
+        "./httpmodels",
+        "./httpproxy",
+        "./httpquery",
+        "./httpsecurity",
+        "./httpsigned",
+        "./httpstreams",
+        "./httpvalidation"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 5.24
+    },
+    {
+      "name": "consumer-test",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "./background",
+        "./scheduling",
+        "./tooling",
+        "./configured",
+        "./developeroperations",
+        "./httpassets",
+        "./spaportals",
+        "./startupconfig",
+        "./httpcompression",
+        "./httpcookies",
+        "./httpcors",
+        "./httpdownloads",
+        "./httpdto",
+        "./httpendpoints",
+        "./httpetags",
+        "./httpkernel",
+        "./httpmiddleware",
+        "./httpmodels",
+        "./httpproxy",
+        "./httpquery",
+        "./httpsecurity",
+        "./httpsigned",
+        "./httpstreams",
+        "./httpvalidation"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 21.59
+    },
+    {
+      "name": "consumer-race",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./background",
+        "./scheduling",
+        "./tooling",
+        "./configured",
+        "./developeroperations",
+        "./httpassets",
+        "./spaportals",
+        "./startupconfig",
+        "./httpcompression",
+        "./httpcookies",
+        "./httpcors",
+        "./httpdownloads",
+        "./httpdto",
+        "./httpendpoints",
+        "./httpetags",
+        "./httpkernel",
+        "./httpmiddleware",
+        "./httpmodels",
+        "./httpproxy",
+        "./httpquery",
+        "./httpsecurity",
+        "./httpsigned",
+        "./httpstreams",
+        "./httpvalidation"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 42.42
+    },
+    {
+      "name": "owned-compiler-cases",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        ".",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(aggregate_input|aggregate_nonnullable_result|aggregate_owner|aggregate_pivot_input|aggregate_result|application_event_outbox_key|application_timezone|cli_command_name|cli_handler_arguments|cli_registry_key|config_owner|config_value|contribution_result_type|email_address_type|email_attachment_key|email_idempotency_key|email_job_payload|email_stored_source|email_template_data|email_upload_source|event_listener_payload|event_model_id|event_payload_type|event_topic_conversion|form_actor|form_handler|form_optional_actor|form_prepare_input|form_prepare_output|generated_config_owner|generated_config_value|generic_dto_argument|generic_dto_handler|generic_dto_rule|health_probe_callback|health_probe_identity|http_asset_media|http_asset_path|http_asset_service_key|http_asset_source|http_compression_encoders|http_compression_level|http_cookie_model|http_cookie_name|http_cookie_value|http_cors_header|http_cors_origin|http_csp_hash|http_csp_sandbox|http_csp_source|http_download_body|http_download_disposition|http_download_handler|http_download_media|http_download_model_id|http_download_source|http_dto_descriptor_conversion|http_dto_descriptor_owner|http_dto_encode_nullable_value|http_dto_encode_owner|http_dto_encode_slice_items|http_dto_enum_value|http_dto_model_id|http_dto_nullable_owner|http_dto_patch_state|http_dto_result_owner|http_dto_slice_owner|http_endpoint_body|http_endpoint_body_descriptor|http_endpoint_path|http_endpoint_query|http_endpoint_response|http_endpoint_url_query|http_enum_codec_descriptor|http_error_code|http_error_declaration|http_etag_config|http_float_integer|http_float_named|http_float_width|http_generated_path_enum|http_generated_path_model|http_generated_path_owner|http_header_value|http_json_codec_owner|http_json_key_conversion|http_json_key_owner|http_json_map_owner|http_json_scalar_owner|http_middleware_id|http_multipart_file_slice|http_multipart_file_value|http_multipart_handler|http_multipart_json_value|http_multipart_owner|http_path_codec_value|http_path_field_value|http_proxy_header|http_proxy_network|http_proxy_origin|http_public_origin|http_query_conversion|http_query_default_value|http_query_embed_owner|http_query_merge_owner|http_query_model_id|http_query_optional_field|http_query_owner|http_query_repeated_field|http_query_scalar_field|http_route_handler|http_route_model_id|http_route_path_owner|http_scalar_conversion|http_scalar_owner|http_security_policy|http_signed_handler|http_signed_model|http_signed_origin|http_signed_query|http_signing_key_id|http_spa_index|http_stream_body|http_stream_disposition|http_stream_handler|http_stream_length|http_stream_media|http_stream_source|http_test_response_owner|http_text_path_pointer|http_url_source_owner|http_validation_body|http_validation_input|http_validation_path|http_validation_query|inspection_section_type|job_envelope_version_type|job_handler_owner|job_identity_conversion|job_identity_owner|job_middleware_owner|job_options_owner|job_payload_owner|job_retry_identity|job_test_identity_owner|job_unique_owner|job_with_middleware_owner|job_workflow_payload|migration_identity|named_cache_store|named_config_collection|named_database_connection|nested_field_owner|nested_policy_actor|nested_relation_owner|observation_operation_name|observation_reporter_payload|pivot_key|pivot_model|pivot_order|pivot_payload|pivot_scope|plugin_asset_identity|plugin_collection_schema|plugin_config_override|plugin_identity|plugin_job_schema|plugin_migration_registry|plugin_provider_wrapper|plugin_requirement|plugin_route_scope|plugin_scaffold_input|relation_attach_draft|relation_attach_source|relation_attach_target|relation_create_defaults_owner|relation_detach_result|relation_exists_owner|relation_key|relation_owner|relation_scope|relation_target|routing_endpoint_role|routing_read_config|schedule_id_owner|schedule_job_payload|schedule_occurrence_owner|scoped_connection_name|scoped_database_settings|service_value|settings_value_contract|soft_pivot_scope|startup_broker_name|startup_browser_actor|startup_http_name|startup_job_payload|startup_log_name|startup_mail_name|trace_exporter_payload|trace_identity_type|union_constructor|union_handler|union_owner|union_visitor|webhook_account|webhook_verifier|where_doesnt_have_owner|where_has_aggregate|where_has_find_owner|where_has_owner)$"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 27.83
+    },
+    {
+      "name": "catalogue",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.23
+    },
+    {
+      "name": "docs",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.65
+    },
+    {
+      "name": "format",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "command": [
+        "sh",
+        "tools/format-go.sh",
+        "check",
+        "/usr/local/go/bin/gofmt"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.78
+    },
+    {
+      "name": "diff",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.02
+    }
+  ],
+  "updated_at_utc": "2026-10-24T20:41:54.887284+00:00",
+  "compiler_cases_passed": 210,
+  "contract_evidence": "Reused immediately preceding laneA9 remainder exports: manifest, OpenAPI and TypeScript byte-identical. Stage9 changed no runtime, declaration or generated source.",
+  "source_rewrites": [],
+  "new_rows_ported": [],
+  "limitations": [
+    "No live PostgreSQL; sources compiled/vetted; lead owns integration gates.",
+    "26 consumer negatives still use legacy declarations; their passing baseline does not establish an ORM port.",
+    "H1 is separate and untouched; A2 waits for lead confirmation of A1 integration."
+  ],
+  "laneA9_final_reporting_checks": [
+    {
+      "command": "make docs-check",
+      "cache": "r6",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "integration_batch7c": {
+    "historical_source_hashes": {
+      "tests/fixtures/plugin_base/base.go": "d4e8a5935bbdef63217362958f2726305cfe9e1bf5c12d28b3f9a30f52b36fb4",
+      "tests/fixtures/plugin_base/base_test.go": "1bf1c477a54d9f4b5586ed6df1c75a322915e4eacf3ffbac204f7663dd47e2ff",
+      "tests/fixtures/plugin_base/trace.go": "3f30e62ad29dfebe38e8524c6ed6646dd4a3ec0e94189d4a641778ab19662fed",
+      "tests/fixtures/plugin_dep/reports.go": "cdb835ddac1dc11c0604a3ca33851f04ec17558bd82bdbe8f230eb627f0db9b3",
+      "tests/fixtures/plugin_dep/reports_test.go": "c167d9ea7b669f74ab66437494ce5597e1b944f4870f629adc48d9af710e7669",
+      "tests/fixtures/plugin_dep/scaffold.go": "8e840ec886974ab7b7fe0b710590a0fa45cf8b1110666c5ed96193f0029d8329",
+      "tests/fixtures/consumer/pluginusage/bootstrap.go": "252d8fab2e29bbcf8ff47d80fb2faf0762f715ecbf484a7b45a4d3d0eb27a145",
+      "tests/fixtures/consumer/pluginusage/migrations_postgres_test.go": "bdde9a3d4ae6014d4f4c65315317dea2d2d265bdb78324377650fcd247544852",
+      "tests/fixtures/consumer/pluginusage/plugins_test.go": "b0fef92b37d616bfa991919f5520bab9a8d38bb12b66696d000fe016db481e5f",
+      "tests/fixtures/consumer/background/module.go": "2f2bdb688d6211c7713c55ee0d9f8fb0a0458a197c6cf54b1eba04d85d46cc23",
+      "tests/fixtures/consumer/background/module_test.go": "df8cf2b87ecdda19f8c781d1c51dcb51e09f14d23ad1a3915a15605183823dd5",
+      "tests/fixtures/consumer/background/operations.go": "400389d74c62816f8d1dcbf199a9ba40327d8dd89619a28273a4e311d15d81ac",
+      "tests/fixtures/consumer/background/operations_test.go": "9862346849041dd56f8a04ec5a49dac01417f174acd356c53b0ed985a93f52f3",
+      "tests/fixtures/consumer/background/welcome.go": "fb8ebb054af03afef54cfa92eb40610920013f1b76c7fc3cb67b9de3cf918611",
+      "tests/fixtures/consumer/background/welcome_test.go": "13e2c84744e0ae26bd75478841a3039faaac31f5b6f7f6694f02a71e726cf627",
+      "tests/fixtures/consumer/scheduling/reports.go": "b5a63514e39e97965f4a136bbdd54cdb05490bc6e8ab62bdbff87a19b235fd84",
+      "tests/fixtures/consumer/scheduling/reports_test.go": "005abdcd4cdb39705cf88105e70dcf32246fbf6727bb5f1bf85e51986c601573",
+      "tests/fixtures/consumer/tooling/commands.go": "9018dd245ab56229ea66fe7f22d9012650db831e2eb37c2db0d5b5aa99f9955f",
+      "tests/fixtures/consumer/tooling/database.go": "677485bfe34d2442bf95f715a84217d0f5e1b9865fff1d01771e32f4768de3ae",
+      "tests/fixtures/consumer/tooling/helpers_test.go": "5f719adf991859da535a917ea27587af3178762f0bfdb0f530e87d8e857a136d",
+      "tests/fixtures/consumer/tooling/production.go": "f6d62c12f24d27577c3264369e4579e4dae316ab49eb6720652ac5db17b51a44",
+      "tests/fixtures/consumer/tooling/production_test.go": "f3d911efe7de1319d7b06d010b441f1a727ad0aa0cc5788a147da116033a537b",
+      "tests/fixtures/consumer/tooling/routing.go": "a0291cdc8f3ba785aa029ce5004967dfa0670e62fdb31f3376591a50f6b0f153",
+      "tests/fixtures/consumer/tooling/tooling_test.go": "237837ce73d32f90d520f717dfeec219beb9b8a7b90b8e7c4064204977cbfead",
+      "tests/fixtures/consumer/configured/settings.go": "ba7f3a45b8a780976e382a3b4f378a948f165cc5756c05cb129ac0ce422bfe6e",
+      "tests/fixtures/consumer/configured/settings_foundry.gen.go": "145ab8aaf2a1225cc5e43fb4cc2b77f5a5ca3a7888cc6873a6b889199e527fe6",
+      "tests/fixtures/consumer/configured/settings_test.go": "3020023c8a44f0879af74c7c90bb86b3b2810b23910745a73aaa7c595749b446",
+      "tests/fixtures/consumer/developeroperations/operations.go": "e47135f98b39e77b379600ba5fbef83b2e6a98aa283f0e69d66679a7f76623c8",
+      "tests/fixtures/consumer/httpassets/assets.go": "943f608fa79e334ddb2135fa267c99b2980f4ca2e2bef336b9c2ea80dd059629",
+      "tests/fixtures/consumer/httpassets/assets_test.go": "70f219ed6efa9ab4d52f089bc1d136bbdff5d1148c0bb870590d4128d11946d4",
+      "tests/fixtures/consumer/spaportals/portals.go": "a08546f4ec6cea47e9b72a1cb102557cc879397feab9a01f19a342591ee14ac4",
+      "tests/fixtures/consumer/spaportals/portals_test.go": "86ad8c8c10ba803f82efa83b10bcf64933dceacb6a9770295989d1169db6f661",
+      "tests/fixtures/consumer/startupconfig/environment_foundry.gen.go": "7dfbd70f41268e99a814c939a2ff39137a1db17eb70bec581a2f6c7f04749736",
+      "tests/fixtures/consumer/startupconfig/settings.go": "1c66556aa9aa78b5f892dab5893a1259e1bf456fac4d66038052e366cf032827",
+      "tests/fixtures/consumer/startupconfig/settings_foundry.gen.go": "70aad5fde966b8769a28e267d981dcb1506b8524187a90e31a07472b0d41f8ee",
+      "tests/fixtures/consumer/startupconfig/settings_test.go": "26d057aeeb907d1c7ad72c93bc3b0f33de7ae2a21c45ffd2d58d9935ace5669a",
+      "tests/fixtures/consumer/httpcompression/compression.go": "96983789f891f498208cbf6d01c7a808f9bff61aa2f649722fdadc9a604b84d8",
+      "tests/fixtures/consumer/httpcompression/compression_test.go": "1af3d40feb1529d8f01845a93ef42a3d72f3083a4c5e122d9edcef201e0daf29",
+      "tests/fixtures/consumer/httpcookies/cookies.go": "8a2cb5f93756e20798a40e7d49655b93d0a68f23c190432fb4349cf8a7660c64",
+      "tests/fixtures/consumer/httpcookies/cookies_test.go": "210b1eea37f7c005f162534f7663c9c6982c7f97c4f6922b5c6e269f10511652",
+      "tests/fixtures/consumer/httpcors/router.go": "bc064cbfd33695b6cc63d464287b8d92aa74ac5bdb56d37fbb029ab00a9df299",
+      "tests/fixtures/consumer/httpcors/router_test.go": "e29259d7b74a948ee4236821f89556ef2e2cbc5b17de595cb7248d6862e9d2a0",
+      "tests/fixtures/consumer/httpdownloads/downloads.go": "8c746b86e40c3f6c04e639a44b2e528a145b105d5683cc1f54ac1bd4d04c54d7",
+      "tests/fixtures/consumer/httpdownloads/downloads_test.go": "0ddfe8f3288522ee975d1dc1782a891a4bde60fbb7f5d41deec2b7b8f0759efe",
+      "tests/fixtures/consumer/httpdownloads/example.go": "5552efeee146ebbec572d57a5ba51e0731d5b639e9718ab90901ee8bd387e710",
+      "tests/fixtures/consumer/httpdto/custom_code.go": "9d06e5ae7f6d3f284f4bd44565433ec4886667d25e55e39675c61074b9e1ce56",
+      "tests/fixtures/consumer/httpdto/custom_code_test.go": "68f716d694eaf5c4680a0e4b3be45ad73221ec028b7f3a98ba6fca059f64a782",
+      "tests/fixtures/consumer/httpdto/dto.go": "7fd275107447da5224ad7156b02a13770d742828fdf23fc789038c97a6cb2bcd",
+      "tests/fixtures/consumer/httpdto/dto_test.go": "42417f77686e2989f790ca133492860bcc8a9c912978a11f08ac9b81c8af7532",
+      "tests/fixtures/consumer/httpdto/encoding_test.go": "5825f232cac0b7f4ff0d43c31d242c3cd6841a88cba8c6b209db55e8ed9e3ff4",
+      "tests/fixtures/consumer/httpdto/inventory_response_foundry.gen.go": "20cc3ab00101c0019ed1780e00f51da1fee84c6b907c271d2448bd903b21f72c",
+      "tests/fixtures/consumer/httpdto/map_keys.go": "66d9fcd96a36462258103fc64348c2ca73d98c057525dc68d0915d418abd5eb9",
+      "tests/fixtures/consumer/httpdto/map_keys_test.go": "697a3a3247c9ba785f91614700a23889e751fe40e43adf3c71215704a059a659",
+      "tests/fixtures/consumer/httpdto/order_response_foundry.gen.go": "6ae2ceec532ba705d499ca3679374822be261d630ab596970e41d628d8d70fd2",
+      "tests/fixtures/consumer/httpdto/stream.go": "32e4c5dac6255e8639c90ed090b095cf9354398db73afb14a588596bcf34d9eb",
+      "tests/fixtures/consumer/httpdto/stream_response_foundry.gen.go": "f557a458aede5a2c9a18a4ef1aa20dda42d2d49abd8474215ff8a5db8dd0d65a",
+      "tests/fixtures/consumer/httpdto/stream_test.go": "dff56135241d36550cd8c00a06a8146a043b9ac766f305d25145684b67efc95c",
+      "tests/fixtures/consumer/httpdto/tracking_response_foundry.gen.go": "ca0228bb6d3293356cbfc3c986a33e89cdc57be17e15548b8784d74c3e7ab7e2",
+      "tests/fixtures/consumer/httpdto/update_user_foundry.gen.go": "59a5e8273144e4d781684e4b42898ceb0a466c9b5d0a2611105890f5af19aad6",
+      "tests/fixtures/consumer/httpdto/user_response_foundry.gen.go": "d8de8105791d02f751c888e215c87706bbe4457c5ba7eaf7f149427ec84da31c",
+      "tests/fixtures/consumer/httpendpoints/deadline_test.go": "264272d4105a586049f1241ce012f6bce7dca15fe9472d634171849e825dd59a",
+      "tests/fixtures/consumer/httpendpoints/endpoints.go": "884735497c55c1dd5f7e9595b435911f418486d1951771b09a220f795c889cf8",
+      "tests/fixtures/consumer/httpendpoints/endpoints_test.go": "a62e1cd8425adea3e25633aa4c548c990a0216b5a0a05864ab864ce964fa403f",
+      "tests/fixtures/consumer/httpendpoints/errors.go": "4f1efc50067f70539f5ee0852ab61fd520aa7115d219c001493ba44ae487d971",
+      "tests/fixtures/consumer/httpendpoints/errors_test.go": "b0b95e720b82c44aa032ec53dda7f320bcf4eef26f7d5d1d1e00b03a7e826c64",
+      "tests/fixtures/consumer/httpendpoints/retry_errors_test.go": "f9b8169048f4f9ce636253b25da79b5b19acfe8fb1482682f76f7204fcae8a4e",
+      "tests/fixtures/consumer/httpetags/etags.go": "ec4966987705844d72dc1528dd5548b8e051153099c77642abc2ab2ec00cd667",
+      "tests/fixtures/consumer/httpetags/etags_test.go": "d80c3a5fb1317a7bc93081314c53f6925bf0662db9d920985f7c5124ee24a24c",
+      "tests/fixtures/consumer/httpkernel/asset_path_foundry.gen.go": "e760d3df725412ec124aea11ab187bef2a8f5461a670d543c7aae5c41eb2cd6f",
+      "tests/fixtures/consumer/httpkernel/generated_routes_test.go": "d34051f0d539db51c7895d2080b82dcfd8afdd0887ea20eb4d89c6124e7e2aff",
+      "tests/fixtures/consumer/httpkernel/kernel_test.go": "e97d615934e4290cc079b0110885a61cfbb3a62ce29f54655b6c8e21c9687a80",
+      "tests/fixtures/consumer/httpkernel/path_declarations.go": "8b4a1df4c17237fc311d337949bce61ae6727214f09a40cd904e5224d3cce41c",
+      "tests/fixtures/consumer/httpkernel/request_test.go": "911bfafd61db71f2508f7cd77b6a94fa7395f694e3a692f7e161e29dbb2864e4",
+      "tests/fixtures/consumer/httpkernel/routes_test.go": "b4da12df365c56000988fb0e9c84ba32f99fdcc0d678364e7e7249735a3937c0",
+      "tests/fixtures/consumer/httpkernel/user_feed_path_foundry.gen.go": "c29cbce0e77694df7ab6634ef1fb7da42dbbf197d7caf95233258591aec13da4",
+      "tests/fixtures/consumer/httpkernel/user_path_foundry.gen.go": "312f16089eb607df7419d97cdbc7b6d934144f38a7367a6c5af91efc50648a92",
+      "tests/fixtures/consumer/httpmiddleware/router.go": "27664bd674cf58160cf5dcee7ba28c5c9bd6e4c5c382a255d43d2b8ed8c76782",
+      "tests/fixtures/consumer/httpmiddleware/router_test.go": "21fcbc98346a697ba53e4170240572ad33ff24b7fcb6980ae3e499a11a81b1ee",
+      "tests/fixtures/consumer/httpmodels/bindings.go": "22bc0ed7f410a24a4552d2786108beb21d3ed2f47d61ca1b8baceb70fd926a99",
+      "tests/fixtures/consumer/httpmodels/bindings_postgres_test.go": "aef3dd54b55ac1090568ac55308130c83a25be2f6436bb13982b407d181055f2",
+      "tests/fixtures/consumer/httpmodels/bindings_test.go": "014a94b27a37acaba0c28e7851217b31c067deb5103982068121bb8972f8bfba",
+      "tests/fixtures/consumer/httpproxy/router.go": "940321d71b4844f85209daf7a34c724fa907561b2f9af732a21b48e782515026",
+      "tests/fixtures/consumer/httpproxy/router_test.go": "8e6ebbb506d43e66dd8773a6d8bddd13b9c9f125398408c48bcdb36f2712ac21",
+      "tests/fixtures/consumer/httpquery/composition.go": "7de7cc88725be6906981a6eaed83ec418c0f69b7820562e5463745d1ca5467db",
+      "tests/fixtures/consumer/httpquery/composition_test.go": "1d0a316a41cf811257e13e16d2f30ed3fc72d425bda235a84273dbca18cadcdf",
+      "tests/fixtures/consumer/httpquery/floats.go": "29c304ea20737fe5d9c4822492952939ac21ed8348c8b6f0018c5428e8dba968",
+      "tests/fixtures/consumer/httpquery/floats_test.go": "866bbc734f0f258e7ba69058fb21519988e586f4c036385da445bb11c1aeff5f",
+      "tests/fixtures/consumer/httpquery/json_contract.go": "2103d1f65362cb926255ef9436760f845c0dc0c7ec6205c57e8dbf34afa14206",
+      "tests/fixtures/consumer/httpquery/nearby_input_foundry.gen.go": "e4f6f49239c0f59f137f4abb50f63383efe4e91c56fc4eb6474c93eda2e7ff24",
+      "tests/fixtures/consumer/httpquery/position_path_foundry.gen.go": "73eb7587cc47d22bba58af2d28a29479f82656ff52b30bbd346196f077059b1d",
+      "tests/fixtures/consumer/httpquery/priority_path_foundry.gen.go": "fc912569594e8671b1d12e36c0bb1d65d95c1b19088c207a7f3b0b856b829139",
+      "tests/fixtures/consumer/httpquery/priority_query_foundry.gen.go": "748cc8064904fa53afdf67a3adc8e703ba8316c14e86dcbbe6da9120074ffd63",
+      "tests/fixtures/consumer/httpquery/priority_response_foundry.gen.go": "cdda3d3a1f6b158db313f7fba92cc03db183c509ed3b7cc90ec2b8c4488ee767",
+      "tests/fixtures/consumer/httpquery/query.go": "e313de4e4ae0d00e47c0891b988ac197ba77387b0fd6c16f70f274fb7462b823",
+      "tests/fixtures/consumer/httpquery/query_test.go": "406a1f6a4709ec6b85ff561f73f88924785186c9a2b78fb50fc80bf5186fd561",
+      "tests/fixtures/consumer/httpquery/scalar_metadata.go": "7baaa70df31b36c33bb2e95fe50c3ae77323b72bc03333b4e2a063262a7655b3",
+      "tests/fixtures/consumer/httpquery/scalar_metadata_test.go": "66bef09f5f80bd308ecf3f24101dcd40ce64cd1ad24f9ae2fdaf32f70a7da218",
+      "tests/fixtures/consumer/httpquery/search_input_foundry.gen.go": "3980fc9c1fa8b391e101816ff283e1fa05379c2233d7542d0bad5965e8e6f4cb",
+      "tests/fixtures/consumer/httpquery/source_identity.go": "b2f388a07ef41e138a84bc3b80ca599b87eb6742ed695ea2f86b72a035470009",
+      "tests/fixtures/consumer/httpquery/source_identity_test.go": "9a7d52374ef4bc82a2c1d6fa32b43d4bae66dd42c66d5aab8c7004b43788fc80",
+      "tests/fixtures/consumer/httpsecurity/csp.go": "13d2e87c90b57fdf6dc63e8cb718ef171fa29a680034baf60ea49e197b29e16e",
+      "tests/fixtures/consumer/httpsecurity/csp_test.go": "4632ffbc30c66115525eab635d40f48136317f42aab300b894358242e33a329e",
+      "tests/fixtures/consumer/httpsecurity/public_urls.go": "1f474a4434d80332e890fc8813c97084526dfd29e289b518db9594033a63d589",
+      "tests/fixtures/consumer/httpsecurity/public_urls_test.go": "06be5a033ba21cf41962e007f4e6a6405472e0346fc3ad37d969346110df00eb",
+      "tests/fixtures/consumer/httpsecurity/router.go": "08c984bfbb364a7579f031d345e3c5780d00cfd642ef3871eb15131fae44afd9",
+      "tests/fixtures/consumer/httpsecurity/router_test.go": "494cadb2c8361f1477bf817b343052f9a68eb7b139522cad3f61b676c96cd52f",
+      "tests/fixtures/consumer/httpsigned/links.go": "49fbc92c3814938ab67645b98def34f9081b98f7b640cf5e871ee2f735cc465f",
+      "tests/fixtures/consumer/httpsigned/links_test.go": "a1043345ac44e501c51ab9ab5029cf194e60c7c1a86ba9c229b5c21c84eb00ce",
+      "tests/fixtures/consumer/httpstreams/streams.go": "6f67ccccadebf28604a1fe11bcda68e4fd9af8774fcc313a0b7b3245ecef799e",
+      "tests/fixtures/consumer/httpstreams/streams_test.go": "3b7daffd6b28ec998d640b0ed46e70cc6c6b5e3fec7c0eed18984b5cb74d219b",
+      "tests/fixtures/consumer/httpvalidation/async.go": "8a1df963910b73630b2eb2494929b7e12beac1c10576e59e11f11da4415f2e02",
+      "tests/fixtures/consumer/httpvalidation/async_test.go": "5866d92cb0dff5275187251ab5d4243b2ed047e046e46cf1481a5ad49da5c487",
+      "tests/fixtures/consumer/httpvalidation/validation.go": "e3cd34387a058030adb41d0c402b6950e10927b390230ff201d5689606aa03e5",
+      "tests/fixtures/consumer/httpvalidation/validation_test.go": "27a88d5dd879bb12227b8ead9063ca0411482be6a877717e781a14a239837446",
+      "tests/fixtures/consumer/testdata/compilefail/aggregate_input/invalid.go": "1caff534d47e9a288ccfd8b97fa55e61b958dca90ed4fe54cc0bb1d607ba0a52",
+      "tests/fixtures/consumer/testdata/compilefail/aggregate_nonnullable_result/invalid.go": "801aa32bb6859f497698eb8c11ac918401d51c06ae98f7d0f3ff679e266d65d3",
+      "tests/fixtures/consumer/testdata/compilefail/aggregate_owner/invalid.go": "bfe12902bccd07586c8cf30ff38feeecc1173508245d9bf6a9e2a2c68beb31dc",
+      "tests/fixtures/consumer/testdata/compilefail/aggregate_pivot_input/invalid.go": "3d28e561c6a2e319a2c14384d69bcee65d7b4707ec0f01af687b055ff1309d21",
+      "tests/fixtures/consumer/testdata/compilefail/aggregate_result/invalid.go": "4a712f3075a8cc385804590f1de96151bb4ae8fee0d2472acb8ec9327e600d50",
+      "tests/fixtures/consumer/testdata/compilefail/application_event_outbox_key/invalid.go": "ce5f20812ca3476a51017bfd4b3c7c30ce62d74d67034be3f0791f9aee309a5d",
+      "tests/fixtures/consumer/testdata/compilefail/application_timezone/invalid.go": "ff0b84b46338ee07b9dbac7f5fa92f2e66ffcc67969c9c0b8db53a2897118281",
+      "tests/fixtures/consumer/testdata/compilefail/cli_command_name/invalid.go": "d9e2ebd886ddc6ca5f25d19e01dd3a92aad6272a16abed67de192deb7d53cbff",
+      "tests/fixtures/consumer/testdata/compilefail/cli_handler_arguments/invalid.go": "d7e8c073a41bc7dc520d68b6acb602292060d7a940c142b4bd7045dbab8efb44",
+      "tests/fixtures/consumer/testdata/compilefail/cli_registry_key/invalid.go": "34d0eb4c89be4e227d27c736725e5e846fb17f3d6677e6687f42ec54b0775260",
+      "tests/fixtures/consumer/testdata/compilefail/config_owner/invalid.go": "51373f723d55090937f8afc4a8bb04a05c74449255a827a775b2c5ec579a63a1",
+      "tests/fixtures/consumer/testdata/compilefail/config_value/invalid.go": "91cd40ee866b6d332d0fbd90abd30852e520518daeb2fdc5e4175cf6cb34f7d4",
+      "tests/fixtures/consumer/testdata/compilefail/contribution_result_type/invalid.go": "969f911872fffae4ce439aa70912bbdbeda396461e0e5fbc0f1d79bf9b8f5ba6",
+      "tests/fixtures/consumer/testdata/compilefail/email_address_type/invalid.go": "fcf58fa0b5b4c1afb8c8395e4989adef9923292ece480eec8870de577a627d43",
+      "tests/fixtures/consumer/testdata/compilefail/email_attachment_key/invalid.go": "811d706a0283e5679c62821762d8adc3925f4ca67ad6750d2f28329067508854",
+      "tests/fixtures/consumer/testdata/compilefail/email_idempotency_key/invalid.go": "57bc766e33ec6baf7f216a09ad25b56e97a82f5b39fda2bb1350c8659d121153",
+      "tests/fixtures/consumer/testdata/compilefail/email_job_payload/invalid.go": "0f8b1eac480bea5d436f1c7c9f4323498fc05f130f2a753c6f5450b5773afe72",
+      "tests/fixtures/consumer/testdata/compilefail/email_stored_source/invalid.go": "0b6606fa7a3a612deb09cc177bb1016ab9abfe3856956993cd1224b2de5fb6cf",
+      "tests/fixtures/consumer/testdata/compilefail/email_template_data/invalid.go": "dd0cbd668d4d5053d075f2c2f88b7b78c1004da6a1443a87dc1d77d8cdc799d9",
+      "tests/fixtures/consumer/testdata/compilefail/email_upload_source/invalid.go": "db4ac270d74e165efc7e57509fc08a86914e0e651e64eb316926a020476e3fc5",
+      "tests/fixtures/consumer/testdata/compilefail/event_listener_payload/invalid.go": "a0b6e0508a2112fee1f287a065110f528caac3f7c1f51087f5f30cdf883440f3",
+      "tests/fixtures/consumer/testdata/compilefail/event_model_id/invalid.go": "b186863281a2573033000d4ec66300f64cf5f6aa75fa949cec981d35d919e335",
+      "tests/fixtures/consumer/testdata/compilefail/event_payload_type/invalid.go": "8bf13490077abbb2466f948d999f4418dff19ea10235e8e258c11b1631fde18d",
+      "tests/fixtures/consumer/testdata/compilefail/event_topic_conversion/invalid.go": "008ec8a2a080edcdb6f292979188f90c9c5bbc29f1f05f1c2ec899dd65969a77",
+      "tests/fixtures/consumer/testdata/compilefail/form_actor/invalid.go": "d386d3f0a28d89ff1a99df2386a2e2dfa932c78f35df4f2717b491c975e25fae",
+      "tests/fixtures/consumer/testdata/compilefail/form_handler/invalid.go": "25dfb0a39eb8a05004eda5174fc06f23b23bec3794bf2b6ee9b2685f85b91f5b",
+      "tests/fixtures/consumer/testdata/compilefail/form_optional_actor/invalid.go": "70aae3b04da38bd292562f165972d5ef551f6f171f76c9d2d73d36091c489ac5",
+      "tests/fixtures/consumer/testdata/compilefail/form_prepare_input/invalid.go": "ccb084842623a5d34b81f3fad89b5843b45b94b2887e065fbabfd45eba2018fb",
+      "tests/fixtures/consumer/testdata/compilefail/form_prepare_output/invalid.go": "629795455da651c9b6790dbb5210482194a126e5efc9b7f32b7b4b4077eb3431",
+      "tests/fixtures/consumer/testdata/compilefail/generated_config_owner/invalid.go": "74f339cf978f96f9e1f682d80cdbd49d70d72ef1af804c9bce16c8f8f9565809",
+      "tests/fixtures/consumer/testdata/compilefail/generated_config_value/invalid.go": "8398dee7d3c8fbf1e884884e3bff054c41d00f9ca15792900d9c8285eb8cf3bf",
+      "tests/fixtures/consumer/testdata/compilefail/generic_dto_argument/invalid.go": "04b165f35a3b3b57035c64ef9166102aa9dabc4b01163e5e4cb7061908ec3a49",
+      "tests/fixtures/consumer/testdata/compilefail/generic_dto_handler/invalid.go": "aa386ba8520f9b0f7af8a90e3bba2b972d7b5ae31e2fbdafbaf591de397ce7e3",
+      "tests/fixtures/consumer/testdata/compilefail/generic_dto_rule/invalid.go": "983566933aecc7507d6494842b14bd715391f99bbe937229d6b97c90ab2444f8",
+      "tests/fixtures/consumer/testdata/compilefail/health_probe_callback/invalid.go": "13596f49a51c0b13e738a3ceda40daf8e8fd5e39ac310b5480954c674657d328",
+      "tests/fixtures/consumer/testdata/compilefail/health_probe_identity/invalid.go": "58b8c74d4e7b780b128f00bacc2d4b1016afb845ce3baa723f6827f8dbe29686",
+      "tests/fixtures/consumer/testdata/compilefail/http_asset_media/invalid.go": "910c143e5264cc13d0c8f05ed39237d74089dbdd7af42007c43b587e81cc8d85",
+      "tests/fixtures/consumer/testdata/compilefail/http_asset_path/invalid.go": "e78291de4e12404503aec3a99a13be7ea46abe1d53ae40666d6d5908147af58b",
+      "tests/fixtures/consumer/testdata/compilefail/http_asset_service_key/invalid.go": "a7ea92add3614b082cc897d9cb9c949635e10643df94717d0e3ffb730c90f14c",
+      "tests/fixtures/consumer/testdata/compilefail/http_asset_source/invalid.go": "a93862f2148c022c69f4f4148027eccfb2c51b3a9dff361b78b79b3a1c343bd1",
+      "tests/fixtures/consumer/testdata/compilefail/http_compression_encoders/invalid.go": "b983e2ff860b29a296770c15d98492666074df136eba836e58537f16c6b54bbd",
+      "tests/fixtures/consumer/testdata/compilefail/http_compression_level/invalid.go": "1c2c766854315f006d5d61b3564bf299a5f7cbaa85400999e8426dcc67d60e0b",
+      "tests/fixtures/consumer/testdata/compilefail/http_cookie_model/invalid.go": "c923392fa6ec2d42da9538774460ee8c6c131a91fff5dca0ca6d6382558065f5",
+      "tests/fixtures/consumer/testdata/compilefail/http_cookie_name/invalid.go": "711af61ef6b8f950565eae75fa3057c6e69939f46aa034ebb41b112af405699e",
+      "tests/fixtures/consumer/testdata/compilefail/http_cookie_value/invalid.go": "9f5436efd875ea7dfd1f7b389aaaa1b8f7929005fbe6ae6561cc49e6b0294b27",
+      "tests/fixtures/consumer/testdata/compilefail/http_cors_header/invalid.go": "8342242f2cce22f6ac3b523997550960be1a239e00343b97c8013a10e08e2a44",
+      "tests/fixtures/consumer/testdata/compilefail/http_cors_origin/invalid.go": "2f691d5194a858c9e564d2376eb58ec23ea9769b8b12e2360f7be74c1ee65973",
+      "tests/fixtures/consumer/testdata/compilefail/http_csp_hash/invalid.go": "eb28e05464e522292e22c36ef19b77ea754c8aff1d41b55d7cb6166bd214c80d",
+      "tests/fixtures/consumer/testdata/compilefail/http_csp_sandbox/invalid.go": "53581105a886e121f7a25cc6ea5d427341ebd78b57021257c5b9f493890e81fb",
+      "tests/fixtures/consumer/testdata/compilefail/http_csp_source/invalid.go": "0ace0218934b6496cd3a1e69e7ece5faa1fc64e29e26ede5e69ed3f1363e1795",
+      "tests/fixtures/consumer/testdata/compilefail/http_download_body/invalid.go": "564b54f8cddeba19908ef4dcb64f69d9ee5d57cc5d139abc0cf2e23ae85d3d33",
+      "tests/fixtures/consumer/testdata/compilefail/http_download_disposition/invalid.go": "862479b63c67292d467312339a97e64b97166f3226d49f4872b961caef73fae4",
+      "tests/fixtures/consumer/testdata/compilefail/http_download_handler/invalid.go": "134f1dfb94eb2ac656545531096f72b9c2038733362fd72d64b362fc90616a2a",
+      "tests/fixtures/consumer/testdata/compilefail/http_download_media/invalid.go": "8e441f530838978d4ab02d76c61c017ad12ad4202fab0d3c5b3f8baf3a5493ec",
+      "tests/fixtures/consumer/testdata/compilefail/http_download_model_id/invalid.go": "84887bb48c5aa4f39faa8e03eca673afc8bd7692ffa41df7c5d9618d91a1a7cb",
+      "tests/fixtures/consumer/testdata/compilefail/http_download_source/invalid.go": "17b1ca26f7d8b9df72dba628c6e3bf32dfe9a6a9f38de5beade3a5b34b5f0bf6",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_descriptor_conversion/invalid.go": "53baa9c59c0e9d5451b778c62ddb22d9175b2c8b210f002d4acd024b345c2dab",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_descriptor_owner/invalid.go": "8d3266c0d19c4b625e1d773a7b207d15b3c4053981f258543c4b329a1cd7d5a8",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_encode_nullable_value/invalid.go": "4156aab128e1cd83262ac4674d890fc55663e4957e67e131e2ff6118486ee403",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_encode_owner/invalid.go": "f52d84e22c4f76b78db47b3432aa0ee022c81dbe748632c23a0a12e161efc135",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_encode_slice_items/invalid.go": "20e3647e6e118d28869dee976c02aa8a106a90ba13c427897e21a9656d1c13d0",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_enum_value/invalid.go": "176882b04dc1a4d72060c619ef48a4c0224e0fbe9c61fb6f50c1aa46591642b0",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_model_id/invalid.go": "0dba8736828edfc42607044da264241a8edd110d9bf0e5022cbd3302b1fb577f",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_nullable_owner/invalid.go": "cd7374a97cd1293f137ad28b752576a8e138f43aa520c25c94d190a21cb8d944",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_patch_state/invalid.go": "9f87c0b4aa615852fac55af4c8c91fe68ed086daeeef76f8d9094ffcd6d0bd8c",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_result_owner/invalid.go": "3406d949e64d859d895bdff740352bae3e52e613ad1404daa70bc53c73d9fca1",
+      "tests/fixtures/consumer/testdata/compilefail/http_dto_slice_owner/invalid.go": "355bcb19495de1a304e4e0519c40f1979706fb6aa2475af39c408e61119ccb6f",
+      "tests/fixtures/consumer/testdata/compilefail/http_endpoint_body/invalid.go": "16d71d310f71f5e9b8ccec6f95657c2ebccf76e94106d95ecc364bcddcb0c5f4",
+      "tests/fixtures/consumer/testdata/compilefail/http_endpoint_body_descriptor/invalid.go": "90cee497c9d3731a48ba695e2d20e40afcba1e0f9b684cec076b9dcbcb9de159",
+      "tests/fixtures/consumer/testdata/compilefail/http_endpoint_path/invalid.go": "17d54627b162c9124967af79c28add291587bc8f5a5aa390f4e7f593bf4e715d",
+      "tests/fixtures/consumer/testdata/compilefail/http_endpoint_query/invalid.go": "d4a39df239183ac4f7f5fb1a4c60f7663eeecbd7068e6fca29f32970ff52a72c",
+      "tests/fixtures/consumer/testdata/compilefail/http_endpoint_response/invalid.go": "bdc222d3bd5e35a97a0bc0a9a4c182994efcbe13eb7e4d80a093c26f8679c9be",
+      "tests/fixtures/consumer/testdata/compilefail/http_endpoint_url_query/invalid.go": "db93b598badc020e92b214a3870323085a2d673f0565e5ce1c61c4d47c353deb",
+      "tests/fixtures/consumer/testdata/compilefail/http_enum_codec_descriptor/invalid.go": "fb303de6ce914e0592adc3078597f44c25356a96f555243fe1d22eabe682f5f1",
+      "tests/fixtures/consumer/testdata/compilefail/http_error_code/invalid.go": "84a6420e097cf96ec4735697e582df03a4bc4a18f759e53374c060c90593757b",
+      "tests/fixtures/consumer/testdata/compilefail/http_error_declaration/invalid.go": "680aeecca70061d4042e96212c27a9fa1480d781aa9d3eed78878f8a15de635d",
+      "tests/fixtures/consumer/testdata/compilefail/http_etag_config/invalid.go": "d1c4af25bbd56502deee7a9ba9c64e54dffefeae9c4fc3863320ecb1b3cb8ef6",
+      "tests/fixtures/consumer/testdata/compilefail/http_float_integer/invalid.go": "3b2f85a47824bc7159c284a8bcf9e24420b624f13dfbec9af45ff6b2718ae39f",
+      "tests/fixtures/consumer/testdata/compilefail/http_float_named/invalid.go": "782999410e05fffa15add5af6b60e5cf8f44efe46ff3bf85eff085cbd2883c92",
+      "tests/fixtures/consumer/testdata/compilefail/http_float_width/invalid.go": "6b73a640d019f1608decf75a97db1f0b26136b0becbb0e8743a2afeed926a78c",
+      "tests/fixtures/consumer/testdata/compilefail/http_generated_path_enum/invalid.go": "414a64b1361766d39e85e560f2b244c34fb499c7d0dfd8322837d6143028baa6",
+      "tests/fixtures/consumer/testdata/compilefail/http_generated_path_model/invalid.go": "8cdaaa3c6b33d1176e3a3499aee5f608c6d0d34eedac3449d0ec5e290f541c62",
+      "tests/fixtures/consumer/testdata/compilefail/http_generated_path_owner/invalid.go": "d5ab8a4968f01065ac57b7441e019f97234f54a4fc034af774ad7ea6fe95bd86",
+      "tests/fixtures/consumer/testdata/compilefail/http_header_value/invalid.go": "9b570e23167d5993b27f94ea66d336e3028b9540ec148f90d064843d3368bab0",
+      "tests/fixtures/consumer/testdata/compilefail/http_json_codec_owner/invalid.go": "4ea8a1fae08649d7c221df824d41cfa25cb061fe5dbad603f47f5f7d6d82b83d",
+      "tests/fixtures/consumer/testdata/compilefail/http_json_key_conversion/invalid.go": "74d4f4faa3df9ed3d0a8da567265ddc1567781168cf735acd6f3e97967c91cdc",
+      "tests/fixtures/consumer/testdata/compilefail/http_json_key_owner/invalid.go": "4d93d4ab369919792902fc4131abc06da00b5a535d3cab1bf3109b497a762605",
+      "tests/fixtures/consumer/testdata/compilefail/http_json_map_owner/invalid.go": "61b3e873d436b78d24ac6fb2625eee48a44d9e811ce990cfb9aa78cf86144fc6",
+      "tests/fixtures/consumer/testdata/compilefail/http_json_scalar_owner/invalid.go": "d99d7aec581bcccea55de475e95562da9e06652153a31b3323e3c4186c55a894",
+      "tests/fixtures/consumer/testdata/compilefail/http_middleware_id/invalid.go": "59453bdd7a9377fe6bec452651bd54adfe68805e54be3d07670745cf5912f91c",
+      "tests/fixtures/consumer/testdata/compilefail/http_multipart_file_slice/invalid.go": "822d4229f716c3289a99d5ab53bf25824bad7fda33f8dc13fbca84d97b5fbe70",
+      "tests/fixtures/consumer/testdata/compilefail/http_multipart_file_value/invalid.go": "e8baedd002006629a4e9e0e1763e0061e6b1d567438e7205ea2e7fa47291fcbd",
+      "tests/fixtures/consumer/testdata/compilefail/http_multipart_handler/invalid.go": "7896a2eb4dcb2b15d4f75fe742a20ffadd83bc5fac52a8a6cd055988bb0938cc",
+      "tests/fixtures/consumer/testdata/compilefail/http_multipart_json_value/invalid.go": "d7a5e2efd1ebe4e45812cfc0ec7c84a5e51b00ffffa23caef13be6a0d549450a",
+      "tests/fixtures/consumer/testdata/compilefail/http_multipart_owner/invalid.go": "1cbe5d7fafff4cd6453c15dc5e67a051c7cfb842c6fe2097363c079c10dda601",
+      "tests/fixtures/consumer/testdata/compilefail/http_path_codec_value/invalid.go": "250ff30d41a4618edff12efe151bc061d560c0036910fadbdf6717b84426e9e9",
+      "tests/fixtures/consumer/testdata/compilefail/http_path_field_value/invalid.go": "29abac24164af67b26522c7b6358d065d0922519bb635611edf6b637fc3e903a",
+      "tests/fixtures/consumer/testdata/compilefail/http_proxy_header/invalid.go": "7673804e11a4c2b40b74dcfc6b8c71650c35caca43d1c7292b538f839b1cdf82",
+      "tests/fixtures/consumer/testdata/compilefail/http_proxy_network/invalid.go": "eb2e6c48b8086cb8194d9b1cac178b8d3986d271bed98e4818ac6758dcfd64d5",
+      "tests/fixtures/consumer/testdata/compilefail/http_proxy_origin/invalid.go": "21ffe985e6b8d90d3c4f0e38822bd514fe5885fcfefa10f3ceef7e0fe57508a1",
+      "tests/fixtures/consumer/testdata/compilefail/http_public_origin/invalid.go": "a5d32330cc789923344228471831165a41044e49495b6b97443bfc94342fb13b",
+      "tests/fixtures/consumer/testdata/compilefail/http_query_conversion/invalid.go": "52c1976cedfea3240ae6f42f5c13e4cd1d8e77280cfd272adf5ada89ca4820e9",
+      "tests/fixtures/consumer/testdata/compilefail/http_query_default_value/invalid.go": "c174e2c5a031ddeb0510b22894fcd886e144616f514c276f307f11047ceff3fa",
+      "tests/fixtures/consumer/testdata/compilefail/http_query_embed_owner/invalid.go": "d48c2f9b919dcb4feb6045e9a6b7dbe891d278592b5f12f95c79079b47fe5335",
+      "tests/fixtures/consumer/testdata/compilefail/http_query_merge_owner/invalid.go": "b2d97f4963c8ca18f3a4c228e2fd7835ac9e05109f6597a56560150092fa1d46",
+      "tests/fixtures/consumer/testdata/compilefail/http_query_model_id/invalid.go": "4771e67775db75c11230a57279d4306f0fc17c7cad58ffc4c3e19cc1732319ab",
+      "tests/fixtures/consumer/testdata/compilefail/http_query_optional_field/invalid.go": "4d4eba13a8f0357788b933679123c12bb9d2529108041b22d67596006005a171",
+      "tests/fixtures/consumer/testdata/compilefail/http_query_owner/invalid.go": "0685837391b6467226c09bfee862558185d5884deff71b17a8daa03b17e90788",
+      "tests/fixtures/consumer/testdata/compilefail/http_query_repeated_field/invalid.go": "0cec2b9907aadf88450b80ad8ac95731262ba22e80cec21f7fb7b0006709c2d1",
+      "tests/fixtures/consumer/testdata/compilefail/http_query_scalar_field/invalid.go": "bfa1a782412fcfead64099c608ade8dc8d13a9dd4a45ce1527addd0b428f5c7d",
+      "tests/fixtures/consumer/testdata/compilefail/http_route_handler/invalid.go": "a376fda75583a4645f976ddea93432dcfdd454fd234f234240011a51558865bf",
+      "tests/fixtures/consumer/testdata/compilefail/http_route_model_id/invalid.go": "a67fc37b0e118157fd79a98dc8b3266a01adfa5a646ac5c9a0a96116923e3f13",
+      "tests/fixtures/consumer/testdata/compilefail/http_route_path_owner/invalid.go": "22cf03deaf62a4779b4859951475a327de0120f6ceb85c7105dd015ede1abc57",
+      "tests/fixtures/consumer/testdata/compilefail/http_scalar_conversion/invalid.go": "93b0a82695a82c1b2ac0d9556bb67c8f73837fdf66374cfbd276129fa2c1f592",
+      "tests/fixtures/consumer/testdata/compilefail/http_scalar_owner/invalid.go": "9d6a013ce6b3fa813af9a37e2593ab78495249b5799bb055cb8c26d27f09d8f8",
+      "tests/fixtures/consumer/testdata/compilefail/http_security_policy/invalid.go": "3291b88534cf5b026f0917e9e733d1fb0836b5d3b6c3f7942544eb5b86a762da",
+      "tests/fixtures/consumer/testdata/compilefail/http_signed_handler/invalid.go": "a28fc4913d445229a20935084d33ddb4eb3a12bcf3ed4420fbd21fcee631fd5a",
+      "tests/fixtures/consumer/testdata/compilefail/http_signed_model/invalid.go": "784ace00856c75250135cb78c64b77a57cbff3028146708e6b2580641f750b52",
+      "tests/fixtures/consumer/testdata/compilefail/http_signed_origin/invalid.go": "0ab8b445681613f47088707c2b219748d985facdc4ba398eefc0df68d73b4c89",
+      "tests/fixtures/consumer/testdata/compilefail/http_signed_query/invalid.go": "7eb6a8332e7e4a28843cfa0d8895edcfc5fb4a3a3b33d3546f9ce35049fd9e4c",
+      "tests/fixtures/consumer/testdata/compilefail/http_signing_key_id/invalid.go": "6c3ca4a08acfea79149b29054c98a26cddd3be98a04423c3f9488705f77abc20",
+      "tests/fixtures/consumer/testdata/compilefail/http_spa_index/invalid.go": "f68bb6d0c2cdf13dcf92cfe7044dc19edb9fe7bbb8816db1bf0687c61dd66c1a",
+      "tests/fixtures/consumer/testdata/compilefail/http_stream_body/invalid.go": "3f5ac040990339afe04accbe9eabcc63ad588e57ca77182271bbee4c83ef3d54",
+      "tests/fixtures/consumer/testdata/compilefail/http_stream_disposition/invalid.go": "a467f3d8841ec162407b5026edf83c8527c8638561a3d7e060e8458591cf9e34",
+      "tests/fixtures/consumer/testdata/compilefail/http_stream_handler/invalid.go": "63f885774552dee324a4c61a90341b2130c96566e2d53bdba534fa0f066a2f88",
+      "tests/fixtures/consumer/testdata/compilefail/http_stream_length/invalid.go": "e3e291ab834e92e84851e6ca4d9beda453c9f6c5f118a2ab833326a91f13d3ec",
+      "tests/fixtures/consumer/testdata/compilefail/http_stream_media/invalid.go": "eff5c59047ee7ad9ac01f65e46577a50db9f72fc4163a3d63b96386b5ae35144",
+      "tests/fixtures/consumer/testdata/compilefail/http_stream_source/invalid.go": "f8f58cb036fa4c77947ac534344a2f4aa212c6afc44ef6eb08691b803c2e9879",
+      "tests/fixtures/consumer/testdata/compilefail/http_test_response_owner/invalid.go": "fe567af8e378844356d702d4f1e73016ce0e8a1f63dd064f6a22bf6ac16625b7",
+      "tests/fixtures/consumer/testdata/compilefail/http_text_path_pointer/invalid.go": "78282a86a76f86985ae3d5309c528804f9da51fb70cd64d3d568353471ed7534",
+      "tests/fixtures/consumer/testdata/compilefail/http_url_source_owner/invalid.go": "1fbf2c831b4cf2c210f466adbb82c3da51f0f607a8491a367665aa26a51ea648",
+      "tests/fixtures/consumer/testdata/compilefail/http_validation_body/invalid.go": "949333bb972e24d05c32a930d77a93e21d25515924dec7d241758a0294130909",
+      "tests/fixtures/consumer/testdata/compilefail/http_validation_input/invalid.go": "8e90844527b31d57c3b5989e0c2376276ced4491897208b2fbfb80a36ec1cc47",
+      "tests/fixtures/consumer/testdata/compilefail/http_validation_path/invalid.go": "32e91df6d5121167d45663811f454455f5629ffaec94cfdf1147ca380d1c569a",
+      "tests/fixtures/consumer/testdata/compilefail/http_validation_query/invalid.go": "557ffa4e4c8886403f148c8c463ada4aad998a9adb0df0fa7f14128fe8d7f284",
+      "tests/fixtures/consumer/testdata/compilefail/inspection_section_type/invalid.go": "434a86e82a3d4eda0349dfa5c7f1d4636412001624d592e20620a511d9719460",
+      "tests/fixtures/consumer/testdata/compilefail/job_envelope_version_type/invalid.go": "2966797d7710a3561527a89ff246edf7659fb197090884ff49930912467c0826",
+      "tests/fixtures/consumer/testdata/compilefail/job_handler_owner/invalid.go": "485e14bea884b53d93d5c8176ec1d15b0ebbf878faea92e1aa6aa56877963b2b",
+      "tests/fixtures/consumer/testdata/compilefail/job_identity_conversion/invalid.go": "2767e8301443fb293fd33911f1c16254e845ad67550df74f0789faef8d2dda2d",
+      "tests/fixtures/consumer/testdata/compilefail/job_identity_owner/invalid.go": "e45194cf2ec998d116c59c0568d6ececb54377f0843708a0947a3c84c744c02e",
+      "tests/fixtures/consumer/testdata/compilefail/job_middleware_owner/invalid.go": "3daeed0c4140b6bfa6c85ab59a09b224a9fb0613bce06ee803c7c85c5ff05d44",
+      "tests/fixtures/consumer/testdata/compilefail/job_options_owner/invalid.go": "b34f3059b17e8f99eb248f5c196b5996f7991fe3079b3a0a89ee31bb3be51b93",
+      "tests/fixtures/consumer/testdata/compilefail/job_payload_owner/invalid.go": "019c4d9fa7564d53d4d4726de82dce3fac25e54477ef43de4e63addf3b889ffd",
+      "tests/fixtures/consumer/testdata/compilefail/job_retry_identity/invalid.go": "e2bb9eb7495874c766cca09fc4f8f94d6e3b59fe801951a857b6b283218b331a",
+      "tests/fixtures/consumer/testdata/compilefail/job_test_identity_owner/invalid.go": "53d6a5d2287bb5b3b1805d2fdffbe5a0326894008fd4a9c077eb3070cd82f793",
+      "tests/fixtures/consumer/testdata/compilefail/job_unique_owner/invalid.go": "1528fdd4299a3eb507299e76eb55bfd0ab495241d8aecf2ceed74a9e782cab14",
+      "tests/fixtures/consumer/testdata/compilefail/job_with_middleware_owner/invalid.go": "cc9684f75082293dd973ab69637bd3209ef683aa76bb1561b82217b027cad01e",
+      "tests/fixtures/consumer/testdata/compilefail/job_workflow_payload/invalid.go": "717db09f3aedb1f71bd3fa576249ebf36c6c16267ae010e5f93aa9adbf6afc0d",
+      "tests/fixtures/consumer/testdata/compilefail/migration_identity/invalid.go": "71a9cdca03592db9d7b812727662f165b8daf6a308ecad3690e61d16da28eceb",
+      "tests/fixtures/consumer/testdata/compilefail/named_cache_store/invalid.go": "fd949abad99b88d90d3b996003855c3b429cbda9d190a0cafcd40427d4c6696f",
+      "tests/fixtures/consumer/testdata/compilefail/named_config_collection/invalid.go": "8c53723e5cd08b98b9bf43634a314e54ddd01b19a06191b7f204bcb53b30b711",
+      "tests/fixtures/consumer/testdata/compilefail/named_database_connection/invalid.go": "434aa95e6a17c1b9a742f73839013ceefaa77fe8167aa68df84bef58cb5d4d0b",
+      "tests/fixtures/consumer/testdata/compilefail/nested_field_owner/invalid.go": "aa44e32338198d19e9483d10e8dcc784b40cc7def9493e65f5358483f340f201",
+      "tests/fixtures/consumer/testdata/compilefail/nested_policy_actor/invalid.go": "b5f7c899ffc7bb816074ea2d14ac702b249272d44b7440984c663480c6d9ac1b",
+      "tests/fixtures/consumer/testdata/compilefail/nested_relation_owner/invalid.go": "a0ccd66c4420c636891df0eb3789f9968a7c4593d67a51f053bfdfa7c20a812a",
+      "tests/fixtures/consumer/testdata/compilefail/observation_operation_name/invalid.go": "111d06089b2e95c8e726616879879530ad269d94f5aa90c5642145d9b4cc55e3",
+      "tests/fixtures/consumer/testdata/compilefail/observation_reporter_payload/invalid.go": "eb89595465ff8beeeddc1ab160cf99f42e50290d3b285b535b01e6a5353931bb",
+      "tests/fixtures/consumer/testdata/compilefail/pivot_key/invalid.go": "b1dcc0e2a0de465cbe2f68fb4ca80f6272f3c2975f15418bf04def854c86a8d8",
+      "tests/fixtures/consumer/testdata/compilefail/pivot_model/invalid.go": "dd93d6402e76cf8befc2b7d9a62e768297d050bfa546b47167ec14d852e7410d",
+      "tests/fixtures/consumer/testdata/compilefail/pivot_order/invalid.go": "4442d7bf712c72833de410b02d80814f5c19475f70ad8146d4d1027cbbef3f4f",
+      "tests/fixtures/consumer/testdata/compilefail/pivot_payload/invalid.go": "d91b9fe35a6c549a50024aa0bf1667cdb70521f5428a427b31995f7c6d2b80cc",
+      "tests/fixtures/consumer/testdata/compilefail/pivot_scope/invalid.go": "12ada243d252db9a029df2b190ffe69f1e0203ea280fc0a1a70955c1c2f5dcd8",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_asset_identity/invalid.go": "a8635165c6a91c18a819c0932a1223846eed0e625672bc2478a242bc51da34ed",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_collection_schema/invalid.go": "e5d7ea3dd7b3a48a2a8bb8991a79539aee1752f6e963c2ddad67bbb3e1979bb9",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_config_override/invalid.go": "189ce31495a05cf0345e5f00c3299768ee50a8980c6e179ae6b941d76c0c1c24",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_identity/invalid.go": "f2c8a51d54126f98bcb0e4c98d8c4c0fcef859baac3ced5c0e4bf2f713504faf",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_job_schema/invalid.go": "7b464cfcc271a4fadeef52d15ae30ff2e4a2eb46f9b0931bd292d310bee6f1b0",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_migration_registry/invalid.go": "b3d91fbd5b67b3d35806cc3bb704f4ea2f776694e20dd90db3bbf36ab3d27336",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_provider_wrapper/invalid.go": "b16699bc9bd617eb8cdc3728b81a0665903793b80100efb4d52f09436fdd5518",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_requirement/invalid.go": "b428e1bd49728b0264d3829e1e8725b4332346285375bf26b430e31916c8da98",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_route_scope/invalid.go": "fdc9ba55b96d3eb89453d21a91f1c8c8d7e3bc3ee5b8495ec32cb379ce7225aa",
+      "tests/fixtures/consumer/testdata/compilefail/plugin_scaffold_input/invalid.go": "0614911086e84749796bd17f5240e5369400ac0a286bf695c9c8b1cf20d32b3e",
+      "tests/fixtures/consumer/testdata/compilefail/relation_attach_draft/invalid.go": "546bc310d8f03b8690b889ef867e87eaddbef774644f01ae795331e94ccae96d",
+      "tests/fixtures/consumer/testdata/compilefail/relation_attach_source/invalid.go": "2de311addfbc1692f3502754d0bdf67f13c4831189a32d3863d4f38981500b92",
+      "tests/fixtures/consumer/testdata/compilefail/relation_attach_target/invalid.go": "a3de008a43ff49fbc4d391c766168d93d2095121a062a3c0015c48f202443af1",
+      "tests/fixtures/consumer/testdata/compilefail/relation_create_defaults_owner/invalid.go": "91e9b352c3983d400fdb798739c0b5f48ec56252ca050906b0fd13fa62f790e3",
+      "tests/fixtures/consumer/testdata/compilefail/relation_detach_result/invalid.go": "cec0a1a645dee755143d4b0ee206f67014a5f4b1c10d3b9002b32ffde551b9a2",
+      "tests/fixtures/consumer/testdata/compilefail/relation_exists_owner/invalid.go": "c8e34a6b438907d743dd4a0c7ee92e5565dc2fda790b7c0b244b4644cd26d546",
+      "tests/fixtures/consumer/testdata/compilefail/relation_key/invalid.go": "5edd5175ec6a64628deb03c0f95a2115401bf698b2a32cfb79ee89bacb8f9358",
+      "tests/fixtures/consumer/testdata/compilefail/relation_owner/invalid.go": "730a7322f182056d92ab8ecba7030a491194b665cb333da6a4197af1942c2af6",
+      "tests/fixtures/consumer/testdata/compilefail/relation_scope/invalid.go": "2f43a671835cd3face9f622b4fea13e400b4e0bf1beadfbc3d224c384aa6f7fa",
+      "tests/fixtures/consumer/testdata/compilefail/relation_target/invalid.go": "171e80ad05d123b36911afb38445ed09f5a83f0545d0f26b43905dcf6ed8146a",
+      "tests/fixtures/consumer/testdata/compilefail/routing_endpoint_role/invalid.go": "45b382a3c67a82780343790c08c702cea15e9dffa42349a371f31be8fdba0f71",
+      "tests/fixtures/consumer/testdata/compilefail/routing_read_config/invalid.go": "760cae88dc65b28526c10c67c674ba436f9c11e3695218f40e1d3670c920fe81",
+      "tests/fixtures/consumer/testdata/compilefail/schedule_id_owner/invalid.go": "8221ea568ae2213f2a6d777bc903ad5487d0e07ac5be08d1e09a01bf0d232dce",
+      "tests/fixtures/consumer/testdata/compilefail/schedule_job_payload/invalid.go": "4c072a6ab2b441d4d0a95419e75d1120735762c25b55c424ecfcf42e77f4b078",
+      "tests/fixtures/consumer/testdata/compilefail/schedule_occurrence_owner/invalid.go": "8506a4a33ad4a4d027af80893e0ffb76c3bc5f484a6b67ec2710c42110655ba7",
+      "tests/fixtures/consumer/testdata/compilefail/scoped_connection_name/invalid.go": "5ee8c76bf849e6e2a7a38e60602485d1a0db9a298002243da8d3096836bf33d4",
+      "tests/fixtures/consumer/testdata/compilefail/scoped_database_settings/invalid.go": "e52e57c9d9b7d3046d784fd44df7cdcf9e0511104cdddc884927d82da146586d",
+      "tests/fixtures/consumer/testdata/compilefail/service_value/invalid.go": "cd0fb395bab3a4756fbc879a9181ffbb58aa619d83bad274b9d5111a9615bbb2",
+      "tests/fixtures/consumer/testdata/compilefail/settings_value_contract/invalid.go": "52ae1eb23149c4ed737a33f06277f924d3b8f0effb1453699df47859742562ad",
+      "tests/fixtures/consumer/testdata/compilefail/soft_pivot_scope/invalid.go": "83bbb60833842d330c598f8717855149c85c083148f2160074843f9e9765a250",
+      "tests/fixtures/consumer/testdata/compilefail/startup_broker_name/invalid.go": "728ebb07e344cc88541930f3b0e416a67b6ccee826d20ee26666cfea39287506",
+      "tests/fixtures/consumer/testdata/compilefail/startup_browser_actor/invalid.go": "8afae30eb9063779a399990a7a6a225cf1b993729490030fc143a463e0051dac",
+      "tests/fixtures/consumer/testdata/compilefail/startup_http_name/invalid.go": "df2a4e6ed1a13f24e4d63776aaad6d85e8ab413a01b2b911cc25693deeb149c7",
+      "tests/fixtures/consumer/testdata/compilefail/startup_job_payload/invalid.go": "5f68210979bc1cea73375b10c0b1ff59f06136d0fab012fc91ccc8ee9b0513d0",
+      "tests/fixtures/consumer/testdata/compilefail/startup_log_name/invalid.go": "55c21ea860cf273d610813cf1a59ff6ea39605edba516aa4f26b644227f8d173",
+      "tests/fixtures/consumer/testdata/compilefail/startup_mail_name/invalid.go": "26a33b980a8bb371a1a0f003d1ed34e8b0cfeb7d1ee1b09acaab8643ca6d63be",
+      "tests/fixtures/consumer/testdata/compilefail/trace_exporter_payload/invalid.go": "c21070415cdd2fd5cbfa18d6f428e4efa47cb284d13fe4047436f61274cdcfe5",
+      "tests/fixtures/consumer/testdata/compilefail/trace_identity_type/invalid.go": "6bcbf996bc55aa37471069f003f18d75fdc6e95fe9d044530541199f1bf59ade",
+      "tests/fixtures/consumer/testdata/compilefail/union_constructor/invalid.go": "a752389d2e54792e92c9873c24909b771311f1a2d4779bceee1e445a2ab31217",
+      "tests/fixtures/consumer/testdata/compilefail/union_handler/invalid.go": "ed63ef92419e8f7570c2872eeb6f1ba04cab74d6cc6dae75a42cd08171a1dbc6",
+      "tests/fixtures/consumer/testdata/compilefail/union_owner/invalid.go": "a7178791f6ba6a5cc10e39b99fedba3c4365bddeeed7b924ebfe3696a8b9d387",
+      "tests/fixtures/consumer/testdata/compilefail/union_visitor/invalid.go": "914f104899b64d2ea407a9c3f51ce1c25eb4ea13a69475b28454af48ca4feaca",
+      "tests/fixtures/consumer/testdata/compilefail/webhook_account/invalid.go": "6e10753e54a254ed0f2eac5b51e8d0796a8d918fa53a637fece6dfe4b6397c9e",
+      "tests/fixtures/consumer/testdata/compilefail/webhook_verifier/invalid.go": "da93eb593123a745f01a3aa7eb68fc4c74055307d519adf4e4ac20b776b3ff9a",
+      "tests/fixtures/consumer/testdata/compilefail/where_doesnt_have_owner/invalid.go": "4d48137be3e1ab8f1b6c3b5bfb96637b23e4d7d4101990f05b2021110ab9dd00",
+      "tests/fixtures/consumer/testdata/compilefail/where_has_aggregate/invalid.go": "d3fe00bdbd5319d46a001d1528afb727ad6b3022e770bfa0767c01ccc451d927",
+      "tests/fixtures/consumer/testdata/compilefail/where_has_find_owner/invalid.go": "601fa9699e4800bc17ce1188eacf025583fa0d6fdde9f2fc354c0f44bbff539e",
+      "tests/fixtures/consumer/testdata/compilefail/where_has_owner/invalid.go": "96e6c61c5e78e19bf05108ec9a7a550eed86f55366b850947b7363ad68ce2b2d"
+    },
+    "base_commit": "fdaff938",
+    "status": "integrated; acceptance passed; pending lead commit",
+    "worktree": "Foundry-Go-goway-int3",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r9",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "conflicts": {
+      "lane_a": 5,
+      "lane_b": 0,
+      "lane_c": 12,
+      "resolution": "union registries; retain newer consumer mappings and documentation; preserve historical evidence; add cumulative functions without duplicate snapshot entries"
+    },
+    "catalogue": {
+      "total": 1032,
+      "ported": 570,
+      "port": 18,
+      "unaffected": 444
+    },
+    "goway_compiler_cases": 832,
+    "goway_footprint_probes": 139,
+    "existing_footprint_ceilings": "all 134 prior probes retained unchanged",
+    "generated_outputs": "no manual edits; generated output/manifests retained",
+    "postgres": "not run; lead-owned live service gate",
+    "release_inventory": "new runtime Go sources pinned; no new non-Go testdata assets or policy broadening",
+    "commands": {
+      "go build ./...": {
+        "result": "pass",
+        "log": "build.log"
+      },
+      "python3 tools/goway_catalogue.py": {
+        "result": "pass",
+        "log": "catalogue.log"
+      },
+      "go vet ./...": {
+        "result": "pass",
+        "log": "vet.log"
+      },
+      "go test -race -timeout=20m ./database/... ./internal/...": {
+        "result": "pass segmented across r8/r9 cache rotation",
+        "log": "race.log",
+        "completed_packages": [
+          "github.com/weiloon1234/Foundry-Go/database",
+          "github.com/weiloon1234/Foundry-Go/database/codec",
+          "github.com/weiloon1234/Foundry-Go/database/command",
+          "github.com/weiloon1234/Foundry-Go/database/encrypted",
+          "github.com/weiloon1234/Foundry-Go/database/lifecycle",
+          "github.com/weiloon1234/Foundry-Go/database/migrate",
+          "github.com/weiloon1234/Foundry-Go/database/orm",
+          "github.com/weiloon1234/Foundry-Go/database/orm/expr",
+          "github.com/weiloon1234/Foundry-Go/database/orm/internal/enuminit",
+          "github.com/weiloon1234/Foundry-Go/database/orm/rows",
+          "github.com/weiloon1234/Foundry-Go/database/postgres",
+          "github.com/weiloon1234/Foundry-Go/database/prune",
+          "github.com/weiloon1234/Foundry-Go/database/query",
+          "github.com/weiloon1234/Foundry-Go/database/relation",
+          "github.com/weiloon1234/Foundry-Go/database/seed",
+          "github.com/weiloon1234/Foundry-Go/internal/admission",
+          "github.com/weiloon1234/Foundry-Go/internal/agent",
+          "github.com/weiloon1234/Foundry-Go/internal/attachmentstore",
+          "github.com/weiloon1234/Foundry-Go/internal/auditstore",
+          "github.com/weiloon1234/Foundry-Go/internal/authtransport",
+          "github.com/weiloon1234/Foundry-Go/internal/awscredentials",
+          "github.com/weiloon1234/Foundry-Go/internal/cacheatomic",
+          "github.com/weiloon1234/Foundry-Go/internal/cacheint",
+          "github.com/weiloon1234/Foundry-Go/internal/cachetest",
+          "github.com/weiloon1234/Foundry-Go/internal/callback",
+          "github.com/weiloon1234/Foundry-Go/internal/challengestore",
+          "github.com/weiloon1234/Foundry-Go/internal/cmd/checkdocs",
+          "github.com/weiloon1234/Foundry-Go/internal/cmd/testinputs",
+          "github.com/weiloon1234/Foundry-Go/internal/cmd/testpostgres",
+          "github.com/weiloon1234/Foundry-Go/internal/contextlink",
+          "github.com/weiloon1234/Foundry-Go/internal/contractmeta",
+          "github.com/weiloon1234/Foundry-Go/internal/contractname",
+          "github.com/weiloon1234/Foundry-Go/internal/credential",
+          "github.com/weiloon1234/Foundry-Go/internal/dependency",
+          "github.com/weiloon1234/Foundry-Go/internal/doctor",
+          "github.com/weiloon1234/Foundry-Go/internal/errordiag",
+          "github.com/weiloon1234/Foundry-Go/internal/errorgraph",
+          "github.com/weiloon1234/Foundry-Go/internal/eventseam",
+          "github.com/weiloon1234/Foundry-Go/internal/extensioncommand",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionmaintenance",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionrow",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionslot",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionstore",
+          "github.com/weiloon1234/Foundry-Go/internal/extensiontest",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionvalue",
+          "github.com/weiloon1234/Foundry-Go/internal/faultwrap",
+          "github.com/weiloon1234/Foundry-Go/internal/filelock",
+          "github.com/weiloon1234/Foundry-Go/internal/filename",
+          "github.com/weiloon1234/Foundry-Go/internal/frameworkadapter",
+          "github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
+        ],
+        "remaining_packages": [
+          "github.com/weiloon1234/Foundry-Go/internal/generate",
+          "github.com/weiloon1234/Foundry-Go/internal/gotype",
+          "github.com/weiloon1234/Foundry-Go/internal/httppath",
+          "github.com/weiloon1234/Foundry-Go/internal/httpquery",
+          "github.com/weiloon1234/Foundry-Go/internal/httptoken",
+          "github.com/weiloon1234/Foundry-Go/internal/httptransport",
+          "github.com/weiloon1234/Foundry-Go/internal/idempotencystore",
+          "github.com/weiloon1234/Foundry-Go/internal/identifier",
+          "github.com/weiloon1234/Foundry-Go/internal/jobarchive",
+          "github.com/weiloon1234/Foundry-Go/internal/jobtest",
+          "github.com/weiloon1234/Foundry-Go/internal/jsonpointer",
+          "github.com/weiloon1234/Foundry-Go/internal/jsonshape",
+          "github.com/weiloon1234/Foundry-Go/internal/jsonwire",
+          "github.com/weiloon1234/Foundry-Go/internal/keyaddress",
+          "github.com/weiloon1234/Foundry-Go/internal/leasetest",
+          "github.com/weiloon1234/Foundry-Go/internal/lifecore",
+          "github.com/weiloon1234/Foundry-Go/internal/lockouttest",
+          "github.com/weiloon1234/Foundry-Go/internal/mediatype",
+          "github.com/weiloon1234/Foundry-Go/internal/mfastore",
+          "github.com/weiloon1234/Foundry-Go/internal/modelmeta",
+          "github.com/weiloon1234/Foundry-Go/internal/namedservice",
+          "github.com/weiloon1234/Foundry-Go/internal/noraw",
+          "github.com/weiloon1234/Foundry-Go/internal/notificationstore",
+          "github.com/weiloon1234/Foundry-Go/internal/ormcore",
+          "github.com/weiloon1234/Foundry-Go/internal/outboxstore",
+          "github.com/weiloon1234/Foundry-Go/internal/outboxtest",
+          "github.com/weiloon1234/Foundry-Go/internal/ownedstream",
+          "github.com/weiloon1234/Foundry-Go/internal/pubsubstream",
+          "github.com/weiloon1234/Foundry-Go/internal/pubsubtest",
+          "github.com/weiloon1234/Foundry-Go/internal/querycore",
+          "github.com/weiloon1234/Foundry-Go/internal/ratelimittest",
+          "github.com/weiloon1234/Foundry-Go/internal/ratewindow",
+          "github.com/weiloon1234/Foundry-Go/internal/safeerror",
+          "github.com/weiloon1234/Foundry-Go/internal/scheduletest",
+          "github.com/weiloon1234/Foundry-Go/internal/sessionstore",
+          "github.com/weiloon1234/Foundry-Go/internal/sqlname",
+          "github.com/weiloon1234/Foundry-Go/internal/sqlowner",
+          "github.com/weiloon1234/Foundry-Go/internal/sqlscope",
+          "github.com/weiloon1234/Foundry-Go/internal/sqlvalue",
+          "github.com/weiloon1234/Foundry-Go/internal/statementmeta",
+          "github.com/weiloon1234/Foundry-Go/internal/statementshape",
+          "github.com/weiloon1234/Foundry-Go/internal/storageio",
+          "github.com/weiloon1234/Foundry-Go/internal/storemigration",
+          "github.com/weiloon1234/Foundry-Go/internal/testinputs",
+          "github.com/weiloon1234/Foundry-Go/internal/textvalue",
+          "github.com/weiloon1234/Foundry-Go/internal/tokenstore",
+          "github.com/weiloon1234/Foundry-Go/internal/upload",
+          "github.com/weiloon1234/Foundry-Go/internal/webhookstore",
+          "github.com/weiloon1234/Foundry-Go/internal/websockettest",
+          "github.com/weiloon1234/Foundry-Go/internal/workscope"
+        ],
+        "resume_log": "race-r9.log",
+        "resume_command": "xargs -n 6 sh -c 'go test -race -timeout=20m \"$@\" || exit 255' foundry-tests < race-remaining.txt",
+        "covered_packages": 100
+      },
+      "make fixture-check": {
+        "result": "pass",
+        "log": "fixtures.log",
+        "scope": "vet and tests for plugin_base, plugin_dep, consumer and goway; compiler cases and unchanged footprint ceilings passed; live PostgreSQL skipped"
+      },
+      "make generate-check": {
+        "result": "pass",
+        "log": "generate.log",
+        "generated_outputs_changed": 0
+      },
+      "make release-tools-check": {
+        "result": "pass",
+        "log": "release.log",
+        "python_tests": 26
+      },
+      "make agent-smoke": {
+        "result": "pass after targeted correction",
+        "log": "agent.log",
+        "initial_result": "492 pass, 2 stale expectations failed",
+        "corrections": [
+          "typed-row-expression definition points at database/orm/expr/row.go",
+          "distinct-model-selection package completion asserts DistinctRecord; Where is a query method"
+        ],
+        "rerun_command": "go test -timeout=20m -count=1 -v ./internal/agent -run '^TestRealGoplsConsumer$/^(typed-row-expression|distinct-model-selection)$'",
+        "rerun_log": "agent-fixed.log",
+        "rerun_result": "pass",
+        "total_passing_subtests": 494,
+        "gopls": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+      },
+      "make fmt-check": {
+        "result": "pass",
+        "log": "format.log",
+        "output": "empty; gofmt clean"
+      },
+      "make docs-check": {
+        "result": "pass",
+        "log": "docs.log"
+      },
+      "go vet ./internal/agent && go test -race -timeout=20m ./internal/agent": {
+        "result": "pass",
+        "log": "agent-race.log",
+        "reason": "final editor-assertion corrections"
+      },
+      "git diff --check; git diff --cached --check": {
+        "result": "pass",
+        "log": "diff-check.log"
+      }
+    },
+    "remaining_scope": "Stage 9 caller migration and generated cleanup remain in progress; new foundations do not automatically migrate retained callers",
+    "commit": "none",
+    "log_sha256": {
+      "release.log": "344e9133837ec3bdc5263a09f556bf1acc91872d438a08200a10f24bdbad8557",
+      "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "catalogue.log": "8e7dcb91c59cad1a8ce2cb7500ccc0d09e1e176bb6d08e24a70caf84f07157da",
+      "apply-a.log": "8a7912cab5f47a366569af77462ba0b1e11c2229ce8f9bb83ab51dd1e4a8773f",
+      "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "apply-c.log": "dc97e124400f24b2f5f59ef5d3f7a10946623de62344d558ee3865750cc09a9f",
+      "apply-b.log": "011c07c7978e58f515657fa03510e05ee31bb412aec0522dd9909d3f5d26c9cc",
+      "race-r9.log": "d7a066294432a8f13a88d235625cee22a3ee3eb5b4f5e7d338112df79d1133fa",
+      "agent-fixed.log": "77463e5880e1d7932339b3e037be326d5f79362e8f3f3e1a2bfedd7221ac019c",
+      "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+      "agent-race.log": "a73901e29f0fb0c23d4a02fd1c8c66de8d5a8970075f2f50ba1506d0a0ee088c",
+      "race.log": "c482c4bac535298f15833780cb8c12ef69301323e7e34cc3d48aeae95458b214",
+      "fixtures.log": "d24568ebc3442c0827e2924e24be7f50ec2cc6b4ad6907160190a4f0a3bf955c",
+      "agent.log": "b679830b27cfe357e8c83ee48039cc513706c02aebf491bfdbf3da59c2bfd8e1",
+      "generate.log": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+      "build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cache_rotation": "r8 completed build/vet and partial race coverage; interrupted race packages and remaining checks resumed on r9"
+  }
+}

@@ -1,5 +1,9 @@
 package invalid
 
-import "foundry.test/consumer/models"
+import (
+	"foundry.test/consumer/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+)
 
-var _ = models.QueryUsers().DistinctOn(models.OrderFields().ID.Group())
+var _ = rows.DistinctOnScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Age))), expr.Group(expr.Value(models.Orders.ID)))

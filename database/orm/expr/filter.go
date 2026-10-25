@@ -23,6 +23,12 @@ func Has[M, N any](r orm.ExistenceRelation[M, N], ps ...Predicate[N]) Predicate[
 	return ModelPredicate(orm.FoundryRelationPredicate(r, inputs, sqlowner.Metadata()))
 }
 
+// RelationFilter adapts expression predicates for a relation's typed target.
+// Example: orders.Where(expr.RelationFilter(orders,expr.GreaterColumn(Orders.Total,Orders.Paid))).
+func RelationFilter[M, N any](r orm.ExistenceRelation[M, N], p Predicate[N]) orm.Predicate[N] {
+	return orm.FoundryRelationFilter(r, p.core, sqlowner.Metadata())
+}
+
 // RowComparison exposes only equality and membership, including for enums.
 // Example: expr.CompareRow(expr.Value(Users.State)).In(Active,Pending).
 type RowComparison[S, V any] struct {

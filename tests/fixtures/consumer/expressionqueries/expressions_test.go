@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal"
 )
 
+// TODO(stage9-lane-a): port these direct scalar Compile assertions when that terminal lands.
 func TestTypedConditionalSQL(t *testing.T) {
 	u := models.UserFields()
 	display := query.Coalesce(u.Nickname, u.Email)

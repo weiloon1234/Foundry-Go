@@ -61,15 +61,11 @@
   "existing_ceilings_raised": false,
   "generated": "Makefile generation: one Response DTO and its ownership manifest; existing generated outputs unchanged",
   "source_sha256": {
-    "CHANGELOG.md": "c48f993cd0c34ba19021d50f2f76bc3b0d4552a9272081ae9b0dd9d67a7c29c2",
-    "Makefile": "d7ba763cf5d6e779cd77d104e740664f25cb8fdecce29be13ab7cf3ea4dd22b4",
     "application/tables.go": "139996e63732f20365a06ed04e146831423f23a5bbaa98985869aecc0ee3b776",
     "application/tables_binding_test.go": "0a945990d80c41dc08cb3a2e524725f8c38c254fad773f801590a05866404dc9",
     "application/tables_enum_test.go": "4ffddff1e4529af11467f3ca4c75cd9ff596c14606a3c2887d6a29febabdf480",
     "application/tables_test.go": "77c8fe06d5c2c5043321d1d4870a0dcd1b4ff0195c3e3a9ee7a493cf1177aa42",
-    "blueprint/00-master-architecture-and-parity.md": "3e61d3f7c052a186b183b24d267ca41eff9e913763bd4f1bccd2137f7591e8e0",
-    "blueprint/goway-data-layer/README.md": "4e39f9a878f4bbcd1fde44d1e7134537a0e37a77f9bdea17fd850ac8aa9b5ba3",
-    "blueprint/goway-data-layer/compilefail-mapping.tsv": "30ea06528c9377086f7c905dd34aa215a0a306809061a6be863ca4aa328506ed",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "ecfea7af36902396758ff1c429f18eddbc7a38bd73018aac364870a6b62d733a",
     "database/codec/binding_error_test.go": "263e725507202290b7242648d74f3e205da83324dc94549606532335c2162029",
     "database/codec/codec.go": "60fb0acff4099a23d2ca318d2d60efec87f02b19334752188c464cbca7518280",
     "database/codec/decoding_error_test.go": "327a9b2a38d012b0c5323738e0fb28cf086e748ea2600278ce4e2c58813a7af8",
@@ -79,9 +75,6 @@
     "database/orm/check_columns_test.go": "b64d506b86b663e587e35d3ab5018e8998da94b8f39054a340447fa500940d32",
     "database/orm/check_test.go": "2397c02b5738f4cd851b2a3f1cfaea8e5c855360442fb4e69d94c2d0f778e8c5",
     "database/orm/declaration.go": "741ef110cbdeff1910a3a2e9e2b2993d2fedec3523b807920598dbcafd8b7245",
-    "database/orm/method_surface_test.go": "d511843a67ff772ceb33785f25cf78fd04ac63b17992aa5e89e7776d985aa6b9",
-    "database/orm/testdata/public-methods.txt": "5db41adab0a905820577b56bd809336ca4b24324850fa265f39ff7080b11865d",
-    "database/orm/transaction_phase_test.go": "52dc79aba4c93dc129f04bcaa063b9e7db8bbea14c9ca1e2c63ec1c2c10b33b2",
     "database/postgres/error_graph_classification_test.go": "8075e1e8c40149752d1553cb603e3b60c986892ef62f0ee7cbca123537410927",
     "database/postgres/errors.go": "a61a618fd77c27a3606434cd56786463daa1fb52c8c133eb06284e76385d1402",
     "database/query/binding_error_test.go": "1fcf5fc1e1d5e6de41a500938985091cac680f2ed684d2443d7a8f72b119ad6d",
@@ -99,8 +92,6 @@
     "http/errors.go": "259dd4d44212c8a5ed7deb406fe9c5761b712a73e7497283e05a5fbe97881569",
     "http/json_error_classification_test.go": "94e3d7e118bc24d6f6e7d4c3e85b3499675e174ece92e3835b710cc4999c7fbf",
     "http/pagination/cursor_codec_error_test.go": "ddaf77fd8202e6d3c95c081331455f0a0949529bcc6c1878c2a1a64e94c5d5d8",
-    "internal/agent/field_documentation_acceptance_test.go": "e908b17d52af9c34419984283a276b67d997f6b8aa47e8337df48f3f4f027b07",
-    "internal/agent/gopls_acceptance_test.go": "8a104ac3255c59923523240f041be31cfeec63bb71d157bc8328a2c11e065988",
     "internal/errorgraph/walk.go": "f36d620d442af56fd4f5b29bfdb33533e268a1b62d230e02f13ba98e483282bb",
     "internal/errorgraph/walk_test.go": "bcc4ebbc58bfaeec16760a8db89706ee4c6639b3b2a1d76808ff5ed95354a9e5",
     "internal/ormcore/codec.go": "f93dc88403201fdc8c5f8b48c68a98e3ff2d37f0fb5c62a82ff4bae5d6b0cc44",
@@ -111,10 +102,8 @@
     "internal/querycore/json_path.go": "3bc84b843326b4b53f51b0e5542cb2021b4ebb6b14123406f26298c932799fc0",
     "internal/safeerror/error.go": "ec60fea49efbd4434a80a3e6859b6d168e14a52493e0a6e0a7314b1feb0aa137",
     "internal/safeerror/error_test.go": "8fa0a10b7b19e2ca01c4f2771a25035a4b6e8af7fdfde38d4b9da56e864d6330",
-    "tests/fixtures/consumer/mutatorqueries/orm.go": "6740c41b8aac4c954360afb13b3c40b056b165ce3f2a0197d2241d6924006d59",
-    "tests/fixtures/consumer/types_test.go": "c6400a84382588d397cfcd1e57c6572926cc2debe1051d2581ca9c726075addd",
-    "tests/fixtures/goway/compiler_cases_test.go": "93a12f0abecf551cfadf1ada5c5bef7d9893bc05cef837b2c2a9a5d84f17c416",
-    "tests/fixtures/goway/footprint_test.go": "0edfc2c1ef7ef9b3eaf76b859c4eb00470f1ee0c095b01ba38bfe3abedf6f043",
+    "tests/fixtures/goway/compiler_cases_test.go": "5f2e336beeca0c0c480407c4d93cd23b2c1bae573b91aab9014e0be878c7306e",
+    "tests/fixtures/goway/footprint_test.go": "ae9e0878002d541207b5b2e9ad934eab9ae36ca5802e8ca9cb5aa56b90df8b19",
     "tests/fixtures/goway/go.mod": "6a12c9874b82f07d6a26a7344d54725f8860a8bd1eec63ea6d57e6ba633ddc34",
     "tests/fixtures/goway/integrations/.foundry-gen.json": "00e584cde7f55c0296ee741008d646ea961aa7d3b3be708992c245113fa48db2",
     "tests/fixtures/goway/integrations/applicationcontrol/application.go": "5cc8246197908117ec64fdb6eaec7a092e973dea8b7b53188f91238c33767a12",
@@ -143,14 +132,25 @@
     "tests/fixtures/goway/testdata/compilefail/http_pagination_map_owner/invalid.go": "9a62b19409cd1ee3ed4fe2bff9571fac5cef75d43a00999c15ebee0e10e1f603",
     "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_result/invalid.go": "186a40e9247b5d718251e961493db9d2b6e6be989225e2b31519016213509d4a",
     "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_total/invalid.go": "d5060dfa3485cfc275c1693c0d0bfaa526f7cb8839824fa070262af2ee7d8675",
-    "tools/goway_catalogue_test.py": "3c5ceb41aa9dc9a17d1c919ea511e084be9309923b874ff97bbc4e331afeddf0",
-    "tools/release/release_test.go": "5cd219933d54b70b9d3f5fa3d89319a0592e00c4870c46cc31d463dc7230f1a0",
-    "tools/release/source.go": "d84fc823ad60ac0c21ba25e32e29432a78099d6efc5a36294fc5151796dd2f3d",
     "value/json.go": "752abc1fa6f3a202cc7cce7ec5d8023cb12f985dfd2b294f9ecfc010fbf13b39",
     "value/json_encoding.go": "ef5d4d80a3c187531548acddbfeb5d43b5d74c75b111b849afe4d244a096acce",
     "value/json_key_encoding.go": "60febb211c4691c4eaf31655382214222d903fccd80c2693e25eccb810d12f74",
     "value/json_key_encoding_test.go": "f6c0d1f252bc2afaf85d1018703ccf383b01e0ba26f6bbd29db7c4ea19d7de02",
-    "value/json_map.go": "b034627067fdc7453a665f57c65640bcf7697c3bc7e6359034dc94480685f7fb"
+    "value/json_map.go": "b034627067fdc7453a665f57c65640bcf7697c3bc7e6359034dc94480685f7fb",
+    "CHANGELOG.md": "6c9744c1c13c875ffd7aebfc74b57b4173fede5797de6e78063a882cce06cd6d",
+    "Makefile": "d7ba763cf5d6e779cd77d104e740664f25cb8fdecce29be13ab7cf3ea4dd22b4",
+    "blueprint/00-master-architecture-and-parity.md": "0a9b7f63805d0332f12e16244c2f42bdbcd61200bdf1411f74e2e189df78398a",
+    "blueprint/goway-data-layer/README.md": "a3f0278717966ee8a27f40d5a50ffd14dd3af2bc65d1b0fe68309189451ea1d8",
+    "database/orm/method_surface_test.go": "d0c7bfd32a40388d46ee93e45088b228b210133eb73c56b9292bc4871ab5a1d3",
+    "database/orm/testdata/public-methods.txt": "06775763b7f87f044a0ad59cc27964764dbf51ff31270cac64e6b1944672dfb6",
+    "database/orm/transaction_phase_test.go": "52dc79aba4c93dc129f04bcaa063b9e7db8bbea14c9ca1e2c63ec1c2c10b33b2",
+    "internal/agent/field_documentation_acceptance_test.go": "119d4e19f45f5542847f6d377fc2d0b45b5f67c6670ff837c3d2b56f1004687b",
+    "internal/agent/gopls_acceptance_test.go": "3b2ecde81c88908b139ac1d4104f31c83f1e6a865928604d1149620c31fb93aa",
+    "tests/fixtures/consumer/mutatorqueries/orm.go": "f0a3e3c05aca419488d082964921adfc539a00e055c31317eb8ba20fa7470d6d",
+    "tests/fixtures/consumer/types_test.go": "2017f6af1449d1faaa5a46148ba74d81a853da30b10f932eb2571582f3d33e77",
+    "tools/goway_catalogue_test.py": "7fb955d7222290defcee9395ff10b4849fba508441734761f40d5576edc15767",
+    "tools/release/release_test.go": "9064b9fef31b7875ce8eb02aec24f0cd6cf76d7ed553e49406b332a1dca5afce",
+    "tools/release/source.go": "d84fc823ad60ac0c21ba25e32e29432a78099d6efc5a36294fc5151796dd2f3d"
   },
   "shared_files": [
     "blueprint/goway-data-layer/compilefail-mapping.tsv",
@@ -2972,5 +2972,2440 @@
       "Stage 6 whole-app measurement gate"
     ],
     "git": "Only authorized apply -3 --binary/add writes; no commit."
+  },
+  "historical_laneA9_rebase": {
+    "base_commit": "6d801119400fab31a6f9bd66bc2988ada795bf2d",
+    "status": "passed: laneA9 union rebase at 6d80111; H1 remains separate",
+    "new_probes": [
+      {
+        "name": "framework_registration",
+        "pkg": "./integrations/registration",
+        "functions": 4007,
+        "ceiling": 8693,
+        "budget_baseline": 7559
+      },
+      {
+        "name": "framework_pagination",
+        "pkg": "./integrations",
+        "functions": 5305,
+        "ceiling": 6079,
+        "budget_baseline": 5286
+      },
+      {
+        "name": "framework_seeder",
+        "pkg": "./integrations/seeding",
+        "functions": 858,
+        "ceiling": 998,
+        "budget_baseline": 867
+      },
+      {
+        "name": "framework_registration_option",
+        "pkg": "./integrations/registrationoption",
+        "functions": 1010,
+        "baseline": 1012,
+        "ceiling": 1164
+      },
+      {
+        "name": "framework_application_control",
+        "pkg": "./integrations/applicationcontrol",
+        "functions": 3339,
+        "baseline": 5524,
+        "ceiling": 6353
+      }
+    ],
+    "source_sha256": {
+      "application/tables.go": "139996e63732f20365a06ed04e146831423f23a5bbaa98985869aecc0ee3b776",
+      "application/tables_binding_test.go": "0a945990d80c41dc08cb3a2e524725f8c38c254fad773f801590a05866404dc9",
+      "application/tables_enum_test.go": "4ffddff1e4529af11467f3ca4c75cd9ff596c14606a3c2887d6a29febabdf480",
+      "application/tables_test.go": "77c8fe06d5c2c5043321d1d4870a0dcd1b4ff0195c3e3a9ee7a493cf1177aa42",
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "ab56d918eb3f04cfe8b420f0c9e05bdcbb0a5a1a02c13f9ceca02cb470119954",
+      "database/codec/binding_error_test.go": "263e725507202290b7242648d74f3e205da83324dc94549606532335c2162029",
+      "database/codec/codec.go": "60fb0acff4099a23d2ca318d2d60efec87f02b19334752188c464cbca7518280",
+      "database/codec/decoding_error_test.go": "327a9b2a38d012b0c5323738e0fb28cf086e748ea2600278ce4e2c58813a7af8",
+      "database/decoding_paths_test.go": "fb5bac58662013c4b32c96e9e821c9e91b3d2b83b1fc2021579482316257ab62",
+      "database/errors.go": "a04bd75511c301a160b2cf0323243add7341c034d7d0ebdb5ed71debb1cd6bb8",
+      "database/execution.go": "7482a58124ff09d8823554f291c998ee6db85234cb8a59d7bece6ddc6b84be22",
+      "database/orm/check_columns_test.go": "b64d506b86b663e587e35d3ab5018e8998da94b8f39054a340447fa500940d32",
+      "database/orm/check_test.go": "2397c02b5738f4cd851b2a3f1cfaea8e5c855360442fb4e69d94c2d0f778e8c5",
+      "database/orm/declaration.go": "741ef110cbdeff1910a3a2e9e2b2993d2fedec3523b807920598dbcafd8b7245",
+      "database/postgres/error_graph_classification_test.go": "8075e1e8c40149752d1553cb603e3b60c986892ef62f0ee7cbca123537410927",
+      "database/postgres/errors.go": "a61a618fd77c27a3606434cd56786463daa1fb52c8c133eb06284e76385d1402",
+      "database/query/binding_error_test.go": "1fcf5fc1e1d5e6de41a500938985091cac680f2ed684d2443d7a8f72b119ad6d",
+      "database/query/cursor_codec_redaction_test.go": "14d46c217736c13f1200938823b4785b94d640ef372a1661cbe0f003105264a3",
+      "database/sql_callbacks.go": "337258394fe3b4426dcccd460259725d7d2350c0877d798e1c87d1198f96c26c",
+      "database/sql_callbacks_test.go": "c1bf63498df401ebcdac503fc36562094d8e3d8a6cd65cf8dc3c7dd45d62f30c",
+      "docs/guides/application-bootstrap.md": "f390a09d3c6a0fb2f9b1999d17fa335aa4b4ad6b49565b91c5864f7cb72bd5d9",
+      "docs/guides/http-cursor-pagination.md": "58fa36ba167a6cd9fc186311668ae719c07dc1c8e99b7bcb2a6ce70c100e591c",
+      "docs/guides/http-pagination.md": "d4a96c79f309e21026d73018a920f4162cf0d3eaf1377fde60f9575a185ff1b0",
+      "docs/guides/migrations-and-seeding.md": "72a143309b65a879c871c803c5b0ec680ee0020b438025d966d21bc776d5ea2d",
+      "enum/descriptor.go": "2751cc80caec9dd4829c3d37f4c16e3e71443fea98654471d309ba55e5da140c",
+      "enum/descriptor_error_test.go": "14c383e87f77ce9c57db6947fc2afb94cdb647093d8d4bf4b8e50658c886c274",
+      "http/authentication.go": "1df524945e55692980cbd08bc2bb51e73e02c6dec2ec256721dc68e12478ffbb",
+      "http/error_classification.go": "1ac61d5e3ef81a8e5324388b7d5c8277f296f7add23a46d87a790b44166cfa86",
+      "http/errors.go": "259dd4d44212c8a5ed7deb406fe9c5761b712a73e7497283e05a5fbe97881569",
+      "http/json_error_classification_test.go": "94e3d7e118bc24d6f6e7d4c3e85b3499675e174ece92e3835b710cc4999c7fbf",
+      "http/pagination/cursor_codec_error_test.go": "ddaf77fd8202e6d3c95c081331455f0a0949529bcc6c1878c2a1a64e94c5d5d8",
+      "internal/errorgraph/walk.go": "f36d620d442af56fd4f5b29bfdb33533e268a1b62d230e02f13ba98e483282bb",
+      "internal/errorgraph/walk_test.go": "bcc4ebbc58bfaeec16760a8db89706ee4c6639b3b2a1d76808ff5ed95354a9e5",
+      "internal/ormcore/codec.go": "f93dc88403201fdc8c5f8b48c68a98e3ff2d37f0fb5c62a82ff4bae5d6b0cc44",
+      "internal/querycore/compiler.go": "e5bf37d4bddf8ad357dbf4a02cf7c96ffd60eaf7ba3cba2b611d6755c156f855",
+      "internal/querycore/compiler_binding_test.go": "babdf5a1e07d4628c4d74b35d1c27d2265647d71737bc4efdf3f0ebd1968a1de",
+      "internal/querycore/cursor_boundary.go": "7a5da9f7708f3573887ad9008189b7549feb64c1a3efeca0146bb7e95b414513",
+      "internal/querycore/json_key_error_test.go": "b933045461b39cb2aab8034419949efb254d8c55b24d1edc5ab502a8a054dc01",
+      "internal/querycore/json_path.go": "3bc84b843326b4b53f51b0e5542cb2021b4ebb6b14123406f26298c932799fc0",
+      "internal/safeerror/error.go": "ec60fea49efbd4434a80a3e6859b6d168e14a52493e0a6e0a7314b1feb0aa137",
+      "internal/safeerror/error_test.go": "8fa0a10b7b19e2ca01c4f2771a25035a4b6e8af7fdfde38d4b9da56e864d6330",
+      "tests/fixtures/goway/compiler_cases_test.go": "a99317e6b152ecbd89f8e55bb243e3973ba46c94e7b8a8bd7bbde3b6d073087a",
+      "tests/fixtures/goway/footprint_test.go": "0edfc2c1ef7ef9b3eaf76b859c4eb00470f1ee0c095b01ba38bfe3abedf6f043",
+      "tests/fixtures/goway/go.mod": "6a12c9874b82f07d6a26a7344d54725f8860a8bd1eec63ea6d57e6ba633ddc34",
+      "tests/fixtures/goway/integrations/.foundry-gen.json": "00e584cde7f55c0296ee741008d646ea961aa7d3b3be708992c245113fa48db2",
+      "tests/fixtures/goway/integrations/applicationcontrol/application.go": "5cc8246197908117ec64fdb6eaec7a092e973dea8b7b53188f91238c33767a12",
+      "tests/fixtures/goway/integrations/pagination.go": "7370d582b1cd5d8798aa71f6c423850fce4ad7981a073e05f1c5a096d6f37ca4",
+      "tests/fixtures/goway/integrations/pagination_test.go": "29ca860af8ad33d4057aaa5f8262ab0ace5590a4501e1c0d9b239a8752f7e709",
+      "tests/fixtures/goway/integrations/registration/application.go": "e577b3c90cff418120bb627e387983e20f94cf08ba1b2f41852dc995442e3514",
+      "tests/fixtures/goway/integrations/registrationoption/option.go": "acbc18240cdd4844ce1729b8f87bfae4ec7845910be8dd53a7ca726f7b460c3b",
+      "tests/fixtures/goway/integrations/response_foundry.gen.go": "bf517076f221c1daabc8e04dc83d77a2e085e71d8471bdc766dafaa5228a3c24",
+      "tests/fixtures/goway/integrations/seeding/seeder.go": "bc5add521fc5759a87f90f4465cdfea017765a3a7e1a9a15d0b3e9c3ef4dfcdb",
+      "tests/fixtures/goway/models/tables.go": "c9a3d73b792af302433222c824ed540f9201f3a9ea355a47444966ec30421014",
+      "tests/fixtures/goway/models/tables_test.go": "e18c4b42f0fd37f72d09ad2a5332cec2935290ce4e62e6a49327439548831a44",
+      "tests/fixtures/goway/pgsmoke/seeder_pagination_test.go": "48a7262ec3d8f1174bfee63c84a2f5dd3b2506f71aa2971831e925f9bfba83ee",
+      "tests/fixtures/goway/stage7_remainder_golden_test.go": "d150d590ae52946e831da7b415c758b69d4a843c93d77bc76cfd0ec05e938f92",
+      "tests/fixtures/goway/testdata/compilefail/application_table_declaration/invalid.go": "fdd113809626b61021d917558719347b5bf3ea432ddb867d4a17f670881a8c0a",
+      "tests/fixtures/goway/testdata/compilefail/http_cursor_mapping_owner/invalid.go": "497c34583fa9e26f446f4ce99c0dc2e6ab2336655c7d0aa71f24e430196c8f15",
+      "tests/fixtures/goway/testdata/compilefail/http_cursor_navigation_owner/invalid.go": "8811844b693fef681af7788cf3b35a19c3f5c8b137389e5e7044c5321eea04d9",
+      "tests/fixtures/goway/testdata/compilefail/http_cursor_request_owner/invalid.go": "f3fa4203b91946249c02593d5bf21a6a71323ef591f7714cced1992806880f7a",
+      "tests/fixtures/goway/testdata/compilefail/http_cursor_result_owner/invalid.go": "8d730cad9a9b93c5ee082247f1d55b7e8e1eb0bf1f14ef0f7ee32ae1c18ad4c4",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_authorization/invalid.go": "ae797d70ef8c65bacdfb4e9c996c31916334fcafcb7c4e776628e3dcf0c182cb",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_cursor/invalid.go": "6d15a107fdd27efddd2bac96e85855d891800c91716c4a14eaf4613e0490d681",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_numbered/invalid.go": "c53560b5188c79166196f341ed978ca5d59c8843f6ae382668887290638c2b69",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_permission/invalid.go": "c8379864a0a7522f663489b9b5a663ec1265cb2cc118c76efdf19df09873c41a",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_scopes/invalid.go": "07bea74ebe3869abb0d7210dae81efdde433d1700ce870547be033cbc6e31f8a",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_simple/invalid.go": "27e8ffe44b839a0522f7bfca62d84b8dbc7d1ec99c287dd255c891c88b08944f",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_handler/invalid.go": "1d1244b3a5f2057ed2d1547b9bc01f64dcb385cc8c25eaf98ee9c40dd255094e",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_map_owner/invalid.go": "9a62b19409cd1ee3ed4fe2bff9571fac5cef75d43a00999c15ebee0e10e1f603",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_result/invalid.go": "186a40e9247b5d718251e961493db9d2b6e6be989225e2b31519016213509d4a",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_total/invalid.go": "d5060dfa3485cfc275c1693c0d0bfaa526f7cb8839824fa070262af2ee7d8675",
+      "value/json.go": "752abc1fa6f3a202cc7cce7ec5d8023cb12f985dfd2b294f9ecfc010fbf13b39",
+      "value/json_encoding.go": "ef5d4d80a3c187531548acddbfeb5d43b5d74c75b111b849afe4d244a096acce",
+      "value/json_key_encoding.go": "60febb211c4691c4eaf31655382214222d903fccd80c2693e25eccb810d12f74",
+      "value/json_key_encoding_test.go": "f6c0d1f252bc2afaf85d1018703ccf383b01e0ba26f6bbd29db7c4ea19d7de02",
+      "value/json_map.go": "b034627067fdc7453a665f57c65640bcf7697c3bc7e6359034dc94480685f7fb"
+    },
+    "logs": "/private/tmp/goway-laneA9-remainder",
+    "cache_rotation": "LaneA9 remainder and Stage9 commands used r6, GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off. Older cache results are historical.",
+    "updated_at_utc": "2026-10-24T20:41:54.888702+00:00",
+    "contract_comparison": "Fresh 6d80111 HEAD-overlay and laneA9 remainder exports are byte-identical.",
+    "compiler_cases_total": 792,
+    "footprint_probes_total": 130,
+    "checks": [
+      {
+        "name": "build",
+        "command": [
+          "go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 9.89
+      },
+      {
+        "name": "vet",
+        "command": [
+          "go",
+          "vet",
+          "./database/...",
+          "./internal/...",
+          "./application/...",
+          "./http/pagination/...",
+          "./enum/...",
+          "./value/...",
+          "./http/..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 32.77
+      },
+      {
+        "name": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database/orm/...",
+          "./database/query/...",
+          "./internal/querycore/...",
+          "./internal/ormcore/...",
+          "./application/...",
+          "./http/pagination/...",
+          "./database/seed/...",
+          "./enum/...",
+          "./database/codec/...",
+          "./database",
+          "./value",
+          "./internal/safeerror",
+          "./database/postgres",
+          "./http",
+          "./internal/errorgraph"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 103.91
+      },
+      {
+        "name": "fixture-vet",
+        "command": [
+          "go",
+          "vet",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 22.0
+      },
+      {
+        "name": "fixture-test",
+        "command": [
+          "go",
+          "test",
+          "-v",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 111.3
+      },
+      {
+        "name": "fixture-race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./integrations/...",
+          "./models"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 10.96
+      },
+      {
+        "name": "seed-protocol",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database",
+          "-run",
+          "Seeder"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 2.44
+      },
+      {
+        "name": "generate-check",
+        "command": [
+          "make",
+          "generate-check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 10.25
+      },
+      {
+        "name": "catalogue",
+        "command": [
+          "python3",
+          "tools/goway_catalogue.py"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 0.39
+      },
+      {
+        "name": "format",
+        "command": [
+          "sh",
+          "tools/format-go.sh",
+          "check",
+          "/usr/local/go/bin/gofmt"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 0.98
+      },
+      {
+        "name": "docs",
+        "command": [
+          "make",
+          "docs-check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 0.76
+      },
+      {
+        "name": "diff",
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 0.03
+      },
+      {
+        "name": "consumer-contracts",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./httppagination/...",
+          "./clientcontracts",
+          "-run",
+          "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 49.04
+      },
+      {
+        "name": "contract-before",
+        "command": [
+          "go",
+          "test",
+          "-overlay=/private/tmp/goway-laneA9-remainder/contract-before-overlay.json",
+          "./clientcontracts",
+          "-run",
+          "^TestStage7ContractEvidence$"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 40.88
+      },
+      {
+        "name": "contract-current",
+        "command": [
+          "go",
+          "test",
+          "-overlay=/private/tmp/goway-laneA9-remainder/contract-current-overlay.json",
+          "./clientcontracts",
+          "-run",
+          "^TestStage7ContractEvidence$"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 32.96
+      }
+    ],
+    "pre_rebase_base_commit": "f3cfffd7199988d51023dbe516e505bdb1538b50",
+    "review21_checks": [
+      {
+        "name": "build",
+        "command": [
+          "go",
+          "build",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 15.73
+      },
+      {
+        "name": "vet",
+        "command": [
+          "go",
+          "vet",
+          "./database/...",
+          "./internal/...",
+          "./application/...",
+          "./http/pagination/...",
+          "./enum/...",
+          "./value/...",
+          "./http/..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 29.1
+      },
+      {
+        "name": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database/orm/...",
+          "./database/query/...",
+          "./internal/querycore/...",
+          "./internal/ormcore/...",
+          "./application/...",
+          "./http/pagination/...",
+          "./database/seed/...",
+          "./enum/...",
+          "./database/codec/...",
+          "./database",
+          "./value",
+          "./internal/safeerror",
+          "./database/postgres",
+          "./http",
+          "./internal/errorgraph"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 103.11
+      },
+      {
+        "name": "fixture-vet",
+        "command": [
+          "go",
+          "vet",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 14.73
+      },
+      {
+        "name": "fixture-test",
+        "command": [
+          "go",
+          "test",
+          "-v",
+          "./..."
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 79.52
+      },
+      {
+        "name": "fixture-race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./integrations/...",
+          "./models"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 6.09
+      },
+      {
+        "name": "seed-protocol",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./database",
+          "-run",
+          "Seeder"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 2.02
+      },
+      {
+        "name": "generate-check",
+        "command": [
+          "make",
+          "generate-check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 6.5
+      },
+      {
+        "name": "catalogue",
+        "command": [
+          "python3",
+          "tools/goway_catalogue.py"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 0.23
+      },
+      {
+        "name": "format",
+        "command": [
+          "sh",
+          "tools/format-go.sh",
+          "check",
+          "/usr/local/go/bin/gofmt"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 0.61
+      },
+      {
+        "name": "docs",
+        "command": [
+          "make",
+          "docs-check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "name": "diff",
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 0.02
+      },
+      {
+        "name": "consumer-contracts",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./httppagination/...",
+          "./clientcontracts",
+          "-run",
+          "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 30.69
+      },
+      {
+        "name": "contract-before",
+        "command": [
+          "go",
+          "test",
+          "-overlay=/private/tmp/goway-stage7-remainder-review21/contract-before-overlay.json",
+          "./clientcontracts",
+          "-run",
+          "^TestStage7ContractEvidence$"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 3.76
+      },
+      {
+        "name": "contract-current",
+        "command": [
+          "go",
+          "test",
+          "-overlay=/private/tmp/goway-stage7-remainder-review21/contract-current-overlay.json",
+          "./clientcontracts",
+          "-run",
+          "^TestStage7ContractEvidence$"
+        ],
+        "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+        "cache": "r6",
+        "exit_code": 0,
+        "seconds": 15.16
+      }
+    ],
+    "review21_logs": "/private/tmp/goway-stage7-remainder-review21",
+    "rebase": {
+      "compiler_base_entries_preserved": 777,
+      "compiler_additions": 15,
+      "footprint_base_entries_preserved": 125,
+      "footprint_additions": 5,
+      "footprints": {
+        "aggregate_families": {
+          "baseline": 3799,
+          "ceiling": 4369,
+          "functions": 4366
+        },
+        "aggregate_group": {
+          "baseline": 2426,
+          "ceiling": 2790,
+          "functions": 2533
+        },
+        "aggregate_slot_declaration": {
+          "baseline": 1112,
+          "ceiling": 1279,
+          "functions": 1127
+        },
+        "aggregate_slot_direct": {
+          "baseline": 1490,
+          "ceiling": 1714,
+          "functions": 1490
+        },
+        "aggregate_slot_nested": {
+          "baseline": 2048,
+          "ceiling": 2356,
+          "functions": 2050
+        },
+        "aggregate_slot_pivot": {
+          "baseline": 2095,
+          "ceiling": 2410,
+          "functions": 2092
+        },
+        "audit": {
+          "baseline": 1313,
+          "ceiling": 1510,
+          "functions": 1337
+        },
+        "column_encrypted_json": {
+          "baseline": 1217,
+          "ceiling": 1400,
+          "functions": 1321
+        },
+        "column_encrypted_text": {
+          "baseline": 1127,
+          "ceiling": 1297,
+          "functions": 1231
+        },
+        "column_enum": {
+          "baseline": 1232,
+          "ceiling": 1417,
+          "functions": 1344
+        },
+        "column_interval": {
+          "baseline": 1178,
+          "ceiling": 1355,
+          "functions": 1293
+        },
+        "column_json": {
+          "baseline": 1280,
+          "ceiling": 1472,
+          "functions": 1391
+        },
+        "column_nullable_encrypted_json": {
+          "baseline": 1449,
+          "ceiling": 1667,
+          "functions": 1562
+        },
+        "column_nullable_encrypted_text": {
+          "baseline": 1359,
+          "ceiling": 1563,
+          "functions": 1472
+        },
+        "column_nullable_interval": {
+          "baseline": 1406,
+          "ceiling": 1617,
+          "functions": 1530
+        },
+        "column_nullable_json": {
+          "baseline": 1522,
+          "ceiling": 1751,
+          "functions": 1642
+        },
+        "column_nullable_password": {
+          "baseline": 1417,
+          "ceiling": 1630,
+          "functions": 1535
+        },
+        "column_nullable_text": {
+          "baseline": 1456,
+          "ceiling": 1675,
+          "functions": 1584
+        },
+        "column_number": {
+          "baseline": 1172,
+          "ceiling": 1348,
+          "functions": 1267
+        },
+        "column_password": {
+          "baseline": 1190,
+          "ceiling": 1369,
+          "functions": 1299
+        },
+        "column_time": {
+          "baseline": 1194,
+          "ceiling": 1374,
+          "functions": 1309
+        },
+        "conditional_row": {
+          "baseline": 1681,
+          "ceiling": 1934,
+          "functions": 1805
+        },
+        "conditional_selected": {
+          "baseline": 1511,
+          "ceiling": 1738,
+          "functions": 1649
+        },
+        "conflict": {
+          "baseline": 944,
+          "ceiling": 1086,
+          "functions": 968
+        },
+        "conflict_advanced": {
+          "baseline": 1817,
+          "ceiling": 2090,
+          "functions": 1808
+        },
+        "correlation": {
+          "baseline": 2752,
+          "ceiling": 3165,
+          "functions": 2991
+        },
+        "cte_recursive": {
+          "baseline": 1076,
+          "ceiling": 1238,
+          "functions": 1131
+        },
+        "cursor": {
+          "baseline": 1127,
+          "ceiling": 1297,
+          "functions": 1186
+        },
+        "datatable_projection": {
+          "baseline": 2951,
+          "ceiling": 3394,
+          "functions": 2971
+        },
+        "distinct": {
+          "baseline": 1135,
+          "ceiling": 1306,
+          "functions": 1174
+        },
+        "each_writes": {
+          "baseline": 888,
+          "ceiling": 1022,
+          "functions": 879
+        },
+        "expr_arithmetic": {
+          "baseline": 1162,
+          "ceiling": 1337,
+          "functions": 1256
+        },
+        "expr_selected": {
+          "baseline": 1551,
+          "ceiling": 1784,
+          "functions": 1698
+        },
+        "extension_declaration": {
+          "baseline": 30434,
+          "ceiling": 35000,
+          "functions": 11399
+        },
+        "extension_handles": {
+          "baseline": 1481,
+          "ceiling": 1704,
+          "functions": 1501
+        },
+        "extension_slots": {
+          "baseline": 2154,
+          "ceiling": 2478,
+          "functions": 2103
+        },
+        "extension_slots_old": {
+          "baseline": 30493,
+          "ceiling": 35067,
+          "functions": 9750
+        },
+        "framework_application_control": {
+          "baseline": 5524,
+          "ceiling": 6353,
+          "functions": 3339
+        },
+        "framework_attachmentstore": {
+          "baseline": 4729,
+          "ceiling": 5439,
+          "functions": 4792
+        },
+        "framework_auditstore": {
+          "baseline": 4753,
+          "ceiling": 5466,
+          "functions": 4753
+        },
+        "framework_challengestore": {
+          "baseline": 2558,
+          "ceiling": 2942,
+          "functions": 2560
+        },
+        "framework_countries": {
+          "baseline": 4122,
+          "ceiling": 4741,
+          "functions": 4177
+        },
+        "framework_extensionstore": {
+          "baseline": 5407,
+          "ceiling": 6219,
+          "functions": 5640
+        },
+        "framework_idempotencystore": {
+          "baseline": 2249,
+          "ceiling": 2587,
+          "functions": 2253
+        },
+        "framework_jobarchive": {
+          "baseline": 2280,
+          "ceiling": 2622,
+          "functions": 2280
+        },
+        "framework_mfastore": {
+          "baseline": 2947,
+          "ceiling": 3390,
+          "functions": 2947
+        },
+        "framework_notificationstore": {
+          "baseline": 5119,
+          "ceiling": 5887,
+          "functions": 5165
+        },
+        "framework_outbox": {
+          "baseline": 2896,
+          "ceiling": 3331,
+          "functions": 2916
+        },
+        "framework_pagination": {
+          "baseline": 5286,
+          "ceiling": 6079,
+          "functions": 5305
+        },
+        "framework_registration": {
+          "baseline": 7559,
+          "ceiling": 8693,
+          "functions": 4007
+        },
+        "framework_registration_option": {
+          "baseline": 1012,
+          "ceiling": 1164,
+          "functions": 1010
+        },
+        "framework_seeder": {
+          "baseline": 867,
+          "ceiling": 998,
+          "functions": 858
+        },
+        "framework_sessionstore": {
+          "baseline": 4166,
+          "ceiling": 4791,
+          "functions": 4166
+        },
+        "framework_tokenstore": {
+          "baseline": 5315,
+          "ceiling": 6113,
+          "functions": 5315
+        },
+        "framework_webhookstore": {
+          "baseline": 4705,
+          "ceiling": 5411,
+          "functions": 4769
+        },
+        "global_scopes": {
+          "baseline": 1374,
+          "ceiling": 1581,
+          "functions": 1389
+        },
+        "has": {
+          "baseline": 1302,
+          "ceiling": 1498,
+          "functions": 1412
+        },
+        "has_one": {
+          "baseline": 1281,
+          "ceiling": 1474,
+          "functions": 1403
+        },
+        "input_column_kinds": {
+          "baseline": 5088,
+          "ceiling": 5852,
+          "functions": 5321
+        },
+        "input_key": {
+          "baseline": 982,
+          "ceiling": 1130,
+          "functions": 1049
+        },
+        "json_functions": {
+          "baseline": 2736,
+          "ceiling": 3147,
+          "functions": 2739
+        },
+        "json_paths": {
+          "baseline": 6146,
+          "ceiling": 7068,
+          "functions": 6168
+        },
+        "key_chunk": {
+          "baseline": 812,
+          "ceiling": 934,
+          "functions": 862
+        },
+        "lateral": {
+          "baseline": 2852,
+          "ceiling": 3280,
+          "functions": 3049
+        },
+        "lifecycle_changes": {
+          "baseline": 1050,
+          "ceiling": 1208,
+          "functions": 1093
+        },
+        "lifecycle_write": {
+          "baseline": 930,
+          "ceiling": 1070,
+          "functions": 973
+        },
+        "model_type": {
+          "baseline": 299,
+          "ceiling": 344,
+          "functions": 299
+        },
+        "models": {
+          "baseline": 6147,
+          "ceiling": 7070,
+          "functions": 6840
+        },
+        "models_1": {
+          "baseline": 1619,
+          "ceiling": 1862,
+          "functions": 1751
+        },
+        "models_3": {
+          "baseline": 2435,
+          "ceiling": 2801,
+          "functions": 2605
+        },
+        "morph": {
+          "baseline": 1088,
+          "ceiling": 1252,
+          "functions": 1155
+        },
+        "mutator_explicit": {
+          "baseline": 1605,
+          "ceiling": 1846,
+          "functions": 1717
+        },
+        "mutators": {
+          "baseline": 801,
+          "ceiling": 922,
+          "functions": 855
+        },
+        "nested_with": {
+          "baseline": 1281,
+          "ceiling": 1474,
+          "functions": 1403
+        },
+        "nullable_join_chain": {
+          "baseline": 1695,
+          "ceiling": 1950,
+          "functions": 1854
+        },
+        "on_comparisons": {
+          "baseline": 1454,
+          "ceiling": 1673,
+          "functions": 1593
+        },
+        "onequery": {
+          "baseline": 803,
+          "ceiling": 924,
+          "functions": 854
+        },
+        "orm_binding": {
+          "baseline": 1089,
+          "ceiling": 1253,
+          "functions": 1101
+        },
+        "orm_factory": {
+          "baseline": 1093,
+          "ceiling": 1257,
+          "functions": 1093
+        },
+        "outbox_publisher": {
+          "baseline": 1324,
+          "ceiling": 1523,
+          "functions": 1324
+        },
+        "outer_join": {
+          "baseline": 1668,
+          "ceiling": 1919,
+          "functions": 1789
+        },
+        "pivot": {
+          "baseline": 1005,
+          "ceiling": 1156,
+          "functions": 1072
+        },
+        "prune_registry": {
+          "baseline": 933,
+          "ceiling": 1073,
+          "functions": 933
+        },
+        "q_join": {
+          "baseline": 1598,
+          "ceiling": 1838,
+          "functions": 1766
+        },
+        "q_select": {
+          "baseline": 836,
+          "ceiling": 962,
+          "functions": 895
+        },
+        "q_with": {
+          "baseline": 1053,
+          "ceiling": 1211,
+          "functions": 1211
+        },
+        "raw": {
+          "baseline": 1045,
+          "ceiling": 1202,
+          "functions": 1096
+        },
+        "raw_fragments": {
+          "baseline": 1331,
+          "ceiling": 1531,
+          "functions": 1380
+        },
+        "record_sets": {
+          "baseline": 1288,
+          "ceiling": 1482,
+          "functions": 1294
+        },
+        "records": {
+          "baseline": 1313,
+          "ceiling": 1510,
+          "functions": 1327
+        },
+        "relation_with": {
+          "baseline": 1847,
+          "ceiling": 2125,
+          "functions": 2047
+        },
+        "relation_write_attach": {
+          "baseline": 1110,
+          "ceiling": 1277,
+          "functions": 1110
+        },
+        "relation_write_declaration": {
+          "baseline": 361,
+          "ceiling": 416,
+          "functions": 361
+        },
+        "relation_write_sync": {
+          "baseline": 1124,
+          "ceiling": 1293,
+          "functions": 1124
+        },
+        "report_filters": {
+          "baseline": 2095,
+          "ceiling": 2410,
+          "functions": 2112
+        },
+        "report_pipeline": {
+          "baseline": 1905,
+          "ceiling": 2191,
+          "functions": 2120
+        },
+        "report_reads": {
+          "baseline": 1063,
+          "ceiling": 1223,
+          "functions": 1063
+        },
+        "result_cursor": {
+          "baseline": 2229,
+          "ceiling": 2564,
+          "functions": 2229
+        },
+        "result_reads": {
+          "baseline": 1351,
+          "ceiling": 1554,
+          "functions": 1385
+        },
+        "retrieval_read": {
+          "baseline": 826,
+          "ceiling": 950,
+          "functions": 831
+        },
+        "role_input_same": {
+          "baseline": 1360,
+          "ceiling": 1564,
+          "functions": 1360
+        },
+        "role_lookup_input": {
+          "baseline": 1226,
+          "ceiling": 1410,
+          "functions": 1213
+        },
+        "role_primary_number": {
+          "baseline": 1195,
+          "ceiling": 1375,
+          "functions": 1182
+        },
+        "role_primary_text": {
+          "baseline": 1216,
+          "ceiling": 1399,
+          "functions": 1216
+        },
+        "role_soft_read": {
+          "baseline": 1548,
+          "ceiling": 1781,
+          "functions": 1548
+        },
+        "role_soft_write": {
+          "baseline": 620,
+          "ceiling": 713,
+          "functions": 620
+        },
+        "role_source": {
+          "baseline": 905,
+          "ceiling": 1041,
+          "functions": 905
+        },
+        "role_time_read": {
+          "baseline": 1394,
+          "ceiling": 1604,
+          "functions": 1394
+        },
+        "rows_each": {
+          "baseline": 899,
+          "ceiling": 1034,
+          "functions": 899
+        },
+        "scalar_temporal": {
+          "baseline": 2625,
+          "ceiling": 3019,
+          "functions": 2629
+        },
+        "scalar_text": {
+          "baseline": 2312,
+          "ceiling": 2659,
+          "functions": 2315
+        },
+        "scoped_write": {
+          "baseline": 1111,
+          "ceiling": 1278,
+          "functions": 1111
+        },
+        "sensitive_models": {
+          "baseline": 2606,
+          "ceiling": 2997,
+          "functions": 2821
+        },
+        "source_write": {
+          "baseline": 1311,
+          "ceiling": 1508,
+          "functions": 1302
+        },
+        "subqueries": {
+          "baseline": 2837,
+          "ceiling": 3263,
+          "functions": 3061
+        },
+        "table_ref": {
+          "baseline": 803,
+          "ceiling": 924,
+          "functions": 854
+        },
+        "terminal_adjustment": {
+          "baseline": 1382,
+          "ceiling": 1590,
+          "functions": 1382
+        },
+        "terminal_create_or_first": {
+          "baseline": 880,
+          "ceiling": 1012,
+          "functions": 880
+        },
+        "terminal_explain": {
+          "baseline": 1318,
+          "ceiling": 1516,
+          "functions": 1322
+        },
+        "terminal_lookup": {
+          "baseline": 893,
+          "ceiling": 1027,
+          "functions": 893
+        },
+        "terminal_prune": {
+          "baseline": 930,
+          "ceiling": 1070,
+          "functions": 930
+        },
+        "through": {
+          "baseline": 928,
+          "ceiling": 1068,
+          "functions": 986
+        },
+        "transaction_correlation": {
+          "baseline": 2908,
+          "ceiling": 3345,
+          "functions": 2908
+        },
+        "transaction_joins": {
+          "baseline": 1835,
+          "ceiling": 2111,
+          "functions": 1835
+        },
+        "transaction_records": {
+          "baseline": 1296,
+          "ceiling": 1491,
+          "functions": 1406
+        },
+        "uuid_seeks": {
+          "baseline": 1023,
+          "ceiling": 1177,
+          "functions": 1023
+        },
+        "validation_database": {
+          "baseline": 1441,
+          "ceiling": 1658,
+          "functions": 1441
+        },
+        "value_sets": {
+          "baseline": 2230,
+          "ceiling": 2565,
+          "functions": 2237
+        },
+        "window_frames": {
+          "baseline": 1767,
+          "ceiling": 2033,
+          "functions": 1769
+        },
+        "window_rank": {
+          "baseline": 1345,
+          "ceiling": 1547,
+          "functions": 1346
+        }
+      },
+      "existing_ceilings_raised": false
+    },
+    "laneA9_final_reporting_checks": [
+      {
+        "command": "make docs-check",
+        "cache": "r6",
+        "exit_code": 0
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ]
+  },
+  "pre_rebase_base_commit": "f3cfffd7199988d51023dbe516e505bdb1538b50",
+  "review21_checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 15.73
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./database/...",
+        "./internal/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./enum/...",
+        "./value/...",
+        "./http/..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 29.1
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm/...",
+        "./database/query/...",
+        "./internal/querycore/...",
+        "./internal/ormcore/...",
+        "./application/...",
+        "./http/pagination/...",
+        "./database/seed/...",
+        "./enum/...",
+        "./database/codec/...",
+        "./database",
+        "./value",
+        "./internal/safeerror",
+        "./database/postgres",
+        "./http",
+        "./internal/errorgraph"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 103.11
+    },
+    {
+      "name": "fixture-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 14.73
+    },
+    {
+      "name": "fixture-test",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "./..."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 79.52
+    },
+    {
+      "name": "fixture-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./integrations/...",
+        "./models"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/goway",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 6.09
+    },
+    {
+      "name": "seed-protocol",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database",
+        "-run",
+        "Seeder"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 2.02
+    },
+    {
+      "name": "generate-check",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 6.5
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.23
+    },
+    {
+      "name": "format",
+      "command": [
+        "sh",
+        "tools/format-go.sh",
+        "check",
+        "/usr/local/go/bin/gofmt"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.61
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.21
+    },
+    {
+      "name": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 0.02
+    },
+    {
+      "name": "consumer-contracts",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./httppagination/...",
+        "./clientcontracts",
+        "-run",
+        "TestConsumerClientManifestKeepsRealFeatureBoundaries|Test.*Pagination|Test.*Cursor"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 30.69
+    },
+    {
+      "name": "contract-before",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review21/contract-before-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 3.76
+    },
+    {
+      "name": "contract-current",
+      "command": [
+        "go",
+        "test",
+        "-overlay=/private/tmp/goway-stage7-remainder-review21/contract-current-overlay.json",
+        "./clientcontracts",
+        "-run",
+        "^TestStage7ContractEvidence$"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA/tests/fixtures/consumer",
+      "cache": "r6",
+      "exit_code": 0,
+      "seconds": 15.16
+    }
+  ],
+  "review21_logs": "/private/tmp/goway-stage7-remainder-review21",
+  "rebase": {
+    "compiler_base_entries_preserved": 777,
+    "compiler_additions": 15,
+    "footprint_base_entries_preserved": 125,
+    "footprint_additions": 5,
+    "footprints": {
+      "aggregate_families": {
+        "baseline": 3799,
+        "ceiling": 4369,
+        "functions": 4366
+      },
+      "aggregate_group": {
+        "baseline": 2426,
+        "ceiling": 2790,
+        "functions": 2533
+      },
+      "aggregate_slot_declaration": {
+        "baseline": 1112,
+        "ceiling": 1279,
+        "functions": 1127
+      },
+      "aggregate_slot_direct": {
+        "baseline": 1490,
+        "ceiling": 1714,
+        "functions": 1490
+      },
+      "aggregate_slot_nested": {
+        "baseline": 2048,
+        "ceiling": 2356,
+        "functions": 2050
+      },
+      "aggregate_slot_pivot": {
+        "baseline": 2095,
+        "ceiling": 2410,
+        "functions": 2092
+      },
+      "audit": {
+        "baseline": 1313,
+        "ceiling": 1510,
+        "functions": 1337
+      },
+      "column_encrypted_json": {
+        "baseline": 1217,
+        "ceiling": 1400,
+        "functions": 1321
+      },
+      "column_encrypted_text": {
+        "baseline": 1127,
+        "ceiling": 1297,
+        "functions": 1231
+      },
+      "column_enum": {
+        "baseline": 1232,
+        "ceiling": 1417,
+        "functions": 1344
+      },
+      "column_interval": {
+        "baseline": 1178,
+        "ceiling": 1355,
+        "functions": 1293
+      },
+      "column_json": {
+        "baseline": 1280,
+        "ceiling": 1472,
+        "functions": 1391
+      },
+      "column_nullable_encrypted_json": {
+        "baseline": 1449,
+        "ceiling": 1667,
+        "functions": 1562
+      },
+      "column_nullable_encrypted_text": {
+        "baseline": 1359,
+        "ceiling": 1563,
+        "functions": 1472
+      },
+      "column_nullable_interval": {
+        "baseline": 1406,
+        "ceiling": 1617,
+        "functions": 1530
+      },
+      "column_nullable_json": {
+        "baseline": 1522,
+        "ceiling": 1751,
+        "functions": 1642
+      },
+      "column_nullable_password": {
+        "baseline": 1417,
+        "ceiling": 1630,
+        "functions": 1535
+      },
+      "column_nullable_text": {
+        "baseline": 1456,
+        "ceiling": 1675,
+        "functions": 1584
+      },
+      "column_number": {
+        "baseline": 1172,
+        "ceiling": 1348,
+        "functions": 1267
+      },
+      "column_password": {
+        "baseline": 1190,
+        "ceiling": 1369,
+        "functions": 1299
+      },
+      "column_time": {
+        "baseline": 1194,
+        "ceiling": 1374,
+        "functions": 1309
+      },
+      "conditional_row": {
+        "baseline": 1681,
+        "ceiling": 1934,
+        "functions": 1805
+      },
+      "conditional_selected": {
+        "baseline": 1511,
+        "ceiling": 1738,
+        "functions": 1649
+      },
+      "conflict": {
+        "baseline": 944,
+        "ceiling": 1086,
+        "functions": 968
+      },
+      "conflict_advanced": {
+        "baseline": 1817,
+        "ceiling": 2090,
+        "functions": 1808
+      },
+      "correlation": {
+        "baseline": 2752,
+        "ceiling": 3165,
+        "functions": 2991
+      },
+      "cte_recursive": {
+        "baseline": 1076,
+        "ceiling": 1238,
+        "functions": 1131
+      },
+      "cursor": {
+        "baseline": 1127,
+        "ceiling": 1297,
+        "functions": 1186
+      },
+      "datatable_projection": {
+        "baseline": 2951,
+        "ceiling": 3394,
+        "functions": 2971
+      },
+      "distinct": {
+        "baseline": 1135,
+        "ceiling": 1306,
+        "functions": 1174
+      },
+      "each_writes": {
+        "baseline": 888,
+        "ceiling": 1022,
+        "functions": 879
+      },
+      "expr_arithmetic": {
+        "baseline": 1162,
+        "ceiling": 1337,
+        "functions": 1256
+      },
+      "expr_selected": {
+        "baseline": 1551,
+        "ceiling": 1784,
+        "functions": 1698
+      },
+      "extension_declaration": {
+        "baseline": 30434,
+        "ceiling": 35000,
+        "functions": 11399
+      },
+      "extension_handles": {
+        "baseline": 1481,
+        "ceiling": 1704,
+        "functions": 1501
+      },
+      "extension_slots": {
+        "baseline": 2154,
+        "ceiling": 2478,
+        "functions": 2103
+      },
+      "extension_slots_old": {
+        "baseline": 30493,
+        "ceiling": 35067,
+        "functions": 9750
+      },
+      "framework_application_control": {
+        "baseline": 5524,
+        "ceiling": 6353,
+        "functions": 3339
+      },
+      "framework_attachmentstore": {
+        "baseline": 4729,
+        "ceiling": 5439,
+        "functions": 4792
+      },
+      "framework_auditstore": {
+        "baseline": 4753,
+        "ceiling": 5466,
+        "functions": 4753
+      },
+      "framework_challengestore": {
+        "baseline": 2558,
+        "ceiling": 2942,
+        "functions": 2560
+      },
+      "framework_countries": {
+        "baseline": 4122,
+        "ceiling": 4741,
+        "functions": 4177
+      },
+      "framework_extensionstore": {
+        "baseline": 5407,
+        "ceiling": 6219,
+        "functions": 5640
+      },
+      "framework_idempotencystore": {
+        "baseline": 2249,
+        "ceiling": 2587,
+        "functions": 2253
+      },
+      "framework_jobarchive": {
+        "baseline": 2280,
+        "ceiling": 2622,
+        "functions": 2280
+      },
+      "framework_mfastore": {
+        "baseline": 2947,
+        "ceiling": 3390,
+        "functions": 2947
+      },
+      "framework_notificationstore": {
+        "baseline": 5119,
+        "ceiling": 5887,
+        "functions": 5165
+      },
+      "framework_outbox": {
+        "baseline": 2896,
+        "ceiling": 3331,
+        "functions": 2916
+      },
+      "framework_pagination": {
+        "baseline": 5286,
+        "ceiling": 6079,
+        "functions": 5305
+      },
+      "framework_registration": {
+        "baseline": 7559,
+        "ceiling": 8693,
+        "functions": 4007
+      },
+      "framework_registration_option": {
+        "baseline": 1012,
+        "ceiling": 1164,
+        "functions": 1010
+      },
+      "framework_seeder": {
+        "baseline": 867,
+        "ceiling": 998,
+        "functions": 858
+      },
+      "framework_sessionstore": {
+        "baseline": 4166,
+        "ceiling": 4791,
+        "functions": 4166
+      },
+      "framework_tokenstore": {
+        "baseline": 5315,
+        "ceiling": 6113,
+        "functions": 5315
+      },
+      "framework_webhookstore": {
+        "baseline": 4705,
+        "ceiling": 5411,
+        "functions": 4769
+      },
+      "global_scopes": {
+        "baseline": 1374,
+        "ceiling": 1581,
+        "functions": 1389
+      },
+      "has": {
+        "baseline": 1302,
+        "ceiling": 1498,
+        "functions": 1412
+      },
+      "has_one": {
+        "baseline": 1281,
+        "ceiling": 1474,
+        "functions": 1403
+      },
+      "input_column_kinds": {
+        "baseline": 5088,
+        "ceiling": 5852,
+        "functions": 5321
+      },
+      "input_key": {
+        "baseline": 982,
+        "ceiling": 1130,
+        "functions": 1049
+      },
+      "json_functions": {
+        "baseline": 2736,
+        "ceiling": 3147,
+        "functions": 2739
+      },
+      "json_paths": {
+        "baseline": 6146,
+        "ceiling": 7068,
+        "functions": 6168
+      },
+      "key_chunk": {
+        "baseline": 812,
+        "ceiling": 934,
+        "functions": 862
+      },
+      "lateral": {
+        "baseline": 2852,
+        "ceiling": 3280,
+        "functions": 3049
+      },
+      "lifecycle_changes": {
+        "baseline": 1050,
+        "ceiling": 1208,
+        "functions": 1093
+      },
+      "lifecycle_write": {
+        "baseline": 930,
+        "ceiling": 1070,
+        "functions": 973
+      },
+      "model_type": {
+        "baseline": 299,
+        "ceiling": 344,
+        "functions": 299
+      },
+      "models": {
+        "baseline": 6147,
+        "ceiling": 7070,
+        "functions": 6840
+      },
+      "models_1": {
+        "baseline": 1619,
+        "ceiling": 1862,
+        "functions": 1751
+      },
+      "models_3": {
+        "baseline": 2435,
+        "ceiling": 2801,
+        "functions": 2605
+      },
+      "morph": {
+        "baseline": 1088,
+        "ceiling": 1252,
+        "functions": 1155
+      },
+      "mutator_explicit": {
+        "baseline": 1605,
+        "ceiling": 1846,
+        "functions": 1717
+      },
+      "mutators": {
+        "baseline": 801,
+        "ceiling": 922,
+        "functions": 855
+      },
+      "nested_with": {
+        "baseline": 1281,
+        "ceiling": 1474,
+        "functions": 1403
+      },
+      "nullable_join_chain": {
+        "baseline": 1695,
+        "ceiling": 1950,
+        "functions": 1854
+      },
+      "on_comparisons": {
+        "baseline": 1454,
+        "ceiling": 1673,
+        "functions": 1593
+      },
+      "onequery": {
+        "baseline": 803,
+        "ceiling": 924,
+        "functions": 854
+      },
+      "orm_binding": {
+        "baseline": 1089,
+        "ceiling": 1253,
+        "functions": 1101
+      },
+      "orm_factory": {
+        "baseline": 1093,
+        "ceiling": 1257,
+        "functions": 1093
+      },
+      "outbox_publisher": {
+        "baseline": 1324,
+        "ceiling": 1523,
+        "functions": 1324
+      },
+      "outer_join": {
+        "baseline": 1668,
+        "ceiling": 1919,
+        "functions": 1789
+      },
+      "pivot": {
+        "baseline": 1005,
+        "ceiling": 1156,
+        "functions": 1072
+      },
+      "prune_registry": {
+        "baseline": 933,
+        "ceiling": 1073,
+        "functions": 933
+      },
+      "q_join": {
+        "baseline": 1598,
+        "ceiling": 1838,
+        "functions": 1766
+      },
+      "q_select": {
+        "baseline": 836,
+        "ceiling": 962,
+        "functions": 895
+      },
+      "q_with": {
+        "baseline": 1053,
+        "ceiling": 1211,
+        "functions": 1211
+      },
+      "raw": {
+        "baseline": 1045,
+        "ceiling": 1202,
+        "functions": 1096
+      },
+      "raw_fragments": {
+        "baseline": 1331,
+        "ceiling": 1531,
+        "functions": 1380
+      },
+      "record_sets": {
+        "baseline": 1288,
+        "ceiling": 1482,
+        "functions": 1294
+      },
+      "records": {
+        "baseline": 1313,
+        "ceiling": 1510,
+        "functions": 1327
+      },
+      "relation_with": {
+        "baseline": 1847,
+        "ceiling": 2125,
+        "functions": 2047
+      },
+      "relation_write_attach": {
+        "baseline": 1110,
+        "ceiling": 1277,
+        "functions": 1110
+      },
+      "relation_write_declaration": {
+        "baseline": 361,
+        "ceiling": 416,
+        "functions": 361
+      },
+      "relation_write_sync": {
+        "baseline": 1124,
+        "ceiling": 1293,
+        "functions": 1124
+      },
+      "report_filters": {
+        "baseline": 2095,
+        "ceiling": 2410,
+        "functions": 2112
+      },
+      "report_pipeline": {
+        "baseline": 1905,
+        "ceiling": 2191,
+        "functions": 2120
+      },
+      "report_reads": {
+        "baseline": 1063,
+        "ceiling": 1223,
+        "functions": 1063
+      },
+      "result_cursor": {
+        "baseline": 2229,
+        "ceiling": 2564,
+        "functions": 2229
+      },
+      "result_reads": {
+        "baseline": 1351,
+        "ceiling": 1554,
+        "functions": 1385
+      },
+      "retrieval_read": {
+        "baseline": 826,
+        "ceiling": 950,
+        "functions": 831
+      },
+      "role_input_same": {
+        "baseline": 1360,
+        "ceiling": 1564,
+        "functions": 1360
+      },
+      "role_lookup_input": {
+        "baseline": 1226,
+        "ceiling": 1410,
+        "functions": 1213
+      },
+      "role_primary_number": {
+        "baseline": 1195,
+        "ceiling": 1375,
+        "functions": 1182
+      },
+      "role_primary_text": {
+        "baseline": 1216,
+        "ceiling": 1399,
+        "functions": 1216
+      },
+      "role_soft_read": {
+        "baseline": 1548,
+        "ceiling": 1781,
+        "functions": 1548
+      },
+      "role_soft_write": {
+        "baseline": 620,
+        "ceiling": 713,
+        "functions": 620
+      },
+      "role_source": {
+        "baseline": 905,
+        "ceiling": 1041,
+        "functions": 905
+      },
+      "role_time_read": {
+        "baseline": 1394,
+        "ceiling": 1604,
+        "functions": 1394
+      },
+      "rows_each": {
+        "baseline": 899,
+        "ceiling": 1034,
+        "functions": 899
+      },
+      "scalar_temporal": {
+        "baseline": 2625,
+        "ceiling": 3019,
+        "functions": 2629
+      },
+      "scalar_text": {
+        "baseline": 2312,
+        "ceiling": 2659,
+        "functions": 2315
+      },
+      "scoped_write": {
+        "baseline": 1111,
+        "ceiling": 1278,
+        "functions": 1111
+      },
+      "sensitive_models": {
+        "baseline": 2606,
+        "ceiling": 2997,
+        "functions": 2821
+      },
+      "source_write": {
+        "baseline": 1311,
+        "ceiling": 1508,
+        "functions": 1302
+      },
+      "subqueries": {
+        "baseline": 2837,
+        "ceiling": 3263,
+        "functions": 3061
+      },
+      "table_ref": {
+        "baseline": 803,
+        "ceiling": 924,
+        "functions": 854
+      },
+      "terminal_adjustment": {
+        "baseline": 1382,
+        "ceiling": 1590,
+        "functions": 1382
+      },
+      "terminal_create_or_first": {
+        "baseline": 880,
+        "ceiling": 1012,
+        "functions": 880
+      },
+      "terminal_explain": {
+        "baseline": 1318,
+        "ceiling": 1516,
+        "functions": 1322
+      },
+      "terminal_lookup": {
+        "baseline": 893,
+        "ceiling": 1027,
+        "functions": 893
+      },
+      "terminal_prune": {
+        "baseline": 930,
+        "ceiling": 1070,
+        "functions": 930
+      },
+      "through": {
+        "baseline": 928,
+        "ceiling": 1068,
+        "functions": 986
+      },
+      "transaction_correlation": {
+        "baseline": 2908,
+        "ceiling": 3345,
+        "functions": 2908
+      },
+      "transaction_joins": {
+        "baseline": 1835,
+        "ceiling": 2111,
+        "functions": 1835
+      },
+      "transaction_records": {
+        "baseline": 1296,
+        "ceiling": 1491,
+        "functions": 1406
+      },
+      "uuid_seeks": {
+        "baseline": 1023,
+        "ceiling": 1177,
+        "functions": 1023
+      },
+      "validation_database": {
+        "baseline": 1441,
+        "ceiling": 1658,
+        "functions": 1441
+      },
+      "value_sets": {
+        "baseline": 2230,
+        "ceiling": 2565,
+        "functions": 2237
+      },
+      "window_frames": {
+        "baseline": 1767,
+        "ceiling": 2033,
+        "functions": 1769
+      },
+      "window_rank": {
+        "baseline": 1345,
+        "ceiling": 1547,
+        "functions": 1346
+      }
+    },
+    "existing_ceilings_raised": false
+  },
+  "laneA9_final_reporting_checks": [
+    {
+      "command": "make docs-check",
+      "cache": "r6",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "integration_batch7c": {
+    "historical_source_hashes": {
+      "application/tables.go": "139996e63732f20365a06ed04e146831423f23a5bbaa98985869aecc0ee3b776",
+      "application/tables_binding_test.go": "0a945990d80c41dc08cb3a2e524725f8c38c254fad773f801590a05866404dc9",
+      "application/tables_enum_test.go": "4ffddff1e4529af11467f3ca4c75cd9ff596c14606a3c2887d6a29febabdf480",
+      "application/tables_test.go": "77c8fe06d5c2c5043321d1d4870a0dcd1b4ff0195c3e3a9ee7a493cf1177aa42",
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "30ea06528c9377086f7c905dd34aa215a0a306809061a6be863ca4aa328506ed",
+      "database/codec/binding_error_test.go": "263e725507202290b7242648d74f3e205da83324dc94549606532335c2162029",
+      "database/codec/codec.go": "60fb0acff4099a23d2ca318d2d60efec87f02b19334752188c464cbca7518280",
+      "database/codec/decoding_error_test.go": "327a9b2a38d012b0c5323738e0fb28cf086e748ea2600278ce4e2c58813a7af8",
+      "database/decoding_paths_test.go": "fb5bac58662013c4b32c96e9e821c9e91b3d2b83b1fc2021579482316257ab62",
+      "database/errors.go": "a04bd75511c301a160b2cf0323243add7341c034d7d0ebdb5ed71debb1cd6bb8",
+      "database/execution.go": "7482a58124ff09d8823554f291c998ee6db85234cb8a59d7bece6ddc6b84be22",
+      "database/orm/check_columns_test.go": "b64d506b86b663e587e35d3ab5018e8998da94b8f39054a340447fa500940d32",
+      "database/orm/check_test.go": "2397c02b5738f4cd851b2a3f1cfaea8e5c855360442fb4e69d94c2d0f778e8c5",
+      "database/orm/declaration.go": "741ef110cbdeff1910a3a2e9e2b2993d2fedec3523b807920598dbcafd8b7245",
+      "database/postgres/error_graph_classification_test.go": "8075e1e8c40149752d1553cb603e3b60c986892ef62f0ee7cbca123537410927",
+      "database/postgres/errors.go": "a61a618fd77c27a3606434cd56786463daa1fb52c8c133eb06284e76385d1402",
+      "database/query/binding_error_test.go": "1fcf5fc1e1d5e6de41a500938985091cac680f2ed684d2443d7a8f72b119ad6d",
+      "database/query/cursor_codec_redaction_test.go": "14d46c217736c13f1200938823b4785b94d640ef372a1661cbe0f003105264a3",
+      "database/sql_callbacks.go": "337258394fe3b4426dcccd460259725d7d2350c0877d798e1c87d1198f96c26c",
+      "database/sql_callbacks_test.go": "c1bf63498df401ebcdac503fc36562094d8e3d8a6cd65cf8dc3c7dd45d62f30c",
+      "docs/guides/application-bootstrap.md": "f390a09d3c6a0fb2f9b1999d17fa335aa4b4ad6b49565b91c5864f7cb72bd5d9",
+      "docs/guides/http-cursor-pagination.md": "58fa36ba167a6cd9fc186311668ae719c07dc1c8e99b7bcb2a6ce70c100e591c",
+      "docs/guides/http-pagination.md": "d4a96c79f309e21026d73018a920f4162cf0d3eaf1377fde60f9575a185ff1b0",
+      "docs/guides/migrations-and-seeding.md": "72a143309b65a879c871c803c5b0ec680ee0020b438025d966d21bc776d5ea2d",
+      "enum/descriptor.go": "2751cc80caec9dd4829c3d37f4c16e3e71443fea98654471d309ba55e5da140c",
+      "enum/descriptor_error_test.go": "14c383e87f77ce9c57db6947fc2afb94cdb647093d8d4bf4b8e50658c886c274",
+      "http/authentication.go": "1df524945e55692980cbd08bc2bb51e73e02c6dec2ec256721dc68e12478ffbb",
+      "http/error_classification.go": "1ac61d5e3ef81a8e5324388b7d5c8277f296f7add23a46d87a790b44166cfa86",
+      "http/errors.go": "259dd4d44212c8a5ed7deb406fe9c5761b712a73e7497283e05a5fbe97881569",
+      "http/json_error_classification_test.go": "94e3d7e118bc24d6f6e7d4c3e85b3499675e174ece92e3835b710cc4999c7fbf",
+      "http/pagination/cursor_codec_error_test.go": "ddaf77fd8202e6d3c95c081331455f0a0949529bcc6c1878c2a1a64e94c5d5d8",
+      "internal/errorgraph/walk.go": "f36d620d442af56fd4f5b29bfdb33533e268a1b62d230e02f13ba98e483282bb",
+      "internal/errorgraph/walk_test.go": "bcc4ebbc58bfaeec16760a8db89706ee4c6639b3b2a1d76808ff5ed95354a9e5",
+      "internal/ormcore/codec.go": "f93dc88403201fdc8c5f8b48c68a98e3ff2d37f0fb5c62a82ff4bae5d6b0cc44",
+      "internal/querycore/compiler.go": "e5bf37d4bddf8ad357dbf4a02cf7c96ffd60eaf7ba3cba2b611d6755c156f855",
+      "internal/querycore/compiler_binding_test.go": "babdf5a1e07d4628c4d74b35d1c27d2265647d71737bc4efdf3f0ebd1968a1de",
+      "internal/querycore/cursor_boundary.go": "7a5da9f7708f3573887ad9008189b7549feb64c1a3efeca0146bb7e95b414513",
+      "internal/querycore/json_key_error_test.go": "b933045461b39cb2aab8034419949efb254d8c55b24d1edc5ab502a8a054dc01",
+      "internal/querycore/json_path.go": "3bc84b843326b4b53f51b0e5542cb2021b4ebb6b14123406f26298c932799fc0",
+      "internal/safeerror/error.go": "ec60fea49efbd4434a80a3e6859b6d168e14a52493e0a6e0a7314b1feb0aa137",
+      "internal/safeerror/error_test.go": "8fa0a10b7b19e2ca01c4f2771a25035a4b6e8af7fdfde38d4b9da56e864d6330",
+      "tests/fixtures/goway/compiler_cases_test.go": "93a12f0abecf551cfadf1ada5c5bef7d9893bc05cef837b2c2a9a5d84f17c416",
+      "tests/fixtures/goway/footprint_test.go": "0edfc2c1ef7ef9b3eaf76b859c4eb00470f1ee0c095b01ba38bfe3abedf6f043",
+      "tests/fixtures/goway/go.mod": "6a12c9874b82f07d6a26a7344d54725f8860a8bd1eec63ea6d57e6ba633ddc34",
+      "tests/fixtures/goway/integrations/.foundry-gen.json": "00e584cde7f55c0296ee741008d646ea961aa7d3b3be708992c245113fa48db2",
+      "tests/fixtures/goway/integrations/applicationcontrol/application.go": "5cc8246197908117ec64fdb6eaec7a092e973dea8b7b53188f91238c33767a12",
+      "tests/fixtures/goway/integrations/pagination.go": "7370d582b1cd5d8798aa71f6c423850fce4ad7981a073e05f1c5a096d6f37ca4",
+      "tests/fixtures/goway/integrations/pagination_test.go": "29ca860af8ad33d4057aaa5f8262ab0ace5590a4501e1c0d9b239a8752f7e709",
+      "tests/fixtures/goway/integrations/registration/application.go": "e577b3c90cff418120bb627e387983e20f94cf08ba1b2f41852dc995442e3514",
+      "tests/fixtures/goway/integrations/registrationoption/option.go": "acbc18240cdd4844ce1729b8f87bfae4ec7845910be8dd53a7ca726f7b460c3b",
+      "tests/fixtures/goway/integrations/response_foundry.gen.go": "bf517076f221c1daabc8e04dc83d77a2e085e71d8471bdc766dafaa5228a3c24",
+      "tests/fixtures/goway/integrations/seeding/seeder.go": "bc5add521fc5759a87f90f4465cdfea017765a3a7e1a9a15d0b3e9c3ef4dfcdb",
+      "tests/fixtures/goway/models/tables.go": "c9a3d73b792af302433222c824ed540f9201f3a9ea355a47444966ec30421014",
+      "tests/fixtures/goway/models/tables_test.go": "e18c4b42f0fd37f72d09ad2a5332cec2935290ce4e62e6a49327439548831a44",
+      "tests/fixtures/goway/pgsmoke/seeder_pagination_test.go": "48a7262ec3d8f1174bfee63c84a2f5dd3b2506f71aa2971831e925f9bfba83ee",
+      "tests/fixtures/goway/stage7_remainder_golden_test.go": "d150d590ae52946e831da7b415c758b69d4a843c93d77bc76cfd0ec05e938f92",
+      "tests/fixtures/goway/testdata/compilefail/application_table_declaration/invalid.go": "fdd113809626b61021d917558719347b5bf3ea432ddb867d4a17f670881a8c0a",
+      "tests/fixtures/goway/testdata/compilefail/http_cursor_mapping_owner/invalid.go": "497c34583fa9e26f446f4ce99c0dc2e6ab2336655c7d0aa71f24e430196c8f15",
+      "tests/fixtures/goway/testdata/compilefail/http_cursor_navigation_owner/invalid.go": "8811844b693fef681af7788cf3b35a19c3f5c8b137389e5e7044c5321eea04d9",
+      "tests/fixtures/goway/testdata/compilefail/http_cursor_request_owner/invalid.go": "f3fa4203b91946249c02593d5bf21a6a71323ef591f7714cced1992806880f7a",
+      "tests/fixtures/goway/testdata/compilefail/http_cursor_result_owner/invalid.go": "8d730cad9a9b93c5ee082247f1d55b7e8e1eb0bf1f14ef0f7ee32ae1c18ad4c4",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_authorization/invalid.go": "ae797d70ef8c65bacdfb4e9c996c31916334fcafcb7c4e776628e3dcf0c182cb",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_cursor/invalid.go": "6d15a107fdd27efddd2bac96e85855d891800c91716c4a14eaf4613e0490d681",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_numbered/invalid.go": "c53560b5188c79166196f341ed978ca5d59c8843f6ae382668887290638c2b69",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_permission/invalid.go": "c8379864a0a7522f663489b9b5a663ec1265cb2cc118c76efdf19df09873c41a",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_scopes/invalid.go": "07bea74ebe3869abb0d7210dae81efdde433d1700ce870547be033cbc6e31f8a",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_auth_simple/invalid.go": "27e8ffe44b839a0522f7bfca62d84b8dbc7d1ec99c287dd255c891c88b08944f",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_handler/invalid.go": "1d1244b3a5f2057ed2d1547b9bc01f64dcb385cc8c25eaf98ee9c40dd255094e",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_map_owner/invalid.go": "9a62b19409cd1ee3ed4fe2bff9571fac5cef75d43a00999c15ebee0e10e1f603",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_result/invalid.go": "186a40e9247b5d718251e961493db9d2b6e6be989225e2b31519016213509d4a",
+      "tests/fixtures/goway/testdata/compilefail/http_pagination_simple_total/invalid.go": "d5060dfa3485cfc275c1693c0d0bfaa526f7cb8839824fa070262af2ee7d8675",
+      "value/json.go": "752abc1fa6f3a202cc7cce7ec5d8023cb12f985dfd2b294f9ecfc010fbf13b39",
+      "value/json_encoding.go": "ef5d4d80a3c187531548acddbfeb5d43b5d74c75b111b849afe4d244a096acce",
+      "value/json_key_encoding.go": "60febb211c4691c4eaf31655382214222d903fccd80c2693e25eccb810d12f74",
+      "value/json_key_encoding_test.go": "f6c0d1f252bc2afaf85d1018703ccf383b01e0ba26f6bbd29db7c4ea19d7de02",
+      "value/json_map.go": "b034627067fdc7453a665f57c65640bcf7697c3bc7e6359034dc94480685f7fb",
+      "CHANGELOG.md": "c48f993cd0c34ba19021d50f2f76bc3b0d4552a9272081ae9b0dd9d67a7c29c2",
+      "Makefile": "d7ba763cf5d6e779cd77d104e740664f25cb8fdecce29be13ab7cf3ea4dd22b4",
+      "blueprint/00-master-architecture-and-parity.md": "3e61d3f7c052a186b183b24d267ca41eff9e913763bd4f1bccd2137f7591e8e0",
+      "blueprint/goway-data-layer/README.md": "4e39f9a878f4bbcd1fde44d1e7134537a0e37a77f9bdea17fd850ac8aa9b5ba3",
+      "database/orm/method_surface_test.go": "d511843a67ff772ceb33785f25cf78fd04ac63b17992aa5e89e7776d985aa6b9",
+      "database/orm/testdata/public-methods.txt": "5db41adab0a905820577b56bd809336ca4b24324850fa265f39ff7080b11865d",
+      "database/orm/transaction_phase_test.go": "52dc79aba4c93dc129f04bcaa063b9e7db8bbea14c9ca1e2c63ec1c2c10b33b2",
+      "internal/agent/field_documentation_acceptance_test.go": "e908b17d52af9c34419984283a276b67d997f6b8aa47e8337df48f3f4f027b07",
+      "internal/agent/gopls_acceptance_test.go": "8a104ac3255c59923523240f041be31cfeec63bb71d157bc8328a2c11e065988",
+      "tests/fixtures/consumer/mutatorqueries/orm.go": "6740c41b8aac4c954360afb13b3c40b056b165ce3f2a0197d2241d6924006d59",
+      "tests/fixtures/consumer/types_test.go": "c6400a84382588d397cfcd1e57c6572926cc2debe1051d2581ca9c726075addd",
+      "tools/goway_catalogue_test.py": "3c5ceb41aa9dc9a17d1c919ea511e084be9309923b874ff97bbc4e331afeddf0",
+      "tools/release/release_test.go": "5cd219933d54b70b9d3f5fa3d89319a0592e00c4870c46cc31d463dc7230f1a0",
+      "tools/release/source.go": "d84fc823ad60ac0c21ba25e32e29432a78099d6efc5a36294fc5151796dd2f3d"
+    },
+    "base_commit": "fdaff938",
+    "status": "integrated; acceptance passed; pending lead commit",
+    "worktree": "Foundry-Go-goway-int3",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r9",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "conflicts": {
+      "lane_a": 5,
+      "lane_b": 0,
+      "lane_c": 12,
+      "resolution": "union registries; retain newer consumer mappings and documentation; preserve historical evidence; add cumulative functions without duplicate snapshot entries"
+    },
+    "catalogue": {
+      "total": 1032,
+      "ported": 570,
+      "port": 18,
+      "unaffected": 444
+    },
+    "goway_compiler_cases": 832,
+    "goway_footprint_probes": 139,
+    "existing_footprint_ceilings": "all 134 prior probes retained unchanged",
+    "generated_outputs": "no manual edits; generated output/manifests retained",
+    "postgres": "not run; lead-owned live service gate",
+    "release_inventory": "new runtime Go sources pinned; no new non-Go testdata assets or policy broadening",
+    "commands": {
+      "go build ./...": {
+        "result": "pass",
+        "log": "build.log"
+      },
+      "python3 tools/goway_catalogue.py": {
+        "result": "pass",
+        "log": "catalogue.log"
+      },
+      "go vet ./...": {
+        "result": "pass",
+        "log": "vet.log"
+      },
+      "go test -race -timeout=20m ./database/... ./internal/...": {
+        "result": "pass segmented across r8/r9 cache rotation",
+        "log": "race.log",
+        "completed_packages": [
+          "github.com/weiloon1234/Foundry-Go/database",
+          "github.com/weiloon1234/Foundry-Go/database/codec",
+          "github.com/weiloon1234/Foundry-Go/database/command",
+          "github.com/weiloon1234/Foundry-Go/database/encrypted",
+          "github.com/weiloon1234/Foundry-Go/database/lifecycle",
+          "github.com/weiloon1234/Foundry-Go/database/migrate",
+          "github.com/weiloon1234/Foundry-Go/database/orm",
+          "github.com/weiloon1234/Foundry-Go/database/orm/expr",
+          "github.com/weiloon1234/Foundry-Go/database/orm/internal/enuminit",
+          "github.com/weiloon1234/Foundry-Go/database/orm/rows",
+          "github.com/weiloon1234/Foundry-Go/database/postgres",
+          "github.com/weiloon1234/Foundry-Go/database/prune",
+          "github.com/weiloon1234/Foundry-Go/database/query",
+          "github.com/weiloon1234/Foundry-Go/database/relation",
+          "github.com/weiloon1234/Foundry-Go/database/seed",
+          "github.com/weiloon1234/Foundry-Go/internal/admission",
+          "github.com/weiloon1234/Foundry-Go/internal/agent",
+          "github.com/weiloon1234/Foundry-Go/internal/attachmentstore",
+          "github.com/weiloon1234/Foundry-Go/internal/auditstore",
+          "github.com/weiloon1234/Foundry-Go/internal/authtransport",
+          "github.com/weiloon1234/Foundry-Go/internal/awscredentials",
+          "github.com/weiloon1234/Foundry-Go/internal/cacheatomic",
+          "github.com/weiloon1234/Foundry-Go/internal/cacheint",
+          "github.com/weiloon1234/Foundry-Go/internal/cachetest",
+          "github.com/weiloon1234/Foundry-Go/internal/callback",
+          "github.com/weiloon1234/Foundry-Go/internal/challengestore",
+          "github.com/weiloon1234/Foundry-Go/internal/cmd/checkdocs",
+          "github.com/weiloon1234/Foundry-Go/internal/cmd/testinputs",
+          "github.com/weiloon1234/Foundry-Go/internal/cmd/testpostgres",
+          "github.com/weiloon1234/Foundry-Go/internal/contextlink",
+          "github.com/weiloon1234/Foundry-Go/internal/contractmeta",
+          "github.com/weiloon1234/Foundry-Go/internal/contractname",
+          "github.com/weiloon1234/Foundry-Go/internal/credential",
+          "github.com/weiloon1234/Foundry-Go/internal/dependency",
+          "github.com/weiloon1234/Foundry-Go/internal/doctor",
+          "github.com/weiloon1234/Foundry-Go/internal/errordiag",
+          "github.com/weiloon1234/Foundry-Go/internal/errorgraph",
+          "github.com/weiloon1234/Foundry-Go/internal/eventseam",
+          "github.com/weiloon1234/Foundry-Go/internal/extensioncommand",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionmaintenance",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionrow",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionslot",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionstore",
+          "github.com/weiloon1234/Foundry-Go/internal/extensiontest",
+          "github.com/weiloon1234/Foundry-Go/internal/extensionvalue",
+          "github.com/weiloon1234/Foundry-Go/internal/faultwrap",
+          "github.com/weiloon1234/Foundry-Go/internal/filelock",
+          "github.com/weiloon1234/Foundry-Go/internal/filename",
+          "github.com/weiloon1234/Foundry-Go/internal/frameworkadapter",
+          "github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
+        ],
+        "remaining_packages": [
+          "github.com/weiloon1234/Foundry-Go/internal/generate",
+          "github.com/weiloon1234/Foundry-Go/internal/gotype",
+          "github.com/weiloon1234/Foundry-Go/internal/httppath",
+          "github.com/weiloon1234/Foundry-Go/internal/httpquery",
+          "github.com/weiloon1234/Foundry-Go/internal/httptoken",
+          "github.com/weiloon1234/Foundry-Go/internal/httptransport",
+          "github.com/weiloon1234/Foundry-Go/internal/idempotencystore",
+          "github.com/weiloon1234/Foundry-Go/internal/identifier",
+          "github.com/weiloon1234/Foundry-Go/internal/jobarchive",
+          "github.com/weiloon1234/Foundry-Go/internal/jobtest",
+          "github.com/weiloon1234/Foundry-Go/internal/jsonpointer",
+          "github.com/weiloon1234/Foundry-Go/internal/jsonshape",
+          "github.com/weiloon1234/Foundry-Go/internal/jsonwire",
+          "github.com/weiloon1234/Foundry-Go/internal/keyaddress",
+          "github.com/weiloon1234/Foundry-Go/internal/leasetest",
+          "github.com/weiloon1234/Foundry-Go/internal/lifecore",
+          "github.com/weiloon1234/Foundry-Go/internal/lockouttest",
+          "github.com/weiloon1234/Foundry-Go/internal/mediatype",
+          "github.com/weiloon1234/Foundry-Go/internal/mfastore",
+          "github.com/weiloon1234/Foundry-Go/internal/modelmeta",
+          "github.com/weiloon1234/Foundry-Go/internal/namedservice",
+          "github.com/weiloon1234/Foundry-Go/internal/noraw",
+          "github.com/weiloon1234/Foundry-Go/internal/notificationstore",
+          "github.com/weiloon1234/Foundry-Go/internal/ormcore",
+          "github.com/weiloon1234/Foundry-Go/internal/outboxstore",
+          "github.com/weiloon1234/Foundry-Go/internal/outboxtest",
+          "github.com/weiloon1234/Foundry-Go/internal/ownedstream",
+          "github.com/weiloon1234/Foundry-Go/internal/pubsubstream",
+          "github.com/weiloon1234/Foundry-Go/internal/pubsubtest",
+          "github.com/weiloon1234/Foundry-Go/internal/querycore",
+          "github.com/weiloon1234/Foundry-Go/internal/ratelimittest",
+          "github.com/weiloon1234/Foundry-Go/internal/ratewindow",
+          "github.com/weiloon1234/Foundry-Go/internal/safeerror",
+          "github.com/weiloon1234/Foundry-Go/internal/scheduletest",
+          "github.com/weiloon1234/Foundry-Go/internal/sessionstore",
+          "github.com/weiloon1234/Foundry-Go/internal/sqlname",
+          "github.com/weiloon1234/Foundry-Go/internal/sqlowner",
+          "github.com/weiloon1234/Foundry-Go/internal/sqlscope",
+          "github.com/weiloon1234/Foundry-Go/internal/sqlvalue",
+          "github.com/weiloon1234/Foundry-Go/internal/statementmeta",
+          "github.com/weiloon1234/Foundry-Go/internal/statementshape",
+          "github.com/weiloon1234/Foundry-Go/internal/storageio",
+          "github.com/weiloon1234/Foundry-Go/internal/storemigration",
+          "github.com/weiloon1234/Foundry-Go/internal/testinputs",
+          "github.com/weiloon1234/Foundry-Go/internal/textvalue",
+          "github.com/weiloon1234/Foundry-Go/internal/tokenstore",
+          "github.com/weiloon1234/Foundry-Go/internal/upload",
+          "github.com/weiloon1234/Foundry-Go/internal/webhookstore",
+          "github.com/weiloon1234/Foundry-Go/internal/websockettest",
+          "github.com/weiloon1234/Foundry-Go/internal/workscope"
+        ],
+        "resume_log": "race-r9.log",
+        "resume_command": "xargs -n 6 sh -c 'go test -race -timeout=20m \"$@\" || exit 255' foundry-tests < race-remaining.txt",
+        "covered_packages": 100
+      },
+      "make fixture-check": {
+        "result": "pass",
+        "log": "fixtures.log",
+        "scope": "vet and tests for plugin_base, plugin_dep, consumer and goway; compiler cases and unchanged footprint ceilings passed; live PostgreSQL skipped"
+      },
+      "make generate-check": {
+        "result": "pass",
+        "log": "generate.log",
+        "generated_outputs_changed": 0
+      },
+      "make release-tools-check": {
+        "result": "pass",
+        "log": "release.log",
+        "python_tests": 26
+      },
+      "make agent-smoke": {
+        "result": "pass after targeted correction",
+        "log": "agent.log",
+        "initial_result": "492 pass, 2 stale expectations failed",
+        "corrections": [
+          "typed-row-expression definition points at database/orm/expr/row.go",
+          "distinct-model-selection package completion asserts DistinctRecord; Where is a query method"
+        ],
+        "rerun_command": "go test -timeout=20m -count=1 -v ./internal/agent -run '^TestRealGoplsConsumer$/^(typed-row-expression|distinct-model-selection)$'",
+        "rerun_log": "agent-fixed.log",
+        "rerun_result": "pass",
+        "total_passing_subtests": 494,
+        "gopls": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+      },
+      "make fmt-check": {
+        "result": "pass",
+        "log": "format.log",
+        "output": "empty; gofmt clean"
+      },
+      "make docs-check": {
+        "result": "pass",
+        "log": "docs.log"
+      },
+      "go vet ./internal/agent && go test -race -timeout=20m ./internal/agent": {
+        "result": "pass",
+        "log": "agent-race.log",
+        "reason": "final editor-assertion corrections"
+      },
+      "git diff --check; git diff --cached --check": {
+        "result": "pass",
+        "log": "diff-check.log"
+      }
+    },
+    "remaining_scope": "Stage 9 caller migration and generated cleanup remain in progress; new foundations do not automatically migrate retained callers",
+    "commit": "none",
+    "log_sha256": {
+      "release.log": "344e9133837ec3bdc5263a09f556bf1acc91872d438a08200a10f24bdbad8557",
+      "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "catalogue.log": "8e7dcb91c59cad1a8ce2cb7500ccc0d09e1e176bb6d08e24a70caf84f07157da",
+      "apply-a.log": "8a7912cab5f47a366569af77462ba0b1e11c2229ce8f9bb83ab51dd1e4a8773f",
+      "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "apply-c.log": "dc97e124400f24b2f5f59ef5d3f7a10946623de62344d558ee3865750cc09a9f",
+      "apply-b.log": "011c07c7978e58f515657fa03510e05ee31bb412aec0522dd9909d3f5d26c9cc",
+      "race-r9.log": "d7a066294432a8f13a88d235625cee22a3ee3eb5b4f5e7d338112df79d1133fa",
+      "agent-fixed.log": "77463e5880e1d7932339b3e037be326d5f79362e8f3f3e1a2bfedd7221ac019c",
+      "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+      "agent-race.log": "a73901e29f0fb0c23d4a02fd1c8c66de8d5a8970075f2f50ba1506d0a0ee088c",
+      "race.log": "c482c4bac535298f15833780cb8c12ef69301323e7e34cc3d48aeae95458b214",
+      "fixtures.log": "d24568ebc3442c0827e2924e24be7f50ec2cc6b4ad6907160190a4f0a3bf955c",
+      "agent.log": "b679830b27cfe357e8c83ee48039cc513706c02aebf491bfdbf3da59c2bfd8e1",
+      "generate.log": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+      "build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cache_rotation": "r8 completed build/vet and partial race coverage; interrupted race packages and remaining checks resumed on r9"
   }
 }

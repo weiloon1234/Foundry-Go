@@ -299,3 +299,18 @@ Main B37 port: apply this return-boundary change in `database/query/json_path.go
 (main owner); the worktree owner is `internal/querycore/json_path.go`.
 Docs notes: JSON map-path declaration failures retain diagnostic causes without
 changing their transport classification; direct JSON key validation is unchanged.
+
+
+## Lane A9 rebase at 6d80111
+
+Resolved compiler/footprint conflicts by union: all 777 base compiler cases and
+125 base footprint entries are unchanged, with 15 compiler cases and five probes
+from the accepted remainder added. All 15 acceptance steps passed on r6. Fresh
+manifest/OpenAPI/TypeScript exports are byte-identical to the new HEAD baseline.
+The fixture suite passes 792 compiler cases and 130 footprint probes. No ceilings
+were raised; q_with remains 1,211/1,211 and aggregate_families 4,366/4,369.
+
+Current probe counts on this newer base: registration 4,007; option-only 1,010;
+application-only 3,339; pagination 5,305; seeder 858. Historical measurements above
+remain historical: these newer-base counts do not isolate a remainder performance
+change. No code or files in the old laneA worktree were changed.

@@ -2,7 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = models.QueryUsers().DistinctOnValues(foundryquery.Value(models.OrderFields().TotalCents).Key())
+var _ = rows.DistinctOnScalarValues(rows.SelectScalar(rows.From(models.Users.Query()), expr.Count[models.User]().Value()), expr.Count[models.Order]().Value().Key())

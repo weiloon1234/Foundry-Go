@@ -2,7 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = query.OnConflictKeys[models.User](query.Value(models.UserFields().Age).Key())
+var _ = rows.OnConflictKeys[models.User](expr.Select(expr.Value(models.Users.Age)).Key())

@@ -37,7 +37,13 @@ func DoesntHave[M, N any](r ExistenceRelation[M, N], ps ...Predicate[N]) Predica
 // Validate the actual metadata before child predicate types are erased. A
 // promoted relationTarget marker alone cannot establish either model owner.
 func relationPredicatePlan(plan *relationPlan, source, target reflect.Type) (*relationPlan, error) {
-	if plan == nil || plan.target == nil {
+	if plan == nil {
+		return nil, invalid("relation requires bound target metadata")
+	}
+	if plan.err != nil {
+		return nil, plan.err
+	}
+	if plan.target == nil {
 		return nil, invalid("relation requires bound target metadata")
 	}
 	if plan.slot == nil || plan.slot.owner == nil || plan.slot.owner.typ != source || plan.target.typ != target {

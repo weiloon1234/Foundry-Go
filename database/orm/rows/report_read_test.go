@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
@@ -138,6 +139,11 @@ func TestProjectionBridgeCapabilitiesFailClosed(t *testing.T) {
 	if !errors.Is(orm.FoundryPredicate(blocked, sqlowner.Metadata()).Err, fault.Invalid) {
 		t.Fatal("zero relation capability accepted")
 	}
+	filter := orm.FoundryRelationFilter(relation, ormcore.Predicate{}, sqlowner.MetadataSeal{})
+	if !errors.Is(orm.FoundryPredicate(filter, sqlowner.Metadata()).Err, fault.Invalid) {
+		t.Fatal("zero filter capability accepted")
+	}
+
 	own, foreign := declareMembers(), declareMembers()
 	for _, p := range []expr.Predicate[member]{expr.ModelPredicate(foreign.ID.Eq(1)), expr.ModelPredicate(orm.Predicate[member]{})} {
 		if _, err := Compile(SelectValue(own.Query(), own.ID).Where(p)); !errors.Is(err, fault.Invalid) {

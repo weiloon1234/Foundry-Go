@@ -2,9 +2,9 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var rows = models.QueryUsers().ConflictRows()
-var fields = models.UserFieldsAt(rows.Proposed())
-var _ = query.SelectValue(rows, query.Value(fields.Age))
+var records = rows.ConflictRowsOf(models.Users.Query())
+var _ = rows.SelectScalar(records, expr.Select(expr.At(records.Proposed(), models.Users.Age)))

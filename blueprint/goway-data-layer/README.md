@@ -97,7 +97,10 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 9 B2/B3 | Lifecycle consumers, observer counts, typed unset and soft-model batches | Done pending the lead’s commit; bounded lifecycle writes and stored/input identities retained. |
 | 9 C A1 | Shared models/catalog/query fixtures and eleven dependent query packages | Done pending the lead’s commit; original result identities and generated parity oracles retained. |
 | 9 C clauses | Scalar windows and correlated HAVING/DISTINCT/DISTINCT ON; lateral consumers | Done pending the lead’s commit; remaining terminal/stream adapters stay with their owners. |
-| 9 | Migrate consumer fixtures and compiler catalogue | In progress; B1–B3, C wave 1/A1/source clauses and D1 integrated. Remaining dependent cutovers and generated-output cleanup stay open. |
+| 9 A read/filter | Ordinary read inspection/iteration, callback identity and relation expression filters | Done pending the lead’s commit; one shared iteration owner and retained construction errors. |
+| 9 B upsert | Shared-model conflict/upsert consumer cutover | Done pending the lead’s commit; 24 consumer negatives migrated with existing catalogue dispositions. |
+| 9 C results | Scalar GROUP BY/HAVING/DISTINCT/DISTINCT ON and record/set DISTINCT | Done pending the lead’s commit; eight package functions, runtime consumers and seven new Go-way negatives. |
+| 9 | Migrate consumer fixtures and compiler catalogue | In progress; B1–B3/upsert, A read/filter foundations, C wave 1/A1/source/result clauses and D1 integrated. Remaining dependent cutovers and generated-output cleanup stay open. |
 | 10 | Guides, examples and editor coverage | Planned |
 | 11 | Full acceptance and whole-app performance evidence | Planned |
 | 12 | Consumer application migration, separately authorized | Later |
@@ -1735,3 +1738,69 @@ are recorded in the [B2 evidence](../../docs/evidence/goway-stage9-b2.json),
 [review-26 evidence](../../docs/evidence/goway-stage9-lane-c-review26.json) and
 [source-clause evidence](../../docs/evidence/goway-stage9-lane-c-source-clauses.json).
 Live PostgreSQL coverage remains for the lead's service gate.
+
+## Integration batch 7c: read families, result clauses and upserts
+
+`rows.CompileRead`, `rows.PreflightRead` and `rows.EachRead` accept the existing
+ordinary `ReadSource[S,R]` family. Scalar, record, set and value-set adapters retain
+codecs, scope context, result identity and bounded iteration. Transaction-only
+sources remain restricted to their transaction terminals. No Query/Table methods
+or new capability families are added.
+
+Complete models use the shared `ormcore.RecordBatches` owner in both APIs.
+Retrieval callbacks run once per nonempty closed batch, with the existing batch
+size and window accounting. Proven primary-key sources can advance by key; joins,
+sets and recursive sources use offsets when uniqueness cannot be proven, retaining
+repeated IDs. Callback-returned errors preserve identity without calling their
+formatters; callback panic/Goexit still fails through the isolation owner.
+
+`expr.RelationFilter` adapts expression predicates to a relation's target-owned
+predicate through the validated metadata bridge. Eager constraints and EXISTS
+share target/declaration/reference checks. Stored relation-construction errors
+remain attached when a filter is moved to another query or relation. JSON source
+and relation composition consumers now exercise these adapters.
+
+Eight rows package functions complete the ordinary result-clause family:
+
+| Result family | Package functions |
+| --- | --- |
+| Scalar | `GroupByScalar`, `HavingScalar`, `DistinctScalar`, `DistinctOnScalar`, `DistinctOnScalarValues` |
+| Complete record | `DistinctRecord` |
+| Record set | `DistinctSet` |
+| Value set | `DistinctValues` |
+
+They delegate to the existing clause owners, preserving selected codecs, nullable
+values, nested input SELECTs, scopes and bounds. DISTINCT ON keeps row keys distinct
+from selected keys and retains ordering/phase validation. The upsert consumer now
+uses shared `models.Users`/`WriteRecords`, typed assignments and `ConflictRowsOf`
+for stored/proposed calculations, with its original defaults, identity, atomicity
+and index assertions. Its 24 compiler cases retain their existing Go-way mappings.
+
+Stage 9 remains in progress. The retained A3/HTTP consumers need no ORM declaration
+dependency where they only use ordinary models, typed IDs, DTOs or service contracts.
+The read and scalar-clause foundations now remove blockers recorded in the lane
+reports; their remaining callers still need explicit migration. In particular,
+retained complete-record streaming and direct scalar-compile oracles, the remaining
+JSONKind projection boundary, A2/HTTP model callers and generated cleanup are not
+claimed complete by this integration. Stage 6 whole-app measurement is still pending.
+
+Catalogue totals remain 1,032 rows: 570 ported, 18 pending and 444 unaffected. The
+Go-way fixture has 832 compiler cases and 139 probes. All 134 previous probe ceilings
+are retained. Five new probe baselines and their 15% ceilings are:
+
+| Probe | Measured functions | Ceiling |
+| --- | ---: | ---: |
+| read_scalar | 1,165 | 1,340 |
+| read_record | 1,002 | 1,153 |
+| read_set | 1,050 | 1,208 |
+| relation_filter | 1,831 | 2,106 |
+| result_clauses | 2,188 | 2,517 |
+
+These are lane measurements of T/t symbols in consumer archives; integration
+acceptance checks their unchanged ceilings. Current commands and source hashes
+are recorded with the [read terminals](../../docs/evidence/goway-stage9-read-terminals.json),
+[relation filters](../../docs/evidence/goway-stage9-relation-filters.json),
+[upserts](../../docs/evidence/goway-stage9-upsert.json) and
+[result clauses](../../docs/evidence/goway-stage9-lane-c-result-clauses.json).
+The [A3 inventory](../../docs/evidence/goway-stage9-a3-report.md) retains the
+consumer ownership roster. Live PostgreSQL acceptance remains the lead's gate.

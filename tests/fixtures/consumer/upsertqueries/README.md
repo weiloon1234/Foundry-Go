@@ -1,9 +1,18 @@
 # Conflict policies
 
-`ExcludedRecords` publishes the ORM declaration for the physical table `excluded`.
-Its migrated cases keep database defaults, incoming-row disambiguation and stored
-versus proposed calculations through `rows.ConflictRowsOf`.
+`upsertqueries` uses the shared `models.Users` and `models.WriteRecords`
+declarations for inserts and typed `orm.Upsert`/`orm.UpsertMany` policies.
+`ExcludedRecords` declares the physical table `excluded` and exercises its
+stored/proposed alias disambiguation through `rows.ConflictRowsOf`.
 
-The remaining scenarios depend on lane C's `models.User`, `models.WriteRecord` and
-`internal/queryfixture` cutover. Their legacy assertions are retained until those
-shared declarations are integrated; this package does not duplicate their tables.
+The PostgreSQL cases retain defaults, explicit zero/null values, composite and
+named conflict targets, partial/expression indexes, trigger-modified proposed
+values, scalar and correlated calculations, batch rollback and concurrent identity
+assertions. Reusing the caller's assignments with `orm.Compare` checks that UUID
+synthesis leaves the caller's key omitted. Invalid and empty batches assert that
+no transaction opens; the retained `query.MaxInsertRows` compatibility constant
+supplies the shared insert bound without using the legacy query engine.
+
+PostgreSQL tests remain opt-in through the existing fixture helper. The generated
+APIs are retained for the lead's generator-retirement barrier; these scenarios and
+their compiler negatives use the ORM surface.

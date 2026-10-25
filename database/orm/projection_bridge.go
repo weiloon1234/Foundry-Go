@@ -47,10 +47,24 @@ func FoundryRelationPredicate[M, N any](r ExistenceRelation[M, N], ps []ormcore.
 		return Predicate[M]{err: err}
 	}
 
-	source := ormcore.Source{Scope: reflect.TypeFor[N](), Owners: map[string]any{plan.target.model.Table: plan.target}}
 	predicates := make([]Predicate[N], len(ps))
 	for i, p := range ps {
-		predicates[i] = Predicate[N]{owner: plan.target, expression: p.Node, err: errors.Join(p.Err, ormcore.CheckReferenceSet(source, p.Refs, p.ReferenceFree))}
+		predicates[i] = relationExpressionPredicate[N](plan, p)
 	}
 	return relationExistence[M](relationWhere(plan, predicates))
+}
+
+// FoundryRelationFilter validates expression conditions for a relation target. Example: FoundryRelationFilter(r,p,sqlowner.Metadata()).
+func FoundryRelationFilter[M, N any](r ExistenceRelation[M, N], p ormcore.Predicate, seal sqlowner.MetadataSeal) Predicate[N] {
+	if !seal.Valid() {
+		return Predicate[N]{err: invalid("invalid SQL owner capability")}
+	}
+	if nilInterface(r) {
+		return Predicate[N]{err: invalid("nil relation descriptor")}
+	}
+	plan, err := relationPredicatePlan(r.relationPlan(nil), reflect.TypeFor[M](), reflect.TypeFor[N]())
+	if err != nil {
+		return Predicate[N]{err: err}
+	}
+	return relationExpressionPredicate[N](plan, p)
 }

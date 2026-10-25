@@ -1,5 +1,7 @@
-package invalid
+package conflict_value
 
-import "foundry.test/consumer/models"
+import (
+	m "foundry.test/consumer/models"
+)
 
-var _ = models.UserFields().Age.Set("thirty")
+var _ = m.Users.Age.Set("thirty")

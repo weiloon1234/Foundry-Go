@@ -28,7 +28,7 @@ func FoundryRecord[M any](scope ormcore.Scope, seal sqlowner.MetadataSeal) ormco
 }
 
 func modelRecord(table *tableCore) ormcore.Record {
-	return ormcore.Record{Fields: func() []ormcore.RecordField { return modelRecordFields(table) }, Type: table.typ, Owner: table, Columns: slices.Clone(table.model.Columns), Err: declarationCoreError(table), Checks: []func() error{func() error { return tableError(table) }}, Scan: func(row database.Row, p unsafe.Pointer) error { return hydrate(table, row, p) }, Callbacks: func(ex database.Executor, data func() (unsafe.Pointer, int)) *ormcore.ReadCallbacks {
+	return ormcore.Record{Primary: table.model.Primary, Fields: func() []ormcore.RecordField { return modelRecordFields(table) }, Type: table.typ, Owner: table, Columns: slices.Clone(table.model.Columns), Err: declarationCoreError(table), Checks: []func() error{func() error { return tableError(table) }}, Scan: func(row database.Row, p unsafe.Pointer) error { return hydrate(table, row, p) }, Callbacks: func(ex database.Executor, data func() (unsafe.Pointer, int)) *ormcore.ReadCallbacks {
 		batch := &retrievalBatch{table: table}
 		callbacks := readBatches(ex, batch)
 		complete := callbacks.Complete

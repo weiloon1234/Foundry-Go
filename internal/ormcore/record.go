@@ -22,6 +22,7 @@ type RecordField struct {
 }
 
 type Record struct {
+	Primary   string // Model-owned primary column; empty for declared projections.
 	Fields    func() []RecordField
 	Type      reflect.Type
 	Owner     any

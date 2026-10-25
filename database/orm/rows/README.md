@@ -213,3 +213,15 @@ and `DistinctOnCorrelatedScalar` before a correlated scalar/EXISTS operation.
 HAVING takes lifted group predicates; DISTINCT ON takes lifted row keys and keeps
 PostgreSQL's ordering validation. The resulting descriptors retain their parent,
 input and result types and do not acquire independent execution capabilities.
+
+`GroupByScalar` and `HavingScalar` add row keys and group predicates within a
+scalar SELECT. `DistinctScalar` deduplicates its selected value after grouping;
+`DistinctOnScalar` takes row keys, including keys absent from the selected output.
+`DistinctOnScalarValues` accepts selected keys while retaining group/window
+validation. Order by the DISTINCT ON keys first. These clauses preserve the selected codec,
+nullability and subquery boundary. They never impose a scalar cardinality limit.
+
+`DistinctRecord`, `DistinctSet` and `DistinctValues` deduplicate complete record,
+record-set and value-set results. They preserve inner input SELECTs and retain the
+ordinary read-only result family. Existing bounds and ordering remain in place;
+NULL equality and selected-order validation follow the shared PostgreSQL compiler.

@@ -2,7 +2,9 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = query.OnConflictKeys[models.User](models.UserFieldsAt(models.QueryUsers().ConflictRows().Proposed()).Email.Group())
+var records = rows.ConflictRowsOf(models.Users.Query())
+var _ = rows.OnConflictKeys[models.User](expr.Group(expr.At(records.Proposed(), models.Users.Email)))

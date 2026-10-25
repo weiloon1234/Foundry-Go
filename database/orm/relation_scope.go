@@ -1,6 +1,11 @@
 package orm
 
-import "github.com/weiloon1234/Foundry-Go/internal/querycore"
+import (
+	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"reflect"
+)
 
 // Where constrains related rows. Example: OrderRelations.Buyer.Where(Users.Age.Gt(18)).
 func (r BelongsTo[M, N]) Where(ps ...Predicate[N]) BelongsTo[M, N] {
@@ -156,3 +161,9 @@ func (r BelongsTo[M, N]) LatestOfMany() BelongsTo[M, N] { r.plan = ofMany(r.plan
 
 // OldestOfMany chooses the lowest target primary key. Example: OrderRelations.Buyer.OldestOfMany().
 func (r BelongsTo[M, N]) OldestOfMany() BelongsTo[M, N] { r.plan = ofMany(r.plan, 3); return r }
+
+// Expression filters and EXISTS share target-owner and scope validation.
+func relationExpressionPredicate[N any](plan *relationPlan, p ormcore.Predicate) Predicate[N] {
+	source := ormcore.Source{Scope: reflect.TypeFor[N](), Owners: map[string]any{plan.target.model.Table: plan.target}}
+	return Predicate[N]{owner: plan.target, expression: p.Node, err: errors.Join(p.Err, ormcore.CheckReferenceSet(source, p.Refs, p.ReferenceFree))}
+}

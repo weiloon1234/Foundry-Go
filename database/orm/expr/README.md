@@ -422,3 +422,20 @@ validation and null-inclusive negation; its API cutover is a separate slice.
 For joined or aliased report columns, use `TextRowAt(scope, column)` or
 `TextNullableRowAt(scope, column)`. They retain the column’s actual text capability
 and its validated scope; promoted markers cannot authorize an enum as text.
+
+### Expression filters on relations
+
+Use `expr.RelationFilter` to adapt a row predicate to an existing relation's
+`.Where` method. The relation validates the target model and declaration owner;
+selected/HAVING predicates and predicates for a different target cannot be passed.
+
+```go
+orders := UserRelations.Orders
+orders = orders.Where(expr.RelationFilter(orders,
+    expr.GreaterColumn(Orders.Total, Orders.Paid)))
+users, err := Users.Query().Where(orm.Has(orders)).With(orders).All(ctx, db)
+```
+
+The adapter retains correlated references and uses the same owner validation as
+`expr.Has`. It also permits JSON operators on a natural primary key through
+`expr.Value(Policies.Key())`, without binding the primary field a second time.

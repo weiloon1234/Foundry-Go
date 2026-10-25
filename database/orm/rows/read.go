@@ -7,10 +7,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
 // Compile inspects a projection without I/O; bound scope contexts are preserved. Example: rows.Compile(q).
@@ -18,16 +16,7 @@ func Compile[S, R any](q Query[S, R]) (orm.Statement, error) {
 	return compileContext(nil, q)
 }
 func compileContext[S, R any](ctx context.Context, q Query[S, R]) (orm.Statement, error) {
-	if ctx != nil {
-		if err := ctx.Err(); err != nil {
-			return orm.Statement{}, err
-		}
-	}
-	s, err := ormcore.CompileRecord(ctx, Read(q).core)
-	if err != nil {
-		return orm.Statement{}, err
-	}
-	return orm.FoundryStatement(s, sqlowner.Metadata())
+	return compileReadContext(ctx, Read(q).core)
 }
 
 // Preflight validates a projection with the executing request context and no I/O. Example: rows.Preflight(ctx,q).
@@ -58,7 +47,7 @@ func Each[S, R any](ctx context.Context, ex database.Executor, q Query[S, R], yi
 		if err != nil {
 			return err
 		}
-		return callback.Isolated("query iteration", func() error { return yield(item) })
+		return ormcore.Iteration(ctx, func() error { return yield(item) })
 	})
 }
 
