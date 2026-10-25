@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -15,44 +16,48 @@ import (
 )
 
 func TestKeyCallbackRetainsOperationUntilExit(t *testing.T) {
-	broker, _, _ := fixture(t, func(c *pubsub.Config) { c.MaxConcurrent = 1 })
-	entered, release := make(chan struct{}), make(chan struct{})
-	topic, err := pubsub.Define[memberID, payload]("held-keys", 1, keyspace.NewCodec(func(memberID) (string, error) { close(entered); <-release; return "key", nil })).Bind(broker)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := make(chan error, 1)
-	go func() {
-		_, err := topic.Publish(t.Context(), 1, payload{Text: "held", Labels: []string{}})
-		result <- err
-	}()
-	<-entered
-	// A full broker queues briefly, then reports retryable overload.
-	bounded, stop := context.WithTimeout(t.Context(), 20*time.Millisecond)
-	if _, err := topic.Publish(bounded, 2, payload{}); !errors.Is(err, fault.Overloaded) {
-		t.Error(err)
-	}
-	stop()
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	if err := broker.Close(ctx); !errors.Is(err, context.Canceled) {
-		t.Error(err)
-	}
-	select {
-	case <-broker.Done():
-		t.Error("broker abandoned key callback")
-	default:
-	}
-	if broker.Stats().Operations != 1 {
-		t.Error(broker.Stats())
-	}
-	close(release)
-	if err := <-result; !errors.Is(err, context.Canceled) {
-		t.Fatal(err)
-	}
-	if err := broker.Close(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		broker, _, _ := fixture(t, func(c *pubsub.Config) { c.MaxConcurrent = 1 })
+		entered, release := make(chan struct{}), make(chan struct{})
+		topic, err := pubsub.Define[memberID, payload]("held-keys", 1, keyspace.NewCodec(func(memberID) (string, error) { close(entered); <-release; return "key", nil })).Bind(broker)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := make(chan error, 1)
+		go func() {
+			_, err := topic.Publish(t.Context(), 1, payload{Text: "held", Labels: []string{}})
+			result <- err
+		}()
+		<-entered
+		// A full broker queues briefly, then reports retryable overload.
+		bounded, stop := context.WithTimeout(t.Context(), 20*time.Millisecond)
+		if _, err := topic.Publish(bounded, 2, payload{}); !errors.Is(err, fault.Overloaded) {
+			t.Error(err)
+		}
+		stop()
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		if err := broker.Close(ctx); !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+		// Drain shutdown cancellation before releasing the owned key callback.
+		synctest.Wait()
+		select {
+		case <-broker.Done():
+			t.Error("broker abandoned key callback")
+		default:
+		}
+		if broker.Stats().Operations != 1 {
+			t.Error(broker.Stats())
+		}
+		close(release)
+		if err := <-result; !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+		if err := broker.Close(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 type decoderGate struct {

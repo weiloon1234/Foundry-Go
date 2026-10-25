@@ -74,27 +74,86 @@ func (r *correlationRenamer) query(q Subquery, depth int) Subquery {
 		delete(required.Sources, r.from)
 	}
 	q.Correlation = &required
-	q.Node.Selections = slices.Clone(q.Node.Selections)
-	for i := range q.Node.Selections {
-		q.Node.Selections[i].Expression = r.value(q.Node.Selections[i].Expression, depth+1)
+	q.Node = r.avoidCapture(q.Node, required, depth)
+	q.Node = r.selectNode(q.Node, depth)
+	return q
+}
+
+// Deferred scopes can introduce a source after the enclosing relation chose its
+// alias. Rename that local source before substituting the outer name; rejecting
+// the original shadowing above still protects malformed correlations.
+func (r *correlationRenamer) avoidCapture(node SelectNode, required ScopeRequirement, depth int) SelectNode {
+	count := 0
+	if node.Source.Name() == r.to {
+		count++
 	}
-	q.Node.Orders = slices.Clone(q.Node.Orders)
-	for i := range q.Node.Orders {
-		q.Node.Orders[i].Expression = r.value(q.Node.Orders[i].Expression, depth+1)
+	for _, join := range node.Joins {
+		if join.Source.Name() == r.to {
+			count++
+		}
 	}
-	q.Node.GroupBy = slices.Clone(q.Node.GroupBy)
-	for i := range q.Node.GroupBy {
-		q.Node.GroupBy[i] = r.value(q.Node.GroupBy[i], depth+1)
+	if count == 0 || r.err != nil {
+		return node
 	}
-	q.Node.Distinct.Keys = slices.Clone(q.Node.Distinct.Keys)
-	for i := range q.Node.Distinct.Keys {
-		q.Node.Distinct.Keys[i] = r.value(q.Node.Distinct.Keys[i], depth+1)
+	if count != 1 {
+		r.err = fault.New(fault.Invalid, "invalid or repeated select source")
+		return node
 	}
-	q.Node.Predicates = r.expressions(q.Node.Predicates, depth+1)
-	q.Node.Having = r.expressions(q.Node.Having, depth+1)
-	q.Node.Joins = slices.Clone(q.Node.Joins)
-	for i := range q.Node.Joins {
-		j := &q.Node.Joins[i]
+	names, err := NamesInSelects(node)
+	if err != nil {
+		r.err = err
+		return node
+	}
+	names.Used[r.from], names.Used[r.to] = true, true
+	for name := range required.Sources {
+		names.Used[name] = true
+	}
+	alias := names.Allocate(r.to)
+	local := correlationRenamer{from: r.to, to: alias, nodes: r.nodes}
+	node = local.selectNode(node, depth)
+	r.nodes, r.err = local.nodes, local.err
+	if node.Source.Name() == r.to {
+		node.Source.Alias = alias
+	}
+	for i := range node.Joins {
+		if node.Joins[i].Source.Name() == r.to {
+			node.Joins[i].Source.Alias = alias
+		}
+	}
+	node.Locks = slices.Clone(node.Locks)
+	for i := range node.Locks {
+		node.Locks[i].Targets = slices.Clone(node.Locks[i].Targets)
+		for j, target := range node.Locks[i].Targets {
+			if target == r.to {
+				node.Locks[i].Targets[j] = alias
+			}
+		}
+	}
+	return node
+}
+
+func (r *correlationRenamer) selectNode(node SelectNode, depth int) SelectNode {
+	node.Selections = slices.Clone(node.Selections)
+	for i := range node.Selections {
+		node.Selections[i].Expression = r.value(node.Selections[i].Expression, depth+1)
+	}
+	node.Orders = slices.Clone(node.Orders)
+	for i := range node.Orders {
+		node.Orders[i].Expression = r.value(node.Orders[i].Expression, depth+1)
+	}
+	node.GroupBy = slices.Clone(node.GroupBy)
+	for i := range node.GroupBy {
+		node.GroupBy[i] = r.value(node.GroupBy[i], depth+1)
+	}
+	node.Distinct.Keys = slices.Clone(node.Distinct.Keys)
+	for i := range node.Distinct.Keys {
+		node.Distinct.Keys[i] = r.value(node.Distinct.Keys[i], depth+1)
+	}
+	node.Predicates = r.expressions(node.Predicates, depth+1)
+	node.Having = r.expressions(node.Having, depth+1)
+	node.Joins = slices.Clone(node.Joins)
+	for i := range node.Joins {
+		j := &node.Joins[i]
 		if j.On != nil {
 			j.On = r.expression(j.On, depth+1)
 		}
@@ -103,7 +162,7 @@ func (r *correlationRenamer) query(q Subquery, depth int) Subquery {
 			j.Source.Query, j.Lateral = &nested.Node, nested.Correlation
 		}
 	}
-	return q
+	return node
 }
 
 func (r *correlationRenamer) value(v ValueExpression, depth int) ValueExpression {
