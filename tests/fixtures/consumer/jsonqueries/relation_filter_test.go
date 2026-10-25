@@ -1,13 +1,15 @@
 package jsonqueries_test
 
 import (
+	"reflect"
+	"testing"
+
 	"foundry.test/consumer/jsonqueries"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/database/query"
-	"reflect"
-	"testing"
 )
 
 func TestJSONNaturalKeyRelationFilterParity(t *testing.T) {

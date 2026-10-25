@@ -9,6 +9,7 @@ import (
 	"foundry.test/consumer/httpdto"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -45,7 +46,7 @@ func Module(service OrderService, config websocket.Config, server websocket.Serv
 // UserInbox is a separate authenticated channel with a different nominal owner.
 // The helper checks the guard and stored key; IDs alone never grant access.
 func UserInbox(guard auth.Guard[models.User]) websocket.Channel[InboxOwner, model.ID[models.User], models.User] {
-	return websocket.OwnedRooms[InboxOwner]("users.inbox", websocket.DefineRooms(foundryhttp.ModelIDPath[models.User]()), guard, (models.User{}).FoundryReference())
+	return websocket.OwnedRooms[InboxOwner]("users.inbox", websocket.DefineRooms(foundryhttp.ModelIDPath[models.User]()), guard, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})))
 }
 
 // NewHub and NewDistributedHub share the exact declarations and domain binding.
@@ -73,7 +74,7 @@ func NewPublisher(config websocket.Config, backend websocket.ClusterBackend, clu
 	return websocket.NewPublisher(r, config, backend, cluster)
 }
 func RevokeUser(ctx context.Context, source websocket.PublisherSource, guard auth.Guard[models.User], user models.User) error {
-	return websocket.DisconnectSubject(ctx, source, guard, user.FoundryReference())
+	return websocket.DisconnectSubject(ctx, source, guard, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user))
 }
 func Diagnostics(ctx context.Context, hub *websocket.Hub, guard auth.Guard[models.User], authorize func(context.Context, models.User) error) (websocket.Diagnostics, error) {
 	return websocket.Diagnose(ctx, hub, guard, authorize)

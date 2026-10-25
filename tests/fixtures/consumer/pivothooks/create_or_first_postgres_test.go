@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"foundry.test/consumer/pivothooks"
+
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 // claimsUniqueViolation is an application error whose custom Is claims to be
@@ -39,19 +41,18 @@ func TestCreateOrFirstResolvesOnlyTheModelInsertConflict(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	a := pivothooks.AssignmentFields()
-	lead, err := pivothooks.QueryHookAssignments().Create(ctx, f.db, pivothooks.AssignmentDraft{}.
-		SetProjectID(f.project.ID).SetPersonID(f.people["ann"].ID).SetRole("lead"))
+	a := pivothooks.Assignments
+	lead, err := pivothooks.Assignments.Insert(ctx, f.db, pivothooks.Assignments.ProjectID.Set(f.project.ID), pivothooks.Assignments.PersonID.Set(f.people["ann"].ID), pivothooks.Assignments.Role.Set("lead"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Every lookup below matches ann's existing assignment.
-	project := pivothooks.QueryHookAssignments().Where(a.ProjectID.Eq(f.project.ID))
-	draft := func(person, role string) pivothooks.AssignmentDraft {
-		return pivothooks.AssignmentDraft{}.SetProjectID(f.project.ID).SetPersonID(f.people[person].ID).SetRole(role)
+	project := pivothooks.Assignments.Query().Where(a.ProjectID.Eq(f.project.ID))
+	draft := func(person, role string) []orm.Assignment[pivothooks.Assignment] {
+		return []orm.Assignment[pivothooks.Assignment]{pivothooks.Assignments.ProjectID.Set(f.project.ID), pivothooks.Assignments.PersonID.Set(f.people[person].ID), pivothooks.Assignments.Role.Set(role)}
 	}
 	// The model's own INSERT conflicting on its own unique index resolves.
-	found, err := project.Where(a.PersonID.Eq(f.people["ann"].ID)).CreateOrFirst(ctx, f.db, draft("ann", "member"))
+	found, err := orm.CreateOrFirst(ctx, f.db, project.Where(a.PersonID.Eq(f.people["ann"].ID)), draft("ann", "member")...)
 	if err != nil || found.ID != lead.ID || found.Role != "lead" {
 		t.Fatal("own unique conflict did not resolve to the stored model", found, err)
 	}
@@ -61,7 +62,7 @@ func TestCreateOrFirstResolvesOnlyTheModelInsertConflict(t *testing.T) {
 		want      func(error) bool
 	}{
 		"hook write violation": {role: "member", onCreated: func(ctx context.Context, tx *database.Tx) error {
-			_, err := pivothooks.QueryHookPeople().Create(ctx, tx, pivothooks.PersonDraft{}.SetName("ann"))
+			_, err := pivothooks.People.Insert(ctx, tx, pivothooks.People.Name.Set("ann"))
 			return err
 		}, want: func(err error) bool { return errors.Is(err, database.UniqueViolation) }},
 		"hook claims violation": {role: "member", onCreated: func(context.Context, *database.Tx) error {
@@ -74,7 +75,7 @@ func TestCreateOrFirstResolvesOnlyTheModelInsertConflict(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			trace := &pivothooks.Trace{OnCreated: test.onCreated}
-			created, err := project.CreateOrFirst(pivothooks.WithTrace(ctx, trace), f.db, draft("bob", test.role))
+			created, err := orm.CreateOrFirst(pivothooks.WithTrace(ctx, trace), f.db, project, draft("bob", test.role)...)
 			if !test.want(err) {
 				t.Fatal("foreign failure was not returned", created, err)
 			}

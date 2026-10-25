@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 func TestRestoredEmailDoesNotRestoreRecoveryLinks(t *testing.T) {
@@ -17,17 +18,17 @@ func TestRestoredEmailDoesNotRestoreRecoveryLinks(t *testing.T) {
 		t.Fatal("creation omitted revision")
 	}
 	reset := issue(t, s)
-	verify, err := s.verification.Issue(t.Context(), original.FoundryReference())
+	verify, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(original))
 	if err != nil {
 		t.Fatal(err)
 	}
-	update(t, s, recovering.MemberDraft{}.SetEmail("changed@example.test").SetEmailVerified(true))
+	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Email.Set("changed@example.test"), recovering.MemberRecords.EmailVerified.Set(true)})
 	changed := current(t, s)
 	if changed.EmailRevision == original.EmailRevision || changed.EmailVerified {
 		t.Fatal("email changed without fresh unverified state")
 	}
 	// Even explicitly submitting a stale revision cannot revive it.
-	update(t, s, recovering.MemberDraft{}.SetEmail(original.Email).SetEmailRevision(original.EmailRevision))
+	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Email.Set(original.Email), recovering.MemberRecords.EmailRevision.Set(original.EmailRevision)})
 	restored := current(t, s)
 	if restored.EmailRevision == original.EmailRevision || restored.EmailRevision == changed.EmailRevision {
 		t.Fatal("restoration reused a generation")
@@ -39,7 +40,7 @@ func TestRestoredEmailDoesNotRestoreRecoveryLinks(t *testing.T) {
 		t.Fatal("restored email revived verification", err)
 	}
 	freshReset := issue(t, s)
-	freshVerify, err := s.verification.Issue(t.Context(), original.FoundryReference())
+	freshVerify, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(original))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,13 +60,13 @@ func TestUnchangedEmailAndRolledBackChangesPreserveRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	update(t, s, recovering.MemberDraft{}.SetEmail(original.Email).SetEmailRevision(fabricated).SetEnabled(true))
+	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Email.Set(original.Email), recovering.MemberRecords.EmailRevision.Set(fabricated), recovering.MemberRecords.Enabled.Set(true)})
 	if current(t, s).EmailRevision != original.EmailRevision {
 		t.Fatal("unchanged email replaced managed revision")
 	}
 	rollback := errors.New("rollback email mutation")
 	err = s.within(t.Context(), func(tx *database.Tx) error {
-		changed, err := recovering.QueryRecoveryMembers().Update(t.Context(), tx, original.ID, recovering.MemberDraft{}.SetEmail("rolled-back@example.test"))
+		changed, err := recovering.MemberRecords.Update(t.Context(), tx, original.ID, recovering.MemberRecords.Email.Set("rolled-back@example.test"))
 		if err != nil {
 			return err
 		}
@@ -92,7 +93,7 @@ func TestRecoveryWaitsForEmailChangeThenRejectsOldRevision(t *testing.T) {
 	writeDone := make(chan error, 1)
 	go func() {
 		writeDone <- s.within(t.Context(), func(tx *database.Tx) error {
-			_, err := recovering.QueryRecoveryMembers().Update(t.Context(), tx, s.member.ID, recovering.MemberDraft{}.SetEmail("while-locked@example.test"))
+			_, err := recovering.MemberRecords.Update(t.Context(), tx, s.member.ID, recovering.MemberRecords.Email.Set("while-locked@example.test"))
 			if err != nil {
 				return err
 			}
@@ -124,5 +125,34 @@ func TestRecoveryWaitsForEmailChangeThenRejectsOldRevision(t *testing.T) {
 	}
 	if current(t, s).Password != s.member.Password {
 		t.Fatal("stale reset changed password")
+	}
+}
+
+// UPDATE OF fires even when the assigned value equals its previous value. This
+// distinguishes true omission from replacing a stale revision with the old one.
+func TestUnchangedEmailOmitsSubmittedRevision(t *testing.T) {
+	s := prepare(t)
+	original := current(t, s)
+	fabricated, err := challenge.NewRevision[recovering.Member]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.within(t.Context(), func(tx *database.Tx) error {
+		for _, sql := range []string{
+			`CREATE FUNCTION reject_revision_assignment() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'revision must be omitted'; END $$`,
+			`CREATE TRIGGER reject_revision_assignment BEFORE UPDATE OF email_revision ON recovery_members FOR EACH ROW EXECUTE FUNCTION reject_revision_assignment()`,
+		} {
+			if _, err := tx.Exec(t.Context(), sql); err != nil {
+				return err
+			}
+		}
+		_, err := recovering.MemberRecords.Update(t.Context(), tx, original.ID, recovering.MemberRecords.Email.Set(original.Email), recovering.MemberRecords.EmailRevision.Set(fabricated), recovering.MemberRecords.Enabled.Set(false))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stored := current(t, s)
+	if stored.EmailRevision != original.EmailRevision || stored.Enabled {
+		t.Fatal("unset lost stored revision or the unrelated explicit false")
 	}
 }

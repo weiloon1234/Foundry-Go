@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	sessionpg "github.com/weiloon1234/Foundry-Go/auth/session/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -45,7 +46,7 @@ func TestPersistentSessionSuppliesConcreteModel(t *testing.T) {
 	}
 	user := models.User{ID: id, Status: models.StatusActive}
 	var loads atomic.Int32
-	provider := auth.DefineProvider("users", (models.User{}).FoundryReference(), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
+	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
 		loads.Add(1)
 		if key != id {
 			return value.Optional[models.User]{}, nil
@@ -60,7 +61,7 @@ func TestPersistentSessionSuppliesConcreteModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof, err := auth.NewProof(user.FoundryReference(), auth.Authenticated)
+	proof, err := auth.NewProof(orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}

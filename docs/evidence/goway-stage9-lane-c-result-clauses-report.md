@@ -1,6 +1,9 @@
 # Stage 9 lane C: remaining result clauses
 
-Base `6d80111`, on top of the accepted cumulative Wave 1/A1/source-clauses delta.
+Rebased onto `fdaff938` (batch-7b), which already includes Wave 1, A1 and source clauses.
+Resolved the reapplied cumulative patch to retain only the result-clause delta.
+Integrated evidence hashes, reporting comments and snapshot order are unchanged;
+registries retain lane B/D entries alongside the result additions.
 No commit. Generated outputs, directives, module files and Makefile are unchanged.
 
 ## API and shared ownership
@@ -26,8 +29,7 @@ checks retain B31. Tests reject same-model foreign declarations, foreign paramet
 keys, zero descriptors, wrong phases and invalid ordering. Inputs remain immutable.
 
 All eight functions are pinned surface additions; no removals or convertibility
-allowlist additions. The cumulative snapshot also includes the six previously
-accepted source-clause functions.
+allowlist additions. The six accepted source-clause functions retain their integrated snapshot order.
 
 ## Consumers and compiler rows
 
@@ -55,11 +57,15 @@ value-set DISTINCT with ordering/windows and nested SELECT/CTE boundaries.
 
 ## Footprint and acceptance
 
-Native Go 1.27.1 darwin/arm64, r7 cache, GOMAXPROCS=4, GOFLAGS=-p=4, GOWORK=off.
+Native Go 1.27.1 darwin/arm64, r8 cache, GOMAXPROCS=4, GOFLAGS=-p=4, GOWORK=off.
 New `result_clauses` probe exercises all eight functions and measures **2,188 T/t
-functions**, ceiling **2,517 = ceil(2,188 × 1.15)**. All 127 probes pass; existing
+functions**, ceiling **2,517 = ceil(2,188 × 1.15)**. Existing
 ceilings are unchanged. `q_with` remains **1,211/1,211**, `aggregate_families`
 **4,366/4,369**, and the accepted `source_clauses` probe **2,505/2,881**.
+All 135 footprint probes passed on this base. Build, vet, rows/consumer tests
+and races, the surface/convertibility guards, all 373 owned consumer negatives and
+seven new Go-way negatives passed. PostgreSQL sources compile and vet; catalogue,
+docs-check, gofmt and diff checks pass.
 Exact commands, final results, footprint sweep and source hashes are recorded in
 the companion evidence JSON. PostgreSQL execution remains lead-owned; local runs
 explicitly unset its URL/required flags.
@@ -80,3 +86,42 @@ HAVING, DISTINCT and both row-key/selected-key DISTINCT ON. Complete record and
 set results support DISTINCT through read-only package functions. DISTINCT and
 conditional-expression runtime consumers are ready for the PostgreSQL gate;
 complete-record streaming and direct scalar compilation still await lane A.
+
+## Remaining C packages after batch-7b
+
+No remaining package can complete independently of the pending lane A APIs.
+Retained legacy tests are acceptance requirements, not compatibility implementations.
+The following anchors identify the assertions that prevent whole-package cutover
+(all paths are under `tests/fixtures/consumer/`):
+
+| Package | Pending owner/API | Retained assertion |
+| --- | --- | --- |
+| advancedqueries | lane A `EachRead` | `subqueries_postgres_test.go:178`: scalar streaming callback error |
+| comparisonqueries | lane A `RelationFilter` | `subqueries_postgres_test.go:84`: subquery expression inside referral filter |
+| ctes | lane A `CompileRead`, `EachRead` | `ctes_postgres_test.go:43,69`: scalar CTE SQL and streaming |
+| recordqueries | lane A `EachRead` | `records_postgres_test.go:79`: complete-record callback error |
+| setqueries | lane A `CompileRead`, `EachRead`, `RelationFilter` | `sets_postgres_test.go:178,194,203`: set SQL, related membership and streaming |
+| recursivequeries | lane A `CompileRead`, `EachRead`, `RelationFilter` | `recursive_postgres_test.go:144,152,168,260`: set SQL, related membership and session-owned recursive streaming |
+| distinctqueries | lane A `EachRead` | `distinct_postgres_test.go:191`: complete-record DISTINCT streaming |
+| expressionqueries | lane A `CompileRead` | `expressions_test.go:18,30,35`: direct scalar conditional SQL/validation |
+| framequeries | lane A `CompileRead` | `named_postgres_test.go:26`: named-window definition and parameter deduplication |
+| scalarqueries | lane A `CompileRead` | `geographic_test.go:16`, `scalars_postgres_test.go:202`: geographic/scalar SQL validation |
+| filterqueries | lane A `CompileRead` | `filters_postgres_test.go:152`: reject outer-only correlated aggregate FILTER before execution |
+| keyqueries | lane A `CompileRead`; additional clause gaps below | `keys_test.go:26`: selected computed partition SQL |
+| correlations | lane A `CompileRead` | `correlations_postgres_test.go:94,97`: invalid outer capture rejected before execution |
+| jsonqueries | lane A `RelationFilter` | `composition_postgres_test.go:44–45`: JSON containment predicate on a related codec-backed key |
+
+`keyqueries` additionally retains correlated scalar GROUP BY and selected-key
+DISTINCT ON (`keys_postgres_test.go:106`), and value-set selected-key DISTINCT ON
+(`keys_postgres_test.go:79`). Those adapters are absent in this base; the accepted
+ordinary scalar/record/set DISTINCT functions do not cover these descriptors.
+They remain explicit framework gaps for follow-up routing. No pending terminal or
+relation-filter implementation was duplicated in this delta.
+
+## Integration history
+
+The earlier lane report used base `6d80111`, r7, and recorded 127 passing probes.
+The rebase above used `fdaff938`, r8, and recorded 135. These are historical
+lane measurements. Batch 7c integrated the read/filter foundations; batch 7d
+adds the correlated/value-set key clauses. The pending-API inventory above
+describes the earlier lane base, not the current integrated capability set.

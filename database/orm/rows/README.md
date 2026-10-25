@@ -225,3 +225,14 @@ nullability and subquery boundary. They never impose a scalar cardinality limit.
 record-set and value-set results. They preserve inner input SELECTs and retain the
 ordinary read-only result family. Existing bounds and ordering remain in place;
 NULL equality and selected-order validation follow the shared PostgreSQL compiler.
+
+Correlated scalar keys use `GroupByCorrelatedScalar` for lifted row grouping and
+`DistinctOnCorrelatedScalarValues` for selected keys. Use `OrderCorrelatedScalar`
+when ordering by aggregates or windows; its leading orders must match the DISTINCT
+ON keys. These functions preserve the enclosing scope and inner limit/offset.
+
+`DistinctOnValueSet` accepts selected keys in the combined `Set[V]` scope. For
+example, `rows.DistinctOnValueSet(values, expr.Select(values.Value()).Key())`
+retains the scalar codec, including nullability. Group keys cannot be substituted
+for selected keys, and keys from either input query cannot enter the combined
+scope. Both families reuse the ordinary rows clause and compiler validation.

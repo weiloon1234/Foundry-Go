@@ -3,6 +3,7 @@ package recovering_test
 import (
 	"encoding/json"
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,7 +42,7 @@ func TestPostgresRecoveryHTTPCommitsModelAndCredentialInvalidation(t *testing.T)
 	credentials := attachCredentials(t, s)
 	web, api := issueCredentials(t, credentials, passwordProof(t, s, "old long password"))
 	reset := issue(t, s)
-	verify, err := s.verification.Issue(t.Context(), s.member.FoundryReference())
+	verify, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestPostgresRecoveryHTTPExpiredAndDisabledResponsesAgree(t *testing.T) {
 				s.clock.Advance(passwordreset.DefaultLifetime)
 			}
 			if mode == "disabled" {
-				update(t, s, recovering.MemberDraft{}.SetEnabled(false))
+				update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Enabled.Set(false)})
 			}
 			raw := reset.Token().Secret().Reveal()
 			if mode == "absent" {

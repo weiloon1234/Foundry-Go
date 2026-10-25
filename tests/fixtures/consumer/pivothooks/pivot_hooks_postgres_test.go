@@ -9,8 +9,10 @@ import (
 	"testing"
 
 	"foundry.test/consumer/pivothooks"
+
 	foundry "github.com/weiloon1234/Foundry-Go"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -32,8 +34,8 @@ func start(t *testing.T) fixture {
 	scope := pgtest.Isolate(t)
 	pool := foundation.NewKey[*database.DB]("pivot.pool")
 	observers := foundation.Module{Name: "observers", OnRegister: func(r *foundation.Registrar) error {
-		return pivothooks.RegisterAssignmentObserver(r, pool, pivothooks.NewAssignmentObserver("provider.assignment"), func(foundation.Resolver) (func() pivothooks.AssignmentHooks, error) {
-			return func() pivothooks.AssignmentHooks { return pivothooks.Hooks("provider") }, nil
+		return orm.RegisterObserver(r, pool, orm.NewObserver[pivothooks.Assignment]("provider.assignment"), func(foundation.Resolver) (func() orm.Hooks[pivothooks.Assignment], error) {
+			return func() orm.Hooks[pivothooks.Assignment] { return pivothooks.ORMHooks("provider") }, nil
 		})
 	}}
 	app := testkit.Start(t, foundry.New().Register(postgres.Module("database", pool, scope.Config())).Register(observers))
@@ -51,11 +53,11 @@ func start(t *testing.T) fixture {
 		}
 	}
 	f := fixture{db: db, people: make(map[string]pivothooks.Person), names: make(map[model.ID[pivothooks.Person]]string)}
-	if f.project, err = pivothooks.QueryHookProjects().Create(t.Context(), db, pivothooks.ProjectDraft{}.SetName("apollo")); err != nil {
+	if f.project, err = pivothooks.Projects.Insert(t.Context(), db, pivothooks.Projects.Name.Set("apollo")); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"ann", "bob", "cid", "dee"} {
-		person, err := pivothooks.QueryHookPeople().Create(t.Context(), db, pivothooks.PersonDraft{}.SetName(name))
+		person, err := pivothooks.People.Insert(t.Context(), db, pivothooks.People.Name.Set(name))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,7 +77,7 @@ func (f fixture) persons(names ...string) []pivothooks.Person {
 // links reads the stored pivots as person name -> role.
 func (f fixture) links(t *testing.T) map[string]string {
 	t.Helper()
-	stored, err := pivothooks.QueryHookAssignments().Where(pivothooks.AssignmentFields().ProjectID.Eq(f.project.ID)).All(t.Context(), f.db)
+	stored, err := pivothooks.Assignments.Query().Where(pivothooks.Assignments.ProjectID.Eq(f.project.ID)).All(t.Context(), f.db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,8 +136,8 @@ func expected(creates, updates, deletes []string) map[string]int {
 
 func TestPivotLifecycleRunsOncePerChangedLink(t *testing.T) {
 	f := start(t)
-	members := pivothooks.ProjectRelations().Members
-	member := pivothooks.AssignmentDraft{}.SetRole("member")
+	members := pivothooks.ProjectLinks.Members
+	member := []orm.Assignment[pivothooks.Assignment]{pivothooks.Assignments.Role.Set("member")}
 	run := func(t *testing.T, operation func(context.Context) error) *pivothooks.Trace {
 		t.Helper()
 		trace := &pivothooks.Trace{}
@@ -159,7 +161,7 @@ func TestPivotLifecycleRunsOncePerChangedLink(t *testing.T) {
 
 	var result struct{ attached, detached, updated []pivothooks.Assignment }
 	sync := func(ctx context.Context) error {
-		c, err := members.Sync(ctx, f.db, f.project, f.persons("ann", "bob"), member, nil)
+		c, err := orm.Sync(ctx, f.db, members, f.project, f.persons("ann", "bob"), member, nil)
 		result.attached, result.detached, result.updated = c.Attached, c.Detached, c.Updated
 		return err
 	}
@@ -177,7 +179,7 @@ func TestPivotLifecycleRunsOncePerChangedLink(t *testing.T) {
 	// Sync to bob and cid, updating retained links: ann is removed, bob updated,
 	// cid created; each runs its own lifecycle exactly once.
 	trace = run(t, func(ctx context.Context) error {
-		c, err := members.Sync(ctx, f.db, f.project, f.persons("bob", "cid"), member, pivothooks.AssignmentDraft{}.SetRole("lead"))
+		c, err := orm.Sync(ctx, f.db, members, f.project, f.persons("bob", "cid"), member, []orm.Assignment[pivothooks.Assignment]{pivothooks.Assignments.Role.Set("lead")})
 		result.attached, result.detached, result.updated = c.Attached, c.Detached, c.Updated
 		return err
 	})
@@ -204,7 +206,7 @@ func TestPivotLifecycleRunsOncePerChangedLink(t *testing.T) {
 
 	// Retained links without an update draft run no hooks.
 	trace = run(t, func(ctx context.Context) error {
-		c, err := members.SyncWithoutDetaching(ctx, f.db, f.project, f.persons("bob", "dee"), member, nil)
+		c, err := orm.SyncWithoutDetaching(ctx, f.db, members, f.project, f.persons("bob", "dee"), member, nil)
 		result.attached, result.detached, result.updated = c.Attached, c.Detached, c.Updated
 		return err
 	})
@@ -214,7 +216,7 @@ func TestPivotLifecycleRunsOncePerChangedLink(t *testing.T) {
 	}
 
 	trace = run(t, func(ctx context.Context) error {
-		c, err := members.Toggle(ctx, f.db, f.project, f.persons("cid", "ann"), member)
+		c, err := orm.Toggle(ctx, f.db, members, f.project, f.persons("cid", "ann"), member...)
 		result.attached, result.detached, result.updated = c.Attached, c.Detached, c.Updated
 		return err
 	})
@@ -224,7 +226,7 @@ func TestPivotLifecycleRunsOncePerChangedLink(t *testing.T) {
 	}
 
 	trace = run(t, func(ctx context.Context) error {
-		updated, err := members.UpdateExistingPivot(ctx, f.db, f.project, f.people["dee"], pivothooks.AssignmentDraft{}.SetRole("owner"))
+		updated, err := orm.UpdatePivot(ctx, f.db, members, f.project, f.people["dee"], pivothooks.Assignments.Role.Set("owner"))
 		result.updated = updated
 		return err
 	})
@@ -234,14 +236,14 @@ func TestPivotLifecycleRunsOncePerChangedLink(t *testing.T) {
 	}
 
 	trace = run(t, func(ctx context.Context) error {
-		attached, err := members.AttachMany(ctx, f.db, f.project, f.persons("cid"), member)
+		attached, err := orm.AttachMany(ctx, f.db, members, f.project, f.persons("cid"), member...)
 		result.attached = attached
 		return err
 	})
 	check(t, trace, []string{"cid"}, nil, nil, map[string]string{"ann": "member", "bob": "lead", "cid": "member", "dee": "owner"})
 
 	trace = run(t, func(ctx context.Context) error {
-		detached, err := members.DetachMany(ctx, f.db, f.project, f.persons("ann", "bob"))
+		detached, err := orm.DetachMany(ctx, f.db, members, f.project, f.persons("ann", "bob"))
 		result.detached = detached
 		return err
 	})
@@ -251,7 +253,7 @@ func TestPivotLifecycleRunsOncePerChangedLink(t *testing.T) {
 	}
 
 	trace = run(t, func(ctx context.Context) error {
-		detached, err := members.DetachAll(ctx, f.db, f.project)
+		detached, err := orm.DetachAll(ctx, f.db, members, f.project)
 		result.detached = detached
 		return err
 	})
@@ -263,9 +265,9 @@ func TestPivotLifecycleRunsOncePerChangedLink(t *testing.T) {
 
 func TestPivotHookFailureRollsBackTheWholeOperation(t *testing.T) {
 	f := start(t)
-	members := pivothooks.ProjectRelations().Members
-	member := pivothooks.AssignmentDraft{}.SetRole("member")
-	if _, err := members.Sync(t.Context(), f.db, f.project, f.persons("ann", "bob"), member, nil); err != nil {
+	members := pivothooks.ProjectLinks.Members
+	member := []orm.Assignment[pivothooks.Assignment]{pivothooks.Assignments.Role.Set("member")}
+	if _, err := orm.Sync(t.Context(), f.db, members, f.project, f.persons("ann", "bob"), member, nil); err != nil {
 		t.Fatal(err)
 	}
 	before := f.links(t)
@@ -276,23 +278,23 @@ func TestPivotHookFailureRollsBackTheWholeOperation(t *testing.T) {
 	}{
 		// ann removed and bob updated before dee's creation fails.
 		{"provider.created", 2, func(ctx context.Context) error {
-			_, err := members.Sync(ctx, f.db, f.project, f.persons("bob", "cid", "dee"), member, pivothooks.AssignmentDraft{}.SetRole("lead"))
+			_, err := orm.Sync(ctx, f.db, members, f.project, f.persons("bob", "cid", "dee"), member, []orm.Assignment[pivothooks.Assignment]{pivothooks.Assignments.Role.Set("lead")})
 			return err
 		}},
 		{"local.updating", 1, func(ctx context.Context) error {
-			_, err := members.UpdateExistingPivot(ctx, f.db, f.project, f.people["bob"], pivothooks.AssignmentDraft{}.SetRole("lead"))
+			_, err := orm.UpdatePivot(ctx, f.db, members, f.project, f.people["bob"], pivothooks.Assignments.Role.Set("lead"))
 			return err
 		}},
 		{"local.deleted", 2, func(ctx context.Context) error {
-			_, err := members.DetachAll(ctx, f.db, f.project)
+			_, err := orm.DetachAll(ctx, f.db, members, f.project)
 			return err
 		}},
 		{"provider.deleting", 1, func(ctx context.Context) error {
-			_, err := members.Toggle(ctx, f.db, f.project, f.persons("ann", "cid"), member)
+			_, err := orm.Toggle(ctx, f.db, members, f.project, f.persons("ann", "cid"), member...)
 			return err
 		}},
 		{"local.creating", 2, func(ctx context.Context) error {
-			_, err := members.AttachMany(ctx, f.db, f.project, f.persons("cid", "dee"), member)
+			_, err := orm.AttachMany(ctx, f.db, members, f.project, f.persons("cid", "dee"), member...)
 			return err
 		}},
 	} {

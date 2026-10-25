@@ -1,0 +1,356 @@
+{
+  "slice": "stage9-clientcontracts",
+  "base_commit": "fdaff938b71108081499a70d7bf2767f94a147c9",
+  "status": "complete; targeted acceptance and native TypeScript gate passed; httppagination prerequisite migration awaits integration",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r9",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "FOUNDRY_TEST_POSTGRES_URL": "",
+    "FOUNDRY_TEST_POSTGRES_REQUIRED": "0",
+    "FOUNDRY_TEST_REDIS_ADDR": "",
+    "FOUNDRY_TEST_REDIS_REQUIRED": "0"
+  },
+  "native_tools": {
+    "FOUNDRY_TEST_NODE": "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+    "FOUNDRY_TEST_TYPESCRIPT": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js"
+  },
+  "packages_migrated": [
+    "clientcontracts"
+  ],
+  "missing_prerequisite_packages": [],
+  "pending_prerequisite_migrations": [
+    "httppagination: accepted ORM migration is not integrated; existing public aliases remain compatible"
+  ],
+  "rows_ported": [],
+  "shared_files_touched": [],
+  "framework_surface_additions": [],
+  "footprint": "No footprint source or budget changes; not remeasured for this fixture alias migration.",
+  "source_sha256": {
+    "tests/fixtures/consumer/clientcontracts/contracts.go": "def6b4565f3378cfd1c14ea9d4a98b33e31ed1a4da5533a549dc06c075e8cece",
+    "tests/fixtures/consumer/clientcontracts/README.md": "fea6de3948b697fac4ad3a136a839fa803dab378598e7cd5e8395aea06923123",
+    "docs/evidence/goway-stage9-clientcontracts-report.md": "c99acb8ce2d57c143e9d6e84e83e375ee07802875e2ac2ca45174bb09d19d1d3",
+    "tests/fixtures/goway/footprint_test.go": "a97770e05b1e615a8ee4eef3bbcc1216c36995dec35f17494d2cc66e2e1bd026",
+    "database/orm/testdata/public-methods.txt": "e8fe0816b20135f0c99ff3d40862bf9a2b8b76a575a598e795ec928d6c9cd58c",
+    "database/orm/method_surface_test.go": "bcb9032c8f9c1f062cde57293dca07c3973aa7bfe7e80829b9a17095e9490792",
+    "CHANGELOG.md": "74a28993fc576fb06507749fccec4d1a157a40a3a067777f86f68b926eec83f3",
+    "tools/release/source.go": "d84fc823ad60ac0c21ba25e32e29432a78099d6efc5a36294fc5151796dd2f3d",
+    "blueprint/00-master-architecture-and-parity.md": "5fb432b4ba66513738103597c60e9ded68be5ba60957290f61ba909c220fb881",
+    "tests/fixtures/goway/compiler_cases_test.go": "dcf5f486298a4f194bb700ff69b880a9cb3875cde3086981f5cd876d8d60c207",
+    "internal/agent/gopls_acceptance_test.go": "115ec8a0ba0432c4e2b6d7f05d65fd46ab552c64804a6e5cec157836fc2b4f58",
+    "blueprint/goway-data-layer/README.md": "3d525fb51bc6b03947c71f52c3710019d5c4358a97924cdd504323f16772ec0c",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "74c8f91bcc75ff10ce573f51a20e40a8d7e6adede7e3310cc5cd9e04aa73263e",
+    "tools/release/release_test.go": "9064b9fef31b7875ce8eb02aec24f0cd6cf76d7ed553e49406b332a1dca5afce",
+    "tools/goway_catalogue_test.py": "ee1e38b232eded37861cf1857dd9e854483fb7c4c65e69946431e4b6ae0afebc"
+  },
+  "protected_contract_sha256": {
+    "tests/fixtures/consumer/clientcontracts/dto.go": "55c0134b87c30dfe2e8a249e136f64df98e5cc72868782271bb95fad7f0456df",
+    "tests/fixtures/consumer/clientcontracts/explicit_map.go": "bd2f8bbb98e9d1d57d920cbd3bd15d49ef43a1433b3ef8fa61d36a9e133e48d2",
+    "tests/fixtures/consumer/clientcontracts/filters_foundry.gen.go": "005e40fd085e064004d3002a72fa1f7b3934d024f7cf2e0e4149eb84d17529cf",
+    "tests/fixtures/consumer/clientcontracts/item_path_foundry.gen.go": "fd67081cee6f9537e1918259354a0184bfea4d1111e54084588608d18b6bef29",
+    "tests/fixtures/consumer/clientcontracts/member_foundry.gen.go": "dbf055a90e3be42c98da52fa2986ee454fd16c90dd2df0d3a6f6e73f349caff1",
+    "tests/fixtures/consumer/clientcontracts/owner_index_foundry.gen.go": "4bfca615d0243e39631cce24af765fd0fc402d97d31f40232722df1af8de1329",
+    "tests/fixtures/consumer/clientcontracts/payload_foundry.gen.go": "c041986835606e4c303c7ff85065f4383a26032179842ef6fa83373f491e6eb6",
+    "tests/fixtures/consumer/clientcontracts/presentation.go": "b7fa03a2b640768283df126d176c1f4a9f8da6df9f7e84e73ecdefe1cfa4c4cb",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/README.md": "489e159e047158d237b95c750cb06802af48cd5f95b76fc3441dbb3a59d2f9df",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/.foundry-gen.json": "ef0315d4e0298f732bcd3e46ff4ede5375d998144fac71263aff34b24cb06dc6",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_foundry.gen.ts": "4e7d04978485be8e51660b3b183ed3630d69e25654ac8a0795bf5dae2e5d3e3d",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_live_foundry.gen.ts": "1cd62f80f27ea12e43f580c90c6b1f19d84dc1ba33472208cafe605a66d8297e",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_manifest_foundry.gen.json": "abd227d084a4fd4306c25e20bff00bcc81fdb67ef12a77f4efb3c7b6d4f0ffa3",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_members_foundry.gen.ts": "6593ec2e0c681379f94427582c11b7a48c5c47245e8f5c337bb8512e0948b926",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_openapi_foundry.gen.json": "88b03c554a21065aa30d732dfdaf148a3d98a1919ce37a968da07572b92b30de",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_react_foundry.gen.ts": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_runtime_foundry.gen.ts": "320809004634e61403f68c70430069ecfde83522bb9af2e2d83383383c9619f2",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_runtime_realtime_foundry.gen.ts": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/client/contracts_vue_foundry.gen.ts": "90772adf054a6c6ebd6c8e681f5e07139ed457cbcf1b1dd62d918693f7adce40",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/provenance.json": "78d4b23ead8f43ddbb059badf6f2d3174ecf3e0c58a4b5960feb51dd51cf0fdd",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/.foundry-gen.json": "641b4bf828b3319d7721ab9e385ae71257fffd7f79787d63adf5204a241459b5",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_exports_foundry.gen.ts": "14cb19f339504c085440e1dcc17ce9e7476ea5d6e41e632e1e708a2459657d0e",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_foundry.gen.ts": "122dd3596b5ba3b7547d14d30fdb05309eb1586a43d0ad920e15596d0f799d97",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_manifest_foundry.gen.json": "56d4702f48046eb14a93f09e3abb88139718e39b5fc858feaef4073a4afe5e67",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_openapi_foundry.gen.json": "76fed07876cc519d244b5abfb1fa098baa0460b25fde5bc244fbd7c9fbe03b10",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_react_foundry.gen.ts": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_reports_foundry.gen.ts": "169ac3fafe9e3533a0ca7cb0af4de4e7b18f1b5bfdcfdb850cda4c5bd88d02ef",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_runtime_foundry.gen.ts": "320809004634e61403f68c70430069ecfde83522bb9af2e2d83383383c9619f2",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_runtime_realtime_foundry.gen.ts": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834",
+    "tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/reporting/contracts_vue_foundry.gen.ts": "90772adf054a6c6ebd6c8e681f5e07139ed457cbcf1b1dd62d918693f7adce40",
+    "tests/fixtures/consumer/clientcontracts/testdata/descriptors/runtime.mjs": "5371a790603f6c1500bf25c2534fe55590cd1938fb738d57dfa0db9ec2e079ba",
+    "tests/fixtures/consumer/clientcontracts/testdata/descriptors/types.ts": "0b038f8b3abfe4ba84d53cbb999f84531689bb2e72b81d21ec5b129baa07ea80",
+    "tests/fixtures/consumer/clientcontracts/testdata/form_adapters/runtime.mjs": "63917775f7a4c282a13ec8ce70d8e446b8ab0047d49d378a09c58f8f7ca35e3d",
+    "tests/fixtures/consumer/clientcontracts/testdata/form_adapters/types.ts": "5efa7dbaf8385bb81208933051291c4cec76bcda2daaa0c0081ee056eb620815",
+    "tests/fixtures/consumer/clientcontracts/testdata/forms.mjs": "6050ed1e631a166ae24c3a99d08f693364c10255b9b13a0a0d8f331abbc0494a",
+    "tests/fixtures/consumer/clientcontracts/testdata/messages.mjs": "0c3452e8f972f8b613a62d207e9fadc0787efe782c160110c0ec208049fb6429",
+    "tests/fixtures/consumer/clientcontracts/testdata/messages.ts": "3165b912bcf9ec9ef2868a514d9bfd069b8fb1588c82747104b150149872beea",
+    "tests/fixtures/consumer/clientcontracts/testdata/reporting/runtime.mjs": "a0926746250c8d9cd3b01948b036897565b48a66dca957045cd813cdb8026e6f",
+    "tests/fixtures/consumer/clientcontracts/testdata/reporting/types.ts": "993292dd6b1f82093241875c11f03c8c017deaa68c5cddb381e9908e23b9df4d",
+    "tests/fixtures/consumer/clientcontracts/testdata/runtime.mjs": "f1dad9c8daa330937d1489999071fbed18b75df8b86bc01bbafac5d2ce92a7e1",
+    "tests/fixtures/consumer/clientcontracts/testdata/surfaces.mjs": "f31508a02e2c2a1065aab6afcab0c61386ecf85612133b0c3eb948ad42abfeac",
+    "tests/fixtures/consumer/clientcontracts/testdata/surfaces.ts": "041f12ba7b036c162ae578f09a4840498052d220ec14fe6dd6eef073bd11bb47",
+    "tests/fixtures/consumer/clientcontracts/testdata/types.ts": "733b2a2567147061b4661f7a511d3476d2556f4a27f5f65cccfe154960eb998a",
+    "tests/fixtures/consumer/clientcontracts/transports.go": "560bc55050d5a163ddad4fd3391ed3abbe5e157c2bab633017945062210669b8",
+    "tests/fixtures/consumer/clientcontracts/validation_plurals.go": "6cc1d5cbfcf5091b202e1eddb847f65bcfb345fe2ff401c1a39b6efc79de2d3d"
+  },
+  "checks": [
+    {
+      "directory": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./clientcontracts"
+      ],
+      "exit_code": 0
+    },
+    {
+      "directory": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./clientcontracts"
+      ],
+      "exit_code": 0
+    },
+    {
+      "directory": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "./clientcontracts"
+      ],
+      "exit_code": 0
+    },
+    {
+      "directory": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./clientcontracts"
+      ],
+      "exit_code": 0
+    },
+    {
+      "directory": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(manifest_http_source|manifest_type_identity|manifest_realtime_source|openapi_manifest_source|typescript_manifest_source|typescript_options|presentation_kind|presentation_parameter_owner)$",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "directory": ".",
+      "command": [
+        "python3",
+        "-B",
+        "tools/goway_catalogue.py"
+      ],
+      "exit_code": 0,
+      "note": "Unchanged catalogue: 576 ported, 12 pending, 444 unaffected."
+    },
+    {
+      "command": "SHA-256 comparison of 45 protected files against pre-edit hashes",
+      "exit_code": 0
+    },
+    {
+      "directory": ".",
+      "command": [
+        "make",
+        "typescript-check"
+      ],
+      "exit_code": 0,
+      "note": "Specified native tools, required mode and local loopback access; strict TypeScript negatives, HTTP/WebSocket/reporting, React/Vue forms and existing bundle assertions passed. No live PostgreSQL/Redis."
+    },
+    {
+      "directory": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-run",
+        "^TestClientDescriptorsPreserveExtremeMetadata$",
+        "./clientcontracts"
+      ],
+      "exit_code": 0,
+      "note": "Specified native Node/TypeScript tools, required mode."
+    },
+    {
+      "directory": ".",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "directory": ".",
+      "command": "gofmt -l tests/fixtures/consumer/clientcontracts/contracts.go; git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "integration_batch7d": {
+    "historical_source_hashes": {
+      "tests/fixtures/consumer/clientcontracts/contracts.go": "def6b4565f3378cfd1c14ea9d4a98b33e31ed1a4da5533a549dc06c075e8cece",
+      "tests/fixtures/consumer/clientcontracts/README.md": "fea6de3948b697fac4ad3a136a839fa803dab378598e7cd5e8395aea06923123",
+      "docs/evidence/goway-stage9-clientcontracts-report.md": "c99acb8ce2d57c143e9d6e84e83e375ee07802875e2ac2ca45174bb09d19d1d3"
+    },
+    "base_commit": "79db1cf8",
+    "status": "integrated; acceptance passed; pending lead commit",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r10",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "conflicts": {
+      "lane_a": 5,
+      "lane_b": 1,
+      "lane_c": 8,
+      "resolution": "union registries/snapshot/cases/probes; preserve cumulative evidence and newer source; merge rows documentation"
+    },
+    "catalogue": {
+      "total": 1032,
+      "ported": 576,
+      "port": 12,
+      "unaffected": 444
+    },
+    "compiler_cases": 848,
+    "footprint_probes": 140,
+    "existing_ceilings": "139 retained unchanged",
+    "release_inventory": "no new non-Go testdata; existing correlated_clauses.go and record_clauses.go already explicitly pinned; source policy unchanged",
+    "generated_outputs": "retained unchanged; no manual edits",
+    "postgres": "not run; lead-owned",
+    "commands": {
+      "go build ./...": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "build.log"
+      },
+      "python3 tools/goway_catalogue.py": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "catalogue.log"
+      },
+      "go vet ./...": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "vet.log"
+      },
+      "go test -race -timeout=20m ./database/... ./internal/... (six-package batches)": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "race.log"
+      },
+      "fixture-check consumer remainder (r10; completed vet/packages retained)": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "fixtures-r10.log"
+      },
+      "consumer fixture vet/tests": {
+        "result": "pass segmented r9/r10",
+        "logs": [
+          "fixtures.log",
+          "fixtures-r10.log"
+        ],
+        "completed_packages": 121,
+        "note": "consumer vet and first seven packages completed before interruption; remaining 114 packages passed on r10"
+      },
+      "fixture-check goway vet/tests (r10)": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "goway-r10.log"
+      },
+      "make fixture-check": {
+        "result": "pass segmented r9/r10",
+        "logs": [
+          "fixtures.log",
+          "fixtures-r10.log",
+          "goway-r10.log"
+        ],
+        "scope": "plugin_base/plugin_dep vet/tests; consumer vet and all 121 packages; goway vet and all packages, compiler cases and footprints; live PostgreSQL skipped"
+      },
+      "make generate-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "generate.log"
+      },
+      "make release-tools-check": {
+        "result": "pass after catalogue regression input correction",
+        "initial_log": "release.log",
+        "final_log": "release-final.log",
+        "python_tests": 26,
+        "correction": "preserve exact original generated-reference expressions for the five migrated negative programs; validator behavior unchanged"
+      },
+      "make typescript-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "typescript.log"
+      },
+      "make agent-smoke": {
+        "result": "pass after targeted correction",
+        "log": "agent.log",
+        "initial_passed_subtests": 493,
+        "correction": "typed-result-cursor-page expects Scope/OrderBy on ORM CursorQuery rather than the old Compile method",
+        "rerun_command": "go test -timeout=20m -count=1 -v ./internal/agent -run '^TestRealGoplsConsumer$/^typed-result-cursor-page$'",
+        "rerun_log": "agent-fixed.log",
+        "total_passing_subtests": 494
+      },
+      "real gopls corrected cursor probe": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "agent-fixed.log"
+      },
+      "make fmt-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "format.log"
+      },
+      "final editor package vet/race": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "agent-race.log"
+      },
+      "make docs-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "docs.log"
+      },
+      "git diff --check; git diff --cached --check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "diff-check.log"
+      }
+    },
+    "commit": "none",
+    "log_sha256": {
+      "release.log": "8fda3f7ac0d896790d80359214dbd405cdfb37bbdc79f916e39a7856c4f043e3",
+      "typescript.log": "5d304e4f07cdc8501fb2c434567ea0b85951129db5ede147536d0c11d4ec028d",
+      "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "catalogue.log": "93396c2d43f764059ed480d24c99df364af72684c04a6a6d15f39e63590454e5",
+      "apply-a.log": "1efa89bfe94e15d68b0d4c609a35d20b7e7eeffa644f4688f646faa5f3f5b6a7",
+      "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "apply-c.log": "f92417b562a710f87494c5f28f63143aef35024ff6a76856b2066b41f7dc443b",
+      "apply-b.log": "b9fa4889287fab793487b5245ff258267d09bf54285e4eef7acc6541c5422884",
+      "goway-r10.log": "fc8d761e37bacbb73326182c7bb7cbe4235951989fdcbd1891ea4702f60c0026",
+      "release-fixed.log": "ff81e3be2842ed1fa06c3142be8fe6bb8ed77d6bc456bd291dfd85801b75298e",
+      "agent-fixed.log": "7c2209ddb45f5b0dc561e8a101ea6de99e22c31ccea421865178fe78157a91f5",
+      "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+      "agent-race.log": "4a3468202241f4b10f176c5a3d0a82533b82dc7d1b6b70a1f745c13bdd8976f8",
+      "race.log": "892cb09a62ef27b3e51ea912c732ce1cefabb0cf9d1d61cc01acf0f15853745b",
+      "release-final.log": "88c1db1c609b243aa3730a739b676b94e5f0ab34dbf72b562c9084c0361781e4",
+      "fixtures.log": "d46f5b9356ce1eb11ae092473b91d43476d9976cb96bd923d770988c201c3362",
+      "agent.log": "ff66c404d6f77ae103a645a38215afdf9f79e03adbcb666e4efaed5aeed965e2",
+      "fixtures-r10.log": "78223d14b4d2c72bf71b7f564466caa8931906277b1bd231639ae2f6ecef86a5",
+      "generate.log": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+      "build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native_tools": {
+      "gopls": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+      "node": "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+      "typescript": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js"
+    },
+    "cache_rotation": "r9 build, vet, complete database/internal race gate, plugin fixtures, consumer vet and initial consumer packages passed; interrupted fixture remainder and subsequent gates resumed on r10"
+  }
+}

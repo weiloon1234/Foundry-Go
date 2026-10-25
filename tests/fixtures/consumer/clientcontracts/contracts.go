@@ -18,7 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/datatable"
 	"github.com/weiloon1234/Foundry-Go/enum"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -160,17 +160,17 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 		empty.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil
 		}),
-		pagination.Authenticated(httppagination.GuardedList, pageBinding).WithPermissions(Manage).Handle(func(_ context.Context, actor Account, input httppagination.ListRequest) (query.Page[httppagination.MemberResponse], error) {
-			return query.Page[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{{Email: mutatorqueries.DisplayEmail(actor.Display), ID: modelIDForPage()}}, Number: input.Page.Number, Size: input.Page.Size, Total: 1, Pages: 1}, nil
+		pagination.Authenticated(httppagination.GuardedList, pageBinding).WithPermissions(Manage).Handle(func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
+			return orm.PageResult[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{{Email: mutatorqueries.DisplayEmail(actor.Display), ID: modelIDForPage()}}, Number: input.Page.Number, Size: input.Page.Size, Total: 1, Pages: 1}, nil
 		}),
-		pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding).WithPermissions(Manage).Handle(func(_ context.Context, actor Account, input httppagination.ListRequest) (query.SimplePage[httppagination.MemberResponse], error) {
-			return query.SimplePage[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{{Email: mutatorqueries.DisplayEmail(actor.Display), ID: modelIDForPage()}}, Number: input.Page.Number, Size: input.Page.Size}, nil
+		pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding).WithPermissions(Manage).Handle(func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.SimplePage[httppagination.MemberResponse], error) {
+			return orm.SimplePage[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{{Email: mutatorqueries.DisplayEmail(actor.Display), ID: modelIDForPage()}}, Number: input.Page.Number, Size: input.Page.Size}, nil
 		}),
 		pagination.Authenticated(httppagination.GuardedCursorList, pageBinding).WithPermissions(Manage).Handle(func(ctx context.Context, actor Account, input httppagination.CursorListRequest) (httppagination.CursorListResult, error) {
-			return pagination.MapCursorPage(ctx, query.CursorPage[mutatorqueries.Member]{Size: input.Page.Size}, httppagination.PresentMember)
+			return pagination.MapCursorPage(ctx, orm.CursorPage[mutatorqueries.Member]{Size: input.Page.Size}, httppagination.PresentMember)
 		}),
-		httppagination.List.Handle(func(_ context.Context, input httppagination.ListRequest) (query.Page[httppagination.MemberResponse], error) {
-			return query.Page[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{}, Number: input.Page.Number, Size: input.Page.Size, Total: 0, Pages: 0}, nil
+		httppagination.List.Handle(func(_ context.Context, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
+			return orm.PageResult[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{}, Number: input.Page.Number, Size: input.Page.Size, Total: 0, Pages: 0}, nil
 		}),
 	)...)
 	if err != nil {

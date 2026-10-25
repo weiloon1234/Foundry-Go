@@ -8,8 +8,11 @@ import (
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
+
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -20,15 +23,18 @@ func TestPostgresTypedCorrelations(t *testing.T) {
 }
 
 func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) error {
-	u := models.UserFields()
-	link := query.Correlate(models.QueryUsers(), models.QueryOrders())
-	buyer := models.UserFieldsAt(query.OuterScope(link, models.QueryUsers().Scope()))
-	order := models.OrderFieldsAt(query.InnerScope(link, models.QueryOrders().Scope()))
-	matched := link.Where(order.BuyerID.EqColumn(buyer.ID))
-	counts := query.SelectCorrelatedValue(matched, query.CountField(order.ID).Value())
-	totals := query.SelectCorrelatedValue(matched, query.Sum(order.TotalCents).Value())
-	report := reports.ProjectUserOrderStats(models.QueryUsers()).SelectID(query.Value(u.ID)).SelectEmail(query.Value(u.Email)).
-		SelectOrders(query.CorrelatedScalarQuery(counts)).SelectTotal(query.CorrelatedScalarNullableQuery(totals)).Query().OrderBy(u.Email.Asc())
+	u := models.Users
+	link := rowset.Correlate(rowset.From(models.Users.Query()), rowset.From(models.Orders.Query()))
+	buyer := rowset.OuterScope(link, rowset.ModelScope(models.Users.Query()))
+	order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
+	matched := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)))
+	counts := rowset.SelectCorrelatedScalar(matched, expr.CountFieldAt(order, models.Orders.ID).Value())
+	totals := rowset.SelectCorrelatedScalar(matched, expr.SumAt(order, models.Orders.TotalCents).Value())
+	r := reports.UserOrderStatsRows
+	report := rowset.Select(rowset.From(models.Users.Query()), r.Row,
+		rowset.Map(r.ID, expr.Value(u.ID)), rowset.Map(r.Email, expr.Value(u.Email)),
+		rowset.MapSelected(r.Orders, rowset.CorrelatedScalarQuery(counts)),
+		rowset.MapSelected(r.Total, rowset.CorrelatedScalarNullableQuery(totals))).OrderBy(expr.Value(u.Email).Asc())
 	rows, err := report.All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -44,24 +50,24 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	if sum, ok := rows[0].Total.Get(); !ok || sum.String() != "3" || !rows[2].Total.IsNull() {
 		t.Error("correlated exact sums lost NULL or precision")
 	}
-	ids := query.SelectCorrelatedValue(matched, query.Value(order.BuyerID))
-	for _, predicate := range []query.Predicate[models.User]{matched.Exists(), ids.Exists(), u.ID.InCorrelatedQuery(ids), u.ID.InNullableCorrelatedQuery(query.SelectCorrelatedValue(matched, query.Nullable(query.Value(order.BuyerID))))} {
-		if n, err := models.QueryUsers().Where(predicate).Count(t.Context(), tx); err != nil || n != 2 {
+	ids := rowset.SelectCorrelatedScalar(matched, expr.Select(expr.At(order, models.Orders.BuyerID)))
+	for _, predicate := range []expr.Predicate[models.User]{matched.Exists(), ids.Exists(), rowset.InCorrelatedQuery(expr.Value(u.ID), ids), rowset.InNullableCorrelatedQuery(expr.Value(u.ID), rowset.SelectCorrelatedScalar(matched, expr.Nullable(expr.Select(expr.At(order, models.Orders.BuyerID)))))} {
+		if n, err := expr.Where(models.Users.Query(), predicate).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Error("correlated EXISTS/IN mismatch", n, err)
 		}
 	}
-	if n, err := models.QueryUsers().Where(matched.Exists().Not()).Count(t.Context(), tx); err != nil || n != 1 {
+	if n, err := expr.Where(models.Users.Query(), expr.Not(matched.Exists())).Count(t.Context(), tx); err != nil || n != 1 {
 		t.Error("correlated NOT EXISTS mismatch", err)
 	}
 	// Only the first buyer has an order with a larger sibling order. The nested
 	// correlation refers to both its parent order and its grandparent user.
-	other := query.As[otherOrderAlias](models.QueryOrders(), "other_order")
-	nested := query.Correlate(link, other)
-	grandparent := models.UserFieldsAt(query.OuterScope(nested, query.OuterScope(link, models.QueryUsers().Scope())))
-	parent := models.OrderFieldsAt(query.OuterScope(nested, query.InnerScope(link, models.QueryOrders().Scope())))
-	child := models.OrderFieldsAt(query.InnerScope(nested, other.Scope()))
-	larger := nested.Where(child.BuyerID.EqColumn(grandparent.ID), child.TotalCents.GtColumn(parent.TotalCents))
-	found, err := models.QueryUsers().Where(matched.Where(larger.Exists()).Exists()).All(t.Context(), tx)
+	other := rowset.As[otherOrderAlias](models.Orders.Query(), "other_order")
+	nested := rowset.Correlate(link, other)
+	grandparent := rowset.OuterScope(nested, buyer)
+	parent := rowset.OuterScope(nested, order)
+	child := rowset.InnerScope(nested, rowset.Scope(other))
+	larger := nested.Where(expr.Equal(expr.At(child, models.Orders.BuyerID), expr.At(grandparent, models.Users.ID)), expr.Greater(expr.At(child, models.Orders.TotalCents), expr.At(parent, models.Orders.TotalCents)))
+	found, err := expr.Where(models.Users.Query(), matched.Where(larger.Exists()).Exists()).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
@@ -70,48 +76,50 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	}
 	// Non-equality column predicates retain order/value types and SQL operators.
 	for _, test := range []struct {
-		predicate query.Predicate[query.Correlation[models.User, models.Order]]
+		predicate expr.Predicate[rowset.Correlation[models.User, models.Order]]
 		want      int64
 	}{
-		{order.TotalCents.LtColumn(order.TotalCents), 0},
-		{order.TotalCents.LteColumn(order.TotalCents), 2},
-		{order.TotalCents.GtColumn(order.TotalCents), 0},
-		{order.TotalCents.GteColumn(order.TotalCents), 2},
-		{order.BuyerID.NeColumn(buyer.ID), 0},
+		{expr.Less(expr.At(order, models.Orders.TotalCents), expr.At(order, models.Orders.TotalCents)), 0},
+		{expr.LessOrEqual(expr.At(order, models.Orders.TotalCents), expr.At(order, models.Orders.TotalCents)), 2},
+		{expr.Greater(expr.At(order, models.Orders.TotalCents), expr.At(order, models.Orders.TotalCents)), 0},
+		{expr.GreaterOrEqual(expr.At(order, models.Orders.TotalCents), expr.At(order, models.Orders.TotalCents)), 2},
+		{expr.NotEqual(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)), 0},
 	} {
-		if n, err := models.QueryUsers().Where(matched.Where(test.predicate).Exists()).Count(t.Context(), tx); err != nil || n != test.want {
+		if n, err := expr.Where(models.Users.Query(), matched.Where(test.predicate).Exists()).Count(t.Context(), tx); err != nil || n != test.want {
 			t.Error("column comparison mismatch", n, test.want, err)
 		}
 	}
 	// Outer grouping validates references in SELECT/HAVING; WHERE remains before
 	// grouping. A key group can safely contain a correlated scalar count.
-	if groups, err := report.GroupBy(u.ID.Group(), u.Email.Group()).All(t.Context(), tx); err != nil || len(groups) != 3 {
+	if groups, err := rowset.GroupBy(report, expr.Group(expr.Value(u.ID)), expr.Group(expr.Value(u.Email))).All(t.Context(), tx); err != nil || len(groups) != 3 {
 		t.Error("grouped correlated report failed", err)
 	}
-	if groups, err := query.SelectValue(models.QueryUsers(), query.Count[models.User]().Value()).GroupBy(u.ID.Group()).Having(query.Grouped(matched.Exists())).All(t.Context(), tx); err != nil || len(groups) != 2 {
+	grouped := rowset.Having(rowset.GroupBy(rowset.FromModel(models.Users.Query()), expr.Group(expr.Value(u.ID))), expr.Grouped(matched.Exists()))
+	if groups, err := rowset.ReadScalar(rowset.SelectScalar(rowset.FromRows(grouped), expr.Count[models.User]().Value())).All(t.Context(), tx); err != nil || len(groups) != 2 {
 		t.Error("correlated HAVING failed", err)
 	}
-	if _, err := query.SelectValue(models.QueryUsers(), query.Count[models.User]().Value()).Having(query.Grouped(matched.Exists())).Compile(); !errors.Is(err, fault.Invalid) {
+	ungrouped := rowset.Having(rowset.FromModel(models.Users.Query()), expr.Grouped(matched.Exists()))
+	if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.FromRows(ungrouped), expr.Count[models.User]().Value()))); !errors.Is(err, fault.Invalid) {
 		t.Error("ungrouped outer reference reached SQL", err)
 	}
-	if _, err := query.SelectValue(models.QueryUsers(), query.CorrelatedScalarQuery(query.SelectCorrelatedValue(link, query.CountField(buyer.ID).Value()))).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.CorrelatedScalarQuery(rowset.SelectCorrelatedScalar(link, expr.CountFieldAt(buyer, models.Users.ID).Value()))))); !errors.Is(err, fault.Invalid) {
 		t.Error("outer-only aggregate changed SELECT ownership", err)
 	}
 	// A limited scalar is per outer row. A filtered/limited aliased source retains
 	// its global window before correlation, just as it does before a join.
-	chosen := query.CorrelatedScalarQuery(query.SelectCorrelatedValue(matched, query.Value(order.ID)).OrderBy(order.TotalCents.Desc()).Limit(1))
-	if selected, err := query.SelectValue(models.QueryUsers(), chosen).OrderBy(u.Email.Asc()).All(t.Context(), tx); err != nil || len(selected) != 3 || selected[0].IsNull() || !selected[2].IsNull() {
+	chosen := rowset.CorrelatedScalarQuery(rowset.SelectCorrelatedScalar(matched, expr.Select(expr.At(order, models.Orders.ID))).OrderBy(expr.At(order, models.Orders.TotalCents).Desc()).Limit(1))
+	if selected, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), chosen)).OrderBy(expr.Value(u.Email).Asc()).All(t.Context(), tx); err != nil || len(selected) != 3 || selected[0].IsNull() || !selected[2].IsNull() {
 		t.Error("correlated scalar window mismatch", err)
 	}
-	limited := query.As[otherOrderAlias](models.QueryOrders().OrderBy(models.OrderFields().TotalCents.Asc()).Limit(1), "first_order")
-	windowed := query.Correlate(models.QueryUsers(), limited)
-	wb := models.UserFieldsAt(query.OuterScope(windowed, models.QueryUsers().Scope()))
-	wo := models.OrderFieldsAt(query.InnerScope(windowed, limited.Scope()))
-	if n, err := models.QueryUsers().Where(windowed.Where(wo.BuyerID.EqColumn(wb.ID)).Exists()).Count(t.Context(), tx); err != nil || n != 1 {
+	limited := rowset.As[otherOrderAlias](models.Orders.Query().OrderBy(models.Orders.TotalCents.Asc()).Limit(1), "first_order")
+	windowed := rowset.Correlate(rowset.From(models.Users.Query()), limited)
+	wb := rowset.OuterScope(windowed, rowset.ModelScope(models.Users.Query()))
+	wo := rowset.InnerScope(windowed, rowset.Scope(limited))
+	if n, err := expr.Where(models.Users.Query(), windowed.Where(expr.Equal(expr.At(wo, models.Orders.BuyerID), expr.At(wb, models.Users.ID))).Exists()).Count(t.Context(), tx); err != nil || n != 1 {
 		t.Error("source window moved past correlation", err)
 	}
 	err = tx.Savepoint(t.Context(), func(child *database.Tx) error {
-		rows, err := query.SelectValue(models.QueryUsers(), query.CorrelatedScalarQuery(ids)).All(t.Context(), child)
+		rows, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.CorrelatedScalarQuery(ids))).All(t.Context(), child)
 		var detail *database.Error
 		if rows != nil || !errors.As(err, &detail) || detail.SQLState() != "21000" {
 			t.Error("correlated scalar cardinality failure changed", err)
@@ -127,10 +135,10 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 		t.Error("canceled correlated report reached database", err)
 	}
 	// Correlated predicates participate in ordinary scoped writes.
-	if updated, err := models.QueryUsers().Where(matched.Exists()).Update(t.Context(), tx, users[0].ID, models.UserDraft{}.SetAge(30)); err != nil || updated.Age != 30 {
+	if updated, err := orm.Update(t.Context(), tx, expr.Where(models.Users.Query(), matched.Exists()), models.Users.Key(), users[0].ID, models.Users.Age.Set(30)); err != nil || updated.Age != 30 {
 		t.Error("correlated model update failed", err)
 	}
-	if _, err := models.QueryUsers().Where(matched.Exists()).Update(t.Context(), tx, users[2].ID, models.UserDraft{}.SetAge(30)); !errors.Is(err, database.NotFound) {
+	if _, err := orm.Update(t.Context(), tx, expr.Where(models.Users.Query(), matched.Exists()), models.Users.Key(), users[2].ID, models.Users.Age.Set(30)); !errors.Is(err, database.NotFound) {
 		t.Error("correlated write failed to constrain its key", err)
 	}
 	// A through relation assigns framework aliases to the outer model. Its
@@ -139,11 +147,11 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 		return err
 	}
 	for _, friend := range users[:2] {
-		if _, err := models.QueryFriendships().Create(t.Context(), tx, models.FriendshipDraft{}.SetFromID(users[2].ID).SetToID(friend.ID).SetNote("query test")); err != nil {
+		if _, err := models.Friendships.Insert(t.Context(), tx, models.Friendships.FromID.Set(users[2].ID), models.Friendships.ToID.Set(friend.ID), models.Friendships.Note.Set("query test")); err != nil {
 			return err
 		}
 	}
-	loaded, err := models.QueryUsers().Where(u.ID.Eq(users[2].ID)).With(models.UserRelations().Friends.Where(matched.Where(larger.Exists()).Exists())).RequireFirst(t.Context(), tx)
+	loaded, err := models.Users.Query().Where(u.ID.Eq(users[2].ID)).With(models.UserLinks.Friends.Where(expr.RelationFilter(models.UserLinks.Friends, matched.Where(larger.Exists()).Exists()))).Require(t.Context(), tx)
 	if err != nil {
 		return err
 	}

@@ -252,10 +252,10 @@ func TestResetRacesCannotLeaveUsableCredentials(t *testing.T) {
 				}
 			}
 			assertRevoked(t, c, web, api)
-			if rows, err := c.sessions.List(t.Context(), s.member.FoundryReference()); err != nil || len(rows) != 0 {
+			if rows, err := c.sessions.List(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member)); err != nil || len(rows) != 0 {
 				t.Fatal("session rows survived race", err)
 			}
-			if rows, err := c.tokens.List(t.Context(), s.member.FoundryReference()); err != nil || len(rows) != 0 {
+			if rows, err := c.tokens.List(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member)); err != nil || len(rows) != 0 {
 				t.Fatal("token rows survived race", err)
 			}
 		})
@@ -267,7 +267,7 @@ func TestTransactionalRevocationRestoresSchemaAndRejectsForeignPool(t *testing.T
 	_, _ = issueCredentials(t, c, passwordProof(t, s, "old long password"))
 	other := pgtest.Open(t)
 	if err := other.Transaction(t.Context(), func(tx *database.Tx) error {
-		if _, err := c.sessions.RevokeAllIn(t.Context(), tx, s.member.FoundryReference()); !errors.Is(err, fault.Invalid) {
+		if _, err := c.sessions.RevokeAllIn(t.Context(), tx, recovering.MemberIdentity.ReferenceOf(s.member)); !errors.Is(err, fault.Invalid) {
 			return errors.New("foreign pool accepted")
 		}
 		return nil
@@ -282,7 +282,7 @@ func TestTransactionalRevocationRestoresSchemaAndRejectsForeignPool(t *testing.T
 		if err := database.ScanOne(t.Context(), tx, `SELECT pg_catalog.current_setting('search_path')`, nil, &before); err != nil {
 			return err
 		}
-		if count, err := c.sessions.RevokeAllIn(t.Context(), tx, s.member.FoundryReference()); err != nil || count != 1 {
+		if count, err := c.sessions.RevokeAllIn(t.Context(), tx, recovering.MemberIdentity.ReferenceOf(s.member)); err != nil || count != 1 {
 			return errors.New("joined revocation failed")
 		}
 		if err := database.ScanOne(t.Context(), tx, `SELECT pg_catalog.current_setting('search_path')`, nil, &after); err != nil {

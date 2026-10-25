@@ -1,38 +1,44 @@
 package productionprofile
 
-import "github.com/weiloon1234/Foundry-Go/database/query"
+import (
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+)
 
-// Check exercises ordinary generated drafts and typed query composition without
-// opening a database, listener, queue, or application resource.
+// Check exercises typed assignments and query composition without acquiring resources.
 func Check() error {
-	f := RecordFields()
-	base := QueryProfileRecords().Where(f.Active.Eq(true)).Where(f.Score.Gte(10)).OrderBy(f.Score.Desc(), f.ID.Asc()).Limit(25)
-	if _, err := base.Compile(); err != nil {
+	if err := orm.Check(Tables()...); err != nil {
 		return err
 	}
-	if _, err := query.SelectValue(QueryProfileRecords().Where(f.Active.Eq(true)), query.Sum(f.Score).Value()).Compile(); err != nil {
+	f := Records
+	base := f.Query().Where(f.Active.Eq(true), f.Score.Gte(10)).OrderBy(f.Score.Desc(), f.ID.Asc()).Limit(25)
+	if _, err := orm.Compile(base); err != nil {
 		return err
 	}
-	_ = RecordDraft{}.SetName("profile").SetPayload([]byte("owned"))
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query().Where(f.Active.Eq(true))), expr.Sum(f.Score).Value()))); err != nil {
+		return err
+	}
+	_ = []orm.Assignment[Record]{f.Name.Set("profile"), f.Payload.Set([]byte("owned"))}
 	return nil
 }
 
 type resourceLeft struct{}
 type resourceRight struct{}
 
-// CheckJoinedFields exercises the same generated field capabilities in a
-// self-join, including the nullable side's text, binary and ordered values.
+// CheckJoinedFields exercises nullable text, binary and ordered values in a self-join.
 func CheckJoinedFields() error {
-	left := query.As[resourceLeft](QueryProfileRecords(), "left_records")
-	right := query.As[resourceRight](QueryProfileRecords(), "right_records")
-	joined := query.LeftJoin(left, right, query.On(RecordFieldsAt(left.Scope()).ID, RecordFieldsAt(right.Scope()).ID))
-	fields := RecordFieldsAt(query.LeftScope(joined, left.Scope()))
-	nullable := RecordNullableFieldsAt(query.NullableRightScope(joined, right.Scope()))
-	caption := query.Coalesce(nullable.Name, fields.Name)
-	text := query.SelectValue(joined, query.Lower(caption).Value()).Where(fields.Active.Eq(true), nullable.Score.IsNotNull()).OrderBy(caption.Asc(), fields.ID.Asc())
-	if _, err := text.Compile(); err != nil {
+	left := rows.As[resourceLeft](Records.Query(), "left_records")
+	right := rows.As[resourceRight](Records.Query(), "right_records")
+	joined := rows.LeftJoin(left, right, rows.On(expr.At(rows.Scope(left), Records.ID), expr.At(rows.Scope(right), Records.ID)))
+	fields := rows.LeftScope(joined, rows.Scope(left))
+	nullable := rows.NullableRightScope(joined, rows.Scope(right))
+	caption := expr.Coalesce(expr.AtNullable(nullable, Records.Name), expr.At(fields, Records.Name))
+	text := rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(joined, expr.Lower(caption).Value()),
+		expr.At(fields, Records.Active).Eq(true), expr.AtNullable(nullable, Records.Score).IsNotNull())).OrderBy(caption.Asc(), expr.At(fields, Records.ID).Asc())
+	if _, err := rows.CompileRead(text); err != nil {
 		return err
 	}
-	_, err := query.SelectValue(joined, query.Coalesce(nullable.Payload, fields.Payload).Value()).Compile()
+	_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(joined, expr.Select(expr.Coalesce(expr.AtNullable(nullable, Records.Payload), expr.At(fields, Records.Payload))))))
 	return err
 }

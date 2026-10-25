@@ -3,6 +3,8 @@ package bootstrap
 
 import (
 	"context"
+	"os"
+
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/config/toml"
@@ -11,7 +13,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
-	"os"
 )
 
 //foundry:config
@@ -49,7 +50,7 @@ func Build(ctx context.Context, settings Settings, options ...application.Option
 		return nil, fault.New(fault.Invalid, "bootstrap acceptance needs explicit actors and schema")
 	}
 	// Schema is a SQL parameter below. It is never interpolated into domain SQL.
-	return application.New(settings.App, options...).HTTP(func(services application.Services) ([]http.RouteRegistration, error) {
+	return application.New(settings.App, append([]application.Option{application.WithTables(Tables()...)}, options...)...).HTTP(func(services application.Services) ([]http.RouteRegistration, error) {
 		return Routes(settings, services)
 	}).Build(ctx)
 }

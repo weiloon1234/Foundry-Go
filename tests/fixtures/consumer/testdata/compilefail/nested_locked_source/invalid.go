@@ -2,7 +2,7 @@ package invalid
 
 import (
 	n "foundry.test/consumer/nestedbindings"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ query.ModelQuerySource[n.Project] = n.QueryProjects().ForUpdate()
+var _ orm.Query[n.Project] = n.ProjectRecords.Query().ForUpdate()

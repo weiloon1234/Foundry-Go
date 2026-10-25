@@ -3,13 +3,15 @@ package configuredprofile
 
 import (
 	"context"
+	"os"
+
 	"foundry.test/consumer/productionprofile"
+
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/config/toml"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
-	"os"
 )
 
 const Primary cache.StoreName = "primary"
@@ -40,5 +42,5 @@ func Build(ctx context.Context, settings application.Settings, options ...applic
 	if err := productionprofile.Check(); err != nil {
 		return nil, err
 	}
-	return application.New(settings, options...).HTTP(Routes).Build(ctx)
+	return application.New(settings, append([]application.Option{application.WithTables(productionprofile.Tables()...)}, options...)...).HTTP(Routes).Build(ctx)
 }

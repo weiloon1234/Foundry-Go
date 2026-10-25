@@ -1,20 +1,5 @@
 {
-  "slice": "stage9-upsert",
-  "base_commit": "fdaff938b71108081499a70d7bf2767f94a147c9",
-  "status": "complete; targeted acceptance passed; PostgreSQL sources compiled only",
-  "environment": {
-    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r8",
-    "GOMAXPROCS": "4",
-    "GOFLAGS": "-p=4",
-    "GOWORK": "off",
-    "FOUNDRY_TEST_POSTGRES_URL": "",
-    "FOUNDRY_TEST_POSTGRES_REQUIRED": "0",
-    "FOUNDRY_TEST_REDIS_ADDR": "",
-    "FOUNDRY_TEST_REDIS_REQUIRED": "0"
-  },
-  "packages_migrated": [
-    "upsertqueries"
-  ],
+  "catalogue_disposition_changes": 0,
   "consumer_cases_updated": [
     "conflict_calculated_target",
     "conflict_calculation_owner",
@@ -41,142 +26,55 @@
     "index_predicate_owner",
     "index_proposed_key"
   ],
-  "goway_compiler_cases": [
-    "conflict_calculated_target",
-    "conflict_calculation_model_scope",
-    "conflict_calculation_nullability",
-    "conflict_calculation_owner",
-    "conflict_calculation_selected",
-    "conflict_calculation_type",
-    "conflict_condition_owner",
-    "conflict_conversion",
-    "conflict_nullable_calculation_value",
-    "conflict_rows_ordinary_where",
-    "conflict_rows_select",
-    "conflict_rows_where_owner",
-    "conflict_target_owner",
-    "conflict_update_owner",
-    "conflict_value",
-    "index_key_owner",
-    "index_key_selected",
-    "index_key_string",
-    "index_predicate_owner",
-    "index_proposed_key",
-    "required_null_set",
-    "upsert_draft_owner",
-    "upsert_policy_owner",
-    "upsert_result_owner"
-  ],
-  "catalogue_disposition_changes": 0,
-  "framework_surface_additions": [],
-  "footprint": {
-    "source_or_budget_changes": false,
-    "measurement": "not rerun; consumer-only test and negative migration"
-  },
-  "postgres": "sources compiled; live service not executed",
-  "shared_files": [
-    "blueprint/goway-data-layer/compilefail-mapping.tsv",
-    "tests/fixtures/consumer/types_test.go"
-  ],
-  "acceptance": [
-    {
-      "cwd": "tests/fixtures/consumer",
-      "command": "go build ./upsertqueries",
-      "result": "pass"
-    },
-    {
-      "cwd": "tests/fixtures/consumer",
-      "command": "go vet ./upsertqueries",
-      "result": "pass"
-    },
-    {
-      "cwd": "tests/fixtures/consumer",
-      "command": "go test ./upsertqueries",
-      "result": "pass"
-    },
-    {
-      "cwd": "tests/fixtures/consumer",
-      "command": "go test -race ./upsertqueries",
-      "result": "pass"
-    },
-    {
-      "cwd": "tests/fixtures/consumer",
-      "command": "go test -run '^TestInvalidPublicContractsFailCompilation$/^(conflict_calculated_target|conflict_calculation_owner|conflict_calculation_type|conflict_calculation_nullability|conflict_calculation_model_scope|conflict_calculation_selected|conflict_rows_ordinary_where|conflict_rows_where_owner|conflict_rows_select|conflict_nullable_calculation_value|conflict_target_owner|conflict_update_owner|conflict_value|conflict_nonnullable|conflict_condition_owner|conflict_conversion|upsert_policy_owner|upsert_draft_owner|upsert_result_owner|index_key_owner|index_key_selected|index_key_string|index_predicate_owner|index_proposed_key)$' .",
-      "result": "pass"
-    },
-    {
-      "cwd": "tests/fixtures/goway",
-      "command": "go test -run '^TestInvalidPublicContractsFailCompilation$/^(conflict_calculated_target|conflict_calculation_model_scope|conflict_calculation_nullability|conflict_calculation_owner|conflict_calculation_selected|conflict_calculation_type|conflict_condition_owner|conflict_conversion|conflict_nullable_calculation_value|conflict_rows_ordinary_where|conflict_rows_select|conflict_rows_where_owner|conflict_target_owner|conflict_update_owner|conflict_value|index_key_owner|index_key_selected|index_key_string|index_predicate_owner|index_proposed_key|required_null_set|upsert_draft_owner|upsert_policy_owner|upsert_result_owner)$' .",
-      "result": "pass"
-    },
-    {
-      "cwd": ".",
-      "command": "python3 -B tools/goway_catalogue.py",
-      "result": "pass",
-      "summary": "570 ported, 18 port, 444 unaffected; total 1032"
-    },
-    {
-      "cwd": ".",
-      "command": "make docs-check",
-      "result": "pass"
-    },
-    {
-      "cwd": ".",
-      "command": "gofmt on changed Go files; git diff --check",
-      "result": "pass"
-    }
-  ],
-  "corrections": [
-    "Initial vet/test compilation rejected lookup.Scope(); corrected to rows.Scope(lookup), then vet/tests/race passed."
-  ],
-  "remaining_blocker": "retrievalqueries legacy_iteration_postgres_test.go: lane A complete-record streaming API not integrated; retained unchanged",
   "source_sha256": {
-    "blueprint/goway-data-layer/compilefail-mapping.tsv": "ecfea7af36902396758ff1c429f18eddbc7a38bd73018aac364870a6b62d733a",
-    "tests/fixtures/consumer/internal/queryfixture/postgres.go": "e984a00576e440b7796695cb94a2d727a02ce5ee189da8f607e0d6887ba5ca40",
-    "tests/fixtures/consumer/models/orm.go": "f14d2b74d81e472248291f8edb6092bbc3685951c8d863d2ab746d4488ab8c37",
-    "tests/fixtures/consumer/models/orm_postgres_test.go": "31bd7529e7564c0f69868d059c976747d65aa553a433757f981530f341a197a3",
-    "tests/fixtures/consumer/models/orm_relations.go": "e4325ee511125cbde536ffec5032e66a91a771e0f197bd127934ad9dd3bf4755",
-    "tests/fixtures/consumer/models/orm_test.go": "ac70ddcf6d224eb8abcc48ad6be229c01820f2d43aac32b72657acfe3ed625aa",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_calculated_target/invalid.go": "5c9e1f3bdc67e97b6c51c85b8d5a638db3b9f0d9d0541b8c58333237b363bcac",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_model_scope/invalid.go": "4cee33040f6966b5a96f8f72a34d2308a6041f4768c70f3194fad1b8856a9145",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_nullability/invalid.go": "8a244d5e23a171704260b616fa11e9dd60166baaf5034a9c465a03d097240ba3",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_owner/invalid.go": "3bac5daa95dc81bb958040ddfbf88e94ba7fa366250483cf7c5df19fd643cb88",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_selected/invalid.go": "be460d890d1247683fceb0c8b94902a26e06c64cd4bedd98a2322c70be8e162c",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_type/invalid.go": "44defa0a9138e928e97db72833ac36c55d11f65f82c76979c969a0a9d43938fa",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_condition_owner/invalid.go": "4d98fd58ec79146ec1418b2143fe7abb74173dc66ec29dff6d12326a3738e3f8",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_conversion/invalid.go": "ebcb7d0c65e5669353db07689664913b1eb559ee4db2b022065191c7f9129757",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_nonnullable/invalid.go": "045471c54b72adadbddc8de5183c273400f48a83317b89c3b7ba18bf6b2aa61f",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_nullable_calculation_value/invalid.go": "2f9953ffb72a73f14ef6bef6151d893d1d3136db237156a70e9236d8b13b9def",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_rows_ordinary_where/invalid.go": "ff8066dbaef8bb1d59dea71dd8672fb20944bcad523f301be90087a98c141702",
     "tests/fixtures/consumer/testdata/compilefail/conflict_rows_select/invalid.go": "4fa6741bc89e64c21842ee2bf29d18916e670962d39b9f8c08f52c4aa8e3f083",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_rows_where_owner/invalid.go": "65e7a572826569234bf100e41ba914fea56ef11f0c68c113f2ec6c98c80c1ed0",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_target_owner/invalid.go": "56ade04bd81d97f223d9d901ea212418bd6d3e296c29f678a8f21f05a2fe4e9e",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_update_owner/invalid.go": "edc5d6ae5b69653ea2ab412c6fe5381176cf5c75604bbf8650ada6c1a0d6e515",
-    "tests/fixtures/consumer/testdata/compilefail/conflict_value/invalid.go": "68b19cf72a5bbdab8b79e2446e81a9c8bc847c7b7b141179deddaedda35917a6",
-    "tests/fixtures/consumer/testdata/compilefail/index_key_owner/invalid.go": "422afa573983045788bd5924175334d426dbf8a1f8b75ad3e08358ccb04031a3",
-    "tests/fixtures/consumer/testdata/compilefail/index_key_selected/invalid.go": "8b21b4fe2c70810ce7985aadc8548456fb119b8a2849a721bb3cfa7a69240fcf",
-    "tests/fixtures/consumer/testdata/compilefail/index_key_string/invalid.go": "cf416c9f74bbd0203a3a76ffd5b8e846f848058a6c665844dcfbab0cd5181608",
-    "tests/fixtures/consumer/testdata/compilefail/index_predicate_owner/invalid.go": "85f663b46330225b657c8ec1dcb3f1fec2504609930f75da0bb60c67b24433fd",
-    "tests/fixtures/consumer/testdata/compilefail/index_proposed_key/invalid.go": "74486da843f0d43b713de57fc6d55e7c5b6922820e2da52f7a62b6141d134610",
-    "tests/fixtures/consumer/testdata/compilefail/upsert_draft_owner/invalid.go": "b5a51806b6da3d066a5a6e9293cdafe6bafc55f4568ccfa1a90fc92437dadb32",
-    "tests/fixtures/consumer/testdata/compilefail/upsert_policy_owner/invalid.go": "43110f7b1240f4a2238e62901e7a1df59a8c9328869a38f1c69c0f087643e59f",
-    "tests/fixtures/consumer/testdata/compilefail/upsert_result_owner/invalid.go": "c707ca7d12f4541a340ba32d50b12929cc62e9af0da5fb66390b3c7eedb784c1",
-    "tests/fixtures/consumer/types_test.go": "2017f6af1449d1faaa5a46148ba74d81a853da30b10f932eb2571582f3d33e77",
-    "tests/fixtures/consumer/upsertqueries/README.md": "43b14b7b48f821e98cca4bd966c536085663b117cc93afa7e2e64dccb4f38273",
-    "tests/fixtures/consumer/upsertqueries/calculations_postgres_test.go": "144f6eca82171f098a81b1a619f7a059ec9f936f3c3d463d42f26dbbfe8ff67e",
     "tests/fixtures/consumer/upsertqueries/index_targets_postgres_test.go": "03d3bcbe4df9dd24aaf263dee6edc1158424052e99b29943d7a181a53bab4a14",
+    "tests/fixtures/goway/compiler_cases_test.go": "dcf5f486298a4f194bb700ff69b880a9cb3875cde3086981f5cd876d8d60c207",
+    "tests/fixtures/consumer/models/orm_relations.go": "e4325ee511125cbde536ffec5032e66a91a771e0f197bd127934ad9dd3bf4755",
+    "tests/fixtures/consumer/models/orm_postgres_test.go": "31bd7529e7564c0f69868d059c976747d65aa553a433757f981530f341a197a3",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_nullable_calculation_value/invalid.go": "2f9953ffb72a73f14ef6bef6151d893d1d3136db237156a70e9236d8b13b9def",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_target_owner/invalid.go": "56ade04bd81d97f223d9d901ea212418bd6d3e296c29f678a8f21f05a2fe4e9e",
+    "tests/fixtures/consumer/testdata/compilefail/index_predicate_owner/invalid.go": "85f663b46330225b657c8ec1dcb3f1fec2504609930f75da0bb60c67b24433fd",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_type/invalid.go": "44defa0a9138e928e97db72833ac36c55d11f65f82c76979c969a0a9d43938fa",
     "tests/fixtures/consumer/upsertqueries/orm.go": "8d9c0b2c49559db97c429d329cf79bdd2c8e147af5fad393b910faeec8032fe2",
+    "tests/fixtures/consumer/models/orm_test.go": "ac70ddcf6d224eb8abcc48ad6be229c01820f2d43aac32b72657acfe3ed625aa",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_model_scope/invalid.go": "4cee33040f6966b5a96f8f72a34d2308a6041f4768c70f3194fad1b8856a9145",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_owner/invalid.go": "3bac5daa95dc81bb958040ddfbf88e94ba7fa366250483cf7c5df19fd643cb88",
     "tests/fixtures/consumer/upsertqueries/upserts_postgres_test.go": "97839220ceaed23b4c846ad413eaf3a8c06ac95e376e066e821ec7e1b9db3f1f",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_calculated_target/invalid.go": "5c9e1f3bdc67e97b6c51c85b8d5a638db3b9f0d9d0541b8c58333237b363bcac",
+    "tools/release/release_test.go": "9064b9fef31b7875ce8eb02aec24f0cd6cf76d7ed553e49406b332a1dca5afce",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "74c8f91bcc75ff10ce573f51a20e40a8d7e6adede7e3310cc5cd9e04aa73263e",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_nonnullable/invalid.go": "045471c54b72adadbddc8de5183c273400f48a83317b89c3b7ba18bf6b2aa61f",
     "docs/evidence/goway-stage9-upsert-report.md": "252b5fc7432a00d2fb81209da813ea2ea4bd651c1201c56bf637f36c99c9a20e",
-    "blueprint/00-master-architecture-and-parity.md": "0a9b7f63805d0332f12e16244c2f42bdbcd61200bdf1411f74e2e189df78398a",
-    "blueprint/goway-data-layer/README.md": "a3f0278717966ee8a27f40d5a50ffd14dd3af2bc65d1b0fe68309189451ea1d8",
-    "internal/agent/gopls_acceptance_test.go": "3b2ecde81c88908b139ac1d4104f31c83f1e6a865928604d1149620c31fb93aa",
-    "database/orm/method_surface_test.go": "d0c7bfd32a40388d46ee93e45088b228b210133eb73c56b9292bc4871ab5a1d3",
-    "database/orm/testdata/public-methods.txt": "06775763b7f87f044a0ad59cc27964764dbf51ff31270cac64e6b1944672dfb6",
-    "tests/fixtures/goway/compiler_cases_test.go": "5f2e336beeca0c0c480407c4d93cd23b2c1bae573b91aab9014e0be878c7306e",
-    "CHANGELOG.md": "6c9744c1c13c875ffd7aebfc74b57b4173fede5797de6e78063a882cce06cd6d",
-    "tests/fixtures/goway/footprint_test.go": "ae9e0878002d541207b5b2e9ad934eab9ae36ca5802e8ca9cb5aa56b90df8b19",
-    "tools/release/release_test.go": "9064b9fef31b7875ce8eb02aec24f0cd6cf76d7ed553e49406b332a1dca5afce"
+    "tests/fixtures/consumer/testdata/compilefail/index_key_selected/invalid.go": "8b21b4fe2c70810ce7985aadc8548456fb119b8a2849a721bb3cfa7a69240fcf",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_condition_owner/invalid.go": "4d98fd58ec79146ec1418b2143fe7abb74173dc66ec29dff6d12326a3738e3f8",
+    "database/orm/testdata/public-methods.txt": "e8fe0816b20135f0c99ff3d40862bf9a2b8b76a575a598e795ec928d6c9cd58c",
+    "tests/fixtures/consumer/testdata/compilefail/upsert_draft_owner/invalid.go": "b5a51806b6da3d066a5a6e9293cdafe6bafc55f4568ccfa1a90fc92437dadb32",
+    "tests/fixtures/consumer/models/orm.go": "f14d2b74d81e472248291f8edb6092bbc3685951c8d863d2ab746d4488ab8c37",
+    "CHANGELOG.md": "74a28993fc576fb06507749fccec4d1a157a40a3a067777f86f68b926eec83f3",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_rows_where_owner/invalid.go": "65e7a572826569234bf100e41ba914fea56ef11f0c68c113f2ec6c98c80c1ed0",
+    "internal/agent/gopls_acceptance_test.go": "115ec8a0ba0432c4e2b6d7f05d65fd46ab552c64804a6e5cec157836fc2b4f58",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_rows_ordinary_where/invalid.go": "ff8066dbaef8bb1d59dea71dd8672fb20944bcad523f301be90087a98c141702",
+    "tests/fixtures/goway/footprint_test.go": "a97770e05b1e615a8ee4eef3bbcc1216c36995dec35f17494d2cc66e2e1bd026",
+    "blueprint/00-master-architecture-and-parity.md": "5fb432b4ba66513738103597c60e9ded68be5ba60957290f61ba909c220fb881",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_selected/invalid.go": "be460d890d1247683fceb0c8b94902a26e06c64cd4bedd98a2322c70be8e162c",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_update_owner/invalid.go": "edc5d6ae5b69653ea2ab412c6fe5381176cf5c75604bbf8650ada6c1a0d6e515",
+    "tests/fixtures/consumer/testdata/compilefail/upsert_result_owner/invalid.go": "c707ca7d12f4541a340ba32d50b12929cc62e9af0da5fb66390b3c7eedb784c1",
+    "tests/fixtures/consumer/types_test.go": "a52dcabc158f8663e6792a19732494eee39ed6a40ae136b9f8603a0c4c90ef34",
+    "tests/fixtures/consumer/upsertqueries/README.md": "43b14b7b48f821e98cca4bd966c536085663b117cc93afa7e2e64dccb4f38273",
+    "tests/fixtures/consumer/testdata/compilefail/index_key_string/invalid.go": "cf416c9f74bbd0203a3a76ffd5b8e846f848058a6c665844dcfbab0cd5181608",
+    "tests/fixtures/consumer/internal/queryfixture/postgres.go": "e984a00576e440b7796695cb94a2d727a02ce5ee189da8f607e0d6887ba5ca40",
+    "tests/fixtures/consumer/upsertqueries/calculations_postgres_test.go": "144f6eca82171f098a81b1a619f7a059ec9f936f3c3d463d42f26dbbfe8ff67e",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_conversion/invalid.go": "ebcb7d0c65e5669353db07689664913b1eb559ee4db2b022065191c7f9129757",
+    "blueprint/goway-data-layer/README.md": "3d525fb51bc6b03947c71f52c3710019d5c4358a97924cdd504323f16772ec0c",
+    "database/orm/method_surface_test.go": "bcb9032c8f9c1f062cde57293dca07c3973aa7bfe7e80829b9a17095e9490792",
+    "tests/fixtures/consumer/testdata/compilefail/index_proposed_key/invalid.go": "74486da843f0d43b713de57fc6d55e7c5b6922820e2da52f7a62b6141d134610",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_nullability/invalid.go": "8a244d5e23a171704260b616fa11e9dd60166baaf5034a9c465a03d097240ba3",
+    "tests/fixtures/consumer/testdata/compilefail/index_key_owner/invalid.go": "422afa573983045788bd5924175334d426dbf8a1f8b75ad3e08358ccb04031a3",
+    "tests/fixtures/consumer/testdata/compilefail/upsert_policy_owner/invalid.go": "43110f7b1240f4a2238e62901e7a1df59a8c9328869a38f1c69c0f087643e59f",
+    "tests/fixtures/consumer/testdata/compilefail/conflict_value/invalid.go": "68b19cf72a5bbdab8b79e2446e81a9c8bc847c7b7b141179deddaedda35917a6",
+    "tools/release/source.go": "d84fc823ad60ac0c21ba25e32e29432a78099d6efc5a36294fc5151796dd2f3d",
+    "tools/goway_catalogue_test.py": "ee1e38b232eded37861cf1857dd9e854483fb7c4c65e69946431e4b6ae0afebc"
   },
   "integration_batch7c": {
     "historical_source_hashes": {
@@ -439,5 +337,357 @@
       "build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     "cache_rotation": "r8 completed build/vet and partial race coverage; interrupted race packages and remaining checks resumed on r9"
+  },
+  "status": "complete; targeted acceptance passed; PostgreSQL sources compiled only",
+  "acceptance": [
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go build ./upsertqueries",
+      "result": "pass"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go vet ./upsertqueries",
+      "result": "pass"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test ./upsertqueries",
+      "result": "pass"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -race ./upsertqueries",
+      "result": "pass"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -run '^TestInvalidPublicContractsFailCompilation$/^(conflict_calculated_target|conflict_calculation_owner|conflict_calculation_type|conflict_calculation_nullability|conflict_calculation_model_scope|conflict_calculation_selected|conflict_rows_ordinary_where|conflict_rows_where_owner|conflict_rows_select|conflict_nullable_calculation_value|conflict_target_owner|conflict_update_owner|conflict_value|conflict_nonnullable|conflict_condition_owner|conflict_conversion|upsert_policy_owner|upsert_draft_owner|upsert_result_owner|index_key_owner|index_key_selected|index_key_string|index_predicate_owner|index_proposed_key)$' .",
+      "result": "pass"
+    },
+    {
+      "cwd": "tests/fixtures/goway",
+      "command": "go test -run '^TestInvalidPublicContractsFailCompilation$/^(conflict_calculated_target|conflict_calculation_model_scope|conflict_calculation_nullability|conflict_calculation_owner|conflict_calculation_selected|conflict_calculation_type|conflict_condition_owner|conflict_conversion|conflict_nullable_calculation_value|conflict_rows_ordinary_where|conflict_rows_select|conflict_rows_where_owner|conflict_target_owner|conflict_update_owner|conflict_value|index_key_owner|index_key_selected|index_key_string|index_predicate_owner|index_proposed_key|required_null_set|upsert_draft_owner|upsert_policy_owner|upsert_result_owner)$' .",
+      "result": "pass"
+    },
+    {
+      "cwd": ".",
+      "command": "python3 -B tools/goway_catalogue.py",
+      "result": "pass",
+      "summary": "570 ported, 18 port, 444 unaffected; total 1032"
+    },
+    {
+      "cwd": ".",
+      "command": "make docs-check",
+      "result": "pass"
+    },
+    {
+      "cwd": ".",
+      "command": "gofmt on changed Go files; git diff --check",
+      "result": "pass"
+    }
+  ],
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r8",
+    "FOUNDRY_TEST_REDIS_ADDR": "",
+    "FOUNDRY_TEST_POSTGRES_URL": "",
+    "GOWORK": "off",
+    "GOMAXPROCS": "4",
+    "FOUNDRY_TEST_POSTGRES_REQUIRED": "0",
+    "FOUNDRY_TEST_REDIS_REQUIRED": "0",
+    "GOFLAGS": "-p=4"
+  },
+  "packages_migrated": [
+    "upsertqueries"
+  ],
+  "corrections": [
+    "Initial vet/test compilation rejected lookup.Scope(); corrected to rows.Scope(lookup), then vet/tests/race passed."
+  ],
+  "base_commit": "fdaff938b71108081499a70d7bf2767f94a147c9",
+  "remaining_blocker": "retrievalqueries legacy_iteration_postgres_test.go: lane A complete-record streaming API not integrated; retained unchanged",
+  "slice": "stage9-upsert",
+  "framework_surface_additions": [],
+  "postgres": "sources compiled; live service not executed",
+  "footprint": {
+    "measurement": "not rerun; consumer-only test and negative migration",
+    "source_or_budget_changes": false
+  },
+  "goway_compiler_cases": [
+    "conflict_calculated_target",
+    "conflict_calculation_model_scope",
+    "conflict_calculation_nullability",
+    "conflict_calculation_owner",
+    "conflict_calculation_selected",
+    "conflict_calculation_type",
+    "conflict_condition_owner",
+    "conflict_conversion",
+    "conflict_nullable_calculation_value",
+    "conflict_rows_ordinary_where",
+    "conflict_rows_select",
+    "conflict_rows_where_owner",
+    "conflict_target_owner",
+    "conflict_update_owner",
+    "conflict_value",
+    "index_key_owner",
+    "index_key_selected",
+    "index_key_string",
+    "index_predicate_owner",
+    "index_proposed_key",
+    "required_null_set",
+    "upsert_draft_owner",
+    "upsert_policy_owner",
+    "upsert_result_owner"
+  ],
+  "shared_files": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "tests/fixtures/consumer/types_test.go"
+  ],
+  "historical_batch7d_incoming_lane_b": {
+    "source_sha256": {
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "fa199e7ce1bafee56124d3fba81ebcd2d4c9eeb3f85d52959a6982038ab5668f",
+      "tests/fixtures/consumer/internal/queryfixture/postgres.go": "e984a00576e440b7796695cb94a2d727a02ce5ee189da8f607e0d6887ba5ca40",
+      "tests/fixtures/consumer/models/orm.go": "f14d2b74d81e472248291f8edb6092bbc3685951c8d863d2ab746d4488ab8c37",
+      "tests/fixtures/consumer/models/orm_postgres_test.go": "31bd7529e7564c0f69868d059c976747d65aa553a433757f981530f341a197a3",
+      "tests/fixtures/consumer/models/orm_relations.go": "e4325ee511125cbde536ffec5032e66a91a771e0f197bd127934ad9dd3bf4755",
+      "tests/fixtures/consumer/models/orm_test.go": "ac70ddcf6d224eb8abcc48ad6be229c01820f2d43aac32b72657acfe3ed625aa",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculated_target/invalid.go": "5c9e1f3bdc67e97b6c51c85b8d5a638db3b9f0d9d0541b8c58333237b363bcac",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_model_scope/invalid.go": "4cee33040f6966b5a96f8f72a34d2308a6041f4768c70f3194fad1b8856a9145",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_nullability/invalid.go": "8a244d5e23a171704260b616fa11e9dd60166baaf5034a9c465a03d097240ba3",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_owner/invalid.go": "3bac5daa95dc81bb958040ddfbf88e94ba7fa366250483cf7c5df19fd643cb88",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_selected/invalid.go": "be460d890d1247683fceb0c8b94902a26e06c64cd4bedd98a2322c70be8e162c",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_type/invalid.go": "44defa0a9138e928e97db72833ac36c55d11f65f82c76979c969a0a9d43938fa",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_condition_owner/invalid.go": "4d98fd58ec79146ec1418b2143fe7abb74173dc66ec29dff6d12326a3738e3f8",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_conversion/invalid.go": "ebcb7d0c65e5669353db07689664913b1eb559ee4db2b022065191c7f9129757",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_nonnullable/invalid.go": "045471c54b72adadbddc8de5183c273400f48a83317b89c3b7ba18bf6b2aa61f",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_nullable_calculation_value/invalid.go": "2f9953ffb72a73f14ef6bef6151d893d1d3136db237156a70e9236d8b13b9def",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_rows_ordinary_where/invalid.go": "ff8066dbaef8bb1d59dea71dd8672fb20944bcad523f301be90087a98c141702",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_rows_select/invalid.go": "4fa6741bc89e64c21842ee2bf29d18916e670962d39b9f8c08f52c4aa8e3f083",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_rows_where_owner/invalid.go": "65e7a572826569234bf100e41ba914fea56ef11f0c68c113f2ec6c98c80c1ed0",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_target_owner/invalid.go": "56ade04bd81d97f223d9d901ea212418bd6d3e296c29f678a8f21f05a2fe4e9e",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_update_owner/invalid.go": "edc5d6ae5b69653ea2ab412c6fe5381176cf5c75604bbf8650ada6c1a0d6e515",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_value/invalid.go": "68b19cf72a5bbdab8b79e2446e81a9c8bc847c7b7b141179deddaedda35917a6",
+      "tests/fixtures/consumer/testdata/compilefail/index_key_owner/invalid.go": "422afa573983045788bd5924175334d426dbf8a1f8b75ad3e08358ccb04031a3",
+      "tests/fixtures/consumer/testdata/compilefail/index_key_selected/invalid.go": "8b21b4fe2c70810ce7985aadc8548456fb119b8a2849a721bb3cfa7a69240fcf",
+      "tests/fixtures/consumer/testdata/compilefail/index_key_string/invalid.go": "cf416c9f74bbd0203a3a76ffd5b8e846f848058a6c665844dcfbab0cd5181608",
+      "tests/fixtures/consumer/testdata/compilefail/index_predicate_owner/invalid.go": "85f663b46330225b657c8ec1dcb3f1fec2504609930f75da0bb60c67b24433fd",
+      "tests/fixtures/consumer/testdata/compilefail/index_proposed_key/invalid.go": "74486da843f0d43b713de57fc6d55e7c5b6922820e2da52f7a62b6141d134610",
+      "tests/fixtures/consumer/testdata/compilefail/upsert_draft_owner/invalid.go": "b5a51806b6da3d066a5a6e9293cdafe6bafc55f4568ccfa1a90fc92437dadb32",
+      "tests/fixtures/consumer/testdata/compilefail/upsert_policy_owner/invalid.go": "43110f7b1240f4a2238e62901e7a1df59a8c9328869a38f1c69c0f087643e59f",
+      "tests/fixtures/consumer/testdata/compilefail/upsert_result_owner/invalid.go": "c707ca7d12f4541a340ba32d50b12929cc62e9af0da5fb66390b3c7eedb784c1",
+      "tests/fixtures/consumer/types_test.go": "1fecd64ec5491b93c2f5e5e9896deb7c5d94262a3391fcb5af7c4c4ec8ef0e4e",
+      "tests/fixtures/consumer/upsertqueries/README.md": "43b14b7b48f821e98cca4bd966c536085663b117cc93afa7e2e64dccb4f38273",
+      "tests/fixtures/consumer/upsertqueries/calculations_postgres_test.go": "144f6eca82171f098a81b1a619f7a059ec9f936f3c3d463d42f26dbbfe8ff67e",
+      "tests/fixtures/consumer/upsertqueries/index_targets_postgres_test.go": "03d3bcbe4df9dd24aaf263dee6edc1158424052e99b29943d7a181a53bab4a14",
+      "tests/fixtures/consumer/upsertqueries/orm.go": "8d9c0b2c49559db97c429d329cf79bdd2c8e147af5fad393b910faeec8032fe2",
+      "tests/fixtures/consumer/upsertqueries/upserts_postgres_test.go": "97839220ceaed23b4c846ad413eaf3a8c06ac95e376e066e821ec7e1b9db3f1f",
+      "docs/evidence/goway-stage9-upsert-report.md": "252b5fc7432a00d2fb81209da813ea2ea4bd651c1201c56bf637f36c99c9a20e"
+    }
+  },
+  "integration_batch7d": {
+    "historical_source_hashes": {
+      "tests/fixtures/consumer/testdata/compilefail/conflict_rows_select/invalid.go": "4fa6741bc89e64c21842ee2bf29d18916e670962d39b9f8c08f52c4aa8e3f083",
+      "tests/fixtures/consumer/upsertqueries/index_targets_postgres_test.go": "03d3bcbe4df9dd24aaf263dee6edc1158424052e99b29943d7a181a53bab4a14",
+      "tests/fixtures/goway/compiler_cases_test.go": "5f2e336beeca0c0c480407c4d93cd23b2c1bae573b91aab9014e0be878c7306e",
+      "tests/fixtures/consumer/models/orm_relations.go": "e4325ee511125cbde536ffec5032e66a91a771e0f197bd127934ad9dd3bf4755",
+      "tests/fixtures/consumer/models/orm_postgres_test.go": "31bd7529e7564c0f69868d059c976747d65aa553a433757f981530f341a197a3",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_nullable_calculation_value/invalid.go": "2f9953ffb72a73f14ef6bef6151d893d1d3136db237156a70e9236d8b13b9def",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_target_owner/invalid.go": "56ade04bd81d97f223d9d901ea212418bd6d3e296c29f678a8f21f05a2fe4e9e",
+      "tests/fixtures/consumer/testdata/compilefail/index_predicate_owner/invalid.go": "85f663b46330225b657c8ec1dcb3f1fec2504609930f75da0bb60c67b24433fd",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_type/invalid.go": "44defa0a9138e928e97db72833ac36c55d11f65f82c76979c969a0a9d43938fa",
+      "tests/fixtures/consumer/upsertqueries/orm.go": "8d9c0b2c49559db97c429d329cf79bdd2c8e147af5fad393b910faeec8032fe2",
+      "tests/fixtures/consumer/models/orm_test.go": "ac70ddcf6d224eb8abcc48ad6be229c01820f2d43aac32b72657acfe3ed625aa",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_model_scope/invalid.go": "4cee33040f6966b5a96f8f72a34d2308a6041f4768c70f3194fad1b8856a9145",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_owner/invalid.go": "3bac5daa95dc81bb958040ddfbf88e94ba7fa366250483cf7c5df19fd643cb88",
+      "tests/fixtures/consumer/upsertqueries/upserts_postgres_test.go": "97839220ceaed23b4c846ad413eaf3a8c06ac95e376e066e821ec7e1b9db3f1f",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculated_target/invalid.go": "5c9e1f3bdc67e97b6c51c85b8d5a638db3b9f0d9d0541b8c58333237b363bcac",
+      "tools/release/release_test.go": "9064b9fef31b7875ce8eb02aec24f0cd6cf76d7ed553e49406b332a1dca5afce",
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "ecfea7af36902396758ff1c429f18eddbc7a38bd73018aac364870a6b62d733a",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_nonnullable/invalid.go": "045471c54b72adadbddc8de5183c273400f48a83317b89c3b7ba18bf6b2aa61f",
+      "docs/evidence/goway-stage9-upsert-report.md": "252b5fc7432a00d2fb81209da813ea2ea4bd651c1201c56bf637f36c99c9a20e",
+      "tests/fixtures/consumer/testdata/compilefail/index_key_selected/invalid.go": "8b21b4fe2c70810ce7985aadc8548456fb119b8a2849a721bb3cfa7a69240fcf",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_condition_owner/invalid.go": "4d98fd58ec79146ec1418b2143fe7abb74173dc66ec29dff6d12326a3738e3f8",
+      "database/orm/testdata/public-methods.txt": "06775763b7f87f044a0ad59cc27964764dbf51ff31270cac64e6b1944672dfb6",
+      "tests/fixtures/consumer/testdata/compilefail/upsert_draft_owner/invalid.go": "b5a51806b6da3d066a5a6e9293cdafe6bafc55f4568ccfa1a90fc92437dadb32",
+      "tests/fixtures/consumer/models/orm.go": "f14d2b74d81e472248291f8edb6092bbc3685951c8d863d2ab746d4488ab8c37",
+      "CHANGELOG.md": "6c9744c1c13c875ffd7aebfc74b57b4173fede5797de6e78063a882cce06cd6d",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_rows_where_owner/invalid.go": "65e7a572826569234bf100e41ba914fea56ef11f0c68c113f2ec6c98c80c1ed0",
+      "internal/agent/gopls_acceptance_test.go": "3b2ecde81c88908b139ac1d4104f31c83f1e6a865928604d1149620c31fb93aa",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_rows_ordinary_where/invalid.go": "ff8066dbaef8bb1d59dea71dd8672fb20944bcad523f301be90087a98c141702",
+      "tests/fixtures/goway/footprint_test.go": "ae9e0878002d541207b5b2e9ad934eab9ae36ca5802e8ca9cb5aa56b90df8b19",
+      "blueprint/00-master-architecture-and-parity.md": "0a9b7f63805d0332f12e16244c2f42bdbcd61200bdf1411f74e2e189df78398a",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_selected/invalid.go": "be460d890d1247683fceb0c8b94902a26e06c64cd4bedd98a2322c70be8e162c",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_update_owner/invalid.go": "edc5d6ae5b69653ea2ab412c6fe5381176cf5c75604bbf8650ada6c1a0d6e515",
+      "tests/fixtures/consumer/testdata/compilefail/upsert_result_owner/invalid.go": "c707ca7d12f4541a340ba32d50b12929cc62e9af0da5fb66390b3c7eedb784c1",
+      "tests/fixtures/consumer/types_test.go": "2017f6af1449d1faaa5a46148ba74d81a853da30b10f932eb2571582f3d33e77",
+      "tests/fixtures/consumer/upsertqueries/README.md": "43b14b7b48f821e98cca4bd966c536085663b117cc93afa7e2e64dccb4f38273",
+      "tests/fixtures/consumer/testdata/compilefail/index_key_string/invalid.go": "cf416c9f74bbd0203a3a76ffd5b8e846f848058a6c665844dcfbab0cd5181608",
+      "tests/fixtures/consumer/internal/queryfixture/postgres.go": "e984a00576e440b7796695cb94a2d727a02ce5ee189da8f607e0d6887ba5ca40",
+      "tests/fixtures/consumer/upsertqueries/calculations_postgres_test.go": "144f6eca82171f098a81b1a619f7a059ec9f936f3c3d463d42f26dbbfe8ff67e",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_conversion/invalid.go": "ebcb7d0c65e5669353db07689664913b1eb559ee4db2b022065191c7f9129757",
+      "blueprint/goway-data-layer/README.md": "a3f0278717966ee8a27f40d5a50ffd14dd3af2bc65d1b0fe68309189451ea1d8",
+      "database/orm/method_surface_test.go": "d0c7bfd32a40388d46ee93e45088b228b210133eb73c56b9292bc4871ab5a1d3",
+      "tests/fixtures/consumer/testdata/compilefail/index_proposed_key/invalid.go": "74486da843f0d43b713de57fc6d55e7c5b6922820e2da52f7a62b6141d134610",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_calculation_nullability/invalid.go": "8a244d5e23a171704260b616fa11e9dd60166baaf5034a9c465a03d097240ba3",
+      "tests/fixtures/consumer/testdata/compilefail/index_key_owner/invalid.go": "422afa573983045788bd5924175334d426dbf8a1f8b75ad3e08358ccb04031a3",
+      "tests/fixtures/consumer/testdata/compilefail/upsert_policy_owner/invalid.go": "43110f7b1240f4a2238e62901e7a1df59a8c9328869a38f1c69c0f087643e59f",
+      "tests/fixtures/consumer/testdata/compilefail/conflict_value/invalid.go": "68b19cf72a5bbdab8b79e2446e81a9c8bc847c7b7b141179deddaedda35917a6"
+    },
+    "base_commit": "79db1cf8",
+    "status": "integrated; acceptance passed; pending lead commit",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r10",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "conflicts": {
+      "lane_a": 5,
+      "lane_b": 1,
+      "lane_c": 8,
+      "resolution": "union registries/snapshot/cases/probes; preserve cumulative evidence and newer source; merge rows documentation"
+    },
+    "catalogue": {
+      "total": 1032,
+      "ported": 576,
+      "port": 12,
+      "unaffected": 444
+    },
+    "compiler_cases": 848,
+    "footprint_probes": 140,
+    "existing_ceilings": "139 retained unchanged",
+    "release_inventory": "no new non-Go testdata; existing correlated_clauses.go and record_clauses.go already explicitly pinned; source policy unchanged",
+    "generated_outputs": "retained unchanged; no manual edits",
+    "postgres": "not run; lead-owned",
+    "commands": {
+      "go build ./...": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "build.log"
+      },
+      "python3 tools/goway_catalogue.py": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "catalogue.log"
+      },
+      "go vet ./...": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "vet.log"
+      },
+      "go test -race -timeout=20m ./database/... ./internal/... (six-package batches)": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "race.log"
+      },
+      "fixture-check consumer remainder (r10; completed vet/packages retained)": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "fixtures-r10.log"
+      },
+      "consumer fixture vet/tests": {
+        "result": "pass segmented r9/r10",
+        "logs": [
+          "fixtures.log",
+          "fixtures-r10.log"
+        ],
+        "completed_packages": 121,
+        "note": "consumer vet and first seven packages completed before interruption; remaining 114 packages passed on r10"
+      },
+      "fixture-check goway vet/tests (r10)": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "goway-r10.log"
+      },
+      "make fixture-check": {
+        "result": "pass segmented r9/r10",
+        "logs": [
+          "fixtures.log",
+          "fixtures-r10.log",
+          "goway-r10.log"
+        ],
+        "scope": "plugin_base/plugin_dep vet/tests; consumer vet and all 121 packages; goway vet and all packages, compiler cases and footprints; live PostgreSQL skipped"
+      },
+      "make generate-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "generate.log"
+      },
+      "make release-tools-check": {
+        "result": "pass after catalogue regression input correction",
+        "initial_log": "release.log",
+        "final_log": "release-final.log",
+        "python_tests": 26,
+        "correction": "preserve exact original generated-reference expressions for the five migrated negative programs; validator behavior unchanged"
+      },
+      "make typescript-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "typescript.log"
+      },
+      "make agent-smoke": {
+        "result": "pass after targeted correction",
+        "log": "agent.log",
+        "initial_passed_subtests": 493,
+        "correction": "typed-result-cursor-page expects Scope/OrderBy on ORM CursorQuery rather than the old Compile method",
+        "rerun_command": "go test -timeout=20m -count=1 -v ./internal/agent -run '^TestRealGoplsConsumer$/^typed-result-cursor-page$'",
+        "rerun_log": "agent-fixed.log",
+        "total_passing_subtests": 494
+      },
+      "real gopls corrected cursor probe": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "agent-fixed.log"
+      },
+      "make fmt-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "format.log"
+      },
+      "final editor package vet/race": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "agent-race.log"
+      },
+      "make docs-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "docs.log"
+      },
+      "git diff --check; git diff --cached --check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "diff-check.log"
+      }
+    },
+    "commit": "none",
+    "log_sha256": {
+      "release.log": "8fda3f7ac0d896790d80359214dbd405cdfb37bbdc79f916e39a7856c4f043e3",
+      "typescript.log": "5d304e4f07cdc8501fb2c434567ea0b85951129db5ede147536d0c11d4ec028d",
+      "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "catalogue.log": "93396c2d43f764059ed480d24c99df364af72684c04a6a6d15f39e63590454e5",
+      "apply-a.log": "1efa89bfe94e15d68b0d4c609a35d20b7e7eeffa644f4688f646faa5f3f5b6a7",
+      "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "apply-c.log": "f92417b562a710f87494c5f28f63143aef35024ff6a76856b2066b41f7dc443b",
+      "apply-b.log": "b9fa4889287fab793487b5245ff258267d09bf54285e4eef7acc6541c5422884",
+      "goway-r10.log": "fc8d761e37bacbb73326182c7bb7cbe4235951989fdcbd1891ea4702f60c0026",
+      "release-fixed.log": "ff81e3be2842ed1fa06c3142be8fe6bb8ed77d6bc456bd291dfd85801b75298e",
+      "agent-fixed.log": "7c2209ddb45f5b0dc561e8a101ea6de99e22c31ccea421865178fe78157a91f5",
+      "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+      "agent-race.log": "4a3468202241f4b10f176c5a3d0a82533b82dc7d1b6b70a1f745c13bdd8976f8",
+      "race.log": "892cb09a62ef27b3e51ea912c732ce1cefabb0cf9d1d61cc01acf0f15853745b",
+      "release-final.log": "88c1db1c609b243aa3730a739b676b94e5f0ab34dbf72b562c9084c0361781e4",
+      "fixtures.log": "d46f5b9356ce1eb11ae092473b91d43476d9976cb96bd923d770988c201c3362",
+      "agent.log": "ff66c404d6f77ae103a645a38215afdf9f79e03adbcb666e4efaed5aeed965e2",
+      "fixtures-r10.log": "78223d14b4d2c72bf71b7f564466caa8931906277b1bd231639ae2f6ecef86a5",
+      "generate.log": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+      "build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native_tools": {
+      "gopls": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+      "node": "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+      "typescript": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js"
+    },
+    "cache_rotation": "r9 build, vet, complete database/internal race gate, plugin fixtures, consumer vet and initial consumer packages passed; interrupted fixture remainder and subsequent gates resumed on r10"
   }
 }

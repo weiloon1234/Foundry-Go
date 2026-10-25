@@ -7,6 +7,7 @@ import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -18,11 +19,11 @@ type ProfileInput = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, f
 type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 type OptionalProfileEndpoint = foundryhttp.OptionalAuthenticationEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent]
 
-// Users reuses the generated stored primary-key codec and ordinary typed query.
+// Users reuses the declared stored primary-key codec and ordinary typed query.
 // No Actor hydration, key string conversion or custom persistence schema exists.
 func Users(executor database.Executor) UserProvider {
-	return auth.DefineProvider("users", (models.User{}).FoundryReference(), func(ctx context.Context, id model.ID[models.User]) (value.Optional[models.User], error) {
-		return models.QueryUsers().Find(ctx, executor, id)
+	return auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})), func(ctx context.Context, id model.ID[models.User]) (value.Optional[models.User], error) {
+		return models.Users.Find(ctx, executor, id)
 	}, func(_ context.Context, user models.User) (bool, error) {
 		return user.Status == models.StatusActive, nil
 	})

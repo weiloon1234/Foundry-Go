@@ -100,7 +100,10 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 9 A read/filter | Ordinary read inspection/iteration, callback identity and relation expression filters | Done pending the lead’s commit; one shared iteration owner and retained construction errors. |
 | 9 B upsert | Shared-model conflict/upsert consumer cutover | Done pending the lead’s commit; 24 consumer negatives migrated with existing catalogue dispositions. |
 | 9 C results | Scalar GROUP BY/HAVING/DISTINCT/DISTINCT ON and record/set DISTINCT | Done pending the lead’s commit; eight package functions, runtime consumers and seven new Go-way negatives. |
-| 9 | Migrate consumer fixtures and compiler catalogue | In progress; B1–B3/upsert, A read/filter foundations, C wave 1/A1/source/result clauses and D1 integrated. Remaining dependent cutovers and generated-output cleanup stay open. |
+| 9 A2 | Application/profile, pivot lifecycle, relationship-filter and correlation consumers | Done pending the lead’s commit; ordinary ORM tables and thin application registration. Office relation-value callers remain open. |
+| 9 D3/client | Recovery/authentication, nested binding, service and client-contract consumers | Done pending the lead’s commit; six Stage 7 catalogue rows ported. Pagination clause callers remain partial. |
+| 9 C keys | Correlated grouping/selected ordering and value-set selected DISTINCT ON | Done pending the lead’s commit; four package functions, ten negatives and one bounded probe. |
+| 9 | Migrate consumer fixtures and compiler catalogue | In progress; B1–B3/upsert, A read/filter/A2, D1/D3/client contracts and C source/result/key clauses integrated. Remaining dependent cutovers and generated-output cleanup stay open. |
 | 10 | Guides, examples and editor coverage | Planned |
 | 11 | Full acceptance and whole-app performance evidence | Planned |
 | 12 | Consumer application migration, separately authorized | Later |
@@ -537,8 +540,8 @@ intentionally accepts byte slices, while identity does not.
 
 | Disposition | Cases |
 | --- | ---: |
-| ported | 570 |
-| port | 18 |
+| ported | 576 |
+| port | 12 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -576,7 +579,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-570 old catalogue rows are covered by 562 distinct Go-way cases.
+576 old catalogue rows are covered by 568 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1804,3 +1807,62 @@ are recorded with the [read terminals](../../docs/evidence/goway-stage9-read-ter
 [result clauses](../../docs/evidence/goway-stage9-lane-c-result-clauses.json).
 The [A3 inventory](../../docs/evidence/goway-stage9-a3-report.md) retains the
 consumer ownership roster. Live PostgreSQL acceptance remains the lead's gate.
+
+## Integration batch 7d: application consumers and computed keys
+
+A2 migrates `pivothooks`, `relationshipfilters`, `productionprofile`,
+`configuredprofile`, `bootstrap` and `correlations`. Application assembly validates
+thin table handles through `WithTables`. Pivot writes retain their shared lifecycle
+callbacks; actor references, scoped writes, nested EXISTS and nullable correlated
+queries retain their concrete identities. Office declarations are available, but
+ad-hoc relation aggregate selection/order/filter without model slots is still an
+open framework gap. Its original acceptance assertions remain.
+
+The D3 batch migrates recovery, authentication, nested bindings, notification and
+realtime identities, with an audit of the other service-only consumers. Recovery's
+Saving hook calls `orm.WriteUnset(write, fields.EmailRevision.Set)` when the email
+is unchanged. This removes the assignment: it does not send NULL, zero or the old
+value. The retained PostgreSQL trigger regression proves omission. Model-first
+locking, stored-hash compare-and-swap, request snapshots and unknown-commit
+reconciliation remain unchanged. Nested binding retains parent scope, alternate-key
+uniqueness, authorization order and retrieval callbacks.
+
+Client handlers use ORM page/simple-page/cursor aliases and explicit DTO
+presentation. The existing frozen-byte checks and native TypeScript tests cover
+client/reporting manifests, OpenAPI and generated client output; no transport or
+persisted schema changes are intended. Generated files and ownership manifests
+remain at the lead's cleanup barrier.
+
+Four package functions complete the computed-key clause adapters:
+
+| Function | Typed scope and behavior |
+| --- | --- |
+| `rows.GroupByCorrelatedScalar` | Lifted row group keys in the enclosing/inner correlation |
+| `rows.DistinctOnCorrelatedScalarValues` | Selected keys in that same correlation |
+| `rows.OrderCorrelatedScalar` | Selected ordering, including aggregate/window keys and the DISTINCT ON prefix |
+| `rows.DistinctOnValueSet` | Selected keys in the combined value-set output scope |
+
+These functions delegate to shared clause and ordering owners, retaining input
+windows, immutable descriptors, aliases and nullable codecs. They add no public
+Query/Table methods or capability families. Ten negative cases preserve owner,
+phase, value-type and wrapper restrictions. The new `key_clauses` lane measurement
+is 2,674 T/t functions with a 3,076 ceiling; all 139 pre-existing ceilings remain
+unchanged, for 140 probes total.
+
+The catalogue has 1,032 rows: 576 ported, 12 pending and 444 unaffected. Go-way has
+848 compiler cases. Six Stage 7 rows now have concrete ORM counterparts:
+`nested_bundle_handler`, `notification_payload_owner`,
+`notification_recipient_owner`, `session_metadata_model`, `token_id_model` and
+`websocket_disconnect_model`.
+
+Stage 9 remains in progress. Original pagination relational-clause tests remain
+in the named legacy files; the ordinary complete-record DISTINCT ON adapter and
+any remaining scalar cursor clause gaps need their owners. Existing read/filter
+foundations are available but retained callers are not automatically migrated.
+Office ad-hoc aggregates, JSONKind projection identity, remaining consumers and
+generated cleanup stay open. Historical lane reports describe their own bases;
+current integration results are recorded in the [A2 evidence](../../docs/evidence/goway-stage9-a2.json),
+[D3 evidence](../../docs/evidence/goway-stage9-d3.json),
+[client-contract evidence](../../docs/evidence/goway-stage9-clientcontracts.json)
+and [computed-key evidence](../../docs/evidence/goway-stage9-lane-c-key-clauses.json).
+Live PostgreSQL remains the lead's gate.

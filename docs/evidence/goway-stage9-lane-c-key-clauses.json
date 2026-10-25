@@ -1,0 +1,524 @@
+{
+  "slice": "stage9-lane-c-key-clauses",
+  "base_commit": "fdaff938b71108081499a70d7bf2767f94a147c9",
+  "recorded_at": "2026-10-25T02:00:03.568240+00:00",
+  "status": "PASS targeted acceptance; live PostgreSQL remains lead-owned. On top of the accepted result-clause delta. No commit.",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r8",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "toolchain": "go version go1.27.1 darwin/arm64",
+  "services": "Go test/build/vet commands unset FOUNDRY_TEST_POSTGRES_URL and FOUNDRY_TEST_POSTGRES_REQUIRED. PostgreSQL sources compile; live PostgreSQL tests skip as required for this lane.",
+  "surface_additions": [
+    "rows.GroupByCorrelatedScalar",
+    "rows.DistinctOnCorrelatedScalarValues",
+    "rows.OrderCorrelatedScalar",
+    "rows.DistinctOnValueSet"
+  ],
+  "surface_removals": [],
+  "new_types": [],
+  "new_query_table_methods": [],
+  "new_capabilities": [],
+  "convertibility_allowlist_additions": [],
+  "new_compiler_cases": [
+    "key_correlated_group_owner",
+    "key_correlated_group_phase",
+    "key_correlated_selected_owner",
+    "key_correlated_selected_phase",
+    "key_correlated_order_owner",
+    "key_value_set_owner",
+    "key_value_set_type",
+    "key_value_set_phase",
+    "key_correlated_wrapper",
+    "key_value_set_wrapper"
+  ],
+  "catalogue_rows_changed_this_increment": [],
+  "sql_parity": [
+    "TestCorrelatedSelectedKeySQLParity/computed_row",
+    "TestCorrelatedSelectedKeySQLParity/aggregate",
+    "TestCorrelatedSelectedKeySQLParity/window",
+    "TestValueSetSelectedKeySQLParity/nullable",
+    "TestValueSetSelectedKeySQLParity/window"
+  ],
+  "postgres_regression": "keyqueries.TestPostgresORMComputedKeyClauses: correlated computed grouping/distinct and combined value-set distinct; compiled, not executed.",
+  "footprint": {
+    "metric": "T/t symbols in native probe archive",
+    "probes_passed": 136,
+    "existing_ceilings_changed": false,
+    "measurements": {
+      "aggregate_families": {
+        "measured": 4366,
+        "ceiling": 4369,
+        "archive_bytes": 19982070
+      },
+      "key_clauses": {
+        "measured": 2674,
+        "ceiling": 3076,
+        "archive_bytes": 12522122
+      },
+      "q_with": {
+        "measured": 1211,
+        "ceiling": 1211,
+        "archive_bytes": 5612594
+      },
+      "result_clauses": {
+        "measured": 2188,
+        "ceiling": 2517,
+        "archive_bytes": 9615846
+      },
+      "source_clauses": {
+        "measured": 2505,
+        "ceiling": 2881,
+        "archive_bytes": 11935106
+      }
+    }
+  },
+  "checks": [
+    {
+      "label": "build",
+      "cwd": ".",
+      "command": "go build ./database/orm/...",
+      "result": "PASS",
+      "seconds": 0.69,
+      "log": "/private/tmp/goway-stage9-c-key-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "guards",
+      "cwd": ".",
+      "command": "go test ./database/orm -run '^(TestPublicMethodSurface|TestPublicGenericMethodsAreDirect|TestExportedTypesPreventPhaseConversions)$'",
+      "result": "PASS",
+      "seconds": 11.96,
+      "log": "/private/tmp/goway-stage9-c-key-guards.log",
+      "log_sha256": "e127c1760e2bc20b413f7962c619ed3fbb4e339120604de2d21a89a79264db18"
+    },
+    {
+      "label": "compiler",
+      "cwd": "tests/fixtures/goway",
+      "command": "go test . -run '^TestInvalidPublicContractsFailCompilation$/^(key_correlated_group_owner|key_correlated_group_phase|key_correlated_selected_owner|key_correlated_selected_phase|key_correlated_order_owner|key_value_set_owner|key_value_set_type|key_value_set_phase|key_correlated_wrapper|key_value_set_wrapper)$' -v",
+      "result": "PASS",
+      "seconds": 104.7,
+      "log": "/private/tmp/goway-stage9-c-key-compiler.log",
+      "log_sha256": "ea0a6a9e58953310327ec9af8524e71afc9a7a1ebc06c83a2a19d232e4d6a390"
+    },
+    {
+      "label": "vet-final",
+      "cwd": ".",
+      "command": "go vet ./database/orm/...",
+      "result": "PASS",
+      "seconds": 27.2,
+      "log": "/private/tmp/goway-stage9-c-key-vet-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "rows-final",
+      "cwd": ".",
+      "command": "go test ./database/orm/rows",
+      "result": "PASS",
+      "seconds": 2.59,
+      "log": "/private/tmp/goway-stage9-c-key-rows-final.log",
+      "log_sha256": "0a7407947b35ecb32528556eb8e2c56067339a63e55d9f292cd4a1723a5a9cb8"
+    },
+    {
+      "label": "race-final",
+      "cwd": ".",
+      "command": "go test -race ./database/orm/rows",
+      "result": "PASS",
+      "seconds": 46.34,
+      "log": "/private/tmp/goway-stage9-c-key-race-final.log",
+      "log_sha256": "1a161861bc341a2849df9f0313b3c084ca165b0d76aed5f617e8d6b031ef7eba"
+    },
+    {
+      "label": "footprint",
+      "cwd": "tests/fixtures/goway",
+      "command": "go test . -run '^TestFootprintBudgets$' -v",
+      "result": "PASS",
+      "seconds": 145.29,
+      "log": "/private/tmp/goway-stage9-c-key-footprint.log",
+      "log_sha256": "782364149f4c5eca9a96f9fcd0f43ba40e0f27ea50badbbd1d626e8206951176"
+    },
+    {
+      "label": "fixture-vet",
+      "cwd": "tests/fixtures/goway",
+      "command": "go vet . ./testdata/footprint/key_clauses ./pgsmoke",
+      "result": "PASS",
+      "seconds": 1.04,
+      "log": "/private/tmp/goway-stage9-c-key-fixture-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "pgsmoke",
+      "cwd": "tests/fixtures/goway",
+      "command": "go test ./pgsmoke -run '^$'",
+      "result": "PASS",
+      "seconds": 28.07,
+      "log": "/private/tmp/goway-stage9-c-key-pgsmoke.log",
+      "log_sha256": "74101af38ffe9be0609a1779f9148fb9c345e915993691ff1d6ddbcfd12b9d0d"
+    },
+    {
+      "label": "catalogue",
+      "cwd": ".",
+      "command": "python3 -B tools/goway_catalogue.py",
+      "result": "PASS",
+      "seconds": 0.56,
+      "log": "/private/tmp/goway-stage9-c-key-catalogue.log",
+      "log_sha256": "8e7dcb91c59cad1a8ce2cb7500ccc0d09e1e176bb6d08e24a70caf84f07157da"
+    },
+    {
+      "label": "consumer-corrected",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test ./keyqueries -v",
+      "result": "PASS",
+      "seconds": 10.94,
+      "log": "/private/tmp/goway-stage9-c-key-consumer-corrected.log",
+      "log_sha256": "5ed80addd7a331e8d903ea0914bf7e281f71b86f3da7c069cc312ce2d26b95be"
+    },
+    {
+      "label": "consumer-vet-corrected",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go vet ./keyqueries",
+      "result": "PASS",
+      "seconds": 0.39,
+      "log": "/private/tmp/goway-stage9-c-key-consumer-vet-corrected.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "consumer-race-corrected",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -race ./keyqueries",
+      "result": "PASS",
+      "seconds": 18.67,
+      "log": "/private/tmp/goway-stage9-c-key-consumer-race-corrected.log",
+      "log_sha256": "102089406e327b954258b2ba312cb1417443518baee45d739e781558e42455ff"
+    },
+    {
+      "label": "format",
+      "cwd": ".",
+      "command": "gofmt -l database/orm/method_surface_test.go database/orm/rows/correlated_clauses.go database/orm/rows/scalar_clauses.go tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go tests/fixtures/consumer/expressionqueries/expressions_postgres_test.go tests/fixtures/consumer/expressionqueries/expressions_test.go tests/fixtures/consumer/testdata/compilefail/computed_group_owner/invalid.go tests/fixtures/consumer/testdata/compilefail/distinct_key_owner/invalid.go tests/fixtures/consumer/testdata/compilefail/distinct_predicate_owner/invalid.go tests/fixtures/consumer/testdata/compilefail/distinct_scalar_type/invalid.go tests/fixtures/consumer/testdata/compilefail/distinct_write/invalid.go tests/fixtures/consumer/testdata/compilefail/selected_distinct_owner/invalid.go tests/fixtures/consumer/testdata/compilefail/selected_group_phase/invalid.go tests/fixtures/consumer/types_test.go tests/fixtures/goway/compiler_cases_test.go tests/fixtures/goway/footprint_test.go database/orm/rows/key_clauses_test.go database/orm/rows/record_clauses.go database/orm/rows/scalar_grouping_test.go tests/fixtures/consumer/distinctqueries/clause_parity_test.go tests/fixtures/consumer/keyqueries/clause_parity_test.go tests/fixtures/goway/testdata/compilefail/key_correlated_group_owner/invalid.go tests/fixtures/goway/testdata/compilefail/key_correlated_group_phase/invalid.go tests/fixtures/goway/testdata/compilefail/key_correlated_order_owner/invalid.go tests/fixtures/goway/testdata/compilefail/key_correlated_selected_owner/invalid.go tests/fixtures/goway/testdata/compilefail/key_correlated_selected_phase/invalid.go tests/fixtures/goway/testdata/compilefail/key_correlated_wrapper/invalid.go tests/fixtures/goway/testdata/compilefail/key_value_set_owner/invalid.go tests/fixtures/goway/testdata/compilefail/key_value_set_phase/invalid.go tests/fixtures/goway/testdata/compilefail/key_value_set_type/invalid.go tests/fixtures/goway/testdata/compilefail/key_value_set_wrapper/invalid.go tests/fixtures/goway/testdata/compilefail/scalar_distinct_key_owner/invalid.go tests/fixtures/goway/testdata/compilefail/scalar_distinct_key_selected/invalid.go tests/fixtures/goway/testdata/compilefail/scalar_group_owner/invalid.go tests/fixtures/goway/testdata/compilefail/scalar_group_phase/invalid.go tests/fixtures/goway/testdata/compilefail/scalar_having_owner/invalid.go tests/fixtures/goway/testdata/compilefail/scalar_having_row_phase/invalid.go tests/fixtures/goway/testdata/compilefail/scalar_selected_distinct_owner/invalid.go tests/fixtures/goway/testdata/footprint/key_clauses/probe.go tests/fixtures/goway/testdata/footprint/result_clauses/probe.go",
+      "result": "PASS",
+      "seconds": 0.03,
+      "log": "/private/tmp/goway-stage9-c-key-format.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "docs-final",
+      "cwd": ".",
+      "command": "make docs-check",
+      "result": "PASS",
+      "seconds": 0.51,
+      "log": "/private/tmp/goway-stage9-c-key-docs-final.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "label": "diffcheck-final",
+      "cwd": ".",
+      "command": "git diff --check",
+      "result": "PASS",
+      "seconds": 0.05,
+      "log": "/private/tmp/goway-stage9-c-key-diffcheck-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "initial_failed_checks": [
+    {
+      "label": "vet",
+      "cwd": ".",
+      "command": "go vet ./database/orm/...",
+      "result": "FAIL (corrected in final checks)",
+      "seconds": 28.94,
+      "log": "/private/tmp/goway-stage9-c-key-vet.log",
+      "log_sha256": "758f54d9b73fb40d7758da4f209d918e9dff853f65e36fa72727d3c461b4d75d"
+    },
+    {
+      "label": "rows",
+      "cwd": ".",
+      "command": "go test ./database/orm/rows",
+      "result": "FAIL (corrected in final checks)",
+      "seconds": 0.34,
+      "log": "/private/tmp/goway-stage9-c-key-rows.log",
+      "log_sha256": "a73418386aacd4eec2d59045aa9eace64c7394efadbde1ce02ea5e642aaaf429"
+    },
+    {
+      "label": "race",
+      "cwd": ".",
+      "command": "go test -race ./database/orm/rows",
+      "result": "FAIL (corrected in final checks)",
+      "seconds": 0.42,
+      "log": "/private/tmp/goway-stage9-c-key-race.log",
+      "log_sha256": "a73418386aacd4eec2d59045aa9eace64c7394efadbde1ce02ea5e642aaaf429"
+    },
+    {
+      "label": "consumer",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test ./keyqueries",
+      "result": "FAIL (corrected in final checks)",
+      "seconds": 0.22,
+      "log": "/private/tmp/goway-stage9-c-key-consumer.log",
+      "log_sha256": "dbbd38560f51ac0e0c389114a05f58f424e4da2352a5bf1fe1983762b553376d"
+    },
+    {
+      "label": "consumer-vet",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go vet ./keyqueries",
+      "result": "FAIL (corrected in final checks)",
+      "seconds": 0.23,
+      "log": "/private/tmp/goway-stage9-c-key-consumer-vet.log",
+      "log_sha256": "bd5de034ca89861939c9f94cbf7870f02e7f593a730de526e42942ba2904ff12"
+    },
+    {
+      "label": "consumer-race",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -race ./keyqueries",
+      "result": "FAIL (corrected in final checks)",
+      "seconds": 0.66,
+      "log": "/private/tmp/goway-stage9-c-key-consumer-race.log",
+      "log_sha256": "dbbd38560f51ac0e0c389114a05f58f424e4da2352a5bf1fe1983762b553376d"
+    },
+    {
+      "label": "consumer-final",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test ./keyqueries",
+      "result": "FAIL (corrected in final checks)",
+      "seconds": 14.63,
+      "log": "/private/tmp/goway-stage9-c-key-consumer-final.log",
+      "log_sha256": "dcb70f0281573fdef0ba89be92141c53690b27b8b1246002b8dabe3fe1978497"
+    },
+    {
+      "label": "consumer-race-final",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -race ./keyqueries",
+      "result": "FAIL (corrected in final checks)",
+      "seconds": 28.17,
+      "log": "/private/tmp/goway-stage9-c-key-consumer-race-final.log",
+      "log_sha256": "daa374c9d7786a9f817109e1a5a73cf88d21327fb0966dc6801f8a6cd8ae30de"
+    }
+  ],
+  "corrections": [
+    "Test fixtures initially used Param on scoped Expression and WindowFor on source descriptors. Switched to selected exemplars, concrete inner scopes and typed Window values; production adapters unchanged.",
+    "The parity fixtures initially compared an explicit casted parameter with the legacy direct-literal comparison. Switched the ORM fixture to OrderRow(total).Gt(1), preserving the original legacy SQL and exact bindings."
+  ],
+  "consumer_status": "keyqueries has ORM coverage for both formerly missing clause results. Its remaining direct scalar compilation assertions await integration of lane A terminals; no replacement terminal is implemented.",
+  "source_sha256": {
+    "database/orm/rows/correlated_clauses.go": "af097be242af6299316374e1631cf2ae39d59e385237bf6463ee59667c9a38f7",
+    "database/orm/rows/record_clauses.go": "459a3d1d75ba392575d15720b915708008a3df7d3daf23849a3d98fa9881f39e",
+    "database/orm/rows/key_clauses_test.go": "90144737518440d85787cd979ec6638a8d52bc975b7d3936a4ba4b0bdc89b13c",
+    "database/orm/rows/clauses.go": "8e2c2ba31cf91f79409e31534c1a54491634b0f980f7b71b2ab589560eae51d6",
+    "database/orm/rows/scalar_clauses.go": "e790d234bc63b492983c938f9ea049702b984975b0da4dd2a4f3f37cef25f6be",
+    "database/orm/rows/README.md": "ae709e5ef56240c86eea1e6d3320704eb54270007abfd19d436d9a57b1d11bb0",
+    "database/orm/method_surface_test.go": "bcb9032c8f9c1f062cde57293dca07c3973aa7bfe7e80829b9a17095e9490792",
+    "database/orm/testdata/public-methods.txt": "e8fe0816b20135f0c99ff3d40862bf9a2b8b76a575a598e795ec928d6c9cd58c",
+    "internal/ormcore/clauses.go": "d2c8c535ecfdf593364fd875961a8cb5cfceb1bd28b139c974df3db0d414c6ba",
+    "database/query/distinct.go": "a2e1c8811a547e7c824650c12b621a9b52e62fd1cb7f91193eb09298316f91fc",
+    "tests/fixtures/consumer/keyqueries/clause_parity_test.go": "87525019cc504ae1c848c736334be642704d38f2518056d44f19e0bfc0a5ca7a",
+    "tests/fixtures/goway/compiler_cases_test.go": "dcf5f486298a4f194bb700ff69b880a9cb3875cde3086981f5cd876d8d60c207",
+    "tests/fixtures/goway/footprint_test.go": "a97770e05b1e615a8ee4eef3bbcc1216c36995dec35f17494d2cc66e2e1bd026",
+    "tests/fixtures/goway/testdata/footprint/key_clauses/probe.go": "54d9eee139d12484b8ab1ed0534fd0baba0889957be0bebd884e71f0c57be690",
+    "docs/evidence/goway-stage9-lane-c-key-clauses-report.md": "249a2bb2b2356c394e0fc35ddc24ce19a460c3fd876fca7b170a365ac095d25d",
+    "tests/fixtures/goway/testdata/compilefail/key_correlated_group_owner/invalid.go": "1d2f87063d834b434cd7b07e9401fd509971b4988af8aa308a20a2498af2cd19",
+    "tests/fixtures/goway/testdata/compilefail/key_correlated_group_phase/invalid.go": "a37591d4e5c0866cde7968e7d12c677b5e467f41c3ca6e7f8d7ef3581d12e6ce",
+    "tests/fixtures/goway/testdata/compilefail/key_correlated_selected_owner/invalid.go": "19f7ade85e5b9b9bb0568d17a6973dd405156fe88cb41fd841250dd736eff1b0",
+    "tests/fixtures/goway/testdata/compilefail/key_correlated_selected_phase/invalid.go": "30c9d5210c7bf60f03a2db9e8b98865cb0235475c126fcf12c652db5570fb929",
+    "tests/fixtures/goway/testdata/compilefail/key_correlated_order_owner/invalid.go": "ba67e7867bbd3ae872a1cd840808d2a745fa8d05050854c30ed6792a0a7532d2",
+    "tests/fixtures/goway/testdata/compilefail/key_value_set_owner/invalid.go": "3fbd894eaf238dd2caf72ca8931e91d03dcde6685e9946e0cbdea1092cff5933",
+    "tests/fixtures/goway/testdata/compilefail/key_value_set_type/invalid.go": "72fd5bce40548cceabd1e0125e809e56815413816fa7ed10686e2750a7924cbb",
+    "tests/fixtures/goway/testdata/compilefail/key_value_set_phase/invalid.go": "d9a6af2360033ee92a73b68c6eb3944143f095ec2869a9bbaff5293eb09645bb",
+    "tests/fixtures/goway/testdata/compilefail/key_correlated_wrapper/invalid.go": "72dffcf673c3fe100cfb372df1c4e40e4354ee828afd120919cb981ec362a938",
+    "tests/fixtures/goway/testdata/compilefail/key_value_set_wrapper/invalid.go": "4c0bb97aaf63006d888e2f03fb5e629624c679aca9f94d3f36ba11b43f99108a",
+    "CHANGELOG.md": "74a28993fc576fb06507749fccec4d1a157a40a3a067777f86f68b926eec83f3",
+    "tools/release/source.go": "d84fc823ad60ac0c21ba25e32e29432a78099d6efc5a36294fc5151796dd2f3d",
+    "tools/release/release_test.go": "9064b9fef31b7875ce8eb02aec24f0cd6cf76d7ed553e49406b332a1dca5afce",
+    "blueprint/00-master-architecture-and-parity.md": "5fb432b4ba66513738103597c60e9ded68be5ba60957290f61ba909c220fb881",
+    "internal/agent/gopls_acceptance_test.go": "115ec8a0ba0432c4e2b6d7f05d65fd46ab552c64804a6e5cec157836fc2b4f58",
+    "blueprint/goway-data-layer/README.md": "3d525fb51bc6b03947c71f52c3710019d5c4358a97924cdd504323f16772ec0c",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "74c8f91bcc75ff10ce573f51a20e40a8d7e6adede7e3310cc5cd9e04aa73263e",
+    "tools/goway_catalogue_test.py": "ee1e38b232eded37861cf1857dd9e854483fb7c4c65e69946431e4b6ae0afebc"
+  },
+  "integration_batch7d": {
+    "historical_source_hashes": {
+      "database/orm/rows/correlated_clauses.go": "af097be242af6299316374e1631cf2ae39d59e385237bf6463ee59667c9a38f7",
+      "database/orm/rows/record_clauses.go": "459a3d1d75ba392575d15720b915708008a3df7d3daf23849a3d98fa9881f39e",
+      "database/orm/rows/key_clauses_test.go": "90144737518440d85787cd979ec6638a8d52bc975b7d3936a4ba4b0bdc89b13c",
+      "database/orm/rows/clauses.go": "8e2c2ba31cf91f79409e31534c1a54491634b0f980f7b71b2ab589560eae51d6",
+      "database/orm/rows/scalar_clauses.go": "e790d234bc63b492983c938f9ea049702b984975b0da4dd2a4f3f37cef25f6be",
+      "database/orm/rows/README.md": "ae709e5ef56240c86eea1e6d3320704eb54270007abfd19d436d9a57b1d11bb0",
+      "database/orm/method_surface_test.go": "aed6505d28fc4ea3015ed267c66fc819e957c5c9f3c79bd2b6763c2449945e61",
+      "database/orm/testdata/public-methods.txt": "60eb414ea5658bc02b235a983465faae41a4da91c740f5d5c1a4538c7b8b0030",
+      "internal/ormcore/clauses.go": "d2c8c535ecfdf593364fd875961a8cb5cfceb1bd28b139c974df3db0d414c6ba",
+      "database/query/distinct.go": "a2e1c8811a547e7c824650c12b621a9b52e62fd1cb7f91193eb09298316f91fc",
+      "tests/fixtures/consumer/keyqueries/clause_parity_test.go": "87525019cc504ae1c848c736334be642704d38f2518056d44f19e0bfc0a5ca7a",
+      "tests/fixtures/goway/compiler_cases_test.go": "568a7d35c49dd4aea43df82f19aa44bd19c12f785832052cb9425dfbe15563f8",
+      "tests/fixtures/goway/footprint_test.go": "05e561ad49f74db7ce3afc61c766e3d3c8868f6de5c99fc8129f1b3cffbef550",
+      "tests/fixtures/goway/testdata/footprint/key_clauses/probe.go": "54d9eee139d12484b8ab1ed0534fd0baba0889957be0bebd884e71f0c57be690",
+      "docs/evidence/goway-stage9-lane-c-key-clauses-report.md": "249a2bb2b2356c394e0fc35ddc24ce19a460c3fd876fca7b170a365ac095d25d",
+      "tests/fixtures/goway/testdata/compilefail/key_correlated_group_owner/invalid.go": "1d2f87063d834b434cd7b07e9401fd509971b4988af8aa308a20a2498af2cd19",
+      "tests/fixtures/goway/testdata/compilefail/key_correlated_group_phase/invalid.go": "a37591d4e5c0866cde7968e7d12c677b5e467f41c3ca6e7f8d7ef3581d12e6ce",
+      "tests/fixtures/goway/testdata/compilefail/key_correlated_selected_owner/invalid.go": "19f7ade85e5b9b9bb0568d17a6973dd405156fe88cb41fd841250dd736eff1b0",
+      "tests/fixtures/goway/testdata/compilefail/key_correlated_selected_phase/invalid.go": "30c9d5210c7bf60f03a2db9e8b98865cb0235475c126fcf12c652db5570fb929",
+      "tests/fixtures/goway/testdata/compilefail/key_correlated_order_owner/invalid.go": "ba67e7867bbd3ae872a1cd840808d2a745fa8d05050854c30ed6792a0a7532d2",
+      "tests/fixtures/goway/testdata/compilefail/key_value_set_owner/invalid.go": "3fbd894eaf238dd2caf72ca8931e91d03dcde6685e9946e0cbdea1092cff5933",
+      "tests/fixtures/goway/testdata/compilefail/key_value_set_type/invalid.go": "72fd5bce40548cceabd1e0125e809e56815413816fa7ed10686e2750a7924cbb",
+      "tests/fixtures/goway/testdata/compilefail/key_value_set_phase/invalid.go": "d9a6af2360033ee92a73b68c6eb3944143f095ec2869a9bbaff5293eb09645bb",
+      "tests/fixtures/goway/testdata/compilefail/key_correlated_wrapper/invalid.go": "72dffcf673c3fe100cfb372df1c4e40e4354ee828afd120919cb981ec362a938",
+      "tests/fixtures/goway/testdata/compilefail/key_value_set_wrapper/invalid.go": "4c0bb97aaf63006d888e2f03fb5e629624c679aca9f94d3f36ba11b43f99108a"
+    },
+    "base_commit": "79db1cf8",
+    "status": "integrated; acceptance passed; pending lead commit",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r10",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "conflicts": {
+      "lane_a": 5,
+      "lane_b": 1,
+      "lane_c": 8,
+      "resolution": "union registries/snapshot/cases/probes; preserve cumulative evidence and newer source; merge rows documentation"
+    },
+    "catalogue": {
+      "total": 1032,
+      "ported": 576,
+      "port": 12,
+      "unaffected": 444
+    },
+    "compiler_cases": 848,
+    "footprint_probes": 140,
+    "existing_ceilings": "139 retained unchanged",
+    "release_inventory": "no new non-Go testdata; existing correlated_clauses.go and record_clauses.go already explicitly pinned; source policy unchanged",
+    "generated_outputs": "retained unchanged; no manual edits",
+    "postgres": "not run; lead-owned",
+    "commands": {
+      "go build ./...": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "build.log"
+      },
+      "python3 tools/goway_catalogue.py": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "catalogue.log"
+      },
+      "go vet ./...": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "vet.log"
+      },
+      "go test -race -timeout=20m ./database/... ./internal/... (six-package batches)": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "race.log"
+      },
+      "fixture-check consumer remainder (r10; completed vet/packages retained)": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "fixtures-r10.log"
+      },
+      "consumer fixture vet/tests": {
+        "result": "pass segmented r9/r10",
+        "logs": [
+          "fixtures.log",
+          "fixtures-r10.log"
+        ],
+        "completed_packages": 121,
+        "note": "consumer vet and first seven packages completed before interruption; remaining 114 packages passed on r10"
+      },
+      "fixture-check goway vet/tests (r10)": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "goway-r10.log"
+      },
+      "make fixture-check": {
+        "result": "pass segmented r9/r10",
+        "logs": [
+          "fixtures.log",
+          "fixtures-r10.log",
+          "goway-r10.log"
+        ],
+        "scope": "plugin_base/plugin_dep vet/tests; consumer vet and all 121 packages; goway vet and all packages, compiler cases and footprints; live PostgreSQL skipped"
+      },
+      "make generate-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "generate.log"
+      },
+      "make release-tools-check": {
+        "result": "pass after catalogue regression input correction",
+        "initial_log": "release.log",
+        "final_log": "release-final.log",
+        "python_tests": 26,
+        "correction": "preserve exact original generated-reference expressions for the five migrated negative programs; validator behavior unchanged"
+      },
+      "make typescript-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "typescript.log"
+      },
+      "make agent-smoke": {
+        "result": "pass after targeted correction",
+        "log": "agent.log",
+        "initial_passed_subtests": 493,
+        "correction": "typed-result-cursor-page expects Scope/OrderBy on ORM CursorQuery rather than the old Compile method",
+        "rerun_command": "go test -timeout=20m -count=1 -v ./internal/agent -run '^TestRealGoplsConsumer$/^typed-result-cursor-page$'",
+        "rerun_log": "agent-fixed.log",
+        "total_passing_subtests": 494
+      },
+      "real gopls corrected cursor probe": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "agent-fixed.log"
+      },
+      "make fmt-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "format.log"
+      },
+      "final editor package vet/race": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "agent-race.log"
+      },
+      "make docs-check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "docs.log"
+      },
+      "git diff --check; git diff --cached --check": {
+        "result": "pass",
+        "exit_code": 0,
+        "log": "diff-check.log"
+      }
+    },
+    "commit": "none",
+    "log_sha256": {
+      "release.log": "8fda3f7ac0d896790d80359214dbd405cdfb37bbdc79f916e39a7856c4f043e3",
+      "typescript.log": "5d304e4f07cdc8501fb2c434567ea0b85951129db5ede147536d0c11d4ec028d",
+      "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "catalogue.log": "93396c2d43f764059ed480d24c99df364af72684c04a6a6d15f39e63590454e5",
+      "apply-a.log": "1efa89bfe94e15d68b0d4c609a35d20b7e7eeffa644f4688f646faa5f3f5b6a7",
+      "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "apply-c.log": "f92417b562a710f87494c5f28f63143aef35024ff6a76856b2066b41f7dc443b",
+      "apply-b.log": "b9fa4889287fab793487b5245ff258267d09bf54285e4eef7acc6541c5422884",
+      "goway-r10.log": "fc8d761e37bacbb73326182c7bb7cbe4235951989fdcbd1891ea4702f60c0026",
+      "release-fixed.log": "ff81e3be2842ed1fa06c3142be8fe6bb8ed77d6bc456bd291dfd85801b75298e",
+      "agent-fixed.log": "7c2209ddb45f5b0dc561e8a101ea6de99e22c31ccea421865178fe78157a91f5",
+      "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+      "agent-race.log": "4a3468202241f4b10f176c5a3d0a82533b82dc7d1b6b70a1f745c13bdd8976f8",
+      "race.log": "892cb09a62ef27b3e51ea912c732ce1cefabb0cf9d1d61cc01acf0f15853745b",
+      "release-final.log": "88c1db1c609b243aa3730a739b676b94e5f0ab34dbf72b562c9084c0361781e4",
+      "fixtures.log": "d46f5b9356ce1eb11ae092473b91d43476d9976cb96bd923d770988c201c3362",
+      "agent.log": "ff66c404d6f77ae103a645a38215afdf9f79e03adbcb666e4efaed5aeed965e2",
+      "fixtures-r10.log": "78223d14b4d2c72bf71b7f564466caa8931906277b1bd231639ae2f6ecef86a5",
+      "generate.log": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+      "build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "native_tools": {
+      "gopls": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+      "node": "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+      "typescript": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js"
+    },
+    "cache_rotation": "r9 build, vet, complete database/internal race gate, plugin fixtures, consumer vet and initial consumer packages passed; interrupted fixture remainder and subsequent gates resumed on r10"
+  }
+}

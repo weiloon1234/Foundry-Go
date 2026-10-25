@@ -10,6 +10,7 @@ import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
@@ -24,14 +25,14 @@ func TestConsumerReceivesGeneratedModelAndReusesProvider(t *testing.T) {
 	}
 	user := models.User{ID: id, Status: models.StatusActive}
 	var loads atomic.Int32
-	provider := auth.DefineProvider("users", (models.User{}).FoundryReference(), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
+	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
 		loads.Add(1)
 		if key != id {
 			t.Error("wrong typed key")
 		}
 		return value.Set(user), nil
 	}, func(_ context.Context, u models.User) (bool, error) { return u.Status == models.StatusActive, nil })
-	proof, err := auth.NewProof(user.FoundryReference(), auth.Authenticated)
+	proof, err := auth.NewProof(orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +85,7 @@ func TestConsumerReceivesGeneratedModelAndReusesProvider(t *testing.T) {
 	if loads.Load() != 3 {
 		t.Fatal("consumer attribution repeated hydration")
 	}
-	identity, err := user.FoundryIdentity()
+	identity, err := orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user).Identity()
 	if err != nil {
 		t.Fatal(err)
 	}

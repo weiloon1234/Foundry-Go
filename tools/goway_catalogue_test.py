@@ -49,6 +49,11 @@ class CatalogueTests(unittest.TestCase):
             "mfa_retirement_owner": 'u.FoundryReference()',
             "recovery_reference_model": 'account.FoundryReference()',
             "revocation_reference_model": 'account.FoundryReference()',
+            "notification_payload_owner": 'user.FoundryReference()',
+            "notification_recipient_owner": 'other.FoundryReference()',
+            "session_metadata_model": '(models.User{}).FoundryReference()',
+            "token_id_model": 'user.FoundryReference()',
+            "websocket_disconnect_model": 'o.FoundryReference()',
         }
         for name in names:
             with self.subTest(case=name):

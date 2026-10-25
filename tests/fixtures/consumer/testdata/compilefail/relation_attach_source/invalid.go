@@ -2,10 +2,13 @@ package invalid
 
 import (
 	"context"
+
 	"foundry.test/consumer/linkqueries"
+
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 func invalid(db *database.DB) {
-	_, _ = linkqueries.MemberRelations().Groups.Attach(context.Background(), db, linkqueries.Group{}, linkqueries.Group{}, linkqueries.MembershipDraft{})
+	_, _ = orm.Attach(context.Background(), db, linkqueries.MemberLinks.Groups, linkqueries.Group{}, linkqueries.Group{})
 }

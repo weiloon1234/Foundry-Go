@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	sessionpg "github.com/weiloon1234/Foundry-Go/auth/session/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -36,10 +37,10 @@ func StartVerifiedSession(ctx context.Context, sessions *UserSessions, proof aut
 	return sessions.Issue(ctx, proof, session.IssueOptions{})
 }
 func ListedSessions(ctx context.Context, sessions *UserSessions, user models.User) ([]UserSession, error) {
-	return sessions.List(ctx, user.FoundryReference())
+	return sessions.List(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user))
 }
 func RevokeListedSession(ctx context.Context, sessions *UserSessions, user models.User, id session.ID[models.User]) (bool, error) {
-	return sessions.RevokeID(ctx, user.FoundryReference(), id)
+	return sessions.RevokeID(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), id)
 }
 func SessionSubject(info UserSession) model.Reference[models.User, model.ID[models.User]] {
 	return info.Subject()

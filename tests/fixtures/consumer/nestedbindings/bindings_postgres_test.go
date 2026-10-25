@@ -8,7 +8,7 @@ import (
 	n "foundry.test/consumer/nestedbindings"
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -34,17 +34,17 @@ func seed(ctx context.Context, tx *database.Tx) (fixture, error) {
 		}
 	}
 	for _, name := range []string{"Alpha", "Beta"} {
-		team, err := n.QueryTeams().Create(ctx, tx, n.TeamDraft{}.SetName(name))
+		team, err := n.TeamRecords.Insert(ctx, tx, n.TeamRecords.Name.Set(name))
 		if err != nil {
 			return f, err
 		}
 		f.teams = append(f.teams, team)
-		project, err := n.QueryProjects().Create(ctx, tx, n.ProjectDraft{}.SetTeamID(team.ID).SetSlug("shared").SetEnabled(true))
+		project, err := n.ProjectRecords.Insert(ctx, tx, n.ProjectRecords.TeamID.Set(team.ID), n.ProjectRecords.Slug.Set("shared"), n.ProjectRecords.Enabled.Set(true))
 		if err != nil {
 			return f, err
 		}
 		f.projects = append(f.projects, project)
-		task, err := n.QueryTasks().Create(ctx, tx, n.TaskDraft{}.SetProjectID(project.ID).SetSlug("same"))
+		task, err := n.TaskRecords.Insert(ctx, tx, n.TaskRecords.ProjectID.Set(project.ID), n.TaskRecords.Slug.Set("same"))
 		if err != nil {
 			return f, err
 		}
@@ -97,7 +97,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 			}
 			return url
 		}
-		if _, err := n.QueryProjects().Create(ctx, tx, n.ProjectDraft{}.SetTeamID(f.teams[0].ID).SetSlug("disabled").SetEnabled(false)); err != nil {
+		if _, err := n.ProjectRecords.Insert(ctx, tx, n.ProjectRecords.TeamID.Set(f.teams[0].ID), n.ProjectRecords.Slug.Set("disabled"), n.ProjectRecords.Enabled.Set(false)); err != nil {
 			return err
 		}
 		missing, err := model.NewID[n.Team]()
@@ -129,7 +129,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 				return errors.New("nested key escaped its parent")
 			}
 		}
-		onlyBeta, err := n.QueryProjects().Create(ctx, tx, n.ProjectDraft{}.SetTeamID(f.teams[1].ID).SetSlug("beta-only").SetEnabled(true))
+		onlyBeta, err := n.ProjectRecords.Insert(ctx, tx, n.ProjectRecords.TeamID.Set(f.teams[1].ID), n.ProjectRecords.Slug.Set("beta-only"), n.ProjectRecords.Enabled.Set(true))
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		if veto.Projects != 1 {
 			return errors.New("retrieval error changed scope behavior")
 		}
-		eager := query.RelatedUnique(n.TeamRelations().Projects.With(n.ProjectRelations().Team), n.ProjectFields().Slug)
+		eager := orm.RelatedUnique(n.TeamLinks.Projects.With(n.ProjectLinks.Team), n.ProjectRecords.Slug)
 		before := counter.Queries.Load()
 		loaded, err := eager.Find(ctx, counter, f.teams[0], "shared")
 		if err != nil {
@@ -162,16 +162,16 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		if !ok || !set || !present || team.ID != f.teams[0].ID || counter.Queries.Load()-before != 2 {
 			return errors.New("declared eager load or its accounting lost")
 		}
-		if _, err := n.QueryProjects().Delete(ctx, tx, f.projects[0].ID); err != nil {
+		if _, err := n.ProjectRecords.Delete(ctx, tx, f.projects[0].ID); err != nil {
 			return err
 		}
 		route(t, router, ctx, location(f.teams[0].ID, "shared", "same"), "", 404)
-		visible := query.RelatedUnique(n.TeamRelations().Projects.WithTrashed(), n.ProjectFields().Slug)
+		visible := orm.RelatedUnique(n.TeamLinks.Projects.WithTrashed(), n.ProjectRecords.Slug)
 		if got, err := visible.Find(ctx, tx, f.teams[0], "shared"); err != nil || !got.IsSet() {
 			return errors.New("explicit soft-delete visibility lost")
 		}
 		// A second duplicate inside the same parent fails closed, with no domain call.
-		if _, err := n.QueryProjects().Create(ctx, tx, n.ProjectDraft{}.SetTeamID(f.teams[1].ID).SetSlug("shared").SetEnabled(true)); err != nil {
+		if _, err := n.ProjectRecords.Insert(ctx, tx, n.ProjectRecords.TeamID.Set(f.teams[1].ID), n.ProjectRecords.Slug.Set("shared"), n.ProjectRecords.Enabled.Set(true)); err != nil {
 			return err
 		}
 		route(t, router, ctx, location(f.teams[1].ID, "shared", "same"), "", 500)
@@ -187,13 +187,13 @@ func TestPostgresTypedRequestAndResourcePolicyStages(t *testing.T) {
 			return err
 		}
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		provider := auth.DefineProvider("nested_teams", f.teams[0].FoundryReference(), func(_ context.Context, id model.ID[n.Team]) (value.Optional[n.Team], error) {
+		provider := auth.DefineProvider("nested_teams", orm.IdentityOf(n.TeamRecords.Table, n.TeamRecords.Key()).ReferenceOf(f.teams[0]), func(_ context.Context, id model.ID[n.Team]) (value.Optional[n.Team], error) {
 			if id == f.teams[0].ID {
 				return value.Set(f.teams[0]), nil
 			}
 			return value.Optional[n.Team]{}, nil
 		}, func(context.Context, n.Team) (bool, error) { return true, nil })
-		proof, err := auth.NewProof(f.teams[0].FoundryReference(), auth.Authenticated)
+		proof, err := auth.NewProof(orm.IdentityOf(n.TeamRecords.Table, n.TeamRecords.Key()).ReferenceOf(f.teams[0]), auth.Authenticated)
 		if err != nil {
 			return err
 		}

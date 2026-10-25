@@ -7,6 +7,7 @@ import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
@@ -32,7 +33,7 @@ func SignedOrders(endpoint OrderEndpoint, signer foundryhttp.URLSigner) SignedOr
 	return foundryhttp.SignedAuthenticated(endpoint, signer)
 }
 func OrderResource(db database.Executor) modelbinding.Resolver[OrderPath, models.Order] {
-	return modelbinding.ByKey(db, models.QueryOrders(), func(path OrderPath) model.ID[models.Order] { return path.Order })
+	return modelbinding.ByKey(db, orm.Keyed(models.Orders.Query(), models.Orders.Key()), func(path OrderPath) model.ID[models.Order] { return path.Order })
 }
 
 // BoundOrder composes subject admission and one typed resource lookup, then the

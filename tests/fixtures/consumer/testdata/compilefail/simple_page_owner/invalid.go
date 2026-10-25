@@ -2,10 +2,10 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 func wrong() {
-	p, _ := models.QueryUsers().SimplePaginate(nil, nil, query.PageRequest{})
-	var _ query.SimplePage[models.Order] = p
+	p, _ := models.Users.Query().SimplePaginate(nil, nil, orm.PageRequest{})
+	var _ orm.SimplePage[models.Order] = p
 }

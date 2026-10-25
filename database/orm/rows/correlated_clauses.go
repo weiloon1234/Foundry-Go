@@ -22,3 +22,24 @@ func DistinctOnCorrelatedScalar[O, I, V any](q CorrelatedScalar[O, I, V], keys .
 	q.core.Source = DistinctOn(Query[Correlation[O, I], struct{}]{source: q.core.Source}, keys...).source
 	return q
 }
+
+// GroupByCorrelatedScalar appends lifted row keys inside the correlated SELECT.
+// Example: rows.GroupByCorrelatedScalar(selected, expr.Group(bucket)).
+func GroupByCorrelatedScalar[O, I, V any](q CorrelatedScalar[O, I, V], keys ...expr.GroupKey[Correlation[O, I]]) CorrelatedScalar[O, I, V] {
+	q.core.Source = GroupBy(Query[Correlation[O, I], struct{}]{source: q.core.Source}, keys...).source
+	return q
+}
+
+// DistinctOnCorrelatedScalarValues accepts selected keys inside the correlated SELECT.
+// Example: rows.DistinctOnCorrelatedScalarValues(selected, count.Value().Key()).
+func DistinctOnCorrelatedScalarValues[O, I, V any](q CorrelatedScalar[O, I, V], keys ...expr.ProjectionKey[Correlation[O, I]]) CorrelatedScalar[O, I, V] {
+	q.core.Source = DistinctOnValues(Query[Correlation[O, I], struct{}]{source: q.core.Source}, keys...).source
+	return q
+}
+
+// OrderCorrelatedScalar appends row or selected ordering inside the correlated SELECT.
+// Example: rows.OrderCorrelatedScalar(selected, count.Desc()).
+func OrderCorrelatedScalar[O, I, V any](q CorrelatedScalar[O, I, V], orders ...expr.ProjectionOrder[Correlation[O, I]]) CorrelatedScalar[O, I, V] {
+	q.core.Source = recordOrders(q.core.Source, orders)
+	return q
+}

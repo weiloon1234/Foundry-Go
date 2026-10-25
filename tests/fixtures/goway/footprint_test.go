@@ -34,6 +34,8 @@ var footprintBudgets = map[string]footprintBudget{
 	"read_scalar":                   {"./testdata/footprint/read_scalar", 1165},
 	"read_record":                   {"./testdata/footprint/read_record", 1002},
 	"read_set":                      {"./testdata/footprint/read_set", 1050},
+	"key_clauses":                   {"./testdata/footprint/key_clauses", 2674},
+	"result_clauses":                {"./testdata/footprint/result_clauses", 2188},
 	"prune_registry":                {"./testdata/footprint/prune_registry", 933},
 	"transaction_joins":             {"./testdata/footprint/transaction_joins", 1835},
 	"transaction_correlation":       {"./testdata/footprint/transaction_correlation", 2908},
@@ -71,7 +73,6 @@ var footprintBudgets = map[string]footprintBudget{
 	"write_unset":                   {"./testdata/footprint/write_unset", 266},
 	"observer_counts":               {"./testdata/footprint/observer_counts", 63},
 	"source_clauses":                {"./testdata/footprint/source_clauses", 2505},
-	"result_clauses":                {"./testdata/footprint/result_clauses", 2188},
 
 	"cte_recursive": {"./testdata/footprint/cte_recursive", 1076},
 	"record_sets":   {"./testdata/footprint/record_sets", 1288},

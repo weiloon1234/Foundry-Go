@@ -5,12 +5,13 @@ import (
 	"foundry.test/consumer/authenticating"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth/session"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 func bad(ctx context.Context, sessions *authenticating.UserSessions) {
 	var info session.Info[models.Group, model.ID[models.Group]]
-	rows, _ := sessions.List(ctx, (models.User{}).FoundryReference())
+	rows, _ := sessions.List(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})))
 	info = rows[0]
 	_ = info
 }

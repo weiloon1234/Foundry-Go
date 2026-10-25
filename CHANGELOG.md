@@ -8,6 +8,17 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Migrate application/profile, pivot lifecycle, relationship-filter and correlation
+  consumers to ORM declarations. Migrate recovery, authentication and nested binding
+  consumers while retaining model-first locking and typed reconciliation outcomes.
+  Recovery uses WriteUnset to omit an unchanged revision rather than reassign it.
+- Add correlated scalar grouping, selected-key DISTINCT ON and selected ordering,
+  plus value-set DISTINCT ON, through the shared clause owners. Existing scopes,
+  window bounds and nullable codecs are retained.
+- Use ORM pagination result aliases in client contracts with explicit DTO mapping;
+  published contract bytes and TypeScript sources remain unchanged. Generated
+  coexistence and the remaining caller migrations stay at their existing barriers.
+
 - Add rows.CompileRead, PreflightRead and EachRead for ordinary scalar, record and
   set results. Complete-model iteration shares the legacy/ORM batch owner, retains
   retrieval callbacks and duplicate IDs, and preserves returned callback errors

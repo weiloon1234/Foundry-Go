@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	tokenpg "github.com/weiloon1234/Foundry-Go/auth/token/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/testkit"
@@ -49,7 +50,7 @@ func TestTokenConsumerLoginRefreshReplayAndCurrentModel(t *testing.T) {
 	var loads atomic.Int32
 	var enabled atomic.Bool
 	enabled.Store(true)
-	provider := auth.DefineProvider("users", (models.User{}).FoundryReference(), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
+	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
 		loads.Add(1)
 		if key != id {
 			return value.Optional[models.User]{}, nil
@@ -64,7 +65,7 @@ func TestTokenConsumerLoginRefreshReplayAndCurrentModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof, err := auth.NewProof(user.FoundryReference(), auth.Authenticated)
+	proof, err := auth.NewProof(orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +161,7 @@ func TestTokenConsumerLoginRefreshReplayAndCurrentModel(t *testing.T) {
 	if err != nil || len(listed) != 1 {
 		t.Fatal("reissue", err)
 	}
-	if ok, err := tokens.RevokeID(t.Context(), user.FoundryReference(), listed[0].ID()); err != nil || !ok {
+	if ok, err := tokens.RevokeID(t.Context(), orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), listed[0].ID()); err != nil || !ok {
 		t.Fatal("typed revocation", err)
 	}
 	if w := call("GET", "/profile", "", third.Access); w.Code != 401 {

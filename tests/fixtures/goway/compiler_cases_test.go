@@ -2,6 +2,22 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"notification_payload_owner", "cannot use"},
+		{"notification_recipient_owner", "cannot use"},
+		{"session_metadata_model", "cannot use"},
+		{"token_id_model", "cannot use"},
+		{"websocket_disconnect_model", "does not match inferred type"},
+		{"nested_bundle_handler", "cannot use"},
+		{"key_correlated_group_owner", "does not match"},
+		{"key_correlated_group_phase", "does not match"},
+		{"key_correlated_selected_owner", "does not match"},
+		{"key_correlated_selected_phase", "does not match"},
+		{"key_correlated_order_owner", "does not match"},
+		{"key_value_set_owner", "does not match"},
+		{"key_value_set_type", "does not match"},
+		{"key_value_set_phase", "does not match"},
+		{"key_correlated_wrapper", "does not match"},
+		{"key_value_set_wrapper", "does not match"},
 		{"auth_assurance", "cannot use"},
 		{"auth_scope_proof_owner", "cannot use"},
 		{"mfa_retirement_owner", "cannot use"},

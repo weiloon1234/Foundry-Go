@@ -25,3 +25,12 @@ func DistinctValues[V any](q ValueSetQuery[V]) ValueSetQuery[V] {
 	q.core.Direct = false
 	return q
 }
+
+// DistinctOnValueSet selects one combined value per selected-key combination.
+// Keys and ordering belong to the combined output scope, not either input SELECT.
+// Example: rows.DistinctOnValueSet(values, expr.Select(values.Value()).Key()).
+func DistinctOnValueSet[V any](q ValueSetQuery[V], keys ...expr.ProjectionKey[Set[V]]) ValueSetQuery[V] {
+	q.core.Source = DistinctOnScalarValues(SelectScalar(q, expr.Select(q.Value())), keys...).source
+	q.core.Direct = false
+	return q
+}

@@ -19,12 +19,12 @@ type Reset = passwordreset.Reset[Member, model.ID[Member]]
 type Verification = emailverification.Verification[Member, model.ID[Member]]
 
 func Members(db database.Executor) Provider {
-	return auth.DefineProvider("recovery.members", (Member{}).FoundryReference(), func(ctx context.Context, id model.ID[Member]) (value.Optional[Member], error) {
-		return QueryRecoveryMembers().Find(ctx, db, id)
+	return auth.DefineProvider("recovery.members", MemberIdentity.ReferenceOf(Member{}), func(ctx context.Context, id model.ID[Member]) (value.Optional[Member], error) {
+		return MemberRecords.Find(ctx, db, id)
 	}, func(_ context.Context, member Member) (bool, error) { return member.Enabled, nil })
 }
 func lock(ctx context.Context, tx *database.Tx, id model.ID[Member]) (value.Optional[Member], error) {
-	return QueryRecoveryMembers().ForUpdate().Find(ctx, tx, id)
+	return MemberRecords.Query().Where(MemberRecords.Key().Eq(id)).ForUpdate().First(ctx, tx)
 }
 func email(member Member) string                             { return member.Email }
 func emailRevision(member Member) challenge.Revision[Member] { return member.EmailRevision }
@@ -36,7 +36,7 @@ func NewReset(store *challenge.Store, provider Provider, hasher *password.Hasher
 	return passwordreset.New(store, provider, hasher, passwordreset.Model[Member, model.ID[Member]]{
 		Lock: lock, Email: email, EmailRevision: emailRevision, Hash: func(member Member) password.Hash { return member.Password },
 		SetPassword: func(ctx context.Context, tx *database.Tx, member Member, next password.Hash) (Member, error) {
-			return QueryRecoveryMembers().Update(ctx, tx, member.ID, MemberDraft{}.SetPassword(next))
+			return MemberRecords.Update(ctx, tx, member.ID, MemberRecords.Password.Set(next))
 		},
 		ValidatePassword: func(_ context.Context, plain password.Plaintext) error {
 			if len(plain.Secret().Reveal()) < 12 {
@@ -51,7 +51,7 @@ func NewVerification(store *challenge.Store, provider Provider) (*Verification, 
 	return emailverification.New(store, provider, emailverification.Model[Member, model.ID[Member]]{
 		Lock: lock, Email: email, EmailRevision: emailRevision, Verified: func(member Member) bool { return member.EmailVerified },
 		MarkVerified: func(ctx context.Context, tx *database.Tx, member Member) (Member, error) {
-			return QueryRecoveryMembers().Update(ctx, tx, member.ID, MemberDraft{}.SetEmailVerified(true))
+			return MemberRecords.Update(ctx, tx, member.ID, MemberRecords.EmailVerified.Set(true))
 		},
 	}, emailverification.DefaultLifetime)
 }

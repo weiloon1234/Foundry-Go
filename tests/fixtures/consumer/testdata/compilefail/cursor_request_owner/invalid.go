@@ -3,7 +3,7 @@ package invalid
 import (
 	"context"
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var invalid, _ = models.QueryUsers().CursorPaginate(context.Background(), nil, query.CursorRequest[models.Order]{Size: 2})
+var invalid, _ = orm.CursorPaginate(context.Background(), nil, models.Users.Query(), orm.CursorRequest[models.Order]{Size: 2})

@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -40,14 +41,14 @@ func NewLogin(db interface {
 }, provider Provider, hasher *password.Hasher) (*Login, error) {
 	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Member, string]{
 		Lookup: func(ctx context.Context, email string) (value.Optional[Member], error) {
-			return QueryRecoveryMembers().Where(MemberFields().Email.Eq(email)).First(ctx, db)
+			return MemberRecords.Query().Where(MemberRecords.Email.Eq(email)).First(ctx, db)
 		},
 		Lock: func(ctx context.Context, tx *database.Tx, prior Member) (value.Optional[Member], error) {
 			return lock(ctx, tx, prior.ID)
 		},
 		Hash: func(member Member) password.Hash { return member.Password },
 		Rehash: func(ctx context.Context, member Member, old, next password.Hash) (value.Optional[Member], error) {
-			updated, err := QueryRecoveryMembers().Where(MemberFields().Password.Eq(old)).Update(ctx, db, member.ID, MemberDraft{}.SetPassword(next))
+			updated, err := orm.Update(ctx, db, MemberRecords.Query().Where(MemberRecords.Password.Eq(old)), MemberRecords.Key(), member.ID, MemberRecords.Password.Set(next))
 			if errors.Is(err, database.NotFound) {
 				return value.Optional[Member]{}, nil
 			}

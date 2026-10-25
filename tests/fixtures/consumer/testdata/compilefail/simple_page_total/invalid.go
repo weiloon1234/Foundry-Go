@@ -1,5 +1,5 @@
 package invalid
 
-import "github.com/weiloon1234/Foundry-Go/database/query"
+import "github.com/weiloon1234/Foundry-Go/database/orm"
 
-var _ = query.SimplePage[int]{}.Total
+var _ = orm.SimplePage[int]{}.Total

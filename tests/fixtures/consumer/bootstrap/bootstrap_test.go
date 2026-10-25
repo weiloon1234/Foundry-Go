@@ -5,6 +5,18 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
+	"io"
+	"log/slog"
+	"mime/multipart"
+	stdhttp "net/http"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -17,17 +29,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
-	"image"
-	"image/color"
-	"image/png"
-	"io"
-	"log/slog"
-	"mime/multipart"
-	stdhttp "net/http"
-	"os"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
@@ -83,10 +84,10 @@ func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
 				return err
 			}
 		}
-		if _, err := QueryBootstrapMembers().Create(t.Context(), tx, MemberDraft{}.SetID(settings.MemberID).SetName("Ada")); err != nil {
+		if _, err := Members.Insert(t.Context(), tx, Members.ID.Set(settings.MemberID), Members.Name.Set("Ada")); err != nil {
 			return err
 		}
-		_, err := QueryBootstrapOperators().Create(t.Context(), tx, OperatorDraft{}.SetID(settings.OperatorID).SetDepartment("Operations"))
+		_, err := Operators.Insert(t.Context(), tx, Operators.ID.Set(settings.OperatorID), Operators.Department.Set("Operations"))
 		return err
 	}); err != nil {
 		t.Fatal(err)

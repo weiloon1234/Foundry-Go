@@ -5,43 +5,80 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// memberHooks owns the email revision for all ordinary generated model writes.
-// This model uses canonical stored email without a write mutator. If later
-// observers/mutators change it, Saved checks the final stored change and rolls
-// back any mutation that omitted the accompanying revision/verification reset.
+// The revision belongs to the email generation, never to submitted draft values.
+func nextEmailRevision(before value.Optional[Member], email value.Optional[string]) (value.Optional[challenge.Revision[Member]], error) {
+	old, exists := before.Get()
+	next, assigned := email.Get()
+	if !exists || (assigned && next != old.Email) {
+		revision, err := challenge.NewRevision[Member]()
+		return value.Set(revision), err
+	}
+	if old.EmailRevision.IsZero() {
+		return value.Optional[challenge.Revision[Member]]{}, fault.New(fault.Invalid, "existing email state requires a revision backfill")
+	}
+	return value.Optional[challenge.Revision[Member]]{}, nil
+}
+
+func checkEmailState(after value.Optional[Member], emailChanged, revisionChanged bool) error {
+	current, exists := after.Get()
+	if !exists || current.EmailRevision.IsZero() {
+		return fault.New(fault.Invalid, "saved email state has no revision")
+	}
+	if emailChanged && (!revisionChanged || current.EmailVerified) {
+		return fault.New(fault.Invalid, "email change requires fresh unverified state")
+	}
+	return nil
+}
+
+func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
+	return orm.Hooks[Member]{
+		Saving: func(_ context.Context, _ *database.Tx, before value.Optional[Member], draft *orm.Write[Member]) error {
+			revision, err := nextEmailRevision(before, orm.WriteGet(draft, fields.Email.Set))
+			if err != nil {
+				return err
+			}
+			if next, ok := revision.Get(); ok {
+				return orm.WriteSet(draft, fields.EmailRevision.Set(next), fields.EmailVerified.Set(false))
+			}
+			return orm.WriteUnset(draft, fields.EmailRevision.Set)
+		},
+		Saved: func(_ context.Context, _ *database.Tx, changes orm.Changes[Member]) error {
+			email, err := orm.ChangeOf(changes, fields.Email)
+			if err != nil {
+				return err
+			}
+			revision, err := orm.ChangeOf(changes, fields.EmailRevision)
+			if err != nil {
+				return err
+			}
+			return checkEmailState(changes.After(), email.Changed(), revision.Changed())
+		},
+	}
+}
+
+// memberHooks retains the generator's callback contract until its retirement.
+// Both adapters use the same revision policy; consumers register only the ORM one.
 func memberHooks() MemberHooks {
 	return MemberHooks{
 		Saving: func(_ context.Context, _ *database.Tx, before value.Optional[Member], draft *MemberDraft) error {
-			old, exists := before.Get()
-			next, assigned := draft.Email().Get()
-			if !exists || (assigned && next != old.Email) {
-				revision, err := challenge.NewRevision[Member]()
-				if err != nil {
-					return err
-				}
-				*draft = draft.SetEmailRevision(revision).SetEmailVerified(false)
-				return nil
+			revision, err := nextEmailRevision(before, draft.Email())
+			if err != nil {
+				return err
 			}
-			if old.EmailRevision.IsZero() {
-				return fault.New(fault.Invalid, "existing email state requires a revision backfill")
+			if next, ok := revision.Get(); ok {
+				*draft = draft.SetEmailRevision(next).SetEmailVerified(false)
+			} else {
+				*draft = draft.UnsetEmailRevision()
 			}
-			// Submitted draft values cannot restore an old generation.
-			*draft = draft.UnsetEmailRevision()
 			return nil
 		},
 		Saved: func(_ context.Context, _ *database.Tx, changes MemberChanges) error {
-			current, exists := changes.After().Get()
-			if !exists || current.EmailRevision.IsZero() {
-				return fault.New(fault.Invalid, "saved email state has no revision")
-			}
-			if changes.Fields().Email.Changed() && (!changes.Fields().EmailRevision.Changed() || current.EmailVerified) {
-				return fault.New(fault.Invalid, "email change requires fresh unverified state")
-			}
-			return nil
+			return checkEmailState(changes.After(), changes.Fields().Email.Changed(), changes.Fields().EmailRevision.Changed())
 		},
 	}
 }

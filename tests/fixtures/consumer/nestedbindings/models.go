@@ -4,7 +4,6 @@ package nestedbindings
 import (
 	"context"
 	"errors"
-	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -60,13 +59,5 @@ func WithTrace(ctx context.Context, trace *Trace) context.Context {
 var RetrievalFailure = errors.New("test project retrieval failed")
 
 func projectRetrieval() ProjectRetrievalHooks {
-	return ProjectRetrievalHooks{Retrieved: func(ctx context.Context, _ database.Executor, _ Project) error {
-		if trace, _ := ctx.Value(traceKey{}).(*Trace); trace != nil {
-			trace.Projects++
-			if trace.Fail {
-				return RetrievalFailure
-			}
-		}
-		return nil
-	}}
+	return ProjectRetrievalHooks{Retrieved: retrievedProject}
 }

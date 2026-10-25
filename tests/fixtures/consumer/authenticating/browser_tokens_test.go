@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	tokenpg "github.com/weiloon1234/Foundry-Go/auth/token/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -94,7 +95,7 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 		t.Fatal(err)
 	}
 	user := models.User{ID: id, Status: models.StatusActive}
-	provider := auth.DefineProvider("users", (models.User{}).FoundryReference(), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
+	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
 		if key != id {
 			return value.Optional[models.User]{}, nil
 		}
@@ -127,7 +128,7 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof, err := auth.NewProof(user.FoundryReference(), auth.Authenticated)
+	proof, err := auth.NewProof(orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}

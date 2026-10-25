@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"crypto/subtle"
+
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/http"
@@ -37,16 +38,16 @@ func withinSchema(ctx context.Context, db *database.DB, schema string, run func(
 	})
 }
 func actors(settings Settings, db *database.DB) (http.GuardBinding[Member], http.GuardBinding[Operator], error) {
-	memberProvider := auth.DefineProvider("bootstrap.members", (Member{}).FoundryReference(), func(ctx context.Context, id model.ID[Member]) (result value.Optional[Member], err error) {
-		err = withinSchema(ctx, db, settings.Schema, func(tx *database.Tx) error { result, err = QueryBootstrapMembers().Find(ctx, tx, id); return err })
+	memberProvider := auth.DefineProvider("bootstrap.members", MemberIdentity.ReferenceOf(Member{}), func(ctx context.Context, id model.ID[Member]) (result value.Optional[Member], err error) {
+		err = withinSchema(ctx, db, settings.Schema, func(tx *database.Tx) error { result, err = Members.Find(ctx, tx, id); return err })
 		return
 	}, func(context.Context, Member) (bool, error) { return true, nil })
-	operatorProvider := auth.DefineProvider("bootstrap.operators", (Operator{}).FoundryReference(), func(ctx context.Context, id model.ID[Operator]) (result value.Optional[Operator], err error) {
-		err = withinSchema(ctx, db, settings.Schema, func(tx *database.Tx) error { result, err = QueryBootstrapOperators().Find(ctx, tx, id); return err })
+	operatorProvider := auth.DefineProvider("bootstrap.operators", OperatorIdentity.ReferenceOf(Operator{}), func(ctx context.Context, id model.ID[Operator]) (result value.Optional[Operator], err error) {
+		err = withinSchema(ctx, db, settings.Schema, func(tx *database.Tx) error { result, err = Operators.Find(ctx, tx, id); return err })
 		return
 	}, func(context.Context, Operator) (bool, error) { return true, nil })
-	member := auth.DefineGuard("bootstrap.member", memberProvider, auth.DefineStrategy("member.cookie", staticProof(settings.MemberToken, (Member{ID: settings.MemberID}).FoundryReference())))
-	operator := auth.DefineGuard("bootstrap.operator", operatorProvider, auth.DefineStrategy("operator.bearer", staticProof(settings.OperatorToken, (Operator{ID: settings.OperatorID}).FoundryReference())))
+	member := auth.DefineGuard("bootstrap.member", memberProvider, auth.DefineStrategy("member.cookie", staticProof(settings.MemberToken, MemberIdentity.ReferenceOf(Member{ID: settings.MemberID}))))
+	operator := auth.DefineGuard("bootstrap.operator", operatorProvider, auth.DefineStrategy("operator.bearer", staticProof(settings.OperatorToken, OperatorIdentity.ReferenceOf(Operator{ID: settings.OperatorID}))))
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), member.Registration(), operator.Registration())
 	if err != nil {
 		return http.GuardBinding[Member]{}, http.GuardBinding[Operator]{}, err

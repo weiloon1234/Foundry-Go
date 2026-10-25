@@ -9,7 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/notifications"
@@ -41,13 +41,13 @@ func TestPublicNotificationConsumer(t *testing.T) {
 		t.Fatal(err)
 	}
 	user := models.User{ID: id, Email: "fixture@example.test", Status: models.StatusActive}
-	provider := auth.DefineProvider("users", models.User{}.FoundryReference(), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
+	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(models.User{}), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
 		if key == id {
 			return value.Set(user), nil
 		}
 		return value.Optional[models.User]{}, nil
 	}, func(_ context.Context, u models.User) (bool, error) { return u.Status == models.StatusActive, nil })
-	proof, err := auth.NewProof(user.FoundryReference(), auth.Authenticated)
+	proof, err := auth.NewProof(orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestPublicNotificationConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := notifying.Unread(scope.Context(), inbox, query.PageRequest{Number: 1, Size: 10})
+	page, err := notifying.Unread(scope.Context(), inbox, orm.Page(1, 10))
 	if err != nil || len(page.Items) != 1 {
 		t.Fatal("recipient inbox", err)
 	}

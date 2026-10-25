@@ -7,4 +7,4 @@ import (
 
 type Other struct{}
 
-var _ = recovering.MemberDraft{}.SetEmailRevision(challenge.Revision[Other]{})
+var _ = recovering.MemberRecords.EmailRevision.Set(challenge.Revision[Other]{})

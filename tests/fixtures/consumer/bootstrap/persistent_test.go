@@ -4,7 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"io"
+	"log/slog"
+	stdhttp "net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
 	profilemodel "foundry.test/consumer/profiles"
+
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/audit"
@@ -22,13 +31,6 @@ import (
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/translations"
 	"github.com/weiloon1234/Foundry-Go/value"
-	"io"
-	"log/slog"
-	stdhttp "net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
@@ -64,7 +66,7 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	s.Features.Reports.Config.Schema = schema
 	s.Features.Health.Enabled = true
 	s.Features.Observability.Enabled = true
-	app, err := application.New(s, application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).Features(func(application.Services) (application.FeatureDeclarations, error) {
+	app, err := application.New(s, application.WithTables(append(Tables(), profilemodel.Tables()...)...), application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).Features(func(application.Services) (application.FeatureDeclarations, error) {
 		return application.FeatureDeclarations{
 			Owners:       []extensions.Declaration{profilemodel.Owners.Registration()},
 			Settings:     []settings.Registration{profilemodel.PageSize.Registration()},
@@ -133,8 +135,8 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	}
 	member := Member{ID: memberID, Name: "Member"}
 	operator := Operator{ID: operatorID, Department: "Operations"}
-	mp := auth.DefineProvider("configured.members", (Member{}).FoundryReference(), func(context.Context, model.ID[Member]) (value.Optional[Member], error) { return value.Set(member), nil }, func(context.Context, Member) (bool, error) { return true, nil })
-	op := auth.DefineProvider("configured.operators", (Operator{}).FoundryReference(), func(context.Context, model.ID[Operator]) (value.Optional[Operator], error) {
+	mp := auth.DefineProvider("configured.members", MemberIdentity.ReferenceOf(Member{}), func(context.Context, model.ID[Member]) (value.Optional[Member], error) { return value.Set(member), nil }, func(context.Context, Member) (bool, error) { return true, nil })
+	op := auth.DefineProvider("configured.operators", OperatorIdentity.ReferenceOf(Operator{}), func(context.Context, model.ID[Operator]) (value.Optional[Operator], error) {
 		return value.Set(operator), nil
 	}, func(context.Context, Operator) (bool, error) { return true, nil })
 	members, err := application.NewBrowserGuard(services, "", mp, "member.cookie")
@@ -149,7 +151,7 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof, err := auth.NewProof(member.FoundryReference(), auth.Authenticated)
+	proof, err := auth.NewProof(MemberIdentity.ReferenceOf(member), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +159,7 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	operatorProof, err := auth.NewProof(operator.FoundryReference(), auth.Authenticated)
+	operatorProof, err := auth.NewProof(OperatorIdentity.ReferenceOf(operator), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +217,7 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	var profile profilemodel.Profile
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		profile, err = profilemodel.QueryProfiles().Create(ctx, tx, profilemodel.ProfileDraft{}.SetName("Configured"))
+		profile, err = profilemodel.Profiles.Insert(ctx, tx, profilemodel.Profiles.Name.Set("Configured"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -224,10 +226,10 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := profilemodel.PreferencesKey.Set(t.Context(), preferences, profile.FoundryReference(), profilemodel.Preferences{Dark: true}); err != nil {
+	if err := profilemodel.PreferencesKey.Set(t.Context(), preferences, profilemodel.ProfileIdentity.ReferenceOf(profile), profilemodel.Preferences{Dark: true}); err != nil {
 		t.Fatal(err)
 	}
-	found, err := profilemodel.PreferencesKey.Get(t.Context(), preferences, profile.FoundryReference())
+	found, err := profilemodel.PreferencesKey.Get(t.Context(), preferences, profilemodel.ProfileIdentity.ReferenceOf(profile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,10 +255,10 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := profilemodel.Label.Set(t.Context(), localized, profile.FoundryReference(), "en", "Configured label"); err != nil {
+	if err := profilemodel.Label.Set(t.Context(), localized, profilemodel.ProfileIdentity.ReferenceOf(profile), "en", "Configured label"); err != nil {
 		t.Fatal(err)
 	}
-	text, err := profilemodel.Label.Get(t.Context(), localized, profile.FoundryReference(), "en")
+	text, err := profilemodel.Label.Get(t.Context(), localized, profilemodel.ProfileIdentity.ReferenceOf(profile), "en")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,10 +317,10 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := profilemodel.Documents.Add(t.Context(), files, profile.FoundryReference(), attachments.Upload{Source: strings.NewReader("configured attachment"), OriginalName: "proof.txt"}); err != nil {
+	if _, err := profilemodel.Documents.Add(t.Context(), files, profilemodel.ProfileIdentity.ReferenceOf(profile), attachments.Upload{Source: strings.NewReader("configured attachment"), OriginalName: "proof.txt"}); err != nil {
 		t.Fatal(err)
 	}
-	documents, err := profilemodel.Documents.List(t.Context(), files, profile.FoundryReference())
+	documents, err := profilemodel.Documents.List(t.Context(), files, profilemodel.ProfileIdentity.ReferenceOf(profile))
 	if err != nil || len(documents) != 1 {
 		t.Fatal("configured attachment not listed", err)
 	}

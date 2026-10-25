@@ -21,7 +21,6 @@ type personAlias struct{}
 type purchaseAlias struct{}
 type resultAlias struct{}
 
-// TODO(stage9-lane-a): retain the ordinary result assertions until read-family streaming and clause adapters land.
 func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		people := rows.As[personAlias](models.Users.Query(), "person")

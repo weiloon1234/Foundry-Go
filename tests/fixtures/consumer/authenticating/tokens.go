@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	tokenpg "github.com/weiloon1234/Foundry-Go/auth/token/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
@@ -50,5 +51,5 @@ func UserTokenSubject(info UserTokenInfo) model.Reference[models.User, model.ID[
 	return info.Subject()
 }
 func ListUserTokens(ctx context.Context, tokens *UserTokens, user models.User) ([]UserTokenInfo, error) {
-	return tokens.List(ctx, user.FoundryReference())
+	return tokens.List(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user))
 }

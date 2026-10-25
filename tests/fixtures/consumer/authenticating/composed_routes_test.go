@@ -13,6 +13,7 @@ import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -33,13 +34,13 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 	user := models.User{ID: userID, Status: models.StatusActive}
 	order := models.Order{ID: orderID, BuyerID: userID}
 	var loads, resources atomic.Int32
-	provider := auth.DefineProvider("users", user.FoundryReference(), func(_ context.Context, id model.ID[models.User]) (value.Optional[models.User], error) {
+	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), func(_ context.Context, id model.ID[models.User]) (value.Optional[models.User], error) {
 		loads.Add(1)
 		return value.Set(user), nil
 	}, func(_ context.Context, subject models.User) (bool, error) {
 		return subject.Status == models.StatusActive, nil
 	})
-	proof, err := auth.NewProof(user.FoundryReference(), auth.Authenticated)
+	proof, err := auth.NewProof(orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +79,7 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 	bound := authenticating.BoundOrder(signed, resolver, guard, func(ctx context.Context, subject models.User, resource models.Order) error {
 		calls++
 		identity, present := attribution.FromContext(ctx).Model()
-		expected, _ := subject.FoundryIdentity()
+		expected, _ := orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(subject).Identity()
 		if !present || identity != expected || subject.ID != userID || resource.ID != orderID {
 			t.Error("consumer lost typed models or provenance")
 		}

@@ -6,6 +6,7 @@ import (
 
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/jsonqueries"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm"

@@ -17,6 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/passwordreset"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
@@ -77,7 +78,7 @@ func prepare(t *testing.T) *fixture {
 		if _, err := tx.Exec(t.Context(), `CREATE TABLE recovery_members(id uuid PRIMARY KEY,email text NOT NULL,email_revision uuid NOT NULL,password text NOT NULL,email_verified boolean NOT NULL,enabled boolean NOT NULL)`); err != nil {
 			return err
 		}
-		s.member, err = recovering.QueryRecoveryMembers().Create(t.Context(), tx, recovering.MemberDraft{}.SetEmail("member@example.test").SetPassword(old).SetEmailVerified(false).SetEnabled(true))
+		s.member, err = recovering.MemberRecords.Insert(t.Context(), tx, recovering.MemberRecords.Email.Set("member@example.test"), recovering.MemberRecords.Password.Set(old), recovering.MemberRecords.EmailVerified.Set(false), recovering.MemberRecords.Enabled.Set(true))
 		return err
 	})
 	if err != nil {
@@ -93,11 +94,11 @@ func prepare(t *testing.T) *fixture {
 	}
 	// Test schemas use a scoped provider lookup so ordinary guards can resolve
 	// current models. Recovery itself continues using the supplied tx lock.
-	provider := auth.DefineProvider("recovery.members", (recovering.Member{}).FoundryReference(), func(ctx context.Context, id model.ID[recovering.Member]) (value.Optional[recovering.Member], error) {
+	provider := auth.DefineProvider("recovery.members", recovering.MemberIdentity.ReferenceOf(recovering.Member{}), func(ctx context.Context, id model.ID[recovering.Member]) (value.Optional[recovering.Member], error) {
 		var found value.Optional[recovering.Member]
 		err := s.within(ctx, func(tx *database.Tx) error {
 			var err error
-			found, err = recovering.QueryRecoveryMembers().Find(ctx, tx, id)
+			found, err = recovering.MemberRecords.Find(ctx, tx, id)
 			return err
 		})
 		return found, err
@@ -137,7 +138,7 @@ func current(t *testing.T, s *fixture) recovering.Member {
 	var result recovering.Member
 	err := s.within(t.Context(), func(tx *database.Tx) error {
 		var err error
-		result, err = recovering.QueryRecoveryMembers().RequireFind(t.Context(), tx, s.member.ID)
+		result, err = recovering.MemberRecords.Require(t.Context(), tx, s.member.ID)
 		return err
 	})
 	if err != nil {
@@ -145,10 +146,10 @@ func current(t *testing.T, s *fixture) recovering.Member {
 	}
 	return result
 }
-func update(t *testing.T, s *fixture, draft recovering.MemberDraft) {
+func update(t *testing.T, s *fixture, draft []orm.Assignment[recovering.Member]) {
 	t.Helper()
 	if err := s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := recovering.QueryRecoveryMembers().Update(t.Context(), tx, s.member.ID, draft)
+		_, err := recovering.MemberRecords.Update(t.Context(), tx, s.member.ID, draft...)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -156,7 +157,7 @@ func update(t *testing.T, s *fixture, draft recovering.MemberDraft) {
 }
 func issue(t *testing.T, s *fixture) passwordreset.Issued[recovering.Member] {
 	t.Helper()
-	issued, err := s.reset.Issue(t.Context(), s.member.FoundryReference())
+	issued, err := s.reset.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +171,7 @@ func TestResetAndVerificationOwnPurposeAndCurrentModel(t *testing.T) {
 	if _, err := s.reset.Complete(t.Context(), first.Token(), next); !errors.Is(err, auth.Unauthenticated) {
 		t.Fatal("replaced reset token accepted", err)
 	}
-	verify, err := s.verification.Issue(t.Context(), s.member.FoundryReference())
+	verify, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +204,7 @@ func TestResetAndVerificationOwnPurposeAndCurrentModel(t *testing.T) {
 	if _, err := s.verification.Complete(t.Context(), verify.Token()); !errors.Is(err, auth.Unauthenticated) {
 		t.Fatal("verification reused", err)
 	}
-	if _, err := s.verification.Issue(t.Context(), s.member.FoundryReference()); !errors.Is(err, auth.Unauthenticated) {
+	if _, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member)); !errors.Is(err, auth.Unauthenticated) {
 		t.Fatal("verified email issued another link", err)
 	}
 }
@@ -262,21 +263,21 @@ func TestRecoveryRejectsChangedEmailPasswordAndDisabledModels(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			s := prepare(t)
 			reset := issue(t, s)
-			verification, err := s.verification.Issue(t.Context(), s.member.FoundryReference())
+			verification, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member))
 			if err != nil {
 				t.Fatal(err)
 			}
 			switch change {
 			case "email":
-				update(t, s, recovering.MemberDraft{}.SetEmail("changed@example.test"))
+				update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Email.Set("changed@example.test")})
 			case "password":
 				hash, err := s.hasher.Hash(t.Context(), plain(t, "other long password"))
 				if err != nil {
 					t.Fatal(err)
 				}
-				update(t, s, recovering.MemberDraft{}.SetPassword(hash))
+				update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Password.Set(hash)})
 			case "disabled":
-				update(t, s, recovering.MemberDraft{}.SetEnabled(false))
+				update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Enabled.Set(false)})
 			}
 			if _, err := s.reset.Complete(t.Context(), reset.Token(), plain(t, "new long password")); !errors.Is(err, auth.Unauthenticated) {
 				t.Fatal("stale reset accepted", err)
@@ -320,11 +321,11 @@ func TestConcurrentResetHasOneConsumer(t *testing.T) {
 func TestRevocationAndPruningSeparatePurposeAndBoundWork(t *testing.T) {
 	s := prepare(t)
 	reset := issue(t, s)
-	verify, err := s.verification.Issue(t.Context(), s.member.FoundryReference())
+	verify, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if removed, err := s.reset.Revoke(t.Context(), s.member.FoundryReference()); err != nil || !removed {
+	if removed, err := s.reset.Revoke(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member)); err != nil || !removed {
 		t.Fatal("revoke", err)
 	}
 	if _, err := s.reset.Complete(t.Context(), reset.Token(), plain(t, "new long password")); !errors.Is(err, auth.Unauthenticated) {
@@ -333,9 +334,9 @@ func TestRevocationAndPruningSeparatePurposeAndBoundWork(t *testing.T) {
 	if _, err := s.verification.Complete(t.Context(), verify.Token()); err != nil {
 		t.Fatal("reset revoke affected verification", err)
 	}
-	update(t, s, recovering.MemberDraft{}.SetEmailVerified(false))
+	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.EmailVerified.Set(false)})
 	_ = issue(t, s)
-	if _, err := s.verification.Issue(t.Context(), s.member.FoundryReference()); err != nil {
+	if _, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member)); err != nil {
 		t.Fatal(err)
 	}
 	s.clock.Advance(passwordreset.DefaultLifetime)

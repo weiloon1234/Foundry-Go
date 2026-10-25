@@ -4,32 +4,33 @@ import (
 	"testing"
 
 	"foundry.test/consumer/productionprofile"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 )
 
-var selectedField query.Expression[productionprofile.Record, string]
-var parameterField query.RowExpression[productionprofile.Record, int64]
-var summarizedField query.NullableOrderedAggregate[productionprofile.Record, decimal.Decimal]
+var selectedField expr.Selected[productionprofile.Record, string]
+var parameterField expr.RowExpression[productionprofile.Record, int64]
+var summarizedField expr.NullableOrderedAggregate[productionprofile.Record, decimal.Decimal]
 
 func BenchmarkProfileFieldSelection(b *testing.B) {
-	f := productionprofile.RecordFields().Name
+	f := productionprofile.Records.Name
 	b.ReportAllocs()
 	for b.Loop() {
-		selectedField = query.Value(f)
+		selectedField = expr.Select(expr.Value(f))
 	}
 }
 func BenchmarkProfileFieldParameter(b *testing.B) {
-	f := productionprofile.RecordFields().Score
+	f := productionprofile.Records.Score
 	b.ReportAllocs()
 	for b.Loop() {
-		parameterField = query.Param(f, int64(1))
+		parameterField = expr.Param(f, int64(1))
 	}
 }
 func BenchmarkProfileFieldSummary(b *testing.B) {
-	f := productionprofile.RecordFields().Score
+	f := productionprofile.Records.Score
 	b.ReportAllocs()
 	for b.Loop() {
-		summarizedField = query.Sum(f)
+		summarizedField = expr.Sum(f)
 	}
 }

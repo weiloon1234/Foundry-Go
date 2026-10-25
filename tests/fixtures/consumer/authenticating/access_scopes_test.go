@@ -9,6 +9,7 @@ import (
 	"foundry.test/consumer/authenticating"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -29,7 +30,7 @@ func TestConsumerAccessScopesKeepGeneratedModelAndResourcePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	var loads atomic.Int32
-	provider := auth.DefineProvider("users", user.FoundryReference(), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
+	provider := auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), func(_ context.Context, key model.ID[models.User]) (value.Optional[models.User], error) {
 		loads.Add(1)
 		return value.Set(user), nil
 	}, func(context.Context, models.User) (bool, error) { return true, nil })

@@ -8,7 +8,7 @@ import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/email"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/jobs"
@@ -59,11 +59,11 @@ func card(_ context.Context, _ models.User, _ notifications.DeliveryContext, inp
 }
 
 func Capture(ctx context.Context, binding OrdersBinding, user models.User, input OrderPlaced) (notifications.PendingNotification[models.User, OrderPlaced], error) {
-	return binding.Capture(ctx, user.FoundryReference(), input, notifications.ID[models.User]{})
+	return binding.Capture(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), input, notifications.ID[models.User]{})
 }
 func Enqueue(ctx context.Context, tx *database.Tx, manager *notifications.Manager, producer *jobs.Outbox, pending notifications.PendingNotification[models.User, OrderPlaced]) (outbox.ID[notifications.DeliveryRequest], error) {
 	return pending.Enqueue(ctx, tx, manager, Delivery, producer)
 }
-func Unread(ctx context.Context, inbox notifications.Inbox[models.User, model.ID[models.User]], page query.PageRequest) (query.Page[notifications.Record[models.User]], error) {
+func Unread(ctx context.Context, inbox notifications.Inbox[models.User, model.ID[models.User]], page orm.PageRequest) (orm.PageResult[notifications.Record[models.User]], error) {
 	return inbox.List(ctx, page, true)
 }

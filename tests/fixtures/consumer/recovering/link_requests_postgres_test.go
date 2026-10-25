@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/emailverification"
 	"github.com/weiloon1234/Foundry-Go/auth/passwordreset"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
@@ -45,12 +46,12 @@ func requestLookup(s *fixture) recovering.RecipientLookup {
 	return func(ctx context.Context, email string) (value.Optional[model.Reference[recovering.Member, model.ID[recovering.Member]]], error) {
 		var result value.Optional[model.Reference[recovering.Member, model.ID[recovering.Member]]]
 		err := s.within(ctx, func(tx *database.Tx) error {
-			found, err := recovering.QueryRecoveryMembers().Where(recovering.MemberFields().Email.Eq(email)).First(ctx, tx)
+			found, err := recovering.MemberRecords.Query().Where(recovering.MemberRecords.Email.Eq(email)).First(ctx, tx)
 			if err != nil {
 				return err
 			}
 			if member, ok := found.Get(); ok {
-				result = value.Set(member.FoundryReference())
+				result = value.Set(recovering.MemberIdentity.ReferenceOf(member))
 			}
 			return nil
 		})
@@ -73,7 +74,7 @@ func TestPostgresRecoveryLinkRequestsUseCommittedAddressAndQuota(t *testing.T) {
 		// current stored email, and delivery must use that committed snapshot.
 		if found.IsSet() {
 			err = s.within(ctx, func(tx *database.Tx) error {
-				_, err := recovering.QueryRecoveryMembers().Update(ctx, tx, s.member.ID, recovering.MemberDraft{}.SetEmail("current@example.test"))
+				_, err := recovering.MemberRecords.Update(ctx, tx, s.member.ID, recovering.MemberRecords.Email.Set("current@example.test"))
 				return err
 			})
 		}
@@ -174,7 +175,7 @@ func TestPostgresRecoveryRequestHTTPHasUniformAcknowledgements(t *testing.T) {
 	if invalid.Code != 422 || sent != 3 {
 		t.Fatal("invalid email reached lookup", invalid.Code)
 	}
-	update(t, s, recovering.MemberDraft{}.SetEnabled(false))
+	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Enabled.Set(false)})
 	disabled := recoveryHTTP(router, "POST", "https", paths[1], `{"email":"member@example.test"}`, "https://app.test")
 	settle()
 	if disabled.Code != 204 || sent != 3 {
