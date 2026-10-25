@@ -1,33 +1,25 @@
 package expr
 
 import (
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// JSONKind identifies JSON shape; JSONNull is a present JSON null, distinct from SQL NULL.
-// Example: expr.JSONType(document).Eq(expr.JSONObject).
-type JSONKind string
+// JSONKind is the shared JSON shape identity; JSON null remains distinct from SQL NULL.
+type JSONKind = database.JSONKind
 
 const (
-	// JSONObject denotes an object. Example: kind.Eq(expr.JSONObject).
-	JSONObject JSONKind = "object"
-	// JSONArray denotes an array. Example: kind.Eq(expr.JSONArray).
-	JSONArray JSONKind = "array"
-	// JSONString denotes a string. Example: kind.Eq(expr.JSONString).
-	JSONString JSONKind = "string"
-	// JSONNumber denotes a number. Example: kind.Eq(expr.JSONNumber).
-	JSONNumber JSONKind = "number"
-	// JSONBoolean denotes a boolean. Example: kind.Eq(expr.JSONBoolean).
-	JSONBoolean JSONKind = "boolean"
-	// JSONNull denotes a present JSON null. Example: kind.Eq(expr.JSONNull).
-	JSONNull JSONKind = "null"
+	JSONObject  = database.JSONObject
+	JSONArray   = database.JSONArray
+	JSONString  = database.JSONString
+	JSONNumber  = database.JSONNumber
+	JSONBoolean = database.JSONBoolean
+	JSONNull    = database.JSONNull
 )
 
-// Validate rejects unknown kinds. Example: expr.JSONObject.Validate().
-func (k JSONKind) Validate() error { return querycore.ValidateJSONKind(string(k)) }
 func jsonKindCodec() codec.Codec[JSONKind] {
 	return codec.String[JSONKind]().Validated(JSONKind.Validate)
 }

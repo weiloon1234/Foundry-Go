@@ -12,7 +12,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -178,17 +177,16 @@ func TestInvalidDistinctNeverExecutes(t *testing.T) {
 	}
 }
 
-// TODO(stage9-lane-a): migrate this assertion when complete-record streaming lands.
 func TestPostgresDistinctRecordStreaming(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
-		people := query.As[personAlias](models.QueryUsers(), "person")
-		orders := query.As[purchaseAlias](models.QueryOrders(), "purchase")
-		p, o := models.UserFieldsAt(people.Scope()), models.OrderFieldsAt(orders.Scope())
-		joined := query.InnerJoin(people, orders, query.On(p.ID, o.BuyerID))
-		scope := query.LeftScope(joined, people.Scope())
-		unique := query.SelectRecord(joined, scope).OrderBy(models.UserFieldsAt(scope).Email.Asc()).Distinct()
+		people := rows.As[personAlias](models.Users.Query(), "person")
+		orders := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
+		p, o := rows.Scope(people), rows.Scope(orders)
+		joined := rows.InnerJoin(people, orders, rows.On(expr.At(p, models.Users.ID), expr.At(o, models.Orders.BuyerID)))
+		scope := rows.LeftScope(joined, p)
+		unique := rows.DistinctRecord(rows.SelectRecord(joined, scope).OrderBy(expr.At(scope, models.Users.Email).Asc()))
 		var streamed []models.User
-		if err := unique.Each(t.Context(), tx, func(u models.User) error { streamed = append(streamed, u); return nil }); err != nil || !reflect.DeepEqual(streamed, users[:2]) {
+		if err := rows.EachRead(t.Context(), tx, unique, func(u models.User) error { streamed = append(streamed, u); return nil }); err != nil || !reflect.DeepEqual(streamed, users[:2]) {
 			t.Fatal("distinct stream changed rows", err)
 		}
 		return nil

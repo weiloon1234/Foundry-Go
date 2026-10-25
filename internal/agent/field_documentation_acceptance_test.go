@@ -48,7 +48,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		{"orm-row-selection", "reporting/members.go", "rows.MapSelected(MemberRows.", "Name", "/reporting/rows.go", []string{"Display name selected for the member report"}},
 		{"extension-descriptor", "articles/loading_postgres_test.go", "s.x.", "Title", "/articles/tables.go", []string{"localized article heading shown to readers", "keeps its locale input and owner", "ArticleSlots.Title.Rule"}},
 		{"changes-field", "mutatorqueries/changes_postgres_test.go", "orm.ChangeOf(changes, q.", "Email", "/mutatorqueries/orm.go", []string{"delivery address.", "stored values", "MutateEmail"}},
-		{"json-property", "jsonqueries/path_postgres_test.go", "prefs.", "Theme", "/jsonqueries/document_foundry.gen.go", []string{"reader appearance", "omitted uses the application default"}},
+		{"json-property", "jsonqueries/path_postgres_test.go", "expr.JSONProperty(prefs, jsonqueries.", "Theme", "/jsonqueries/tables.go", []string{"reader appearance", "omitted uses the application default"}},
 	} {
 		t.Run(probe.name, func(t *testing.T) {
 			parallelRealGopls(t)

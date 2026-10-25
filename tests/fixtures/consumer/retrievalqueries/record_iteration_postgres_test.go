@@ -8,30 +8,34 @@ import (
 
 	"foundry.test/consumer/retrievalqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
 type selectedMember struct{}
 
-func TestPostgresLegacyCompleteRecordIterationClosesBoundedBatches(t *testing.T) {
-	db, stats, namespace := retrievalApplication(t, true)
+func TestPostgresCompleteRecordIterationClosesBoundedBatches(t *testing.T) {
+	db, stats, namespace := retrievalApp(t)
 	err := inSchema(t.Context(), db, namespace, func(tx *database.Tx) error {
-		q := retrievalqueries.QueryRetrievalMembers()
-		f := retrievalqueries.MemberFields()
+		q := retrievalqueries.Members.Query()
+		f := retrievalqueries.Members
 		for i := range query.DefaultChunkSize + 3 {
-			if _, err := q.Create(t.Context(), tx, retrievalqueries.MemberDraft{}.SetName(fmt.Sprintf("stream %03d", i))); err != nil {
+			if _, err := retrievalqueries.Members.Insert(t.Context(), tx, f.Name.Set(fmt.Sprintf("stream %03d", i))); err != nil {
 				return err
 			}
 		}
 		base := q.Where(f.Name.Like("stream %"))
-		alias := query.As[selectedMember](query.CTE("iteration_members", base), "selected")
-		af := retrievalqueries.MemberFieldsAt(alias.Scope())
-		record := query.SelectRecord(alias, alias.Scope()).OrderBy(af.Name.Asc()).Offset(1).Limit(query.DefaultChunkSize + 1)
+		alias := rows.AsRecord[selectedMember](rows.CTE("iteration_members", rows.ModelRecord(base)), "selected")
+		name := expr.At(rows.Scope(alias), f.Name)
+		record := rows.SelectRecord(alias, rows.Scope(alias)).OrderBy(name.Asc()).Offset(1).Limit(query.DefaultChunkSize + 1)
 		for _, test := range []struct {
 			name string
 			run  func(context.Context, database.Executor, func(retrievalqueries.Member) error) error
 		}{
-			{"complete-cte-record", record.Each},
+			{"complete-cte-record", func(ctx context.Context, ex database.Executor, yield func(retrievalqueries.Member) error) error {
+				return rows.EachRead(ctx, ex, record, yield)
+			}},
 		} {
 			for _, stopEarly := range []bool{false, true} {
 				var trace retrievalqueries.Trace

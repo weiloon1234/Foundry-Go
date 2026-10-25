@@ -8,13 +8,13 @@ import (
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-func TestPostgresGeneratedRelations(t *testing.T) {
+func TestPostgresORMRelations(t *testing.T) {
 	db := pgtest.Open(t)
 	namespace := pgtest.Namespace(t, db)
 	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
@@ -31,30 +31,31 @@ func TestPostgresGeneratedRelations(t *testing.T) {
 		}
 		var users []models.User
 		for i := 0; i < 4; i++ {
-			draft := models.UserDraft{}.SetEmail("fixture").SetAge(i + 20).SetStatus(models.StatusActive).SetLevel(models.LevelBasic)
+			memberStatus := models.StatusActive
 			if i == 1 {
-				draft = draft.SetStatus(models.StatusDisabled)
+				memberStatus = models.StatusDisabled
 			}
+			draft := []orm.Assignment[models.User]{models.Users.Email.Set("fixture"), models.Users.Age.Set(i + 20), models.Users.Status.Set(memberStatus), models.Users.Level.Set(models.LevelBasic)}
 			if i == 1 || i == 2 {
-				draft = draft.SetIntroducerID(users[0].ID)
+				draft = append(draft, models.Users.IntroducerID.Set(users[0].ID))
 			}
 			if i == 3 {
-				draft = draft.SetIntroducerID(users[1].ID)
+				draft = append(draft, models.Users.IntroducerID.Set(users[1].ID))
 			}
-			user, err := models.QueryUsers().Create(t.Context(), tx, draft)
+			user, err := models.Users.Insert(t.Context(), tx, draft...)
 			if err != nil {
 				return err
 			}
 			users = append(users, user)
 		}
 		for i, buyer := range []model.ID[models.User]{users[0].ID, users[0].ID, users[1].ID} {
-			if _, err := models.QueryOrders().Create(t.Context(), tx, models.OrderDraft{}.SetBuyerID(buyer).SetTotalCents(int64(i+1))); err != nil {
+			if _, err := models.Orders.Insert(t.Context(), tx, models.Orders.BuyerID.Set(buyer), models.Orders.TotalCents.Set(int64(i+1))); err != nil {
 				return err
 			}
 		}
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		base := models.QueryUsers().OrderBy(models.UserFields().Age.Asc())
-		loaded, err := base.With(models.UserRelations().Introducer).All(t.Context(), counter)
+		base := models.Users.Query().OrderBy(models.Users.Age.Asc())
+		loaded, err := base.With(models.UserLinks.Introducer).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}
@@ -84,23 +85,23 @@ func TestPostgresGeneratedRelations(t *testing.T) {
 			}
 		}
 		counter.Queries.Store(0)
-		if _, err := models.QueryUsers().With(models.UserRelations().Introducer).LoadMissing(t.Context(), counter, loaded); err != nil {
+		if _, err := orm.LoadMissingFrom(t.Context(), counter, models.Users.Query().With(models.UserLinks.Introducer), loaded); err != nil {
 			return err
 		}
 		if counter.Queries.Load() != 0 {
 			t.Error("LoadMissing queried already loaded/empty slots")
 		}
 		counter.Queries.Store(0)
-		if _, err := models.QueryUsers().With(models.UserRelations().Introducer).Load(t.Context(), counter, []models.User{users[1], users[1]}); err != nil {
+		if _, err := orm.LoadFrom(t.Context(), counter, models.Users.Query().With(models.UserLinks.Introducer), []models.User{users[1], users[1]}); err != nil {
 			return err
 		}
 		if counter.Queries.Load() != 1 {
 			t.Error("duplicate parent keys were not batched")
 		}
-		limits := query.DefaultRelationLimits()
+		limits := orm.DefaultRelationLimits()
 		limits.BatchSize = 2
 		counter.Queries.Store(0)
-		collections, err := base.WithRelationLimits(limits).With(models.UserRelations().Orders.OrderBy(models.OrderFields().TotalCents.Desc())).All(t.Context(), counter)
+		collections, err := orm.WithRelationLimits(base, limits).With(models.UserLinks.Orders.OrderBy(models.Orders.TotalCents.Desc())).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}
@@ -127,7 +128,7 @@ func TestPostgresGeneratedRelations(t *testing.T) {
 			}
 		}
 		counter.Queries.Store(0)
-		nested, err := base.With(models.UserRelations().Introducer.With(models.UserRelations().Introducer)).All(t.Context(), counter)
+		nested, err := base.With(models.UserLinks.Introducer.With(models.UserLinks.Introducer)).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}
@@ -141,7 +142,7 @@ func TestPostgresGeneratedRelations(t *testing.T) {
 		if !ok || g.ID != users[0].ID {
 			t.Error("nested self-relation lost target")
 		}
-		referrals, err := base.With(models.UserRelations().Referrals).All(t.Context(), tx)
+		referrals, err := base.With(models.UserLinks.Referrals).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -151,17 +152,17 @@ func TestPostgresGeneratedRelations(t *testing.T) {
 				t.Error("nullable inverse key attached wrong referrals")
 			}
 		}
-		scoped, err := base.With(models.UserRelations().Introducer.Where(models.UserFields().Status.Eq(models.StatusActive))).All(t.Context(), tx)
+		scoped, err := base.With(models.UserLinks.Introducer.Where(models.Users.Status.Eq(models.StatusActive))).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
 		if parent, _ := scoped[3].Introducer.Get(); parent.IsSet() {
 			t.Error("related query ignored explicit scope")
 		}
-		if result, err := base.With(models.UserRelations().SingleOrder).All(t.Context(), tx); !errors.Is(err, database.TooManyRows) || result != nil {
+		if result, err := base.With(models.UserLinks.SingleOrder).All(t.Context(), tx); !errors.Is(err, database.TooManyRows) || result != nil {
 			t.Error("has-one selected an arbitrary duplicate")
 		}
-		one, err := base.With(models.UserRelations().SingleOrder.Where(models.OrderFields().TotalCents.Gt(1))).All(t.Context(), tx)
+		one, err := base.With(models.UserLinks.SingleOrder.Where(models.Orders.TotalCents.Gt(1))).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -169,29 +170,29 @@ func TestPostgresGeneratedRelations(t *testing.T) {
 			t.Error("scoped has-one did not load")
 		}
 		counter.Queries.Store(0)
-		badDepth := models.UserRelations().Introducer.With(models.UserRelations().Introducer)
+		badDepth := models.UserLinks.Introducer.With(models.UserLinks.Introducer)
 		limits.MaxDepth = 1
-		if _, err := base.WithRelationLimits(limits).With(badDepth).All(t.Context(), counter); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.WithRelationLimits(base, limits).With(badDepth).All(t.Context(), counter); !errors.Is(err, fault.Invalid) {
 			t.Error("depth bound ignored")
 		}
-		if _, err := base.With(models.UserRelations().Introducer, models.UserRelations().Introducer).All(t.Context(), counter); !errors.Is(err, fault.Invalid) {
+		if _, err := base.With(models.UserLinks.Introducer, models.UserLinks.Introducer).All(t.Context(), counter); !errors.Is(err, fault.Invalid) {
 			t.Error("duplicate slot accepted")
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		if _, err := base.With(models.UserRelations().Introducer).All(ctx, counter); !errors.Is(err, context.Canceled) {
+		if _, err := base.With(models.UserLinks.Introducer).All(ctx, counter); !errors.Is(err, context.Canceled) {
 			t.Error("canceled eager query executed")
 		}
 		if counter.Queries.Load() != 0 {
 			t.Error("invalid graph reached parent SQL")
 		}
-		limits = query.DefaultRelationLimits()
+		limits = orm.DefaultRelationLimits()
 		limits.MaxRows = 1
-		if result, err := base.WithRelationLimits(limits).With(models.UserRelations().Introducer).All(t.Context(), tx); !errors.Is(err, fault.Invalid) || result != nil {
+		if result, err := orm.WithRelationLimits(base, limits).With(models.UserLinks.Introducer).All(t.Context(), tx); !errors.Is(err, fault.Invalid) || result != nil {
 			t.Error("row budget returned partial models")
 		}
 		// Failure after an earlier branch loaded must not mutate supplied parents.
-		if result, err := base.With(models.UserRelations().Introducer, models.UserRelations().SingleOrder).Load(t.Context(), tx, users); !errors.Is(err, database.TooManyRows) || result != nil {
+		if result, err := orm.LoadFrom(t.Context(), tx, base.With(models.UserLinks.Introducer, models.UserLinks.SingleOrder), users); !errors.Is(err, database.TooManyRows) || result != nil {
 			t.Error("multi-branch failure published a partial load")
 		}
 		for _, user := range users {
@@ -199,22 +200,22 @@ func TestPostgresGeneratedRelations(t *testing.T) {
 				t.Error("failed Load mutated its source")
 			}
 		}
-		limits = query.DefaultRelationLimits()
+		limits = orm.DefaultRelationLimits()
 		limits.MaxRows = 3
-		if result, err := models.QueryUsers().WithRelationLimits(limits).With(models.UserRelations().Orders).Load(t.Context(), tx, []models.User{users[0], users[0]}); !errors.Is(err, fault.Invalid) || result != nil {
+		if result, err := orm.LoadFrom(t.Context(), tx, orm.WithRelationLimits(models.Users.Query(), limits).With(models.UserLinks.Orders), []models.User{users[0], users[0]}); !errors.Is(err, fault.Invalid) || result != nil {
 			t.Error("duplicate parent expansion bypassed the relation budget")
 		}
 		for _, code := range []models.CountryCode{"MY", "SG"} {
-			if _, err := models.QueryCountries().Create(t.Context(), tx, models.CountryDraft{}.SetCode(code).SetName(string(code))); err != nil {
+			if _, err := models.Countries.Insert(t.Context(), tx, models.Countries.Code.Set(code), models.Countries.Name.Set(string(code))); err != nil {
 				return err
 			}
 		}
 		for _, code := range []models.LocationCode{"KL", "JB"} {
-			if _, err := models.QueryLocations().Create(t.Context(), tx, models.LocationDraft{}.SetCode(code).SetCountryCode("MY")); err != nil {
+			if _, err := models.Locations.Insert(t.Context(), tx, models.Locations.Code.Set(code), models.Locations.CountryCode.Set("MY")); err != nil {
 				return err
 			}
 		}
-		countries, err := models.QueryCountries().OrderBy(models.CountryFields().Code.Asc()).With(models.CountryRelations().Locations.With(models.LocationRelations().Country)).All(t.Context(), tx)
+		countries, err := models.Countries.Query().OrderBy(models.Countries.Code.Asc()).With(models.CountryLinks.Locations.With(models.LocationLinks.Country)).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}

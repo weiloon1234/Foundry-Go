@@ -1,0 +1,106 @@
+package rows
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
+	m := declareMembers()
+	base := CursorFor(ModelRecord(m.Query().Where(m.ID.Ne(0)).OrderBy(m.ID.Desc()).Limit(8).Offset(1)))
+	id := expr.At(base.Scope(), m.ID)
+	valid := base.UniqueBy(expr.Group(id))
+	s, err := CompileCursor(valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(s.SQL(), "LIMIT") != 1 || !strings.Contains(s.SQL(), `ORDER BY "foundry_cursor"."id" ASC`) {
+		t.Fatal("compile added a page or lost canonical order", s.SQL())
+	}
+	if err := PreflightCursor(t.Context(), valid); err != nil {
+		t.Fatal(err)
+	}
+	if err := PreflightCursor(nil, valid); !errors.Is(err, fault.Invalid) {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := PreflightCursor(ctx, valid); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	foreign := declareMembers()
+	for _, bad := range []CursorQuery[member]{
+		{}, base, base.UniqueBy(expr.Group(id), expr.Group(id)),
+		base.UniqueBy(expr.Group(expr.Select(id).Param(1))),
+		base.UniqueBy(expr.Group(expr.At(base.Scope(), foreign.ID))),
+		valid.OrderBy(expr.Negate(id).Asc()),
+		valid.OrderBy(id.Asc().NullsLast()),
+	} {
+		if _, err := CompileCursor(bad); !errors.Is(err, fault.Invalid) {
+			t.Fatal("invalid cursor compiled", err)
+		}
+		if err := PreflightCursor(t.Context(), bad); !errors.Is(err, fault.Invalid) {
+			t.Fatal("invalid cursor preflight succeeded", err)
+		}
+	}
+	again, err := CompileCursor(valid)
+	if err != nil || again.SQL() != s.SQL() {
+		t.Fatal("validation mutated cursor", err)
+	}
+	scalar := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Select(expr.Value(m.Nickname)))))
+	scalar = scalar.UniqueBy(scalar.Key())
+	if _, err := CompileValueCursor(scalar); err != nil {
+		t.Fatal(err)
+	}
+	if err := PreflightValueCursor(t.Context(), scalar); err != nil {
+		t.Fatal(err)
+	}
+	if err := PreflightValueCursor(nil, scalar); !errors.Is(err, fault.Invalid) {
+		t.Fatal(err)
+	}
+	if err := PreflightValueCursor(ctx, scalar); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	badScalar := scalar.UniqueBy(expr.Group(scalar.Value().Param(value.Null[string]())))
+	if _, err := CompileValueCursor(badScalar); !errors.Is(err, fault.Invalid) {
+		t.Fatal(err)
+	}
+	if err := PreflightValueCursor(t.Context(), badScalar); !errors.Is(err, fault.Invalid) {
+		t.Fatal(err)
+	}
+}
+
+func TestCursorPreflightUsesCurrentScopeContext(t *testing.T) {
+	m := orm.Define("members", func(b orm.Builder[member], m *member) members {
+		table := orm.TableOf(b, &m.ID)
+		return members{table, orm.PrimaryOf(b, table.Key()), orm.TextOf(b, &m.Name), orm.NullableTextOf(b, &m.Nickname)}
+	}, orm.WithGlobalScopes(func(d members) []orm.GlobalScope[member] {
+		return []orm.GlobalScope[member]{orm.Scope(d.Table, "tenant", func(ctx context.Context) (orm.Predicate[member], error) {
+			id, ok := ctx.Value(reportTenantKey{}).(int64)
+			if !ok {
+				return orm.Predicate[member]{}, errors.New("missing tenant")
+			}
+			return d.ID.Eq(id), nil
+		})}
+	}))
+	bound := context.WithValue(t.Context(), reportTenantKey{}, int64(1))
+	cursor := CursorFor(ModelRecord(orm.WithScopeContext(m.Query(), bound)))
+	cursor = cursor.UniqueBy(expr.Group(expr.At(cursor.Scope(), m.ID)))
+	statement, err := CompileCursor(cursor)
+	if err != nil || statement.Arguments()[0] != int64(1) {
+		t.Fatal(statement, err)
+	}
+	if err := PreflightCursor(context.WithValue(t.Context(), reportTenantKey{}, int64(2)), cursor); err != nil {
+		t.Fatal(err)
+	}
+	if err := PreflightCursor(t.Context(), cursor); err == nil {
+		t.Fatal("cursor preflight inherited stale context")
+	}
+}

@@ -444,3 +444,10 @@ The adapter retains correlated references and uses the same owner validation as
 exact nullability. Use existing `OrderBy`/`Where` adapters to rank and filter models,
 and `rows.WithValue` to read a complete model alongside the value. See the
 [complete model and computed value recipe](../rows/records.md).
+
+Computed relation ordering uses `relation.OrderBy(expr.RelationOrder(relation,
+expr.Negate(expr.Value(Orders.Total)).Asc()))`. For pivot fields, use
+`relation.OrderByPivot(expr.RelationPivotOrder(relation, order))`. Both adapters
+validate the relation's actual source/target metadata and the field declaration;
+pivot ordering additionally validates the bound pivot. These row-phase adapters
+preserve NULL placement and binding order and reject selected/window orders.

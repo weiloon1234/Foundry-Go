@@ -152,11 +152,11 @@ The [chunk acceptance](chunkqueries/chunks_postgres_test.go) checks bounded offs
 
 The [upsert acceptance](upsertqueries/upserts_postgres_test.go) covers generated single/batch upserts, composite and named conflict targets, defaults, typed values/NULLs, skipped rows, retained UUIDs, concurrent writers, reserved target names, duplicate-target rollback and failed batch hydration. [Conflict calculations](upsertqueries/calculations_postgres_test.go) add generated stored/proposed field scopes, exact decimals, nullable values, trigger/default behavior, scalar and correlated assignments, CTE dependencies and rollback after scalar cardinality errors. [Index targets](upsertqueries/index_targets_postgres_test.go) exercise typed expressions and partial predicates under generic prepared plans, static quoted constants, conditional updates and unmatched index errors. Negative compiler cases preserve destination, scope, value, nullability and row/selected-phase rules. Gopls inspects generated methods, conflict scopes, typed assignment construction and index declarations.
 
-The [relation declarations](models/relations.go) use generated Go fields to connect typed keys. [PostgreSQL relation acceptance](model_relations_postgres_test.go) verifies batched/nested self-relations, nullable inverse keys, loaded states, scopes, cardinality, natural keys and query/resource bounds. The catalog model also targets a generated model in another package. Compiler failures cover wrong relation keys, owners, targets and scoped predicates.
+The [relation declarations](models/orm_relations.go) use handwritten ORM handles to connect typed keys. [PostgreSQL relation acceptance](model_relations_postgres_test.go) verifies batched/nested self-relations, nullable inverse keys, loaded states, scopes, cardinality, natural keys and query/resource bounds. The catalog model also targets a concrete model in another package. Compiler failures cover wrong relation keys, owners, targets and scoped predicates.
 
 The [many-to-many acceptance](model_through_postgres_test.go) loads concrete [membership pivots](models/membership.go) beside each group and self-referencing friendship targets. It verifies combined target/pivot ordering, distinct duplicate edges, nullable keys, separate scopes, nested target/pivot relations, query counts, loaded states, ambiguous joins and failed pivot hydration. Compiler assertions reject incompatible pivot keys, owners, scopes, ordering and payloads.
 
-The [aggregate declarations](models/aggregates.go) and [PostgreSQL aggregate acceptance](model_aggregates_postgres_test.go) cover generated computed slots, exact sums beyond int64, fractional averages, nullable decimal/float summaries, text extrema, scoped pivot aggregates, distinct targets, nested loading and failure budgets. Aggregate compiler assertions reject wrong owners/results/nullability and numeric operations on non-numeric fields.
+The [aggregate declarations](models/orm_relations.go) and [PostgreSQL aggregate acceptance](model_aggregates_postgres_test.go) cover typed computed slots, exact sums beyond int64, fractional averages, nullable decimal/float summaries, text extrema, scoped pivot aggregates, distinct targets, nested loading and failure budgets. Aggregate compiler assertions reject wrong owners/results/nullability and numeric operations on non-numeric fields.
 
 The [projection declarations](reports/projections.go) and [projection acceptance](projectionqueries/projections_postgres_test.go) verify partial reads into complete separate records, grouped/scalar exact summaries, imported enums, nullable promotion, result-window counting, mapping validation, cancellation and failed decoding. Typed HAVING filters, aggregate ranking and empty/NULL group conditions exercise the shared compiler. Negative fixtures check ownership, value/nullability types, row/group predicate separation and the absence of model writes on projections. Real gopls resolves generated selection definitions in the reports package and inspects typed aggregate condition methods.
 
@@ -352,9 +352,10 @@ assignment-list probe named `model_assignments` in the budget catalogue. The
 other three probe bodies and ceilings are unchanged. Historical values remain in
 [the frozen evidence](../../../docs/evidence/goway-stage9-d4-legacy-footprint.json).
 
-The root relation, pivot and aggregate PostgreSQL tests still use the legacy API:
-they need custom limits for loading existing parents, which `orm.Load` and
-`orm.LoadMissing` do not yet accept. Their assertions remain intact. Generated
+The root relation, pivot and aggregate PostgreSQL tests use ORM declarations.
+`orm.LoadFrom` and `orm.LoadMissingFrom` carry custom relation limits from their
+query when loading existing parents. Statement counts, duplicate-parent budgets,
+cardinality failures and atomic publication assertions remain intact. Generated
 model directives and ownership manifests remain until the lead's final barrier.
 
 The existing `make typescript-check` wiring still selects both real client and

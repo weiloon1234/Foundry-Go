@@ -5,17 +5,17 @@ import (
 	"testing"
 
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 )
 
-// TODO(stage9-lane-a): port these direct scalar Compile assertions when that terminal lands.
 func TestTypedConditionalSQL(t *testing.T) {
-	u := models.UserFields()
-	display := query.Coalesce(u.Nickname, u.Email)
-	choice := query.When(u.Age.Gt(20), query.Param(u.Email, "older"))
-	label := choice.When(u.Age.Eq(20), u.Email).Else(query.Param(u.Email, "unknown"))
-	statement, err := query.SelectValue(models.QueryUsers().Where(display.Ne("")), label.Value()).OrderBy(label.Asc()).Compile()
+	u := models.Users
+	display := expr.Coalesce(expr.Value(u.Nickname), expr.Value(u.Email))
+	choice := expr.When(expr.ModelPredicate(u.Age.Gt(20)), expr.Param(u.Email, "older"))
+	label := choice.When(expr.ModelPredicate(u.Age.Eq(20)), expr.Value(u.Email)).Else(expr.Param(u.Email, "unknown"))
+	statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(expr.Where(models.Users.Query(), display.Ne(""))), label.Value()), label.Asc())))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,15 +24,15 @@ func TestTypedConditionalSQL(t *testing.T) {
 			t.Fatal("missing computed SQL", want, statement.SQL())
 		}
 	}
-	orders := models.QueryOrders()
-	total := query.Sum(models.OrderFields().TotalCents)
-	computed := query.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())
-	if _, err := query.SelectValue(orders, computed).Compile(); err != nil {
+	orders := models.Orders.Query()
+	total := expr.Sum(models.Orders.TotalCents)
+	computed := expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(orders), computed))); err != nil {
 		t.Fatal(err)
 	}
-	count := query.Count[models.Order]()
-	category := query.WhenValue(count.Gt(1), count.Param(2).Value()).Else(count.Param(1).Value())
-	if _, err := query.SelectValue(orders, category).Compile(); err != nil {
+	count := expr.Count[models.Order]()
+	category := expr.WhenValue(count.Gt(1), count.Param(2).Value()).Else(count.Param(1).Value())
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(orders), category))); err != nil {
 		t.Fatal(err)
 	}
 }

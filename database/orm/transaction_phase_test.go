@@ -63,7 +63,6 @@ var allowedPhaseConversions = map[string]string{
 	"expr.DateUnit <-> query.TimestampUnit":                                    "Scalar enum values grant no query capability; destination operations validate their domain.",
 	"expr.JSONKind <-> orm.MorphName":                                          "Scalar names grant no query capability and retain destination name/codec validation.",
 	"expr.JSONKind <-> query.GlobalScopeName":                                  "Scalar names grant no query capability and retain destination name/codec validation.",
-	"expr.JSONKind <-> query.JSONKind":                                         "Scalar names grant no query capability and retain destination name/codec validation.",
 	"expr.JSONKind <-> query.MorphName":                                        "Scalar names grant no query capability and retain destination name/codec validation.",
 	"expr.LocalResolution <-> expr.TimestampUnit":                              "Scalar enum values grant no query capability; destination operations validate their domain.",
 	"expr.LocalResolution <-> query.DateUnit":                                  "Scalar enum values grant no query capability; destination operations validate their domain.",

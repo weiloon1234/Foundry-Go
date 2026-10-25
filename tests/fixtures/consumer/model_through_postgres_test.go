@@ -9,13 +9,12 @@ import (
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
-	"github.com/weiloon1234/Foundry-Go/database/relation"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-func TestPostgresGeneratedManyToMany(t *testing.T) {
+func TestPostgresORMManyToMany(t *testing.T) {
 	db := pgtest.Open(t)
 	namespace := pgtest.Namespace(t, db)
 	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
@@ -32,11 +31,12 @@ func TestPostgresGeneratedManyToMany(t *testing.T) {
 		}
 		var users []models.User
 		for i := range 4 {
-			draft := models.UserDraft{}.SetEmail("through-fixture").SetAge(20 + i).SetStatus(models.StatusActive).SetLevel(models.LevelBasic)
+			memberStatus := models.StatusActive
 			if i == 1 {
-				draft = draft.SetStatus(models.StatusDisabled)
+				memberStatus = models.StatusDisabled
 			}
-			user, err := models.QueryUsers().Create(t.Context(), tx, draft)
+			draft := []orm.Assignment[models.User]{models.Users.Email.Set("through-fixture"), models.Users.Age.Set(20 + i), models.Users.Status.Set(memberStatus), models.Users.Level.Set(models.LevelBasic)}
+			user, err := models.Users.Insert(t.Context(), tx, draft...)
 			if err != nil {
 				return err
 			}
@@ -47,7 +47,7 @@ func TestPostgresGeneratedManyToMany(t *testing.T) {
 			if i == 2 {
 				name = "third"
 			}
-			if _, err := models.QueryGroups().Create(t.Context(), tx, models.GroupDraft{}.SetCode(code).SetName(name).SetOwnerID(users[i].ID)); err != nil {
+			if _, err := models.Groups.Insert(t.Context(), tx, models.Groups.Code.Set(code), models.Groups.Name.Set(name), models.Groups.OwnerID.Set(users[i].ID)); err != nil {
 				return err
 			}
 		}
@@ -60,19 +60,19 @@ func TestPostgresGeneratedManyToMany(t *testing.T) {
 			{"a", 0, "a", 2}, {"b", 0, "b", 1}, {"c", 0, "a", 1}, {"d", 1, "a", 3}, {"e", 2, "c", 1},
 			{"null", 0, "", 1}, {"orphan", 0, "missing", 1},
 		} {
-			draft := models.MembershipDraft{}.SetID(edge.id).SetUserID(users[edge.owner].ID).SetLookup("same").SetPriority(edge.priority).SetLevel(models.LevelBasic).SetInviterID(users[1].ID)
+			draft := []orm.Assignment[models.Membership]{models.Memberships.ID.Set(edge.id), models.Memberships.UserID.Set(users[edge.owner].ID), models.Memberships.Lookup.Set("same"), models.Memberships.Priority.Set(edge.priority), models.Memberships.Level.Set(models.LevelBasic), models.Memberships.InviterID.Set(users[1].ID)}
 			if edge.group != "" {
-				draft = draft.SetGroupCode(edge.group)
+				draft = append(draft, models.Memberships.GroupCode.Set(edge.group))
 			}
-			if _, err := models.QueryMemberships().Create(t.Context(), tx, draft); err != nil {
+			if _, err := models.Memberships.Insert(t.Context(), tx, draft...); err != nil {
 				return err
 			}
 		}
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		limits := query.DefaultRelationLimits()
+		limits := orm.DefaultRelationLimits()
 		limits.BatchSize = 2
-		groups := models.UserRelations().Groups.OrderByPivot(models.MembershipFields().Priority.Asc()).OrderBy(models.GroupFields().Code.Desc())
-		base := models.QueryUsers().OrderBy(models.UserFields().Age.Asc()).WithRelationLimits(limits)
+		groups := models.UserLinks.Groups.OrderByPivot(models.Memberships.Priority.Asc()).OrderBy(models.Groups.Code.Desc())
+		base := orm.WithRelationLimits(models.Users.Query().OrderBy(models.Users.Age.Asc()), limits)
 		loaded, err := base.With(groups).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -97,14 +97,14 @@ func TestPostgresGeneratedManyToMany(t *testing.T) {
 			t.Error("target or nullable pivot hydration incorrect")
 		}
 		counter.Queries.Store(0)
-		if _, err := base.With(groups).LoadMissing(t.Context(), counter, loaded); err != nil {
+		if _, err := orm.LoadMissingFrom(t.Context(), counter, base.With(groups), loaded); err != nil {
 			return err
 		}
 		if counter.Queries.Load() != 0 {
 			t.Error("LoadMissing repeated loaded many-to-many queries")
 		}
 		counter.Queries.Store(0)
-		duplicates, err := base.With(groups).Load(t.Context(), counter, []models.User{users[0], users[0]})
+		duplicates, err := orm.LoadFrom(t.Context(), counter, base.With(groups), []models.User{users[0], users[0]})
 		if err != nil {
 			return err
 		}
@@ -119,7 +119,7 @@ func TestPostgresGeneratedManyToMany(t *testing.T) {
 		}
 
 		counter.Queries.Store(0)
-		nested := groups.With(models.GroupRelations().Owner.Where(models.UserFields().Status.Eq(models.StatusActive))).WithPivot(models.MembershipRelations().Inviter)
+		nested := groups.With(models.GroupLinks.Owner.Where(models.Users.Status.Eq(models.StatusActive))).WithPivot(models.MembershipLinks.Inviter)
 		loaded, err = base.With(nested).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -134,7 +134,7 @@ func TestPostgresGeneratedManyToMany(t *testing.T) {
 		if !ownerLoaded || owner.IsSet() || !inviterLoaded || !inviterPresent || inviterModel.ID != users[1].ID {
 			t.Error("target/pivot nested scopes or loaded states incorrect")
 		}
-		filtered, err := base.With(groups.Where(models.GroupFields().Code.Eq("a")).WherePivot(models.MembershipFields().Priority.Gt(1))).All(t.Context(), counter)
+		filtered, err := base.With(groups.Where(models.Groups.Code.Eq("a")).WherePivot(models.Memberships.Priority.Gt(1))).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}
@@ -143,11 +143,11 @@ func TestPostgresGeneratedManyToMany(t *testing.T) {
 		}
 
 		for _, link := range []struct{ from, to int }{{0, 1}, {0, 2}, {1, 0}} {
-			if _, err := models.QueryFriendships().Create(t.Context(), tx, models.FriendshipDraft{}.SetFromID(users[link.from].ID).SetToID(users[link.to].ID).SetNote("friend")); err != nil {
+			if _, err := models.Friendships.Insert(t.Context(), tx, models.Friendships.FromID.Set(users[link.from].ID), models.Friendships.ToID.Set(users[link.to].ID), models.Friendships.Note.Set("friend")); err != nil {
 				return err
 			}
 		}
-		friends := models.UserRelations().Friends.Where(models.UserFields().Status.Eq(models.StatusActive)).OrderBy(models.UserFields().Age.Asc())
+		friends := models.UserLinks.Friends.Where(models.Users.Status.Eq(models.StatusActive)).OrderBy(models.Users.Age.Asc())
 		self, err := base.With(friends.With(friends)).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -175,15 +175,15 @@ func membershipIDs(user models.User) []string {
 	return ids
 }
 
-func assertThroughFailures(t *testing.T, tx *database.Tx, counter *queryfixture.QueryCounter, base models.UserQuery, groups query.ThroughRelation[models.User, models.Group, models.Membership], users []models.User) error {
+func assertThroughFailures(t *testing.T, tx *database.Tx, counter *queryfixture.QueryCounter, base orm.Query[models.User], groups orm.ThroughRelation[models.User, models.Group, models.Membership], users []models.User) error {
 	t.Helper()
 	for _, test := range []struct {
 		cap     int
 		parents []models.User
 	}{{2, users}, {5, []models.User{users[0]}}, {6, []models.User{users[0], users[0]}}} {
-		limits := query.DefaultRelationLimits()
+		limits := orm.DefaultRelationLimits()
 		limits.MaxRows = test.cap
-		result, err := base.WithRelationLimits(limits).With(groups).Load(t.Context(), counter, test.parents)
+		result, err := orm.LoadFrom(t.Context(), counter, orm.WithRelationLimits(base, limits).With(groups), test.parents)
 		if !errors.Is(err, fault.Invalid) || result != nil {
 			t.Error("many-to-many shared row/attachment bound ignored")
 		}
@@ -191,25 +191,18 @@ func assertThroughFailures(t *testing.T, tx *database.Tx, counter *queryfixture.
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	counter.Queries.Store(0)
-	if result, err := base.With(groups).Load(ctx, counter, users); !errors.Is(err, context.Canceled) || result != nil || counter.Queries.Load() != 0 {
+	if result, err := orm.LoadFrom(ctx, counter, base.With(groups), users); !errors.Is(err, context.Canceled) || result != nil || counter.Queries.Load() != 0 {
 		t.Error("canceled many-to-many performed I/O")
 	}
-	limits := query.DefaultRelationLimits()
+	limits := orm.DefaultRelationLimits()
 	limits.MaxDepth = 1
-	if result, err := base.WithRelationLimits(limits).With(groups.WithPivot(models.MembershipRelations().Inviter)).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || result != nil || counter.Queries.Load() != 0 {
+	if result, err := orm.WithRelationLimits(base, limits).With(groups.WithPivot(models.MembershipLinks.Inviter)).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || result != nil || counter.Queries.Load() != 0 {
 		t.Error("nested pivot depth was not checked before root query")
 	}
 	// A declared alternate key need not be unique in the physical schema. A
 	// pivot that joins two targets must fail instead of selecting an arbitrary one.
-	ambiguous := query.ManyToMany(models.UserFields().ID, models.MembershipFields().UserID, models.MembershipFields().Lookup, models.GroupFields().Name).
-		Bind("Groups", models.QueryUsers().Query, models.QueryGroups().Query, models.QueryMemberships().Query,
-			func(m models.User) relation.Through[models.Group, models.Membership] { return m.Groups },
-			func(m models.User, loaded relation.Through[models.Group, models.Membership]) models.User {
-				m.Groups = loaded
-				return m
-			}).
-		WherePivot(models.MembershipFields().ID.Eq("a"))
-	if result, err := base.With(ambiguous).Load(t.Context(), counter, users); !errors.Is(err, database.TooManyRows) || result != nil {
+	ambiguous := orm.ManyToManyOf(models.Users.Groups, models.Users.ID, models.Memberships.UserID, models.Memberships.Lookup, models.Groups.Name).WherePivot(models.Memberships.ID.Eq("a"))
+	if result, err := orm.LoadFrom(t.Context(), counter, base.With(ambiguous), users); !errors.Is(err, database.TooManyRows) || result != nil {
 		t.Error("ambiguous pivot join did not reject duplicate target rows")
 	}
 	// Invalid stored enum data in the second model decoder discards the target
@@ -217,7 +210,7 @@ func assertThroughFailures(t *testing.T, tx *database.Tx, counter *queryfixture.
 	if _, err := tx.Exec(t.Context(), `UPDATE memberships SET level = 255 WHERE id = $1`, "a"); err != nil {
 		return err
 	}
-	if result, err := base.With(models.UserRelations().Friends, groups).Load(t.Context(), counter, users); err == nil || result != nil {
+	if result, err := orm.LoadFrom(t.Context(), counter, base.With(models.UserLinks.Friends, groups), users); err == nil || result != nil {
 		t.Error("failed pivot hydration published partial parents")
 	}
 	for _, user := range users {
@@ -225,7 +218,7 @@ func assertThroughFailures(t *testing.T, tx *database.Tx, counter *queryfixture.
 			t.Error("failed branch mutated caller values")
 		}
 	}
-	if _, err := models.QueryGroups().Count(t.Context(), counter); err != nil {
+	if _, err := models.Groups.Query().Count(t.Context(), counter); err != nil {
 		return err
 	}
 	return nil

@@ -2,6 +2,19 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"relation_expression_order_target", "does not match"},
+		{"relation_expression_order_phase", "does not match"},
+		{"relation_expression_pivot_target", "does not match"},
+		{"cursor_compile_transaction", "does not match"},
+		{"cursor_compile_promoted", "does not match"},
+
+		{"derived_aggregate_selected", "does not match"},
+		{"derived_aggregate_nullable", "does not satisfy"},
+		{"derived_aggregate_foreign_scope", "does not match"},
+		{"derived_aggregate_promoted", "does not match"},
+		{"record_distinct_on_foreign_scope", "does not match"},
+		{"record_distinct_on_selected_phase", "does not match"},
+
 		{"notification_payload_owner", "cannot use"},
 		{"notification_recipient_owner", "cannot use"},
 		{"session_metadata_model", "cannot use"},

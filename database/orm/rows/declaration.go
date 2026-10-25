@@ -28,13 +28,14 @@ type rowCore struct {
 	check   func() error
 }
 type fieldCore struct {
-	sensitive bool
-	cursor    func(any, unsafe.Pointer) (driver.Value, error)
-	owner     *rowCore
-	column    querycore.ProjectionColumn
-	offset    uintptr
-	scan      func(unsafe.Pointer) any
-	check     func() error
+	aggregateInput bool
+	sensitive      bool
+	cursor         func(any, unsafe.Pointer) (driver.Value, error)
+	owner          *rowCore
+	column         querycore.ProjectionColumn
+	offset         uintptr
+	scan           func(unsafe.Pointer) any
+	check          func() error
 }
 type declaration struct {
 	core     *rowCore
@@ -205,6 +206,11 @@ func bindField[R, V any](b Builder[R], ptr *V, c codec.Codec[V]) Field[R, V] {
 	if err := c.Validate(); err != nil {
 		d.errors = append(d.errors, fmt.Errorf("row %s: invalid codec; use a kind constructor or FieldOf with orm.Codec(...): %w", field.Name, err))
 	}
+	switch c.ParameterType() {
+	case codec.TypeInteger, codec.TypeFloat, codec.TypeDecimal, codec.TypeText,
+		codec.TypeDate, codec.TypeTime, codec.TypeLocalDateTime, codec.TypeDateTime, codec.TypeInterval:
+		f.aggregateInput = true
+	}
 	f.column = querycore.ProjectionColumn{Sensitive: c.SensitiveValues(), Name: name, Typ: reflect.TypeFor[V](), Nullable: value.IsNullableType[V]()}
 	f.sensitive = c.SensitiveValues()
 	f.cursor = func(raw any, base unsafe.Pointer) (driver.Value, error) {
@@ -220,7 +226,7 @@ func bindField[R, V any](b Builder[R], ptr *V, c codec.Codec[V]) Field[R, V] {
 	f.scan = func(base unsafe.Pointer) any { return c.Scan((*V)(unsafe.Add(base, f.offset))) }
 	d.fields[index] = f
 	return Field[R, V]{core: f, column: func() ormcore.Column[V] {
-		return ormcore.Column[V]{Text: c.ParameterType() == codec.TypeText, Sensitive: c.SensitiveValues(), Kind: c.ParameterType(), Nullable: f.column.Nullable, Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: f.owner.err}
+		return ormcore.Column[V]{AggregateInput: f.aggregateInput, Text: c.ParameterType() == codec.TypeText, Sensitive: c.SensitiveValues(), Kind: c.ParameterType(), Nullable: f.column.Nullable, Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: f.owner.err}
 	}}
 }
 func seal(d *declaration) {

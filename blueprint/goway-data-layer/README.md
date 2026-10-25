@@ -101,11 +101,14 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 9 B upsert | Shared-model conflict/upsert consumer cutover | Done pending the lead’s commit; 24 consumer negatives migrated with existing catalogue dispositions. |
 | 9 C results | Scalar GROUP BY/HAVING/DISTINCT/DISTINCT ON and record/set DISTINCT | Done pending the lead’s commit; eight package functions, runtime consumers and seven new Go-way negatives. |
 | 9 A2 | Application/profile, pivot lifecycle, relationship-filter and correlation consumers | Done pending the lead’s commit; ordinary ORM tables and thin application registration. Office relation-value callers are integrated in batch 7e. |
-| 9 D3/client | Recovery/authentication, nested binding, service and client-contract consumers | Done pending the lead’s commit; six Stage 7 catalogue rows ported. Pagination clause callers remain partial. |
+| 9 D3/client | Recovery/authentication, nested binding, service and client-contract consumers | Done pending the lead’s commit; six Stage 7 catalogue rows ported. Pagination clause callers are completed in batch 7f. |
 | 9 C keys | Correlated grouping/selected ordering and value-set selected DISTINCT ON | Done pending the lead’s commit; four package functions, ten negatives and one bounded probe. |
 | 9 A3/load | Office annotations, tooling/HTTP models and existing-parent relation limits | Done pending the lead’s commit; RelatedValue/WithValue and LoadFrom/LoadMissingFrom retain shared hydration and batching. |
-| 9 D matching/D4 | Extension matching, attachment batches, diagnostic redaction and root/editor harness | Done pending the lead’s commit; lane B’s nestedbindings remains authoritative. Legacy relation oracle migration and generated cleanup remain open. |
-| 9 | Migrate consumer fixtures and compiler catalogue | In progress; B1–B3/upsert, A read/filter/A2, D1/D3/client contracts and C source/result/key clauses integrated. Remaining dependent cutovers and generated-output cleanup stay open. |
+| 9 D matching/D4 | Extension matching, attachment batches, diagnostic redaction and root/editor harness | Done pending the lead’s commit; lane B’s nestedbindings remains authoritative. Root relation callers are migrated in batch 7f; generated cleanup remains open. |
+| 9 B reads | Retrieval streaming, scalar/DTO/complete-record pagination and safe draft-helper cleanup | Done pending the lead’s commit; EachRead retains callback identity and bounded iteration. |
+| 9 C terminals | Derived aggregates, JSONKind, complete-record DISTINCT ON, relation ordering and cursor inspection | Done pending the lead’s commit; scalarqueries/keyqueries and dependent query consumers migrated. |
+| 9 D loaders | Root direct, joined and aggregate relation tests; editor probes | Done pending the lead’s commit; LoadFrom/LoadMissingFrom preserve query-owned budgets and all existing assertions. |
+| 9 | Migrate consumer fixtures and compiler catalogue | In progress; batch 7f closes read/pagination/query-family and root relation callers. Eleven catalogue rows and generated-output cleanup remain open. |
 | 10 | Guides, examples and editor coverage | Planned |
 | 11 | Full acceptance and whole-app performance evidence | Planned |
 | 12 | Consumer application migration, separately authorized | Later |
@@ -1903,3 +1906,39 @@ Current integration commands and source hashes are recorded with the
 [office evidence](../../docs/evidence/goway-stage9-office.json),
 [loader evidence](../../docs/evidence/goway-stage9-load-query.json), and
 [root/redaction evidence](../../docs/evidence/goway-stage9-d4.json).
+
+## Integration batch 7f: read terminals and relation loaders
+
+Retrieval CTE streaming uses `rows.EachRead`, retaining closed-row callback windows,
+limits, cancellation and callback error identity. Cursor and page consumers use
+shared read/result contracts; complete-record DISTINCT ON preserves input ordering,
+including unselected input columns. The unused audit-query `Domain` and `EmailAfter`
+helpers are removed; generated drafts, directives and ownership manifests remain.
+
+Derived fields use the 18 `expr` row-aggregate functions with existing ordered
+capabilities and nullable codecs. `database.JSONKind` is the single owner, with
+compatible aliases in `query` and `expr`. `rows.DistinctOnRecord`,
+`expr.RelationOrder`/`RelationPivotOrder`, and cursor compile/preflight functions
+reuse the shared compiler and validation paths. They add no Query/Table methods.
+Scalar, key, JSON, frame, recursive, set and report consumers retain their result,
+SQL, ordering and error assertions; explicit old/new SQL parity oracles remain.
+
+The three root relation suites now call `orm.LoadFrom`/`LoadMissingFrom`, retaining
+statement counts, nullability, cardinality, cancellation, no partial publication
+and parent immutability assertions. Editor probes follow the migrated APIs and
+handwritten schemas, including lifted nullable fields and typed JSON paths.
+
+The integrated registry has 872 compiler cases and 150 footprint probes. All 146
+inherited ceilings are unchanged. The four added ceilings are 3,229 functions for
+derived aggregates, 2,383 for record DISTINCT ON, 4,867 for relation expression
+ordering and 2,062 for cursor terminals. The catalogue retains 1,032 rows: 577
+ported, 11 pending and 444 unaffected; this batch adds native negatives rather
+than claiming those remaining catalogue rules are ported.
+
+Stage 9 remains in progress. Generated cleanup, retained automatic-mutator producers
+and the remaining catalogue rows require their own migration. Current command
+results and source hashes are recorded in the integrated
+[read evidence](../../docs/evidence/goway-stage9-b-read-completion.json),
+[derived-field evidence](../../docs/evidence/goway-stage9-lane-c-derived-gaps.json),
+[terminal evidence](../../docs/evidence/goway-stage9-lane-c-final-gaps.json) and
+[loader evidence](../../docs/evidence/goway-stage9-d4-loaders.json).

@@ -1,0 +1,38 @@
+package framequeries_test
+
+import (
+	"foundry.test/consumer/framequeries"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/database/query"
+	"reflect"
+	"testing"
+)
+
+func TestNamedFrameSQLParity(t *testing.T) {
+	f := framequeries.Samples
+	if err := orm.Check(f); err != nil {
+		t.Fatal(err)
+	}
+	q := f.Query()
+	window := expr.WindowFor(rows.ModelScope(q)).PartitionBy(expr.Group(expr.Param(f.ID, 1))).OrderBy(expr.Value(f.ID).Asc()).RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
+	selected := rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(q), expr.Over(expr.Count[framequeries.Sample](), window)), expr.RowNumber(window).Asc()))
+	if err := rows.PreflightRead(t.Context(), selected); err != nil {
+		t.Fatal(err)
+	}
+	got, err := rows.CompileRead(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := framequeries.QueryFrameSamples()
+	of := framequeries.SampleFields()
+	ow := query.WindowFor(old).PartitionBy(query.Param(of.ID, 1).Group()).OrderBy(of.ID.Asc()).RowsBetween(query.Preceding(1), query.CurrentRow()).Named("framed")
+	want, err := query.SelectValue(old, query.Count[framequeries.Sample]().Over(ow)).OrderBy(query.RowNumber(ow).Asc()).Compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) {
+		t.Fatalf("named frame SQL parity\n%s\n%s\n%v\n%v", got.SQL(), want.SQL(), got.Arguments(), want.Arguments())
+	}
+}

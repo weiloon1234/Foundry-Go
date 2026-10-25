@@ -5,55 +5,58 @@ import (
 
 	"foundry.test/consumer/jsonqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 func TestPostgresGeneratedJSONPaths(t *testing.T) {
 	runJSON(t, func(tx *database.Tx, original []jsonqueries.Document) error {
-		q, f := jsonqueries.QueryJsonDocuments(), jsonqueries.DocumentFields()
-		prefs := f.Settings.Properties()
+		q, f := jsonqueries.Documents.Query(), jsonqueries.Documents
+		prefs := expr.JSONRoot(expr.Value(f.Settings))
 		price, err := decimal.Parse("9007199254740993.123456789")
 		if err != nil {
 			return err
 		}
 		profile := jsonqueries.Profile{Name: "Ada", Age: 42, Scores: []int64{1, 7}, Attributes: map[int]string{2: "two"}, Next: &jsonqueries.Profile{Name: "next"}, Quoted: "quoted\"value", Odd: "safe'_%"}
 		updated := document(t, jsonqueries.Preferences{Theme: value.Set("dark"), Labels: value.Set(map[string]string{"lang": "en"}), Quota: value.Set(price), Profile: value.Set(profile)})
-		if _, err := q.Update(t.Context(), tx, 1, jsonqueries.DocumentDraft{}.SetSettings(updated)); err != nil {
+		if _, err := orm.Update(t.Context(), tx, q, f.Key(), 1, f.Settings.Set(updated)); err != nil {
 			return err
 		}
-		p := prefs.Profile.Properties()
+		p := expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.ProfileField))
 		for _, test := range []struct {
-			predicate query.Predicate[jsonqueries.Document]
+			predicate expr.Predicate[jsonqueries.Document]
 			want      int64
 		}{
-			{prefs.Theme.Scalar().Like("%ark%"), 2},
-			{prefs.Theme.Scalar().Contains("ar"), 2},
-			{prefs.Theme.IsMissing(), 1},
-			{prefs.Labels.At("lang").Scalar().Eq("en"), 1},
-			{prefs.Quota.Scalar().Eq(price), 1},
-			{f.Tags.At(-1).Scalar().Eq("go"), 2},
-			{f.Tags.At(100).IsMissing(), 3},
-			{p.Name.Scalar().Eq("Ada"), 1},
-			{p.Age.Scalar().Eq(42), 1},
-			{p.Nickname.IsJSONNull(), 1},
-			{p.Nickname.Exists(), 1},
-			{p.Nickname.IsMissing(), 2},
-			{p.Nickname.Scalar().IsNull(), 3},
-			{p.Scores.At(-1).Scalar().Gt(6), 1},
-			{p.Attributes.At(2).Scalar().Eq("two"), 1},
-			{p.Next.Properties().Name.Scalar().Eq("next"), 1},
-			{p.Quoted.Scalar().Eq("quoted\"value"), 1},
-			{p.Odd.Scalar().Eq("safe'_%"), 1},
-			{f.Backup.Properties().Theme.Scalar().Eq("dark"), 1},
+			{expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.Theme)), codec.String[string]()).Like("%ark%"), 2},
+			{expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.Theme)), codec.String[string]()).Contains("ar"), 2},
+			{expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.Theme)).IsMissing(), 1},
+			{expr.JSONTextScalar(expr.JSONMapKey(expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.LabelsField)), "lang"), codec.String[string]()).Eq("en"), 1},
+			{expr.JSONOrderedScalar(expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.QuotaField)), codec.Decimal()).Eq(price), 1},
+			{expr.JSONTextScalar(expr.JSONIndex(expr.JSONRoot(expr.Value(f.Tags)), -1), codec.String[string]()).Eq("go"), 2},
+			{expr.JSONIndex(expr.JSONRoot(expr.Value(f.Tags)), 100).IsMissing(), 3},
+			{expr.JSONTextScalar(expr.JSONProperty(p, jsonqueries.NameField), codec.String[string]()).Eq("Ada"), 1},
+			{expr.JSONOrderedScalar(expr.JSONProperty(p, jsonqueries.AgeField), codec.Signed[int64]()).Eq(42), 1},
+			{expr.JSONProperty(p, jsonqueries.NicknameField).IsJSONNull(), 1},
+			{expr.JSONProperty(p, jsonqueries.NicknameField).Exists(), 1},
+			{expr.JSONProperty(p, jsonqueries.NicknameField).IsMissing(), 2},
+			{expr.JSONTextScalar(expr.JSONPointer(expr.JSONProperty(p, jsonqueries.NicknameField)), codec.String[string]()).IsNull(), 3},
+			{expr.JSONOrderedScalar(expr.JSONIndex(expr.JSONProperty(p, jsonqueries.ScoresField), -1), codec.Signed[int64]()).Gt(6), 1},
+			{expr.JSONTextScalar(expr.JSONMapKey(expr.JSONProperty(p, jsonqueries.AttributesField), 2), codec.String[string]()).Eq("two"), 1},
+			{expr.JSONTextScalar(expr.JSONProperty(expr.JSONPointer(expr.JSONProperty(p, jsonqueries.NextField)), jsonqueries.NameField), codec.String[string]()).Eq("next"), 1},
+			{expr.JSONTextScalar(expr.JSONProperty(p, jsonqueries.QuotedField), codec.String[string]()).Eq("quoted\"value"), 1},
+			{expr.JSONTextScalar(expr.JSONProperty(p, jsonqueries.OddField), codec.String[string]()).Eq("safe'_%"), 1},
+			{expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(expr.JSONNullableRoot(expr.Value(f.Backup)), jsonqueries.Theme)), codec.String[string]()).Eq("dark"), 1},
 		} {
-			got, err := q.Where(test.predicate).Count(t.Context(), tx)
+			got, err := expr.Where(q, test.predicate).Count(t.Context(), tx)
 			if err != nil || got != test.want {
 				t.Fatal("JSON path count", got, test.want, err)
 			}
 		}
-		snapshots, err := query.SelectValue(q.OrderBy(f.ID.Asc()), prefs.Profile.JSON().Value()).All(t.Context(), tx)
+		snapshots, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.OrderBy(f.Key().Asc())), expr.JSONOptional(expr.JSONProperty(prefs, jsonqueries.ProfileField)).JSON().Value())).All(t.Context(), tx)
 		if err != nil || len(snapshots) != 3 || !snapshots[1].IsNull() || !snapshots[2].IsNull() {
 			t.Fatal(snapshots, err)
 		}
@@ -62,7 +65,7 @@ func TestPostgresGeneratedJSONPaths(t *testing.T) {
 		if !ok || err != nil || decoded.Name != "Ada" || decoded.Age != 42 {
 			t.Fatal(decoded, err)
 		}
-		nulls, err := query.SelectValue(q.OrderBy(f.ID.Asc()), p.Nickname.JSON().Value()).All(t.Context(), tx)
+		nulls, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.OrderBy(f.Key().Asc())), expr.JSONProperty(p, jsonqueries.NicknameField).JSON().Value())).All(t.Context(), tx)
 		if err != nil || len(nulls) != 3 || !nulls[1].IsNull() {
 			t.Fatal(nulls, err)
 		}
@@ -70,7 +73,7 @@ func TestPostgresGeneratedJSONPaths(t *testing.T) {
 		if !present || !first.IsJSONNull() {
 			t.Fatal("JSON null lost", nulls)
 		}
-		ages, err := query.SelectValue(q.Where(f.ID.Eq(1)), p.Age.JSON().Value()).All(t.Context(), tx)
+		ages, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.Where(f.Key().Eq(1))), expr.JSONProperty(p, jsonqueries.AgeField).JSON().Value())).All(t.Context(), tx)
 		if err != nil || len(ages) != 1 {
 			t.Fatal(ages, err)
 		}

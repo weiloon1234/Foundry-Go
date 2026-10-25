@@ -5,6 +5,7 @@ import (
 
 	"foundry.test/consumer/jsonqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -33,7 +34,7 @@ func runJSON(t *testing.T, check func(*database.Tx, []jsonqueries.Document) erro
 			}
 		}
 		key := document(t, jsonqueries.PolicyKey{Version: 9007199254740993, Region: "apac"})
-		if _, err := jsonqueries.QueryJsonPolicies().Create(t.Context(), tx, jsonqueries.PolicyDraft{}.SetID(key).SetName("primary")); err != nil {
+		if _, err := jsonqueries.Policies.Insert(t.Context(), tx, jsonqueries.Policies.Key().Set(key), jsonqueries.Policies.Name.Set("primary")); err != nil {
 			return err
 		}
 		var rows []jsonqueries.Document
@@ -45,14 +46,16 @@ func runJSON(t *testing.T, check func(*database.Tx, []jsonqueries.Document) erro
 			if i == 2 {
 				tags = []string{"db", "go"}
 			}
-			draft := jsonqueries.DocumentDraft{}.SetID(i + 1).SetSettings(document(t, prefs)).SetTags(document(t, tags)).SetState(document(t, value.Null[string]())).SetPolicyID(key)
+			f := jsonqueries.Documents
+			state := document(t, value.Null[string]())
 			if i == 0 {
-				draft = draft.SetState(document(t, value.Of("ready")))
+				state = document(t, value.Of("ready"))
 			}
+			draft := []orm.Assignment[jsonqueries.Document]{f.Key().Set(i + 1), f.Settings.Set(document(t, prefs)), f.Tags.Set(document(t, tags)), f.State.Set(state), f.PolicyID.Set(key)}
 			if i == 2 {
-				draft = draft.SetBackup(document(t, prefs))
+				draft = append(draft, f.Backup.Set(document(t, prefs)))
 			}
-			row, err := jsonqueries.QueryJsonDocuments().Create(t.Context(), tx, draft)
+			row, err := jsonqueries.Documents.Insert(t.Context(), tx, draft...)
 			if err != nil {
 				return err
 			}

@@ -8,6 +8,16 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete retrieval streaming and cursor/page consumers through ORM read terminals,
+  including complete-record DISTINCT ON. Migrate scalar, key, JSON, frame, set,
+  recursive and derived-report consumers while preserving explicit legacy SQL oracles.
+- Add derived-row aggregates, relation expression/pivot ordering and cursor
+  compile/preflight functions through shared owners. JSONKind now has one database
+  owner with compatible public aliases.
+- Migrate root relation loading tests and editor probes to LoadFrom/LoadMissingFrom
+  and handwritten field declarations. Remove unused audit-query draft helpers;
+  generated outputs remain until the separate cleanup barrier.
+
 - Add complete-model relation aggregate reads through expr.RelatedValue and
   rows.WithValue/Annotated, and LoadFrom/LoadMissingFrom for loading existing
   parents with query-owned relation limits. No parent statement is issued.

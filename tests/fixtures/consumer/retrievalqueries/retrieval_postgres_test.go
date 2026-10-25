@@ -42,11 +42,6 @@ func memberConstructor(key foundation.Key[*factoryStats], index int, label strin
 
 func retrievalApp(t *testing.T) (*database.DB, *factoryStats, string) {
 	t.Helper()
-	return retrievalApplication(t, false)
-}
-
-func retrievalApplication(t *testing.T, legacyMembers bool) (*database.DB, *factoryStats, string) {
-	t.Helper()
 	pool := foundation.NewKey[*database.DB]("retrieval.pool")
 	statsKey := foundation.NewKey[*factoryStats]("retrieval.stats")
 	stats := &factoryStats{}
@@ -55,14 +50,14 @@ func retrievalApplication(t *testing.T, legacyMembers bool) (*database.DB, *fact
 	config.Pool.AcquireTimeout = 2 * time.Second
 	app := testkit.Start(t, foundry.New().Register(
 		foundation.Module{Name: "second", Requires: []foundation.ProviderID{"first"}, OnRegister: func(r *foundation.Registrar) error {
-			return registerMemberRetrieval(r, pool, "members.second", memberConstructor(statsKey, 1, "second"), legacyMembers)
+			return orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[retrievalqueries.Member]("members.second"), memberConstructor(statsKey, 1, "second"))
 		}},
 		postgres.Module("database", pool, config),
 		foundation.Module{Name: "first", OnRegister: func(r *foundation.Registrar) error {
 			if err := foundation.Provide(r, statsKey, stats); err != nil {
 				return err
 			}
-			if err := registerMemberRetrieval(r, pool, "members.first", memberConstructor(statsKey, 0, "first"), legacyMembers); err != nil {
+			if err := orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[retrievalqueries.Member]("members.first"), memberConstructor(statsKey, 0, "first")); err != nil {
 				return err
 			}
 			if err := orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[retrievalqueries.Group]("groups.read"), func(s foundation.Resolver) (func() orm.RetrievalHooks[retrievalqueries.Group], error) {
@@ -268,21 +263,4 @@ func TestPostgresRetrievalFailureRollsBackOwningWrite(t *testing.T) {
 			}
 		})
 	}
-}
-
-// The retained complete-record streaming oracle needs the legacy member family
-// until rows exposes bounded complete-model iteration. Each app installs one family.
-func registerMemberRetrieval(r *foundation.Registrar, pool foundation.Key[*database.DB], name string, constructor func(foundation.Resolver) (func() orm.RetrievalHooks[retrievalqueries.Member], error), legacy bool) error {
-	if !legacy {
-		return orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[retrievalqueries.Member](name), constructor)
-	}
-	return retrievalqueries.RegisterMemberRetrievalObserver(r, pool, retrievalqueries.NewMemberRetrievalObserver(name), func(resolver foundation.Resolver) (func() retrievalqueries.MemberRetrievalHooks, error) {
-		factory, err := constructor(resolver)
-		if err != nil {
-			return nil, err
-		}
-		return func() retrievalqueries.MemberRetrievalHooks {
-			return retrievalqueries.MemberRetrievalHooks{Retrieved: factory().Retrieved}
-		}, nil
-	})
 }

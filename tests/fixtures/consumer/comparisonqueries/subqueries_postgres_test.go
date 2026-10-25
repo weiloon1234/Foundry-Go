@@ -11,7 +11,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
 type thresholdAlias struct{}
@@ -59,50 +58,49 @@ func TestPostgresScalarRowsAndComparisonDiscovery(t *testing.T) {
 	})
 }
 
-// TODO(stage9-lane-a): migrate this test after expression predicates can enter relation filters.
 func TestPostgresCorrelatedRowComparisonsAndRelationAliases(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
-		q := models.QueryUsers()
-		f := models.UserFields()
-		orders := models.QueryOrders()
-		link := query.Correlate(q, orders)
-		buyer := models.UserFieldsAt(query.OuterScope(link, q.Scope()))
-		order := models.OrderFieldsAt(query.InnerScope(link, orders.Scope()))
-		matching := link.Where(query.Equal(order.BuyerID, buyer.ID))
-		countQuery := query.SelectCorrelatedValue(matching, query.CountField(order.ID).Value())
-		orderCount := query.CorrelatedScalarRowQuery(countQuery)
-		zero := query.NullableRow(query.Count[models.User]().Param(0))
-		purchased := query.GreaterNullable(orderCount, zero)
-		rows, err := q.Where(purchased).OrderBy(f.Age.Asc()).All(t.Context(), tx)
-		if err != nil || len(rows) != 2 || rows[0].ID != users[0].ID || rows[1].ID != users[1].ID {
-			t.Fatal(rows, err)
+		q := models.Users.Query()
+		f := models.Users
+		orders := models.Orders.Query()
+		link := rows.Correlate(rows.From(q), rows.From(orders))
+		buyer := rows.OuterScope(link, rows.ModelScope(q))
+		order := rows.InnerScope(link, rows.ModelScope(orders))
+		matching := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)))
+		countQuery := rows.SelectCorrelatedScalar(matching, expr.CountFieldAt(order, models.Orders.ID).Value())
+		orderCount := rows.CorrelatedScalarRowQuery(countQuery)
+		zero := expr.NullableRow(expr.Count[models.User]().Param(0))
+		purchased := expr.GreaterNullable(orderCount, zero)
+		items, err := expr.Where(q, purchased).OrderBy(f.Age.Asc()).All(t.Context(), tx)
+		if err != nil || len(items) != 2 || items[0].ID != users[0].ID || items[1].ID != users[1].ID {
+			t.Fatal(items, err)
 		}
-		total := query.CorrelatedScalarNullableRowQuery(query.SelectCorrelatedValue(matching, query.Sum(order.TotalCents).Value()))
-		if n, err := q.Where(query.NotDistinctFrom(total, query.NullFor(query.DecimalOf(f.Age)))).Count(t.Context(), tx); err != nil || n != 2 {
+		total := rows.CorrelatedScalarNullableRowQuery(rows.SelectCorrelatedScalar(matching, expr.SumAt(order, models.Orders.TotalCents).Value()))
+		if n, err := expr.Where(q, expr.NotDistinctFrom(total, expr.NullFor(expr.DecimalOf(expr.Value(f.Age))))).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal("nullable correlated total lost NULL", n, err)
 		}
-		rows, err = q.WhereHas(models.UserRelations().Referrals.Where(purchased)).All(t.Context(), tx)
-		if err != nil || len(rows) != 1 || rows[0].ID != users[0].ID {
-			t.Fatal("direct relation comparison alias", rows, err)
+		items, err = q.Where(orm.Has(models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, purchased)))).All(t.Context(), tx)
+		if err != nil || len(items) != 1 || items[0].ID != users[0].ID {
+			t.Fatal("direct relation comparison alias", items, err)
 		}
 		if err := queryfixture.CreateFriendshipTable(t.Context(), tx); err != nil {
 			return err
 		}
 		for _, target := range users[1:3] {
-			if _, err := models.QueryFriendships().Create(t.Context(), tx, models.FriendshipDraft{}.SetFromID(users[0].ID).SetToID(target.ID).SetNote("linked")); err != nil {
+			if _, err := models.Friendships.Insert(t.Context(), tx, models.Friendships.FromID.Set(users[0].ID), models.Friendships.ToID.Set(target.ID), models.Friendships.Note.Set("linked")); err != nil {
 				return err
 			}
 		}
-		rows, err = q.Where(f.ID.Eq(users[0].ID)).With(models.UserRelations().Friends.Where(purchased)).All(t.Context(), tx)
-		if err != nil || len(rows) != 1 {
-			t.Fatal(rows, err)
+		items, err = q.Where(f.ID.Eq(users[0].ID)).With(models.UserLinks.Friends.Where(expr.RelationFilter(models.UserLinks.Friends, purchased))).All(t.Context(), tx)
+		if err != nil || len(items) != 1 {
+			t.Fatal(items, err)
 		}
-		links, loaded := rows[0].Friends.Get()
+		links, loaded := items[0].Friends.Get()
 		if !loaded || len(links) != 1 || links[0].Model.ID != users[1].ID {
 			t.Fatal("through relation scalar comparison alias", links)
 		}
 		// Reusing the original condition must still address its original model.
-		if n, err := q.Where(purchased).Count(t.Context(), tx); err != nil || n != 2 {
+		if n, err := expr.Where(q, purchased).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal("relation qualification mutated original predicate", n, err)
 		}
 		return nil

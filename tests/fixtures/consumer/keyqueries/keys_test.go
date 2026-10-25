@@ -7,47 +7,46 @@ import (
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/keyqueries"
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
-func buckets() query.ProjectionQuery[models.User, keyqueries.BucketCount] {
-	u := models.UserFields()
-	bucket := query.When(u.Age.Gt(20), query.Param(u.Age, 1)).Else(query.Param(u.Age, 0))
-	return keyqueries.SelectBucketCount(models.QueryUsers(), keyqueries.BucketCountSelection[models.User]{Bucket: bucket.Value(), Count: query.Count[models.User]().Value()}).GroupBy(bucket.Group()).OrderBy(bucket.Asc())
+func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
+	u := models.Users
+	bucket := expr.When(expr.ModelPredicate(u.Age.Gt(20)), expr.Param(u.Age, 1)).Else(expr.Param(u.Age, 0))
+	return rowset.GroupBy(rowset.Select(rowset.From(models.Users.Query()), keyqueries.BucketCounts.Row,
+		rowset.MapSelected(keyqueries.BucketCounts.Bucket, bucket.Value()),
+		rowset.MapSelected(keyqueries.BucketCounts.Count, expr.Count[models.User]().Value()),
+	), expr.Group(bucket)).OrderBy(bucket.Asc())
 }
 
 func TestComputedKeyContracts(t *testing.T) {
-	u := models.UserFields()
-	base := models.QueryUsers()
-	bucket := query.When(u.Age.Gt(20), query.Param(u.Age, 1)).Else(query.Param(u.Age, 0))
+	u := models.Users
+	base := models.Users.Query()
+	bucket := expr.When(expr.ModelPredicate(u.Age.Gt(20)), expr.Param(u.Age, 1)).Else(expr.Param(u.Age, 0))
 	selected := bucket.Value()
-	window := query.WindowFor(base).PartitionByValues(selected.Key()).OrderBy(u.Age.Asc())
-	if _, err := query.SelectValue(base, query.RowNumber(window)).Compile(); err != nil {
+	window := expr.WindowFor(rowset.ModelScope(base)).PartitionByValues(selected.Key()).OrderBy(expr.Value(u.Age).Asc())
+	if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(base), expr.RowNumber(window)))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := base.DistinctOnValues(selected.Key()).OrderBy(bucket.Asc(), u.Age.Asc()).Compile(); err != nil {
+	if _, err := rowset.Compile(rowset.OrderBy(rowset.DistinctOnValues(rowset.FromModel(base), selected.Key()), bucket.Asc(), expr.Value(u.Age).Asc())); err != nil {
 		t.Fatal(err)
 	}
-	for _, invalid := range []query.ValueQuery[models.User, int]{
-		query.SelectValue(base, query.Value(u.Age)).GroupBy(bucket.Group()),
-		query.SelectValue(base, bucket.Value()).GroupBy(bucket.Group(), bucket.Group()),
-		query.SelectValue(base, bucket.Value()).DistinctOn(bucket.Group()).OrderBy(u.Age.Asc()),
-		query.SelectValue(base, bucket.Value()).DistinctOnValues(),
+	for _, invalid := range []rowset.Scalar[models.User, int]{
+		rowset.GroupByScalar(rowset.SelectScalar(rowset.From(base), expr.Select(expr.Value(u.Age))), expr.Group(bucket)),
+		rowset.GroupByScalar(rowset.SelectScalar(rowset.From(base), bucket.Value()), expr.Group(bucket), expr.Group(bucket)),
+		rowset.OrderScalar(rowset.DistinctOnScalar(rowset.SelectScalar(rowset.From(base), bucket.Value()), expr.Group(bucket)), expr.Value(u.Age).Asc()),
+		rowset.DistinctOnScalarValues(rowset.SelectScalar(rowset.From(base), bucket.Value())),
 	} {
-		if _, err := invalid.All(t.Context(), queryfixture.NoQueries(t)); !errors.Is(err, fault.Invalid) {
+		if _, err := rowset.ReadScalar(invalid).All(t.Context(), queryfixture.NoQueries(t)); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid key reached execution", err)
 		}
 	}
-	count := query.Count[models.User]()
-	invalidWindow := query.WindowFor(base).PartitionByValues(query.RowNumber(query.WindowFor(base)).Key())
-	if _, err := query.SelectValue(base, count.Over(invalidWindow)).All(t.Context(), queryfixture.NoQueries(t)); !errors.Is(err, fault.Invalid) {
+	count := expr.Count[models.User]()
+	invalidWindow := expr.WindowFor(rowset.ModelScope(base)).PartitionByValues(expr.RowNumber(expr.WindowFor(rowset.ModelScope(base))).Key())
+	if _, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(base), expr.Over(count, invalidWindow))).All(t.Context(), queryfixture.NoQueries(t)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nested window partition reached execution", err)
 	}
-	// A computed cursor key must first become a declared output field.
-	cursor := query.CursorFor(buckets())
-	f := keyqueries.BucketCountFieldsAt(cursor.Scope())
-	if _, err := cursor.OrderBy(f.Bucket.Asc()).UniqueBy(query.Param(f.Bucket, 1).Group()).Compile(); !errors.Is(err, fault.Invalid) {
-		t.Fatal("computed cursor key accepted without a declared output field", err)
-	}
+	testComputedCursorKey(t)
 }

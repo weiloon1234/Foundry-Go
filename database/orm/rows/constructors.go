@@ -48,6 +48,7 @@ func EnumOf[R any, E interface {
 	codec, check := ormcore.EnumCodec[E]()
 	f := bindField(b, ptr, codec)
 	f.core.check = check
+	f.core.aggregateInput = false
 	return f
 }
 
@@ -84,6 +85,7 @@ func NullableEnumOf[R any, E interface {
 	base, check := ormcore.EnumCodec[E]()
 	f := bindField(b, ptr, codec.Nullable(base))
 	f.core.check = check
+	f.core.aggregateInput = false
 	return f
 }
 

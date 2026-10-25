@@ -38,8 +38,10 @@ type Scope struct {
 
 // Column retains typed closures without a heavy codec field.
 type Column[V any] struct {
-	Text      bool
-	Sensitive bool
+	// AggregateInput is issued by a declared ordered result field, never a promoted marker.
+	AggregateInput bool
+	Text           bool
+	Sensitive      bool
 	Reference
 	Field    querycore.FieldRef
 	Kind     codec.ParameterType

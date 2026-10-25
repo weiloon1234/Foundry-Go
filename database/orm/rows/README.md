@@ -236,3 +236,20 @@ example, `rows.DistinctOnValueSet(values, expr.Select(values.Value()).Key())`
 retains the scalar codec, including nullability. Group keys cannot be substituted
 for selected keys, and keys from either input query cannot enter the combined
 scope. Both families reuse the ordinary rows clause and compiler validation.
+
+Derived result fields can be aggregated without losing their declaration ownership:
+`expr.SumRow(rows.At(scope, Totals.Amount))` and `expr.SumNullableRow` return nullable
+exact decimals. The float, interval, min/max and count families keep their existing
+result rules. Only declared ordered fields grant ordered aggregate input; enums,
+computed parameters and foreign declarations fail validation. The original
+`expr.SumAt(scope, modelColumn)` API remains unchanged.
+
+`DistinctOnRecord(record, keys...).OrderBy(...)` keeps keys and ordering in the
+original input scope, including joined fields outside the selected complete record.
+It remains read-only and uses the shared ordering-prefix validation.
+
+`CompileCursor` and `PreflightCursor` validate completed-output cursor keys and
+canonical ordering without I/O. `CompileValueCursor` and `PreflightValueCursor`
+provide the same boundary for scalar cursors. Compilation adds no page boundary
+or lookahead limit; preflight uses the executing context, including current global
+scopes. Invalid computed keys are rejected here, before pagination is invoked.

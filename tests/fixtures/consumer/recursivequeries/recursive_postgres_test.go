@@ -13,7 +13,9 @@ import (
 	"foundry.test/consumer/recursivequeries"
 	"foundry.test/consumer/reports"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
@@ -22,19 +24,19 @@ type parentAlias struct{}
 type childAlias struct{}
 type resultAlias struct{}
 
-func descendants(self query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User] {
-	parent := query.As[parentAlias](self, "parent")
-	child := query.As[childAlias](models.QueryUsers(), "child")
-	p, c := models.UserFieldsAt(parent.Scope()), models.UserFieldsAt(child.Scope())
-	joined := query.InnerJoin(child, parent, query.On(c.IntroducerID, p.ID))
-	return query.SelectRecord(joined, query.LeftScope(joined, child.Scope()))
+func descendants(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
+	parent := rowset.AsRecord[parentAlias](self, "parent")
+	child := rowset.As[childAlias](models.Users.Query(), "child")
+	p, c := rowset.Scope(parent), rowset.Scope(child)
+	joined := rowset.InnerJoin(child, parent, rowset.OnEqual(expr.At(c, models.Users.IntroducerID), expr.NullableRow(expr.At(p, models.Users.ID))))
+	return rowset.SelectRecord(joined, rowset.LeftScope(joined, rowset.Scope(child)))
 }
 
-func readUsers(t *testing.T, tx database.Executor, definition query.CommonTable[models.User]) []models.User {
+func readUsers(t *testing.T, tx database.Executor, definition rowset.CommonTable[models.User]) []models.User {
 	t.Helper()
-	source := query.As[resultAlias](definition, "result")
-	fields := models.UserFieldsAt(source.Scope())
-	rows, err := query.SelectRecord(source, source.Scope()).OrderBy(fields.Email.Asc()).All(t.Context(), tx)
+	source := rowset.AsRecord[resultAlias](definition, "result")
+	fields := rowset.Scope(source)
+	rows, err := rowset.SelectRecord(source, rowset.Scope(source)).OrderBy(expr.At(fields, models.Users.Email).Asc()).All(t.Context(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,36 +48,36 @@ func TestPostgresRecursiveModelHierarchy(t *testing.T) {
 		ctx := t.Context()
 		// Extend the existing a->b relation to a->b->c using a typed write.
 		var err error
-		users[2], err = models.QueryUsers().Update(ctx, tx, users[2].ID, models.UserDraft{}.SetIntroducerID(users[1].ID))
+		users[2], err = orm.Update(ctx, tx, models.Users.Query(), models.Users.Key(), users[2].ID, models.Users.IntroducerID.Set(users[1].ID))
 		if err != nil {
 			return err
 		}
-		u := models.UserFields()
-		anchor := models.QueryUsers().Where(u.ID.Eq(users[0].ID))
-		tree := query.RecursiveCTE("descendants", anchor, descendants)
+		u := models.Users
+		anchor := models.Users.Query().Where(u.ID.Eq(users[0].ID))
+		tree := rowset.RecursiveCTE("descendants", rowset.ModelRecord(anchor), descendants)
 		if rows := readUsers(t, tx, tree); !reflect.DeepEqual(rows, users) {
 			t.Fatal("recursive model hierarchy lost complete records or levels")
 		}
 		if rows := readUsers(t, tx, tree.Materialized()); !reflect.DeepEqual(rows, users) {
 			t.Fatal("materialization changed recursion")
 		}
-		if rows := readUsers(t, tx, query.RecursiveCTE("empty_tree", anchor.Where(u.Age.Lt(0)), descendants)); len(rows) != 0 {
+		if rows := readUsers(t, tx, rowset.RecursiveCTE("empty_tree", rowset.ModelRecord(anchor.Where(u.Age.Lt(0))), descendants)); len(rows) != 0 {
 			t.Fatal("empty recursive anchor produced rows")
 		}
-		pruned := query.RecursiveCTE("pruned", anchor, func(self query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User] {
-			parent := query.As[parentAlias](self, "parent")
-			child := query.As[childAlias](models.QueryUsers().Where(u.Age.Lt(22)), "child")
-			j := query.InnerJoin(child, parent, query.On(models.UserFieldsAt(child.Scope()).IntroducerID, models.UserFieldsAt(parent.Scope()).ID))
-			return query.SelectRecord(j, query.LeftScope(j, child.Scope()))
+		pruned := rowset.RecursiveCTE("pruned", rowset.ModelRecord(anchor), func(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
+			parent := rowset.AsRecord[parentAlias](self, "parent")
+			child := rowset.As[childAlias](models.Users.Query().Where(u.Age.Lt(22)), "child")
+			j := rowset.InnerJoin(child, parent, rowset.OnEqual(expr.At(rowset.Scope(child), models.Users.IntroducerID), expr.NullableRow(expr.At(rowset.Scope(parent), models.Users.ID))))
+			return rowset.SelectRecord(j, rowset.LeftScope(j, rowset.Scope(child)))
 		})
 		if rows := readUsers(t, tx, pruned); !reflect.DeepEqual(rows, users[:2]) {
 			t.Fatal("recursive step predicate did not prune descendants")
 		}
-		roots := models.QueryUsers().Where(u.Age.Lte(21))
-		if rows := readUsers(t, tx, query.RecursiveCTE("distinct_paths", roots, descendants)); !reflect.DeepEqual(rows, users) {
+		roots := models.Users.Query().Where(u.Age.Lte(21))
+		if rows := readUsers(t, tx, rowset.RecursiveCTE("distinct_paths", rowset.ModelRecord(roots), descendants)); !reflect.DeepEqual(rows, users) {
 			t.Fatal("UNION did not deduplicate recursive paths")
 		}
-		if rows := readUsers(t, tx, query.RecursiveAllCTE("all_paths", roots, descendants)); !reflect.DeepEqual(rows, []models.User{users[0], users[1], users[1], users[2], users[2]}) {
+		if rows := readUsers(t, tx, rowset.RecursiveAllCTE("all_paths", rowset.ModelRecord(roots), descendants)); !reflect.DeepEqual(rows, []models.User{users[0], users[1], users[1], users[2], users[2]}) {
 			t.Fatal("UNION ALL lost duplicate paths")
 		}
 		if err := checkRecursiveComposition(t, tx, tree, users); err != nil {
@@ -88,7 +90,7 @@ func TestPostgresRecursiveModelHierarchy(t *testing.T) {
 			return err
 		}
 		// Close the cycle c->a. UNION of unchanged complete records terminates.
-		users[0], err = models.QueryUsers().Update(ctx, tx, users[0].ID, models.UserDraft{}.SetIntroducerID(users[2].ID))
+		users[0], err = orm.Update(ctx, tx, models.Users.Query(), models.Users.Key(), users[0].ID, models.Users.IntroducerID.Set(users[2].ID))
 		if err != nil {
 			return err
 		}
@@ -99,34 +101,34 @@ func TestPostgresRecursiveModelHierarchy(t *testing.T) {
 	})
 }
 
-func checkPermittedStepSources(t *testing.T, tx *database.Tx, anchor models.UserQuery) error {
-	for name, step := range map[string]func(query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User]{
-		"intersection": func(self query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User] {
-			return query.Intersect(self, models.QueryUsers())
+func checkPermittedStepSources(t *testing.T, tx *database.Tx, anchor orm.Query[models.User]) error {
+	for name, step := range map[string]func(rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User]{
+		"intersection": func(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
+			return rowset.Intersect(self, rowset.ModelRecord(models.Users.Query()))
 		},
-		"left_except": func(self query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User] {
-			return query.Except(self, models.QueryUsers().Limit(0))
+		"left_except": func(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
+			return rowset.Except(self, rowset.ModelRecord(models.Users.Query().Limit(0)))
 		},
-		"union_step": func(self query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User] {
-			return query.UnionAll(self, models.QueryUsers().Limit(0))
+		"union_step": func(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
+			return rowset.UnionAll(self, rowset.ModelRecord(models.Users.Query().Limit(0)))
 		},
-		"preserved_left": func(self query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User] {
-			a, b := query.As[parentAlias](self, "a"), query.As[childAlias](models.QueryUsers().Limit(0), "b")
-			j := query.LeftJoin(a, b, query.On(models.UserFieldsAt(a.Scope()).ID, models.UserFieldsAt(b.Scope()).ID))
-			return query.SelectRecord(j, query.LeftScope(j, a.Scope()))
+		"preserved_left": func(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
+			a, b := rowset.AsRecord[parentAlias](self, "a"), rowset.As[childAlias](models.Users.Query().Limit(0), "b")
+			j := rowset.LeftJoin(a, b, rowset.On(expr.At(rowset.Scope(a), models.Users.ID), expr.At(rowset.Scope(b), models.Users.ID)))
+			return rowset.SelectRecord(j, rowset.LeftScope(j, rowset.Scope(a)))
 		},
-		"preserved_right": func(self query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User] {
-			a, b := query.As[parentAlias](models.QueryUsers().Limit(0), "a"), query.As[childAlias](self, "b")
-			j := query.RightJoin(a, b, query.On(models.UserFieldsAt(a.Scope()).ID, models.UserFieldsAt(b.Scope()).ID))
-			return query.SelectRecord(j, query.RightScope(j, b.Scope()))
+		"preserved_right": func(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
+			a, b := rowset.As[parentAlias](models.Users.Query().Limit(0), "a"), rowset.AsRecord[childAlias](self, "b")
+			j := rowset.RightJoin(a, b, rowset.On(expr.At(rowset.Scope(a), models.Users.ID), expr.At(rowset.Scope(b), models.Users.ID)))
+			return rowset.SelectRecord(j, rowset.RightScope(j, rowset.Scope(b)))
 		},
-		"independent_aggregate": func(self query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User] {
-			a := query.As[parentAlias](self, "a")
-			count := query.SelectValue(models.QueryOrders(), query.Count[models.Order]().Value())
-			return query.SelectRecord(a, a.Scope()).Where(query.ExistsQuery(a, count))
+		"independent_aggregate": func(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
+			a := rowset.AsRecord[parentAlias](self, "a")
+			count := rowset.SelectScalar(rowset.From(models.Orders.Query()), expr.Count[models.Order]().Value())
+			return rowset.SelectRecord(a, rowset.Scope(a)).Where(rowset.ExistsQuery(a, count))
 		},
 	} {
-		tree := query.RecursiveCTE(name, anchor, step)
+		tree := rowset.RecursiveCTE(name, rowset.ModelRecord(anchor), step)
 		if rows := readUsers(t, tx, tree); len(rows) != 1 {
 			t.Fatal("permitted recursive step changed repeated anchor", name)
 		}
@@ -134,59 +136,69 @@ func checkPermittedStepSources(t *testing.T, tx *database.Tx, anchor models.User
 	return nil
 }
 
-func checkRecursiveComposition(t *testing.T, tx *database.Tx, tree query.CommonTable[models.User], users []models.User) error {
+func checkRecursiveComposition(t *testing.T, tx *database.Tx, tree rowset.CommonTable[models.User], users []models.User) error {
 	ctx := t.Context()
-	combined := query.Union(tree, tree)
-	fields := models.UserFieldsAt(combined.Scope())
-	if n, err := combined.Count(ctx, tx); err != nil || n != 3 {
+	combined := rowset.Union(tree, tree)
+	fields := combined.Scope()
+	if n, err := rowset.ReadSet(combined).Count(ctx, tx); err != nil || n != 3 {
 		t.Fatal("shared recursive CTE/set composition failed", err)
 	}
-	s, err := combined.Compile()
+	s, err := rowset.CompileRead(rowset.ReadSet(combined))
 	if err != nil {
 		return err
 	}
 	if strings.Count(s.SQL(), `"descendants" ("id"`) != 1 {
 		t.Fatal("shared recursive CTE was emitted more than once")
 	}
-	ids := query.SelectValue(combined, query.Value(fields.ID))
-	if n, err := models.QueryUsers().WhereHas(models.UserRelations().Referrals.Where(models.UserFields().ID.InQuery(ids))).Count(ctx, tx); err != nil || n != 2 {
+	ids := rowset.SelectScalar(combined, expr.Select(expr.At(fields, models.Users.ID)))
+	if n, err := models.Users.Query().Where(orm.Has(models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, rowset.InQuery(expr.Value(models.Users.ID), ids))))).Count(ctx, tx); err != nil || n != 2 {
 		t.Fatal("relationship predicate lost recursive CTE dependency", err)
 	}
-	if n, err := models.QueryUsers().Where(models.UserFields().ID.InQuery(ids)).Count(ctx, tx); err != nil || n != 3 {
+	if n, err := expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(models.Users.ID), ids)).Count(ctx, tx); err != nil || n != 3 {
 		t.Fatal("recursive membership failed", err)
 	}
-	result := query.As[resultAlias](tree, "result")
-	f := models.UserFieldsAt(result.Scope())
-	q := query.SelectRecord(result, result.Scope()).OrderBy(f.Email.Asc())
-	if row, err := q.Offset(1).RequireFirst(ctx, tx); err != nil || row.ID != users[1].ID {
+	result := rowset.AsRecord[resultAlias](tree, "result")
+	f := rowset.Scope(result)
+	q := rowset.SelectRecord(result, rowset.Scope(result)).OrderBy(expr.At(f, models.Users.Email).Asc())
+	if row, err := rowset.ReadRecord(q.Offset(1)).RequireFirst(ctx, tx); err != nil || row.ID != users[1].ID {
 		t.Fatal("recursive required result lost selected window", err)
 	}
-	if row, err := q.Limit(0).First(ctx, tx); err != nil || row.IsSet() {
+	if row, err := rowset.ReadRecord(q.Limit(0)).First(ctx, tx); err != nil || row.IsSet() {
 		t.Fatal("recursive optional result ignored zero limit", err)
 	}
 	stop := errors.New("stop recursive stream")
-	if err := q.Each(ctx, tx, func(models.User) error { return stop }); !errors.Is(err, stop) {
+	if err := rowset.EachRead(ctx, tx, q, func(models.User) error { return stop }); !errors.Is(err, stop) {
 		t.Fatal("recursive stream lost callback failure", err)
 	}
-	if n, err := q.Count(ctx, tx); err != nil || n != 3 {
+	if n, err := rowset.ReadRecord(q).Count(ctx, tx); err != nil || n != 3 {
 		t.Fatal("recursive stream failed to release rows", err)
 	}
 	return nil
 }
 
-func checkRecursiveProjection(t *testing.T, tx *database.Tx, anchor models.UserQuery, users []models.User) error {
-	u := models.UserFields()
-	initial := reports.SelectUserSummary(anchor, reports.UserSummarySelection[models.User]{ID: query.Value(u.ID), Email: query.Value(u.Email), Nickname: query.Value(u.Nickname), Status: query.Value(u.Status)})
-	tree := query.RecursiveCTE("summaries", initial, func(self query.RecursiveSelf[reports.UserSummary]) query.RecordQuerySource[reports.UserSummary] {
-		parent := query.As[parentAlias](self, "parent")
-		child := query.As[childAlias](models.QueryUsers(), "child")
-		j := query.InnerJoin(child, parent, query.On(models.UserFieldsAt(child.Scope()).IntroducerID, reports.UserSummaryFieldsAt(parent.Scope()).ID))
-		f := models.UserFieldsAt(query.LeftScope(j, child.Scope()))
-		return reports.ProjectUserSummary(j).SelectID(query.Value(f.ID)).SelectEmail(query.Value(f.Email)).SelectNickname(query.Value(f.Nickname)).SelectStatus(query.Value(f.Status)).Query()
+func checkRecursiveProjection(t *testing.T, tx *database.Tx, anchor orm.Query[models.User], users []models.User) error {
+	u := models.Users
+	initial := rowset.Select(rowset.From(anchor), reports.UserSummaries.Row,
+		rowset.Map(reports.UserSummaries.ID, expr.Value(u.ID)),
+		rowset.Map(reports.UserSummaries.Email, expr.Value(u.Email)),
+		rowset.Map(reports.UserSummaries.Nickname, expr.Value(u.Nickname)),
+		rowset.Map(reports.UserSummaries.Status, expr.Value(u.Status)),
+	)
+	tree := rowset.RecursiveCTE("summaries", rowset.RecordOf(initial), func(self rowset.RecursiveSelf[reports.UserSummary]) rowset.RecordSource[reports.UserSummary] {
+		parent := rowset.AsRecord[parentAlias](self, "parent")
+		child := rowset.As[childAlias](models.Users.Query(), "child")
+		j := rowset.InnerJoin(child, parent, rowset.OnEqual(expr.At(rowset.Scope(child), models.Users.IntroducerID), expr.NullableRow(rowset.At(rowset.Scope(parent), reports.UserSummaries.ID))))
+		f := rowset.LeftScope(j, rowset.Scope(child))
+		return rowset.RecordOf(rowset.Select(j, reports.UserSummaries.Row,
+			rowset.Map(reports.UserSummaries.ID, expr.At(f, models.Users.ID)),
+			rowset.Map(reports.UserSummaries.Email, expr.At(f, models.Users.Email)),
+			rowset.Map(reports.UserSummaries.Nickname, expr.At(f, models.Users.Nickname)),
+			rowset.Map(reports.UserSummaries.Status, expr.At(f, models.Users.Status)),
+		))
 	})
-	a := query.As[resultAlias](tree, "result")
-	f := reports.UserSummaryFieldsAt(a.Scope())
-	rows, err := query.SelectRecord(a, a.Scope()).OrderBy(f.Email.Asc()).All(t.Context(), tx)
+	a := rowset.AsRecord[resultAlias](tree, "result")
+	f := rowset.Scope(a)
+	rows, err := rowset.SelectRecord(a, rowset.Scope(a)).OrderBy(rowset.At(f, reports.UserSummaries.Email).Asc()).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
@@ -206,38 +218,38 @@ func TestPostgresNaturalKeyRecursionAndCancellation(t *testing.T) {
 				return err
 			}
 		}
-		for _, draft := range []recursivequeries.NodeDraft{
-			recursivequeries.NodeDraft{}.SetCode("root").SetName("Root"),
-			recursivequeries.NodeDraft{}.SetCode("child").SetParent("root").SetName("Child"),
-			recursivequeries.NodeDraft{}.SetCode("leaf").SetParent("child").SetName("Leaf"),
+		for _, draft := range [][]orm.Assignment[recursivequeries.Node]{
+			{recursivequeries.Nodes.Code.Set("root"), recursivequeries.Nodes.Name.Set("Root")},
+			{recursivequeries.Nodes.Code.Set("child"), recursivequeries.Nodes.Parent.Set(recursivequeries.NodeCode("root")), recursivequeries.Nodes.Name.Set("Child")},
+			{recursivequeries.Nodes.Code.Set("leaf"), recursivequeries.Nodes.Parent.Set(recursivequeries.NodeCode("child")), recursivequeries.Nodes.Name.Set("Leaf")},
 		} {
-			if _, err := recursivequeries.QueryNodes().Create(t.Context(), session, draft); err != nil {
+			if _, err := recursivequeries.Nodes.Insert(t.Context(), session, draft...); err != nil {
 				return err
 			}
 		}
-		n := recursivequeries.NodeFields()
-		anchor := recursivequeries.QueryNodes().Where(n.Code.Eq("root"))
-		tree := query.RecursiveCTE("node_tree", anchor, func(self query.RecursiveSelf[recursivequeries.Node]) query.RecordQuerySource[recursivequeries.Node] {
-			parent := query.As[parentAlias](self, "parent")
-			// Derived self-reference remains a FROM source, not an expression subquery.
-			working := query.As[resultAlias](query.SelectRecord(parent, parent.Scope()), "working")
-			child := query.As[childAlias](recursivequeries.QueryNodes(), "child")
-			j := query.InnerJoin(child, working, query.On(recursivequeries.NodeFieldsAt(child.Scope()).Parent, recursivequeries.NodeFieldsAt(working.Scope()).Code))
-			return query.SelectRecord(j, query.LeftScope(j, child.Scope()))
+		n := recursivequeries.Nodes
+		anchor := recursivequeries.Nodes.Query().Where(n.Code.Eq("root"))
+		tree := rowset.RecursiveCTE("node_tree", rowset.ModelRecord(anchor), func(self rowset.RecursiveSelf[recursivequeries.Node]) rowset.RecordSource[recursivequeries.Node] {
+			parent := rowset.AsRecord[parentAlias](self, "parent")
+			// Derived self-reference remains a FROM source, not an expression subexpr.
+			working := rowset.AsRecord[resultAlias](rowset.SelectRecord(parent, rowset.Scope(parent)), "working")
+			child := rowset.As[childAlias](recursivequeries.Nodes.Query(), "child")
+			j := rowset.InnerJoin(child, working, rowset.OnEqual(expr.At(rowset.Scope(child), recursivequeries.Nodes.Parent), expr.NullableRow(expr.At(rowset.Scope(working), recursivequeries.Nodes.Code))))
+			return rowset.SelectRecord(j, rowset.LeftScope(j, rowset.Scope(child)))
 		})
-		a := query.As[resultAlias](tree, "result")
-		fields := recursivequeries.NodeFieldsAt(a.Scope())
-		codes, err := query.SelectValue(a, query.Value(fields.Code)).OrderBy(fields.Code.Asc()).All(t.Context(), session)
+		a := rowset.AsRecord[resultAlias](tree, "result")
+		fields := rowset.Scope(a)
+		codes, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(a, expr.Select(expr.At(fields, recursivequeries.Nodes.Code))), expr.At(fields, recursivequeries.Nodes.Code).Asc())).All(t.Context(), session)
 		if err != nil || !reflect.DeepEqual(codes, []recursivequeries.NodeCode{"child", "leaf", "root"}) {
 			t.Fatal("recursive natural-key hierarchy failed", codes, err)
 		}
-		loop := query.RecursiveAllCTE("nonterminating", anchor, func(self query.RecursiveSelf[recursivequeries.Node]) query.RecordQuerySource[recursivequeries.Node] {
+		loop := rowset.RecursiveAllCTE("nonterminating", rowset.ModelRecord(anchor), func(self rowset.RecursiveSelf[recursivequeries.Node]) rowset.RecordSource[recursivequeries.Node] {
 			return self
 		})
-		source := query.As[resultAlias](loop, "result")
+		source := rowset.AsRecord[resultAlias](loop, "result")
 		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 		defer cancel()
-		_, err = query.SelectRecord(source, source.Scope()).Count(ctx, session)
+		_, err = rowset.ReadRecord(rowset.SelectRecord(source, rowset.Scope(source))).Count(ctx, session)
 		return err
 	})
 	if !errors.Is(err, context.DeadlineExceeded) {
@@ -250,14 +262,14 @@ func TestPostgresNaturalKeyRecursionAndCancellation(t *testing.T) {
 		if _, err := session.Exec(t.Context(), `SET search_path TO "`+namespace+`"`); err != nil {
 			return err
 		}
-		anchor := recursivequeries.QueryNodes().Where(recursivequeries.NodeFields().Code.Eq("root"))
-		loop := query.RecursiveAllCTE("stream_loop", anchor, func(self query.RecursiveSelf[recursivequeries.Node]) query.RecordQuerySource[recursivequeries.Node] {
+		anchor := recursivequeries.Nodes.Query().Where(recursivequeries.Nodes.Code.Eq("root"))
+		loop := rowset.RecursiveAllCTE("stream_loop", rowset.ModelRecord(anchor), func(self rowset.RecursiveSelf[recursivequeries.Node]) rowset.RecordSource[recursivequeries.Node] {
 			return self
 		})
-		source := query.As[resultAlias](loop, "result")
+		source := rowset.AsRecord[resultAlias](loop, "result")
 		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 		defer cancel()
-		return query.SelectRecord(source, source.Scope()).Each(ctx, session, func(row recursivequeries.Node) error {
+		return rowset.EachRead(ctx, session, rowset.SelectRecord(source, rowset.Scope(source)), func(row recursivequeries.Node) error {
 			yielded = row.Code == "root"
 			cancel() // Stop server work before Close can drain the endless stream.
 			return stop
@@ -272,13 +284,13 @@ func TestPostgresNaturalKeyRecursionAndCancellation(t *testing.T) {
 }
 
 func TestRecursiveSelfCannotEscapeToExecutor(t *testing.T) {
-	var escaped query.RecursiveSelf[models.User]
-	_ = query.RecursiveCTE("tree", models.QueryUsers(), func(self query.RecursiveSelf[models.User]) query.RecordQuerySource[models.User] {
+	var escaped rowset.RecursiveSelf[models.User]
+	_ = rowset.RecursiveCTE("tree", rowset.ModelRecord(models.Users.Query()), func(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
 		escaped = self
 		return descendants(self)
 	})
-	a := query.As[resultAlias](escaped, "escaped")
-	if rows, err := query.SelectRecord(a, a.Scope()).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
+	a := rowset.AsRecord[resultAlias](escaped, "escaped")
+	if rows, err := rowset.SelectRecord(a, rowset.Scope(a)).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Fatal("escaped self reached executor", err)
 	}
 }

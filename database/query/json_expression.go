@@ -1,26 +1,22 @@
 package query
 
 import (
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// JSONKind identifies a JSON value's top-level shape. JSONNull is distinct from SQL NULL.
-type JSONKind string
+// JSONKind is the shared JSON shape identity; JSON null remains distinct from SQL NULL.
+type JSONKind = database.JSONKind
 
 const (
-	JSONObject  JSONKind = "object"
-	JSONArray   JSONKind = "array"
-	JSONString  JSONKind = "string"
-	JSONNumber  JSONKind = "number"
-	JSONBoolean JSONKind = "boolean"
-	JSONNull    JSONKind = "null"
+	JSONObject  = database.JSONObject
+	JSONArray   = database.JSONArray
+	JSONString  = database.JSONString
+	JSONNumber  = database.JSONNumber
+	JSONBoolean = database.JSONBoolean
+	JSONNull    = database.JSONNull
 )
-
-func (k JSONKind) Validate() error {
-	return querycore.ValidateJSONKind(string(k))
-}
 
 func jsonKindCodec() codec.Codec[JSONKind] {
 	return codec.String[JSONKind]().Validated(JSONKind.Validate)

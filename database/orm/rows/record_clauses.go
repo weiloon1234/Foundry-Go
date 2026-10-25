@@ -34,3 +34,12 @@ func DistinctOnValueSet[V any](q ValueSetQuery[V], keys ...expr.ProjectionKey[Se
 	q.core.Direct = false
 	return q
 }
+
+// DistinctOnRecord selects a complete read-only record per input-key combination.
+// Ordering stays in the input scope, including columns not in the selected record.
+// Example: rows.DistinctOnRecord(rows.SelectRecord(joined,left),expr.Group(buyerID)).OrderBy(buyerID.Asc(),orderID.Desc()).
+func DistinctOnRecord[S, R any](q RecordRead[S, R], keys ...expr.GroupKey[S]) RecordRead[S, R] {
+	q.core.Source = DistinctOn(Query[S, struct{}]{source: q.core.Source}, keys...).source
+	q.core.Direct = false
+	return q
+}
