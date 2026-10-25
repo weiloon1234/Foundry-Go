@@ -14,6 +14,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	dbpg "github.com/weiloon1234/Foundry-Go/database/postgres"
+	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -48,9 +50,9 @@ type setup struct {
 	loads    atomic.Int32
 }
 
-func prepare(t *testing.T) *setup {
+func prepare(t *testing.T, adjust ...func(*dbpg.Config)) *setup {
 	t.Helper()
-	s := &setup{db: pgtest.Open(t), clock: testkit.NewClock(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))}
+	s := &setup{db: pgtest.Open(t, adjust...), clock: testkit.NewClock(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))}
 	s.schema = pgtest.Namespace(t, s.db)
 	s.enabled.Store(true)
 	config := tokenpg.DefaultConfig()
@@ -329,7 +331,7 @@ func TestConcurrentIssueCapacityAndSubjectRevocation(t *testing.T) {
 		if err == nil {
 			successes++
 		} else if !errors.Is(err, auth.CredentialLimit) {
-			t.Fatal(err)
+			t.Fatalf("unexpected issuance failure: %+v", errordiag.Describe(err))
 		}
 	}
 	if successes != 2 {

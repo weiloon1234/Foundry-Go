@@ -112,7 +112,9 @@ func lockSubject(ctx context.Context, tx *database.Tx, address session.Address, 
 			return sessionstore.Subject{}, false, err
 		}
 		draft := sessionstore.SubjectDraft{}.SetKey(key).SetScope(scope).SetIdentity(data)
-		if _, err := sessionstore.QueryFoundrySessionSubjects().Upsert(ctx, tx, draft, query.OnConflict(sessionstore.SubjectFields().Key).DoNothing()); err != nil {
+		// First-subject races can hit the primary key or UNIQUE (key, scope).
+		// Cover both, then retain the scoped locking read and identity checks.
+		if _, err := sessionstore.QueryFoundrySessionSubjects().Upsert(ctx, tx, draft, query.OnConflict[sessionstore.Subject]().DoNothing()); err != nil {
 			return sessionstore.Subject{}, false, err
 		}
 	}

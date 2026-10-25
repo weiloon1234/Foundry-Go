@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Credential contention and subject creation (B39)
+
+- Handle both subject unique indexes during concurrent token, session and
+  challenge creation. Retain scoped locking, stored-identity validation,
+  capacity limits, revocation and single-use behavior without automatic retries.
+- Classify confirmed credential lock/deadlock/serialization rollbacks as conflicts,
+  preserve pool overload and deadline classifications, and retain database causes.
+  Bounded, isolated inspection includes custom `As`; committed or unknown outcomes,
+  typed-nil results and inspection failures prevent optimistic classification.
+- Add concurrent first-subject and forced lock/pool contention regressions, plus
+  safe diagnostics for unexpected token issuance failures.
+
 ### Editor probes and database conflict and callback failures (B34–B36)
 
 - Update editor probes for `http.SignedAuthenticated` and authenticated route

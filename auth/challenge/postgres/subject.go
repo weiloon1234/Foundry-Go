@@ -27,7 +27,9 @@ func lockSubject(ctx context.Context, tx *database.Tx, address challenge.Address
 			return challengestore.Subject{}, false, err
 		}
 		draft := challengestore.SubjectDraft{}.SetKey(key).SetScope(scope).SetIdentity(data)
-		if _, err := challengestore.QueryFoundryChallengeSubjects().Upsert(ctx, tx, draft, query.OnConflict(challengestore.SubjectFields().Key).DoNothing()); err != nil {
+		// First-subject races can hit the primary key or UNIQUE (key, scope).
+		// Cover both, then retain the scoped locking read and identity checks.
+		if _, err := challengestore.QueryFoundryChallengeSubjects().Upsert(ctx, tx, draft, query.OnConflict[challengestore.Subject]().DoNothing()); err != nil {
 			return challengestore.Subject{}, false, err
 		}
 	}

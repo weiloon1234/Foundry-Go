@@ -122,7 +122,9 @@ func lockSubject(ctx context.Context, tx *database.Tx, address token.Address, id
 			return tokenstore.Subject{}, false, err
 		}
 		draft := tokenstore.SubjectDraft{}.SetKey(key).SetScope(scope).SetIdentity(data)
-		if _, err := tokenstore.QueryFoundryTokenSubjects().Upsert(ctx, tx, draft, query.OnConflict(tokenstore.SubjectFields().Key).DoNothing()); err != nil {
+		// First-subject races can hit the primary key or UNIQUE (key, scope).
+		// Cover both, then retain the scoped locking read and identity checks.
+		if _, err := tokenstore.QueryFoundryTokenSubjects().Upsert(ctx, tx, draft, query.OnConflict[tokenstore.Subject]().DoNothing()); err != nil {
 			return tokenstore.Subject{}, false, err
 		}
 	}
