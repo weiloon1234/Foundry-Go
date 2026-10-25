@@ -1972,3 +1972,29 @@ ownership manifests; no generated conflict is hand-merged.
 
 See [integration evidence](../../docs/evidence/goway-batch7g-integration.json) for
 conflicts, exact removals, source fingerprints and segmented acceptance results.
+
+## Integration batch 7h: oracle prerequisites and helper retirement
+
+CurrentEmailDraft and CreatorDraft are removed; consumers use the typed assignment
+helpers and retain exact-value/presence assertions. PostgreSQL sensitive and mutator
+behavior tests use ORM declarations. The dual-runtime redaction test has a
+handwritten legacy declaration, independent of generated models.
+
+The oracle import guard parses escaped import paths and requires recording files
+to contain only reviewed paired entry points and their helpers. Ordinary tests and
+benchmarks live separately. Direct, target, pivot and mixed relation ordering retain
+their recorded SQL/bindings comparisons. The reviewed census covers 540 test sources
+and 103 paired entry points. The only migration-before exceptions are
+`migration/guide_test.go`, `migration/examples_test.go` and `migration/sql_test.go`
+under the Go-way fixture. Stage 8c removes this exception when before snippets become
+documentation-only; after snippets remain compiled.
+
+Stage 7 and the Stage 9 catalogue remain complete; the cleanup barrier and final
+PostgreSQL oracle freeze remain pending. Offline capture/replay uses temporary
+storage and does not publish expectations. This integration checked 907 observations
+across 134 assertion sites and 12 footprint packages. See the
+[prerequisite decisions](../../docs/evidence/goway-stage8c-base-dependencies-report.md)
+and [helper retirement](../../docs/evidence/goway-stage9-d-helper-report.md).
+
+Current-source command results and hashes are recorded in
+[batch 7h evidence](../../docs/evidence/goway-batch7h-integration.json).

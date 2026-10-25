@@ -7,13 +7,13 @@ From the repository root, the lead can run these without a Makefile change:
 
 ```sh
 cd tests/fixtures/goway
-GOCACHE=/private/tmp/foundry-goway-codex-gocache-r13 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --check
+GOCACHE=/private/tmp/foundry-goway-codex-gocache-r14 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --check
 # Lead-only PostgreSQL capture/replay, using the existing private test configuration:
-GOCACHE=/private/tmp/foundry-goway-codex-gocache-r13 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --check --postgres
+GOCACHE=/private/tmp/foundry-goway-codex-gocache-r14 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --check --postgres
 # Only at the integrated-tree freeze barrier:
-GOCACHE=/private/tmp/foundry-goway-codex-gocache-r13 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --freeze --postgres
+GOCACHE=/private/tmp/foundry-goway-codex-gocache-r14 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --freeze --postgres
 # An intentional later replacement requires this distinct command:
-GOCACHE=/private/tmp/foundry-goway-codex-gocache-r13 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --refreeze --postgres
+GOCACHE=/private/tmp/foundry-goway-codex-gocache-r14 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --refreeze --postgres
 ```
 
 `--check` runs real golden paths and measurements into temporary storage, checks
@@ -115,3 +115,23 @@ Consumer replay reads a sibling module, so use make (which supplies the shared
 source fingerprint) or `go test -count=1` for direct replay, including filtered runs.
 The shared assertion calls `testkit.TrackExternalInputs`; the recorder always uses
 `-count=1`. This prevents cached consumer results from hiding changed oracle inputs.
+
+The recorder also audits actual Go imports across the checkout. Dependencies on
+oldmodels/oldreporting are restricted to their own declarations, reviewed paired
+comparison files, the three oldGolden adapter helpers, and registered legacy
+footprint probes. A recording file cannot also contain unrecorded tests, benchmarks,
+fuzz targets, examples or init hooks. Ordinary assertions live in separate files
+without generated-model imports, including the dual-runtime mutator redaction test.
+Every Go import is parsed and unquoted, including escaped paths; descriptor
+package-name strings do not count as imports.
+PostgreSQL behavioral tests use ORM declarations; the mutator legacy hydration
+comparison lives in `pgsmoke/oracle_legacy_test.go` and requires `--postgres`.
+
+The sole non-recording exception class is **migration-before examples**, limited to
+`migration/guide_test.go`, `migration/examples_test.go` and `migration/sql_test.go`.
+These compile the guide's before snippets deliberately. Stage 8c makes before blocks
+documentation-only and leaves after blocks compiled, then removes this exception.
+The guard regression rejects other files in the same directory and matching file
+names elsewhere. Relation-expression ordering's direct, target, pivot and mixed
+modes use the shared frozen comparator; ordinary rejection assertions are separate
+in `relation_order_behavior_test.go`.

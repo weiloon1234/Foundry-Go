@@ -8,6 +8,12 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Retire CurrentEmailDraft/CreatorDraft in favor of typed assignment helpers.
+  Separate legacy oracle recording from ordinary behavior tests, migrate sensitive
+  and mutator PostgreSQL coverage to ORM declarations, and enforce parsed import
+  guards (including escaped paths). The three migration-before example files keep
+  a temporary exception until Stage 8c; final oracle freezing remains pending.
+
 - Complete the Stage 9 compiler catalogue (587 ported, 445 unaffected, zero pending)
   and begin the generated-consumer cleanup barrier. Add the reviewed oracle freeze
   harness; freezing and remaining legacy retirement are still pending.

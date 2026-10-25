@@ -61,10 +61,6 @@ type User struct {
 	Scratch            []string `foundry:"-"`
 }
 
-// CurrentEmailDraft deliberately refers to a generated return type and methods.
-// Generation must work when all generated files are absent in a fresh checkout.
-func (u User) CurrentEmailDraft() UserDraft { return UserDraft{}.SetEmail(u.Email) }
-
 //foundry:model table=orders
 type Order struct {
 	ID         model.ID[Order]

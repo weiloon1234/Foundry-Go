@@ -1,12 +1,15 @@
 package invalid
 
 import (
-	old "foundry.test/goway/oldmodels"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
+type user struct{}
+type order struct{}
+
 func invalid() {
-	users := query.TextNullableValue(query.Value(old.UserFields().Nickname))
-	orders := query.NullableTextValueComparison[old.Order, string](users)
+	users := query.TextNullableValue(query.Value(query.NewNullableTextField[user]("users", "nickname", codec.String[string]())))
+	orders := query.NullableTextValueComparison[order, string](users)
 	_ = orders.Eq("x")
 }

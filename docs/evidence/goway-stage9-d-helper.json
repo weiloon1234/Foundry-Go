@@ -1,0 +1,2534 @@
+{
+  "slice": "stage9-d-barrier-helpers",
+  "base": "dbe6b1b789f2a23b8324f53935cd753e9141a9b4",
+  "recorded_at": "2026-10-25T06:55:52.012950+00:00",
+  "status": "Helper retirement and targeted acceptance complete; zero-reference audit blocked by 140 retained compile-fail files and 11 oracle-support declaration/factory files.",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r13",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "FOUNDRY_TEST_GOPLS": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+  },
+  "implementation": {
+    "old_helpers_removed": [
+      "models.User.CurrentEmailDraft",
+      "catalog.Product.CreatorDraft"
+    ],
+    "remaining_old_helper_go_references": 0,
+    "caller_migration": "Already present in supplied base, including actual-helper assignment consumption and supplied empty-email/key assertions. Preserved unchanged.",
+    "obsolete_directives_removed": 0,
+    "generated_outputs_changed": 0,
+    "ownership_manifests_changed": 0,
+    "reason_no_generated_deletion": "Both owners remain used by live oracle recording files and retained compiler negatives. No output becomes obsolete solely from removing these helpers."
+  },
+  "acceptance": [
+    {
+      "name": "generation",
+      "command": "make generate",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-d-helper-generate.log",
+      "log_sha256": "9e13e1f5e0b58f8bca816409c40b7ecc36e31fe4d9f0d5251bfc889258fd6a2b"
+    },
+    {
+      "name": "consumer_build",
+      "command": "go -C tests/fixtures/consumer build ./...",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-d-helper-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "consumer_vet",
+      "command": "go -C tests/fixtures/consumer vet ./...",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-d-helper-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "helper_and_root_races",
+      "command": "env -u FOUNDRY_TEST_POSTGRES_URL -u FOUNDRY_TEST_POSTGRES_REQUIRED go -C tests/fixtures/consumer test -race -count=1 -run '^Test(BusinessAssignmentHelpers|CrossPackageBusinessAssignmentHelper|CurrentEmailAssignmentSuppliesExactInput|CreatorAssignmentSuppliesExactUserKey|HandwrittenModelsAndAssignments|HandwrittenConsumerPackageGraph)$' .",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-d-helper-race.log",
+      "log_sha256": "df0361736b66d462bd3ae4061a218d63b7e35fd0caeccabc1bc80fdedecf4966"
+    },
+    {
+      "name": "owner_package_races",
+      "command": "env -u FOUNDRY_TEST_POSTGRES_URL -u FOUNDRY_TEST_POSTGRES_REQUIRED go -C tests/fixtures/consumer test -race -count=1 ./models ./catalog ./internal/queryfixture",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-d-helper-packages-race.log",
+      "log_sha256": "020137154184bc310a68f1266586216883e1371b6781c3ea744855728d70fce4"
+    },
+    {
+      "name": "catalogue",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 tools/goway_catalogue.py",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-d-helper-catalogue.log",
+      "log_sha256": "6329ef022e09704bed1fdeed64cafdafeed3f6a425abfbb8ae0ce5d513db8868"
+    },
+    {
+      "name": "docs",
+      "command": "make docs-check",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-d-helper-docs.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "name": "gofmt",
+      "command": "gofmt -l tests/fixtures/consumer/models/models.go tests/fixtures/consumer/catalog/product.go",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-d-helper-gofmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "diff_check",
+      "command": "git diff --check",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-d-helper-diff-check.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "editor_and_generation_check",
+      "command": "make agent-smoke",
+      "prerequisites": [
+        "make generate-check"
+      ],
+      "exit_code": 0,
+      "passed_probes": 502,
+      "failed_probes": 0,
+      "skipped_probes": 0,
+      "duration_seconds": 354.287,
+      "log": "/private/tmp/goway-d-helper-agent-smoke.log",
+      "log_sha256": "22f52d620f5b58b5ace248e76bc3ce890c3d8649b9e44b611e0900899ead414a"
+    }
+  ],
+  "source_sha256": {
+    "tests/fixtures/consumer/models/models.go": "13a24b5e35f87f6ca8719201f960ff0d82fc7065cd3eef7a7561ea2a2c6b09b4",
+    "tests/fixtures/consumer/catalog/product.go": "9a106155f97e2e632aab683c750d8ac622e0ecbc14eb43e39500f4fba6fc8725",
+    "tests/fixtures/consumer/models/business_assignments.go": "942f879e9862e8f7866ccf37a27e3d8dcd8d5ba2e56e5f597a52c0118ba0cc47",
+    "tests/fixtures/consumer/catalog/business_assignments.go": "04bb8edc24b7aa6090db304bc40053e089035da723a77203640bac24a9ba9444",
+    "tests/fixtures/consumer/generated_test.go": "b75ddcd14b71862510faba79563893dac2a37e811ea9d46b4a0732a5afcc6cbe",
+    "tests/fixtures/consumer/package_graph_test.go": "96e929345946d25b6b83e2f4bc53d2e3df198eefa46f30e50aa1a2a66fdb4521",
+    "tests/fixtures/consumer/business_assignments_test.go": "58ce44116dd69a713eb4edd5ca23cd269b0b2d662b0767eaa7843e24a1c0b30d",
+    "tests/fixtures/consumer/assignment_inputs_test.go": "a6b332e9cf85abd4cfee5210b772c88d07b4e975ee9ef2d017608536a672f25c",
+    "tests/fixtures/consumer/internal/queryfixture/postgres.go": "a3ef30c9955f9f63288d48de3debe83235273e03bd7fe49464b5803bdb16ff05",
+    "tests/fixtures/consumer/models/README.md": "c2ebc9bad9a1c51ba1d42d987e7cdf144cd8b777e5ed3db4f5656ba9f9e58a1a",
+    "docs/evidence/goway-stage9-d-helper-report.md": "78dd638bea1f4c0d062aafd1bc5907d7e41b43ab34d01e137671238e763a3f17",
+    "docs/evidence/goway-stage9-d-helper-references.tsv": "76a9ddc50f067fbb5393e98a6cb66ab97719c0741878d27eb2417e2f927b1d75"
+  },
+  "zero_reference_audit": {
+    "result": "blocked",
+    "oracle_recording_files": 32,
+    "outside_recording_compilefail_files": 140,
+    "outside_recording_support_files": 11,
+    "retained_directives": 49,
+    "retained_generated_files": 49,
+    "oracle_receipt_phase": "pending",
+    "script": "from pathlib import Path\nimport hashlib,importlib.util,json,re\nroot=Path.cwd();base=root/'tests/fixtures/consumer'\nspec=importlib.util.spec_from_file_location('catalogue',root/'tools/goway_catalogue.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\nsymbols=m.generated_symbols(root)\ncensus=json.loads((root/'tests/fixtures/goway/testdata/oracles/comparisons.json').read_text())['files']\nrows=[];methods=[];generated=[];directives=[]\nfor p in sorted(base.rglob('*.go')):\n s=p.read_text();rel=str(p.relative_to(root))\n if p.name.endswith('_foundry.gen.go'):\n  if 'FoundryModel' in s or 'ProjectionDefinition[' in s:generated.append(rel)\n  continue\n for i,line in enumerate(s.splitlines(),1):\n  if line.startswith('//foundry:model') or line.startswith('//foundry:projection'):directives.append({'file':rel,'line':i,'directive':line})\n code=m.code_only(s);refs=set()\n for alias,path in re.findall(r'(?:\\b([A-Za-z_]\\w*)\\s+)?\"([^\"\\n]+)\"',s):\n  qualifier=alias or path.rsplit('/',1)[-1]\n  selected=set(re.findall(r'\\b'+re.escape(qualifier)+r'\\s*\\.\\s*([A-Za-z_]\\w*)',code))\n  refs.update(qualifier+'.'+symbol for symbol in selected & symbols.get(path,set()))\n own='foundry.test/consumer/'+str(p.parent.relative_to(base))\n refs.update(n for n in symbols.get(own,set()) if re.search(r'(?<![\\w.])'+re.escape(n)+r'\\b',code))\n boundary=sorted(set(re.findall(r'\\bFoundry(?:Reference|Identity|Model|CreateMutation|UpdateMutation)\\s*(?=\\()',code)))\n if boundary:methods.append({'file':rel,'names':boundary})\n if not refs:continue\n paired=census.get('consumer/'+str(p.relative_to(base)),{}).get('paired_tests',[])\n category='oracle_recording' if paired else 'compilefail' if '/testdata/compilefail/' in rel else 'other'\n rows.append({'file':rel,'category':category,'symbols':sorted(refs),'paired_tests':paired,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()})\nresult={'base':'dbe6b1b7','method':'Exact exported model/projection symbols indexed by tools/goway_catalogue.py, matched against imported package aliases and unqualified same-package uses after masking comments and strings. Oracle recording files come from the existing comparisons.json paired_tests census. Generated implementations and ambiguous receiver boundaries are inventoried separately.','generated_files':generated,'directives':directives,'references':rows,'receiver_boundary_candidates':methods}\nPath('/private/tmp/goway-d-helper-exact-audit.json').write_text(json.dumps(result,indent=2)+'\\n')\nfor category in ['oracle_recording','compilefail','other']:\n group=[r for r in rows if r['category']==category];print(category, len(group))\n if category=='other':\n  for r in group:print(' ',r['file'],', '.join(r['symbols']))\nprint('generated_files',len(generated),'directives',len(directives))\nprint('receiver_boundaries',len(methods))\n",
+    "inventory": {
+      "base": "dbe6b1b7",
+      "method": "Exact exported model/projection symbols indexed by tools/goway_catalogue.py, matched against imported package aliases and unqualified same-package uses after masking comments and strings. Oracle recording files come from the existing comparisons.json paired_tests census. Generated implementations and ambiguous receiver boundaries are inventoried separately.",
+      "generated_files": [
+        "tests/fixtures/consumer/bootstrap/member_foundry.gen.go",
+        "tests/fixtures/consumer/bootstrap/operator_foundry.gen.go",
+        "tests/fixtures/consumer/catalog/product_foundry.gen.go",
+        "tests/fixtures/consumer/framequeries/sample_foundry.gen.go",
+        "tests/fixtures/consumer/intervalqueries/label_foundry.gen.go",
+        "tests/fixtures/consumer/intervalqueries/link_foundry.gen.go",
+        "tests/fixtures/consumer/intervalqueries/plan_foundry.gen.go",
+        "tests/fixtures/consumer/intervalqueries/sample_foundry.gen.go",
+        "tests/fixtures/consumer/intervalqueries/summary_foundry.gen.go",
+        "tests/fixtures/consumer/jsonqueries/document_foundry.gen.go",
+        "tests/fixtures/consumer/jsonqueries/policy_foundry.gen.go",
+        "tests/fixtures/consumer/jsonqueries/snapshot_foundry.gen.go",
+        "tests/fixtures/consumer/keyqueries/bucket_count_foundry.gen.go",
+        "tests/fixtures/consumer/linkqueries/group_foundry.gen.go",
+        "tests/fixtures/consumer/models/country_foundry.gen.go",
+        "tests/fixtures/consumer/models/friendship_foundry.gen.go",
+        "tests/fixtures/consumer/models/group_foundry.gen.go",
+        "tests/fixtures/consumer/models/ledger_entry_foundry.gen.go",
+        "tests/fixtures/consumer/models/location_foundry.gen.go",
+        "tests/fixtures/consumer/models/measurement_foundry.gen.go",
+        "tests/fixtures/consumer/models/membership_foundry.gen.go",
+        "tests/fixtures/consumer/models/order_foundry.gen.go",
+        "tests/fixtures/consumer/models/user_foundry.gen.go",
+        "tests/fixtures/consumer/models/write_record_foundry.gen.go",
+        "tests/fixtures/consumer/mutatorqueries/member_foundry.gen.go",
+        "tests/fixtures/consumer/officequeries/desk_foundry.gen.go",
+        "tests/fixtures/consumer/officequeries/employee_foundry.gen.go",
+        "tests/fixtures/consumer/officequeries/label_foundry.gen.go",
+        "tests/fixtures/consumer/officequeries/labeling_foundry.gen.go",
+        "tests/fixtures/consumer/officequeries/note_foundry.gen.go",
+        "tests/fixtures/consumer/officequeries/office_foundry.gen.go",
+        "tests/fixtures/consumer/officequeries/region_foundry.gen.go",
+        "tests/fixtures/consumer/pivothooks/assignment_foundry.gen.go",
+        "tests/fixtures/consumer/pivothooks/person_foundry.gen.go",
+        "tests/fixtures/consumer/pivothooks/project_foundry.gen.go",
+        "tests/fixtures/consumer/productionprofile/record_foundry.gen.go",
+        "tests/fixtures/consumer/reporting/member_foundry.gen.go",
+        "tests/fixtures/consumer/reporting/operator_foundry.gen.go",
+        "tests/fixtures/consumer/reporting/order_foundry.gen.go",
+        "tests/fixtures/consumer/reports/buyer_totals_foundry.gen.go",
+        "tests/fixtures/consumer/reports/order_summary_foundry.gen.go",
+        "tests/fixtures/consumer/reports/user_summary_foundry.gen.go",
+        "tests/fixtures/consumer/scalarqueries/calculation_foundry.gen.go",
+        "tests/fixtures/consumer/scalarqueries/sample_foundry.gen.go",
+        "tests/fixtures/consumer/temporalqueries/calendar_summary_foundry.gen.go",
+        "tests/fixtures/consumer/temporalqueries/sample_foundry.gen.go",
+        "tests/fixtures/consumer/transactionqueries/record_foundry.gen.go",
+        "tests/fixtures/consumer/transactionqueries/summary_foundry.gen.go",
+        "tests/fixtures/consumer/windowqueries/ranking_row_foundry.gen.go"
+      ],
+      "directives": [
+        {
+          "file": "tests/fixtures/consumer/bootstrap/models.go",
+          "line": 5,
+          "directive": "//foundry:model table=bootstrap_members"
+        },
+        {
+          "file": "tests/fixtures/consumer/bootstrap/models.go",
+          "line": 11,
+          "directive": "//foundry:model table=bootstrap_operators"
+        },
+        {
+          "file": "tests/fixtures/consumer/catalog/product.go",
+          "line": 12,
+          "directive": "//foundry:model table=products primary=Code"
+        },
+        {
+          "file": "tests/fixtures/consumer/framequeries/sample.go",
+          "line": 12,
+          "directive": "//foundry:model table=frame_samples primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/intervalqueries/models.go",
+          "line": 13,
+          "directive": "//foundry:model table=interval_samples primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/intervalqueries/models.go",
+          "line": 27,
+          "directive": "//foundry:model table=interval_plans primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/intervalqueries/models.go",
+          "line": 49,
+          "directive": "//foundry:model table=interval_labels primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/intervalqueries/models.go",
+          "line": 55,
+          "directive": "//foundry:model table=interval_links primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/intervalqueries/models.go",
+          "line": 62,
+          "directive": "//foundry:projection"
+        },
+        {
+          "file": "tests/fixtures/consumer/jsonqueries/models.go",
+          "line": 36,
+          "directive": "//foundry:model table=json_documents primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/jsonqueries/models.go",
+          "line": 47,
+          "directive": "//foundry:model table=json_policies primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/jsonqueries/models.go",
+          "line": 58,
+          "directive": "//foundry:projection"
+        },
+        {
+          "file": "tests/fixtures/consumer/keyqueries/reports.go",
+          "line": 4,
+          "directive": "//foundry:projection"
+        },
+        {
+          "file": "tests/fixtures/consumer/linkqueries/models.go",
+          "line": 29,
+          "directive": "//foundry:model table=link_groups primary=Code retrieval=groupReads"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/ledger.go",
+          "line": 9,
+          "directive": "//foundry:model table=ledger_entries"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/location.go",
+          "line": 7,
+          "directive": "//foundry:model table=locations primary=Code"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/measurement.go",
+          "line": 9,
+          "directive": "//foundry:model table=measurements"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/membership.go",
+          "line": 12,
+          "directive": "//foundry:model table=groups primary=Code"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/membership.go",
+          "line": 24,
+          "directive": "//foundry:model table=memberships primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/membership.go",
+          "line": 40,
+          "directive": "//foundry:model table=friendships"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/models.go",
+          "line": 30,
+          "directive": "//foundry:model table=users"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/models.go",
+          "line": 64,
+          "directive": "//foundry:model table=orders"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/models.go",
+          "line": 72,
+          "directive": "//foundry:model table=countries primary=Code"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/write_record.go",
+          "line": 10,
+          "directive": "//foundry:model table=write_records primary=Code"
+        },
+        {
+          "file": "tests/fixtures/consumer/mutatorqueries/member.go",
+          "line": 17,
+          "directive": "//foundry:model table=mutator_members"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/models.go",
+          "line": 15,
+          "directive": "//foundry:model table=office_regions"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/models.go",
+          "line": 26,
+          "directive": "//foundry:model table=office_offices"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/models.go",
+          "line": 45,
+          "directive": "//foundry:model table=office_employees"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/models.go",
+          "line": 72,
+          "directive": "//foundry:model table=office_notes"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/models.go",
+          "line": 90,
+          "directive": "//foundry:model table=office_labels"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/models.go",
+          "line": 97,
+          "directive": "//foundry:model table=office_labelings"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/models.go",
+          "line": 137,
+          "directive": "//foundry:model table=office_desks"
+        },
+        {
+          "file": "tests/fixtures/consumer/pivothooks/models.go",
+          "line": 11,
+          "directive": "//foundry:model table=hook_projects"
+        },
+        {
+          "file": "tests/fixtures/consumer/pivothooks/models.go",
+          "line": 18,
+          "directive": "//foundry:model table=hook_people"
+        },
+        {
+          "file": "tests/fixtures/consumer/pivothooks/models.go",
+          "line": 26,
+          "directive": "//foundry:model table=hook_assignments hooks=assignmentHooks"
+        },
+        {
+          "file": "tests/fixtures/consumer/productionprofile/record.go",
+          "line": 9,
+          "directive": "//foundry:model table=profile_records"
+        },
+        {
+          "file": "tests/fixtures/consumer/reporting/models.go",
+          "line": 21,
+          "directive": "//foundry:model table=report_operators"
+        },
+        {
+          "file": "tests/fixtures/consumer/reporting/models.go",
+          "line": 30,
+          "directive": "//foundry:model table=report_members"
+        },
+        {
+          "file": "tests/fixtures/consumer/reporting/models.go",
+          "line": 43,
+          "directive": "//foundry:model table=report_orders"
+        },
+        {
+          "file": "tests/fixtures/consumer/reports/projections.go",
+          "line": 11,
+          "directive": "//foundry:projection"
+        },
+        {
+          "file": "tests/fixtures/consumer/reports/projections.go",
+          "line": 20,
+          "directive": "//foundry:projection"
+        },
+        {
+          "file": "tests/fixtures/consumer/reports/projections.go",
+          "line": 28,
+          "directive": "//foundry:projection"
+        },
+        {
+          "file": "tests/fixtures/consumer/scalarqueries/sample.go",
+          "line": 11,
+          "directive": "//foundry:model table=calculation_samples primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/scalarqueries/sample.go",
+          "line": 22,
+          "directive": "//foundry:projection"
+        },
+        {
+          "file": "tests/fixtures/consumer/temporalqueries/sample.go",
+          "line": 11,
+          "directive": "//foundry:model table=temporal_samples primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/temporalqueries/sample.go",
+          "line": 26,
+          "directive": "//foundry:projection"
+        },
+        {
+          "file": "tests/fixtures/consumer/transactionqueries/models.go",
+          "line": 12,
+          "directive": "//foundry:model table=records primary=ID"
+        },
+        {
+          "file": "tests/fixtures/consumer/transactionqueries/models.go",
+          "line": 18,
+          "directive": "//foundry:projection"
+        },
+        {
+          "file": "tests/fixtures/consumer/windowqueries/reports.go",
+          "line": 11,
+          "directive": "//foundry:projection"
+        }
+      ],
+      "references": [
+        {
+          "file": "tests/fixtures/consumer/bootstrap/tables_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "MemberFields",
+            "QueryBootstrapMembers"
+          ],
+          "paired_tests": [
+            "TestORMActorDeclarationParity"
+          ],
+          "sha256": "28975ea108adc28db10476b36682b8babfad00d88c429792ae68f675f415cccf"
+        },
+        {
+          "file": "tests/fixtures/consumer/catalog/orm_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "ProductFields",
+            "ProductRelations",
+            "QueryProducts"
+          ],
+          "paired_tests": [
+            "TestProductORMParity"
+          ],
+          "sha256": "aed34b3f2b19aeff30b1965985acaacee0290329664eb2057d9024046a483556"
+        },
+        {
+          "file": "tests/fixtures/consumer/catalog/product.go",
+          "category": "other",
+          "symbols": [
+            "ProductFields",
+            "ProductRelationSet",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "9a106155f97e2e632aab683c750d8ac622e0ecbc14eb43e39500f4fba6fc8725"
+        },
+        {
+          "file": "tests/fixtures/consumer/comparisonqueries/scalar_clause_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [
+            "TestAliasedScalarWindowSQLParity"
+          ],
+          "sha256": "367f6eafa2afe42b94817fa623b1ab401b44af262f8c56f945dff3f60236a626"
+        },
+        {
+          "file": "tests/fixtures/consumer/correlations/sql_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt",
+            "models.UserRelations"
+          ],
+          "paired_tests": [
+            "TestORMCorrelatedGroupingAndRelationParity"
+          ],
+          "sha256": "079fa6bc5f7256a421d715e711b3d17407db7a68e157e94ee29ae02b74ded3db"
+        },
+        {
+          "file": "tests/fixtures/consumer/distinctqueries/clause_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [
+            "TestScalarGroupingDistinctSQLParity",
+            "TestScalarDistinctOnUnselectedKeySQLParity",
+            "TestRecordAndSetDistinctSQLParity",
+            "TestValueSetDistinctSQLParity"
+          ],
+          "sha256": "dabcf32e243272dad24d6d1e44b821f7e8d569200363c584d6ddec227c087085"
+        },
+        {
+          "file": "tests/fixtures/consumer/distinctqueries/correlated_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [
+            "TestCorrelatedDistinctOnSQLParity"
+          ],
+          "sha256": "430385f9bd94e0a792d70b5fe4390ea6e15c1c04dc69c1a3a2c9a2e22718b114"
+        },
+        {
+          "file": "tests/fixtures/consumer/distinctqueries/record_distinct_on_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFields",
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [
+            "TestRecordDistinctOnInputOrderingParity"
+          ],
+          "sha256": "969e0a3a784e5dab1e659b33d5bb3f62b2d865fa9b9660b4b236e8273305ca42"
+        },
+        {
+          "file": "tests/fixtures/consumer/framequeries/sql_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "framequeries.QueryFrameSamples",
+            "framequeries.SampleFields"
+          ],
+          "paired_tests": [
+            "TestNamedFrameSQLParity"
+          ],
+          "sha256": "1e53b250d7ffa4a7732f8bb481f68d6f28c352001ac37eb83f0a1bce4f53b5f9"
+        },
+        {
+          "file": "tests/fixtures/consumer/httpmodels/sql_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryCountries",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [
+            "TestDeclaredBindingsPreserveLegacySQL"
+          ],
+          "sha256": "f89f1f6d94b450af55f3772a62031d8e57c53e9888667def2f9f60afcf9d8363"
+        },
+        {
+          "file": "tests/fixtures/consumer/intervalqueries/models.go",
+          "category": "other",
+          "symbols": [
+            "LabelFields",
+            "LinkFields",
+            "PlanAggregateSet",
+            "PlanFields",
+            "PlanRelationSet",
+            "PlanRelations",
+            "SampleFields"
+          ],
+          "paired_tests": [],
+          "sha256": "f2b6da104fda6fe26466060384e8704fbd5c6040d1fc9fefe10d45590a1739a2"
+        },
+        {
+          "file": "tests/fixtures/consumer/intervalqueries/orm_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "LabelFields",
+            "PlanRelations",
+            "ProjectSummary",
+            "QueryIntervalLabels",
+            "QueryIntervalLinks",
+            "QueryIntervalPlans",
+            "QueryIntervalSamples",
+            "SampleFields"
+          ],
+          "paired_tests": [
+            "TestIntervalDeclarationSQLParity"
+          ],
+          "sha256": "50ff02f934e37addab309347224269d68f57a1d821a36607e9e4f76a712178ae"
+        },
+        {
+          "file": "tests/fixtures/consumer/jsonqueries/models.go",
+          "category": "other",
+          "symbols": [
+            "DocumentFields",
+            "DocumentRelationSet",
+            "PolicyFields"
+          ],
+          "paired_tests": [],
+          "sha256": "b8470ba4e51d21420f9c43a6743141b53cbc8285b0a71abde42c8087e8648de1"
+        },
+        {
+          "file": "tests/fixtures/consumer/jsonqueries/path_sql_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "jsonqueries.DocumentFields",
+            "jsonqueries.QueryJsonDocuments"
+          ],
+          "paired_tests": [
+            "TestDeclaredJSONPathSQLParity"
+          ],
+          "sha256": "b3debaf4b1f1f87df2e227103f56b5ecf538cdb94d4afc2bef8807e8a1319a88"
+        },
+        {
+          "file": "tests/fixtures/consumer/jsonqueries/relation_filter_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "jsonqueries.DocumentRelations",
+            "jsonqueries.PolicyFields",
+            "jsonqueries.QueryJsonDocuments"
+          ],
+          "paired_tests": [
+            "TestJSONNaturalKeyRelationFilterParity"
+          ],
+          "sha256": "f1cc9edd9863c512a328cd47a3dce1fde1dfc7447387676dbce5dc28eea77250"
+        },
+        {
+          "file": "tests/fixtures/consumer/jsonqueries/snapshot_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "jsonqueries.DocumentFields",
+            "jsonqueries.ProjectSnapshot",
+            "jsonqueries.QueryJsonDocuments"
+          ],
+          "paired_tests": [
+            "TestSnapshotJSONKindIdentityAndSQLParity"
+          ],
+          "sha256": "8188c3fea79194ff440328b51b253eb82b2e47adf309fb79baa5d0446622da4e"
+        },
+        {
+          "file": "tests/fixtures/consumer/keyqueries/clause_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFields",
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [
+            "TestCorrelatedSelectedKeySQLParity",
+            "TestValueSetSelectedKeySQLParity"
+          ],
+          "sha256": "b2072bbd2af80519a5bfc960173649a22b03cbba552d9ef269d0e3f5037f0cc2"
+        },
+        {
+          "file": "tests/fixtures/consumer/keyqueries/cursor_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "keyqueries.BucketCountFieldsAt",
+            "keyqueries.BucketCountSelection",
+            "keyqueries.SelectBucketCount",
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [
+            "TestCursorCompileSQLParity"
+          ],
+          "sha256": "41d426f59c6b9dc41c88ad6488b8705e8d477fbce55e2a20c79e3c49de691d8a"
+        },
+        {
+          "file": "tests/fixtures/consumer/lateralqueries/clause_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt",
+            "reports.ProjectCorrelatedOrderSummary"
+          ],
+          "paired_tests": [
+            "TestCorrelatedRecordClauseSQLParity"
+          ],
+          "sha256": "9e549eb901606beb8aa33c51d258f36bfbd4c851559f0cb994119f6576bdf348"
+        },
+        {
+          "file": "tests/fixtures/consumer/linkqueries/models.go",
+          "category": "other",
+          "symbols": [
+            "GroupRetrievalHooks"
+          ],
+          "paired_tests": [],
+          "sha256": "b4a707fb1ff7854ec7ef31746bb701e5a32c7b5ab430a12fc909a7cad92446aa"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/aggregates.go",
+          "category": "other",
+          "symbols": [
+            "GroupFields",
+            "MeasurementFields",
+            "MembershipFields",
+            "OrderFields",
+            "UserAggregateSet",
+            "UserRelations"
+          ],
+          "paired_tests": [],
+          "sha256": "24df31023eddef4a69c93ae11fbbb641ad90b6bfdf0c6fb7c5a4f30f74d7793e"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/membership.go",
+          "category": "other",
+          "symbols": [
+            "GroupFields",
+            "GroupRelationSet",
+            "MembershipFields",
+            "MembershipRelationSet",
+            "UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "487a899710f890aef6dd4689ebee4f287a355315e3d1b2c562ca07f47e0a3e6d"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/orm_postgres_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserAggregates",
+            "models.UserFields",
+            "models.UserRelations"
+          ],
+          "paired_tests": [
+            "TestPostgresSharedDeclarationRelationParity"
+          ],
+          "sha256": "528f936bcc4d0a990a91547fb72b597b051d82997a9e77c84f332b15f3b3cd6a"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/orm_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.QueryCountries",
+            "models.QueryFriendships",
+            "models.QueryGroups",
+            "models.QueryLedgerEntries",
+            "models.QueryLocations",
+            "models.QueryMeasurements",
+            "models.QueryMemberships",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.QueryWriteRecords",
+            "models.UserRelations"
+          ],
+          "paired_tests": [
+            "TestORMDeclarationSQLParity"
+          ],
+          "sha256": "fe5e4a6bd1b5a73e4c0e5317766d1061ed7fcb963537a2140a529b8ad3fcf8e1"
+        },
+        {
+          "file": "tests/fixtures/consumer/models/relations.go",
+          "category": "other",
+          "symbols": [
+            "CountryFields",
+            "CountryRelationSet",
+            "FriendshipFields",
+            "GroupFields",
+            "LocationFields",
+            "LocationRelationSet",
+            "MeasurementFields",
+            "MembershipFields",
+            "OrderFields",
+            "OrderRelationSet",
+            "UserFields",
+            "UserRelationSet"
+          ],
+          "paired_tests": [],
+          "sha256": "30179cb0e80e61a0206a7017897dff10f7e9f835351ac8d5c132ab32db3bf4e0"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/models.go",
+          "category": "other",
+          "symbols": [
+            "DeskFields",
+            "DeskRelationSet",
+            "DeskRelations",
+            "EmployeeFields",
+            "EmployeeRelationSet",
+            "LabelFields",
+            "LabelRelationSet",
+            "LabelingFields",
+            "NoteFields",
+            "NoteRelationSet",
+            "OfficeAggregateSet",
+            "OfficeFields",
+            "OfficeRelationSet",
+            "OfficeRelations",
+            "RegionFields",
+            "RegionRelationSet"
+          ],
+          "paired_tests": [],
+          "sha256": "fb548c6544202d234dc563cbe894cfd1dfca711541320fb38a80ee0ed85a369c"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/related_value_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "EmployeeFields",
+            "LabelFields",
+            "OfficeFields",
+            "OfficeRelations",
+            "QueryOfficeOffices",
+            "QueryOfficeRegions",
+            "RegionRelations"
+          ],
+          "paired_tests": [
+            "TestOfficeRelatedValueSQLParity"
+          ],
+          "sha256": "dd659139727012b14853c26a301833f129d458cde8a7f818294d3acc41cce948"
+        },
+        {
+          "file": "tests/fixtures/consumer/officequeries/tables_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "NoteRelations",
+            "OfficeRelations",
+            "QueryOfficeDesks",
+            "QueryOfficeNotes",
+            "QueryOfficeOffices",
+            "QueryOfficeRegions",
+            "RegionRelations"
+          ],
+          "paired_tests": [
+            "TestORMOfficeDeclarationParity"
+          ],
+          "sha256": "c4051aefd937641b2c83d38ef7add7ee23a3de8116a5188224fec276b1a62f15"
+        },
+        {
+          "file": "tests/fixtures/consumer/pivothooks/hooks.go",
+          "category": "other",
+          "symbols": [
+            "AssignmentChanges",
+            "AssignmentDraft",
+            "AssignmentHooks"
+          ],
+          "paired_tests": [],
+          "sha256": "948e694f7acec5b0463c441f82073436279f014b603f46ca79ce733264ee8488"
+        },
+        {
+          "file": "tests/fixtures/consumer/pivothooks/models.go",
+          "category": "other",
+          "symbols": [
+            "AssignmentFields",
+            "PersonFields",
+            "ProjectFields",
+            "ProjectRelationSet"
+          ],
+          "paired_tests": [],
+          "sha256": "1244e48cde4c5184c1da50a6baec19206e68e4e2c5b7a65c1f9cc9cd72ecd42e"
+        },
+        {
+          "file": "tests/fixtures/consumer/pivothooks/tables_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "AssignmentFields",
+            "QueryHookAssignments"
+          ],
+          "paired_tests": [
+            "TestORMPivotDeclarationParity"
+          ],
+          "sha256": "4ed63f4d68a438e617d9ee015c80c8d82767ae16b33001241088889bfdcb8c90"
+        },
+        {
+          "file": "tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "reports.OrderSummarySelection",
+            "reports.SelectOrderSummary"
+          ],
+          "paired_tests": [
+            "TestFilteredAggregatePhaseSQLParity"
+          ],
+          "sha256": "c535ea910bc05a72c16031cd4da9ddd97940298c446bbdfdab571074d9e7b382"
+        },
+        {
+          "file": "tests/fixtures/consumer/recursivequeries/sql_parity_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [
+            "TestRecursiveRecordSQLParity"
+          ],
+          "sha256": "51be31135f42303c36f6cd2ed0dc6e5151267748988a94f2e43f99ce4e3d2cd1"
+        },
+        {
+          "file": "tests/fixtures/consumer/reporting/models.go",
+          "category": "other",
+          "symbols": [
+            "MemberFields",
+            "MemberRelationSet",
+            "OrderFields",
+            "OrderRelationSet"
+          ],
+          "paired_tests": [],
+          "sha256": "d630bff910b96dffc60fe47a50582e33fa9ad3a6b62da8c01d73396e20d8d084"
+        },
+        {
+          "file": "tests/fixtures/consumer/reporting/orm_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "OperatorFields",
+            "QueryReportOperators"
+          ],
+          "paired_tests": [
+            "TestOperatorORMIdentityAndLookupParity"
+          ],
+          "sha256": "cc201e33078e2b3aad267b9edab344ad3f1e387b8e4c32947ed8404d04455b9d"
+        },
+        {
+          "file": "tests/fixtures/consumer/reporting/source_golden_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "MemberFields",
+            "MemberFieldsAt",
+            "OrderFields",
+            "OrderFieldsAt",
+            "OrderRelations",
+            "QueryReportMembers",
+            "QueryReportOrders"
+          ],
+          "paired_tests": [
+            "TestReportSourceGolden"
+          ],
+          "sha256": "e0dee195b74a0e832dbe12f465d89134a92170eb448b1108bfb4aaa69630fea0"
+        },
+        {
+          "file": "tests/fixtures/consumer/reports/rows_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "ProjectBuyerTotals",
+            "ProjectUserSummary",
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [
+            "TestRowsSQLParity"
+          ],
+          "sha256": "87c7c7a83effde2a3f91257589f66d7c48df69e1d422493fdb09225e273f7cc1"
+        },
+        {
+          "file": "tests/fixtures/consumer/scalarqueries/projection_sql_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "scalarqueries.CalculationFieldsAt",
+            "scalarqueries.CalculationSelection",
+            "scalarqueries.QueryCalculationSamples",
+            "scalarqueries.SampleFields",
+            "scalarqueries.SelectCalculation"
+          ],
+          "paired_tests": [
+            "TestCalculationProjectionSQLParity",
+            "TestDerivedAggregateSQLParity",
+            "TestDerivedCountSQLParity"
+          ],
+          "sha256": "1597c8f3539a38354f81aa9ab96ae90f844439b067790c8dada7a3cbdfa1e166"
+        },
+        {
+          "file": "tests/fixtures/consumer/setqueries/derived_aggregate_sql_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields",
+            "reports.BuyerTotalsFieldsAt",
+            "reports.ProjectBuyerTotals",
+            "reports.ProjectOrderSummary"
+          ],
+          "paired_tests": [
+            "TestDerivedSetAggregateSQLParity"
+          ],
+          "sha256": "d3004e3c81b461fea00b7bb06cc223273afec42b6f200ceeed35a0b01e910e47"
+        },
+        {
+          "file": "tests/fixtures/consumer/temporalqueries/orm_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "ProjectCalendarSummary",
+            "QueryTemporalSamples",
+            "SampleFields"
+          ],
+          "paired_tests": [
+            "TestTemporalDeclarationSQLParity"
+          ],
+          "sha256": "c7c5b2e5e1ddc7aed8e3efbe0a2d9f1bfa8e26e4c9bc570f426d3c0b2cedf1ad"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/arithmetic_compare_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "a4d419ddfee860857b7037913fd33c0a7b11563e6a386f4bfb7b031d9ec910e0"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/arithmetic_float_remainder/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "5d188e44eb15078f7abd4b39141061c2af30852bc59886dab88041539801ba45"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/arithmetic_nullable_operand/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "fefdbd95b00d9139ca46c24d79023ee4af27f3af3ea55fd5b2740a37136f9716"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/arithmetic_nullable_result/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "fb59b873db9985fedd2c0906760ca759248b893447f93d666388b893f772873e"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/arithmetic_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "1b397aa6b380398a77a65338008c9288e0736d9b82eb572a28e6c1061b27d6fd"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/arithmetic_row_phase/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "3158d90ac794d0d2f0d56a8bd8f364a3a36908c932b7370f7a0470f95a113c5f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/arithmetic_text/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "0dfc4eae56ac4bad69bb70d420642ca33bd19a5f7019909976e9e4a332e2423a"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/arithmetic_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "ed7d7c402019cd5803ac848502ac1e73d7109b25cbae3544835c77056cdd5dfa"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/case_aggregate_condition/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "dc1c79c886987a35e1cd75bde07a6f2ef3811ad241f59b16448b07b56c223387"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/case_aggregate_row_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "4140be5d904f105b6eedda0fd3dfb8681d74699bb0899a76e3dc11f605dea2f8"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/case_result_nullable/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "1861758788b2acc5ef01b5df6f68395da7c2d72c63c495505764ba605874f785"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/case_result_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.GroupFields",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "fa1404826cb65a1272c644de0f607342ae141b7f00700af2e29eefc0cd001e05"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/case_result_type/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "5590ddc0162d0263992c1ba026ff208f9f46bd290197cc6159ea4d07dc6a4d23"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/case_unfinished/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "c6b6b909dcb9fef1d066f8d8148e0242de018749c7299b54ce0031160ba587b4"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/case_window_row_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "f25935471e23a76f243c0a253b85db7d08168e91e56f7379444539010a0e9f7e"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/coalesce_fallback_nullable/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "9515afe14be15e77afc3aab5a04943122e0797e65b5eff21215ab31a01878be6"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/coalesce_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.GroupFields",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "0536216fd4ebcf601aaf84e16c7dd7cb4c304321f958da7ca3cb93dd1930ebde"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/coalesce_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "a4d7d4c0ed96232b9de90c698a39afc3718887393a0033da5268825f48fe263c"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/column_enum_range/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "fb17d93cc764c8613a8ebeacd81376537900ca593213dc96788520b77de1a1dd"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/column_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "f6e235098cdbec36ed3fb226ffc57b80092ff3db53fa1f3cc7a1f640a634d440"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/column_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "f1a0aa3ebd28838bbd420adc14c69327bbc24320ff6a0454ffbdae823a4ba52a"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/computed_group_selected_list/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "fa9f53b167b48b9666eff2d23b0b08a5d2fc581cca6b4e063d764a204b039150"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/computed_model_order_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "4625524bfbda153bfd5d53b9d84dd186f532e733deef3a32fe4c7a102cff14ec"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/computed_partition_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "2a07cbecfc0a531fed321ed3178d34b34475c7baeb209497f1e18aad332365bd"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_column_id/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "b2fbc980220f7a1f4eb79558533287cefafc8115fc2c5ecd13ea575438334b1f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_exists_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "e3e435faa7fb50f68e0d2e762528f45bb48101319db3bebbf9f64252bc08079c"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_inner_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "713e572eccceb8bc7bcefcd8f12e0f079ad87f21e8fccb2e956864857b485b5f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_input_selection/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "9b75259f8bf4766c7643bfce84436499085e7e4c207e29462fa1528a01a854f5"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_membership_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "53687b3349458ba3b28e987fea95bd4979886266da2eb0e9fa2e47b29994869a"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_model_fields/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "13831d459106478d4d27ced671fc1feafca5c7b23306c09a1b7d0afca2c1f972"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_nullable_fields/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "f0c8658537163b9216b585fba75b548dbea29714f9c6a4ba0e8a10f54df42737"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_nullable_membership/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "d855c64d558fa6e76b6a8c98330c2600bcd3a8c1cf6e1ce03f4b4b514ba9b5e1"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_nullable_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "d4cdefa9527936e6ee01443d575cb7d2e1d4a8ed81dfbb079616a595cb82fc04"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_outer_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "276eff734094965584b1e59dfdbc0628c1257596cd891ca2fe36de095ffe33b2"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_query_escape/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "8ee25e7f8656813bdf367af5cb277ac6b93dd7a8eff5de555aa9b39274db1754"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_scalar_nullability/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt",
+            "reports.ProjectUserSummary"
+          ],
+          "paired_tests": [],
+          "sha256": "35a3c65bb7cd1c7001992f040dbcd3a1fe2a15783ef9756ba4243f5570d39106"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_scalar_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "cb798a5da38864526799fe61355b6e4e08d7159b1dcf69185928cf1da4759c06"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_scope_unlifted/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "813fa1ee668af31c829816c16529f9f9ec833ab543720a23677c69d520cb95f1"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_source_escape/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "9c04723a218270900f24764c83339af4ed711b8ec9be47c4d1eb36da7c5fd421"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/correlation_uncorrelated_membership/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "f04ce9022cde7bf552d94b02b09c12e5198241f82f0413cdf54973b3bac75188"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/create_draft_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.CountryDraft",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "f84292dd3eade6c2588566729686072191ac701396543cb6b89d4c7b3b1e47e3"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/cross_join_nullable_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "fc1571c334b04bcbe95fc22286f34675982146e279772a514f47bce02202d281"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/cross_join_scope_conversion/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "7784aaceb4c51667e3b2fa0c2cda9bcec38a6d4cdc123a378aa103a45bd5f977"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/cte_membership_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "78c6a4f474e0f72900c2295a0b326e02d808577a0f5698aae11b66e2254e627a"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/cte_model_write/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserDraft"
+          ],
+          "paired_tests": [],
+          "sha256": "01f0d52a6e5c8d0ce52b24436b05c8c8d09c13abcc6ab1434ff7f8f89bcd2f5a"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/cte_nullable_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "a3e935fee43d919b72ce48de268d6933db234eaa2400d5332c3aaeabe831031d"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/cte_record_conversion/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "eebf91ff35b613711355476f14fd495513f0152e4fdb259b49f26ddfbb896cdc"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/cte_record_fields/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "ef7baf6ef03201c781099c0c83e0b045c082db2ee75a28a934e88032808a528f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/decimal_conversion_float/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "01efa1d03c39cc39d08214c28d9748e8e784abb54c32d2fd7b088f59db186caa"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/delete_key_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "ee61ecb6eeaf04ea2e4f5ae1b89158c32a0c9bdd8806fda8c9fa714490ffd50b"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/derived_enum_operator/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "reports.ProjectUserSummary",
+            "reports.UserSummaryFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "c276d14de373d6ef913dd4307af195813afb426b4f138745b54b2e3b14dffb33"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/derived_nullable_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFieldsAt",
+            "reports.ProjectUserSummary",
+            "reports.UserSummaryFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "2d3f4bdbe01db60d4a7990f8bc2c662bcfd319228539a4eb06451d90f069a503"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/derived_predicate_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields",
+            "reports.ProjectUserSummary",
+            "reports.UserSummaryFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "1e783292d0c4267d4c40d2e0f2569cb6f277a3835e946ce46287ce909032bef3"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/derived_record_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFieldsAt",
+            "reports.ProjectUserSummary"
+          ],
+          "paired_tests": [],
+          "sha256": "8701b8ffc8cf6e75676b7c1ce43addbb6e850902a377b0ba072aa3d133cfda93"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/exists_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "21f80bbdbf95dd30e7ca32be633f844b11112419cde01d39e0d1387620c799bb"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/geographic_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "dc1ef3e97f4c59204b6b67dcb9305a04761b162836ae58a11b71c3bad325e312"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/interval_draft_text/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "intervalqueries.SampleDraft"
+          ],
+          "paired_tests": [],
+          "sha256": "d52940c66655f9cf28c6bd6099276cd4a1fa087f580c5adc65f1764781fbc560"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_contains_payload/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "d81d7a42ea5bc1fdeb22e24d2f1396e471ba5dca648cc0dab358febbc4887d3c"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_draft_payload/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentDraft"
+          ],
+          "paired_tests": [],
+          "sha256": "c718e4f415318f4059924f6733cd8e16149a79f8666db70bc4c8a6181e1e259e"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_kind_boolean/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "95c3b3fd8a3d5113e447e60d93a6077bf4698bfa6f235c48029ebcd2bc1f6abb"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_like/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "4c735fcfdbeb28805002c97191b60a41dca9fa6b2575f44480b476fab2225fae"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_nullable_input/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "ec6d2494823736962cb1aef478e6e69765f20548a07567ff56a084d5f59f809f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_path_array_index/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "62a843cc4afce7e248c2dab49f943053378e68799a1cefb9a6f0ceeb84eaa9e1"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_path_map_key/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "1c489f6d3e09b318069f0f4e5949a8e695dc6180384a12d2920fae3fc8abb2bd"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_path_numeric_like/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "3247e9815b984025194d73320e1121df76790897b1799b4fb88409f6f13621c2"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_path_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields",
+            "jsonqueries.QueryJsonPolicies"
+          ],
+          "paired_tests": [],
+          "sha256": "50c8cf6f5bfb887958cf6f0182db6509979ba557d56b646e353678a019c2870c"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_path_payload/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "6fdc40ce6c7a0774ddeffd7cb157a1516560372b850e24c59d520f314d83f109"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_path_row_phase/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "570c9973edd9b38d3febceb714236d583b8267eae3cc8ebe30b482ce84c7e082"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_path_scalar_type/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "8a52f140fa729315d53287f05cad5d3704df5d484c1c958eb3f964cf4b0b2d9c"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_path_unknown_field/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "19b8721cf4e64550513ee549b3a055257f9646d6f42d38d24b8b808e77961b53"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_predicate_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields",
+            "jsonqueries.QueryJsonPolicies"
+          ],
+          "paired_tests": [],
+          "sha256": "b8c00196201cbce4f19ec75d26734b46b4f890098ce53e8d0a7ef4be20e2eab6"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_projection_payload/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields",
+            "jsonqueries.ProjectSnapshot",
+            "jsonqueries.QueryJsonDocuments"
+          ],
+          "paired_tests": [],
+          "sha256": "5ba4729be7fb35907ee0de5271760ef5a730bc6cc66fa5bd8a50b555176758f5"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_selected_row/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "f8218a396d59afe4d9b759c7c665be734a314f67f3a9660ee6d42bedbf07c26a"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/json_sum/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "jsonqueries.DocumentFields"
+          ],
+          "paired_tests": [],
+          "sha256": "e71674c37c28083137e0a4c41a44d32b25d2c374a6795f6fc2b1a7c72049c358"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/locked_analyze_executor/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "5d73dd2371781c3ddc9c4c9ba45c13405ab2c6d25b6f6b1084bebf1f11f0edbe"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/locked_explain_executor/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "b9cbe66abb08d635e91e12176113ec9ce4a4bd01484e89c63f45ffa7095ba06d"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/named_window_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "d7dda94cd6ab09bfa1eabfa4d19bf5099a22fd2a446a6b37cc3fbd6edf98f2c2"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/parameter_id/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "ee1de5ef36991cb077b9342eda8141cb364478bf56666786e3bb10942e8ae4b7"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/parameter_nullable_field/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "a64ce767edd2cc0c3772a1f770c6ef3d5a75abcea5c95c69c18f3bd42ce5fe84"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/parameter_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "d009ef157f3cc1e749cef4dbe204b424114313114eeeb428e3818879f6809a58"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/parameter_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "89e8a1f33394eb4b37a4d45947030e7920799b7b6df8c308227757aab070bc0f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/projected_record_write/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "fc668ab1b439d88d233fbdd28798afec39c326406ee4d7fe5e1aa792d3cacf3a"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/range_boundary_conversion/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "8ea078f920c6f5f1b1e810ca3436ccb3e188ede92626e3562ca17ab7fef4b59f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/range_boundary_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "d8a0a4c9ea54941eb72f320a5bcfffc989ada3a6e8b3cdb2555f4dabd7b36fce"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/range_distance_type/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "8713f6bbba6799213d930787cc99cc1e76884f984e1aba16cb37f85744576cc0"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/range_nullable_distance/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.MeasurementFields",
+            "models.QueryMeasurements"
+          ],
+          "paired_tests": [],
+          "sha256": "370b846309baed01fef89933e8f5dd3742ce4510cec3307d7655b935ff07b20c"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/range_numeric_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "c2cc5006b38b4691f600693e0d2854a76ffb3c59653217e56499495f9928db70"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/range_numeric_text/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "f271879181d791fb453164828ab3f686c88de717e75678172b11d3fe9a95c6ee"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/range_ordinary_boundary/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "3625540dfbb4ea4e75f1d7145a57d23917adf0731619916c0e2f4e8980f876a9"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/range_temporal_distance/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "aaacf1343fddc8caeac55048292e24c3e27f7c7ff63df4184734ade9f47d33ae"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/range_temporal_number/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "11078bcd647179b4b6f486905800973fa790d0611a63b86c04ac466dabc12312"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/record_selection_nullable/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "fd04dec4fefa4a85bfdf35249aa93204ad855d74aabdc947c4cd0f2a6ea4c3ae"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/record_selection_result/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "3a6f901324209487a5036a0b5056f3dd9996653d5eb2e16cae77471e1338afb3"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/record_selection_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "c890605f94a6ebf2fbcc3a3e3ec46700cd97f2db6180d70829276e8b71f3529c"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/record_selection_unlifted/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "a6dae5dab8e32a73f9cc503931a34974a38e19aff3945f5e15b8ab94e8c08191"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/record_selection_write/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "cc08b5853ec9ca8c840d2e0051433173835e7a11975a2debcddfddba11579b6b"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/recursive_field_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "4b1dd5f1c3c78f4918fa5a70d460f4cc279b173d90f7cc6adf930f12b85466c7"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/recursive_self_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "a67d3e90e51dfa4c56f223b57e5b5f9079831272d6d318c947c4209435b5bd42"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/recursive_step_record/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "290c11992bf9f470c9928d98a6b09a1310e7747abe39b3650b4270b3c03219d1"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/result_cursor_fields_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFieldsAt",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "35f95680f5459662076d55fa0c0d01c9f4d01fcc7119f9ed02b4a4fcfff20d44"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/result_cursor_key_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "aa5e530aa11b8488a803e0b9a1611af31348623cd31414b4160d87c23454b918"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/result_cursor_order_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "23b18ab5c704ba54f6c865ef790f41928df85d4208647bccdd250423b400a5f7"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/result_cursor_predicate_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "8e0a5f4aa6b42860cbacbe045270545b3e69caa3cdbe369f5443b808066532b5"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/result_cursor_request_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "d63866778d876f4b29735f3fb05cfb70a8e7741b1618f6a0b6741cb7b09b5df3"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/result_cursor_source/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "8540e993960fc56702c8dc421c83ab5e427171c30ef8a2af056ac24993d70661"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/result_cursor_write/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserDraft"
+          ],
+          "paired_tests": [],
+          "sha256": "36025ef1209143867cd8df88a0b53184e4865f9df87d6c7fdf6c4fb0735ea52b"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/scalar_nullability/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields",
+            "reports.ProjectUserSummary"
+          ],
+          "paired_tests": [],
+          "sha256": "6616fd578dff3c6396c184623d8ee8a15cb14bdc68ab580ef0a0d21093a2932a"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/scalar_nullable_input/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "e7f04452a7dd703a8b075def7bd6fa8434006981bf0597f1d0211a7268af22f1"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/scalar_row_identity_type/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "e02831b99c9c8acf0f38c6529f37c71b6859bd1a4b0af1cbe3e16d4505c8a58b"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/scalar_row_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "192f53edc4c1c169c2190e70030285058f97febc916de10b6af68359dcbf15b5"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/scoped_model_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "a75343b1e464a5c62099a63b7ba1212ab92b7ad56a004d02e367462e36c35fe8"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/selected_calculation_order/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "0f4a3ee68f367215710d8788ab473e97cb95d620f64ad0e82b6379bffe9faf98"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/selected_comparison_row/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "0c7802d2b27bc1c996165d8e82d30e272f8036a8930d63efc19f55a82b27f056"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/selected_key_conversion/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "d368777df06816e4eadc0a1a840bead2dc1d1da61bad67c2856fcfa5361d5ffc"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/selected_key_row_list/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "b5ed1d09dffa0a838eed8f44e0372f3f1820002b6e8aefa2b950e2d0ef51f253"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/selected_partition_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "f1b4e255d9b4763b0943e51a1abcbd7c814848446b24bb1b4757ce9e213f642f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/set_model_write/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserDraft"
+          ],
+          "paired_tests": [],
+          "sha256": "d7519c9c76f1084b6b8fc50afdc8dbf1903da59ee3966bb27e8ab6b3f5810e89"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/set_nullable_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "e44ab4eac18ab1e63a004fdd763a8a02b1d6a62e4982804938f78cfe051def6e"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/set_projection_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "reports.ProjectBuyerTotals",
+            "reports.ProjectUserSummary"
+          ],
+          "paired_tests": [],
+          "sha256": "65f139c6b7c1ce7f99f2e36677c99855bf86cb7366d4a5906083b1b0ff0e413f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/set_record_conversion/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "08ecc9a47b1eab5b74fac13a55f37f6a2f3fb876f86769f640932ed413faffde"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/set_record_scalar/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "2bbbe14afd78999c555a0f5f134b150f33f6b8438665dd0ce867ffc48a366a7f"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/set_value_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "d24ad003bdb3c138930e371d21bf889becb1a21e05dd1895562ec12dbe3f42ac"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/subquery_filter_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "17e241d4d216013a79fecc839d35f4ae1efc9439867bccb28e5982a56d896bb1"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/subquery_id/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "f0c69aca060564ccc04dc0ebdcfe94d5725544c02b3d94995500044ea8ea2afa"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/subquery_nullable/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "5c109b5039fbb036cf70e66ade3b16717314b3f0b2315700488147c234dd5133"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/subquery_selection_scope/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryOrders",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "67210b145633ce7353d690f25434efb4ba4431e62c729d6624870e1637ac9009"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/subquery_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "8b97e6e30395169552c7266474137dea3d6044bf466f35e9345f66acc4b6ff06"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/substring_text_position/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "2a0d5e4ee468d7bd32579df5d856d2a9d404a84b73fb5f91057e51c966135292"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/text_numeric/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "fd31150016f71fa029ed4b3055cd16395f3e7d2c901f1bac3070014f85076f27"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/text_operand_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "67807e4346376500e3e392f39676f716ae044cbb0959f819d6fef50534401c8d"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/text_pattern_value/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "7f225f0d6a1b3497886fa3df4364c5f765f577e076069ea4d7f2408f05b2e549"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/update_draft_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.CountryDraft",
+            "models.QueryUsers"
+          ],
+          "paired_tests": [],
+          "sha256": "6da1e054edf2a964ef3332ea791eb91b8d18e31e7d29f46785fe5a3ca9da9a8b"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/update_key_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserDraft"
+          ],
+          "paired_tests": [],
+          "sha256": "f7f3df00503eb6c1c855a6b95d7f7484cdbb1cbd19a5dcb96771c91d840ed32d"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/value_compare_like_number/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "5137e87cc6bbdcb02991e065605e0a62caec359e6f54c571dd766f85771c16c1"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/value_compare_nullable/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "70d980f936bd5c400cca1aee0111958d380cb53bb107f62926440ad67fd36050"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/value_compare_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "81044070ab9c955ca2e2299346574ce5e4b4381b1a83049d345c2df5a81bd64c"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/value_compare_selected_owner/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFieldsAt"
+          ],
+          "paired_tests": [],
+          "sha256": "9715387929daade90c2a4928e5883d29c3c72ca9a6ca1e11784463f3a9963450"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/value_compare_selected_where/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "960dc3cf14f4f291e8b944349b9466e487d2d47a1a8b65e0c0d3cf3e4970a09b"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/value_compare_type/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "5e19a1b1cfaa8d4354f0842f548dcff94943f3f67b5c413beccd3cc6517da706"
+        },
+        {
+          "file": "tests/fixtures/consumer/testdata/compilefail/value_cursor_nullable/invalid.go",
+          "category": "compilefail",
+          "symbols": [
+            "models.QueryUsers",
+            "models.UserFields"
+          ],
+          "paired_tests": [],
+          "sha256": "60588a5b62e0a35d0966118a399d2993931eecaede1da474659dcfa48510bbcc"
+        },
+        {
+          "file": "tests/fixtures/consumer/tooling/database_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.QueryUsers"
+          ],
+          "paired_tests": [
+            "TestUserPlanAndRoutingSQLParity"
+          ],
+          "sha256": "01f47c0427e109f15a503327fb63e65f6e96d6c5e8b2a4fc9d74e362ca033a9e"
+        },
+        {
+          "file": "tests/fixtures/consumer/transactionqueries/orm_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "ProjectSummary",
+            "QueryRecords",
+            "RecordFields"
+          ],
+          "paired_tests": [
+            "TestTransactionDeclarationSQLParity"
+          ],
+          "sha256": "68828d630bbba302943d90a919b182d39afd613f43a6d8d7505952b95ae402fc"
+        },
+        {
+          "file": "tests/fixtures/consumer/windowqueries/orm_test.go",
+          "category": "oracle_recording",
+          "symbols": [
+            "models.OrderFields",
+            "models.QueryOrders",
+            "windowqueries.RankingRowSelection",
+            "windowqueries.SelectRankingRow"
+          ],
+          "paired_tests": [
+            "TestWindowReportSQLParity"
+          ],
+          "sha256": "1877b617659ddd579beda1cf7480b580be830bc260bbc42c3f08f26c985c7238"
+        }
+      ],
+      "receiver_boundary_candidates": [
+        {
+          "file": "tests/fixtures/consumer/bootstrap/tables_test.go",
+          "names": [
+            "FoundryReference"
+          ],
+          "disposition": "generated reference in registered oracle recording"
+        },
+        {
+          "file": "tests/fixtures/consumer/clientcontracts/contracts.go",
+          "names": [
+            "FoundryIdentity",
+            "FoundryReference"
+          ],
+          "disposition": "handwritten identity adapter or its consumer"
+        },
+        {
+          "file": "tests/fixtures/consumer/internal/authfixture/authentication.go",
+          "names": [
+            "FoundryIdentity"
+          ],
+          "disposition": "handwritten identity adapter or its consumer"
+        },
+        {
+          "file": "tests/fixtures/consumer/multifactor/tables.go",
+          "names": [
+            "FoundryIdentity"
+          ],
+          "disposition": "handwritten identity adapter or its consumer"
+        },
+        {
+          "file": "tests/fixtures/consumer/nestedbindings/identity_test.go",
+          "names": [
+            "FoundryIdentity"
+          ],
+          "disposition": "handwritten identity adapter or its consumer"
+        },
+        {
+          "file": "tests/fixtures/consumer/nestedbindings/tables.go",
+          "names": [
+            "FoundryIdentity"
+          ],
+          "disposition": "handwritten identity adapter or its consumer"
+        },
+        {
+          "file": "tests/fixtures/consumer/passwords/tables.go",
+          "names": [
+            "FoundryIdentity"
+          ],
+          "disposition": "handwritten identity adapter or its consumer"
+        },
+        {
+          "file": "tests/fixtures/consumer/recovering/identity_test.go",
+          "names": [
+            "FoundryIdentity"
+          ],
+          "disposition": "handwritten identity adapter or its consumer"
+        },
+        {
+          "file": "tests/fixtures/consumer/recovering/tables.go",
+          "names": [
+            "FoundryIdentity"
+          ],
+          "disposition": "handwritten identity adapter or its consumer"
+        },
+        {
+          "file": "tests/fixtures/consumer/reporting/orm_test.go",
+          "names": [
+            "FoundryReference"
+          ],
+          "disposition": "generated reference in registered oracle recording"
+        }
+      ]
+    },
+    "pending_lead_decision": "Whether required oracle support is included in the exception. The 140 retained original compile-fail programs also need owner disposition before a strict zero-reference claim is possible."
+  },
+  "limits": [
+    "No live PostgreSQL; sources compiled/vetted and opt-in cases skipped.",
+    "No oracle freeze, fabricated expectations or assertion deletion.",
+    "No framework API/method surface, dependency, footprint probe/ceiling or contract changes.",
+    "The narrow decision-14 cross-owner step removes the two helper declarations and updates their README; other owner factories and negative programs remain untouched."
+  ],
+  "post_verification_source_unchanged": true,
+  "shared_files_touched": [
+    "tests/fixtures/consumer/models/models.go",
+    "tests/fixtures/consumer/catalog/product.go",
+    "tests/fixtures/consumer/models/README.md"
+  ],
+  "integration_batch7h": {
+    "worktree": "Foundry-Go-goway-int7",
+    "base": "dbe6b1b7",
+    "evidence": "docs/evidence/goway-batch7h-integration.json",
+    "note": "Lane checks above are historical; current integration results are recorded separately."
+  }
+}

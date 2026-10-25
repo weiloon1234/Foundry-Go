@@ -1,0 +1,183 @@
+{
+  "slice": "stage8c-postgres-prerequisites",
+  "commit": "fdaff938b71108081499a70d7bf2767f94a147c9",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r13",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "cache_rotation": "Recorder race and PostgreSQL source compilation passed before rotation on r12; interrupted behavior race resumed from its failed segment on r13. No subsequent Go invocation uses r12.",
+  "final_freeze_performed": false,
+  "postgres_executed": false,
+  "postgres_owner": "lead",
+  "public_surface_additions": [],
+  "footprint_ceilings_changed": [],
+  "comparison_census": {
+    "test_sources": 491,
+    "paired_entry_points": 84,
+    "full_sites": 119,
+    "offline_sites": 117,
+    "postgres_mutator_test": "TestMutatorHydrationParity",
+    "postgres_mutator_site": "goway/pgsmoke/mutators/hydration"
+  },
+  "remaining_importer_files": {
+    "tests/fixtures/goway/adjustments_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/aggregate_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/audit_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/composition_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/conditional_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/conflict_advanced_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/conflict_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/correlation_lateral_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/expression_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/extension_handles_test.go": "foundry.test/goway/oldmodels/extensions",
+    "tests/fixtures/goway/golden_old_loading_test.go": "foundry.test/goway/oldmodels, foundry.test/goway/oldreporting",
+    "tests/fixtures/goway/golden_old_queries_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/golden_old_relations_test.go": "foundry.test/goway/oldmodels, foundry.test/goway/oldreporting",
+    "tests/fixtures/goway/integration_adapters_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/joins_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/lifecycle_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/load_query_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/mutators_golden_test.go": "foundry.test/goway/oldmodels/mutators",
+    "tests/fixtures/goway/on_conditions_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/pgsmoke/oracle_legacy_test.go": "foundry.test/goway/oldmodels/mutators",
+    "tests/fixtures/goway/reads_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/records_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/relation_aggregates_golden_test.go": "foundry.test/goway/oldmodels/joined",
+    "tests/fixtures/goway/relation_filter_test.go": "foundry.test/goway/oldmodels/joined",
+    "tests/fixtures/goway/relation_writes_test.go": "foundry.test/goway/oldmodels/joined",
+    "tests/fixtures/goway/relations_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/relations_joined_golden_test.go": "foundry.test/goway/oldmodels/joined",
+    "tests/fixtures/goway/report_projection_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/result_read_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/retrieval_scope_golden_test.go": "foundry.test/goway/oldmodels/reads",
+    "tests/fixtures/goway/sensitive_golden_test.go": "foundry.test/goway/oldmodels/sensitive",
+    "tests/fixtures/goway/source_write_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/stage7_remainder_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/statement_detector_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/store_capabilities_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/subqueries_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/terminal_writes_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/testdata/footprint/extension_slots_old/probe.go": "foundry.test/goway/oldmodels/extensions",
+    "tests/fixtures/goway/transaction_composition_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/validation_database_test.go": "foundry.test/goway/oldmodels, foundry.test/goway/oldmodels/hooks, foundry.test/goway/oldmodels/reads",
+    "tests/fixtures/goway/window_golden_test.go": "foundry.test/goway/oldmodels"
+  },
+  "checks": [
+    {
+      "name": "recorder-race-and-import-inventory",
+      "command": "go test -race -count=1 -v ./cmd/freeze-oracles",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-8c-prerequisites-recorder.log",
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r12"
+    },
+    {
+      "name": "postgres-source-compilation",
+      "command": "go test -count=1 -run '^$' ./pgsmoke",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-8c-prerequisites-pgsmoke.log",
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r12"
+    },
+    {
+      "name": "behavior-race",
+      "command": "go test -race -count=1 -run '^(TestInferredCapabilityCatchersNeverReceiveAuthority|TestMutatorsOldAndNewAgree|TestMutatorInputsAreReusableAndOwned|TestMutatorErrorRedactionInBothAPIs|TestInputPrimaryKeyOldAndNewAgree|TestSensitiveOldAndNewAgree|TestPasswordOldAndNewAgree|TestSensitiveStreamingFailureParity)$' .",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-8c-prerequisites-behavior-r13.log",
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r13"
+    },
+    {
+      "name": "catalogue",
+      "command": "python3 tools/goway_catalogue.py",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-8c-prerequisites-catalogue.log"
+    },
+    {
+      "name": "owner-conversion-negatives",
+      "command": "go test -count=1 -v -run '^TestInvalidPublicContractsFailCompilation$/^old_text_comparison_(nullable_)?owner_conversion$' .",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-8c-prerequisites-compilefail-r13.log",
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r13"
+    },
+    {
+      "name": "vet",
+      "command": "go vet . ./pgsmoke ./cmd/freeze-oracles",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-8c-prerequisites-vet-r13.log",
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r13"
+    },
+    {
+      "name": "docs",
+      "command": "make docs-check",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-8c-prerequisites-docs-r13.log",
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r13"
+    },
+    {
+      "name": "format",
+      "command": "gofmt -l <10 changed Go sources>",
+      "status": "pass",
+      "output": ""
+    },
+    {
+      "name": "diff-check",
+      "command": "git diff --check",
+      "status": "pass",
+      "returncode": 0,
+      "output": ""
+    }
+  ],
+  "source_sha256": {
+    "tests/fixtures/goway/pgsmoke/sensitive_test.go": "d3301730b29304b8a0ee26ea1bb0f4b96a36749ec88cb0d700b5d7d4ba94379e",
+    "tests/fixtures/goway/pgsmoke/mutators_test.go": "10545d9095ef00a72cc8279a6699451e0e573a793b08b7c641aca5a8abaaaa21",
+    "tests/fixtures/goway/pgsmoke/oracle_legacy_test.go": "b25ce018916aa75281e3e63b2d01e4a7c0147cf4d6f2c334a3d23f278e62c0da",
+    "tests/fixtures/goway/bridge_capability_test.go": "da2eeac0c9fd6f3b7bfc3ce45e3dd1522be47c66473b1c5ca908993add99b0f6",
+    "tests/fixtures/goway/testdata/compilefail/old_text_comparison_owner_conversion/invalid.go": "0e868e3b40785a47203e588d9940f8a7cc7eefeeb19d5acfdb41b8895cd58b56",
+    "tests/fixtures/goway/testdata/compilefail/old_text_comparison_nullable_owner_conversion/invalid.go": "bbc7914ea84f6160c988a5868188f6d673b8109d0e7250f579fccfc987709e27",
+    "tests/fixtures/goway/cmd/freeze-oracles/main.go": "294ef81f0c8db3d68ba2d67f299125944a0b44e57d3058f0200e5a6a90945a28",
+    "tests/fixtures/goway/cmd/freeze-oracles/main_test.go": "13387c3189d4d18ba60a4d4709aa8a1790363bc227486ae50da4a9583e076134",
+    "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports.go": "4b568994d79173d446e092abb74306b9bfdbf2b611aca948219f1692790ce4db",
+    "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports_test.go": "772ee4e5916a315560837e67625bbc15a39434946d28961a10d641933d9875f8",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "e0449c6a26fe3243be5b09075cfde37c968f16c949dcbea4642196346a7ba63e",
+    "tests/fixtures/goway/testdata/oracles/README.md": "1ab46780e4a9928b33a7f17b0c406551c91c0a6244781d2b165405d68a1f0ba4",
+    "docs/evidence/goway-stage8c-oracle-comparison-inventory.md": "6461a84cfb2e4e6711b6c7955a77d39a14e1c4f408ff072ea4fd10282710b1c0",
+    "docs/evidence/goway-stage8c-postgres-prerequisites-report.md": "999f06fc422ca00450ee12384105d4077ced573725d5e4bcd85d620bdd649b5f"
+  },
+  "pending_checks": [],
+  "pre_integration_batch7h_source_sha256": {
+    "tests/fixtures/goway/pgsmoke/sensitive_test.go": "d3301730b29304b8a0ee26ea1bb0f4b96a36749ec88cb0d700b5d7d4ba94379e",
+    "tests/fixtures/goway/pgsmoke/mutators_test.go": "10545d9095ef00a72cc8279a6699451e0e573a793b08b7c641aca5a8abaaaa21",
+    "tests/fixtures/goway/pgsmoke/oracle_legacy_test.go": "b25ce018916aa75281e3e63b2d01e4a7c0147cf4d6f2c334a3d23f278e62c0da",
+    "tests/fixtures/goway/bridge_capability_test.go": "da2eeac0c9fd6f3b7bfc3ce45e3dd1522be47c66473b1c5ca908993add99b0f6",
+    "tests/fixtures/goway/testdata/compilefail/old_text_comparison_owner_conversion/invalid.go": "0e868e3b40785a47203e588d9940f8a7cc7eefeeb19d5acfdb41b8895cd58b56",
+    "tests/fixtures/goway/testdata/compilefail/old_text_comparison_nullable_owner_conversion/invalid.go": "bbc7914ea84f6160c988a5868188f6d673b8109d0e7250f579fccfc987709e27",
+    "tests/fixtures/goway/cmd/freeze-oracles/main.go": "294ef81f0c8db3d68ba2d67f299125944a0b44e57d3058f0200e5a6a90945a28",
+    "tests/fixtures/goway/cmd/freeze-oracles/main_test.go": "f0f186cac385022a7c3f04354561cb1f5aadc0a7a39f8be206fb887c1f1007f3",
+    "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports.go": "08a7de1dda7548631295a20e9c61310b61286d5b425a4a7f2f8741675598b120",
+    "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports_test.go": "80c8ac6b3ef834056756ff0bfbab52faa651c174aed5759eddd527398ba35431",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "1f597763124180ab7aebddd3bca16a7faa1d7e7fd3570a07793c43643a63f3f2",
+    "tests/fixtures/goway/testdata/oracles/README.md": "8e83064f2d512cee4d8eb2f51d84dee7a2ed27d284d499f813445fa9313e750c",
+    "docs/evidence/goway-stage8c-oracle-comparison-inventory.md": "cb698fe4c00d7cb0da8b28dcbda8d296373eb662359b4b623f91578a8974ac12",
+    "docs/evidence/goway-stage8c-postgres-prerequisites-report.md": "9fa9e7881b6b595513f2fc8a993c356572ee87d7c8b33e4cba60e3657ca61b0c"
+  },
+  "integration_batch7h": {
+    "worktree": "Foundry-Go-goway-int7",
+    "base": "dbe6b1b7",
+    "evidence": "docs/evidence/goway-batch7h-integration.json",
+    "note": "Lane checks above are historical; current integration results are recorded separately."
+  }
+}

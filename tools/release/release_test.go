@@ -236,6 +236,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 		"database/orm/transaction_phase_test.go",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
 		"docs/evidence/goway-stage9-c-barrier-freeze.tsv",
+		"docs/evidence/goway-stage9-d-helper-references.tsv",
 		"internal/storemigration/testdata/challenge_prune_projection.json",
 		"internal/storemigration/testdata/challengestore_entry_read.json",
 		"internal/storemigration/testdata/challengestore_entry_write.json",

@@ -7,16 +7,15 @@ import (
 
 	"foundry.test/goway/coremodels"
 	m "foundry.test/goway/models/mutators"
-	old "foundry.test/goway/oldmodels/mutators"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/testkit/postgres"
-	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 )
 
-func TestMutators(t *testing.T) {
+func insertMutatorFixture(t *testing.T) (*database.DB, m.Member, orm.Assignment[m.Member]) {
+	t.Helper()
 	db := postgres.Isolate(t).Open(t)
 	ctx := t.Context()
 	_, err := db.Exec(ctx, `CREATE TABLE mutator_members (id bigint PRIMARY KEY,contact_email text NOT NULL,note text,name text NOT NULL DEFAULT 'database',body bytea NOT NULL,enabled boolean NOT NULL DEFAULT true)`)
@@ -28,21 +27,28 @@ func TestMutators(t *testing.T) {
 	input[0] = 9
 	got, err := q.Insert(ctx, db, q.Key().Set(1), q.Email.Set(coremodels.EmailInput{Address: " ADA@EXAMPLE.TEST "}), body, q.Enabled.Set(false))
 	must(t, err)
+	return db, got, body
+}
+
+func TestMutators(t *testing.T) {
+	db, got, body := insertMutatorFixture(t)
+	ctx := t.Context()
+	q := m.Members
 	if got.Email != "ada@example.test" || got.Name != "database" || got.Enabled || !got.Note.IsNull() || !bytes.Equal(got.Body, []byte{1, 2}) {
 		t.Fatal("mutated/default/null/binary insert")
 	}
-	stored, err := old.QueryMutatorMembers().RequireFind(ctx, db, 1)
+	stored, err := q.Require(ctx, db, 1)
 	must(t, err)
-	if stored.Email != got.Email || !oracleEqual(t, "goway/pgsmoke/mutators/hydration", oracle.Snapshot(stored.Email), oracle.Snapshot(got.Email)) {
-		t.Fatal("old read differs")
+	if stored.Email != got.Email {
+		t.Fatal("persisted mutated email differs")
 	}
-	_, err = old.QueryMutatorMembers().Update(ctx, db, 1, old.MemberDraft{}.SetName(" Ada ").SetNote(coremodels.LabelInput{Text: " note "}))
+	_, err = q.Update(ctx, db, 1, q.Name.Set(" Ada "), q.Note.Set(coremodels.LabelInput{Text: " note "}))
 	must(t, err)
 	got, err = q.Require(ctx, db, 1)
 	must(t, err)
 	note, ok := got.Note.Get()
 	if !ok || note != "note" || got.Name != "Ada" {
-		t.Fatal("old mutation/new read")
+		t.Fatal("mutated update hydration")
 	}
 	_, err = q.Update(ctx, db, 1, q.Note.SetNull())
 	must(t, err)

@@ -4,53 +4,18 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
-	"reflect"
-	"testing"
-	"time"
-
 	"foundry.test/goway/coremodels"
-	e "foundry.test/goway/models/extensions"
 	n "foundry.test/goway/models/hooks"
 	o "foundry.test/goway/oldmodels/hooks"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/testkit/factory"
+	"reflect"
+	"testing"
+	"time"
 )
-
-func TestORMExtensionDeclaration(t *testing.T) {
-	if err := orm.Check(e.Articles, e.Authors); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.Owner.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.Declaration().Validate(); err != nil {
-		t.Fatal(err)
-	}
-	for _, slot := range e.ArticleExtensions.All() {
-		g := &goldenCapture{}
-		db := readDB(t, g)
-		if _, err := orm.Load(t.Context(), db, []e.Article{{ID: 1}}, slot); !errors.Is(err, fault.Missing) {
-			t.Fatal("unbound runtime", err)
-		}
-		if g.statements != 0 {
-			t.Fatal("unbound loader executed SQL")
-		}
-	}
-	other := orm.IdentityOf(e.Articles.Table, e.Articles.Key())
-	pinned := extensions.DefineORMOwner("articles", other, extensions.OwnerOptions{StorageModel: "extension_articles"})
-	a, err := e.Owner.Subject(e.Owner.Reference(1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := pinned.Subject(other.ReferenceOf(e.Article{ID: 1}))
-	if err != nil || a.Key != b.Key || a.Scope != b.Scope {
-		t.Fatal("persisted owner identity", err)
-	}
-}
 
 func TestFactoryORMAndGeneratedParity(t *testing.T) {
 	for _, count := range []int{1, 3} {

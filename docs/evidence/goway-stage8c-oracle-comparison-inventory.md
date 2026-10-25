@@ -2,7 +2,7 @@
 
 The reviewed capture census covers the fixture modules, not every framework test.
 It locks all fixture test-source hashes and names paired entry points independently
-of recorder discovery. The current census has 489 sources and 84 paired entry points.
+of recorder discovery. The current census has 540 sources and 103 paired entry points.
 
 | Source | Paired entry points |
 | --- | --- |
@@ -53,12 +53,13 @@ of recorder discovery. The current census has 489 sources and 84 paired entry po
 | `goway/mutators_golden_test.go` | `TestInputPrimaryKeyOldAndNewAgree`, `TestMutatorsOldAndNewAgree` |
 | `goway/nested_binding_orm_test.go` | `TestNestedORMBindingHasNoGlobalFallback` |
 | `goway/on_conditions_golden_test.go` | `TestStage6b2OnGolden` |
-| `goway/pgsmoke/mutators_test.go` | `TestMutators` (PostgreSQL) |
+| `goway/pgsmoke/oracle_legacy_test.go` | `TestMutatorHydrationParity` (PostgreSQL) |
 | `goway/read_terminal_golden_test.go` | `TestStage9ReadCTEScalarAndValueSetParity`, `TestStage9ReadScalarCompileParity` |
 | `goway/reads_golden_test.go` | `TestReadSQLAndCursorTokensAgree` |
 | `goway/records_golden_test.go` | `TestStage6c1RecordGolden` |
 | `goway/relation_aggregates_golden_test.go` | `TestRelationAggregateGoldens` |
 | `goway/relation_filter_test.go` | `TestRelationExpressionFilterSQLParity` |
+| `goway/relation_order_golden_test.go` | `TestComputedRelationOrderSQLMatchesOldAPI` (direct, target, pivot, mixed) |
 | `goway/relation_writes_test.go` | `TestRelationWriteGoldens` |
 | `goway/relations_golden_test.go` | `TestDirectRelationSQLMatchesOldAPI` |
 | `goway/relations_joined_golden_test.go` | `TestJoinedExistenceSQLMatchesOldAPI`, `TestJoinedFamiliesSQLMatchesOldAPI` |
@@ -106,11 +107,12 @@ reported for the lead's retirement decisions; no complete-tree freeze is claimed
 | `database/orm/plan_contract_test.go` | `TestPlanContractsShareOneOwner`: public type identity |
 | `database/orm/column_kinds_test.go` | `TestColumnKindCoreParity`: old/new field method signatures |
 
+The sensitive and mutator PostgreSQL behavior tests now use ORM declarations only.
+Their persistence, validation, rollback and encrypted-binding assertions remain
+executable after generator retirement. The direct legacy email hydration comparison
+is isolated in `goway/pgsmoke/oracle_legacy_test.go` for PostgreSQL capture.
+
 Additional retained interoperability coverage (not a direct golden comparison):
-`goway/pgsmoke/sensitive_test.go:TestSensitivePersistenceAcrossAPIs` writes with one
-API and reads with the other; the remaining mutation/read assertions in
-`goway/pgsmoke/mutators_test.go:TestMutators` do likewise. They need an explicit
-retirement plan as tests, even though the new direct email comparison is captured.
 `database/decoding_paths_test.go` exercises both APIs against shared redaction
 assertions; `database/record_iteration_test.go` also retains dual-API failure and
 resource-release assertions. Observer compatibility tests explicitly reject mixed
@@ -122,3 +124,9 @@ frozen legacy JSON goldens. They are not missing live legacy capture.
 `internal/ormcore/primitive_codec_test.go` compares new adapters to retained codec
 implementations; both codec owners survive generator retirement. Other legacy-only
 PostgreSQL fixtures are behavior coverage, not paired legacy/current observations.
+
+After batch 7g, relation-expression ordering remains in the recording census and its
+ordinary rejection test moves to `relation_order_behavior_test.go`. The exact three
+`goway/migration/{guide,examples,sql}_test.go` files have the lead-approved
+migration-before examples exception; they are not all recording-only. Stage 8c
+keeps before blocks as uncompiled documentation and after blocks as compiled tests.

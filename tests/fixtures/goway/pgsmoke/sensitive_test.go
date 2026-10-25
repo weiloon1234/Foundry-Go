@@ -3,7 +3,6 @@ package pgsmoke_test
 import (
 	"errors"
 	newmodels "foundry.test/goway/models/sensitive"
-	oldmodels "foundry.test/goway/oldmodels/sensitive"
 	"github.com/weiloon1234/Foundry-Go/auth/password"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/encrypted"
@@ -17,7 +16,7 @@ import (
 	"testing"
 )
 
-func TestSensitivePersistenceAcrossAPIs(t *testing.T) {
+func TestSensitivePersistence(t *testing.T) {
 	scope := postgres.Isolate(t)
 	key, err := encryption.GenerateKey("field_test")
 	must(t, err)
@@ -67,46 +66,43 @@ func TestSensitivePersistenceAcrossAPIs(t *testing.T) {
 	if _, err = copies.Require(ctx, db, inserted.ID); !errors.Is(err, fault.Invalid) {
 		t.Fatalf("wrong-table fault: %v", err)
 	}
-	oldID, err := model.ParseID[oldmodels.Vault](inserted.ID.String())
+	storedVault, err := v.Require(ctx, db, inserted.ID)
 	must(t, err)
-	old, err := oldmodels.QuerySensitiveVaults().RequireFind(ctx, db, oldID)
+	storedSettings, err := storedVault.Settings.Decode()
 	must(t, err)
-	oldSettings, err := old.Settings.Decode()
-	must(t, err)
-	oldOptional, ok := old.Optional.Get()
+	storedOptional, ok := storedVault.Optional.Get()
 	if !ok {
 		t.Fatal("missing nullable encrypted JSON")
 	}
-	optional, err := oldOptional.Decode()
+	optional, err := storedOptional.Decode()
 	must(t, err)
-	if old.Token.Reveal() != "private" || oldSettings.Region != "west" || optional.Region != "west" {
-		t.Fatal("new-to-old encrypted hydration")
+	if storedVault.Token.Reveal() != "private" || storedSettings.Region != "west" || optional.Region != "west" {
+		t.Fatal("encrypted text and JSON hydration")
 	}
-	oldDoc, err := encrypted.NewJSON(oldmodels.Settings{Region: "east"})
+	secondDoc, err := encrypted.NewJSON(newmodels.Settings{Region: "east"})
 	must(t, err)
-	second, err := oldmodels.QuerySensitiveVaults().Create(ctx, db, oldmodels.VaultDraft{}.SetToken(encrypted.NewText("old private")).SetSettings(oldDoc))
+	second, err := v.Insert(ctx, db, v.Token.Set(encrypted.NewText("second private")), v.Settings.Set(secondDoc))
 	must(t, err)
-	newID, err := model.ParseID[newmodels.Vault](second.ID.String())
+	secondID := second.ID
+	current, err := v.Require(ctx, db, secondID)
 	must(t, err)
-	current, err := v.Require(ctx, db, newID)
-	must(t, err)
-	if current.Token.Reveal() != "old private" || !current.Backup.IsNull() || !current.Optional.IsNull() {
-		t.Fatal("old-to-new encrypted hydration")
+	if current.Token.Reveal() != "second private" || !current.Backup.IsNull() || !current.Optional.IsNull() {
+		t.Fatal("omitted nullable encrypted fields")
 	}
-	_, err = oldmodels.QuerySensitiveVaults().Update(ctx, db, oldID, oldmodels.VaultDraft{}.SetToken(encrypted.NewText("changed by old")).ClearBackup().ClearOptional())
+	_, err = v.Update(ctx, db, inserted.ID, v.Token.Set(encrypted.NewText("changed first")), v.Backup.SetNull(), v.Optional.SetNull())
 	must(t, err)
 	current, err = v.Require(ctx, db, inserted.ID)
 	must(t, err)
-	if current.Token.Reveal() != "changed by old" || !current.Backup.IsNull() || !current.Optional.IsNull() {
-		t.Fatal("old update/new read")
+	if current.Token.Reveal() != "changed first" || !current.Backup.IsNull() || !current.Optional.IsNull() {
+		t.Fatal("encrypted update and explicit null hydration")
 	}
-	_, err = v.Update(ctx, db, newID, v.Token.Set(encrypted.NewText("changed by new")), v.Backup.Set(encrypted.NewText("new backup")), v.Optional.Set(doc))
+	_, err = v.Update(ctx, db, secondID, v.Token.Set(encrypted.NewText("changed second")), v.Backup.Set(encrypted.NewText("new backup")), v.Optional.Set(doc))
 	must(t, err)
-	second, err = oldmodels.QuerySensitiveVaults().RequireFind(ctx, db, second.ID)
+	second, err = v.Require(ctx, db, second.ID)
 	must(t, err)
 	backup, ok := second.Backup.Get()
-	if !ok || backup.Reveal() != "new backup" || second.Token.Reveal() != "changed by new" {
-		t.Fatal("new update/old read")
+	if !ok || backup.Reveal() != "new backup" || second.Token.Reveal() != "changed second" {
+		t.Fatal("encrypted update hydration")
 	}
 	_, err = v.Update(ctx, db, inserted.ID, v.Backup.Set(encrypted.NewText("clear me")), v.Optional.Set(doc))
 	must(t, err)
@@ -128,23 +124,17 @@ func TestSensitivePersistenceAcrossAPIs(t *testing.T) {
 	if !backupNull || !optionalNull {
 		t.Fatal("SetNull did not store SQL NULL")
 	}
-	// Copy one existing envelope to another row. Both APIs must refuse to publish it.
-	_, err = db.Exec(ctx, `UPDATE sensitive_vaults SET token=(SELECT token FROM sensitive_vaults WHERE id=$1) WHERE id=$2`, inserted.ID.String(), newID.String())
+	// Copy one existing envelope to another row. Hydration must reject it.
+	_, err = db.Exec(ctx, `UPDATE sensitive_vaults SET token=(SELECT token FROM sensitive_vaults WHERE id=$1) WHERE id=$2`, inserted.ID.String(), secondID.String())
 	must(t, err)
-	if _, err = v.Require(ctx, db, newID); !errors.Is(err, fault.Invalid) {
-		t.Fatalf("new API wrong-row fault: %v", err)
-	}
-	if _, err = oldmodels.QuerySensitiveVaults().RequireFind(ctx, db, second.ID); !errors.Is(err, fault.Invalid) {
-		t.Fatalf("old API wrong-row fault: %v", err)
+	if _, err = v.Require(ctx, db, secondID); !errors.Is(err, fault.Invalid) {
+		t.Fatalf("wrong-row fault: %v", err)
 	}
 	// A same-row different-column envelope is equally invalid.
-	_, err = db.Exec(ctx, `UPDATE sensitive_vaults SET token=backup WHERE id=$1`, newID.String())
+	_, err = db.Exec(ctx, `UPDATE sensitive_vaults SET token=backup WHERE id=$1`, secondID.String())
 	must(t, err)
-	if _, err = v.Require(ctx, db, newID); !errors.Is(err, fault.Invalid) {
-		t.Fatalf("new API wrong-column fault: %v", err)
-	}
-	if _, err = oldmodels.QuerySensitiveVaults().RequireFind(ctx, db, second.ID); !errors.Is(err, fault.Invalid) {
-		t.Fatalf("old API wrong-column fault: %v", err)
+	if _, err = v.Require(ctx, db, secondID); !errors.Is(err, fault.Invalid) {
+		t.Fatalf("wrong-column fault: %v", err)
 	}
 	hasher, err := password.New(password.DefaultConfig())
 	must(t, err)
@@ -158,16 +148,14 @@ func TestSensitivePersistenceAcrossAPIs(t *testing.T) {
 	if !account.Backup.IsNull() {
 		t.Fatal("nullable hash did not retain SQL NULL")
 	}
-	oldAccountID, err := model.ParseID[oldmodels.Account](account.ID.String())
+	storedAccount, err := a.Require(ctx, db, account.ID)
 	must(t, err)
-	oldAccount, err := oldmodels.QuerySensitiveAccounts().RequireFind(ctx, db, oldAccountID)
-	must(t, err)
-	match, err := hasher.Check(ctx, plain, oldAccount.Digest)
+	match, err := hasher.Check(ctx, plain, storedAccount.Digest)
 	must(t, err)
 	if !match {
 		t.Fatal("stored password round trip")
 	}
-	_, err = oldmodels.QuerySensitiveAccounts().Update(ctx, db, oldAccountID, oldmodels.AccountDraft{}.SetBackup(hash))
+	_, err = a.Update(ctx, db, account.ID, a.Backup.Set(hash))
 	must(t, err)
 	account, err = a.Query().Where(a.Key().Eq(account.ID), a.Digest.Eq(hash)).OrderBy(a.Digest.Asc()).Require(ctx, db)
 	must(t, err)

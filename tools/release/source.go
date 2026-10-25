@@ -94,6 +94,7 @@ func (policy sourcePolicy) sourceName(path string) bool {
 		"database/orm/testdata/public-methods.txt",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
 		"docs/evidence/goway-stage9-c-barrier-freeze.tsv",
+		"docs/evidence/goway-stage9-d-helper-references.tsv",
 		"mailing/testdata/mailers.toml",
 		"spaportals/web/admin/assets/app-3f2a9c.js",
 		"spaportals/web/admin/logo.svg",

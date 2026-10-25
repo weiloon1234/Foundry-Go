@@ -46,6 +46,17 @@ runtime and parity oracles is Stage 8d, under a separate lead decision.
    before deleting that set. An ordinary ORM model need not have the generated
    `FoundryIdentity` method, so that method alone is not an equivalent replacement.
 
+### Migration guide before/after examples (lead decision after batch 7g)
+
+`tests/fixtures/goway/migration/{guide,examples,sql}_test.go` are the exact
+**migration-before examples** exception in the oracle import guard. They currently
+compile the guide's old-API snippets intentionally. During 8c, move the **before**
+blocks to documentation-only, uncompiled examples; keep the **after** blocks compiled
+against ORM. Update the guide snippet check to enforce that distinction, remove the
+three-file exception once generated imports are gone, and retain the recorded
+`TestDeclarationsAndReadSQL` observations as the legacy SQL reference. Do not retain
+a hidden legacy generator or permit other files to borrow this exception.
+
 ## 2. Exact source surgery
 
 Paths in this section are relative to `internal/generate/`.

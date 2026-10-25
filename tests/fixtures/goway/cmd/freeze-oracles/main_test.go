@@ -21,6 +21,12 @@ func TestReplayGroupsRequirePostgresOnlyInFullCapture(t *testing.T) {
 		if sites["consumer/models/postgres/hydration"] != postgres {
 			t.Fatal("incorrect PostgreSQL selection")
 		}
+		if sites["goway/pgsmoke/mutators/hydration"] != postgres {
+			t.Fatal("incorrect mutator PostgreSQL selection")
+		}
+		if !sites["goway/relation_order_golden/1"] {
+			t.Fatal("relation-expression ordering absent")
+		}
 		if !sites["goway/integrations/pagination/parse"] {
 			t.Fatal("cursor parsing absent")
 		}

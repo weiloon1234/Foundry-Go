@@ -1,0 +1,292 @@
+{
+  "slice": "stage8c-prerequisites-review34",
+  "review": "last-34.md, both findings",
+  "commit": "fdaff938b71108081499a70d7bf2767f94a147c9",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r13",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "final_freeze_performed": false,
+  "postgres_executed": false,
+  "public_surface_additions": [],
+  "footprint_ceilings_changed": [],
+  "moved_behavior": {
+    "tests/fixtures/goway/extension_handles_test.go": {
+      "destination": "tests/fixtures/goway/extension_handles_behavior_test.go",
+      "tests": [
+        "TestExtensionHandlesDoNotExposeLegacyFamilies",
+        "TestZeroExtensionHandlesFailClosed",
+        "TestThinExtensionBindingKeepsUnboundDeclarationImmutable"
+      ]
+    },
+    "tests/fixtures/goway/integration_adapters_test.go": {
+      "destination": "tests/fixtures/goway/integration_adapters_behavior_test.go",
+      "tests": [
+        "TestORMExtensionDeclaration"
+      ]
+    },
+    "tests/fixtures/goway/mutators_golden_test.go": {
+      "destination": "tests/fixtures/goway/mutators_behavior_test.go",
+      "tests": [
+        "TestMutatorInputsAreReusableAndOwned",
+        "TestMutatorErrorRedactionInBothAPIs"
+      ]
+    },
+    "tests/fixtures/goway/relation_filter_test.go": {
+      "destination": "tests/fixtures/goway/relation_filter_behavior_test.go",
+      "tests": [
+        "TestRelationFilterRejectsForeignMetadata"
+      ]
+    },
+    "tests/fixtures/goway/relation_writes_test.go": {
+      "destination": "tests/fixtures/goway/relation_writes_behavior_test.go",
+      "tests": [
+        "TestRelationWriteMorphDefaultsAndSingleStatements"
+      ]
+    },
+    "tests/fixtures/goway/report_projection_golden_test.go": {
+      "destination": "tests/fixtures/goway/report_projection_behavior_test.go",
+      "tests": [
+        "TestReportRelationAdapterRejectsForeignDeclaration",
+        "TestReportEnumPatternCompilerDefense"
+      ]
+    },
+    "tests/fixtures/goway/retrieval_scope_golden_test.go": {
+      "destination": "tests/fixtures/goway/retrieval_scope_behavior_test.go",
+      "tests": [
+        "TestScopePropagationProjectionJoinsAggregatesAndRelationBypasses",
+        "TestJoinedRetrievalCallbacksVisitOnlyCurrentBatch"
+      ]
+    },
+    "tests/fixtures/goway/statement_detector_test.go": {
+      "destination": "tests/fixtures/goway/statement_detector_behavior_test.go",
+      "tests": [
+        "TestStatementDetectorExternalSitesAndBatchLengths"
+      ],
+      "benchmarks": [
+        "BenchmarkStatementDetectorConsumer"
+      ]
+    },
+    "tests/fixtures/goway/validation_database_test.go": {
+      "destination": "tests/fixtures/goway/validation_database_behavior_test.go",
+      "tests": [
+        "TestValidationDatabaseRejectsBadSourcesAndRedacts",
+        "TestValidationDatabaseCheckTimeScopesAndExclusions"
+      ]
+    }
+  },
+  "remaining_importer_files": {
+    "tests/fixtures/goway/adjustments_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/aggregate_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/audit_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/composition_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/conditional_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/conflict_advanced_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/conflict_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/correlation_lateral_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/expression_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/extension_handles_test.go": "foundry.test/goway/oldmodels/extensions",
+    "tests/fixtures/goway/golden_old_loading_test.go": "foundry.test/goway/oldmodels, foundry.test/goway/oldreporting",
+    "tests/fixtures/goway/golden_old_queries_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/golden_old_relations_test.go": "foundry.test/goway/oldmodels, foundry.test/goway/oldreporting",
+    "tests/fixtures/goway/integration_adapters_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/joins_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/lifecycle_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/load_query_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/mutators_golden_test.go": "foundry.test/goway/oldmodels/mutators",
+    "tests/fixtures/goway/on_conditions_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/pgsmoke/oracle_legacy_test.go": "foundry.test/goway/oldmodels/mutators",
+    "tests/fixtures/goway/reads_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/records_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/relation_aggregates_golden_test.go": "foundry.test/goway/oldmodels/joined",
+    "tests/fixtures/goway/relation_filter_test.go": "foundry.test/goway/oldmodels/joined",
+    "tests/fixtures/goway/relation_writes_test.go": "foundry.test/goway/oldmodels/joined",
+    "tests/fixtures/goway/relations_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/relations_joined_golden_test.go": "foundry.test/goway/oldmodels/joined",
+    "tests/fixtures/goway/report_projection_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/result_read_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/retrieval_scope_golden_test.go": "foundry.test/goway/oldmodels/reads",
+    "tests/fixtures/goway/sensitive_golden_test.go": "foundry.test/goway/oldmodels/sensitive",
+    "tests/fixtures/goway/source_write_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/stage7_remainder_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/statement_detector_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/store_capabilities_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/subqueries_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/terminal_writes_golden_test.go": "foundry.test/goway/oldmodels/hooks",
+    "tests/fixtures/goway/testdata/footprint/extension_slots_old/probe.go": "foundry.test/goway/oldmodels/extensions",
+    "tests/fixtures/goway/transaction_composition_golden_test.go": "foundry.test/goway/oldmodels",
+    "tests/fixtures/goway/validation_database_test.go": "foundry.test/goway/oldmodels, foundry.test/goway/oldmodels/hooks, foundry.test/goway/oldmodels/reads",
+    "tests/fixtures/goway/window_golden_test.go": "foundry.test/goway/oldmodels"
+  },
+  "comparison_census": {
+    "sources": 500,
+    "paired_tests": 84,
+    "sites_full": 119,
+    "sites_offline": 117
+  },
+  "checks": [
+    {
+      "command": "go test -race -count=1 -v ./cmd/freeze-oracles",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "segmented_pass",
+      "log": "/private/tmp/goway-review34-recorder.log",
+      "notes": "All unit regressions passed; two integration checks initially rejected a remaining ordinary benchmark. Corrected and rerun separately.",
+      "initial_returncode": 1
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "-v",
+        "-run",
+        "^(TestCompiledStatementsCarryTrustedShapes|TestCursorStatementsCarryTrustedShapes|TestExtensionHandlesDoNotExposeLegacyFamilies|TestFactoryORMAndGeneratedParity|TestInputPrimaryKeyOldAndNewAgree|TestJoinedRetrievalCallbacksVisitOnlyCurrentBatch|TestMutatorErrorRedactionInBothAPIs|TestMutatorInputsAreReusableAndOwned|TestMutatorsOldAndNewAgree|TestORMExtensionDeclaration|TestORMModelBindingScopeAndDuplicateParity|TestRelationExpressionFilterSQLParity|TestRelationFilterRejectsForeignMetadata|TestRelationWriteGoldens|TestRelationWriteMorphDefaultsAndSingleStatements|TestReportEnumPatternCompilerDefense|TestReportFilterAdaptersGolden|TestReportProjectionGolden|TestReportRelationAdapterRejectsForeignDeclaration|TestRetrievalAndScopeOldAndNewAgree|TestScopePropagationProjectionJoinsAggregatesAndRelationBypasses|TestStatementDetectorExternalSitesAndBatchLengths|TestThinExtensionBindingKeepsUnboundDeclarationImmutable|TestThinExtensionHandlesPreserveLegacyPoliciesAndUnboundBehavior|TestValidationDatabaseCheckTimeScopesAndExclusions|TestValidationDatabaseGlobalScopesWithoutRetrieval|TestValidationDatabaseObservationParity|TestValidationDatabaseRejectsBadSourcesAndRedacts|TestValidationDatabaseRulesAndDescriptions|TestZeroExtensionHandlesFailClosed)$",
+        "."
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "segmented_pass",
+      "log": "/private/tmp/goway-review34-behavior-race-rerun.log",
+      "passed_tests": 29,
+      "notes": "Scope/exclusion assertion against encoded transcript failed; repaired at its behavior test, then rerun alone.",
+      "initial_returncode": 1
+    },
+    {
+      "command": "go test -race -count=1 -v -run ^TestValidationDatabaseCheckTimeScopesAndExclusions$ .",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-review34-validation-fixture-rerun.log"
+    },
+    {
+      "command": "go vet . ./cmd/freeze-oracles",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-review34-vet.log"
+    },
+    {
+      "command": "python3 tools/goway_catalogue.py",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-review34-catalogue.log"
+    },
+    {
+      "command": [
+        "gofmt",
+        "-l",
+        "tests/fixtures/goway/extension_handles_test.go",
+        "tests/fixtures/goway/extension_handles_behavior_test.go",
+        "tests/fixtures/goway/integration_adapters_test.go",
+        "tests/fixtures/goway/integration_adapters_behavior_test.go",
+        "tests/fixtures/goway/mutators_golden_test.go",
+        "tests/fixtures/goway/mutators_behavior_test.go",
+        "tests/fixtures/goway/relation_filter_test.go",
+        "tests/fixtures/goway/relation_filter_behavior_test.go",
+        "tests/fixtures/goway/relation_writes_test.go",
+        "tests/fixtures/goway/relation_writes_behavior_test.go",
+        "tests/fixtures/goway/report_projection_golden_test.go",
+        "tests/fixtures/goway/report_projection_behavior_test.go",
+        "tests/fixtures/goway/retrieval_scope_golden_test.go",
+        "tests/fixtures/goway/retrieval_scope_behavior_test.go",
+        "tests/fixtures/goway/statement_detector_test.go",
+        "tests/fixtures/goway/statement_detector_behavior_test.go",
+        "tests/fixtures/goway/validation_database_test.go",
+        "tests/fixtures/goway/validation_database_behavior_test.go",
+        "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports.go",
+        "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports_test.go"
+      ],
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "status": "pass",
+      "output": ""
+    },
+    {
+      "command": "git diff --check",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "status": "pass",
+      "output": ""
+    },
+    {
+      "command": "go test -race -count=1 -v -run '^(TestLegacyImportsStayInRecordingPaths|TestReplayGroupsRequirePostgresOnlyInFullCapture)$' ./cmd/freeze-oracles",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/goway",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-review34-recorder-final.log"
+    },
+    {
+      "command": "make docs-check",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "status": "pass",
+      "returncode": 0,
+      "log": "/private/tmp/goway-review34-docs.log"
+    }
+  ],
+  "correction_logs": [
+    "/private/tmp/goway-review34-recorder-rerun.log",
+    "/private/tmp/goway-review34-behavior-race.log"
+  ],
+  "source_sha256": {
+    "tests/fixtures/goway/extension_handles_test.go": "2f6ebd81330929d7ee6bb2df43d703176a1605a9e739de2e5b4eda054069d5fa",
+    "tests/fixtures/goway/extension_handles_behavior_test.go": "e0c30699ad7503e7880879080f6daa1becf73c8c4d188ab28df93f87cda769e1",
+    "tests/fixtures/goway/integration_adapters_test.go": "d3c2e79703e7e0878e5c9a035ad458b248c9af633d0904d5fe84b8a7bce96943",
+    "tests/fixtures/goway/integration_adapters_behavior_test.go": "c3713d0528631a9f004b163d6641263bfca0d283d4038a214fdfdeca61275f18",
+    "tests/fixtures/goway/mutators_golden_test.go": "a0680e2e1e9ea40be359cb2721e86f92b0b210171bcf23785797dcf8349be43d",
+    "tests/fixtures/goway/mutators_behavior_test.go": "af55a4e8a1988a991e23d5d8620eefec06d8b2d64f6cf38792408635a16f00bb",
+    "tests/fixtures/goway/relation_filter_test.go": "f05df67186c61736415dccf564a109851cab753aa4cfa85e105cc0e9da27b87f",
+    "tests/fixtures/goway/relation_filter_behavior_test.go": "0e070810623e1abfc6eff3ddf04f2376e907618fda469957f29e0b9d40e12a70",
+    "tests/fixtures/goway/relation_writes_test.go": "cc27400e8a1149eed4fa3e062d696f1c217a5ee931377ff7296887142837b47d",
+    "tests/fixtures/goway/relation_writes_behavior_test.go": "228bfe09586a9f92b23deb962b817c545aba6f649c8b7c86a4680cba0c1473b4",
+    "tests/fixtures/goway/report_projection_golden_test.go": "683f8be61f52a7ffeede36fc94eba34c5416b96b375e8551470049d0a027c565",
+    "tests/fixtures/goway/report_projection_behavior_test.go": "2c5424382ac81a27b59f86dd55e9096e37182753905c37c503f1a0bb64ed4e3b",
+    "tests/fixtures/goway/retrieval_scope_golden_test.go": "629d49f025b3a8e21862802fec8d42abf64d858cc36cfdd30a3be7a72906e8cd",
+    "tests/fixtures/goway/retrieval_scope_behavior_test.go": "7b0fe48436152cb503d9bdf8e1f5fd4e8a9cd609caad1ee5dbc47106b9b41165",
+    "tests/fixtures/goway/statement_detector_test.go": "acb9aa22aa7ed3feaad85c7f4a2c538908893db053d80be676b311c5a9be22c4",
+    "tests/fixtures/goway/statement_detector_behavior_test.go": "235f4b64dc1a33d37417182f3104cfb3523e9c69b838309dc65dbba1aeac8452",
+    "tests/fixtures/goway/validation_database_test.go": "5b2d86f4f483cff3f8009bbe50b78e8a58313a5d4b0da606a6f88ee6307ab8c7",
+    "tests/fixtures/goway/validation_database_behavior_test.go": "ee54911ab9a2698781a55fadcf5f02e4266a9db7040002877f161f874ad01256",
+    "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports.go": "4b568994d79173d446e092abb74306b9bfdbf2b611aca948219f1692790ce4db",
+    "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports_test.go": "772ee4e5916a315560837e67625bbc15a39434946d28961a10d641933d9875f8",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "e0449c6a26fe3243be5b09075cfde37c968f16c949dcbea4642196346a7ba63e",
+    "tests/fixtures/goway/testdata/oracles/README.md": "1ab46780e4a9928b33a7f17b0c406551c91c0a6244781d2b165405d68a1f0ba4",
+    "docs/evidence/goway-stage8c-oracle-comparison-inventory.md": "6461a84cfb2e4e6711b6c7955a77d39a14e1c4f408ff072ea4fd10282710b1c0",
+    "docs/evidence/goway-stage8c-postgres-prerequisites-report.md": "999f06fc422ca00450ee12384105d4077ced573725d5e4bcd85d620bdd649b5f",
+    "docs/evidence/goway-stage8c-review34-report.md": "3bbae49c1238455d53e3a7e955c0e296224de83bc4fc301c617952a936008924"
+  },
+  "pending_checks": [],
+  "pre_integration_batch7h_source_sha256": {
+    "tests/fixtures/goway/extension_handles_test.go": "2f6ebd81330929d7ee6bb2df43d703176a1605a9e739de2e5b4eda054069d5fa",
+    "tests/fixtures/goway/extension_handles_behavior_test.go": "e0c30699ad7503e7880879080f6daa1becf73c8c4d188ab28df93f87cda769e1",
+    "tests/fixtures/goway/integration_adapters_test.go": "d3c2e79703e7e0878e5c9a035ad458b248c9af633d0904d5fe84b8a7bce96943",
+    "tests/fixtures/goway/integration_adapters_behavior_test.go": "c3713d0528631a9f004b163d6641263bfca0d283d4038a214fdfdeca61275f18",
+    "tests/fixtures/goway/mutators_golden_test.go": "a0680e2e1e9ea40be359cb2721e86f92b0b210171bcf23785797dcf8349be43d",
+    "tests/fixtures/goway/mutators_behavior_test.go": "af55a4e8a1988a991e23d5d8620eefec06d8b2d64f6cf38792408635a16f00bb",
+    "tests/fixtures/goway/relation_filter_test.go": "f05df67186c61736415dccf564a109851cab753aa4cfa85e105cc0e9da27b87f",
+    "tests/fixtures/goway/relation_filter_behavior_test.go": "0e070810623e1abfc6eff3ddf04f2376e907618fda469957f29e0b9d40e12a70",
+    "tests/fixtures/goway/relation_writes_test.go": "cc27400e8a1149eed4fa3e062d696f1c217a5ee931377ff7296887142837b47d",
+    "tests/fixtures/goway/relation_writes_behavior_test.go": "228bfe09586a9f92b23deb962b817c545aba6f649c8b7c86a4680cba0c1473b4",
+    "tests/fixtures/goway/report_projection_golden_test.go": "683f8be61f52a7ffeede36fc94eba34c5416b96b375e8551470049d0a027c565",
+    "tests/fixtures/goway/report_projection_behavior_test.go": "2c5424382ac81a27b59f86dd55e9096e37182753905c37c503f1a0bb64ed4e3b",
+    "tests/fixtures/goway/retrieval_scope_golden_test.go": "629d49f025b3a8e21862802fec8d42abf64d858cc36cfdd30a3be7a72906e8cd",
+    "tests/fixtures/goway/retrieval_scope_behavior_test.go": "7b0fe48436152cb503d9bdf8e1f5fd4e8a9cd609caad1ee5dbc47106b9b41165",
+    "tests/fixtures/goway/statement_detector_test.go": "acb9aa22aa7ed3feaad85c7f4a2c538908893db053d80be676b311c5a9be22c4",
+    "tests/fixtures/goway/statement_detector_behavior_test.go": "235f4b64dc1a33d37417182f3104cfb3523e9c69b838309dc65dbba1aeac8452",
+    "tests/fixtures/goway/validation_database_test.go": "5b2d86f4f483cff3f8009bbe50b78e8a58313a5d4b0da606a6f88ee6307ab8c7",
+    "tests/fixtures/goway/validation_database_behavior_test.go": "bc674d5b07dde46a70992b21b3fce9dc81d3d2721faf7ea4d8e52b91d7ab1b22",
+    "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports.go": "22bb71951892195494b3d81b139695e3cf13e4176f5d0be5be14e948fd97336d",
+    "tests/fixtures/goway/cmd/freeze-oracles/legacy_imports_test.go": "18130d796dd51e737691f043e4099f6b04bdef36d2699393b23d22a32fb2c45d",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "a8cc0144af11599610a82defd4412e3031369178a89afa90e98735e0bc7f7295",
+    "tests/fixtures/goway/testdata/oracles/README.md": "5cfaffc73cfaa260bf1cfba66b5a60d664c95f7b4c8c42d52c245a404b2faf55",
+    "docs/evidence/goway-stage8c-oracle-comparison-inventory.md": "e4e2feac4492c55a4d0c756e20d8cca07bb5b6b030c342812a45c452ee82dc2d",
+    "docs/evidence/goway-stage8c-postgres-prerequisites-report.md": "999f06fc422ca00450ee12384105d4077ced573725d5e4bcd85d620bdd649b5f",
+    "docs/evidence/goway-stage8c-review34-report.md": "3bbae49c1238455d53e3a7e955c0e296224de83bc4fc301c617952a936008924"
+  },
+  "integration_batch7h": {
+    "worktree": "Foundry-Go-goway-int7",
+    "base": "dbe6b1b7",
+    "evidence": "docs/evidence/goway-batch7h-integration.json",
+    "note": "Lane checks above are historical; current integration results are recorded separately."
+  }
+}

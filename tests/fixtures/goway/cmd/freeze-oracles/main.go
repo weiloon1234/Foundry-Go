@@ -344,6 +344,9 @@ func replayGroups(fixture string, includePostgres bool) ([]replayGroup, map[stri
 	if err := audit.Validate(fixtures); err != nil {
 		return nil, nil, err
 	}
+	if _, err := recordingImporters(fixture, audit); err != nil {
+		return nil, nil, err
+	}
 	reviewed := audit.Packages(fixtures)
 	postgres := audit.PostgreSQL(fixtures)
 	dirs := make([]string, 0, len(reviewed))

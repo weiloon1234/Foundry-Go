@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"foundry.test/goway/models"
-	"foundry.test/goway/oldmodels"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -146,11 +146,16 @@ func TestInferredCapabilityCatchersNeverReceiveAuthority(t *testing.T) {
 	capture := &goldenCapture{}
 	db := capture.open(t.Context())
 	defer db.Close(t.Context())
+	legacyOrders := query.ForModel(query.Define("orders", "id", []query.Column{{Name: "id"}, {Name: "buyer_id"}, {Name: "total_cents"}}, func(row database.Row) (models.Order, error) {
+		var m models.Order
+		err := row.Scan(codec.ID[models.Order]().Scan(&m.ID), codec.ID[models.User]().Scan(&m.BuyerID), codec.Signed[int64]().Scan(&m.TotalCents))
+		return m, err
+	}))
 	createOld := func(writer database.Transactor) {
 		t.Helper()
-		id := must(model.ParseID[oldmodels.Order](orderID))
-		buyer := must(model.ParseID[oldmodels.User](buyerID))
-		row, err := oldmodels.QueryOrders().Create(t.Context(), writer, oldmodels.OrderDraft{}.SetID(id).SetBuyerID(buyer).SetTotalCents(500))
+		id := must(model.ParseID[models.Order](orderID))
+		buyer := must(model.ParseID[models.User](buyerID))
+		row, err := legacyOrders.Insert(t.Context(), writer, query.Change(query.Assign[models.Order]("orders", "id", codec.ID[models.Order](), id), query.Assign[models.Order]("orders", "buyer_id", codec.ID[models.User](), buyer), query.Assign[models.Order]("orders", "total_cents", codec.Signed[int64](), int64(500))))
 		if err != nil || row.ID != id {
 			t.Fatal(row, err)
 		}
@@ -167,7 +172,7 @@ func TestInferredCapabilityCatchersNeverReceiveAuthority(t *testing.T) {
 	// Exercise both read and mutation observer lookup in the old API. A wrapper
 	// may supply transactions but may not prove observer absence or receive a seal.
 	observer := catchObservers(db, db.FoundryObservers)
-	if _, err := oldmodels.QueryOrders().All(t.Context(), observer); err != nil {
+	if _, err := legacyOrders.All(t.Context(), observer); err != nil {
 		t.Fatal(err)
 	}
 	createOld(observer)

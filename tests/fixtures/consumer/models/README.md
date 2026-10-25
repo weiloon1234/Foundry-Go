@@ -17,4 +17,5 @@ new consumers use these ORM declarations. The lead owns generated-output cleanup
 `user.CurrentEmailAssignment()` returns `orm.Assignment[User]` for the current
 email, preserving an explicit empty string. For a product's creator key,
 `product.CreatorAssignment()` returns an assignment for `models.User`.
-The old draft helpers remain temporarily for lane D's root-test cutover.
+The root tests consume the actual helper results through the ORM write pipeline
+and check supplied values and presence. The old draft helpers have been removed.

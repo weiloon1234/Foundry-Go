@@ -1362,10 +1362,13 @@
       "sha256": "a3033a10ed83cecdde62fad173bec909cbdce35328ebaf6171e52303a05449fb"
     },
     "goway/bridge_capability_test.go": {
-      "sha256": "8255b310104f75dd5097116462dad2e4ea73eacb16b9e4ee425636ae4e50c41f"
+      "sha256": "da2eeac0c9fd6f3b7bfc3ce45e3dd1522be47c66473b1c5ca908993add99b0f6"
+    },
+    "goway/cmd/freeze-oracles/legacy_imports_test.go": {
+      "sha256": "772ee4e5916a315560837e67625bbc15a39434946d28961a10d641933d9875f8"
     },
     "goway/cmd/freeze-oracles/main_test.go": {
-      "sha256": "fa8610347918bdbe4ebdd3ec0826070b04371212143cd1e5c103f3984f1b9af3"
+      "sha256": "13387c3189d4d18ba60a4d4709aa8a1790363bc227486ae50da4a9583e076134"
     },
     "goway/column_kinds_test.go": {
       "sha256": "fb0d9da937faf55e503026fd5f795b9552221caeeff84605a02120cd8777fe18"
@@ -1427,11 +1430,14 @@
       ],
       "sha256": "509f313ace0c08a6d9d69d4f0e1b925f2bccd75e40d08c1179519ce4a27570a1"
     },
+    "goway/extension_handles_behavior_test.go": {
+      "sha256": "e0c30699ad7503e7880879080f6daa1becf73c8c4d188ab28df93f87cda769e1"
+    },
     "goway/extension_handles_test.go": {
       "paired_tests": [
         "TestThinExtensionHandlesPreserveLegacyPoliciesAndUnboundBehavior"
       ],
-      "sha256": "3c3ed48b6c02d1b22150f4640d0964dd7aab18574bb0fb16a4990de0f028f72c"
+      "sha256": "2f6ebd81330929d7ee6bb2df43d703176a1605a9e739de2e5b4eda054069d5fa"
     },
     "goway/extension_matching_test.go": {
       "sha256": "8ea35ab312ea536948cbebb101518b03dac146979a9bbe7771c2645dfb9ee110",
@@ -1469,12 +1475,15 @@
       ],
       "sha256": "3ccf84402e056c25b090aeda23764bbe89191325d80e0a296d71fe464af6039d"
     },
+    "goway/integration_adapters_behavior_test.go": {
+      "sha256": "c3713d0528631a9f004b163d6641263bfca0d283d4038a214fdfdeca61275f18"
+    },
     "goway/integration_adapters_test.go": {
       "paired_tests": [
         "TestFactoryORMAndGeneratedParity",
         "TestORMModelBindingScopeAndDuplicateParity"
       ],
-      "sha256": "3f1d06a0aacf4e3171c830a66e339bde3696ed6d56a3784c0151010193e0e907"
+      "sha256": "d3c2e79703e7e0878e5c9a035ad458b248c9af633d0904d5fe84b8a7bce96943"
     },
     "goway/integrations/oracle_test.go": {
       "sha256": "d735be86e48430f1a7e354d52372d702afd1ebdf245b9506099e24e146ede34c"
@@ -1533,12 +1542,15 @@
     "goway/models/tables_test.go": {
       "sha256": "e18c4b42f0fd37f72d09ad2a5332cec2935290ce4e62e6a49327439548831a44"
     },
+    "goway/mutators_behavior_test.go": {
+      "sha256": "af55a4e8a1988a991e23d5d8620eefec06d8b2d64f6cf38792408635a16f00bb"
+    },
     "goway/mutators_golden_test.go": {
       "paired_tests": [
         "TestInputPrimaryKeyOldAndNewAgree",
         "TestMutatorsOldAndNewAgree"
       ],
-      "sha256": "6a9099cb8c434af5a981fd148ccfddb12548ed745597e08594424e321af89253"
+      "sha256": "a0680e2e1e9ea40be359cb2721e86f92b0b210171bcf23785797dcf8349be43d"
     },
     "goway/nested_binding_orm_test.go": {
       "paired_tests": [
@@ -1601,13 +1613,16 @@
       "sha256": "0c0e50686e7dbe5a3cf6c156090e6e70b76091ebd5a50093e5fedc96e50a44d5"
     },
     "goway/pgsmoke/mutators_test.go": {
-      "sha256": "1340052d2e561c7cc69bbd8b5aa7ee29d9af62e89b68a3daf4dffc7b4ce90369",
+      "sha256": "10545d9095ef00a72cc8279a6699451e0e573a793b08b7c641aca5a8abaaaa21"
+    },
+    "goway/pgsmoke/oracle_legacy_test.go": {
       "paired_tests": [
-        "TestMutators"
+        "TestMutatorHydrationParity"
       ],
       "postgres_tests": [
-        "TestMutators"
-      ]
+        "TestMutatorHydrationParity"
+      ],
+      "sha256": "b25ce018916aa75281e3e63b2d01e4a7c0147cf4d6f2c334a3d23f278e62c0da"
     },
     "goway/pgsmoke/oracle_test.go": {
       "sha256": "2aea222bcb141a9348f030d3c5d2d8aa1d47ca3f37c44a8aec8646a1b327560a"
@@ -1661,7 +1676,7 @@
       "sha256": "48a7262ec3d8f1174bfee63c84a2f5dd3b2506f71aa2971831e925f9bfba83ee"
     },
     "goway/pgsmoke/sensitive_test.go": {
-      "sha256": "045a4911a88bd2999982293079895222b2605adc9fe588c9dfeeeba9235959fb"
+      "sha256": "d3301730b29304b8a0ee26ea1bb0f4b96a36749ec88cb0d700b5d7d4ba94379e"
     },
     "goway/pgsmoke/smoke_test.go": {
       "sha256": "ebcdecd23721e930b2288d068fb67f61b071758fadcccd2a2d74515594f50405"
@@ -1724,23 +1739,32 @@
     "goway/relation_aggregates_test.go": {
       "sha256": "0a3f86df9b79ad043c87212cd21417835843d27ea3a93fecab40ab121037cf7e"
     },
+    "goway/relation_filter_behavior_test.go": {
+      "sha256": "0e070810623e1abfc6eff3ddf04f2376e907618fda469957f29e0b9d40e12a70"
+    },
     "goway/relation_filter_test.go": {
       "paired_tests": [
         "TestRelationExpressionFilterSQLParity"
       ],
-      "sha256": "01c4a3f06389ccdcd4906151683f47ad6f16003e4e0b1a3ca86850bd50a55823"
+      "sha256": "f05df67186c61736415dccf564a109851cab753aa4cfa85e105cc0e9da27b87f"
+    },
+    "goway/relation_order_behavior_test.go": {
+      "sha256": "a27b8a4fdf1894eee2106305d9b98ce1bb69751de6df16d53ea60de865dc01a9"
     },
     "goway/relation_order_golden_test.go": {
-      "sha256": "c6a43213e0d9ea18a536cc98d7b2669636cfbaada1c2ec64147df478f66d43e6",
+      "sha256": "ca540a238dd5209d86f4c3abc038a3b061b1e506871c01afb4a1d45c90ba6fb4",
       "paired_tests": [
         "TestComputedRelationOrderSQLMatchesOldAPI"
       ]
+    },
+    "goway/relation_writes_behavior_test.go": {
+      "sha256": "228bfe09586a9f92b23deb962b817c545aba6f649c8b7c86a4680cba0c1473b4"
     },
     "goway/relation_writes_test.go": {
       "paired_tests": [
         "TestRelationWriteGoldens"
       ],
-      "sha256": "d647ed098970b8b61304fddfd9e75f2a8da72794d5365477c3461af38579bc07"
+      "sha256": "cc27400e8a1149eed4fa3e062d696f1c217a5ee931377ff7296887142837b47d"
     },
     "goway/relations_golden_test.go": {
       "paired_tests": [
@@ -1758,12 +1782,15 @@
     "goway/relations_joined_test.go": {
       "sha256": "c4ed99b9487e85ec8b03c345927ca98afd4edcfaad3f58fec5114f858feb6100"
     },
+    "goway/report_projection_behavior_test.go": {
+      "sha256": "2c5424382ac81a27b59f86dd55e9096e37182753905c37c503f1a0bb64ed4e3b"
+    },
     "goway/report_projection_golden_test.go": {
       "paired_tests": [
         "TestReportFilterAdaptersGolden",
         "TestReportProjectionGolden"
       ],
-      "sha256": "bdcae2d50303ce105d53957db6100f21a44d22d49449a8a3c70284f7118a137f"
+      "sha256": "683f8be61f52a7ffeede36fc94eba34c5416b96b375e8551470049d0a027c565"
     },
     "goway/report_text_capability_test.go": {
       "sha256": "5c75c056bc321902e0052bcfd5bb977b30cecda5dc1c200d0a99fee6510f75c7"
@@ -1774,11 +1801,14 @@
       ],
       "sha256": "052e5a1e2608c1d1e453a8a743bd349d902c34e93ed271464f5b76d97b192415"
     },
+    "goway/retrieval_scope_behavior_test.go": {
+      "sha256": "7b0fe48436152cb503d9bdf8e1f5fd4e8a9cd609caad1ee5dbc47106b9b41165"
+    },
     "goway/retrieval_scope_golden_test.go": {
       "paired_tests": [
         "TestRetrievalAndScopeOldAndNewAgree"
       ],
-      "sha256": "b298c78dd1ac3c8ea1ae891f2e26795c651f78bddaab678e076f0108c2047c31"
+      "sha256": "629d49f025b3a8e21862802fec8d42abf64d858cc36cfdd30a3be7a72906e8cd"
     },
     "goway/scalar_golden_test.go": {
       "paired_tests": [
@@ -1813,8 +1843,11 @@
       ],
       "sha256": "588e2698b15dd7b88573c60dd2f412a0e2b456ca2d52ab0326c459a9f8331239"
     },
+    "goway/statement_detector_behavior_test.go": {
+      "sha256": "235f4b64dc1a33d37417182f3104cfb3523e9c69b838309dc65dbba1aeac8452"
+    },
     "goway/statement_detector_test.go": {
-      "sha256": "762ed4f46abea46cec9d5bd0af020ed3c6de42da3b024d1fa5f33b95fa17b7e1",
+      "sha256": "acb9aa22aa7ed3feaad85c7f4a2c538908893db053d80be676b311c5a9be22c4",
       "paired_tests": [
         "TestCompiledStatementsCarryTrustedShapes",
         "TestCursorStatementsCarryTrustedShapes"
@@ -1845,13 +1878,16 @@
       ],
       "sha256": "c0f2abc890d14071b02d21e30878b567e3ca19acdcb34340438bfa26fc171e8e"
     },
+    "goway/validation_database_behavior_test.go": {
+      "sha256": "ee54911ab9a2698781a55fadcf5f02e4266a9db7040002877f161f874ad01256"
+    },
     "goway/validation_database_test.go": {
       "paired_tests": [
         "TestValidationDatabaseGlobalScopesWithoutRetrieval",
         "TestValidationDatabaseObservationParity",
         "TestValidationDatabaseRulesAndDescriptions"
       ],
-      "sha256": "23dd6ead9a61e63a9b90ca1646bc3e1a0a60cac430ffc4e8b4c2c875cc87691d"
+      "sha256": "5b2d86f4f483cff3f8009bbe50b78e8a58313a5d4b0da606a6f88ee6307ab8c7"
     },
     "goway/window_golden_test.go": {
       "paired_tests": [
