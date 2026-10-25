@@ -11,6 +11,7 @@ import (
 
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -51,7 +52,7 @@ type legacyQueueConfig struct {
 
 func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error) {
 	if client == nil || client.done == nil {
-		return nil, fault.New(fault.Invalid, "jobs require a prepared Redis client")
+		return nil, safeerror.NewFault(fault.Invalid, "jobs require a prepared Redis client")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -206,7 +207,7 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 		return jobReply{}, err
 	}
 	if b == nil || b.client == nil {
-		return jobReply{}, fault.New(fault.Invalid, "Redis job backend is not initialized")
+		return jobReply{}, safeerror.NewFault(fault.Invalid, "Redis job backend is not initialized")
 	}
 	encoded, err := json.Marshal(request)
 	if err != nil {
@@ -220,17 +221,17 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 	}
 	parts, ok := raw.([]any)
 	if !ok || len(parts) == 0 {
-		return jobReply{}, fault.New(fault.Internal, "invalid Redis job reply")
+		return jobReply{}, safeerror.NewFault(fault.Internal, "invalid Redis job reply")
 	}
 	status, ok := parts[0].(int64)
 	if !ok {
-		return jobReply{}, fault.New(fault.Internal, "invalid Redis job status")
+		return jobReply{}, safeerror.NewFault(fault.Internal, "invalid Redis job status")
 	}
 	switch status {
 	case -2:
-		return jobReply{}, fault.New(fault.Invalid, "Redis job state or operation is invalid")
+		return jobReply{}, safeerror.NewFault(fault.Invalid, "Redis job state or operation is invalid")
 	case -3:
-		return jobReply{}, fault.New(fault.Conflict, "Redis job identity already belongs to a different envelope")
+		return jobReply{}, safeerror.NewFault(fault.Conflict, "Redis job identity already belongs to a different envelope")
 	case -4:
 		return jobReply{}, jobs.ErrOwnershipLost
 	case -5:
@@ -247,18 +248,18 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 		return jobReply{}, jobs.ErrLegacyLayout
 	case 1:
 	default:
-		return jobReply{}, fault.New(fault.Internal, "invalid Redis job status")
+		return jobReply{}, safeerror.NewFault(fault.Internal, "invalid Redis job status")
 	}
 	if len(parts) != 2 {
-		return jobReply{}, fault.New(fault.Internal, "invalid Redis job reply size")
+		return jobReply{}, safeerror.NewFault(fault.Internal, "invalid Redis job reply size")
 	}
 	text, ok := parts[1].(string)
 	if !ok {
-		return jobReply{}, fault.New(fault.Internal, "invalid Redis job result")
+		return jobReply{}, safeerror.NewFault(fault.Internal, "invalid Redis job result")
 	}
 	var reply jobReply
 	if err := json.Unmarshal([]byte(text), &reply); err != nil {
-		return jobReply{}, fault.New(fault.Internal, "invalid Redis job result encoding")
+		return jobReply{}, safeerror.NewFault(fault.Internal, "invalid Redis job result encoding")
 	}
 	return reply, nil
 }
@@ -360,7 +361,7 @@ func (b *JobBackend) JobCancel(ctx context.Context, key jobs.Key, target jobs.Ta
 }
 func (b *JobBackend) JobInspect(ctx context.Context, key jobs.Key, id jobs.ExecutionID) (value.Optional[jobs.Record], error) {
 	if id.IsZero() {
-		return value.Optional[jobs.Record]{}, fault.New(fault.Invalid, "job inspection requires an identity")
+		return value.Optional[jobs.Record]{}, safeerror.NewFault(fault.Invalid, "job inspection requires an identity")
 	}
 	reply, err := b.command(ctx, key, jobRequest{Op: "inspect", ID: id.String()})
 	if err != nil || reply.Record == nil {
@@ -381,7 +382,7 @@ func (r *jobStoredRecord) decode(key jobs.Key) (jobs.Record, error) {
 		return jobs.Record{}, err
 	}
 	if envelope.ID().String() != r.ID {
-		return jobs.Record{}, fault.New(fault.Invalid, "stored Redis job identity differs")
+		return jobs.Record{}, safeerror.NewFault(fault.Invalid, "stored Redis job identity differs")
 	}
 	result := jobs.Record{Retries: r.Retries, LastRetry: r.LastRetry, Workflow: r.Workflow, Position: r.Position, Envelope: envelope, State: r.State, Attempts: r.Attempts, Exceptions: r.Exceptions, AvailableAt: time.UnixMilli(r.Available).UTC(), CreatedAt: time.UnixMilli(r.Created).UTC(), CancellationRequested: r.Cancelled}
 	if r.Expiry != 0 {
@@ -401,7 +402,7 @@ func (b *JobBackend) JobWorkflow(ctx context.Context, key jobs.Key, workflow job
 		return false, err
 	}
 	if workflow.Queue() != key.Queue() {
-		return false, fault.New(fault.Invalid, "workflow belongs to another queue")
+		return false, safeerror.NewFault(fault.Invalid, "workflow belongs to another queue")
 	}
 	data, err := workflow.MarshalJSON()
 	if err != nil {
@@ -438,7 +439,7 @@ func (b *JobBackend) JobWorkflow(ctx context.Context, key jobs.Key, workflow job
 // JobWorkflowStatus reports one workflow's progress without payloads.
 func (b *JobBackend) JobWorkflowStatus(ctx context.Context, key jobs.Key, id jobs.WorkflowID) (value.Optional[jobs.WorkflowStatus], error) {
 	if id.IsZero() {
-		return value.Optional[jobs.WorkflowStatus]{}, fault.New(fault.Invalid, "workflow status requires an identity")
+		return value.Optional[jobs.WorkflowStatus]{}, safeerror.NewFault(fault.Invalid, "workflow status requires an identity")
 	}
 	reply, err := b.command(ctx, key, jobRequest{Op: "workflow_status", ID: id.String()})
 	if err != nil || reply.Workflow == nil {
@@ -446,7 +447,7 @@ func (b *JobBackend) JobWorkflowStatus(ctx context.Context, key jobs.Key, id job
 	}
 	w := reply.Workflow
 	if w.ID != id.String() || w.Total != w.Pending+w.Processed || w.Processed != w.Succeeded+w.FailedJobs+w.Cancelled {
-		return value.Optional[jobs.WorkflowStatus]{}, fault.New(fault.Invalid, "invalid Redis workflow status")
+		return value.Optional[jobs.WorkflowStatus]{}, safeerror.NewFault(fault.Invalid, "invalid Redis workflow status")
 	}
 	status := jobs.WorkflowStatus{ID: id, Kind: w.Kind, Total: w.Total, Pending: w.Pending, Processed: w.Processed, Succeeded: w.Succeeded, FailedJobs: w.FailedJobs, Cancelled: w.Cancelled, Failed: w.Failed, Cancelling: w.Cancelling}
 	if w.Finished > 0 {
@@ -468,7 +469,7 @@ func (b *JobBackend) JobMigrateLayout(ctx context.Context, key jobs.Key) (bool, 
 
 func (b *JobBackend) JobCancelWorkflow(ctx context.Context, key jobs.Key, id jobs.WorkflowID) (bool, error) {
 	if id.IsZero() {
-		return false, fault.New(fault.Invalid, "workflow cancellation requires an identity")
+		return false, safeerror.NewFault(fault.Invalid, "workflow cancellation requires an identity")
 	}
 	reply, err := b.command(ctx, key, jobRequest{Op: "cancel_workflow", ID: id.String()})
 	return reply.Changed, err
@@ -515,7 +516,7 @@ func (b *JobBackend) JobStats(ctx context.Context, key jobs.Key) (jobs.QueueStat
 		return jobs.QueueStats{}, err
 	}
 	if reply.Stats == nil {
-		return jobs.QueueStats{}, fault.New(fault.Internal, "invalid Redis job statistics")
+		return jobs.QueueStats{}, safeerror.NewFault(fault.Internal, "invalid Redis job statistics")
 	}
 	return *reply.Stats, nil
 }

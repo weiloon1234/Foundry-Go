@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/faultwrap"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RememberOption narrows one Remember call.
@@ -31,7 +32,7 @@ type rememberSettings struct {
 func WithLoadTimeout(timeout time.Duration) RememberOption {
 	return func(s *rememberSettings) error {
 		if timeout <= 0 || timeout > MaxLoadTimeout {
-			return fault.New(fault.Invalid, "cache load timeout must be positive and bounded")
+			return safeerror.NewFault(fault.Invalid, "cache load timeout must be positive and bounded")
 		}
 		s.loadTimeout = timeout
 		return nil
@@ -63,7 +64,7 @@ func WithLoadTimeout(timeout time.Duration) RememberOption {
 // must propagate the supplied context; detected fill cycles fail with fault.Cycle.
 func (c Cache[K, V]) Remember(ctx context.Context, key K, ttl TTL, loader func(context.Context) (V, error), options ...RememberOption) (V, error) {
 	if loader == nil {
-		return *new(V), fault.New(fault.Invalid, "cache Remember requires a loader")
+		return *new(V), safeerror.NewFault(fault.Invalid, "cache Remember requires a loader")
 	}
 	if err := ttl.Validate(); err != nil {
 		return *new(V), err
@@ -75,7 +76,7 @@ func (c Cache[K, V]) Remember(ctx context.Context, key K, ttl TTL, loader func(c
 	settings := rememberSettings{loadTimeout: c.store.config.LoadTimeout}
 	for _, option := range options {
 		if option == nil {
-			return *new(V), fault.New(fault.Invalid, "cache Remember option is nil")
+			return *new(V), safeerror.NewFault(fault.Invalid, "cache Remember option is nil")
 		}
 		if err := option(&settings); err != nil {
 			return *new(V), err
@@ -186,7 +187,7 @@ func (c Cache[K, V]) startFill(owner context.Context, access entryAccess, flight
 	go func() {
 		var data []byte
 		var outcome fillOutcome
-		var err error = fault.New(fault.Panicked, "cache fill exited without returning")
+		var err error = safeerror.NewFault(fault.Panicked, "cache fill exited without returning")
 		defer func() {
 			release()
 			c.store.finishFill(access.fillKey, flight, data, err, outcome)

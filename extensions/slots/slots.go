@@ -18,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/translations"
@@ -102,7 +103,7 @@ func (d Declaration) Describe() Description {
 // Validate checks that the declaration came from generated code.
 func (d Declaration) Validate() error {
 	if d.owner.Name() == "" || d.install == nil {
-		return fault.New(fault.Invalid, "model extension declaration requires generated owner and cleanup registration")
+		return safeerror.NewFault(fault.Invalid, "model extension declaration requires generated owner and cleanup registration")
 	}
 	return nil
 }
@@ -116,7 +117,7 @@ func (d Declaration) Register(r *foundation.Registrar, pool foundation.Key[*data
 		return err
 	}
 	if resolve == nil {
-		return fault.New(fault.Invalid, "model extension registration requires a runtime resolver")
+		return safeerror.NewFault(fault.Invalid, "model extension registration requires a runtime resolver")
 	}
 	return d.install(r, pool, resolve)
 }
@@ -130,7 +131,7 @@ func (Declaration) Format(s fmt.State, _ rune) {
 func ObserverName[M any]() (string, error) {
 	typ := reflect.TypeFor[M]()
 	if typ.Kind() != reflect.Struct || typ.Name() == "" || typ.PkgPath() == "" {
-		return "", fault.New(fault.Invalid, "model extension observer requires a defined model struct")
+		return "", safeerror.NewFault(fault.Invalid, "model extension observer requires a defined model struct")
 	}
 	digest := sha256.Sum256([]byte(typ.PkgPath() + "." + typ.Name()))
 	return "foundry.extensions." + hex.EncodeToString(digest[:]), nil
@@ -156,7 +157,7 @@ type Cleanup[M any] struct {
 // manager is absent fails here instead of silently skipping cleanup.
 func NewCleanup[M any, K comparable](runtime Runtime, owner extensions.Owner[M, K], parts Parts, reference func(M) model.Reference[M, K]) (Cleanup[M], error) {
 	if reference == nil {
-		return Cleanup[M]{}, fault.New(fault.Invalid, "model extension cleanup requires a reference function")
+		return Cleanup[M]{}, safeerror.NewFault(fault.Invalid, "model extension cleanup requires a reference function")
 	}
 	if err := owner.Validate(); err != nil {
 		return Cleanup[M]{}, err
@@ -169,7 +170,7 @@ func NewCleanup[M any, K comparable](runtime Runtime, owner extensions.Owner[M, 
 	case len(parts.Metadata) > 0 && runtime.Metadata == nil:
 		return Cleanup[M]{}, missing(owner.Name(), "metadata")
 	case runtime.CleanupQueue != nil && runtime.Store == nil:
-		return Cleanup[M]{}, fault.New(fault.Invalid, "model extension cleanup queue requires the extension store")
+		return Cleanup[M]{}, safeerror.NewFault(fault.Invalid, "model extension cleanup queue requires the extension store")
 	}
 	if runtime.CleanupQueue != nil {
 		if err := runtime.CleanupQueue.Validate(); err != nil {
@@ -209,7 +210,7 @@ func NewCleanup[M any, K comparable](runtime Runtime, owner extensions.Owner[M, 
 			return nil
 		}
 		if operation != lifecycle.Delete && operation != lifecycle.ForceDelete {
-			return fault.New(fault.Invalid, "model extension cleanup requires a deletion")
+			return safeerror.NewFault(fault.Invalid, "model extension cleanup requires a deletion")
 		}
 		subject, err := owner.Subject(ref)
 		if err != nil {
@@ -235,19 +236,19 @@ func NewCleanup[M any, K comparable](runtime Runtime, owner extensions.Owner[M, 
 // force deletion; soft deletion returns without changes.
 func (c Cleanup[M]) Deleted(ctx context.Context, tx *database.Tx, before value.Optional[M], operation value.Optional[lifecycle.Operation]) error {
 	if c.run == nil {
-		return fault.New(fault.Invalid, "model extension cleanup is not initialized")
+		return safeerror.NewFault(fault.Invalid, "model extension cleanup is not initialized")
 	}
 	deleted, ok := before.Get()
 	if !ok {
-		return fault.New(fault.Missing, "model extension cleanup requires the deleted model")
+		return safeerror.NewFault(fault.Missing, "model extension cleanup requires the deleted model")
 	}
 	current, ok := operation.Get()
 	if !ok {
-		return fault.New(fault.Missing, "model extension cleanup requires a lifecycle operation")
+		return safeerror.NewFault(fault.Missing, "model extension cleanup requires a lifecycle operation")
 	}
 	return c.run(ctx, tx, deleted, current)
 }
 
 func missing(owner extensions.OwnerName, kind string) error {
-	return fault.New(fault.Missing, "model extension owner "+string(owner)+" declares "+kind+" slots, but the "+kind+" feature is not configured")
+	return safeerror.NewFault(fault.Missing, "model extension owner "+string(owner)+" declares "+kind+" slots, but the "+kind+" feature is not configured")
 }

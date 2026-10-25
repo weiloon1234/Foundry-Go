@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -16,7 +17,7 @@ func (b *Backend) Consume(ctx context.Context, address challenge.Address, hash c
 		return value.Optional[challenge.Record]{}, err
 	}
 	if apply == nil {
-		return value.Optional[challenge.Record]{}, fault.New(fault.Invalid, "challenge consumption requires an action")
+		return value.Optional[challenge.Record]{}, safeerror.NewFault(fault.Invalid, "challenge consumption requires an action")
 	}
 	scope, _ := address.Key()
 	var result value.Optional[challenge.Record]
@@ -34,7 +35,7 @@ func (b *Backend) Consume(ctx context.Context, address challenge.Address, hash c
 			return err
 		}
 		if !present {
-			return fault.New(fault.Invalid, "stored challenge has no subject")
+			return safeerror.NewFault(fault.Invalid, "stored challenge has no subject")
 		}
 		current, err := entries(scope, subject.Key).ForUpdate().Find(ctx, tx, original.ID)
 		if err != nil {
@@ -68,7 +69,7 @@ func (b *Backend) Consume(ctx context.Context, address challenge.Address, hash c
 			return err
 		}
 		if !selected.Live(now.UTC()) {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		if _, err := entries(scope, subject.Key).Delete(ctx, tx, row.ID); err != nil {
 			return err

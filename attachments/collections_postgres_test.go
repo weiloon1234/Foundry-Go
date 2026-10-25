@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -52,6 +53,10 @@ func TestPostgresAttachmentCollectionsIdentityAndOrdering(t *testing.T) {
 		ids = append(ids, attachmentOf(t, addText(t, f, testMultiple, owner, text)).ID())
 	}
 	rejected, err := testMultiple.Add(t.Context(), f.manager, owner, uploadText("four"))
+	var full *fault.Error
+	if !errors.As(err, &full) || full.Code() != fault.Conflict || full.Message() != "attachment collection is full" || !strings.Contains(err.Error(), full.Message()) {
+		t.Fatal("full collection lost its owned diagnostic", err)
+	}
 	if err == nil || rejected.Publication != Unpublished || journal(t, f, rejected.Operation).State != string(Cleaned) {
 		t.Fatal("cardinality failure leaked new object", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Status uint8
@@ -37,7 +38,7 @@ func (d Decision) Validate(p Policy) error {
 			return nil
 		}
 	}
-	return fault.New(fault.Internal, "invalid lockout decision")
+	return safeerror.NewFault(fault.Internal, "invalid lockout decision")
 }
 
 // Admission returns a snapshot only for an allowed attempt.
@@ -51,7 +52,7 @@ func (a Admission) Validate(p Policy) error {
 		return err
 	}
 	if a.Decision.Triggered {
-		return fault.New(fault.Internal, "admission cannot start a lock")
+		return safeerror.NewFault(fault.Internal, "admission cannot start a lock")
 	}
 	if a.Decision.Status == StatusAllowed {
 		return a.Snapshot.Validate()
@@ -59,7 +60,7 @@ func (a Admission) Validate(p Policy) error {
 	if a.Decision.Status == StatusLocked && a.Snapshot == (Snapshot{}) {
 		return nil
 	}
-	return fault.New(fault.Internal, "invalid lockout admission")
+	return safeerror.NewFault(fault.Internal, "invalid lockout admission")
 }
 
 type Outcome uint8
@@ -71,7 +72,7 @@ const (
 
 func (o Outcome) Validate() error {
 	if o != Failed && o != Succeeded {
-		return fault.New(fault.Invalid, "invalid lockout attempt outcome")
+		return safeerror.NewFault(fault.Invalid, "invalid lockout attempt outcome")
 	}
 	return nil
 }

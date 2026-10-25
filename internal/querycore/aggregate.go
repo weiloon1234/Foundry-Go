@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type AggregateKind uint8
@@ -37,19 +38,19 @@ func (a AggregateNode) Validate(field func(FieldRef) error) error {
 	switch a.Kind {
 	case CountAll, ExistsValues:
 		if a.Field != (FieldRef{}) || a.Cast != NativeNumber {
-			return fault.New(fault.Invalid, "row aggregate has an unexpected field or cast")
+			return safeerror.NewFault(fault.Invalid, "row aggregate has an unexpected field or cast")
 		}
 		return nil
 	case CountValues, CountDistinct, MinimumValue, MaximumValue:
 		if a.Cast != NativeNumber {
-			return fault.New(fault.Invalid, "aggregate has an unsupported cast")
+			return safeerror.NewFault(fault.Invalid, "aggregate has an unsupported cast")
 		}
 	case SumValues, AverageValues:
 		if a.Cast != ExactNumberCast && a.Cast != FloatNumberCast && a.Cast != IntervalValueCast {
-			return fault.New(fault.Invalid, "aggregate summary requires a result representation")
+			return safeerror.NewFault(fault.Invalid, "aggregate summary requires a result representation")
 		}
 	default:
-		return fault.New(fault.Invalid, "invalid aggregate declaration")
+		return safeerror.NewFault(fault.Invalid, "invalid aggregate declaration")
 	}
 	return field(a.Field)
 }

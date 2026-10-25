@@ -2,6 +2,7 @@ package data
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -23,19 +24,19 @@ func DefaultLimits() Limits {
 }
 func (l Limits) Validate() error {
 	if l.Entries <= 0 || l.Entries > MaxEntries || l.FieldBytes <= 0 || l.FieldBytes > keyspace.MaxKeyBytes || l.ValueBytes <= 0 || l.ValueBytes > value.JSONMaxBytes || l.ReplyBytes <= 0 || l.ReplyBytes > MaxReplyBytes || l.ValueBytes > l.ReplyBytes/l.Entries {
-		return fault.New(fault.Invalid, "invalid Redis data collection bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid Redis data collection bounds")
 	}
 	return nil
 }
 func (l Limits) ValidateField(field string) error {
 	if len(field) == 0 || len(field) > l.FieldBytes {
-		return fault.New(fault.Invalid, "Redis hash field exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "Redis hash field exceeds its bound")
 	}
 	return nil
 }
 func (l Limits) ValidateValue(text string) error {
 	if len(text) == 0 || len(text) > l.ValueBytes {
-		return fault.New(fault.Invalid, "Redis data value exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "Redis data value exceeds its bound")
 	}
 	return nil
 }

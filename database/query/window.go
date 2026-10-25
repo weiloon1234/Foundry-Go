@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type windowSpec = querycore.WindowSpec
@@ -56,7 +57,7 @@ type Window[S any] struct {
 func WindowFor[S any](source ScopeSource[S]) Window[S] {
 	w := Window[S]{}
 	if nilDescriptor(source) {
-		w.node.Err = fault.New(fault.Invalid, "window requires a source scope")
+		w.node.Err = safeerror.NewFault(fault.Invalid, "window requires a source scope")
 		return w
 	}
 	w.node.Err = source.scopeSource().scopeRequirement.Err
@@ -85,7 +86,7 @@ func (w Window[S]) OrderBy(orders ...ProjectionOrder[S]) Window[S] {
 	w.node.Orders = slices.Clone(w.node.Orders)
 	for _, order := range orders {
 		if nilDescriptor(order) {
-			w.node.Err = fault.New(fault.Invalid, "window ordering requires an expression")
+			w.node.Err = safeerror.NewFault(fault.Invalid, "window ordering requires an expression")
 			continue
 		}
 		w.node.Orders = append(w.node.Orders, order.projectionOrder().node)
@@ -130,7 +131,7 @@ func Following(count int64) FrameOffset {
 
 func (w Window[S]) between(kind frameKind, start, end FrameBoundary) Window[S] {
 	if nilDescriptor(start) || nilDescriptor(end) {
-		w.node.Err = fault.New(fault.Invalid, "window frame requires two boundaries")
+		w.node.Err = safeerror.NewFault(fault.Invalid, "window frame requires two boundaries")
 		return w
 	}
 	w.node.Frame = &windowFrame{Kind: kind, Start: start.frameBoundary(), End: end.frameBoundary()}

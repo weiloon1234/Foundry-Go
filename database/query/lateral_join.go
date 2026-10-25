@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // LateralSource is a named correlated record, usable only after its required
@@ -17,7 +18,7 @@ type LateralSource[A, O, R any] struct {
 func AsLateral[A, O, R any](source CorrelatedRecordSource[O, R], alias string) LateralSource[A, O, R] {
 	var r correlatedRecord[O, R]
 	if nilDescriptor(source) {
-		r.query.err = fault.New(fault.Invalid, "lateral alias requires a correlated record and valid name")
+		r.query.err = safeerror.NewFault(fault.Invalid, "lateral alias requires a correlated record and valid name")
 	} else {
 		r = source.correlatedRecord()
 	}

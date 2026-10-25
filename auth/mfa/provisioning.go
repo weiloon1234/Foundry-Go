@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -20,7 +21,7 @@ func ProvisioningURI(key TOTPSecret, issuer, account string) (secret.String, err
 		return secret.String{}, err
 	}
 	if !validLabel(issuer) || !validLabel(account) {
-		return secret.String{}, fault.New(fault.Invalid, "invalid TOTP issuer or account label")
+		return secret.String{}, safeerror.NewFault(fault.Invalid, "invalid TOTP issuer or account label")
 	}
 	label := issuer + ":" + account
 	uri := url.URL{Scheme: "otpauth", Host: "totp", Path: "/" + label, RawPath: "/" + url.PathEscape(label)}

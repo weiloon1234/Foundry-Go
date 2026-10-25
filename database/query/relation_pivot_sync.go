@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // UpdateDraft is the generated bridge for typed infrastructure that updates a
@@ -81,7 +82,7 @@ func (r ThroughRelation[M, N, P]) DetachAll(ctx context.Context, writer database
 // and returns the updated pivots; duplicate links are all updated.
 func (r ThroughRelation[M, N, P]) UpdateExistingPivot(ctx context.Context, writer database.Transactor, source M, target N, update UpdateDraft[P]) ([]P, error) {
 	if nilDescriptor(update) {
-		return nil, fault.New(fault.Invalid, "pivot update requires a typed draft")
+		return nil, safeerror.NewFault(fault.Invalid, "pivot update requires a typed draft")
 	}
 	changes, err := r.pivotWrite(ctx, writer, source, []N{target}, nil, update, pivotUpdate)
 	return changes.Updated, err
@@ -107,10 +108,10 @@ func (r ThroughRelation[M, N, P]) pivotWrite(ctx context.Context, writer databas
 		return PivotChanges[P]{}, err
 	}
 	if len(targets) > limit {
-		return PivotChanges[P]{}, fault.New(fault.Invalid, "relation write exceeds its row limit")
+		return PivotChanges[P]{}, safeerror.NewFault(fault.Invalid, "relation write exceeds its row limit")
 	}
 	if (mode == pivotAttach || mode == pivotSync || mode == pivotSyncKeep || mode == pivotToggle) && nilDescriptor(create) {
-		return PivotChanges[P]{}, fault.New(fault.Invalid, "relation attachment requires a typed pivot draft")
+		return PivotChanges[P]{}, safeerror.NewFault(fault.Invalid, "relation attachment requires a typed pivot draft")
 	}
 	targets = slices.Clone(targets)
 	return executeWrite(ctx, writer, func(ctx context.Context, tx *database.Tx) (PivotChanges[P], error) {
@@ -171,7 +172,7 @@ func (r ThroughRelation[M, N, P]) pivotWrite(ctx context.Context, writer databas
 			detach, attach = nil, nil
 		case pivotUpdate:
 			if len(keep) == 0 {
-				return PivotChanges[P]{}, database.NewError("pivot update", database.NotFound)
+				return PivotChanges[P]{}, databaseFailure("pivot update", database.NotFound)
 			}
 			attach = nil
 		}
@@ -232,14 +233,14 @@ func (r ThroughRelation[M, N, P]) lockedSourceKey(ctx context.Context, tx *datab
 func relationKey[M any](q Query[M], ref fieldRef, model M) (pivotKey, error) {
 	field, ok := q.definition.modelField(ref.Column)
 	if !ok {
-		return pivotKey{}, fault.New(fault.Invalid, "relation key has no declared codec")
+		return pivotKey{}, safeerror.NewFault(fault.Invalid, "relation key has no declared codec")
 	}
 	raw, err := field.get(model)
 	if err != nil {
 		return pivotKey{}, err
 	}
 	if raw == nil {
-		return pivotKey{}, fault.New(fault.Missing, "relation writes require non-null endpoint keys")
+		return pivotKey{}, safeerror.NewFault(fault.Missing, "relation writes require non-null endpoint keys")
 	}
 	identity, err := recordEqualityKey(field.kind, raw)
 	if err != nil {
@@ -259,7 +260,7 @@ func (r ThroughRelation[M, N, P]) lockedTargetKeys(ctx context.Context, tx *data
 	target := r.spec.target
 	primary, ok := target.definition.modelField(target.definition.modelDefinition.Primary)
 	if !ok || primary.get == nil {
-		return nil, fault.New(fault.Invalid, "relation writes require a target primary-key codec")
+		return nil, safeerror.NewFault(fault.Invalid, "relation writes require a target primary-key codec")
 	}
 	requested := make([]pivotKey, 0, len(targets))
 	seen := make(map[cursorValue]bool, len(targets))
@@ -278,7 +279,7 @@ func (r ThroughRelation[M, N, P]) lockedTargetKeys(ctx context.Context, tx *data
 		return nil, err
 	}
 	if len(found) != len(requested) {
-		return nil, database.NewError("relation target", database.NotFound)
+		return nil, databaseFailure("relation target", database.NotFound)
 	}
 	byPrimary := make(map[cursorValue]N, len(found))
 	for _, model := range found {
@@ -293,7 +294,7 @@ func (r ThroughRelation[M, N, P]) lockedTargetKeys(ctx context.Context, tx *data
 	for _, key := range requested {
 		model, ok := byPrimary[key.identity]
 		if !ok {
-			return nil, database.NewError("relation target", database.NotFound)
+			return nil, databaseFailure("relation target", database.NotFound)
 		}
 		foreign, err := relationKey(target, r.spec.foreign, model)
 		if err != nil {
@@ -311,7 +312,7 @@ func (r ThroughRelation[M, N, P]) lockedTargetKeys(ctx context.Context, tx *data
 			return nil, err
 		}
 		if matches != int64(len(result)) {
-			return nil, database.NewError("relation target key", database.TooManyRows)
+			return nil, databaseFailure("relation target key", database.TooManyRows)
 		}
 	}
 	return result, nil
@@ -328,7 +329,7 @@ func lockedModels[M any](ctx context.Context, tx *database.Tx, q Query[M], limit
 		return nil, err
 	}
 	if len(models) > limit {
-		return nil, database.NewError("relation write rows", database.TooManyRows)
+		return nil, databaseFailure("relation write rows", database.TooManyRows)
 	}
 	return models, nil
 }
@@ -351,7 +352,7 @@ func (r ThroughRelation[M, N, P]) sourceLinks(source pivotKey) (Query[P], error)
 	local, ok := r.pivot.definition.modelField(r.pivotLocal.Column)
 	_, found := r.pivot.definition.modelField(r.pivotForeign.Column)
 	if !ok || !found {
-		return Query[P]{}, fault.New(fault.Invalid, "relation pivot keys have no declared codecs")
+		return Query[P]{}, safeerror.NewFault(fault.Invalid, "relation pivot keys have no declared codecs")
 	}
 	return r.pivot.Where(keyEquality[P](r.pivotLocal, local, source)), nil
 }
@@ -372,7 +373,7 @@ func (r ThroughRelation[M, N, P]) currentLinks(ctx context.Context, tx *database
 		return nil, err
 	}
 	if len(pivots) > limit {
-		return nil, fault.New(fault.Invalid, "relation write exceeds its row limit")
+		return nil, safeerror.NewFault(fault.Invalid, "relation write exceeds its row limit")
 	}
 	current := make([]pivotKey, 0, len(pivots))
 	seen := make(map[cursorValue]bool, len(pivots))
@@ -442,7 +443,7 @@ func setReturning[P any](ctx context.Context, tx *database.Tx, plan mutationPlan
 		return nil, err
 	}
 	if len(pivots) > limit {
-		return nil, fault.New(fault.Invalid, "relation write exceeds its row limit")
+		return nil, safeerror.NewFault(fault.Invalid, "relation write exceeds its row limit")
 	}
 	return pivots, nil
 }
@@ -492,7 +493,7 @@ func (r ThroughRelation[M, N, P]) createPivots(ctx context.Context, tx *database
 func (r ThroughRelation[M, N, P]) requireLinks(ctx context.Context, tx *database.Tx, source pivotKey, created []P) error {
 	primary, ok := r.pivot.definition.modelField(r.pivot.definition.modelDefinition.Primary)
 	if !ok {
-		return fault.New(fault.Invalid, "relation pivot requires a primary-key codec")
+		return safeerror.NewFault(fault.Invalid, "relation pivot requires a primary-key codec")
 	}
 	keys := make([]pivotKey, len(created))
 	for i, pivot := range created {
@@ -513,7 +514,7 @@ func (r ThroughRelation[M, N, P]) requireLinks(ctx context.Context, tx *database
 		return err
 	}
 	if matched != int64(len(created)) {
-		return fault.New(fault.Invalid, "stored pivot does not satisfy the relation endpoints and filters")
+		return safeerror.NewFault(fault.Invalid, "stored pivot does not satisfy the relation endpoints and filters")
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (p sourceMutation[S, M]) validateExecution(ctx context.Context, writer database.Transactor) error {
@@ -36,7 +37,7 @@ func (p sourceMutation[S, M]) prepare(returning bool) func(context.Context, *dat
 
 func (p sourceMutation[S, M]) prepareValues(ctx context.Context, source clock.Clock) (sourceMutation[S, M], error) {
 	if ctx == nil {
-		return p, fault.New(fault.Invalid, "source write preparation requires a context")
+		return p, safeerror.NewFault(fault.Invalid, "source write preparation requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return p, err
@@ -81,12 +82,12 @@ func (p sourceMutation[S, M]) exec(ctx context.Context, writer database.Transact
 }
 
 func ambiguousSourceMatch() error {
-	return database.NewError("SQL-mapped update matched multiple source rows for one model", database.TooManyRows)
+	return databaseFailure("SQL-mapped update matched multiple source rows for one model", database.TooManyRows)
 }
 
 func (p sourceMutation[S, M]) returning(ctx context.Context, writer database.Transactor, limit int) ([]M, error) {
 	if limit <= 0 || limit > MaxInsertRows {
-		return nil, fault.New(fault.Invalid, "source write returning requires a positive bounded result limit")
+		return nil, safeerror.NewFault(fault.Invalid, "source write returning requires a positive bounded result limit")
 	}
 	p.destination = p.destination.inContext(ctx)
 	if err := p.validateExecution(ctx, writer); err != nil {
@@ -124,7 +125,7 @@ func (r sourceMatchRow) Scan(destinations ...any) error {
 		return ambiguousSourceMatch()
 	}
 	if matches != 1 {
-		return fault.New(fault.Invalid, "source write returned invalid match metadata")
+		return safeerror.NewFault(fault.Invalid, "source write returned invalid match metadata")
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
@@ -44,11 +45,11 @@ func NewCoordinatedStore(manager *lease.Manager, config Config, coordination Coo
 		return nil, err
 	}
 	if config.Namespace != manager.Namespace() {
-		return nil, fault.New(fault.Invalid, "cache and lease namespaces must match")
+		return nil, safeerror.NewFault(fault.Invalid, "cache and lease namespaces must match")
 	}
 	backend, ok := manager.BorrowedBackend().(CoordinatedBackend)
 	if !ok {
-		return nil, fault.New(fault.Invalid, "lease authority does not support coordinated cache publication")
+		return nil, safeerror.NewFault(fault.Invalid, "lease authority does not support coordinated cache publication")
 	}
 	store, err := NewStore(backend, config, options...)
 	if err != nil {
@@ -56,7 +57,7 @@ func NewCoordinatedStore(manager *lease.Manager, config Config, coordination Coo
 	}
 	if _, scoped := backend.(TaggedBackend); scoped {
 		if _, ok := backend.(CoordinatedTaggedBackend); !ok {
-			return nil, fault.New(fault.Invalid, "cache backend requires coordinated tags for namespace protection")
+			return nil, safeerror.NewFault(fault.Invalid, "cache backend requires coordinated tags for namespace protection")
 		}
 	}
 	locks, err := cacheFills.Bind(manager)
@@ -79,7 +80,7 @@ func (c Cache[K, V]) fill(ctx, owner context.Context, access entryAccess, ttl TT
 	}
 	backend, ok := access.backend.(CoordinatedBackend)
 	if !ok {
-		return nil, fault.New(fault.Invalid, "cache view does not support coordinated publication")
+		return nil, safeerror.NewFault(fault.Invalid, "cache view does not support coordinated publication")
 	}
 	coordination := c.store.coordination
 	deadline := time.Now().Add(coordination.config.Wait)
@@ -113,9 +114,9 @@ func (c Cache[K, V]) fill(ctx, owner context.Context, access entryAccess, ttl TT
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
 			if coordination.config.Wait == 0 {
-				return nil, fault.New(fault.Conflict, "cache fill lease is contended")
+				return nil, safeerror.NewFault(fault.Conflict, "cache fill lease is contended")
 			}
-			return nil, fault.Wrap(fault.Timeout, "cache fill lease wait expired", context.DeadlineExceeded)
+			return nil, safeerror.WrapFault(fault.Timeout, "cache fill lease wait expired", context.DeadlineExceeded)
 		}
 		delay := coordination.poll/2 + time.Duration(rand.Int64N(int64(coordination.poll-coordination.poll/2)))
 		timer := time.NewTimer(min(delay, remaining))
@@ -142,7 +143,7 @@ func FillLeaseKey(fill EntryKey) (lease.Key, error) {
 // binding. Adapters must additionally compare ownership atomically at publication.
 func ValidateFillProof(ctx context.Context, fill EntryKey, proof lease.Proof) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "cache fill publication requires a context")
+		return safeerror.NewFault(fault.Invalid, "cache fill publication requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -155,7 +156,7 @@ func ValidateFillProof(ctx context.Context, fill EntryKey, proof lease.Proof) er
 		return err
 	}
 	if expected != proof.Key() {
-		return fault.New(fault.Invalid, "lease proof belongs to a different cache fill")
+		return safeerror.NewFault(fault.Invalid, "lease proof belongs to a different cache fill")
 	}
 	return nil
 }

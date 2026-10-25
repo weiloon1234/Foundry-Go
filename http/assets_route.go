@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const assetParameter = "asset"
@@ -39,7 +40,7 @@ func assetPrefix(prefix string) (string, error) {
 		return "", nil
 	}
 	if !strings.HasPrefix(prefix, "/") || strings.HasSuffix(prefix, "/") {
-		return "", fault.New(fault.Invalid, "asset prefix requires an absolute path without a trailing slash")
+		return "", safeerror.NewFault(fault.Invalid, "asset prefix requires an absolute path without a trailing slash")
 	}
 	if _, err := StaticPath(prefix).validate(); err != nil {
 		return "", err
@@ -48,7 +49,7 @@ func assetPrefix(prefix string) (string, error) {
 }
 func (m AssetMount) Validate() error {
 	if m.assets == nil || m.assets.done == nil {
-		return fault.New(fault.Invalid, "asset mount requires constructed assets")
+		return safeerror.NewFault(fault.Invalid, "asset mount requires constructed assets")
 	}
 	return m.route.Validate()
 }
@@ -141,7 +142,7 @@ func (a *Assets) selectAsset(ctx context.Context, raw string, directoryURL bool)
 		return assetSelection{}, BadRequest.WithCause(err)
 	}
 	if !a.config.allowed(name) {
-		return assetSelection{}, NotFound
+		return assetSelection{}, NotFound.WithCause(nil)
 	}
 	lookup := name
 	if lookup == "" {
@@ -154,7 +155,7 @@ func (a *Assets) selectAsset(ctx context.Context, raw string, directoryURL bool)
 	selected := assetSelection{name: name}
 	if info.mode.IsDir() {
 		if a.config.Index == "" {
-			return selected, NotFound
+			return selected, NotFound.WithCause(nil)
 		}
 		selected.name = path.Join(name, string(a.config.Index))
 		index, err := a.stat(ctx, selected.name)
@@ -162,14 +163,14 @@ func (a *Assets) selectAsset(ctx context.Context, raw string, directoryURL bool)
 			return selected, err
 		}
 		if !index.mode.IsRegular() {
-			return selected, NotFound
+			return selected, NotFound.WithCause(nil)
 		}
 		if !directoryURL {
 			selected.redirect = 1
 		}
 	} else {
 		if !info.mode.IsRegular() {
-			return selected, NotFound
+			return selected, NotFound.WithCause(nil)
 		}
 		if directoryURL {
 			selected.redirect = -1

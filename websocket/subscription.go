@@ -8,7 +8,7 @@ func (c *connectionState) subscribe(ctx context.Context, request Request, key su
 		replayCount = *request.Replay
 	}
 	if replayCount > channel.replay.Messages {
-		return Response{}, Malformed
+		return Response{}, codeFailure(Malformed)
 	}
 	subscription := &subscriptionState{key: key, channel: channel, subject: access.reference, origin: access.origin, access: access.retained()}
 	if channel.private {
@@ -34,28 +34,28 @@ func (c *connectionState) subscribe(ctx context.Context, request Request, key su
 			return err
 		}
 		if c.hub.closing || c.ctx.Err() != nil {
-			return Stopping
+			return codeFailure(Stopping)
 		}
 		if c.subscriptions[key] != nil {
-			return AlreadySubscribed
+			return codeFailure(AlreadySubscribed)
 		}
 		if len(c.subscriptions) >= c.hub.config.MaxSubscriptions {
-			return CapacityExceeded
+			return codeFailure(CapacityExceeded)
 		}
 		if subscription.subjectID != "" && !c.subjectAllowedLocked(subscription.subjectID) {
-			return CapacityExceeded
+			return codeFailure(CapacityExceeded)
 		}
 		if subscription.member != "" {
 			if c.hub.cluster == nil {
 				group, exists := c.hub.presence[key]
 				if !exists && len(c.hub.presence) >= c.hub.config.MaxPresenceScopes {
-					return CapacityExceeded
+					return codeFailure(CapacityExceeded)
 				}
 				if group[subscription.member] == nil && len(group) >= c.hub.config.MaxPresenceMembers {
-					return CapacityExceeded
+					return codeFailure(CapacityExceeded)
 				}
 			} else if _, exists := c.hub.clusterPresence[key]; !exists && len(c.hub.clusterPresence) >= c.hub.config.MaxPresenceScopes {
-				return CapacityExceeded
+				return codeFailure(CapacityExceeded)
 			}
 		}
 		return nil

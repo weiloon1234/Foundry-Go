@@ -13,6 +13,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -395,7 +396,7 @@ func (q EntryQuery) foundryInsertMany(ctx context.Context, writer database.Trans
 }
 func (q EntryQuery) foundryCreateMutations(drafts []EntryDraft) ([]foundryquery.Mutation[Entry], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Entry], len(drafts))
 	for i, draft := range drafts {
@@ -722,7 +723,7 @@ func (q EntryQuery) DeleteAll(ctx context.Context, writer database.Transactor) (
 // Increment adjusts one numeric field of every matching model by a typed delta, such as EntryFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q EntryQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Entry], extra ...EntryDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Entry]
 	if len(extra) == 1 {
@@ -737,7 +738,7 @@ func (q EntryQuery) Increment(ctx context.Context, writer database.Transactor, a
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as EntryFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q EntryQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Entry], extra ...EntryDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Entry]
 	if len(extra) == 1 {
@@ -1018,34 +1019,34 @@ func CompareEntry(before, after foundryvalue.Optional[Entry], assigned EntryDraf
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[Entry](), before, after, assigned.fieldID.IsSet(), func(item Entry) model.ID[Entry] { return item.ID })
 	if err != nil {
-		return EntryChanges{}, fmt.Errorf("compare Entry.ID: %w", err)
+		return EntryChanges{}, foundrydiagnostic.Prefix("compare Entry.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return EntryChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return EntryChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Scope, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldScope.IsSet(), func(item Entry) string { return item.Scope })
 	if err != nil {
-		return EntryChanges{}, fmt.Errorf("compare Entry.Scope: %w", err)
+		return EntryChanges{}, foundrydiagnostic.Prefix("compare Entry.Scope", err)
 	}
 	changes.fields.SubjectKey, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldSubjectKey.IsSet(), func(item Entry) string { return item.SubjectKey })
 	if err != nil {
-		return EntryChanges{}, fmt.Errorf("compare Entry.SubjectKey: %w", err)
+		return EntryChanges{}, foundrydiagnostic.Prefix("compare Entry.SubjectKey", err)
 	}
 	changes.fields.SecretHash, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldSecretHash.IsSet(), func(item Entry) string { return item.SecretHash })
 	if err != nil {
-		return EntryChanges{}, fmt.Errorf("compare Entry.SecretHash: %w", err)
+		return EntryChanges{}, foundrydiagnostic.Prefix("compare Entry.SecretHash", err)
 	}
 	changes.fields.BindingHash, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldBindingHash.IsSet(), func(item Entry) string { return item.BindingHash })
 	if err != nil {
-		return EntryChanges{}, fmt.Errorf("compare Entry.BindingHash: %w", err)
+		return EntryChanges{}, foundrydiagnostic.Prefix("compare Entry.BindingHash", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Entry) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return EntryChanges{}, fmt.Errorf("compare Entry.CreatedAt: %w", err)
+		return EntryChanges{}, foundrydiagnostic.Prefix("compare Entry.CreatedAt", err)
 	}
 	changes.fields.ExpiresAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldExpiresAt.IsSet(), func(item Entry) temporal.DateTime { return item.ExpiresAt })
 	if err != nil {
-		return EntryChanges{}, fmt.Errorf("compare Entry.ExpiresAt: %w", err)
+		return EntryChanges{}, foundrydiagnostic.Prefix("compare Entry.ExpiresAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1192,7 +1193,7 @@ func (EntryHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.O
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Entry]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Entry]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1251,7 +1252,7 @@ func (EntryHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.O
 					}
 				}
 			default:
-				return foundryquery.Mutation[Entry]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Entry]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1375,7 +1376,7 @@ func (EntryHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.O
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1477,14 +1478,14 @@ type EntryAuditPolicy struct {
 func (changes EntryChanges) Audit(policy EntryAuditPolicy) (record.Model[Entry, model.ID[Entry]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Entry, model.ID[Entry]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Entry, model.ID[Entry]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Entry, model.ID[Entry]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Entry, model.ID[Entry]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -1586,7 +1587,7 @@ func EntryAuditing(policy EntryAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() EntryHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes EntryChanges) error {

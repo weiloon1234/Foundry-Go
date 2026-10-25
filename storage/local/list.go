@@ -52,7 +52,7 @@ func (b *Backend) walk(ctx context.Context, visit func(*os.Root, string) error) 
 				for _, entry := range entries {
 					scanned++
 					if scanned > b.config.MaxScan {
-						return storage.Failure(storage.LimitExceeded, storage.ListOperation, storage.NotApplicable, nil)
+						return newFailure(storage.LimitExceeded, storage.ListOperation, storage.NotApplicable, nil)
 					}
 					if err := visit(parent, entry.Name()); err != nil {
 						return err

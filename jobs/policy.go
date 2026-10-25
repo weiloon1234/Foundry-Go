@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -50,15 +51,15 @@ func (p Policy) Validate() error {
 		return err
 	}
 	if p.Attempts == 0 || p.Attempts > MaxAttempts || p.Timeout <= 0 || p.Timeout > MaxTimeout || len(p.Backoff) == 0 || len(p.Backoff) > MaxAttempts || p.Jitter < 0 || p.Jitter > MaxDelay {
-		return fault.New(fault.Invalid, "invalid job attempt, timeout or retry bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid job attempt, timeout or retry bounds")
 	}
 	for _, delay := range p.Backoff {
 		if delay < 0 || delay > MaxDelay-p.Jitter {
-			return fault.New(fault.Invalid, "invalid job retry delay")
+			return safeerror.NewFault(fault.Invalid, "invalid job retry delay")
 		}
 	}
 	if p.MaxExceptions > p.Attempts || !p.RetryUntil.IsZero() && (p.RetryUntil.Year() < 1970 || p.RetryUntil.Year() > 9999) {
-		return fault.New(fault.Invalid, "invalid job exception limit or retry deadline")
+		return safeerror.NewFault(fault.Invalid, "invalid job exception limit or retry deadline")
 	}
 	return nil
 }
@@ -77,7 +78,7 @@ func (p Policy) RetryDelay(attempt uint32) (time.Duration, error) {
 		return 0, err
 	}
 	if attempt == 0 {
-		return 0, fault.New(fault.Invalid, "retry requires a started attempt")
+		return 0, safeerror.NewFault(fault.Invalid, "retry requires a started attempt")
 	}
 	return p.Backoff[min(int(attempt)-1, len(p.Backoff)-1)], nil
 }

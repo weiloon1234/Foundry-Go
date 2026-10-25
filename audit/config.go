@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/audit/record"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Area identifies an application audit namespace. It is attribution metadata,
@@ -17,7 +18,7 @@ type Area string
 
 func (a Area) Validate() error {
 	if !identifier.Semantic(string(a)) {
-		return fault.New(fault.Invalid, "audit area requires a semantic identifier")
+		return safeerror.NewFault(fault.Invalid, "audit area requires a semantic identifier")
 	}
 	return nil
 }
@@ -49,7 +50,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.MaxValueBytes != 0 && (c.MaxValueBytes < ValueBytesFloor || c.MaxValueBytes > ValueBytesCeiling) {
-		return fault.New(fault.Invalid, "audit value limit is outside its supported bounds")
+		return safeerror.NewFault(fault.Invalid, "audit value limit is outside its supported bounds")
 	}
 	return nil
 }
@@ -79,7 +80,7 @@ type areaContextKey struct{}
 // attribution. It does not authenticate the caller or grant history access.
 func WithArea(ctx context.Context, area Area) (context.Context, error) {
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "audit area requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "audit area requires a context")
 	}
 	if err := area.Validate(); err != nil {
 		return nil, err
@@ -89,7 +90,7 @@ func WithArea(ctx context.Context, area Area) (context.Context, error) {
 
 func (r *Recorder) area(ctx context.Context) (Area, error) {
 	if r == nil || ctx == nil {
-		return "", fault.New(fault.Invalid, "audit requires a recorder and context")
+		return "", safeerror.NewFault(fault.Invalid, "audit requires a recorder and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err

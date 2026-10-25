@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (p mutationPlan[M]) needsConventions() bool {
@@ -62,7 +63,7 @@ func (p *mutationPlan[M]) applyConventionsFor(ctx context.Context, source clock.
 func (q Query[M]) withModelValue(mutation Mutation[M], column string, raw any) (Mutation[M], error) {
 	field, ok := q.definition.modelField(column)
 	if !ok || field.assignment == nil {
-		return Mutation[M]{}, fault.New(fault.Invalid, "automatic assignment is missing its model codec")
+		return Mutation[M]{}, safeerror.NewFault(fault.Invalid, "automatic assignment is missing its model codec")
 	}
 	v, err := field.assignment(raw)
 	if err != nil {

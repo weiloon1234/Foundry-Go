@@ -2,9 +2,11 @@ package enum_test
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/enum"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 )
 
@@ -95,14 +97,9 @@ func TestRetainedDescriptorValidatesOnce(t *testing.T) {
 
 func TestPanickingValidationFailsClosed(t *testing.T) {
 	d := enum.Describe("example.test/domain", "Panicking", enum.Case[panicking]{Name: "One", Value: 1, LabelKey: "enum.one"})
-	func() {
-		defer func() {
-			if recover() == nil {
-				t.Fatal("custom marshaler panic was hidden")
-			}
-		}()
-		_ = d.Validate()
-	}()
+	if err := d.Validate(); !errors.Is(err, fault.Panicked) {
+		t.Fatal("custom marshaler panic was not contained", err)
+	}
 	if err := d.Validate(); err == nil {
 		t.Fatal("interrupted validation reported success")
 	}

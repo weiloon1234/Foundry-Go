@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -23,7 +24,7 @@ type Address struct {
 
 func (a Address) Validate() error {
 	if !identifier.Semantic(a.Kind) || !identifier.Semantic(a.Name) || a.Version == 0 {
-		return fault.New(fault.Invalid, "outbox message requires a declared address and nonzero version")
+		return safeerror.NewFault(fault.Invalid, "outbox message requires a declared address and nonzero version")
 	}
 	return a.Destination.Validate()
 }
@@ -33,7 +34,7 @@ func (a Address) Validate() error {
 // Unknown commit outcomes remain the caller's transaction responsibility.
 func Append(ctx context.Context, tx *database.Tx, address Address, payload string, origin attribution.Origin) (Message, error) {
 	if ctx == nil || tx == nil {
-		return Message{}, fault.New(fault.Invalid, "outbox enqueue requires a context and transaction")
+		return Message{}, safeerror.NewFault(fault.Invalid, "outbox enqueue requires a context and transaction")
 	}
 	if err := ctx.Err(); err != nil {
 		return Message{}, err
@@ -66,7 +67,7 @@ func Find(ctx context.Context, executor database.Executor, address Address, id m
 		return value.Optional[Message]{}, err
 	}
 	if id.IsZero() {
-		return value.Optional[Message]{}, fault.New(fault.Invalid, "outbox lookup requires a nonzero message ID")
+		return value.Optional[Message]{}, safeerror.NewFault(fault.Invalid, "outbox lookup requires a nonzero message ID")
 	}
 	fields := MessageFields()
 	return QueryFoundryOutbox().Where(

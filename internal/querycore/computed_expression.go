@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // One structural boundary is shared by compilation, analysis, validation and
@@ -27,7 +28,7 @@ func VisitComputedValue(v ValueExpression, item func(ValueExpression) error, con
 			return true, v.Err
 		}
 		if len(v.Arguments) == 0 || len(v.Arguments) > MaxExpressionNodes || (v.Kind != CoalesceValues && v.Kind != NullIfValues) || (v.Kind == NullIfValues && len(v.Arguments) != 2) {
-			return true, fault.New(fault.Invalid, "invalid conditional value arguments")
+			return true, safeerror.NewFault(fault.Invalid, "invalid conditional value arguments")
 		}
 		for _, argument := range v.Arguments {
 			if err := item(argument); err != nil {
@@ -40,7 +41,7 @@ func VisitComputedValue(v ValueExpression, item func(ValueExpression) error, con
 			return true, v.Err
 		}
 		if len(v.Branches) == 0 || len(v.Branches) > MaxExpressionNodes || v.Otherwise == nil {
-			return true, fault.New(fault.Invalid, "CASE requires bounded branches and an explicit ELSE result")
+			return true, safeerror.NewFault(fault.Invalid, "CASE requires bounded branches and an explicit ELSE result")
 		}
 		for _, branch := range v.Branches {
 			if err := condition(branch.Condition); err != nil {
@@ -62,7 +63,7 @@ func ValidateRowValue(v ValueExpression, field func(FieldRef) error, depth int, 
 	}
 	*nodes++
 	if depth > MaxExpressionDepth || *nodes > MaxExpressionNodes {
-		return fault.New(fault.Invalid, "row value exceeds its resource bound")
+		return safeerror.NewFault(fault.Invalid, "row value exceeds its resource bound")
 	}
 	if f, ok := v.(FieldRef); ok {
 		return field(f)
@@ -77,7 +78,7 @@ func ValidateRowValue(v ValueExpression, field func(FieldRef) error, depth int, 
 	if handled {
 		return err
 	}
-	return fault.New(fault.Invalid, "row values cannot contain selected aggregate or window expressions")
+	return safeerror.NewFault(fault.Invalid, "row values cannot contain selected aggregate or window expressions")
 }
 
 func (c *Compiler) ComputedSQL(v ValueExpression, grouped map[FieldRef]bool, grouping bool) (string, error) {
@@ -121,6 +122,6 @@ func (c *Compiler) ComputedSQL(v ValueExpression, grouped map[FieldRef]bool, gro
 		result.WriteString(" ELSE " + otherwise + " END")
 		return result.String(), nil
 	default:
-		return "", fault.New(fault.Invalid, "invalid computed SQL value")
+		return "", safeerror.NewFault(fault.Invalid, "invalid computed SQL value")
 	}
 }

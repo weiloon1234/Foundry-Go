@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -25,18 +26,18 @@ type TOTPSecret struct{ encoded secret.String }
 
 func ParseTOTPSecret(encoded secret.String) (TOTPSecret, error) {
 	if len(encoded.Reveal()) != totpEncoding.EncodedLen(totpSecretBytes) {
-		return TOTPSecret{}, fault.New(fault.Invalid, "invalid TOTP secret")
+		return TOTPSecret{}, safeerror.NewFault(fault.Invalid, "invalid TOTP secret")
 	}
 	raw, err := totpEncoding.DecodeString(encoded.Reveal())
 	if err != nil || len(raw) != totpSecretBytes || totpEncoding.EncodeToString(raw) != encoded.Reveal() {
-		return TOTPSecret{}, fault.New(fault.Invalid, "invalid TOTP secret encoding")
+		return TOTPSecret{}, safeerror.NewFault(fault.Invalid, "invalid TOTP secret encoding")
 	}
 	return TOTPSecret{encoded: encoded}, nil
 }
 func GenerateTOTPSecret() (TOTPSecret, error) {
 	var raw [totpSecretBytes]byte
 	if _, err := rand.Read(raw[:]); err != nil {
-		return TOTPSecret{}, fault.Wrap(fault.Internal, "TOTP secret generation failed", err)
+		return TOTPSecret{}, safeerror.WrapFailure(fault.Internal, "TOTP secret generation failed", err)
 	}
 	return ParseTOTPSecret(secret.New(totpEncoding.EncodeToString(raw[:])))
 }

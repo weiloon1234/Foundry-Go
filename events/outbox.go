@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/outboxstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -33,7 +34,7 @@ func PrepareOutbox(destination outbox.Destination, bus *Bus) (*Outbox, error) {
 		return nil, err
 	}
 	if bus == nil || bus.done == nil {
-		return nil, fault.New(fault.Invalid, "event outbox requires a prepared bus")
+		return nil, safeerror.NewFault(fault.Invalid, "event outbox requires a prepared bus")
 	}
 	return &Outbox{destination: destination, bus: bus}, nil
 }
@@ -43,7 +44,7 @@ func (*Outbox) Format(state fmt.State, _ rune)    { _, _ = state.Write([]byte("e
 
 func (o *Outbox) begin(ctx context.Context, key topicKey, typ reflect.Type) (context.Context, registration, outboxstore.Address, func(), error) {
 	if o == nil || o.bus == nil {
-		return nil, registration{}, outboxstore.Address{}, nil, fault.New(fault.Invalid, "event outbox is not prepared")
+		return nil, registration{}, outboxstore.Address{}, nil, safeerror.NewFault(fault.Invalid, "event outbox is not prepared")
 	}
 	operation, entry, release, err := o.bus.begin(ctx, key, typ)
 	address := outboxstore.Address{Kind: eventMessageKind, Destination: o.destination, Name: string(key.name), Version: uint32(key.version)}
@@ -56,7 +57,7 @@ func (o *Outbox) begin(ctx context.Context, key topicKey, typ reflect.Type) (con
 // Delivery belongs to the worker runtime and must tolerate at-least-once attempts.
 func (t Topic[E]) Enqueue(ctx context.Context, tx *database.Tx, producer *Outbox, input E) (outbox.ID[E], error) {
 	if tx == nil {
-		return outbox.ID[E]{}, fault.New(fault.Invalid, "event enqueue requires a transaction")
+		return outbox.ID[E]{}, safeerror.NewFault(fault.Invalid, "event enqueue requires a transaction")
 	}
 	operation, _, address, release, err := producer.begin(ctx, topicKey{t.name, t.version}, reflect.TypeFor[E]())
 	if err != nil {
@@ -136,7 +137,7 @@ func (t Topic[E]) Find(ctx context.Context, executor database.Executor, producer
 	}
 	typed, ok := captured.typed.(value.JSON[E])
 	if !ok {
-		return value.Optional[Stored[E]]{}, fault.New(fault.Internal, "stored event has the wrong payload schema")
+		return value.Optional[Stored[E]]{}, safeerror.NewFault(fault.Internal, "stored event has the wrong payload schema")
 	}
 	origin, err := row.Origin.Decode()
 	if err != nil {

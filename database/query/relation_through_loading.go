@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor database.Executor, r ThroughRelation[M, N, P], local ScalarField[M, A], pivotLocal ScalarField[P, A], pivotForeign ScalarField[P, B], foreign ScalarField[N, B], parents []M, state *relationLoadState, depth int) ([][]relation.Link[N, P], error) {
@@ -25,7 +26,7 @@ func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor da
 		batch, err := collectRead(ctx, executor, statement,
 			func(row database.Row) (relation.Link[N, P], error) {
 				if count == state.remaining {
-					return relation.Link[N, P]{}, fault.New(fault.Invalid, "related rows exceed the shared loading budget")
+					return relation.Link[N, P]{}, safeerror.NewFault(fault.Invalid, "related rows exceed the shared loading budget")
 				}
 				count++
 				return scanJoined(row, r.spec.target.definition, r.pivot.definition)
@@ -54,7 +55,7 @@ func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor da
 		}
 		key, ok := owner.Get()
 		if !ok || !requested[key.identity] {
-			return nil, fault.New(fault.Invalid, "pivot source key does not match requested keys; check key equality semantics")
+			return nil, safeerror.NewFault(fault.Invalid, "pivot source key does not match requested keys; check key equality semantics")
 		}
 		pivotKey, err := readRelationKey(pivotForeignMeta, pivotForeign, link.Pivot)
 		if err != nil {
@@ -67,21 +68,21 @@ func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor da
 		pk, pset := pivotKey.Get()
 		tk, tset := targetKey.Get()
 		if !pset || !tset || pk.identity != tk.identity {
-			return nil, fault.New(fault.Invalid, "pivot target key does not match related key; check key equality semantics")
+			return nil, safeerror.NewFault(fault.Invalid, "pivot target key does not match related key; check key equality semantics")
 		}
 		raw, err := primaryMeta.get(link.Pivot)
 		if err != nil {
 			return nil, err
 		}
 		if raw == nil {
-			return nil, fault.New(fault.Invalid, "pivot primary key cannot be NULL")
+			return nil, safeerror.NewFault(fault.Invalid, "pivot primary key cannot be NULL")
 		}
 		identity, err := recordEqualityKey(primaryMeta.kind, raw)
 		if err != nil {
-			return nil, fault.New(fault.Invalid, "pivot primary key has no canonical database representation")
+			return nil, safeerror.NewFault(fault.Invalid, "pivot primary key has no canonical database representation")
 		}
 		if seenPivots[identity] {
-			return nil, database.NewError("pivot matched more than one target", database.TooManyRows)
+			return nil, databaseFailure("pivot matched more than one target", database.TooManyRows)
 		}
 		seenPivots[identity] = true
 		owners[i], targets[i], pivots[i] = key.identity, link.Model, link.Pivot

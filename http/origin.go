@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Origin is an HTTP(S) origin without a path, credentials, query or fragment.
@@ -25,7 +26,7 @@ func (o Origin) Validate() error { _, err := ParseOrigin(string(o)); return err 
 // It does not resolve DNS or convert Unicode hostnames to ASCII.
 func ParseOrigin(input string) (Origin, error) {
 	invalid := func() (Origin, error) {
-		return "", fault.New(fault.Invalid, "HTTP origin requires an HTTP(S) authority without path, credentials, query or fragment")
+		return "", safeerror.NewFault(fault.Invalid, "HTTP origin requires an HTTP(S) authority without path, credentials, query or fragment")
 	}
 	if input == string(NullOrigin) {
 		return NullOrigin, nil

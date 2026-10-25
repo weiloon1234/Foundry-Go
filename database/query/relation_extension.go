@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // SlotFetch loads one slot value per parent, index-aligned, from a store other
@@ -48,11 +49,11 @@ func NewExtensionSlot[M, S any](binding ExtensionBinding[M, S]) ExtensionSlot[M]
 	spec := &extensionSlotSpec[M]{name: binding.Name, table: binding.Table}
 	switch {
 	case binding.Name == "" || binding.Table == "" || binding.Get == nil || binding.Set == nil || binding.Loaded == nil || binding.Count == nil:
-		spec.err = fault.New(fault.Invalid, "extension slot requires a generated binding")
+		spec.err = safeerror.NewFault(fault.Invalid, "extension slot requires a generated binding")
 	case binding.Fetch == nil:
 		spec.err = binding.Unbound
 		if spec.err == nil {
-			spec.err = fault.New(fault.Missing, "extension slot is not bound to a runtime")
+			spec.err = safeerror.NewFault(fault.Missing, "extension slot is not bound to a runtime")
 		}
 	}
 	fetch := binding.Fetch
@@ -73,14 +74,14 @@ func NewExtensionSlot[M, S any](binding ExtensionBinding[M, S]) ExtensionSlot[M]
 				return nil, err
 			}
 			if len(fetched) != len(batch) {
-				return nil, fault.New(fault.Invalid, "extension slot fetch returned a different number of values")
+				return nil, safeerror.NewFault(fault.Invalid, "extension slot fetch returned a different number of values")
 			}
 			count := 0
 			for _, v := range fetched {
 				count += binding.Count(v)
 			}
 			if count > state.remaining {
-				return nil, fault.New(fault.Invalid, "related rows exceed the shared loading budget")
+				return nil, safeerror.NewFault(fault.Invalid, "related rows exceed the shared loading budget")
 			}
 			state.remaining -= count
 			if err := state.attach(count); err != nil {
@@ -111,23 +112,23 @@ func (r ExtensionSlot[M]) copyRelation() Relation[M] { return r }
 
 func (r ExtensionSlot[M]) validateRelation(table string, depth int, limits RelationLimits) error {
 	if r.spec == nil {
-		return fault.New(fault.Invalid, "extension slot requires a generated descriptor")
+		return safeerror.NewFault(fault.Invalid, "extension slot requires a generated descriptor")
 	}
 	if r.spec.err != nil {
 		return r.spec.err
 	}
 	if depth > limits.MaxDepth {
-		return fault.New(fault.Invalid, "relation nesting exceeds its depth bound")
+		return safeerror.NewFault(fault.Invalid, "relation nesting exceeds its depth bound")
 	}
 	if table != r.spec.table {
-		return fault.New(fault.Invalid, "extension slot belongs to a different model table")
+		return safeerror.NewFault(fault.Invalid, "extension slot belongs to a different model table")
 	}
 	return nil
 }
 
 func (r ExtensionSlot[M]) loadRelation(ctx context.Context, executor database.Executor, parents []M, state *relationLoadState, _ int, missing bool) ([]M, error) {
 	if r.spec == nil || r.spec.err != nil || r.spec.load == nil {
-		return nil, fault.New(fault.Invalid, "extension slot requires a bound descriptor")
+		return nil, safeerror.NewFault(fault.Invalid, "extension slot requires a bound descriptor")
 	}
 	return r.spec.load(ctx, executor, parents, state, missing)
 }

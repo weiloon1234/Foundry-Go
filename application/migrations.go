@@ -1,12 +1,14 @@
 package application
 
 import (
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs/archive"
-	"slices"
 )
 
 // maxMigrationTargets bounds the application's own migration declarations.
@@ -20,7 +22,7 @@ const maxMigrationTargets = 128
 func (b *Builder) Migrations(targets ...infrastructure.MigrationTarget) *Builder {
 	b.mutate(func() {
 		if len(targets) > maxMigrationTargets-len(b.state.migrations) {
-			b.state.err = fault.New(fault.Invalid, "too many application migration targets")
+			b.state.err = safeerror.NewFault(fault.Invalid, "too many application migration targets")
 			return
 		}
 		b.state.migrations = append(b.state.migrations, cloneMigrations(targets)...)

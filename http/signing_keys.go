@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -37,15 +39,15 @@ func (k SigningKeys) GoString() string { return secret.Redacted }
 // nor their signatures are inferred from an application name or environment.
 func NewSigningKeys(active SigningKey, previous ...SigningKey) (SigningKeys, error) {
 	if len(previous) > 15 {
-		return SigningKeys{}, fault.New(fault.Invalid, "too many signing keys")
+		return SigningKeys{}, safeerror.NewFault(fault.Invalid, "too many signing keys")
 	}
 	result := SigningKeys{active: active.ID, keys: make(map[SigningKeyID]secret.String, len(previous)+1)}
 	add := func(k SigningKey) error {
 		if !validSigningKeyID(k.ID) || len(k.Secret.Reveal()) < 32 || len(k.Secret.Reveal()) > 1024 {
-			return fault.New(fault.Invalid, "invalid signing key identifier or material length")
+			return safeerror.NewFault(fault.Invalid, "invalid signing key identifier or material length")
 		}
 		if _, ok := result.keys[k.ID]; ok {
-			return fault.New(fault.Duplicate, "signing key identifier is repeated")
+			return safeerror.NewFault(fault.Duplicate, "signing key identifier is repeated")
 		}
 		result.keys[k.ID] = k.Secret
 		return nil
@@ -63,7 +65,7 @@ func NewSigningKeys(active SigningKey, previous ...SigningKey) (SigningKeys, err
 func (k SigningKeys) ActiveID() SigningKeyID { return k.active }
 func (k SigningKeys) Validate() error {
 	if _, ok := k.keys[k.active]; !ok {
-		return fault.New(fault.Invalid, "signing keys have no active key")
+		return safeerror.NewFault(fault.Invalid, "signing keys have no active key")
 	}
 	return nil
 }

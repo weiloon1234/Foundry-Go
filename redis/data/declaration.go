@@ -2,6 +2,7 @@ package data
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -15,7 +16,7 @@ type definition[K any] struct {
 
 func (d *definition[K]) validate() error {
 	if d == nil || !keyspace.ValidName(string(d.name)) || d.version == 0 {
-		return fault.New(fault.Invalid, "invalid Redis data declaration")
+		return safeerror.NewFault(fault.Invalid, "invalid Redis data declaration")
 	}
 	return d.keys.Validate()
 }
@@ -47,11 +48,11 @@ func (d HashDeclaration[K, F, V]) Bind(s *Store) (Hash[K, F, V], error) {
 		return Hash[K, F, V]{}, err
 	}
 	if s == nil {
-		return Hash[K, F, V]{}, fault.New(fault.Invalid, "hash binding requires a store")
+		return Hash[K, F, V]{}, safeerror.NewFault(fault.Invalid, "hash binding requires a store")
 	}
 	backend, ok := s.backend.(HashBackend)
 	if !ok {
-		return Hash[K, F, V]{}, fault.New(fault.Invalid, "adapter does not support Redis hashes")
+		return Hash[K, F, V]{}, safeerror.NewFault(fault.Invalid, "adapter does not support Redis hashes")
 	}
 	if err := s.bind(d.definition.name, d.definition.version, &d.definition.id); err != nil {
 		return Hash[K, F, V]{}, err
@@ -71,11 +72,11 @@ func (d SetDeclaration[K, V]) Bind(s *Store) (Set[K, V], error) {
 		return Set[K, V]{}, err
 	}
 	if s == nil {
-		return Set[K, V]{}, fault.New(fault.Invalid, "set binding requires a store")
+		return Set[K, V]{}, safeerror.NewFault(fault.Invalid, "set binding requires a store")
 	}
 	backend, ok := s.backend.(SetBackend)
 	if !ok {
-		return Set[K, V]{}, fault.New(fault.Invalid, "adapter does not support Redis sets")
+		return Set[K, V]{}, safeerror.NewFault(fault.Invalid, "adapter does not support Redis sets")
 	}
 	if err := s.bind(d.definition.name, d.definition.version, &d.definition.id); err != nil {
 		return Set[K, V]{}, err
@@ -95,11 +96,11 @@ func (d SortedSetDeclaration[K, V]) Bind(s *Store) (SortedSet[K, V], error) {
 		return SortedSet[K, V]{}, err
 	}
 	if s == nil {
-		return SortedSet[K, V]{}, fault.New(fault.Invalid, "sorted set binding requires a store")
+		return SortedSet[K, V]{}, safeerror.NewFault(fault.Invalid, "sorted set binding requires a store")
 	}
 	backend, ok := s.backend.(SortedSetBackend)
 	if !ok {
-		return SortedSet[K, V]{}, fault.New(fault.Invalid, "adapter does not support Redis sorted sets")
+		return SortedSet[K, V]{}, safeerror.NewFault(fault.Invalid, "adapter does not support Redis sorted sets")
 	}
 	if err := s.bind(d.definition.name, d.definition.version, &d.definition.id); err != nil {
 		return SortedSet[K, V]{}, err
@@ -119,11 +120,11 @@ func (d ListDeclaration[K, V]) Bind(s *Store) (List[K, V], error) {
 		return List[K, V]{}, err
 	}
 	if s == nil {
-		return List[K, V]{}, fault.New(fault.Invalid, "list binding requires a store")
+		return List[K, V]{}, safeerror.NewFault(fault.Invalid, "list binding requires a store")
 	}
 	backend, ok := s.backend.(ListBackend)
 	if !ok {
-		return List[K, V]{}, fault.New(fault.Invalid, "adapter does not support Redis lists")
+		return List[K, V]{}, safeerror.NewFault(fault.Invalid, "adapter does not support Redis lists")
 	}
 	if err := s.bind(d.definition.name, d.definition.version, &d.definition.id); err != nil {
 		return List[K, V]{}, err

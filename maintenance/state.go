@@ -21,6 +21,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -54,10 +55,10 @@ type Rule struct {
 
 func (r Rule) Validate() error {
 	if len(r.Method) > 16 || strings.IndexFunc(r.Method, func(c rune) bool { return c < 'A' || c > 'Z' }) >= 0 {
-		return fault.New(fault.Invalid, "maintenance exemption method must be an uppercase HTTP method")
+		return safeerror.NewFault(fault.Invalid, "maintenance exemption method must be an uppercase HTTP method")
 	}
 	if !validPath(r.Path) {
-		return fault.New(fault.Invalid, "maintenance exemption path must be a canonical absolute path")
+		return safeerror.NewFault(fault.Invalid, "maintenance exemption path must be a canonical absolute path")
 	}
 	return nil
 }
@@ -110,7 +111,7 @@ func (p Policy) Validate() error {
 		}
 	}
 	if p.BypassTTL < 0 || p.BypassTTL > MaxBypassTTL || p.BypassTTL%time.Second != 0 {
-		return fault.New(fault.Invalid, "maintenance bypass lifetime must be whole seconds up to seven days")
+		return safeerror.NewFault(fault.Invalid, "maintenance bypass lifetime must be whole seconds up to seven days")
 	}
 	return nil
 }
@@ -126,7 +127,7 @@ func (p Policy) snapshot() Policy {
 
 func validateRules(rules []Rule, allow []netip.Prefix) error {
 	if len(rules) > MaxRules || len(allow) > MaxAllowedPrefixes {
-		return fault.New(fault.Invalid, "maintenance exemptions exceed their bound")
+		return safeerror.NewFault(fault.Invalid, "maintenance exemptions exceed their bound")
 	}
 	seen := make(map[Rule]bool, len(rules))
 	for _, rule := range rules {
@@ -134,13 +135,13 @@ func validateRules(rules []Rule, allow []netip.Prefix) error {
 			return err
 		}
 		if seen[rule] {
-			return fault.New(fault.Duplicate, "duplicate maintenance exemption")
+			return safeerror.NewFault(fault.Duplicate, "duplicate maintenance exemption")
 		}
 		seen[rule] = true
 	}
 	for _, prefix := range allow {
 		if !prefix.IsValid() || prefix != prefix.Masked() || prefix.Addr().Zone() != "" || prefix.Addr().Is4In6() {
-			return fault.New(fault.Invalid, "maintenance allowed networks must be canonical CIDR prefixes")
+			return safeerror.NewFault(fault.Invalid, "maintenance allowed networks must be canonical CIDR prefixes")
 		}
 	}
 	return nil
@@ -159,7 +160,7 @@ func (d SecretDigest) MarshalText() ([]byte, error) {
 }
 func (d *SecretDigest) UnmarshalText(text []byte) error {
 	if d == nil {
-		return fault.New(fault.Invalid, "missing maintenance secret digest destination")
+		return safeerror.NewFault(fault.Invalid, "missing maintenance secret digest destination")
 	}
 	if len(text) == 0 {
 		*d = SecretDigest{}
@@ -167,10 +168,10 @@ func (d *SecretDigest) UnmarshalText(text []byte) error {
 	}
 	var decoded SecretDigest
 	if len(text) != 64 || strings.ToLower(string(text)) != string(text) {
-		return fault.New(fault.Invalid, "invalid maintenance secret digest")
+		return safeerror.NewFault(fault.Invalid, "invalid maintenance secret digest")
 	}
 	if _, err := hex.Decode(decoded[:], text); err != nil {
-		return fault.New(fault.Invalid, "invalid maintenance secret digest")
+		return safeerror.NewFault(fault.Invalid, "invalid maintenance secret digest")
 	}
 	*d = decoded
 	return nil
@@ -181,7 +182,7 @@ func (SecretDigest) LogValue() slog.Value { return slog.StringValue("maintenance
 func NewSecret() (string, error) {
 	var data [24]byte
 	if _, err := rand.Read(data[:]); err != nil {
-		return "", fault.Wrap(fault.Internal, "cannot generate maintenance secret", err)
+		return "", safeerror.WrapFault(fault.Internal, "cannot generate maintenance secret", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(data[:]), nil
 }
@@ -192,7 +193,7 @@ func DigestSecret(secret string) (SecretDigest, error) {
 	if len(secret) < 16 || len(secret) > 128 || strings.IndexFunc(secret, func(c rune) bool {
 		return !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_')
 	}) >= 0 {
-		return SecretDigest{}, fault.New(fault.Invalid, "maintenance secret needs 16 to 128 URL-safe characters")
+		return SecretDigest{}, safeerror.NewFault(fault.Invalid, "maintenance secret needs 16 to 128 URL-safe characters")
 	}
 	return sha256.Sum256([]byte(secret)), nil
 }
@@ -212,13 +213,13 @@ type State struct {
 
 func (s State) Validate() error {
 	if s.RetryAfter < 0 || s.RetryAfter > MaxRetryAfter || s.RetryAfter%time.Second != 0 {
-		return fault.New(fault.Invalid, "maintenance retry interval must be whole seconds up to 24 hours")
+		return safeerror.NewFault(fault.Invalid, "maintenance retry interval must be whole seconds up to 24 hours")
 	}
 	if len(s.Message) > MaxMessageBytes || !utf8.ValidString(s.Message) || strings.IndexFunc(s.Message, unicode.IsControl) >= 0 {
-		return fault.New(fault.Invalid, "maintenance message must be bounded single-line text")
+		return safeerror.NewFault(fault.Invalid, "maintenance message must be bounded single-line text")
 	}
 	if !s.Down && (s.RetryAfter != 0 || s.Message != "" || !s.Secret.IsZero() || len(s.Allow) != 0 || len(s.Exempt) != 0) {
-		return fault.New(fault.Invalid, "serving maintenance state cannot carry maintenance options")
+		return safeerror.NewFault(fault.Invalid, "serving maintenance state cannot carry maintenance options")
 	}
 	return validateRules(s.Exempt, s.Allow)
 }
@@ -251,16 +252,16 @@ func (s State) MarshalJSON() ([]byte, error) {
 
 func (s *State) UnmarshalJSON(data []byte) error {
 	if s == nil {
-		return fault.New(fault.Invalid, "missing maintenance state destination")
+		return safeerror.NewFault(fault.Invalid, "missing maintenance state destination")
 	}
 	var wire wireState
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
 	if len(data) > 64<<10 || decoder.Decode(&wire) != nil || decoder.More() {
-		return fault.New(fault.Invalid, "invalid maintenance state record")
+		return safeerror.NewFault(fault.Invalid, "invalid maintenance state record")
 	}
 	if wire.Version != stateVersion || wire.RetryAfter < 0 || wire.RetryAfter > int64(MaxRetryAfter/time.Second) {
-		return fault.New(fault.Invalid, "unsupported maintenance state record")
+		return safeerror.NewFault(fault.Invalid, "unsupported maintenance state record")
 	}
 	decoded := State{Down: wire.Down, RetryAfter: time.Duration(wire.RetryAfter) * time.Second, Message: wire.Message, Secret: wire.Secret, Allow: wire.Allow, Exempt: wire.Exempt, Since: wire.Since}
 	if err := decoded.Validate(); err != nil {

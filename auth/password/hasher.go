@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -28,7 +29,7 @@ func New(config Config) (*Hasher, error) {
 }
 func (h *Hasher) Validate() error {
 	if h == nil || h.gate == nil {
-		return fault.New(fault.Invalid, "password hasher is not configured")
+		return safeerror.NewFault(fault.Invalid, "password hasher is not configured")
 	}
 	return h.config.Validate()
 }
@@ -46,7 +47,7 @@ func (h *Hasher) Hash(ctx context.Context, plain Plaintext) (Hash, error) {
 	err := h.gate.Execute(ctx, func(op context.Context) error {
 		salt := make([]byte, SaltBytes)
 		if _, err := rand.Read(salt); err != nil {
-			return fault.Wrap(fault.Internal, "password salt generation failed", err)
+			return safeerror.WrapFailure(fault.Internal, "password salt generation failed", err)
 		}
 		if err := op.Err(); err != nil {
 			return err
@@ -83,10 +84,10 @@ func (h *Hasher) Check(ctx context.Context, plain Plaintext, hash Hash) (bool, e
 	}
 	if parsed.algorithm == bcryptHash {
 		if parsed.bcryptCost > h.config.MaxBcryptCost {
-			return false, fault.New(fault.Invalid, "stored password hash exceeds verification policy")
+			return false, safeerror.NewFault(fault.Invalid, "stored password hash exceeds verification policy")
 		}
 	} else if !parsed.parameters.within(h.config.VerifyLimit) {
-		return false, fault.New(fault.Invalid, "stored password hash exceeds verification policy")
+		return false, safeerror.NewFault(fault.Invalid, "stored password hash exceeds verification policy")
 	}
 	matched := false
 	err = h.gate.Execute(ctx, func(op context.Context) error {
@@ -101,7 +102,7 @@ func (h *Hasher) Check(ctx context.Context, plain Plaintext, hash Hash) (bool, e
 			err := bcrypt.CompareHashAndPassword([]byte(encoded), input[:min(len(input), 72)])
 			matched = err == nil
 			if err != nil && !errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
-				return fault.New(fault.Invalid, "invalid or unsupported password hash")
+				return safeerror.NewFault(fault.Invalid, "invalid or unsupported password hash")
 			}
 			return nil
 		}

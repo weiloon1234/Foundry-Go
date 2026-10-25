@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -73,7 +74,7 @@ func parameterExpression[S, V any](v V, c codec.Codec[V]) RowExpression[S, V] {
 func NullableRow[S, V any](source RowValue[S, V]) RowExpression[S, value.Nullable[V]] {
 	e := rowInput(source).Value()
 	if value.IsNullableType[V]() {
-		e.node = parameterNode{Err: fault.New(fault.Invalid, "row value is already nullable")}
+		e.node = parameterNode{Err: safeerror.NewFault(fault.Invalid, "row value is already nullable")}
 	}
 	return RowExpression[S, value.Nullable[V]]{Nullable(e)}
 }

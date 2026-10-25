@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -34,7 +35,7 @@ type AliasedSource[A, M any] struct {
 func As[A, M any](source RecordQuerySource[M], alias string) AliasedSource[A, M] {
 	q := recordQuery[M]{}
 	if nilDescriptor(source) {
-		q.err = fault.New(fault.Invalid, "alias requires a record query and valid name")
+		q.err = safeerror.NewFault(fault.Invalid, "alias requires a record query and valid name")
 	} else {
 		q = source.recordQuery()
 	}
@@ -47,7 +48,7 @@ func As[A, M any](source RecordQuerySource[M], alias string) AliasedSource[A, M]
 func aliasInput[S, M any](q recordQuery[M], alias string) (joinInput[S], *recordMetadata[M]) {
 	var input joinInput[S]
 	if !sqlname.Valid(alias) {
-		input.err = fault.New(fault.Invalid, "alias requires a record query and valid name")
+		input.err = safeerror.NewFault(fault.Invalid, "alias requires a record query and valid name")
 		return input, nil
 	}
 	if q.err != nil {

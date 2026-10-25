@@ -4,10 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"os"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -96,7 +96,7 @@ func (b *Backend) openRecord(key storage.ObjectKey) (*os.File, storage.ObjectInf
 		err = failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	if err != nil {
-		return nil, storage.ObjectInfo{}, 0, errors.Join(err, failureIf(file.Close(), storage.CloseOperation, storage.NotApplicable))
+		return nil, storage.ObjectInfo{}, 0, safeerror.Join("operation failed", err, failureIf(file.Close(), storage.CloseOperation, storage.NotApplicable))
 	}
 	return file, info, offset, nil
 }

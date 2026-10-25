@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type lockStrength = querycore.LockStrength
@@ -54,7 +55,7 @@ func lockOf[S any](spec lockSpec, targets []LockTarget[S]) lockSpec {
 
 func lockContext(ctx context.Context, tx *database.Tx) error {
 	if tx == nil {
-		return fault.New(fault.Invalid, "row locking requires an active transaction")
+		return safeerror.NewFault(fault.Invalid, "row locking requires an active transaction")
 	}
 	return executionContext(ctx, tx)
 }

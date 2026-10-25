@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -23,7 +24,7 @@ func (k Key) Namespace() keyspace.Namespace { return k.address.Namespace }
 func (k Key) String() string                { return k.address.String(KeyFeature) }
 func ValidateOperation(ctx context.Context, key Key, policy Policy) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "lockout requires a context")
+		return safeerror.NewFault(fault.Invalid, "lockout requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err

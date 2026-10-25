@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // SignedURLInfo describes framework-owned query parameters separately from an
@@ -40,11 +41,11 @@ func signedURLInfo(policy signedURLPolicy) *SignedURLInfo {
 func (info SignedURLInfo) Validate() error {
 	expected := signedURLInfo(signedURLPolicy{})
 	if info.Version != expected.Version || info.Algorithm != expected.Algorithm || info.ExpiresParameter != expected.ExpiresParameter || info.SignatureParameter != expected.SignatureParameter || !info.Relative {
-		return fault.New(fault.Invalid, "unsupported signed URL metadata")
+		return safeerror.NewFault(fault.Invalid, "unsupported signed URL metadata")
 	}
 	policy, err := signedURLPolicy{}.withIgnored(info.IgnoredParameters)
 	if err != nil || !slices.IsSorted(info.IgnoredParameters) || len(policy.ignored) != len(info.IgnoredParameters) {
-		return fault.New(fault.Invalid, "unsupported signed URL ignored parameters")
+		return safeerror.NewFault(fault.Invalid, "unsupported signed URL ignored parameters")
 	}
 	return nil
 }
@@ -71,7 +72,7 @@ func (r SignedRoute[P]) Validate() error {
 		return err
 	}
 	if r.route.Method() == TRACE {
-		return fault.New(fault.Invalid, "TRACE cannot carry a signed URL")
+		return safeerror.NewFault(fault.Invalid, "TRACE cannot carry a signed URL")
 	}
 	return r.signer.Validate()
 }
@@ -151,7 +152,7 @@ func signedRegistration(registration RouteRegistration, signer URLSigner, spec R
 	next := registration.handler
 	registration.handler = stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		if _, ok := PublicOrigin(r.Context()); !ok {
-			writeRoutingError(w, r, InternalError.WithCause(fault.New(fault.Missing, "signed route requires PublicURLs middleware")))
+			writeRoutingError(w, r, InternalError.WithCause(safeerror.NewFault(fault.Missing, "signed route requires PublicURLs middleware")))
 			return
 		}
 		if r.URL == nil || Method(r.Method) != spec.Method && !(spec.Method == GET && r.Method == stdhttp.MethodHead) {

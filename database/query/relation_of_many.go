@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type ofManyChoice uint8
@@ -54,10 +55,10 @@ func (r OneRelation[M, N]) oneOfManyTarget() Query[N] {
 
 func (r OneRelation[M, N]) validateOfMany() error {
 	if r.ofMany > oldestOfMany {
-		return fault.New(fault.Invalid, "invalid one-of-many choice")
+		return safeerror.NewFault(fault.Invalid, "invalid one-of-many choice")
 	}
 	if r.ofMany == orderedOfMany && len(r.spec.target.queryCore.Orders) == 0 {
-		return fault.New(fault.Invalid, "one-of-many requires at least one order")
+		return safeerror.NewFault(fault.Invalid, "one-of-many requires at least one order")
 	}
 	return nil
 }

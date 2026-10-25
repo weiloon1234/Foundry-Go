@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // StreamResponse keeps the handler result typed as Stream. Declared media,
@@ -27,7 +28,7 @@ func (f *fileResponse) prepareStream(ctx context.Context, stream Stream, limits 
 	prepared.limit = limits.Bytes
 	prepared.length = content.Length
 	if length, ok := content.Length.Get(); ok && (length < 0 || length > limits.Bytes) {
-		return prepared, InternalError.WithCause(fault.New(fault.Internal, "stream length exceeds file response limits"))
+		return prepared, InternalError.WithCause(safeerror.NewFault(fault.Internal, "stream length exceeds file response limits"))
 	}
 	prepared.media, prepared.disposition, err = stream.filePresentation.prepare(f, content.Name, content.MediaType)
 	if err != nil {

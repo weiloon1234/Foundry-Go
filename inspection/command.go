@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Command supplies an explicit metadata-only CLI declaration. Parse and run this
@@ -15,7 +16,7 @@ import (
 // a second declaration list. It must not construct or start services.
 func Command(name cli.Name, collect func(context.Context) (Report, error)) (cli.Declaration, error) {
 	if collect == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "inspection command requires a pure report collector")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "inspection command requires a pure report collector")
 	}
 	command := cli.Define(name, "Inspect declared routes, jobs, schedules, plugins, contracts, model extensions and configuration sources", cli.Flags(func(flags *flag.FlagSet, args *Arguments) {
 		args.Section = All

@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TransactionCommonTable is a reusable complete-record CTE whose consumers
@@ -14,7 +15,7 @@ type TransactionCommonTable[R any] struct{ definition CommonTable[R] }
 func TransactionCTE[R any](name string, source TransactionRecordSource[R]) TransactionCommonTable[R] {
 	record := recordQuery[R]{}
 	if nilDescriptor(source) {
-		record.err = fault.New(fault.Invalid, "transaction CTE requires a record source")
+		record.err = safeerror.NewFault(fault.Invalid, "transaction CTE requires a record source")
 	} else {
 		record = source.transactionRecord()
 	}

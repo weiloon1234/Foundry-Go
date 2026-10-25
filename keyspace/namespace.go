@@ -1,7 +1,10 @@
 // Package keyspace owns namespace syntax and typed key codecs shared by infrastructure features.
 package keyspace
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+)
 
 // Feature identifies the physical key family owned by a framework adapter.
 type Feature string
@@ -12,7 +15,7 @@ type Namespace struct{ Application, Environment string }
 
 func (n Namespace) Validate() error {
 	if !ValidName(n.Application) || !ValidName(n.Environment) {
-		return fault.New(fault.Invalid, "invalid keyspace application or environment")
+		return safeerror.NewFault(fault.Invalid, "invalid keyspace application or environment")
 	}
 	return nil
 }

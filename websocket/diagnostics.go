@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type channelCounters struct {
@@ -32,7 +33,7 @@ type Diagnostics struct {
 // authentication adapter; its scope determines the administrative subject.
 func Diagnose[M any](ctx context.Context, hub *Hub, guard auth.Guard[M], authorize func(context.Context, M) error) (Diagnostics, error) {
 	if authorize == nil {
-		return Diagnostics{}, fault.New(fault.Invalid, "WebSocket diagnostics require an authorization policy")
+		return Diagnostics{}, safeerror.NewFault(fault.Invalid, "WebSocket diagnostics require an authorization policy")
 	}
 	ctx, finish, err := hub.operation(ctx)
 	if err != nil {

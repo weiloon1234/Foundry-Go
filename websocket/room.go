@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -47,7 +48,7 @@ func (r Rooms[R]) parse(ctx context.Context, text string) (R, error) {
 		return zero, err
 	}
 	if !validRoom(text) {
-		return zero, Malformed
+		return zero, codeFailure(Malformed)
 	}
 	result, err := r.codec.Parse(text)
 	if err != nil {
@@ -58,7 +59,7 @@ func (r Rooms[R]) parse(ctx context.Context, text string) (R, error) {
 		return zero, err
 	}
 	if canonical != text {
-		return zero, fault.New(fault.Invalid, "room key is not canonical")
+		return zero, safeerror.NewFault(fault.Invalid, "room key is not canonical")
 	}
 	return result, ctx.Err()
 }
@@ -79,7 +80,7 @@ func (r Rooms[R]) encode(ctx context.Context, room R) (string, error) {
 			return err
 		}
 		if !validRoom(text) {
-			return fault.New(fault.Invalid, "invalid room key")
+			return safeerror.NewFault(fault.Invalid, "invalid room key")
 		}
 		_, err = r.parse(ctx, text)
 		return err

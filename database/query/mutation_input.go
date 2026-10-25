@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // AssignInput is a generated declaration boundary for a value that must pass
@@ -17,7 +18,7 @@ func AssignInput[M, I any](table, column string, input I) Assignment[M] {
 
 func captureInput[I any](input I) assignmentValue {
 	return assignmentValue{Value: input, Bind: func() (driver.Value, error) {
-		return nil, fault.New(fault.Invalid, "mutation input must be transformed before SQL binding")
+		return nil, safeerror.NewFault(fault.Invalid, "mutation input must be transformed before SQL binding")
 	}}
 }
 

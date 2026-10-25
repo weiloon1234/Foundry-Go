@@ -6,12 +6,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Signing boundaries share clock ownership and supported timestamp validation.
 func signingTime(applicationClock clock.Clock, operation string) (time.Time, error) {
 	if nilCookieValue(applicationClock) {
-		return time.Time{}, fault.New(fault.Invalid, "signing requires an application clock")
+		return time.Time{}, safeerror.NewFault(fault.Invalid, "signing requires an application clock")
 	}
 	var now time.Time
 	read := func() error { now = applicationClock.Now().UTC(); return nil }
@@ -26,7 +27,7 @@ func signingTime(applicationClock clock.Clock, operation string) (time.Time, err
 		return time.Time{}, err
 	}
 	if now.Year() < 1970 || now.Year() > 9999 {
-		return time.Time{}, fault.New(fault.Invalid, "signing clock is outside its supported range")
+		return time.Time{}, safeerror.NewFault(fault.Invalid, "signing clock is outside its supported range")
 	}
 	return now, nil
 }

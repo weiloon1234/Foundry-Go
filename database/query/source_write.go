@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // UpdateSource performs an explicit set-based UPDATE FROM. SQL expressions use
@@ -32,7 +33,7 @@ type sourceMutation[S, M any] struct {
 func newSourceMutation[S, M any](destination ModelQuerySource[M], source ProjectionSource[S], kind mutationKind) sourceMutation[S, M] {
 	p := sourceMutation[S, M]{kind: kind}
 	if nilDescriptor(destination) || nilDescriptor(source) {
-		p.source.err = fault.New(fault.Invalid, "source write requires a destination and source query")
+		p.source.err = safeerror.NewFault(fault.Invalid, "source write requires a destination and source query")
 		return p
 	}
 	p.destination = destination.modelQuery()

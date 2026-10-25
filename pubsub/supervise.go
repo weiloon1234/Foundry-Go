@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxSuperviseBackoff bounds the delay between re-subscription attempts.
@@ -25,7 +26,7 @@ func DefaultSupervisePolicy() SupervisePolicy {
 }
 func (p SupervisePolicy) Validate() error {
 	if p.InitialBackoff <= 0 || p.MaxBackoff < p.InitialBackoff || p.MaxBackoff > MaxSuperviseBackoff {
-		return fault.New(fault.Invalid, "invalid pub/sub supervision backoff")
+		return safeerror.NewFault(fault.Invalid, "invalid pub/sub supervision backoff")
 	}
 	return nil
 }
@@ -55,7 +56,7 @@ func (t Topic[K, V]) Supervise(ctx context.Context, key K, policy SupervisePolic
 		return err
 	}
 	if ctx == nil || receive == nil || gap == nil {
-		return fault.New(fault.Invalid, "pub/sub supervision needs a context, receiver and gap handler")
+		return safeerror.NewFault(fault.Invalid, "pub/sub supervision needs a context, receiver and gap handler")
 	}
 	if err := policy.Validate(); err != nil {
 		return err
@@ -106,7 +107,7 @@ func (t Topic[K, V]) supervised(ctx context.Context, subscription *Subscription[
 		report := Gap{Cause: *interruption, Attempts: *attempts}
 		*interruption, *attempts = nil, 0
 		if err := callback.Invoke("pub/sub gap handler", func() error { return gap(ctx, report) }); err != nil {
-			return handlerFailure{err}
+			return failedHandler(err)
 		}
 	}
 	for {
@@ -115,9 +116,18 @@ func (t Topic[K, V]) supervised(ctx context.Context, subscription *Subscription[
 			return err
 		}
 		if err := callback.Invoke("pub/sub supervised receiver", func() error { return receive(ctx, value) }); err != nil {
-			return handlerFailure{err}
+			return failedHandler(err)
 		}
 	}
+}
+
+func failedHandler(cause error) error {
+	failure := handlerFailure{cause}
+	message, owned := safeerror.OwnedMessage(cause)
+	if !owned {
+		message = failure.Error()
+	}
+	return safeerror.Owned(message, failure)
 }
 
 // handlerFailure marks an application callback error, which is never a gap.
@@ -129,7 +139,7 @@ func (e handlerFailure) Unwrap() error { return e.cause }
 // interrupted reports whether a subscription ended by losing delivery, as
 // opposed to shutdown or an application handler failure.
 func interrupted(err error) bool {
-	if _, handler := err.(handlerFailure); handler {
+	if _, handler := safeerror.UnwrapOwned(err).(handlerFailure); handler {
 		return false
 	}
 	closed := true

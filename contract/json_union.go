@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -28,7 +29,10 @@ func (v UnionValue[T]) MarshalJSON() ([]byte, error) {
 	}
 	return []byte(v.wire), nil
 }
-func invalidUnion() error { return fault.New(fault.Invalid, "invalid union value") }
+func invalidUnion() error { return safeerror.NewFault(fault.Invalid, "invalid union value") }
+func invalidUnionCause(err error) error {
+	return safeerror.WrapFault(fault.Invalid, "invalid union value", safeerror.Diagnostic("union JSON codec failed", err))
+}
 
 // Union helper bounds also protect direct encoding/json use. An HTTP descriptor
 // additionally applies its configured, usually smaller, complete-document bounds.
@@ -50,7 +54,7 @@ func EncodeUnion[T, P any](descriptor JSON[T], tag string, input P) (UnionValue[
 	limits := unionLimits()
 	payload, err := value.EncodeJSON(context.Background(), input, value.JSONEncodingLimits{Bytes: limits.Bytes, Depth: limits.Depth, Nodes: limits.Nodes, Steps: limits.Steps})
 	if err != nil {
-		return UnionValue[T]{}, invalidUnion()
+		return UnionValue[T]{}, invalidUnionCause(err)
 	}
 	if len(payload) < 2 || payload[0] != '{' || payload[len(payload)-1] != '}' {
 		return UnionValue[T]{}, invalidUnion()
@@ -87,11 +91,11 @@ func DecodeUnion[T any](descriptor JSON[T], data []byte) (UnionValue[T], error) 
 	limits := unionLimits()
 	node, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: limits.Bytes, Depth: limits.Depth, Nodes: limits.Nodes})
 	if err != nil {
-		return UnionValue[T]{}, &DecodeError{cause: err}
+		return UnionValue[T]{}, decodeFailure(nil, err)
 	}
 	issues, err := descriptor.schema.check(context.Background(), node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
 	if err != nil || len(issues) != 0 {
-		return UnionValue[T]{}, &DecodeError{issues: issues, cause: err}
+		return UnionValue[T]{}, decodeFailure(issues, err)
 	}
 	object, ok := node.(map[string]any)
 	if !ok {
@@ -120,10 +124,10 @@ func UnionVariant[T, P any](stored UnionValue[T], tag string) (P, error) {
 	if err != nil {
 		// Keep the shared JSON boundary's panic/Goexit classification. Ordinary
 		// codec errors remain value-free; never call arbitrary error methods.
-		if failure, ok := err.(*fault.Error); ok && failure.Code() == fault.Panicked {
-			return *new(P), failure
+		if safeerror.IsPanic(err) {
+			return *new(P), err
 		}
-		return *new(P), invalidUnion()
+		return *new(P), invalidUnionCause(err)
 	}
 	return result, nil
 }

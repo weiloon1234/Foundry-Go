@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -57,7 +58,7 @@ func (d ProjectionDefinition[P]) Validate() error {
 		return err
 	}
 	if len(d.fields) > len(d.columns) {
-		return fault.New(fault.Invalid, "too many projection field getters")
+		return safeerror.NewFault(fault.Invalid, "too many projection field getters")
 	}
 	types := make(map[string]reflect.Type, len(d.columns))
 	for _, column := range d.columns {

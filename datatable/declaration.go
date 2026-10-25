@@ -13,6 +13,7 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Action string
@@ -164,7 +165,7 @@ func NewRegistry(registrations ...Registration) (*Registry, error) {
 			return nil, err
 		}
 		if _, exists := r.entries[item.id]; exists {
-			return nil, fault.New(fault.Duplicate, "datatable ID is already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "datatable ID is already registered")
 		}
 		r.entries[item.id] = item
 	}

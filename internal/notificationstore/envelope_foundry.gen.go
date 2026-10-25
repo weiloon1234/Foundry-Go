@@ -15,6 +15,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -518,7 +519,7 @@ func (q EnvelopeQuery) foundryInsertMany(ctx context.Context, writer database.Tr
 }
 func (q EnvelopeQuery) foundryCreateMutations(drafts []EnvelopeDraft) ([]foundryquery.Mutation[Envelope], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Envelope], len(drafts))
 	for i, draft := range drafts {
@@ -896,7 +897,7 @@ func (q EnvelopeQuery) DeleteAll(ctx context.Context, writer database.Transactor
 // Increment adjusts one numeric field of every matching model by a typed delta, such as EnvelopeFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q EnvelopeQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Envelope], extra ...EnvelopeDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Envelope]
 	if len(extra) == 1 {
@@ -911,7 +912,7 @@ func (q EnvelopeQuery) Increment(ctx context.Context, writer database.Transactor
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as EnvelopeFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q EnvelopeQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Envelope], extra ...EnvelopeDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Envelope]
 	if len(extra) == 1 {
@@ -1313,50 +1314,50 @@ func CompareEnvelope(before, after foundryvalue.Optional[Envelope], assigned Env
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[Envelope](), before, after, assigned.fieldID.IsSet(), func(item Envelope) model.ID[Envelope] { return item.ID })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.ID: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return EnvelopeChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return EnvelopeChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Recipient, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldRecipient.IsSet(), func(item Envelope) string { return item.Recipient })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.Recipient: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.Recipient", err)
 	}
 	changes.fields.Scope, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldScope.IsSet(), func(item Envelope) string { return item.Scope })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.Scope: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.Scope", err)
 	}
 	changes.fields.SubjectKey, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldSubjectKey.IsSet(), func(item Envelope) string { return item.SubjectKey })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.SubjectKey: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.SubjectKey", err)
 	}
 	changes.fields.Identity, err = lifecycle.CompareModelField(codec.JSON[model.Identity](), before, after, assigned.fieldIdentity.IsSet(), func(item Envelope) foundryvalue.JSON[model.Identity] { return item.Identity })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.Identity: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.Identity", err)
 	}
 	changes.fields.Origin, err = lifecycle.CompareModelField(codec.JSON[attribution.Origin](), before, after, assigned.fieldOrigin.IsSet(), func(item Envelope) foundryvalue.JSON[attribution.Origin] { return item.Origin })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.Origin: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.Origin", err)
 	}
 	changes.fields.Name, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldName.IsSet(), func(item Envelope) string { return item.Name })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.Name: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.Name", err)
 	}
 	changes.fields.Version, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldVersion.IsSet(), func(item Envelope) uint32 { return item.Version })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.Version: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.Version", err)
 	}
 	changes.fields.Payload, err = lifecycle.CompareModelField(codec.JSON[json.RawMessage](), before, after, assigned.fieldPayload.IsSet(), func(item Envelope) foundryvalue.JSON[json.RawMessage] { return item.Payload })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.Payload: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.Payload", err)
 	}
 	changes.fields.Fingerprint, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldFingerprint.IsSet(), func(item Envelope) string { return item.Fingerprint })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.Fingerprint: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.Fingerprint", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Envelope) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return EnvelopeChanges{}, fmt.Errorf("compare Envelope.CreatedAt: %w", err)
+		return EnvelopeChanges{}, foundrydiagnostic.Prefix("compare Envelope.CreatedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1523,7 +1524,7 @@ func (EnvelopeHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycl
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Envelope]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Envelope]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1582,7 +1583,7 @@ func (EnvelopeHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycl
 					}
 				}
 			default:
-				return foundryquery.Mutation[Envelope]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Envelope]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1722,7 +1723,7 @@ func (EnvelopeHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycl
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1832,14 +1833,14 @@ type EnvelopeAuditPolicy struct {
 func (changes EnvelopeChanges) Audit(policy EnvelopeAuditPolicy) (record.Model[Envelope, model.ID[Envelope]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Envelope, model.ID[Envelope]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Envelope, model.ID[Envelope]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Envelope, model.ID[Envelope]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Envelope, model.ID[Envelope]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -1977,7 +1978,7 @@ func EnvelopeAuditing(policy EnvelopeAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() EnvelopeHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes EnvelopeChanges) error {

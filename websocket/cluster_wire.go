@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type clusterKind string
@@ -40,7 +41,7 @@ func (h *Hub) publishEnvelope(ctx context.Context, envelope clusterEnvelope) err
 		return err
 	}
 	if len(data) > h.cluster.config.Buffer.PayloadBytes {
-		return fault.New(fault.Invalid, "cluster envelope exceeds its transport bound")
+		return safeerror.NewFault(fault.Invalid, "cluster envelope exceeds its transport bound")
 	}
 	_, err = h.cluster.backend.Publish(ctx, h.cluster.topic, data)
 	return err
@@ -59,7 +60,7 @@ func (h *Hub) publishDistributed(ctx context.Context, response Response, data []
 		// Earlier releases reject envelopes that carry an exclusion, so a local
 		// connection is excluded when this instance routes the echo instead.
 		if err := h.excludeLocally(response.MessageID, except); err != nil {
-			return &notPublished{err}
+			return safeerror.Retain(err, &notPublished{err})
 		}
 		except = ConnectionID{}
 	}
@@ -90,7 +91,7 @@ func (h *Hub) excludeLocally(id MessageID, connection ConnectionID) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if _, local := h.connections[connection]; !local {
-		return fault.New(fault.Invalid, "excluding a connection of another instance requires ClusterConfig.ExcludeRemoteConnections")
+		return safeerror.NewFault(fault.Invalid, "excluding a connection of another instance requires ClusterConfig.ExcludeRemoteConnections")
 	}
 	state := h.cluster
 	expired := 0
@@ -100,7 +101,7 @@ func (h *Hub) excludeLocally(id MessageID, connection ConnectionID) error {
 	}
 	state.exclusionOrder = state.exclusionOrder[expired:]
 	if len(state.exclusions) >= maxLocalExclusions {
-		return fault.New(fault.Overloaded, "too many publications await their exclusion echo")
+		return safeerror.NewFault(fault.Overloaded, "too many publications await their exclusion echo")
 	}
 	state.exclusions[id] = connection
 	state.exclusionOrder = append(state.exclusionOrder, pendingExclusion{id: id, expires: now.Add(exclusionLifetime)})
@@ -159,11 +160,11 @@ func (h *Hub) decodePublication(ctx context.Context, data []byte) (Response, err
 	}
 	channel := h.registry.channels[response.Channel]
 	if channel == nil {
-		return Response{}, UnknownChannel
+		return Response{}, codeFailure(UnknownChannel)
 	}
 	event := channel.events[response.Event]
 	if event == nil || event.direction != ServerToClient || event.wire == nil {
-		return Response{}, WrongDirection
+		return Response{}, codeFailure(WrongDirection)
 	}
 	if err := channel.room(ctx, response.Room); err != nil {
 		return Response{}, err
@@ -179,12 +180,12 @@ func (h *Hub) receiveCluster(ctx context.Context, data []byte) error {
 		return err
 	}
 	if envelope.Version != ProtocolVersion || envelope.Policy != h.cluster.key.Policy() || envelope.Instance.IsZero() {
-		return fault.New(fault.Conflict, "WebSocket cluster protocol or registry policy differs")
+		return safeerror.NewFault(fault.Conflict, "WebSocket cluster protocol or registry policy differs")
 	}
 	switch envelope.Kind {
 	case clusterPublication:
 		if envelope.Subject != "" || envelope.Scope != nil {
-			return fault.New(fault.Invalid, "invalid publication envelope")
+			return safeerror.NewFault(fault.Invalid, "invalid publication envelope")
 		}
 		response, err := h.decodePublication(ctx, envelope.Frame)
 		if err != nil {
@@ -203,19 +204,19 @@ func (h *Hub) receiveCluster(ctx context.Context, data []byte) error {
 		return nil
 	case clusterDisconnectConnection:
 		if len(envelope.Frame) != 0 || envelope.Connection.IsZero() || envelope.Subject != "" || envelope.Scope != nil {
-			return fault.New(fault.Invalid, "invalid disconnect envelope")
+			return safeerror.NewFault(fault.Invalid, "invalid disconnect envelope")
 		}
 		h.disconnectConnection(envelope.Connection)
 		return nil
 	case clusterDisconnectSubject:
 		if len(envelope.Frame) != 0 || !envelope.Connection.IsZero() || !validDigest(string(envelope.Subject)) || envelope.Scope != nil {
-			return fault.New(fault.Invalid, "invalid subject command")
+			return safeerror.NewFault(fault.Invalid, "invalid subject command")
 		}
 		h.disconnectSubject(envelope.Subject)
 		return nil
 	case clusterPresenceChanged:
 		if len(envelope.Frame) != 0 || !envelope.Connection.IsZero() || envelope.Subject != "" || envelope.Scope == nil {
-			return fault.New(fault.Invalid, "invalid presence command")
+			return safeerror.NewFault(fault.Invalid, "invalid presence command")
 		}
 		if err := envelope.Scope.Validate(); err != nil {
 			return err
@@ -229,7 +230,7 @@ func (h *Hub) receiveCluster(ctx context.Context, data []byte) error {
 		}
 		return nil
 	default:
-		return fault.New(fault.Invalid, "unknown cluster command")
+		return safeerror.NewFault(fault.Invalid, "unknown cluster command")
 	}
 }
 
@@ -238,7 +239,7 @@ func (h *Hub) receiveCluster(ctx context.Context, data []byte) error {
 // room and payload types.
 func DecodePublication(data []byte, maxBytes int) (Response, error) {
 	if maxBytes < 1 || maxBytes > 1<<20 {
-		return Response{}, fault.New(fault.Invalid, "invalid publication frame bound")
+		return Response{}, safeerror.NewFault(fault.Invalid, "invalid publication frame bound")
 	}
 	var response Response
 	if _, err := decodeObject(data, maxBytes, func(name string) wireMember {
@@ -273,11 +274,11 @@ func DecodePublication(data []byte, maxBytes int) (Response, error) {
 		return Response{}, err
 	}
 	if response.Version != ProtocolVersion || response.Type != EventResponse || response.MessageID.IsZero() || response.ID != "" || response.Code != "" || len(response.Members) != 0 || response.Member != nil || response.Replayed {
-		return Response{}, fault.New(fault.Invalid, "invalid distributed publication")
+		return Response{}, safeerror.NewFault(fault.Invalid, "invalid distributed publication")
 	}
 
 	if !identifier.Semantic(string(response.Channel)) || !identifier.Semantic(string(response.Event)) || len(response.Payload) == 0 || response.Room != nil && !validRoom(*response.Room) {
-		return Response{}, fault.New(fault.Invalid, "invalid publication identifiers")
+		return Response{}, safeerror.NewFault(fault.Invalid, "invalid publication identifiers")
 	}
 	return response, nil
 }

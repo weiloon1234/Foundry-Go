@@ -28,6 +28,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/filelock"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const marker = ".foundry-cache"
@@ -74,7 +75,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if !filepath.IsAbs(c.Root) || strings.ContainsRune(c.Root, 0) || credential.IsNil(c.Clock) || !cacheatomic.ValidPruneInterval(c.PruneInterval) || (runtime.GOOS != "darwin" && runtime.GOOS != "linux") {
-		return fault.New(fault.Invalid, "invalid file cache configuration")
+		return safeerror.NewFault(fault.Invalid, "invalid file cache configuration")
 	}
 	return nil
 }
@@ -139,7 +140,7 @@ func Open(ctx context.Context, config Config) (*Backend, error) {
 // PruneInterval is positive, starts the owned background pruner.
 func (b *Backend) Start(ctx context.Context) error {
 	if b == nil || b.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "file cache needs a backend and context")
+		return safeerror.NewFault(fault.Invalid, "file cache needs a backend and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -147,7 +148,7 @@ func (b *Backend) Start(ctx context.Context) error {
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
-		return fault.New(fault.Closed, "file cache is closed")
+		return safeerror.NewFault(fault.Closed, "file cache is closed")
 	}
 	if b.root != nil {
 		b.mu.Unlock()
@@ -155,7 +156,7 @@ func (b *Backend) Start(ctx context.Context) error {
 	}
 	if b.starting {
 		b.mu.Unlock()
-		return fault.New(fault.Conflict, "file cache startup is already running")
+		return safeerror.NewFault(fault.Conflict, "file cache startup is already running")
 	}
 	operation, cancel := context.WithCancel(ctx)
 	b.starting = true
@@ -170,14 +171,14 @@ func (b *Backend) Start(ctx context.Context) error {
 		_, err = b.sweep(operation, root, 0, "")
 	}
 	if err != nil && root != nil {
-		err = errors.Join(err, root.Close())
+		err = safeerror.Join("operation failed", err, root.Close())
 		root = nil
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	defer cancel()
 	if b.closed && root != nil {
-		err = errors.Join(fault.New(fault.Closed, "file cache closed during startup"), root.Close())
+		err = safeerror.Join("operation failed", safeerror.NewFault(fault.Closed, "file cache closed during startup"), root.Close())
 		root = nil
 	}
 	b.root = root
@@ -215,7 +216,7 @@ func initialize(ctx context.Context, root *os.Root) error {
 		}
 		for _, entry := range entries {
 			if entry.Name() != lockName {
-				return fault.New(fault.Invalid, "file cache root is not empty or owned")
+				return safeerror.NewFault(fault.Invalid, "file cache root is not empty or owned")
 			}
 		}
 		return nil
@@ -235,19 +236,19 @@ func initialize(ctx context.Context, root *os.Root) error {
 	info, err := root.Lstat(marker)
 	if err == nil {
 		if !info.Mode().IsRegular() || info.Size() != int64(len(magic)) {
-			return fault.New(fault.Invalid, "invalid file cache marker")
+			return safeerror.NewFault(fault.Invalid, "invalid file cache marker")
 		}
 		f, err := root.Open(marker)
 		if err != nil {
 			return safe(err)
 		}
 		data, err := io.ReadAll(io.LimitReader(f, int64(len(magic)+1)))
-		err = errors.Join(err, f.Close())
+		err = safeerror.Join("operation failed", err, f.Close())
 		if err != nil {
 			return safe(err)
 		}
 		if string(data) != magic {
-			return fault.New(fault.Invalid, "invalid file cache marker")
+			return safeerror.NewFault(fault.Invalid, "invalid file cache marker")
 		}
 		return createShardLocks(root)
 	}
@@ -262,7 +263,7 @@ func initialize(ctx context.Context, root *os.Root) error {
 		return safe(err)
 	}
 	_, err = f.WriteString(magic)
-	if err = safe(errors.Join(err, f.Sync(), f.Close())); err != nil {
+	if err = safe(safeerror.Join("operation failed", err, f.Sync(), f.Close())); err != nil {
 		return err
 	}
 	return createShardLocks(root)
@@ -285,7 +286,7 @@ func createShardLocks(root *os.Root) error {
 }
 func (b *Backend) enter(ctx context.Context) (*os.Root, func(), error) {
 	if b == nil || b.done == nil || ctx == nil {
-		return nil, nil, fault.New(fault.Invalid, "file cache needs a backend and context")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "file cache needs a backend and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
@@ -293,10 +294,10 @@ func (b *Backend) enter(ctx context.Context) (*os.Root, func(), error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return nil, nil, fault.New(fault.Closed, "file cache is closed")
+		return nil, nil, safeerror.NewFault(fault.Closed, "file cache is closed")
 	}
 	if b.root == nil {
-		return nil, nil, fault.New(fault.Invalid, "file cache has not started")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "file cache has not started")
 	}
 	b.active++
 	return b.root, b.leave, nil
@@ -323,7 +324,7 @@ func (b *Backend) finish() {
 }
 func (b *Backend) Close(ctx context.Context) error {
 	if b == nil || b.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "file cache close needs context")
+		return safeerror.NewFault(fault.Invalid, "file cache close needs context")
 	}
 	b.mu.Lock()
 	b.closed = true
@@ -457,7 +458,7 @@ func (b *Backend) accessLocked(ctx context.Context, root *os.Root, name, key str
 	case err == nil && info.Mode().IsRegular():
 		previous = info.Size()
 	case err == nil:
-		return false, fault.New(fault.Invalid, "invalid file cache record")
+		return false, safeerror.NewFault(fault.Invalid, "invalid file cache record")
 	case !errors.Is(err, fs.ErrNotExist):
 		return false, safe(err)
 	}
@@ -516,7 +517,7 @@ func (b *Backend) Prune(ctx context.Context, limit int) (int, error) {
 // usage estimate. The scan is bounded by twice MaxEntries plus MaxPrune files.
 func (b *Backend) Sweep(ctx context.Context, limit int) (PruneResult, error) {
 	if limit < 1 || limit > MaxPrune {
-		return PruneResult{}, fault.New(fault.Invalid, "invalid cache prune limit")
+		return PruneResult{}, safeerror.NewFault(fault.Invalid, "invalid cache prune limit")
 	}
 	root, leave, err := b.enter(ctx)
 	if err != nil {
@@ -676,5 +677,5 @@ func safe(err error) error {
 	if err == nil {
 		return nil
 	}
-	return fault.Wrap(fault.Invalid, "file cache operation failed", err)
+	return safeerror.WrapFailure(fault.Invalid, "file cache operation failed", err)
 }

@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Stored SQL mappings share metadata across insertion and joined updates.
@@ -28,13 +29,13 @@ func (q Query[M]) validateSQLMapping(mapping modelValueMapping) (string, error) 
 	name := mapping.field.Column
 	field, declared := q.definition.modelField(name)
 	if !declared || mapping.typ != field.typ || mapping.expression == nil {
-		return "", fault.New(fault.Invalid, "SQL mapping has an undeclared or incompatible field")
+		return "", safeerror.NewFault(fault.Invalid, "SQL mapping has an undeclared or incompatible field")
 	}
 	if field.mutator.apply != nil {
-		return "", fault.New(fault.Invalid, "SQL mapping cannot bypass a Go field mutator; supply a literal draft input")
+		return "", safeerror.NewFault(fault.Invalid, "SQL mapping cannot bypass a Go field mutator; supply a literal draft input")
 	}
 	if q.hasTimestamps() && name == q.definition.modelDefinition.Timestamps.Updated {
-		return "", fault.New(fault.Invalid, "SQL mapping cannot replace a managed update timestamp")
+		return "", safeerror.NewFault(fault.Invalid, "SQL mapping cannot replace a managed update timestamp")
 	}
 	return name, nil
 }

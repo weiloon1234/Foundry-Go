@@ -18,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/health/checks"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/notifications"
 	"github.com/weiloon1234/Foundry-Go/settings"
@@ -45,7 +46,7 @@ var AuditKey = foundation.NewKey[*audit.Recorder](string(AuditProvider))
 
 func registerFeatures(ctx context.Context, builder *foundation.Builder, settings Settings, source clock.Clock, constructors []Features, models []slots.Declaration, keys *encryption.Keyring) error {
 	if len(constructors) > 128 {
-		return fault.New(fault.Invalid, "too many feature declaration constructors")
+		return safeerror.NewFault(fault.Invalid, "too many feature declaration constructors")
 	}
 	s := settings.Features
 	builder.Register(foundation.Module{Name: FeatureDeclarationsProvider, Requires: []foundation.ProviderID{Provider}, OnRegister: func(r *foundation.Registrar) error {
@@ -259,7 +260,7 @@ func (s Services) Audit() (*audit.Recorder, error)                { return Resol
 // models.<Model>Extensions().From(runtime).
 func (s Services) ModelExtensions() (slots.Runtime, error) {
 	if !s.features.Extensions.Enabled {
-		return slots.Runtime{}, fault.New(fault.Missing, "model extensions require features.extensions")
+		return slots.Runtime{}, safeerror.NewFault(fault.Missing, "model extensions require features.extensions")
 	}
 	var runtime slots.Runtime
 	var err error
@@ -289,11 +290,11 @@ func validateModelExtensions(s FeatureSettings, models []slots.Declaration) erro
 		parts, owner := declaration.Parts(), string(declaration.Owner().Name())
 		switch {
 		case !s.Extensions.Enabled:
-			return fault.New(fault.Invalid, "model extension owner "+owner+" requires features.extensions")
+			return safeerror.NewFault(fault.Invalid, "model extension owner "+owner+" requires features.extensions")
 		case len(parts.Translations) > 0 && !s.Locales.Enabled:
-			return fault.New(fault.Invalid, "model extension owner "+owner+" declares translated slots, which require features.locales")
+			return safeerror.NewFault(fault.Invalid, "model extension owner "+owner+" declares translated slots, which require features.locales")
 		case len(parts.Attachments) > 0 && !s.Attachments.Enabled:
-			return fault.New(fault.Invalid, "model extension owner "+owner+" declares attachment slots, which require features.attachments")
+			return safeerror.NewFault(fault.Invalid, "model extension owner "+owner+" declares attachment slots, which require features.attachments")
 		}
 	}
 	return nil

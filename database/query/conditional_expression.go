@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -32,7 +33,7 @@ func Coalesce[S, V any](first RowValue[S, value.Nullable[V]], fallback RowValue[
 func CoalesceValue[S, V any](first Expression[S, value.Nullable[V]], fallback Expression[S, V]) Expression[S, V] {
 	n := conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{first.node, fallback.node}}
 	if value.IsNullableType[V]() {
-		n.Err = fault.New(fault.Invalid, "non-null fallback must not be nullable")
+		n.Err = safeerror.NewFault(fault.Invalid, "non-null fallback must not be nullable")
 	}
 	return Expression[S, V]{node: n, codec: fallback.codec}
 }
@@ -67,7 +68,7 @@ func NullIf[S, V any](first, second RowValue[S, V]) RowExpression[S, value.Nulla
 func NullIfValue[S, V any](first, second Expression[S, V]) Expression[S, value.Nullable[V]] {
 	n := conditionalNode{Kind: nullIfValues, Arguments: []valueExpression{first.node, second.node}}
 	if value.IsNullableType[V]() {
-		n.Err = fault.New(fault.Invalid, "nullable NULLIF input requires NullIfNullable")
+		n.Err = safeerror.NewFault(fault.Invalid, "nullable NULLIF input requires NullIfNullable")
 	}
 	return Expression[S, value.Nullable[V]]{node: n, codec: codec.Nullable(first.codec)}
 }
@@ -147,7 +148,7 @@ func (c caseBuilder[S, V]) finish(otherwise valueExpression) Expression[S, V] {
 func (c caseBuilder[S, V]) finishNull() Expression[S, value.Nullable[V]] {
 	n := caseNode{Branches: c.branches, Otherwise: parameterNode{Kind: c.codec.ParameterType()}}
 	if value.IsNullableType[V]() {
-		n.Err = fault.New(fault.Invalid, "CASE result is already nullable; provide a nullable Else value")
+		n.Err = safeerror.NewFault(fault.Invalid, "CASE result is already nullable; provide a nullable Else value")
 	}
 	return Expression[S, value.Nullable[V]]{node: n, codec: codec.Nullable(c.codec)}
 }

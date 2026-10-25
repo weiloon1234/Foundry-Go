@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/outboxstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlscope"
 	"github.com/weiloon1234/Foundry-Go/outbox"
@@ -34,7 +35,7 @@ func PrepareOutbox(destination outbox.Destination, dispatcher *Dispatcher) (*Out
 		return nil, err
 	}
 	if dispatcher == nil || dispatcher.slots == nil {
-		return nil, fault.New(fault.Invalid, "job outbox requires a dispatcher")
+		return nil, safeerror.NewFault(fault.Invalid, "job outbox requires a dispatcher")
 	}
 	return &Outbox{destination: destination, dispatcher: dispatcher}, nil
 }
@@ -43,7 +44,7 @@ func PrepareOutbox(destination outbox.Destination, dispatcher *Dispatcher) (*Out
 // Enqueue still joins the caller's transaction; it never commits independently.
 func PrepareOutboxIn(destination outbox.Destination, dispatcher *Dispatcher, db *database.DB, schema string) (*Outbox, error) {
 	if db == nil || !sqlname.Valid(schema) {
-		return nil, fault.New(fault.Invalid, "job outbox requires a database and schema")
+		return nil, safeerror.NewFault(fault.Invalid, "job outbox requires a database and schema")
 	}
 	producer, err := PrepareOutbox(destination, dispatcher)
 	if err != nil {
@@ -72,7 +73,7 @@ func (d Definition[P]) Enqueue(ctx context.Context, tx *database.Tx, producer *O
 // for commit or execution. Duplicate publication is bounded by queue retention.
 func (p Pending[P]) Enqueue(ctx context.Context, tx *database.Tx, producer *Outbox) (outbox.ID[P], error) {
 	if producer == nil || tx == nil {
-		return outbox.ID[P]{}, fault.New(fault.Invalid, "job enqueue requires an outbox and transaction")
+		return outbox.ID[P]{}, safeerror.NewFault(fault.Invalid, "job enqueue requires an outbox and transaction")
 	}
 	release, err := producer.dispatcher.begin(ctx)
 	if err != nil {
@@ -110,7 +111,7 @@ func (p Pending[P]) Enqueue(ctx context.Context, tx *database.Tx, producer *Outb
 // repeated publication, bounded by queue retention.
 func (w Workflow) Enqueue(ctx context.Context, tx *database.Tx, producer *Outbox) (outbox.ID[WorkflowExecution], error) {
 	if producer == nil || tx == nil {
-		return outbox.ID[WorkflowExecution]{}, fault.New(fault.Invalid, "workflow enqueue requires an outbox and transaction")
+		return outbox.ID[WorkflowExecution]{}, safeerror.NewFault(fault.Invalid, "workflow enqueue requires an outbox and transaction")
 	}
 	release, err := producer.dispatcher.begin(ctx)
 	if err != nil {
@@ -150,17 +151,17 @@ type DurableBackend interface {
 
 func (d *Dispatcher) RequireDurable() error {
 	if d == nil || d.slots == nil {
-		return fault.New(fault.Invalid, "job dispatcher is not initialized")
+		return safeerror.NewFault(fault.Invalid, "job dispatcher is not initialized")
 	}
 	authority, ok := d.backend.(DurableBackend)
 	if !ok || !authority.DurableAcceptance() {
-		return fault.New(fault.Invalid, "outbox publication requires a durable job backend")
+		return safeerror.NewFault(fault.Invalid, "outbox publication requires a durable job backend")
 	}
 	return nil
 }
 func (o *Outbox) PublicationRoute() (publisher.Route, error) {
 	if o == nil {
-		return publisher.Route{}, fault.New(fault.Invalid, "job outbox is not initialized")
+		return publisher.Route{}, safeerror.NewFault(fault.Invalid, "job outbox is not initialized")
 	}
 	if err := o.dispatcher.RequireDurable(); err != nil {
 		return publisher.Route{}, err
@@ -183,7 +184,7 @@ func (o *Outbox) PublicationRoute() (publisher.Route, error) {
 			return err
 		}
 		if string(envelope.Name()) != message.Name() || uint32(envelope.Version()) != message.Version() || message.Destination() != o.destination {
-			return fault.New(fault.Invalid, "outbox job address differs from its payload")
+			return safeerror.NewFault(fault.Invalid, "outbox job address differs from its payload")
 		}
 		if _, err := o.dispatcher.registry.lookup(jobKey{envelope.Name(), envelope.Version()}); err != nil {
 			return err

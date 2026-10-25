@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/schedule"
@@ -55,7 +56,7 @@ func (b *authority) LeaseAcquire(ctx context.Context, key lease.Key, owner lease
 			_, err = b.Backend.LeaseAcquire(ctx, key, foreign, 50*time.Millisecond)
 			return false, err
 		case 2:
-			return false, fault.New(fault.Internal, "injected coordination outage")
+			return false, safeerror.NewFault(fault.Internal, "injected coordination outage")
 		}
 	}
 	return b.Backend.LeaseAcquire(ctx, key, owner, ttl)

@@ -3,13 +3,13 @@ package query
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // FirstOrInsert returns the first primary-ordered matching model, or creates
@@ -29,7 +29,7 @@ func (q Query[M]) FirstOrInsert(ctx context.Context, writer database.Transactor,
 // single-statement upsert; there is no hidden retry after a competing insert.
 func (q Query[M]) PatchOrInsert(ctx context.Context, writer database.Transactor, create CreateDraft[M], update func(context.Context, *database.Tx, M) (Mutation[M], error)) (M, error) {
 	if update == nil {
-		return *new(M), fault.New(fault.Invalid, "lookup update requires a draft callback")
+		return *new(M), safeerror.NewFault(fault.Invalid, "lookup update requires a draft callback")
 	}
 	return q.writeLookup(ctx, writer, create, update)
 }
@@ -40,7 +40,7 @@ func (q Query[M]) writeLookup(ctx context.Context, writer database.Transactor, c
 	}
 	q = q.inContext(ctx)
 	if nilDescriptor(create) {
-		return *new(M), fault.New(fault.Invalid, "lookup creation requires a typed draft")
+		return *new(M), safeerror.NewFault(fault.Invalid, "lookup creation requires a typed draft")
 	}
 	if _, err := q.modelWriteCompiler(updateModel, false); err != nil {
 		return *new(M), err
@@ -96,7 +96,7 @@ func (q Query[M]) InsertOrFirst(ctx context.Context, writer database.Transactor,
 	}
 	q = q.inContext(ctx)
 	if nilDescriptor(create) {
-		return *new(M), fault.New(fault.Invalid, "lookup creation requires a typed draft")
+		return *new(M), safeerror.NewFault(fault.Invalid, "lookup creation requires a typed draft")
 	}
 	if _, err := q.modelWriteCompiler(updateModel, false); err != nil {
 		return *new(M), err
@@ -127,14 +127,14 @@ func (q Query[M]) InsertOrFirst(ctx context.Context, writer database.Transactor,
 		// A failed savepoint rollback poisons tx, so the reads below then fail too.
 		conflict, err := q.ownUniqueViolation(ctx, tx, statementErr)
 		if err != nil {
-			return *new(M), errors.Join(insertErr, err)
+			return *new(M), safeerror.Join("operation failed", insertErr, err)
 		}
 		if !conflict {
 			return *new(M), insertErr
 		}
 		models, err := returningModels(ctx, tx, statement, q.definition.scan, 0, 1)
 		if err != nil {
-			return *new(M), errors.Join(insertErr, err)
+			return *new(M), safeerror.Join("operation failed", insertErr, err)
 		}
 		if len(models) == 0 {
 			return *new(M), insertErr
@@ -174,7 +174,7 @@ func (q Query[M]) requireLookupMatch(ctx context.Context, tx *database.Tx, creat
 		return *new(M), err
 	}
 	if !matches {
-		return *new(M), fault.New(fault.Invalid, "created model does not satisfy lookup predicates and visibility")
+		return *new(M), safeerror.NewFault(fault.Invalid, "created model does not satisfy lookup predicates and visibility")
 	}
 	return created, nil
 }

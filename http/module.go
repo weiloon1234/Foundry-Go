@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module registers one prepared server and the HTTP kernel. The handler factory
@@ -19,7 +20,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*Server], config Serv
 	config = config.Snapshot()
 	return foundation.Module{Name: name, OnRegister: func(r *foundation.Registrar) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "HTTP module needs a handler factory")
+			return safeerror.NewFault(fault.Invalid, "HTTP module needs a handler factory")
 		}
 		if err := config.Validate(); err != nil {
 			return err

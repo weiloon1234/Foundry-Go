@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -17,7 +18,7 @@ func (p Provider[M, K]) CheckModel(ctx context.Context, subject M) (model.Refere
 		return model.Reference[M, K]{}, err
 	}
 	if ctx == nil {
-		return model.Reference[M, K]{}, fault.New(fault.Invalid, "model check requires a context")
+		return model.Reference[M, K]{}, safeerror.NewFault(fault.Invalid, "model check requires a context")
 	}
 	var reference model.Reference[M, K]
 	err := callback.Isolated("check authentication model", func() error {

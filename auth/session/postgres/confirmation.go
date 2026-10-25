@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -44,7 +45,7 @@ func (b *Backend) Confirm(ctx context.Context, address session.Address, identity
 // or after now-within, using this backend's clock.
 func (b *Backend) ConfirmedWithin(ctx context.Context, address session.Address, identity model.Identity, id model.ID[session.Record], within time.Duration) (bool, error) {
 	if within <= 0 {
-		return false, fault.New(fault.Invalid, "password confirmation window must be positive")
+		return false, safeerror.NewFault(fault.Invalid, "password confirmation window must be positive")
 	}
 	key, scope, err := b.sessionTarget(ctx, address, identity, id)
 	if err != nil {
@@ -61,7 +62,7 @@ func (b *Backend) ConfirmedWithin(ctx context.Context, address session.Address, 
 
 func (b *Backend) sessionTarget(ctx context.Context, address session.Address, identity model.Identity, id model.ID[session.Record]) (string, string, error) {
 	if b == nil || b.db == nil || ctx == nil || id.IsZero() {
-		return "", "", fault.New(fault.Invalid, "session PostgreSQL operation requires a backend, context and session")
+		return "", "", safeerror.NewFault(fault.Invalid, "session PostgreSQL operation requires a backend, context and session")
 	}
 	key, err := address.SubjectKey(identity)
 	if err != nil {

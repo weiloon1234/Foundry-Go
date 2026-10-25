@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (l *PasswordLogin[M, K, I]) checkedResult(subject M, proof Proof[M, K]) (PasswordResult[M, K], error) {
@@ -16,17 +17,17 @@ func (l *PasswordLogin[M, K, I]) checkedResult(subject M, proof Proof[M, K]) (Pa
 		}
 		current, present := found.Get()
 		if !present {
-			return *new(M), Unauthenticated
+			return *new(M), Unauthenticated.WithCause(nil)
 		}
 		identity, err := current.FoundryIdentity()
 		if err != nil {
 			return *new(M), err
 		}
 		if identity != proof.Identity() {
-			return *new(M), fault.New(fault.Invalid, "password issuance lock returned a different model")
+			return *new(M), safeerror.NewFault(fault.Invalid, "password issuance lock returned a different model")
 		}
 		if l.model.Hash(current) != expectedHash {
-			return *new(M), Unauthenticated
+			return *new(M), Unauthenticated.WithCause(nil)
 		}
 		if err := l.provider.checkEligibility(ctx, current); err != nil {
 			return *new(M), err
@@ -36,7 +37,7 @@ func (l *PasswordLogin[M, K, I]) checkedResult(subject M, proof Proof[M, K]) (Pa
 			return *new(M), err
 		}
 		if required != (proof.Assurance() == PendingMFA) {
-			return *new(M), Unauthenticated
+			return *new(M), Unauthenticated.WithCause(nil)
 		}
 		if err := ctx.Err(); err != nil {
 			return *new(M), err

@@ -124,6 +124,16 @@ func (k *FailingKey) UnmarshalText(data []byte) error {
 	return nil
 }
 
+func (k FailingKey) MarshalText() ([]byte, error) {
+	switch k {
+	case "marshal-panic":
+		panic("private key panic")
+	case "marshal-goexit":
+		runtime.Goexit()
+	}
+	return []byte(k), nil
+}
+
 type FailingKeyDTO struct{ Values map[FailingKey]string }
 
 func TestJSONMapKeyPanicAndGoexitAreInternal(t *testing.T) {
@@ -132,9 +142,10 @@ func TestJSONMapKeyPanicAndGoexitAreInternal(t *testing.T) {
 		JSONMapType[map[FailingKey]string]("values", "text", "app.FailingKey", StringJSONKey[FailingKey]()),
 		{ID: "text", Kind: StringKind},
 	}})
-	for _, name := range []string{"panic", "goexit"} {
+	for _, name := range []string{"panic", "goexit", "marshal-panic", "marshal-goexit"} {
 		result, err := descriptor.Decode(context.Background(), []byte("{\"Values\":{\""+name+"\":\"x\"}}"), dtoLimits())
-		if !errors.Is(err, fault.Internal) || result.Values != nil || strings.Contains(err.Error(), "private") {
+		var rejected *DecodeError
+		if !errors.Is(err, fault.Internal) || errors.As(err, &rejected) || result.Values != nil || strings.Contains(err.Error(), "private") {
 			t.Fatal("key panic became input rejection", err)
 		}
 	}

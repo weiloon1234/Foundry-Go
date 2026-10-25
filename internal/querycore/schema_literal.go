@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Only a conflict target compiler enables this path. Values have already passed
@@ -30,7 +31,7 @@ func (c *Compiler) SchemaLiteral(value any) (string, error) {
 		text = strconv.FormatInt(v, 10)
 	case float64:
 		if math.IsNaN(v) || math.IsInf(v, 0) {
-			return "", fault.New(fault.Invalid, "schema constants require finite numbers")
+			return "", safeerror.NewFault(fault.Invalid, "schema constants require finite numbers")
 		}
 		if v == 0 {
 			v = 0
@@ -48,7 +49,7 @@ func (c *Compiler) SchemaLiteral(value any) (string, error) {
 			break
 		}
 		if remaining < 17 || len(v) > (remaining-17)/2 {
-			return "", fault.New(fault.Invalid, "schema constant exceeds its resource bound")
+			return "", safeerror.NewFault(fault.Invalid, "schema constant exceeds its resource bound")
 		}
 		text = "DECODE('" + hex.EncodeToString(v) + "', 'hex')"
 	case time.Time:
@@ -58,10 +59,10 @@ func (c *Compiler) SchemaLiteral(value any) (string, error) {
 			return "", err
 		}
 	default:
-		return "", fault.New(fault.Invalid, "unsupported schema constant representation")
+		return "", safeerror.NewFault(fault.Invalid, "unsupported schema constant representation")
 	}
 	if len(text) > remaining {
-		return "", fault.New(fault.Invalid, "schema constant exceeds its resource bound")
+		return "", safeerror.NewFault(fault.Invalid, "schema constant exceeds its resource bound")
 	}
 	c.ScalarSQLBytes += len(text)
 	return text, nil
@@ -69,10 +70,10 @@ func (c *Compiler) SchemaLiteral(value any) (string, error) {
 
 func QuoteSchemaText(value string, remaining int) (string, error) {
 	if remaining < 3 || len(value) > remaining-3 {
-		return "", fault.New(fault.Invalid, "schema text constant exceeds its resource bound")
+		return "", safeerror.NewFault(fault.Invalid, "schema text constant exceeds its resource bound")
 	}
 	if !utf8.ValidString(value) || strings.IndexByte(value, 0) >= 0 {
-		return "", fault.New(fault.Invalid, "schema text constant requires valid PostgreSQL UTF-8")
+		return "", safeerror.NewFault(fault.Invalid, "schema text constant requires valid PostgreSQL UTF-8")
 	}
 	size := len(value) + 3
 	for i := range len(value) {
@@ -80,7 +81,7 @@ func QuoteSchemaText(value string, remaining int) (string, error) {
 			size++
 		}
 		if size > remaining {
-			return "", fault.New(fault.Invalid, "escaped schema constant exceeds its resource bound")
+			return "", safeerror.NewFault(fault.Invalid, "escaped schema constant exceeds its resource bound")
 		}
 	}
 	var result strings.Builder

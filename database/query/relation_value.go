@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RelatedValue computes a typed aggregate over a relationship's matching
@@ -20,7 +21,7 @@ import (
 //	pairs, err := query.WithValue(QueryUsers(), orders).All(ctx, db)
 func RelatedValue[M, N, V any](source AggregateSource[M, N], computation AggregateExpression[N, V]) RowExpression[M, V] {
 	if nilDescriptor(source) || nilDescriptor(computation) {
-		return RowExpression[M, V]{Expression[M, V]{node: parameterNode{Err: fault.New(fault.Invalid, "related value requires a relationship and computation")}}}
+		return RowExpression[M, V]{Expression[M, V]{node: parameterNode{Err: safeerror.NewFault(fault.Invalid, "related value requires a relationship and computation")}}}
 	}
 	aggregate := computation.aggregateValue()
 	input := source.aggregateInput()
@@ -41,7 +42,7 @@ func RelatedValue[M, N, V any](source AggregateSource[M, N], computation Aggrega
 // self-relations stay unambiguous; many-to-many inputs keep their join aliases.
 func relatedValueNode[M, N any](input aggregateInput[M, N], measure aggregateNode) (selectNode, error) {
 	if input.validate == nil || input.selectNode == nil || input.source.definition == nil {
-		return selectNode{}, fault.New(fault.Invalid, "related value requires a bound relationship")
+		return selectNode{}, safeerror.NewFault(fault.Invalid, "related value requires a bound relationship")
 	}
 	if err := input.validate(0, DefaultRelationLimits()); err != nil {
 		return selectNode{}, err
@@ -103,7 +104,7 @@ func (q AnnotatedQuery[M, V]) reader() readResult[Annotated[M, V]] {
 	}
 	definition := q.query.definition
 	if definition == nil || q.value.expression.node == nil || q.value.expression.codec.Validate() != nil {
-		r.err = fault.New(fault.Invalid, "annotated reads require model metadata and a typed value")
+		r.err = safeerror.NewFault(fault.Invalid, "annotated reads require model metadata and a typed value")
 		return r
 	}
 	r.node = q.query.modelSelect()

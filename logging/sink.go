@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -72,13 +73,13 @@ func (c AsyncConfig) resolved() AsyncConfig {
 func (c AsyncConfig) Validate() error {
 	if !c.Enabled {
 		if c != (AsyncConfig{}) {
-			return fault.New(fault.Invalid, "async logging options require async to be enabled")
+			return safeerror.NewFault(fault.Invalid, "async logging options require async to be enabled")
 		}
 		return nil
 	}
 	c = c.resolved()
 	if c.Queue < 1 || c.Queue > 65536 || c.MaxBytes < 1024 || c.MaxBytes > 256<<20 {
-		return fault.New(fault.Invalid, "async logging queue limits must be bounded and positive")
+		return safeerror.NewFault(fault.Invalid, "async logging queue limits must be bounded and positive")
 	}
 	return nil
 }
@@ -89,34 +90,34 @@ func (c SinkConfig) Validate() error {
 		return err
 	}
 	if c.Level < slog.LevelDebug || c.Level > slog.LevelError {
-		return fault.New(fault.Invalid, "invalid logging level")
+		return safeerror.NewFault(fault.Invalid, "invalid logging level")
 	}
 	if err := c.Async.Validate(); err != nil {
 		return err
 	}
 	if c.Driver != Syslog && c.Syslog != (SyslogConfig{}) {
-		return fault.New(fault.Invalid, "syslog options require the syslog driver")
+		return safeerror.NewFault(fault.Invalid, "syslog options require the syslog driver")
 	}
 	switch c.Driver {
 	case Stderr, Stdout:
 		if c.Path != "" || c.Rotation != (RotationConfig{}) {
-			return fault.New(fault.Invalid, "stream logging cannot select file options")
+			return safeerror.NewFault(fault.Invalid, "stream logging cannot select file options")
 		}
 	case File:
 		if !filepath.IsAbs(c.Path) || strings.ContainsRune(c.Path, 0) {
-			return fault.New(fault.Invalid, "log file requires an absolute path")
+			return safeerror.NewFault(fault.Invalid, "log file requires an absolute path")
 		}
 		return c.Rotation.Validate()
 	case Syslog:
 		if c.Path != "" || c.Rotation != (RotationConfig{}) {
-			return fault.New(fault.Invalid, "syslog logging cannot select file options")
+			return safeerror.NewFault(fault.Invalid, "syslog logging cannot select file options")
 		}
 		if !syslogSupported {
-			return fault.New(fault.Invalid, "syslog logging is unsupported on this platform")
+			return safeerror.NewFault(fault.Invalid, "syslog logging is unsupported on this platform")
 		}
 		return c.Syslog.Validate()
 	default:
-		return fault.New(fault.Invalid, "unsupported logging sink")
+		return safeerror.NewFault(fault.Invalid, "unsupported logging sink")
 	}
 	return nil
 }
@@ -209,7 +210,7 @@ func (s *Sink) Logger() *slog.Logger {
 }
 func (s *Sink) Start(ctx context.Context) error {
 	if s == nil || s.state == nil || ctx == nil {
-		return fault.New(fault.Invalid, "logging sink requires an owner and context")
+		return safeerror.NewFault(fault.Invalid, "logging sink requires an owner and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -218,7 +219,7 @@ func (s *Sink) Start(ctx context.Context) error {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.closed {
-		return fault.New(fault.Closed, "logging sink is closed")
+		return safeerror.NewFault(fault.Closed, "logging sink is closed")
 	}
 	if state.target != nil {
 		return nil
@@ -266,18 +267,18 @@ func (state *sinkState) open() error {
 		}
 		if info, err := os.Lstat(state.config.Path); err == nil {
 			if !info.Mode().IsRegular() {
-				return fault.New(fault.Invalid, "log destination must be a regular file")
+				return safeerror.NewFault(fault.Invalid, "log destination must be a regular file")
 			}
 		} else if !errors.Is(err, os.ErrNotExist) {
-			return fault.Wrap(fault.Invalid, "cannot inspect log destination", err)
+			return safeerror.WrapFault(fault.Invalid, "cannot inspect log destination", err)
 		}
 		file, err := os.OpenFile(state.config.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
-			return fault.Wrap(fault.Invalid, "cannot open log destination", err)
+			return safeerror.WrapFault(fault.Invalid, "cannot open log destination", err)
 		}
 		info, err := file.Stat()
 		if err != nil || !info.Mode().IsRegular() {
-			return errors.Join(fault.New(fault.Invalid, "invalid opened log destination"), err, file.Close())
+			return safeerror.Join("operation failed", safeerror.NewFault(fault.Invalid, "invalid opened log destination"), err, file.Close())
 		}
 		state.target = streamDestination{file}
 		state.file = file
@@ -310,7 +311,7 @@ func (s *Sink) writeRecord(data []byte, level slog.Level) (int, error) {
 	if len(state.queue) == cap(state.queue) || int64(len(data)) > async.MaxBytes-state.queuedBytes.Load() {
 		state.events.dropped.Add(1)
 		state.events.notice(noticeDropped, nil)
-		return 0, fault.New(fault.Overloaded, "log queue is full; record dropped")
+		return 0, safeerror.NewFault(fault.Overloaded, "log queue is full; record dropped")
 	}
 	state.queuedBytes.Add(int64(len(data)))
 	state.queue <- asyncRecord{data: slices.Clone(data), level: level}
@@ -389,7 +390,7 @@ func (s *Sink) Close() error {
 	state.target = nil
 	if state.file != nil {
 		if err := state.file.Close(); err != nil {
-			return fault.Wrap(fault.Internal, "cannot close log destination", err)
+			return safeerror.WrapFault(fault.Internal, "cannot close log destination", err)
 		}
 	}
 	return nil

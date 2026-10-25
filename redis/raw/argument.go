@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Argument snapshots one explicit raw value. Zero is invalid; empty Text/Bytes
@@ -31,7 +32,7 @@ func Int64(value int64) Argument   { return Text(strconv.FormatInt(value, 10)) }
 func Uint64(value uint64) Argument { return Text(strconv.FormatUint(value, 10)) }
 func (a Argument) validate() error {
 	if !a.valid {
-		return fault.New(fault.Invalid, "invalid or oversized raw Redis argument")
+		return safeerror.NewFault(fault.Invalid, "invalid or oversized raw Redis argument")
 	}
 	return nil
 }

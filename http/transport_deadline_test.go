@@ -231,18 +231,19 @@ func (GoexitEventPayload) MarshalJSON() ([]byte, error) {
 	return nil, nil
 }
 
-// A writer that exits abnormally still stops the sink and waits for the
-// producer before the request is released.
+// A contained codec Goexit still stops the sink and waits for the producer
+// before returning failure to the caller.
 func TestServeEventsReleasesOwnershipOnGoexit(t *testing.T) {
 	t.Parallel()
 	descriptor := endpointDTO[GoexitEventPayload](contract.Property{Name: "name", Type: "text", Required: true})
 	var producerReturned bool
+	var returned error
 	exited := make(chan bool, 1)
 	go func() {
 		completed := false
 		defer func() { exited <- completed }()
 		request := httptest.NewRequest("GET", "/events", nil)
-		_ = ServeEvents(httptest.NewRecorder(), request, descriptor, DefaultEventStreamConfig(), func(ctx context.Context, sink *EventSink[GoexitEventPayload]) error {
+		returned = ServeEvents(httptest.NewRecorder(), request, descriptor, DefaultEventStreamConfig(), func(ctx context.Context, sink *EventSink[GoexitEventPayload]) error {
 			defer func() { producerReturned = true }()
 			if err := sink.Send(ctx, Event[GoexitEventPayload]{Data: GoexitEventPayload{Name: "x"}}); err != nil {
 				return err
@@ -252,8 +253,11 @@ func TestServeEventsReleasesOwnershipOnGoexit(t *testing.T) {
 		})
 		completed = true
 	}()
-	if <-exited {
-		t.Fatal("codec Goexit was converted into a return")
+	if !<-exited {
+		t.Fatal("codec Goexit escaped containment")
+	}
+	if !errors.Is(returned, fault.Panicked) {
+		t.Fatalf("codec Goexit did not retain its failure: %v", returned)
 	}
 	if !producerReturned {
 		t.Fatal("request released while the producer was still running")

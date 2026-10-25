@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RecordField supplies typed field extraction and codec validation at the
@@ -47,7 +48,7 @@ func encodeModelKey(raw driver.Value) (cursorValue, error) {
 	}
 	key, err := encodeCursorValue(raw)
 	if err != nil {
-		return cursorValue{}, fault.New(fault.Invalid, "model key has no canonical database representation")
+		return cursorValue{}, safeerror.NewFault(fault.Invalid, "model key has no canonical database representation")
 	}
 	return key, nil
 }
@@ -98,7 +99,7 @@ func newRecordFieldMetadata[V any](column string, c codec.Codec[V]) recordFieldM
 
 func validateModelFieldMetadata(field recordFieldMetadata, hasGetter bool, columns, seen map[string]bool) error {
 	if !columns[field.column] || seen[field.column] || !hasGetter || field.decode == nil {
-		return fault.New(fault.Invalid, "invalid or repeated model field declaration")
+		return safeerror.NewFault(fault.Invalid, "invalid or repeated model field declaration")
 	}
 	seen[field.column] = true
 	return nil
@@ -106,7 +107,7 @@ func validateModelFieldMetadata(field recordFieldMetadata, hasGetter bool, colum
 
 func validateProjectionFieldMetadata(field recordFieldMetadata, hasGetter bool, types map[string]reflect.Type) error {
 	if types[field.column] == nil || types[field.column] != field.typ || !hasGetter || field.decode == nil {
-		return fault.New(fault.Invalid, "invalid or repeated projection field getter")
+		return safeerror.NewFault(fault.Invalid, "invalid or repeated projection field getter")
 	}
 	delete(types, field.column)
 	return nil

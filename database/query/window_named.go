@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -25,7 +26,7 @@ func orderedWindows(s selectNode) ([]*namedWindow, error) { return querycore.Ord
 // it follows PostgreSQL inheritance: the referenced definition must be frameless.
 func (w Window[S]) Named(name string) Window[S] {
 	if !sqlname.Valid(name) {
-		w.node.Err = fault.New(fault.Invalid, "named window requires a valid SQL identifier")
+		w.node.Err = safeerror.NewFault(fault.Invalid, "named window requires a valid SQL identifier")
 		return w
 	}
 	return Window[S]{node: windowSpec{Reference: &namedWindow{Name: name, Definition: w.node}}}

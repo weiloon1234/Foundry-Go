@@ -2,11 +2,12 @@ package redis
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"net"
 
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // classify never formats server/transport errors, which can include credentials
@@ -17,22 +18,30 @@ func classify(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
+	err = safeerror.Reveal("Redis operation failed", err)
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return safeerror.Wrap("Redis operation failed", safeerror.Join("Redis operation failed", ctx.Err(), err))
 	}
 	var existing *fault.Error
-	if errors.As(err, &existing) {
-		return err
+	if callback.ErrorAs(err, &existing) {
+		return safeerror.Wrap("Redis operation failed", err)
 	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return err
+	if callback.ErrorIs(err, context.Canceled) || callback.ErrorIs(err, context.DeadlineExceeded) {
+		return safeerror.Wrap("Redis operation failed", err)
 	}
-	if errors.Is(err, driver.ErrClosed) {
-		return fault.Wrap(fault.Closed, "Redis connection is closed", err)
+	if callback.ErrorIs(err, driver.ErrClosed) {
+		return safeerror.WrapFault(fault.Closed, "Redis connection is closed", err)
 	}
 	var timeout net.Error
-	if errors.As(err, &timeout) && timeout.Timeout() {
-		return fault.Wrap(fault.Timeout, "Redis operation timed out", err)
+	timedOut := false
+	inspected := callback.Isolated("Redis timeout classification", func() error {
+		if callback.ErrorAs(err, &timeout) {
+			timedOut = timeout.Timeout()
+		}
+		return nil
+	})
+	if inspected == nil && timedOut {
+		return safeerror.WrapFault(fault.Timeout, "Redis operation timed out", err)
 	}
-	return fault.Wrap(fault.Internal, "Redis operation failed", err)
+	return safeerror.WrapFailure(fault.Internal, "Redis operation failed", err)
 }

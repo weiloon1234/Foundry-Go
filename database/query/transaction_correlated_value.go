@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -59,7 +60,7 @@ func (q TransactionCorrelatedValueQuery[O, I, V]) transactionCorrelatedValue() c
 
 func transactionCorrelatedValueOf[O TransactionScope, V any](source TransactionCorrelatedValueSource[O, V]) valueSubquery[V] {
 	if nilDescriptor(source) {
-		return valueSubquery[V]{subquery: subquery{Err: fault.New(fault.Invalid, "transaction correlated value requires a source")}}
+		return valueSubquery[V]{subquery: subquery{Err: safeerror.NewFault(fault.Invalid, "transaction correlated value requires a source")}}
 	}
 	return source.transactionCorrelatedValue().value
 }

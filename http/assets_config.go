@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // AssetPath is a relative slash-separated asset path. Empty identifies a mount
@@ -35,18 +36,18 @@ func FilesystemAssets(fsys fs.FS) AssetSource { return AssetSource{filesystem: f
 func (s AssetSource) validate() error {
 	if s.directory != "" {
 		if s.filesystem != nil || strings.ContainsRune(s.directory, 0) || strings.TrimSpace(s.directory) != s.directory {
-			return fault.New(fault.Invalid, "invalid asset directory")
+			return safeerror.NewFault(fault.Invalid, "invalid asset directory")
 		}
 		return nil
 	}
 	if s.filesystem == nil {
-		return fault.New(fault.Invalid, "assets require a source")
+		return safeerror.NewFault(fault.Invalid, "assets require a source")
 	}
 	v := reflect.ValueOf(s.filesystem)
 	switch v.Kind() {
 	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Func, reflect.Interface, reflect.Chan:
 		if v.IsNil() {
-			return fault.New(fault.Invalid, "assets require a non-nil filesystem")
+			return safeerror.NewFault(fault.Invalid, "assets require a non-nil filesystem")
 		}
 	}
 	return nil
@@ -87,23 +88,23 @@ func (c AssetsConfig) Validate() error {
 			return err
 		}
 		if strings.Contains(string(c.Index), "/") {
-			return fault.New(fault.Invalid, "directory index must be one filename")
+			return safeerror.NewFault(fault.Invalid, "directory index must be one filename")
 		}
 		if !c.allowed(string(c.Index)) {
-			return fault.New(fault.Invalid, "directory index is hidden by asset policy")
+			return safeerror.NewFault(fault.Invalid, "directory index is hidden by asset policy")
 		}
 	}
 	if len(c.Media) > 64 {
-		return fault.New(fault.Invalid, "asset media declarations exceed limit")
+		return safeerror.NewFault(fault.Invalid, "asset media declarations exceed limit")
 	}
 	for extension, media := range c.Media {
 		text := string(extension)
 		if len(text) < 2 || len(text) > 32 || text[0] != '.' {
-			return fault.New(fault.Invalid, "invalid asset extension")
+			return safeerror.NewFault(fault.Invalid, "invalid asset extension")
 		}
 		for _, r := range text[1:] {
 			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
-				return fault.New(fault.Invalid, "asset extension must be lowercase")
+				return safeerror.NewFault(fault.Invalid, "asset extension must be lowercase")
 			}
 		}
 		if err := media.Validate(); err != nil {
@@ -134,7 +135,7 @@ func assetPathParts(text string) (string, bool, error) {
 	trailing := strings.HasSuffix(text, "/")
 	name := strings.TrimSuffix(text, "/")
 	if strings.HasPrefix(text, "/") || len(text) > 4096 || strings.Contains(text, "\\") || name == "." || name != "" && !fs.ValidPath(name) {
-		return "", false, fault.New(fault.Invalid, "invalid relative asset path")
+		return "", false, safeerror.NewFault(fault.Invalid, "invalid relative asset path")
 	}
 	if err := validateParameterText(name, true); err != nil {
 		return "", false, err
@@ -147,7 +148,7 @@ func assetFilePath(name AssetPath) error {
 		return err
 	}
 	if text == "" || dir {
-		return fault.New(fault.Invalid, "asset file requires a non-directory path")
+		return safeerror.NewFault(fault.Invalid, "asset file requires a non-directory path")
 	}
 	return nil
 }

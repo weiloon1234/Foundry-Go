@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/maintenance/cachestore"
 )
@@ -58,14 +59,14 @@ func prepareMaintenance(s Settings, o options) (*maintenance.Gate, error) {
 	if m.Store != "" {
 		store, ok := s.Services.Cache.Stores[m.Store]
 		if !ok {
-			return nil, fault.New(fault.Missing, "maintenance store is not a configured cache store")
+			return nil, safeerror.NewFault(fault.Missing, "maintenance store is not a configured cache store")
 		}
 		// A null cache retains nothing, so a shared pause would silently vanish.
 		if store.Driver == infrastructure.NullCache {
-			return nil, fault.New(fault.Invalid, "maintenance store cannot use the null cache driver")
+			return nil, safeerror.NewFault(fault.Invalid, "maintenance store cannot use the null cache driver")
 		}
 		if m.PollInterval < maintenance.MinPollInterval || m.PollInterval > maintenance.MaxPollInterval {
-			return nil, fault.New(fault.Invalid, "maintenance poll interval is out of range")
+			return nil, safeerror.NewFault(fault.Invalid, "maintenance poll interval is out of range")
 		}
 	}
 	policy := m.policy()
@@ -84,7 +85,7 @@ func prepareMaintenance(s Settings, o options) (*maintenance.Gate, error) {
 	if o.recorder != nil {
 		// A supplied recorder's gate keeps its owner's policy, including probes.
 		if m.configured() {
-			return nil, fault.New(fault.Invalid, "supplied recorder owns its maintenance policy")
+			return nil, safeerror.NewFault(fault.Invalid, "supplied recorder owns its maintenance policy")
 		}
 		return o.recorder.Gate(), nil
 	}

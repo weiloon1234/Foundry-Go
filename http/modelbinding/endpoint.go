@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Input preserves the original typed transport request alongside its loaded
@@ -45,7 +46,7 @@ func Bind[P, Q, B, M, R any](transport Transport[P, Q, B, R], resolver Resolver[
 
 func (e Endpoint[P, Q, B, M, R]) Validate() error {
 	if e.authorization != nil && *e.authorization == nil {
-		return fault.New(fault.Invalid, "resource authorization callback is missing")
+		return safeerror.NewFault(fault.Invalid, "resource authorization callback is missing")
 	}
 	if err := validateTransport(e.transport); err != nil {
 		return err
@@ -70,7 +71,7 @@ func (e Endpoint[P, Q, B, M, R]) Handle(handler func(context.Context, Input[P, Q
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if handler == nil {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "model binding requires a handler"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "model binding requires a handler"))
 	}
 	resolve := func(ctx context.Context, in foundryhttp.Input[P, Q, B]) (Input[P, Q, B, M], error) {
 		bound, err := resolveInput(ctx, e.resolver, in)
@@ -111,7 +112,7 @@ type boundTransport[P, Q, B, R any] interface {
 
 func validateTransport(transport interface{ Validate() error }) error {
 	if nilValue(transport) {
-		return fault.New(fault.Invalid, "model binding requires an endpoint")
+		return safeerror.NewFault(fault.Invalid, "model binding requires an endpoint")
 	}
 	return callback.Isolated("validate model-bound endpoint", transport.Validate)
 }

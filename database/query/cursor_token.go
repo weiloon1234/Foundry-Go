@@ -12,6 +12,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 )
 
@@ -50,7 +51,9 @@ type cursorEnvelope struct {
 
 type cursorValue sqlvalue.Value
 
-func invalidCursor() error { return fault.New(fault.Invalid, "invalid cursor token or query scope") }
+func invalidCursor() error {
+	return safeerror.NewFault(fault.Invalid, "invalid cursor token or query scope")
+}
 
 func encodeCursorValue(v driver.Value) (cursorValue, error) {
 	encoded, err := sqlvalue.Encode(v)
@@ -135,7 +138,7 @@ func makeCursor[M any](scope string, fields []ModelField[M], model M) (Cursor[M]
 	envelope := cursorEnvelope{Version: 1, Scope: scope, Values: make([]cursorValue, len(fields))}
 	for i, field := range fields {
 		if field.sensitive {
-			return Cursor[M]{}, fault.New(fault.Invalid, "sensitive fields cannot be cursor keys")
+			return Cursor[M]{}, safeerror.NewFault(fault.Invalid, "sensitive fields cannot be cursor keys")
 		}
 		bound, err := field.get(model)
 		if err != nil {

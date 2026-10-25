@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -73,14 +74,14 @@ func fieldFromWire(wire fieldWire) (capturedField, error) {
 // failing the business write.
 func CaptureField[M, V any](name string, c codec.Codec[V], change lifecycle.FieldChange[V], disclosure Disclosure) (Field[M], error) {
 	if !sqlname.Valid(name) {
-		return Field[M]{}, fault.New(fault.Invalid, "audit field requires a declared column")
+		return Field[M]{}, safeerror.NewFault(fault.Invalid, "audit field requires a declared column")
 	}
 	if err := disclosure.Validate(); err != nil {
 		return Field[M]{}, err
 	}
 	before, after := change.Before().IsSet(), change.After().IsSet()
 	if !before && !after || change.Assigned() && !after {
-		return Field[M]{}, fault.New(fault.Invalid, "audit field requires a stored change")
+		return Field[M]{}, safeerror.NewFault(fault.Invalid, "audit field requires a stored change")
 	}
 	result := Field[M]{field: capturedField{name: name, typ: c.ParameterType(), assigned: change.Assigned(), changed: change.Changed()},
 		before: before, after: after, excluded: disclosure == Exclude}
@@ -106,7 +107,7 @@ func CaptureField[M, V any](name string, c codec.Codec[V], change lifecycle.Fiel
 		return err
 	})
 	if err != nil {
-		return Field[M]{}, fault.Wrap(fault.Invalid, "audit field capture failed", err)
+		return Field[M]{}, safeerror.WrapFailure(fault.Invalid, "audit field capture failed", err)
 	}
 	return result, nil
 }
@@ -117,7 +118,7 @@ func CaptureField[M, V any](name string, c codec.Codec[V], change lifecycle.Fiel
 // and delete operations retain complete snapshots.
 func Capture[M, K, V any](builder *Builder[M, K], name string, c codec.Codec[V], change lifecycle.FieldChange[V], disclosure Disclosure) error {
 	if builder == nil || builder.seen == nil {
-		return fault.New(fault.Invalid, "audit builder is not initialized")
+		return safeerror.NewFault(fault.Invalid, "audit builder is not initialized")
 	}
 	if err := disclosure.Validate(); err != nil {
 		return builder.fail(err)

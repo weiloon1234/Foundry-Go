@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 	"github.com/weiloon1234/Foundry-Go/internal/pubsubstream"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 )
 
@@ -22,7 +23,7 @@ type Backend struct {
 
 func New(maxSubscriptions int) (*Backend, error) {
 	if maxSubscriptions <= 0 {
-		return nil, fault.New(fault.Invalid, "memory pub/sub capacity must be positive")
+		return nil, safeerror.NewFault(fault.Invalid, "memory pub/sub capacity must be positive")
 	}
 	return &Backend{capacity: maxSubscriptions, streams: make(map[*stream]struct{})}, nil
 }
@@ -37,7 +38,7 @@ func (b *Backend) Publish(ctx context.Context, channel pubsub.Channel, data []by
 		return 0, err
 	}
 	if b == nil || b.streams == nil {
-		return 0, fault.New(fault.Invalid, "memory pub/sub adapter is not initialized")
+		return 0, safeerror.NewFault(fault.Invalid, "memory pub/sub adapter is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -64,7 +65,7 @@ func (b *Backend) Subscribe(ctx context.Context, channels []pubsub.Channel, limi
 		return nil, err
 	}
 	if b == nil || b.streams == nil {
-		return nil, fault.New(fault.Invalid, "memory pub/sub adapter is not initialized")
+		return nil, safeerror.NewFault(fault.Invalid, "memory pub/sub adapter is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -76,7 +77,7 @@ func (b *Backend) Subscribe(ctx context.Context, channels []pubsub.Channel, limi
 	}
 	// A live-subscription bound fails fast; it is retryable once one closes.
 	if len(b.streams) >= b.capacity {
-		return nil, fault.New(fault.Overloaded, "memory pub/sub subscription capacity reached")
+		return nil, safeerror.NewFault(fault.Overloaded, "memory pub/sub subscription capacity reached")
 	}
 	buffer, err := pubsubstream.New(limits)
 	if err != nil {
@@ -91,7 +92,7 @@ func (b *Backend) Subscribe(ctx context.Context, channels []pubsub.Channel, limi
 }
 func (b *Backend) Close() error {
 	if b == nil || b.streams == nil {
-		return fault.New(fault.Invalid, "memory pub/sub adapter is not initialized")
+		return safeerror.NewFault(fault.Invalid, "memory pub/sub adapter is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -117,7 +118,7 @@ func (s *stream) Done() <-chan struct{}                            { return s.bu
 func (s *stream) Err() error                                       { return s.buffer.Err() }
 func (s *stream) Close(ctx context.Context) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "pub/sub stream close needs context")
+		return safeerror.NewFault(fault.Invalid, "pub/sub stream close needs context")
 	}
 	s.backend.mu.Lock()
 	defer s.backend.mu.Unlock()

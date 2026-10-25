@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/tracing"
@@ -33,7 +34,7 @@ func (c DispatchConfig) Validate() error {
 		return err
 	}
 	if c.MaxInFlight <= 0 || c.MaxInFlight > 65536 {
-		return fault.New(fault.Invalid, "invalid job dispatch concurrency")
+		return safeerror.NewFault(fault.Invalid, "invalid job dispatch concurrency")
 	}
 	return nil
 }
@@ -56,7 +57,7 @@ type Dispatcher struct {
 
 func NewDispatcher(backend Backend, registry *Registry, config DispatchConfig) (*Dispatcher, error) {
 	if backend == nil || isNil(backend) || registry == nil || registry.entries == nil {
-		return nil, fault.New(fault.Invalid, "job dispatcher requires a backend and registry")
+		return nil, safeerror.NewFault(fault.Invalid, "job dispatcher requires a backend and registry")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -73,7 +74,7 @@ func isNil(v any) bool {
 }
 func (d *Dispatcher) begin(ctx context.Context) (func(), error) {
 	if d == nil || d.slots == nil || ctx == nil {
-		return nil, fault.New(fault.Invalid, "job dispatch requires an initialized dispatcher and context")
+		return nil, safeerror.NewFault(fault.Invalid, "job dispatch requires an initialized dispatcher and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -124,7 +125,7 @@ func (p Pending[P]) Envelope() Envelope { return p.envelope }
 // must be deterministic and cooperate; this call waits for actual codec exit.
 func (d Definition[P]) Capture(ctx context.Context, input P, options Options[P]) (Pending[P], error) {
 	if ctx == nil {
-		return Pending[P]{}, fault.New(fault.Invalid, "job capture requires a context")
+		return Pending[P]{}, safeerror.NewFault(fault.Invalid, "job capture requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return Pending[P]{}, err
@@ -195,7 +196,7 @@ func (d Definition[P]) check(registry *Registry) error {
 		return err
 	}
 	if entry.typ != reflect.TypeFor[P]() || !entry.policy.same(d.policy) {
-		return fault.New(fault.Invalid, "job definition differs from its registered payload or policy")
+		return safeerror.NewFault(fault.Invalid, "job definition differs from its registered payload or policy")
 	}
 	return nil
 }

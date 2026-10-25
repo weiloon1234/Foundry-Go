@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // BackendConnection owns immutable cluster selection, borrowing its authority adapter.
@@ -17,7 +18,7 @@ type BackendConnection struct {
 func NewLocalConnection() *BackendConnection { return &BackendConnection{local: true} }
 func NewClusterConnection(backend ClusterBackend, cluster ClusterConfig) (*BackendConnection, error) {
 	if credential.IsNil(backend) {
-		return nil, fault.New(fault.Invalid, "realtime connection requires a cluster adapter")
+		return nil, safeerror.NewFault(fault.Invalid, "realtime connection requires a cluster adapter")
 	}
 	if err := cluster.Validate(); err != nil {
 		return nil, err
@@ -26,7 +27,7 @@ func NewClusterConnection(backend ClusterBackend, cluster ClusterConfig) (*Backe
 }
 func (c *BackendConnection) NewHub(registry *Registry, authentication *foundryhttp.Authentication, config Config, opts ...Option) (*Hub, error) {
 	if c == nil {
-		return nil, fault.New(fault.Invalid, "realtime connection is missing")
+		return nil, safeerror.NewFault(fault.Invalid, "realtime connection is missing")
 	}
 	if c.local {
 		return New(registry, authentication, config, opts...)
@@ -35,7 +36,7 @@ func (c *BackendConnection) NewHub(registry *Registry, authentication *foundryht
 }
 func (c *BackendConnection) NewPublisher(registry *Registry, config Config, opts ...Option) (*Publisher, error) {
 	if c == nil || c.local {
-		return nil, fault.New(fault.Invalid, "standalone realtime publication requires a cluster connection")
+		return nil, safeerror.NewFault(fault.Invalid, "standalone realtime publication requires a cluster connection")
 	}
 	return NewPublisher(registry, config, c.backend, c.cluster, opts...)
 }

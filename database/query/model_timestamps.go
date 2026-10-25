@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -30,7 +31,7 @@ func (d Definition[M]) validateTimestamps() error {
 	}
 	fields := d.modelDefinition.Timestamps
 	if fields.Created == fields.Updated {
-		return fault.New(fault.Invalid, "creation and update timestamps require different columns")
+		return safeerror.NewFault(fault.Invalid, "creation and update timestamps require different columns")
 	}
 	for _, name := range []string{fields.Created, fields.Updated} {
 		field, ok := d.modelField(name)
@@ -45,10 +46,10 @@ func validateTimestampField(model modelDefinition, name string, field recordFiel
 	column := slices.IndexFunc(model.Columns, func(column columnData) bool { return column.Name == name })
 	if !declared || name == model.Primary || column < 0 || model.Columns[column].Nullable || field.kind != codec.TypeDateTime || field.assignment == nil ||
 		(field.typ != reflect.TypeFor[time.Time]() && field.typ != reflect.TypeFor[temporal.DateTime]()) {
-		return fault.New(fault.Invalid, "managed timestamps require declared non-null instant fields")
+		return safeerror.NewFault(fault.Invalid, "managed timestamps require declared non-null instant fields")
 	}
 	if field.mutator.apply != nil && field.mutator.input != field.typ {
-		return fault.New(fault.Invalid, "managed timestamps cannot synthesize distinct mutator inputs")
+		return safeerror.NewFault(fault.Invalid, "managed timestamps cannot synthesize distinct mutator inputs")
 	}
 	return nil
 }
@@ -68,7 +69,7 @@ func transactionClock(tx *database.Tx) clock.Clock {
 // through their normal codec, which rejects unsupported sub-microsecond data.
 func modelTimestamp(ctx context.Context, source clock.Clock) (time.Time, error) {
 	if ctx == nil || source == nil {
-		return time.Time{}, fault.New(fault.Invalid, "managed timestamps require a context and owning application clock")
+		return time.Time{}, safeerror.NewFault(fault.Invalid, "managed timestamps require a context and owning application clock")
 	}
 	if err := ctx.Err(); err != nil {
 		return time.Time{}, err

@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -17,7 +18,7 @@ type Queue string
 
 func (q Queue) Validate() error {
 	if !identifier.Semantic(string(q)) {
-		return fault.New(fault.Invalid, "job queue requires a semantic name")
+		return safeerror.NewFault(fault.Invalid, "job queue requires a semantic name")
 	}
 	return nil
 }

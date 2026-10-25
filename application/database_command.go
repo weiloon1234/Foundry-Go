@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"errors"
 	"io"
 	"slices"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/seed"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // DatabaseCommandResources supplies the application registries used by the
@@ -36,7 +36,7 @@ type DatabaseCommandResources struct {
 // history table. Up runs the schemas in order and stops at the first failure.
 func (a *App) RunDatabaseCommand(ctx context.Context, invocation dbcommand.Command, resources DatabaseCommandResources, output io.Writer) (err error) {
 	if a == nil || ctx == nil {
-		return fault.New(fault.Invalid, "database command requires a built application and context")
+		return safeerror.NewFault(fault.Invalid, "database command requires a built application and context")
 	}
 	name := invocation.Database()
 	if name == "" {
@@ -44,7 +44,7 @@ func (a *App) RunDatabaseCommand(ctx context.Context, invocation dbcommand.Comma
 	}
 	connection, ok := a.databases.Connections[name]
 	if !ok {
-		return fault.New(fault.Missing, "selected database connection is not configured")
+		return safeerror.NewFault(fault.Missing, "selected database connection is not configured")
 	}
 	groups, err := a.databases.MigrationGroups(a.migrations...)
 	if err != nil {
@@ -84,7 +84,7 @@ func (a *App) RunDatabaseCommand(ctx context.Context, invocation dbcommand.Comma
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), config.CleanupTimeout)
 		defer cancel()
-		err = errors.Join(err, db.Close(cleanup))
+		err = safeerror.Join("operation failed", err, db.Close(cleanup))
 	}()
 	if invocation.NeedsDatabase() {
 		if err := db.Start(ctx); err != nil {

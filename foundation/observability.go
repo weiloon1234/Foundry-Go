@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
@@ -19,7 +19,7 @@ import (
 func WithObservability(recorder *observability.Recorder) Option {
 	return func(s *settings) error {
 		if recorder == nil || s.observability != nil {
-			return fault.New(fault.Invalid, "application requires one non-nil observation recorder")
+			return safeerror.NewFault(fault.Invalid, "application requires one non-nil observation recorder")
 		}
 		if err := recorder.Claim(); err != nil {
 			return err
@@ -54,7 +54,7 @@ func (r *runtimeState) startObservability() error {
 	r.cleanups = append(r.cleanups, cleanup{name: "observability reporters", close: func(ctx context.Context) error {
 		err := r.observability.Close(ctx)
 		<-r.observability.Done()
-		return errors.Join(err, <-finished)
+		return safeerror.Join("operation failed", err, <-finished)
 	}})
 	r.mu.Unlock()
 	go func() {

@@ -2,10 +2,10 @@ package outbound
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module owns the service and requires the providers owning its borrowed
@@ -34,9 +34,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Service], requires [
 		if err := r.OnShutdown("outbound webhooks", func(ctx context.Context) error {
 			err := service.Close(ctx)
 			<-service.Done()
-			return errors.Join(err, service.Close(context.Background()))
+			return safeerror.Join("operation failed", err, service.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, service.Close(ctx))
+			return safeerror.Join("operation failed", err, service.Close(ctx))
 		}
 		return nil
 	}}

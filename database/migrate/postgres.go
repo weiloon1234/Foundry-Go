@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -12,6 +11,10 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -47,7 +50,7 @@ func DefaultPostgresConfig() PostgresConfig {
 
 func (c PostgresConfig) Validate() error {
 	if !sqlname.Valid(c.Schema) || !sqlname.Valid(c.Table) || len(c.Schema) > 63 || len(c.Table) > 63 || c.LockTimeout <= 0 || c.LockPollInterval <= 0 || c.CleanupTimeout <= 0 || c.MaxHistory <= 0 || c.MaxHistory == math.MaxInt || !sessionLimit(c.StatementLockTimeout) || !sessionLimit(c.StatementTimeout) || (c.SearchPath != "" && !sqlname.Valid(c.SearchPath)) {
-		return fault.New(fault.Invalid, "invalid PostgreSQL migration configuration")
+		return safeerror.NewFault(fault.Invalid, "invalid PostgreSQL migration configuration")
 	}
 	return nil
 }
@@ -75,7 +78,7 @@ type Postgres struct {
 // different database's compatibility with PostgreSQL SQL and advisory locks.
 func NewPostgres(db *database.DB, registry *Registry, config PostgresConfig) (*Postgres, error) {
 	if db == nil || registry == nil {
-		return nil, fault.New(fault.Invalid, "migration runner needs a database and registry")
+		return nil, safeerror.NewFault(fault.Invalid, "migration runner needs a database and registry")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -144,10 +147,10 @@ func (p *Postgres) Up(ctx context.Context) (result RunResult, err error) {
 			return nil
 		}
 		if len(pending) > p.config.MaxHistory-len(history) {
-			return fault.New(fault.Invalid, "pending migrations would exceed configured history limit")
+			return safeerror.NewFault(fault.Invalid, "pending migrations would exceed configured history limit")
 		}
 		if report.LastBatch == math.MaxInt64 {
-			return fault.New(fault.Invalid, "migration batch number is exhausted")
+			return safeerror.NewFault(fault.Invalid, "migration batch number is exhausted")
 		}
 		result.Batch = report.LastBatch + 1
 		for _, status := range report.Statuses {
@@ -178,12 +181,12 @@ func (p *Postgres) locked(ctx context.Context, run func(*database.Session) error
 		if err := p.acquireLock(ctx, session); err != nil {
 			return err
 		}
-		defer func() { err = errors.Join(err, p.releaseLock(ctx, session)) }()
+		defer func() { err = safeerror.Join("operation failed", err, p.releaseLock(ctx, session)) }()
 		if err := p.limitSession(ctx, session); err != nil {
 			session.Discard()
 			return err
 		}
-		defer func() { err = errors.Join(err, p.restoreSession(ctx, session)) }()
+		defer func() { err = safeerror.Join("operation failed", err, p.restoreSession(ctx, session)) }()
 		return run(session)
 	})
 }
@@ -227,27 +230,39 @@ func (p *Postgres) restoreSession(ctx context.Context, session *database.Session
 // declared identifiers and the database classification, never SQL or values.
 func (p *Postgres) failure(key Key, err error) error {
 	var interrupted *InterruptedMigration
-	if errors.As(err, &interrupted) {
+	var classified *database.Error
+	complete := false
+	inspection := callback.Isolated("inspect migration failure", func() error {
+		var found bool
+		interrupted, found, complete = errorgraph.As[*InterruptedMigration](err)
+		if !complete || found {
+			return nil
+		}
+		classified, _, complete = errorgraph.As[*database.Error](err)
+		return nil
+	})
+	if inspection != nil || !complete {
+		return safeerror.Wrap("migration failure could not be classified", err)
+	}
+	if interrupted != nil || classified == nil {
 		return err
 	}
 	name := string(key.Origin) + "/" + string(key.ID)
-	var classified *database.Error
-	if !errors.As(err, &classified) {
-		return err
-	}
-	detail := string(classified.Code())
-	if state := classified.SQLState(); state != "" {
-		detail += ", SQLSTATE " + state
+	detail := "database failure"
+	for _, attribute := range errordiag.Describe(classified).Attributes {
+		if attribute.Key == "database_code" {
+			detail = attribute.Value
+		}
 	}
 	switch {
 	case classified.Outcome() == database.Unknown:
-		return fault.Wrap(fault.Conflict, "migration "+name+" has an unknown commit outcome ("+detail+"); run migrate status and reconcile before retrying", err)
+		return safeerror.WrapFault(fault.Conflict, "migration "+name+" has an unknown commit outcome ("+detail+"); run migrate status and reconcile before retrying", err)
 	case classified.Code() == database.LockNotAvailable:
-		return fault.Wrap(fault.Timeout, "migration "+name+" could not acquire a table lock within "+p.config.StatementLockTimeout.String()+" ("+detail+"); it was not committed and can be retried after conflicting transactions finish", err)
+		return safeerror.WrapFault(fault.Timeout, "migration "+name+" could not acquire a table lock within "+p.config.StatementLockTimeout.String()+" ("+detail+"); it was not committed and can be retried after conflicting transactions finish", err)
 	case classified.Code() == database.SerializationFailure || classified.Code() == database.Deadlock:
-		return fault.Wrap(fault.Conflict, "migration "+name+" conflicted with concurrent work ("+detail+"); it was not committed and can be retried", err)
+		return safeerror.WrapFault(fault.Conflict, "migration "+name+" conflicted with concurrent work ("+detail+"); it was not committed and can be retried", err)
 	default:
-		return fault.Wrap(fault.Invalid, "migration "+name+" failed and was not committed ("+detail+")", err)
+		return safeerror.WrapFault(fault.Invalid, "migration "+name+" failed and was not committed ("+detail+")", err)
 	}
 }
 
@@ -267,7 +282,7 @@ func (p *Postgres) acquireLock(ctx context.Context, session *database.Session) e
 		case <-timer.C:
 		case <-wait.Done():
 			timer.Stop()
-			return fault.Wrap(fault.Timeout, "migration lock acquisition timed out", wait.Err())
+			return safeerror.WrapFault(fault.Timeout, "migration lock acquisition timed out", wait.Err())
 		}
 	}
 }
@@ -278,7 +293,7 @@ func (p *Postgres) releaseLock(ctx context.Context, session *database.Session) e
 	var released bool
 	err := database.ScanOne(cleanup, session, "SELECT pg_catalog.pg_advisory_unlock($1)", []any{p.lockKey}, &released)
 	if err == nil && !released {
-		err = fault.New(fault.Conflict, "migration session did not own its expected advisory lock")
+		err = safeerror.NewFault(fault.Conflict, "migration session did not own its expected advisory lock")
 	}
 	if err != nil {
 		session.Discard()
@@ -307,14 +322,14 @@ func (p *Postgres) history(ctx context.Context, executor database.Executor) ([]A
 	err := database.ScanOne(ctx, executor, `SELECT c.relkind::text FROM pg_catalog.pg_class AS c
 JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
 WHERE n.nspname = $1 AND c.relname = $2`, []any{p.config.Schema, p.config.Table}, &kind)
-	if errors.Is(err, database.NotFound) {
+	if missingRelation(err) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	if kind != "r" {
-		return nil, fault.New(fault.Invalid, "migration history relation must be an ordinary table")
+		return nil, safeerror.NewFault(fault.Invalid, "migration history relation must be an ordinary table")
 	}
 	var records []Applied
 	err = database.ForEach(ctx, executor, "SELECT origin, id, version, checksum, batch, applied_at FROM "+p.table+" ORDER BY batch, origin, id LIMIT $1", []any{p.config.MaxHistory + 1}, func(row database.Row) (Applied, error) {
@@ -332,7 +347,7 @@ WHERE n.nspname = $1 AND c.relname = $2`, []any{p.config.Schema, p.config.Table}
 		return entry, nil
 	}, func(entry Applied) error {
 		if len(records) >= p.config.MaxHistory {
-			return fault.New(fault.Invalid, "migration history exceeds configured entry limit")
+			return safeerror.NewFault(fault.Invalid, "migration history exceeds configured entry limit")
 		}
 		records = append(records, entry)
 		return nil
@@ -361,4 +376,13 @@ func (p *Postgres) apply(ctx context.Context, session *database.Session, item mi
 	}
 	entry.AppliedAt = entry.AppliedAt.UTC()
 	return entry, nil
+}
+
+func missingRelation(err error) bool {
+	missing := false
+	inspection := callback.Isolated("inspect migration relation", func() error {
+		missing = errorgraph.Is(err, database.NotFound)
+		return nil
+	})
+	return inspection == nil && missing
 }

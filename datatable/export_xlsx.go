@@ -3,7 +3,6 @@ package datatable
 import (
 	"archive/zip"
 	"bufio"
-	"errors"
 	"io"
 	"math"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/datatable/internal/spreadsheet"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const (
@@ -183,7 +183,7 @@ func (w *xlsxReport) Finish() error {
 	if err == nil {
 		err = w.buffered.Flush()
 	}
-	return errors.Join(err, w.archive.Close())
+	return safeerror.Join("operation failed", err, w.archive.Close())
 }
 func (w *xlsxReport) Abort() {
 	if !w.closed {

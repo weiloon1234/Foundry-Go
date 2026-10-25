@@ -2,6 +2,7 @@ package http
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -35,7 +36,7 @@ func (p filePresentation) prepare(f *fileResponse, name string, media MediaType)
 		return "", "", err
 	}
 	if !f.accepts(media) {
-		return "", "", fault.New(fault.Internal, "file response media type is not declared")
+		return "", "", safeerror.NewFault(fault.Internal, "file response media type is not declared")
 	}
 	disposition, err := p.disposition.HeaderValue(name)
 	return MediaType(normalizedFileMedia(media)), disposition, err

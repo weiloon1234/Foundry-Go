@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // expandJSONTypes retains authored duplicate detection, while allowing a custom
@@ -46,7 +47,7 @@ func expandJSONTypes(input []Type, shared bool) ([]Type, error) {
 			return err
 		})
 		if err != nil {
-			return nil, fault.Wrap(fault.Invalid, "invalid custom JSON contract", err)
+			return nil, safeerror.WrapFault(fault.Invalid, "invalid custom JSON contract", err)
 		}
 		if description.Root != typ.ID ||
 			len(description.Types) > jsonwire.MaxNodes-len(result) {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // WithStickyReads makes routed reads read-your-writes within a request scope:
@@ -18,7 +19,7 @@ import (
 func WithStickyReads(window time.Duration) Option {
 	return func(settings *poolSettings) error {
 		if window <= 0 {
-			return fault.New(fault.Invalid, "sticky read window must be positive")
+			return safeerror.NewFault(fault.Invalid, "sticky read window must be positive")
 		}
 		settings.stickyWindow = window
 		return nil

@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type CredentialKind string
@@ -27,7 +28,7 @@ type CredentialInfo struct {
 
 func (info CredentialInfo) Validate() error {
 	if !identifier.Semantic(string(info.Source)) {
-		return fault.New(fault.Invalid, "credential metadata requires a source")
+		return safeerror.NewFault(fault.Invalid, "credential metadata requires a source")
 	}
 	switch info.Kind {
 	case BearerCredentialKind:
@@ -37,5 +38,5 @@ func (info CredentialInfo) Validate() error {
 	case CookieCredentialKind:
 		return CookieName(info.Name).Validate()
 	}
-	return fault.New(fault.Invalid, "unsupported credential transport metadata")
+	return safeerror.NewFault(fault.Invalid, "unsupported credential transport metadata")
 }

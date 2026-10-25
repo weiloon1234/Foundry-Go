@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
@@ -39,7 +40,7 @@ func (o OverlapOptions) Validate() error {
 		return err
 	}
 	if o.Mode != ReleaseOnOverlap && o.Mode != SkipOnOverlap || o.Mode == ReleaseOnOverlap && (o.Delay <= 0 || o.Delay > MaxDelay) {
-		return fault.New(fault.Invalid, "invalid job overlap mode or release delay")
+		return safeerror.NewFault(fault.Invalid, "invalid job overlap mode or release delay")
 	}
 	return nil
 }
@@ -62,7 +63,7 @@ func (o Overlap[P]) enabled() bool { return o.acquire != nil }
 func WithoutOverlapping[P, K any](leases lease.Leases[K], key func(P) K, options OverlapOptions) Overlap[P] {
 	if key == nil {
 		return Overlap[P]{acquire: func(context.Context, P) (*lease.Guard, bool, error) {
-			return nil, false, fault.New(fault.Invalid, "job overlap requires a key resolver")
+			return nil, false, safeerror.NewFault(fault.Invalid, "job overlap requires a key resolver")
 		}, options: options}
 	}
 	return Overlap[P]{options: options, acquire: func(ctx context.Context, payload P) (*lease.Guard, bool, error) {
@@ -126,7 +127,7 @@ func (t Throttle[P]) enabled() bool { return t.peek != nil }
 func ThrottleExceptions[P, K any](limiter ratelimit.Limiter[K], key func(P) K, backoff time.Duration) Throttle[P] {
 	if key == nil {
 		return Throttle[P]{backoff: backoff, peek: func(context.Context, P) (ratelimit.Decision, error) {
-			return ratelimit.Decision{}, fault.New(fault.Invalid, "job exception throttle requires a key resolver")
+			return ratelimit.Decision{}, safeerror.NewFault(fault.Invalid, "job exception throttle requires a key resolver")
 		}, record: func(context.Context, P) {}}
 	}
 	return Throttle[P]{backoff: backoff,
@@ -138,7 +139,7 @@ func ThrottleExceptions[P, K any](limiter ratelimit.Limiter[K], key func(P) K, b
 }
 func (t Throttle[P]) validate() error {
 	if t.backoff < 0 || t.backoff > MaxDelay {
-		return fault.New(fault.Invalid, "invalid job exception throttle backoff")
+		return safeerror.NewFault(fault.Invalid, "invalid job exception throttle backoff")
 	}
 	return nil
 }

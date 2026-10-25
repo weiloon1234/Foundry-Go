@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 	"github.com/weiloon1234/Foundry-Go/internal/ratewindow"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
@@ -69,7 +70,7 @@ func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
 func New(maxEntries int, source clock.Clock) (*Backend, error) {
 	if maxEntries <= 0 || source == nil {
-		return nil, fault.New(fault.Invalid, "memory rate limiter requires positive capacity and a clock")
+		return nil, safeerror.NewFault(fault.Invalid, "memory rate limiter requires positive capacity and a clock")
 	}
 	return &Backend{clock: source, capacity: maxEntries, entries: make(map[ratelimit.Key]*bucket)}, nil
 }
@@ -92,12 +93,12 @@ func (b *Backend) ClearRateLimit(ctx context.Context, key ratelimit.Key) (bool, 
 		return false, err
 	}
 	if b == nil || b.clock == nil {
-		return false, fault.New(fault.Invalid, "memory rate limiter is not initialized")
+		return false, safeerror.NewFault(fault.Invalid, "memory rate limiter is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return false, fault.New(fault.Closed, "memory rate limiter is closed")
+		return false, safeerror.NewFault(fault.Closed, "memory rate limiter is closed")
 	}
 	now := b.observe()
 	if err := ctx.Err(); err != nil {
@@ -141,12 +142,12 @@ func (b *Backend) decide(ctx context.Context, key ratelimit.Key, limit ratelimit
 		return ratelimit.Decision{}, err
 	}
 	if b == nil || b.clock == nil {
-		return ratelimit.Decision{}, fault.New(fault.Invalid, "memory rate limiter is not initialized")
+		return ratelimit.Decision{}, safeerror.NewFault(fault.Invalid, "memory rate limiter is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return ratelimit.Decision{}, fault.New(fault.Closed, "memory rate limiter is closed")
+		return ratelimit.Decision{}, safeerror.NewFault(fault.Closed, "memory rate limiter is closed")
 	}
 	now := b.observe()
 	window := limit.Window.Milliseconds()
@@ -195,7 +196,7 @@ func (b *Backend) decide(ctx context.Context, key ratelimit.Key, limit ratelimit
 				b.reclaim(now)
 			}
 			if len(b.entries) >= b.capacity {
-				return ratelimit.Decision{}, fault.New(fault.Conflict, "memory rate limit capacity reached")
+				return ratelimit.Decision{}, safeerror.NewFault(fault.Conflict, "memory rate limit capacity reached")
 			}
 			created := next
 			b.entries[key] = &created
@@ -220,7 +221,7 @@ func (b *Backend) decide(ctx context.Context, key ratelimit.Key, limit ratelimit
 // is started by this adapter or the borrowing Store.
 func (b *Backend) Close() error {
 	if b == nil || b.clock == nil {
-		return fault.New(fault.Invalid, "memory rate limiter is not initialized")
+		return safeerror.NewFault(fault.Invalid, "memory rate limiter is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()

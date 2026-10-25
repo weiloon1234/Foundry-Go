@@ -2,19 +2,20 @@ package application
 
 import (
 	"context"
-	"errors"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/jobs/archive"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/schedule"
 	"github.com/weiloon1234/Foundry-Go/websocket"
-	"slices"
 )
 
 const JobDeclarationsProvider foundation.ProviderID = "foundry.application.jobs"
@@ -33,7 +34,7 @@ var realtimeDeclarationsKey = foundation.NewKey[RealtimeDeclarations](string(Rea
 
 func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructure.Plan, s Settings, source clock.Clock, jobDeclarations []JobDeclaration, eventDeclarations []EventDeclaration, schedules []Schedules, realtime Realtime) error {
 	if len(jobDeclarations) > 4096 || len(eventDeclarations) > 4096 || len(schedules) > 128 {
-		return fault.New(fault.Invalid, "too many application declarations")
+		return safeerror.NewFault(fault.Invalid, "too many application declarations")
 	}
 	if len(jobDeclarations) > 0 {
 		builder.Register(foundation.Module{Name: JobDeclarationsProvider, Requires: []foundation.ProviderID{Provider}, OnRegister: func(r *foundation.Registrar) error {
@@ -43,10 +44,10 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 					name = s.Services.Jobs.Default
 				}
 				if _, ok := s.Services.Jobs.Connections[name]; !ok {
-					return fault.New(fault.Missing, "job declaration connection is not configured")
+					return safeerror.NewFault(fault.Missing, "job declaration connection is not configured")
 				}
 				if d.install == nil {
-					return fault.New(fault.Invalid, "invalid job declaration")
+					return safeerror.NewFault(fault.Invalid, "invalid job declaration")
 				}
 				if err := d.install(r, name); err != nil {
 					return err
@@ -56,7 +57,7 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 		}})
 	}
 	if len(eventDeclarations) > 0 && !s.Features.Events.Enabled {
-		return fault.New(fault.Invalid, "event declarations require events to be enabled")
+		return safeerror.NewFault(fault.Invalid, "event declarations require events to be enabled")
 	}
 	if s.Features.Events.Enabled {
 		module := events.Module(EventProvider, EventKey, s.Features.Events.Config)
@@ -70,7 +71,7 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 		builder.Register(foundation.Module{Name: EventDeclarationsProvider, Requires: []foundation.ProviderID{EventProvider}, OnRegister: func(r *foundation.Registrar) error {
 			for _, d := range eventDeclarations {
 				if d.install == nil {
-					return fault.New(fault.Invalid, "invalid event declaration")
+					return safeerror.NewFault(fault.Invalid, "invalid event declaration")
 				}
 				if err := d.install(r); err != nil {
 					return err
@@ -101,7 +102,7 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 		builder.Register(worker)
 	}
 	if len(schedules) > 0 && !s.Scheduler.Enabled {
-		return fault.New(fault.Invalid, "schedule declarations require scheduler to be enabled")
+		return safeerror.NewFault(fault.Invalid, "schedule declarations require scheduler to be enabled")
 	}
 	// Housekeeping settings are validated in every process; only a process
 	// running the scheduler registers the leader-only schedules.
@@ -114,7 +115,7 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 	}
 	if s.Scheduler.Enabled {
 		if !s.Services.Coordination.Enabled {
-			return fault.New(fault.Missing, "scheduler requires configured coordination")
+			return safeerror.NewFault(fault.Missing, "scheduler requires configured coordination")
 		}
 		config := s.Scheduler.runtime(source)
 		if err := config.Validate(); err != nil {
@@ -144,24 +145,24 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 		}))
 	}
 	if !s.Realtime.Enabled && !s.Realtime.Publisher && realtime != nil {
-		return fault.New(fault.Invalid, "realtime declarations require realtime or its publisher to be enabled")
+		return safeerror.NewFault(fault.Invalid, "realtime declarations require realtime or its publisher to be enabled")
 	}
 	if s.Realtime.Enabled || s.Realtime.Publisher {
 		if realtime == nil {
-			return fault.New(fault.Missing, "realtime requires typed channel declarations")
+			return safeerror.NewFault(fault.Missing, "realtime requires typed channel declarations")
 		}
 		if s.Realtime.Enabled && s.Realtime.Publisher {
-			return fault.New(fault.Invalid, "a realtime hub already publishes; disable the standalone publisher")
+			return safeerror.NewFault(fault.Invalid, "a realtime hub already publishes; disable the standalone publisher")
 		}
 		if s.Realtime.Shared && (!s.Realtime.Enabled || !s.HTTP.Enabled) {
-			return fault.New(fault.Invalid, "shared realtime requires realtime and HTTP to be enabled")
+			return safeerror.NewFault(fault.Invalid, "shared realtime requires realtime and HTTP to be enabled")
 		}
 		name := s.Realtime.Connection
 		if name == "" {
 			name = s.Services.Realtime.Default
 		}
 		if _, ok := s.Services.Realtime.Connections[name]; !ok {
-			return fault.New(fault.Missing, "realtime connection is not configured")
+			return safeerror.NewFault(fault.Missing, "realtime connection is not configured")
 		}
 		if err := s.Realtime.Config.Validate(); err != nil {
 			return err
@@ -214,7 +215,7 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 				return r.OnShutdown("publisher", func(ctx context.Context) error {
 					err := publisher.Close(ctx)
 					<-publisher.Done()
-					return errors.Join(err, publisher.Close(context.Background()))
+					return safeerror.Join("operation failed", err, publisher.Close(context.Background()))
 				})
 			}})
 		case s.Realtime.Shared:
@@ -255,7 +256,7 @@ func (s Services) RealtimePublisher() (websocket.PublisherSource, error) {
 	}
 	publisher, err := Resolve(s, RealtimePublisherKey)
 	if err != nil {
-		return nil, fault.New(fault.Missing, "realtime publication is not configured")
+		return nil, safeerror.NewFault(fault.Missing, "realtime publication is not configured")
 	}
 	return publisher, nil
 }
@@ -280,7 +281,7 @@ func realtimeRoutes(s Settings) Routes {
 }
 func (a *App) RealtimeReady(ctx context.Context) (string, error) {
 	if a == nil {
-		return "", fault.New(fault.Missing, "realtime is not configured")
+		return "", safeerror.NewFault(fault.Missing, "realtime is not configured")
 	}
 	hub, err := a.Resources().RealtimeHub()
 	if err != nil {
@@ -301,7 +302,7 @@ func registerListenerQueue(builder *foundation.Builder, s Settings) error {
 		connection = s.Services.Jobs.Default
 	}
 	if _, ok := s.Services.Jobs.Connections[connection]; !ok {
-		return fault.New(fault.Missing, "queued event listener connection is not configured")
+		return safeerror.NewFault(fault.Missing, "queued event listener connection is not configured")
 	}
 	queue := s.Features.Events.ListenerQueue
 	if queue == "" {
@@ -359,7 +360,7 @@ func registerJobArchive(builder *foundation.Builder, s Settings, source clock.Cl
 		connection = s.Services.Jobs.Default
 	}
 	if _, ok := s.Services.Jobs.Connections[connection]; !ok {
-		return fault.New(fault.Missing, "job archive worker connection is not configured")
+		return safeerror.NewFault(fault.Missing, "job archive worker connection is not configured")
 	}
 	builder.Register(foundation.Module{Name: JobArchiveProvider, Requires: []foundation.ProviderID{infrastructure.DatabaseProvider(name), infrastructure.JobProvider(connection)}, OnRegister: func(r *foundation.Registrar) error {
 		if err := foundation.Factory(r, JobArchiveKey, func(resolver foundation.Resolver) (*archive.Store, error) {

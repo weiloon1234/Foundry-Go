@@ -2,6 +2,109 @@
 
 ## Unreleased
 
+- H1 follow-up contains Redis TLS peer/connection verification, client-certificate
+  selection, random-reader, key-log writer, signer (including selected certificates),
+  clock and session-cache delegates. Startup regressions cover returned errors
+  where supported and panic/Goexit; TLS 1.2 and 1.3 session-cache writes are covered.
+  Post-startup delegate failures on reconnect and a recorded Close-time failure
+  are covered.
+  Read/Write per-I/O isolation is removed in favor of per-delegate containment,
+  eliminating hot-path channel and goroutine allocations (`BenchmarkTLSReadWrite`,
+  64-byte loopback TCP echo, darwin/arm64, `GOMAXPROCS=4`: 28 allocs and 1,216 B
+  before; 0 allocs and 0 B after) while closing connections only on delegate
+  failure or contained panics, leaving connections usable across read timeouts.
+  Unit tests cover wrapped ECH rejection verify in panic,
+  Goexit and returned-error modes without a live ECH handshake.
+  Database observer Goexit is contained while retaining query cleanup. Failed
+  raw-body error inspection remains HTTP 500; CSV inspection failure retains its
+  cause. Nested JSON recovery does not leak metadata from handled failures;
+  two-child decoder propagation and joins retain earlier panic/Goexit classification
+  and exact HTTP 500 response bytes, while returning only the ordinary child stays
+  HTTP 400.
+  Reports retain independent transaction and rollback attributes, and successful
+  slow statements retain an empty error code.
+
+- H1 review corrections preserve asset-drain reporting, terminal JSON diagnostics,
+  enum `errors.As` identity and distinct structured fault notes. Cache/config JSON
+  callbacks and downstream error matching use bounded containment. Structured
+  database/HTTP reports accept known codes and captured framework operations;
+  arbitrary adapter metadata is retained structurally but omitted from reports.
+  Public CLI `Report` remains an intentional operator-facing presentation API
+  that calls application `Error()` inside isolation; runtime redaction guarantees
+  do not apply to that explicit presentation contract.
+
+
+### Application-error containment (H1 / B37)
+
+- Retain attachment-owned publication diagnostics through nested operation and
+  extension-transaction containment, including uploads invisible to a transaction
+  snapshot. Preserve `fault.Invalid`, the fault message and unpublished operation
+  identity. A shared internal immutable marker now also owns importer and
+  registration diagnostics; application-created faults remain redacted.
+
+- Preserve framework-owned container construction and plugin configuration
+  diagnostics, including missing dependencies, constructor cycles, type mismatches,
+  nil services, unknown configuration fields and decoder/validator failures.
+  Savepoint and cleanup aggregation retain immutable diagnostic text and all
+  outcome causes. Shared neutral wrappers and direct foreign capsules preserve
+  marked diagnostics without trusting application-created faults or formatters.
+  This corrects diagnostic text; public signatures and classifications are unchanged.
+- Capture diagnostic provenance at handwritten and generated framework construction
+  sites. Preserve source-owned enum, codec, query, storage, authentication, HTTP,
+  job, email, CLI, idempotency and WebSocket diagnostics through nested callbacks
+  and cleanup. Built-in CLI usage and protocol/status errors are marked at their
+  framework return sites, including cookie/URL-signature and storage-address
+  failures; application-defined messages and codes stay untrusted.
+  Database
+  owners capture known operation/code diagnostics after settling write and commit
+  outcomes; application-created database errors and custom code text remain
+  untrusted. Supervised pubsub handler failures retain their terminal identity
+  through presentation wrappers. Public
+  fault sentinels retain their concrete type and exact identity; their captured
+  text cannot be replaced by mutating an exposed fault. Application-generated
+  code and application-created faults do not receive framework provenance.
+- Structured failure reports now read immutable framework notes and panic frames.
+  Arbitrary application fault messages and unknown custom classification text are
+  redacted. This is a diagnostic logging compatibility correction; classifications
+  and inspectable causes remain available. Error-returning APIs may add internal
+  wrappers; use `errors.Is/As` for sentinel and typed identity.
+- Preserve importer-owned CSV/XLSX diagnostics and typed input-error causes through
+  callback redaction, including oversized XML tokens, forbidden document types and
+  “import XLSX could not be read”. Archive-read failures retain their reader cause.
+  Application reader and handler errors remain redacted. Restore locale/file/key
+  diagnostics from localization catalog loading without exposing filesystem errors.
+  Keep registry-owned duplicate and override diagnostics through provider callbacks.
+  Snapshot owned diagnostic text so mutating an inspectable fault cannot expose
+  application text through importer or registration errors.
+- **Compatibility correction:** canonical JSON map-key `MarshalText` panic or
+  Goexit now returns HTTP 500 instead of HTTP 400 on `e1c2356a`. These are internal
+  failures; ordinary returned key-codec errors remain invalid input (HTTP 400).
+- Redact callback and codec failures without formatting application errors. Keep
+  causes available through `errors.Is/As` and preserve classification precedence.
+- Shield SQL and JSON libraries from application error inspection with opaque
+  failures, restoring causes only after the library returns. Add guarded adapters
+  for indirect SQL values, built-in PostgreSQL conversions and JSON/text methods.
+  Native List streaming and nested value wrappers retain contained cause identity.
+- Bound and contain error inspection in pagination, seeding and migrations.
+  Failed inspection cannot become success, a missing row, or a retry decision.
+- Add `postgres.Config.RegisterTypes` and its scoped `TypeRegistry` for custom
+  native codecs. Connection-owned wrapping preserves descriptor aliases and
+  registration order. This is a compatibility change: move native registrations
+  out of query rewriters and into the hook; see the [PostgreSQL guide](docs/guides/postgresql.md#custom-postgresql-types).
+- Remove per-rewrite catalog queries. A public pgx encode-plan sentinel rejects
+  native registration during custom rewrites, naming the Foundry hook and
+  discarding that connection without retry. Unchanged rewrites preserve caches
+  and issue no additional server statements. Type loading uses a protected
+  setup search path and restores the original scope. Dependencies are unchanged.
+- Contain field-mutator and autocommit-decoder failures; close rows and retain
+  unknown write outcomes. Restore legacy-driver cancellation checks and cleanup.
+- Keep enum round-trip decode causes diagnostic-only for HTTP classification.
+- Preserve HTTP JSON error status and response bytes when retaining diagnostic
+  causes, except for the canonical JSON map-key `MarshalText` panic/Goexit
+  400→500 compatibility correction above. JSON conversion and HTTP
+  error-classification Goexit now return a contained failure instead of
+  terminating the caller's goroutine.
+
 ### Credential contention and subject creation (B39)
 
 - Handle both subject unique indexes during concurrent token, session and

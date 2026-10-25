@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -28,7 +29,7 @@ func scopeOf[S any](source projectionSource[S]) queryScope[S] {
 	r := queryScope[S]{scopeRequirement: scopeRequirement{Sources: make(map[string][]columnData), Err: source.err}}
 	add := func(table tableSource) {
 		if _, exists := r.scopeRequirement.Sources[table.Name()]; exists {
-			r.scopeRequirement.Err = fault.New(fault.Invalid, "scope repeats a source name")
+			r.scopeRequirement.Err = safeerror.NewFault(fault.Invalid, "scope repeats a source name")
 		}
 		r.scopeRequirement.Sources[table.Name()] = table.Columns
 	}

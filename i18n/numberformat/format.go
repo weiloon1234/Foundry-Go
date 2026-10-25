@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal/money"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 )
@@ -118,7 +119,7 @@ func (f *Formatter) digits(builder *strings.Builder, text string) {
 	}
 }
 
-func invalid(message string) error { return fault.New(fault.Invalid, message) }
+func invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }
 
 // Placement selects where a currency symbol appears relative to the number.
 // The zero value is invalid; New selects the locale default.

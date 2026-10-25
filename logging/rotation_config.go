@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RotationConfig controls file sinks. A nonempty file rolls over before a write
@@ -38,7 +39,7 @@ func (c RotationConfig) resolved() RotationConfig {
 func (c RotationConfig) Validate() error {
 	c = c.resolved()
 	if c.MaxBytes < 1 || c.MaxBytes > 1<<30 || c.MaxFiles < 1 || c.MaxFiles > 1000 || c.MaxAge < time.Second || c.MaxAge > 365*24*time.Hour {
-		return fault.New(fault.Invalid, "log rotation limits must be bounded and positive")
+		return safeerror.NewFault(fault.Invalid, "log rotation limits must be bounded and positive")
 	}
 	return nil
 }

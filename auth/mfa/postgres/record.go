@@ -5,6 +5,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/mfastore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -23,7 +24,7 @@ func decode(address mfa.Address, row mfastore.Factor) (mfa.Record, error) {
 		return mfa.Record{}, err
 	}
 	if row.Scope != scope || row.Key != key {
-		return mfa.Record{}, fault.New(fault.Invalid, "stored MFA factor belongs to a different subject")
+		return mfa.Record{}, safeerror.NewFault(fault.Invalid, "stored MFA factor belongs to a different subject")
 	}
 	ciphertext, err := encryption.ParseCiphertext(row.Ciphertext)
 	if err != nil {
@@ -34,7 +35,7 @@ func decode(address mfa.Address, row mfastore.Factor) (mfa.Record, error) {
 		return mfa.Record{}, err
 	}
 	if len(hashes) > mfa.MaxRecoveryCodes {
-		return mfa.Record{}, fault.New(fault.Invalid, "stored MFA recovery capacity exceeded")
+		return mfa.Record{}, safeerror.NewFault(fault.Invalid, "stored MFA recovery capacity exceeded")
 	}
 	record := mfa.Record{ID: model.IDFromBytes[mfa.Record](row.Generation.Bytes()), Address: address, Subject: identity, Ciphertext: ciphertext, CreatedAt: row.CreatedAt, RecoveryHashes: make([]mfa.RecoveryHash, len(hashes))}
 	for i, hash := range hashes {

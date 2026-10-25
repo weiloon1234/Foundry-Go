@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Internal ownership reads deliberately skip Retrieved callbacks, like the
@@ -52,18 +53,18 @@ func (r ThroughRelation[M, N, P]) writeKeys(source M, target N) (relationWriteKe
 func relationPivotKey[M, P any](source Query[M], sourceRef fieldRef, model M, pivot Query[P], pivotRef fieldRef) (driver.Value, Predicate[P], error) {
 	sourceField, ok := source.definition.modelField(sourceRef.Column)
 	if !ok {
-		return nil, Predicate[P]{}, fault.New(fault.Invalid, "relation source key has no declared codec")
+		return nil, Predicate[P]{}, safeerror.NewFault(fault.Invalid, "relation source key has no declared codec")
 	}
 	pivotField, ok := pivot.definition.modelField(pivotRef.Column)
 	if !ok {
-		return nil, Predicate[P]{}, fault.New(fault.Invalid, "relation pivot key has no assignment codec")
+		return nil, Predicate[P]{}, safeerror.NewFault(fault.Invalid, "relation pivot key has no assignment codec")
 	}
 	raw, err := sourceField.get(model)
 	if err != nil {
 		return nil, Predicate[P]{}, err
 	}
 	if raw == nil {
-		return nil, Predicate[P]{}, fault.New(fault.Missing, "relation writes require non-null endpoint keys")
+		return nil, Predicate[P]{}, safeerror.NewFault(fault.Missing, "relation writes require non-null endpoint keys")
 	}
 	// The same codec validates the comparison and automatic draft default.
 	predicate := Predicate[P]{expression: comparison{Operand: pivotRef, Operator: equal, Values: []any{raw}, Bind: pivotField.decode}}

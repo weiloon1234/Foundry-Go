@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -51,7 +52,7 @@ func DefineSemaphore[K any](name Name, codec keyspace.Codec[K], slots int) Semap
 func (d SemaphoreDeclaration[K]) Name() Name { return d.leases.Name() }
 func (d SemaphoreDeclaration[K]) Validate() error {
 	if d.slots < 1 || d.slots > MaxSemaphoreSlots {
-		return fault.New(fault.Invalid, "semaphore slots must be between 1 and 1024")
+		return safeerror.NewFault(fault.Invalid, "semaphore slots must be between 1 and 1024")
 	}
 	return d.leases.Validate()
 }
@@ -99,7 +100,7 @@ func (s Semaphore[K]) Acquire(ctx context.Context, key K, ttl, wait time.Duratio
 // whether fn ran. Contention within wait is (false, nil).
 func (s Semaphore[K]) With(ctx context.Context, key K, ttl, wait time.Duration, fn func(context.Context) error) (bool, error) {
 	if fn == nil {
-		return false, fault.New(fault.Invalid, "semaphore callback is required")
+		return false, safeerror.NewFault(fault.Invalid, "semaphore callback is required")
 	}
 	return s.poll(ctx, wait, func(slot int) (bool, error) {
 		return s.leases.With(ctx, semaphoreSlot[K]{key, slot}, ttl, 0, fn)
@@ -111,13 +112,13 @@ func (s Semaphore[K]) With(ctx context.Context, key K, ttl, wait time.Duration, 
 // wait expires.
 func (s Semaphore[K]) poll(ctx context.Context, wait time.Duration, attempt func(int) (bool, error)) (bool, error) {
 	if s.leases.definition == nil {
-		return false, fault.New(fault.Invalid, "semaphore handle is not initialized")
+		return false, safeerror.NewFault(fault.Invalid, "semaphore handle is not initialized")
 	}
 	if ctx == nil {
-		return false, fault.New(fault.Invalid, "semaphore requires a context")
+		return false, safeerror.NewFault(fault.Invalid, "semaphore requires a context")
 	}
 	if wait < 0 || wait > s.leases.manager.config.MaxWait {
-		return false, fault.New(fault.Invalid, "lease wait exceeds its bound")
+		return false, safeerror.NewFault(fault.Invalid, "lease wait exceeds its bound")
 	}
 	deadline := time.Now().Add(wait)
 	order := rand.Perm(s.slots)

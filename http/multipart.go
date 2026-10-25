@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Multipart binds declared form parts to one concrete request DTO. Text parts
@@ -37,7 +38,7 @@ func DefineMultipart[B any](parts ...MultipartPart[B]) Multipart[B] {
 		}
 		_, duplicate := d.indexes[part.info.Name]
 		if !httpquery.ValidName(part.info.Name) || duplicate || part.kind == "" || part.kind != MultipartText && part.assign == nil {
-			d.err = fault.New(fault.Invalid, "multipart part requires a unique name, type and field selector")
+			d.err = safeerror.NewFault(fault.Invalid, "multipart part requires a unique name, type and field selector")
 			break
 		}
 		if part.kind == MultipartText {
@@ -62,10 +63,10 @@ func (d Multipart[B]) Validate() error {
 		return d.err
 	}
 	if d.indexes == nil {
-		return fault.New(fault.Invalid, "multipart descriptor is not defined")
+		return safeerror.NewFault(fault.Invalid, "multipart descriptor is not defined")
 	}
 	if strings.IndexByte(d.directory, 0) >= 0 || d.directory != "" && !filepath.IsAbs(d.directory) {
-		return fault.New(fault.Invalid, "upload temporary directory must be an absolute server path")
+		return safeerror.NewFault(fault.Invalid, "upload temporary directory must be an absolute server path")
 	}
 	return d.text.Validate()
 }
@@ -134,8 +135,13 @@ func (*MultipartError) Is(target error) bool       { return target == fault.Inva
 func (e *MultipartError) Unwrap() error            { return e.cause }
 func (e *MultipartError) Issues() []contract.Issue { return slices.Clone(e.issues) }
 
+func multipartFailure(issues []contract.Issue, cause error) error {
+	failure := &MultipartError{issues: issues, cause: cause}
+	return safeerror.Owned(failure.Error(), failure)
+}
+
 func multipartIssue(path string, code contract.IssueCode) error {
-	return &MultipartError{issues: []contract.Issue{{Path: path, Code: code}}}
+	return multipartFailure([]contract.Issue{{Path: path, Code: code}}, nil)
 }
 
 func (d Multipart[B]) bind(ctx context.Context, input multipartInput, limits EndpointLimits) (B, error) {
@@ -146,12 +152,12 @@ func (d Multipart[B]) bind(ctx context.Context, input multipartInput, limits End
 		}
 	}
 	if len(issues) != 0 {
-		return *new(B), &MultipartError{issues: issues}
+		return *new(B), multipartFailure(issues, nil)
 	}
 	result, err := d.text.decodeValues(ctx, input.text, limits.Multipart.Issues)
 	if err != nil {
-		if failure, ok := err.(*QueryError); ok {
-			return *new(B), &MultipartError{issues: failure.Issues(), cause: failure}
+		if failure, ok := safeerror.UnwrapOwned(err).(*QueryError); ok {
+			return *new(B), multipartFailure(failure.Issues(), err)
 		}
 		return *new(B), err
 	}
@@ -173,7 +179,7 @@ func (d Multipart[B]) bind(ctx context.Context, input multipartInput, limits End
 		return nil
 	})
 	if owned != nil {
-		return *new(B), fault.Wrap(fault.Internal, "multipart field callback failed", owned)
+		return *new(B), safeerror.WrapFailure(fault.Internal, "multipart field callback failed", owned)
 	}
 	if err := ctx.Err(); err != nil {
 		return *new(B), err

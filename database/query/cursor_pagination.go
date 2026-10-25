@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -41,7 +42,7 @@ func (q Query[M]) cursorPlan(request CursorRequest[M]) (cursorPlan[M], error) {
 		return cursorPlan[M]{}, err
 	}
 	if len(q.queryCore.Orders) > MaxCursorFields {
-		return cursorPlan[M]{}, fault.New(fault.Invalid, "cursor ordering exceeds its field bound")
+		return cursorPlan[M]{}, safeerror.NewFault(fault.Invalid, "cursor ordering exceeds its field bound")
 	}
 	if err := validateKeysetOrders(q.queryCore.Orders); err != nil {
 		return cursorPlan[M]{}, err
@@ -53,11 +54,11 @@ func (q Query[M]) cursorPlan(request CursorRequest[M]) (cursorPlan[M], error) {
 	fields := make([]ModelField[M], len(q.queryCore.Orders))
 	for i, order := range q.queryCore.Orders {
 		if order.Computed != nil {
-			return cursorPlan[M]{}, fault.New(fault.Invalid, "computed cursor keys require a declared projection and CursorFor")
+			return cursorPlan[M]{}, safeerror.NewFault(fault.Invalid, "computed cursor keys require a declared projection and CursorFor")
 		}
 		field, ok := byName[order.Field.Column]
 		if !ok {
-			return cursorPlan[M]{}, fault.New(fault.Invalid, "cursor ordering requires generated field codecs and getters")
+			return cursorPlan[M]{}, safeerror.NewFault(fault.Invalid, "cursor ordering requires generated field codecs and getters")
 		}
 		fields[i] = field
 	}
@@ -165,7 +166,7 @@ func anyNullable(queryOrder) bool { return true }
 func validateKeysetOrders(orders []queryOrder) error {
 	for _, order := range orders {
 		if order.Nulls != nullsDefault {
-			return fault.New(fault.Invalid, "cursor and keyset ordering cannot use explicit NULLS FIRST/LAST")
+			return safeerror.NewFault(fault.Invalid, "cursor and keyset ordering cannot use explicit NULLS FIRST/LAST")
 		}
 	}
 	return nil

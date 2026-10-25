@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -41,10 +42,10 @@ func validateSoftDeleteField(model modelDefinition, field recordFieldMetadata, d
 	column := slices.IndexFunc(model.Columns, func(c columnData) bool { return c.Name == model.SoftDelete.Name })
 	if !declared || column < 0 || !model.Columns[column].Nullable || model.Primary == model.SoftDelete.Name || field.kind != codec.TypeDateTime || field.assignment == nil ||
 		(field.typ != reflect.TypeFor[value.Nullable[time.Time]]() && field.typ != reflect.TypeFor[value.Nullable[temporal.DateTime]]()) {
-		return fault.New(fault.Invalid, "soft deletion requires a declared nullable instant field")
+		return safeerror.NewFault(fault.Invalid, "soft deletion requires a declared nullable instant field")
 	}
 	if field.mutator.apply != nil && field.mutator.input != field.typ {
-		return fault.New(fault.Invalid, "soft deletion cannot synthesize distinct mutator inputs")
+		return safeerror.NewFault(fault.Invalid, "soft deletion cannot synthesize distinct mutator inputs")
 	}
 	return nil
 }

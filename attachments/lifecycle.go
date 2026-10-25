@@ -65,7 +65,7 @@ func (m *Manager) cleanupSubject(ctx context.Context, tx *database.Tx, owner ext
 				return err
 			}
 			if retained[subject.Key] {
-				return fault.New(fault.Conflict, "attachment cleanup requires a deleted owner")
+				return attachmentFailure(fault.Conflict, "attachment cleanup requires a deleted owner")
 			}
 			ids, err := m.retireOwner(ctx, child, subject, queue)
 			if err != nil {

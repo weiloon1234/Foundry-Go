@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Exists checks whether a live entry belongs to the current namespace/tag snapshot.
@@ -18,11 +19,11 @@ func (c Cache[K, V]) Exists(ctx context.Context, key K) (bool, error) {
 	var found bool
 	err := c.operation(ctx, func(ctx context.Context) error {
 		if _, ok := c.store.backend.(EntryBackend); !ok {
-			return fault.New(fault.Invalid, "cache backend does not support entry inspection")
+			return safeerror.NewFault(fault.Invalid, "cache backend does not support entry inspection")
 		}
 		if _, scoped := c.store.backend.(TaggedBackend); scoped {
 			if _, ok := c.store.backend.(TaggedEntryBackend); !ok {
-				return fault.New(fault.Invalid, "cache backend does not support tagged entry inspection")
+				return safeerror.NewFault(fault.Invalid, "cache backend does not support tagged entry inspection")
 			}
 		}
 		address, err := c.address(key)
@@ -65,7 +66,7 @@ func (c Cache[K, V]) Expire(ctx context.Context, key K, ttl TTL) (bool, error) {
 	err := c.execute(ctx, key, func(ctx context.Context, access entryAccess) error {
 		backend, ok := access.backend.(EntryBackend)
 		if !ok {
-			return fault.New(fault.Invalid, "cache backend does not support expiry changes")
+			return safeerror.NewFault(fault.Invalid, "cache backend does not support expiry changes")
 		}
 		var err error
 		changed, err = backend.Expire(ctx, access.key, ttl)
@@ -89,7 +90,7 @@ func (c Cache[K, V]) ForgetMany(ctx context.Context, keys ...K) (uint64, error) 
 	var count uint64
 	err := c.operation(ctx, func(ctx context.Context) error {
 		if len(keys) > c.store.config.MaxBatchEntries {
-			return fault.New(fault.Invalid, "cache batch exceeds configured key limit")
+			return safeerror.NewFault(fault.Invalid, "cache batch exceeds configured key limit")
 		}
 		if len(keys) == 0 {
 			return nil
@@ -100,10 +101,10 @@ func (c Cache[K, V]) ForgetMany(ctx context.Context, keys ...K) (uint64, error) 
 		}
 		if tagged {
 			if _, ok := c.store.backend.(TaggedBatchBackend); !ok {
-				return fault.New(fault.Invalid, "cache backend does not support tagged batch removal")
+				return safeerror.NewFault(fault.Invalid, "cache backend does not support tagged batch removal")
 			}
 		} else if _, ok := c.store.backend.(BatchBackend); !ok {
-			return fault.New(fault.Invalid, "cache backend does not support batch removal")
+			return safeerror.NewFault(fault.Invalid, "cache backend does not support batch removal")
 		}
 		bases := make([]EntryKey, 0, len(keys))
 		for _, key := range keys {
@@ -149,7 +150,7 @@ func (c Cache[K, V]) ForgetMany(ctx context.Context, keys ...K) (uint64, error) 
 			count, err = c.store.backend.(TaggedBatchBackend).ForgetManyTagged(ctx, batch)
 		}
 		if err == nil && count > uint64(len(bases)) {
-			return fault.New(fault.Invalid, "cache backend returned an invalid batch count")
+			return safeerror.NewFault(fault.Invalid, "cache backend returned an invalid batch count")
 		}
 		return err
 	})
@@ -163,14 +164,14 @@ func (c Cache[K, V]) ForgetMany(ctx context.Context, keys ...K) (uint64, error) 
 func (b taggedAccess) Exists(ctx context.Context, _ EntryKey) (bool, error) {
 	backend, ok := b.backend.(TaggedEntryBackend)
 	if !ok {
-		return false, fault.New(fault.Invalid, "cache backend does not support tagged entry inspection")
+		return false, safeerror.NewFault(fault.Invalid, "cache backend does not support tagged entry inspection")
 	}
 	return backend.ExistsTagged(ctx, b.key)
 }
 func (b taggedAccess) Expire(ctx context.Context, _ EntryKey, ttl TTL) (bool, error) {
 	backend, ok := b.backend.(TaggedEntryBackend)
 	if !ok {
-		return false, fault.New(fault.Invalid, "cache backend does not support tagged expiry changes")
+		return false, safeerror.NewFault(fault.Invalid, "cache backend does not support tagged expiry changes")
 	}
 	return backend.ExpireTagged(ctx, b.key, ttl)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Options struct {
@@ -282,4 +283,4 @@ func (m Message[A]) bindArguments(ctx context.Context, args A) (map[string]i18n.
 	}
 	return values, nil
 }
-func invalid() error { return fault.New(fault.Invalid, "invalid typed localization message") }
+func invalid() error { return safeerror.NewFault(fault.Invalid, "invalid typed localization message") }

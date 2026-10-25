@@ -4,12 +4,13 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
 func (b *Backend) Locate(key storage.ObjectKey) (storage.ObjectAddress, error) {
 	if b == nil || !b.prepared {
-		return storage.ObjectAddress{}, storage.Invalid
+		return storage.ObjectAddress{}, safeerror.Owned(string(storage.Invalid), storage.Invalid)
 	}
 	full, err := b.object(key)
 	if err != nil {
@@ -21,7 +22,7 @@ func (b *Backend) Locate(key storage.ObjectKey) (storage.ObjectAddress, error) {
 	if b.config.Provider == R2 || b.config.Provider == Compatible {
 		endpoint, err := url.Parse(b.config.Endpoint)
 		if err != nil {
-			return storage.ObjectAddress{}, storage.Invalid
+			return storage.ObjectAddress{}, safeerror.Owned(string(storage.Invalid), storage.Invalid)
 		}
 		if b.config.Provider == R2 {
 			account, _, _ := strings.Cut(strings.ToLower(endpoint.Hostname()), ".")

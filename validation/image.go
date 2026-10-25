@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ImageSize is inspected image metadata in displayed orientation.
@@ -75,7 +76,7 @@ func Dimensions[F any](measurer ImageMeasurer[F], constraints DimensionConstrain
 		return failed[F](err)
 	}
 	if err := callback.Isolated("validation image measurer declaration", measurer.Validate); err != nil {
-		return failed[F](fault.Wrap(fault.Invalid, "invalid image measurer", err))
+		return failed[F](safeerror.WrapFault(fault.Invalid, "invalid image measurer", err))
 	}
 	rule := valueRule(Spec{ID: "foundry.image_dimensions", Parameters: constraints.parameters()}, true, func(s *execution, file F) (bool, error) {
 		size, ok, err := measurer.Measure(s.ctx, file)

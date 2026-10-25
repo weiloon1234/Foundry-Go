@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
@@ -27,7 +28,7 @@ func (c CatchUp) Validate() error {
 		return nil
 	}
 	if c.Window <= 0 || c.Window > 7*24*time.Hour || c.Max < 1 || c.Max > 1000 {
-		return fault.New(fault.Invalid, "invalid schedule catch-up window or count")
+		return safeerror.NewFault(fault.Invalid, "invalid schedule catch-up window or count")
 	}
 	return nil
 }
@@ -58,7 +59,7 @@ type Options struct {
 func DefaultOptions() Options { return Options{Timeout: 5 * time.Minute, OverlapTTL: 30 * time.Second} }
 func (o Options) Validate() error {
 	if o.Timeout <= 0 || o.Timeout > 24*time.Hour || len(o.Environments) > 64 {
-		return fault.New(fault.Invalid, "invalid schedule timeout or environment bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid schedule timeout or environment bounds")
 	}
 	if err := lease.ValidateDuration(o.OverlapTTL); err != nil {
 		return err
@@ -75,7 +76,7 @@ func (o Options) Validate() error {
 	seen := make(map[string]bool)
 	for _, environment := range o.Environments {
 		if !keyspace.ValidName(environment) || seen[environment] {
-			return fault.New(fault.Invalid, "invalid or duplicate schedule environment")
+			return safeerror.NewFault(fault.Invalid, "invalid or duplicate schedule environment")
 		}
 		seen[environment] = true
 	}
@@ -104,7 +105,7 @@ func (d Declaration) Spec() Spec       { return d.spec }
 func (d Declaration) Options() Options { return d.options.snapshot() }
 func (d Declaration) Validate() error {
 	if !identifier.Semantic(string(d.id)) || d.handler == nil {
-		return fault.New(fault.Invalid, "schedule requires a semantic ID and handler")
+		return safeerror.NewFault(fault.Invalid, "schedule requires a semantic ID and handler")
 	}
 	if err := d.spec.Validate(); err != nil {
 		return err
@@ -182,7 +183,7 @@ type Registry struct{ entries []Declaration }
 
 func NewRegistry(declarations ...Declaration) (*Registry, error) {
 	if len(declarations) == 0 || len(declarations) > 4096 {
-		return nil, fault.New(fault.Invalid, "schedule registry requires 1 to 4096 declarations")
+		return nil, safeerror.NewFault(fault.Invalid, "schedule registry requires 1 to 4096 declarations")
 	}
 	seen := make(map[ID]bool)
 	entries := make([]Declaration, len(declarations))
@@ -191,7 +192,7 @@ func NewRegistry(declarations ...Declaration) (*Registry, error) {
 			return nil, err
 		}
 		if seen[d.id] {
-			return nil, fault.New(fault.Duplicate, "schedule ID already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "schedule ID already registered")
 		}
 		seen[d.id] = true
 		d.options = d.options.snapshot()

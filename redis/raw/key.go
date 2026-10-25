@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/redis/data"
 )
@@ -22,7 +23,7 @@ type Key struct {
 
 func NewKey(ns keyspace.Namespace, name Name, version Version, logical string) (Key, error) {
 	if version == 0 {
-		return Key{}, fault.New(fault.Invalid, "raw Redis key requires a version")
+		return Key{}, safeerror.NewFault(fault.Invalid, "raw Redis key requires a version")
 	}
 	a, err := keyaddress.New(ns, string(name), logical)
 	if err != nil {
@@ -38,7 +39,7 @@ func FromDataKey(key data.Key) (Key, error) {
 }
 func (k Key) Validate() error {
 	if k.text == "" {
-		return fault.New(fault.Invalid, "raw Redis key is uninitialized")
+		return safeerror.NewFault(fault.Invalid, "raw Redis key is uninitialized")
 	}
 	return k.namespace.Validate()
 }
@@ -63,7 +64,7 @@ func DefineKeys[K any](name Name, version Version, codec keyspace.Codec[K]) Decl
 }
 func (d Declaration[K]) Bind(s *Store) (Keys[K], error) {
 	if d.definition == nil || !keyspace.ValidName(string(d.definition.name)) || d.definition.version == 0 {
-		return Keys[K]{}, fault.New(fault.Invalid, "invalid raw Redis key declaration")
+		return Keys[K]{}, safeerror.NewFault(fault.Invalid, "invalid raw Redis key declaration")
 	}
 	if err := d.definition.codec.Validate(); err != nil {
 		return Keys[K]{}, err
@@ -82,7 +83,7 @@ type Keys[K any] struct {
 
 func (k Keys[K]) resolve(ctx context.Context, input K) (Key, error) {
 	if k.definition == nil || k.store == nil {
-		return Key{}, fault.New(fault.Invalid, "raw Redis keys are unbound")
+		return Key{}, safeerror.NewFault(fault.Invalid, "raw Redis keys are unbound")
 	}
 	text, err := k.definition.codec.Encode(input)
 	if err != nil {
@@ -92,7 +93,7 @@ func (k Keys[K]) resolve(ctx context.Context, input K) (Key, error) {
 		return Key{}, err
 	}
 	if len(text) > k.store.config.MaxKeyBytes {
-		return Key{}, fault.New(fault.Invalid, "raw Redis logical key exceeds its bound")
+		return Key{}, safeerror.NewFault(fault.Invalid, "raw Redis logical key exceeds its bound")
 	}
 	return NewKey(k.store.config.Namespace, k.definition.name, k.definition.version, text)
 }

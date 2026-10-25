@@ -143,7 +143,7 @@ func operationCode(err error) Code {
 func (c *connectionState) dispatch(ctx context.Context, request Request) (Response, error) {
 	channel := c.hub.registry.channels[request.Channel]
 	if channel == nil {
-		return Response{}, UnknownChannel
+		return Response{}, codeFailure(UnknownChannel)
 	}
 	key := requestKey(request)
 	if request.Action == Unsubscribe {
@@ -154,7 +154,7 @@ func (c *connectionState) dispatch(ctx context.Context, request Request) (Respon
 		}
 		c.hub.mu.Unlock()
 		if subscription == nil {
-			return Response{}, NotSubscribed
+			return Response{}, codeFailure(NotSubscribed)
 		}
 		if err := c.leave(subscription); err != nil {
 			return Response{}, err
@@ -183,10 +183,10 @@ func (c *connectionState) dispatch(ctx context.Context, request Request) (Respon
 	}
 	c.hub.mu.Unlock()
 	if closing {
-		return Response{}, Stopping
+		return Response{}, codeFailure(Stopping)
 	}
 	if subscription == nil {
-		return Response{}, NotSubscribed
+		return Response{}, codeFailure(NotSubscribed)
 	}
 	if channel.private {
 		var err error
@@ -197,10 +197,10 @@ func (c *connectionState) dispatch(ctx context.Context, request Request) (Respon
 	access.context = ctx
 	event := channel.events[request.Event]
 	if event == nil {
-		return Response{}, UnknownEvent
+		return Response{}, codeFailure(UnknownEvent)
 	}
 	if event.direction != ClientToServer {
-		return Response{}, WrongDirection
+		return Response{}, codeFailure(WrongDirection)
 	}
 	if err := event.invoke(ctx, c.hub, c.id, access, request.Payload, c.hub.config.Payload, func() bool {
 		accepted := c.respond(Response{Type: Accepted, ID: request.ID, Channel: request.Channel, Room: request.Room})

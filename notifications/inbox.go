@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -48,7 +49,7 @@ func (r Recipient[M, K]) Inbox(manager *Manager) (Inbox[M, K], error) {
 			return Inbox[M, K]{manager: manager, recipient: r}, nil
 		}
 	}
-	return Inbox[M, K]{}, fault.New(fault.Missing, "notification recipient is not registered")
+	return Inbox[M, K]{}, safeerror.NewFault(fault.Missing, "notification recipient is not registered")
 }
 func (i Inbox[M, K]) subject(ctx context.Context) (string, error) {
 	if err := i.recipient.Validate(); err != nil {
@@ -60,7 +61,7 @@ func (i Inbox[M, K]) subject(ctx context.Context) (string, error) {
 	}
 	identity, present := origin.Model()
 	if !present {
-		return "", auth.Unauthenticated
+		return "", auth.Unauthenticated.WithCause(nil)
 	}
 	reference, err := i.recipient.provider.Parse(identity)
 	if err != nil {

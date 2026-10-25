@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -66,7 +67,7 @@ func UniqueIgnoring[M any, S interface {
 	Where(...query.Predicate[M]) S
 }, V, K comparable](executor database.Executor, source S, field query.KeyField[M, V], key interface{ Ne(K) query.Predicate[M] }, current validation.Slot[K]) validation.Rule[V] {
 	if isNil(key) {
-		return validation.Requires(current, validation.Unique(ModelLookup[M, V]{err: fault.New(fault.Invalid, "database validation requires a key field")}))
+		return validation.Requires(current, validation.Unique(ModelLookup[M, V]{err: safeerror.NewFault(fault.Invalid, "database validation requires a key field")}))
 	}
 	// The fixed part of the scope is validated at declaration; only the
 	// excluded key is supplied per check.
@@ -105,7 +106,7 @@ func Lookup[M any, V comparable](executor database.Executor, source query.ModelQ
 // executor and callback only; each check validates the returned scope.
 func Scoped[M any, S query.ModelQuerySource[M], V comparable](executor database.Executor, scope func(context.Context) (S, error), field query.KeyField[M, V]) ModelLookup[M, V] {
 	if scope == nil || isNil(field) {
-		return ModelLookup[M, V]{err: fault.New(fault.Invalid, "database validation requires a scope and field")}
+		return ModelLookup[M, V]{err: safeerror.NewFault(fault.Invalid, "database validation requires a scope and field")}
 	}
 	return ModelLookup[M, V]{executor: executor, scoped: func(ctx context.Context) (query.ValueLookup[M, V], error) {
 		source, err := scope(ctx)
@@ -122,7 +123,7 @@ func (l ModelLookup[M, V]) Validate() error {
 		return l.err
 	}
 	if isNil(l.executor) {
-		return fault.New(fault.Invalid, "database validation requires an executor")
+		return safeerror.NewFault(fault.Invalid, "database validation requires an executor")
 	}
 	if l.scoped != nil {
 		return nil

@@ -2,13 +2,15 @@ package http
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"github.com/weiloon1234/Foundry-Go/value"
 	stdhttp "net/http"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // Cookie is an immutable typed declaration. Models, enums and named scalar
@@ -27,7 +29,7 @@ type Cookie[V any] struct {
 func DefineCookie[V any](name CookieName, codec CookieCodec[V], options CookieOptions) Cookie[V] {
 	owned, err := compileCookieOptions(name, options)
 	if err == nil && nilCookieValue(codec) {
-		err = fault.New(fault.Invalid, "cookie requires a codec")
+		err = safeerror.NewFault(fault.Invalid, "cookie requires a codec")
 	}
 	return Cookie[V]{name: name, codec: codec, options: owned, owned: err == nil && cookieCodecOwned(codec), err: err}
 }
@@ -48,7 +50,7 @@ func (c Cookie[V]) Validate() error {
 		return c.err
 	}
 	if nilCookieValue(c.codec) {
-		return fault.New(fault.Invalid, "cookie requires a codec")
+		return safeerror.NewFault(fault.Invalid, "cookie requires a codec")
 	}
 	_, err := compileCookieOptions(c.name, c.options)
 	return err
@@ -93,7 +95,7 @@ func (c Cookie[V]) readText(r *stdhttp.Request) (string, bool, error) {
 		return "", false, err
 	}
 	if r == nil {
-		return "", false, fault.New(fault.Invalid, "cookie read requires a request")
+		return "", false, safeerror.NewFault(fault.Invalid, "cookie read requires a request")
 	}
 	if err := r.Context().Err(); err != nil {
 		return "", false, err
@@ -110,12 +112,12 @@ func (c Cookie[V]) readText(r *stdhttp.Request) (string, bool, error) {
 // __Host- name to prevent other hosts from supplying a same-name cookie.
 func findRequestCookie(lines []string, name CookieName) (string, bool, error) {
 	if len(lines) > maxCookieRequestFields {
-		return "", false, BadRequest
+		return "", false, BadRequest.WithCause(nil)
 	}
 	size := 0
 	for _, line := range lines {
 		if len(line) > maxCookieRequestBytes-size {
-			return "", false, BadRequest
+			return "", false, BadRequest.WithCause(nil)
 		}
 		size += len(line)
 	}
@@ -131,7 +133,7 @@ func findRequestCookie(lines []string, name CookieName) (string, bool, error) {
 				continue
 			}
 			if pairs++; pairs > maxCookieRequestPairs {
-				return "", false, BadRequest
+				return "", false, BadRequest.WithCause(nil)
 			}
 			key, text, hasValue := strings.Cut(pair, "=")
 			if !hasValue || strings.Trim(key, " \t") != string(name) {
@@ -158,7 +160,7 @@ func findRequestCookie(lines []string, name CookieName) (string, bool, error) {
 // surrounding quotes, to exactly one requested pair.
 func nativeCookieValue(name CookieName, text string) (string, error) {
 	if len(text) > MaxCookieBytes {
-		return "", BadRequest
+		return "", BadRequest.WithCause(nil)
 	}
 	cookies, err := stdhttp.ParseCookie(string(name) + "=" + text)
 	if err != nil || len(cookies) != 1 {
@@ -175,7 +177,7 @@ func (c Cookie[V]) decode(ctx context.Context, text string) (V, error) {
 	err := c.invoke("cookie decoder", func() error { result, failed = c.codec.Parse(text); return nil })
 	if err != nil {
 		var zero V
-		return zero, fault.Wrap(fault.Internal, "cookie decoder callback failed", err)
+		return zero, safeerror.WrapFailure(fault.Internal, "cookie decoder callback failed", err)
 	}
 	if failed != nil {
 		var zero V
@@ -192,7 +194,7 @@ func (c Cookie[V]) format(ctx context.Context, v V) (string, error) {
 		return "", err
 	}
 	if ctx == nil {
-		return "", fault.New(fault.Invalid, "cookie write requires a context")
+		return "", safeerror.NewFault(fault.Invalid, "cookie write requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -201,22 +203,22 @@ func (c Cookie[V]) format(ctx context.Context, v V) (string, error) {
 	var failed error
 	err := c.invoke("cookie encoder", func() error { text, failed = c.codec.Format(v); return nil })
 	if err != nil {
-		return "", fault.Wrap(fault.Internal, "cookie encoder callback failed", err)
+		return "", safeerror.WrapFailure(fault.Internal, "cookie encoder callback failed", err)
 	}
 	if failed != nil {
-		return "", fault.Wrap(fault.Invalid, "cookie value could not be encoded", failed)
+		return "", safeerror.WrapFault(fault.Invalid, "cookie value could not be encoded", failed)
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
 	if len(text) > MaxCookieBytes {
-		return "", fault.New(fault.Invalid, "cookie value exceeds its byte bound")
+		return "", safeerror.NewFault(fault.Invalid, "cookie value exceeds its byte bound")
 	}
 	return text, nil
 }
 func (c Cookie[V]) publish(w stdhttp.ResponseWriter, text string, remove bool) error {
 	if nilCookieValue(w) {
-		return fault.New(fault.Invalid, "cookie write requires a response writer")
+		return safeerror.NewFault(fault.Invalid, "cookie write requires a response writer")
 	}
 	header, err := c.header(text, remove)
 	if err != nil {
@@ -232,11 +234,11 @@ func (c Cookie[V]) header(text string, remove bool) (string, error) {
 		cookie.Expires = time.Unix(1, 0).UTC()
 	}
 	if err := cookie.Valid(); err != nil {
-		return "", fault.New(fault.Invalid, "invalid cookie wire value")
+		return "", safeerror.NewFault(fault.Invalid, "invalid cookie wire value")
 	}
 	header := cookie.String()
 	if len(header) > MaxCookieBytes {
-		return "", fault.New(fault.Invalid, "cookie exceeds its complete header bound")
+		return "", safeerror.NewFault(fault.Invalid, "cookie exceeds its complete header bound")
 	}
 	return header, nil
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RetryPolicy bounds automatic re-execution of a whole transaction. Attempts
@@ -29,7 +30,7 @@ const MaxRetryAttempts = 10
 
 func (p RetryPolicy) Validate() error {
 	if p.Attempts < 1 || p.Attempts > MaxRetryAttempts || p.InitialDelay <= 0 || p.MaxDelay < p.InitialDelay {
-		return fault.New(fault.Invalid, "invalid transaction retry policy")
+		return safeerror.NewFault(fault.Invalid, "invalid transaction retry policy")
 	}
 	return nil
 }
@@ -45,10 +46,10 @@ func (p RetryPolicy) Validate() error {
 // returned when attempts are exhausted or ctx ends while waiting.
 func Retry(ctx context.Context, transactor Transactor, policy RetryPolicy, fn func(*Tx) error, options ...TxOptions) error {
 	if ctx == nil || transactor == nil || fn == nil {
-		return fault.New(fault.Invalid, "transaction retry requires a context, transactor and callback")
+		return safeerror.NewFault(fault.Invalid, "transaction retry requires a context, transactor and callback")
 	}
 	if _, nested := transactor.(*Tx); nested {
-		return fault.New(fault.Invalid, "transaction retry requires an outer transaction owner, not a savepoint")
+		return safeerror.NewFault(fault.Invalid, "transaction retry requires an outer transaction owner, not a savepoint")
 	}
 	if err := policy.Validate(); err != nil {
 		return err

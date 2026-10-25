@@ -2,8 +2,10 @@ package modelbinding
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // AuthenticatedEndpoint retains two independent model types: the transport's
@@ -20,7 +22,7 @@ func BindAuthenticated[P, Q, B, S, M, R any](transport foundryhttp.Authenticated
 }
 func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Validate() error {
 	if e.authorization != nil && *e.authorization == nil {
-		return fault.New(fault.Invalid, "resource authorization callback is missing")
+		return safeerror.NewFault(fault.Invalid, "resource authorization callback is missing")
 	}
 	if err := validateTransport(e.transport); err != nil {
 		return err
@@ -38,7 +40,7 @@ func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Handle(handler func(context.Con
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if handler == nil {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated model binding requires a handler"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated model binding requires a handler"))
 	}
 	resolve := func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (Input[P, Q, B, M], error) {
 		bound, err := resolveInput(ctx, e.resolver, in)

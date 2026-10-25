@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // SortedSet preserves resource/member types with a float64 score per member.
@@ -63,7 +64,7 @@ func (s SortedSet[K, V]) Increment(ctx context.Context, key K, input V, delta fl
 		var err error
 		score, err = s.backend.SortedSetIncrement(ctx, k, text, delta, l)
 		if err == nil && math.IsNaN(score) {
-			return fault.New(fault.Internal, "invalid Redis sorted set score")
+			return safeerror.NewFault(fault.Internal, "invalid Redis sorted set score")
 		}
 		return err
 	})
@@ -93,7 +94,7 @@ func (s SortedSet[K, V]) Score(ctx context.Context, key K, input V) (float64, bo
 		var err error
 		score, found, err = s.backend.SortedSetScore(ctx, k, text, l)
 		if err == nil && found && math.IsNaN(score) {
-			return fault.New(fault.Internal, "invalid Redis sorted set score")
+			return safeerror.NewFault(fault.Internal, "invalid Redis sorted set score")
 		}
 		return err
 	})
@@ -114,7 +115,7 @@ func (s SortedSet[K, V]) Rank(ctx context.Context, key K, input V, order Order) 
 		var err error
 		rank, found, err = s.backend.SortedSetRank(ctx, k, text, order, l)
 		if err == nil && rank >= uint64(l.Entries) {
-			return fault.New(fault.Internal, "invalid Redis sorted set rank")
+			return safeerror.NewFault(fault.Internal, "invalid Redis sorted set rank")
 		}
 		return err
 	})
@@ -152,7 +153,7 @@ func (s SortedSet[K, V]) CountByScore(ctx context.Context, key K, scores ScoreRa
 		var err error
 		count, err = s.backend.SortedSetCountByScore(ctx, k, scores, l)
 		if err == nil && count > uint64(l.Entries) {
-			return fault.New(fault.Internal, "invalid Redis sorted set cardinality")
+			return safeerror.NewFault(fault.Internal, "invalid Redis sorted set cardinality")
 		}
 		return err
 	})
@@ -172,7 +173,7 @@ func (s SortedSet[K, V]) read(ctx context.Context, key K, window Window, fn func
 			return err
 		}
 		if len(stored) > window.Count {
-			return fault.New(fault.Invalid, "Redis sorted set reply exceeds its window")
+			return safeerror.NewFault(fault.Invalid, "Redis sorted set reply exceeds its window")
 		}
 		result = make([]Scored[V], 0, len(stored))
 		remaining := l.ReplyBytes
@@ -181,7 +182,7 @@ func (s SortedSet[K, V]) read(ctx context.Context, key K, window Window, fn func
 				return err
 			}
 			if len(item.Member) > remaining || math.IsNaN(item.Score) || i > 0 && !ordered(stored[i-1], item, window.Order) {
-				return fault.New(fault.Invalid, "Redis sorted set reply exceeds its bound or is not ordered")
+				return safeerror.NewFault(fault.Invalid, "Redis sorted set reply exceeds its bound or is not ordered")
 			}
 			remaining -= len(item.Member)
 			member, err := decode[V](item.Member, l)

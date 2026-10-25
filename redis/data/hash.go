@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -108,10 +109,10 @@ func (h Hash[K, F, V]) GetMany(ctx context.Context, key K, fields ...F) ([]value
 	err := h.execute(ctx, key, func(ctx context.Context, k Key, l Limits) error {
 		backend, ok := h.backend.(HashReadBackend)
 		if !ok {
-			return fault.New(fault.Invalid, "adapter does not support Redis hash batch reads")
+			return safeerror.NewFault(fault.Invalid, "adapter does not support Redis hash batch reads")
 		}
 		if len(fields) == 0 || len(fields) > l.Entries {
-			return fault.New(fault.Invalid, "Redis hash field batch exceeds its bound")
+			return safeerror.NewFault(fault.Invalid, "Redis hash field batch exceeds its bound")
 		}
 		names := make([]string, len(fields))
 		for i, field := range fields {
@@ -125,7 +126,7 @@ func (h Hash[K, F, V]) GetMany(ctx context.Context, key K, fields ...F) ([]value
 			return err
 		}
 		if len(texts) != len(names) {
-			return fault.New(fault.Internal, "invalid Redis hash batch reply")
+			return safeerror.NewFault(fault.Internal, "invalid Redis hash batch reply")
 		}
 		result = make([]value.Optional[V], len(texts))
 		remaining := l.ReplyBytes
@@ -138,7 +139,7 @@ func (h Hash[K, F, V]) GetMany(ctx context.Context, key K, fields ...F) ([]value
 				return err
 			}
 			if len(text) > remaining {
-				return fault.New(fault.Invalid, "Redis hash reply exceeds its bound")
+				return safeerror.NewFault(fault.Invalid, "Redis hash reply exceeds its bound")
 			}
 			remaining -= len(text)
 			item, err := decode[V](text, l)
@@ -164,17 +165,17 @@ func (h Hash[K, F, V]) GetAll(ctx context.Context, key K) ([]HashEntry[F, V], er
 	err := h.execute(ctx, key, func(ctx context.Context, k Key, l Limits) error {
 		backend, ok := h.backend.(HashReadBackend)
 		if !ok {
-			return fault.New(fault.Invalid, "adapter does not support Redis hash batch reads")
+			return safeerror.NewFault(fault.Invalid, "adapter does not support Redis hash batch reads")
 		}
 		if h.parse == nil {
-			return fault.New(fault.Invalid, "Redis hash declaration has no field decoder")
+			return safeerror.NewFault(fault.Invalid, "Redis hash declaration has no field decoder")
 		}
 		stored, err := backend.HashGetAll(ctx, k, l)
 		if err != nil {
 			return err
 		}
 		if len(stored) > l.Entries {
-			return fault.New(fault.Invalid, "Redis hash exceeds its cardinality bound")
+			return safeerror.NewFault(fault.Invalid, "Redis hash exceeds its cardinality bound")
 		}
 		result = make([]HashEntry[F, V], 0, len(stored))
 		remaining := l.ReplyBytes
@@ -183,7 +184,7 @@ func (h Hash[K, F, V]) GetAll(ctx context.Context, key K) ([]HashEntry[F, V], er
 				return err
 			}
 			if l.ValidateField(entry.Field) != nil || len(entry.Value) > remaining || i > 0 && entry.Field <= stored[i-1].Field {
-				return fault.New(fault.Invalid, "Redis hash reply exceeds its bound or is not canonical")
+				return safeerror.NewFault(fault.Invalid, "Redis hash reply exceeds its bound or is not canonical")
 			}
 			remaining -= len(entry.Value)
 			field, err := h.parse(entry.Field)
@@ -191,7 +192,7 @@ func (h Hash[K, F, V]) GetAll(ctx context.Context, key K) ([]HashEntry[F, V], er
 				return err
 			}
 			if encoded, err := h.fields.Encode(field); err != nil || encoded != entry.Field {
-				return fault.New(fault.Invalid, "Redis hash field decoder does not invert its codec")
+				return safeerror.NewFault(fault.Invalid, "Redis hash field decoder does not invert its codec")
 			}
 			item, err := decode[V](entry.Value, l)
 			if err != nil {
@@ -216,7 +217,7 @@ func IncrementField[K, F any](ctx context.Context, h Hash[K, F, int64], key K, f
 	err := h.execute(ctx, key, func(ctx context.Context, k Key, l Limits) error {
 		backend, ok := h.backend.(HashCounterBackend)
 		if !ok {
-			return fault.New(fault.Invalid, "adapter does not support Redis hash counters")
+			return safeerror.NewFault(fault.Invalid, "adapter does not support Redis hash counters")
 		}
 		name, err := h.field(ctx, field, l)
 		if err != nil {

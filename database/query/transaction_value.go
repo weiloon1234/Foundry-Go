@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -32,7 +33,7 @@ func (a transactionValueAdapter[V]) valueQuery() valueSubquery[V] { return a.val
 
 func transactionValueOf[V any](source TransactionValueSource[V]) valueSubquery[V] {
 	if nilDescriptor(source) {
-		return valueSubquery[V]{subquery: subquery{Err: fault.New(fault.Invalid, "transaction value requires a source")}}
+		return valueSubquery[V]{subquery: subquery{Err: safeerror.NewFault(fault.Invalid, "transaction value requires a source")}}
 	}
 	return source.transactionValue()
 }

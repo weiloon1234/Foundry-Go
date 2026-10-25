@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MultipartLimits bounds the complete encoded body, individual files, buffered
@@ -26,7 +27,7 @@ func DefaultMultipartLimits() MultipartLimits {
 
 func (l MultipartLimits) Validate() error {
 	if l.Bytes <= 0 || l.FileBytes <= 0 || l.FileBytes > l.Bytes || l.Parts <= 0 || l.Files <= 0 || l.Files > l.Parts || l.Readers <= 0 || l.HeaderBytes <= 0 || l.FieldBytes <= 0 || l.FieldsBytes < l.FieldBytes || int64(l.FieldsBytes) > l.Bytes || int64(l.FieldBytes) == math.MaxInt64 || l.Issues <= 0 {
-		return fault.New(fault.Invalid, "invalid multipart resource limits")
+		return safeerror.NewFault(fault.Invalid, "invalid multipart resource limits")
 	}
 	return nil
 }

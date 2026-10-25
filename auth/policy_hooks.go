@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Verdict is a hook decision. Abstain leaves the declared policy in charge.
@@ -65,7 +66,7 @@ func DefineAfter[M any](name PolicyName, veto func(context.Context, M, PolicyNam
 
 func (d *hookDefinition[M]) validate() error {
 	if d == nil || !identifier.Semantic(string(d.name)) || d.decide == nil {
-		return fault.New(fault.Invalid, "authorization hook requires a semantic name and callback")
+		return safeerror.NewFault(fault.Invalid, "authorization hook requires a semantic name and callback")
 	}
 	return nil
 }
@@ -115,7 +116,7 @@ func runHooks[M any](ctx context.Context, scope *Scope, phase hookPhase, subject
 			return Abstain, err
 		}
 		if !verdict.valid() {
-			return Abstain, fault.New(fault.Invalid, "authorization hook returned an invalid verdict")
+			return Abstain, safeerror.NewFault(fault.Invalid, "authorization hook returned an invalid verdict")
 		}
 		if phase == afterPhase && verdict == Allow {
 			verdict = Abstain
@@ -142,7 +143,8 @@ type Denial struct {
 
 // NewDenial returns a typed denial. The message must be safe for the caller to see.
 func NewDenial(code DenialCode, message string) error {
-	return &Denial{code: code, message: message}
+	denial := &Denial{code: code, message: message}
+	return safeerror.Owned(denial.Error(), denial)
 }
 func (d *Denial) Code() DenialCode {
 	if d == nil {
@@ -177,7 +179,7 @@ func (d Decision) Err() error {
 		return nil
 	}
 	if d.denial != nil {
-		return d.denial
+		return safeerror.Owned(d.denial.Error(), d.denial)
 	}
-	return Forbidden
+	return safeerror.Owned(Forbidden.Error(), Forbidden)
 }

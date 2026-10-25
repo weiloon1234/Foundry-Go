@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // slotKey has a nonzero size so every declared slot has a distinct address.
@@ -55,7 +56,7 @@ func Provide[T, P any](slot Slot[P], derive func(context.Context, T) (P, error),
 			return
 		}
 		if err != nil {
-			s.err = fault.Wrap(fault.Internal, "validation slot provider failed", err)
+			s.err = safeerror.WrapFailure(fault.Internal, "validation slot provider failed", err)
 			return
 		}
 		previous := s.ctx

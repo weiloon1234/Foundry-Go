@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // partitionedRow reuses complete generated model decoders for joined rows.
@@ -29,7 +30,7 @@ func (discardColumn) Scan(any) error { return nil }
 
 func (r partitionedRow) Scan(destinations ...any) error {
 	if len(destinations) != r.count || r.start < 0 || r.count < 0 || r.start+r.count > r.total {
-		return fault.New(fault.Invalid, "joined decoder does not match its declared columns")
+		return safeerror.NewFault(fault.Invalid, "joined decoder does not match its declared columns")
 	}
 	all := make([]any, r.total)
 	for i := range all {
@@ -37,7 +38,7 @@ func (r partitionedRow) Scan(destinations ...any) error {
 	}
 	for i, destination := range destinations {
 		if _, raw := destination.(*sql.RawBytes); raw {
-			return fault.New(fault.Invalid, "joined hydration requires owned values, not RawBytes")
+			return safeerror.NewFault(fault.Invalid, "joined hydration requires owned values, not RawBytes")
 		}
 		all[r.start+i] = destination
 	}

@@ -13,6 +13,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -503,7 +504,7 @@ func (q VariantQuery) foundryInsertMany(ctx context.Context, writer database.Tra
 }
 func (q VariantQuery) foundryCreateMutations(drafts []VariantDraft) ([]foundryquery.Mutation[Variant], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Variant], len(drafts))
 	for i, draft := range drafts {
@@ -956,7 +957,7 @@ func (q VariantQuery) DeleteAll(ctx context.Context, writer database.Transactor)
 // Increment adjusts one numeric field of every matching model by a typed delta, such as VariantFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q VariantQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Variant], extra ...VariantDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Variant]
 	if len(extra) == 1 {
@@ -971,7 +972,7 @@ func (q VariantQuery) Increment(ctx context.Context, writer database.Transactor,
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as VariantFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q VariantQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Variant], extra ...VariantDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Variant]
 	if len(extra) == 1 {
@@ -1549,78 +1550,78 @@ func CompareVariant(before, after foundryvalue.Optional[Variant], assigned Varia
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[Variant](), before, after, assigned.fieldID.IsSet(), func(item Variant) model.ID[Variant] { return item.ID })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.ID: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return VariantChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return VariantChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.FileID, err = lifecycle.CompareModelField(codec.ID[File](), before, after, assigned.fieldFileID.IsSet(), func(item Variant) model.ID[File] { return item.FileID })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.FileID: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.FileID", err)
 	}
 	changes.fields.Name, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldName.IsSet(), func(item Variant) string { return item.Name })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.Name: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.Name", err)
 	}
 	changes.fields.Disk, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldDisk.IsSet(), func(item Variant) string { return item.Disk })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.Disk: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.Disk", err)
 	}
 	changes.fields.ObjectKey, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldObjectKey.IsSet(), func(item Variant) string { return item.ObjectKey })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.ObjectKey: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.ObjectKey", err)
 	}
 	changes.fields.ContentType, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldContentType.IsSet(), func(item Variant) string { return item.ContentType })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.ContentType: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.ContentType", err)
 	}
 	changes.fields.Size, err = lifecycle.CompareModelField(codec.Signed[int64](), before, after, assigned.fieldSize.IsSet(), func(item Variant) int64 { return item.Size })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.Size: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.Size", err)
 	}
 	changes.fields.Digest, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldDigest.IsSet(), func(item Variant) string { return item.Digest })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.Digest: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.Digest", err)
 	}
 	changes.fields.ETag, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldETag.IsSet(), func(item Variant) string { return item.ETag })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.ETag: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.ETag", err)
 	}
 	changes.fields.ObjectVersion, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldObjectVersion.IsSet(), func(item Variant) string { return item.ObjectVersion })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.ObjectVersion: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.ObjectVersion", err)
 	}
 	changes.fields.Width, err = lifecycle.CompareModelField(codec.Signed[int32](), before, after, assigned.fieldWidth.IsSet(), func(item Variant) int32 { return item.Width })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.Width: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.Width", err)
 	}
 	changes.fields.Height, err = lifecycle.CompareModelField(codec.Signed[int32](), before, after, assigned.fieldHeight.IsSet(), func(item Variant) int32 { return item.Height })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.Height: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.Height", err)
 	}
 	changes.fields.State, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldState.IsSet(), func(item Variant) string { return item.State })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.State: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.State", err)
 	}
 	changes.fields.WriterID, err = lifecycle.CompareModelField(codec.ID[Writer](), before, after, assigned.fieldWriterID.IsSet(), func(item Variant) model.ID[Writer] { return item.WriterID })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.WriterID: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.WriterID", err)
 	}
 	changes.fields.Attempts, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldAttempts.IsSet(), func(item Variant) uint32 { return item.Attempts })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.Attempts: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.Attempts", err)
 	}
 	changes.fields.LastFailure, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldLastFailure.IsSet(), func(item Variant) string { return item.LastFailure })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.LastFailure: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.LastFailure", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Variant) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.CreatedAt: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.CreatedAt", err)
 	}
 	changes.fields.UpdatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldUpdatedAt.IsSet(), func(item Variant) temporal.DateTime { return item.UpdatedAt })
 	if err != nil {
-		return VariantChanges{}, fmt.Errorf("compare Variant.UpdatedAt: %w", err)
+		return VariantChanges{}, foundrydiagnostic.Prefix("compare Variant.UpdatedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1822,7 +1823,7 @@ func (VariantHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Variant]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Variant]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1881,7 +1882,7 @@ func (VariantHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryquery.Mutation[Variant]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Variant]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -2049,7 +2050,7 @@ func (VariantHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -2173,14 +2174,14 @@ type VariantAuditPolicy struct {
 func (changes VariantChanges) Audit(policy VariantAuditPolicy) (record.Model[Variant, model.ID[Variant]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Variant, model.ID[Variant]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Variant, model.ID[Variant]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Variant, model.ID[Variant]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Variant, model.ID[Variant]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -2383,7 +2384,7 @@ func VariantAuditing(policy VariantAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() VariantHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes VariantChanges) error {

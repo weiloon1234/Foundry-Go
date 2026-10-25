@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -82,7 +83,7 @@ func Private[C, R any, S model.Identifiable](id ChannelID, rooms Rooms[R], guard
 		}
 		identity, present := origin.Model()
 		if !present {
-			return *new(S), SubjectReference{}, attribution.Origin{}, fault.New(fault.Internal, "verified guard has no identity")
+			return *new(S), SubjectReference{}, attribution.Origin{}, safeerror.NewFault(fault.Internal, "verified guard has no identity")
 		}
 		return subject, SubjectReference{Guard: guard.Name(), Provider: guard.ProviderName(), Identity: identity}, origin, nil
 	}
@@ -96,7 +97,7 @@ func OwnedRooms[C any, R comparable, S model.Identifiable](id ChannelID, rooms R
 	c := Private[C](id, rooms, guard, func(ctx context.Context, subject S, target Target[R]) error {
 		room, present := target.Room.Get()
 		if !present {
-			return auth.Forbidden
+			return auth.Forbidden.WithCause(nil)
 		}
 		origin, err := guard.Origin(ctx)
 		if err != nil {
@@ -104,14 +105,14 @@ func OwnedRooms[C any, R comparable, S model.Identifiable](id ChannelID, rooms R
 		}
 		identity, present := origin.Model()
 		if !present {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		actual, err := reference.Parse(identity)
 		if err != nil {
 			return err
 		}
 		if actual.Key() != room {
-			return auth.Forbidden
+			return auth.Forbidden.WithCause(nil)
 		}
 		return ctx.Err()
 	})
@@ -131,7 +132,7 @@ func (c Channel[C, R, S]) Validate() error {
 		return c.err
 	}
 	if c.token == nil || !identifier.Semantic(string(c.id)) || c.resolve == nil {
-		return fault.New(fault.Invalid, "invalid WebSocket channel")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket channel")
 	}
 	if err := c.rooms.Validate(); err != nil {
 		return err
@@ -141,7 +142,7 @@ func (c Channel[C, R, S]) Validate() error {
 	}
 	if c.private {
 		if c.authorize == nil {
-			return fault.New(fault.Invalid, "private channel requires authorization")
+			return safeerror.NewFault(fault.Invalid, "private channel requires authorization")
 		}
 		if err := c.guard.Validate(); err != nil {
 			return err
@@ -174,7 +175,7 @@ func (c Channel[C, R, S]) check(ctx context.Context, room *string) (accessResult
 		if errorgraph.Is(err, fault.Panicked) {
 			return accessResult{}, err
 		}
-		return accessResult{}, Malformed
+		return accessResult{}, codeFailure(Malformed)
 	}
 	subject, reference, origin, err := c.resolve(ctx)
 	if err != nil {

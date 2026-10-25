@@ -2,8 +2,10 @@ package http
 
 import (
 	"encoding/base64"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -35,24 +37,24 @@ type base64CookieCodec[V any] struct{ inner CookieCodec[V] }
 func (c base64CookieCodec[V]) Parse(text string) (V, error) {
 	var zero V
 	if nilCookieValue(c.inner) || len(text) > MaxCookieBytes {
-		return zero, fault.New(fault.Invalid, "invalid base64 cookie codec or value")
+		return zero, safeerror.NewFault(fault.Invalid, "invalid base64 cookie codec or value")
 	}
 	data, err := base64.RawURLEncoding.Strict().DecodeString(text)
 	if err != nil || base64.RawURLEncoding.EncodeToString(data) != text {
-		return zero, fault.New(fault.Invalid, "invalid base64 cookie representation")
+		return zero, safeerror.NewFault(fault.Invalid, "invalid base64 cookie representation")
 	}
 	return c.inner.Parse(string(data))
 }
 func (c base64CookieCodec[V]) Format(v V) (string, error) {
 	if nilCookieValue(c.inner) {
-		return "", fault.New(fault.Invalid, "cookie codec is missing")
+		return "", safeerror.NewFault(fault.Invalid, "cookie codec is missing")
 	}
 	text, err := c.inner.Format(v)
 	if err != nil {
 		return "", err
 	}
 	if len(text) > MaxCookieBytes || base64.RawURLEncoding.EncodedLen(len(text)) > MaxCookieBytes {
-		return "", fault.New(fault.Invalid, "cookie value exceeds its byte bound")
+		return "", safeerror.NewFault(fault.Invalid, "cookie value exceeds its byte bound")
 	}
 	return base64.RawURLEncoding.EncodeToString([]byte(text)), nil
 }

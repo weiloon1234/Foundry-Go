@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -46,7 +47,7 @@ func (p Pending) ExpiresAt() time.Time   { return p.expires }
 func newToken() (string, error) {
 	var raw [randomBytes]byte
 	if _, err := rand.Read(raw[:]); err != nil {
-		return "", fault.Wrap(fault.Internal, "OAuth randomness failed", err)
+		return "", safeerror.WrapFailure(fault.Internal, "OAuth randomness failed", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(raw[:]), nil
 }
@@ -70,11 +71,11 @@ func (p Pending) challenge() string {
 
 func (p Pending) validate() error {
 	if p.provider == "" || p.expires.IsZero() {
-		return fault.New(fault.Invalid, "OAuth pending request is uninitialized")
+		return safeerror.NewFault(fault.Invalid, "OAuth pending request is uninitialized")
 	}
 	for _, value := range []string{p.state, p.nonce, p.verifier} {
 		if !canonicalToken(value) {
-			return fault.New(fault.Invalid, "OAuth pending request is malformed")
+			return safeerror.NewFault(fault.Invalid, "OAuth pending request is malformed")
 		}
 	}
 	return nil
@@ -106,11 +107,11 @@ func (pendingCodec) Format(p Pending) (string, error) {
 func (pendingCodec) Parse(text string) (Pending, error) {
 	parts := strings.Split(text, ":")
 	if len(parts) != 6 || parts[0] != "v1" {
-		return Pending{}, fault.New(fault.Invalid, "invalid OAuth pending request")
+		return Pending{}, safeerror.NewFault(fault.Invalid, "invalid OAuth pending request")
 	}
 	expires, err := strconv.ParseInt(parts[5], 10, 64)
 	if err != nil || expires <= 0 {
-		return Pending{}, fault.New(fault.Invalid, "invalid OAuth pending request")
+		return Pending{}, safeerror.NewFault(fault.Invalid, "invalid OAuth pending request")
 	}
 	result := Pending{provider: ProviderName(parts[1]), state: parts[2], nonce: parts[3], verifier: parts[4], expires: time.Unix(expires, 0).UTC()}
 	return result, result.validate()

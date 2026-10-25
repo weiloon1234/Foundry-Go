@@ -14,6 +14,7 @@ import (
 	decimal "github.com/weiloon1234/Foundry-Go/decimal"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -829,7 +830,7 @@ func (q CountryQuery) foundryInsertMany(ctx context.Context, writer database.Tra
 }
 func (q CountryQuery) foundryCreateMutations(drafts []CountryDraft) ([]foundryquery.Mutation[Country], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Country], len(drafts))
 	for i, draft := range drafts {
@@ -1378,7 +1379,7 @@ func (q CountryQuery) DeleteAll(ctx context.Context, writer database.Transactor)
 // Increment adjusts one numeric field of every matching model by a typed delta, such as CountryFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q CountryQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Country], extra ...CountryDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Country]
 	if len(extra) == 1 {
@@ -1393,7 +1394,7 @@ func (q CountryQuery) Increment(ctx context.Context, writer database.Transactor,
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as CountryFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q CountryQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Country], extra ...CountryDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Country]
 	if len(extra) == 1 {
@@ -2317,110 +2318,110 @@ func CompareCountry(before, after foundryvalue.Optional[Country], assigned Count
 	var err error
 	changes.fields.ISO2, err = lifecycle.CompareModelField(codec.String[Code](), before, after, assigned.fieldISO2.IsSet(), func(item Country) Code { return item.ISO2 })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.ISO2: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.ISO2", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ISO2.Changed() || changes.fields.ISO2.Assigned()) {
-		return CountryChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return CountryChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.ISO3, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldISO3.IsSet(), func(item Country) string { return item.ISO3 })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.ISO3: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.ISO3", err)
 	}
 	changes.fields.ISONumeric, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldISONumeric.IsSet(), func(item Country) foundryvalue.Nullable[string] { return item.ISONumeric })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.ISONumeric: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.ISONumeric", err)
 	}
 	changes.fields.Name, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldName.IsSet(), func(item Country) string { return item.Name })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Name: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Name", err)
 	}
 	changes.fields.OfficialName, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldOfficialName.IsSet(), func(item Country) foundryvalue.Nullable[string] { return item.OfficialName })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.OfficialName: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.OfficialName", err)
 	}
 	changes.fields.Capital, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldCapital.IsSet(), func(item Country) foundryvalue.Nullable[string] { return item.Capital })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Capital: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Capital", err)
 	}
 	changes.fields.Region, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldRegion.IsSet(), func(item Country) foundryvalue.Nullable[string] { return item.Region })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Region: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Region", err)
 	}
 	changes.fields.Subregion, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldSubregion.IsSet(), func(item Country) foundryvalue.Nullable[string] { return item.Subregion })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Subregion: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Subregion", err)
 	}
 	changes.fields.Currencies, err = lifecycle.CompareModelField(codec.JSON[[]Currency](), before, after, assigned.fieldCurrencies.IsSet(), func(item Country) foundryvalue.JSON[[]Currency] { return item.Currencies })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Currencies: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Currencies", err)
 	}
 	changes.fields.PrimaryCurrencyCode, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldPrimaryCurrencyCode.IsSet(), func(item Country) foundryvalue.Nullable[string] { return item.PrimaryCurrencyCode })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.PrimaryCurrencyCode: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.PrimaryCurrencyCode", err)
 	}
 	changes.fields.CallingCode, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldCallingCode.IsSet(), func(item Country) foundryvalue.Nullable[string] { return item.CallingCode })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.CallingCode: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.CallingCode", err)
 	}
 	changes.fields.CallingRoot, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldCallingRoot.IsSet(), func(item Country) foundryvalue.Nullable[string] { return item.CallingRoot })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.CallingRoot: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.CallingRoot", err)
 	}
 	changes.fields.CallingSuffixes, err = lifecycle.CompareModelField(codec.JSON[[]string](), before, after, assigned.fieldCallingSuffixes.IsSet(), func(item Country) foundryvalue.JSON[[]string] { return item.CallingSuffixes })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.CallingSuffixes: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.CallingSuffixes", err)
 	}
 	changes.fields.TLDs, err = lifecycle.CompareModelField(codec.JSON[[]string](), before, after, assigned.fieldTLDs.IsSet(), func(item Country) foundryvalue.JSON[[]string] { return item.TLDs })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.TLDs: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.TLDs", err)
 	}
 	changes.fields.Timezones, err = lifecycle.CompareModelField(codec.JSON[[]string](), before, after, assigned.fieldTimezones.IsSet(), func(item Country) foundryvalue.JSON[[]string] { return item.Timezones })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Timezones: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Timezones", err)
 	}
 	changes.fields.Latitude, err = lifecycle.CompareModelField(codec.Nullable(codec.Float[float64]()), before, after, assigned.fieldLatitude.IsSet(), func(item Country) foundryvalue.Nullable[float64] { return item.Latitude })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Latitude: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Latitude", err)
 	}
 	changes.fields.Longitude, err = lifecycle.CompareModelField(codec.Nullable(codec.Float[float64]()), before, after, assigned.fieldLongitude.IsSet(), func(item Country) foundryvalue.Nullable[float64] { return item.Longitude })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Longitude: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Longitude", err)
 	}
 	changes.fields.Independent, err = lifecycle.CompareModelField(codec.Nullable(codec.Bool[bool]()), before, after, assigned.fieldIndependent.IsSet(), func(item Country) foundryvalue.Nullable[bool] { return item.Independent })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Independent: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Independent", err)
 	}
 	changes.fields.UNMember, err = lifecycle.CompareModelField(codec.Nullable(codec.Bool[bool]()), before, after, assigned.fieldUNMember.IsSet(), func(item Country) foundryvalue.Nullable[bool] { return item.UNMember })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.UNMember: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.UNMember", err)
 	}
 	changes.fields.FlagEmoji, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldFlagEmoji.IsSet(), func(item Country) foundryvalue.Nullable[string] { return item.FlagEmoji })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.FlagEmoji: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.FlagEmoji", err)
 	}
 	changes.fields.Status, err = lifecycle.CompareModelField(codec.String[Status]().Validated(Status.Validate), before, after, assigned.fieldStatus.IsSet(), func(item Country) Status { return item.Status })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.Status: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.Status", err)
 	}
 	changes.fields.ConversionRate, err = lifecycle.CompareModelField(codec.Nullable(codec.Decimal()), before, after, assigned.fieldConversionRate.IsSet(), func(item Country) foundryvalue.Nullable[decimal.Decimal] { return item.ConversionRate })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.ConversionRate: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.ConversionRate", err)
 	}
 	changes.fields.IsDefault, err = lifecycle.CompareModelField(codec.Bool[bool](), before, after, assigned.fieldIsDefault.IsSet(), func(item Country) bool { return item.IsDefault })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.IsDefault: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.IsDefault", err)
 	}
 	changes.fields.ReferenceVersion, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldReferenceVersion.IsSet(), func(item Country) string { return item.ReferenceVersion })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.ReferenceVersion: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.ReferenceVersion", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Country) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.CreatedAt: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.CreatedAt", err)
 	}
 	changes.fields.UpdatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldUpdatedAt.IsSet(), func(item Country) temporal.DateTime { return item.UpdatedAt })
 	if err != nil {
-		return CountryChanges{}, fmt.Errorf("compare Country.UpdatedAt: %w", err)
+		return CountryChanges{}, foundrydiagnostic.Prefix("compare Country.UpdatedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -2662,7 +2663,7 @@ func (CountryHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Country]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Country]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -2721,7 +2722,7 @@ func (CountryHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryquery.Mutation[Country]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Country]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -2921,7 +2922,7 @@ func (CountryHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -3061,14 +3062,14 @@ type CountryAuditPolicy struct {
 func (changes CountryChanges) Audit(policy CountryAuditPolicy) (record.Model[Country, Code], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Country, Code]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Country, Code]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Country, Code]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Country, Code]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "iso2", policy.ISO2)
 	if err != nil {
@@ -3343,7 +3344,7 @@ func CountryAuditing(policy CountryAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() CountryHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes CountryChanges) error {

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type cursorBoundary struct {
@@ -27,7 +28,7 @@ func readCursorBoundary[R any](request CursorRequest[R], scope string, fields []
 	}
 	for _, field := range fields {
 		if field.sensitive {
-			return cursorBoundary{}, fault.New(fault.Invalid, "sensitive fields cannot be cursor keys")
+			return cursorBoundary{}, safeerror.NewFault(fault.Invalid, "sensitive fields cannot be cursor keys")
 		}
 	}
 	token, present := request.After.Get()

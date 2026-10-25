@@ -3,7 +3,6 @@ package i18n
 import (
 	"cmp"
 	"context"
-	"errors"
 	"io"
 	"io/fs"
 	"path"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Catalog directory bounds. Raw directory listings are bounded separately from
@@ -41,18 +41,19 @@ func Load(ctx context.Context, source fs.FS, locales LocaleCatalog, options Cata
 		return nil, err
 	}
 	var result *Catalog
+	var failed error
 	err = callback.Isolated("localization catalog load", func() error {
-		messages, sources, err := readTemplates(ctx, source, set)
-		if err != nil {
-			return err
+		messages, sources, readErr := readTemplates(ctx, source, set)
+		failed = readErr
+		if failed == nil {
+			result, failed = newCatalog(ctx, set, options, definitions, messages, sources)
 		}
-		result, err = newCatalog(ctx, set, options, definitions, messages, sources)
-		return err
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return result, failed
 }
 
 // ReadTemplates reads a catalog tree with Load's layout, limits and rules but
@@ -71,19 +72,21 @@ func ReadTemplates(ctx context.Context, source fs.FS, locales LocaleCatalog) (ma
 		return nil, err
 	}
 	var result map[LocaleID]map[MessageKey]Template
+	var failed error
 	err = callback.Isolated("localization catalog read", func() error {
-		var err error
-		result, _, err = readTemplates(ctx, source, set)
-		return err
+		result, _, failed = readTemplates(ctx, source, set)
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return result, failed
 }
 
 // readTemplates flattens every locale file and records which file supplied
-// each key, so later compilation errors can name it.
+// each key, so later compilation errors can name it. Filesystem errors are
+// replaced with catalog-owned diagnostics here. Callers retain those diagnostics
+// separately from callback containment, which only reports panic/Goexit.
 func readTemplates(ctx context.Context, source fs.FS, set LocaleSet) (map[LocaleID]map[MessageKey]Template, messageSources, error) {
 	messages := make(map[LocaleID]map[MessageKey]Template)
 	sources := make(messageSources)
@@ -191,7 +194,7 @@ func readCatalogDirectory(source fs.FS, name string, maximum int) (entries []fs.
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
 			entries = nil
-			err = errors.Join(err, invalidMessage())
+			err = safeerror.Join("operation failed", err, invalidMessage())
 		}
 	}()
 	directory, ok := file.(fs.ReadDirFile)
@@ -204,7 +207,7 @@ func readCatalogDirectory(source fs.FS, name string, maximum int) (entries []fs.
 			return nil, invalidMessage()
 		}
 		entries = append(entries, page...)
-		if errors.Is(readErr, io.EOF) {
+		if callback.ErrorIs(readErr, io.EOF) {
 			break
 		}
 		if readErr != nil || len(page) == 0 {
@@ -228,7 +231,7 @@ func readCatalogFile(source fs.FS, name string) (data []byte, err error) {
 	defer func() {
 		if closeErr := f.Close(); closeErr != nil {
 			data = nil
-			err = errors.Join(err, invalidMessage())
+			err = safeerror.Join("operation failed", err, invalidMessage())
 		}
 	}()
 	data, err = io.ReadAll(io.LimitReader(f, maxCatalogFileBytes+1))

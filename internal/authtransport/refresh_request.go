@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -25,7 +26,7 @@ func (RefreshCredential) LogValue() slog.Value         { return slog.StringValue
 func (RefreshCredential) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 func (v *RefreshCredential) UnmarshalJSON(data []byte) error {
 	if v == nil {
-		return fault.New(fault.Invalid, "refresh credential destination is missing")
+		return safeerror.NewFault(fault.Invalid, "refresh credential destination is missing")
 	}
 	*v = RefreshCredential{}
 	candidate, err := parseTokenCredential(data)

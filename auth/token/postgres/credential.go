@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -85,7 +86,7 @@ func (b *Backend) Lookup(ctx context.Context, address token.Address, hash token.
 // while its successor is younger than grace and its own access is live.
 func (b *Backend) LookupWithin(ctx context.Context, address token.Address, hash token.Digest, grace time.Duration) (value.Optional[token.Record], error) {
 	if grace <= 0 {
-		return value.Optional[token.Record]{}, fault.New(fault.Invalid, "token access grace must be positive")
+		return value.Optional[token.Record]{}, safeerror.NewFault(fault.Invalid, "token access grace must be positive")
 	}
 	return b.lookup(ctx, address, hash, false, grace)
 }
@@ -95,7 +96,7 @@ func (b *Backend) lookup(ctx context.Context, address token.Address, hash token.
 		return value.Optional[token.Record]{}, err
 	}
 	if b == nil || b.db == nil || ctx == nil {
-		return value.Optional[token.Record]{}, fault.New(fault.Invalid, "token PostgreSQL operation requires a backend and context")
+		return value.Optional[token.Record]{}, safeerror.NewFault(fault.Invalid, "token PostgreSQL operation requires a backend and context")
 	}
 	scope, err := address.Key()
 	if err != nil {
@@ -115,7 +116,7 @@ func (b *Backend) lookup(ctx context.Context, address token.Address, hash token.
 	case grace > 0 && row.entry.Generation+1 == row.family.Generation:
 		successor, present := row.successor.Get()
 		if !present {
-			return value.Optional[token.Record]{}, fault.New(fault.Invalid, "stored token family has no current generation")
+			return value.Optional[token.Record]{}, safeerror.NewFault(fault.Invalid, "stored token family has no current generation")
 		}
 		current.SupersededAt = value.Set(successor)
 		if err := current.Validate(address); err != nil {
@@ -241,7 +242,7 @@ func (b *Backend) Refresh(ctx context.Context, address token.Address, old, acces
 		return value.Optional[token.Record]{}, err
 	}
 	if access.IsZero() || refresh.IsZero() || access.Equal(refresh) || old.Equal(access) || old.Equal(refresh) {
-		return value.Optional[token.Record]{}, fault.New(fault.Invalid, "refresh requires distinct new hashes")
+		return value.Optional[token.Record]{}, safeerror.NewFault(fault.Invalid, "refresh requires distinct new hashes")
 	}
 	var result value.Optional[token.Record]
 	err := b.within(ctx, func(tx *database.Tx) error {
@@ -271,7 +272,7 @@ func (b *Backend) Refresh(ctx context.Context, address token.Address, old, acces
 			return err
 		}
 		if !live {
-			return fault.New(fault.Invalid, "live token could not refresh under its family lock")
+			return safeerror.NewFault(fault.Invalid, "live token could not refresh under its family lock")
 		}
 		draft, err := entryDraft(next, subject.Scope)
 		if err != nil {

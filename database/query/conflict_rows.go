@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -52,7 +53,7 @@ func (r ConflictRows[M]) recordScope(table string) RecordScope[ConflictRow[M], M
 func (r ConflictRows[M]) scopeSource() queryScope[ConflictRow[M]] {
 	scope := scopeRequirement{Err: r.err}
 	if r.record == nil || len(r.record.columns) == 0 {
-		scope.Err = fault.New(fault.Invalid, "conflict rows require complete model metadata")
+		scope.Err = safeerror.NewFault(fault.Invalid, "conflict rows require complete model metadata")
 	} else {
 		scope.Sources = map[string][]columnData{
 			conflictStoredTable:   r.record.columns,

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -93,7 +94,7 @@ func (q Query[M]) conflictScopeViolation(conflict *Conflict[M], requested, retur
 	if conflict == nil || conflict.state.Action != querycore.ConflictDoUpdate || len(conflict.state.Condition) != 0 || len(conflict.state.RowCondition) != 0 || returned >= requested || len(q.queryCore.ScopePredicates()) == 0 {
 		return nil
 	}
-	return fault.New(fault.Conflict, "upsert conflicts with a row outside the model's global scopes")
+	return safeerror.NewFault(fault.Conflict, "upsert conflicts with a row outside the model's global scopes")
 }
 
 // Bulk operations normalize explicitly supplied field values without dispatching

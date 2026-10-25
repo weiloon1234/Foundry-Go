@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -86,7 +87,7 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 		}
 	}
 	if e.preparation != nil && *e.preparation == nil || e.authorization != nil && *e.authorization == nil {
-		return fault.New(fault.Invalid, "request lifecycle callback is missing")
+		return safeerror.NewFault(fault.Invalid, "request lifecycle callback is missing")
 	}
 	if e.examples.err != nil {
 		return e.examples.err
@@ -111,16 +112,16 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 		return err
 	}
 	if e.response.credentials && e.route.Method() != POST {
-		return fault.New(fault.Invalid, "credential delivery requires a POST endpoint")
+		return safeerror.NewFault(fault.Invalid, "credential delivery requires a POST endpoint")
 	}
 	if err := e.validateRefreshCookie(); err != nil {
 		return err
 	}
 	if e.route.Method() == TRACE {
-		return fault.New(fault.Invalid, "TRACE requires a raw HTTP handler")
+		return safeerror.NewFault(fault.Invalid, "TRACE requires a raw HTTP handler")
 	}
 	if (e.route.Method() == GET || e.route.Method() == HEAD) && e.body.kind != payloadEmpty {
-		return fault.New(fault.Invalid, "typed GET and HEAD endpoints require an empty request body")
+		return safeerror.NewFault(fault.Invalid, "typed GET and HEAD endpoints require an empty request body")
 	}
 	return nil
 }
@@ -160,7 +161,7 @@ func (e Endpoint[P, Q, B, R]) URL(ctx context.Context, path P, query Q) (string,
 // only an actual write failure can then prevent delivery.
 func (e Endpoint[P, Q, B, R]) Handle(handler Handler[P, Q, B, R]) RouteRegistration {
 	if handler == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "endpoint requires a handler"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "endpoint requires a handler"))
 	}
 	return e.handlePrepared(e.complete(handler))
 }
@@ -171,7 +172,7 @@ func (e Endpoint[P, Q, B, R]) Handle(handler Handler[P, Q, B, R]) RouteRegistrat
 // validation, handler.
 func (e Endpoint[P, Q, B, R]) HandleBound(bind Binding[P, Q, B, R]) RouteRegistration {
 	if bind == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "endpoint requires a binding"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "endpoint requires a binding"))
 	}
 	return e.handleStaged(func(ctx context.Context, input Input[P, Q, B]) (func(context.Context, Input[P, Q, B]) (preparedResponse, error), error) {
 		handler, err := bind(ctx, input)
@@ -179,7 +180,7 @@ func (e Endpoint[P, Q, B, R]) HandleBound(bind Binding[P, Q, B, R]) RouteRegistr
 			return nil, err
 		}
 		if handler == nil {
-			return nil, InternalError.WithCause(fault.New(fault.Internal, "endpoint binding returned no handler"))
+			return nil, InternalError.WithCause(safeerror.NewFault(fault.Internal, "endpoint binding returned no handler"))
 		}
 		return e.complete(handler), nil
 	})
@@ -334,8 +335,8 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 	}
 	// Isolation rule: the application handler and application-supplied hooks
 	// run through callback.Isolated, which also contains runtime.Goexit.
-	// Framework hot paths (codecs, body reads, file chunks, URL generation and
-	// error classification) use callback.Invoke: same goroutine, panics
+	// Framework hot paths (URL codecs, body reads, file chunks and URL generation)
+	// use callback.Invoke: same goroutine, panics
 	// contained with their frames, no per-call goroutine.
 	callbackErr := callback.Isolated("HTTP endpoint handler", func() error {
 		data, returned = handler(ctx, input)
@@ -350,7 +351,7 @@ func endpointInputError(ctx context.Context, source string, err error) error {
 		return RequestTimeout.WithCause(err)
 	}
 	var issues []contract.Issue
-	switch failure := err.(type) {
+	switch failure := safeerror.UnwrapOwned(err).(type) {
 	case *QueryError:
 		issues = failure.Issues()
 	case *MultipartError:
@@ -363,5 +364,5 @@ func endpointInputError(ctx context.Context, source string, err error) error {
 	for i := range issues {
 		issues[i].Path = "/" + source + issues[i].Path
 	}
-	return &responseError{code: BadRequest, cause: err, issues: issues}
+	return responseFailure(BadRequest, err, issues)
 }

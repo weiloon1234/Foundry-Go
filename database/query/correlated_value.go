@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -70,7 +71,7 @@ func (q CorrelatedValueQuery[O, I, V]) correlatedValue() correlatedValue[O, V] {
 
 func correlatedValueOf[O, V any](source CorrelatedValueSource[O, V]) valueSubquery[V] {
 	if nilDescriptor(source) {
-		return valueSubquery[V]{subquery: subquery{Err: fault.New(fault.Invalid, "correlated value requires a query")}}
+		return valueSubquery[V]{subquery: subquery{Err: safeerror.NewFault(fault.Invalid, "correlated value requires a query")}}
 	}
 	return source.correlatedValue().value
 }
@@ -80,7 +81,7 @@ func correlatedValueOf[O, V any](source CorrelatedValueSource[O, V]) valueSubque
 func CorrelatedScalarQuery[O, V any](source CorrelatedValueSource[O, V]) Expression[O, value.Nullable[V]] {
 	q := correlatedValueOf(source)
 	if value.IsNullableType[V]() {
-		q.subquery.Err = fault.New(fault.Invalid, "nullable correlated scalar inputs require CorrelatedScalarNullableQuery or CorrelatedScalarNullableRowQuery")
+		q.subquery.Err = safeerror.NewFault(fault.Invalid, "nullable correlated scalar inputs require CorrelatedScalarNullableQuery or CorrelatedScalarNullableRowQuery")
 	}
 	return Expression[O, value.Nullable[V]]{node: scalarSubquery{Query: q.subquery}, codec: codec.Nullable(q.codec)}
 }

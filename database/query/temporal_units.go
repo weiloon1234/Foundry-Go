@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -85,7 +86,7 @@ type TimeZone struct{ name string }
 // empty names are rejected to avoid process-specific timezone selection.
 func LoadTimeZone(name string) (TimeZone, error) {
 	if _, err := temporal.LoadTimeZone(name); err != nil {
-		return TimeZone{}, fault.Wrap(fault.Invalid, "invalid query timezone", err)
+		return TimeZone{}, safeerror.WrapFault(fault.Invalid, "invalid query timezone", err)
 	}
 	return TimeZone{name: name}, nil
 }
@@ -112,7 +113,7 @@ func textOperationArgument[S any](text string, err error) operationArgument {
 func unitArgument[S any](unit, minimum temporalUnit) operationArgument {
 	var err error
 	if unit < minimum || unit > unitMillennium {
-		err = fault.New(fault.Invalid, "invalid temporal truncation unit")
+		err = safeerror.NewFault(fault.Invalid, "invalid temporal truncation unit")
 	}
 	return textOperationArgument[S](unit.name(), err)
 }
@@ -120,14 +121,14 @@ func unitArgument[S any](unit, minimum temporalUnit) operationArgument {
 func zoneArgument[S any](zone TimeZone) operationArgument {
 	var err error
 	if zone.name == "" {
-		err = fault.New(fault.Invalid, "temporal operation requires a timezone")
+		err = safeerror.NewFault(fault.Invalid, "temporal operation requires a timezone")
 	}
 	return textOperationArgument[S](zone.name, err)
 }
 
 func resolutionArgument[S any](zone TimeZone, policy LocalResolution) operationArgument {
 	if policy != PostgresStandardTime {
-		return textOperationArgument[S]("", fault.New(fault.Invalid, "local resolution requires an explicit supported DST policy"))
+		return textOperationArgument[S]("", safeerror.NewFault(fault.Invalid, "local resolution requires an explicit supported DST policy"))
 	}
 	return zoneArgument[S](zone)
 }

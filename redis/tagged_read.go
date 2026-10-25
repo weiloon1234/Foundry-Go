@@ -7,6 +7,7 @@ import (
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 //go:embed tagged_read.lua
@@ -64,12 +65,12 @@ func (c *Client) ReadSnapshot(ctx context.Context, base cache.EntryKey, tags []c
 	}
 	extra := len(fields) - len(tags)
 	if code != 1 || extra < 0 || extra > 2 || (!payload && extra == 2) || (payload && extra == 1) {
-		return cache.TaggedKey{}, nil, false, fault.New(fault.Internal, "invalid Redis tag snapshot reply")
+		return cache.TaggedKey{}, nil, false, safeerror.NewFault(fault.Internal, "invalid Redis tag snapshot reply")
 	}
 	for i := range tags {
 		text, ok := fields[i].(string)
 		if !ok {
-			return cache.TaggedKey{}, nil, false, fault.New(fault.Internal, "invalid Redis tag version type")
+			return cache.TaggedKey{}, nil, false, safeerror.NewFault(fault.Internal, "invalid Redis tag version type")
 		}
 		if stamps[i].Version, err = cache.ParseTagVersion([]byte(text)); err != nil {
 			return cache.TaggedKey{}, nil, false, err
@@ -83,14 +84,14 @@ func (c *Client) ReadSnapshot(ctx context.Context, base cache.EntryKey, tags []c
 		return key, nil, false, nil
 	}
 	if marker, ok := fields[len(tags)].(int64); !ok || marker != 1 {
-		return cache.TaggedKey{}, nil, false, fault.New(fault.Internal, "invalid Redis tag snapshot reply")
+		return cache.TaggedKey{}, nil, false, safeerror.NewFault(fault.Internal, "invalid Redis tag snapshot reply")
 	}
 	if !payload {
 		return key, nil, true, nil
 	}
 	data, ok := fields[len(tags)+1].(string)
 	if !ok {
-		return cache.TaggedKey{}, nil, false, fault.New(fault.Internal, "invalid Redis cache result")
+		return cache.TaggedKey{}, nil, false, safeerror.NewFault(fault.Internal, "invalid Redis cache result")
 	}
 	return key, []byte(data), true, nil
 }

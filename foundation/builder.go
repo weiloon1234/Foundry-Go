@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/dependency"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
@@ -38,7 +39,7 @@ type settings struct {
 func WithClock(source clock.Clock) Option {
 	return func(s *settings) error {
 		if nilValue(source) {
-			return fault.New(fault.Invalid, "clock cannot be nil")
+			return safeerror.NewFault(fault.Invalid, "clock cannot be nil")
 		}
 		s.clock = source
 		return nil
@@ -49,7 +50,7 @@ func WithClock(source clock.Clock) Option {
 func WithLogger(logger *slog.Logger) Option {
 	return func(s *settings) error {
 		if logger == nil {
-			return fault.New(fault.Invalid, "logger cannot be nil")
+			return safeerror.NewFault(fault.Invalid, "logger cannot be nil")
 		}
 		s.logger = logger
 		return nil
@@ -64,7 +65,7 @@ func WithLogger(logger *slog.Logger) Option {
 func WithShutdownTimeout(timeout time.Duration) Option {
 	return func(s *settings) error {
 		if timeout <= 0 {
-			return fault.New(fault.Invalid, "shutdown timeout must be positive")
+			return safeerror.NewFault(fault.Invalid, "shutdown timeout must be positive")
 		}
 		s.shutdownTimeout = timeout
 		return nil
@@ -79,7 +80,7 @@ func WithShutdownTimeout(timeout time.Duration) Option {
 func WithStopDelay(delay time.Duration) Option {
 	return func(s *settings) error {
 		if delay < 0 {
-			return fault.New(fault.Invalid, "stop delay cannot be negative")
+			return safeerror.NewFault(fault.Invalid, "stop delay cannot be negative")
 		}
 		s.stopDelay = delay
 		return nil
@@ -92,7 +93,7 @@ func WithStopDelay(delay time.Duration) Option {
 func WithStartupTimeout(timeout time.Duration) Option {
 	return func(s *settings) error {
 		if timeout < 0 {
-			return fault.New(fault.Invalid, "startup timeout cannot be negative")
+			return safeerror.NewFault(fault.Invalid, "startup timeout cannot be negative")
 		}
 		s.startupTimeout = timeout
 		return nil
@@ -106,7 +107,7 @@ func WithStartupTimeout(timeout time.Duration) Option {
 func WithMaintenance(gate *maintenance.Gate) Option {
 	return func(s *settings) error {
 		if gate == nil {
-			return fault.New(fault.Invalid, "maintenance gate cannot be nil")
+			return safeerror.NewFault(fault.Invalid, "maintenance gate cannot be nil")
 		}
 		s.maintenance = gate
 		return nil
@@ -140,7 +141,7 @@ func NewBuilder(options ...Option) *Builder {
 	}}
 	for _, option := range options {
 		if option == nil {
-			b.err = fault.New(fault.Invalid, "nil builder option")
+			b.err = safeerror.NewFault(fault.Invalid, "nil builder option")
 			break
 		}
 		if err := option(&b.settings); err != nil {
@@ -176,11 +177,11 @@ func (b *Builder) add(provider Provider, replace bool) {
 		return
 	}
 	if b.built {
-		b.err = fault.New(fault.Closed, "builder has already been built")
+		b.err = safeerror.NewFault(fault.Closed, "builder has already been built")
 		return
 	}
 	if nilValue(provider) {
-		b.err = fault.New(fault.Invalid, "nil provider")
+		b.err = safeerror.NewFault(fault.Invalid, "nil provider")
 		return
 	}
 	var entry providerEntry
@@ -195,30 +196,30 @@ func (b *Builder) add(provider Provider, replace bool) {
 		return
 	}
 	if !validName(string(entry.id)) {
-		b.err = fault.New(fault.Invalid, "invalid provider ID")
+		b.err = safeerror.NewFault(fault.Invalid, "invalid provider ID")
 		return
 	}
 	if strings.HasPrefix(string(entry.id), "plugin:") {
 		if _, ok := provider.(pluginProvider); !ok {
-			b.err = fault.New(fault.Invalid, "plugin provider IDs require RegisterPlugin")
+			b.err = safeerror.NewFault(fault.Invalid, "plugin provider IDs require RegisterPlugin")
 			return
 		}
 	}
 	position, exists := b.index[entry.id]
 	if replace {
 		if !exists {
-			b.err = fault.New(fault.Missing, "cannot replace missing provider "+string(entry.id))
+			b.err = safeerror.NewFault(fault.Missing, "cannot replace missing provider "+string(entry.id))
 			return
 		}
 		if _, plugin := b.providers[position].provider.(pluginProvider); plugin {
-			b.err = fault.New(fault.Invalid, "cannot replace a plugin as an application provider")
+			b.err = safeerror.NewFault(fault.Invalid, "cannot replace a plugin as an application provider")
 			return
 		}
 		b.providers[position] = entry
 		return
 	}
 	if exists {
-		b.err = fault.New(fault.Duplicate, "provider "+string(entry.id)+" is already registered")
+		b.err = safeerror.NewFault(fault.Duplicate, "provider "+string(entry.id)+" is already registered")
 		return
 	}
 	b.index[entry.id] = len(b.providers)
@@ -231,7 +232,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	b.mu.Lock()
 	if b.built {
 		b.mu.Unlock()
-		return nil, fault.New(fault.Closed, "builder has already been built")
+		return nil, safeerror.NewFault(fault.Closed, "builder has already been built")
 	}
 	b.built = true
 	entries, overrides, settings, buildErr := append([]providerEntry(nil), b.providers...), append([]contributionOverride(nil), b.overrides...), b.settings, b.err
@@ -240,13 +241,13 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 		return nil, buildErr
 	}
 	if settings.stopDelay >= settings.shutdownTimeout {
-		return nil, fault.New(fault.Invalid, "stop delay must be shorter than the shutdown timeout")
+		return nil, safeerror.NewFault(fault.Invalid, "stop delay must be shorter than the shutdown timeout")
 	}
 	if recorder := settings.observability; recorder != nil {
 		if settings.maintenance == nil {
 			settings.maintenance = recorder.Gate()
 		} else if settings.maintenance != recorder.Gate() {
-			return nil, fault.New(fault.Invalid, "maintenance gate differs from the observation recorder's gate")
+			return nil, safeerror.NewFault(fault.Invalid, "maintenance gate differs from the observation recorder's gate")
 		}
 	}
 	if settings.maintenance == nil {
@@ -274,7 +275,7 @@ func orderProviders(entries []providerEntry) ([]providerEntry, error) {
 	for _, entry := range entries {
 		for _, required := range entry.dependencies {
 			if !validName(string(required)) {
-				return nil, fault.New(fault.Invalid, "invalid dependency in provider "+string(entry.id))
+				return nil, safeerror.NewFault(fault.Invalid, "invalid dependency in provider "+string(entry.id))
 			}
 		}
 		byID[entry.id] = entry
@@ -283,9 +284,9 @@ func orderProviders(entries []providerEntry) ([]providerEntry, error) {
 	order, failure := dependency.Order(roots, func(id ProviderID) ([]ProviderID, bool) { entry, ok := byID[id]; return entry.dependencies, ok })
 	if failure != nil {
 		if failure.Kind == dependency.Cycle {
-			return nil, fault.New(fault.Cycle, "provider dependency cycle at "+string(failure.Key))
+			return nil, safeerror.NewFault(fault.Cycle, "provider dependency cycle at "+string(failure.Key))
 		}
-		return nil, fault.New(fault.Missing, "provider dependency "+string(failure.Key)+" is not registered")
+		return nil, safeerror.NewFault(fault.Missing, "provider dependency "+string(failure.Key)+" is not registered")
 	}
 	ordered := make([]providerEntry, 0, len(order))
 	for _, id := range order {

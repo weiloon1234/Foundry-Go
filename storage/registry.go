@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/namedservice"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const MaxDisks = namedservice.MaxEntries
@@ -36,7 +37,7 @@ type Registry struct {
 
 func NewRegistry(disks ...*Disk) (*Registry, error) {
 	if len(disks) > MaxDisks {
-		return nil, Failure(LimitExceeded, OpenOperation, NotApplicable, nil)
+		return nil, newFailure(LimitExceeded, OpenOperation, NotApplicable, nil)
 	}
 	registry := &Registry{disks: make(map[DiskID]*Disk, len(disks))}
 	for _, disk := range disks {
@@ -44,7 +45,7 @@ func NewRegistry(disks ...*Disk) (*Registry, error) {
 			return nil, err
 		}
 		if _, duplicate := registry.disks[disk.ID()]; duplicate {
-			return nil, fault.New(fault.Duplicate, "storage disk is already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "storage disk is already registered")
 		}
 		registry.disks[disk.ID()] = disk
 		registry.names = append(registry.names, disk.ID())
@@ -54,14 +55,14 @@ func NewRegistry(disks ...*Disk) (*Registry, error) {
 }
 func (r *Registry) Disk(id DiskID) (*Disk, error) {
 	if r == nil || r.disks == nil {
-		return nil, Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return nil, newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	if err := id.Validate(); err != nil {
 		return nil, err
 	}
 	disk, exists := r.disks[id]
 	if !exists {
-		return nil, fault.New(fault.Missing, "storage disk is not registered")
+		return nil, safeerror.NewFault(fault.Missing, "storage disk is not registered")
 	}
 	return disk, nil
 }
@@ -87,7 +88,7 @@ func NewDefaultRegistry(selected DiskID, disks ...*Disk) (*Registry, error) {
 }
 func (r *Registry) Default() (*Disk, error) {
 	if r == nil || r.selected == "" {
-		return nil, fault.New(fault.Missing, "default storage disk is not configured")
+		return nil, safeerror.NewFault(fault.Missing, "default storage disk is not configured")
 	}
 	return r.Disk(r.selected)
 }

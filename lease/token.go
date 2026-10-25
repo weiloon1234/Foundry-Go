@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,11 +13,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
 // ErrExported marks a guard whose ownership was handed to another process.
-var ErrExported = fault.New(fault.Closed, "lease ownership exported")
+var ErrExported = safeerror.Sentinel(fault.Closed, "lease ownership exported")
 
 const tokenPrefix = "foundry-lease-v1."
 
@@ -39,10 +39,10 @@ type Token[K any] struct {
 // Restore). The guard must belong to l's family.
 func (l Leases[K]) Export(g *Guard) (Token[K], error) {
 	if l.definition == nil || g == nil || g.manager == nil {
-		return Token[K]{}, fault.New(fault.Invalid, "lease export requires a bound handle and guard")
+		return Token[K]{}, safeerror.NewFault(fault.Invalid, "lease export requires a bound handle and guard")
 	}
 	if !l.owns(g.key) {
-		return Token[K]{}, fault.New(fault.Invalid, "lease guard belongs to another family")
+		return Token[K]{}, safeerror.NewFault(fault.Invalid, "lease guard belongs to another family")
 	}
 	if err := g.Err(); err != nil {
 		return Token[K]{}, err
@@ -72,17 +72,17 @@ type TransferBackend interface {
 // already restored returns ErrLost. The backend must implement TransferBackend.
 func (l Leases[K]) Restore(ctx context.Context, token Token[K]) (*Guard, error) {
 	if l.definition == nil {
-		return nil, fault.New(fault.Invalid, "lease handle is not initialized")
+		return nil, safeerror.NewFault(fault.Invalid, "lease handle is not initialized")
 	}
 	if err := token.validate(); err != nil {
 		return nil, err
 	}
 	if !l.owns(token.key) {
-		return nil, fault.New(fault.Invalid, "lease token belongs to another family")
+		return nil, safeerror.NewFault(fault.Invalid, "lease token belongs to another family")
 	}
 	backend, ok := l.manager.backend.(TransferBackend)
 	if !ok {
-		return nil, fault.New(fault.Invalid, "lease backend does not support restoring exported tokens")
+		return nil, safeerror.NewFault(fault.Invalid, "lease backend does not support restoring exported tokens")
 	}
 	owner, err := NewOwner()
 	if err != nil {
@@ -106,13 +106,13 @@ func (l Leases[K]) Restore(ctx context.Context, token Token[K]) (*Guard, error) 
 	stop()
 	uncertain := err != nil || transferred
 	if err == nil && (!transferred || parent.Err() != nil || !time.Now().Before(until)) {
-		err = errors.Join(ErrLost, parent.Err())
+		err = safeerror.Join("operation failed", ErrLost, parent.Err())
 	}
 	if err != nil {
 		if uncertain {
 			// A lost or late reply may hide an applied transfer. Release the
 			// fresh owner once; the consumed token cannot be restored again.
-			err = errors.Join(err, l.manager.releaseOwner(token.key, owner))
+			err = safeerror.Join("operation failed", err, l.manager.releaseOwner(token.key, owner))
 		}
 		unlink()
 		return nil, err
@@ -155,7 +155,7 @@ func (t Token[K]) MarshalText() ([]byte, error) {
 
 // UnmarshalText decodes and validates a token produced by MarshalText.
 func (t *Token[K]) UnmarshalText(data []byte) error {
-	invalid := fault.New(fault.Invalid, "invalid lease token")
+	invalid := safeerror.NewFault(fault.Invalid, "invalid lease token")
 	text, ok := strings.CutPrefix(string(data), tokenPrefix)
 	if t == nil || !ok || len(text) > 1024 {
 		return invalid

@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/health"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/notifications"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
@@ -58,7 +59,7 @@ func (b *Builder) Models(declarations ...slots.Declaration) *Builder {
 func (b *Builder) Features(construct Features) *Builder {
 	b.mutate(func() {
 		if construct == nil {
-			b.state.err = fault.New(fault.Invalid, "nil feature declarations")
+			b.state.err = safeerror.NewFault(fault.Invalid, "nil feature declarations")
 			return
 		}
 		b.state.features = append(b.state.features, construct)
@@ -108,7 +109,7 @@ func mergeFeatures(r foundation.Resolver, s FeatureSettings, constructors []Feat
 			}
 			for key, template := range messages {
 				if _, exists := result.Catalog[locale][key]; exists {
-					return result, fault.New(fault.Duplicate, "locale message was declared twice")
+					return result, safeerror.NewFault(fault.Duplicate, "locale message was declared twice")
 				}
 				result.Catalog[locale][key] = template
 			}
@@ -124,7 +125,7 @@ func mergeFeatures(r foundation.Resolver, s FeatureSettings, constructors []Feat
 		!s.Health.Enabled && len(result.Readiness) > 0,
 	} {
 		if condition {
-			return result, fault.New(fault.Invalid, "feature declarations require the corresponding feature to be enabled")
+			return result, safeerror.NewFault(fault.Invalid, "feature declarations require the corresponding feature to be enabled")
 		}
 	}
 	return result, nil

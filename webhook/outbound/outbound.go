@@ -18,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/httpclient"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlscope"
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
@@ -128,7 +129,7 @@ func New(dependencies Dependencies, config Config) (*Service, error) {
 		return nil, err
 	}
 	if !dependencies.Client.RestrictsDestinations() {
-		return nil, fault.New(fault.Invalid, "outbound webhooks require an HTTP client with a restricted destination policy")
+		return nil, safeerror.NewFault(fault.Invalid, "outbound webhooks require an HTTP client with a restricted destination policy")
 	}
 	calls, err := workscope.New(config.MaxActive, config.Timeout)
 	if err != nil {
@@ -195,7 +196,7 @@ func (s *Service) join(ctx context.Context, tx *database.Tx, fn func(context.Con
 }
 
 func invalid() error {
-	return fault.New(fault.Invalid, "invalid outbound webhook declaration, endpoint or delivery")
+	return safeerror.NewFault(fault.Invalid, "invalid outbound webhook declaration, endpoint or delivery")
 }
 
 func validEvents(events []EventType) error {

@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RecordQuerySource exposes a complete model or declared projection as a typed
@@ -27,7 +28,7 @@ func (q Query[M]) recordQuery() recordQuery[M] {
 		return r
 	}
 	if q.definition == nil || len(q.relations) != 0 || q.relationLimits != nil {
-		r.err = fault.New(fault.Invalid, "record sources require model metadata without eager-loading options")
+		r.err = safeerror.NewFault(fault.Invalid, "record sources require model metadata without eager-loading options")
 		return r
 	}
 	r.node, r.columns = q.modelSelect(), q.definition.modelDefinition.Columns

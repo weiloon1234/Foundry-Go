@@ -1,12 +1,14 @@
 package pagination
 
 import (
-	"errors"
 	"math"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -25,18 +27,23 @@ func navigation(page query.PageRequest, more bool, last value.Optional[int64], p
 		target := page
 		target.Number = number
 		location, err := build(target)
-		switch {
-		case errors.Is(err, errBeyondMaximumPage):
-			return "", false, nil
-		case err != nil:
-			return "", false, err
+		if err != nil {
+			beyond := false
+			inspection := callback.Isolated("inspect pagination link failure", func() error {
+				beyond = errorgraph.Is(err, errBeyondMaximumPage)
+				return nil
+			})
+			if inspection == nil && beyond {
+				return "", false, nil
+			}
+			return "", false, safeerror.Wrap("build pagination link failed", err)
 		}
 		return location, true, nil
 	}
 	var links Links
 	if more {
 		if page.Number == math.MaxInt {
-			return Links{}, fault.New(fault.Invalid, "next page exceeds the platform page-number range")
+			return Links{}, safeerror.NewFault(fault.Invalid, "next page exceeds the platform page-number range")
 		}
 		// The next page may exist but be deeper than the endpoint accepts.
 		location, ok, err := link(page.Number + 1)
@@ -112,7 +119,7 @@ func numberedResponse[P, F, T any](policy navigationPolicy) func(Request[P, F], 
 			return NumberedResponse[T]{}, err
 		}
 		if page.Number != request.Page.Number || page.Size != request.Page.Size {
-			return NumberedResponse[T]{}, fault.New(fault.Invalid, "page result does not match its HTTP request")
+			return NumberedResponse[T]{}, safeerror.NewFault(fault.Invalid, "page result does not match its HTTP request")
 		}
 		links, err := navigation(request.Page, int64(page.Number) < page.Pages, value.Set(page.Pages), policy, build)
 		if err != nil {
@@ -129,7 +136,7 @@ func simpleResponse[P, F, T any](policy navigationPolicy) func(Request[P, F], qu
 			return SimpleResponse[T]{}, err
 		}
 		if page.Number != request.Page.Number || page.Size != request.Page.Size {
-			return SimpleResponse[T]{}, fault.New(fault.Invalid, "page result does not match its HTTP request")
+			return SimpleResponse[T]{}, safeerror.NewFault(fault.Invalid, "page result does not match its HTTP request")
 		}
 		links, err := navigation(request.Page, page.HasMore, value.Optional[int64]{}, policy, build)
 		if err != nil {

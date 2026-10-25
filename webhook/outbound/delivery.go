@@ -7,8 +7,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	"strconv"
 	"strings"
@@ -20,6 +20,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/httpclient"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	store "github.com/weiloon1234/Foundry-Go/internal/webhookstore"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -188,7 +189,7 @@ func envelope[P any](ctx context.Context, service *Service, event Event[P], payl
 	body.Write(data)
 	body.WriteString(`}`)
 	if int64(body.Len()) > service.config.MaxPayloadBytes {
-		return "", fault.New(fault.Invalid, "webhook payload exceeds its limit")
+		return "", safeerror.NewFault(fault.Invalid, "webhook payload exceeds its limit")
 	}
 	return body.String(), nil
 }
@@ -222,7 +223,7 @@ func Send[P any](ctx context.Context, tx *database.Tx, queue Queue, endpoint End
 				return err
 			}
 			if !row.Active {
-				return fault.New(fault.Conflict, "webhook endpoint is inactive")
+				return safeerror.NewFault(fault.Conflict, "webhook endpoint is inactive")
 			}
 			id, err = queue.record(ctx, tx, row.ID, event.kind, body, now)
 			return err
@@ -264,7 +265,7 @@ func Publish[P any](ctx context.Context, tx *database.Tx, queue Queue, event Eve
 				return err
 			}
 			if len(rows) > queue.service.config.MaxEndpoints {
-				return fault.New(fault.Conflict, "webhook fan-out exceeds its endpoint limit")
+				return safeerror.NewFault(fault.Conflict, "webhook fan-out exceeds its endpoint limit")
 			}
 			for _, row := range rows {
 				events, err := row.Events.Decode()
@@ -373,14 +374,14 @@ func (s *Service) Deliver(ctx context.Context, id DeliveryID) error {
 			}
 			// A pre-send failure is an attempt too; record it while possible.
 			recorded := s.recordAttempt(context.WithoutCancel(ctx), deliveryKey(id), 0, category, Pending)
-			return errors.Join(deliveryFailure(category, err), recorded)
+			return safeerror.Join("operation failed", deliveryFailure(category, err), recorded)
 		}
 		if delivery.State != string(Pending) {
 			return nil
 		}
 		if !endpoint.Active {
 			recorded := s.recordAttempt(ctx, delivery.ID, 0, "endpoint_inactive", Failed)
-			return jobs.Permanent(errors.Join(fault.New(fault.Conflict, "webhook endpoint is inactive"), recorded))
+			return jobs.Permanent(safeerror.Join("operation failed", safeerror.NewFault(fault.Conflict, "webhook endpoint is inactive"), recorded))
 		}
 		stamp := strconv.FormatInt(s.clock.Now().Unix(), 10)
 		webhookID := WebhookID(id)
@@ -423,7 +424,7 @@ func (s *Service) Deliver(ctx context.Context, id DeliveryID) error {
 // deliveryFailure keeps the transport cause for errors.Is inspection while its
 // message contains only the stable category.
 func deliveryFailure(category string, cause error) error {
-	return fault.Wrap(fault.Internal, "webhook delivery failed: "+category, cause)
+	return safeerror.WrapFailure(fault.Internal, "webhook delivery failed: "+category, cause)
 }
 
 // classify maps one attempt to its logged status, failure category and
@@ -431,7 +432,7 @@ func deliveryFailure(category string, cause error) error {
 // 2xx whose body the client could not read is still delivered.
 func classify(status int, err error) (int32, string, bool) {
 	var failure *httpclient.Error
-	if status == 0 && errors.As(err, &failure) {
+	if status == 0 && callback.ErrorAs(err, &failure) {
 		status = failure.Status()
 	}
 	if status != 0 {
@@ -454,7 +455,7 @@ func classify(status int, err error) (int32, string, bool) {
 		return 0, "overloaded", true
 	case errorgraph.Is(err, context.DeadlineExceeded) || errorgraph.Is(err, context.Canceled):
 		return 0, "timeout", true
-	case errors.As(err, &failure) && failure.Kind() == httpclient.InvalidRequest:
+	case callback.ErrorAs(err, &failure) && failure.Kind() == httpclient.InvalidRequest:
 		return 0, "invalid_request", false
 	}
 	return 0, "transport_failed", true
@@ -555,7 +556,7 @@ func (q Queue) ReplayFailed(ctx context.Context, endpoint value.Optional[Endpoin
 					return err
 				}
 				if !row.Active {
-					return fault.New(fault.Conflict, "webhook endpoint is inactive")
+					return safeerror.NewFault(fault.Conflict, "webhook endpoint is inactive")
 				}
 				endpoints = endpoints.Where(e.ID.Eq(row.ID))
 			}
@@ -590,7 +591,7 @@ func (q Queue) reset(ctx context.Context, tx *database.Tx, row store.Delivery) e
 		return err
 	}
 	if !endpoint.Active {
-		return fault.New(fault.Conflict, "webhook endpoint is inactive")
+		return safeerror.NewFault(fault.Conflict, "webhook endpoint is inactive")
 	}
 	now, err := q.service.now()
 	if err != nil {

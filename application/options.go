@@ -1,15 +1,17 @@
 package application
 
 import (
+	"log/slog"
+
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/observability"
-	"log/slog"
 )
 
 type options struct {
@@ -31,7 +33,7 @@ type Option func(*options) error
 func WithLogHandler(name logging.ChannelName, handler slog.Handler) Option {
 	return func(o *options) error {
 		if credential.IsNil(handler) {
-			return fault.New(fault.Invalid, "application log handler is nil")
+			return safeerror.NewFault(fault.Invalid, "application log handler is nil")
 		}
 		o.logHandlers = append(o.logHandlers, logging.WithHandler(name, handler))
 		return nil
@@ -41,7 +43,7 @@ func WithLogHandler(name logging.ChannelName, handler slog.Handler) Option {
 func WithClock(c clock.Clock) Option {
 	return func(o *options) error {
 		if credential.IsNil(c) {
-			return fault.New(fault.Invalid, "application clock is nil")
+			return safeerror.NewFault(fault.Invalid, "application clock is nil")
 		}
 		o.clock = c
 		return nil
@@ -53,7 +55,7 @@ func WithClock(c clock.Clock) Option {
 func WithLogger(l *slog.Logger) Option {
 	return func(o *options) error {
 		if l == nil {
-			return fault.New(fault.Invalid, "application logger is nil")
+			return safeerror.NewFault(fault.Invalid, "application logger is nil")
 		}
 		o.logger = l
 		return nil
@@ -62,7 +64,7 @@ func WithLogger(l *slog.Logger) Option {
 func WithObservability(r *observability.Recorder) Option {
 	return func(o *options) error {
 		if r == nil {
-			return fault.New(fault.Invalid, "application recorder is nil")
+			return safeerror.NewFault(fault.Invalid, "application recorder is nil")
 		}
 		o.recorder = r
 		return nil

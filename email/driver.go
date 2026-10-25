@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"log/slog"
 	"slices"
 )
@@ -13,11 +14,11 @@ type IdempotencyKey string
 
 func (k IdempotencyKey) Validate() error {
 	if len(k) > 256 {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	for _, c := range k {
 		if c < 33 || c > 126 {
-			return Construction
+			return emaildiag.Failure(Construction)
 		}
 	}
 	return nil
@@ -62,7 +63,7 @@ func (o Outbound) Size() int                      { return o.size }
 func (o Outbound) IdempotencyKey() IdempotencyKey { return o.key }
 func (o Outbound) Validate() error {
 	if len(o.mime) == 0 && !o.structured || o.size <= 0 {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	return nil
 }
@@ -82,7 +83,7 @@ type Receipt struct{ MessageID string }
 
 func (r Receipt) Validate() error {
 	if len(r.MessageID) > 512 || !headerText(r.MessageID) {
-		return Ambiguous
+		return emaildiag.Failure(Ambiguous)
 	}
 	return nil
 }

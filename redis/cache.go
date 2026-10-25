@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cacheint"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
@@ -81,12 +82,12 @@ func (c *Client) cacheArguments(ctx context.Context, op string, data []byte, ttl
 		return "", 0, err
 	}
 	if len(data) > c.config.MaxValueBytes {
-		return "", 0, fault.New(fault.Invalid, "cache value exceeds Redis payload bound")
+		return "", 0, safeerror.NewFault(fault.Invalid, "cache value exceeds Redis payload bound")
 	}
 	bound := c.config.MaxValueBytes
 	if op == "increment" {
 		if bound < cacheint.MaxBytes {
-			return "", 0, fault.New(fault.Invalid, "Redis payload bound cannot hold every counter value")
+			return "", 0, safeerror.NewFault(fault.Invalid, "Redis payload bound cannot hold every counter value")
 		}
 		bound = cacheint.MaxBytes
 	}
@@ -119,28 +120,28 @@ func ceilMilliseconds(duration time.Duration) int64 {
 func cacheReply(value any) ([]any, int64, error) {
 	items, ok := value.([]any)
 	if !ok || len(items) == 0 {
-		return nil, 0, fault.New(fault.Internal, "invalid Redis cache reply")
+		return nil, 0, safeerror.NewFault(fault.Internal, "invalid Redis cache reply")
 	}
 	code, ok := items[0].(int64)
 	if !ok {
-		return nil, 0, fault.New(fault.Internal, "invalid Redis cache status")
+		return nil, 0, safeerror.NewFault(fault.Internal, "invalid Redis cache status")
 	}
 	if code < 0 && len(items) != 1 {
-		return nil, 0, fault.New(fault.Internal, "invalid Redis failure reply")
+		return nil, 0, safeerror.NewFault(fault.Internal, "invalid Redis failure reply")
 	}
 	switch code {
 	case -4:
 		return nil, 0, lease.ErrLost
 	case -1:
-		return nil, 0, fault.New(fault.Invalid, "stored Redis cache data or metadata is corrupt or exceeds its bound")
+		return nil, 0, safeerror.NewFault(fault.Invalid, "stored Redis cache data or metadata is corrupt or exceeds its bound")
 	case -2:
-		return nil, 0, fault.New(fault.Conflict, "Redis cache tag snapshot changed or expired")
+		return nil, 0, safeerror.NewFault(fault.Conflict, "Redis cache tag snapshot changed or expired")
 	case -3:
-		return nil, 0, fault.New(fault.Invalid, "Redis tags require Redis 7 or newer with script permission checks")
+		return nil, 0, safeerror.NewFault(fault.Invalid, "Redis tags require Redis 7 or newer with script permission checks")
 	case 0, 1:
 		return items[1:], code, nil
 	default:
-		return nil, 0, fault.New(fault.Internal, "invalid Redis cache status")
+		return nil, 0, safeerror.NewFault(fault.Internal, "invalid Redis cache status")
 	}
 }
 func decodeReply(value any, wantsValue bool) ([]byte, bool, error) {
@@ -161,5 +162,5 @@ func decodeReply(value any, wantsValue bool) ([]byte, bool, error) {
 			}
 		}
 	}
-	return nil, false, fault.New(fault.Internal, "invalid Redis cache result")
+	return nil, false, safeerror.NewFault(fault.Internal, "invalid Redis cache result")
 }

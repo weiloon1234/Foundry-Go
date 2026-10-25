@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/notifications"
 )
@@ -34,7 +36,7 @@ const usage = "notifications deliveries|resolve|deliver [--format text|json]; de
 
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
-		return Command{}, fault.New(fault.Invalid, "notification commands require help output")
+		return Command{}, safeerror.NewFault(fault.Invalid, "notification commands require help output")
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(help, usage+"\n"); err != nil {
@@ -43,13 +45,13 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, flag.ErrHelp
 	}
 	if len(args) < 2 || args[0] != "notifications" {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result := Command{operation: args[1], limit: 20}
 	switch result.operation {
 	case "deliveries", "resolve", "deliver":
 	default:
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	flags := flag.NewFlagSet("notifications "+result.operation, flag.ContinueOnError)
 	flags.SetOutput(help)
@@ -57,7 +59,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	undecided := func(text string) (notifications.State, error) {
 		state := notifications.State(text)
 		if state != notifications.Running && state != notifications.Uncertain {
-			return "", fault.New(fault.Invalid, "state must be running or uncertain")
+			return "", safeerror.NewFault(fault.Invalid, "state must be running or uncertain")
 		}
 		return state, nil
 	}
@@ -78,7 +80,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 			case notifications.ResolveDelivered, notifications.ResolveRejected, notifications.ResolveResend:
 				return nil
 			}
-			return fault.New(fault.Invalid, "resolution must be delivered, rejected or resend")
+			return safeerror.NewFault(fault.Invalid, "resolution must be delivered, rejected or resend")
 		})
 	case "deliver":
 		flags.Func("notification", "notification ID", func(text string) (err error) {
@@ -90,16 +92,16 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, err
 	}
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result.json = *format == "json"
 	switch {
 	case result.operation == "deliveries" && (result.state == "" || result.limit < 1 || result.limit > notifications.MaxDeliveryPage):
-		return Command{}, cli.Usage("deliveries requires --state and a --limit between 1 and 100")
+		return Command{}, clidiag.Usage("deliveries requires --state and a --limit between 1 and 100")
 	case result.operation == "resolve" && (result.id.Validate() != nil || result.state == "" || result.resolution == ""):
-		return Command{}, cli.Usage("resolve requires --id, --expect and --as")
+		return Command{}, clidiag.Usage("resolve requires --id, --expect and --as")
 	case result.operation == "deliver" && result.notification.IsZero():
-		return Command{}, cli.Usage("deliver requires --notification")
+		return Command{}, clidiag.Usage("deliver requires --notification")
 	}
 	return result, nil
 }
@@ -107,7 +109,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 // Declaration registers the notifications command in the ordinary CLI registry.
 func Declaration(construct func(foundation.Resolver) (*notifications.Manager, error)) (cli.Declaration, error) {
 	if construct == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "notification commands require a manager constructor")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "notification commands require a manager constructor")
 	}
 	definition := cli.Define("notifications", "Inspect and resolve running or uncertain notification deliveries", func(args []string, help io.Writer) (Command, error) {
 		if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -134,7 +136,7 @@ type resolved struct {
 // Run emits operational metadata only: never payloads, routes or rendered content.
 func (c Command) Run(ctx context.Context, manager *notifications.Manager, output io.Writer) error {
 	if ctx == nil || output == nil || manager == nil {
-		return fault.New(fault.Invalid, "notification command requires context, manager and output")
+		return safeerror.NewFault(fault.Invalid, "notification command requires context, manager and output")
 	}
 	switch c.operation {
 	case "deliveries":
@@ -183,5 +185,5 @@ func (c Command) Run(ctx context.Context, manager *notifications.Manager, output
 		}
 		return err
 	}
-	return fault.New(fault.Invalid, "uninitialized notification command; use Parse")
+	return safeerror.NewFault(fault.Invalid, "uninitialized notification command; use Parse")
 }

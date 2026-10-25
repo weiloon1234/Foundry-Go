@@ -13,6 +13,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -445,7 +446,7 @@ func (q DeliveryQuery) foundryInsertMany(ctx context.Context, writer database.Tr
 }
 func (q DeliveryQuery) foundryCreateMutations(drafts []DeliveryDraft) ([]foundryquery.Mutation[Delivery], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Delivery], len(drafts))
 	for i, draft := range drafts {
@@ -814,7 +815,7 @@ func (q DeliveryQuery) DeleteAll(ctx context.Context, writer database.Transactor
 // Increment adjusts one numeric field of every matching model by a typed delta, such as DeliveryFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q DeliveryQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Delivery], extra ...DeliveryDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Delivery]
 	if len(extra) == 1 {
@@ -829,7 +830,7 @@ func (q DeliveryQuery) Increment(ctx context.Context, writer database.Transactor
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as DeliveryFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q DeliveryQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Delivery], extra ...DeliveryDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Delivery]
 	if len(extra) == 1 {
@@ -1239,50 +1240,50 @@ func CompareDelivery(before, after foundryvalue.Optional[Delivery], assigned Del
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[Delivery](), before, after, assigned.fieldID.IsSet(), func(item Delivery) model.ID[Delivery] { return item.ID })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.ID: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return DeliveryChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return DeliveryChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.EndpointID, err = lifecycle.CompareModelField(codec.ID[Endpoint](), before, after, assigned.fieldEndpointID.IsSet(), func(item Delivery) model.ID[Endpoint] { return item.EndpointID })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.EndpointID: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.EndpointID", err)
 	}
 	changes.fields.Event, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldEvent.IsSet(), func(item Delivery) string { return item.Event })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.Event: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.Event", err)
 	}
 	changes.fields.Payload, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldPayload.IsSet(), func(item Delivery) string { return item.Payload })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.Payload: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.Payload", err)
 	}
 	changes.fields.State, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldState.IsSet(), func(item Delivery) string { return item.State })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.State: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.State", err)
 	}
 	changes.fields.Attempts, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldAttempts.IsSet(), func(item Delivery) uint32 { return item.Attempts })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.Attempts: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.Attempts", err)
 	}
 	changes.fields.LastStatus, err = lifecycle.CompareModelField(codec.Signed[int32](), before, after, assigned.fieldLastStatus.IsSet(), func(item Delivery) int32 { return item.LastStatus })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.LastStatus: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.LastStatus", err)
 	}
 	changes.fields.LastFailure, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldLastFailure.IsSet(), func(item Delivery) string { return item.LastFailure })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.LastFailure: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.LastFailure", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Delivery) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.CreatedAt: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.CreatedAt", err)
 	}
 	changes.fields.UpdatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldUpdatedAt.IsSet(), func(item Delivery) temporal.DateTime { return item.UpdatedAt })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.UpdatedAt: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.UpdatedAt", err)
 	}
 	changes.fields.DeliveredAt, err = lifecycle.CompareModelField(codec.Nullable(codec.DateTime()), before, after, assigned.fieldDeliveredAt.IsSet(), func(item Delivery) foundryvalue.Nullable[temporal.DateTime] { return item.DeliveredAt })
 	if err != nil {
-		return DeliveryChanges{}, fmt.Errorf("compare Delivery.DeliveredAt: %w", err)
+		return DeliveryChanges{}, foundrydiagnostic.Prefix("compare Delivery.DeliveredAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1449,7 +1450,7 @@ func (DeliveryHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycl
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Delivery]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Delivery]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1508,7 +1509,7 @@ func (DeliveryHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycl
 					}
 				}
 			default:
-				return foundryquery.Mutation[Delivery]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Delivery]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1648,7 +1649,7 @@ func (DeliveryHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycl
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1758,14 +1759,14 @@ type DeliveryAuditPolicy struct {
 func (changes DeliveryChanges) Audit(policy DeliveryAuditPolicy) (record.Model[Delivery, model.ID[Delivery]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Delivery, model.ID[Delivery]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Delivery, model.ID[Delivery]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Delivery, model.ID[Delivery]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Delivery, model.ID[Delivery]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -1905,7 +1906,7 @@ func DeliveryAuditing(policy DeliveryAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() DeliveryHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes DeliveryChanges) error {

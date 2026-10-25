@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"slices"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/schedule"
 )
@@ -54,7 +56,7 @@ type Report struct {
 func Collect(ctx context.Context, sources Sources) (Report, error) {
 	var result Report
 	if ctx == nil || sources.Jobs != nil && sources.Dispatcher != nil {
-		return result, fault.New(fault.Invalid, "inspection requires a context and unambiguous job source")
+		return result, safeerror.NewFault(fault.Invalid, "inspection requires a context and unambiguous job source")
 	}
 	if err := ctx.Err(); err != nil {
 		return result, err
@@ -84,7 +86,7 @@ func Collect(ctx context.Context, sources Sources) (Report, error) {
 	for _, report := range sources.Configuration {
 		for _, entry := range report.Entries() {
 			if seen[entry.Name] {
-				return Report{}, fault.New(fault.Duplicate, "configuration provenance name is repeated; retain its namespace")
+				return Report{}, safeerror.NewFault(fault.Duplicate, "configuration provenance name is repeated; retain its namespace")
 			}
 			seen[entry.Name] = true
 			result.Configuration = append(result.Configuration, entry)
@@ -134,10 +136,10 @@ func (a Arguments) Validate() error {
 	switch a.Section {
 	case All, Routes, Jobs, Schedules, Plugins, Commands, Configuration, Contracts, Extensions:
 	default:
-		return cli.Usage("unknown inspection section")
+		return clidiag.Usage("unknown inspection section")
 	}
 	if a.Format != JSON && a.Format != Text {
-		return cli.Usage("inspection format must be json or text")
+		return clidiag.Usage("inspection format must be json or text")
 	}
 	return nil
 }
@@ -147,7 +149,7 @@ func (a Arguments) Validate() error {
 // Configuration sections contain provenance names and secret markers, no values.
 func Write(ctx context.Context, output io.Writer, report Report, arguments Arguments) error {
 	if ctx == nil || output == nil {
-		return fault.New(fault.Invalid, "inspection output requires a context and writer")
+		return safeerror.NewFault(fault.Invalid, "inspection output requires a context and writer")
 	}
 	if err := arguments.Validate(); err != nil {
 		return err

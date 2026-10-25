@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Visitors may descend into a referenced CTE using the same walker and budget.
@@ -22,7 +23,7 @@ type SelectWalk struct {
 func (w *SelectWalk) Visit(depth int) bool {
 	w.Nodes++
 	if depth > MaxExpressionDepth || w.Nodes > MaxExpressionNodes {
-		w.Err = fault.New(fault.Invalid, "query analysis exceeds its resource bound")
+		w.Err = safeerror.NewFault(fault.Invalid, "query analysis exceeds its resource bound")
 	}
 	return w.Err == nil
 }
@@ -76,7 +77,7 @@ func (w *SelectWalk) SelectNode(s SelectNode, depth int) {
 	}
 	for _, size := range []int{len(s.Joins), len(s.Selections), len(s.Predicates), len(s.Having), len(s.GroupBy), len(s.Orders), len(s.Distinct.Keys), len(s.Locks)} {
 		if size > MaxExpressionNodes {
-			w.Err = fault.New(fault.Invalid, "query analysis exceeds its resource bound")
+			w.Err = safeerror.NewFault(fault.Invalid, "query analysis exceeds its resource bound")
 			return
 		}
 	}
@@ -157,7 +158,7 @@ func (w *SelectWalk) Subquery(q Subquery, depth int) {
 func (w *SelectWalk) VisitCorrelation(required *ScopeRequirement) {
 	if required != nil {
 		if len(required.Sources) > MaxExpressionNodes {
-			w.Err = fault.New(fault.Invalid, "query analysis exceeds its resource bound")
+			w.Err = safeerror.NewFault(fault.Invalid, "query analysis exceeds its resource bound")
 			return
 		}
 		if w.Correlation != nil {
@@ -181,7 +182,7 @@ func (w *SelectWalk) Value(v ValueExpression, depth int) {
 		w.VisitField(v.Field)
 		if v.Filter != nil {
 			if len(v.Filter.Predicates) > MaxExpressionNodes {
-				w.Err = fault.New(fault.Invalid, "aggregate filter analysis exceeds its resource bound")
+				w.Err = safeerror.NewFault(fault.Invalid, "aggregate filter analysis exceeds its resource bound")
 				return
 			}
 			for _, p := range v.Filter.Predicates {
@@ -212,7 +213,7 @@ func (w *SelectWalk) Value(v ValueExpression, depth int) {
 		}
 		w.WindowSpec(v.Window, depth+1)
 	default:
-		w.Err = fault.New(fault.Invalid, "query analysis found an invalid value")
+		w.Err = safeerror.NewFault(fault.Invalid, "query analysis found an invalid value")
 	}
 }
 
@@ -264,6 +265,6 @@ func (w *SelectWalk) Expression(e Expression, depth int) {
 	case Negation:
 		w.Expression(e.Child, depth+1)
 	default:
-		w.Err = fault.New(fault.Invalid, "query analysis found an invalid predicate")
+		w.Err = safeerror.NewFault(fault.Invalid, "query analysis found an invalid predicate")
 	}
 }

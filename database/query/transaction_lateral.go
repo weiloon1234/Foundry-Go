@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TransactionLateralSource is a named correlated record. It can only be joined
@@ -16,7 +17,7 @@ type TransactionLateralSource[A any, O TransactionScope, R any] struct {
 func AsTransactionLateral[A any, O TransactionScope, R any](source TransactionCorrelatedRecordSource[O, R], alias string) TransactionLateralSource[A, O, R] {
 	var r correlatedRecord[O, R]
 	if nilDescriptor(source) {
-		r.query.err = fault.New(fault.Invalid, "transaction lateral alias requires a correlated record")
+		r.query.err = safeerror.NewFault(fault.Invalid, "transaction lateral alias requires a correlated record")
 	} else {
 		r = source.transactionCorrelatedRecord()
 	}
@@ -50,7 +51,7 @@ func TransactionLeftJoinLateral[L TransactionScope, A, R any](left TransactionJo
 func buildTransactionLateral[S, L TransactionScope, A, R any](left TransactionJoinInput[L], right TransactionLateralSource[A, L, R], on []JoinOn[L, TransactionAlias[A, R]], kind joinKind) transactionJoinedSource[S, L, TransactionAlias[A, R]] {
 	var input joinInput[L]
 	if nilDescriptor(left) {
-		input.err = fault.New(fault.Invalid, "transaction lateral join requires a preceding source")
+		input.err = safeerror.NewFault(fault.Invalid, "transaction lateral join requires a preceding source")
 	} else {
 		input = left.transactionJoinInput()
 	}

@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Flags adapts Go's ordinary typed flag bindings to an owned argument struct.
@@ -28,7 +29,7 @@ func FlagsWithArgs[A any](configure func(*flag.FlagSet, *A), positional func(*A,
 	return func(args []string, help io.Writer) (A, error) {
 		var result A
 		if configure == nil || help == nil {
-			return result, fault.New(fault.Invalid, "CLI flags require configuration and help output")
+			return result, safeerror.NewFault(fault.Invalid, "CLI flags require configuration and help output")
 		}
 		if err := validateArguments(args); err != nil {
 			return result, err
@@ -44,11 +45,11 @@ func FlagsWithArgs[A any](configure func(*flag.FlagSet, *A), positional func(*A,
 				return *new(A), InvalidArguments(err)
 			}
 		} else if flags.NArg() != 0 {
-			return *new(A), Usage("command accepts flags only")
+			return *new(A), ownedUsage("command accepts flags only")
 		}
 		if validate != nil {
 			if err := validate(result); err != nil {
-				return *new(A), &UsageError{cause: err}
+				return *new(A), InvalidArguments(err)
 			}
 		}
 		return result, nil
@@ -60,7 +61,7 @@ func FlagsWithArgs[A any](configure func(*flag.FlagSet, *A), positional func(*A,
 // or flag ownership; use a fresh FlagSet for each invocation.
 func ParseFlags(flags *flag.FlagSet, args []string) error {
 	if flags == nil {
-		return fault.New(fault.Invalid, "CLI parsing requires a flag set")
+		return safeerror.NewFault(fault.Invalid, "CLI parsing requires a flag set")
 	}
 	if err := validateArguments(args); err != nil {
 		return err
@@ -118,7 +119,7 @@ func InvalidArguments(err error) error {
 	if err == nil || err == flag.ErrHelp {
 		return err
 	}
-	return &UsageError{cause: err}
+	return safeerror.Retain(err, &UsageError{cause: err})
 }
 
 // ExactArgs binds exactly count positional values through assign, a helper for
@@ -126,10 +127,10 @@ func InvalidArguments(err error) error {
 func ExactArgs[A any](count int, assign func(*A, []string) error) func(*A, []string) error {
 	return func(target *A, values []string) error {
 		if count < 0 || assign == nil {
-			return fault.New(fault.Invalid, "positional binding requires a count and assignment")
+			return safeerror.NewFault(fault.Invalid, "positional binding requires a count and assignment")
 		}
 		if len(values) != count {
-			return fmt.Errorf("expected %d positional argument(s), got %d", count, len(values))
+			return safeerror.New(fmt.Sprintf("expected %d positional argument(s), got %d", count, len(values)))
 		}
 		return assign(target, values)
 	}

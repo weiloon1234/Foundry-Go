@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -25,7 +26,7 @@ func morphName[M Morphable]() (MorphName, error) {
 	var zero M
 	name := zero.MorphName()
 	if !sqlname.Valid(string(name)) {
-		return "", fault.New(fault.Invalid, "morph names use the identifier grammar")
+		return "", safeerror.NewFault(fault.Invalid, "morph names use the identifier grammar")
 	}
 	return name, nil
 }
@@ -48,7 +49,7 @@ func MorphOne[M Morphable, N any, K comparable](local KeyField[M, K], id KeyFiel
 
 func morphTargetSpec[M Morphable, N any](spec relationSpec[M, N], kind KeyField[N, MorphName]) relationSpec[M, N] {
 	if nilDescriptor(kind) {
-		spec.declarationError = fault.New(fault.Invalid, "polymorphic relation requires a morph type field")
+		spec.declarationError = safeerror.NewFault(fault.Invalid, "polymorphic relation requires a morph type field")
 		return spec
 	}
 	name, err := morphName[M]()
@@ -69,7 +70,7 @@ func morphTargetSpec[M Morphable, N any](spec relationSpec[M, N], kind KeyField[
 func MorphTo[M any, N Morphable, K comparable](id KeyField[M, K], kind KeyField[M, MorphName], key KeyField[N, K]) OneRelation[M, N] {
 	r := BelongsTo(id, key)
 	if nilDescriptor(kind) {
-		r.spec.declarationError = fault.New(fault.Invalid, "polymorphic relation requires a morph type field")
+		r.spec.declarationError = safeerror.NewFault(fault.Invalid, "polymorphic relation requires a morph type field")
 		return r
 	}
 	name, err := morphName[N]()
@@ -122,7 +123,7 @@ func MorphedByMany[M any, N Morphable, P any, A, B comparable](local KeyField[M,
 
 func morphPivot[M, N, P any](r ThroughRelation[M, N, P], kind KeyField[P, MorphName], name MorphName, err error) ThroughRelation[M, N, P] {
 	if err == nil && nilDescriptor(kind) {
-		err = fault.New(fault.Invalid, "polymorphic relation requires a morph type field")
+		err = safeerror.NewFault(fault.Invalid, "polymorphic relation requires a morph type field")
 	}
 	if err != nil {
 		r.spec.declarationError = err
@@ -157,7 +158,7 @@ type morphSource struct {
 func morphMatches[M any](m *morphSource, source Query[M], parent M) (bool, error) {
 	field, ok := source.definition.modelField(m.kind.Column)
 	if !ok || field.get == nil {
-		return false, fault.New(fault.Invalid, "morph type is not a generated model field")
+		return false, safeerror.NewFault(fault.Invalid, "morph type is not a generated model field")
 	}
 	raw, err := field.get(parent)
 	if err != nil || raw == nil {

@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
@@ -26,8 +28,10 @@ type UploadReference struct {
 func (UploadReference) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("storage multipart reference"))
 }
-func (UploadReference) MarshalJSON() ([]byte, error) { return nil, storage.Invalid }
-func (r UploadReference) Key() storage.ObjectKey     { return r.key }
+func (UploadReference) MarshalJSON() ([]byte, error) {
+	return nil, safeerror.Owned(string(storage.Invalid), storage.Invalid)
+}
+func (r UploadReference) Key() storage.ObjectKey { return r.key }
 
 type PendingUpload struct {
 	Reference UploadReference
@@ -50,30 +54,30 @@ func (b *Backend) cleanupReference(key storage.ObjectKey, upload string) storage
 // Unsupported: inspect ListUploads and establish ownership before aborting.
 func (b *Backend) UploadFromCleanup(id storage.CleanupID) (UploadReference, error) {
 	if b == nil || !b.prepared {
-		return UploadReference{}, storage.Failure(storage.Invalid, storage.DeleteOperation, storage.Unchanged, nil)
+		return UploadReference{}, newFailure(storage.Invalid, storage.DeleteOperation, storage.Unchanged, nil)
 	}
 	if len(id.Value()) > storage.MaxCursorBytes {
-		return UploadReference{}, storage.Invalid
+		return UploadReference{}, safeerror.Owned(string(storage.Invalid), storage.Invalid)
 	}
 	var ref cleanupReference
 	decoder := json.NewDecoder(strings.NewReader(id.Value()))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&ref) != nil {
-		return UploadReference{}, storage.Invalid
+		return UploadReference{}, safeerror.Owned(string(storage.Invalid), storage.Invalid)
 	}
 	var extra any
 	if decoder.Decode(&extra) != io.EOF || ref.Scope != b.scope() {
-		return UploadReference{}, storage.Invalid
+		return UploadReference{}, safeerror.Owned(string(storage.Invalid), storage.Invalid)
 	}
 	key, err := storage.ParseKey(ref.Key)
 	if err != nil {
 		return UploadReference{}, err
 	}
 	if ref.Upload == "" {
-		return UploadReference{}, storage.Unsupported
+		return UploadReference{}, safeerror.Owned(string(storage.Unsupported), storage.Unsupported)
 	}
 	if !validUploadID(ref.Upload) {
-		return UploadReference{}, storage.Invalid
+		return UploadReference{}, safeerror.Owned(string(storage.Invalid), storage.Invalid)
 	}
 	return UploadReference{b.scope(), key, ref.Upload}, nil
 }
@@ -109,7 +113,7 @@ func (b *Backend) ListUploads(ctx context.Context, options storage.ListOptions) 
 			return UploadPage{}, failure(storage.ListOperation, storage.NotApplicable, err)
 		}
 		if cursor.Scope != b.scope() || cursor.Prefix != options.Prefix.String() || !validUploadID(cursor.Upload) || !strings.HasPrefix(cursor.Key, aws.ToString(input.Prefix)) {
-			return UploadPage{}, storage.Failure(storage.Invalid, storage.ListOperation, storage.NotApplicable, nil)
+			return UploadPage{}, newFailure(storage.Invalid, storage.ListOperation, storage.NotApplicable, nil)
 		}
 		if _, err := storage.ParseKey(cursor.Key); err != nil {
 			return UploadPage{}, err
@@ -125,14 +129,14 @@ func (b *Backend) ListUploads(ctx context.Context, options storage.ListOptions) 
 		return UploadPage{}, failure(storage.ListOperation, storage.NotApplicable, err)
 	}
 	if result == nil || len(result.Uploads) > options.Limit || len(result.CommonPrefixes) > 0 || result.EncodingType != types.EncodingTypeUrl {
-		return UploadPage{}, storage.Failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, nil)
+		return UploadPage{}, newFailure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, nil)
 	}
 	page := UploadPage{Uploads: make([]PendingUpload, 0, len(result.Uploads))}
 	seen := make(map[string]bool, len(result.Uploads))
 	for _, entry := range result.Uploads {
 		full, err := b.decodeListedKey(aws.ToString(entry.Key))
 		if err != nil || !strings.HasPrefix(full, aws.ToString(input.Prefix)) {
-			return UploadPage{}, storage.Failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, err)
+			return UploadPage{}, newFailure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, err)
 		}
 		if err := validateKeyText(b.config.requiresNFC(), full); err != nil {
 			return UploadPage{}, err
@@ -143,12 +147,12 @@ func (b *Backend) ListUploads(ctx context.Context, options storage.ListOptions) 
 		}
 		upload := aws.ToString(entry.UploadId)
 		if !validUploadID(upload) || seen[upload] || entry.Initiated == nil {
-			return UploadPage{}, storage.Failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, nil)
+			return UploadPage{}, newFailure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, nil)
 		}
 		seen[upload] = true
 		initiated, err := temporal.NewDateTime(*entry.Initiated)
 		if err != nil || initiated.IsZero() {
-			return UploadPage{}, storage.Failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, err)
+			return UploadPage{}, newFailure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, err)
 		}
 		page.Uploads = append(page.Uploads, PendingUpload{Reference: UploadReference{b.scope(), key, upload}, Initiated: initiated})
 	}
@@ -156,7 +160,7 @@ func (b *Backend) ListUploads(ctx context.Context, options storage.ListOptions) 
 		next, err := b.decodeListedKey(aws.ToString(result.NextKeyMarker))
 		upload := aws.ToString(result.NextUploadIdMarker)
 		if err != nil || !validUploadID(upload) || !strings.HasPrefix(next, aws.ToString(input.Prefix)) || next == aws.ToString(input.KeyMarker) && upload == aws.ToString(input.UploadIdMarker) {
-			return UploadPage{}, storage.Failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, err)
+			return UploadPage{}, newFailure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, err)
 		}
 		page.Next, err = encodeCursor(uploadCursor{b.scope(), options.Prefix.String(), next, upload})
 		if err != nil {
@@ -174,7 +178,7 @@ func (b *Backend) AbortUpload(ctx context.Context, ref UploadReference) error {
 		return err
 	}
 	if ref.scope != b.scope() || !validUploadID(ref.upload) {
-		return storage.Failure(storage.Invalid, storage.DeleteOperation, storage.Unchanged, nil)
+		return newFailure(storage.Invalid, storage.DeleteOperation, storage.Unchanged, nil)
 	}
 	full, err := b.object(ref.key)
 	if err != nil {
@@ -184,10 +188,13 @@ func (b *Backend) AbortUpload(ctx context.Context, ref UploadReference) error {
 	_, active := b.activeWrites[ref.key]
 	b.activeMu.Unlock()
 	if active {
-		return storage.Failure(storage.PreconditionFailed, storage.DeleteOperation, storage.Unchanged, nil)
+		return newFailure(storage.PreconditionFailed, storage.DeleteOperation, storage.Unchanged, nil)
 	}
 	if err := b.abort(ctx, full, ref.upload); err != nil {
-		return failure(storage.DeleteOperation, storage.Unknown, err).WithCleanup(b.cleanupReference(ref.key, ref.upload))
+		classified := failure(storage.DeleteOperation, storage.Unknown, err)
+		var detail *storage.Error
+		errors.As(classified, &detail)
+		return safeerror.Retain(classified, detail.WithCleanup(b.cleanupReference(ref.key, ref.upload)))
 	}
 	return nil
 }
@@ -224,11 +231,11 @@ func (b *Backend) abort(ctx context.Context, full, upload string) error {
 			return err
 		}
 		if remaining == nil {
-			return storage.IntegrityFailed
+			return safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 		}
 		if len(remaining.Parts) == 0 && !aws.ToBool(remaining.IsTruncated) {
 			return nil
 		}
 	}
-	return storage.Failure(storage.Unavailable, storage.DeleteOperation, storage.Unknown, nil)
+	return newFailure(storage.Unavailable, storage.DeleteOperation, storage.Unknown, nil)
 }

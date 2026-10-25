@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Store binds cache declarations to one namespace and a borrowed Backend.
@@ -49,7 +50,7 @@ type StoreOption func(*Store) error
 func WithLogger(logger *slog.Logger) StoreOption {
 	return func(s *Store) error {
 		if logger == nil {
-			return fault.New(fault.Invalid, "cache store logger is nil")
+			return safeerror.NewFault(fault.Invalid, "cache store logger is nil")
 		}
 		s.logger = logger
 		return nil
@@ -58,7 +59,7 @@ func WithLogger(logger *slog.Logger) StoreOption {
 
 func NewStore(backend Backend, config Config, options ...StoreOption) (*Store, error) {
 	if backend == nil {
-		return nil, fault.New(fault.Invalid, "cache store requires a backend")
+		return nil, safeerror.NewFault(fault.Invalid, "cache store requires a backend")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -71,7 +72,7 @@ func NewStore(backend Backend, config Config, options ...StoreOption) (*Store, e
 	store := &Store{backend: backend, config: config, namespaceTag: namespaceTag, lifetime: lifetime, stop: stop, drained: make(chan struct{}), declarations: make(map[Name]*declarationID), fills: make(map[EntryKey]*fill)}
 	for _, option := range options {
 		if option == nil {
-			return nil, fault.New(fault.Invalid, "cache store option is nil")
+			return nil, safeerror.NewFault(fault.Invalid, "cache store option is nil")
 		}
 		if err := option(store); err != nil {
 			return nil, err
@@ -89,7 +90,7 @@ func (s *Store) Namespace() Namespace { return s.config.Namespace }
 // before the backend's owner does. Repeated calls wait again.
 func (s *Store) Close(ctx context.Context) error {
 	if s == nil || s.drained == nil || ctx == nil {
-		return fault.New(fault.Invalid, "cache store close needs an initialized store and context")
+		return safeerror.NewFault(fault.Invalid, "cache store close needs an initialized store and context")
 	}
 	s.mu.Lock()
 	if !s.closed.Swap(true) {
@@ -122,7 +123,7 @@ func (s *Store) finishLocked() {
 // active rejects operations on a closed Store.
 func (s *Store) active() error {
 	if s.closed.Load() {
-		return fault.New(fault.Closed, "cache store is closed")
+		return safeerror.NewFault(fault.Closed, "cache store is closed")
 	}
 	return nil
 }

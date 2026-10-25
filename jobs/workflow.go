@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -79,7 +80,7 @@ func (w Workflow) Envelope() WorkflowEnvelope { return w.envelope }
 // Call before dispatch; changing an already accepted identity conflicts.
 func (w Workflow) WithCompletion(step Step) (Workflow, error) {
 	if w.envelope.kind != BatchKind || w.envelope.completion.IsSet() {
-		return Workflow{}, fault.New(fault.Invalid, "only a batch without completion accepts a completion job")
+		return Workflow{}, safeerror.NewFault(fault.Invalid, "only a batch without completion accepts a completion job")
 	}
 	w.envelope.completion = value.Set(step.envelope)
 	w.steps = append(slices.Clone(w.steps), step)
@@ -90,7 +91,7 @@ func (w Workflow) WithCompletion(step Step) (Workflow, error) {
 // member is terminal, if any member failed or was cancelled by a failure.
 func (w Workflow) WithCatch(step Step) (Workflow, error) {
 	if w.envelope.catch.IsSet() {
-		return Workflow{}, fault.New(fault.Invalid, "workflow already has a catch job")
+		return Workflow{}, safeerror.NewFault(fault.Invalid, "workflow already has a catch job")
 	}
 	w.envelope.catch = value.Set(step.envelope)
 	w.steps = append(slices.Clone(w.steps), step)
@@ -101,7 +102,7 @@ func (w Workflow) WithCatch(step Step) (Workflow, error) {
 // member (and the completion) is terminal, whatever the outcome.
 func (w Workflow) WithFinally(step Step) (Workflow, error) {
 	if w.envelope.finally.IsSet() {
-		return Workflow{}, fault.New(fault.Invalid, "workflow already has a finally job")
+		return Workflow{}, safeerror.NewFault(fault.Invalid, "workflow already has a finally job")
 	}
 	w.envelope.finally = value.Set(step.envelope)
 	w.steps = append(slices.Clone(w.steps), step)
@@ -143,7 +144,7 @@ func (w Workflow) check(registry *Registry) error {
 			return err
 		}
 		if entry.typ != step.typ || !entry.policy.same(step.policy) {
-			return fault.New(fault.Invalid, "workflow step differs from its registered definition")
+			return safeerror.NewFault(fault.Invalid, "workflow step differs from its registered definition")
 		}
 	}
 	return nil
@@ -204,14 +205,14 @@ func (w WorkflowEnvelope) Queue() Queue {
 }
 func (w WorkflowEnvelope) Validate() error {
 	if w.id.IsZero() || (w.kind != ChainKind && w.kind != BatchKind) || len(w.steps) == 0 || len(w.steps) > MaxWorkflowSteps {
-		return fault.New(fault.Invalid, "invalid job workflow identity, kind or size")
+		return safeerror.NewFault(fault.Invalid, "invalid job workflow identity, kind or size")
 	}
 	if w.completion.IsSet() && w.kind != BatchKind {
-		return fault.New(fault.Invalid, "chain cannot have a batch completion")
+		return safeerror.NewFault(fault.Invalid, "chain cannot have a batch completion")
 	}
 	members := w.Members()
 	if len(members) > MaxWorkflowMembers {
-		return fault.New(fault.Invalid, "invalid job workflow size")
+		return safeerror.NewFault(fault.Invalid, "invalid job workflow size")
 	}
 	seen := make(map[ExecutionID]bool)
 	size := 0
@@ -220,7 +221,7 @@ func (w WorkflowEnvelope) Validate() error {
 			return err
 		}
 		if item.Queue() != w.Queue() || seen[item.ID()] || item.Uniqueness().Digest != "" {
-			return fault.New(fault.Invalid, "workflow requires distinct non-unique jobs in one queue")
+			return safeerror.NewFault(fault.Invalid, "workflow requires distinct non-unique jobs in one queue")
 		}
 		seen[item.ID()] = true
 		data, err := item.MarshalJSON()
@@ -229,7 +230,7 @@ func (w WorkflowEnvelope) Validate() error {
 		}
 		size += len(data)
 		if size > MaxWorkflowBytes {
-			return fault.New(fault.Invalid, "job workflow exceeds byte capacity")
+			return safeerror.NewFault(fault.Invalid, "job workflow exceeds byte capacity")
 		}
 	}
 	return nil
@@ -267,7 +268,7 @@ type workflowWire struct {
 
 func DecodeWorkflow(data []byte) (WorkflowEnvelope, error) {
 	if len(data) > MaxWorkflowBytes+64*1024 {
-		return WorkflowEnvelope{}, fault.New(fault.Invalid, "job workflow exceeds transport capacity")
+		return WorkflowEnvelope{}, safeerror.NewFault(fault.Invalid, "job workflow exceeds transport capacity")
 	}
 	if _, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: MaxWorkflowBytes + 64*1024, Depth: value.JSONMaxDepth, Nodes: (MaxWorkflowMembers + 1) * value.JSONMaxNodes}); err != nil {
 		return WorkflowEnvelope{}, err
@@ -276,7 +277,7 @@ func DecodeWorkflow(data []byte) (WorkflowEnvelope, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&wire); err != nil {
-		return WorkflowEnvelope{}, fault.New(fault.Invalid, "invalid job workflow transport")
+		return WorkflowEnvelope{}, safeerror.NewFault(fault.Invalid, "invalid job workflow transport")
 	}
 
 	result := WorkflowEnvelope{id: wire.ID, kind: wire.Kind}

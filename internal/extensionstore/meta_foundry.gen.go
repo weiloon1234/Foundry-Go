@@ -14,6 +14,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -470,7 +471,7 @@ func (q MetaQuery) foundryInsertMany(ctx context.Context, writer database.Transa
 }
 func (q MetaQuery) foundryCreateMutations(drafts []MetaDraft) ([]foundryquery.Mutation[Meta], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Meta], len(drafts))
 	for i, draft := range drafts {
@@ -824,7 +825,7 @@ func (q MetaQuery) DeleteAll(ctx context.Context, writer database.Transactor) (i
 // Increment adjusts one numeric field of every matching model by a typed delta, such as MetaFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q MetaQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Meta], extra ...MetaDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Meta]
 	if len(extra) == 1 {
@@ -839,7 +840,7 @@ func (q MetaQuery) Increment(ctx context.Context, writer database.Transactor, ad
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as MetaFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q MetaQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Meta], extra ...MetaDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Meta]
 	if len(extra) == 1 {
@@ -1187,46 +1188,46 @@ func CompareMeta(before, after foundryvalue.Optional[Meta], assigned MetaDraft) 
 	var err error
 	changes.fields.Key, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldKey.IsSet(), func(item Meta) string { return item.Key })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.Key: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.Key", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.Key.Changed() || changes.fields.Key.Assigned()) {
-		return MetaChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return MetaChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Owner, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldOwner.IsSet(), func(item Meta) string { return item.Owner })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.Owner: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.Owner", err)
 	}
 	changes.fields.Scope, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldScope.IsSet(), func(item Meta) string { return item.Scope })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.Scope: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.Scope", err)
 	}
 	changes.fields.SubjectKey, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldSubjectKey.IsSet(), func(item Meta) string { return item.SubjectKey })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.SubjectKey: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.SubjectKey", err)
 	}
 	changes.fields.Identity, err = lifecycle.CompareModelField(codec.JSON[model.Identity](), before, after, assigned.fieldIdentity.IsSet(), func(item Meta) foundryvalue.JSON[model.Identity] { return item.Identity })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.Identity: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.Identity", err)
 	}
 	changes.fields.Name, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldName.IsSet(), func(item Meta) string { return item.Name })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.Name: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.Name", err)
 	}
 	changes.fields.Version, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldVersion.IsSet(), func(item Meta) uint32 { return item.Version })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.Version: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.Version", err)
 	}
 	changes.fields.Value, err = lifecycle.CompareModelField(codec.JSON[json.RawMessage](), before, after, assigned.fieldValue.IsSet(), func(item Meta) foundryvalue.JSON[json.RawMessage] { return item.Value })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.Value: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.Value", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Meta) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.CreatedAt: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.CreatedAt", err)
 	}
 	changes.fields.UpdatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldUpdatedAt.IsSet(), func(item Meta) temporal.DateTime { return item.UpdatedAt })
 	if err != nil {
-		return MetaChanges{}, fmt.Errorf("compare Meta.UpdatedAt: %w", err)
+		return MetaChanges{}, foundrydiagnostic.Prefix("compare Meta.UpdatedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1388,7 +1389,7 @@ func (MetaHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.Ob
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Meta]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Meta]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1447,7 +1448,7 @@ func (MetaHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.Ob
 					}
 				}
 			default:
-				return foundryquery.Mutation[Meta]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Meta]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1583,7 +1584,7 @@ func (MetaHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.Ob
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1691,14 +1692,14 @@ type MetaAuditPolicy struct {
 func (changes MetaChanges) Audit(policy MetaAuditPolicy) (record.Model[Meta, string], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Meta, string]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Meta, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Meta, string]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Meta, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "key", policy.Key)
 	if err != nil {
@@ -1829,7 +1830,7 @@ func MetaAuditing(policy MetaAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() MetaHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes MetaChanges) error {

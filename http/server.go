@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"golang.org/x/net/netutil"
 )
 
@@ -37,7 +38,7 @@ type Server struct {
 // goroutines. The supplied logger is local to this server; no global is changed.
 func Prepare(handler stdhttp.Handler, config ServerConfig, logger *slog.Logger, options ...ServerOption) (*Server, error) {
 	if logger == nil {
-		return nil, fault.New(fault.Invalid, "HTTP server needs a logger")
+		return nil, safeerror.NewFault(fault.Invalid, "HTTP server needs a logger")
 	}
 	server, err := prepare(handler, config, options...)
 	if err != nil {
@@ -53,13 +54,13 @@ func prepare(handler stdhttp.Handler, config ServerConfig, options ...ServerOpti
 		return nil, err
 	}
 	if handler == nil {
-		return nil, fault.New(fault.Invalid, "HTTP server needs a handler")
+		return nil, safeerror.NewFault(fault.Invalid, "HTTP server needs a handler")
 	}
 	value := reflect.ValueOf(handler)
 	switch value.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		if value.IsNil() {
-			return nil, fault.New(fault.Invalid, "HTTP server needs a non-nil handler")
+			return nil, safeerror.NewFault(fault.Invalid, "HTTP server needs a non-nil handler")
 		}
 	}
 	if err := config.Validate(); err != nil {
@@ -73,7 +74,7 @@ func prepare(handler stdhttp.Handler, config ServerConfig, options ...ServerOpti
 // address. Readiness records successful binding, not ongoing service health.
 func (s *Server) Ready(ctx context.Context) (string, error) {
 	if s == nil || s.ready == nil || ctx == nil {
-		return "", fault.New(fault.Invalid, "HTTP readiness requires a prepared server and context")
+		return "", safeerror.NewFault(fault.Invalid, "HTTP readiness requires a prepared server and context")
 	}
 	select {
 	case <-s.ready:
@@ -100,16 +101,16 @@ func (s *Server) Run(ctx context.Context) error { return s.run(ctx, nil, false) 
 
 func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) error {
 	if s == nil || s.ready == nil || ctx == nil {
-		return fault.New(fault.Invalid, "HTTP startup requires a prepared server and context")
+		return safeerror.NewFault(fault.Invalid, "HTTP startup requires a prepared server and context")
 	}
 	s.mu.Lock()
 	if s.managed != managed {
 		s.mu.Unlock()
-		return fault.New(fault.Invalid, "application module owns HTTP startup")
+		return safeerror.NewFault(fault.Invalid, "application module owns HTTP startup")
 	}
 	if s.attempted {
 		s.mu.Unlock()
-		return fault.New(fault.Conflict, "HTTP server has already run")
+		return safeerror.NewFault(fault.Conflict, "HTTP server has already run")
 	}
 	s.attempted = true
 	s.mu.Unlock()
@@ -123,7 +124,7 @@ func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) err
 	}
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.config.Address)
 	if err != nil {
-		err = fault.Wrap(fault.Internal, "HTTP listener could not start", err)
+		err = safeerror.WrapFault(fault.Internal, "HTTP listener could not start", err)
 		s.completeStart("", err)
 		return err
 	}
@@ -177,7 +178,7 @@ func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) err
 		if errors.Is(shutdownErr, context.DeadlineExceeded) {
 			code = fault.Timeout
 		}
-		shutdownErr = errors.Join(fault.Wrap(code, "HTTP shutdown grace did not complete", shutdownErr), server.Close())
+		shutdownErr = safeerror.Join("operation failed", safeerror.WrapFault(code, "HTTP shutdown grace did not complete", shutdownErr), server.Close())
 	}
 	// Shutdown ignores hijacked connections. The admitted handler itself may
 	// still be running, so its ownership is tracked independently of net/http.
@@ -188,7 +189,7 @@ func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) err
 	if errors.Is(serveErr, stdhttp.ErrServerClosed) {
 		serveErr = nil
 	}
-	return errors.Join(ctx.Err(), serveErr, shutdownErr)
+	return safeerror.Join("operation failed", ctx.Err(), serveErr, shutdownErr)
 }
 
 func (s *Server) completeStart(address string, err error) {

@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -26,7 +27,7 @@ func matchTOTP(key TOTPSecret, code TOTPCode, now temporal.DateTime, window int,
 	}
 	previous, used := last.Get()
 	if window < 0 || window > 1 || now.UTC().Unix() < 0 || used && previous < 0 {
-		return absent, fault.New(fault.Invalid, "invalid TOTP verification state")
+		return absent, safeerror.NewFault(fault.Invalid, "invalid TOTP verification state")
 	}
 	raw, _ := totpEncoding.DecodeString(key.Secret().Reveal())
 	step := now.UTC().Unix() / totpPeriodSeconds

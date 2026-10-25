@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -173,4 +174,6 @@ func Restore(registry *extensions.Registry, owner extensions.OwnerName, scope st
 	}
 	return identity, nil
 }
-func invalid() error { return fault.New(fault.Invalid, "invalid persisted model extension identity") }
+func invalid() error {
+	return safeerror.NewFault(fault.Invalid, "invalid persisted model extension identity")
+}

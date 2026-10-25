@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Store borrows a backend and shares bounded operation capacity across bindings.
@@ -17,7 +18,7 @@ type Store struct {
 
 func NewStore(backend Backend, config Config) (*Store, error) {
 	if credential.IsNil(backend) {
-		return nil, fault.New(fault.Invalid, "token store requires a backend")
+		return nil, safeerror.NewFault(fault.Invalid, "token store requires a backend")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -26,7 +27,7 @@ func NewStore(backend Backend, config Config) (*Store, error) {
 }
 func (s *Store) validate() error {
 	if s == nil || s.gate == nil {
-		return fault.New(fault.Invalid, "tokens require a bound store")
+		return safeerror.NewFault(fault.Invalid, "tokens require a bound store")
 	}
 	return nil
 }

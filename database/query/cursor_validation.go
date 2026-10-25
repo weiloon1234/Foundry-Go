@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -19,7 +20,10 @@ func (e *CursorInputError) Unwrap() error { return e.cause }
 
 func (*CursorInputError) Is(target error) bool { return target == fault.Invalid }
 
-func cursorInputFailure(cause error) error { return &CursorInputError{cause: cause} }
+func cursorInputFailure(cause error) error {
+	failure := &CursorInputError{cause: cause}
+	return safeerror.Owned(failure.Error(), failure)
+}
 
 // Validate checks the token's bounded structure without database I/O. Query
 // execution still verifies the query fingerprint and every ordered key codec.
@@ -45,7 +49,7 @@ func (r CursorRequest[R]) Validate() error {
 // Empty pages carry no cursor; a nonempty page's navigation remains a hint.
 func (p CursorPage[R]) Validate() error {
 	if !validPageSize(p.Size) || len(p.Items) > p.Size || len(p.Items) == 0 && (p.Next.IsSet() || p.Previous.IsSet()) {
-		return fault.New(fault.Invalid, "invalid cursor page metadata")
+		return safeerror.NewFault(fault.Invalid, "invalid cursor page metadata")
 	}
 	for _, optional := range []value.Optional[Cursor[R]]{p.Next, p.Previous} {
 		if cursor, set := optional.Get(); set {

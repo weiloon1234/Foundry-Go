@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Applied records a completed migration. Nontransactional statements finish
@@ -66,7 +67,7 @@ type Report struct {
 // Check reports drift without formatting untrusted SQL or stored values.
 func (r Report) Check() error {
 	if len(r.Problems) != 0 {
-		return fault.New(fault.Conflict, fmt.Sprintf("migration history has %d conflict(s); inspect status before applying changes", len(r.Problems)))
+		return safeerror.NewFault(fault.Conflict, fmt.Sprintf("migration history has %d conflict(s); inspect status before applying changes", len(r.Problems)))
 	}
 	return nil
 }
@@ -78,10 +79,10 @@ func (r *Registry) Inspect(history []Applied) (Report, error) {
 	byKey := make(map[Key]Applied, len(history))
 	for _, entry := range history {
 		if !validKey(entry.Key) || !validName(string(entry.Version)) || entry.Batch <= 0 || entry.AppliedAt.IsZero() {
-			return Report{}, fault.New(fault.Invalid, "invalid migration history record")
+			return Report{}, safeerror.NewFault(fault.Invalid, "invalid migration history record")
 		}
 		if _, exists := byKey[entry.Key]; exists {
-			return Report{}, fault.New(fault.Duplicate, "duplicate migration history record")
+			return Report{}, safeerror.NewFault(fault.Duplicate, "duplicate migration history record")
 		}
 		entry.AppliedAt = entry.AppliedAt.UTC()
 		byKey[entry.Key] = entry

@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // fallbackPattern is how route inspection presents a fallback: it can answer
@@ -36,17 +37,17 @@ type routeFallback struct {
 // fallback; the original router is unchanged.
 func (r *Router) WithFallback(id RouteID, handler stdhttp.Handler) (*Router, error) {
 	if r == nil || r.mux == nil {
-		return nil, fault.New(fault.Invalid, "fallback requires a router")
+		return nil, safeerror.NewFault(fault.Invalid, "fallback requires a router")
 	}
 	if handler == nil || !identifier.Semantic(string(id)) {
-		return nil, fault.New(fault.Invalid, "fallback requires a semantic ID and a handler")
+		return nil, safeerror.NewFault(fault.Invalid, "fallback requires a semantic ID and a handler")
 	}
 	if r.fallback != nil {
-		return nil, fault.New(fault.Duplicate, "router already has a fallback")
+		return nil, safeerror.NewFault(fault.Duplicate, "router already has a fallback")
 	}
 	for _, route := range r.routes {
 		if route.ID == id {
-			return nil, fault.New(fault.Duplicate, "fallback route ID is already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "fallback route ID is already registered")
 		}
 	}
 	info := RouteInfo{ID: id, Method: GET, Path: fallbackPattern, Parameters: []string{"path"}, Access: Public, Raw: true, Fallback: true}

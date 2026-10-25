@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -39,7 +40,7 @@ type RelatedLookup[P, M any, K comparable] struct {
 
 func RelatedUnique[P, M any, K comparable](relation ScopedRelation[P, M], field KeyField[M, K]) RelatedLookup[P, M, K] {
 	if nilDescriptor(relation) || nilDescriptor(field) {
-		return RelatedLookup[P, M, K]{err: fault.New(fault.Invalid, "related lookup requires a direct relation and stored target field")}
+		return RelatedLookup[P, M, K]{err: safeerror.NewFault(fault.Invalid, "related lookup requires a direct relation and stored target field")}
 	}
 	return RelatedLookup[P, M, K]{relation: relation.lookupRelation(), field: field.relationKey()}
 }
@@ -49,7 +50,7 @@ func (l RelatedLookup[P, M, K]) Validate() error {
 		return l.err
 	}
 	if l.relation.validate == nil || l.relation.spec.scope == nil {
-		return fault.New(fault.Invalid, "related lookup requires a direct relationship")
+		return safeerror.NewFault(fault.Invalid, "related lookup requires a direct relationship")
 	}
 	if err := l.relation.validate(); err != nil {
 		return err
@@ -73,7 +74,7 @@ func (l RelatedLookup[P, M, K]) Find(ctx context.Context, executor database.Exec
 		return nil
 	})
 	if failure != nil {
-		return value.Optional[M]{}, fault.Wrap(fault.Internal, "model relationship scope failed", failure)
+		return value.Optional[M]{}, safeerror.WrapFailure(fault.Internal, "model relationship scope failed", failure)
 	}
 	if err := ctx.Err(); err != nil {
 		return value.Optional[M]{}, err

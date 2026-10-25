@@ -2,7 +2,6 @@ package challenge
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -44,7 +44,7 @@ func New[M model.Identifiable, K any, P Purpose](store *Store, provider auth.Pro
 		}
 	}
 	if binding.Lock == nil || binding.Binding == nil {
-		return nil, fault.New(fault.Invalid, "challenge model requires lock and binding callbacks")
+		return nil, safeerror.NewFault(fault.Invalid, "challenge model requires lock and binding callbacks")
 	}
 	address := Address{Namespace: store.config.Namespace, Provider: provider.Name(), Model: provider.ModelName(), Purpose: purpose[P]()}
 	if err := address.Validate(); err != nil {
@@ -54,7 +54,7 @@ func New[M model.Identifiable, K any, P Purpose](store *Store, provider auth.Pro
 }
 func (f *Flow[M, K, P]) Validate() error {
 	if f == nil {
-		return fault.New(fault.Invalid, "challenge flow is not configured")
+		return safeerror.NewFault(fault.Invalid, "challenge flow is not configured")
 	}
 	return f.store.Validate()
 }
@@ -84,21 +84,21 @@ func (f *Flow[M, K, P]) locked(ctx context.Context, tx *database.Tx, identity mo
 	}
 	subject, present := found.Get()
 	if !present {
-		return *new(M), Binding{}, auth.Unauthenticated
+		return *new(M), Binding{}, auth.Unauthenticated.WithCause(nil)
 	}
 	got, err := f.eligible(ctx, subject)
 	if err != nil {
 		return *new(M), Binding{}, err
 	}
 	if got != identity {
-		return *new(M), Binding{}, fault.New(fault.Invalid, "challenge lookup returned a different identity")
+		return *new(M), Binding{}, safeerror.NewFault(fault.Invalid, "challenge lookup returned a different identity")
 	}
 	binding, err := f.model.Binding(subject)
 	if err != nil {
 		return *new(M), Binding{}, err
 	}
 	if binding.IsZero() {
-		return *new(M), Binding{}, fault.New(fault.Invalid, "challenge model returned an empty binding")
+		return *new(M), Binding{}, safeerror.NewFault(fault.Invalid, "challenge model returned an empty binding")
 	}
 	return subject, binding, nil
 }
@@ -131,7 +131,7 @@ func (f *Flow[M, K, P]) eligible(ctx context.Context, subject M) (model.Identity
 		return model.Identity{}, err
 	}
 	if !allowed {
-		return model.Identity{}, auth.Unauthenticated
+		return model.Identity{}, auth.Unauthenticated.WithCause(nil)
 	}
 	return identity, nil
 }
@@ -163,7 +163,7 @@ func (f *Flow[M, K, P]) Issue(ctx context.Context, reference model.Reference[M, 
 		record, err := f.store.backend.Issue(op, f.address, identity, Digest{hash: hash}, f.lifetime, func(inner context.Context, tx *database.Tx) (Binding, error) {
 			if called || tx == nil || callbackError != nil {
 				if callbackError == nil {
-					callbackError = fault.New(fault.Invalid, "invalid challenge preparation callback")
+					callbackError = safeerror.NewFault(fault.Invalid, "invalid challenge preparation callback")
 				}
 				return Binding{}, callbackError
 			}
@@ -179,13 +179,13 @@ func (f *Flow[M, K, P]) Issue(ctx context.Context, reference model.Reference[M, 
 			return binding, callbackError
 		})
 		if err != nil || callbackError != nil {
-			return errors.Join(err, callbackError)
+			return safeerror.Join("operation failed", err, callbackError)
 		}
 		if err := record.Validate(f.address); err != nil {
 			return err
 		}
 		if !called || record.Subject != identity || !record.Hash.hash.Equal(hash) || !record.Binding.Equal(binding) || record.ExpiresAt.UTC().Sub(record.CreatedAt.UTC()) != f.lifetime {
-			return fault.New(fault.Invalid, "challenge backend returned a different issuance")
+			return safeerror.NewFault(fault.Invalid, "challenge backend returned a different issuance")
 		}
 		result = Issued[M, P]{subject: subject, token: Token[M, P]{value: raw}, expires: record.ExpiresAt}
 		return nil
@@ -204,7 +204,7 @@ func (f *Flow[M, K, P]) Consume(ctx context.Context, token Token[M, P], apply fu
 		return *new(M), err
 	}
 	if apply == nil {
-		return *new(M), fault.New(fault.Invalid, "challenge consumption requires an action")
+		return *new(M), safeerror.NewFault(fault.Invalid, "challenge consumption requires an action")
 	}
 	var result M
 	err := f.store.gate.Execute(ctx, func(op context.Context) error {
@@ -218,7 +218,7 @@ func (f *Flow[M, K, P]) Consume(ctx context.Context, token Token[M, P], apply fu
 		found, err := f.store.backend.Consume(op, f.address, hash, func(inner context.Context, tx *database.Tx, record Record) error {
 			if called || tx == nil || callbackError != nil {
 				if callbackError == nil {
-					callbackError = fault.New(fault.Invalid, "invalid challenge consumption callback")
+					callbackError = safeerror.NewFault(fault.Invalid, "invalid challenge consumption callback")
 				}
 				return callbackError
 			}
@@ -228,14 +228,14 @@ func (f *Flow[M, K, P]) Consume(ctx context.Context, token Token[M, P], apply fu
 					return err
 				}
 				if !record.Hash.Equal(hash) {
-					return fault.New(fault.Invalid, "challenge backend selected a different credential")
+					return safeerror.NewFault(fault.Invalid, "challenge backend selected a different credential")
 				}
 				subject, binding, err := f.locked(op, tx, record.Subject)
 				if err != nil {
 					return err
 				}
 				if !binding.Equal(record.Binding) {
-					return auth.Unauthenticated
+					return auth.Unauthenticated.WithCause(nil)
 				}
 				result, err = apply(op, tx, subject)
 				if err != nil {
@@ -246,7 +246,7 @@ func (f *Flow[M, K, P]) Consume(ctx context.Context, token Token[M, P], apply fu
 					return err
 				}
 				if identity != record.Subject {
-					return fault.New(fault.Invalid, "challenge action changed model identity")
+					return safeerror.NewFault(fault.Invalid, "challenge action changed model identity")
 				}
 				if err := op.Err(); err != nil {
 					return err
@@ -257,17 +257,17 @@ func (f *Flow[M, K, P]) Consume(ctx context.Context, token Token[M, P], apply fu
 			return callbackError
 		})
 		if err != nil || callbackError != nil {
-			return errors.Join(err, callbackError)
+			return safeerror.Join("operation failed", err, callbackError)
 		}
 		record, present := found.Get()
 		if !present {
 			if called {
-				return fault.New(fault.Invalid, "challenge backend discarded a completed action")
+				return safeerror.NewFault(fault.Invalid, "challenge backend discarded a completed action")
 			}
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		if !called || record != applied {
-			return fault.New(fault.Invalid, "challenge backend returned a different consumption")
+			return safeerror.NewFault(fault.Invalid, "challenge backend returned a different consumption")
 		}
 		return nil
 	})
@@ -302,14 +302,14 @@ func (f *Flow[M, K, P]) Prune(ctx context.Context, limit int) (uint64, error) {
 		return 0, err
 	}
 	if limit < 1 || limit > MaxPrune {
-		return 0, fault.New(fault.Invalid, "invalid challenge prune limit")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid challenge prune limit")
 	}
 	var removed uint64
 	err := f.store.gate.Execute(ctx, func(op context.Context) error {
 		var err error
 		removed, err = f.store.backend.Prune(op, f.address, limit)
 		if err == nil && removed > uint64(limit) {
-			return fault.New(fault.Invalid, "challenge prune exceeded its limit")
+			return safeerror.NewFault(fault.Invalid, "challenge prune exceeded its limit")
 		}
 		return err
 	})

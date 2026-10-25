@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Batch owns all temporary files and readers for one request. Close waits for
@@ -31,7 +32,7 @@ type Batch struct {
 
 func New(ctx context.Context, config Config) (*Batch, error) {
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "upload batch requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "upload batch requires a context")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -60,7 +61,7 @@ func (b *Batch) create(ctx context.Context) (*os.File, string, error) {
 		return nil, "", err
 	}
 	if b.files >= b.config.MaxFiles {
-		return nil, "", &LimitError{Kind: Files}
+		return nil, "", safeerror.Owned("upload resource limit exceeded", &LimitError{Kind: Files})
 	}
 	if b.root == nil {
 		dir, err := os.MkdirTemp(b.config.TempDirectory, "foundry-upload-")
@@ -70,7 +71,7 @@ func (b *Batch) create(ctx context.Context) (*os.File, string, error) {
 		root, err := os.OpenRoot(dir)
 		if err != nil {
 			removeErr := os.Remove(dir)
-			return nil, "", errors.Join(err, removeErr)
+			return nil, "", safeerror.Join("operation failed", err, removeErr)
 		}
 		b.dir, b.root = dir, root
 	}
@@ -88,7 +89,7 @@ func (b *Batch) take(n int64) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if n > b.config.MaxBytes-b.bytes {
-		return &LimitError{Kind: TotalBytes}
+		return safeerror.Owned("upload resource limit exceeded", &LimitError{Kind: TotalBytes})
 	}
 	b.bytes += n
 	return nil
@@ -132,7 +133,7 @@ func (b *Batch) Close() error {
 		}
 		failures = append(failures, b.root.Close(), os.Remove(b.dir))
 	}
-	b.closeErr = errors.Join(failures...)
+	b.closeErr = safeerror.Join("operation failed", failures...)
 	b.closed = true
 	b.changed.Broadcast()
 	return b.closeErr

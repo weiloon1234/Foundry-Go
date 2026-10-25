@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -25,7 +26,7 @@ type credentialResponseJSON[T, W any] struct {
 
 func (d credentialResponseJSON[T, W]) Validate() error {
 	if d.prepare == nil {
-		return fault.New(fault.Invalid, "credential response requires a preparation callback")
+		return safeerror.NewFault(fault.Invalid, "credential response requires a preparation callback")
 	}
 	if d.validate != nil {
 		if err := d.validate(); err != nil {
@@ -45,7 +46,7 @@ func (d credentialResponseJSON[T, W]) Encode(ctx context.Context, result T, limi
 		return nil, err
 	}
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "credential delivery requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "credential delivery requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -66,14 +67,14 @@ func (d credentialResponseJSON[T, W]) Encode(ctx context.Context, result T, limi
 }
 func credentialClockValid(source clock.Clock) error {
 	if nilCookieValue(source) {
-		return fault.New(fault.Invalid, "credential response requires a clock")
+		return safeerror.NewFault(fault.Invalid, "credential response requires a clock")
 	}
 	return nil
 }
 func credentialTime(source clock.Clock) (temporal.DateTime, error) {
 	now, err := temporal.NewDateTime(source.Now())
 	if err != nil || now.IsZero() {
-		return temporal.DateTime{}, fault.New(fault.Invalid, "credential delivery clock is invalid")
+		return temporal.DateTime{}, safeerror.NewFault(fault.Invalid, "credential delivery clock is invalid")
 	}
 	return now, nil
 }

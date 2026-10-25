@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type secretError struct{}
@@ -22,7 +23,7 @@ func (hostileUnwrap) Error() string { return "hostile" }
 func (hostileUnwrap) Unwrap() error { panic("private") }
 
 func TestDescribeIsRedactedAndBounded(t *testing.T) {
-	err := fmt.Errorf("handler: %w", fault.Wrap(fault.Internal, "query failed", secretError{}))
+	err := fmt.Errorf("handler: %w", safeerror.WrapFault(fault.Internal, "query failed", secretError{}))
 	d := errordiag.Describe(err)
 	rendered := fmt.Sprintf("%+v", d)
 	if strings.Contains(rendered, "hunter2") {
@@ -31,7 +32,7 @@ func TestDescribeIsRedactedAndBounded(t *testing.T) {
 	if len(d.Faults) != 1 || d.Faults[0].Code != fault.Internal || d.Faults[0].Message != "query failed" {
 		t.Fatalf("fault note missing: %+v", d)
 	}
-	if len(d.Types) != 3 || d.Types[2] != "errordiag_test.secretError" {
+	if len(d.Types) != 4 || d.Types[3] != "errordiag_test.secretError" {
 		t.Fatalf("type chain missing: %+v", d.Types)
 	}
 	if errordiag.Describe(nil).IsZero() == false {
@@ -40,7 +41,7 @@ func TestDescribeIsRedactedAndBounded(t *testing.T) {
 	if !errordiag.Describe(hostileUnwrap{}).Truncated {
 		t.Fatal("failing Unwrap must truncate, not crash")
 	}
-	joined := errors.Join(fault.Overloaded, fault.New(fault.Closed, "closed"))
+	joined := errors.Join(fault.Overloaded, safeerror.NewFault(fault.Closed, "closed"))
 	if d := errordiag.Describe(joined); len(d.Faults) != 2 {
 		t.Fatalf("joined faults missing: %+v", d)
 	}
@@ -66,10 +67,14 @@ type promotedDiagnostic struct{ *databaseError }
 
 func TestDiagnosticCapabilitiesFailClosedAndStayWithConcreteOwners(t *testing.T) {
 	db := database.NewError("read", database.NotFound).(*database.Error)
+	var response errordiag.Provider
+	if !errors.As(foundryhttp.NotFound.WithCause(errors.New("cause")), &response) {
+		t.Fatal("response lost diagnostic capability")
+	}
 	for _, attributes := range [][]fault.Attribute{
 		call(db.FoundryDiagnostic),
 		call(foundryhttp.NotFound.FoundryDiagnostic),
-		call(foundryhttp.NotFound.WithCause(errors.New("cause")).(errordiag.Provider).FoundryDiagnostic),
+		call(response.FoundryDiagnostic),
 	} {
 		if len(attributes) != 0 {
 			t.Fatal("zero seal published diagnostic", attributes)
@@ -88,5 +93,19 @@ func TestDiagnosticCapabilitiesFailClosedAndStayWithConcreteOwners(t *testing.T)
 		if diagnostic := errordiag.Describe(err); len(diagnostic.Attributes) == 0 {
 			t.Fatalf("framework diagnostic %T lost its attributes", err)
 		}
+	}
+}
+
+func TestTransparentSnapshotsDoNotExhaustFaultNotes(t *testing.T) {
+	first := safeerror.NewFault(fault.Invalid, "first")
+	wrapped := first
+	for range 12 {
+		wrapped = safeerror.Prefix("context", wrapped)
+	}
+	second := safeerror.NewFault(fault.Invalid, "first") // same text, distinct construction
+	panicked := safeerror.Panic("callback panicked", []fault.Frame{{Function: "origin", Line: 42}})
+	result := errordiag.Describe(errors.Join(wrapped, second, panicked))
+	if len(result.Faults) != 3 || len(result.Frames) != 1 || result.Frames[0].Function != "origin" {
+		t.Fatalf("transparent wrappers hid distinct snapshots: %+v", result)
 	}
 }

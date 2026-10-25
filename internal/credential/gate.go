@@ -2,13 +2,13 @@ package credential
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func IsNil(v any) bool {
@@ -37,7 +37,7 @@ func NewGate(maximum int, timeout time.Duration) *Gate {
 }
 func (g *Gate) Execute(ctx context.Context, fn func(context.Context) error) error {
 	if g == nil || g.slots == nil || ctx == nil || fn == nil {
-		return fault.New(fault.Invalid, "credential operation requires a bound store and context")
+		return safeerror.NewFault(fault.Invalid, "credential operation requires a bound store and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -63,7 +63,7 @@ func (g *Gate) Execute(ctx context.Context, fn func(context.Context) error) erro
 	if canceled := op.Err(); canceled != nil {
 		// A late cancellation must not erase a known committed/uncertain database
 		// outcome or another operational cause. Keep both identities, safely formatted.
-		return fault.Wrap(operationFailureCode(err), "credential operation canceled", errors.Join(canceled, err))
+		return safeerror.WrapFault(operationFailureCode(err), "credential operation canceled", safeerror.Join("operation failed", canceled, err))
 	}
-	return fault.Wrap(operationFailureCode(err), "credential operation failed", err)
+	return safeerror.WrapFailure(operationFailureCode(err), "credential operation failed", err)
 }

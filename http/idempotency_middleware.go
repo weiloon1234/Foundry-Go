@@ -1,8 +1,10 @@
 package http
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
 	stdhttp "net/http"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PreservesIdempotentResponses explicitly attests a custom wrapper's contract:
@@ -18,7 +20,7 @@ func defineReplayMiddleware(id MiddlewareID, construct func(stdhttp.Handler) (st
 func validateIdempotentMiddlewares(items []Middleware) error {
 	for _, item := range items {
 		if !item.idempotent {
-			return fault.New(fault.Invalid, "middleware has no idempotent-response contract: "+string(item.id))
+			return safeerror.NewFault(fault.Invalid, "middleware has no idempotent-response contract: "+string(item.id))
 		}
 	}
 	return nil

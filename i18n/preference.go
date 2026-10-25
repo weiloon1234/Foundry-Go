@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PreferenceSource names the step that selected a locale, for Vary/cache policy
@@ -110,7 +111,7 @@ func AcceptLanguage[S any](header func(S) string) Preference[S] {
 func (p Preference[S]) Source() PreferenceSource { return p.source }
 func (p Preference[S]) Validate() error {
 	if p.match == nil || p.source == "" {
-		return fault.New(fault.Invalid, "invalid locale preference")
+		return safeerror.NewFault(fault.Invalid, "invalid locale preference")
 	}
 	return nil
 }
@@ -142,7 +143,7 @@ func NewLocaleResolver[S any](locales LocaleCatalog, steps ...Preference[S]) (*L
 		return nil, err
 	}
 	if len(steps) > MaxPreferences {
-		return nil, fault.New(fault.Invalid, "too many locale preferences")
+		return nil, safeerror.NewFault(fault.Invalid, "too many locale preferences")
 	}
 	for i, step := range steps {
 		if err := step.Validate(); err != nil {
@@ -150,7 +151,7 @@ func NewLocaleResolver[S any](locales LocaleCatalog, steps ...Preference[S]) (*L
 		}
 		for _, earlier := range steps[:i] {
 			if earlier.source == step.source {
-				return nil, fault.New(fault.Duplicate, "duplicate locale preference "+string(step.source))
+				return nil, safeerror.NewFault(fault.Duplicate, "duplicate locale preference "+string(step.source))
 			}
 		}
 	}

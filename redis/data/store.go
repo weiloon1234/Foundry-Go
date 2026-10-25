@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -26,7 +27,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.MaxDeclarations <= 0 || c.MaxKeyBytes <= 0 || c.MaxKeyBytes > keyspace.MaxKeyBytes || c.MaxConcurrent <= 0 || c.MaxBatchKeys <= 0 || c.MaxBatchKeys > MaxBatchKeys || c.Timeout <= 0 {
-		return fault.New(fault.Invalid, "invalid Redis data store bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid Redis data store bounds")
 	}
 	return c.Limits.Validate()
 }
@@ -50,7 +51,7 @@ type Store struct {
 
 func NewStore(backend Backend, c Config) (*Store, error) {
 	if backend == nil {
-		return nil, fault.New(fault.Invalid, "Redis data store requires an adapter")
+		return nil, safeerror.NewFault(fault.Invalid, "Redis data store requires an adapter")
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -59,24 +60,24 @@ func NewStore(backend Backend, c Config) (*Store, error) {
 }
 func (s *Store) bind(name Name, version Version, id *declarationID) error {
 	if s == nil || s.slots == nil {
-		return fault.New(fault.Invalid, "Redis data binding requires a store")
+		return safeerror.NewFault(fault.Invalid, "Redis data binding requires a store")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := declarationKey{name, version}
 	old, exists := s.declarations[key]
 	if exists && old != id {
-		return fault.New(fault.Duplicate, "Redis data name/version has another declaration")
+		return safeerror.NewFault(fault.Duplicate, "Redis data name/version has another declaration")
 	}
 	if !exists && len(s.declarations) >= s.config.MaxDeclarations {
-		return fault.New(fault.Invalid, "Redis data declaration capacity reached")
+		return safeerror.NewFault(fault.Invalid, "Redis data declaration capacity reached")
 	}
 	s.declarations[key] = id
 	return nil
 }
 func (s *Store) execute(ctx context.Context, fn func(context.Context) error) error {
 	if s == nil || s.slots == nil || ctx == nil {
-		return fault.New(fault.Invalid, "Redis data operation requires a bound store and context")
+		return safeerror.NewFault(fault.Invalid, "Redis data operation requires a bound store and context")
 	}
 	op, cancel := context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()

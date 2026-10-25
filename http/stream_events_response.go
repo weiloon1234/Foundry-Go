@@ -2,13 +2,14 @@ package http
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	stdhttp "net/http"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // EventStreamMediaType is the media type of server-sent event responses.
@@ -37,7 +38,7 @@ func (e Events[T]) WithConfig(config EventStreamConfig) Events[T] {
 
 // MarshalJSON rejects implicit serialization; events require their response contract.
 func (Events[T]) MarshalJSON() ([]byte, error) {
-	return nil, fault.New(fault.Invalid, "events require an event stream response contract")
+	return nil, safeerror.NewFault(fault.Invalid, "events require an event stream response contract")
 }
 
 // EventStreamResponse declares a server-sent event (text/event-stream) response
@@ -69,7 +70,7 @@ func (d eventsDescriptor[T]) Description() (contract.Schema, error) {
 
 func (d eventsDescriptor[T]) prepare(events Events[T], limits contract.JSONLimits) (func(stdhttp.ResponseWriter, *stdhttp.Request) error, error) {
 	if events.produce == nil {
-		return nil, fault.New(fault.Invalid, "event stream has no producer")
+		return nil, safeerror.NewFault(fault.Invalid, "event stream has no producer")
 	}
 	config := events.config
 	config.Data = limits
@@ -84,7 +85,7 @@ func (d eventsDescriptor[T]) prepare(events Events[T], limits contract.JSONLimit
 			return nil
 		}
 		err := ServeEvents(w, r, d.descriptor, config, events.produce)
-		if err != nil && r.Context().Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+		if err != nil && r.Context().Err() != nil && (callback.ErrorIs(err, context.Canceled) || callback.ErrorIs(err, context.DeadlineExceeded)) {
 			// The client left or the route deadline ended the stream.
 			return nil
 		}

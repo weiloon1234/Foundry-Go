@@ -3,6 +3,7 @@ package manifest
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type DistributionKind string
@@ -29,7 +30,7 @@ func (d Distribution) Validate() error {
 		return err
 	}
 	if (d.Kind != Assets && d.Kind != Scaffold) || !identifier.Semantic(d.Name) {
-		return fault.New(fault.Invalid, "invalid plugin distribution identity")
+		return safeerror.NewFault(fault.Invalid, "invalid plugin distribution identity")
 	}
 	return nil
 }

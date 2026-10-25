@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -27,13 +28,13 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.MaxConcurrent < 1 || c.MaxConcurrent > 65536 || c.Timeout <= 0 {
-		return fault.New(fault.Invalid, "invalid challenge capacity or timeout")
+		return safeerror.NewFault(fault.Invalid, "invalid challenge capacity or timeout")
 	}
 	return nil
 }
 func ValidateLifetime(lifetime time.Duration) error {
 	if lifetime < time.Millisecond || lifetime > MaxLifetime || lifetime%time.Microsecond != 0 {
-		return fault.New(fault.Invalid, "invalid challenge lifetime")
+		return safeerror.NewFault(fault.Invalid, "invalid challenge lifetime")
 	}
 	return nil
 }

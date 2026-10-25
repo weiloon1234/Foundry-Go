@@ -13,6 +13,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -500,7 +501,7 @@ func (q FactorQuery) foundryInsertMany(ctx context.Context, writer database.Tran
 }
 func (q FactorQuery) foundryCreateMutations(drafts []FactorDraft) ([]foundryquery.Mutation[Factor], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Factor], len(drafts))
 	for i, draft := range drafts {
@@ -863,7 +864,7 @@ func (q FactorQuery) DeleteAll(ctx context.Context, writer database.Transactor) 
 // Increment adjusts one numeric field of every matching model by a typed delta, such as FactorFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q FactorQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Factor], extra ...FactorDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Factor]
 	if len(extra) == 1 {
@@ -878,7 +879,7 @@ func (q FactorQuery) Increment(ctx context.Context, writer database.Transactor, 
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as FactorFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q FactorQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Factor], extra ...FactorDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Factor]
 	if len(extra) == 1 {
@@ -1264,46 +1265,46 @@ func CompareFactor(before, after foundryvalue.Optional[Factor], assigned FactorD
 	var err error
 	changes.fields.Key, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldKey.IsSet(), func(item Factor) string { return item.Key })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.Key: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.Key", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.Key.Changed() || changes.fields.Key.Assigned()) {
-		return FactorChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return FactorChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Scope, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldScope.IsSet(), func(item Factor) string { return item.Scope })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.Scope: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.Scope", err)
 	}
 	changes.fields.Identity, err = lifecycle.CompareModelField(codec.JSON[model.Identity](), before, after, assigned.fieldIdentity.IsSet(), func(item Factor) foundryvalue.JSON[model.Identity] { return item.Identity })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.Identity: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.Identity", err)
 	}
 	changes.fields.Generation, err = lifecycle.CompareModelField(codec.ID[Factor](), before, after, assigned.fieldGeneration.IsSet(), func(item Factor) model.ID[Factor] { return item.Generation })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.Generation: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.Generation", err)
 	}
 	changes.fields.Ciphertext, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldCiphertext.IsSet(), func(item Factor) string { return item.Ciphertext })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.Ciphertext: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.Ciphertext", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Factor) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.CreatedAt: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.CreatedAt", err)
 	}
 	changes.fields.PendingUntil, err = lifecycle.CompareModelField(codec.Nullable(codec.DateTime()), before, after, assigned.fieldPendingUntil.IsSet(), func(item Factor) foundryvalue.Nullable[temporal.DateTime] { return item.PendingUntil })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.PendingUntil: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.PendingUntil", err)
 	}
 	changes.fields.ConfirmedAt, err = lifecycle.CompareModelField(codec.Nullable(codec.DateTime()), before, after, assigned.fieldConfirmedAt.IsSet(), func(item Factor) foundryvalue.Nullable[temporal.DateTime] { return item.ConfirmedAt })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.ConfirmedAt: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.ConfirmedAt", err)
 	}
 	changes.fields.LastStep, err = lifecycle.CompareModelField(codec.Nullable(codec.Signed[int64]()), before, after, assigned.fieldLastStep.IsSet(), func(item Factor) foundryvalue.Nullable[int64] { return item.LastStep })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.LastStep: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.LastStep", err)
 	}
 	changes.fields.RecoveryHashes, err = lifecycle.CompareModelField(codec.JSON[[]string](), before, after, assigned.fieldRecoveryHashes.IsSet(), func(item Factor) foundryvalue.JSON[[]string] { return item.RecoveryHashes })
 	if err != nil {
-		return FactorChanges{}, fmt.Errorf("compare Factor.RecoveryHashes: %w", err)
+		return FactorChanges{}, foundrydiagnostic.Prefix("compare Factor.RecoveryHashes", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1465,7 +1466,7 @@ func (FactorHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Factor]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Factor]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1524,7 +1525,7 @@ func (FactorHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.
 					}
 				}
 			default:
-				return foundryquery.Mutation[Factor]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Factor]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1660,7 +1661,7 @@ func (FactorHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1768,14 +1769,14 @@ type FactorAuditPolicy struct {
 func (changes FactorChanges) Audit(policy FactorAuditPolicy) (record.Model[Factor, string], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Factor, string]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Factor, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Factor, string]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Factor, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "key", policy.Key)
 	if err != nil {
@@ -1904,7 +1905,7 @@ func FactorAuditing(policy FactorAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() FactorHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes FactorChanges) error {

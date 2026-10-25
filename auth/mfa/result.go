@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -23,7 +24,7 @@ func ParseEnrollmentID[M any](text string) (EnrollmentID[M], error) {
 		return EnrollmentID[M]{}, err
 	}
 	if id.IsZero() {
-		return EnrollmentID[M]{}, fault.New(fault.Invalid, "enrollment ID is empty")
+		return EnrollmentID[M]{}, safeerror.NewFault(fault.Invalid, "enrollment ID is empty")
 	}
 	return EnrollmentID[M]{id: id}, nil
 }
@@ -92,6 +93,6 @@ func (r Response) Validate() error {
 	case 2:
 		return r.recovery.Validate()
 	default:
-		return fault.New(fault.Invalid, "MFA response must select a factor")
+		return safeerror.NewFault(fault.Invalid, "MFA response must select a factor")
 	}
 }

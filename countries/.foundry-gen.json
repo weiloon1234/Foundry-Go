@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    "country_foundry.gen.go": "c70f366c2cd1415f827a98f5259cef406f0ece333aa640a9678763a14182f35c",
-    "status_foundry.gen.go": "56badd9d23d80ced4208f3d623173b1c9372a1f982e430708e96413d4ae460b4"
+    "country_foundry.gen.go": "6e14c39089e76ea259926e0a6a4f31c719d8483e0bbc63a13405b4cb472ee258",
+    "status_foundry.gen.go": "001082b8ae0a052de59cf71a463a5b7a4f00ab60eb695781742c82b840093568"
   }
 }

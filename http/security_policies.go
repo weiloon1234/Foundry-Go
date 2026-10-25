@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // FramePolicy selects the supported X-Frame-Options policy. Zero omits the
@@ -21,7 +22,7 @@ func (p FramePolicy) Validate() error {
 	case "", FrameDeny, FrameSameOrigin:
 		return nil
 	}
-	return fault.New(fault.Invalid, "unsupported frame policy")
+	return safeerror.NewFault(fault.Invalid, "unsupported frame policy")
 }
 
 // ReferrerPolicy selects a single standard Referrer-Policy token. Zero omits
@@ -44,7 +45,7 @@ func (p ReferrerPolicy) Validate() error {
 	case "", ReferrerNoReferrer, ReferrerNoReferrerWhenDowngrade, ReferrerSameOrigin, ReferrerOrigin, ReferrerStrictOrigin, ReferrerOriginWhenCrossOrigin, ReferrerStrictOriginWhenCrossOrigin, ReferrerUnsafeURL:
 		return nil
 	}
-	return fault.New(fault.Invalid, "unsupported referrer policy")
+	return safeerror.NewFault(fault.Invalid, "unsupported referrer policy")
 }
 
 // HSTSPolicy is an explicit Strict-Transport-Security declaration. MaxAge must
@@ -59,10 +60,10 @@ type HSTSPolicy struct {
 
 func (p HSTSPolicy) Validate() error {
 	if p.MaxAge < 0 || p.MaxAge%time.Second != 0 {
-		return fault.New(fault.Invalid, "HSTS max age must be a nonnegative whole number of seconds")
+		return safeerror.NewFault(fault.Invalid, "HSTS max age must be a nonnegative whole number of seconds")
 	}
 	if p.Preload && (!p.IncludeSubDomains || p.MaxAge < 365*24*time.Hour) {
-		return fault.New(fault.Invalid, "HSTS preload requires subdomains and at least one year of max age")
+		return safeerror.NewFault(fault.Invalid, "HSTS preload requires subdomains and at least one year of max age")
 	}
 	return nil
 }

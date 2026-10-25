@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Observe runs work synchronously with the recorder attached to ctx. A missing,
@@ -14,7 +15,7 @@ import (
 // Succeeded even if its context is cancelled or expires afterwards.
 func Observe(ctx context.Context, operation Operation, run func(context.Context) error) (err error) {
 	if ctx == nil || run == nil {
-		return fault.New(fault.Invalid, "observation requires a context and callback")
+		return safeerror.NewFault(fault.Invalid, "observation requires a context and callback")
 	}
 	recorder := FromContext(ctx)
 	if recorder == nil {
@@ -24,7 +25,7 @@ func Observe(ctx context.Context, operation Operation, run func(context.Context)
 	if work == nil {
 		work = ctx
 	}
-	err = fault.New(fault.Panicked, "observed callback exited without returning")
+	err = safeerror.NewFault(fault.Panicked, "observed callback exited without returning")
 	defer func() { span.End(Result{Outcome: OutcomeFor(err)}) }()
 	err = run(work)
 	return err

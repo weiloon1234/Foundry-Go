@@ -14,6 +14,7 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Hub owns connections, bounded queues and active callbacks. Construction starts
@@ -86,7 +87,7 @@ type options struct {
 func WithLogger(logger *slog.Logger) Option {
 	return func(o *options) error {
 		if logger == nil {
-			return fault.New(fault.Invalid, "WebSocket logger cannot be nil")
+			return safeerror.NewFault(fault.Invalid, "WebSocket logger cannot be nil")
 		}
 		o.logger = logger
 		return nil
@@ -98,7 +99,7 @@ func New(registry *Registry, authentication *foundryhttp.Authentication, config 
 }
 func newHub(registry *Registry, authentication *foundryhttp.Authentication, config Config, inbound bool, opts []Option) (*Hub, error) {
 	if registry == nil || len(registry.channels) == 0 {
-		return nil, fault.New(fault.Invalid, "WebSocket hub requires a registry")
+		return nil, safeerror.NewFault(fault.Invalid, "WebSocket hub requires a registry")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -106,14 +107,14 @@ func newHub(registry *Registry, authentication *foundryhttp.Authentication, conf
 	var configured options
 	for _, option := range opts {
 		if option == nil {
-			return nil, fault.New(fault.Invalid, "nil WebSocket option")
+			return nil, safeerror.NewFault(fault.Invalid, "nil WebSocket option")
 		}
 		if err := option(&configured); err != nil {
 			return nil, err
 		}
 	}
 	if len(configured.tickets) != 0 && (authentication == nil || !inbound) {
-		return nil, fault.New(fault.Invalid, "WebSocket tickets require hub authentication")
+		return nil, safeerror.NewFault(fault.Invalid, "WebSocket tickets require hub authentication")
 	}
 	var guards *auth.Registry
 	if authentication != nil {
@@ -132,12 +133,12 @@ func newHub(registry *Registry, authentication *foundryhttp.Authentication, conf
 	historyBytes := 0
 	for _, d := range registry.ordered {
 		if d.replay.Messages > config.OutboundQueue-1 || d.replay.Messages > config.DeduplicationEntries {
-			return nil, fault.New(fault.Invalid, "replay count exceeds the connection queue or deduplication bound")
+			return nil, safeerror.NewFault(fault.Invalid, "replay count exceeds the connection queue or deduplication bound")
 		}
 		historyBytes += d.replay.Bytes
 	}
 	if historyBytes > 256<<20 || int64(config.MaxConnections)*int64(config.DeduplicationEntries)*64 > 1<<30 {
-		return nil, fault.New(fault.Invalid, "WebSocket history or deduplication budget exceeds its bound")
+		return nil, safeerror.NewFault(fault.Invalid, "WebSocket history or deduplication budget exceeds its bound")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	metrics := make(map[ChannelID]*channelCounters, len(registry.channels))
@@ -158,11 +159,11 @@ func newHub(registry *Registry, authentication *foundryhttp.Authentication, conf
 
 func (h *Hub) validateChannel(token *channelToken, id ChannelID) error {
 	if h == nil || h.done == nil || token == nil {
-		return fault.New(fault.Invalid, "WebSocket hub/channel is not initialized")
+		return safeerror.NewFault(fault.Invalid, "WebSocket hub/channel is not initialized")
 	}
 	d := h.registry.channels[id]
 	if d == nil || d.token != token {
-		return fault.New(fault.Missing, "channel declaration is not registered")
+		return safeerror.NewFault(fault.Missing, "channel declaration is not registered")
 	}
 	return nil
 }
@@ -179,11 +180,11 @@ func (h *Hub) Done() <-chan struct{} {
 // unrecoverable cluster fault that terminated the hub, if any.
 func (h *Hub) Stop(ctx context.Context) error {
 	if h == nil || h.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "WebSocket stop requires a hub and context")
+		return safeerror.NewFault(fault.Invalid, "WebSocket stop requires a hub and context")
 	}
 	for frame, _ := ctx.Value(operationKey{}).(*operationFrame); frame != nil; frame = frame.parent {
 		if frame.hub == h && frame.active.Load() {
-			return fault.New(fault.Cycle, "WebSocket callback cannot wait for its own shutdown")
+			return safeerror.NewFault(fault.Cycle, "WebSocket callback cannot wait for its own shutdown")
 		}
 	}
 	h.beginStop()
@@ -238,14 +239,14 @@ func ownedContext(ctx context.Context, h *Hub) (context.Context, func()) {
 // immediately; socket capacity is admitted separately.
 func (h *Hub) operation(ctx context.Context) (context.Context, func(), error) {
 	if h == nil || h.done == nil || ctx == nil {
-		return nil, nil, fault.New(fault.Invalid, "WebSocket operation requires a hub and context")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "WebSocket operation requires a hub and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 	if err := h.admission.Acquire(ctx, admission.Wait(h.config.OperationTimeout), h.ctx.Done()); err != nil {
 		if errors.Is(err, fault.Closed) {
-			return nil, nil, Stopping
+			return nil, nil, codeFailure(Stopping)
 		}
 		h.counters.operationOverloads.Add(1)
 		return nil, nil, err
@@ -254,7 +255,7 @@ func (h *Hub) operation(ctx context.Context) (context.Context, func(), error) {
 	if h.closing {
 		h.mu.Unlock()
 		h.admission.Release()
-		return nil, nil, Stopping
+		return nil, nil, codeFailure(Stopping)
 	}
 	h.operations++
 	h.mu.Unlock()
@@ -319,7 +320,7 @@ func (h *Hub) Registry() *Registry {
 // stream gap/resubscription. Transient per-operation failures do not fail it.
 func (h *Hub) Probe(ctx context.Context) error {
 	if h == nil || h.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "WebSocket probe requires a hub and context")
+		return safeerror.NewFault(fault.Invalid, "WebSocket probe requires a hub and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -328,9 +329,9 @@ func (h *Hub) Probe(ctx context.Context) error {
 	defer h.mu.Unlock()
 	switch {
 	case h.closing || h.terminal != nil:
-		return Stopping
+		return codeFailure(Stopping)
 	case !h.clusterReadyLocked():
-		return Unavailable
+		return codeFailure(Unavailable)
 	}
 	return nil
 }

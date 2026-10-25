@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -41,7 +42,7 @@ func compileRelationAggregate[M, N any](ctx context.Context, input aggregateInpu
 		// private AST boundary carries driver values, never caller SQL text.
 		node.Predicates = append(node.Predicates, comparison{Operand: input.group, Operator: in, Values: bindings, Bind: func(v any) (driver.Value, error) {
 			if !driver.IsValue(v) {
-				return nil, fault.New(fault.Invalid, "aggregate key is not a database value")
+				return nil, safeerror.NewFault(fault.Invalid, "aggregate key is not a database value")
 			}
 			return v, nil
 		}})
@@ -117,27 +118,27 @@ func fetchRelationAggregate[M, N, V any](ctx context.Context, executor database.
 				return groupedAggregate[V]{}, err
 			}
 			if (input.singular && count > 1) || (input.unique != (fieldRef{}) && count != distinct) {
-				return groupedAggregate[V]{}, database.NewError("aggregate relation cardinality", database.TooManyRows)
+				return groupedAggregate[V]{}, databaseFailure("aggregate relation cardinality", database.TooManyRows)
 			}
 			key, err := metadata.decode(raw)
 			if err != nil {
 				return groupedAggregate[V]{}, err
 			}
 			if key == nil {
-				return groupedAggregate[V]{}, fault.New(fault.Invalid, "aggregate group key is NULL")
+				return groupedAggregate[V]{}, safeerror.NewFault(fault.Invalid, "aggregate group key is NULL")
 			}
 			identity, err := recordEqualityKey(metadata.kind, key)
 			return groupedAggregate[V]{key: identity, value: result}, err
 		}, func(row groupedAggregate[V]) error {
 			if state.remaining == 0 {
-				return fault.New(fault.Invalid, "aggregate groups exceed the shared loading budget")
+				return safeerror.NewFault(fault.Invalid, "aggregate groups exceed the shared loading budget")
 			}
 			state.remaining--
 			if !requested[row.key] {
-				return fault.New(fault.Invalid, "aggregate group key does not match requested keys; check key equality semantics")
+				return safeerror.NewFault(fault.Invalid, "aggregate group key does not match requested keys; check key equality semantics")
 			}
 			if _, exists := results[row.key]; exists {
-				return fault.New(fault.Invalid, "aggregate returned repeated group keys; check key equality semantics")
+				return safeerror.NewFault(fault.Invalid, "aggregate returned repeated group keys; check key equality semantics")
 			}
 			results[row.key] = row.value
 			return nil

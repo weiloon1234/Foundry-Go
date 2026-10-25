@@ -3,6 +3,7 @@ package i18n
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MessageKey identifies a UI message independently of its locale. Generated
@@ -12,7 +13,7 @@ type MessageKey string
 
 func (k MessageKey) Validate() error {
 	if !identifier.Semantic(string(k)) {
-		return fault.New(fault.Invalid, "invalid message key")
+		return safeerror.NewFault(fault.Invalid, "invalid message key")
 	}
 	return nil
 }

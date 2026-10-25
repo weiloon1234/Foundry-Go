@@ -15,6 +15,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const ParentHeader = "traceparent"
@@ -34,22 +35,22 @@ func (id SpanID) MarshalText() ([]byte, error)  { return []byte(id.String()), ni
 // ID for root spans. Propagation Context.Validate separately rejects zero IDs.
 func (id *TraceID) UnmarshalText(text []byte) error {
 	if id == nil || len(text) != 32 || !lowerHex(string(text)) {
-		return fault.New(fault.Invalid, "invalid trace ID text")
+		return safeerror.NewFault(fault.Invalid, "invalid trace ID text")
 	}
 	var decoded TraceID
 	if _, err := hex.Decode(decoded[:], text); err != nil {
-		return fault.New(fault.Invalid, "invalid trace ID text")
+		return safeerror.NewFault(fault.Invalid, "invalid trace ID text")
 	}
 	*id = decoded
 	return nil
 }
 func (id *SpanID) UnmarshalText(text []byte) error {
 	if id == nil || len(text) != 16 || !lowerHex(string(text)) {
-		return fault.New(fault.Invalid, "invalid span ID text")
+		return safeerror.NewFault(fault.Invalid, "invalid span ID text")
 	}
 	var decoded SpanID
 	if _, err := hex.Decode(decoded[:], text); err != nil {
-		return fault.New(fault.Invalid, "invalid span ID text")
+		return safeerror.NewFault(fault.Invalid, "invalid span ID text")
 	}
 	*id = decoded
 	return nil
@@ -84,7 +85,7 @@ func (c Context) LogValue() slog.Value {
 
 func (c Context) Validate() error {
 	if c.trace.IsZero() || c.span.IsZero() {
-		return fault.New(fault.Invalid, "trace context requires nonzero trace and span IDs")
+		return safeerror.NewFault(fault.Invalid, "trace context requires nonzero trace and span IDs")
 	}
 	return nil
 }
@@ -116,7 +117,7 @@ func randomID(bytes []byte) error {
 	// astronomically unlikely retry instead of silently manufacturing an ID.
 	for range 4 {
 		if err := fill(bytes); err != nil {
-			return fault.Wrap(fault.Internal, "cannot create trace identity", err)
+			return safeerror.WrapFault(fault.Internal, "cannot create trace identity", err)
 		}
 		for _, b := range bytes {
 			if b != 0 {
@@ -124,7 +125,7 @@ func randomID(bytes []byte) error {
 			}
 		}
 	}
-	return fault.New(fault.Internal, "cannot create nonzero trace identity")
+	return safeerror.NewFault(fault.Internal, "cannot create nonzero trace identity")
 }
 
 func New(sampled bool) (Context, error) {
@@ -178,7 +179,7 @@ func lowerHex(text string) bool {
 // discarded independently, as required by the W3C processing model. Adapters
 // choose whether to trust propagation at their network boundary.
 func Parse(parent, state string) (Context, error) {
-	invalid := func() (Context, error) { return Context{}, fault.New(fault.Invalid, "invalid traceparent") }
+	invalid := func() (Context, error) { return Context{}, safeerror.NewFault(fault.Invalid, "invalid traceparent") }
 	if len(parent) < 55 || len(parent) > MaxParentBytes || parent[2] != '-' || parent[35] != '-' || parent[52] != '-' || !lowerHex(parent[:2]) || parent[:2] == "ff" {
 		return invalid()
 	}
@@ -236,7 +237,7 @@ func WithoutContext(ctx context.Context) context.Context {
 
 func WithContext(ctx context.Context, value Context) (context.Context, error) {
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "trace attachment requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "trace attachment requires a context")
 	}
 	if err := value.Validate(); err != nil {
 		return nil, err
@@ -260,14 +261,14 @@ type Sampler func(TraceID) bool
 // RatioSampler. Incoming sampled flags never override the local decision.
 func StartSampled(ctx context.Context, sampler Sampler) (context.Context, Context, error) {
 	if sampler == nil {
-		return nil, Context{}, fault.New(fault.Invalid, "trace start requires a sampler")
+		return nil, Context{}, safeerror.NewFault(fault.Invalid, "trace start requires a sampler")
 	}
 	return start(ctx, sampler)
 }
 
 func start(ctx context.Context, sample Sampler) (context.Context, Context, error) {
 	if ctx == nil {
-		return nil, Context{}, fault.New(fault.Invalid, "trace start requires a context")
+		return nil, Context{}, safeerror.NewFault(fault.Invalid, "trace start requires a context")
 	}
 	parent := FromContext(ctx)
 	var next Context
@@ -290,7 +291,7 @@ func start(ctx context.Context, sample Sampler) (context.Context, Context, error
 // agree for one trace. Zero samples nothing and one samples every trace.
 func RatioSampler(ratio float64) (Sampler, error) {
 	if !(ratio >= 0 && ratio <= 1) {
-		return nil, fault.New(fault.Invalid, "trace sampling ratio must be between 0 and 1")
+		return nil, safeerror.NewFault(fault.Invalid, "trace sampling ratio must be between 0 and 1")
 	}
 	switch ratio {
 	case 0:
@@ -318,31 +319,31 @@ func (c Context) MarshalJSON() ([]byte, error) {
 
 func (c *Context) UnmarshalJSON(data []byte) error {
 	if c == nil {
-		return fault.New(fault.Invalid, "trace decoding requires a destination")
+		return safeerror.NewFault(fault.Invalid, "trace decoding requires a destination")
 	}
 	decoded, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: 2048, Depth: 2, Nodes: 8})
 	if err != nil {
-		return fault.New(fault.Invalid, "invalid trace context document")
+		return safeerror.NewFault(fault.Invalid, "invalid trace context document")
 	}
 	object, ok := decoded.(map[string]any)
 	if !ok || len(object) < 1 || len(object) > 2 {
-		return fault.New(fault.Invalid, "invalid trace context document")
+		return safeerror.NewFault(fault.Invalid, "invalid trace context document")
 	}
 	parent, ok := object["traceparent"].(string)
 	if !ok {
-		return fault.New(fault.Invalid, "trace context requires traceparent")
+		return safeerror.NewFault(fault.Invalid, "trace context requires traceparent")
 	}
 	state := ""
 	if raw, present := object["tracestate"]; present {
 		var valid bool
 		state, valid = raw.(string)
 		if !valid {
-			return fault.New(fault.Invalid, "invalid tracestate value")
+			return safeerror.NewFault(fault.Invalid, "invalid tracestate value")
 		}
 	}
 	for key := range object {
 		if key != "traceparent" && key != "tracestate" {
-			return fault.New(fault.Invalid, "unknown trace context field")
+			return safeerror.NewFault(fault.Invalid, "unknown trace context field")
 		}
 	}
 	if _, err := normalizeState(state); err != nil {

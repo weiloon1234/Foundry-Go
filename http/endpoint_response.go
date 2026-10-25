@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // prepare runs only after the handler succeeded. JSON encoding is bounded CPU
@@ -30,14 +31,14 @@ func (r Response[R]) prepare(ctx context.Context, input R, limits EndpointLimits
 	if r.kind == payloadEvents {
 		events, err := r.events.prepare(input, limits.Response)
 		if err != nil {
-			return preparedResponse{}, InternalError.WithCause(fault.Wrap(fault.Internal, "event stream is invalid", err))
+			return preparedResponse{}, InternalError.WithCause(safeerror.WrapFault(fault.Internal, "event stream is invalid", err))
 		}
 		return preparedResponse{events: events}, nil
 	}
 	if r.kind == payloadRedirect {
 		location, err := r.redirectTarget(input)
 		if err != nil {
-			return preparedResponse{}, InternalError.WithCause(fault.Wrap(fault.Internal, "redirect target is invalid", err))
+			return preparedResponse{}, InternalError.WithCause(safeerror.WrapFault(fault.Internal, "redirect target is invalid", err))
 		}
 		return preparedResponse{location: location}, nil
 	}
@@ -55,20 +56,20 @@ func (r Response[R]) prepare(ctx context.Context, input R, limits EndpointLimits
 	data, err := r.json.Encode(encoding, input, limits.Response)
 	if err != nil {
 		cause := err
-		if encoded, ok := err.(*contract.EncodeError); ok {
+		if encoded, ok := safeerror.UnwrapOwned(err).(*contract.EncodeError); ok {
 			cause = encoded.Unwrap()
 		}
 		if canceled := ctx.Err(); canceled != nil && cause == canceled {
 			return preparedResponse{}, Unavailable.WithCause(err)
 		}
-		return preparedResponse{}, InternalError.WithCause(fault.Wrap(fault.Internal, "typed JSON response failed its contract or EndpointLimits.Response bounds", err))
+		return preparedResponse{}, InternalError.WithCause(safeerror.WrapFailure(fault.Internal, "typed JSON response failed its contract or EndpointLimits.Response bounds", err))
 	}
 	prepared := preparedResponse{data: data, status: status}
 	if r.setRefreshCookie != nil {
 		// Formatted with the same live context as the credential body.
 		prepared.setCookie, err = r.setRefreshCookie(encoding, input)
 		if err != nil {
-			return preparedResponse{}, InternalError.WithCause(fault.Wrap(fault.Internal, "refresh cookie could not be prepared", err))
+			return preparedResponse{}, InternalError.WithCause(safeerror.WrapFault(fault.Internal, "refresh cookie could not be prepared", err))
 		}
 	}
 	return prepared, nil
@@ -104,7 +105,7 @@ func writePreparedResponse(w stdhttp.ResponseWriter, request *stdhttp.Request, p
 		err = io.ErrShortWrite
 	}
 	if err != nil {
-		return fault.Wrap(fault.Internal, "typed HTTP response could not be written", err)
+		return safeerror.WrapFault(fault.Internal, "typed HTTP response could not be written", err)
 	}
 	return nil
 }

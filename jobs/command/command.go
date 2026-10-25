@@ -5,9 +5,9 @@ package command
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"strconv"
 	"time"
@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -42,7 +43,7 @@ func bulk(operation string) bool {
 
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
-		return Command{}, fault.New(fault.Invalid, "job commands require help output")
+		return Command{}, safeerror.NewFault(fault.Invalid, "job commands require help output")
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		_, err := io.WriteString(help, usage+"\n")
@@ -52,13 +53,13 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, flag.ErrHelp
 	}
 	if len(args) < 2 || args[0] != "jobs" {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result := Command{operation: args[1], options: jobs.ListOptions{State: jobs.Failed, Limit: 20}}
 	switch result.operation {
 	case "failed", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
 	default:
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	flags := flag.NewFlagSet("jobs "+result.operation, flag.ContinueOnError)
 	flags.SetOutput(help)
@@ -110,22 +111,22 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, err
 	}
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	if err := result.options.Validate(); err != nil {
 		return Command{}, cli.InvalidArguments(err)
 	}
 	if (result.operation == "inspect" || result.operation == "retry" || result.operation == "forget") && result.id.IsZero() {
-		return Command{}, cli.Usage("--id is required")
+		return Command{}, clidiag.Usage("--id is required")
 	}
 	if result.operation == "migrate-layout" && !result.confirm {
-		return Command{}, cli.Usage("--confirm is required: stop or drain every process of the previous release first")
+		return Command{}, clidiag.Usage("--confirm is required: stop or drain every process of the previous release first")
 	}
 	if bulk(result.operation) && !result.confirm {
-		return Command{}, cli.Usage("--confirm is required for bulk queue operations")
+		return Command{}, clidiag.Usage("--confirm is required for bulk queue operations")
 	}
 	if result.operation == "retry" && result.token == "" {
-		return Command{}, cli.Usage("--token from a failed inspection is required")
+		return Command{}, clidiag.Usage("--token from a failed inspection is required")
 	}
 	result.json = *format == "json"
 	return result, nil
@@ -135,7 +136,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 // constructor resolves configured services after boot; parsing/help does no I/O.
 func Declaration(construct func(foundation.Resolver) (*jobs.Connections, error)) (cli.Declaration, error) {
 	if construct == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "job commands require a connection constructor")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "job commands require a connection constructor")
 	}
 	definition := cli.Define("jobs", "Inspect, retry and manage retained jobs", func(args []string, help io.Writer) (Command, error) {
 		if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -174,12 +175,12 @@ type retryResult struct {
 // requires reconciliation with that same token, never a newly fetched one.
 func (c Command) Run(ctx context.Context, connections *jobs.Connections, output io.Writer) error {
 	if ctx == nil || output == nil {
-		return fault.New(fault.Invalid, "job command requires context and output")
+		return safeerror.NewFault(fault.Invalid, "job command requires context and output")
 	}
 	switch c.operation {
 	case "failed", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
 	default:
-		return fault.New(fault.Invalid, "uninitialized job command; use Parse")
+		return safeerror.NewFault(fault.Invalid, "uninitialized job command; use Parse")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -254,7 +255,7 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 	}
 	record, ok := found.Get()
 	if !ok {
-		return fault.New(fault.Missing, "job is not retained in the selected queue")
+		return safeerror.NewFault(fault.Missing, "job is not retained in the selected queue")
 	}
 	if c.operation == "forget" {
 		changed, err := dispatcher.Forget(ctx, queue, record.Envelope.Target())
@@ -294,7 +295,7 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 	} else {
 		_, err = fmt.Fprintf(output, "%s\tacceptance=%s changed=%t token=%s\n", result.ID.String(), result.Acceptance, result.Changed, result.Token)
 	}
-	return errors.Join(retryErr, err)
+	return safeerror.Join("operation failed", retryErr, err)
 }
 
 // runBulk walks the whole queue in bounded pages. Each page's changes are
@@ -326,7 +327,7 @@ func (c Command) runBulk(ctx context.Context, dispatcher *jobs.Dispatcher, queue
 			} else {
 				_, writeErr = fmt.Fprintf(output, "%s matched=%d changed=%d\n", c.operation, total.Matched, total.Changed)
 			}
-			return errors.Join(err, writeErr)
+			return safeerror.Join("operation failed", err, writeErr)
 		}
 		options.After = page.Next
 	}

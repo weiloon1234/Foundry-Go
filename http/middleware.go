@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MiddlewareID is the semantic identity of one middleware declaration. It is
@@ -36,7 +37,7 @@ func (m Middleware) ID() MiddlewareID { return m.id }
 
 func (m Middleware) Validate() error {
 	if !identifier.Semantic(string(m.id)) || m.construct == nil {
-		return fault.New(fault.Invalid, "HTTP middleware requires a semantic ID and constructor")
+		return safeerror.NewFault(fault.Invalid, "HTTP middleware requires a semantic ID and constructor")
 	}
 	return nil
 }
@@ -45,7 +46,7 @@ const maxMiddlewares = 128
 
 func validateMiddlewares(middlewares []Middleware) error {
 	if len(middlewares) > maxMiddlewares {
-		return fault.New(fault.Invalid, "HTTP middleware chain exceeds its declaration bound")
+		return safeerror.NewFault(fault.Invalid, "HTTP middleware chain exceeds its declaration bound")
 	}
 	seen := make(map[MiddlewareID]bool, len(middlewares))
 	for _, item := range middlewares {
@@ -53,7 +54,7 @@ func validateMiddlewares(middlewares []Middleware) error {
 			return err
 		}
 		if seen[item.id] {
-			return fault.New(fault.Duplicate, "HTTP middleware ID is repeated in one chain: "+string(item.id))
+			return safeerror.NewFault(fault.Duplicate, "HTTP middleware ID is repeated in one chain: "+string(item.id))
 		}
 		seen[item.id] = true
 	}
@@ -62,7 +63,7 @@ func validateMiddlewares(middlewares []Middleware) error {
 
 func appendMiddlewares(outer, inner []Middleware) ([]Middleware, error) {
 	if len(outer) > maxMiddlewares-len(inner) {
-		return nil, fault.New(fault.Invalid, "HTTP middleware chain exceeds its declaration bound")
+		return nil, safeerror.NewFault(fault.Invalid, "HTTP middleware chain exceeds its declaration bound")
 	}
 	owned := append(slices.Clone(outer), inner...)
 	if err := validateMiddlewares(owned); err != nil {
@@ -91,7 +92,7 @@ func middlewareIDs(middlewares []Middleware) []MiddlewareID {
 // explicitly replaces it. Optional writer capabilities remain its responsibility.
 func ApplyMiddleware(handler stdhttp.Handler, middlewares ...Middleware) (stdhttp.Handler, error) {
 	if nilHTTPHandler(handler) {
-		return nil, fault.New(fault.Invalid, "HTTP middleware requires a handler")
+		return nil, safeerror.NewFault(fault.Invalid, "HTTP middleware requires a handler")
 	}
 	owned, err := appendMiddlewares(nil, middlewares)
 	if err != nil {
@@ -116,10 +117,10 @@ func ApplyMiddleware(handler stdhttp.Handler, middlewares ...Middleware) (stdhtt
 			return err
 		})
 		if err != nil {
-			return nil, fault.Wrap(fault.Invalid, "HTTP middleware construction failed: "+string(item.id), err)
+			return nil, safeerror.WrapFailure(fault.Invalid, "HTTP middleware construction failed: "+string(item.id), err)
 		}
 		if nilHTTPHandler(wrapped) {
-			return nil, fault.New(fault.Invalid, "HTTP middleware returned an empty handler: "+string(item.id))
+			return nil, safeerror.NewFault(fault.Invalid, "HTTP middleware returned an empty handler: "+string(item.id))
 		}
 		current = wrapped
 	}

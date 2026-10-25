@@ -6,8 +6,6 @@ package infrastructure
 import (
 	"context"
 	"fmt"
-	"github.com/weiloon1234/Foundry-Go/email"
-	"github.com/weiloon1234/Foundry-Go/logging"
 	"log/slog"
 	"maps"
 	"os"
@@ -18,12 +16,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/config"
+	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/namedservice"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
+	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/storage/local"
 )
 
@@ -63,7 +64,7 @@ type Option func(*options) error
 func WithClock(source clock.Clock) Option {
 	return func(o *options) error {
 		if credential.IsNil(source) {
-			return fault.New(fault.Invalid, "infrastructure clock is nil")
+			return safeerror.NewFault(fault.Invalid, "infrastructure clock is nil")
 		}
 		o.clock = source
 		return nil
@@ -75,7 +76,7 @@ func WithClock(source clock.Clock) Option {
 func WithDatabaseEncryption(keys *encryption.Keyring) Option {
 	return func(o *options) error {
 		if keys == nil {
-			return fault.New(fault.Invalid, "database encryption key ring is nil")
+			return safeerror.NewFault(fault.Invalid, "database encryption key ring is nil")
 		}
 		if err := keys.Validate(); err != nil {
 			return err
@@ -93,10 +94,10 @@ func WithCredentials(name credentials.Name, provider credentials.Provider) Optio
 			return err
 		}
 		if credential.IsNil(provider) {
-			return fault.New(fault.Invalid, "cloud credential provider is nil")
+			return safeerror.NewFault(fault.Invalid, "cloud credential provider is nil")
 		}
 		if _, ok := o.credentials[name]; ok {
-			return fault.New(fault.Duplicate, "cloud credential provider is duplicated")
+			return safeerror.NewFault(fault.Duplicate, "cloud credential provider is duplicated")
 		}
 		o.credentials[name] = provider
 		return nil
@@ -116,7 +117,7 @@ func Configure(settings Settings, optionsList ...Option) (*Plan, error) {
 	o := options{clock: clock.System{}, logger: logging.JSON(os.Stderr, logging.Options{}), mailDrivers: make(map[MailDriver]email.Driver), credentials: make(map[credentials.Name]credentials.Provider)}
 	for _, option := range optionsList {
 		if option == nil {
-			return nil, fault.New(fault.Invalid, "nil infrastructure option")
+			return nil, safeerror.NewFault(fault.Invalid, "nil infrastructure option")
 		}
 		if err := option(&o); err != nil {
 			return nil, err
@@ -155,20 +156,20 @@ func (p *Plan) Register(builder *foundation.Builder) *foundation.Builder {
 func keys[K ~string, V any](values map[K]V) []K { return slices.Sorted(maps.Keys(values)) }
 func selection[N namedservice.Name, V any](field config.Key[Settings, N], selected N, values map[N]V) error {
 	if len(values) > namedservice.MaxEntries {
-		return fault.New(fault.Invalid, "too many named services for "+field.Name())
+		return safeerror.NewFault(fault.Invalid, "too many named services for "+field.Name())
 	}
 	if len(values) == 0 {
 		return nil
 	}
 	if err := selected.Validate(); err != nil {
-		return fault.Wrap(fault.Invalid, "invalid default service selection for "+field.Name(), err)
+		return safeerror.WrapFault(fault.Invalid, "invalid default service selection for "+field.Name(), err)
 	}
 	if _, ok := values[selected]; !ok {
-		return fault.New(fault.Missing, "default service for "+field.Name()+" is not configured")
+		return safeerror.NewFault(fault.Missing, "default service for "+field.Name()+" is not configured")
 	}
 	for _, name := range keys(values) {
 		if err := name.Validate(); err != nil {
-			return fault.Wrap(fault.Invalid, "invalid named service for "+field.Name(), err)
+			return safeerror.WrapFault(fault.Invalid, "invalid named service for "+field.Name(), err)
 		}
 	}
 	return nil
@@ -191,7 +192,7 @@ func (p *Plan) validate() error {
 	}
 	remaining := s.Database.MaxConnections
 	if len(s.Database.Connections) > 0 && (remaining <= 0 || remaining > 65536) {
-		return fault.New(fault.Invalid, "invalid total database connection budget")
+		return safeerror.NewFault(fault.Invalid, "invalid total database connection budget")
 	}
 	for _, name := range keys(s.Database.Connections) {
 		c := s.Database.Connections[name]
@@ -199,13 +200,13 @@ func (p *Plan) validate() error {
 			return err
 		}
 		if c.MaxConnections > remaining {
-			return fault.New(fault.Invalid, "database connections exceed total budget")
+			return safeerror.NewFault(fault.Invalid, "database connections exceed total budget")
 		}
 		remaining -= c.MaxConnections
 	}
 	remaining = s.Redis.MaxConnections
 	if len(s.Redis.Connections) > 0 && (remaining <= 0 || remaining > 65536) {
-		return fault.New(fault.Invalid, "invalid total Redis connection budget")
+		return safeerror.NewFault(fault.Invalid, "invalid total Redis connection budget")
 	}
 	for _, name := range keys(s.Redis.Connections) {
 		c := s.Redis.Connections[name]
@@ -213,12 +214,12 @@ func (p *Plan) validate() error {
 			return err
 		}
 		if c.MaxConnections > remaining || c.MaxSubscriptions > remaining-c.MaxConnections {
-			return fault.New(fault.Invalid, "Redis connections exceed total budget")
+			return safeerror.NewFault(fault.Invalid, "Redis connections exceed total budget")
 		}
 		remaining -= c.MaxConnections + c.MaxSubscriptions
 	}
 	if len(s.Credentials)+len(p.options.credentials) > namedservice.MaxEntries {
-		return fault.New(fault.Invalid, "too many credential sources")
+		return safeerror.NewFault(fault.Invalid, "too many credential sources")
 	}
 	for _, name := range keys(s.Credentials) {
 		if err := name.Validate(); err != nil {
@@ -228,7 +229,7 @@ func (p *Plan) validate() error {
 			return err
 		}
 		if _, ok := p.options.credentials[name]; ok {
-			return fault.New(fault.Duplicate, "cloud credential source is duplicated")
+			return safeerror.NewFault(fault.Duplicate, "cloud credential source is duplicated")
 		}
 	}
 	for _, name := range keys(s.Storage.Disks) {
@@ -253,21 +254,21 @@ func (p *Plan) validate() error {
 				if provider == nil {
 					c, ok := s.Credentials[disk.Cloud.Credentials]
 					if !ok {
-						return fault.New(fault.Missing, "storage credential source is not configured")
+						return safeerror.NewFault(fault.Missing, "storage credential source is not configured")
 					}
 					if (disk.Driver == R2Disk || disk.Driver == CompatibleDisk) && c.Mode == credentials.Chain {
-						return fault.New(fault.Invalid, "R2 and S3-compatible disks require explicit non-chain credentials")
+						return safeerror.NewFault(fault.Invalid, "R2 and S3-compatible disks require explicit non-chain credentials")
 					}
 				}
 				provider = credentials.ProviderFunc(func(context.Context) (credentials.Value, error) {
-					return credentials.Value{}, fault.New(fault.Internal, "validation-only credentials")
+					return credentials.Value{}, safeerror.NewFault(fault.Internal, "validation-only credentials")
 				})
 			}
 			if _, err := disk.cloudConfig(provider); err != nil {
 				return err
 			}
 		default:
-			return fault.New(fault.Invalid, "unsupported storage driver")
+			return safeerror.NewFault(fault.Invalid, "unsupported storage driver")
 		}
 	}
 	for _, name := range keys(s.Cache.Stores) {
@@ -291,10 +292,10 @@ func (p *Plan) validate() error {
 			}
 			r, ok := s.Redis.Connections[c.Redis]
 			if !ok {
-				return fault.New(fault.Missing, "cache Redis connection is not configured")
+				return safeerror.NewFault(fault.Missing, "cache Redis connection is not configured")
 			}
 			if c.Config.MaxValueBytes > r.MaxValueBytes {
-				return fault.New(fault.Invalid, "cache exceeds Redis value bound")
+				return safeerror.NewFault(fault.Invalid, "cache exceeds Redis value bound")
 			}
 		case FileCache:
 			f := c.fileConfig(p.options.clock, p.options.logger)
@@ -306,28 +307,28 @@ func (p *Plan) validate() error {
 				c.Database = s.Database.Default
 			}
 			if _, ok := s.Database.Connections[c.Database]; !ok {
-				return fault.New(fault.Missing, "cache database connection is not configured")
+				return safeerror.NewFault(fault.Missing, "cache database connection is not configured")
 			}
 			f := c.postgresConfig(p.options.clock, p.options.logger)
 			if err := f.Validate(); err != nil {
 				return err
 			}
 		default:
-			return fault.New(fault.Invalid, "unsupported cache driver")
+			return safeerror.NewFault(fault.Invalid, "unsupported cache driver")
 		}
 		if c.Require.DistributedFills {
 			if c.Driver != RedisCache {
-				return fault.New(fault.Invalid, "distributed cache fills require Redis")
+				return safeerror.NewFault(fault.Invalid, "distributed cache fills require Redis")
 			}
 			if err := c.Leases.Validate(); err != nil {
 				return err
 			}
 			if c.Leases.Namespace != c.Config.Namespace {
-				return fault.New(fault.Invalid, "cache fill namespace mismatch")
+				return safeerror.NewFault(fault.Invalid, "cache fill namespace mismatch")
 			}
 		}
 		if (c.Driver == FileCache || c.Driver == PostgresCache) && (c.Require.Tags || c.Require.Batches) {
-			return fault.New(fault.Invalid, "persistent cache does not support requested tags or batches")
+			return safeerror.NewFault(fault.Invalid, "persistent cache does not support requested tags or batches")
 		}
 		s.Cache.Stores[name] = c
 	}
@@ -360,7 +361,7 @@ func (Plan) LogValue() slog.Value       { return slog.StringValue("infrastructur
 func WithLogger(logger *slog.Logger) Option {
 	return func(o *options) error {
 		if logger == nil {
-			return fault.New(fault.Invalid, "infrastructure logger is nil")
+			return safeerror.NewFault(fault.Invalid, "infrastructure logger is nil")
 		}
 		o.logger = logger
 		return nil
@@ -375,13 +376,13 @@ func WithMailDriver(name MailDriver, driver email.Driver) Option {
 			return err
 		}
 		if builtInMailDriver(name) || credential.IsNil(driver) {
-			return fault.New(fault.Invalid, "custom mail driver requires a distinct name and instance")
+			return safeerror.NewFault(fault.Invalid, "custom mail driver requires a distinct name and instance")
 		}
 		if _, ok := o.mailDrivers[name]; ok {
-			return fault.New(fault.Duplicate, "custom mail driver already registered")
+			return safeerror.NewFault(fault.Duplicate, "custom mail driver already registered")
 		}
 		if len(o.mailDrivers) >= namedservice.MaxEntries {
-			return fault.New(fault.Invalid, "too many custom mail drivers")
+			return safeerror.NewFault(fault.Invalid, "too many custom mail drivers")
 		}
 		o.mailDrivers[name] = driver
 		return nil

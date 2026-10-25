@@ -1,10 +1,12 @@
 package http
 
 import (
+	stdhttp "net/http"
+
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
-	stdhttp "net/http"
 )
 
 // AuthenticatedRoute supplies a concrete verified model while retaining native
@@ -64,7 +66,7 @@ func (r AuthenticatedRoute[P, M]) HandleRaw(handler func(stdhttp.ResponseWriter,
 		return InvalidRouteRegistration(err)
 	}
 	if handler == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated raw route requires a handler"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated raw route requires a handler"))
 	}
 	return r.bound(false).HandleRaw(func(w stdhttp.ResponseWriter, request *stdhttp.Request, path P) {
 		subject, err := r.guard.Require(request.Context())
@@ -98,7 +100,7 @@ func (r OptionalAuthenticationRoute[P, M]) HandleRaw(handler func(stdhttp.Respon
 		return InvalidRouteRegistration(err)
 	}
 	if handler == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "optional raw route requires a handler"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "optional raw route requires a handler"))
 	}
 	return r.required.bound(true).HandleRaw(func(w stdhttp.ResponseWriter, request *stdhttp.Request, path P) {
 		subject, err := r.required.guard.Optional(request.Context())

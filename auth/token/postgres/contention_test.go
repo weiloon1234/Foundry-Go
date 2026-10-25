@@ -137,8 +137,8 @@ func TestCredentialGateDatabaseOutcomes(t *testing.T) {
 			for _, cause := range []error{errors.Join(opaque, competing), errors.Join(competing, opaque)} {
 				calls := 0
 				err := credential.NewGate(1, 30*time.Second).Execute(t.Context(), func(context.Context) error { calls++; return cause })
-				classified, ok := err.(*fault.Error)
-				if calls != 1 || !ok || classified.Code() != fault.Internal {
+				var classified *fault.Error
+				if calls != 1 || !errors.As(err, &classified) || classified.Code() != fault.Internal {
 					t.Fatal("As-only outcome lost precedence", calls, err)
 				}
 				var retained *database.Error

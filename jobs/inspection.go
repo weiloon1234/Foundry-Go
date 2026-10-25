@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -25,16 +26,16 @@ type ListOptions struct {
 
 func (o ListOptions) Validate() error {
 	if o.Limit < 1 || o.Limit > MaxListLimit {
-		return fault.New(fault.Invalid, "job list limit must be between 1 and 100")
+		return safeerror.NewFault(fault.Invalid, "job list limit must be between 1 and 100")
 	}
 	if (o.Name == "") != (o.Version == 0) || (o.Name != "" && !identifier.Semantic(string(o.Name))) {
-		return fault.New(fault.Invalid, "job list schema filter requires name and version")
+		return safeerror.NewFault(fault.Invalid, "job list schema filter requires name and version")
 	}
 	switch o.State {
 	case "", Waiting, Blocked, Reserved, Running, Succeeded, Failed, Cancelled:
 		return nil
 	}
-	return fault.New(fault.Invalid, "invalid job list state")
+	return safeerror.NewFault(fault.Invalid, "invalid job list state")
 }
 func (o ListOptions) Matches(r Record) bool {
 	return (o.State == "" || o.State == r.State) && (o.Name == "" || (o.Name == r.Envelope.Name() && o.Version == r.Envelope.Version()))
@@ -88,7 +89,7 @@ func (d *Dispatcher) Inspect(ctx context.Context, queue Queue, id ExecutionID) (
 		return value.Optional[Record]{}, err
 	}
 	if id.IsZero() {
-		return value.Optional[Record]{}, fault.New(fault.Invalid, "job inspection requires an identity")
+		return value.Optional[Record]{}, safeerror.NewFault(fault.Invalid, "job inspection requires an identity")
 	}
 	return d.backend.JobInspect(ctx, key, id)
 }

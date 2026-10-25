@@ -2,7 +2,6 @@ package attachments
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/query"
@@ -85,7 +84,7 @@ func (m *Manager) PruneOrphans(ctx context.Context, owner extensions.OwnerName, 
 		defer cancel()
 		pending, cleanupErr := m.cleanupMany(cleanupCtx, scheduled)
 		result.PendingCleanup = pending
-		return errors.Join(err, cleanupErr)
+		return joinFailures(err, cleanupErr)
 	})
 	return result, err
 }
@@ -138,7 +137,7 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 				return invalid()
 			}
 			if row.State == string(Writing) || row.State == string(Uncertain) {
-				return fault.New(fault.Conflict, "orphaned upload requires writer and storage settlement")
+				return attachmentFailure(fault.Conflict, "orphaned upload requires writer and storage settlement")
 			}
 			now, err := m.store.Now()
 			if err != nil {

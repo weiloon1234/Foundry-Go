@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // AuthenticatedTransport composes the request/response contract with its concrete
@@ -41,7 +42,7 @@ func bindSubject[P, Q, B, S, R any](bind AuthenticatedBinding[P, Q, B, S, R], su
 			return nil, authenticationError(err)
 		}
 		if next == nil {
-			return nil, InternalError.WithCause(fault.New(fault.Internal, "authenticated binding returned no handler"))
+			return nil, InternalError.WithCause(safeerror.NewFault(fault.Internal, "authenticated binding returned no handler"))
 		}
 		return func(ctx context.Context, in Input[P, Q, B]) (R, error) {
 			result, err := next(ctx, actor, in)

@@ -2,7 +2,6 @@ package logging
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -14,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/dependency"
 	"github.com/weiloon1234/Foundry-Go/internal/namedservice"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Stack is valid only in ChannelSettings, not as an individual file/stream sink.
@@ -37,21 +37,21 @@ func (s ChannelSettings) Validate() error {
 	if s.Sink.Driver == Custom {
 		sink := s.Sink
 		if len(s.Stack) != 0 || sink.Path != "" || sink.AddSource || sink.Rotation != (RotationConfig{}) || sink.TimeZone != "" || sink.Async != (AsyncConfig{}) || sink.Syslog != (SyslogConfig{}) {
-			return fault.New(fault.Invalid, "custom log channel selects only its level")
+			return safeerror.NewFault(fault.Invalid, "custom log channel selects only its level")
 		}
 		if sink.Level < slog.LevelDebug || sink.Level > slog.LevelError {
-			return fault.New(fault.Invalid, "invalid logging level")
+			return safeerror.NewFault(fault.Invalid, "invalid logging level")
 		}
 		return nil
 	}
 	if s.Sink.Driver != Stack {
 		if len(s.Stack) != 0 {
-			return fault.New(fault.Invalid, "sink channel cannot have stack children")
+			return safeerror.NewFault(fault.Invalid, "sink channel cannot have stack children")
 		}
 		return s.Sink.Validate()
 	}
 	if len(s.Stack) < 1 || len(s.Stack) > 16 || s.Sink.Path != "" || s.Sink.Level != 0 || s.Sink.AddSource || s.Sink.Rotation != (RotationConfig{}) || s.Sink.TimeZone != "" || s.Sink.Async != (AsyncConfig{}) || s.Sink.Syslog != (SyslogConfig{}) {
-		return fault.New(fault.Invalid, "logging stack requires bounded children and leaf-owned sink options")
+		return safeerror.NewFault(fault.Invalid, "logging stack requires bounded children and leaf-owned sink options")
 	}
 	seen := make(map[ChannelName]bool, len(s.Stack))
 	for _, name := range s.Stack {
@@ -59,7 +59,7 @@ func (s ChannelSettings) Validate() error {
 			return err
 		}
 		if seen[name] {
-			return fault.New(fault.Duplicate, "logging stack repeats a child")
+			return safeerror.NewFault(fault.Duplicate, "logging stack repeats a child")
 		}
 		seen[name] = true
 	}
@@ -108,10 +108,10 @@ func WithHandler(name ChannelName, handler slog.Handler) ChannelOption {
 			return err
 		}
 		if nilHandler(handler) {
-			return fault.New(fault.Invalid, "custom log handler is nil")
+			return safeerror.NewFault(fault.Invalid, "custom log handler is nil")
 		}
 		if _, exists := o.handlers[name]; exists {
-			return fault.New(fault.Duplicate, "custom log handler is already bound")
+			return safeerror.NewFault(fault.Duplicate, "custom log handler is already bound")
 		}
 		o.handlers[name] = handler
 		return nil
@@ -137,7 +137,7 @@ func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSetti
 	configured := channelOptions{handlers: make(map[ChannelName]slog.Handler)}
 	for _, option := range options {
 		if option == nil {
-			return nil, fault.New(fault.Invalid, "nil logging channel option")
+			return nil, safeerror.NewFault(fault.Invalid, "nil logging channel option")
 		}
 		if err := option(&configured); err != nil {
 			return nil, err
@@ -151,14 +151,14 @@ func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSetti
 		if item, exists := settings[name]; !exists {
 			settings[name] = ChannelSettings{Sink: SinkConfig{Driver: Custom}}
 		} else if item.Sink.Driver != Custom {
-			return nil, fault.New(fault.Invalid, "custom log handler requires a custom channel")
+			return nil, safeerror.NewFault(fault.Invalid, "custom log handler requires a custom channel")
 		}
 	}
 	if len(settings) == 0 || len(settings) > namedservice.MaxEntries {
-		return nil, fault.New(fault.Invalid, "logging requires bounded named channels")
+		return nil, safeerror.NewFault(fault.Invalid, "logging requires bounded named channels")
 	}
 	if _, ok := settings[selected]; !ok {
-		return nil, fault.New(fault.Missing, "default log channel is not configured")
+		return nil, safeerror.NewFault(fault.Missing, "default log channel is not configured")
 	}
 	names := slices.Sorted(maps.Keys(settings))
 	for _, name := range names {
@@ -175,9 +175,9 @@ func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSetti
 	order, failure := dependency.Order(names, func(name ChannelName) ([]ChannelName, bool) { item, ok := settings[name]; return item.Stack, ok })
 	if failure != nil {
 		if failure.Kind == dependency.Cycle {
-			return nil, fault.New(fault.Cycle, "logging stack contains a cycle")
+			return nil, safeerror.NewFault(fault.Cycle, "logging stack contains a cycle")
 		}
-		return nil, fault.New(fault.Missing, "logging stack refers to an unknown channel")
+		return nil, safeerror.NewFault(fault.Missing, "logging stack refers to an unknown channel")
 	}
 	state := &channelSetState{}
 	values := make(map[ChannelName]*slog.Logger, len(settings))
@@ -192,7 +192,7 @@ func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSetti
 		if item.Sink.Driver == Custom {
 			handler, ok := configured.handlers[name]
 			if !ok {
-				return nil, fault.New(fault.Missing, "custom log channel has no handler")
+				return nil, safeerror.NewFault(fault.Missing, "custom log channel has no handler")
 			}
 			events := newSinkEvents(Custom, nil)
 			state.leaves = append(state.leaves, channelLeaf{name: name, custom: events})
@@ -263,7 +263,7 @@ func (s *ChannelSet) Stats() []ChannelStats {
 
 func (s *ChannelSet) Start(ctx context.Context) error {
 	if s == nil || s.state == nil || ctx == nil {
-		return fault.New(fault.Invalid, "logging channels require an owner and context")
+		return safeerror.NewFault(fault.Invalid, "logging channels require an owner and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -272,7 +272,7 @@ func (s *ChannelSet) Start(ctx context.Context) error {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.closed {
-		return fault.New(fault.Closed, "logging channels are closed")
+		return safeerror.NewFault(fault.Closed, "logging channels are closed")
 	}
 	if state.started {
 		return nil
@@ -281,7 +281,7 @@ func (s *ChannelSet) Start(ctx context.Context) error {
 		if err := sink.Start(ctx); err != nil {
 			state.closed = true
 			state.closeErr = closeSinks(state.sinks)
-			return errors.Join(err, state.closeErr)
+			return safeerror.Join("operation failed", err, state.closeErr)
 		}
 	}
 	state.started = true
@@ -304,7 +304,7 @@ func (s *ChannelSet) Close() error {
 func closeSinks(sinks []*Sink) error {
 	var result error
 	for i := len(sinks) - 1; i >= 0; i-- {
-		result = errors.Join(result, sinks[i].Close())
+		result = safeerror.Join("operation failed", result, sinks[i].Close())
 	}
 	return result
 }
@@ -328,7 +328,7 @@ func (h stackHandler) Handle(ctx context.Context, record slog.Record) error {
 	var result error
 	for _, child := range h.handlers {
 		if child.Enabled(ctx, record.Level) {
-			result = errors.Join(result, child.Handle(ctx, record.Clone()))
+			result = safeerror.Join("operation failed", result, child.Handle(ctx, record.Clone()))
 		}
 	}
 	return result

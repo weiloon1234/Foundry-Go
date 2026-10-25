@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TransactionJoinInput is an alias or joined input whose consumers require Tx.
@@ -37,7 +38,7 @@ func (j transactionJoinedSource[S, L, R]) rightScope() scopeBoundary[S, R] {
 func buildTransactionJoin[S, L, R TransactionScope](left TransactionJoinInput[L], right TransactionJoinTable[R], on JoinOn[L, R], kind joinKind) transactionJoinedSource[S, L, R] {
 	var result transactionJoinedSource[S, L, R]
 	if nilDescriptor(left) || nilDescriptor(right) {
-		result.joined.input.err = fault.New(fault.Invalid, "transaction join requires both sources")
+		result.joined.input.err = safeerror.NewFault(fault.Invalid, "transaction join requires both sources")
 		return result
 	}
 	result.joined = buildJoin[S](transactionJoinAdapter[L]{input: left.transactionJoinInput()}, transactionJoinAdapter[R]{input: right.transactionJoinTable()}, on, kind)

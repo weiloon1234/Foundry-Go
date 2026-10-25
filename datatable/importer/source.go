@@ -3,13 +3,14 @@ package importer
 import (
 	"context"
 	"encoding/csv"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	"strconv"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/datatable/internal/spreadsheet"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Format selects the container of an uploaded table.
@@ -121,8 +122,18 @@ func (r *csvReader) next() (int, []rawCell, error) {
 	record, err := r.reader.Read()
 	if err != nil {
 		var malformed *csv.ParseError
-		if errors.As(err, &malformed) && !errors.Is(err, fault.Invalid) {
-			return 0, nil, invalid("import CSV is malformed")
+		matched, failed := callback.ErrorAsResult(err, &malformed)
+		if failed != nil {
+			return 0, nil, failed
+		}
+		if matched {
+			invalidInput, failed := callback.ErrorIsResult(err, fault.Invalid)
+			if failed != nil {
+				return 0, nil, failed
+			}
+			if !invalidInput {
+				return 0, nil, invalid("import CSV is malformed")
+			}
 		}
 		return 0, nil, err
 	}
@@ -182,7 +193,7 @@ func (g *csvGuard) Read(p []byte) (int, error) {
 	}
 	n, err := g.reader.Read(p)
 	if n < 0 || n > len(p) {
-		return 0, fault.New(fault.Internal, "import reader returned an invalid count")
+		return 0, safeerror.NewFault(fault.Internal, "import reader returned an invalid count")
 	}
 	g.remaining -= int64(n)
 	for _, b := range p[:n] {

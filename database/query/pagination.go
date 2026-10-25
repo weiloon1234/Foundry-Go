@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxPageSize bounds returned rows for numbered, simple and cursor pagination.
@@ -36,7 +37,7 @@ func validPageSize(size int) bool { return size > 0 && size <= MaxPageSize }
 
 func (r PageRequest) offset() (int, error) {
 	if r.Number < 1 || !validPageSize(r.Size) || r.Number-1 > math.MaxInt/r.Size {
-		return 0, fault.New(fault.Invalid, "invalid page number, size or offset overflow")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid page number, size or offset overflow")
 	}
 	return (r.Number - 1) * r.Size, nil
 }
@@ -61,7 +62,7 @@ func (p Page[R]) Validate() error {
 		return err
 	}
 	if p.Total < 0 || p.Pages != pageCount(p.Total, p.Size) || len(p.Items) > p.Size {
-		return fault.New(fault.Invalid, "invalid numbered page metadata")
+		return safeerror.NewFault(fault.Invalid, "invalid numbered page metadata")
 	}
 	return nil
 }
@@ -73,7 +74,7 @@ func (p SimplePage[R]) Validate() error {
 		return err
 	}
 	if len(p.Items) > p.Size || p.HasMore && len(p.Items) != p.Size {
-		return fault.New(fault.Invalid, "invalid simple page metadata")
+		return safeerror.NewFault(fault.Invalid, "invalid simple page metadata")
 	}
 	return nil
 }
@@ -86,7 +87,7 @@ func (q Query[M]) paginationBase() (Query[M], error) {
 		return Query[M]{}, err
 	}
 	if q.queryCore.Limit.IsSet() || q.queryCore.Offset != 0 {
-		return Query[M]{}, fault.New(fault.Invalid, "pagination requires an unpaginated query")
+		return Query[M]{}, safeerror.NewFault(fault.Invalid, "pagination requires an unpaginated query")
 	}
 	return q, nil
 }
@@ -138,7 +139,7 @@ func readPage[R any](request PageRequest, count func() (int64, error), read func
 		return Page[R]{}, err
 	}
 	if total < 0 {
-		return Page[R]{}, fault.New(fault.Invalid, "database returned a negative page count")
+		return Page[R]{}, safeerror.NewFault(fault.Invalid, "database returned a negative page count")
 	}
 	items, err := read()
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Limits bounds encoded bytes and parameter slots. During parsing an empty
@@ -23,7 +24,7 @@ type Limits struct {
 
 func (l Limits) Validate() error {
 	if l.Bytes <= 0 || l.Pairs <= 0 {
-		return fault.New(fault.Invalid, "invalid query transport limits")
+		return safeerror.NewFault(fault.Invalid, "invalid query transport limits")
 	}
 	return nil
 }
@@ -33,13 +34,13 @@ func checkContext(ctx context.Context, limits Limits) error {
 		return err
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "query transport requires a context")
+		return safeerror.NewFault(fault.Invalid, "query transport requires a context")
 	}
 	return ctx.Err()
 }
 
-func invalidInput() error { return fault.New(fault.Invalid, "invalid query input") }
-func exceeded() error     { return fault.New(fault.Invalid, "query transport limit exceeded") }
+func invalidInput() error { return safeerror.NewFault(fault.Invalid, "invalid query input") }
+func exceeded() error     { return safeerror.NewFault(fault.Invalid, "query transport limit exceeded") }
 
 // Parse accepts a raw query without its leading question mark. It preserves
 // repeated values and distinguishes an omitted key from a present empty value.
@@ -119,7 +120,7 @@ func Encode(ctx context.Context, values url.Values, limits Limits) (string, erro
 			}
 			remaining -= len(name) + len(entry)
 			if !utf8.ValidString(name) || !utf8.ValidString(entry) {
-				return "", fault.New(fault.Invalid, "invalid query output")
+				return "", safeerror.NewFault(fault.Invalid, "invalid query output")
 			}
 		}
 	}

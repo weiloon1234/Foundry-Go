@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -25,7 +26,7 @@ func jsonFragment[S, P any](fragment P) Expression[S, value.Nullable[value.JSON[
 	c := codec.Nullable(codec.JSON[P]())
 	document, err := value.NewJSON(fragment)
 	if err != nil {
-		return Expression[S, value.Nullable[value.JSON[P]]]{node: parameterNode{Err: fault.New(fault.Invalid, "JSON fragment cannot be encoded")}, codec: c}
+		return Expression[S, value.Nullable[value.JSON[P]]]{node: parameterNode{Err: safeerror.NewFault(fault.Invalid, "JSON fragment cannot be encoded")}, codec: c}
 	}
 	return parameterExpression[S](value.Of(document), c).Value()
 }

@@ -157,24 +157,16 @@ func TestEncodeJSONContainsCodecFailures(t *testing.T) {
 	}
 }
 
-// Codecs run on the caller's goroutine: Goexit ends that goroutine, like any
-// other Go call, instead of being converted into an error.
-func TestEncodeJSONCodecGoexitEndsCallerGoroutine(t *testing.T) {
+func TestEncodeJSONContainsCodecGoexit(t *testing.T) {
 	defer func() { encodingCodecCancel = nil }()
 	for _, mode := range []string{"goexit", "cancelgoexit"} {
 		ctx, cancel := context.WithCancel(context.Background())
 		encodingCodecCancel = cancel
-		returned := make(chan bool, 1)
-		go func() {
-			completed := false
-			defer func() { returned <- completed }()
-			_, _ = value.EncodeJSON(ctx, EncodingCodec{mode}, encodingLimits())
-			completed = true
-		}()
-		if <-returned {
-			t.Fatalf("%s: codec Goexit was converted into a return", mode)
-		}
+		data, err := value.EncodeJSON(ctx, EncodingCodec{mode}, encodingLimits())
 		cancel()
+		if data != nil || !errors.Is(err, fault.Panicked) || !errors.Is(err, fault.Internal) {
+			t.Fatalf("%s: codec Goexit was not contained: %v", mode, err)
+		}
 	}
 }
 

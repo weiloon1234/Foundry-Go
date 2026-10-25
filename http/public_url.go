@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -47,45 +48,45 @@ func (c PublicURLConfig) Validate() error { _, err := compilePublicURLs(c); retu
 
 func compilePublicURLs(c PublicURLConfig) (publicURLPolicy, error) {
 	if len(c.AllowedOrigins)+len(c.AllowedPatterns) == 0 || len(c.AllowedOrigins) > maxPublicOrigins || len(c.AllowedPatterns) > maxPublicOrigins {
-		return publicURLPolicy{}, fault.New(fault.Invalid, "public URLs require bounded allowed origins")
+		return publicURLPolicy{}, safeerror.NewFault(fault.Invalid, "public URLs require bounded allowed origins")
 	}
 	p := publicURLPolicy{allowed: make(map[Origin]bool, len(c.AllowedOrigins)), exempt: make(map[string]bool, len(c.ExemptPaths))}
 	for _, input := range c.AllowedOrigins {
 		origin, err := ParseOrigin(string(input))
 		if err != nil || origin == NullOrigin {
-			return publicURLPolicy{}, fault.New(fault.Invalid, "public URL origin requires an HTTP(S) authority")
+			return publicURLPolicy{}, safeerror.NewFault(fault.Invalid, "public URL origin requires an HTTP(S) authority")
 		}
 		if p.allowed[origin] {
-			return publicURLPolicy{}, fault.New(fault.Duplicate, "public URL origin is repeated")
+			return publicURLPolicy{}, safeerror.NewFault(fault.Duplicate, "public URL origin is repeated")
 		}
 		p.allowed[origin] = true
 	}
 	for _, input := range c.AllowedPatterns {
 		matcher, err := compileOriginPattern(input)
 		if err != nil || matcher.exact != "" {
-			return publicURLPolicy{}, fault.New(fault.Invalid, "public URL patterns require an HTTP(S) subdomain wildcard")
+			return publicURLPolicy{}, safeerror.NewFault(fault.Invalid, "public URL patterns require an HTTP(S) subdomain wildcard")
 		}
 		if slices.Contains(p.patterns, matcher) {
-			return publicURLPolicy{}, fault.New(fault.Duplicate, "public URL pattern is repeated")
+			return publicURLPolicy{}, safeerror.NewFault(fault.Duplicate, "public URL pattern is repeated")
 		}
 		p.patterns = append(p.patterns, matcher)
 	}
 	if len(c.ExemptPaths) > maxPublicExemptPaths {
-		return publicURLPolicy{}, fault.New(fault.Invalid, "public URL exempt paths exceed their declaration bound")
+		return publicURLPolicy{}, safeerror.NewFault(fault.Invalid, "public URL exempt paths exceed their declaration bound")
 	}
 	for _, exempt := range c.ExemptPaths {
 		if exempt == "" || exempt[0] != '/' || len(exempt) > 1024 || path.Clean(exempt) != exempt || strings.ContainsAny(exempt, "?#*{}\\ ") {
-			return publicURLPolicy{}, fault.New(fault.Invalid, "public URL exempt paths must be exact clean absolute paths")
+			return publicURLPolicy{}, safeerror.NewFault(fault.Invalid, "public URL exempt paths must be exact clean absolute paths")
 		}
 		if p.exempt[exempt] {
-			return publicURLPolicy{}, fault.New(fault.Duplicate, "public URL exempt path is repeated")
+			return publicURLPolicy{}, safeerror.NewFault(fault.Duplicate, "public URL exempt path is repeated")
 		}
 		p.exempt[exempt] = true
 	}
 	if origin, ok := c.Canonical.Get(); ok {
 		canonical, err := ParseOrigin(string(origin))
 		if err != nil || !p.admits(canonical) {
-			return publicURLPolicy{}, fault.New(fault.Invalid, "canonical public URL origin must be allowed")
+			return publicURLPolicy{}, safeerror.NewFault(fault.Invalid, "canonical public URL origin must be allowed")
 		}
 		p.canonical = canonical
 	}
@@ -148,7 +149,7 @@ func RequirePublicURLs() Middleware {
 	return defineReplayMiddleware(PublicURLRequiredMiddlewareID, func(next stdhttp.Handler) (stdhttp.Handler, error) {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			if _, ok := PublicOrigin(r.Context()); !ok {
-				writeRoutingError(w, r, InternalError.WithCause(fault.New(fault.Missing, "route requires PublicURLs middleware")))
+				writeRoutingError(w, r, InternalError.WithCause(safeerror.NewFault(fault.Missing, "route requires PublicURLs middleware")))
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -172,7 +173,7 @@ func validatePublicURLRequirements(handler stdhttp.Handler, chain []Middleware) 
 	for _, route := range router.Routes() {
 		requires := route.SignedURL != nil || slices.Contains(route.Middlewares, PublicURLRequiredMiddlewareID)
 		if requires && !slices.Contains(route.Middlewares, PublicURLMiddlewareID) {
-			return fault.New(fault.Invalid, "route "+string(route.ID)+" generates public URLs; apply PublicURLs in the same ApplyMiddleware chain as the router or on the route")
+			return safeerror.NewFault(fault.Invalid, "route "+string(route.ID)+" generates public URLs; apply PublicURLs in the same ApplyMiddleware chain as the router or on the route")
 		}
 	}
 	return nil
@@ -194,7 +195,7 @@ func PublicOrigin(ctx context.Context) (Origin, bool) {
 func PublicURL(ctx context.Context, relative string) (string, error) {
 	origin, ok := PublicOrigin(ctx)
 	if !ok {
-		return "", fault.New(fault.Missing, "public URL origin is not bound to this context")
+		return "", safeerror.NewFault(fault.Missing, "public URL origin is not bound to this context")
 	}
 	return AbsoluteURL(origin, relative)
 }
@@ -205,7 +206,7 @@ func PublicURL(ctx context.Context, relative string) (string, error) {
 func AbsoluteURL(origin Origin, relative string) (string, error) {
 	base, err := ParseOrigin(string(origin))
 	if err != nil || base == NullOrigin {
-		return "", fault.New(fault.Invalid, "absolute URL requires an HTTP(S) origin")
+		return "", safeerror.NewFault(fault.Invalid, "absolute URL requires an HTTP(S) origin")
 	}
 	if err := validateRelativeURL(relative); err != nil {
 		return "", err
@@ -216,19 +217,19 @@ func AbsoluteURL(origin Origin, relative string) (string, error) {
 // validateRelativeURL accepts one bounded origin-relative path/query.
 func validateRelativeURL(relative string) error {
 	if len(relative) == 0 || len(relative) > 64<<10 || !strings.HasPrefix(relative, "/") || strings.HasPrefix(relative, "//") || strings.ContainsAny(relative, "\\#") {
-		return fault.New(fault.Invalid, "public URL requires a bounded origin-relative path")
+		return safeerror.NewFault(fault.Invalid, "public URL requires a bounded origin-relative path")
 	}
 	for i := range len(relative) {
 		if relative[i] <= ' ' || relative[i] == 127 {
-			return fault.New(fault.Invalid, "public URL contains invalid whitespace or control bytes")
+			return safeerror.NewFault(fault.Invalid, "public URL contains invalid whitespace or control bytes")
 		}
 	}
 	u, err := url.ParseRequestURI(relative)
 	if err != nil || u.Scheme != "" || u.Host != "" || u.Opaque != "" || u.User != nil {
-		return fault.New(fault.Invalid, "invalid origin-relative URL")
+		return safeerror.NewFault(fault.Invalid, "invalid origin-relative URL")
 	}
 	if _, err := url.QueryUnescape(u.RawQuery); err != nil {
-		return fault.New(fault.Invalid, "invalid origin-relative query escaping")
+		return safeerror.NewFault(fault.Invalid, "invalid origin-relative query escaping")
 	}
 	return nil
 }

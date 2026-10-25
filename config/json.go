@@ -2,10 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"io"
 	"strings"
-
-	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 // JSON declares a structured setting, such as a slice, map or settings struct.
@@ -17,13 +19,15 @@ func JSON[T, V any](name string, field func(*T) *V) Key[T, V] {
 	return NewKey(name, field, func(raw string) (V, error) {
 		var value V
 		decoder := json.NewDecoder(strings.NewReader(raw))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&value); err != nil {
+		var data json.RawMessage
+		if err := decoder.Decode(&data); err != nil {
 			return value, err
 		}
-		var extra json.RawMessage
-		if err := decoder.Decode(&extra); err != io.EOF {
-			return value, fault.New(fault.Invalid, "structured setting requires one JSON value")
+		if err := jsoncodec.Unmarshal(data, &value, jsonv2.RejectUnknownMembers(true)); err != nil {
+			return value, err
+		}
+		if err := decoder.Decode(&data); err != io.EOF {
+			return value, safeerror.NewFault(fault.Invalid, "structured setting requires one JSON value")
 		}
 		return value, nil
 	})

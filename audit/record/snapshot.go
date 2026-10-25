@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -177,7 +178,7 @@ func (s Snapshot) compact(limit int) (Snapshot, bool, error) {
 	return oversized(data, true), true, nil
 }
 
-func invalidSnapshot() error { return fault.New(fault.Invalid, "invalid audit snapshot") }
+func invalidSnapshot() error { return safeerror.NewFault(fault.Invalid, "invalid audit snapshot") }
 
 func (s Snapshot) MarshalJSON() ([]byte, error) {
 	if err := s.validate(); err != nil {

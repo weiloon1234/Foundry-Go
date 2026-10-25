@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jobarchive"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -76,7 +77,7 @@ var _ jobs.FailureSink = (*Store)(nil)
 
 func New(db *database.DB, schema string, source clock.Clock) (*Store, error) {
 	if db == nil || !sqlname.Valid(schema) || source == nil {
-		return nil, fault.New(fault.Invalid, "job archive requires a database, schema and clock")
+		return nil, safeerror.NewFault(fault.Invalid, "job archive requires a database, schema and clock")
 	}
 	return &Store{db: db, schema: schema, clock: source}, nil
 }
@@ -95,7 +96,7 @@ func (s *Store) within(ctx context.Context, fn func(*database.Tx) error, options
 // execution and manual retry cycle is ignored.
 func (s *Store) RecordFailure(ctx context.Context, failed jobs.FailedJob) error {
 	if s == nil || ctx == nil {
-		return fault.New(fault.Invalid, "job archive is not initialized")
+		return safeerror.NewFault(fault.Invalid, "job archive is not initialized")
 	}
 	// MarshalJSON enforces jobs.MaxEnvelopeBytes on these exact bytes, which
 	// are stored unchanged so Retry decodes what the queue carried.
@@ -104,7 +105,7 @@ func (s *Store) RecordFailure(ctx context.Context, failed jobs.FailedJob) error 
 		return err
 	}
 	if len(data) > jobs.MaxEnvelopeBytes {
-		return fault.New(fault.Invalid, "job envelope exceeds transport bounds")
+		return safeerror.NewFault(fault.Invalid, "job envelope exceeds transport bounds")
 	}
 	failedAt := failed.FailedAt
 	if failedAt.IsZero() {
@@ -188,7 +189,7 @@ func (s *Store) List(ctx context.Context, options ListOptions) (Page, error) {
 		options.Limit = 20
 	}
 	if s == nil || ctx == nil || options.Limit < 1 || options.Limit > MaxPage {
-		return Page{}, fault.New(fault.Invalid, "job archive listing requires 1 to 100 entries")
+		return Page{}, safeerror.NewFault(fault.Invalid, "job archive listing requires 1 to 100 entries")
 	}
 	request := query.CursorRequest[jobarchive.Failure]{Size: options.Limit}
 	if !options.After.IsZero() {
@@ -236,7 +237,7 @@ func entry(row jobarchive.Failure) Entry {
 // ID is returned.
 func (s *Store) Retry(ctx context.Context, dispatcher *jobs.Dispatcher, id ID) (jobs.ExecutionID, error) {
 	if s == nil || ctx == nil || dispatcher == nil || id.IsZero() {
-		return jobs.ExecutionID{}, fault.New(fault.Invalid, "job archive retry requires a dispatcher and entry")
+		return jobs.ExecutionID{}, safeerror.NewFault(fault.Invalid, "job archive retry requires a dispatcher and entry")
 	}
 	key := model.IDFromBytes[jobarchive.Failure](id.Bytes())
 	var envelope jobs.Envelope
@@ -276,7 +277,7 @@ func (s *Store) Prune(ctx context.Context, cutoff time.Time, limit int) (int, er
 		limit = 1000
 	}
 	if s == nil || ctx == nil || cutoff.IsZero() || limit < 1 || limit > MaxPruneBatch {
-		return 0, fault.New(fault.Invalid, "job archive prune requires a cutoff and batch limit")
+		return 0, safeerror.NewFault(fault.Invalid, "job archive prune requires a cutoff and batch limit")
 	}
 	before, err := temporal.NewDateTime(cutoff.UTC().Truncate(time.Microsecond))
 	if err != nil {

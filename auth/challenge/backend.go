@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -46,7 +47,7 @@ func (r Record) Validate(address Address) error {
 		return err
 	}
 	if r.Address != address || r.Hash.IsZero() || r.Binding.IsZero() || r.CreatedAt.IsZero() || r.ExpiresAt.IsZero() {
-		return fault.New(fault.Invalid, "invalid stored challenge")
+		return safeerror.NewFault(fault.Invalid, "invalid stored challenge")
 	}
 	return ValidateLifetime(r.ExpiresAt.UTC().Sub(r.CreatedAt.UTC()))
 }

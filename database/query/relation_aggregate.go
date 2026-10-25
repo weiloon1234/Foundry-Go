@@ -2,11 +2,11 @@ package query
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // AggregateRelation loads a compiler-checked aggregate into a generated model
@@ -31,10 +31,10 @@ func Related[M, N, V any](source AggregateSource[M, N], computation AggregateExp
 	return AggregateRelation[M, V]{
 		validate: func(table string, depth int, limits RelationLimits) error {
 			if input.validate == nil || input.selectNode == nil || input.source.definition == nil {
-				return fault.New(fault.Invalid, "aggregate requires a bound relation input")
+				return safeerror.NewFault(fault.Invalid, "aggregate requires a bound relation input")
 			}
 			if table != input.source.queryCore.Table {
-				return fault.New(fault.Invalid, "aggregate belongs to a different source table")
+				return safeerror.NewFault(fault.Invalid, "aggregate belongs to a different source table")
 			}
 			if err := input.validate(depth, limits); err != nil {
 				return err
@@ -52,13 +52,13 @@ func Related[M, N, V any](source AggregateSource[M, N], computation AggregateExp
 func (r AggregateRelation[M, V]) Bind(name string, source Query[M], get func(M) relation.Value[V], set func(M, relation.Value[V]) M) AggregateRelation[M, V] {
 	r.bindingError = nil
 	if source.hasQueryOptions() {
-		r.bindingError = fault.New(fault.Invalid, "aggregate Bind requires bare source metadata")
+		r.bindingError = safeerror.NewFault(fault.Invalid, "aggregate Bind requires bare source metadata")
 	}
 	if err := source.validateCore(); err != nil {
 		r.bindingError = err
 	}
 	if source.definition == nil {
-		r.bindingError = fault.New(fault.Invalid, "aggregate Bind requires model metadata")
+		r.bindingError = safeerror.NewFault(fault.Invalid, "aggregate Bind requires model metadata")
 	}
 	r.name, r.table, r.get, r.set = name, source.queryCore.Table, get, set
 	return r
@@ -68,7 +68,7 @@ func (r AggregateRelation[M, V]) Bind(name string, source Query[M], get func(M) 
 // and result type, for request-specific scopes. Related still checks its input.
 func (r AggregateRelation[M, V]) Using(computation AggregateRelation[M, V]) AggregateRelation[M, V] {
 	r.validate, r.fetch = computation.validate, computation.fetch
-	r.bindingError = errors.Join(r.bindingError, computation.bindingError)
+	r.bindingError = safeerror.Join("operation failed", r.bindingError, computation.bindingError)
 	return r
 }
 
@@ -81,7 +81,7 @@ func (r AggregateRelation[M, V]) validateRelation(table string, depth int, limit
 		return r.bindingError
 	}
 	if r.name == "" || table != r.table || r.get == nil || r.set == nil || r.validate == nil || r.fetch == nil {
-		return fault.New(fault.Invalid, "aggregate requires generated metadata, computation and a typed slot")
+		return safeerror.NewFault(fault.Invalid, "aggregate requires generated metadata, computation and a typed slot")
 	}
 	return r.validate(table, depth, limits)
 }

@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -87,7 +88,7 @@ func nullableWindowValue[S, V any](kind windowFunction, input Expression[S, V], 
 	e := windowValue(kind, input, n, w)
 	node := e.node.(windowNode)
 	if value.IsNullableType[V]() {
-		node.Err = fault.New(fault.Invalid, "nullable window input requires its nullable value helper")
+		node.Err = safeerror.NewFault(fault.Invalid, "nullable window input requires its nullable value helper")
 	}
 	return Expression[S, value.Nullable[V]]{node: node, codec: codec.Nullable(input.codec)}
 }

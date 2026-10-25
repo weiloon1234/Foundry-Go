@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/httppath"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Scope is an immutable literal path and route-name prefix. Access remains
@@ -23,7 +24,7 @@ type Scope struct {
 func DefineScope(prefix string, name RouteID) Scope {
 	scope := Scope{prefix: prefix, name: name}
 	if name != "" && !identifier.Semantic(string(name)) {
-		scope.err = fault.New(fault.Invalid, "route scope requires a semantic name prefix")
+		scope.err = safeerror.NewFault(fault.Invalid, "route scope requires a semantic name prefix")
 		return scope
 	}
 	if prefix == "" {
@@ -35,11 +36,11 @@ func DefineScope(prefix string, name RouteID) Scope {
 		return scope
 	}
 	if strings.HasSuffix(prefix, "/") {
-		scope.err = fault.New(fault.Invalid, "route scope prefix cannot end in a slash")
+		scope.err = safeerror.NewFault(fault.Invalid, "route scope prefix cannot end in a slash")
 	}
 	for _, segment := range segments {
 		if segment.Name != "" {
-			scope.err = fault.New(fault.Invalid, "route scope prefixes must be literal paths")
+			scope.err = safeerror.NewFault(fault.Invalid, "route scope prefixes must be literal paths")
 		}
 	}
 	return scope

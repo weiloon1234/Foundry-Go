@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -25,7 +26,7 @@ func (s *Sessions[M, K]) CompleteMFA(ctx context.Context, raw secret.String, fac
 	}
 	backend, ok := s.store.backend.(CompletionBackend)
 	if !ok {
-		return Issued[M, K]{}, fault.New(fault.Invalid, "credential backend cannot complete MFA atomically")
+		return Issued[M, K]{}, safeerror.NewFault(fault.Invalid, "credential backend cannot complete MFA atomically")
 	}
 	var result Issued[M, K]
 	err := s.store.execute(ctx, func(op context.Context) error {
@@ -39,16 +40,16 @@ func (s *Sessions[M, K]) CompleteMFA(ctx context.Context, raw secret.String, fac
 		}
 		pending, present := found.Get()
 		if !present {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		if err := pending.Validate(s.address); err != nil {
 			return err
 		}
 		if !pending.Hash.Equal(hash) {
-			return fault.New(fault.Invalid, "credential lookup returned a different pending secret")
+			return safeerror.NewFault(fault.Invalid, "credential lookup returned a different pending secret")
 		}
 		if pending.Assurance != auth.PendingMFA {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		reference, err := s.provider.Parse(pending.Subject)
 		if err != nil {

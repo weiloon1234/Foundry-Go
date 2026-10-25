@@ -2,10 +2,10 @@ package pubsub
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module owns one broker per application. Requires identifies providers owning
@@ -30,9 +30,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Broker], config Conf
 		if err := r.OnShutdown("pubsub", func(ctx context.Context) error {
 			err := broker.Close(ctx)
 			<-broker.Done()
-			return errors.Join(err, broker.Close(context.Background()))
+			return safeerror.Join("operation failed", err, broker.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, broker.Close(ctx))
+			return safeerror.Join("operation failed", err, broker.Close(ctx))
 		}
 		return nil
 	}}

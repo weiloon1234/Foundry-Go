@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const DefaultConcurrency = 4
@@ -64,14 +65,14 @@ func ParallelLimit[T any](concurrency int, rules ...Rule[T]) Rule[T] {
 					returned := false
 					defer func() {
 						if !returned {
-							child.err = fault.Wrap(fault.Internal, "validation callback failed", fault.New(fault.Panicked, "parallel validation exited without returning"))
+							child.err = safeerror.WrapFailure(fault.Internal, "validation callback failed", safeerror.NewFault(fault.Panicked, "parallel validation exited without returning"))
 						}
 					}()
 					if err := callback.Invoke("parallel validation", func() error {
 						owned[start+i].run(child, input, depth+1)
 						return nil
 					}); err != nil {
-						child.err = fault.Wrap(fault.Internal, "validation callback failed", err)
+						child.err = safeerror.WrapFailure(fault.Internal, "validation callback failed", err)
 					}
 					returned = true
 				}(i)

@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -95,7 +96,7 @@ func prepareMFA(c *MFASettings, s Settings, source clock.Clock) error {
 		return nil
 	}
 	if !s.Encryption.Enabled() {
-		return fault.New(fault.Missing, "MFA requires application encryption keys (Encryption.KeyID and Encryption.Key)")
+		return safeerror.NewFault(fault.Missing, "MFA requires application encryption keys (Encryption.KeyID and Encryption.Key)")
 	}
 	if c.Config.Namespace == (keyspace.Namespace{}) {
 		c.Config.Namespace = s.Services.Namespace

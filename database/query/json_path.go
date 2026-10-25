@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -80,7 +81,7 @@ func NewJSONMapEntry[S, P, C any, K comparable](parent JSONPath[S, P], key K) JS
 			var object map[string]json.RawMessage
 			err = json.Unmarshal([]byte(text), &object)
 			if err == nil && len(object) != 1 {
-				err = fault.New(fault.Invalid, "JSON map key must encode one property")
+				err = safeerror.NewFault(fault.Invalid, "JSON map key must encode one property")
 			}
 			for k := range object {
 				name = k
@@ -88,7 +89,7 @@ func NewJSONMapEntry[S, P, C any, K comparable](parent JSONPath[S, P], key K) JS
 		}
 	}
 	if err != nil {
-		return JSONPath[S, C]{Expression[S, value.Nullable[value.JSON[C]]]{node: parameterNode{Err: fault.New(fault.Invalid, "invalid JSON map key")}, codec: codec.Nullable(codec.JSON[C]())}}
+		return JSONPath[S, C]{Expression[S, value.Nullable[value.JSON[C]]]{node: parameterNode{Err: safeerror.WrapFault(fault.Invalid, "invalid JSON map key", safeerror.Diagnostic("JSON map key failed", err))}, codec: codec.Nullable(codec.JSON[C]())}}
 	}
 	return jsonProperty[S, P, C](parent, name, false, false)
 }
@@ -103,7 +104,7 @@ func jsonPathKey[S any](name string, literal bool) RowExpression[S, string] {
 		result.expression.node = node
 	}
 	if len(name) > value.JSONMaxBytes || !utf8.ValidString(name) || strings.ContainsRune(name, 0) {
-		result.expression.node = parameterNode{Err: fault.New(fault.Invalid, "invalid JSON property name")}
+		result.expression.node = parameterNode{Err: safeerror.NewFault(fault.Invalid, "invalid JSON property name")}
 	}
 	return result
 }

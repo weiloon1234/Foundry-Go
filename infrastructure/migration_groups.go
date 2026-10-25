@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -57,7 +58,7 @@ func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]Migrati
 		}
 		connection, ok := s.Connections[name]
 		if !ok {
-			return nil, fault.New(fault.Missing, "migration target database is not configured")
+			return nil, safeerror.NewFault(fault.Missing, "migration target database is not configured")
 		}
 		schema := target.Schema
 		if schema == "" {
@@ -67,7 +68,7 @@ func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]Migrati
 			schema = "public"
 		}
 		if !sqlname.Valid(schema) {
-			return nil, fault.New(fault.Invalid, "migration target requires a valid PostgreSQL schema")
+			return nil, safeerror.NewFault(fault.Invalid, "migration target requires a valid PostgreSQL schema")
 		}
 		if len(target.Definitions) == 0 {
 			continue
@@ -89,7 +90,7 @@ func (s DatabaseSettings) MigrationGroups(targets ...MigrationTarget) ([]Migrati
 			if previous, seen := byKey[index][definition.Key]; seen {
 				// Features sharing one schema may repeat the same framework migration.
 				if !reflect.DeepEqual(group.Definitions[previous], definition) {
-					return nil, fault.New(fault.Conflict, fmt.Sprintf("migration targets sharing schema %s have conflicting definitions for %s/%s", schema, definition.Key.Origin, definition.Key.ID))
+					return nil, safeerror.NewFault(fault.Conflict, fmt.Sprintf("migration targets sharing schema %s have conflicting definitions for %s/%s", schema, definition.Key.Origin, definition.Key.ID))
 				}
 				continue
 			}

@@ -13,6 +13,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	jobs "github.com/weiloon1234/Foundry-Go/jobs"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
@@ -446,7 +447,7 @@ func (q FailureQuery) foundryInsertMany(ctx context.Context, writer database.Tra
 }
 func (q FailureQuery) foundryCreateMutations(drafts []FailureDraft) ([]foundryquery.Mutation[Failure], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Failure], len(drafts))
 	for i, draft := range drafts {
@@ -836,7 +837,7 @@ func (q FailureQuery) DeleteAll(ctx context.Context, writer database.Transactor)
 // Increment adjusts one numeric field of every matching model by a typed delta, such as FailureFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q FailureQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Failure], extra ...FailureDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Failure]
 	if len(extra) == 1 {
@@ -851,7 +852,7 @@ func (q FailureQuery) Increment(ctx context.Context, writer database.Transactor,
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as FailureFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q FailureQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Failure], extra ...FailureDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Failure]
 	if len(extra) == 1 {
@@ -1280,54 +1281,54 @@ func CompareFailure(before, after foundryvalue.Optional[Failure], assigned Failu
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[Failure](), before, after, assigned.fieldID.IsSet(), func(item Failure) model.ID[Failure] { return item.ID })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.ID: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return FailureChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return FailureChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Execution, err = lifecycle.CompareModelField(codec.ID[jobs.Execution](), before, after, assigned.fieldExecution.IsSet(), func(item Failure) jobs.ExecutionID { return item.Execution })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.Execution: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.Execution", err)
 	}
 	changes.fields.Queue, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldQueue.IsSet(), func(item Failure) string { return item.Queue })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.Queue: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.Queue", err)
 	}
 	changes.fields.Name, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldName.IsSet(), func(item Failure) string { return item.Name })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.Name: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.Name", err)
 	}
 	changes.fields.Version, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldVersion.IsSet(), func(item Failure) uint32 { return item.Version })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.Version: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.Version", err)
 	}
 	changes.fields.Envelope, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldEnvelope.IsSet(), func(item Failure) string { return item.Envelope })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.Envelope: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.Envelope", err)
 	}
 	changes.fields.Reason, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldReason.IsSet(), func(item Failure) string { return item.Reason })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.Reason: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.Reason", err)
 	}
 	changes.fields.Attempts, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldAttempts.IsSet(), func(item Failure) uint32 { return item.Attempts })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.Attempts: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.Attempts", err)
 	}
 	changes.fields.Exceptions, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldExceptions.IsSet(), func(item Failure) uint32 { return item.Exceptions })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.Exceptions: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.Exceptions", err)
 	}
 	changes.fields.Retries, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldRetries.IsSet(), func(item Failure) uint32 { return item.Retries })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.Retries: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.Retries", err)
 	}
 	changes.fields.FailedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldFailedAt.IsSet(), func(item Failure) temporal.DateTime { return item.FailedAt })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.FailedAt: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.FailedAt", err)
 	}
 	changes.fields.RetriedAt, err = lifecycle.CompareModelField(codec.Nullable(codec.DateTime()), before, after, assigned.fieldRetriedAt.IsSet(), func(item Failure) foundryvalue.Nullable[temporal.DateTime] { return item.RetriedAt })
 	if err != nil {
-		return FailureChanges{}, fmt.Errorf("compare Failure.RetriedAt: %w", err)
+		return FailureChanges{}, foundrydiagnostic.Prefix("compare Failure.RetriedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1499,7 +1500,7 @@ func (FailureHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Failure]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Failure]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1558,7 +1559,7 @@ func (FailureHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryquery.Mutation[Failure]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Failure]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1702,7 +1703,7 @@ func (FailureHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1814,14 +1815,14 @@ type FailureAuditPolicy struct {
 func (changes FailureChanges) Audit(policy FailureAuditPolicy) (record.Model[Failure, model.ID[Failure]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Failure, model.ID[Failure]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Failure, model.ID[Failure]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Failure, model.ID[Failure]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Failure, model.ID[Failure]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -1968,7 +1969,7 @@ func FailureAuditing(policy FailureAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() FailureHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes FailureChanges) error {

@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -23,7 +24,7 @@ func (s transactionScopeAdapter[S]) scopeSource() queryScope[S] { return s.scope
 
 func transactionScopeOf[S TransactionScope](source TransactionScopeSource[S]) transactionScopeAdapter[S] {
 	if nilDescriptor(source) {
-		return transactionScopeAdapter[S]{scope: queryScope[S]{scopeRequirement: scopeRequirement{Err: fault.New(fault.Invalid, "transaction correlation requires an outer scope")}}}
+		return transactionScopeAdapter[S]{scope: queryScope[S]{scopeRequirement: scopeRequirement{Err: safeerror.NewFault(fault.Invalid, "transaction correlation requires an outer scope")}}}
 	}
 	return transactionScopeAdapter[S]{scope: source.transactionScopeSource()}
 }

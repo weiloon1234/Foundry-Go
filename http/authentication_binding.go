@@ -2,10 +2,12 @@ package http
 
 import (
 	"context"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"slices"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // authenticationBinding is shared by typed payload endpoints and native routes.
@@ -23,7 +25,7 @@ type authenticationBinding[M any] struct {
 // scope/permission requirements, inside the authenticated request scope.
 func (b authenticationBinding[M]) withActorMiddleware(middlewares ...Middleware) authenticationBinding[M] {
 	if len(middlewares) == 0 {
-		b.requirementError = fault.New(fault.Invalid, "HTTP actor middleware requires a declaration")
+		b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP actor middleware requires a declaration")
 		return b
 	}
 	b.actorMiddleware = append(slices.Clone(b.actorMiddleware), middlewares...)
@@ -37,7 +39,7 @@ func (b authenticationBinding[M]) chain(optional bool) []Middleware {
 
 func (b authenticationBinding[M]) withScopes(required auth.AccessScopes[M]) authenticationBinding[M] {
 	if b.requiredScopes != nil {
-		b.requirementError = fault.New(fault.Duplicate, "HTTP access scopes are already declared")
+		b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP access scopes are already declared")
 		return b
 	}
 	b.requiredScopes = &required
@@ -45,11 +47,11 @@ func (b authenticationBinding[M]) withScopes(required auth.AccessScopes[M]) auth
 }
 func (b authenticationBinding[M]) withPermissions(required ...auth.Permission[M]) authenticationBinding[M] {
 	if b.requiredPermissions != nil {
-		b.requirementError = fault.New(fault.Duplicate, "HTTP permissions are already declared")
+		b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP permissions are already declared")
 		return b
 	}
 	if len(required) == 0 || len(required) > auth.MaxRegistrations {
-		b.requirementError = fault.New(fault.Invalid, "HTTP permissions require a bounded nonempty declaration")
+		b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP permissions require a bounded nonempty declaration")
 		return b
 	}
 	b.requiredPermissions = slices.Clone(required)
@@ -60,7 +62,7 @@ func (b authenticationBinding[M]) validate(access Access, optional bool) error {
 		return b.requirementError
 	}
 	if b.requiredScopes != nil && (optional || b.requiredScopes.Len() == 0) {
-		return fault.New(fault.Invalid, "HTTP scope requirements need a nonempty authenticated declaration")
+		return safeerror.NewFault(fault.Invalid, "HTTP scope requirements need a nonempty authenticated declaration")
 	}
 	if err := b.authentication.validate(); err != nil {
 		return err
@@ -69,7 +71,7 @@ func (b authenticationBinding[M]) validate(access Access, optional bool) error {
 		return err
 	}
 	if optional && len(b.requiredPermissions) > 0 {
-		return fault.New(fault.Invalid, "HTTP permission requirements need an authenticated endpoint")
+		return safeerror.NewFault(fault.Invalid, "HTTP permission requirements need an authenticated endpoint")
 	}
 	names := make(map[auth.PermissionName]bool, len(b.requiredPermissions))
 	for _, permission := range b.requiredPermissions {
@@ -77,19 +79,19 @@ func (b authenticationBinding[M]) validate(access Access, optional bool) error {
 			return err
 		}
 		if names[permission.Name()] {
-			return fault.New(fault.Duplicate, "HTTP permission requirement is repeated")
+			return safeerror.NewFault(fault.Duplicate, "HTTP permission requirement is repeated")
 		}
 		names[permission.Name()] = true
 	}
 	if !b.authentication.hasSource(b.guard.Source()) {
-		return fault.New(fault.Missing, "HTTP authentication guard source is not configured")
+		return safeerror.NewFault(fault.Missing, "HTTP authentication guard source is not configured")
 	}
 	expected := Guarded
 	if optional {
 		expected = Public
 	}
 	if access != expected {
-		return fault.New(fault.Invalid, "authentication adapter does not match route access")
+		return safeerror.NewFault(fault.Invalid, "authentication adapter does not match route access")
 	}
 	return nil
 }

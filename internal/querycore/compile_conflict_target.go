@@ -4,16 +4,17 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (p Conflict) validateTarget(q QueryCore, c *Compiler) error {
 	if len(p.TargetCondition) > 0 && (p.Named || len(p.Keys) == 0) {
-		return fault.New(fault.Invalid, "partial conflict targets require index keys")
+		return safeerror.NewFault(fault.Invalid, "partial conflict targets require index keys")
 	}
 	nodes := 0
 	var walk SelectWalk
 	walk.Source = func(TableSource, int) {
-		walk.Err = fault.New(fault.Invalid, "conflict index targets cannot contain subqueries")
+		walk.Err = safeerror.NewFault(fault.Invalid, "conflict index targets cannot contain subqueries")
 	}
 	field := func(f FieldRef) error {
 		if err := f.Validate(q.Table); err != nil {
@@ -72,7 +73,7 @@ func (p Conflict) targetSQL(parent *Compiler, table string) (string, error) {
 		if _, duplicate, err := index.Find(planned); err != nil {
 			return "", err
 		} else if duplicate {
-			return "", fault.New(fault.Invalid, "conflict target repeats an index key")
+			return "", safeerror.NewFault(fault.Invalid, "conflict target repeats an index key")
 		}
 		index.Add(planned)
 		keys[i] = planned.Sql
@@ -86,7 +87,7 @@ func (p Conflict) targetSQL(parent *Compiler, table string) (string, error) {
 		return "", err
 	}
 	if result.Len() > MaxScalarSQLBytes {
-		return "", fault.New(fault.Invalid, "conflict target SQL exceeds its resource bound")
+		return "", safeerror.NewFault(fault.Invalid, "conflict target SQL exceeds its resource bound")
 	}
 	return result.String(), nil
 }

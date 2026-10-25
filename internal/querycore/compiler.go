@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Statement is a compiled parameterized PostgreSQL statement. SQL and Arguments
@@ -87,7 +89,7 @@ func (c *Compiler) Parameter(value any) (string, error) {
 		return c.SchemaLiteral(value)
 	}
 	if len(c.Arguments) >= MaxParameters {
-		return "", fault.New(fault.Invalid, "query exceeds PostgreSQL parameter bound")
+		return "", safeerror.NewFault(fault.Invalid, "query exceeds PostgreSQL parameter bound")
 	}
 	if data, ok := value.([]byte); ok {
 		value = slices.Clone(data)
@@ -107,7 +109,7 @@ func (c *Compiler) ExpressionAt(e Expression, grouped map[FieldRef]bool, groupin
 	case BinaryComparison:
 		op, ok := BinaryOperator(e.Operator)
 		if !ok {
-			return "", fault.New(fault.Invalid, "invalid value comparison operator")
+			return "", safeerror.NewFault(fault.Invalid, "invalid value comparison operator")
 		}
 		left, err := c.SelectedExpression(e.Left, grouped, grouping)
 		if err != nil {
@@ -154,7 +156,7 @@ func (c *Compiler) ExpressionAt(e Expression, grouped map[FieldRef]bool, groupin
 		text, err := c.ExpressionAt(e.Child, grouped, grouping)
 		return "(NOT " + text + ")", err
 	default:
-		return "", fault.New(fault.Invalid, "invalid query expression")
+		return "", safeerror.NewFault(fault.Invalid, "invalid query expression")
 	}
 }
 
@@ -204,22 +206,27 @@ func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping 
 			return "FALSE", nil
 		}
 		if len(e.Values) > MaxMembershipValues {
-			return "", fault.New(fault.Invalid, "membership list exceeds its value bound")
+			return "", safeerror.NewFault(fault.Invalid, "membership list exceeds its value bound")
 		}
 	}
 	bound := make([]driver.Value, len(e.Values))
 	for i, value := range e.Values {
-		v, err := e.Bind(value)
+		var v driver.Value
+		err := callback.Isolated("query comparison binding", func() error {
+			var err error
+			v, err = e.Bind(value)
+			return err
+		})
 		if err != nil {
 			return "", err
 		}
 		if v == nil {
-			return "", fault.New(fault.Invalid, "NULL comparison requires IsNull or IsNotNull")
+			return "", safeerror.NewFault(fault.Invalid, "NULL comparison requires IsNull or IsNotNull")
 		}
 		if EscapedPattern(e.Operator) {
 			text, ok := v.(string)
 			if !ok {
-				return "", fault.New(fault.Invalid, "text pattern operations require a text database representation")
+				return "", safeerror.NewFault(fault.Invalid, "text pattern operations require a text database representation")
 			}
 			v = LikePattern(e.Operator, text)
 		}
@@ -258,7 +265,7 @@ func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping 
 	}
 	op, ok := ComparisonOperator(e.Operator)
 	if !ok || len(parameters) != 1 {
-		return "", fault.New(fault.Invalid, "unsupported query comparison")
+		return "", safeerror.NewFault(fault.Invalid, "unsupported query comparison")
 	}
 	result := fmt.Sprintf("(%s %s %s", field, op, parameters[0])
 	if EscapedPattern(e.Operator) {
@@ -287,7 +294,7 @@ func LikePattern(op Operator, text string) string {
 func (c *Compiler) RowComparison(e RowComparison, grouped map[FieldRef]bool, grouping bool) (string, error) {
 	op, ok := ComparisonOperator(e.Operator)
 	if !ok || len(e.Operands) != len(e.Values) || len(e.Operands) == 0 {
-		return "", fault.New(fault.Invalid, "invalid row comparison")
+		return "", safeerror.NewFault(fault.Invalid, "invalid row comparison")
 	}
 	left := make([]string, len(e.Operands))
 	right := make([]string, len(e.Values))

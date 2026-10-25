@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxTags bounds application tag references per operation. One additional reserved
@@ -22,7 +23,7 @@ type TagVersion struct{ value [TagVersionBytes]byte }
 func NewTagVersion() (TagVersion, error) {
 	var v TagVersion
 	if _, err := rand.Read(v.value[:]); err != nil {
-		return TagVersion{}, fault.Wrap(fault.Internal, "cache tag entropy failed", err)
+		return TagVersion{}, safeerror.WrapFailure(fault.Internal, "cache tag entropy failed", err)
 	}
 	if err := v.Validate(); err != nil {
 		return TagVersion{}, err
@@ -31,7 +32,7 @@ func NewTagVersion() (TagVersion, error) {
 }
 func ParseTagVersion(data []byte) (TagVersion, error) {
 	if len(data) != TagVersionBytes {
-		return TagVersion{}, fault.New(fault.Invalid, "invalid cache tag version size")
+		return TagVersion{}, safeerror.NewFault(fault.Invalid, "invalid cache tag version size")
 	}
 	var v TagVersion
 	copy(v.value[:], data)
@@ -39,7 +40,7 @@ func ParseTagVersion(data []byte) (TagVersion, error) {
 }
 func (v TagVersion) Validate() error {
 	if v.value == [TagVersionBytes]byte{} {
-		return fault.New(fault.Invalid, "cache tag version is not initialized")
+		return safeerror.NewFault(fault.Invalid, "cache tag version is not initialized")
 	}
 	return nil
 }
@@ -69,11 +70,11 @@ func NewTaggedKey(base EntryKey, stamps []TagStamp) (TaggedKey, error) {
 		return TaggedKey{}, err
 	}
 	if base.namespaceTag {
-		return TaggedKey{}, fault.New(fault.Invalid, "namespace metadata cannot be a cache payload address")
+		return TaggedKey{}, safeerror.NewFault(fault.Invalid, "namespace metadata cannot be a cache payload address")
 	}
 
 	if len(stamps) == 0 || len(stamps) > MaxTags+1 {
-		return TaggedKey{}, fault.New(fault.Invalid, "invalid cache tag count")
+		return TaggedKey{}, safeerror.NewFault(fault.Invalid, "invalid cache tag count")
 	}
 	ordered := slices.Clone(stamps)
 	applicationTags := 0
@@ -88,11 +89,11 @@ func NewTaggedKey(base EntryKey, stamps []TagStamp) (TaggedKey, error) {
 			return TaggedKey{}, err
 		}
 		if stamp.Key.Namespace() != base.Namespace() {
-			return TaggedKey{}, fault.New(fault.Invalid, "cache tags cross namespaces")
+			return TaggedKey{}, safeerror.NewFault(fault.Invalid, "cache tags cross namespaces")
 		}
 	}
 	if applicationTags > MaxTags {
-		return TaggedKey{}, fault.New(fault.Invalid, "invalid cache tag count")
+		return TaggedKey{}, safeerror.NewFault(fault.Invalid, "invalid cache tag count")
 	}
 	// Render each address once; sorting compares the rendered text.
 	type rendered struct {
@@ -109,7 +110,7 @@ func NewTaggedKey(base EntryKey, stamps []TagStamp) (TaggedKey, error) {
 	for _, item := range items {
 		if len(unique) > 0 && unique[len(unique)-1].Key == item.stamp.Key {
 			if unique[len(unique)-1].Version != item.stamp.Version {
-				return TaggedKey{}, fault.New(fault.Invalid, "cache tag versions conflict")
+				return TaggedKey{}, safeerror.NewFault(fault.Invalid, "cache tag versions conflict")
 			}
 			continue
 		}
@@ -158,13 +159,13 @@ func TaggedDataKey(base EntryKey, tags []EntryKey) (EntryKey, error) {
 		return EntryKey{}, err
 	}
 	if base.namespaceTag {
-		return EntryKey{}, fault.New(fault.Invalid, "namespace metadata cannot be a cache payload address")
+		return EntryKey{}, safeerror.NewFault(fault.Invalid, "namespace metadata cannot be a cache payload address")
 	}
 	if err := ValidateTagKeys(tags); err != nil {
 		return EntryKey{}, err
 	}
 	if tags[0].Namespace() != base.Namespace() {
-		return EntryKey{}, fault.New(fault.Invalid, "cache tags cross namespaces")
+		return EntryKey{}, safeerror.NewFault(fault.Invalid, "cache tags cross namespaces")
 	}
 	texts := make([]string, len(tags))
 	for i, key := range tags {
@@ -175,7 +176,7 @@ func TaggedDataKey(base EntryKey, tags []EntryKey) (EntryKey, error) {
 
 func (k TaggedKey) Validate() error {
 	if k.data == nil {
-		return fault.New(fault.Invalid, "tagged cache key is not initialized")
+		return safeerror.NewFault(fault.Invalid, "tagged cache key is not initialized")
 	}
 	return nil
 }

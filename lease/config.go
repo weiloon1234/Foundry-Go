@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -24,7 +25,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.MaxActive <= 0 || c.MaxDeclarations <= 0 || c.MaxKeyBytes <= 0 || c.MaxKeyBytes > keyspace.MaxKeyBytes || c.OperationTimeout <= 0 || c.MaxWait <= 0 || c.PollInterval <= 0 || c.PollInterval > c.MaxWait {
-		return fault.New(fault.Invalid, "invalid lease limits")
+		return safeerror.NewFault(fault.Invalid, "invalid lease limits")
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // One dependency node exposes index targets, assignment subqueries and update
@@ -69,7 +70,7 @@ func (u ConflictUpdate) validMode() bool {
 func (u ConflictUpdate) compileValue(c *Compiler, rename *correlationRenamer) (string, error) {
 	if u.Null {
 		if !c.Columns[u.Field.Column].Nullable {
-			return "", fault.New(fault.Invalid, "NULL conflict assignment requires a nullable model field")
+			return "", safeerror.NewFault(fault.Invalid, "NULL conflict assignment requires a nullable model field")
 		}
 		return c.Parameter(nil)
 	}
@@ -84,7 +85,7 @@ func (u ConflictUpdate) compileValue(c *Compiler, rename *correlationRenamer) (s
 		return c.SelectedExpression(expression, nil, false)
 	}
 	if u.Literal == nil || u.Literal.Bind == nil {
-		return "", fault.New(fault.Invalid, "conflict assignment has no value")
+		return "", safeerror.NewFault(fault.Invalid, "conflict assignment has no value")
 	}
 	return c.AssignmentParameter(u.Field.Column, u.Literal.Bind)
 }

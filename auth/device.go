@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxDeviceUserAgentBytes bounds the user agent stored with a credential.
@@ -43,7 +44,7 @@ func DeviceFrom(ctx context.Context) Device {
 
 func (d Device) Validate() error {
 	if d.ClientIP.Zone() != "" || len(d.UserAgent) > MaxDeviceUserAgentBytes || !utf8.ValidString(d.UserAgent) || strings.IndexFunc(d.UserAgent, unicode.IsControl) >= 0 {
-		return fault.New(fault.Invalid, "invalid credential device metadata")
+		return safeerror.NewFault(fault.Invalid, "invalid credential device metadata")
 	}
 	return nil
 }

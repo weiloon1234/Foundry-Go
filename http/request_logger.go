@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"log/slog"
 	stdhttp "net/http"
 	"sync/atomic"
@@ -88,11 +89,15 @@ func logRouteFailure(r *stdhttp.Request, message string, err error) {
 // Custom error methods run contained; an incomplete or failed inspection
 // keeps the response reported.
 func admissionRejection(err error) bool {
-	if err == error(Unavailable) {
+	decision := safeerror.UnwrapOwned(err)
+	if decision == error(Unavailable) {
+		return true
+	}
+	if failure, ok := decision.(*responseError); ok && failure.code == Unavailable && failure.decision {
 		return true
 	}
 	rejected := false
-	_ = callback.Invoke("HTTP rejection classification", func() error {
+	_ = callback.Isolated("HTTP rejection classification", func() error {
 		rejected = errorgraph.Is(err, fault.Overloaded) || errorgraph.Is(err, fault.Closed)
 		return nil
 	})

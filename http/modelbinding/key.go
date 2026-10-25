@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -24,7 +25,7 @@ type KeyQuery[M, K any] interface {
 // relationships. Define remains available for custom application scopes.
 func ByKey[P, M, K any](executor database.Executor, source KeyQuery[M, K], key func(P) K) Resolver[P, M] {
 	if nilValue(executor) || nilValue(source) || key == nil {
-		return Resolver[P, M]{err: fault.New(fault.Invalid, "model key binding requires an executor, query and key selector")}
+		return Resolver[P, M]{err: safeerror.NewFault(fault.Invalid, "model key binding requires an executor, query and key selector")}
 	}
 	return Resolver[P, M]{
 		check: source.Validate,

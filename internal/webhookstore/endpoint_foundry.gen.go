@@ -13,6 +13,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -450,7 +451,7 @@ func (q EndpointQuery) foundryInsertMany(ctx context.Context, writer database.Tr
 }
 func (q EndpointQuery) foundryCreateMutations(drafts []EndpointDraft) ([]foundryquery.Mutation[Endpoint], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Endpoint], len(drafts))
 	for i, draft := range drafts {
@@ -759,7 +760,7 @@ func (q EndpointQuery) DeleteAll(ctx context.Context, writer database.Transactor
 // Increment adjusts one numeric field of every matching model by a typed delta, such as EndpointFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q EndpointQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Endpoint], extra ...EndpointDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Endpoint]
 	if len(extra) == 1 {
@@ -774,7 +775,7 @@ func (q EndpointQuery) Increment(ctx context.Context, writer database.Transactor
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as EndpointFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q EndpointQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Endpoint], extra ...EndpointDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Endpoint]
 	if len(extra) == 1 {
@@ -1036,30 +1037,30 @@ func CompareEndpoint(before, after foundryvalue.Optional[Endpoint], assigned End
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[Endpoint](), before, after, assigned.fieldID.IsSet(), func(item Endpoint) model.ID[Endpoint] { return item.ID })
 	if err != nil {
-		return EndpointChanges{}, fmt.Errorf("compare Endpoint.ID: %w", err)
+		return EndpointChanges{}, foundrydiagnostic.Prefix("compare Endpoint.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return EndpointChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return EndpointChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.URL, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldURL.IsSet(), func(item Endpoint) string { return item.URL })
 	if err != nil {
-		return EndpointChanges{}, fmt.Errorf("compare Endpoint.URL: %w", err)
+		return EndpointChanges{}, foundrydiagnostic.Prefix("compare Endpoint.URL", err)
 	}
 	changes.fields.Events, err = lifecycle.CompareModelField(codec.JSON[[]string](), before, after, assigned.fieldEvents.IsSet(), func(item Endpoint) foundryvalue.JSON[[]string] { return item.Events })
 	if err != nil {
-		return EndpointChanges{}, fmt.Errorf("compare Endpoint.Events: %w", err)
+		return EndpointChanges{}, foundrydiagnostic.Prefix("compare Endpoint.Events", err)
 	}
 	changes.fields.Active, err = lifecycle.CompareModelField(codec.Bool[bool](), before, after, assigned.fieldActive.IsSet(), func(item Endpoint) bool { return item.Active })
 	if err != nil {
-		return EndpointChanges{}, fmt.Errorf("compare Endpoint.Active: %w", err)
+		return EndpointChanges{}, foundrydiagnostic.Prefix("compare Endpoint.Active", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Endpoint) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return EndpointChanges{}, fmt.Errorf("compare Endpoint.CreatedAt: %w", err)
+		return EndpointChanges{}, foundrydiagnostic.Prefix("compare Endpoint.CreatedAt", err)
 	}
 	changes.fields.UpdatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldUpdatedAt.IsSet(), func(item Endpoint) temporal.DateTime { return item.UpdatedAt })
 	if err != nil {
-		return EndpointChanges{}, fmt.Errorf("compare Endpoint.UpdatedAt: %w", err)
+		return EndpointChanges{}, foundrydiagnostic.Prefix("compare Endpoint.UpdatedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1201,7 +1202,7 @@ func (EndpointHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycl
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Endpoint]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Endpoint]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1260,7 +1261,7 @@ func (EndpointHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycl
 					}
 				}
 			default:
-				return foundryquery.Mutation[Endpoint]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Endpoint]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1380,7 +1381,7 @@ func (EndpointHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycl
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1480,14 +1481,14 @@ type EndpointAuditPolicy struct {
 func (changes EndpointChanges) Audit(policy EndpointAuditPolicy) (record.Model[Endpoint, model.ID[Endpoint]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Endpoint, model.ID[Endpoint]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Endpoint, model.ID[Endpoint]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Endpoint, model.ID[Endpoint]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Endpoint, model.ID[Endpoint]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -1582,7 +1583,7 @@ func EndpointAuditing(policy EndpointAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() EndpointHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes EndpointChanges) error {

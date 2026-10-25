@@ -30,7 +30,8 @@ func assertStorageCycleBound(t *testing.T, cycle *cyclicStorageError) {
 }
 func assertStorageFailure(t *testing.T, err error, outcome storage.Outcome) {
 	t.Helper()
-	detail, ok := err.(*storage.Error)
+	var detail *storage.Error
+	ok := errors.As(err, &detail)
 	if !ok || detail.Code() != storage.Unavailable || detail.Outcome() != outcome {
 		t.Fatal("storage failure lost conservative outcome")
 	}
@@ -138,7 +139,10 @@ func TestWrappedStorageOutcomeAndCleanupSurviveLateCancellation(t *testing.T) {
 			}}, 1)
 			_, err := disk.Put(ctx, testKey(t), strings.NewReader("candidate"), storage.PutOptions{})
 			assertStorageFailure(t, err, outcome)
-			detail := err.(*storage.Error)
+			var detail *storage.Error
+			if !errors.As(err, &detail) {
+				t.Fatal("missing storage classification")
+			}
 			got, ok := detail.Cleanup().Get()
 			if !ok || got.Value() != cleanup.Value() || !errors.Is(err, context.Canceled) {
 				t.Fatal("known outcome lost cleanup or cancellation")

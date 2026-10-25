@@ -1,6 +1,8 @@
 package temporal
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 	"strings"
 	"time"
 	_ "time/tzdata" // Keep named zones available in minimal deployment images.
@@ -69,4 +71,4 @@ func LoadTimeZone(name string) (*time.Location, error) {
 	return zone, nil
 }
 
-func invalidTimeZone() error { return fault.New(fault.Invalid, "invalid timezone") }
+func invalidTimeZone() error { return safeerror.NewFault(fault.Invalid, "invalid timezone") }

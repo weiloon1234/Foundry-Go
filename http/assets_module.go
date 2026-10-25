@@ -2,9 +2,9 @@ package http
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // AssetsModule prepares a source during Build, opens its directory during Boot
@@ -23,7 +23,7 @@ func AssetsModule(name foundation.ProviderID, key foundation.Key[*Assets], confi
 			return err
 		}
 		if err := runtime.OnShutdown("assets", func(ctx context.Context) error { return assets.Close(ctx) }); err != nil {
-			return errors.Join(err, assets.Close(context.WithoutCancel(ctx)))
+			return safeerror.Join("operation failed", err, assets.Close(context.WithoutCancel(ctx)))
 		}
 		return nil
 	}}

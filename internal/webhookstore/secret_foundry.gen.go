@@ -13,6 +13,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -380,7 +381,7 @@ func (q SecretQuery) foundryInsertMany(ctx context.Context, writer database.Tran
 }
 func (q SecretQuery) foundryCreateMutations(drafts []SecretDraft) ([]foundryquery.Mutation[Secret], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Secret], len(drafts))
 	for i, draft := range drafts {
@@ -683,7 +684,7 @@ func (q SecretQuery) DeleteAll(ctx context.Context, writer database.Transactor) 
 // Increment adjusts one numeric field of every matching model by a typed delta, such as SecretFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q SecretQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Secret], extra ...SecretDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Secret]
 	if len(extra) == 1 {
@@ -698,7 +699,7 @@ func (q SecretQuery) Increment(ctx context.Context, writer database.Transactor, 
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as SecretFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q SecretQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Secret], extra ...SecretDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Secret]
 	if len(extra) == 1 {
@@ -937,26 +938,26 @@ func CompareSecret(before, after foundryvalue.Optional[Secret], assigned SecretD
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[Secret](), before, after, assigned.fieldID.IsSet(), func(item Secret) model.ID[Secret] { return item.ID })
 	if err != nil {
-		return SecretChanges{}, fmt.Errorf("compare Secret.ID: %w", err)
+		return SecretChanges{}, foundrydiagnostic.Prefix("compare Secret.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return SecretChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return SecretChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.EndpointID, err = lifecycle.CompareModelField(codec.ID[Endpoint](), before, after, assigned.fieldEndpointID.IsSet(), func(item Secret) model.ID[Endpoint] { return item.EndpointID })
 	if err != nil {
-		return SecretChanges{}, fmt.Errorf("compare Secret.EndpointID: %w", err)
+		return SecretChanges{}, foundrydiagnostic.Prefix("compare Secret.EndpointID", err)
 	}
 	changes.fields.Ciphertext, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldCiphertext.IsSet(), func(item Secret) string { return item.Ciphertext })
 	if err != nil {
-		return SecretChanges{}, fmt.Errorf("compare Secret.Ciphertext: %w", err)
+		return SecretChanges{}, foundrydiagnostic.Prefix("compare Secret.Ciphertext", err)
 	}
 	changes.fields.ExpiresAt, err = lifecycle.CompareModelField(codec.Nullable(codec.DateTime()), before, after, assigned.fieldExpiresAt.IsSet(), func(item Secret) foundryvalue.Nullable[temporal.DateTime] { return item.ExpiresAt })
 	if err != nil {
-		return SecretChanges{}, fmt.Errorf("compare Secret.ExpiresAt: %w", err)
+		return SecretChanges{}, foundrydiagnostic.Prefix("compare Secret.ExpiresAt", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Secret) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return SecretChanges{}, fmt.Errorf("compare Secret.CreatedAt: %w", err)
+		return SecretChanges{}, foundrydiagnostic.Prefix("compare Secret.CreatedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1093,7 +1094,7 @@ func (SecretHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Secret]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Secret]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1152,7 +1153,7 @@ func (SecretHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.
 					}
 				}
 			default:
-				return foundryquery.Mutation[Secret]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Secret]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1268,7 +1269,7 @@ func (SecretHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1366,14 +1367,14 @@ type SecretAuditPolicy struct {
 func (changes SecretChanges) Audit(policy SecretAuditPolicy) (record.Model[Secret, model.ID[Secret]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Secret, model.ID[Secret]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Secret, model.ID[Secret]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Secret, model.ID[Secret]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Secret, model.ID[Secret]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -1457,7 +1458,7 @@ func SecretAuditing(policy SecretAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() SecretHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes SecretChanges) error {

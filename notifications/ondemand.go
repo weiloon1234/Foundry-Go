@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -33,17 +34,17 @@ type Route struct {
 
 func (r Route) Validate() error {
 	if r.Email == (email.Address{}) && r.Address == "" {
-		return fault.New(fault.Invalid, "notification route requires an email or address")
+		return safeerror.NewFault(fault.Invalid, "notification route requires an email or address")
 	}
 	if r.Email != (email.Address{}) && r.Email.Validate() != nil {
-		return fault.New(fault.Invalid, "invalid notification route email")
+		return safeerror.NewFault(fault.Invalid, "invalid notification route email")
 	}
 	if len(r.Address) > MaxRouteAddressBytes || !utf8.ValidString(r.Address) {
-		return fault.New(fault.Invalid, "invalid notification route address")
+		return safeerror.NewFault(fault.Invalid, "invalid notification route address")
 	}
 	for _, c := range r.Address {
 		if c < ' ' || c == 0x7f {
-			return fault.New(fault.Invalid, "invalid notification route address")
+			return safeerror.NewFault(fault.Invalid, "invalid notification route address")
 		}
 	}
 	return nil
@@ -60,7 +61,7 @@ func (r Route) Reference() (model.Reference[Route, string], error) {
 	}
 	data, err := json.Marshal(r)
 	if err != nil {
-		return model.Reference[Route, string]{}, fault.New(fault.Invalid, "invalid notification route")
+		return model.Reference[Route, string]{}, safeerror.NewFault(fault.Invalid, "invalid notification route")
 	}
 	return routeReference(string(data)), nil
 }
@@ -80,7 +81,7 @@ func routeFromIdentity(identity model.Identity) (Route, error) {
 	}
 	var route Route
 	if err := json.Unmarshal([]byte(reference.Key()), &route); err != nil {
-		return Route{}, fault.New(fault.Invalid, "stored notification route is invalid")
+		return Route{}, safeerror.NewFault(fault.Invalid, "stored notification route is invalid")
 	}
 	return route, route.Validate()
 }
@@ -110,11 +111,11 @@ func BindOnDemand[P any](definition Definition[P], channels ...Channel[Route, P]
 				return err
 			}
 			if seen[c.definition.id] {
-				return fault.New(fault.Duplicate, "notification channel is already bound")
+				return safeerror.NewFault(fault.Duplicate, "notification channel is already bound")
 			}
 			seen[c.definition.id] = true
 			if c.definition.kind == "database" || c.definition.recipient != nil {
-				return fault.New(fault.Invalid, "on-demand notifications have no inbox or recipient-bound channel")
+				return safeerror.NewFault(fault.Invalid, "on-demand notifications have no inbox or recipient-bound channel")
 			}
 		}
 		return nil

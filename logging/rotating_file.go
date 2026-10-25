@@ -14,6 +14,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/filelock"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const archiveTimeFormat = "20060102T150405.000000000Z"
@@ -57,7 +58,7 @@ type rotatingFile struct {
 func openRotatingFile(path string, policy RotationConfig, now time.Time, zone *time.Location, events *sinkEvents) (_ *rotatingFile, result error) {
 	root, err := os.OpenRoot(filepath.Dir(path))
 	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "cannot open log directory", err)
+		return nil, safeerror.WrapFault(fault.Invalid, "cannot open log directory", err)
 	}
 	var session [16]byte
 	if _, err := rand.Read(session[:]); err != nil {
@@ -68,7 +69,7 @@ func openRotatingFile(path string, policy RotationConfig, now time.Time, zone *t
 	f := &rotatingFile{root: root, name: filepath.Base(path), policy: policy.resolved(), zone: &ownedZone, events: events, session: hex.EncodeToString(session[:])}
 	defer func() {
 		if result != nil {
-			result = errors.Join(result, f.Close())
+			result = safeerror.Join("operation failed", result, f.Close())
 		}
 	}()
 	f.lock, err = regularLogFile(root, f.name+".foundry-rotation.lock", os.O_CREATE|os.O_RDWR)
@@ -77,14 +78,14 @@ func openRotatingFile(path string, policy RotationConfig, now time.Time, zone *t
 	}
 	info, err := f.lock.Stat()
 	if err != nil || info.Size() != 0 {
-		return nil, fault.New(fault.Invalid, "invalid log rotation lock")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid log rotation lock")
 	}
 	locked, err := filelock.Try(f.lock)
 	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "cannot lock log destination", err)
+		return nil, safeerror.WrapFault(fault.Invalid, "cannot lock log destination", err)
 	}
 	if !locked {
-		return nil, fault.New(fault.Conflict, "log destination already has a rotation owner")
+		return nil, safeerror.NewFault(fault.Conflict, "log destination already has a rotation owner")
 	}
 	f.file, err = regularLogFile(root, f.name, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
 	if err != nil {
@@ -92,7 +93,7 @@ func openRotatingFile(path string, policy RotationConfig, now time.Time, zone *t
 	}
 	info, err = f.file.Stat()
 	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "cannot inspect active log", err)
+		return nil, safeerror.WrapFault(fault.Invalid, "cannot inspect active log", err)
 	}
 	f.size, f.day = info.Size(), calendarDay(info.ModTime(), f.zone)
 	// Startup cleanup is synchronous but never prevents logging; a failure is
@@ -109,19 +110,19 @@ func openRotatingFile(path string, policy RotationConfig, now time.Time, zone *t
 func regularLogFile(root *os.Root, name string, flags int) (*os.File, error) {
 	before, err := root.Lstat(name)
 	if err == nil && !before.Mode().IsRegular() {
-		return nil, fault.New(fault.Invalid, "log destination must be a regular file")
+		return nil, safeerror.NewFault(fault.Invalid, "log destination must be a regular file")
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fault.Wrap(fault.Invalid, "cannot inspect log destination", err)
+		return nil, safeerror.WrapFault(fault.Invalid, "cannot inspect log destination", err)
 	}
 	file, err := root.OpenFile(name, flags, 0600)
 	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "cannot open log destination", err)
+		return nil, safeerror.WrapFault(fault.Invalid, "cannot open log destination", err)
 	}
 	opened, statErr := file.Stat()
 	after, pathErr := root.Lstat(name)
 	if statErr != nil || pathErr != nil || !opened.Mode().IsRegular() || !after.Mode().IsRegular() || !os.SameFile(opened, after) || (before != nil && !os.SameFile(before, opened)) {
-		return nil, errors.Join(fault.New(fault.Invalid, "log destination changed while opening"), statErr, pathErr, file.Close())
+		return nil, safeerror.Join("operation failed", safeerror.NewFault(fault.Invalid, "log destination changed while opening"), statErr, pathErr, file.Close())
 	}
 	return file, nil
 }
@@ -143,7 +144,7 @@ func (f *rotatingFile) writeAt(data []byte, now time.Time) (int, error) {
 		return 0, nil
 	}
 	if int64(len(data)) > f.policy.MaxBytes {
-		return 0, fault.New(fault.Invalid, "log record exceeds rotation size limit")
+		return 0, safeerror.NewFault(fault.Invalid, "log record exceeds rotation size limit")
 	}
 	// A failed replacement leaves the archived data intact. Retry only opening the
 	// absent active path; never append into an archive or truncate a replacement.
@@ -261,29 +262,29 @@ func (f *rotatingFile) rotate(now time.Time) error {
 	current, statErr := f.file.Stat()
 	active, pathErr := f.root.Lstat(f.name)
 	if statErr != nil || pathErr != nil || !active.Mode().IsRegular() || !os.SameFile(current, active) {
-		return errors.Join(fault.New(fault.Invalid, "active log destination changed before rotation"), statErr, pathErr)
+		return safeerror.Join("operation failed", safeerror.NewFault(fault.Invalid, "active log destination changed before rotation"), statErr, pathErr)
 	}
 	// Reserve an unpredictable archive name exclusively before rename. No prior
 	// archive is overwritten, including when clocks repeat or move backwards.
 	var suffix [16]byte
 	if _, err := rand.Read(suffix[:]); err != nil {
-		return fault.Wrap(fault.Internal, "cannot name log archive", err)
+		return safeerror.WrapFault(fault.Internal, "cannot name log archive", err)
 	}
 	name := f.name + ".foundry-" + now.UTC().Format(archiveTimeFormat) + "-" + hex.EncodeToString(suffix[:]) + ".log"
 	reserved, err := f.root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
-		return fault.Wrap(fault.Internal, "cannot reserve log archive", err)
+		return safeerror.WrapFault(fault.Internal, "cannot reserve log archive", err)
 	}
 	if err := reserved.Close(); err != nil {
-		return errors.Join(err, f.root.Remove(name))
+		return safeerror.Join("operation failed", err, f.root.Remove(name))
 	}
 	if err := f.root.Rename(f.name, name); err != nil {
-		return errors.Join(fault.Wrap(fault.Internal, "cannot rotate log file", err), f.root.Remove(name))
+		return safeerror.Join("operation failed", safeerror.WrapFault(fault.Internal, "cannot rotate log file", err), f.root.Remove(name))
 	}
 	closeErr := f.file.Close()
 	f.file = nil
-	if err := errors.Join(closeErr, f.openActive(now)); err != nil {
-		return fault.Wrap(fault.Internal, "cannot replace active log", err)
+	if err := safeerror.Join("operation failed", closeErr, f.openActive(now)); err != nil {
+		return safeerror.WrapFault(fault.Internal, "cannot replace active log", err)
 	}
 	if now.UnixNano() >= f.retryAfter.Load() {
 		f.requestCleanup(now)
@@ -311,11 +312,11 @@ func (f *rotatingFile) archiveTime(name string) (time.Time, bool) {
 func (f *rotatingFile) prune(now time.Time) error {
 	dir, err := f.root.Open(".")
 	if err != nil {
-		return fault.Wrap(fault.Internal, "cannot inspect log archives", err)
+		return safeerror.WrapFault(fault.Internal, "cannot inspect log archives", err)
 	}
 	archives, readErr := f.readArchives(dir)
-	if err := errors.Join(readErr, dir.Close()); err != nil {
-		return fault.Wrap(fault.Internal, "cannot inspect log archives", err)
+	if err := safeerror.Join("operation failed", readErr, dir.Close()); err != nil {
+		return safeerror.WrapFault(fault.Internal, "cannot inspect log archives", err)
 	}
 	slices.SortFunc(archives, func(a, b logArchive) int { return strings.Compare(b.name, a.name) })
 	for index, archive := range archives {
@@ -323,7 +324,7 @@ func (f *rotatingFile) prune(now time.Time) error {
 			continue
 		}
 		if err := f.root.Remove(archive.name); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fault.Wrap(fault.Internal, "cannot remove expired log archive", err)
+			return safeerror.WrapFault(fault.Internal, "cannot remove expired log archive", err)
 		}
 	}
 	return nil
@@ -336,7 +337,7 @@ func (f *rotatingFile) readArchives(dir *os.File) ([]logArchive, error) {
 		entries, err := dir.ReadDir(128)
 		count += len(entries)
 		if count > maxLogDirectoryEntries {
-			return nil, fault.New(fault.Invalid, "log directory exceeds entry limit")
+			return nil, safeerror.NewFault(fault.Invalid, "log directory exceeds entry limit")
 		}
 		for _, entry := range entries {
 			timestamp, match := f.archiveTime(entry.Name())
@@ -365,11 +366,11 @@ func (f *rotatingFile) Close() error {
 		f.file = nil
 	}
 	if f.lock != nil {
-		result = errors.Join(result, f.lock.Close())
+		result = safeerror.Join("operation failed", result, f.lock.Close())
 		f.lock = nil
 	}
 	if f.root != nil {
-		result = errors.Join(result, f.root.Close())
+		result = safeerror.Join("operation failed", result, f.root.Close())
 		f.root = nil
 	}
 	return result

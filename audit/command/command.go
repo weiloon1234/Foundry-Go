@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -39,7 +41,7 @@ const usage = "audit prune [--before RFC3339] [--area name] [--batch 500] [--for
 
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
-		return Command{}, fault.New(fault.Invalid, "audit commands require help output")
+		return Command{}, safeerror.NewFault(fault.Invalid, "audit commands require help output")
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(help, usage+"\n"); err != nil {
@@ -48,7 +50,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, flag.ErrHelp
 	}
 	if len(args) < 2 || args[0] != "audit" || args[1] != "prune" {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result := Command{batch: DefaultBatch, parsed: true}
 	flags := flag.NewFlagSet("audit prune", flag.ContinueOnError)
@@ -56,7 +58,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	flags.Func("before", "remove entries created before this RFC 3339 instant (default: configured retention)", func(text string) error {
 		instant, err := time.Parse(time.RFC3339Nano, text)
 		if err != nil {
-			return fault.New(fault.Invalid, "--before requires an RFC 3339 instant")
+			return safeerror.NewFault(fault.Invalid, "--before requires an RFC 3339 instant")
 		}
 		cutoff, err := temporal.NewDateTime(instant)
 		result.before = value.Set(cutoff)
@@ -74,10 +76,10 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, err
 	}
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	if result.batch < 1 || result.batch > query.MaxPageSize {
-		return Command{}, cli.Usage(fmt.Sprintf("--batch must be between 1 and %d", query.MaxPageSize))
+		return Command{}, clidiag.Usage(fmt.Sprintf("--batch must be between 1 and %d", query.MaxPageSize))
 	}
 	result.json = *format == "json"
 	return result, nil
@@ -87,7 +89,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 // constructor resolves the configured scope after boot; parsing does no I/O.
 func Declaration(construct func(foundation.Resolver) (*audit.Scope, error), now clock.Clock) (cli.Declaration, error) {
 	if construct == nil || now == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "audit commands require a scope constructor and clock")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "audit commands require a scope constructor and clock")
 	}
 	definition := cli.Define("audit", "Explicitly prune retained audit history in bounded batches", func(args []string, help io.Writer) (Command, error) {
 		if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -119,7 +121,7 @@ type result struct {
 // It never prints audit payloads.
 func (c Command) Run(ctx context.Context, scope *audit.Scope, now clock.Clock, output io.Writer) error {
 	if ctx == nil || scope == nil || now == nil || output == nil || !c.parsed {
-		return fault.New(fault.Invalid, "uninitialized audit command; use Parse")
+		return safeerror.NewFault(fault.Invalid, "uninitialized audit command; use Parse")
 	}
 	if area, present := c.area.Get(); present {
 		var err error
@@ -138,7 +140,7 @@ func (c Command) Run(ctx context.Context, scope *audit.Scope, now clock.Clock, o
 		}
 	}
 	if cutoff.UTC().After(current.UTC()) {
-		return cli.Usage("--before must not be later than the current time")
+		return clidiag.Usage("--before must not be later than the current time")
 	}
 	var count int64
 	if c.apply {

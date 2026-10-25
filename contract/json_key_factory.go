@@ -3,6 +3,7 @@ package contract
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ResolveJSONKey evaluates a typed declaration factory during construction.
@@ -18,7 +19,7 @@ func ResolveJSONKey[K comparable](factory func() JSONKey[K]) JSONKey[K] {
 		return key.Validate()
 	})
 	if err != nil {
-		return JSONKey[K]{err: fault.Wrap(fault.Invalid, "invalid JSON key contract", err)}
+		return JSONKey[K]{err: safeerror.WrapFault(fault.Invalid, "invalid JSON key contract", err)}
 	}
 	return key
 }

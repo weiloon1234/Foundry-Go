@@ -2,11 +2,12 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -43,11 +44,16 @@ func newFieldMutator[I, V any](column string, c codec.Codec[V], mutate func(I) (
 	return fieldMutator{input: reflect.TypeFor[I](), output: reflect.TypeFor[V](), apply: func(a assignmentValue) (assignmentValue, error) {
 		input, ok := a.InputValue().(I)
 		if !ok {
-			return assignmentValue{}, fault.New(fault.Invalid, "mutation value does not match its declared field type")
+			return assignmentValue{}, safeerror.NewFault(fault.Invalid, "mutation value does not match its declared field type")
 		}
-		output, err := mutate(input)
+		var output V
+		err := callback.Isolated("mutate model field "+column, func() error {
+			var err error
+			output, err = mutate(input)
+			return err
+		})
 		if err != nil {
-			return assignmentValue{}, fmt.Errorf("mutate model field %s: %w", column, err)
+			return assignmentValue{}, err
 		}
 		return captureAssignment(c, output), nil
 	}}
@@ -110,7 +116,7 @@ func (q Query[M]) mutateAssignments(ctx context.Context, mutation Mutation[M], c
 	for _, field := range q.definition.modelFields {
 		mutator := recordMutator(field.recordFieldMetadata, conflict)
 		if i, set := indices[field.column]; set && mutator.apply != nil && reflect.TypeOf(result.assignments[i].Value) != mutator.input {
-			return Mutation[M]{}, fault.New(fault.Invalid, "mutation value does not match its declared field type")
+			return Mutation[M]{}, safeerror.NewFault(fault.Invalid, "mutation value does not match its declared field type")
 		}
 	}
 	for _, field := range q.definition.modelFields {

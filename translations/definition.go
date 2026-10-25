@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Name string
@@ -116,7 +117,7 @@ func New(store *extensions.Store, catalog i18n.LocaleCatalog, fields ...Registra
 			return nil, err
 		}
 		if _, ok := m.fields[f.key]; ok {
-			return nil, fault.New(fault.Duplicate, "translated field already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "translated field already registered")
 		}
 		counts[f.scope]++
 		if counts[f.scope] > MaxFieldsPerOwner {
@@ -159,5 +160,5 @@ func validText(s string, limit int) bool {
 	return true
 }
 func invalid() error {
-	return fault.New(fault.Invalid, "invalid model translation declaration or data")
+	return safeerror.NewFault(fault.Invalid, "invalid model translation declaration or data")
 }

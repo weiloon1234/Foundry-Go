@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // A canonical value uses the shared compiler with local parameter numbering.
@@ -45,7 +46,7 @@ func (x *ValueIndex) Find(p PlannedValue) (int, bool, error) {
 		x.Comparisons++
 		x.Arguments += len(p.Arguments)
 		if x.Comparisons > MaxExpressionNodes || x.Arguments > MaxParameters {
-			return 0, false, fault.New(fault.Invalid, "expression matching exceeds its resource bound")
+			return 0, false, safeerror.NewFault(fault.Invalid, "expression matching exceeds its resource bound")
 		}
 		if slices.EqualFunc(x.Values[i].Arguments, p.Arguments, reflect.DeepEqual) {
 			return i, true, nil

@@ -119,3 +119,27 @@ func TestAsReturnsTheFirstValueAndReportsExhaustion(t *testing.T) {
 		t.Fatal("custom As value was lost")
 	}
 }
+
+type boundedProjection struct {
+	budget int
+	calls  int
+	refuse bool
+}
+
+func (*boundedProjection) Error() string   { return "bounded projection" }
+func (*boundedProjection) Unwrap() []error { panic("unbounded projection invoked") }
+func (e *boundedProjection) UnwrapBounded(maxChildren int) ([]error, bool) {
+	e.budget = maxChildren
+	e.calls++
+	return nil, !e.refuse
+}
+func TestWalkPassesRemainingBudgetBeforeProjection(t *testing.T) {
+	projection := &boundedProjection{}
+	if !errorgraph.Walk(errors.Join(projection, errors.New("pending sibling")), func(error) bool { return true }) || projection.calls != 1 || projection.budget != 253 {
+		t.Fatal("projection did not receive remaining traversal budget")
+	}
+	projection.refuse = true
+	if errorgraph.Walk(projection, func(error) bool { return true }) {
+		t.Fatal("incomplete projection accepted")
+	}
+}

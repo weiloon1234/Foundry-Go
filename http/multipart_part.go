@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -160,7 +161,7 @@ func bindMultipartValues[B, V any](info QueryParameterInfo, kind MultipartKind, 
 			}
 			item, err := decode(ctx, part, limits)
 			if err != nil {
-				if failure, ok := err.(*contract.DecodeError); ok {
+				if failure, ok := safeerror.UnwrapOwned(err).(*contract.DecodeError); ok {
 					issues := failure.Issues()
 					prefix := queryIssuePath(info.Name)
 					if info.Repeated {
@@ -169,14 +170,14 @@ func bindMultipartValues[B, V any](info QueryParameterInfo, kind MultipartKind, 
 					for j := range issues {
 						issues[j].Path = prefix + issues[j].Path
 					}
-					return &MultipartError{issues: issues, cause: failure}
+					return multipartFailure(issues, err)
 				}
 				return err
 			}
 			values[i] = item
 		}
 		if !write(body, values) {
-			return fault.New(fault.Internal, "multipart field selector returned nil")
+			return safeerror.NewFault(fault.Internal, "multipart field selector returned nil")
 		}
 		return nil
 	}}

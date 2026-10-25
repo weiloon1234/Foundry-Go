@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/schedule"
 	"github.com/weiloon1234/Foundry-Go/websocket"
@@ -21,7 +22,7 @@ type JobDeclaration struct {
 func Job[P any](definition jobs.Definition[P], construct func(Services) (jobs.Handler[P], error)) JobDeclaration {
 	return JobWith(definition, func(services Services) (jobs.Handler[P], jobs.HandlerOptions[P], error) {
 		if construct == nil {
-			return nil, jobs.HandlerOptions[P]{}, fault.New(fault.Invalid, "job requires a typed handler constructor")
+			return nil, jobs.HandlerOptions[P]{}, safeerror.NewFault(fault.Invalid, "job requires a typed handler constructor")
 		}
 		handler, err := construct(services)
 		return handler, jobs.HandlerOptions[P]{}, err
@@ -34,7 +35,7 @@ func Job[P any](definition jobs.Definition[P], construct func(Services) (jobs.Ha
 func JobWith[P any](definition jobs.Definition[P], construct func(Services) (jobs.Handler[P], jobs.HandlerOptions[P], error)) JobDeclaration {
 	return JobDeclaration{install: func(r *foundation.Registrar, connection jobs.ConnectionName) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "job requires a typed handler constructor")
+			return safeerror.NewFault(fault.Invalid, "job requires a typed handler constructor")
 		}
 		return jobs.RegisterJob(r, infrastructure.JobDispatcherKey(connection), definition, func(resolver foundation.Resolver) (jobs.Declaration, error) {
 			services, err := FromResolver(resolver)
@@ -68,7 +69,7 @@ type EventDeclaration struct {
 func Listen[E any](topic events.Topic[E], name events.ListenerID, construct func(Services) (events.Handler[E], error)) EventDeclaration {
 	return EventDeclaration{install: func(r *foundation.Registrar) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "event listener requires a typed handler constructor")
+			return safeerror.NewFault(fault.Invalid, "event listener requires a typed handler constructor")
 		}
 		return events.RegisterListener(r, EventKey, topic, name, func(resolver foundation.Resolver) (events.Handler[E], error) {
 			services, err := FromResolver(resolver)
@@ -85,7 +86,7 @@ func Listen[E any](topic events.Topic[E], name events.ListenerID, construct func
 func ListenQueued[E any](topic events.Topic[E], name events.ListenerID, construct func(Services) (events.Handler[E], error)) EventDeclaration {
 	return EventDeclaration{install: func(r *foundation.Registrar) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "event listener requires a typed handler constructor")
+			return safeerror.NewFault(fault.Invalid, "event listener requires a typed handler constructor")
 		}
 		return events.RegisterQueuedListener(r, EventKey, topic, name, func(resolver foundation.Resolver) (events.Handler[E], error) {
 			services, err := FromResolver(resolver)
@@ -102,7 +103,7 @@ func ListenQueued[E any](topic events.Topic[E], name events.ListenerID, construc
 func Subscribe(id string, construct func(Services) (events.Subscriber, error)) EventDeclaration {
 	return EventDeclaration{install: func(r *foundation.Registrar) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "event subscriber requires a constructor")
+			return safeerror.NewFault(fault.Invalid, "event subscriber requires a constructor")
 		}
 		return events.RegisterSubscriber(r, EventKey, id, func(resolver foundation.Resolver) (events.Subscriber, error) {
 			services, err := FromResolver(resolver)
@@ -126,7 +127,7 @@ type Schedules func(Services) ([]schedule.Declaration, error)
 func (b *Builder) Schedules(construct Schedules) *Builder {
 	b.mutate(func() {
 		if construct == nil {
-			b.state.err = fault.New(fault.Invalid, "nil schedule declarations")
+			b.state.err = safeerror.NewFault(fault.Invalid, "nil schedule declarations")
 			return
 		}
 		b.state.schedules = append(b.state.schedules, construct)
@@ -159,7 +160,7 @@ type Realtime func(Services) (RealtimeDeclarations, error)
 func (b *Builder) Realtime(construct Realtime) *Builder {
 	b.mutate(func() {
 		if construct == nil || b.state.realtime != nil {
-			b.state.err = fault.New(fault.Invalid, "application requires exactly one realtime declaration constructor")
+			b.state.err = safeerror.NewFault(fault.Invalid, "application requires exactly one realtime declaration constructor")
 			return
 		}
 		b.state.realtime = construct

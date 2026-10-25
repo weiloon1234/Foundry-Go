@@ -2,7 +2,7 @@ package redis
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
 	"github.com/weiloon1234/Foundry-Go/internal/pubsubstream"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 )
 
@@ -28,7 +29,7 @@ func (c *Client) Publish(ctx context.Context, channel pubsub.Channel, data []byt
 		return 0, err
 	}
 	if len(data) > c.config.MaxValueBytes {
-		return 0, fault.New(fault.Invalid, "Redis publication exceeds its payload limit")
+		return 0, safeerror.NewFault(fault.Invalid, "Redis publication exceeds its payload limit")
 	}
 	result, err := c.execute(ctx, func(ctx context.Context, raw *driver.Client) (any, error) {
 		return raw.Publish(ctx, channel.String(), data).Result()
@@ -38,7 +39,7 @@ func (c *Client) Publish(ctx context.Context, channel pubsub.Channel, data []byt
 	}
 	count, ok := result.(int64)
 	if !ok || count < 0 {
-		return 0, fault.New(fault.Internal, "invalid Redis publication count")
+		return 0, safeerror.NewFault(fault.Internal, "invalid Redis publication count")
 	}
 	return uint64(count), nil
 }
@@ -46,7 +47,7 @@ func (c *Client) Publish(ctx context.Context, channel pubsub.Channel, data []byt
 // errHubClosing reports that registration raced the shared connection's shutdown
 // (typically a failing connection). It is a retryable disconnect, not the
 // client's own shutdown, which is reported as pubsub.ErrClosed.
-var errHubClosing = fault.Wrap(fault.Conflict, "Redis subscription connection is closing", pubsub.ErrDisconnected)
+var errHubClosing = safeerror.WrapFault(fault.Conflict, "Redis subscription connection is closing", pubsub.ErrDisconnected)
 
 // hubAttempts bounds how often establishment moves to a fresh shared connection
 // after racing the previous connection's shutdown.
@@ -76,7 +77,7 @@ func (c *Client) Subscribe(ctx context.Context, channels []pubsub.Channel, limit
 	defer cancel()
 	for try := 1; ; try++ {
 		err = sub.hub.register(sub)
-		if !errors.Is(err, errHubClosing) || try == hubAttempts {
+		if !callback.ErrorIs(err, errHubClosing) || try == hubAttempts {
 			break
 		}
 		if err = c.attachHub(sub); err != nil {
@@ -90,7 +91,7 @@ func (c *Client) Subscribe(ctx context.Context, channels []pubsub.Channel, limit
 		cause := classify(attempt, err)
 		sub.stop(cause)
 		<-sub.done
-		return nil, errors.Join(cause, sub.cleanupErr)
+		return nil, safeerror.Join("operation failed", cause, sub.cleanupErr)
 	}
 	return sub, nil
 }
@@ -101,7 +102,7 @@ func (c *Client) reserveSubscription(ctx context.Context, channels []pubsub.Chan
 	}
 	if !c.ready.Load() {
 		c.leave()
-		return nil, fault.New(fault.Conflict, "Redis client has not started successfully")
+		return nil, safeerror.NewFault(fault.Conflict, "Redis client has not started successfully")
 	}
 	// Establishment is an ordinary bounded operation: it waits for capacity.
 	if err := c.slots.Acquire(ctx, admission.Wait(c.config.OperationTimeout), c.stopping); err != nil {
@@ -132,7 +133,7 @@ func (c *Client) registerSubscription(ctx context.Context, channels []pubsub.Cha
 	// Live subscriptions are a hard resource quota, not a queue: they are
 	// long-lived, so waiting for one to close would not be bounded.
 	if len(c.subscriptions) >= c.config.MaxSubscriptions {
-		return nil, fault.New(fault.Overloaded, "Redis subscription capacity reached")
+		return nil, safeerror.NewFault(fault.Overloaded, "Redis subscription capacity reached")
 	}
 	buffer, err := pubsubstream.New(limits)
 	if err != nil {
@@ -211,7 +212,7 @@ func (s *subscription) Done() <-chan struct{}                            { retur
 func (s *subscription) Err() error                                       { return s.buffer.Err() }
 func (s *subscription) Close(ctx context.Context) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "Redis subscription close needs context")
+		return safeerror.NewFault(fault.Invalid, "Redis subscription close needs context")
 	}
 	s.stop(pubsub.ErrClosed)
 	select {
@@ -272,7 +273,7 @@ func (s *subscription) stop(reason error) {
 // this stream, explicitly, never silently dropping and continuing.
 func (s *subscription) deliver(channel pubsub.Channel, payload []byte) {
 	if len(payload) > s.payloadLimit {
-		s.stop(fault.New(fault.Invalid, "Redis pub/sub payload exceeds its bound"))
+		s.stop(safeerror.NewFault(fault.Invalid, "Redis pub/sub payload exceeds its bound"))
 		return
 	}
 	if err := s.buffer.Push(pubsub.Message{Channel: channel, Data: payload}); err != nil {
@@ -342,7 +343,7 @@ func (h *hub) register(s *subscription) error {
 	defer h.mu.Unlock()
 	h.pending--
 	if h.closing.Load() {
-		return errors.Join(errHubClosing, h.failure)
+		return safeerror.Join("operation failed", errHubClosing, h.failure)
 	}
 	select {
 	case <-h.client.stopping:
@@ -387,7 +388,7 @@ func (h *hub) register(s *subscription) error {
 	write, cancel := context.WithTimeout(h.lifetime, h.client.config.OperationTimeout)
 	defer cancel()
 	if err := h.raw.Subscribe(write, fresh...); err != nil {
-		failure := errors.Join(pubsub.ErrDisconnected, classify(write, err))
+		failure := safeerror.Join("operation failed", pubsub.ErrDisconnected, classify(write, err))
 		h.failLocked(failure)
 		return failure
 	}
@@ -424,7 +425,7 @@ func (h *hub) unregister(s *subscription) <-chan struct{} {
 		write, cancel := context.WithTimeout(h.lifetime, h.client.config.OperationTimeout)
 		defer cancel()
 		if err := h.raw.Unsubscribe(write, gone...); err != nil {
-			h.failLocked(errors.Join(pubsub.ErrDisconnected, classify(write, err)))
+			h.failLocked(safeerror.Join("operation failed", pubsub.ErrDisconnected, classify(write, err)))
 			return h.done
 		}
 	}
@@ -461,7 +462,7 @@ func (h *hub) shutdownLocked() {
 	h.cancel()
 	go func() {
 		err := h.raw.Close()
-		if errors.Is(err, driver.ErrClosed) {
+		if callback.ErrorIs(err, driver.ErrClosed) {
 			err = nil
 		}
 		<-h.readDone
@@ -478,7 +479,7 @@ func (h *hub) receive() {
 		message, err := h.raw.Receive(h.lifetime)
 		if err != nil {
 			if h.lifetime.Err() == nil {
-				h.fail(errors.Join(pubsub.ErrDisconnected, classify(h.lifetime, err)))
+				h.fail(safeerror.Join("operation failed", pubsub.ErrDisconnected, classify(h.lifetime, err)))
 			}
 			return
 		}
@@ -495,13 +496,13 @@ func (h *hub) receive() {
 				default:
 				}
 			} else {
-				err = fault.New(fault.Invalid, "unexpected Redis pub/sub pong")
+				err = safeerror.NewFault(fault.Invalid, "unexpected Redis pub/sub pong")
 			}
 		default:
-			err = fault.New(fault.Invalid, "Redis pub/sub continuity was interrupted")
+			err = safeerror.NewFault(fault.Invalid, "Redis pub/sub continuity was interrupted")
 		}
 		if err != nil {
-			h.fail(errors.Join(pubsub.ErrDisconnected, err))
+			h.fail(safeerror.Join("operation failed", pubsub.ErrDisconnected, err))
 			return
 		}
 	}
@@ -515,7 +516,7 @@ func (h *hub) deliver(message *driver.Message) error {
 	defer h.mu.Unlock()
 	channel := h.channels[message.Channel]
 	if message.Pattern != "" || channel == nil || !channel.server {
-		return fault.New(fault.Invalid, "Redis delivered an unregistered pub/sub channel")
+		return safeerror.NewFault(fault.Invalid, "Redis delivered an unregistered pub/sub channel")
 	}
 	var payload []byte
 	for s := range channel.streams {
@@ -535,7 +536,7 @@ func (h *hub) deliver(message *driver.Message) error {
 func (h *hub) acknowledge(message *driver.Subscription) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	invalid := fault.New(fault.Invalid, "invalid Redis subscription acknowledgement")
+	invalid := safeerror.NewFault(fault.Invalid, "invalid Redis subscription acknowledgement")
 	channel := h.channels[message.Channel]
 	if channel == nil || len(channel.acks) == 0 {
 		return invalid
@@ -596,7 +597,7 @@ func (h *hub) heartbeat() {
 		cancel()
 		if err != nil {
 			if h.lifetime.Err() == nil {
-				h.fail(errors.Join(pubsub.ErrDisconnected, classify(h.lifetime, err)))
+				h.fail(safeerror.Join("operation failed", pubsub.ErrDisconnected, classify(h.lifetime, err)))
 			}
 			return
 		}
@@ -607,7 +608,7 @@ func (h *hub) heartbeat() {
 			case <-h.lifetime.Done():
 				return
 			case <-timer.C:
-				h.fail(errors.Join(pubsub.ErrDisconnected, fault.New(fault.Timeout, "Redis pub/sub heartbeat timed out")))
+				h.fail(safeerror.Join("operation failed", pubsub.ErrDisconnected, safeerror.NewFault(fault.Timeout, "Redis pub/sub heartbeat timed out")))
 				return
 			case acknowledged := <-h.pong:
 				if acknowledged != sequence {

@@ -5,12 +5,13 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 func executionContext(ctx context.Context, executor database.Executor) error {
 	if ctx == nil || executor == nil {
-		return fault.New(fault.Invalid, "query execution requires a context and executor")
+		return safeerror.NewFault(fault.Invalid, "query execution requires a context and executor")
 	}
 	return ctx.Err()
 }
@@ -35,7 +36,7 @@ func (q Query[M]) eachRows(ctx context.Context, executor database.Executor, yiel
 	}
 	q = q.inContext(ctx)
 	if yield == nil {
-		return fault.New(fault.Invalid, "model iteration requires a callback")
+		return safeerror.NewFault(fault.Invalid, "model iteration requires a callback")
 	}
 	statement, err := q.Compile()
 	if err != nil {
@@ -106,7 +107,7 @@ func (q Query[M]) RequireFirst(ctx context.Context, executor database.Executor) 
 	}
 	model, present := item.Get()
 	if !present {
-		return *new(M), database.NewError("query first", database.NotFound)
+		return *new(M), databaseFailure("query first", database.NotFound)
 	}
 	return model, nil
 }

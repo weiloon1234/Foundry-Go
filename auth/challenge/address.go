@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -19,7 +20,7 @@ type Address struct {
 
 func (a Address) Validate() error {
 	if a.Purpose != ResetPassword && a.Purpose != VerifyEmail {
-		return fault.New(fault.Invalid, "invalid challenge purpose")
+		return safeerror.NewFault(fault.Invalid, "invalid challenge purpose")
 	}
 	return credential.ValidateAddress(a.Namespace, string(a.Purpose), string(a.Provider), a.Model)
 }

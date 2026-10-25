@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // A Go mutator cannot transform an unevaluated SQL expression. A literal uses
@@ -22,7 +23,7 @@ func (q Query[M]) validateConflictMutator(u conflictUpdate) error {
 			expected = field.conflictMutator.output
 		}
 		if reflect.TypeOf(u.Literal.Value) != expected {
-			return fault.New(fault.Invalid, "conflict literal does not match its declared mutated field type")
+			return safeerror.NewFault(fault.Invalid, "conflict literal does not match its declared mutated field type")
 		}
 		return nil
 	}
@@ -32,7 +33,7 @@ func (q Query[M]) validateConflictMutator(u conflictUpdate) error {
 	if source, ok := u.Value.(fieldRef); ok && source.Table == conflictProposedTable && source.Column == u.Field.Column {
 		return nil
 	}
-	return fault.New(fault.Invalid, "conflict field with a Go mutator requires Set, SetNull, or its own proposed value")
+	return safeerror.NewFault(fault.Invalid, "conflict field with a Go mutator requires Set, SetNull, or its own proposed value")
 }
 
 // mutateLiterals transforms one shared conflict policy, independently of the

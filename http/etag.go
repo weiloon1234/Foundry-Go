@@ -1,9 +1,11 @@
 package http
 
 import (
+	stdhttp "net/http"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
-	stdhttp "net/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const ETagMiddlewareID MiddlewareID = "foundry.etag"
@@ -34,7 +36,7 @@ func ETags(config ETagConfig) Middleware {
 			defer response.release()
 			next.ServeHTTP(responseCapabilities(response), r)
 			if err := response.finish(); err != nil {
-				logRouteFailure(r, "HTTP automatic ETag response could not finish", fault.Wrap(fault.Internal, "response transfer failed", err))
+				logRouteFailure(r, "HTTP automatic ETag response could not finish", safeerror.WrapFailure(fault.Internal, "response transfer failed", err))
 				panic(stdhttp.ErrAbortHandler)
 			}
 		}), nil

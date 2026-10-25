@@ -3,6 +3,7 @@ package http
 import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Normalize validates and owns a serialized scalar description. It promises
@@ -33,7 +34,7 @@ func (info URLScalarInfo) Normalize() (URLScalarInfo, error) {
 		valid = true
 	}
 	if !valid {
-		return URLScalarInfo{}, fault.New(fault.Invalid, "URL syntax disagrees with its scalar description")
+		return URLScalarInfo{}, safeerror.NewFault(fault.Invalid, "URL syntax disagrees with its scalar description")
 	}
 	info.Value = shape
 	return info, nil

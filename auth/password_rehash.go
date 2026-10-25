@@ -2,17 +2,18 @@ package auth
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 
 	"github.com/weiloon1234/Foundry-Go/auth/password"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 // concurrentPasswordChange marks an attempt whose password was correct when
 // checked but was replaced before the rehash write. It is Unauthenticated for
 // callers, yet lockout does not count it as a failed guess.
-var concurrentPasswordChange = fault.New(fault.Conflict, "password changed during login")
+var concurrentPasswordChange = safeerror.NewFault(fault.Conflict, "password changed during login")
 
 // rehash preserves identity and confirms eligibility again only when a write
 // returns a new model snapshot. It never retries an omitted or uncertain write.
@@ -44,7 +45,7 @@ func (l *PasswordLogin[M, K, I]) rehash(ctx context.Context, key I, subject M, i
 		return *new(M), err
 	}
 	if actual != identity || l.model.Hash(subject) != next {
-		return *new(M), fault.New(fault.Invalid, "password rehash returned a different identity or hash")
+		return *new(M), safeerror.NewFault(fault.Invalid, "password rehash returned a different identity or hash")
 	}
 	if err := l.provider.checkEligibility(ctx, subject); err != nil {
 		return *new(M), err
@@ -77,7 +78,7 @@ func (l *PasswordLogin[M, K, I]) afterLostRehash(ctx context.Context, key I, ide
 		return *new(M), changed
 	}
 	matched, err := l.hasher.Check(ctx, plain, l.model.Hash(current))
-	if errors.Is(err, fault.Invalid) || err == nil && !matched {
+	if callback.ErrorIs(err, fault.Invalid) || err == nil && !matched {
 		return *new(M), changed
 	}
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module starts one managed publisher after its borrowed database and queue
@@ -24,7 +25,7 @@ func KernelModule(name foundation.ProviderID, key foundation.Key[*Publisher], ke
 	kernels = slices.Clone(kernels)
 	return foundation.Module{Name: name, Requires: slices.Clone(requires), OnRegister: func(r *foundation.Registrar) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "outbox module requires a publisher factory")
+			return safeerror.NewFault(fault.Invalid, "outbox module requires a publisher factory")
 		}
 		return foundation.Factory(r, key, construct)
 	}, OnBoot: func(ctx context.Context, r *foundation.Runtime) error {

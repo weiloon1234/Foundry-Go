@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/ratewindow"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type entry struct {
@@ -45,7 +46,7 @@ type Backend struct {
 
 func New(maxEntries int, source clock.Clock) (*Backend, error) {
 	if maxEntries < 1 || credential.IsNil(source) {
-		return nil, fault.New(fault.Invalid, "memory lockout needs bounded capacity and a clock")
+		return nil, safeerror.NewFault(fault.Invalid, "memory lockout needs bounded capacity and a clock")
 	}
 	return &Backend{clock: source, capacity: maxEntries, entries: make(map[lockout.Key]entry)}, nil
 }
@@ -59,29 +60,29 @@ func (b *Backend) run(ctx context.Context, key lockout.Key, policy lockout.Polic
 		return err
 	}
 	if b == nil || b.clock == nil {
-		return fault.New(fault.Invalid, "memory lockout is not initialized")
+		return safeerror.NewFault(fault.Invalid, "memory lockout is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return fault.New(fault.Closed, "memory lockout is closed")
+		return safeerror.NewFault(fault.Closed, "memory lockout is closed")
 	}
 	now := b.clock.Now().UnixMilli()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if now < 0 || now > ratewindow.MaxTimestamp-lockout.MaxDuration.Milliseconds() {
-		return fault.New(fault.Conflict, "lockout authority clock outside supported range")
+		return safeerror.NewFault(fault.Conflict, "lockout authority clock outside supported range")
 	}
 	item, exists := b.entries[key]
 	if exists && now < item.last {
-		return fault.New(fault.Conflict, "lockout authority clock moved backward")
+		return safeerror.NewFault(fault.Conflict, "lockout authority clock moved backward")
 	}
 	if exists && now >= item.expiry() {
 		exists = false
 	}
 	if exists && item.policy != policy {
-		return fault.New(fault.Conflict, "live lockout policy differs")
+		return safeerror.NewFault(fault.Conflict, "live lockout policy differs")
 	}
 	updated, keep, err := fn(now, item, exists)
 	if err != nil {
@@ -98,7 +99,7 @@ func (b *Backend) run(ctx context.Context, key lockout.Key, policy lockout.Polic
 			}
 		}
 		if len(b.entries) >= b.capacity {
-			return fault.New(fault.Conflict, "memory lockout capacity reached")
+			return safeerror.NewFault(fault.Conflict, "memory lockout capacity reached")
 		}
 	}
 	b.entries[key] = updated
@@ -142,7 +143,7 @@ func (b *Backend) LockoutFinish(ctx context.Context, key lockout.Key, policy loc
 			return item, true, nil
 		}
 		if snapshot.Revision > item.revision {
-			return entry{}, false, fault.New(fault.Invalid, "lockout snapshot revision is ahead of authority")
+			return entry{}, false, safeerror.NewFault(fault.Invalid, "lockout snapshot revision is ahead of authority")
 		}
 		result = item.decision(now)
 		if result.Status == lockout.StatusLocked {
@@ -152,7 +153,7 @@ func (b *Backend) LockoutFinish(ctx context.Context, key lockout.Key, policy loc
 			return item, true, nil
 		}
 		if item.revision == math.MaxUint32 {
-			return entry{}, false, fault.New(fault.Conflict, "lockout revision capacity reached")
+			return entry{}, false, safeerror.NewFault(fault.Conflict, "lockout revision capacity reached")
 		}
 		item.revision++
 		item.last = now
@@ -183,7 +184,7 @@ func (b *Backend) LockoutReset(ctx context.Context, key lockout.Key, policy lock
 }
 func (b *Backend) Close() error {
 	if b == nil || b.clock == nil {
-		return fault.New(fault.Invalid, "memory lockout is not initialized")
+		return safeerror.NewFault(fault.Invalid, "memory lockout is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()

@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -23,14 +24,14 @@ type Channel struct {
 
 func NewChannel(namespace keyspace.Namespace, name Name, version Version, logical string) (Channel, error) {
 	if version == 0 {
-		return Channel{}, fault.New(fault.Invalid, "pub/sub schema version must be positive")
+		return Channel{}, safeerror.NewFault(fault.Invalid, "pub/sub schema version must be positive")
 	}
 	address, err := keyaddress.New(namespace, string(name), logical)
 	return Channel{address, version}, err
 }
 func (c Channel) Validate() error {
 	if c.version == 0 {
-		return fault.New(fault.Invalid, "pub/sub channel is not initialized")
+		return safeerror.NewFault(fault.Invalid, "pub/sub channel is not initialized")
 	}
 	return c.address.Validate()
 }
@@ -51,7 +52,7 @@ func DefaultLimits() Limits {
 }
 func (l Limits) Validate() error {
 	if l.Messages <= 0 || l.Messages > 65536 || l.Bytes <= 0 || l.Bytes > 64<<20 || l.PayloadBytes <= 0 || l.PayloadBytes > value.JSONMaxBytes || l.Bytes < l.PayloadBytes || l.Channels <= 0 || l.Channels > 1024 {
-		return fault.New(fault.Invalid, "invalid pub/sub buffer limits")
+		return safeerror.NewFault(fault.Invalid, "invalid pub/sub buffer limits")
 	}
 	return nil
 }
@@ -85,13 +86,13 @@ type Backend interface {
 	Subscribe(context.Context, []Channel, Limits) (Stream, error)
 }
 
-var ErrClosed = fault.New(fault.Closed, "pub/sub subscription closed")
-var ErrOverflow = fault.New(fault.Conflict, "pub/sub subscription lost messages because its buffer filled")
-var ErrDisconnected = fault.New(fault.Conflict, "pub/sub subscription disconnected; delivery may have been lost")
+var ErrClosed = safeerror.Sentinel(fault.Closed, "pub/sub subscription closed")
+var ErrOverflow = safeerror.Sentinel(fault.Conflict, "pub/sub subscription lost messages because its buffer filled")
+var ErrDisconnected = safeerror.Sentinel(fault.Conflict, "pub/sub subscription disconnected; delivery may have been lost")
 
 func ValidatePublish(ctx context.Context, channel Channel, data []byte) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "pub/sub operation needs context")
+		return safeerror.NewFault(fault.Invalid, "pub/sub operation needs context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -100,13 +101,13 @@ func ValidatePublish(ctx context.Context, channel Channel, data []byte) error {
 		return err
 	}
 	if len(data) == 0 || len(data) > value.JSONMaxBytes {
-		return fault.New(fault.Invalid, "pub/sub payload exceeds transport bounds")
+		return safeerror.NewFault(fault.Invalid, "pub/sub payload exceeds transport bounds")
 	}
 	return nil
 }
 func ValidateSubscribe(ctx context.Context, channels []Channel, limits Limits) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "pub/sub subscription needs context")
+		return safeerror.NewFault(fault.Invalid, "pub/sub subscription needs context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -115,7 +116,7 @@ func ValidateSubscribe(ctx context.Context, channels []Channel, limits Limits) e
 		return err
 	}
 	if len(channels) == 0 || len(channels) > limits.Channels {
-		return fault.New(fault.Invalid, "pub/sub channel count exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "pub/sub channel count exceeds its bound")
 	}
 	seen := make(map[Channel]bool, len(channels))
 	for _, channel := range channels {
@@ -123,7 +124,7 @@ func ValidateSubscribe(ctx context.Context, channels []Channel, limits Limits) e
 			return err
 		}
 		if seen[channel] {
-			return fault.New(fault.Duplicate, "pub/sub subscription repeats a channel")
+			return safeerror.NewFault(fault.Duplicate, "pub/sub subscription repeats a channel")
 		}
 		seen[channel] = true
 	}

@@ -1,6 +1,10 @@
 package application
 
 import (
+	"log/slog"
+	stdhttp "net/http"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -8,14 +12,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/schedule"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/validation"
-	"log/slog"
-	stdhttp "net/http"
-	"slices"
 )
 
 func registerResources(builder *foundation.Builder, image ImageSettings, logger *slog.Logger, channels *logging.ChannelSet, features FeatureSettings, source clock.Clock, recorder *observability.Recorder, dates temporal.Service, calendar schedule.Calendar) {
@@ -156,7 +158,7 @@ func validateBrowserPolicies(router *http.Router, global []http.Middleware) erro
 			local = local || id == http.CSRFMiddlewareID
 		}
 		if !local {
-			return fault.New(fault.Invalid, "cookie-authenticated routes require CSRF protection")
+			return safeerror.NewFault(fault.Invalid, "cookie-authenticated routes require CSRF protection")
 		}
 	}
 	return nil

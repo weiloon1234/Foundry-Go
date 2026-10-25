@@ -7,6 +7,7 @@ import (
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 //go:embed cache_batch.lua
@@ -85,11 +86,11 @@ func (c *Client) removeCacheBatch(ctx context.Context, keys []cache.EntryKey, sn
 		return 0, err
 	}
 	if code != 1 || len(fields) != 1 {
-		return 0, fault.New(fault.Internal, "invalid Redis cache batch reply")
+		return 0, safeerror.NewFault(fault.Internal, "invalid Redis cache batch reply")
 	}
 	count, ok := fields[0].(int64)
 	if !ok || count < 0 || count > int64(len(keys)) {
-		return 0, fault.New(fault.Internal, "invalid Redis cache batch count")
+		return 0, safeerror.NewFault(fault.Internal, "invalid Redis cache batch count")
 	}
 	return uint64(count), nil
 }
@@ -151,7 +152,7 @@ func (c *Client) readCacheBatch(ctx context.Context, keys []cache.EntryKey, snap
 		return nil, err
 	}
 	if code != 1 || len(fields) != len(keys) {
-		return nil, fault.New(fault.Internal, "invalid Redis cache batch reply")
+		return nil, safeerror.NewFault(fault.Internal, "invalid Redis cache batch reply")
 	}
 	values := make([]cache.BatchValue, len(keys))
 	for i, field := range fields {
@@ -160,10 +161,10 @@ func (c *Client) readCacheBatch(ctx context.Context, keys []cache.EntryKey, snap
 			values[i] = cache.BatchValue{Data: []byte(item), Found: true}
 		case int64:
 			if item != 0 {
-				return nil, fault.New(fault.Internal, "invalid Redis cache batch entry")
+				return nil, safeerror.NewFault(fault.Internal, "invalid Redis cache batch entry")
 			}
 		default:
-			return nil, fault.New(fault.Internal, "invalid Redis cache batch entry")
+			return nil, safeerror.NewFault(fault.Internal, "invalid Redis cache batch entry")
 		}
 	}
 	return values, nil

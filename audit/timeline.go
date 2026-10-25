@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -33,10 +34,10 @@ type TimelineRequest struct {
 
 func (r TimelineRequest) Validate() error {
 	if r.Size < 1 || r.Size > query.MaxPageSize {
-		return fault.New(fault.Invalid, "audit timeline size is outside its bounds")
+		return safeerror.NewFault(fault.Invalid, "audit timeline size is outside its bounds")
 	}
 	if before, present := r.Before.Get(); present && before < 1 {
-		return fault.New(fault.Invalid, "audit timeline position must be positive")
+		return safeerror.NewFault(fault.Invalid, "audit timeline position must be positive")
 	}
 	return nil
 }
@@ -75,7 +76,7 @@ func entryMetadata(row auditstore.Entry) (metadata, error) {
 func decodeMetadata(sequence int64, area string, source value.JSON[attribution.Origin], correlation value.Nullable[string], method, route string, createdAt temporal.DateTime) (metadata, error) {
 	result := metadata{sequence: Sequence(sequence), area: Area(area), createdAt: createdAt}
 	if sequence < 1 {
-		return metadata{}, fault.New(fault.Invalid, "stored audit sequence is invalid")
+		return metadata{}, safeerror.NewFault(fault.Invalid, "stored audit sequence is invalid")
 	}
 	if err := result.area.Validate(); err != nil {
 		return metadata{}, err
@@ -153,7 +154,7 @@ func decodeActivity(row auditstore.Activity) (Activity, error) {
 	}
 	result := Activity{metadata: meta, id: row.ID.Bytes(), operation: row.Operation, action: ActionName(row.Action), version: Version(row.Version)}
 	if row.Operation == 0 && (row.Action == "" || row.Version == 0) || row.Operation != 0 && (row.Action != "" || row.Version != 0) {
-		return Activity{}, fault.New(fault.Invalid, "invalid stored audit activity metadata")
+		return Activity{}, safeerror.NewFault(fault.Invalid, "invalid stored audit activity metadata")
 	}
 	if captured, present := row.Subject.Get(); present {
 		identity, err := captured.Decode()
@@ -297,7 +298,7 @@ func identityKey(identity model.Identity) (string, error) {
 	}
 	var key sqlvalue.Value
 	if err := json.Unmarshal([]byte(keyJSON), &key); err != nil {
-		return "", fault.Wrap(fault.Invalid, "invalid audit subject key", err)
+		return "", safeerror.WrapFault(fault.Invalid, "invalid audit subject key", err)
 	}
 	return textKey("m:" + identity.ModelName() + ":" + key.Kind + ":" + key.Text), nil
 }

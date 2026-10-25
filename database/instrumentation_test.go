@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"log/slog"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -67,6 +68,9 @@ func TestQueryObserverAndSlowLogReportStatementsWithoutArguments(t *testing.T) {
 		strings.Contains(logs.String(), "secret-argument") || strings.Contains(logs.String(), "UPDATE records") {
 		t.Fatal("slow log missing or exposed statement text/arguments", logs.String())
 	}
+	if !strings.Contains(logs.String(), `"code":""`) || strings.Contains(logs.String(), `"code":"query_failed"`) {
+		t.Fatal("successful slow statement was classified as failure", logs.String())
+	}
 	for _, event := range events {
 		if strings.Contains(event.Statement, "secret-argument") {
 			t.Fatal("event exposed an argument value")
@@ -103,5 +107,33 @@ func TestQueryObserverPanicsAndFailuresAreContained(t *testing.T) {
 		if _, err := database.Prepare(database.Adapter{Connector: connector{state}}, database.DefaultPoolConfig(), option); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid instrumentation accepted", err)
 		}
+	}
+}
+
+func TestQueryFailureObserverGoexitReleasesConnection(t *testing.T) {
+	state := &driverState{}
+	cause := errors.New("query failed")
+	state.query = func(context.Context, string, []driver.NamedValue) (driver.Rows, error) { return nil, cause }
+	db, err := database.Open(t.Context(), database.Adapter{Connector: connector{state}}, database.DefaultPoolConfig(), database.WithQueryObserver(func(context.Context, database.QueryEvent) { runtime.Goexit() }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	returned := make(chan error, 1)
+	go func() { _, err := db.Query(t.Context(), "failed query"); returned <- err }()
+	select {
+	case err := <-returned:
+		if !errors.Is(err, cause) {
+			t.Fatal("observer changed query failure")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("observer Goexit terminated query caller")
+	}
+	if db.Stats().Owners != 0 || db.Stats().InUse != 0 {
+		t.Fatal("failed query retained its connection")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := db.Close(ctx); err != nil {
+		t.Fatal("query observer stranded shutdown")
 	}
 }

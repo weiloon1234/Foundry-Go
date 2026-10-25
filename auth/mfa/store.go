@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -30,13 +31,13 @@ func (c Config) Validate() error {
 		return err
 	}
 	if !validLabel(c.Issuer) || c.Window < 0 || c.Window > 1 || c.RecoveryCodes < 1 || c.RecoveryCodes > MaxRecoveryCodes || c.MaxConcurrent < 1 || c.MaxConcurrent > 65536 || c.Timeout <= 0 {
-		return fault.New(fault.Invalid, "invalid MFA policy or operation bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid MFA policy or operation bounds")
 	}
 	return validateEnrollmentLifetime(c.EnrollmentLifetime)
 }
 func validateEnrollmentLifetime(lifetime time.Duration) error {
 	if lifetime < time.Millisecond || lifetime > MaxEnrollmentLifetime || lifetime%time.Microsecond != 0 {
-		return fault.New(fault.Invalid, "invalid MFA enrollment lifetime")
+		return safeerror.NewFault(fault.Invalid, "invalid MFA enrollment lifetime")
 	}
 	return nil
 }
@@ -52,7 +53,7 @@ type Store struct {
 
 func NewStore(backend Backend, keys *encryption.Keyring, config Config) (*Store, error) {
 	if credential.IsNil(backend) {
-		return nil, fault.New(fault.Invalid, "MFA store requires a backend")
+		return nil, safeerror.NewFault(fault.Invalid, "MFA store requires a backend")
 	}
 	if err := keys.Validate(); err != nil {
 		return nil, err
@@ -64,7 +65,7 @@ func NewStore(backend Backend, keys *encryption.Keyring, config Config) (*Store,
 }
 func (s *Store) Validate() error {
 	if s == nil || s.gate == nil {
-		return fault.New(fault.Invalid, "MFA store is not configured")
+		return safeerror.NewFault(fault.Invalid, "MFA store is not configured")
 	}
 	return nil
 }

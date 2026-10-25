@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // QueueConfig bounds retained work. MaxEntries and MaxBytes cap live
@@ -29,7 +30,7 @@ func DefaultQueueConfig() QueueConfig {
 
 func (c QueueConfig) Validate() error {
 	if c.MaxEntries <= 0 || c.MaxEntries > 1<<20 || c.MaxBytes <= 0 || c.MaxBytes > 1<<40 || c.MaxHistory <= 0 || c.MaxHistory > 4096 || c.Retention < time.Millisecond || c.Retention > MaxDelay || c.Retention%time.Millisecond != 0 || c.MaxRetained < 0 || c.MaxRetained > 1<<24 {
-		return fault.New(fault.Invalid, "invalid job queue capacity, history or retention")
+		return safeerror.NewFault(fault.Invalid, "invalid job queue capacity, history or retention")
 	}
 	return nil
 }
@@ -44,4 +45,4 @@ func (c QueueConfig) RetainedLimit() int {
 
 // ErrQueueFull reports that live work reached the queue's capacity. Nothing
 // was enqueued; retry after workers drain the queue.
-var ErrQueueFull = fault.New(fault.Overloaded, "job queue capacity is exhausted")
+var ErrQueueFull = safeerror.Sentinel(fault.Overloaded, "job queue capacity is exhausted")

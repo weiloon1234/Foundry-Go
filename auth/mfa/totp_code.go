@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -17,11 +18,11 @@ type TOTPCode struct{ digits secret.String }
 func ParseTOTPCode(raw secret.String) (TOTPCode, error) {
 	text := raw.Reveal()
 	if len(text) != totpDigits {
-		return TOTPCode{}, fault.New(fault.Invalid, "TOTP code must contain six ASCII digits")
+		return TOTPCode{}, safeerror.NewFault(fault.Invalid, "TOTP code must contain six ASCII digits")
 	}
 	for i := range text {
 		if text[i] < '0' || text[i] > '9' {
-			return TOTPCode{}, fault.New(fault.Invalid, "TOTP code must contain six ASCII digits")
+			return TOTPCode{}, safeerror.NewFault(fault.Invalid, "TOTP code must contain six ASCII digits")
 		}
 	}
 	return TOTPCode{digits: raw}, nil
@@ -33,15 +34,15 @@ func (TOTPCode) LogValue() slog.Value         { return slog.StringValue(secret.R
 func (TOTPCode) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 func (c *TOTPCode) UnmarshalJSON(data []byte) error {
 	if c == nil {
-		return fault.New(fault.Invalid, "TOTP code destination is missing")
+		return safeerror.NewFault(fault.Invalid, "TOTP code destination is missing")
 	}
 	*c = TOTPCode{}
 	var raw string
 	if len(data) > 128 {
-		return fault.New(fault.Invalid, "invalid TOTP code input")
+		return safeerror.NewFault(fault.Invalid, "invalid TOTP code input")
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fault.New(fault.Invalid, "invalid TOTP code input")
+		return safeerror.NewFault(fault.Invalid, "invalid TOTP code input")
 	}
 	parsed, err := ParseTOTPCode(secret.New(raw))
 	if err != nil {

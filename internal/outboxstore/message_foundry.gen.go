@@ -15,6 +15,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	outbox "github.com/weiloon1234/Foundry-Go/outbox"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
@@ -507,7 +508,7 @@ func (q MessageQuery) foundryInsertMany(ctx context.Context, writer database.Tra
 }
 func (q MessageQuery) foundryCreateMutations(drafts []MessageDraft) ([]foundryquery.Mutation[Message], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Message], len(drafts))
 	for i, draft := range drafts {
@@ -909,7 +910,7 @@ func (q MessageQuery) DeleteAll(ctx context.Context, writer database.Transactor)
 // Increment adjusts one numeric field of every matching model by a typed delta, such as MessageFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q MessageQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Message], extra ...MessageDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Message]
 	if len(extra) == 1 {
@@ -924,7 +925,7 @@ func (q MessageQuery) Increment(ctx context.Context, writer database.Transactor,
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as MessageFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q MessageQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Message], extra ...MessageDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Message]
 	if len(extra) == 1 {
@@ -1394,58 +1395,58 @@ func CompareMessage(before, after foundryvalue.Optional[Message], assigned Messa
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[Message](), before, after, assigned.fieldID.IsSet(), func(item Message) model.ID[Message] { return item.ID })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.ID: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return MessageChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return MessageChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Kind, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldKind.IsSet(), func(item Message) string { return item.Kind })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.Kind: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.Kind", err)
 	}
 	changes.fields.Destination, err = lifecycle.CompareModelField(codec.String[outbox.Destination](), before, after, assigned.fieldDestination.IsSet(), func(item Message) outbox.Destination { return item.Destination })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.Destination: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.Destination", err)
 	}
 	changes.fields.Name, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldName.IsSet(), func(item Message) string { return item.Name })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.Name: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.Name", err)
 	}
 	changes.fields.Version, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldVersion.IsSet(), func(item Message) uint32 { return item.Version })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.Version: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.Version", err)
 	}
 	changes.fields.Payload, err = lifecycle.CompareModelField(codec.JSON[json.RawMessage](), before, after, assigned.fieldPayload.IsSet(), func(item Message) foundryvalue.JSON[json.RawMessage] { return item.Payload })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.Payload: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.Payload", err)
 	}
 	changes.fields.Origin, err = lifecycle.CompareModelField(codec.JSON[attribution.Origin](), before, after, assigned.fieldOrigin.IsSet(), func(item Message) foundryvalue.JSON[attribution.Origin] { return item.Origin })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.Origin: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.Origin", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Message) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.CreatedAt: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.CreatedAt", err)
 	}
 	changes.fields.PublishState, err = lifecycle.CompareModelField(codec.String[outbox.PublicationState](), before, after, assigned.fieldPublishState.IsSet(), func(item Message) outbox.PublicationState { return item.PublishState })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.PublishState: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.PublishState", err)
 	}
 	changes.fields.PublishAttempts, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldPublishAttempts.IsSet(), func(item Message) uint32 { return item.PublishAttempts })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.PublishAttempts: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.PublishAttempts", err)
 	}
 	changes.fields.PublishAfter, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldPublishAfter.IsSet(), func(item Message) temporal.DateTime { return item.PublishAfter })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.PublishAfter: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.PublishAfter", err)
 	}
 	changes.fields.PublishedAt, err = lifecycle.CompareModelField(codec.Nullable(codec.DateTime()), before, after, assigned.fieldPublishedAt.IsSet(), func(item Message) foundryvalue.Nullable[temporal.DateTime] { return item.PublishedAt })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.PublishedAt: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.PublishedAt", err)
 	}
 	changes.fields.PublishReason, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldPublishReason.IsSet(), func(item Message) string { return item.PublishReason })
 	if err != nil {
-		return MessageChanges{}, fmt.Errorf("compare Message.PublishReason: %w", err)
+		return MessageChanges{}, foundrydiagnostic.Prefix("compare Message.PublishReason", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1622,7 +1623,7 @@ func (MessageHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Message]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Message]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1681,7 +1682,7 @@ func (MessageHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryquery.Mutation[Message]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Message]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1829,7 +1830,7 @@ func (MessageHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1943,14 +1944,14 @@ type MessageAuditPolicy struct {
 func (changes MessageChanges) Audit(policy MessageAuditPolicy) (record.Model[Message, model.ID[Message]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Message, model.ID[Message]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Message, model.ID[Message]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Message, model.ID[Message]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Message, model.ID[Message]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -2106,7 +2107,7 @@ func MessageAuditing(policy MessageAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() MessageHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes MessageChanges) error {

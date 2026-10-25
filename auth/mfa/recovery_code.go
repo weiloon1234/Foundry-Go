@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -32,15 +33,15 @@ func (RecoveryCode) LogValue() slog.Value         { return slog.StringValue(secr
 func (RecoveryCode) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 func (c *RecoveryCode) UnmarshalJSON(data []byte) error {
 	if c == nil {
-		return fault.New(fault.Invalid, "recovery code destination is missing")
+		return safeerror.NewFault(fault.Invalid, "recovery code destination is missing")
 	}
 	*c = RecoveryCode{}
 	var raw string
 	if len(data) > 512 {
-		return fault.New(fault.Invalid, "invalid recovery code input")
+		return safeerror.NewFault(fault.Invalid, "invalid recovery code input")
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fault.New(fault.Invalid, "invalid recovery code input")
+		return safeerror.NewFault(fault.Invalid, "invalid recovery code input")
 	}
 	parsed, err := ParseRecoveryCode(secret.New(raw))
 	if err != nil {
@@ -71,7 +72,7 @@ func (RecoveryHash) MarshalJSON() ([]byte, error) { return json.Marshal(secret.R
 
 func newRecoveryCodes(count int) ([]RecoveryCode, []RecoveryHash, error) {
 	if count < 1 || count > MaxRecoveryCodes {
-		return nil, nil, fault.New(fault.Invalid, "invalid recovery code count")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "invalid recovery code count")
 	}
 	codes := make([]RecoveryCode, 0, count)
 	hashes := make([]RecoveryHash, 0, count)
@@ -82,7 +83,7 @@ func newRecoveryCodes(count int) ([]RecoveryCode, []RecoveryHash, error) {
 		}
 		for _, prior := range hashes {
 			if prior.digest.Equal(digest) {
-				return nil, nil, fault.New(fault.Internal, "recovery code generation collision")
+				return nil, nil, safeerror.NewFault(fault.Internal, "recovery code generation collision")
 			}
 		}
 		codes = append(codes, RecoveryCode{value: raw})
@@ -118,15 +119,15 @@ func consumeRecovery(hashes []RecoveryHash, code RecoveryCode) ([]RecoveryHash, 
 }
 func validateRecoveryHashes(hashes []RecoveryHash) error {
 	if len(hashes) > MaxRecoveryCodes {
-		return fault.New(fault.Invalid, "recovery hash capacity exceeded")
+		return safeerror.NewFault(fault.Invalid, "recovery hash capacity exceeded")
 	}
 	for i, hash := range hashes {
 		if hash.IsZero() {
-			return fault.New(fault.Invalid, "invalid recovery hash")
+			return safeerror.NewFault(fault.Invalid, "invalid recovery hash")
 		}
 		for _, prior := range hashes[:i] {
 			if prior.digest.Equal(hash.digest) {
-				return fault.New(fault.Duplicate, "duplicate recovery hash")
+				return safeerror.NewFault(fault.Duplicate, "duplicate recovery hash")
 			}
 		}
 	}

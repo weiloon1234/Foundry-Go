@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ContentEncoding is a response coding, distinct from header names and media types.
@@ -58,7 +59,7 @@ func (e CompressionEncoder) Validate() error {
 			return nil
 		}
 	}
-	return fault.New(fault.Invalid, "invalid compression encoder or resource options")
+	return safeerror.NewFault(fault.Invalid, "invalid compression encoder or resource options")
 }
 
 type compressionStream interface {
@@ -80,7 +81,7 @@ func (e CompressionEncoder) writer(dst io.Writer) (resettableStream, error) {
 	case BrotliEncoding:
 		return newBrotliStream(dst, e.level, e.window), nil
 	default:
-		return nil, fault.New(fault.Invalid, "compression encoder is not defined")
+		return nil, safeerror.NewFault(fault.Invalid, "compression encoder is not defined")
 	}
 }
 
@@ -161,7 +162,7 @@ func DefaultCompressionConfig() CompressionConfig {
 }
 func (c CompressionConfig) Validate() error {
 	if len(c.Encoders) == 0 || len(c.Encoders) > 2 || c.MinBytes < 0 || c.MinBytes > 64<<10 || c.MaxConcurrent < 1 || c.MaxConcurrent > 1024 {
-		return fault.New(fault.Invalid, "compression configuration exceeds its bounds")
+		return safeerror.NewFault(fault.Invalid, "compression configuration exceeds its bounds")
 	}
 	seen := make(map[ContentEncoding]bool)
 	for _, e := range c.Encoders {
@@ -169,7 +170,7 @@ func (c CompressionConfig) Validate() error {
 			return err
 		}
 		if seen[e.encoding] {
-			return fault.New(fault.Duplicate, "compression encoding is repeated")
+			return safeerror.NewFault(fault.Duplicate, "compression encoding is repeated")
 		}
 		seen[e.encoding] = true
 	}

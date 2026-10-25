@@ -1,7 +1,10 @@
 // Package upload owns request-scoped temporary files behind typed HTTP handles.
 package upload
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+)
 
 const bufferBytes = 32 << 10
 const sniffBytes = 512
@@ -16,7 +19,7 @@ type Config struct {
 
 func (c Config) Validate() error {
 	if c.MaxBytes <= 0 || c.MaxFileBytes <= 0 || c.MaxFileBytes > c.MaxBytes || c.MaxFiles <= 0 || c.MaxReaders <= 0 {
-		return fault.New(fault.Invalid, "invalid upload resource limits")
+		return safeerror.NewFault(fault.Invalid, "invalid upload resource limits")
 	}
 	return nil
 }

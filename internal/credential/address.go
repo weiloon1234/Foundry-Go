@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -16,7 +17,7 @@ func ValidateAddress(namespace keyspace.Namespace, guard, provider, table string
 		return err
 	}
 	if !identifier.Semantic(guard) || !identifier.Semantic(provider) || !sqlname.Table(table) {
-		return fault.New(fault.Invalid, "invalid credential address")
+		return safeerror.NewFault(fault.Invalid, "invalid credential address")
 	}
 	return nil
 }
@@ -31,7 +32,7 @@ func SubjectKey(scope, table string, identity model.Identity) (string, error) {
 		return "", err
 	}
 	if identity.ModelName() != table {
-		return "", fault.New(fault.Invalid, "credential identity belongs to a different model")
+		return "", safeerror.NewFault(fault.Invalid, "credential identity belongs to a different model")
 	}
 	encoded, err := identity.KeyJSON()
 	if err != nil {

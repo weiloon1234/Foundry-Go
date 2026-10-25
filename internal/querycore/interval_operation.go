@@ -3,6 +3,7 @@ package querycore
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func IntervalOperationSpec(op ScalarOperation) (OperationSpec, bool) {
@@ -33,14 +34,14 @@ func (n OperationNode) ValidateInterval() error {
 		wantResult = codec.TypeInteger
 	case AddIntervalsOperation, SubtractIntervalsOperation, NegateIntervalOperation:
 	default:
-		return fault.New(fault.Invalid, "invalid interval operation")
+		return safeerror.NewFault(fault.Invalid, "invalid interval operation")
 	}
 	if n.Result != wantResult {
-		return fault.New(fault.Invalid, "interval operation has an incompatible result")
+		return safeerror.NewFault(fault.Invalid, "interval operation has an incompatible result")
 	}
 	for _, arg := range n.Arguments {
 		if arg.Kind != wantInput {
-			return fault.New(fault.Invalid, "interval operation has incompatible inputs")
+			return safeerror.NewFault(fault.Invalid, "interval operation has incompatible inputs")
 		}
 	}
 	return nil
@@ -60,6 +61,6 @@ func IntervalOperationSQL(n OperationNode, args []string) (string, error) {
 	case IntervalElapsedOperation:
 		return "CAST((EXTRACT(hour FROM " + args[0] + ") * 3600000000000 + EXTRACT(minute FROM " + args[0] + ") * 60000000000 + EXTRACT(second FROM " + args[0] + ") * 1000000000) AS bigint)", nil
 	default:
-		return "", fault.New(fault.Invalid, "invalid interval operation")
+		return "", safeerror.NewFault(fault.Invalid, "invalid interval operation")
 	}
 }

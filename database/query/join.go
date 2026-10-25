@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // JoinInput accepts an aliased record query or the left side of a chained join.
@@ -112,7 +113,7 @@ func FullJoin[L, R any](left JoinInput[L], right JoinTable[R], on JoinOn[L, R]) 
 func buildJoin[S, L, R any](left JoinInput[L], right JoinTable[R], on JoinOn[L, R], kind joinKind) joinedSource[S, L, R] {
 	var result joinedSource[S, L, R]
 	if nilDescriptor(left) || nilDescriptor(right) {
-		result.input.err = fault.New(fault.Invalid, "join requires both sources")
+		result.input.err = safeerror.NewFault(fault.Invalid, "join requires both sources")
 		return result
 	}
 	l, r := left.joinInput(), right.joinTable()

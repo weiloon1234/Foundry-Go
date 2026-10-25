@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -34,7 +35,7 @@ func (s SecondFactor[M, K]) ValidateFor(provider Provider[M, K]) error {
 		return err
 	}
 	if s.verify == nil || s.provider.definition.id != provider.definition.id {
-		return fault.New(fault.Invalid, "second factor must share the credential provider declaration")
+		return safeerror.NewFault(fault.Invalid, "second factor must share the credential provider declaration")
 	}
 	return nil
 }
@@ -52,7 +53,7 @@ func (s SecondFactor[M, K]) Check(ctx context.Context, tx *database.Tx, provider
 		return err
 	}
 	if ctx == nil || tx == nil || consume == nil {
-		return fault.New(fault.Invalid, "second factor requires a transaction and pending consumption")
+		return safeerror.NewFault(fault.Invalid, "second factor requires a transaction and pending consumption")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -67,7 +68,7 @@ func (s SecondFactor[M, K]) Check(ctx context.Context, tx *database.Tx, provider
 		return s.verify(ctx, tx, reference, func(_ context.Context, child *database.Tx) error {
 			if called || failure != nil || !tx.SharesTransaction(child) {
 				if failure == nil {
-					failure = fault.New(fault.Invalid, "second factor violated pending-consumption ownership")
+					failure = safeerror.NewFault(fault.Invalid, "second factor violated pending-consumption ownership")
 				}
 				return failure
 			}
@@ -88,7 +89,7 @@ func (s SecondFactor[M, K]) Check(ctx context.Context, tx *database.Tx, provider
 		return failure
 	}
 	if !called {
-		return fault.New(fault.Invalid, "second factor omitted pending credential consumption")
+		return safeerror.NewFault(fault.Invalid, "second factor omitted pending credential consumption")
 	}
 	return ctx.Err()
 }

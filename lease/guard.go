@@ -2,13 +2,13 @@ package lease
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Guard represents one ownership interval. It has no finalizer: release it
@@ -63,7 +63,7 @@ func (g *Guard) Context() context.Context {
 // Err rechecks validity synchronously, including after a process scheduling pause.
 func (g *Guard) Err() error {
 	if g == nil || g.ctx == nil {
-		return fault.New(fault.Invalid, "lease guard is not initialized")
+		return safeerror.NewFault(fault.Invalid, "lease guard is not initialized")
 	}
 	g.expire()
 	if err := g.parent.Err(); err != nil {
@@ -77,7 +77,7 @@ func (g *Guard) Err() error {
 // guard can run; concurrent attempts fail with Conflict instead of queuing.
 func (g *Guard) Renew(ctx context.Context) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "lease renewal requires a context")
+		return safeerror.NewFault(fault.Invalid, "lease renewal requires a context")
 	}
 	if err := g.Err(); err != nil {
 		return err
@@ -86,7 +86,7 @@ func (g *Guard) Renew(ctx context.Context) error {
 	case <-g.gate:
 		defer func() { g.gate <- struct{}{} }()
 	default:
-		return fault.New(fault.Conflict, "lease renewal is already running")
+		return safeerror.NewFault(fault.Conflict, "lease renewal is already running")
 	}
 	if err := g.Err(); err != nil {
 		return err
@@ -105,7 +105,7 @@ func (g *Guard) Renew(ctx context.Context) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if err != nil || !ok || g.ctx.Err() != nil || !time.Now().Before(previous) || !time.Now().Before(next) {
-		cause := errors.Join(ErrLost, err, context.Cause(g.ctx))
+		cause := safeerror.Join("operation failed", ErrLost, err, context.Cause(g.ctx))
 		g.cancel(cause)
 		return cause
 	}
@@ -154,7 +154,7 @@ func (g *Guard) run(heartbeat bool, finish func()) {
 // same attempt and result. Ownership loss remains available from Err separately.
 func (g *Guard) Release(ctx context.Context) error {
 	if g == nil || g.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "lease release requires an initialized guard and context")
+		return safeerror.NewFault(fault.Invalid, "lease release requires an initialized guard and context")
 	}
 	_ = g.Err() // Observe owner cancellation before recording explicit release.
 	g.cancel(ErrReleased)

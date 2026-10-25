@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type SoftDeleteScope uint8
@@ -20,7 +21,7 @@ func (q QueryCore) HasSoftDeletes() bool { return q.Model != nil && q.Model.Soft
 
 func (q QueryCore) ValidateSoftDeleteScope() error {
 	if q.SoftDeleteScope > TrashedRecords || (q.SoftDeleteScope != ActiveRecords && !q.HasSoftDeletes()) {
-		return fault.New(fault.Invalid, "trashed visibility requires a soft-delete model declaration")
+		return safeerror.NewFault(fault.Invalid, "trashed visibility requires a soft-delete model declaration")
 	}
 	return nil
 }

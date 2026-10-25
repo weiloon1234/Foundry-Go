@@ -119,7 +119,12 @@ exact, and accepts a model the transaction will create, with its key chosen
 first. `ReplaceIn` and `AddIn` then publish it inside the caller's transaction
 of the extension store's pool, joined through a savepoint, using only that
 transaction's connection and at any isolation level, since the upload was
-committed before its snapshot. They lock the owner, recount its intents and
+committed before its snapshot. Preparing after a repeatable-read snapshot instead
+returns `fault.Invalid` with “prepared upload is not visible to this transaction;
+prepare it before the transaction begins”. The result remains `Unpublished` and
+retains its operation ID; `errors.As` exposes the underlying `*fault.Error`.
+Framework diagnostics survive containment; application hook errors retain their
+causes through `errors.Is/As` without exposing their text. They lock the owner, recount its intents and
 publish; the attachment is part of the caller's commit. A failed or rolled-back
 publication leaves the upload `stored`, ready for another attempt; `Discard`
 reclaims it at once, and `ReconcilePending` cleans it after `StoredGrace`. Old-file

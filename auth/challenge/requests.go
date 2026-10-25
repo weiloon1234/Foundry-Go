@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -61,7 +62,7 @@ type Requests[M model.Identifiable, K, I any, P Purpose] struct {
 
 func NewRequests[M model.Identifiable, K, I any, P Purpose](issuer Issuer[M, K, P], limiter ratelimit.Limiter[I], callbacks RequestCallbacks[M, K, I, P], logger *slog.Logger, config auth.Config) (*Requests[M, K, I, P], error) {
 	if credential.IsNil(issuer) || callbacks.Lookup == nil || callbacks.Deliver == nil || logger == nil {
-		return nil, fault.New(fault.Invalid, "recovery requests require issuer, lookup, delivery and logger")
+		return nil, safeerror.NewFault(fault.Invalid, "recovery requests require issuer, lookup, delivery and logger")
 	}
 	for _, err := range []error{issuer.Validate(), limiter.Validate(), config.Validate()} {
 		if err != nil {
@@ -73,7 +74,7 @@ func NewRequests[M model.Identifiable, K, I any, P Purpose](issuer Issuer[M, K, 
 }
 func (r *Requests[M, K, I, P]) Validate() error {
 	if r == nil || r.slots == nil {
-		return fault.New(fault.Invalid, "recovery requests are not configured")
+		return safeerror.NewFault(fault.Invalid, "recovery requests are not configured")
 	}
 	return nil
 }
@@ -91,7 +92,7 @@ func (r *Requests[M, K, I, P]) Request(ctx context.Context, identifier I) error 
 		return err
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "recovery request requires a context")
+		return safeerror.NewFault(fault.Invalid, "recovery request requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -112,7 +113,7 @@ func (r *Requests[M, K, I, P]) Request(ctx context.Context, identifier I) error 
 	if r.closed {
 		r.mu.Unlock()
 		r.slots.Release()
-		return fault.New(fault.Closed, "recovery requests are closed")
+		return safeerror.NewFault(fault.Closed, "recovery requests are closed")
 	}
 	if r.active == 0 {
 		r.idle = make(chan struct{})
@@ -146,7 +147,7 @@ func (r *Requests[M, K, I, P]) Wait(ctx context.Context) error {
 		return err
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "waiting for recovery requests requires a context")
+		return safeerror.NewFault(fault.Invalid, "waiting for recovery requests requires a context")
 	}
 	r.mu.Lock()
 	if r.active == 0 {
@@ -200,7 +201,7 @@ func (r *Requests[M, K, I, P]) dispatch(base context.Context, identifier I) {
 			return err
 		}
 		if actual != identity || issued.Token().Validate() != nil || issued.ExpiresAt().IsZero() {
-			return fault.New(fault.Invalid, "recovery issuer returned an inconsistent delivery")
+			return safeerror.NewFault(fault.Invalid, "recovery issuer returned an inconsistent delivery")
 		}
 		if err := op.Err(); err != nil {
 			return err
@@ -226,7 +227,7 @@ func (r *Requests[M, K, I, P]) Close(ctx context.Context) error {
 		return err
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "closing recovery requests requires a context")
+		return safeerror.NewFault(fault.Invalid, "closing recovery requests requires a context")
 	}
 	r.mu.Lock()
 	r.closed = true

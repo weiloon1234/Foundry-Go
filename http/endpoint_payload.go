@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type payloadKind uint8
@@ -70,18 +71,18 @@ func (b Body[B]) Validate() error {
 		return b.form.Validate()
 	case payloadRaw:
 		if b.raw == nil || b.raw.open == nil {
-			return fault.New(fault.Invalid, "raw request body is not defined")
+			return safeerror.NewFault(fault.Invalid, "raw request body is not defined")
 		}
 		return validateRawMedia(b.raw.media)
 	case payloadEmpty:
 		return nil
 	case payloadRefreshCookie:
 		if b.refreshCookie == nil || b.fromCookie == nil {
-			return fault.New(fault.Invalid, "refresh cookie body is not defined")
+			return safeerror.NewFault(fault.Invalid, "refresh cookie body is not defined")
 		}
 		return b.refreshCookie.Validate()
 	default:
-		return fault.New(fault.Invalid, "request body contract is not defined")
+		return safeerror.NewFault(fault.Invalid, "request body contract is not defined")
 	}
 }
 
@@ -141,27 +142,27 @@ func (r Response[R]) Validate() error {
 	switch r.kind {
 	case payloadDownload, payloadStream:
 		if r.status != 200 || r.file == nil || r.prepareFile == nil {
-			return fault.New(fault.Invalid, "file response is not defined")
+			return safeerror.NewFault(fault.Invalid, "file response is not defined")
 		}
 		return r.file.Validate()
 	case payloadJSON:
 		if r.json == nil || !bodySuccessStatus(r.status) {
-			return fault.New(fault.Invalid, "JSON response requires a body-bearing success status")
+			return safeerror.NewFault(fault.Invalid, "JSON response requires a body-bearing success status")
 		}
 		if r.statuses != nil {
 			if err := validateResponseStatuses(r.statuses, r.status); err != nil || r.selectStatus == nil {
-				return fault.New(fault.Invalid, "JSON response alternatives require two to eight unique body-bearing success statuses")
+				return safeerror.NewFault(fault.Invalid, "JSON response alternatives require two to eight unique body-bearing success statuses")
 			}
 		}
 		return r.json.Validate()
 	case payloadRedirect:
 		if !redirectStatus(r.status) || r.redirectTarget == nil {
-			return fault.New(fault.Invalid, "redirect response requires status 301, 302, 303, 307 or 308")
+			return safeerror.NewFault(fault.Invalid, "redirect response requires status 301, 302, 303, 307 or 308")
 		}
 		return nil
 	case payloadEvents:
 		if r.status != 200 || r.events == nil {
-			return fault.New(fault.Invalid, "event stream response is not defined")
+			return safeerror.NewFault(fault.Invalid, "event stream response is not defined")
 		}
 		return r.events.Validate()
 	case payloadEmpty:
@@ -169,7 +170,7 @@ func (r Response[R]) Validate() error {
 			return nil
 		}
 	}
-	return fault.New(fault.Invalid, "response contract is not defined or has an invalid status")
+	return safeerror.NewFault(fault.Invalid, "response contract is not defined or has an invalid status")
 }
 
 func bodySuccessStatus(status int) bool {

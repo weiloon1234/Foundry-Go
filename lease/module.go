@@ -2,10 +2,10 @@ package lease
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module builds one manager per application. requires identifies the provider(s)
@@ -30,9 +30,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Manager], config Con
 		if err := r.OnShutdown("leases", func(ctx context.Context) error {
 			err := manager.Close(ctx)
 			<-manager.Done()
-			return errors.Join(err, manager.Close(context.Background()))
+			return safeerror.Join("operation failed", err, manager.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, manager.Close(ctx))
+			return safeerror.Join("operation failed", err, manager.Close(ctx))
 		}
 		return nil
 	}}

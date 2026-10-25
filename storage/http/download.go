@@ -2,11 +2,10 @@ package http
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -45,7 +44,7 @@ func Stream(disk *storage.Disk, key storage.ObjectKey, options storage.ReadOptio
 // retryable 503 responses, not 500s; unclassified adapter failures remain 500.
 func responseError(err error) error {
 	var failure *storage.Error
-	if errors.As(err, &failure) {
+	if callback.ErrorAs(err, &failure) {
 		switch failure.Code() {
 		case storage.NotFound:
 			return foundryhttp.NotFound.WithCause(err)
@@ -59,7 +58,7 @@ func responseError(err error) error {
 			return foundryhttp.Unavailable.WithCause(err)
 		}
 	}
-	if errorgraph.Is(err, fault.Overloaded) || errorgraph.Is(err, context.DeadlineExceeded) || errorgraph.Is(err, context.Canceled) {
+	if callback.ErrorIs(err, fault.Overloaded) || callback.ErrorIs(err, context.DeadlineExceeded) || callback.ErrorIs(err, context.Canceled) {
 		return foundryhttp.Unavailable.WithCause(err)
 	}
 	return foundryhttp.InternalError.WithCause(err)

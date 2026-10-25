@@ -2,12 +2,12 @@ package validation
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Lookup checks whether a concrete value exists in an explicitly scoped source.
@@ -46,7 +46,7 @@ func ExistsAll[S ~[]T, T any](lookup BatchLookup[T]) Rule[S] {
 		return failed[S](invalid("validation lookup is missing"))
 	}
 	if err := callback.Isolated("validation batch lookup declaration", lookup.Validate); err != nil {
-		return failed[S](fault.Wrap(fault.Invalid, "invalid validation lookup", err))
+		return failed[S](safeerror.WrapFault(fault.Invalid, "invalid validation lookup", err))
 	}
 	return elementsRule[S](Spec{ID: "foundry.exists_all"}, nil, func(item T) T { return item }, lookup.AllExist)
 }
@@ -59,7 +59,7 @@ func UniqueAll[S ~[]T, T any](lookup AnyLookup[T]) Rule[S] {
 		return failed[S](invalid("validation lookup is missing"))
 	}
 	if err := callback.Isolated("validation batch lookup declaration", lookup.Validate); err != nil {
-		return failed[S](fault.Wrap(fault.Invalid, "invalid validation lookup", err))
+		return failed[S](safeerror.WrapFault(fault.Invalid, "invalid validation lookup", err))
 	}
 	return elementsRule[S](Spec{ID: "foundry.unique_all"}, nil, func(item T) T { return item }, noneExist(lookup))
 }
@@ -76,7 +76,7 @@ func ExistsEach[S ~[]E, E, V any](field Field[E, V], lookup BatchLookup[V]) Rule
 		return failed[S](invalid("validation lookup is missing"))
 	}
 	if err := callback.Isolated("validation batch lookup declaration", lookup.Validate); err != nil {
-		return failed[S](fault.Wrap(fault.Invalid, "invalid validation lookup", err))
+		return failed[S](safeerror.WrapFault(fault.Invalid, "invalid validation lookup", err))
 	}
 	return elementsRule[S](Spec{ID: "foundry.exists", Parameters: []Parameter{parameter("field", field.name)}}, &field, field.selectValue, lookup.AllExist)
 }
@@ -93,7 +93,7 @@ func UniqueEach[S ~[]E, E, V any](field Field[E, V], lookup AnyLookup[V]) Rule[S
 		return failed[S](invalid("validation lookup is missing"))
 	}
 	if err := callback.Isolated("validation batch lookup declaration", lookup.Validate); err != nil {
-		return failed[S](fault.Wrap(fault.Invalid, "invalid validation lookup", err))
+		return failed[S](safeerror.WrapFault(fault.Invalid, "invalid validation lookup", err))
 	}
 	return elementsRule[S](Spec{ID: "foundry.unique", Parameters: []Parameter{parameter("field", field.name)}}, &field, field.selectValue, noneExist(lookup))
 }
@@ -150,7 +150,7 @@ func elementsRule[S ~[]E, E, V any](spec Spec, field *Field[E, V], pick func(E) 
 	return rule
 }
 
-var errStopped = errors.New("validation location stopped")
+var errStopped = safeerror.New("validation location stopped")
 
 // locate observes all values once. Only when that batch rejects does it bisect
 // to the rejected positions: a half that passes proves the other half holds a
@@ -167,7 +167,7 @@ func locate[V any](s *execution, values []V, observe func(context.Context, []V) 
 	if err == nil && !passed {
 		_, err = bisect(check, report, values, 0)
 	}
-	if errors.Is(err, errStopped) {
+	if err == errStopped {
 		return nil
 	}
 	return err
@@ -211,7 +211,7 @@ func lookupRule[T any](lookup Lookup[T], wantExists bool) Rule[T] {
 		return failed[T](invalid("validation lookup is missing"))
 	}
 	if err := callback.Isolated("validation lookup declaration", lookup.Validate); err != nil {
-		return failed[T](fault.Wrap(fault.Invalid, "invalid validation lookup", err))
+		return failed[T](safeerror.WrapFault(fault.Invalid, "invalid validation lookup", err))
 	}
 	spec := Spec{ID: "foundry.exists"}
 	if !wantExists {

@@ -22,6 +22,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 //foundry:enum
@@ -123,7 +124,7 @@ func (a *Artifact) Read(p []byte) (int, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.closed || a.file == nil {
-		return 0, fault.New(fault.Closed, "export artifact is closed")
+		return 0, safeerror.NewFault(fault.Closed, "export artifact is closed")
 	}
 	return a.file.Read(p)
 }
@@ -134,7 +135,7 @@ func (a *Artifact) Seek(offset int64, whence int) (int64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.closed || a.file == nil {
-		return 0, fault.New(fault.Closed, "export artifact is closed")
+		return 0, safeerror.NewFault(fault.Closed, "export artifact is closed")
 	}
 	return a.file.Seek(offset, whence)
 }
@@ -157,7 +158,7 @@ func (a *Artifact) Close() error {
 				a.manager.retainCleanup(a, true)
 			}
 			a.releaseSlot()
-			return errors.Join(a.closeErr, fault.Wrap(fault.Internal, "export file cleanup failed", err))
+			return safeerror.Join("operation failed", a.closeErr, safeerror.WrapFailure(fault.Internal, "export file cleanup failed", err))
 		}
 		a.removed = true
 	}
@@ -207,7 +208,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 	artifact := &Artifact{manager: m, release: release, name: exportName(options.Name, t.ID(), options.Format), media: exportMedia(options.Format)}
 	defer func() {
 		if result == nil {
-			err = errors.Join(err, artifact.Close())
+			err = safeerror.Join("operation failed", err, artifact.Close())
 		}
 	}()
 	ctx = lease.Context()
@@ -265,7 +266,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 		}
 		file, err := os.CreateTemp(m.config.TempDir, "foundry-report-*")
 		if err != nil {
-			return fault.Wrap(fault.Internal, "create export file failed", err)
+			return safeerror.WrapFailure(fault.Internal, "create export file failed", err)
 		}
 		artifact.file, artifact.path = file, file.Name()
 		digest := sha256.New()

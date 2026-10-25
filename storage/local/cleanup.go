@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -24,7 +25,7 @@ func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (ui
 		return 0, failure(storage.Invalid, storage.DeleteOperation, storage.Unchanged, nil)
 	}
 	var removed uint64
-	finished := errors.New("staging cleanup batch complete")
+	finished := safeerror.New("staging cleanup batch complete")
 	err := b.walk(ctx, func(parent *os.Root, name string) error {
 		suffix, ok := strings.CutPrefix(name, tempPrefix)
 		if !ok || len(suffix) != 32 {

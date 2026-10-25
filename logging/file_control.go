@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // FileID identifies one owned log generation. It is not a filesystem path.
@@ -55,7 +56,7 @@ func (s *ChannelSet) FileSink(name ChannelName) (*Sink, error) {
 			}
 		}
 	}
-	return nil, fault.New(fault.Missing, "owned rotating log channel is unavailable")
+	return nil, safeerror.NewFault(fault.Missing, "owned rotating log channel is unavailable")
 }
 
 // withFile stops admission under mu and places a barrier behind every accepted
@@ -64,7 +65,7 @@ func (s *ChannelSet) FileSink(name ChannelName) (*Sink, error) {
 // result even if the caller's deadline ends.
 func (s *Sink) withFile(ctx context.Context, work func(*rotatingFile) error) error {
 	if ctx == nil || s == nil || s.state == nil {
-		return fault.New(fault.Invalid, "log file control requires an owner and context")
+		return safeerror.NewFault(fault.Invalid, "log file control requires an owner and context")
 	}
 	state := s.state
 	state.mu.Lock()
@@ -73,11 +74,11 @@ func (s *Sink) withFile(ctx context.Context, work func(*rotatingFile) error) err
 		return err
 	}
 	if state.closed || state.target == nil {
-		return fault.New(fault.Closed, "log sink is not running")
+		return safeerror.NewFault(fault.Closed, "log sink is not running")
 	}
 	file, ok := state.file.(*rotatingFile)
 	if !ok {
-		return fault.New(fault.Missing, "sink has no owned rotating file")
+		return safeerror.NewFault(fault.Missing, "sink has no owned rotating file")
 	}
 	if state.queue != nil {
 		done := make(chan struct{})
@@ -112,15 +113,15 @@ func (f *rotatingFile) fileInfo(name string) (FileInfo, error) {
 		return FileInfo{}, err
 	}
 	if !info.Mode().IsRegular() {
-		return FileInfo{}, fault.New(fault.Invalid, "log file is not regular")
+		return FileInfo{}, safeerror.NewFault(fault.Invalid, "log file is not regular")
 	}
 	if name == f.name {
 		if f.file == nil {
-			return FileInfo{}, fault.New(fault.Conflict, "active log is unavailable")
+			return FileInfo{}, safeerror.NewFault(fault.Conflict, "active log is unavailable")
 		}
 		opened, err := f.file.Stat()
 		if err != nil || !os.SameFile(opened, info) {
-			return FileInfo{}, fault.New(fault.Conflict, "active log identity changed")
+			return FileInfo{}, safeerror.NewFault(fault.Conflict, "active log identity changed")
 		}
 	}
 	return FileInfo{ID: f.fileID(name), Name: name, Active: name == f.name, Bytes: info.Size(), Modified: info.ModTime().UTC()}, nil
@@ -131,7 +132,7 @@ func (f *rotatingFile) files() ([]FileInfo, error) {
 		return nil, err
 	}
 	archives, readErr := f.readArchives(dir)
-	if err := errors.Join(readErr, dir.Close()); err != nil {
+	if err := safeerror.Join("operation failed", readErr, dir.Close()); err != nil {
 		return nil, err
 	}
 	names := []string{f.name}
@@ -162,7 +163,7 @@ func (f *rotatingFile) files() ([]FileInfo, error) {
 }
 func (f *rotatingFile) findFile(id FileID) (FileInfo, error) {
 	if len(id) != 64 {
-		return FileInfo{}, fault.New(fault.Invalid, "invalid log file identity")
+		return FileInfo{}, safeerror.NewFault(fault.Invalid, "invalid log file identity")
 	}
 	files, err := f.files()
 	if err != nil {
@@ -173,7 +174,7 @@ func (f *rotatingFile) findFile(id FileID) (FileInfo, error) {
 			return info, nil
 		}
 	}
-	return FileInfo{}, fault.New(fault.Conflict, "log file generation expired")
+	return FileInfo{}, safeerror.NewFault(fault.Conflict, "log file generation expired")
 }
 func (s *Sink) Files(ctx context.Context) (files []FileInfo, err error) {
 	err = s.withFile(ctx, func(f *rotatingFile) error { var err error; files, err = f.files(); return err })
@@ -181,7 +182,7 @@ func (s *Sink) Files(ctx context.Context) (files []FileInfo, err error) {
 }
 func (s *Sink) ReadFile(ctx context.Context, request FileRead) (chunk FileChunk, err error) {
 	if request.Offset < -1 || request.Limit < 1 || request.Limit > MaxFileReadBytes {
-		return chunk, fault.New(fault.Invalid, "invalid bounded log read")
+		return chunk, safeerror.NewFault(fault.Invalid, "invalid bounded log read")
 	}
 	err = s.withFile(ctx, func(f *rotatingFile) error {
 		info, err := f.findFile(request.ID)
@@ -198,7 +199,7 @@ func (s *Sink) ReadFile(ctx context.Context, request FileRead) (chunk FileChunk,
 			offset = max(0, info.Bytes-int64(request.Limit))
 		}
 		if offset > info.Bytes {
-			return fault.New(fault.Conflict, "log read position expired")
+			return safeerror.NewFault(fault.Conflict, "log read position expired")
 		}
 		data := make([]byte, min(int64(request.Limit), info.Bytes-offset))
 		n, err := file.ReadAt(data, offset)
@@ -220,7 +221,7 @@ func (s *Sink) RotateFile(ctx context.Context, expected FileID) error {
 			return err
 		}
 		if !info.Active {
-			return fault.New(fault.Invalid, "rotation requires the active log")
+			return safeerror.NewFault(fault.Invalid, "rotation requires the active log")
 		}
 		if err := f.file.Sync(); err != nil {
 			return err
@@ -238,7 +239,7 @@ func (s *Sink) ClearFile(ctx context.Context, expected FileID) error {
 			return err
 		}
 		if !info.Active {
-			return fault.New(fault.Invalid, "clear requires the active log")
+			return safeerror.NewFault(fault.Invalid, "clear requires the active log")
 		}
 		if err := f.file.Truncate(0); err != nil {
 			return err
@@ -258,7 +259,7 @@ func (s *Sink) DeleteArchive(ctx context.Context, id FileID) error {
 			return err
 		}
 		if info.Active {
-			return fault.New(fault.Invalid, "cannot delete the active log")
+			return safeerror.NewFault(fault.Invalid, "cannot delete the active log")
 		}
 		if err := f.root.Remove(info.Name); err != nil {
 			return err

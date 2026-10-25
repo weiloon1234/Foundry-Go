@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Throttle owns one factor's failed-attempt policy, retaining the submitted key
@@ -24,7 +25,7 @@ func (t Throttle[K]) Policy() Policy { return (Declaration[K]{t.definition}).Pol
 func (t Throttle[K]) Limits() (Limits, bool) { return (Declaration[K]{t.definition}).Limits() }
 func (t Throttle[K]) Validate() error {
 	if t.store == nil || t.store.gate == nil {
-		return fault.New(fault.Invalid, "lockout throttle is not bound")
+		return safeerror.NewFault(fault.Invalid, "lockout throttle is not bound")
 	}
 	return (Declaration[K]{t.definition}).Validate()
 }
@@ -34,7 +35,7 @@ func (t Throttle[K]) address(key K) (Key, error) {
 		return Key{}, err
 	}
 	if len(logical) > t.store.config.MaxKeyBytes {
-		return Key{}, fault.New(fault.Invalid, "encoded login key exceeds its limit")
+		return Key{}, safeerror.NewFault(fault.Invalid, "encoded login key exceeds its limit")
 	}
 	return NewKey(t.store.config.Namespace, t.Name(), logical)
 }
@@ -50,7 +51,7 @@ func (t Throttle[K]) Run(ctx context.Context, key K, verify func(context.Context
 		return false, err
 	}
 	if verify == nil {
-		return false, fault.New(fault.Invalid, "lockout requires a verifier")
+		return false, safeerror.NewFault(fault.Invalid, "lockout requires a verifier")
 	}
 	if t.definition.limits != nil {
 		return t.runClient(ctx, key, verify)
@@ -70,10 +71,10 @@ func (t Throttle[K]) Run(ctx context.Context, key K, verify func(context.Context
 		}
 		admission, err := t.store.backend.LockoutBegin(op, address, t.Policy(), generation)
 		if err != nil {
-			return &unavailable{err}
+			return unavailableFailure(err)
 		}
 		if err := admission.Validate(t.Policy()); err != nil {
-			return &unavailable{err}
+			return unavailableFailure(err)
 		}
 		if err := op.Err(); err != nil {
 			return err
@@ -94,20 +95,20 @@ func (t Throttle[K]) Run(ctx context.Context, key K, verify func(context.Context
 		}
 		decision, err := t.store.backend.LockoutFinish(op, address, t.Policy(), admission.Snapshot, outcome)
 		if err != nil {
-			return &unavailable{err}
+			return unavailableFailure(err)
 		}
 		if err := decision.Validate(t.Policy()); err != nil {
-			return &unavailable{err}
+			return unavailableFailure(err)
 		}
 		if outcome == Succeeded && decision.Triggered {
-			return &unavailable{fault.New(fault.Internal, "successful attempt started a lock")}
+			return unavailableFailure(safeerror.NewFault(fault.Internal, "successful attempt started a lock"))
 		}
 		if err := op.Err(); err != nil {
 			return err
 		}
 		if decision.Triggered && t.observer != nil {
 			if err := callback.Isolated("lockout observer", func() error { return t.observer(op, Notice[K]{key: key, retryAfter: decision.RetryAfter}) }); err != nil {
-				return &Rejection{retryAfter: decision.RetryAfter, cause: err, triggered: true}
+				return rejectionFailure(decision.RetryAfter, err, true)
 			}
 		}
 		return decisionError(decision)
@@ -141,7 +142,7 @@ func (t Throttle[K]) Reset(ctx context.Context, key K) (bool, error) {
 		}
 		changed, err = t.store.backend.LockoutReset(op, address, t.Policy())
 		if err != nil {
-			return &unavailable{err}
+			return unavailableFailure(err)
 		}
 		return nil
 	})

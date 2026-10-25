@@ -2,12 +2,12 @@ package storage
 
 import (
 	"context"
-	"errors"
 	"io"
 	"os"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -19,22 +19,22 @@ func (d *Disk) ReadBytes(ctx context.Context, key ObjectKey, maximum int64, opti
 		return nil, ReadInfo{}, err
 	}
 	if maximum < 0 || maximum > d.config.MaxObjectBytes {
-		return nil, ReadInfo{}, Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return nil, ReadInfo{}, newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	body, info, err := d.Open(ctx, key, options)
 	if err != nil {
 		return nil, ReadInfo{}, err
 	}
 	if info.Length > maximum {
-		return nil, ReadInfo{}, Failure(LimitExceeded, OpenOperation, NotApplicable, closeBody(body))
+		return nil, ReadInfo{}, newFailure(LimitExceeded, OpenOperation, NotApplicable, closeBody(body))
 	}
 	data, readErr := io.ReadAll(io.LimitReader(body, maximum+1))
-	err = errors.Join(readErr, closeBody(body))
+	err = safeerror.Join("operation failed", readErr, closeBody(body))
 	if err != nil {
 		return nil, ReadInfo{}, finish(OpenOperation, ctx, err, NotApplicable)
 	}
 	if int64(len(data)) != info.Length {
-		return nil, ReadInfo{}, Failure(IntegrityFailed, OpenOperation, NotApplicable, nil)
+		return nil, ReadInfo{}, newFailure(IntegrityFailed, OpenOperation, NotApplicable, nil)
 	}
 	return data, info, nil
 }
@@ -54,33 +54,33 @@ func (d *Disk) PutFile(ctx context.Context, key ObjectKey, path string, options 
 		return StoredObject{}, err
 	}
 	if ctx == nil {
-		return StoredObject{}, Failure(Invalid, PutOperation, Unchanged, nil)
+		return StoredObject{}, newFailure(Invalid, PutOperation, Unchanged, nil)
 	}
 	if err := ctx.Err(); err != nil {
-		return StoredObject{}, Failure(Unavailable, PutOperation, Unchanged, err)
+		return StoredObject{}, newFailure(Unavailable, PutOperation, Unchanged, err)
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return StoredObject{}, Failure(Unavailable, PutOperation, Unchanged, err)
+		return StoredObject{}, newFailure(Unavailable, PutOperation, Unchanged, err)
 	}
 	info, err := file.Stat()
 	if err == nil && !info.Mode().IsRegular() {
-		err = Failure(Invalid, PutOperation, Unchanged, nil)
+		err = newFailure(Invalid, PutOperation, Unchanged, nil)
 	}
 	if err == nil {
 		if size, supplied := options.Size.Get(); supplied && size != info.Size() {
-			err = Failure(Invalid, PutOperation, Unchanged, nil)
+			err = newFailure(Invalid, PutOperation, Unchanged, nil)
 		}
 	}
 	if err != nil {
-		return StoredObject{}, Failure(Invalid, PutOperation, Unchanged, errors.Join(err, file.Close()))
+		return StoredObject{}, newFailure(Invalid, PutOperation, Unchanged, safeerror.Join("operation failed", err, file.Close()))
 	}
 	options.Size = value.Set(info.Size())
 	result, err := d.Put(ctx, key, file, options)
 	cleanup := file.Close()
 	if cleanup != nil {
 		if err == nil {
-			err = Failure(Unavailable, PutOperation, Applied, cleanup)
+			err = newFailure(Unavailable, PutOperation, Applied, cleanup)
 		} else {
 			err = joinCleanup(PutOperation, err, cleanup)
 		}
@@ -136,14 +136,14 @@ func (d *Disk) CopyTo(ctx context.Context, source ObjectKey, destination *Disk, 
 		return StoredObject{}, err
 	}
 	if options.Source.Range.IsSet() || d == destination && source == target {
-		return StoredObject{}, Failure(Invalid, CopyOperation, Unchanged, nil)
+		return StoredObject{}, newFailure(Invalid, CopyOperation, Unchanged, nil)
 	}
 	if err := options.Destination.Validate(destination.config.MaxObjectBytes); err != nil {
 		return StoredObject{}, err
 	}
 	if copier, ok := d.backend.(ServerCopier); ok && sameBackend(d.backend, destination.backend) {
 		result, err := d.serverCopy(ctx, copier, source, destination, target, options)
-		if !errors.Is(err, errServerCopyDeclined) {
+		if err != errServerCopyDeclined {
 			return result, err
 		}
 	}
@@ -156,7 +156,7 @@ func (d *Disk) CopyTo(ctx context.Context, source ObjectKey, destination *Disk, 
 		write.ContentType = info.Object.ContentType
 	}
 	if size, supplied := write.Size.Get(); supplied && size != info.Length {
-		return StoredObject{}, Failure(Invalid, CopyOperation, Unchanged, closeBody(body))
+		return StoredObject{}, newFailure(Invalid, CopyOperation, Unchanged, closeBody(body))
 	}
 	write.Size = value.Set(info.Length)
 	if !write.Checksum.IsSet() {
@@ -166,7 +166,7 @@ func (d *Disk) CopyTo(ctx context.Context, source ObjectKey, destination *Disk, 
 	cleanup := closeBody(body)
 	if cleanup != nil {
 		if err == nil {
-			err = Failure(Unavailable, CopyOperation, Applied, cleanup)
+			err = newFailure(Unavailable, CopyOperation, Applied, cleanup)
 		} else {
 			err = joinCleanup(CopyOperation, err, cleanup)
 		}
@@ -177,7 +177,7 @@ func (d *Disk) CopyTo(ctx context.Context, source ObjectKey, destination *Disk, 
 	return result, nil
 }
 
-var errServerCopyDeclined = Failure(Unsupported, CopyOperation, Unchanged, nil)
+var errServerCopyDeclined = newFailure(Unsupported, CopyOperation, Unchanged, nil)
 
 func sameBackend(a, b Backend) bool {
 	if a == nil || b == nil {
@@ -217,19 +217,19 @@ func (d *Disk) serverCopy(ctx context.Context, copier ServerCopier, source Objec
 	maximum := min(d.config.MaxObjectBytes, destination.config.MaxObjectBytes)
 	err = callback.Isolated("storage server copy", func() error { var err error; info, err = copier.Copy(op, source, target, options, maximum); return err })
 	var declined *Error
-	if err != nil && op.Err() == nil && errors.As(err, &declined) && declined.Code() == Unsupported && declined.Outcome() == Unchanged {
+	if err != nil && op.Err() == nil && callback.ErrorAs(err, &declined) && declined.Code() == Unsupported && declined.Outcome() == Unchanged {
 		return StoredObject{}, errServerCopyDeclined
 	}
 	if err == nil {
 		if info.Size > maximum {
-			err = Failure(IntegrityFailed, CopyOperation, Applied, nil)
+			err = newFailure(IntegrityFailed, CopyOperation, Applied, nil)
 		} else if e := destination.validateInfo(target, info); e != nil {
-			err = Failure(IntegrityFailed, CopyOperation, Applied, e)
+			err = newFailure(IntegrityFailed, CopyOperation, Applied, e)
 		} else if expected, present := options.Destination.Size.Get(); present && info.Size != expected {
-			err = Failure(IntegrityFailed, CopyOperation, Applied, nil)
+			err = newFailure(IntegrityFailed, CopyOperation, Applied, nil)
 		} else if expected, present := options.Destination.Checksum.Get(); present {
 			if actual, available := info.Checksum.Get(); !available || actual != expected {
-				err = Failure(IntegrityFailed, CopyOperation, Applied, nil)
+				err = newFailure(IntegrityFailed, CopyOperation, Applied, nil)
 			}
 		}
 	}
@@ -264,10 +264,10 @@ func (d *Disk) MoveTo(ctx context.Context, source ObjectKey, destination *Disk, 
 		return result, err
 	}
 	if options.Source.Range.IsSet() || options.Source.Version != "" {
-		return result, Failure(Invalid, MoveOperation, Unchanged, nil)
+		return result, newFailure(Invalid, MoveOperation, Unchanged, nil)
 	}
 	if !d.capabilities.ConditionalRead || !d.capabilities.ConditionalDelete {
-		return result, Failure(Unsupported, MoveOperation, Unchanged, nil)
+		return result, newFailure(Unsupported, MoveOperation, Unchanged, nil)
 	}
 	sourceAddress, err := d.address(ctx, source)
 	if err != nil {
@@ -278,14 +278,14 @@ func (d *Disk) MoveTo(ctx context.Context, source ObjectKey, destination *Disk, 
 		return result, err
 	}
 	if sourceAddress == targetAddress {
-		return result, Failure(Invalid, MoveOperation, Unchanged, nil)
+		return result, newFailure(Invalid, MoveOperation, Unchanged, nil)
 	}
 	info, err := d.Stat(ctx, source, options.Source)
 	if err != nil {
 		return result, err
 	}
 	if info.ETag == "" {
-		return result, Failure(Unsupported, MoveOperation, Unchanged, nil)
+		return result, newFailure(Unsupported, MoveOperation, Unchanged, nil)
 	}
 	options.Source.IfMatch = info.ETag
 	copied, err := d.CopyTo(ctx, source, destination, target, options)
@@ -306,7 +306,7 @@ func (d *Disk) MoveTo(ctx context.Context, source ObjectKey, destination *Disk, 
 
 func mutationOutcome(err error) Outcome {
 	var failure *Error
-	if errors.As(err, &failure) {
+	if callback.ErrorAs(err, &failure) {
 		if failure.Outcome() == NotApplicable {
 			return Unchanged
 		}
@@ -317,14 +317,17 @@ func mutationOutcome(err error) Outcome {
 func joinCleanup(op Operation, primary, cleanup error) error {
 	code, outcome := Unavailable, mutationOutcome(primary)
 	var prior *Error
-	if errors.As(primary, &prior) {
+	if callback.ErrorAs(primary, &prior) {
 		code = prior.Code()
 	}
-	result := Failure(code, op, outcome, errors.Join(primary, cleanup))
+	result := Failure(code, op, outcome, safeerror.Join("operation failed", primary, cleanup))
 	if prior != nil {
 		if id, ok := prior.Cleanup().Get(); ok {
 			result = result.WithCleanup(id)
 		}
 	}
-	return result
+	if prior != nil {
+		return safeerror.Retain(primary, result)
+	}
+	return ownFailure(result)
 }

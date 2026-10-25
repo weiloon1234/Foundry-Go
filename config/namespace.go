@@ -4,12 +4,13 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ValidateNamespace uses the same grammar as configuration field names.
 func ValidateNamespace(namespace string) error {
 	if len(namespace) > 256 || !settingName.MatchString(namespace) {
-		return fault.New(fault.Invalid, "invalid configuration namespace")
+		return safeerror.NewFault(fault.Invalid, "invalid configuration namespace")
 	}
 	return nil
 }
@@ -21,11 +22,11 @@ func (s *Schema[T]) WithinNamespace(namespace string) error {
 		return err
 	}
 	if s == nil || s.byName == nil {
-		return fault.New(fault.Invalid, "configuration schema is not initialized")
+		return safeerror.NewFault(fault.Invalid, "configuration schema is not initialized")
 	}
 	for _, field := range s.fields {
 		if !strings.HasPrefix(field.name(), namespace+".") {
-			return fault.New(fault.Invalid, "configuration field is outside its declared namespace")
+			return safeerror.NewFault(fault.Invalid, "configuration field is outside its declared namespace")
 		}
 	}
 	return nil

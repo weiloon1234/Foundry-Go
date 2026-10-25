@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlscope"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -47,14 +48,14 @@ func (d DeliveryJob) Declare(manager *Manager) (jobs.Declaration, error) {
 		statuses, err := manager.deliver(ctx, model.IDFromBytes[store.Envelope](request.ID.Bytes()))
 		for _, status := range statuses {
 			if status.State.Retryable() {
-				return fault.New(fault.Internal, "notification channels require retry")
+				return safeerror.NewFault(fault.Internal, "notification channels require retry")
 			}
 		}
 		if len(statuses) == 0 {
 			return err
 		}
 		if err != nil {
-			return jobs.Permanent(fault.New(fault.Internal, "notification delivery is terminal"))
+			return jobs.Permanent(safeerror.NewFault(fault.Internal, "notification delivery is terminal"))
 		}
 		return nil
 	})

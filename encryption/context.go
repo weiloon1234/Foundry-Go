@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -27,7 +28,7 @@ type Context struct {
 
 func NewContext(purpose Purpose, binding secret.String) (Context, error) {
 	if !identifier.Semantic(string(purpose)) || binding.IsZero() || len(binding.Reveal()) > MaxBindingBytes {
-		return Context{}, fault.New(fault.Invalid, "invalid encryption context")
+		return Context{}, safeerror.NewFault(fault.Invalid, "invalid encryption context")
 	}
 	return Context{purpose: purpose, binding: binding.Reveal()}, nil
 }

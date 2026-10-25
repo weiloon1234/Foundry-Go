@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -17,7 +18,7 @@ func (r *Keyring) Encrypt(ctx context.Context, binding Context, plaintext secret
 		return Ciphertext{}, err
 	}
 	if len(plaintext.Reveal()) > MaxPlaintextBytes {
-		return Ciphertext{}, fault.New(fault.Invalid, "plaintext exceeds encryption limit")
+		return Ciphertext{}, safeerror.NewFault(fault.Invalid, "plaintext exceeds encryption limit")
 	}
 	if err := r.active.reserve(); err != nil {
 		return Ciphertext{}, err
@@ -38,10 +39,10 @@ func (r *Keyring) Decrypt(ctx context.Context, binding Context, ciphertext Ciphe
 		return secret.String{}, err
 	}
 	if ciphertext.IsZero() {
-		return secret.String{}, fault.New(fault.Invalid, "encryption envelope is missing")
+		return secret.String{}, safeerror.NewFault(fault.Invalid, "encryption envelope is missing")
 	}
 	failure := func() (secret.String, error) {
-		return secret.String{}, fault.New(fault.Invalid, "encryption envelope could not be authenticated")
+		return secret.String{}, safeerror.NewFault(fault.Invalid, "encryption envelope could not be authenticated")
 	}
 	key := r.keys[ciphertext.id]
 	if key == nil {
@@ -80,7 +81,7 @@ func (r *Keyring) validateOperation(ctx context.Context, binding Context) error 
 		return err
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "encryption requires a context")
+		return safeerror.NewFault(fault.Invalid, "encryption requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err

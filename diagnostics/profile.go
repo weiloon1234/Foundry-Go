@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Profile endpoint query parameters. name selects heap (default), goroutine,
@@ -39,15 +40,15 @@ func (r *Runtime) serveProfile(writer stdhttp.ResponseWriter, request *stdhttp.R
 		case "seconds":
 			seconds, err = strconv.Atoi(values[0])
 			if err == nil && (seconds < 1 || seconds > MaxProfileSeconds) {
-				err = fault.New(fault.Invalid, "profile duration is out of range")
+				err = safeerror.NewFault(fault.Invalid, "profile duration is out of range")
 			}
 		case "debug":
 			debug, err = strconv.Atoi(values[0])
 			if err == nil && debug != 0 && debug != 1 {
-				err = fault.New(fault.Invalid, "profile debug level is out of range")
+				err = safeerror.NewFault(fault.Invalid, "profile debug level is out of range")
 			}
 		default:
-			err = fault.New(fault.Invalid, "unknown profile parameter")
+			err = safeerror.NewFault(fault.Invalid, "unknown profile parameter")
 		}
 		if err != nil {
 			_ = foundryhttp.WriteError(writer, request, foundryhttp.BadRequest)
@@ -62,7 +63,7 @@ func (r *Runtime) serveProfile(writer stdhttp.ResponseWriter, request *stdhttp.R
 	case r.profile <- struct{}{}:
 		defer func() { <-r.profile }()
 	default:
-		_ = foundryhttp.WriteError(writer, request, fault.New(fault.Overloaded, "a diagnostics profile is already running"))
+		_ = foundryhttp.WriteError(writer, request, safeerror.NewFault(fault.Overloaded, "a diagnostics profile is already running"))
 		return
 	}
 	header := writer.Header()
@@ -84,7 +85,7 @@ func (r *Runtime) serveProfile(writer stdhttp.ResponseWriter, request *stdhttp.R
 		}
 		if err := start(writer); err != nil {
 			// Another in-process owner holds the global profiler.
-			_ = foundryhttp.WriteError(writer, request, fault.New(fault.Overloaded, "the runtime profiler is busy"))
+			_ = foundryhttp.WriteError(writer, request, safeerror.NewFault(fault.Overloaded, "the runtime profiler is busy"))
 			return
 		}
 		timer := time.NewTimer(time.Duration(seconds) * time.Second)

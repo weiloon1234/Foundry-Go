@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -31,7 +32,7 @@ type CursorQuery[R any] struct {
 // Models needing eager loading use their ordinary CursorPaginate method instead.
 func CursorFor[R any](source RecordQuerySource[R]) CursorQuery[R] {
 	if nilDescriptor(source) {
-		return CursorQuery[R]{err: fault.New(fault.Invalid, "cursor result requires a complete source")}
+		return CursorQuery[R]{err: safeerror.NewFault(fault.Invalid, "cursor result requires a complete source")}
 	}
 	return cursorForRecord(source.recordQuery())
 }
@@ -42,7 +43,7 @@ func cursorForRecord[R any](source recordQuery[R]) CursorQuery[R] {
 		return q
 	}
 	if len(source.columns) == 0 || len(source.columns) != len(source.node.Selections) || len(source.columns) > MaxExpressionNodes || source.scan == nil {
-		q.err = fault.New(fault.Invalid, "cursor result requires bounded columns and a complete decoder")
+		q.err = safeerror.NewFault(fault.Invalid, "cursor result requires bounded columns and a complete decoder")
 		return q
 	}
 	names, err := namesInSelects(source.node)
@@ -80,13 +81,13 @@ func (q CursorQuery[R]) OrderBy(orders ...ProjectionOrder[CursorScope[R]]) Curso
 	q.orders = slices.Clone(q.orders)
 	for _, order := range orders {
 		if nilDescriptor(order) {
-			q.err = fault.New(fault.Invalid, "cursor ordering requires output fields")
+			q.err = safeerror.NewFault(fault.Invalid, "cursor ordering requires output fields")
 			continue
 		}
 		node := order.projectionOrder().node
 		field, ok := node.Expression.(fieldRef)
 		if !ok {
-			q.err = fault.New(fault.Invalid, "cursor ordering requires output fields")
+			q.err = safeerror.NewFault(fault.Invalid, "cursor ordering requires output fields")
 			continue
 		}
 		q.orders = append(q.orders, queryOrder{Field: field, Descending: node.Descending})
@@ -103,7 +104,7 @@ func (q CursorQuery[R]) UniqueBy(keys ...Group[CursorScope[R]]) CursorQuery[R] {
 	for i, key := range keys {
 		field, ok := key.node.(fieldRef)
 		if !ok {
-			q.err = fault.New(fault.Invalid, "cursor identity requires output fields")
+			q.err = safeerror.NewFault(fault.Invalid, "cursor identity requires output fields")
 		}
 		q.unique[i] = field
 	}
@@ -118,7 +119,7 @@ func (q CursorQuery[R]) canonical() (CursorQuery[R], []RecordField[R], []bool, e
 		return fail(q.err)
 	}
 	if q.metadata == nil || q.metadata.scan == nil || q.node.Source.Query == nil || len(q.unique) == 0 || len(q.unique) > MaxCursorFields || len(q.orders) > MaxCursorFields {
-		return fail(fault.New(fault.Invalid, "cursor result requires metadata and a bounded UniqueBy declaration"))
+		return fail(safeerror.NewFault(fault.Invalid, "cursor result requires metadata and a bounded UniqueBy declaration"))
 	}
 	columns := make(map[string]columnData, len(q.metadata.columns))
 	for _, column := range q.metadata.columns {
@@ -128,7 +129,7 @@ func (q CursorQuery[R]) canonical() (CursorQuery[R], []RecordField[R], []bool, e
 	valid := func(f fieldRef) bool { _, ok := columns[f.Column]; return ok && f.Table == q.node.Source.Name() }
 	for _, order := range q.orders {
 		if !valid(order.Field) || seen[order.Field.Column] {
-			return fail(fault.New(fault.Invalid, "cursor order uses an unknown or repeated output field"))
+			return fail(safeerror.NewFault(fault.Invalid, "cursor order uses an unknown or repeated output field"))
 		}
 		seen[order.Field.Column] = true
 	}
@@ -136,7 +137,7 @@ func (q CursorQuery[R]) canonical() (CursorQuery[R], []RecordField[R], []bool, e
 	keys := make(map[string]bool, len(q.unique))
 	for _, key := range q.unique {
 		if !valid(key) || keys[key.Column] {
-			return fail(fault.New(fault.Invalid, "cursor identity uses an unknown or repeated output field"))
+			return fail(safeerror.NewFault(fault.Invalid, "cursor identity uses an unknown or repeated output field"))
 		}
 		keys[key.Column] = true
 		if !seen[key.Column] {
@@ -145,15 +146,15 @@ func (q CursorQuery[R]) canonical() (CursorQuery[R], []RecordField[R], []bool, e
 		}
 	}
 	if len(q.orders) > MaxCursorFields || len(q.metadata.fields) > len(q.metadata.columns) {
-		return fail(fault.New(fault.Invalid, "cursor result exceeds its field bound"))
+		return fail(safeerror.NewFault(fault.Invalid, "cursor result exceeds its field bound"))
 	}
 	getters := make(map[string]RecordField[R], len(q.metadata.fields))
 	for _, field := range q.metadata.fields {
 		if _, exists := getters[field.column]; exists || field.get == nil || field.decode == nil {
-			return fail(fault.New(fault.Invalid, "cursor result has invalid field getters"))
+			return fail(safeerror.NewFault(fault.Invalid, "cursor result has invalid field getters"))
 		}
 		if _, ok := columns[field.column]; !ok {
-			return fail(fault.New(fault.Invalid, "cursor getter is not a declared output field"))
+			return fail(safeerror.NewFault(fault.Invalid, "cursor getter is not a declared output field"))
 		}
 		getters[field.column] = field
 	}
@@ -162,10 +163,10 @@ func (q CursorQuery[R]) canonical() (CursorQuery[R], []RecordField[R], []bool, e
 	for i, order := range q.orders {
 		field, ok := getters[order.Field.Column]
 		if !ok {
-			return fail(fault.New(fault.Invalid, "cursor result requires generated codecs and getters for every ordered field"))
+			return fail(safeerror.NewFault(fault.Invalid, "cursor result requires generated codecs and getters for every ordered field"))
 		}
 		if field.sensitive {
-			return fail(fault.New(fault.Invalid, "sensitive fields cannot be cursor keys"))
+			return fail(safeerror.NewFault(fault.Invalid, "sensitive fields cannot be cursor keys"))
 		}
 		fields[i] = field
 		required[i] = !columns[field.column].Nullable

@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -301,7 +302,7 @@ func SubstringValue[S any, V ~string](input Expression[S, V], start int32, count
 	result := operationValue[S](substringOperation, codec.String[string](), args...)
 	if count < 0 {
 		n := result.node.(operationNode)
-		n.Err = fault.New(fault.Invalid, "substring count cannot be negative")
+		n.Err = safeerror.NewFault(fault.Invalid, "substring count cannot be negative")
 		result.node = n
 	}
 	return result
@@ -320,7 +321,7 @@ func SubstringNullableValue[S any, V ~string](input Expression[S, value.Nullable
 	result := operationValue[S](substringOperation, codec.Nullable(codec.String[string]()), args...)
 	if count < 0 {
 		n := result.node.(operationNode)
-		n.Err = fault.New(fault.Invalid, "substring count cannot be negative")
+		n.Err = safeerror.NewFault(fault.Invalid, "substring count cannot be negative")
 		result.node = n
 	}
 	return result

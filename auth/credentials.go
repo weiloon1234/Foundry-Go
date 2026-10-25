@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -35,20 +36,20 @@ func (Credentials) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("authenti
 
 func NewCredentials(inputs ...Credential) (Credentials, error) {
 	if len(inputs) > MaxCredentials {
-		return Credentials{}, fault.New(fault.Invalid, "too many authentication credential sources")
+		return Credentials{}, safeerror.NewFault(fault.Invalid, "too many authentication credential sources")
 	}
 	values := make(map[CredentialName]secret.String, len(inputs))
 	size := 0
 	for _, input := range inputs {
 		if !identifier.Semantic(string(input.Name)) {
-			return Credentials{}, fault.New(fault.Invalid, "invalid authentication credential source")
+			return Credentials{}, safeerror.NewFault(fault.Invalid, "invalid authentication credential source")
 		}
 		if _, ok := values[input.Name]; ok {
-			return Credentials{}, fault.New(fault.Duplicate, "authentication credential source is repeated")
+			return Credentials{}, safeerror.NewFault(fault.Duplicate, "authentication credential source is repeated")
 		}
 		text := input.Secret.Reveal()
 		if len(text) == 0 || len(text) > MaxCredentialBytes || len(text) > MaxCredentialsBytes-size {
-			return Credentials{}, Unauthenticated
+			return Credentials{}, Unauthenticated.WithCause(nil)
 		}
 		size += len(text)
 		values[input.Name] = secret.New(strings.Clone(text))

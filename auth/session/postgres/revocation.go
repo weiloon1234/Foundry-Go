@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	credentialruntime "github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -23,7 +24,7 @@ func (b *Backend) revokeAll(ctx context.Context, tx *database.Tx, address sessio
 		return 0, err
 	}
 	if !present {
-		return 0, fault.New(fault.Internal, "credential subject is absent after locking")
+		return 0, safeerror.NewFault(fault.Internal, "credential subject is absent after locking")
 	}
 	// Impersonation sessions started from these sessions end with them: Lookup
 	// and List refuse any impersonation whose actor session no longer exists.
@@ -41,7 +42,7 @@ func (b *Backend) RevokeOthers(ctx context.Context, address session.Address, ide
 		return 0, err
 	}
 	if keep.IsZero() {
-		return 0, fault.New(fault.Invalid, "session revocation requires the kept session")
+		return 0, safeerror.NewFault(fault.Invalid, "session revocation requires the kept session")
 	}
 	var count uint64
 	err := b.within(ctx, func(tx *database.Tx) error {
@@ -83,7 +84,7 @@ func (b *Backend) RevokeAll(ctx context.Context, address session.Address, identi
 // inside a savepoint. The original standalone method reuses the same row logic.
 func (b *Backend) RevokeAllIn(ctx context.Context, tx *database.Tx, address session.Address, identity model.Identity) (uint64, error) {
 	if b == nil {
-		return 0, fault.New(fault.Invalid, "credential backend is missing")
+		return 0, safeerror.NewFault(fault.Invalid, "credential backend is missing")
 	}
 	if _, err := address.SubjectKey(identity); err != nil {
 		return 0, err

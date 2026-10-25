@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -23,7 +24,7 @@ type UniqueLookup[M any, K comparable] struct {
 // Unlike Lookup (an existence observation), Unique hydrates the complete model.
 func Unique[M any, K comparable](source ModelQuerySource[M], field KeyField[M, K]) UniqueLookup[M, K] {
 	if nilDescriptor(source) || nilDescriptor(field) {
-		return UniqueLookup[M, K]{err: fault.New(fault.Invalid, "unique lookup requires a model source and stored field")}
+		return UniqueLookup[M, K]{err: safeerror.NewFault(fault.Invalid, "unique lookup requires a model source and stored field")}
 	}
 	return UniqueLookup[M, K]{source: source.modelQuery(), field: field.relationKey()}
 }
@@ -34,14 +35,14 @@ func (l UniqueLookup[M, K]) Validate() error {
 	}
 	q := l.source
 	if q.definition == nil || q.queryCore.Limit.IsSet() || q.queryCore.Offset != 0 {
-		return fault.New(fault.Invalid, "unique lookup requires an unpaginated model scope")
+		return safeerror.NewFault(fault.Invalid, "unique lookup requires an unpaginated model scope")
 	}
 	var zero K
 	if err := q.Where(l.field.Eq(zero)).Validate(); err != nil {
 		return err
 	}
 	if _, ok := q.definition.modelField(l.field.ref.Column); !ok {
-		return fault.New(fault.Invalid, "unique lookup field is not stored on its model")
+		return safeerror.NewFault(fault.Invalid, "unique lookup field is not stored on its model")
 	}
 	return nil
 }
@@ -62,7 +63,7 @@ func uniqueModel[M any](ctx context.Context, executor database.Executor, q Query
 		return value.Optional[M]{}, err
 	}
 	if len(rows) > 1 {
-		return value.Optional[M]{}, fault.New(fault.Internal, "model lookup key has multiple matches in its scope")
+		return value.Optional[M]{}, safeerror.NewFault(fault.Internal, "model lookup key has multiple matches in its scope")
 	}
 	if len(rows) == 0 {
 		return value.Optional[M]{}, nil

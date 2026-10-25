@@ -4,8 +4,10 @@
 package password
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const (
@@ -30,7 +32,7 @@ type Parameters struct {
 
 func (p Parameters) Validate() error {
 	if p.Parallelism < 1 || p.Parallelism > MaxParallelism || p.Iterations < 1 || p.Iterations > MaxIterations || p.MemoryKiB < 8*uint32(p.Parallelism) || p.MemoryKiB > MaxMemoryKiB {
-		return fault.New(fault.Invalid, "password hash parameters exceed supported bounds")
+		return safeerror.NewFault(fault.Invalid, "password hash parameters exceed supported bounds")
 	}
 	return nil
 }
@@ -71,7 +73,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.Parameters.MemoryKiB < 19*1024 || c.Parameters.Iterations < 2 || !c.Parameters.within(c.VerifyLimit) || c.MaxConcurrent < 1 || c.MaxConcurrent > 64 || c.Timeout <= 0 || c.MaxBcryptCost != 0 && (c.MaxBcryptCost < 4 || c.MaxBcryptCost > 31) {
-		return fault.New(fault.Invalid, "invalid password hashing policy or capacity")
+		return safeerror.NewFault(fault.Invalid, "invalid password hashing policy or capacity")
 	}
 	return nil
 }

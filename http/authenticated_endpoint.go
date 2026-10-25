@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -38,7 +39,7 @@ func (e AuthenticatedEndpoint[P, Q, B, M, R]) WithPermissions(required ...auth.P
 func (e AuthenticatedEndpoint[P, Q, B, M, R]) Validate() error { return e.validate(false) }
 func (e AuthenticatedEndpoint[P, Q, B, M, R]) validate(optional bool) error {
 	if e.authorization != nil && *e.authorization == nil {
-		return fault.New(fault.Invalid, "request authorization callback is missing")
+		return safeerror.NewFault(fault.Invalid, "request authorization callback is missing")
 	}
 	if err := e.authenticationBinding.validate(e.endpoint.route.spec.Access, optional); err != nil {
 		return err
@@ -67,7 +68,7 @@ func (e AuthenticatedEndpoint[P, Q, B, M, R]) Handle(handler func(context.Contex
 		return InvalidRouteRegistration(err)
 	}
 	if handler == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated endpoint requires a handler"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated endpoint requires a handler"))
 	}
 	return e.authorized().Handle(func(ctx context.Context, in Input[P, Q, B]) (R, error) {
 		subject, err := e.guard.Require(ctx)
@@ -89,7 +90,7 @@ func (e AuthenticatedEndpoint[P, Q, B, M, R]) HandleBound(bind AuthenticatedBind
 		return InvalidRouteRegistration(err)
 	}
 	if bind == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated endpoint requires a binding"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated endpoint requires a binding"))
 	}
 	return e.authorized().HandleBound(bindSubject(bind, e.guard.Require))
 }
@@ -126,7 +127,7 @@ func OptionalAuthentication[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], au
 }
 func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) Validate() error {
 	if e.authorization != nil && *e.authorization == nil {
-		return fault.New(fault.Invalid, "request authorization callback is missing")
+		return safeerror.NewFault(fault.Invalid, "request authorization callback is missing")
 	}
 	return e.required.validate(true)
 }
@@ -147,7 +148,7 @@ func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) Handle(handler func(conte
 		return InvalidRouteRegistration(err)
 	}
 	if handler == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "optional authentication endpoint requires a handler"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "optional authentication endpoint requires a handler"))
 	}
 	return e.authorized().Handle(func(ctx context.Context, in Input[P, Q, B]) (R, error) {
 		subject, err := e.required.guard.Optional(ctx)
@@ -169,7 +170,7 @@ func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) HandleBound(bind Authenti
 		return InvalidRouteRegistration(err)
 	}
 	if bind == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "optional authentication endpoint requires a binding"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "optional authentication endpoint requires a binding"))
 	}
 	return e.authorized().HandleBound(bindSubject(bind, e.required.guard.Optional))
 }

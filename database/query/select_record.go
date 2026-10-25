@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Private metadata carries the original ordered decoder through scope changes.
@@ -28,7 +29,7 @@ type recordSelection[R any] struct {
 func SelectRecord[S, R any](source ProjectionSource[S], scope RecordScope[S, R]) ProjectionQuery[S, R] {
 	q := ProjectionQuery[S, R]{record: &recordSelection[R]{table: scope.table, metadata: scope.record}}
 	if nilDescriptor(source) {
-		q.source.err = fault.New(fault.Invalid, "record selection requires a source")
+		q.source.err = safeerror.NewFault(fault.Invalid, "record selection requires a source")
 		return q
 	}
 	q.source = source.projectionSource()

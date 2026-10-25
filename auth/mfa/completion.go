@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -24,7 +25,7 @@ func (f *Factors[M, K]) Verifier(response Response) (auth.SecondFactor[M, K], er
 		return auth.SecondFactor[M, K]{}, err
 	}
 	if _, ok := f.store.backend.(TransactionalBackend); !ok {
-		return auth.SecondFactor[M, K]{}, fault.New(fault.Invalid, "MFA backend cannot join credential creation")
+		return auth.SecondFactor[M, K]{}, safeerror.NewFault(fault.Invalid, "MFA backend cannot join credential creation")
 	}
 	verifier := auth.DefineSecondFactor(f.provider, func(ctx context.Context, parent *database.Tx, reference model.Reference[M, K], consume func(context.Context, *database.Tx) error) error {
 		identity, err := reference.Identity()
@@ -37,7 +38,7 @@ func (f *Factors[M, K]) Verifier(response Response) (auth.SecondFactor[M, K], er
 		}
 		load := func(op context.Context, tx *database.Tx) (M, error) {
 			if !parent.SharesTransaction(tx) {
-				return *new(M), fault.New(fault.Invalid, "MFA backend substituted its creation transaction")
+				return *new(M), safeerror.NewFault(fault.Invalid, "MFA backend substituted its creation transaction")
 			}
 			found, err := f.model.Lock(op, tx, reference.Key())
 			if err != nil {
@@ -45,7 +46,7 @@ func (f *Factors[M, K]) Verifier(response Response) (auth.SecondFactor[M, K], er
 			}
 			current, present := found.Get()
 			if !present {
-				return *new(M), auth.Unauthenticated
+				return *new(M), auth.Unauthenticated.WithCause(nil)
 			}
 			actual, err := f.provider.CheckModel(op, current)
 			if err != nil {
@@ -56,7 +57,7 @@ func (f *Factors[M, K]) Verifier(response Response) (auth.SecondFactor[M, K], er
 				return *new(M), err
 			}
 			if got != identity {
-				return *new(M), fault.New(fault.Invalid, "MFA model lock returned a different identity")
+				return *new(M), safeerror.NewFault(fault.Invalid, "MFA model lock returned a different identity")
 			}
 			return current, nil
 		}

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"unicode/utf8"
 
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonshape"
 )
 
@@ -66,7 +67,7 @@ func parseCustomJSONMapKey(ctx context.Context, key string, typ reflect.Type, ou
 		return reflect.Value{}, err
 	}
 	destination := reflect.New(reflect.MapOf(typ, reflect.TypeFor[struct{}]()))
-	if err := json.Unmarshal(data, destination.Interface()); err != nil {
+	if err := jsoncodec.Unmarshal(data, destination.Interface()); err != nil {
 		return reflect.Value{}, err
 	}
 	if destination.Elem().Len() != 1 {

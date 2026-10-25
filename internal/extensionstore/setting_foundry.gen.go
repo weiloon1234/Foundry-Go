@@ -14,6 +14,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -517,7 +518,7 @@ func (q SettingQuery) foundryInsertMany(ctx context.Context, writer database.Tra
 }
 func (q SettingQuery) foundryCreateMutations(drafts []SettingDraft) ([]foundryquery.Mutation[Setting], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Setting], len(drafts))
 	for i, draft := range drafts {
@@ -910,7 +911,7 @@ func (q SettingQuery) DeleteAll(ctx context.Context, writer database.Transactor)
 // Increment adjusts one numeric field of every matching model by a typed delta, such as SettingFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q SettingQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Setting], extra ...SettingDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Setting]
 	if len(extra) == 1 {
@@ -925,7 +926,7 @@ func (q SettingQuery) Increment(ctx context.Context, writer database.Transactor,
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as SettingFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q SettingQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Setting], extra ...SettingDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Setting]
 	if len(extra) == 1 {
@@ -1390,58 +1391,58 @@ func CompareSetting(before, after foundryvalue.Optional[Setting], assigned Setti
 	var err error
 	changes.fields.Name, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldName.IsSet(), func(item Setting) string { return item.Name })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.Name: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.Name", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.Name.Changed() || changes.fields.Name.Assigned()) {
-		return SettingChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return SettingChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Version, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldVersion.IsSet(), func(item Setting) uint32 { return item.Version })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.Version: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.Version", err)
 	}
 	changes.fields.Value, err = lifecycle.CompareModelField(codec.JSON[json.RawMessage](), before, after, assigned.fieldValue.IsSet(), func(item Setting) foundryvalue.JSON[json.RawMessage] { return item.Value })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.Value: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.Value", err)
 	}
 	changes.fields.Kind, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldKind.IsSet(), func(item Setting) string { return item.Kind })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.Kind: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.Kind", err)
 	}
 	changes.fields.Parameters, err = lifecycle.CompareModelField(codec.JSON[json.RawMessage](), before, after, assigned.fieldParameters.IsSet(), func(item Setting) foundryvalue.JSON[json.RawMessage] { return item.Parameters })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.Parameters: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.Parameters", err)
 	}
 	changes.fields.GroupName, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldGroupName.IsSet(), func(item Setting) string { return item.GroupName })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.GroupName: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.GroupName", err)
 	}
 	changes.fields.Label, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldLabel.IsSet(), func(item Setting) string { return item.Label })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.Label: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.Label", err)
 	}
 	changes.fields.Description, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldDescription.IsSet(), func(item Setting) string { return item.Description })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.Description: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.Description", err)
 	}
 	changes.fields.SortOrder, err = lifecycle.CompareModelField(codec.Signed[int32](), before, after, assigned.fieldSortOrder.IsSet(), func(item Setting) int32 { return item.SortOrder })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.SortOrder: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.SortOrder", err)
 	}
 	changes.fields.IsPublic, err = lifecycle.CompareModelField(codec.Bool[bool](), before, after, assigned.fieldIsPublic.IsSet(), func(item Setting) bool { return item.IsPublic })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.IsPublic: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.IsPublic", err)
 	}
 	changes.fields.PresentationDeclared, err = lifecycle.CompareModelField(codec.Bool[bool](), before, after, assigned.fieldPresentationDeclared.IsSet(), func(item Setting) bool { return item.PresentationDeclared })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.PresentationDeclared: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.PresentationDeclared", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Setting) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.CreatedAt: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.CreatedAt", err)
 	}
 	changes.fields.UpdatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldUpdatedAt.IsSet(), func(item Setting) temporal.DateTime { return item.UpdatedAt })
 	if err != nil {
-		return SettingChanges{}, fmt.Errorf("compare Setting.UpdatedAt: %w", err)
+		return SettingChanges{}, foundrydiagnostic.Prefix("compare Setting.UpdatedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1618,7 +1619,7 @@ func (SettingHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Setting]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Setting]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1677,7 +1678,7 @@ func (SettingHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryquery.Mutation[Setting]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Setting]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1825,7 +1826,7 @@ func (SettingHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1939,14 +1940,14 @@ type SettingAuditPolicy struct {
 func (changes SettingChanges) Audit(policy SettingAuditPolicy) (record.Model[Setting, string], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Setting, string]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Setting, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Setting, string]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Setting, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "name", policy.Name)
 	if err != nil {
@@ -2104,7 +2105,7 @@ func SettingAuditing(policy SettingAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() SettingHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes SettingChanges) error {

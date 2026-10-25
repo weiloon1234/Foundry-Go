@@ -2,9 +2,11 @@ package jobs
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/model"
 	"reflect"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 // Jobs use concrete DTOs. Reject models and runtime capabilities even when
@@ -12,7 +14,7 @@ import (
 // codecs own their representation; no codec is called during registration.
 func validatePayloadType(root reflect.Type) error {
 	if root == nil || root.Kind() != reflect.Struct || root.Name() == "" {
-		return fault.New(fault.Invalid, "job payload must be a named concrete struct")
+		return safeerror.NewFault(fault.Invalid, "job payload must be a named concrete struct")
 	}
 	seen := make(map[reflect.Type]bool)
 	var visit func(reflect.Type) error
@@ -23,15 +25,15 @@ func validatePayloadType(root reflect.Type) error {
 		seen[t] = true
 		for _, forbidden := range []reflect.Type{reflect.TypeFor[model.Identifiable](), reflect.TypeFor[context.Context](), reflect.TypeFor[error]()} {
 			if t.Implements(forbidden) || reflect.PointerTo(t).Implements(forbidden) {
-				return fault.New(fault.Invalid, "job payload cannot contain models or runtime capabilities")
+				return safeerror.NewFault(fault.Invalid, "job payload cannot contain models or runtime capabilities")
 			}
 		}
 		if t.PkgPath() == "github.com/weiloon1234/Foundry-Go/secret" {
-			return fault.New(fault.Invalid, "job payload cannot contain credentials")
+			return safeerror.NewFault(fault.Invalid, "job payload cannot contain credentials")
 		}
 		switch t.Kind() {
 		case reflect.Interface, reflect.Func, reflect.Chan, reflect.UnsafePointer, reflect.Uintptr, reflect.Complex64, reflect.Complex128:
-			return fault.New(fault.Invalid, "job payload requires concrete serializable fields")
+			return safeerror.NewFault(fault.Invalid, "job payload requires concrete serializable fields")
 		case reflect.Array:
 			if t.Len() == 0 {
 				return nil

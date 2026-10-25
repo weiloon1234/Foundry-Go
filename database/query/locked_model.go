@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -88,7 +89,7 @@ func (q LockedQuery[M]) reader() readResult[M] {
 		return r
 	}
 	if q.query.definition == nil {
-		r.err = fault.New(fault.Invalid, "locked model query requires generated metadata and hydration")
+		r.err = safeerror.NewFault(fault.Invalid, "locked model query requires generated metadata and hydration")
 		return r
 	}
 	r.node, r.scan = q.query.modelSelect(), q.query.definition.scan
@@ -139,7 +140,7 @@ func (q LockedQuery[M]) RequireFirst(ctx context.Context, tx *database.Tx) (M, e
 	if result, ok := item.Get(); ok {
 		return result, nil
 	}
-	return *new(M), database.NewError("locked model", database.NotFound)
+	return *new(M), databaseFailure("locked model", database.NotFound)
 }
 
 // Each streams locked models. It requires no eager-loading clauses; use All for
@@ -151,7 +152,7 @@ func (q LockedQuery[M]) Each(ctx context.Context, tx *database.Tx, yield func(M)
 		return err
 	}
 	if len(q.query.relations) != 0 || q.query.relationLimits != nil {
-		return fault.New(fault.Invalid, "locked streaming cannot eager-load relations; use All")
+		return safeerror.NewFault(fault.Invalid, "locked streaming cannot eager-load relations; use All")
 	}
 	return q.reader().Each(ctx, tx, yield)
 }

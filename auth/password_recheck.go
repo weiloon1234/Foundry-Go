@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RecheckPassword locks and returns the current model using the original
@@ -25,13 +26,13 @@ func (p Provider[M, K]) RecheckPassword(ctx context.Context, tx *database.Tx, re
 		return *new(M), err
 	}
 	if ctx == nil || tx == nil {
-		return *new(M), fault.New(fault.Invalid, "password recheck requires a context and transaction")
+		return *new(M), safeerror.NewFault(fault.Invalid, "password recheck requires a context and transaction")
 	}
 	if err := ctx.Err(); err != nil {
 		return *new(M), err
 	}
 	if result.recheck == nil || result.recheck.provider != p.definition.id || result.recheck.verify == nil {
-		return *new(M), fault.New(fault.Invalid, "password result does not belong to this provider declaration")
+		return *new(M), safeerror.NewFault(fault.Invalid, "password result does not belong to this provider declaration")
 	}
 	var subject M
 	err := callback.Isolated("password model recheck", func() error {

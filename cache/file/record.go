@@ -17,6 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cacheatomic"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const recordMagic = "FNDCACH1"
@@ -30,7 +31,7 @@ const maxRecordPayload = 64 << 20
 
 // errCorrupt marks a record that fails envelope, address or checksum checks.
 // Reads treat it as a miss; writes replace it and Forget removes it.
-var errCorrupt = fault.New(fault.Invalid, "corrupt file cache record")
+var errCorrupt = safeerror.NewFault(fault.Invalid, "corrupt file cache record")
 
 // Records separate fixed metadata from raw payload. Integrity can be checked
 // with a bounded copy buffer, without materializing values for Exists/Expire.
@@ -162,7 +163,7 @@ func (b *Backend) load(ctx context.Context, root *os.Root, name, key string, mod
 
 func (b *Backend) publish(ctx context.Context, root *os.Root, name, key string, shard int, expires time.Time, size int64, data io.Reader) error {
 	if len(key) > 16384 || size < 0 || size > int64(b.config.MaxValueBytes) {
-		return fault.New(fault.Invalid, "invalid cache record size")
+		return safeerror.NewFault(fault.Invalid, "invalid cache record size")
 	}
 	header := make([]byte, recordHeaderBytes)
 	copy(header, recordMagic)
@@ -197,7 +198,7 @@ func (b *Backend) publish(ctx context.Context, root *os.Root, name, key string, 
 	if err == nil && b.config.Sync {
 		err = f.Sync()
 	}
-	err = errors.Join(err, f.Close())
+	err = safeerror.Join("operation failed", err, f.Close())
 	if err != nil {
 		return safe(err)
 	}
@@ -296,5 +297,5 @@ func syncRoot(root *os.Root) error {
 	if err != nil {
 		return safe(err)
 	}
-	return safe(errors.Join(dir.Sync(), dir.Close()))
+	return safe(safeerror.Join("operation failed", dir.Sync(), dir.Close()))
 }

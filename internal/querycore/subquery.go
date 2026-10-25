@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Subquery struct {
@@ -26,7 +27,7 @@ func (c *Compiler) SubquerySQL(q Subquery, single bool, grouped map[FieldRef]boo
 		return "", q.Err
 	}
 	if single && len(q.Node.Selections) != 1 {
-		return "", fault.New(fault.Invalid, "value subquery must select exactly one column")
+		return "", safeerror.NewFault(fault.Invalid, "value subquery must select exactly one column")
 	}
 	outer, err := c.CorrelationScope(q.Correlation, grouped, grouping)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -24,7 +25,7 @@ type RecursiveSelf[R any] struct {
 
 func (s RecursiveSelf[R]) recordQuery() recordQuery[R] {
 	if s.reference == nil || s.scan == nil {
-		return recordQuery[R]{err: fault.New(fault.Invalid, "recursive self requires an owning CTE")}
+		return recordQuery[R]{err: safeerror.NewFault(fault.Invalid, "recursive self requires an owning CTE")}
 	}
 	r := s.reference
 	return recordQuery[R]{node: selectNode{
@@ -50,7 +51,7 @@ func RecursiveAllCTE[R any](name string, anchor RecordQuerySource[R], step func(
 
 func recursiveTable[R any](name string, anchor RecordQuerySource[R], step func(RecursiveSelf[R]) RecordQuerySource[R], operator setOperator) CommonTable[R] {
 	if !sqlname.Valid(name) || nilDescriptor(anchor) || step == nil {
-		return CommonTable[R]{err: fault.New(fault.Invalid, "recursive CTE requires a valid name, anchor and step")}
+		return CommonTable[R]{err: safeerror.NewFault(fault.Invalid, "recursive CTE requires a valid name, anchor and step")}
 	}
 	a := anchor.recordQuery()
 	if a.err != nil {
@@ -59,7 +60,7 @@ func recursiveTable[R any](name string, anchor RecordQuerySource[R], step func(R
 	reference := &recursiveReference{Name: name, Columns: a.columns}
 	result := step(RecursiveSelf[R]{reference: reference, scan: a.scan, fields: a.fields, lifecycle: a.lifecycle})
 	if nilDescriptor(result) {
-		return CommonTable[R]{err: fault.New(fault.Invalid, "recursive CTE step requires a record query")}
+		return CommonTable[R]{err: safeerror.NewFault(fault.Invalid, "recursive CTE step requires a record query")}
 	}
 	b := result.recordQuery()
 	if err := compatibleRecords(a, b); err != nil {

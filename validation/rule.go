@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonpointer"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type definition struct{ id RuleID }
@@ -142,7 +143,7 @@ func validateExecution(ctx context.Context, limits Limits) error {
 
 func (s *execution) complete(err error) error {
 	if err != nil {
-		return fault.Wrap(fault.Internal, "validation callback failed", err)
+		return safeerror.WrapFailure(fault.Internal, "validation callback failed", err)
 	}
 	if err := s.ctx.Err(); err != nil {
 		return err
@@ -151,7 +152,8 @@ func (s *execution) complete(err error) error {
 		return s.err
 	}
 	if len(s.issues) != 0 {
-		return &Errors{issues: s.issues, messages: s.messages, truncated: s.truncated}
+		failure := &Errors{issues: s.issues, messages: s.messages, truncated: s.truncated}
+		return safeerror.Owned(failure.Error(), failure)
 	}
 	return nil
 }
@@ -198,13 +200,13 @@ func (s *execution) take(depth int) bool {
 		return false
 	}
 	if depth > s.limits.Depth {
-		s.err = &LimitError{}
+		s.err = safeerror.Owned("validation resource bound exceeded", &LimitError{})
 		return false
 	}
 	for {
 		used := atomic.LoadInt64(s.work)
 		if used >= int64(s.limits.Checks) {
-			s.err = &LimitError{}
+			s.err = safeerror.Owned("validation resource bound exceeded", &LimitError{})
 			return false
 		}
 		if atomic.CompareAndSwapInt64(s.work, used, used+1) {
@@ -277,7 +279,7 @@ func (r Rule[T]) run(s *execution, input T, depth int) {
 		return
 	}
 	if err != nil {
-		s.err = fault.Wrap(fault.Internal, "validation rule execution failed", err)
+		s.err = safeerror.WrapFailure(fault.Internal, "validation rule execution failed", err)
 		return
 	}
 	if !valid {
@@ -291,7 +293,7 @@ func (s *execution) issue(spec Spec, message *i18n.PreparedMessage) {
 	if message != nil {
 		rendered, err := item.render(s.ctx, nil, "")
 		if err != nil {
-			s.err = fault.Wrap(fault.Internal, "validation message failed", err)
+			s.err = safeerror.WrapFailure(fault.Internal, "validation message failed", err)
 			return
 		}
 		text = rendered
@@ -411,7 +413,7 @@ func composeNode(info Description, children []ruleNode) ruleNode {
 		rule.info.ServerOnly = rule.info.ServerOnly || child.info.ServerOnly
 		for _, current := range child.definitions {
 			if previous := definitions[current.id]; previous != nil && previous != current {
-				rule.err = fault.New(fault.Duplicate, "validation rule ID has multiple definitions")
+				rule.err = safeerror.NewFault(fault.Duplicate, "validation rule ID has multiple definitions")
 				return rule
 			}
 			definitions[current.id] = current

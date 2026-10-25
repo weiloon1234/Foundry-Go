@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -32,10 +33,10 @@ func (v FieldValue[V]) Get() (value.Optional[V], error) {
 		return value.Optional[V]{}, nil
 	}
 	if v.snapshot.state == Oversized {
-		return value.Optional[V]{}, fault.New(fault.Missing, "audit value exceeded its bound; only its digest was retained")
+		return value.Optional[V]{}, safeerror.NewFault(fault.Missing, "audit value exceeded its bound; only its digest was retained")
 	}
 	if v.snapshot.state != Disclosed {
-		return value.Optional[V]{}, fault.New(fault.Missing, "audit value is redacted")
+		return value.Optional[V]{}, safeerror.NewFault(fault.Missing, "audit value is redacted")
 	}
 	var result V
 	err := callback.Isolated("decode audit field", func() error {
@@ -47,7 +48,7 @@ func (v FieldValue[V]) Get() (value.Optional[V], error) {
 		return err
 	})
 	if err != nil {
-		return value.Optional[V]{}, fault.Wrap(fault.Invalid, "audit field decode failed", err)
+		return value.Optional[V]{}, safeerror.WrapFailure(fault.Invalid, "audit field decode failed", err)
 	}
 	return value.Set(result), nil
 }
@@ -96,11 +97,11 @@ func Inspect[M, K any](record Model[M, K]) (View[M, K], error) {
 // column and existing codec; ordinary application code uses their named fields.
 func ReadField[M, K, V any](view View[M, K], name string, c codec.Codec[V]) (value.Optional[FieldChange[V]], error) {
 	if view.fields == nil {
-		return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "audit view is not initialized")
+		return value.Optional[FieldChange[V]]{}, safeerror.NewFault(fault.Invalid, "audit view is not initialized")
 	}
 	if field, present := view.fields[name]; present {
 		if field.typ != c.ParameterType() {
-			return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "audit field codec does not match its stored representation")
+			return value.Optional[FieldChange[V]]{}, safeerror.NewFault(fault.Invalid, "audit field codec does not match its stored representation")
 		}
 		return value.Set(FieldChange[V]{before: FieldValue[V]{snapshot: field.before, codec: c},
 			after: FieldValue[V]{snapshot: field.after, codec: c}, assigned: field.assigned, changed: field.changed}), nil

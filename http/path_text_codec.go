@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PathTextPointer is the pointer method set required by TextPath. It accepts
@@ -30,7 +31,7 @@ func (textPathCodec[V, P]) Parse(text string) (V, error) {
 	var decoded V
 	if err := P(&decoded).UnmarshalText([]byte(text)); err != nil {
 		var zero V
-		return zero, fault.Wrap(fault.Invalid, "invalid path text representation", err)
+		return zero, safeerror.WrapFault(fault.Invalid, "invalid path text representation", err)
 	}
 	return decoded, nil
 }
@@ -38,7 +39,7 @@ func (textPathCodec[V, P]) Parse(text string) (V, error) {
 func (textPathCodec[V, P]) Format(value V) (string, error) {
 	data, err := P(&value).MarshalText()
 	if err != nil {
-		return "", fault.Wrap(fault.Invalid, "path text value could not be encoded", err)
+		return "", safeerror.WrapFault(fault.Invalid, "path text value could not be encoded", err)
 	}
 	return string(data), nil
 }
@@ -57,7 +58,7 @@ func (boolPathCodec[V]) Parse(text string) (V, error) {
 	case "false":
 		return V(false), nil
 	default:
-		return V(false), fault.New(fault.Invalid, "invalid boolean path parameter")
+		return V(false), safeerror.NewFault(fault.Invalid, "invalid boolean path parameter")
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -23,7 +24,7 @@ func Bytes(size int) ([]byte, error) {
 	}
 	data := make([]byte, size)
 	if _, err := rand.Read(data); err != nil {
-		return nil, fault.New(fault.Internal, "random token generation failed")
+		return nil, safeerror.NewFault(fault.Internal, "random token generation failed")
 	}
 	return data, nil
 }
@@ -69,4 +70,6 @@ func Generate(length int) (secret.String, error) {
 	}
 	return secret.New(string(result)), nil
 }
-func invalid() error { return fault.New(fault.Invalid, "random token length is outside its bound") }
+func invalid() error {
+	return safeerror.NewFault(fault.Invalid, "random token length is outside its bound")
+}

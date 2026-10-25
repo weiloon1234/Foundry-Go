@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ValueLookup retains a model's filtered source and one concrete stored field.
@@ -23,7 +24,7 @@ type ValueLookup[M any, V comparable] struct {
 // accept their non-null value type; nullable input is handled by the caller.
 func Lookup[M any, V comparable](source ModelQuerySource[M], field KeyField[M, V]) ValueLookup[M, V] {
 	if nilDescriptor(source) || nilDescriptor(field) {
-		return ValueLookup[M, V]{err: fault.New(fault.Invalid, "model lookup requires a source and field")}
+		return ValueLookup[M, V]{err: safeerror.NewFault(fault.Invalid, "model lookup requires a source and field")}
 	}
 	return ValueLookup[M, V]{source: source.modelQuery(), field: field.relationKey()}
 }
@@ -36,14 +37,14 @@ func (l ValueLookup[M, V]) Validate() error {
 	}
 	q := l.source
 	if q.definition == nil || q.queryCore.Limit.IsSet() || q.queryCore.Offset != 0 || len(q.queryCore.Orders) != 0 || len(q.relations) != 0 || q.relationLimits != nil {
-		return fault.New(fault.Invalid, "model lookup requires an unpaginated model scope without ordering or eager loading")
+		return safeerror.NewFault(fault.Invalid, "model lookup requires an unpaginated model scope without ordering or eager loading")
 	}
 	var zero V
 	if err := q.Where(l.field.Eq(zero)).Validate(); err != nil {
 		return err
 	}
 	if _, ok := q.definition.modelField(l.field.ref.Column); !ok {
-		return fault.New(fault.Invalid, "model lookup field is not a stored model field")
+		return safeerror.NewFault(fault.Invalid, "model lookup field is not a stored model field")
 	}
 	return nil
 }
@@ -67,7 +68,7 @@ func (l ValueLookup[M, V]) AllExist(ctx context.Context, executor database.Execu
 		return false, err
 	}
 	if ctx == nil {
-		return false, fault.New(fault.Invalid, "model lookup requires a context")
+		return false, safeerror.NewFault(fault.Invalid, "model lookup requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -98,7 +99,7 @@ func (l ValueLookup[M, V]) AnyExist(ctx context.Context, executor database.Execu
 		return false, err
 	}
 	if ctx == nil {
-		return false, fault.New(fault.Invalid, "model lookup requires a context")
+		return false, safeerror.NewFault(fault.Invalid, "model lookup requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return false, err

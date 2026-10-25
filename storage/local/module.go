@@ -2,9 +2,9 @@ package local
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module prepares an adapter without I/O and opens its root during boot. Disk
@@ -18,7 +18,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*Backend], config Con
 			return err
 		}
 		if err := r.OnShutdown("storage-root", func(context.Context) error { return backend.Close() }); err != nil {
-			return errors.Join(err, backend.Close())
+			return safeerror.Join("operation failed", err, backend.Close())
 		}
 		return backend.Start(ctx)
 	}}

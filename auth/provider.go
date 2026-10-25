@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -35,7 +36,7 @@ func DefineProvider[M model.Identifiable, K any](name ProviderName, reference mo
 }
 func (p Provider[M, K]) Validate() error {
 	if p.definition == nil || !identifier.Semantic(string(p.definition.name)) || p.definition.lookup == nil || p.definition.eligible == nil || reflect.TypeFor[M]().Kind() != reflect.Struct {
-		return fault.New(fault.Invalid, "authentication provider requires a name, concrete model struct, lookup and eligibility check")
+		return safeerror.NewFault(fault.Invalid, "authentication provider requires a name, concrete model struct, lookup and eligibility check")
 	}
 	return p.definition.reference.Validate()
 }
@@ -77,14 +78,14 @@ func (p Provider[M, K]) resolve(ctx context.Context, identity model.Identity) (M
 	}
 	subject, present := found.Get()
 	if !present {
-		return *new(M), Unauthenticated
+		return *new(M), Unauthenticated.WithCause(nil)
 	}
 	actual, err := subject.FoundryIdentity()
 	if err != nil {
 		return *new(M), err
 	}
 	if actual != identity {
-		return *new(M), fault.New(fault.Invalid, "authentication provider returned a different model identity")
+		return *new(M), safeerror.NewFault(fault.Invalid, "authentication provider returned a different model identity")
 	}
 	if err := p.checkEligibility(ctx, subject); err != nil {
 		return *new(M), err
@@ -106,7 +107,7 @@ func (p Provider[M, K]) checkEligibility(ctx context.Context, subject M) error {
 		return err
 	}
 	if !allowed {
-		return Unauthenticated
+		return Unauthenticated.WithCause(nil)
 	}
 	return nil
 }

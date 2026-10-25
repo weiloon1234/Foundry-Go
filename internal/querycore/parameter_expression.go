@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type ParameterNode struct {
@@ -49,7 +50,7 @@ func ParameterSQLType(kind codec.ParameterType) (string, error) {
 	case codec.TypeJSON:
 		return "jsonb", nil
 	default:
-		return "", fault.New(fault.Invalid, "parameter expression requires a supported codec parameter type")
+		return "", safeerror.NewFault(fault.Invalid, "parameter expression requires a supported codec parameter type")
 	}
 }
 
@@ -58,7 +59,7 @@ func (p ParameterNode) Validate() error {
 		return p.Err
 	}
 	if !driver.IsValue(p.Value) {
-		return fault.New(fault.Invalid, "parameter expression has an invalid driver value")
+		return safeerror.NewFault(fault.Invalid, "parameter expression has an invalid driver value")
 	}
 	_, err := ParameterSQLType(p.Kind)
 	return err

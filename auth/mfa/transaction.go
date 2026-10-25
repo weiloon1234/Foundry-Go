@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -38,7 +39,7 @@ func (f *Factors[M, K]) mutate(ctx context.Context, identity model.Identity, wit
 		var callbackError error
 		invalid := func() error {
 			if callbackError == nil {
-				callbackError = fault.New(fault.Invalid, "MFA backend violated callback ownership")
+				callbackError = safeerror.NewFault(fault.Invalid, "MFA backend violated callback ownership")
 			}
 			return callbackError
 		}
@@ -60,7 +61,7 @@ func (f *Factors[M, K]) mutate(ctx context.Context, identity model.Identity, wit
 			}
 			changed = true
 			if !validInstant(now) {
-				callbackError = fault.New(fault.Invalid, "MFA backend returned an invalid clock")
+				callbackError = safeerror.NewFault(fault.Invalid, "MFA backend returned an invalid clock")
 				return Change{}, callbackError
 			}
 			if record, present := stored.Get(); present {
@@ -68,7 +69,7 @@ func (f *Factors[M, K]) mutate(ctx context.Context, identity model.Identity, wit
 					return Change{}, callbackError
 				}
 				if now.UTC().Before(record.CreatedAt.UTC()) {
-					callbackError = auth.Unauthenticated
+					callbackError = auth.Unauthenticated.WithCause(nil)
 					return Change{}, callbackError
 				}
 				stored = value.Set(record.Clone())
@@ -104,7 +105,7 @@ func (f *Factors[M, K]) mutate(ctx context.Context, identity model.Identity, wit
 		want, wantPresent := expected.Get()
 		got, gotPresent := actual.Get()
 		if wantPresent != gotPresent || wantPresent && !want.same(got) {
-			return fault.New(fault.Invalid, "MFA backend returned a different mutation")
+			return safeerror.NewFault(fault.Invalid, "MFA backend returned a different mutation")
 		}
 		return op.Err()
 	})

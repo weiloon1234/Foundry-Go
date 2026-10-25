@@ -9,9 +9,10 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-var errWireEnvelope = fault.New(fault.Invalid, "invalid wire envelope")
+var errWireEnvelope = safeerror.NewFault(fault.Invalid, "invalid wire envelope")
 
 // wireMember decodes one registered object member from the shared decoder.
 type wireMember func(*json.Decoder) error

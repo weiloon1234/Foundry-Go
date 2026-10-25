@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TransactionAliasedSource names a complete record or CTE while retaining the
@@ -16,7 +17,7 @@ type TransactionAliasedSource[A, R any] struct {
 func AsTransaction[A, R any](source TransactionRecordSource[R], alias string) TransactionAliasedSource[A, R] {
 	record := recordQuery[R]{}
 	if nilDescriptor(source) {
-		record.err = fault.New(fault.Invalid, "transaction alias requires a record source")
+		record.err = safeerror.NewFault(fault.Invalid, "transaction alias requires a record source")
 	} else {
 		record = source.transactionRecord()
 	}

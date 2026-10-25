@@ -2,6 +2,7 @@ package challenge
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
@@ -23,10 +24,10 @@ func NewRevision[M any]() (Revision[M], error) { return model.NewID[RevisionOwne
 // enabling a recovery flow. The revision remains independent of link issuance.
 func BindRevision[M any](revision Revision[M], parts ...secret.String) (Binding, error) {
 	if len(parts) < 1 || len(parts) > 7 {
-		return Binding{}, fault.New(fault.Invalid, "invalid revision binding components")
+		return Binding{}, safeerror.NewFault(fault.Invalid, "invalid revision binding components")
 	}
 	if revision.IsZero() {
-		return Binding{}, fault.New(fault.Invalid, "recovery state requires a persisted revision")
+		return Binding{}, safeerror.NewFault(fault.Invalid, "recovery state requires a persisted revision")
 	}
 	values := make([]secret.String, 0, len(parts)+1)
 	values = append(values, secret.New(revision.String()))

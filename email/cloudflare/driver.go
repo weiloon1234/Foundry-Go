@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/email/internal/httptransport"
@@ -31,10 +32,10 @@ type Driver struct {
 // hexadecimal Cloudflare account identifier; Token needs Email Sending access.
 func New(config Config) (*Driver, error) {
 	if len(config.AccountID) != 32 || !httptransport.Token(config.Token.Reveal()) {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	if _, err := hex.DecodeString(config.AccountID); err != nil {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	client, err := httptransport.New(config.HTTP, "https://api.cloudflare.com/client/v4")
 	if err != nil {
@@ -54,14 +55,14 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	// Use the general sending limit, including MIME encoding and attachments.
 	// The provider's larger verified-destination-only allowance is not assumed.
 	if d == nil || d.client == nil || ctx == nil || out.Validate() != nil || out.Size() > 5<<20 {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	if ctx.Err() != nil {
-		return email.Receipt{}, email.Transient
+		return email.Receipt{}, emaildiag.Failure(email.Transient)
 	}
 	wire := out.MIME()
 	if len(wire) == 0 {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	m := out.Message()
 	recipients := m.EnvelopeRecipients()
@@ -75,7 +76,7 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	r, err := d.client.Request(ctx, d.path, "application/json", data)
 	if err != nil {
@@ -99,13 +100,13 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	// Only the documented authentication-service rejection refines a 503.
 	// An unknown server failure may have happened after submission.
 	if status == 503 && decoded && response.Success != nil && !*response.Success && response.Result == nil && len(response.Errors) == 1 && response.Errors[0].Code == 10100 {
-		return email.Receipt{}, email.Transient
+		return email.Receipt{}, emaildiag.Failure(email.Transient)
 	}
 	if err := httptransport.Status(status); err != nil {
 		return email.Receipt{}, err
 	}
 	if !decoded || response.Success == nil || !*response.Success || len(response.Errors) != 0 || response.Result == nil || response.Result.MessageID == "" {
-		return email.Receipt{}, email.Ambiguous
+		return email.Receipt{}, emaildiag.Failure(email.Ambiguous)
 	}
 	// Bounced or suppressed recipients do not undo acceptance. Retrying the
 	// entire message could duplicate delivery to recipients already accepted.

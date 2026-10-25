@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxTimestamp is the greatest exact integer shared by Go and Redis Lua numbers.
@@ -34,7 +35,7 @@ func Offset(seed, window int64) int64 {
 // offset + n*window. The result is in (now, now+window].
 func End(now, window, offset int64) (int64, error) {
 	if window <= 0 || offset < 0 || offset >= window || now < 0 || now > MaxTimestamp-window {
-		return 0, fault.New(fault.Invalid, "rate limit clock outside supported epoch range")
+		return 0, safeerror.NewFault(fault.Invalid, "rate limit clock outside supported epoch range")
 	}
 	elapsed := (now - offset) % window
 	if elapsed < 0 {

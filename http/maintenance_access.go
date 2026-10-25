@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
@@ -23,22 +24,22 @@ func (c ServerConfig) Snapshot() ServerConfig {
 
 func (c ServerConfig) validateMaintenancePaths() error {
 	if len(c.MaintenanceReadPaths) > 16 {
-		return fault.New(fault.Invalid, "too many maintenance read paths")
+		return safeerror.NewFault(fault.Invalid, "too many maintenance read paths")
 	}
 	seen := make(map[string]bool, len(c.MaintenanceReadPaths))
 	for _, path := range c.MaintenanceReadPaths {
 		if path == "" || len(path) > 1024 {
-			return fault.New(fault.Invalid, "invalid maintenance read path")
+			return safeerror.NewFault(fault.Invalid, "invalid maintenance read path")
 		}
 		canonical, err := StaticPath(path).URL(NoPath{})
 		if err != nil {
 			return err
 		}
 		if canonical != path {
-			return fault.New(fault.Invalid, "maintenance paths must be canonical unescaped static paths")
+			return safeerror.NewFault(fault.Invalid, "maintenance paths must be canonical unescaped static paths")
 		}
 		if seen[path] {
-			return fault.New(fault.Duplicate, "duplicate maintenance read path")
+			return safeerror.NewFault(fault.Duplicate, "duplicate maintenance read path")
 		}
 		seen[path] = true
 	}
@@ -62,7 +63,7 @@ func (c ServerConfig) permitsMaintenanceRead(request *stdhttp.Request) bool {
 func WithAdmissionProxy(proxy Middleware) ServerOption {
 	return func(o *serverOptions) error {
 		if proxy.id != TrustedProxyMiddlewareID || proxy.proxy == nil {
-			return fault.New(fault.Invalid, "admission proxy requires a valid TrustedProxy middleware")
+			return safeerror.NewFault(fault.Invalid, "admission proxy requires a valid TrustedProxy middleware")
 		}
 		o.proxy = proxy.proxy
 		return nil

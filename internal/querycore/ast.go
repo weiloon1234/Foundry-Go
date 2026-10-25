@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -12,10 +13,10 @@ type FieldRef struct{ Table, Column string }
 
 func (f FieldRef) Validate(table string) error {
 	if !sqlname.Table(f.Table) || !sqlname.Valid(f.Column) {
-		return fault.New(fault.Invalid, "query field has an invalid table or column declaration")
+		return safeerror.NewFault(fault.Invalid, "query field has an invalid table or column declaration")
 	}
 	if f.Table != table {
-		return fault.New(fault.Invalid, "query field belongs to a different table declaration")
+		return safeerror.NewFault(fault.Invalid, "query field belongs to a different table declaration")
 	}
 	return nil
 }
@@ -128,7 +129,7 @@ func ValidateExpressionFields(e Expression, field func(FieldRef) error, depth in
 func ValidateExpressionValues(e Expression, operand func(ValueExpression) error, depth int, nodes *int) error {
 	*nodes++
 	if depth > MaxExpressionDepth || *nodes > MaxExpressionNodes {
-		return fault.New(fault.Invalid, "query expression exceeds its resource bound")
+		return safeerror.NewFault(fault.Invalid, "query expression exceeds its resource bound")
 	}
 	switch e := e.(type) {
 	case Comparison:
@@ -151,7 +152,7 @@ func ValidateExpressionValues(e Expression, operand func(ValueExpression) error,
 		}
 	case BinaryComparison:
 		if _, ok := BinaryOperator(e.Operator); !ok {
-			return fault.New(fault.Invalid, "invalid value comparison operator")
+			return safeerror.NewFault(fault.Invalid, "invalid value comparison operator")
 		}
 		if err := operand(e.Left); err != nil {
 			return err
@@ -167,11 +168,11 @@ func ValidateExpressionValues(e Expression, operand func(ValueExpression) error,
 		return nil
 	case RowComparison:
 		if (e.Operator != Less && e.Operator != Greater) || len(e.Operands) < 2 || len(e.Operands) != len(e.Values) || len(e.Operands) > MaxCursorFields {
-			return fault.New(fault.Invalid, "invalid row comparison")
+			return safeerror.NewFault(fault.Invalid, "invalid row comparison")
 		}
 		for i, item := range e.Operands {
 			if !driver.IsValue(e.Values[i]) || e.Values[i] == nil {
-				return fault.New(fault.Invalid, "row comparison requires non-NULL database values")
+				return safeerror.NewFault(fault.Invalid, "row comparison requires non-NULL database values")
 			}
 			if err := operand(item); err != nil {
 				return err
@@ -191,5 +192,5 @@ func ValidateExpressionValues(e Expression, operand func(ValueExpression) error,
 		// Validated against its model table when resolved during compilation.
 		return nil
 	}
-	return fault.New(fault.Invalid, "query contains an invalid predicate declaration")
+	return safeerror.NewFault(fault.Invalid, "query contains an invalid predicate declaration")
 }

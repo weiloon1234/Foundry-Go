@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
 )
 
@@ -16,7 +17,7 @@ func (b *Backend) Create(ctx context.Context, address session.Address, creation 
 }
 func (b *Backend) CreateChecked(ctx context.Context, address session.Address, creation session.Creation, check func(context.Context, *database.Tx) error) (session.Record, error) {
 	if check == nil {
-		return session.Record{}, fault.New(fault.Invalid, "credential creation requires a proof check")
+		return session.Record{}, safeerror.NewFault(fault.Invalid, "credential creation requires a proof check")
 	}
 	return b.create(ctx, address, creation, check, nil)
 }
@@ -38,7 +39,7 @@ func (b *Backend) create(ctx context.Context, address session.Address, creation 
 			return err
 		}
 		if !present {
-			return fault.New(fault.Internal, "session subject was not created")
+			return safeerror.NewFault(fault.Internal, "session subject was not created")
 		}
 		now, err := b.now()
 		if err != nil {
@@ -122,7 +123,7 @@ func (b *Backend) enforceCapacity(ctx context.Context, tx *database.Tx, subject 
 		return nil
 	}
 	if !pending && creation.Limit == auth.RejectNew {
-		return auth.CredentialLimit
+		return auth.CredentialLimit.WithCause(nil)
 	}
 	_, err = tx.Exec(ctx, `DELETE FROM `+b.sessions()+` WHERE scope = $1 AND subject_key = $2 AND id = ANY($3::uuid[])`, subject.Scope, subject.Key, same[:len(same)-limit+1])
 	return err

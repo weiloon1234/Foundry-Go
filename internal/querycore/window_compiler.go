@@ -5,11 +5,12 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (c *Compiler) ValidateWindow(n WindowNode, grouped map[FieldRef]bool, grouping bool) error {
 	if c.InWindow {
-		return fault.New(fault.Invalid, "window functions cannot nest at the same SELECT level")
+		return safeerror.NewFault(fault.Invalid, "window functions cannot nest at the same SELECT level")
 	}
 	if n.Err != nil {
 		return n.Err
@@ -23,14 +24,14 @@ func (c *Compiler) ValidateWindow(n WindowNode, grouped map[FieldRef]bool, group
 	}
 	n.Window = resolved
 	if len(n.Window.Partitions) > MaxExpressionNodes || len(n.Window.Orders) > MaxExpressionNodes {
-		return fault.New(fault.Invalid, "window exceeds its resource bound")
+		return safeerror.NewFault(fault.Invalid, "window exceeds its resource bound")
 	}
 	previous := c.InWindow
 	c.InWindow = true
 	defer func() { c.InWindow = previous }()
 	check := func(v ValueExpression) error { return c.ValidateSelectedExpression(v, grouped, grouping) }
 	if n.Kind != AggregateWindow && n.Aggregate != (AggregateNode{}) {
-		return fault.New(fault.Invalid, "window function has an unexpected aggregate")
+		return safeerror.NewFault(fault.Invalid, "window function has an unexpected aggregate")
 	}
 	needsValue := n.Kind >= LagWindow && n.Kind <= NthValueWindow
 	if needsValue {
@@ -38,22 +39,22 @@ func (c *Compiler) ValidateWindow(n WindowNode, grouped map[FieldRef]bool, group
 			return err
 		}
 	} else if n.Input != nil {
-		return fault.New(fault.Invalid, "window function has an unexpected value")
+		return safeerror.NewFault(fault.Invalid, "window function has an unexpected value")
 	}
 	switch n.Kind {
 	case RowNumberWindow, RankWindow, DenseRankWindow, PercentRankWindow, CumeDistWindow, FirstValueWindow, LastValueWindow:
 		if n.N != 0 {
-			return fault.New(fault.Invalid, "window function has an unexpected position")
+			return safeerror.NewFault(fault.Invalid, "window function has an unexpected position")
 		}
 	case NtileWindow, NthValueWindow:
 		if n.N <= 0 {
-			return fault.New(fault.Invalid, "window position or bucket count must be positive")
+			return safeerror.NewFault(fault.Invalid, "window position or bucket count must be positive")
 		}
 	case LagWindow, LeadWindow:
 		// PostgreSQL permits negative offsets (the opposite direction).
 	case AggregateWindow:
 		if n.N != 0 || n.Aggregate.Kind == CountDistinct {
-			return fault.New(fault.Invalid, "unsupported aggregate window declaration")
+			return safeerror.NewFault(fault.Invalid, "unsupported aggregate window declaration")
 		}
 		if err := n.Aggregate.Validate(func(f FieldRef) error { return check(f) }); err != nil {
 			return err
@@ -62,13 +63,13 @@ func (c *Compiler) ValidateWindow(n WindowNode, grouped map[FieldRef]bool, group
 			return err
 		}
 	default:
-		return fault.New(fault.Invalid, "invalid window function")
+		return safeerror.NewFault(fault.Invalid, "invalid window function")
 	}
 	if (n.HasFallback || n.Fallback != nil) && n.Kind != LagWindow && n.Kind != LeadWindow {
-		return fault.New(fault.Invalid, "only lag/lead accept fallback values")
+		return safeerror.NewFault(fault.Invalid, "only lag/lead accept fallback values")
 	}
 	if !n.HasFallback && n.Fallback != nil {
-		return fault.New(fault.Invalid, "unexpected window fallback")
+		return safeerror.NewFault(fault.Invalid, "unexpected window fallback")
 	}
 	var seen ValueIndex
 	for _, key := range n.Window.Partitions {
@@ -84,7 +85,7 @@ func (c *Compiler) ValidateWindow(n WindowNode, grouped map[FieldRef]bool, group
 			return err
 		}
 		if found {
-			return fault.New(fault.Invalid, "repeated window partition key")
+			return safeerror.NewFault(fault.Invalid, "repeated window partition key")
 		}
 		seen.Add(plan)
 	}
@@ -102,44 +103,44 @@ func (w WindowSpec) ValidateFrame() error {
 		return nil
 	}
 	if f.Kind < RowsFrame || f.Kind > RangeFrame || f.Exclusion > ExcludeTies {
-		return fault.New(fault.Invalid, "invalid window frame kind or exclusion")
+		return safeerror.NewFault(fault.Invalid, "invalid window frame kind or exclusion")
 	}
 	if f.Kind == GroupsFrame && len(w.Orders) == 0 {
-		return fault.New(fault.Invalid, "GROUPS frame requires window ordering")
+		return safeerror.NewFault(fault.Invalid, "GROUPS frame requires window ordering")
 	}
 	if f.RangeType != 0 {
 		if f.Kind != RangeFrame || len(w.Orders) != 1 {
-			return fault.New(fault.Invalid, "value-distance RANGE requires exactly one ordering expression")
+			return safeerror.NewFault(fault.Invalid, "value-distance RANGE requires exactly one ordering expression")
 		}
 		switch f.RangeType {
 		case codec.TypeInteger, codec.TypeFloat, codec.TypeDecimal, codec.TypeDate, codec.TypeTime, codec.TypeDateTime, codec.TypeLocalDateTime:
 		default:
-			return fault.New(fault.Invalid, "unsupported RANGE ordering representation")
+			return safeerror.NewFault(fault.Invalid, "unsupported RANGE ordering representation")
 		}
 	}
 	for _, bound := range []FrameBound{f.Start, f.End} {
 		switch bound.Kind {
 		case UnboundedPreceding, CurrentRow, UnboundedFollowing:
 			if bound.Offset != 0 || bound.Distance != nil {
-				return fault.New(fault.Invalid, "frame position has an unexpected offset")
+				return safeerror.NewFault(fault.Invalid, "frame position has an unexpected offset")
 			}
 		case PrecedingBound, FollowingBound:
 			if f.Kind == RangeFrame {
 				if bound.Offset != 0 || bound.Distance == nil || f.RangeType == 0 {
-					return fault.New(fault.Invalid, "RANGE offset requires a typed distance")
+					return safeerror.NewFault(fault.Invalid, "RANGE offset requires a typed distance")
 				}
 				if err := bound.Distance.Validate(f.RangeType); err != nil {
 					return err
 				}
 			} else if bound.Offset < 0 || bound.Distance != nil {
-				return fault.New(fault.Invalid, "frame offset requires a nonnegative ROWS/GROUPS distance")
+				return safeerror.NewFault(fault.Invalid, "frame offset requires a nonnegative ROWS/GROUPS distance")
 			}
 		default:
-			return fault.New(fault.Invalid, "invalid window frame boundary")
+			return safeerror.NewFault(fault.Invalid, "invalid window frame boundary")
 		}
 	}
 	if f.Start.Kind == UnboundedFollowing || f.End.Kind == UnboundedPreceding || f.End.Kind < f.Start.Kind {
-		return fault.New(fault.Invalid, "invalid window frame boundary order")
+		return safeerror.NewFault(fault.Invalid, "invalid window frame boundary order")
 	}
 	return nil
 }
@@ -162,7 +163,7 @@ func (c *Compiler) WindowSQL(n WindowNode, grouped map[FieldRef]bool, grouping b
 	} else {
 		names := [...]string{"", "ROW_NUMBER", "RANK", "DENSE_RANK", "PERCENT_RANK", "CUME_DIST", "NTILE", "LAG", "LEAD", "FIRST_VALUE", "LAST_VALUE", "NTH_VALUE"}
 		if n.Kind < RowNumberWindow || int(n.Kind) >= len(names) {
-			return "", fault.New(fault.Invalid, "invalid window function")
+			return "", safeerror.NewFault(fault.Invalid, "invalid window function")
 		}
 		var args []string
 		if n.Input != nil {
@@ -267,7 +268,7 @@ func (c *Compiler) FrameBoundSQL(b FrameBound) (string, error) {
 		}
 		return p + " FOLLOWING", err
 	default:
-		return "", fault.New(fault.Invalid, "invalid frame boundary")
+		return "", safeerror.NewFault(fault.Invalid, "invalid frame boundary")
 	}
 }
 

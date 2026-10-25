@@ -4,12 +4,13 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (q QueryCore) ValidateMutationShape(kind MutationKind, assignments []MutationAssignment, c *Compiler) (map[string]MutationAssignment, error) {
 	kind = kind.SqlKind()
 	if len(assignments) > len(c.Columns) {
-		return nil, fault.New(fault.Invalid, "mutation has more assignments than declared model fields")
+		return nil, safeerror.NewFault(fault.Invalid, "mutation has more assignments than declared model fields")
 	}
 	assigned := make(map[string]MutationAssignment, len(assignments))
 	for _, a := range assignments {
@@ -19,15 +20,15 @@ func (q QueryCore) ValidateMutationShape(kind MutationKind, assignments []Mutati
 		_, declared := c.Columns[a.Field.Column]
 		_, repeated := assigned[a.Field.Column]
 		if !declared || repeated || a.Bind == nil {
-			return nil, fault.New(fault.Invalid, "mutation has an undeclared, repeated or invalid assignment")
+			return nil, safeerror.NewFault(fault.Invalid, "mutation has an undeclared, repeated or invalid assignment")
 		}
 		if kind != InsertModel && a.Field.Column == q.Model.Primary {
-			return nil, fault.New(fault.Invalid, "model primary keys cannot be patched")
+			return nil, safeerror.NewFault(fault.Invalid, "model primary keys cannot be patched")
 		}
 		assigned[a.Field.Column] = a
 	}
 	if kind == DeleteModel && len(assigned) != 0 {
-		return nil, fault.New(fault.Invalid, "model deletion cannot assign fields")
+		return nil, safeerror.NewFault(fault.Invalid, "model deletion cannot assign fields")
 	}
 	return assigned, nil
 }
@@ -44,14 +45,14 @@ func (q QueryCore) ValidateMutation(kind MutationKind, assignments []MutationAss
 		}
 	}
 	if kind == UpdateModel && len(assigned) == 0 {
-		return nil, fault.New(fault.Invalid, "model update requires at least one assigned field")
+		return nil, safeerror.NewFault(fault.Invalid, "model update requires at least one assigned field")
 	}
 	return assigned, nil
 }
 
 func ReadMutationAssignments(assignments []MutationAssignment) (map[FieldRef]AssignmentValue, error) {
 	if len(assignments) > MaxExpressionNodes {
-		return nil, fault.New(fault.Invalid, "mutation exceeds its assignment bound")
+		return nil, safeerror.NewFault(fault.Invalid, "mutation exceeds its assignment bound")
 	}
 	values := make(map[FieldRef]AssignmentValue, len(assignments))
 	for _, assignment := range assignments {
@@ -59,7 +60,7 @@ func ReadMutationAssignments(assignments []MutationAssignment) (map[FieldRef]Ass
 			return nil, err
 		}
 		if _, duplicate := values[assignment.Field]; duplicate || assignment.Bind == nil {
-			return nil, fault.New(fault.Invalid, "mutation has a repeated or invalid assignment")
+			return nil, safeerror.NewFault(fault.Invalid, "mutation has a repeated or invalid assignment")
 		}
 		values[assignment.Field] = assignment.AssignmentValue
 	}
@@ -72,14 +73,14 @@ func (q QueryCore) AdjustSet(a *Adjustment, c *Compiler, assigned map[string]Mut
 	}
 	column, declared := c.Columns[a.Field.Column]
 	if _, repeated := assigned[a.Field.Column]; !declared || repeated || a.Field.Column == q.Model.Primary || a.Bind == nil {
-		return "", fault.New(fault.Invalid, "numeric adjustment requires a declared, unassigned non-key field")
+		return "", safeerror.NewFault(fault.Invalid, "numeric adjustment requires a declared, unassigned non-key field")
 	}
 	bound, err := a.Bind()
 	if err != nil {
 		return "", err
 	}
 	if bound == nil {
-		return "", fault.New(fault.Invalid, "numeric adjustment requires a non-NULL delta")
+		return "", safeerror.NewFault(fault.Invalid, "numeric adjustment requires a non-NULL delta")
 	}
 	parameter, err := c.Parameter(bound)
 	if err != nil {
@@ -121,7 +122,7 @@ func (q QueryCore) CompileMutation(c Compiler, node SelectNode, kind MutationKin
 	case DeleteModel:
 		sql.WriteString("DELETE FROM " + QuotedTable(q.Table))
 	default:
-		return Statement{}, fault.New(fault.Invalid, "invalid model mutation kind")
+		return Statement{}, safeerror.NewFault(fault.Invalid, "invalid model mutation kind")
 	}
 	if err := c.Where(&sql, q.EffectivePredicates()); err != nil {
 		return Statement{}, err

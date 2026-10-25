@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type OuterScope struct {
@@ -19,7 +20,7 @@ func (c *Compiler) CorrelationScope(required *ScopeRequirement, grouped map[Fiel
 		return nil, required.Err
 	}
 	if len(required.Sources) == 0 || len(required.Sources) > MaxExpressionNodes {
-		return nil, fault.New(fault.Invalid, "correlated query has no valid outer scope")
+		return nil, safeerror.NewFault(fault.Invalid, "correlated query has no valid outer scope")
 	}
 	local, enclosing, level := c.Sources, c.Outer, c.SelectDepth
 	visible := make(map[string]map[string]Column, len(required.Sources))
@@ -29,30 +30,30 @@ func (c *Compiler) CorrelationScope(required *ScopeRequirement, grouped map[Fiel
 			actual = enclosing.Sources[name]
 		}
 		if actual == nil {
-			return nil, fault.New(fault.Invalid, "correlated query belongs to a different outer source")
+			return nil, safeerror.NewFault(fault.Invalid, "correlated query belongs to a different outer source")
 		}
 		for _, column := range expected {
 			if _, ok := actual[column.Name]; !ok {
-				return nil, fault.New(fault.Invalid, "correlated outer column is not declared")
+				return nil, safeerror.NewFault(fault.Invalid, "correlated outer column is not declared")
 			}
 		}
 		visible[name] = actual
 	}
 	return &OuterScope{Sources: visible, Field: func(f FieldRef) error {
 		if _, ok := visible[f.Table][f.Column]; !ok {
-			return fault.New(fault.Invalid, "query uses an undeclared outer column")
+			return safeerror.NewFault(fault.Invalid, "query uses an undeclared outer column")
 		}
 		c.ObserveField(level, f)
 		if local[f.Table] != nil {
 			if grouping && !grouped[f] {
-				return fault.New(fault.Invalid, "correlated outer column is not grouped")
+				return safeerror.NewFault(fault.Invalid, "correlated outer column is not grouped")
 			}
 			return f.Validate(f.Table)
 		}
 		if enclosing != nil {
 			return enclosing.Field(f)
 		}
-		return fault.New(fault.Invalid, "correlated query has no enclosing field scope")
+		return safeerror.NewFault(fault.Invalid, "correlated query has no enclosing field scope")
 	}}, nil
 }
 
@@ -61,7 +62,7 @@ func (c *Compiler) AggregateField(f FieldRef) error {
 		return err
 	}
 	if c.Outer != nil && c.Sources[f.Table] == nil {
-		return fault.New(fault.Invalid, "aggregate requires a field in its own SELECT; outer-only aggregates change SQL query ownership")
+		return safeerror.NewFault(fault.Invalid, "aggregate requires a field in its own SELECT; outer-only aggregates change SQL query ownership")
 	}
 	return nil
 }

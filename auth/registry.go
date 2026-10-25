@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type declarationID struct{ marker byte } // Nonzero size: independent identities cannot alias.
@@ -48,7 +49,7 @@ type Config struct {
 func DefaultConfig() Config { return Config{MaxConcurrent: 128, Timeout: 5 * time.Second} }
 func (c Config) Validate() error {
 	if c.MaxConcurrent < 1 || c.MaxConcurrent > 65536 || c.Timeout <= 0 {
-		return fault.New(fault.Invalid, "invalid authentication registry limits")
+		return safeerror.NewFault(fault.Invalid, "invalid authentication registry limits")
 	}
 	return nil
 }
@@ -104,11 +105,11 @@ func (r *Registry) With(registrations ...Registration) (*Registry, error) {
 
 func (r *Registry) add(registrations []Registration) error {
 	if len(registrations) > MaxRegistrations-r.count {
-		return fault.New(fault.Invalid, "authentication registration capacity exceeded")
+		return safeerror.NewFault(fault.Invalid, "authentication registration capacity exceeded")
 	}
 	for _, item := range registrations {
 		if item.id == nil || item.validate == nil || (item.kind != guardRegistration && item.kind != policyRegistration && item.kind != hookRegistration) {
-			return fault.New(fault.Invalid, "invalid authentication registration")
+			return safeerror.NewFault(fault.Invalid, "invalid authentication registration")
 		}
 		if err := item.validate(); err != nil {
 			return err
@@ -147,11 +148,11 @@ func duplicateAuthorization(message string, previous, owner foundation.ProviderI
 		}
 		message += fmt.Sprintf("; belongs to both %s and %s", previous, owner)
 	}
-	return fault.New(fault.Duplicate, message)
+	return safeerror.NewFault(fault.Duplicate, message)
 }
 func (r *Registry) Validate() error {
 	if r == nil || r.slots == nil || r.guards == nil {
-		return fault.New(fault.Invalid, "authentication requires a registry")
+		return safeerror.NewFault(fault.Invalid, "authentication requires a registry")
 	}
 	return nil
 }
@@ -180,7 +181,7 @@ func (r *Registry) NewScope(ctx context.Context, credentials Credentials) (*Scop
 		return nil, err
 	}
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "authentication scope requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "authentication scope requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -224,11 +225,11 @@ type scopeKey struct{}
 
 func currentScope(ctx context.Context) (*Scope, error) {
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "authentication requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "authentication requires a context")
 	}
 	scope, _ := ctx.Value(scopeKey{}).(*Scope)
 	if scope == nil {
-		return nil, fault.New(fault.Missing, "context has no authentication scope")
+		return nil, safeerror.NewFault(fault.Missing, "context has no authentication scope")
 	}
 	if err := scope.check(ctx); err != nil {
 		return nil, err

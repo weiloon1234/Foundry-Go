@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // CheckCreation ensures a synchronous adapter called the supplied check exactly
@@ -15,7 +16,7 @@ func CheckCreation[T any](ctx context.Context, check func(context.Context, *data
 	var failure error
 	result, err := create(func(op context.Context, tx *database.Tx) error {
 		if called {
-			failure = fault.New(fault.Invalid, "credential backend repeated its issuance check")
+			failure = safeerror.NewFault(fault.Invalid, "credential backend repeated its issuance check")
 			return failure
 		}
 		called = true
@@ -30,7 +31,7 @@ func CheckCreation[T any](ctx context.Context, check func(context.Context, *data
 		return *new(T), err
 	}
 	if !called {
-		return *new(T), fault.New(fault.Invalid, "credential backend omitted its issuance check")
+		return *new(T), safeerror.NewFault(fault.Invalid, "credential backend omitted its issuance check")
 	}
 	if failure != nil {
 		return *new(T), failure

@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MapKey is a native JSON object key: ordinary or named text or integers.
@@ -54,7 +56,7 @@ func EachValue[M ~map[K]V, K MapKey, V any](rules ...Rule[V]) Rule[M] {
 // sortedKeys refuses maps larger than the remaining work budget before sorting.
 func sortedKeys[M ~map[K]V, K MapKey, V any](s *execution, input M) []K {
 	if len(input) > s.remainingChecks() {
-		s.err = &LimitError{}
+		s.err = safeerror.Owned("validation resource bound exceeded", &LimitError{})
 		return nil
 	}
 	return slices.Sorted(maps.Keys(input))

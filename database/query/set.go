@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -36,7 +37,7 @@ type SetQuery[R any] struct{ record recordQuery[R] }
 
 func combineRecords[R any](left, right RecordQuerySource[R], operator setOperator) SetQuery[R] {
 	if nilDescriptor(left) || nilDescriptor(right) {
-		return SetQuery[R]{record: recordQuery[R]{err: fault.New(fault.Invalid, "set operation requires two record queries")}}
+		return SetQuery[R]{record: recordQuery[R]{err: safeerror.NewFault(fault.Invalid, "set operation requires two record queries")}}
 	}
 	return combineRecordQueries(left.recordQuery(), right.recordQuery(), operator)
 }
@@ -60,16 +61,16 @@ func compatibleRecords[R any](left, right recordQuery[R]) error {
 			return r.err
 		}
 		if len(r.columns) == 0 || len(r.columns) > MaxExpressionNodes || len(r.columns) != len(r.node.Selections) || r.scan == nil {
-			return fault.New(fault.Invalid, "set input requires a complete record and decoder")
+			return safeerror.NewFault(fault.Invalid, "set input requires a complete record and decoder")
 		}
 	}
 	if len(left.columns) != len(right.columns) {
-		return fault.New(fault.Invalid, "set input column counts differ")
+		return safeerror.NewFault(fault.Invalid, "set input column counts differ")
 	}
 	for i, l := range left.columns {
 		r := right.columns[i]
 		if l.Name != r.Name || l.Nullable != r.Nullable {
-			return fault.New(fault.Invalid, "set input record layouts differ")
+			return safeerror.NewFault(fault.Invalid, "set input record layouts differ")
 		}
 	}
 	return nil
@@ -97,7 +98,7 @@ func (q SetQuery[R]) OrderBy(orders ...ProjectionOrder[Set[R]]) SetQuery[R] {
 	q.record.node.Orders = slices.Clone(q.record.node.Orders)
 	for _, o := range orders {
 		if nilDescriptor(o) {
-			q.record.err = fault.New(fault.Invalid, "set ordering requires an expression")
+			q.record.err = safeerror.NewFault(fault.Invalid, "set ordering requires an expression")
 			continue
 		}
 		q.record.node.Orders = append(q.record.node.Orders, o.projectionOrder().node)
@@ -117,7 +118,7 @@ func (q SetQuery[R]) recordQuery() recordQuery[R] {
 		return r
 	}
 	if r.node.Source.Set == nil || r.scan == nil {
-		r.err = fault.New(fault.Invalid, "set query requires two complete inputs")
+		r.err = safeerror.NewFault(fault.Invalid, "set query requires two complete inputs")
 	}
 	r.directSource = len(r.node.Predicates) == 0 && len(r.node.Orders) == 0 && !r.node.Limit.IsSet() && r.node.Offset == 0
 	return r

@@ -2,10 +2,10 @@ package notifications
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module owns the manager. Requires must name providers owning all borrowed
@@ -33,9 +33,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Manager], requires [
 		if err := r.OnShutdown("notifications", func(ctx context.Context) error {
 			err := manager.Close(ctx)
 			<-manager.Done()
-			return errors.Join(err, manager.Close(context.Background()))
+			return safeerror.Join("operation failed", err, manager.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, manager.Close(ctx))
+			return safeerror.Join("operation failed", err, manager.Close(ctx))
 		}
 		return nil
 	}}

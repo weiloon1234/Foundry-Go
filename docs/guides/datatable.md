@@ -331,7 +331,11 @@ of them; at most `MaxFailures` are retained. Valid rows reach the handler in
 chunks of `ChunkSize`, and a handler error stops the import. Handled chunks are
 not undone by a later failure: run the handler inside a caller-owned transaction
 and check `Report.Failed` for an all-or-nothing import. Codec, rule and handler
-callbacks run synchronously; panic and Goexit become faults.
+callbacks run synchronously; panic and Goexit become faults. Importer-owned
+input failures retain their safe diagnostics and `fault.Invalid` identity;
+use `errors.As` to inspect the underlying `*fault.Error` or `*importer.HeadingError`.
+Errors returned by application readers, rules and handlers retain their causes
+for `errors.Is`/`errors.As`, but their diagnostic text is redacted.
 
 `importer.CSVSource(reader)` accepts RFC 4180 quoting; `WithComma` selects
 another delimiter. `importer.XLSXSource(readerAt, size)` reads the first

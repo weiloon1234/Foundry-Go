@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -38,7 +39,7 @@ func (d Declaration[K, V]) Version() Version {
 }
 func (d Declaration[K, V]) Validate() error {
 	if d.definition == nil || !keyspace.ValidName(string(d.Name())) || d.Version() == 0 {
-		return fault.New(fault.Invalid, "invalid pub/sub declaration")
+		return safeerror.NewFault(fault.Invalid, "invalid pub/sub declaration")
 	}
 	return d.definition.keys.Validate()
 }
@@ -47,7 +48,7 @@ func (d Declaration[K, V]) Bind(b *Broker) (Topic[K, V], error) {
 		return Topic[K, V]{}, err
 	}
 	if b == nil || b.done == nil {
-		return Topic[K, V]{}, fault.New(fault.Invalid, "pub/sub binding requires a broker")
+		return Topic[K, V]{}, safeerror.NewFault(fault.Invalid, "pub/sub binding requires a broker")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -57,11 +58,11 @@ func (d Declaration[K, V]) Bind(b *Broker) (Topic[K, V], error) {
 	key := declarationKey{d.Name(), d.Version()}
 	previous, exists := b.declarations[key]
 	if exists && previous != &d.definition.id {
-		return Topic[K, V]{}, fault.New(fault.Duplicate, "pub/sub topic already has another declaration")
+		return Topic[K, V]{}, safeerror.NewFault(fault.Duplicate, "pub/sub topic already has another declaration")
 	}
 	if !exists {
 		if len(b.declarations) >= b.config.MaxDeclarations {
-			return Topic[K, V]{}, fault.New(fault.Invalid, "pub/sub declaration capacity reached")
+			return Topic[K, V]{}, safeerror.NewFault(fault.Invalid, "pub/sub declaration capacity reached")
 		}
 		b.declarations[key] = &d.definition.id
 	}

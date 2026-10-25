@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -24,7 +25,7 @@ func (b *Backend) revokeAll(ctx context.Context, tx *database.Tx, address token.
 		return 0, err
 	}
 	if !present {
-		return 0, fault.New(fault.Internal, "credential subject is absent after locking")
+		return 0, safeerror.NewFault(fault.Internal, "credential subject is absent after locking")
 	}
 	result, err := tx.Exec(ctx, `DELETE FROM `+b.familyTable()+` WHERE scope = $1 AND subject_key = $2`, subject.Scope, subject.Key)
 	if err != nil {
@@ -40,7 +41,7 @@ func (b *Backend) RevokeOthers(ctx context.Context, address token.Address, ident
 		return 0, err
 	}
 	if keep.IsZero() {
-		return 0, fault.New(fault.Invalid, "token revocation requires the kept family")
+		return 0, safeerror.NewFault(fault.Invalid, "token revocation requires the kept family")
 	}
 	var count uint64
 	err := b.within(ctx, func(tx *database.Tx) error {
@@ -81,7 +82,7 @@ func (b *Backend) RevokeAll(ctx context.Context, address token.Address, identity
 // inside a savepoint. The original standalone method reuses the same row logic.
 func (b *Backend) RevokeAllIn(ctx context.Context, tx *database.Tx, address token.Address, identity model.Identity) (uint64, error) {
 	if b == nil {
-		return 0, fault.New(fault.Invalid, "credential backend is missing")
+		return 0, safeerror.NewFault(fault.Invalid, "credential backend is missing")
 	}
 	if _, err := address.SubjectKey(identity); err != nil {
 		return 0, err

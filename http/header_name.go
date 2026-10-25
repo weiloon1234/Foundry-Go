@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/httptoken"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // HeaderName is a declared HTTP field name, distinct from routes and values.
@@ -14,13 +15,13 @@ type HeaderName string
 
 func (n HeaderName) Validate() error {
 	if len(n) == 0 || len(n) > 256 {
-		return fault.New(fault.Invalid, "HTTP header name is empty or too long")
+		return safeerror.NewFault(fault.Invalid, "HTTP header name is empty or too long")
 	}
 	for i := range n {
 		if httpTokenByte(n[i]) {
 			continue
 		}
-		return fault.New(fault.Invalid, "HTTP header name contains an invalid byte")
+		return safeerror.NewFault(fault.Invalid, "HTTP header name contains an invalid byte")
 	}
 	return nil
 }

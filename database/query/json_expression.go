@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -23,7 +24,7 @@ func (k JSONKind) Validate() error {
 	case JSONObject, JSONArray, JSONString, JSONNumber, JSONBoolean, JSONNull:
 		return nil
 	default:
-		return fault.New(fault.Invalid, "invalid JSON kind")
+		return safeerror.NewFault(fault.Invalid, "invalid JSON kind")
 	}
 }
 

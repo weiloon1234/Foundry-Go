@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -18,7 +19,7 @@ import (
 // batches continue after the last delivered key; other orders use OFFSET.
 func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Executor, yield func(R) error) error {
 	if q.lifecycle == nil || q.lifecycle.primaryIndex < 0 || q.lifecycle.primaryIndex >= len(q.node.Selections) {
-		return fault.New(fault.Invalid, "retrieval batches require complete model primary metadata")
+		return safeerror.NewFault(fault.Invalid, "retrieval batches require complete model primary metadata")
 	}
 	q.node.Orders = slices.Clone(q.node.Orders)
 	primary := q.node.Selections[q.lifecycle.primaryIndex].Expression
@@ -56,7 +57,7 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 			return err
 		}
 		if len(items) > size {
-			return fault.New(fault.Invalid, "database exceeded the retrieval batch limit")
+			return safeerror.NewFault(fault.Invalid, "database exceeded the retrieval batch limit")
 		}
 		if n, bounded := remaining.Get(); bounded {
 			remaining = value.Set(n - len(items))
@@ -71,7 +72,7 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 				return err
 			}
 			if key == nil {
-				return fault.New(fault.Invalid, "retrieval batch primary key cannot be NULL")
+				return safeerror.NewFault(fault.Invalid, "retrieval batch primary key cannot be NULL")
 			}
 			op := greater
 			if q.node.Orders[0].Descending {
@@ -82,7 +83,7 @@ func (q readResult[R]) retrievalChunks(ctx context.Context, executor database.Ex
 			q.node.Offset = 0
 		} else if more {
 			if q.node.Offset > math.MaxInt-len(items) {
-				return fault.New(fault.Invalid, "retrieval batch offset overflow")
+				return safeerror.NewFault(fault.Invalid, "retrieval batch offset overflow")
 			}
 			q.node.Offset += len(items)
 		}

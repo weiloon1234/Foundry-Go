@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/outbox"
@@ -40,7 +41,7 @@ func QueuedOutboxDefinition(policy jobs.Policy) jobs.Definition[queuedEvent] {
 
 func NewQueuedOutbox(policy jobs.Policy, producers ...*Outbox) (*QueuedOutbox, error) {
 	if len(producers) == 0 || len(producers) > 128 {
-		return nil, fault.New(fault.Invalid, "queued events require 1 to 128 outbox destinations")
+		return nil, safeerror.NewFault(fault.Invalid, "queued events require 1 to 128 outbox destinations")
 	}
 	result := &QueuedOutbox{definition: QueuedOutboxDefinition(policy), producers: make(map[outbox.Destination]*Outbox)}
 	if err := result.definition.Validate(); err != nil {
@@ -48,10 +49,10 @@ func NewQueuedOutbox(policy jobs.Policy, producers ...*Outbox) (*QueuedOutbox, e
 	}
 	for _, producer := range producers {
 		if producer == nil || producer.bus == nil {
-			return nil, fault.New(fault.Invalid, "queued events require prepared event outboxes")
+			return nil, safeerror.NewFault(fault.Invalid, "queued events require prepared event outboxes")
 		}
 		if _, exists := result.producers[producer.destination]; exists {
-			return nil, fault.New(fault.Duplicate, "queued event destination already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "queued event destination already registered")
 		}
 		result.producers[producer.destination] = producer
 	}
@@ -59,20 +60,20 @@ func NewQueuedOutbox(policy jobs.Policy, producers ...*Outbox) (*QueuedOutbox, e
 }
 func (q *QueuedOutbox) Declaration() (jobs.Declaration, error) {
 	if q == nil || q.producers == nil {
-		return jobs.Declaration{}, fault.New(fault.Invalid, "queued event delivery is not initialized")
+		return jobs.Declaration{}, safeerror.NewFault(fault.Invalid, "queued event delivery is not initialized")
 	}
 	return q.definition.Declare(func(ctx context.Context, input queuedEvent) error {
 		producer := q.producers[input.Destination]
 		if producer == nil {
-			return fault.New(fault.Missing, "queued event destination is not registered")
+			return safeerror.NewFault(fault.Missing, "queued event destination is not registered")
 		}
 		if input.MessageID.IsZero() {
-			return fault.New(fault.Invalid, "queued event requires a publication identity")
+			return safeerror.NewFault(fault.Invalid, "queued event requires a publication identity")
 		}
 		key := topicKey{input.Name, input.Version}
 		registered, ok := producer.bus.registry[key]
 		if !ok {
-			return fault.New(fault.Missing, "queued event schema is not registered")
+			return safeerror.NewFault(fault.Missing, "queued event schema is not registered")
 		}
 		operation, entry, release, err := producer.bus.begin(ctx, key, registered.schema.typ)
 		if err != nil {
@@ -92,14 +93,14 @@ func (q *QueuedOutbox) Declaration() (jobs.Declaration, error) {
 }
 func (q *QueuedOutbox) PublicationRoute(destination outbox.Destination, dispatcher *jobs.Dispatcher) (publisher.Route, error) {
 	if q == nil || q.producers[destination] == nil {
-		return publisher.Route{}, fault.New(fault.Missing, "queued event destination is not registered")
+		return publisher.Route{}, safeerror.NewFault(fault.Missing, "queued event destination is not registered")
 	}
 	if err := dispatcher.RequireDurable(); err != nil {
 		return publisher.Route{}, err
 	}
 	return publisher.Route{Kind: eventMessageKind, Destination: destination, Publish: func(ctx context.Context, message publisher.Message) error {
 		if message.Destination() != destination {
-			return fault.New(fault.Invalid, "event outbox publication has another destination")
+			return safeerror.NewFault(fault.Invalid, "event outbox publication has another destination")
 		}
 		text, err := message.PayloadJSON()
 		if err != nil {

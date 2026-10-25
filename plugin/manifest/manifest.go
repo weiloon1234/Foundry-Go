@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // FrameworkVersion is the plugin API compatibility version of this framework
@@ -23,18 +24,18 @@ type Requirement string
 
 func (id ID) Validate() error {
 	if !identifier.Semantic(string(id)) {
-		return fault.New(fault.Invalid, "plugin requires a semantic ID")
+		return safeerror.NewFault(fault.Invalid, "plugin requires a semantic ID")
 	}
 	return nil
 }
 
 func (v Version) parse() (*semver.Version, error) {
 	if len(v) == 0 || len(v) > 256 {
-		return nil, fault.New(fault.Invalid, "plugin version exceeds its declaration bound or is empty")
+		return nil, safeerror.NewFault(fault.Invalid, "plugin version exceeds its declaration bound or is empty")
 	}
 	parsed, err := semver.StrictNewVersion(string(v))
 	if err != nil {
-		return nil, fault.New(fault.Invalid, "plugin version must be a full semantic version")
+		return nil, safeerror.NewFault(fault.Invalid, "plugin version must be a full semantic version")
 	}
 	return parsed, nil
 }
@@ -56,16 +57,16 @@ func (v Version) Compare(other Version) (int, error) {
 
 func (r Requirement) parse() (*semver.Constraints, error) {
 	if len(r) == 0 || len(r) > 1024 || strings.TrimSpace(string(r)) != string(r) {
-		return nil, fault.New(fault.Invalid, "plugin requirement is empty or exceeds its declaration bound")
+		return nil, safeerror.NewFault(fault.Invalid, "plugin requirement is empty or exceeds its declaration bound")
 	}
 	for _, character := range r {
 		if character < ' ' || character > '~' {
-			return nil, fault.New(fault.Invalid, "plugin requirements use printable ASCII")
+			return nil, safeerror.NewFault(fault.Invalid, "plugin requirements use printable ASCII")
 		}
 	}
 	parsed, err := semver.NewConstraint(string(r))
 	if err != nil {
-		return nil, fault.New(fault.Invalid, "invalid plugin version requirement")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid plugin version requirement")
 	}
 	return parsed, nil
 }
@@ -116,7 +117,7 @@ func (m Manifest) Namespace() (string, error) {
 		return "", err
 	}
 	if !strings.HasPrefix(namespace, "plugins.") {
-		return "", fault.New(fault.Invalid, "plugin configuration must use the plugins namespace")
+		return "", safeerror.NewFault(fault.Invalid, "plugin configuration must use the plugins namespace")
 	}
 	return namespace, nil
 }
@@ -137,7 +138,7 @@ func (m Manifest) Validate() error {
 		}
 	}
 	if len(m.Description) > 4096 || !utf8.ValidString(m.Description) || strings.ContainsRune(m.Description, 0) || len(m.Dependencies) > 256 {
-		return fault.New(fault.Invalid, "plugin manifest exceeds its declaration bounds")
+		return safeerror.NewFault(fault.Invalid, "plugin manifest exceeds its declaration bounds")
 	}
 	seen := make(map[ID]bool, len(m.Dependencies))
 	for _, dependency := range m.Dependencies {
@@ -148,7 +149,7 @@ func (m Manifest) Validate() error {
 			return err
 		}
 		if seen[dependency.ID] {
-			return fault.New(fault.Duplicate, "duplicate dependency in plugin "+string(m.ID))
+			return safeerror.NewFault(fault.Duplicate, "duplicate dependency in plugin "+string(m.ID))
 		}
 		seen[dependency.ID] = true
 	}

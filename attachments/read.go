@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -26,7 +27,7 @@ const (
 
 // errBatchLimit reports a batch beyond MaxBatchFiles or MaxBatchPropertiesBytes;
 // slot loading retries such a batch in smaller parts.
-var errBatchLimit = fault.New(fault.Conflict, "attachment batch exceeds its row or property limit")
+var errBatchLimit = attachmentFailure(fault.Conflict, "attachment batch exceeds its row or property limit")
 
 type Batch[M any, K comparable] struct {
 	collection Collection[M, K]
@@ -57,7 +58,7 @@ func (b Batch[M, K]) getAt(i int) ([]Attachment[M, K], error) {
 }
 func (b Batch[M, K]) get(subject string) ([]Attachment[M, K], error) {
 	if !b.active[subject] {
-		return nil, database.NotFound
+		return nil, safeerror.Owned(string(database.NotFound), database.NotFound)
 	}
 	return slices.Clone(b.files[subject]), nil
 }
@@ -144,7 +145,7 @@ func (c Collection[M, K]) scanRows(ctx context.Context, tx *database.Tx, m *Mana
 		}
 		counts[row.SubjectKey][row.Locale]++
 		if counts[row.SubjectKey][row.Locale] > c.definition.policy.MaxFiles {
-			return fault.New(fault.Conflict, "stored attachment cardinality differs from its collection")
+			return attachmentFailure(fault.Conflict, "stored attachment cardinality differs from its collection")
 		}
 		result.files[row.SubjectKey] = append(result.files[row.SubjectKey], file)
 		return nil
@@ -184,7 +185,7 @@ func (c Collection[M, K]) find(ctx context.Context, m *Manager, owner model.Refe
 		return Attachment[M, K]{}, err
 	}
 	if len(files) != 1 {
-		return Attachment[M, K]{}, database.NotFound
+		return Attachment[M, K]{}, safeerror.Owned(string(database.NotFound), database.NotFound)
 	}
 	return files[0], nil
 }
@@ -202,7 +203,7 @@ func (c Collection[M, K]) Find(ctx context.Context, m *Manager, owner model.Refe
 
 func readBytes[M any, K comparable](ctx context.Context, m *Manager, file Attachment[M, K], maximum int64) ([]byte, error) {
 	if maximum < 1 || maximum > MaxUploadBytes || file.info.Size > maximum {
-		return nil, storage.Failure(storage.LimitExceeded, storage.OpenOperation, storage.NotApplicable, nil)
+		return nil, storageFailure(storage.LimitExceeded, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	disk, err := m.disks.Disk(file.disk)
 	if err != nil {
@@ -213,10 +214,10 @@ func readBytes[M any, K comparable](ctx context.Context, m *Manager, file Attach
 		return nil, err
 	}
 	if int64(len(data)) != file.info.Size {
-		return nil, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
+		return nil, storageFailure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	if !diskVerified(info, file.digest) && storage.SHA256(sha256.Sum256(data)) != file.digest {
-		return nil, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
+		return nil, storageFailure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	return data, nil
 }
@@ -233,7 +234,7 @@ func (c Collection[M, K]) ReadBytes(ctx context.Context, m *Manager, owner model
 		return nil, err
 	}
 	if maximum < 1 || maximum > MaxUploadBytes {
-		return nil, storage.Failure(storage.LimitExceeded, storage.OpenOperation, storage.NotApplicable, nil)
+		return nil, storageFailure(storage.LimitExceeded, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	var result []byte
 	err := m.reads.Run(ctx, "attachment read", func(ctx context.Context) error {
@@ -395,7 +396,7 @@ func (c Collection[M, K]) temporaryURL(ctx context.Context, m *Manager, file Att
 // ActiveContentRefused reports an inline link to a script-capable attachment
 // (SVG, HTML, XML, JavaScript) whose policy does not set InlineActiveContent.
 // It matches fault.Invalid.
-var ActiveContentRefused = fault.New(fault.Invalid, "script-capable attachment cannot be linked inline")
+var ActiveContentRefused = safeerror.Sentinel(fault.Invalid, "script-capable attachment cannot be linked inline")
 
 // activeContent reports media browsers can execute scripts from when a
 // response renders inline: SVG and other XML documents, HTML and JavaScript.
@@ -444,7 +445,7 @@ func (c Collection[M, K]) Open(ctx context.Context, m *Manager, owner model.Refe
 	}
 	if info.Length != file.info.Size || info.Offset != 0 {
 		cleanup := body.Close()
-		return nil, Attachment[M, K]{}, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, cleanup)
+		return nil, Attachment[M, K]{}, storageFailure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, cleanup)
 	}
 	if diskVerified(info, file.digest) {
 		return body, file, nil
@@ -471,7 +472,7 @@ func (r *verifiedReader) Read(p []byte) (int, error) {
 		var actual storage.SHA256
 		copy(actual[:], r.digest.Sum(nil))
 		if r.remaining != 0 || actual != r.expected {
-			return n, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
+			return n, storageFailure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
 		}
 	}
 	return n, err

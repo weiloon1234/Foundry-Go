@@ -3,12 +3,13 @@ package query
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RetrievalHooks bridges concrete generated read callbacks into the shared read
@@ -60,7 +61,7 @@ func (d *Definition[M]) retrieval() *readLifecycle[M] {
 		},
 		prepare: func(ctx context.Context, set lifecycle.Observers) (func(context.Context, database.Executor, M) error, error) {
 			if d.readHooks == nil {
-				return nil, fault.New(fault.Invalid, "registered model retrieval observers require a generated adapter; regenerate the model")
+				return nil, safeerror.NewFault(fault.Invalid, "registered model retrieval observers require a generated adapter; regenerate the model")
 			}
 			hooks, err := d.readHooks(ctx, set)
 			return hooks.Retrieved, err
@@ -131,7 +132,7 @@ func collectRead[R any](ctx context.Context, executor database.Executor, stateme
 		return nil, err
 	}
 	defer func() {
-		err = errors.Join(err, rows.Close())
+		err = safeerror.Join("operation failed", err, rows.Close())
 		if err != nil {
 			result = nil
 		}
@@ -148,11 +149,11 @@ func collectRead[R any](ctx context.Context, executor database.Executor, stateme
 			}
 			result = append(result, item)
 		}
-		return errors.Join(rows.Close(), ctx.Err())
+		return safeerror.Join("operation failed", rows.Close(), ctx.Err())
 	}
 	set := rows.Observers()
 	if callbacks == nil || !callbacks.needed(set) {
-		err = collect(ctx)
+		err = callback.Isolated("decode query rows", func() error { return collect(ctx) })
 		return result, err
 	}
 	err = rows.WithObserverScope(ctx, func(work context.Context) error {

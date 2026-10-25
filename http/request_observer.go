@@ -2,14 +2,16 @@ package http
 
 import (
 	"context"
+	"log/slog"
+	"slices"
+	"time"
+
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/observability"
-	"log/slog"
-	"slices"
-	"time"
 )
 
 // RequestEvent is a metadata-only completion snapshot. It deliberately excludes
@@ -45,10 +47,10 @@ type ServerOption func(*serverOptions) error
 func WithRequestObserver(observer RequestObserver) ServerOption {
 	return func(o *serverOptions) error {
 		if credential.IsNil(observer) {
-			return fault.New(fault.Invalid, "request observer is nil")
+			return safeerror.NewFault(fault.Invalid, "request observer is nil")
 		}
 		if len(o.observers) >= 16 {
-			return fault.New(fault.Invalid, "too many request observers")
+			return safeerror.NewFault(fault.Invalid, "too many request observers")
 		}
 		o.observers = append(o.observers, observer)
 		return nil
@@ -58,7 +60,7 @@ func configureServer(options []ServerOption) (serverOptions, error) {
 	var o serverOptions
 	for _, option := range slices.Clone(options) {
 		if option == nil {
-			return o, fault.New(fault.Invalid, "nil HTTP server option")
+			return o, safeerror.NewFault(fault.Invalid, "nil HTTP server option")
 		}
 		if err := option(&o); err != nil {
 			return o, err

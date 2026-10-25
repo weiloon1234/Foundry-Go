@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (p *preparedFile) writeStream(w stdhttp.ResponseWriter, r *stdhttp.Request) error {
@@ -48,7 +49,7 @@ func (p *preparedFile) copyStream(w *fileResponseWriter) error {
 			return err
 		}
 		if int64(n) > remaining {
-			return fault.New(fault.Internal, "stream exceeds its declared length or byte limit")
+			return safeerror.NewFault(fault.Internal, "stream exceeds its declared length or byte limit")
 		}
 		finished := err == io.EOF
 		if !finished && int64(n) == remaining {
@@ -60,7 +61,7 @@ func (p *preparedFile) copyStream(w *fileResponseWriter) error {
 					return next
 				}
 				if count != 0 {
-					return fault.New(fault.Internal, "stream exceeds its declared length or byte limit")
+					return safeerror.NewFault(fault.Internal, "stream exceeds its declared length or byte limit")
 				}
 				if next == io.EOF {
 					finished = true

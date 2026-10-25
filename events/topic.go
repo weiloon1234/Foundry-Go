@@ -10,6 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -83,13 +84,13 @@ func (t Topic[E]) Declare(listeners ...Listener[E]) (Declaration, error) {
 			return Declaration{}, err
 		}
 		if _, ok := names[item.name]; ok {
-			return Declaration{}, fault.New(fault.Duplicate, "event listener is already declared")
+			return Declaration{}, safeerror.NewFault(fault.Duplicate, "event listener is already declared")
 		}
 		names[item.name] = struct{}{}
 		declarations = append(declarations, listener{name: item.name, queued: item.queued, invoke: func(ctx context.Context, captured payload) error {
 			snapshot, ok := captured.typed.(value.JSON[E])
 			if !ok {
-				return fault.New(fault.Internal, "event payload does not match its registered schema")
+				return safeerror.NewFault(fault.Internal, "event payload does not match its registered schema")
 			}
 			decoded, err := snapshot.Decode()
 			if err != nil {
@@ -148,7 +149,7 @@ func (Declaration) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("
 
 func validateListener(name ListenerID, present bool) error {
 	if !identifier.Semantic(string(name)) || !present {
-		return fault.New(fault.Invalid, "event listener requires a semantic name and handler")
+		return safeerror.NewFault(fault.Invalid, "event listener requires a semantic name and handler")
 	}
 	return nil
 }

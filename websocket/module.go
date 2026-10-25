@@ -2,7 +2,6 @@ package websocket
 
 import (
 	"context"
-	"errors"
 	stdhttp "net/http"
 	"slices"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type ServerConfig struct {
@@ -42,7 +42,7 @@ func (c ServerConfig) Validate() error {
 func Module(name foundation.ProviderID, key foundation.Key[*Hub], config ServerConfig, requires []foundation.ProviderID, construct func(foundation.Resolver) (*Hub, error)) foundation.Module {
 	return DeclaredModule(name, key, config, requires, func(r foundation.Resolver) (*Hub, []foundryhttp.Middleware, error) {
 		if construct == nil {
-			return nil, nil, fault.New(fault.Invalid, "WebSocket module requires a hub factory")
+			return nil, nil, safeerror.NewFault(fault.Invalid, "WebSocket module requires a hub factory")
 		}
 		hub, err := construct(r)
 		return hub, nil, err
@@ -62,7 +62,7 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 	config.Middleware = slices.Clone(config.Middleware)
 	return foundation.Module{Name: name, Requires: slices.Clone(requires), OnRegister: func(r *foundation.Registrar) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "WebSocket module requires a hub factory")
+			return safeerror.NewFault(fault.Invalid, "WebSocket module requires a hub factory")
 		}
 		if err := config.Validate(); err != nil {
 			return err
@@ -73,7 +73,7 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 				return declaredHub{}, err
 			}
 			if hub == nil || hub.done == nil {
-				return declaredHub{}, fault.New(fault.Invalid, "WebSocket factory returned no hub")
+				return declaredHub{}, safeerror.NewFault(fault.Invalid, "WebSocket factory returned no hub")
 			}
 			route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "foundry.websocket", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath(config.Path))
 			router, err := foundryhttp.NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, request *stdhttp.Request, _ foundryhttp.NoPath) {
@@ -102,7 +102,7 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 				return nil, err
 			}
 			if hub == nil || hub.done == nil {
-				return nil, fault.New(fault.Invalid, "WebSocket factory returned no hub")
+				return nil, safeerror.NewFault(fault.Invalid, "WebSocket factory returned no hub")
 			}
 			d, err := foundation.Resolve(runtime.Services(), declarations)
 			if err != nil {
@@ -117,7 +117,7 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 			hub.mu.Lock()
 			if hub.server != nil || hub.closing {
 				hub.mu.Unlock()
-				return nil, fault.New(fault.Conflict, "WebSocket hub already belongs to a server or is stopping")
+				return nil, safeerror.NewFault(fault.Conflict, "WebSocket hub already belongs to a server or is stopping")
 			}
 			hub.server = server
 			close(hub.serverSelected)
@@ -128,10 +128,10 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 				stop := context.AfterFunc(ctx, hub.beginStop)
 				defer stop()
 				if err := hub.Start(ctx); err != nil {
-					return errors.Join(err, hub.Stop(context.Background()))
+					return safeerror.Join("operation failed", err, hub.Stop(context.Background()))
 				}
 				err := server.Run(ctx)
-				return errors.Join(err, hub.Stop(context.Background()))
+				return safeerror.Join("operation failed", err, hub.Stop(context.Background()))
 			}), nil
 		})
 	}, OnBoot: func(ctx context.Context, r *foundation.Runtime) error {
@@ -142,9 +142,9 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 		if err := r.OnShutdown("hub", func(ctx context.Context) error {
 			err := hub.Stop(ctx)
 			<-hub.Done()
-			return errors.Join(err, hub.Stop(context.Background()))
+			return safeerror.Join("operation failed", err, hub.Stop(context.Background()))
 		}); err != nil {
-			return errors.Join(err, hub.Stop(ctx))
+			return safeerror.Join("operation failed", err, hub.Stop(ctx))
 		}
 		return nil
 	}}
@@ -160,7 +160,7 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 func SharedModule(name foundation.ProviderID, key foundation.Key[*Hub], server foundation.Key[*foundryhttp.Server], requires []foundation.ProviderID, construct func(foundation.Resolver) (*Hub, error)) foundation.Module {
 	return foundation.Module{Name: name, Requires: slices.Clone(requires), OnRegister: func(r *foundation.Registrar) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "WebSocket module requires a hub factory")
+			return safeerror.NewFault(fault.Invalid, "WebSocket module requires a hub factory")
 		}
 		return foundation.Factory(r, key, func(resolver foundation.Resolver) (*Hub, error) {
 			hub, err := construct(resolver)
@@ -168,7 +168,7 @@ func SharedModule(name foundation.ProviderID, key foundation.Key[*Hub], server f
 				return nil, err
 			}
 			if hub == nil || hub.done == nil {
-				return nil, fault.New(fault.Invalid, "WebSocket factory returned no hub")
+				return nil, safeerror.NewFault(fault.Invalid, "WebSocket factory returned no hub")
 			}
 			return hub, nil
 		})
@@ -185,7 +185,7 @@ func SharedModule(name foundation.ProviderID, key foundation.Key[*Hub], server f
 		hub.mu.Lock()
 		if hub.server != nil || hub.closing {
 			hub.mu.Unlock()
-			return fault.New(fault.Conflict, "WebSocket hub already belongs to a server or is stopping")
+			return safeerror.NewFault(fault.Conflict, "WebSocket hub already belongs to a server or is stopping")
 		}
 		hub.server = listener
 		close(hub.serverSelected)
@@ -193,9 +193,9 @@ func SharedModule(name foundation.ProviderID, key foundation.Key[*Hub], server f
 		if err := r.OnShutdown("hub", func(ctx context.Context) error {
 			err := hub.Stop(ctx)
 			<-hub.Done()
-			return errors.Join(err, hub.Stop(context.Background()))
+			return safeerror.Join("operation failed", err, hub.Stop(context.Background()))
 		}); err != nil {
-			return errors.Join(err, hub.Stop(ctx))
+			return safeerror.Join("operation failed", err, hub.Stop(ctx))
 		}
 		context.AfterFunc(r.Context(), hub.beginStop)
 		return hub.Start(ctx)
@@ -206,7 +206,7 @@ func SharedModule(name foundation.ProviderID, key foundation.Key[*Hub], server f
 // path. Middleware wraps only the upgrade; router-wide middleware also applies.
 func Route(hub *Hub, path string, middleware ...foundryhttp.Middleware) foundryhttp.RouteRegistration {
 	if hub == nil || hub.done == nil {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "WebSocket route requires a hub"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "WebSocket route requires a hub"))
 	}
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "foundry.websocket", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
 	var handler stdhttp.Handler = stdhttp.HandlerFunc(hub.ServeHTTP)
@@ -226,7 +226,7 @@ func Route(hub *Hub, path string, middleware ...foundryhttp.Middleware) foundryh
 // address. Manually embedded HTTP handlers use their host's readiness API.
 func (h *Hub) Ready(ctx context.Context) (string, error) {
 	if h == nil || h.done == nil || ctx == nil {
-		return "", fault.New(fault.Invalid, "WebSocket readiness requires a hub and context")
+		return "", safeerror.NewFault(fault.Invalid, "WebSocket readiness requires a hub and context")
 	}
 	ctx, unlink := contextlink.Link(ctx, h.ctx)
 	defer unlink()
@@ -238,7 +238,7 @@ func (h *Hub) Ready(ctx context.Context) (string, error) {
 	select {
 	case <-h.serverSelected:
 	case <-h.done:
-		return "", Stopping
+		return "", codeFailure(Stopping)
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}

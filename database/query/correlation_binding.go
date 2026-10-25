@@ -4,6 +4,7 @@ import (
 	"maps"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Ordinary and transaction correlation share visibility and shadowing rules.
@@ -16,7 +17,7 @@ type correlationBinding[S, O, I any] struct {
 func bindCorrelation[S, O, I any](outer ScopeSource[O], inner ProjectionSource[I]) correlationBinding[S, O, I] {
 	var r correlationBinding[S, O, I]
 	if nilDescriptor(outer) || nilDescriptor(inner) {
-		r.source.err = fault.New(fault.Invalid, "correlation requires outer and inner scopes")
+		r.source.err = safeerror.NewFault(fault.Invalid, "correlation requires outer and inner scopes")
 		return r
 	}
 	r.outer = outer.scopeSource()
@@ -31,7 +32,7 @@ func bindCorrelation[S, O, I any](outer ScopeSource[O], inner ProjectionSource[I
 	}
 	for name := range r.inner.scopeRequirement.Sources {
 		if _, exists := r.outer.scopeRequirement.Sources[name]; exists {
-			r.source.err = fault.New(fault.Invalid, "correlation shadows an outer source; use distinct aliases")
+			r.source.err = safeerror.NewFault(fault.Invalid, "correlation shadows an outer source; use distinct aliases")
 		}
 	}
 	return r

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MergeQueries combines descriptors for the same concrete query type. It
@@ -32,7 +33,7 @@ func EmbedQuery[Outer, Inner any](query Query[Inner], field func(*Outer) *Inner)
 		return Query[Outer]{err: err}
 	}
 	if field == nil {
-		return Query[Outer]{err: fault.New(fault.Invalid, "query embedding requires a field selector")}
+		return Query[Outer]{err: safeerror.NewFault(fault.Invalid, "query embedding requires a field selector")}
 	}
 	parameters := make([]QueryParameter[Outer], 0, len(query.parameters))
 	for _, parameter := range query.parameters {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/upload"
 )
 
@@ -49,15 +50,15 @@ func (d Multipart[B]) read(w stdhttp.ResponseWriter, r *stdhttp.Request, limits 
 	}
 	if r.ContentLength > limits.Multipart.Bytes {
 		rejectUnreadBody(w, r)
-		return *new(B), nil, PayloadTooLarge
+		return *new(B), nil, PayloadTooLarge.WithCause(nil)
 	}
 	boundary, ok := multipartRequestMedia(r.Header)
 	if !ok {
 		rejectUnreadBody(w, r)
-		return *new(B), nil, UnsupportedMediaType
+		return *new(B), nil, UnsupportedMediaType.WithCause(nil)
 	}
 	if r.Body == nil || r.Body == stdhttp.NoBody {
-		return *new(B), nil, BadRequest
+		return *new(B), nil, BadRequest.WithCause(nil)
 	}
 	config := upload.Config{TempDirectory: d.directory, MaxBytes: limits.Multipart.Bytes, MaxFileBytes: limits.Multipart.FileBytes, MaxFiles: limits.Multipart.Files, MaxReaders: limits.Multipart.Readers}
 	batch, err := upload.New(ctx, config)
@@ -113,19 +114,19 @@ func (d Multipart[B]) readParts(r *stdhttp.Request, reader *multipart.Reader, so
 		}
 		count++
 		if count > limits.Multipart.Parts {
-			return PayloadTooLarge
+			return PayloadTooLarge.WithCause(nil)
 		}
 		header := stdhttp.Header(part.Header)
 		if !multipartHeaderFits(header, limits.Multipart.HeaderBytes) {
-			return PayloadTooLarge
+			return PayloadTooLarge.WithCause(nil)
 		}
 		dispositions := header.Values("Content-Disposition")
 		if len(dispositions) != 1 {
-			return BadRequest
+			return BadRequest.WithCause(nil)
 		}
 		disposition, parameters, err := mime.ParseMediaType(dispositions[0])
 		if err != nil || disposition != "form-data" {
-			return BadRequest
+			return BadRequest.WithCause(nil)
 		}
 		name := parameters["name"]
 		index, known := d.indexes[name]
@@ -165,7 +166,7 @@ func (d Multipart[B]) readParts(r *stdhttp.Request, reader *multipart.Reader, so
 		if declaration.kind == MultipartFile {
 			file, err := batch.Capture(r.Context(), content, filename, header.Get("Content-Type"))
 			if err != nil {
-				switch err.(type) {
+				switch safeerror.UnwrapOwned(err).(type) {
 				case *upload.LimitError:
 					return PayloadTooLarge.WithCause(err)
 				case *upload.ReadError:
@@ -189,7 +190,7 @@ func (d Multipart[B]) readParts(r *stdhttp.Request, reader *multipart.Reader, so
 			return source.failure(err)
 		}
 		if len(data) > ceiling {
-			return PayloadTooLarge
+			return PayloadTooLarge.WithCause(nil)
 		}
 		remainingFields -= len(data)
 		if declaration.kind == MultipartText {

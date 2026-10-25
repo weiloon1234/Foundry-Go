@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -22,7 +23,7 @@ type projectionSource[S any] struct {
 func (q Query[M]) projectionSource() projectionSource[M] {
 	s := projectionSource[M]{}
 	if q.definition == nil {
-		s.err = fault.New(fault.Invalid, "projection source requires model metadata")
+		s.err = safeerror.NewFault(fault.Invalid, "projection source requires model metadata")
 		return s
 	}
 	if err := q.queryCore.ValidateSoftDeleteScope(); err != nil {
@@ -31,7 +32,7 @@ func (q Query[M]) projectionSource() projectionSource[M] {
 	}
 	s.err = q.definition.Validate()
 	if len(q.relations) != 0 || q.relationLimits != nil {
-		s.err = fault.New(fault.Invalid, "projection source cannot request eager-loaded model values")
+		s.err = safeerror.NewFault(fault.Invalid, "projection source cannot request eager-loaded model values")
 	}
 	s.node = q.modelSelect()
 	s.node.Selections = nil
@@ -56,7 +57,7 @@ func Project[S, P any](source ProjectionSource[S], definition ProjectionDefiniti
 	}
 	q := ProjectionQuery[S, P]{definition: definition, mappings: lowered}
 	if nilDescriptor(source) {
-		q.source.err = fault.New(fault.Invalid, "projection requires a source")
+		q.source.err = safeerror.NewFault(fault.Invalid, "projection requires a source")
 		return q
 	}
 	q.source = source.projectionSource()
@@ -80,7 +81,7 @@ func (q ProjectionQuery[S, P]) OrderBy(orders ...ProjectionOrder[S]) ProjectionQ
 	q.source.node.Orders = slices.Clone(q.source.node.Orders)
 	for _, o := range orders {
 		if nilDescriptor(o) {
-			q.source.err = fault.New(fault.Invalid, "projection ordering requires an expression")
+			q.source.err = safeerror.NewFault(fault.Invalid, "projection ordering requires an expression")
 			continue
 		}
 		q.source.node.Orders = append(q.source.node.Orders, o.projectionOrder().node)

@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -78,7 +79,7 @@ type lifecycleDepthKey struct{}
 func writeHookContext(ctx context.Context) (context.Context, error) {
 	depth, _ := ctx.Value(lifecycleDepthKey{}).(int)
 	if depth >= MaxLifecycleDepth {
-		return nil, fault.New(fault.Invalid, "model lifecycle nesting exceeds its depth bound; check recursive hooks")
+		return nil, safeerror.NewFault(fault.Invalid, "model lifecycle nesting exceeds its depth bound; check recursive hooks")
 	}
 	return context.WithValue(ctx, lifecycleDepthKey{}, depth+1), nil
 }
@@ -98,7 +99,7 @@ func executeHookedMutation[M any](ctx context.Context, writer database.Transacto
 		}
 		registered := observedBy[M](observers, plan.kind)
 		if registered && !plan.query.definition.hasObserverHooks {
-			return *new(M), fault.New(fault.Invalid, "registered model observers require a generated observer adapter; regenerate the model")
+			return *new(M), safeerror.NewFault(fault.Invalid, "registered model observers require a generated observer adapter; regenerate the model")
 		}
 		if !registered && !plan.query.definition.hasWriteHooks {
 			statement, err := prepareMutation(ctx, &plan, transactionClock(tx), transactionKeys(tx))

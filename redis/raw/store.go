@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -32,7 +33,7 @@ type Store struct {
 
 func NewStore(backend Backend, c Config) (*Store, error) {
 	if backend == nil {
-		return nil, fault.New(fault.Invalid, "raw Redis store requires a backend")
+		return nil, safeerror.NewFault(fault.Invalid, "raw Redis store requires a backend")
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -41,24 +42,24 @@ func NewStore(backend Backend, c Config) (*Store, error) {
 }
 func (s *Store) bind(name Name, v Version, id *declarationID) error {
 	if s == nil || s.slots == nil {
-		return fault.New(fault.Invalid, "raw Redis binding requires a store")
+		return safeerror.NewFault(fault.Invalid, "raw Redis binding requires a store")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := declarationKey{name, v}
 	old, exists := s.declarations[key]
 	if exists && old != id {
-		return fault.New(fault.Duplicate, "raw Redis key name/version already declared")
+		return safeerror.NewFault(fault.Duplicate, "raw Redis key name/version already declared")
 	}
 	if !exists && len(s.declarations) >= s.config.MaxDeclarations {
-		return fault.New(fault.Invalid, "raw Redis declaration capacity reached")
+		return safeerror.NewFault(fault.Invalid, "raw Redis declaration capacity reached")
 	}
 	s.declarations[key] = id
 	return nil
 }
 func (s *Store) execute(ctx context.Context, fn func(context.Context) error) error {
 	if s == nil || s.slots == nil || ctx == nil {
-		return fault.New(fault.Invalid, "raw Redis operation requires a bound store and context")
+		return safeerror.NewFault(fault.Invalid, "raw Redis operation requires a bound store and context")
 	}
 	op, cancel := context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()

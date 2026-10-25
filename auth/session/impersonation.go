@@ -2,13 +2,13 @@ package session
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -20,7 +20,7 @@ const MaxImpersonation = 24 * time.Hour
 // ActorSessionEnded is the cause Resume reports (as auth.Unauthenticated) when
 // the impersonation ended but the original actor's session had been revoked or
 // had expired meanwhile: the actor must log in again.
-var ActorSessionEnded = fault.New(fault.Missing, "the impersonating actor's session has ended")
+var ActorSessionEnded = safeerror.Sentinel(fault.Missing, "the impersonating actor's session has ended")
 
 // Impersonation lets an authenticated actor of one session binding act as a
 // model of another (or the same) binding, for support and administration. The
@@ -51,19 +51,19 @@ func NewImpersonation[A model.Identifiable, AK any, M model.Identifiable, K any]
 		return nil, err
 	}
 	if maximum <= 0 || maximum > MaxImpersonation || maximum%time.Microsecond != 0 {
-		return nil, fault.New(fault.Invalid, "impersonation maximum must be a positive microsecond duration up to 24 hours")
+		return nil, safeerror.NewFault(fault.Invalid, "impersonation maximum must be a positive microsecond duration up to 24 hours")
 	}
 	// The store checks every impersonation against its actor's own session, so
 	// revoking or expiring the actor ends it; both must live in one store.
 	if actors.store != targets.store {
-		return nil, fault.New(fault.Invalid, "impersonation requires actors and targets to share one session store")
+		return nil, safeerror.NewFault(fault.Invalid, "impersonation requires actors and targets to share one session store")
 	}
 	return &Impersonation[A, AK, M, K]{actors: actors, targets: targets, maximum: maximum}, nil
 }
 
 func (i *Impersonation[A, AK, M, K]) Validate() error {
 	if i == nil {
-		return fault.New(fault.Invalid, "impersonation is not configured")
+		return safeerror.NewFault(fault.Invalid, "impersonation is not configured")
 	}
 	if err := i.actors.Validate(); err != nil {
 		return err
@@ -77,10 +77,10 @@ func (i *Impersonation[A, AK, M, K]) WithObserver(observer auth.Observer) (*Impe
 		return nil, err
 	}
 	if observer == nil {
-		return nil, fault.New(fault.Invalid, "impersonation observer is nil")
+		return nil, safeerror.NewFault(fault.Invalid, "impersonation observer is nil")
 	}
 	if i.observer != nil {
-		return nil, fault.New(fault.Duplicate, "impersonation observer already configured")
+		return nil, safeerror.NewFault(fault.Duplicate, "impersonation observer already configured")
 	}
 	next := *i
 	next.observer = observer
@@ -107,14 +107,14 @@ func (i *Impersonation[A, AK, M, K]) Start(ctx context.Context, target model.Ref
 		return Issued[M, K]{}, err
 	}
 	if duration <= 0 || duration > i.maximum || duration%time.Microsecond != 0 {
-		return Issued[M, K]{}, fault.New(fault.Invalid, "impersonation duration exceeds its bound")
+		return Issued[M, K]{}, safeerror.NewFault(fault.Invalid, "impersonation duration exceeds its bound")
 	}
 	actor, err := i.actors.Current(ctx)
 	if err != nil {
 		return Issued[M, K]{}, err
 	}
 	if actor.Impersonated() || actor.Assurance() != auth.Authenticated {
-		return Issued[M, K]{}, auth.ImpersonationForbidden
+		return Issued[M, K]{}, auth.ImpersonationForbidden.WithCause(nil)
 	}
 	actorIdentity, err := actor.Subject().Identity()
 	if err != nil {
@@ -125,7 +125,7 @@ func (i *Impersonation[A, AK, M, K]) Start(ctx context.Context, target model.Ref
 		return Issued[M, K]{}, err
 	}
 	if i.sameBinding() && actorIdentity == targetIdentity {
-		return Issued[M, K]{}, fault.New(fault.Invalid, "an actor cannot impersonate itself")
+		return Issued[M, K]{}, safeerror.NewFault(fault.Invalid, "an actor cannot impersonate itself")
 	}
 	if _, err := i.targets.provider.Resolve(ctx, target); err != nil {
 		return Issued[M, K]{}, err
@@ -188,7 +188,7 @@ func (i *Impersonation[A, AK, M, K]) current(ctx context.Context) (value.Optiona
 	}
 	recorded, present := info.Impersonator().Get()
 	if present && recorded.Guard != i.actors.address.Guard {
-		return value.Optional[Impersonator]{}, Info[M, K]{}, auth.Forbidden
+		return value.Optional[Impersonator]{}, Info[M, K]{}, auth.Forbidden.WithCause(nil)
 	}
 	return info.Impersonator(), info, nil
 }
@@ -201,7 +201,7 @@ func (i *Impersonation[A, AK, M, K]) end(ctx context.Context) (Impersonator, err
 	}
 	recorded, present := impersonator.Get()
 	if !present {
-		return Impersonator{}, auth.Forbidden
+		return Impersonator{}, auth.Forbidden.WithCause(nil)
 	}
 	if _, err := i.targets.RevokeID(ctx, info.Subject(), info.ID()); err != nil {
 		return Impersonator{}, err
@@ -236,7 +236,7 @@ func (i *Impersonation[A, AK, M, K]) Resume(ctx context.Context) (Issued[A, AK],
 	}
 	backend, ok := i.actors.store.backend.(ResumptionBackend)
 	if !ok {
-		return Issued[A, AK]{}, fault.New(fault.Invalid, "credential backend cannot resume impersonation atomically")
+		return Issued[A, AK]{}, safeerror.NewFault(fault.Invalid, "credential backend cannot resume impersonation atomically")
 	}
 	recorded, err := i.end(ctx)
 	if err != nil {
@@ -278,7 +278,7 @@ func (i *Impersonation[A, AK, M, K]) Resume(ctx context.Context) (Issued[A, AK],
 			// The actor must still be eligible; the provider decides.
 			_, err := i.actors.provider.Resolve(check, reference)
 			if err != nil && errorgraph.Is(err, auth.Unauthenticated) {
-				return errors.Join(err, ActorSessionEnded)
+				return safeerror.Join("operation failed", err, ActorSessionEnded)
 			}
 			return err
 		})
@@ -290,7 +290,7 @@ func (i *Impersonation[A, AK, M, K]) Resume(ctx context.Context) (Issued[A, AK],
 			return ended
 		}
 		if record.ID != original.ID || record.Subject != original.Subject || !record.Hash.Equal(hash) || record.CreatedAt != original.CreatedAt || record.ExpiresAt != original.ExpiresAt || record.Remember != original.Remember || record.Impersonator.IsSet() {
-			return fault.New(fault.Invalid, "session backend changed the resumed actor session")
+			return safeerror.NewFault(fault.Invalid, "session backend changed the resumed actor session")
 		}
 		info, err := i.actors.info(record)
 		if err != nil {

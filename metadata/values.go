@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -62,7 +63,7 @@ func (k Key[M, K, V]) set(ctx context.Context, tx *database.Tx, m *Manager, owne
 		return err
 	}
 	if count >= MaxKeysPerOwner {
-		return fault.New(fault.Conflict, "model metadata key limit reached")
+		return safeerror.NewFault(fault.Conflict, "model metadata key limit reached")
 	}
 	_, err = q.Create(ctx, tx, store.MetaDraft{}.SetKey(id).SetOwner(string(k.definition.owner.Name())).SetScope(subject.Scope).SetSubjectKey(subject.Key).SetIdentity(subject.Identity).SetName(string(k.Name())).SetVersion(uint32(k.Version())).SetValue(snapshot).SetCreatedAt(now).SetUpdatedAt(now))
 	return err
@@ -116,7 +117,7 @@ func (b Batch[M, K, V]) getAt(ctx context.Context, i int) (value.Optional[V], er
 }
 func (b Batch[M, K, V]) get(ctx context.Context, subject string) (value.Optional[V], error) {
 	if !b.active[subject] {
-		return value.Optional[V]{}, database.NotFound
+		return value.Optional[V]{}, safeerror.Owned(string(database.NotFound), database.NotFound)
 	}
 	snapshot, ok := b.values[subject]
 	if !ok {
@@ -174,7 +175,7 @@ func (k Key[M, K, V]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, o
 			return err
 		}
 		if row.Version != uint32(k.Version()) {
-			return fault.New(fault.Conflict, "stored metadata version differs from its descriptor")
+			return safeerror.NewFault(fault.Conflict, "stored metadata version differs from its descriptor")
 		}
 		if err := budget.Add(row.Value); err != nil {
 			return err

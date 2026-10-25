@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -19,7 +20,7 @@ func (c *shapeCheck) checkMapKeys(typ Type, keys []string, path string) bool {
 			return false
 		}
 		if len(key) > int(^uint(0)>>1)-bytes {
-			c.err = fault.New(fault.Invalid, "JSON key work bound exceeded")
+			c.err = safeerror.NewFault(fault.Invalid, "JSON key work bound exceeded")
 			return false
 		}
 		bytes += len(key)
@@ -59,8 +60,8 @@ func (c *shapeCheck) checkMapKeys(typ Type, keys []string, path string) bool {
 // Native callback failures retain internal-failure classification even if the
 // request was cancelled during that callback. No arbitrary error methods run.
 func jsonKeyInternalFailure(err error) error {
-	if failure, ok := err.(*fault.Error); ok && failure.Code() == fault.Internal {
-		return fault.Wrap(fault.Internal, "JSON key validation failed", err)
+	if failure, ok := err.(*fault.Error); safeerror.HasCode(err, fault.Internal) || ok && failure.Code() == fault.Internal {
+		return safeerror.WrapFailure(fault.Internal, "JSON key validation failed", err)
 	}
 	return nil
 }

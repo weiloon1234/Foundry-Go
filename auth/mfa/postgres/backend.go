@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/mfastore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -29,7 +30,7 @@ type Config struct {
 func DefaultConfig() Config { return Config{Schema: "public", Clock: clock.System{}} }
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || credential.IsNil(c.Clock) {
-		return fault.New(fault.Invalid, "MFA PostgreSQL adapter requires a schema and clock")
+		return safeerror.NewFault(fault.Invalid, "MFA PostgreSQL adapter requires a schema and clock")
 	}
 	return nil
 }
@@ -41,7 +42,7 @@ type Backend struct {
 
 func New(db *database.DB, config Config) (*Backend, error) {
 	if db == nil {
-		return nil, fault.New(fault.Invalid, "MFA PostgreSQL adapter requires a database pool")
+		return nil, safeerror.NewFault(fault.Invalid, "MFA PostgreSQL adapter requires a database pool")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -53,7 +54,7 @@ var _ mfa.Backend = (*Backend)(nil)
 
 func (b *Backend) within(ctx context.Context, fn func(*database.Tx) error) error {
 	if b == nil || b.db == nil || ctx == nil {
-		return fault.New(fault.Invalid, "MFA operation requires a backend and context")
+		return safeerror.NewFault(fault.Invalid, "MFA operation requires a backend and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -72,7 +73,7 @@ func (b *Backend) now() (temporal.DateTime, error) {
 		return temporal.DateTime{}, err
 	}
 	if now.UTC().Unix() < 0 {
-		return temporal.DateTime{}, fault.New(fault.Invalid, "invalid MFA server time")
+		return temporal.DateTime{}, safeerror.NewFault(fault.Invalid, "invalid MFA server time")
 	}
 	return now, nil
 }
@@ -86,7 +87,7 @@ func (b *Backend) Within(ctx context.Context, address mfa.Address, identity mode
 
 func (b *Backend) WithinIn(ctx context.Context, tx *database.Tx, address mfa.Address, identity model.Identity, prepare func(context.Context, *database.Tx) error, change func(context.Context, *database.Tx, value.Optional[mfa.Record], temporal.DateTime) (mfa.Change, error)) (value.Optional[mfa.Record], error) {
 	if b == nil {
-		return value.Optional[mfa.Record]{}, fault.New(fault.Invalid, "MFA backend is missing")
+		return value.Optional[mfa.Record]{}, safeerror.NewFault(fault.Invalid, "MFA backend is missing")
 	}
 	return b.mutate(ctx, address, identity, prepare, change, func(fn func(*database.Tx) error) error {
 		return credential.InSchema(ctx, tx, b.db, b.config.Schema, fn)
@@ -106,7 +107,7 @@ func (b *Backend) mutate(ctx context.Context, address mfa.Address, identity mode
 		return result, err
 	}
 	if prepare == nil || change == nil {
-		return result, fault.New(fault.Invalid, "MFA transaction requires preparation and mutation")
+		return result, safeerror.NewFault(fault.Invalid, "MFA transaction requires preparation and mutation")
 	}
 	err = within(func(tx *database.Tx) error {
 		// The domain model is the stable serialization row, including first enroll.
@@ -179,10 +180,10 @@ func (b *Backend) checkDeadline(change mfa.Change, started temporal.DateTime) er
 		return err
 	}
 	if now.UTC().Before(started.UTC()) {
-		return fault.New(fault.Invalid, "MFA clock moved backwards during mutation")
+		return safeerror.NewFault(fault.Invalid, "MFA clock moved backwards during mutation")
 	}
 	if until, present := change.Deadline().Get(); present && !now.UTC().Before(until.UTC()) {
-		return auth.Unauthenticated
+		return auth.Unauthenticated.WithCause(nil)
 	}
 	return nil
 }

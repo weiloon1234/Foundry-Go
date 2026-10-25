@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -50,10 +51,10 @@ func (v *Verification[M, K]) WithObserver(observer auth.Observer) (*Verification
 		return nil, err
 	}
 	if observer == nil {
-		return nil, fault.New(fault.Invalid, "email verification observer is nil")
+		return nil, safeerror.NewFault(fault.Invalid, "email verification observer is nil")
 	}
 	if v.observer != nil {
-		return nil, fault.New(fault.Duplicate, "email verification observer already configured")
+		return nil, safeerror.NewFault(fault.Duplicate, "email verification observer already configured")
 	}
 	next := *v
 	next.observer = observer
@@ -62,11 +63,11 @@ func (v *Verification[M, K]) WithObserver(observer auth.Observer) (*Verification
 
 func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Provider[M, K], binding Model[M, K], lifetime time.Duration) (*Verification[M, K], error) {
 	if binding.Lock == nil || binding.Email == nil || binding.EmailRevision == nil || binding.Verified == nil || binding.MarkVerified == nil {
-		return nil, fault.New(fault.Invalid, "email verification requires model callbacks")
+		return nil, safeerror.NewFault(fault.Invalid, "email verification requires model callbacks")
 	}
 	flow, err := challenge.New[M, K, challenge.EmailVerification](store, provider, challenge.Model[M, K]{Lock: binding.Lock, Binding: func(subject M) (challenge.Binding, error) {
 		if binding.Verified(subject) {
-			return challenge.Binding{}, auth.Unauthenticated
+			return challenge.Binding{}, auth.Unauthenticated.WithCause(nil)
 		}
 		return challenge.BindRevision(binding.EmailRevision(subject), secret.New(binding.Email(subject)))
 	}, Eligible: binding.Eligible}, lifetime)
@@ -77,7 +78,7 @@ func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Prov
 }
 func (v *Verification[M, K]) Validate() error {
 	if v == nil || v.flow == nil {
-		return fault.New(fault.Invalid, "email verification is not configured")
+		return safeerror.NewFault(fault.Invalid, "email verification is not configured")
 	}
 	return v.flow.Validate()
 }
@@ -100,7 +101,7 @@ func (v *Verification[M, K]) Complete(ctx context.Context, token Token[M]) (M, e
 			return *new(M), err
 		}
 		if !v.model.Verified(updated) || v.model.Email(updated) != v.model.Email(subject) || v.model.EmailRevision(updated) != v.model.EmailRevision(subject) {
-			return *new(M), fault.New(fault.Invalid, "email verification changed email state or returned an unverified model")
+			return *new(M), safeerror.NewFault(fault.Invalid, "email verification changed email state or returned an unverified model")
 		}
 		return updated, nil
 	})

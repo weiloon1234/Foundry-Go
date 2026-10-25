@@ -9,6 +9,8 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -33,7 +35,9 @@ func New[T any](encode func(T) (driver.Value, error), decode func(any) (T, error
 	return Codec[T]{encode: encode, decode: decode}
 }
 
-func invalid() error { return fault.New(fault.Invalid, "invalid database codec value or destination") }
+func invalid() error {
+	return safeerror.NewFault(fault.Invalid, "invalid database codec value or destination")
+}
 
 // Validate checks that both codec directions are defined without invoking them.
 // Metadata constructors use this before accepting a custom codec.
@@ -51,7 +55,12 @@ func (c Codec[T]) Bind(value T) (driver.Value, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
-	encoded, err := c.encode(value)
+	var encoded driver.Value
+	err := callback.Isolated("database value binding", func() error {
+		var err error
+		encoded, err = c.encode(value)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +79,12 @@ func (c Codec[T]) Decode(source any) (T, error) {
 	if err := c.Validate(); err != nil {
 		return *new(T), err
 	}
-	decoded, err := c.decode(source)
+	var decoded T
+	err := callback.Isolated("database value decoding", func() error {
+		var err error
+		decoded, err = c.decode(source)
+		return err
+	})
 	if err != nil {
 		return *new(T), err
 	}
@@ -98,7 +112,12 @@ func (s scanner[T]) Scan(source any) error {
 	if s.destination == nil || s.decode == nil {
 		return invalid()
 	}
-	decoded, err := s.decode(source)
+	var decoded T
+	err := callback.Isolated("database value scanning", func() error {
+		var err error
+		decoded, err = s.decode(source)
+		return err
+	})
 	if err != nil {
 		return err
 	}

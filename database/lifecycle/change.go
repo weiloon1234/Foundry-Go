@@ -5,12 +5,12 @@ package lifecycle
 import (
 	"bytes"
 	"database/sql/driver"
-	"fmt"
 	"math"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -62,10 +62,10 @@ func (c FieldChange[V]) GoString() string { return c.String() }
 // a separate contract. A failure returns no partial change data.
 func CompareField[V any](c codec.Codec[V], before, after value.Optional[V], assigned bool) (FieldChange[V], error) {
 	if !before.IsSet() && !after.IsSet() {
-		return FieldChange[V]{}, fault.New(fault.Invalid, "field change requires a model snapshot")
+		return FieldChange[V]{}, safeerror.NewFault(fault.Invalid, "field change requires a model snapshot")
 	}
 	if assigned && !after.IsSet() {
-		return FieldChange[V]{}, fault.New(fault.Invalid, "deleted field cannot be assigned")
+		return FieldChange[V]{}, safeerror.NewFault(fault.Invalid, "deleted field cannot be assigned")
 	}
 	same, err := sameField(c, before, after)
 	if err != nil {
@@ -91,11 +91,11 @@ func sameField[V any](c codec.Codec[V], before, after value.Optional[V]) (bool, 
 	}
 	left, err := bindSnapshot(c, before)
 	if err != nil {
-		return false, fmt.Errorf("compare original model field: %w", err)
+		return false, safeerror.Prefix("compare original model field", err)
 	}
 	right, err := bindSnapshot(c, after)
 	if err != nil {
-		return false, fmt.Errorf("compare resulting model field: %w", err)
+		return false, safeerror.Prefix("compare resulting model field", err)
 	}
 	return sameStoredValue(left, right)
 }
@@ -116,10 +116,10 @@ func sameStoredValue(left, right driver.Value) (bool, error) {
 		case nil, bool, int64, string, []byte, time.Time:
 		case float64:
 			if math.IsNaN(v) || math.IsInf(v, 0) {
-				return false, fault.New(fault.Invalid, "field change requires a finite number")
+				return false, safeerror.NewFault(fault.Invalid, "field change requires a finite number")
 			}
 		default:
-			return false, fault.New(fault.Invalid, "unsupported field change codec representation")
+			return false, safeerror.NewFault(fault.Invalid, "unsupported field change codec representation")
 		}
 	}
 	switch v := left.(type) {

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -57,10 +58,10 @@ func (f *Factors[M, K]) WithObserver(observer Observer[M, K]) (*Factors[M, K], e
 		return nil, err
 	}
 	if observer.Changed == nil && observer.Rejected == nil {
-		return nil, fault.New(fault.Invalid, "MFA observer is empty")
+		return nil, safeerror.NewFault(fault.Invalid, "MFA observer is empty")
 	}
 	if f.observer != nil {
-		return nil, fault.New(fault.Duplicate, "MFA observer already configured")
+		return nil, safeerror.NewFault(fault.Duplicate, "MFA observer already configured")
 	}
 	next := *f
 	next.observer = &observer

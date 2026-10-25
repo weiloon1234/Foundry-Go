@@ -3,12 +3,12 @@
 package jsonshape
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Field describes one Go struct field before JSON promotion.
@@ -149,7 +149,7 @@ func Collect[T comparable](typ T, adapter Adapter[T]) ([]Property[T], error) {
 	return result, nil
 }
 
-func invalid() error { return fmt.Errorf("invalid or ambiguous JSON field declaration") }
+func invalid() error { return safeerror.New("invalid or ambiguous JSON field declaration") }
 
 // Go's JSON compatibility mode may suppress malformed-tag errors and use a
 // partial name. Reject those declarations so generated paths cannot disagree

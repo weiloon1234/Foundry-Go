@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -15,7 +16,7 @@ type TransactionSubquery struct{ query subquery }
 func TransactionSubqueryOf(source SubquerySource) TransactionSubquery {
 	q := subquery{}
 	if nilDescriptor(source) {
-		q.Err = fault.New(fault.Invalid, "transaction subquery requires a source")
+		q.Err = safeerror.NewFault(fault.Invalid, "transaction subquery requires a source")
 	} else {
 		q = source.subquery()
 	}
@@ -56,7 +57,7 @@ func (a transactionSubqueryAdapter) subquery() subquery { return a.query }
 
 func transactionSubqueryOf(source TransactionSubquerySource) subquery {
 	if nilDescriptor(source) {
-		return subquery{Err: fault.New(fault.Invalid, "transaction subquery requires a source")}
+		return subquery{Err: safeerror.NewFault(fault.Invalid, "transaction subquery requires a source")}
 	}
 	return source.transactionSubquery()
 }
@@ -102,7 +103,7 @@ func TransactionInNullableQuery[S TransactionScope, V any](left RowValue[S, V], 
 func transactionMembership[S TransactionScope, V any](left RowValue[S, V], inner subquery) Predicate[S] {
 	operand := rowInput(left).Value().node
 	if operand == nil {
-		inner.Err = fault.New(fault.Invalid, "transaction membership requires a row operand")
+		inner.Err = safeerror.NewFault(fault.Invalid, "transaction membership requires a row operand")
 	}
 	return Predicate[S]{expression: subqueryPredicate{Query: inner, Operand: operand}}
 }

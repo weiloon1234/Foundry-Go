@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -50,7 +51,7 @@ func CaptureDocument[P any](input P) (Document[P], error) {
 		return err
 	})
 	if err != nil {
-		return Document[P]{}, fault.Wrap(fault.Invalid, "domain audit capture failed", err)
+		return Document[P]{}, safeerror.WrapFailure(fault.Invalid, "domain audit capture failed", err)
 	}
 	return result, nil
 }
@@ -84,7 +85,7 @@ func ParseDocumentWith[P any](policy Redaction, text string, redacted bool) (Doc
 		return Document[P]{}, err
 	}
 	if changed != redacted || clean != canonical {
-		return Document[P]{}, fault.New(fault.Invalid, "invalid domain audit redaction metadata")
+		return Document[P]{}, safeerror.NewFault(fault.Invalid, "invalid domain audit redaction metadata")
 	}
 	result := Document[P]{payload: payload, redacted: redacted, redaction: policy}
 	if policy < CurrentRedaction {
@@ -111,7 +112,7 @@ func ParseDocumentWith[P any](policy Redaction, text string, redacted bool) (Doc
 // remains available for an explicit, already-redacted audit export.
 func (d Document[P]) Decode() (P, error) {
 	if d.redacted {
-		return *new(P), fault.New(fault.Missing, "redacted audit document has no complete DTO")
+		return *new(P), safeerror.NewFault(fault.Missing, "redacted audit document has no complete DTO")
 	}
 	text, err := d.payload.Text()
 	if err != nil {
@@ -127,7 +128,7 @@ func (d Document[P]) Decode() (P, error) {
 		return err
 	})
 	if err != nil {
-		return *new(P), fault.Wrap(fault.Invalid, "domain audit decoding failed", err)
+		return *new(P), safeerror.WrapFailure(fault.Invalid, "domain audit decoding failed", err)
 	}
 	return result, nil
 }

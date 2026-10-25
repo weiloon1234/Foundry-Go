@@ -193,16 +193,9 @@ func TestStreamingJSONCallbackOwnershipAndFailures(t *testing.T) {
 	if output != nil || !errors.Is(err, fault.Internal) || strings.Contains(err.Error(), "private") {
 		t.Fatal("streaming encode callback", err)
 	}
-	// Encoding codecs run on the caller's goroutine; Goexit ends it.
-	returned := make(chan bool, 1)
-	go func() {
-		completed := false
-		defer func() { returned <- completed }()
-		_, _ = d.Encode(t.Context(), StreamingFailure("goexit"), dtoLimits())
-		completed = true
-	}()
-	if <-returned {
-		t.Fatal("streaming encode Goexit was converted into a return")
+	output, err = d.Encode(t.Context(), StreamingFailure("goexit"), dtoLimits())
+	if output != nil || !errors.Is(err, fault.Internal) || !errors.Is(err, fault.Panicked) || strings.Contains(err.Error(), "private") {
+		t.Fatal("streaming encode Goexit containment", err)
 	}
 	for _, text := range []string{"wait", "wait-panic"} {
 		streamStarted, streamRelease = make(chan struct{}), make(chan struct{})

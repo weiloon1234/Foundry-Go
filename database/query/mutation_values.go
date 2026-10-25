@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -36,7 +37,7 @@ func MutationValue[M, V any](m MutationValues[M], table, column string) (value.O
 	}
 	v, ok := assigned.InputValue().(V)
 	if !ok {
-		return value.Optional[V]{}, fault.New(fault.Invalid, "mutation input does not match its declared field type")
+		return value.Optional[V]{}, safeerror.NewFault(fault.Invalid, "mutation input does not match its declared field type")
 	}
 	return value.Set(v), nil
 }

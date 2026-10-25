@@ -140,8 +140,12 @@ func TestPluginContributionDuplicatesAndExplicitOverrides(t *testing.T) {
 	child := pluginModule("child")
 	child.OnRegister = func(r *plugin.Registrar) error { return foundation.Provide(r, key, "second") }
 	_, err := foundation.NewBuilder().RegisterPlugin(base, child).Build(t.Context())
-	if !errors.Is(err, fault.Duplicate) || !strings.Contains(err.Error(), "plugin:base") || !strings.Contains(err.Error(), "plugin:child") {
+	var duplicateFault *fault.Error
+	if !errors.Is(err, fault.Duplicate) || !errors.As(err, &duplicateFault) || !strings.Contains(duplicateFault.Message(), "plugin:base") || !strings.Contains(duplicateFault.Message(), "plugin:child") {
 		t.Fatalf("duplicate owners absent: %v", err)
+	}
+	if !strings.Contains(err.Error(), "plugin:base") || !strings.Contains(err.Error(), "plugin:child") {
+		t.Fatal("duplicate owner diagnostic was redacted", err)
 	}
 	app, err := foundation.NewBuilder().RegisterPlugin(base).OverrideContributions("application", func(r *foundation.Registrar) error { return foundation.Provide(r, key, "custom") }).Build(t.Context())
 	if err != nil {

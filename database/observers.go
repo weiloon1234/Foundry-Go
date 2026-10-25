@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
@@ -26,7 +27,7 @@ func RegisterObserver[M, H any](r *foundation.Registrar, pool foundation.Key[*DB
 		return err
 	}
 	if construct == nil {
-		return fault.New(fault.Invalid, "model observer needs a dependency constructor")
+		return safeerror.NewFault(fault.Invalid, "model observer needs a dependency constructor")
 	}
 	key := foundation.NewKey[observerContribution](fmt.Sprintf("foundry.database.observer.%q.%q", pool.Name(), observer.Name()))
 	return foundation.Factory(r, key, func(resolver foundation.Resolver) (observerContribution, error) {
@@ -38,7 +39,7 @@ func RegisterObserver[M, H any](r *foundation.Registrar, pool foundation.Key[*DB
 		managed := db.managedObservers
 		db.mu.Unlock()
 		if !managed {
-			return observerContribution{}, fault.New(fault.Invalid, "registered observers require a database Module; prepared pools use BindObservers")
+			return observerContribution{}, safeerror.NewFault(fault.Invalid, "registered observers require a database Module; prepared pools use BindObservers")
 		}
 		factory, err := construct(resolver)
 		if err != nil {
@@ -86,10 +87,10 @@ func (db *DB) bindObservers(set lifecycle.Observers, managed bool) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if db.closing || db.startAttempted || db.observersBound {
-		return fault.New(fault.Closed, "database observer binding is frozen")
+		return safeerror.NewFault(fault.Closed, "database observer binding is frozen")
 	}
 	if db.managedObservers != managed {
-		return fault.New(fault.Invalid, "database Module owns its observer binding")
+		return safeerror.NewFault(fault.Invalid, "database Module owns its observer binding")
 	}
 	db.observers, db.observersBound = set, true
 	return nil

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/health"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module borrows readiness dependencies and the application's recorder. Include
@@ -32,7 +33,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*Runtime], probes fou
 		runtime.mu.Lock()
 		defer runtime.mu.Unlock()
 		if runtime.state != nil {
-			return fault.New(fault.Conflict, "diagnostics already belongs to an application")
+			return safeerror.NewFault(fault.Conflict, "diagnostics already belongs to an application")
 		}
 		runtime.state, runtime.recorder, runtime.gate = app.State, app.Observability(), app.Maintenance()
 		return nil

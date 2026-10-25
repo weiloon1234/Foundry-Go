@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -43,23 +44,23 @@ const maxOTLPResponseBytes = 64 << 10
 func (c OTLPConfig) Validate() error {
 	endpoint, err := url.Parse(c.Endpoint)
 	if err != nil || endpoint.Scheme != "http" && endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.User != nil || endpoint.Fragment != "" || len(c.Endpoint) > 2048 {
-		return fault.New(fault.Invalid, "OTLP endpoint must be an absolute HTTP(S) URL without credentials")
+		return safeerror.NewFault(fault.Invalid, "OTLP endpoint must be an absolute HTTP(S) URL without credentials")
 	}
 	if c.ServiceName == "" || len(c.ServiceName) > 256 || strings.ContainsAny(c.ServiceName, "\r\n\x00") {
-		return fault.New(fault.Invalid, "OTLP export requires a bounded service name")
+		return safeerror.NewFault(fault.Invalid, "OTLP export requires a bounded service name")
 	}
 	if c.Timeout < 0 || c.Timeout > time.Minute || len(c.Headers) > 32 {
-		return fault.New(fault.Invalid, "invalid OTLP timeout or header count")
+		return safeerror.NewFault(fault.Invalid, "invalid OTLP timeout or header count")
 	}
 	seen := make(map[string]bool, len(c.Headers))
 	for _, header := range c.Headers {
 		name := http.CanonicalHeaderKey(header.Name)
 		if !headerToken(header.Name) || seen[name] || strings.ContainsAny(header.Value.Reveal(), "\r\n\x00") || len(header.Value.Reveal()) > 8192 {
-			return fault.New(fault.Invalid, "invalid or duplicate OTLP header")
+			return safeerror.NewFault(fault.Invalid, "invalid or duplicate OTLP header")
 		}
 		switch name {
 		case "Host", "Content-Type", "Content-Length", "Transfer-Encoding", "Connection":
-			return fault.New(fault.Invalid, "OTLP header is owned by the transport")
+			return safeerror.NewFault(fault.Invalid, "OTLP header is owned by the transport")
 		}
 		seen[name] = true
 	}
@@ -196,7 +197,7 @@ func NewOTLPExporter(config OTLPConfig) (TraceBatchExporter, error) {
 		defer cancel()
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 		if err != nil {
-			return fault.New(fault.Invalid, "cannot prepare OTLP export request")
+			return safeerror.NewFault(fault.Invalid, "cannot prepare OTLP export request")
 		}
 		request.Header.Set("Content-Type", "application/json")
 		for _, header := range headers {
@@ -204,12 +205,12 @@ func NewOTLPExporter(config OTLPConfig) (TraceBatchExporter, error) {
 		}
 		response, err := client.Do(request)
 		if err != nil {
-			return fault.Wrap(fault.Internal, "OTLP export request failed", err)
+			return safeerror.WrapFailure(fault.Internal, "OTLP export request failed", err)
 		}
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxOTLPResponseBytes))
 		closeErr := response.Body.Close()
 		if response.StatusCode < 200 || response.StatusCode > 299 {
-			return fault.New(fault.Internal, "OTLP collector rejected the export with status "+strconv.Itoa(response.StatusCode))
+			return safeerror.NewFault(fault.Internal, "OTLP collector rejected the export with status "+strconv.Itoa(response.StatusCode))
 		}
 		return closeErr
 	}, nil

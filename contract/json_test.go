@@ -209,6 +209,12 @@ func TestJSONCodecFailuresAreContained(t *testing.T) {
 			} else if !errors.Is(err, fault.Internal) || !errors.Is(err, fault.Panicked) {
 				t.Fatalf("codec panic/Goexit not internal: %v", err)
 			}
+			if mode == "hostile" {
+				var retained hostileCodecError
+				if !errors.Is(err, hostileCodecError{}) || !errors.As(err, &retained) {
+					t.Fatal("hostile inspection lost codec cause")
+				}
+			}
 		})
 	}
 	result, err := descriptor.Decode(context.Background(), []byte(`{"text":"valid"}`), dtoLimits())

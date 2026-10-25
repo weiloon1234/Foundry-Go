@@ -2,12 +2,12 @@ package query
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -36,31 +36,32 @@ func executeAutocommitInsert[M any](ctx context.Context, send autocommitQuery, s
 	if err != nil {
 		return *new(M), err
 	}
+	defer rows.Close()
 	var candidate value.Optional[M]
-	var readErr error
-	for rows.Next() {
-		if _, present := candidate.Get(); present {
-			readErr = database.NewError("model write returned too many rows", database.TooManyRows)
-			break
+	readErr := callback.Isolated("decode autocommit write", func() error {
+		for rows.Next() {
+			if _, present := candidate.Get(); present {
+				return databaseFailure("model write returned too many rows", database.TooManyRows)
+			}
+			model, err := plan.query.definition.scan(rows)
+			if err != nil {
+				return err
+			}
+			candidate = value.Set(model)
 		}
-		model, err := plan.query.definition.scan(rows)
-		if err != nil {
-			readErr = err
-			break
-		}
-		candidate = value.Set(model)
-	}
-	err = errors.Join(readErr, rows.Close())
+		return nil
+	})
+	err = safeerror.Join("operation failed", readErr, rows.Close())
 	model, present := candidate.Get()
 	if err == nil && present {
 		return model, nil
 	}
 	if err == nil {
-		err = database.NewError("model write returned too few rows", database.NotFound)
+		err = databaseFailure("model write returned too few rows", database.NotFound)
 	}
 	err, reconcile := autocommitOutcome(err)
 	if present && reconcile {
-		return *new(M), &WriteError[M]{cause: err, candidate: model}
+		return *new(M), writeFailure(err, model)
 	}
 	return *new(M), err
 }
@@ -79,7 +80,7 @@ func autocommitOutcome(err error) (error, bool) {
 		return nil
 	})
 	if inspection != nil {
-		err = errors.Join(err, inspection)
+		err = safeerror.Join("operation failed", err, inspection)
 		outcome = ""
 	}
 	switch outcome {
@@ -88,5 +89,5 @@ func autocommitOutcome(err error) (error, bool) {
 	case database.Unknown, database.Committed:
 		return err, true
 	}
-	return database.FoundryStatementUnknown(sqlowner.Outcomes(), "model write", err), true
+	return safeerror.Retain(err, database.FoundryStatementUnknown(sqlowner.Outcomes(), "model write", err)), true
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -36,11 +37,11 @@ type familyBinding struct {
 
 func (t *Tokens[M, K]) ticketBackend() (TicketBackend, error) {
 	if t.store.config.TicketLifetime == 0 {
-		return nil, fault.New(fault.Invalid, "token tickets are disabled")
+		return nil, safeerror.NewFault(fault.Invalid, "token tickets are disabled")
 	}
 	backend, ok := t.store.backend.(TicketBackend)
 	if !ok {
-		return nil, fault.New(fault.Invalid, "token backend does not support tickets")
+		return nil, safeerror.NewFault(fault.Invalid, "token backend does not support tickets")
 	}
 	return backend, nil
 }
@@ -63,7 +64,7 @@ func (t *Tokens[M, K]) IssueTicket(ctx context.Context) (Ticket[M, K], error) {
 		return Ticket[M, K]{}, err
 	}
 	if info.Assurance() != auth.Authenticated {
-		return Ticket[M, K]{}, auth.Unauthenticated
+		return Ticket[M, K]{}, auth.Unauthenticated.WithCause(nil)
 	}
 	raw, hash, err := newSecret(t.store.config.Prefix)
 	if err != nil {
@@ -81,7 +82,7 @@ func (t *Tokens[M, K]) IssueTicket(ctx context.Context) (Ticket[M, K], error) {
 		}
 		at, live := expires.Get()
 		if !live {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		result = Ticket[M, K]{secret: raw, expires: at, family: info.ID()}
 		return nil
@@ -124,7 +125,7 @@ func (t *Tokens[M, K]) RedeemTicket(ctx context.Context, raw secret.String) (val
 			return nil
 		}
 		if ticket.Family.IsZero() {
-			return fault.New(fault.Invalid, "token backend returned an invalid ticket")
+			return safeerror.NewFault(fault.Invalid, "token backend returned an invalid ticket")
 		}
 		if _, err := t.provider.Parse(ticket.Subject); err != nil {
 			return err
@@ -148,7 +149,7 @@ func (t *Tokens[M, K]) RedeemTicket(ctx context.Context, raw secret.String) (val
 func (t *Tokens[M, K]) verifyFamily(ctx context.Context, binding familyBinding) (value.Optional[auth.Proof[M, K]], error) {
 	backend, ok := t.store.backend.(TicketBackend)
 	if !ok {
-		return value.Optional[auth.Proof[M, K]]{}, auth.Unauthenticated
+		return value.Optional[auth.Proof[M, K]]{}, auth.Unauthenticated.WithCause(nil)
 	}
 	var result value.Optional[auth.Proof[M, K]]
 	err := t.store.execute(ctx, func(op context.Context) error {
@@ -158,13 +159,13 @@ func (t *Tokens[M, K]) verifyFamily(ctx context.Context, binding familyBinding) 
 		}
 		record, present := found.Get()
 		if !present {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		if record.ID != binding.family || record.Subject != binding.subject {
-			return fault.New(fault.Invalid, "token backend returned a different family")
+			return safeerror.NewFault(fault.Invalid, "token backend returned a different family")
 		}
 		if record.Assurance != auth.Authenticated {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		info, err := t.info(record)
 		if err != nil {

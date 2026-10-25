@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -34,7 +35,7 @@ func (a Action[P]) Name() ActionName { return a.name }
 func (a Action[P]) Version() Version { return a.version }
 func (a Action[P]) Validate() error {
 	if !identifier.Semantic(string(a.name)) || a.version == 0 || reflect.TypeFor[P]().Kind() == reflect.Interface {
-		return fault.New(fault.Invalid, "audit action requires a name, version and concrete payload type")
+		return safeerror.NewFault(fault.Invalid, "audit action requires a name, version and concrete payload type")
 	}
 	return nil
 }
@@ -55,7 +56,7 @@ func RecordFor[M, K, P any](ctx context.Context, tx *database.Tx, recorder *Reco
 		return ActionID[P]{}, err
 	}
 	if tx == nil {
-		return ActionID[P]{}, fault.New(fault.Invalid, "audit recording requires a transaction")
+		return ActionID[P]{}, safeerror.NewFault(fault.Invalid, "audit recording requires a transaction")
 	}
 	if err := action.Validate(); err != nil {
 		return ActionID[P]{}, err
@@ -73,7 +74,7 @@ func (a Action[P]) record(ctx context.Context, tx *database.Tx, recorder *Record
 		return ActionID[P]{}, err
 	}
 	if tx == nil {
-		return ActionID[P]{}, fault.New(fault.Invalid, "audit recording requires a transaction")
+		return ActionID[P]{}, safeerror.NewFault(fault.Invalid, "audit recording requires a transaction")
 	}
 	if err := a.Validate(); err != nil {
 		return ActionID[P]{}, err
@@ -128,7 +129,7 @@ func (a Action[P]) Find(ctx context.Context, executor database.Executor, recorde
 		return value.Optional[ActionRecord[P]]{}, err
 	}
 	if id.IsZero() {
-		return value.Optional[ActionRecord[P]]{}, fault.New(fault.Invalid, "audit lookup requires a nonzero ID")
+		return value.Optional[ActionRecord[P]]{}, safeerror.NewFault(fault.Invalid, "audit lookup requires a nonzero ID")
 	}
 	selected, err := q.Find(ctx, executor, model.IDFromBytes[auditstore.Entry](id.Bytes()))
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // UniqueKey is a payload-owned business identity, separate from a dispatch ID.
@@ -16,7 +17,7 @@ type UniqueKey[P any] struct{ text string }
 
 func NewUniqueKey[P any](text string) (UniqueKey[P], error) {
 	if len(text) == 0 || len(text) > 4096 {
-		return UniqueKey[P]{}, fault.New(fault.Invalid, "job uniqueness key must contain 1 to 4096 bytes")
+		return UniqueKey[P]{}, safeerror.NewFault(fault.Invalid, "job uniqueness key must contain 1 to 4096 bytes")
 	}
 	return UniqueKey[P]{text: text}, nil
 }
@@ -45,13 +46,13 @@ type Uniqueness struct {
 func (u Uniqueness) Validate() error {
 	if u.Digest == "" && u.For == 0 {
 		if u.UntilProcessing {
-			return fault.New(fault.Invalid, "until-processing uniqueness requires a key")
+			return safeerror.NewFault(fault.Invalid, "until-processing uniqueness requires a key")
 		}
 		return nil
 	}
 	data, err := hex.DecodeString(u.Digest)
 	if err != nil || len(data) != sha256.Size || hex.EncodeToString(data) != u.Digest || u.For < time.Millisecond || u.For > MaxDelay || u.For%time.Millisecond != 0 {
-		return fault.New(fault.Invalid, "invalid job uniqueness window")
+		return safeerror.NewFault(fault.Invalid, "invalid job uniqueness window")
 	}
 	return nil
 }
@@ -60,11 +61,11 @@ func (u Unique[P]) capture(name Name, version Version) (Uniqueness, error) {
 		return Uniqueness{}, nil
 	}
 	if u.Key.text == "" {
-		return Uniqueness{}, fault.New(fault.Invalid, "job uniqueness requires a key")
+		return Uniqueness{}, safeerror.NewFault(fault.Invalid, "job uniqueness requires a key")
 	}
 	digest := sha256.Sum256([]byte(string(name) + "\x00" + strconv.FormatUint(uint64(version), 10) + "\x00" + u.Key.text))
 	result := Uniqueness{Digest: hex.EncodeToString(digest[:]), For: u.For, UntilProcessing: u.UntilProcessing}
 	return result, result.Validate()
 }
 
-var ErrNotUnique = fault.New(fault.Conflict, "job uniqueness window is active")
+var ErrNotUnique = safeerror.Sentinel(fault.Conflict, "job uniqueness window is active")

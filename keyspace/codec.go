@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Codec encodes one concrete key type. Callbacks must be deterministic,
@@ -33,7 +34,7 @@ func TextKeys[K encoding.TextMarshaler]() Codec[K] {
 }
 func (c Codec[K]) Validate() error {
 	if c.encode == nil {
-		return fault.New(fault.Invalid, "key codec is not initialized")
+		return safeerror.NewFault(fault.Invalid, "key codec is not initialized")
 	}
 	return nil
 }

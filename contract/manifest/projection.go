@@ -10,6 +10,7 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/httppath"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
@@ -71,7 +72,7 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 	}
 	for _, entry := range guards.entries {
 		if !known[auth.GuardName(entry.id)] {
-			return nil, fault.New(fault.Missing, "invalid client contract: projection guard "+entry.id+" guards no route or channel")
+			return nil, safeerror.NewFault(fault.Missing, "invalid client contract: projection guard "+entry.id+" guards no route or channel")
 		}
 	}
 	// Both selectors run so that every entry matching a route is marked used.
@@ -106,11 +107,11 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 	}
 	for _, entry := range slices.Concat(routes.entries, channels.entries, paths.entries) {
 		if !entry.used {
-			return nil, fault.New(fault.Missing, "invalid client contract: projection entry "+entry.id+" selects nothing")
+			return nil, safeerror.NewFault(fault.Missing, "invalid client contract: projection entry "+entry.id+" selects nothing")
 		}
 	}
 	if len(result.HTTP) == 0 && result.Realtime == nil {
-		return nil, fault.New(fault.Missing, "invalid client contract: projection selects no operation or channel")
+		return nil, safeerror.NewFault(fault.Missing, "invalid client contract: projection selects no operation or channel")
 	}
 	types := make(typeIndex, len(document.Types))
 	for _, typ := range document.Types {
@@ -251,7 +252,7 @@ func selector[T ~string](ids []T, valid func(string) bool, match func(entry, can
 			return selection{}, invalid("invalid projection entry")
 		}
 		if seen[string(id)] {
-			return selection{}, fault.New(fault.Duplicate, "invalid client contract: repeated projection entry "+string(id))
+			return selection{}, safeerror.NewFault(fault.Duplicate, "invalid client contract: repeated projection entry "+string(id))
 		}
 		seen[string(id)] = true
 		result.entries = append(result.entries, &selectionEntry{id: string(id)})

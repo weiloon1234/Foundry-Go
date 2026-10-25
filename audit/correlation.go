@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -18,7 +19,7 @@ type Correlation string
 // trimmed UTF-8 without control characters.
 func (c Correlation) Validate() error {
 	if c == "" {
-		return fault.New(fault.Invalid, "audit correlation requires an identifier")
+		return safeerror.NewFault(fault.Invalid, "audit correlation requires an identifier")
 	}
 	return attribution.Request{ID: attribution.RequestID(c)}.Validate()
 }
@@ -40,7 +41,7 @@ func NewCorrelation() (Correlation, error) {
 // request ID when one is present, so a request's changes can be read together.
 func WithCorrelation(ctx context.Context, correlation Correlation) (context.Context, error) {
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "audit correlation requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "audit correlation requires a context")
 	}
 	if err := correlation.Validate(); err != nil {
 		return nil, err

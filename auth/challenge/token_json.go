@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -14,19 +15,19 @@ import (
 // existence, purpose, validity or authority. Consumption checks those in storage.
 func (t *Token[M, P]) UnmarshalJSON(data []byte) error {
 	if t == nil {
-		return fault.New(fault.Invalid, "challenge token destination is missing")
+		return safeerror.NewFault(fault.Invalid, "challenge token destination is missing")
 	}
 	*t = Token[M, P]{}
 	var raw string
 	if len(data) > 512 {
-		return fault.New(fault.Invalid, "invalid challenge token input")
+		return safeerror.NewFault(fault.Invalid, "invalid challenge token input")
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fault.New(fault.Invalid, "invalid challenge token input")
+		return safeerror.NewFault(fault.Invalid, "invalid challenge token input")
 	}
 	parsed, err := ParseToken[M, P](secret.New(raw))
 	if err != nil {
-		return fault.New(fault.Invalid, "invalid challenge token input")
+		return safeerror.NewFault(fault.Invalid, "invalid challenge token input")
 	}
 	*t = parsed
 	return nil

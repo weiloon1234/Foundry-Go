@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -52,13 +53,13 @@ func hopSpec[M any, I ModelQuery[I], N any, A, B comparable](local KeyField[M, A
 	hop := &relationHop{first: f.ref, second: s.ref, predicates: intermediate.queryCore.EffectivePredicates,
 		validate: func() error {
 			if intermediate.definition == nil || f.ref.Table != intermediate.queryCore.Table || s.ref.Table != intermediate.queryCore.Table {
-				return fault.New(fault.Invalid, "through relation keys must belong to the intermediate model")
+				return safeerror.NewFault(fault.Invalid, "through relation keys must belong to the intermediate model")
 			}
 			if _, ok := intermediate.definition.modelField(f.ref.Column); !ok {
-				return fault.New(fault.Invalid, "through relation intermediate key is not a generated model field")
+				return safeerror.NewFault(fault.Invalid, "through relation intermediate key is not a generated model field")
 			}
 			if _, ok := intermediate.definition.modelField(s.ref.Column); !ok {
-				return fault.New(fault.Invalid, "through relation intermediate key is not a generated model field")
+				return safeerror.NewFault(fault.Invalid, "through relation intermediate key is not a generated model field")
 			}
 			return intermediate.validateCore()
 		}}
@@ -167,7 +168,7 @@ func fetchHop[M, I, N any, A, B comparable](ctx context.Context, executor databa
 			return nil, err
 		}
 		if len(batch) > state.remaining {
-			return nil, fault.New(fault.Invalid, "related rows exceed the shared loading budget")
+			return nil, safeerror.NewFault(fault.Invalid, "related rows exceed the shared loading budget")
 		}
 		state.remaining -= len(batch)
 		rows = append(rows, batch...)
@@ -188,7 +189,7 @@ func fetchHop[M, I, N any, A, B comparable](ctx context.Context, executor databa
 			return nil, err
 		}
 		if !seen[identity] {
-			return nil, fault.New(fault.Invalid, "related row key does not match requested keys; check key equality semantics")
+			return nil, safeerror.NewFault(fault.Invalid, "related row key does not match requested keys; check key equality semantics")
 		}
 		groups[identity] = append(groups[identity], targets[i])
 	}
@@ -207,7 +208,7 @@ func hopAggregateInput[M, N any](spec relationSpec[M, N], validate func(string, 
 	return aggregateInput[M, N]{source: spec.source, local: spec.local, inputTable: spec.target.queryCore.Table, inputAlias: throughTargetAlias, group: fieldRef{Table: hopAlias, Column: spec.hop.first.Column}, singular: singular,
 		validate: func(depth int, limits RelationLimits) error {
 			if len(spec.target.relations) != 0 {
-				return fault.New(fault.Invalid, "aggregate input cannot request eager-loaded children")
+				return safeerror.NewFault(fault.Invalid, "aggregate input cannot request eager-loaded children")
 			}
 			return validate(spec.source.queryCore.Table, depth, limits)
 		},

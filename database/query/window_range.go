@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -52,7 +53,7 @@ func NullableNumericRange[S any, V numericValue](w Window[S], input Expression[S
 func numericRange[S any, V numericValue](w Window[S], node valueExpression, kind codec.ParameterType, encode func(V) parameterNode) RangeWindow[S, V] {
 	r := RangeWindow[S, V]{window: w, order: orderNode{Expression: node}, kind: kind}
 	if r.kind != codec.TypeInteger && r.kind != codec.TypeFloat && r.kind != codec.TypeDecimal {
-		r.window.node.Err = fault.New(fault.Invalid, "numeric RANGE requires a numeric codec representation")
+		r.window.node.Err = safeerror.NewFault(fault.Invalid, "numeric RANGE requires a numeric codec representation")
 	}
 	r.encode = func(v V) rangeDistance {
 		return rangeDistance{Parameter: encode(v)}
@@ -73,7 +74,7 @@ func NullableTemporalRange[S any, V rangeTemporal](w Window[S], input Expression
 func temporalRange[S any](w Window[S], node valueExpression, kind codec.ParameterType) RangeWindow[S, temporal.Interval] {
 	r := RangeWindow[S, temporal.Interval]{window: w, order: orderNode{Expression: node}, kind: kind}
 	if kind != codec.TypeDate && kind != codec.TypeTime && kind != codec.TypeDateTime && kind != codec.TypeLocalDateTime {
-		r.window.node.Err = fault.New(fault.Invalid, "temporal RANGE requires a temporal codec representation")
+		r.window.node.Err = safeerror.NewFault(fault.Invalid, "temporal RANGE requires a temporal codec representation")
 	}
 	r.encode = func(v temporal.Interval) rangeDistance { return rangeDistance{Interval: &v} }
 	return r
@@ -100,7 +101,7 @@ func (r RangeWindow[S, D]) UnboundedFollowing() RangeBoundary[S, D] {
 }
 
 func (r RangeWindow[S, D]) distance(kind frameBoundKind, v D) RangeBoundary[S, D] {
-	d := rangeDistance{Err: fault.New(fault.Invalid, "undeclared RANGE distance codec")}
+	d := rangeDistance{Err: safeerror.NewFault(fault.Invalid, "undeclared RANGE distance codec")}
 	if r.encode != nil {
 		d = r.encode(v)
 	}
@@ -118,7 +119,7 @@ func (r RangeWindow[S, D]) Following(v D) RangeBoundary[S, D] { return r.distanc
 func (r RangeWindow[S, D]) Between(start, end RangeBoundary[S, D]) Window[S] {
 	w := r.window
 	if r.encode == nil || len(w.node.Orders) != 0 {
-		w.node.Err = fault.New(fault.Invalid, "RANGE requires a declared value and a window without existing ordering")
+		w.node.Err = safeerror.NewFault(fault.Invalid, "RANGE requires a declared value and a window without existing ordering")
 	}
 	w.node.Orders = []orderNode{r.order}
 	w.node.Frame = &windowFrame{Kind: rangeFrame, Start: start.bound, End: end.bound, RangeType: r.kind}

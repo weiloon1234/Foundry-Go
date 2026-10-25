@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Relation is a model-owned eager-loading descriptor. Implementations are
@@ -31,7 +32,7 @@ func DefaultRelationLimits() RelationLimits {
 
 func (l RelationLimits) validate() error {
 	if l.BatchSize < 1 || l.BatchSize > 1000 || l.MaxRows < 1 || l.MaxRows > 1000000 || l.MaxDepth < 1 || l.MaxDepth > 32 {
-		return fault.New(fault.Invalid, "invalid relation resource limits")
+		return safeerror.NewFault(fault.Invalid, "invalid relation resource limits")
 	}
 	return nil
 }
@@ -44,7 +45,7 @@ type relationLoadState struct {
 
 func (s *relationLoadState) attach(count int) error {
 	if count > s.attachments {
-		return fault.New(fault.Invalid, "attached related models exceed the shared loading budget")
+		return safeerror.NewFault(fault.Invalid, "attached related models exceed the shared loading budget")
 	}
 	s.attachments -= count
 	return nil
@@ -57,11 +58,11 @@ func (invalidRelation[M]) relationName() string { return "" }
 func (r invalidRelation[M]) copyRelation() Relation[M] { return r }
 
 func (invalidRelation[M]) validateRelation(string, int, RelationLimits) error {
-	return fault.New(fault.Invalid, "nil relation descriptor")
+	return safeerror.NewFault(fault.Invalid, "nil relation descriptor")
 }
 
 func (invalidRelation[M]) loadRelation(context.Context, database.Executor, []M, *relationLoadState, int, bool) ([]M, error) {
-	return nil, fault.New(fault.Invalid, "nil relation descriptor")
+	return nil, safeerror.NewFault(fault.Invalid, "nil relation descriptor")
 }
 
 func copyRelations[M any](relations []Relation[M]) []Relation[M] {
@@ -107,7 +108,7 @@ func (q Query[M]) validateAt(depth int, limits RelationLimits) error {
 		return err
 	}
 	if len(q.relations) > MaxExpressionNodes {
-		return fault.New(fault.Invalid, "too many relation descriptors")
+		return safeerror.NewFault(fault.Invalid, "too many relation descriptors")
 	}
 	seen := make(map[string]bool, len(q.relations))
 	for _, r := range q.relations {
@@ -115,7 +116,7 @@ func (q Query[M]) validateAt(depth int, limits RelationLimits) error {
 			return err
 		}
 		if seen[r.relationName()] {
-			return fault.New(fault.Invalid, "relation slot was registered more than once")
+			return safeerror.NewFault(fault.Invalid, "relation slot was registered more than once")
 		}
 		seen[r.relationName()] = true
 	}
@@ -142,7 +143,7 @@ func (q Query[M]) load(ctx context.Context, executor database.Executor, parents 
 		return nil, err
 	}
 	if q.definition == nil {
-		return nil, fault.New(fault.Invalid, "relation loading requires model metadata")
+		return nil, safeerror.NewFault(fault.Invalid, "relation loading requires model metadata")
 	}
 	limits := q.loadLimits()
 	return q.loadRelations(ctx, executor, parents, &relationLoadState{limits: limits, remaining: limits.MaxRows, attachments: limits.MaxRows}, 0, missing)

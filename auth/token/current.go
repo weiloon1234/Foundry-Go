@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -60,7 +61,7 @@ func (t *Tokens[M, K]) LogoutRefresh(ctx context.Context, refresh secret.String)
 	}
 	backend, ok := t.store.backend.(RefreshRevocationBackend)
 	if !ok {
-		return false, fault.New(fault.Invalid, "token backend cannot revoke by refresh credential")
+		return false, safeerror.NewFault(fault.Invalid, "token backend cannot revoke by refresh credential")
 	}
 	hash, err := HashSecret(refresh)
 	if err != nil {
@@ -107,7 +108,7 @@ func (t *Tokens[M, K]) RevokeOthers(ctx context.Context) (uint64, error) {
 	}
 	backend, ok := t.store.backend.(SelectiveBackend)
 	if !ok {
-		return 0, fault.New(fault.Invalid, "token backend cannot revoke other tokens")
+		return 0, safeerror.NewFault(fault.Invalid, "token backend cannot revoke other tokens")
 	}
 	var count uint64
 	err = t.store.execute(ctx, func(op context.Context) error {
@@ -131,7 +132,7 @@ func (t *Tokens[M, K]) RevokeOthers(ctx context.Context) (uint64, error) {
 // housekeeping schedule; the auth package does not depend on the scheduler.
 func (t *Tokens[M, K]) PruneExpired(ctx context.Context, batch, maxBatches int) (uint64, error) {
 	if batch < 1 || batch > MaxPruneFamilies || maxBatches < 1 {
-		return 0, fault.New(fault.Invalid, "invalid token prune bounds")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid token prune bounds")
 	}
 	var total uint64
 	for range maxBatches {

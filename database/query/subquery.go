@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -59,7 +60,7 @@ func (f ScalarField[M, V]) inSubquery(q subquery) Predicate[M] {
 func ExistsQuery[S any](outer ProjectionSource[S], inner SubquerySource) Predicate[S] {
 	q := subquery{}
 	if nilDescriptor(inner) {
-		q.Err = fault.New(fault.Invalid, "EXISTS requires a query")
+		q.Err = safeerror.NewFault(fault.Invalid, "EXISTS requires a query")
 	} else {
 		q = inner.subquery()
 	}
@@ -82,7 +83,7 @@ func scalarQuery[S, V any](inner ValueQuerySource[V], outerError error) Expressi
 		q.subquery.Err = outerError
 	}
 	if value.IsNullableType[V]() {
-		q.subquery.Err = fault.New(fault.Invalid, "nullable scalar inputs require ScalarNullableQuery or ScalarNullableRowQuery")
+		q.subquery.Err = safeerror.NewFault(fault.Invalid, "nullable scalar inputs require ScalarNullableQuery or ScalarNullableRowQuery")
 	}
 	return Expression[S, value.Nullable[V]]{node: scalarSubquery{Query: q.subquery}, codec: codec.Nullable(q.codec)}
 }
@@ -103,14 +104,14 @@ func scalarNullableQuery[S, V any](inner ValueQuerySource[value.Nullable[V]], ou
 
 func valueSource[V any](source ValueQuerySource[V]) valueSubquery[V] {
 	if nilDescriptor(source) {
-		return valueSubquery[V]{subquery: subquery{Err: fault.New(fault.Invalid, "subquery requires a single-column value query")}}
+		return valueSubquery[V]{subquery: subquery{Err: safeerror.NewFault(fault.Invalid, "subquery requires a single-column value query")}}
 	}
 	return source.valueQuery()
 }
 
 func outerScopeError[S any](source ProjectionSource[S]) error {
 	if nilDescriptor(source) {
-		return fault.New(fault.Invalid, "subquery expression requires an outer source scope")
+		return safeerror.NewFault(fault.Invalid, "subquery expression requires an outer source scope")
 	}
 	return source.projectionSource().err
 }

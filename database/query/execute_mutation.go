@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -10,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -31,6 +31,11 @@ func (e *WriteError[M]) GoString() string { return e.Error() }
 func (e *WriteError[M]) Unwrap() error { return e.cause }
 
 func (e *WriteError[M]) Candidate() M { return e.candidate }
+
+func writeFailure[M any](cause error, candidate M) error {
+	failure := &WriteError[M]{cause: cause, candidate: candidate}
+	return safeerror.Owned(failure.Error(), failure)
+}
 
 // Insert creates one complete model. Generated Create methods construct the
 // model-specific mutation and defaults; this is the shared execution boundary.
@@ -68,7 +73,7 @@ func (q Query[M]) removal() (Query[M], mutationKind) {
 
 func writeContext(ctx context.Context, writer database.Transactor) error {
 	if ctx == nil || writer == nil {
-		return fault.New(fault.Invalid, "model write requires a context and transactor")
+		return safeerror.NewFault(fault.Invalid, "model write requires a context and transactor")
 	}
 	return ctx.Err()
 }
@@ -79,7 +84,7 @@ func executeMutation[M any](ctx context.Context, writer database.Transactor, pla
 	}
 	plan.query = plan.query.inContext(ctx)
 	if plan.query.queryCore.SkipModelHooks {
-		return *new(M), fault.New(fault.Invalid, "WithoutModelHooks applies only to set-based writes; per-model writes always run hooks")
+		return *new(M), safeerror.NewFault(fault.Invalid, "WithoutModelHooks applies only to set-based writes; per-model writes always run hooks")
 	}
 	observers, known := writerObservers(writer)
 	if plan.query.definition != nil && (plan.query.definition.hasWriteHooks || !known || observedBy[M](observers, plan.kind)) {
@@ -177,17 +182,17 @@ func executeWrite[R any](ctx context.Context, writer database.Transactor, write 
 				return nil
 			})
 			if inspection != nil {
-				err = errors.Join(err, inspection)
+				err = safeerror.Join("operation failed", err, inspection)
 			}
 			if reconcile {
-				return *new(R), &WriteError[R]{cause: err, candidate: model}
+				return *new(R), writeFailure(err, model)
 			}
 		}
 		return *new(R), err
 	}
 	model, present := candidate.Get()
 	if !present {
-		return *new(R), fault.New(fault.Invalid, "transactor returned without a successful model write")
+		return *new(R), safeerror.NewFault(fault.Invalid, "transactor returned without a successful model write")
 	}
 	return model, nil
 }
@@ -215,7 +220,7 @@ func returningModels[M any](ctx context.Context, tx *database.Tx, statement Stat
 		return nil, err
 	}
 	defer func() {
-		err = errors.Join(err, rows.Close())
+		err = safeerror.Join("operation failed", err, rows.Close())
 		if err != nil {
 			result = nil
 		}
@@ -223,7 +228,7 @@ func returningModels[M any](ctx context.Context, tx *database.Tx, statement Stat
 	result = make([]M, 0, maximum)
 	for rows.Next() {
 		if len(result) >= maximum {
-			return nil, database.NewError("model write returned too many rows", database.TooManyRows)
+			return nil, databaseFailure("model write returned too many rows", database.TooManyRows)
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -238,7 +243,7 @@ func returningModels[M any](ctx context.Context, tx *database.Tx, statement Stat
 		return nil, err
 	}
 	if len(result) < minimum {
-		return nil, database.NewError("model write returned too few rows", database.NotFound)
+		return nil, databaseFailure("model write returned too few rows", database.NotFound)
 	}
 	return result, nil
 }

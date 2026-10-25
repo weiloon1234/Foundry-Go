@@ -13,7 +13,7 @@ type ByteRange struct{ Offset, Length int64 }
 
 func (r ByteRange) Validate() error {
 	if r.Offset < 0 || r.Length <= 0 || r.Offset > math.MaxInt64-r.Length {
-		return Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	return nil
 }
@@ -22,7 +22,7 @@ func (r ByteRange) Resolve(size int64) (offset, length int64, err error) {
 		return
 	}
 	if size <= 0 || r.Offset >= size {
-		return 0, 0, Failure(RangeNotSatisfiable, OpenOperation, NotApplicable, nil)
+		return 0, 0, newFailure(RangeNotSatisfiable, OpenOperation, NotApplicable, nil)
 	}
 	return r.Offset, min(r.Length, size-r.Offset), nil
 }
@@ -35,7 +35,7 @@ type WriteCondition struct {
 func IfAbsent() WriteCondition { return WriteCondition{absent: true} }
 func IfMatch(tag ETag) (WriteCondition, error) {
 	if tag == "" {
-		return WriteCondition{}, Failure(Invalid, PutOperation, Unchanged, nil)
+		return WriteCondition{}, newFailure(Invalid, PutOperation, Unchanged, nil)
 	}
 	if err := tag.Validate(); err != nil {
 		return WriteCondition{}, err
@@ -62,7 +62,7 @@ func (o PutOptions) Validate(maximum int64) error {
 		}
 	}
 	if size, present := o.Size.Get(); present && (size < 0 || size > maximum) {
-		return Failure(LimitExceeded, PutOperation, Unchanged, nil)
+		return newFailure(LimitExceeded, PutOperation, Unchanged, nil)
 	}
 	if err := o.Metadata.Validate(); err != nil {
 		return err
@@ -127,7 +127,7 @@ func (o ListOptions) Validate() error {
 		return err
 	}
 	if o.Limit < 1 || o.Limit > MaxPageSize || len(o.Cursor.text) > MaxCursorBytes {
-		return Failure(Invalid, ListOperation, NotApplicable, nil)
+		return newFailure(Invalid, ListOperation, NotApplicable, nil)
 	}
 	return nil
 }
@@ -172,7 +172,7 @@ func DefaultConfig() Config {
 }
 func (c Config) Validate() error {
 	if c.Visibility > Public || c.MaxObjectBytes <= 0 || c.MaxObjectBytes > 1<<50 || c.MaxActive < 1 || c.MaxActive > 4096 || c.Timeout <= 0 || c.Timeout > 24*time.Hour || c.MaxStreams < 0 || c.MaxStreams > 16384 || c.StreamIdleTimeout < 0 || c.StreamIdleTimeout > 24*time.Hour {
-		return Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	return nil
 }

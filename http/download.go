@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -53,7 +54,7 @@ func (d Download) Validate() error {
 		return d.err
 	}
 	if d.source == nil {
-		return fault.New(fault.Invalid, "download requires a source")
+		return safeerror.NewFault(fault.Invalid, "download requires a source")
 	}
 	if err := d.filePresentation.validate(); err != nil {
 		return err
@@ -68,5 +69,5 @@ func (d Download) Validate() error {
 
 // MarshalJSON prevents accidental serialization of a deferred file response.
 func (Download) MarshalJSON() ([]byte, error) {
-	return nil, fault.New(fault.Invalid, "download requires a file response contract")
+	return nil, safeerror.NewFault(fault.Invalid, "download requires a file response contract")
 }

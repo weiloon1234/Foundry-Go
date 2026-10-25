@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/faultwrap"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Operation identifies a typed cache call reported to an Observer.
@@ -67,10 +68,10 @@ type Observer func(context.Context, Event)
 func WithObserver(observer Observer) StoreOption {
 	return func(s *Store) error {
 		if observer == nil {
-			return fault.New(fault.Invalid, "cache observer is nil")
+			return safeerror.NewFault(fault.Invalid, "cache observer is nil")
 		}
 		if s.observer != nil {
-			return fault.New(fault.Invalid, "cache observer is already configured")
+			return safeerror.NewFault(fault.Invalid, "cache observer is already configured")
 		}
 		s.observer = observer
 		return nil

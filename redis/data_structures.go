@@ -10,6 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cacheint"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/redis/data"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -59,7 +60,7 @@ func (c *Client) HashGetMany(ctx context.Context, key data.Key, fields []string,
 		return nil, err
 	}
 	if len(fields) == 0 || len(fields) > l.Entries {
-		return nil, fault.New(fault.Invalid, "Redis hash field batch exceeds its bound")
+		return nil, safeerror.NewFault(fault.Invalid, "Redis hash field batch exceeds its bound")
 	}
 	for _, field := range fields {
 		if err := l.ValidateField(field); err != nil {
@@ -143,7 +144,7 @@ func (c *Client) HashIncrement(ctx context.Context, key data.Key, field string, 
 		return 0, err
 	}
 	if l.ValueBytes < cacheint.MaxBytes {
-		return 0, fault.New(fault.Invalid, "Redis data value bound cannot hold every int64")
+		return 0, safeerror.NewFault(fault.Invalid, "Redis data value bound cannot hold every int64")
 	}
 	reply, code, err := c.dataCall(ctx, dataHashScript, key, "hincrby", l, field, strconv.FormatInt(delta, 10))
 	if err != nil {
@@ -318,7 +319,7 @@ func (c *Client) windowLimits(ctx context.Context, key data.Key, window data.Win
 		return l, err
 	}
 	if window.Offset < 0 || window.Offset > data.MaxEntries || window.Count < 1 || window.Count > l.Entries {
-		return l, fault.New(fault.Invalid, "Redis sorted set window exceeds its bound")
+		return l, safeerror.NewFault(fault.Invalid, "Redis sorted set window exceeds its bound")
 	}
 	return l, nil
 }
@@ -367,7 +368,7 @@ func (c *Client) ListPush(ctx context.Context, key data.Key, values []string, en
 		return 0, err
 	}
 	if len(values) == 0 || len(values) > l.Entries {
-		return 0, fault.New(fault.Invalid, "Redis list push exceeds its bound")
+		return 0, safeerror.NewFault(fault.Invalid, "Redis list push exceeds its bound")
 	}
 	for _, text := range values {
 		if err := l.ValidateValue(text); err != nil {

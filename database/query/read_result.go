@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -30,7 +31,7 @@ func (q readResult[P]) Each(ctx context.Context, executor database.Executor, yie
 	}
 	q.scopeContext = ctx
 	if yield == nil {
-		return fault.New(fault.Invalid, "query iteration requires a callback")
+		return safeerror.NewFault(fault.Invalid, "query iteration requires a callback")
 	}
 	if q.lifecycle.mayRun(executor) {
 		return q.retrievalChunks(ctx, executor, yield)
@@ -76,7 +77,7 @@ func (q readResult[P]) RequireFirst(ctx context.Context, executor database.Execu
 	if p, ok := row.Get(); ok {
 		return p, nil
 	}
-	return *new(P), database.NewError("query first", database.NotFound)
+	return *new(P), databaseFailure("query first", database.NotFound)
 }
 
 // Count counts the selected result window, including grouped rows and pagination.

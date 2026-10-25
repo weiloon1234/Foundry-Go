@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Order selects ascending or descending score order for sorted-set reads.
@@ -16,7 +17,7 @@ const (
 
 func (o Order) Validate() error {
 	if o != Ascending && o != Descending {
-		return fault.New(fault.Invalid, "invalid Redis sorted set order")
+		return safeerror.NewFault(fault.Invalid, "invalid Redis sorted set order")
 	}
 	return nil
 }
@@ -39,7 +40,7 @@ func (w Window) validate(l Limits) error {
 		return err
 	}
 	if w.Offset < 0 || w.Offset > MaxEntries || w.Count < 1 || w.Count > l.Entries {
-		return fault.New(fault.Invalid, "Redis sorted set window exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "Redis sorted set window exceeds its bound")
 	}
 	return nil
 }
@@ -59,7 +60,7 @@ func Between(min, max float64) ScoreRange { return ScoreRange{Min: min, Max: max
 
 func (r ScoreRange) Validate() error {
 	if math.IsNaN(r.Min) || math.IsNaN(r.Max) || r.Min > r.Max {
-		return fault.New(fault.Invalid, "invalid Redis sorted set score range")
+		return safeerror.NewFault(fault.Invalid, "invalid Redis sorted set score range")
 	}
 	return nil
 }
@@ -67,7 +68,7 @@ func (r ScoreRange) Validate() error {
 // ValidateScore rejects NaN, which Redis cannot order.
 func ValidateScore(score float64) error {
 	if math.IsNaN(score) {
-		return fault.New(fault.Invalid, "Redis sorted set score must be a number")
+		return safeerror.NewFault(fault.Invalid, "Redis sorted set score must be a number")
 	}
 	return nil
 }
@@ -82,7 +83,7 @@ const (
 
 func (e End) Validate() error {
 	if e != Front && e != Back {
-		return fault.New(fault.Invalid, "invalid Redis list end")
+		return safeerror.NewFault(fault.Invalid, "invalid Redis list end")
 	}
 	return nil
 }
@@ -90,7 +91,7 @@ func (e End) Validate() error {
 // ValidateIndexRange bounds list indices; negative values count from the tail.
 func ValidateIndexRange(start, stop int64) error {
 	if start < -MaxEntries || start > MaxEntries || stop < -MaxEntries || stop > MaxEntries {
-		return fault.New(fault.Invalid, "Redis list index range exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "Redis list index range exceeds its bound")
 	}
 	return nil
 }

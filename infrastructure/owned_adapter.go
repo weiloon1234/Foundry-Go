@@ -2,10 +2,11 @@ package infrastructure
 
 import (
 	"context"
-	"errors"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
-	"slices"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ownedAdapter centralizes rollback and teardown registration for prepared
@@ -24,11 +25,11 @@ func adapterModule[T any](name foundation.ProviderID, key foundation.Key[*ownedA
 			return err
 		}
 		if adapter == nil {
-			return fault.New(fault.Invalid, "configured adapter is missing")
+			return safeerror.NewFault(fault.Invalid, "configured adapter is missing")
 		}
 		if adapter.close != nil {
 			if err := r.OnShutdown("adapter", adapter.close); err != nil {
-				return errors.Join(err, adapter.close(ctx))
+				return safeerror.Join("operation failed", err, adapter.close(ctx))
 			}
 		}
 		if adapter.start != nil {

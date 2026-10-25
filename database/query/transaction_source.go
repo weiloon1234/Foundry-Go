@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TransactionScope marks expression owners in transaction-required query composition.
@@ -32,7 +33,7 @@ type TransactionRecord[R any] struct{ record recordQuery[R] }
 // filters, order, limits and complete generated metadata remain intact.
 func TransactionOf[R any](source RecordQuerySource[R]) TransactionRecord[R] {
 	if nilDescriptor(source) {
-		return TransactionRecord[R]{record: recordQuery[R]{err: fault.New(fault.Invalid, "transaction record requires a source")}}
+		return TransactionRecord[R]{record: recordQuery[R]{err: safeerror.NewFault(fault.Invalid, "transaction record requires a source")}}
 	}
 	return TransactionRecord[R]{record: source.recordQuery()}
 }
@@ -49,7 +50,7 @@ func (q LockedQuery[M]) transactionRecord() recordQuery[M] {
 func (q LockedResult[S, R]) transactionRecord() recordQuery[R] {
 	r := q.query.recordQuery()
 	if len(q.locks) == 0 && r.err == nil {
-		r.err = fault.New(fault.Invalid, "locked result requires at least one lock clause")
+		r.err = safeerror.NewFault(fault.Invalid, "locked result requires at least one lock clause")
 	}
 	r.node.Locks = q.locks
 	r.directSource = false
@@ -68,7 +69,7 @@ func (a transactionProjectionAdapter[S]) projectionSource() projectionSource[S] 
 
 func transactionProjection[S TransactionScope](source TransactionProjectionSource[S]) transactionProjectionAdapter[S] {
 	if nilDescriptor(source) {
-		return transactionProjectionAdapter[S]{source: projectionSource[S]{err: fault.New(fault.Invalid, "transaction selection requires a source")}}
+		return transactionProjectionAdapter[S]{source: projectionSource[S]{err: safeerror.NewFault(fault.Invalid, "transaction selection requires a source")}}
 	}
 	return transactionProjectionAdapter[S]{source: source.transactionProjection()}
 }

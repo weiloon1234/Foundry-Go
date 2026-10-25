@@ -14,6 +14,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -527,7 +528,7 @@ func (q FamilyQuery) foundryInsertMany(ctx context.Context, writer database.Tran
 }
 func (q FamilyQuery) foundryCreateMutations(drafts []FamilyDraft) ([]foundryquery.Mutation[Family], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Family], len(drafts))
 	for i, draft := range drafts {
@@ -950,7 +951,7 @@ func (q FamilyQuery) DeleteAll(ctx context.Context, writer database.Transactor) 
 // Increment adjusts one numeric field of every matching model by a typed delta, such as FamilyFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q FamilyQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Family], extra ...FamilyDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Family]
 	if len(extra) == 1 {
@@ -965,7 +966,7 @@ func (q FamilyQuery) Increment(ctx context.Context, writer database.Transactor, 
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as FamilyFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q FamilyQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Family], extra ...FamilyDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Family]
 	if len(extra) == 1 {
@@ -1490,66 +1491,66 @@ func CompareFamily(before, after foundryvalue.Optional[Family], assigned FamilyD
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[Family](), before, after, assigned.fieldID.IsSet(), func(item Family) model.ID[Family] { return item.ID })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.ID: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return FamilyChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return FamilyChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Scope, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldScope.IsSet(), func(item Family) string { return item.Scope })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.Scope: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.Scope", err)
 	}
 	changes.fields.SubjectKey, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldSubjectKey.IsSet(), func(item Family) string { return item.SubjectKey })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.SubjectKey: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.SubjectKey", err)
 	}
 	changes.fields.Name, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldName.IsSet(), func(item Family) string { return item.Name })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.Name: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.Name", err)
 	}
 	changes.fields.Scopes, err = lifecycle.CompareModelField(codec.JSON[[]auth.AccessScopeName](), before, after, assigned.fieldScopes.IsSet(), func(item Family) foundryvalue.JSON[[]auth.AccessScopeName] { return item.Scopes })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.Scopes: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.Scopes", err)
 	}
 	changes.fields.Mode, err = lifecycle.CompareModelField(codec.Unsigned[uint8](), before, after, assigned.fieldMode.IsSet(), func(item Family) uint8 { return item.Mode })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.Mode: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.Mode", err)
 	}
 	changes.fields.Assurance, err = lifecycle.CompareModelField(codec.Unsigned[uint8](), before, after, assigned.fieldAssurance.IsSet(), func(item Family) uint8 { return item.Assurance })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.Assurance: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.Assurance", err)
 	}
 	changes.fields.AccessNanos, err = lifecycle.CompareModelField(codec.Signed[int64](), before, after, assigned.fieldAccessNanos.IsSet(), func(item Family) int64 { return item.AccessNanos })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.AccessNanos: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.AccessNanos", err)
 	}
 	changes.fields.RefreshIdleNanos, err = lifecycle.CompareModelField(codec.Signed[int64](), before, after, assigned.fieldRefreshIdleNanos.IsSet(), func(item Family) int64 { return item.RefreshIdleNanos })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.RefreshIdleNanos: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.RefreshIdleNanos", err)
 	}
 	changes.fields.RotationLimit, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldRotationLimit.IsSet(), func(item Family) uint32 { return item.RotationLimit })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.RotationLimit: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.RotationLimit", err)
 	}
 	changes.fields.Generation, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldGeneration.IsSet(), func(item Family) uint32 { return item.Generation })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.Generation: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.Generation", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Family) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.CreatedAt: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.CreatedAt", err)
 	}
 	changes.fields.ExpiresAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldExpiresAt.IsSet(), func(item Family) temporal.DateTime { return item.ExpiresAt })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.ExpiresAt: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.ExpiresAt", err)
 	}
 	changes.fields.ClientIP, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldClientIP.IsSet(), func(item Family) foundryvalue.Nullable[string] { return item.ClientIP })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.ClientIP: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.ClientIP", err)
 	}
 	changes.fields.UserAgent, err = lifecycle.CompareModelField(codec.Nullable(codec.String[string]()), before, after, assigned.fieldUserAgent.IsSet(), func(item Family) foundryvalue.Nullable[string] { return item.UserAgent })
 	if err != nil {
-		return FamilyChanges{}, fmt.Errorf("compare Family.UserAgent: %w", err)
+		return FamilyChanges{}, foundrydiagnostic.Prefix("compare Family.UserAgent", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1736,7 +1737,7 @@ func (FamilyHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Family]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Family]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1795,7 +1796,7 @@ func (FamilyHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.
 					}
 				}
 			default:
-				return foundryquery.Mutation[Family]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Family]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1951,7 +1952,7 @@ func (FamilyHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -2069,14 +2070,14 @@ type FamilyAuditPolicy struct {
 func (changes FamilyChanges) Audit(policy FamilyAuditPolicy) (record.Model[Family, model.ID[Family]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Family, model.ID[Family]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Family, model.ID[Family]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Family, model.ID[Family]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Family, model.ID[Family]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -2250,7 +2251,7 @@ func FamilyAuditing(policy FamilyAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() FamilyHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes FamilyChanges) error {

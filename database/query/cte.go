@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -33,7 +34,7 @@ type CommonTable[R any] struct {
 // consumers and emits each reused definition once. It performs no database I/O.
 func CTE[R any](name string, source RecordQuerySource[R]) CommonTable[R] {
 	if !sqlname.Valid(name) || nilDescriptor(source) {
-		return CommonTable[R]{err: fault.New(fault.Invalid, "CTE requires a valid name and record query")}
+		return CommonTable[R]{err: safeerror.NewFault(fault.Invalid, "CTE requires a valid name and record query")}
 	}
 	q := source.recordQuery()
 	return CommonTable[R]{definition: &cteNode{Name: name, Query: q.node, Columns: q.columns}, scan: q.scan, fields: q.fields, lifecycle: q.lifecycle, err: q.err}
@@ -63,7 +64,7 @@ func (c CommonTable[R]) recordQuery() recordQuery[R] {
 		return recordQuery[R]{err: c.err}
 	}
 	if c.definition == nil {
-		return recordQuery[R]{err: fault.New(fault.Invalid, "CTE requires a definition")}
+		return recordQuery[R]{err: safeerror.NewFault(fault.Invalid, "CTE requires a definition")}
 	}
 	d := c.definition
 	return recordQuery[R]{node: selectNode{

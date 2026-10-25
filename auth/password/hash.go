@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
@@ -69,7 +70,9 @@ func parseBcrypt(raw string) (parsedHash, error) {
 	return parsedHash{algorithm: bcryptHash, bcryptCost: cost}, nil
 }
 
-func invalidHash() error { return fault.New(fault.Invalid, "invalid or unsupported password hash") }
+func invalidHash() error {
+	return safeerror.NewFault(fault.Invalid, "invalid or unsupported password hash")
+}
 func canonicalNumber(raw string, bits int) (uint64, error) {
 	if raw == "" || len(raw) > 10 {
 		return 0, invalidHash()

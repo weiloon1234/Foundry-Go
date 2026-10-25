@@ -369,8 +369,17 @@ func TestPreparedUploadAfterTheSnapshotIsReportedInvisible(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := x.Logo.ReplaceIn(t.Context(), tx, article, late); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "not visible") {
+		result, err := x.Logo.ReplaceIn(t.Context(), tx, article, late)
+		if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "not visible") {
 			return errors.Join(errors.New("an upload prepared after the snapshot was not reported invisible"), err)
+		}
+		var failure *fault.Error
+		const message = "prepared upload is not visible to this transaction; prepare it before the transaction begins"
+		if !errors.As(err, &failure) || failure.Code() != fault.Invalid || failure.Message() != message || !strings.Contains(err.Error(), message) {
+			return errors.New("snapshot rejection lost its typed diagnostic")
+		}
+		if result.Publication != attachments.Unpublished || result.Attachment.IsSet() || result.Operation != late.Operation() {
+			return errors.New("snapshot rejection lost the unpublished operation identity")
 		}
 		return nil
 	}, database.TxOptions{Isolation: database.RepeatableRead}); err != nil {

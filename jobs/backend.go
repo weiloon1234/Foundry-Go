@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -70,7 +71,7 @@ func (r Reason) Validate() error {
 	case NoReason, HandlerFailed, HandlerPanicked, PayloadInvalid, Unregistered, AttemptLimit, LeaseExpired, TimedOut, CancelRequested, WorkerStopped, RateLimited, DependencyFailed, ManuallyRetried, DeliveryLimit, ExceptionLimit, RetryExpired, NotTriggered:
 		return nil
 	}
-	return fault.New(fault.Invalid, "invalid job failure classification")
+	return safeerror.NewFault(fault.Invalid, "invalid job failure classification")
 }
 
 // Target is the complete adapter address for a retained dispatch. Cancellation
@@ -83,7 +84,7 @@ type Target struct {
 
 func (t Target) Validate() error {
 	if t.ID.IsZero() || !identifier.Semantic(string(t.Name)) || t.Version == 0 {
-		return fault.New(fault.Invalid, "invalid job target")
+		return safeerror.NewFault(fault.Invalid, "invalid job target")
 	}
 	return nil
 }
@@ -104,7 +105,7 @@ func (p Ownership) ID() ExecutionID    { return p.id }
 func (p Ownership) Owner() lease.Owner { return p.owner }
 func (p Ownership) Validate() error {
 	if p.id.IsZero() {
-		return fault.New(fault.Invalid, "job ownership requires a dispatch identity")
+		return safeerror.NewFault(fault.Invalid, "job ownership requires a dispatch identity")
 	}
 	return p.owner.Validate()
 }
@@ -147,16 +148,16 @@ type Result struct {
 
 func (r Result) Validate() error {
 	if r.State != Waiting && r.State != Succeeded && r.State != Failed {
-		return fault.New(fault.Invalid, "invalid job completion state")
+		return safeerror.NewFault(fault.Invalid, "invalid job completion state")
 	}
 	if r.Refund && r.State != Waiting {
-		return fault.New(fault.Invalid, "only a released job can refund its attempt")
+		return safeerror.NewFault(fault.Invalid, "only a released job can refund its attempt")
 	}
 	if r.Delay < 0 || r.Delay > MaxDelay || (r.State != Waiting && r.Delay != 0) {
-		return fault.New(fault.Invalid, "invalid job completion delay")
+		return safeerror.NewFault(fault.Invalid, "invalid job completion delay")
 	}
 	if r.State == Succeeded && r.Reason != NoReason {
-		return fault.New(fault.Invalid, "successful job cannot have a failure reason")
+		return safeerror.NewFault(fault.Invalid, "successful job cannot have a failure reason")
 	}
 	return r.Reason.Validate()
 }
@@ -224,13 +225,13 @@ type WakeBackend interface {
 // than this process uses, typically during a configuration rollout. Nothing was
 // changed. It is an operator problem, not a permanent property of the job:
 // outbox publication keeps such rows pending and retries them.
-var ErrQueuePolicy = fault.New(fault.Internal, "job queue policy differs from this process; use the same QueueConfig on every process sharing the queue")
+var ErrQueuePolicy = safeerror.Sentinel(fault.Internal, "job queue policy differs from this process; use the same QueueConfig on every process sharing the queue")
 
 // ErrLegacyLayout reports a queue still stored in an older layout that this
 // release does not migrate implicitly. Stop or drain every process of the
 // previous release, then migrate explicitly (`jobs migrate-layout`,
 // Dispatcher.MigrateLayout). Nothing was changed.
-var ErrLegacyLayout = fault.New(fault.Internal, "job queue uses an older storage layout; stop or drain every process of the previous release, then run `jobs migrate-layout` for this queue")
+var ErrLegacyLayout = safeerror.Sentinel(fault.Internal, "job queue uses an older storage layout; stop or drain every process of the previous release, then run `jobs migrate-layout` for this queue")
 
 // LayoutMigrator is optional: an authority whose stored queue layout changed
 // migrates a queue only when explicitly asked. migrated=false means the queue
@@ -240,13 +241,13 @@ type LayoutMigrator interface {
 }
 
 // ErrOwnershipLost means the reservation can no longer authorize a mutation.
-var ErrOwnershipLost = fault.New(fault.Conflict, "job reservation ownership lost")
-var ErrCancelled = fault.New(fault.Closed, "job cancellation requested")
+var ErrOwnershipLost = safeerror.Sentinel(fault.Conflict, "job reservation ownership lost")
+var ErrCancelled = safeerror.Sentinel(fault.Closed, "job cancellation requested")
 
 // ValidateOperation is shared by adapters at every operation boundary.
 func ValidateOperation(ctx context.Context, key Key) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "job operation requires a context")
+		return safeerror.NewFault(fault.Invalid, "job operation requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -261,7 +262,7 @@ func ValidateEnqueue(ctx context.Context, key Key, envelope Envelope) error {
 		return err
 	}
 	if key.Queue() != envelope.Queue() {
-		return fault.New(fault.Invalid, "job envelope does not belong to this queue")
+		return safeerror.NewFault(fault.Invalid, "job envelope does not belong to this queue")
 	}
 	return nil
 }

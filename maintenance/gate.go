@@ -5,13 +5,13 @@ package maintenance
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"net/netip"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Mode string
@@ -22,8 +22,8 @@ const (
 	Draining Mode = "draining"
 )
 
-var ErrMaintenance = errors.New("application is in maintenance mode")
-var ErrDraining = errors.New("application is draining")
+var ErrMaintenance = safeerror.New("application is in maintenance mode")
+var ErrDraining = safeerror.New("application is draining")
 
 // Gate is application-owned and concurrency-safe. Pausing admission is
 // reversible; Drain is terminal. A nil optional gate represents normal serving.
@@ -76,7 +76,7 @@ func (g *Gate) State() State {
 // store applies the same record on every instance. Drain remains terminal.
 func (g *Gate) Apply(state State) error {
 	if g == nil {
-		return fault.New(fault.Invalid, "maintenance changes require an application gate")
+		return safeerror.NewFault(fault.Invalid, "maintenance changes require an application gate")
 	}
 	if err := state.Validate(); err != nil {
 		return err
@@ -186,7 +186,7 @@ func (g *Gate) signalLocked(mode Mode) {
 // lifetime; application shutdown must still drain the owning kernels/resources.
 func (g *Gate) Set(paused bool) error {
 	if g == nil {
-		return fault.New(fault.Invalid, "maintenance changes require an application gate")
+		return safeerror.NewFault(fault.Invalid, "maintenance changes require an application gate")
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -253,7 +253,7 @@ func (g *Gate) Admit() error {
 // Admit and respond promptly instead of holding a request until maintenance ends.
 func (g *Gate) Wait(ctx context.Context) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "maintenance wait requires a context")
+		return safeerror.NewFault(fault.Invalid, "maintenance wait requires a context")
 	}
 	if g == nil {
 		return ctx.Err()

@@ -5,9 +5,9 @@ package command
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"time"
 
@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/jobs/archive"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -34,7 +35,7 @@ const usage = "failed-jobs list|retry|prune [--format text|json]; list: [--name 
 
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
-		return Command{}, fault.New(fault.Invalid, "failed-job commands require help output")
+		return Command{}, safeerror.NewFault(fault.Invalid, "failed-job commands require help output")
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(help, usage+"\n"); err != nil {
@@ -43,13 +44,13 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, flag.ErrHelp
 	}
 	if len(args) < 2 || args[0] != "failed-jobs" {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result := Command{operation: args[1]}
 	switch result.operation {
 	case "list", "retry", "prune":
 	default:
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	flags := flag.NewFlagSet("failed-jobs "+result.operation, flag.ContinueOnError)
 	flags.SetOutput(help)
@@ -59,7 +60,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		flags.IntVar(&result.options.Limit, "limit", 20, "maximum entries (1-100)")
 		flags.Func("name", "job name", func(text string) error {
 			if !identifier.Semantic(text) {
-				return fault.New(fault.Invalid, "invalid job name")
+				return safeerror.NewFault(fault.Invalid, "invalid job name")
 			}
 			result.options.Name = jobs.Name(text)
 			return nil
@@ -87,18 +88,18 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, err
 	}
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result.json = *format == "json"
 	switch {
 	case result.operation == "list" && (result.options.Limit < 1 || result.options.Limit > archive.MaxPage):
-		return Command{}, cli.Usage("--limit must be between 1 and 100")
+		return Command{}, clidiag.Usage("--limit must be between 1 and 100")
 	case result.operation == "retry" && result.id.IsZero():
-		return Command{}, cli.Usage("--id is required")
+		return Command{}, clidiag.Usage("--id is required")
 	case result.operation == "prune" && result.olderThan <= 0:
-		return Command{}, cli.Usage("--older-than must be a positive duration")
+		return Command{}, clidiag.Usage("--older-than must be a positive duration")
 	case result.operation == "prune" && (result.options.Limit < 1 || result.options.Limit > archive.MaxPruneBatch):
-		return Command{}, cli.Usage("--limit must be between 1 and 10000")
+		return Command{}, clidiag.Usage("--limit must be between 1 and 10000")
 	}
 	return result, nil
 }
@@ -106,7 +107,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 // Declaration registers the failed-jobs command in the ordinary CLI registry.
 func Declaration(construct func(foundation.Resolver) (*archive.Store, *jobs.Connections, error)) (cli.Declaration, error) {
 	if construct == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "failed-job commands require an archive constructor")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "failed-job commands require an archive constructor")
 	}
 	definition := cli.Define("failed-jobs", "List, re-dispatch and prune archived failed jobs", func(args []string, help io.Writer) (Command, error) {
 		if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -128,7 +129,7 @@ func Declaration(construct func(foundation.Resolver) (*archive.Store, *jobs.Conn
 // Run emits only operational metadata: never payloads or error text.
 func (c Command) Run(ctx context.Context, store *archive.Store, connections *jobs.Connections, output io.Writer) error {
 	if ctx == nil || output == nil || store == nil {
-		return fault.New(fault.Invalid, "failed-job command requires context, archive and output")
+		return safeerror.NewFault(fault.Invalid, "failed-job command requires context, archive and output")
 	}
 	switch c.operation {
 	case "list":
@@ -150,7 +151,7 @@ func (c Command) Run(ctx context.Context, store *archive.Store, connections *job
 		return err
 	case "retry":
 		if connections == nil {
-			return fault.New(fault.Invalid, "failed-job retry requires job connections")
+			return safeerror.NewFault(fault.Invalid, "failed-job retry requires job connections")
 		}
 		var connection *jobs.Connection
 		var err error
@@ -181,14 +182,14 @@ func (c Command) Run(ctx context.Context, store *archive.Store, connections *job
 			total += count
 			if err != nil || count < c.options.Limit {
 				if c.json {
-					return errors.Join(err, json.NewEncoder(output).Encode(struct {
+					return safeerror.Join("operation failed", err, json.NewEncoder(output).Encode(struct {
 						Deleted int `json:"deleted"`
 					}{total}))
 				}
 				_, writeErr := fmt.Fprintf(output, "deleted=%d\n", total)
-				return errors.Join(err, writeErr)
+				return safeerror.Join("operation failed", err, writeErr)
 			}
 		}
 	}
-	return fault.New(fault.Invalid, "uninitialized failed-job command; use Parse")
+	return safeerror.NewFault(fault.Invalid, "uninitialized failed-job command; use Parse")
 }

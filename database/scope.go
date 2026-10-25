@@ -2,11 +2,11 @@ package database
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // operationScope owns one sequential connection/transaction capability. Both
@@ -45,7 +45,7 @@ func (s *operationScope) track(rows *Rows) error {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return errors.Join(failure("database scope", Closed), rows.Close())
+		return safeerror.Join("operation failed", failure("database scope", Closed), rows.Close())
 	}
 	s.rows = rows
 	s.mu.Unlock()
@@ -67,7 +67,7 @@ func (s *operationScope) finish() error {
 	var err error
 	if busy {
 		if rows != nil {
-			err = errors.Join(failure("unclosed database rows", Busy), rows.Close())
+			err = safeerror.Join("operation failed", failure("unclosed database rows", Busy), rows.Close())
 		} else {
 			<-idle
 			err = failure("unfinished database operation", Busy)
@@ -75,7 +75,7 @@ func (s *operationScope) finish() error {
 	}
 	if observers != 0 {
 		<-observersIdle
-		err = errors.Join(err, failure("unfinished model observer scope", Busy))
+		err = safeerror.Join("operation failed", err, failure("unfinished model observer scope", Busy))
 	}
 	return err
 }

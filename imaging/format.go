@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Format string
@@ -97,9 +98,13 @@ func (f Format) CanDecode() bool {
 	return ok && capability.Read
 }
 
-func invalid(message string) error        { return fault.New(fault.Invalid, message) }
-func limited() error                      { return fault.New(fault.Invalid, "image exceeds configured resource limits") }
-func unsupported() error                  { return fault.New(fault.Invalid, "unsupported image encoding or container") }
+func invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }
+func limited() error {
+	return safeerror.NewFault(fault.Invalid, "image exceeds configured resource limits")
+}
+func unsupported() error {
+	return safeerror.NewFault(fault.Invalid, "unsupported image encoding or container")
+}
 func safeFormat(s fmt.State, text string) { _, _ = s.Write([]byte(text)) }
 
 // ParseMediaType recognizes image media types. Recognition does not imply that

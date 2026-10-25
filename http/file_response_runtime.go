@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (p *preparedFile) write(w stdhttp.ResponseWriter, r *stdhttp.Request) error {
@@ -33,7 +34,7 @@ func (p *preparedFile) finish(w stdhttp.ResponseWriter, r *stdhttp.Request, writ
 	// even when Header panicked before commit. Never call that writer again to
 	// attempt a replacement response.
 	if owned != nil {
-		return fault.Wrap(fault.Internal, "file response writer failed", owned)
+		return safeerror.WrapFailure(fault.Internal, "file response writer failed", owned)
 	}
 	cause := p.reader.Failure()
 	if cause == nil && writer != nil {
@@ -50,21 +51,21 @@ func (p *preparedFile) finish(w stdhttp.ResponseWriter, r *stdhttp.Request, writ
 	}
 	if cause != nil {
 		if writer != nil && writer.committed {
-			return fault.Wrap(fault.Internal, "file response transfer failed", cause)
+			return safeerror.WrapFailure(fault.Internal, "file response transfer failed", cause)
 		}
 		writeRoutingError(w, r, fileReadError(r.Context(), cause))
 		return nil
 	}
 	if writer == nil {
-		return fault.New(fault.Internal, "file response was not prepared")
+		return safeerror.NewFault(fault.Internal, "file response was not prepared")
 	}
 	if writer.status >= 400 {
-		var responseError error = InternalError
+		var responseError error = InternalError.WithCause(nil)
 		switch writer.status {
 		case stdhttp.StatusPreconditionFailed:
-			responseError = PreconditionFailed
+			responseError = PreconditionFailed.WithCause(nil)
 		case stdhttp.StatusRequestedRangeNotSatisfiable:
-			responseError = RangeNotSatisfiable
+			responseError = RangeNotSatisfiable.WithCause(nil)
 		}
 		writeRoutingError(fileRangeErrorWriter{ResponseWriter: w, contentRange: writer.Header().Get("Content-Range")}, r, responseError)
 	}

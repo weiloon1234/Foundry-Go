@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -14,7 +15,7 @@ func (q readResult[R]) pageWindow(request PageRequest, lookahead bool) (readResu
 		return readResult[R]{}, err
 	}
 	if q.node.Limit.IsSet() || q.node.Offset != 0 || len(q.node.Orders) == 0 {
-		return readResult[R]{}, fault.New(fault.Invalid, "result pagination requires explicit ordering and no outer Limit/Offset")
+		return readResult[R]{}, safeerror.NewFault(fault.Invalid, "result pagination requires explicit ordering and no outer Limit/Offset")
 	}
 	size := request.Size
 	if lookahead {

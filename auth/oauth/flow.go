@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Flow keeps the pending request in an encrypted, short-lived cookie between
@@ -45,7 +46,7 @@ func NewFlow(client *Client, encrypter http.CookieEncrypter, name http.CookieNam
 // http.Redirect with 302) or return it to a single-page client.
 func (f *Flow) Start(ctx context.Context, w stdhttp.ResponseWriter) (string, error) {
 	if f == nil {
-		return "", fault.New(fault.Invalid, "OAuth flow is not configured")
+		return "", safeerror.NewFault(fault.Invalid, "OAuth flow is not configured")
 	}
 	authorization, err := f.client.Begin(ctx)
 	if err != nil {
@@ -64,7 +65,7 @@ func (f *Flow) Start(ctx context.Context, w stdhttp.ResponseWriter) (string, err
 // auth.Unauthenticated.
 func (f *Flow) Finish(w stdhttp.ResponseWriter, r *stdhttp.Request) (Profile, error) {
 	if f == nil || r == nil {
-		return Profile{}, fault.New(fault.Invalid, "OAuth flow is not configured")
+		return Profile{}, safeerror.NewFault(fault.Invalid, "OAuth flow is not configured")
 	}
 	stored, err := f.cookie.Read(r)
 	if clearErr := f.cookie.Clear(w); clearErr != nil {
@@ -75,14 +76,14 @@ func (f *Flow) Finish(w stdhttp.ResponseWriter, r *stdhttp.Request) (Profile, er
 	}
 	pending, present := stored.Get()
 	if !present {
-		return Profile{}, auth.Unauthenticated.WithCause(fault.New(fault.Missing, "OAuth callback has no pending request"))
+		return Profile{}, auth.Unauthenticated.WithCause(safeerror.NewFault(fault.Missing, "OAuth callback has no pending request"))
 	}
 	if r.URL.EscapedPath() != f.callback {
-		return Profile{}, auth.Unauthenticated.WithCause(fault.New(fault.Invalid, "OAuth callback arrived on an unregistered path"))
+		return Profile{}, auth.Unauthenticated.WithCause(safeerror.NewFault(fault.Invalid, "OAuth callback arrived on an unregistered path"))
 	}
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
-		return Profile{}, auth.Unauthenticated.WithCause(fault.New(fault.Invalid, "malformed OAuth callback"))
+		return Profile{}, auth.Unauthenticated.WithCause(safeerror.NewFault(fault.Invalid, "malformed OAuth callback"))
 	}
 	callback, err := ParseCallback(query)
 	if err != nil {

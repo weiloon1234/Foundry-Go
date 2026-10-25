@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -19,14 +20,14 @@ import (
 // only invalid use, never the handler's own failure.
 func (s *Scheduler) RunNow(ctx context.Context, id ID) (Record, error) {
 	if s == nil || s.registry == nil || ctx == nil {
-		return Record{}, fault.New(fault.Invalid, "schedule run requires an initialized scheduler and context")
+		return Record{}, safeerror.NewFault(fault.Invalid, "schedule run requires an initialized scheduler and context")
 	}
 	index := slices.IndexFunc(s.registry.entries, func(d Declaration) bool { return d.id == id })
 	if index < 0 {
-		return Record{}, fault.New(fault.Missing, "schedule is not registered")
+		return Record{}, safeerror.NewFault(fault.Missing, "schedule is not registered")
 	}
 	if !s.status[index].Enabled {
-		return Record{}, fault.New(fault.Invalid, "schedule is disabled in this environment")
+		return Record{}, safeerror.NewFault(fault.Invalid, "schedule is disabled in this environment")
 	}
 	started, err := s.readClock()
 	if err != nil {

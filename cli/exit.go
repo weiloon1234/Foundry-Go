@@ -58,6 +58,9 @@ func Status(err error) ExitCode {
 // Report writes an execution error once and returns its process exit code. The
 // application's main function owns os.Exit and signal handling. A write failure
 // or a misbehaving custom Error method is itself a failed report.
+// Report is an intentional operator-facing presentation boundary: it calls the
+// supplied error's Error method inside callback isolation. It does not promise
+// runtime report redaction; callers choose the error text they present.
 func Report(output io.Writer, err error) ExitCode {
 	code := Status(err)
 	if code == Success {

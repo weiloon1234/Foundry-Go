@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxInsertRows bounds one atomic insert/upsert statement. The shared parameter
@@ -37,7 +38,7 @@ func (p insertPlan[M]) validateRowShapes(requireFields bool) (compiler, []map[st
 		return c, nil, nil, err
 	}
 	if len(p.rows) > MaxInsertRows {
-		return c, nil, nil, fault.New(fault.Invalid, "model insert exceeds its row bound")
+		return c, nil, nil, safeerror.NewFault(fault.Invalid, "model insert exceeds its row bound")
 	}
 	if p.conflict != nil {
 		if err := p.conflict.validate(q, &c); err != nil {
@@ -49,7 +50,7 @@ func (p insertPlan[M]) validateRowShapes(requireFields bool) (compiler, []map[st
 	assignedCount := 0
 	for i, row := range p.rows {
 		if len(row.assignments) > MaxParameters-assignedCount {
-			return c, nil, nil, fault.New(fault.Invalid, "model insert exceeds its cell bound")
+			return c, nil, nil, safeerror.NewFault(fault.Invalid, "model insert exceeds its cell bound")
 		}
 		assignedCount += len(row.assignments)
 		if requireFields {
@@ -70,7 +71,7 @@ func (p insertPlan[M]) validateRowShapes(requireFields bool) (compiler, []map[st
 		union[q.definition.modelDefinition.Primary] = true
 	}
 	if len(rows) > 0 && len(union) > MaxParameters/len(rows) {
-		return c, nil, nil, fault.New(fault.Invalid, "model insert exceeds its cell bound")
+		return c, nil, nil, safeerror.NewFault(fault.Invalid, "model insert exceeds its cell bound")
 	}
 	return c, rows, union, nil
 }

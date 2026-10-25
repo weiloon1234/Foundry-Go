@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -42,10 +43,10 @@ func (r ThroughRelation[M, N, P]) validateWrite() (int, error) {
 	if len(r.orders) != 0 || len(r.spec.target.queryCore.Orders) != 0 || len(r.pivot.queryCore.Orders) != 0 ||
 		len(r.spec.target.relations) != 0 || len(r.pivot.relations) != 0 ||
 		r.spec.target.relationLimits != nil || r.pivot.relationLimits != nil {
-		return 0, fault.New(fault.Invalid, "relation writes do not accept ordering or eager-loading options")
+		return 0, safeerror.NewFault(fault.Invalid, "relation writes do not accept ordering or eager-loading options")
 	}
 	if r.pivotLocal == r.pivotForeign {
-		return 0, fault.New(fault.Invalid, "relation writes require two distinct pivot key fields")
+		return 0, safeerror.NewFault(fault.Invalid, "relation writes require two distinct pivot key fields")
 	}
 	return limit, nil
 }
@@ -63,7 +64,7 @@ func (r ThroughRelation[M, N, P]) Attach(ctx context.Context, writer database.Tr
 		return *new(P), err
 	}
 	if nilDescriptor(draft) {
-		return *new(P), fault.New(fault.Invalid, "relation attachment requires a typed pivot draft")
+		return *new(P), safeerror.NewFault(fault.Invalid, "relation attachment requires a typed pivot draft")
 	}
 	return executeWrite(ctx, writer, func(ctx context.Context, tx *database.Tx) (P, error) {
 		scoped, keys, err := r.writeEndpoints(ctx, tx, source, target)
@@ -90,7 +91,7 @@ func (r ThroughRelation[M, N, P]) Attach(ctx context.Context, writer database.Tr
 			return *new(P), err
 		}
 		if !matches {
-			return *new(P), fault.New(fault.Invalid, "stored pivot does not satisfy the relation endpoints and filters")
+			return *new(P), safeerror.NewFault(fault.Invalid, "stored pivot does not satisfy the relation endpoints and filters")
 		}
 		return created, nil
 	})
@@ -120,7 +121,7 @@ func (r ThroughRelation[M, N, P]) detach(ctx context.Context, writer database.Tr
 		return nil, err
 	}
 	if force && !r.pivot.queryCore.HasSoftDeletes() {
-		return nil, fault.New(fault.Invalid, "force detachment requires a soft-delete pivot")
+		return nil, safeerror.NewFault(fault.Invalid, "force detachment requires a soft-delete pivot")
 	}
 	return executeWrite(ctx, writer, func(ctx context.Context, tx *database.Tx) ([]P, error) {
 		scoped, keys, err := r.writeEndpoints(ctx, tx, source, target)

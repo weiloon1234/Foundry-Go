@@ -18,17 +18,17 @@ const Binary MediaType = "application/octet-stream"
 
 func (m MediaType) Validate() error {
 	if len(m) == 0 || len(m) > MaxContentTypeBytes {
-		return Failure(Invalid, PutOperation, Unchanged, nil)
+		return newFailure(Invalid, PutOperation, Unchanged, nil)
 	}
 	for _, c := range m {
 		if c < 32 || c == 127 {
-			return Failure(Invalid, PutOperation, Unchanged, nil)
+			return newFailure(Invalid, PutOperation, Unchanged, nil)
 		}
 	}
 	parsed, _, err := mime.ParseMediaType(string(m))
 	major, minor, ok := strings.Cut(parsed, "/")
 	if err != nil || !ok || major == "" || minor == "" || strings.ContainsAny(parsed, "*") || strings.Contains(minor, "/") {
-		return Failure(Invalid, PutOperation, Unchanged, err)
+		return newFailure(Invalid, PutOperation, Unchanged, err)
 	}
 	return nil
 }
@@ -42,11 +42,11 @@ func (t ETag) Validate() error {
 		return nil
 	}
 	if len(t) < 2 || len(t) > 1024 || t[0] != '"' || t[len(t)-1] != '"' {
-		return Failure(Invalid, StatOperation, NotApplicable, nil)
+		return newFailure(Invalid, StatOperation, NotApplicable, nil)
 	}
 	for _, c := range []byte(t[1 : len(t)-1]) {
 		if c < 0x21 || c == 0x22 || c > 0x7e {
-			return Failure(Invalid, StatOperation, NotApplicable, nil)
+			return newFailure(Invalid, StatOperation, NotApplicable, nil)
 		}
 	}
 	return nil
@@ -58,11 +58,11 @@ type VersionID string
 
 func (v VersionID) Validate() error {
 	if len(v) > 1024 {
-		return Failure(Invalid, StatOperation, NotApplicable, nil)
+		return newFailure(Invalid, StatOperation, NotApplicable, nil)
 	}
 	for _, c := range v {
 		if c < 32 || c == 127 {
-			return Failure(Invalid, StatOperation, NotApplicable, nil)
+			return newFailure(Invalid, StatOperation, NotApplicable, nil)
 		}
 	}
 	return nil
@@ -74,7 +74,7 @@ func ParseSHA256(text string) (SHA256, error) {
 	var result SHA256
 	raw, err := hex.DecodeString(text)
 	if err != nil || len(raw) != len(result) {
-		return result, Failure(Invalid, PutOperation, Unchanged, err)
+		return result, newFailure(Invalid, PutOperation, Unchanged, err)
 	}
 	copy(result[:], raw)
 	return result, nil
@@ -100,7 +100,7 @@ func (i ObjectInfo) Validate() error {
 		}
 	}
 	if i.Size < 0 || i.Modified.UTC().IsZero() {
-		return Failure(IntegrityFailed, StatOperation, NotApplicable, nil)
+		return newFailure(IntegrityFailed, StatOperation, NotApplicable, nil)
 	}
 	return nil
 }
@@ -165,7 +165,7 @@ func (m ObjectMetadata) Clone() ObjectMetadata {
 	return m
 }
 func (m ObjectMetadata) Validate() error {
-	invalid := func() error { return Failure(Invalid, PutOperation, Unchanged, nil) }
+	invalid := func() error { return newFailure(Invalid, PutOperation, Unchanged, nil) }
 	for _, text := range []string{m.CacheControl, m.ContentDisposition, m.ContentEncoding, m.EncryptionKey} {
 		if !headerText(text) {
 			return invalid()

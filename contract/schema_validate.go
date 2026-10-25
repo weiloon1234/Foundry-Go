@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonpointer"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // shapeLimits is separate from the parser's accounting: aliases consume work
@@ -29,7 +30,7 @@ type shapeCheck struct {
 // and absent declared fields; no recursive alias expansion uses the Go stack.
 func (s *compiledSchema) check(ctx context.Context, node any, limits shapeLimits) ([]Issue, error) {
 	if ctx == nil || limits.steps <= 0 || limits.issues <= 0 {
-		return nil, fault.New(fault.Invalid, "invalid JSON contract validation bounds")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid JSON contract validation bounds")
 	}
 	check := shapeCheck{ctx: ctx, schema: s, limits: limits}
 	check.visit(s.description.Root, node, "", 0)
@@ -51,7 +52,7 @@ func (c *shapeCheck) take() bool {
 		return false
 	}
 	if c.steps >= c.limits.steps {
-		c.err = fault.New(fault.Invalid, "JSON contract validation work bound exceeded")
+		c.err = safeerror.NewFault(fault.Invalid, "JSON contract validation work bound exceeded")
 		return false
 	}
 	c.steps++
@@ -70,7 +71,7 @@ func childPath(parent, key string) string {
 
 func (c *shapeCheck) visit(id TypeID, node any, path string, depth int) {
 	if depth > jsonwire.MaxDepth {
-		c.err = fault.New(fault.Invalid, "JSON contract validation depth bound exceeded")
+		c.err = safeerror.NewFault(fault.Invalid, "JSON contract validation depth bound exceeded")
 		return
 	}
 	var typ Type

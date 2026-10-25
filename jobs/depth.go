@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // DefaultDepthInterval is the sampling period of a DepthMonitor.
@@ -45,12 +46,12 @@ func NewDepthMonitor(interval time.Duration, targets ...DepthTarget) (*DepthMoni
 		interval = DefaultDepthInterval
 	}
 	if interval < time.Second || interval > time.Hour || len(targets) == 0 || len(targets) > 256 {
-		return nil, fault.New(fault.Invalid, "queue depth monitor requires 1 to 256 targets and a 1s to 1h interval")
+		return nil, safeerror.NewFault(fault.Invalid, "queue depth monitor requires 1 to 256 targets and a 1s to 1h interval")
 	}
 	monitor := &DepthMonitor{targets: slices.Clone(targets), interval: interval, readings: make([]QueueDepth, len(targets))}
 	for i, target := range targets {
 		if target.Dispatcher == nil || target.Queue.Validate() != nil {
-			return nil, fault.New(fault.Invalid, "queue depth target requires a dispatcher and queue")
+			return nil, safeerror.NewFault(fault.Invalid, "queue depth target requires a dispatcher and queue")
 		}
 		monitor.readings[i] = QueueDepth{Connection: target.Connection, Queue: target.Queue}
 	}
@@ -61,7 +62,7 @@ func NewDepthMonitor(interval time.Duration, targets ...DepthTarget) (*DepthMoni
 // a failed sample marks that reading unavailable; sampling continues.
 func (m *DepthMonitor) Run(ctx context.Context) error {
 	if m == nil || ctx == nil {
-		return fault.New(fault.Invalid, "queue depth monitor requires initialization and context")
+		return safeerror.NewFault(fault.Invalid, "queue depth monitor requires initialization and context")
 	}
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()

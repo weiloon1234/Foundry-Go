@@ -3,7 +3,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -13,12 +12,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // streamTimeout is the cancellation cause when a read stream does not open
 // within Timeout or makes no read progress for StreamIdleTimeout.
-var streamTimeout = fault.Wrap(fault.Timeout, "storage stream made no progress before its deadline", context.DeadlineExceeded)
+var streamTimeout = safeerror.WrapFault(fault.Timeout, "storage stream made no progress before its deadline", context.DeadlineExceeded)
 
 // Disk owns bounded operations and returned readers, borrowing its backend.
 // Metadata/write operations and open read streams use separate queued
@@ -52,14 +52,14 @@ func NewDisk(id DiskID, backend Backend, config Config) (*Disk, error) {
 	}
 	config = config.normalized()
 	if backend == nil {
-		return nil, Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return nil, newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	var capabilities Capabilities
 	if err := callback.Isolated("storage capabilities", func() error { capabilities = backend.Capabilities(); return nil }); err != nil {
-		return nil, Failure(Invalid, OpenOperation, NotApplicable, err)
+		return nil, newFailure(Invalid, OpenOperation, NotApplicable, err)
 	}
 	if capabilities.ConditionalWriteMaxBytes < 0 {
-		return nil, Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return nil, newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Disk{id: id, backend: backend, config: config, capabilities: capabilities, operations: admission.New(config.MaxActive), streams: admission.New(config.MaxStreams), ctx: ctx, cancel: cancel, readers: make(map[*ownedReader]struct{}), done: make(chan struct{})}, nil
@@ -87,7 +87,7 @@ func (d *Disk) Config() Config {
 }
 func (d *Disk) Validate() error {
 	if d == nil || d.done == nil {
-		return Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	return nil
 }
@@ -100,29 +100,29 @@ func (d *Disk) admit(ctx context.Context, pool *admission.Semaphore, op Operatio
 		return nil, err
 	}
 	if ctx == nil {
-		return nil, Failure(Invalid, op, NotApplicable, nil)
+		return nil, newFailure(Invalid, op, NotApplicable, nil)
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, Failure(Unavailable, op, Unchanged, err)
+		return nil, newFailure(Unavailable, op, Unchanged, err)
 	}
 	d.mu.Lock()
 	closing := d.closing
 	d.mu.Unlock()
 	if closing {
-		return nil, Failure(Closed, op, Unchanged, nil)
+		return nil, newFailure(Closed, op, Unchanged, nil)
 	}
 	if err := pool.Acquire(ctx, admission.Wait(d.config.Timeout), d.ctx.Done()); err != nil {
-		if errors.Is(err, fault.Closed) {
-			return nil, Failure(Closed, op, Unchanged, err)
+		if callback.ErrorIs(err, fault.Closed) {
+			return nil, newFailure(Closed, op, Unchanged, err)
 		}
-		return nil, Failure(Unavailable, op, Unchanged, err)
+		return nil, newFailure(Unavailable, op, Unchanged, err)
 	}
 	streaming := pool == d.streams
 	d.mu.Lock()
 	if d.closing {
 		d.mu.Unlock()
 		pool.Release()
-		return nil, Failure(Closed, op, Unchanged, nil)
+		return nil, newFailure(Closed, op, Unchanged, nil)
 	}
 	d.active++
 	if streaming {
@@ -178,7 +178,7 @@ func finish(op Operation, ctx context.Context, err error, success Outcome) error
 	if success == NotApplicable {
 		outcome = NotApplicable
 	}
-	return Failure(Unavailable, op, outcome, errors.Join(context.Cause(ctx), failed))
+	return newFailure(Unavailable, op, outcome, safeerror.Join("operation failed", context.Cause(ctx), err, failed))
 }
 
 func classifyOutcome(op Operation, ctx context.Context, err error, success Outcome) error {
@@ -201,13 +201,13 @@ func classifyOutcome(op Operation, ctx context.Context, err error, success Outco
 				outcome = failure.Outcome()
 			}
 		}
-		result := Failure(Unavailable, op, outcome, errors.Join(canceled, err))
+		result := Failure(Unavailable, op, outcome, safeerror.Join("operation failed", canceled, err))
 		if failure != nil {
 			if id, present := failure.Cleanup().Get(); present {
 				result = result.WithCleanup(id)
 			}
 		}
-		return result
+		return ownFailure(result)
 	}
 	if err == nil {
 		return nil
@@ -217,13 +217,13 @@ func classifyOutcome(op Operation, ctx context.Context, err error, success Outco
 		if id, present := failure.Cleanup().Get(); present {
 			safe = safe.WithCleanup(id)
 		}
-		return safe
+		return safeerror.Retain(err, safe)
 	}
 	outcome := Unknown
 	if success == NotApplicable {
 		outcome = NotApplicable
 	}
-	return Failure(Unavailable, op, outcome, err)
+	return safeerror.Retain(err, newFailure(Unavailable, op, outcome, err))
 }
 func (d *Disk) writeOptions(o PutOptions) error {
 	if err := o.Validate(d.config.MaxObjectBytes); err != nil {
@@ -242,7 +242,7 @@ func (d *Disk) validateInfo(key ObjectKey, info ObjectInfo) error {
 		return err
 	}
 	if info.Key != key || info.Size > d.config.MaxObjectBytes {
-		return Failure(IntegrityFailed, StatOperation, NotApplicable, nil)
+		return newFailure(IntegrityFailed, StatOperation, NotApplicable, nil)
 	}
 	return nil
 }
@@ -254,7 +254,7 @@ func (d *Disk) Put(ctx context.Context, key ObjectKey, source io.Reader, options
 		return StoredObject{}, err
 	}
 	if source == nil {
-		return StoredObject{}, Failure(Invalid, PutOperation, Unchanged, nil)
+		return StoredObject{}, newFailure(Invalid, PutOperation, Unchanged, nil)
 	}
 	if err := d.writeOptions(options); err != nil {
 		return StoredObject{}, err
@@ -272,17 +272,17 @@ func (d *Disk) Put(ctx context.Context, key ObjectKey, source io.Reader, options
 	err = callback.Isolated("storage put", func() error { var err error; info, err = d.backend.Put(op, key, bounded, options); return err })
 	if err == nil {
 		if !bounded.eof || bounded.failed != nil {
-			err = Failure(IntegrityFailed, PutOperation, Unknown, bounded.failed)
+			err = newFailure(IntegrityFailed, PutOperation, Unknown, bounded.failed)
 		} else if e := d.validateInfo(key, info); e != nil {
-			err = Failure(IntegrityFailed, PutOperation, Applied, e)
+			err = newFailure(IntegrityFailed, PutOperation, Applied, e)
 		} else if info.Size != bounded.read {
-			err = Failure(IntegrityFailed, PutOperation, Applied, nil)
+			err = newFailure(IntegrityFailed, PutOperation, Applied, nil)
 		} else if expected, present := options.Size.Get(); present && info.Size != expected {
-			err = Failure(IntegrityFailed, PutOperation, Applied, nil)
+			err = newFailure(IntegrityFailed, PutOperation, Applied, nil)
 		} else if expected, present := options.Checksum.Get(); present {
 			actual, available := info.Checksum.Get()
 			if !available || actual != expected {
-				err = Failure(IntegrityFailed, PutOperation, Applied, nil)
+				err = newFailure(IntegrityFailed, PutOperation, Applied, nil)
 			}
 		}
 	}
@@ -293,7 +293,7 @@ func (d *Disk) Put(ctx context.Context, key ObjectKey, source io.Reader, options
 }
 func (d *Disk) PutBytes(ctx context.Context, key ObjectKey, data []byte, options PutOptions) (StoredObject, error) {
 	if size, present := options.Size.Get(); present && size != int64(len(data)) {
-		return StoredObject{}, Failure(Invalid, PutOperation, Unchanged, nil)
+		return StoredObject{}, newFailure(Invalid, PutOperation, Unchanged, nil)
 	}
 	options.Size = value.Set(int64(len(data)))
 	return d.Put(ctx, key, bytes.NewReader(data), options)
@@ -341,10 +341,10 @@ func (d *Disk) Open(ctx context.Context, key ObjectKey, options ReadOptions) (io
 		if requested, present := options.Range.Get(); present {
 			var rangeErr error
 			offset, length, rangeErr = requested.Resolve(info.Object.Size)
-			err = errors.Join(err, rangeErr)
+			err = safeerror.Join("operation failed", err, rangeErr)
 		}
 		if body == nil || info.Offset != offset || info.Length != length {
-			err = errors.Join(err, Failure(IntegrityFailed, OpenOperation, NotApplicable, nil))
+			err = safeerror.Join("operation failed", err, newFailure(IntegrityFailed, OpenOperation, NotApplicable, nil))
 		}
 	}
 	err = finish(OpenOperation, op, err, NotApplicable)
@@ -352,7 +352,7 @@ func (d *Disk) Open(ctx context.Context, key ObjectKey, options ReadOptions) (io
 		cancel(context.Canceled)
 		if body != nil {
 			if cleanup := closeBody(body); cleanup != nil {
-				err = Failure(Unavailable, OpenOperation, NotApplicable, errors.Join(err, cleanup))
+				err = newFailure(Unavailable, OpenOperation, NotApplicable, safeerror.Join("operation failed", err, cleanup))
 			}
 		}
 		release()
@@ -372,7 +372,7 @@ func (d *Disk) Open(ctx context.Context, key ObjectKey, options ReadOptions) (io
 	if closing || op.Err() != nil {
 		cause := context.Cause(op)
 		cleanup := reader.Close()
-		return nil, ReadInfo{}, Failure(Closed, OpenOperation, NotApplicable, errors.Join(cause, cleanup))
+		return nil, ReadInfo{}, newFailure(Closed, OpenOperation, NotApplicable, safeerror.Join("operation failed", cause, cleanup))
 	}
 	return reader, info, nil
 }
@@ -387,7 +387,7 @@ func (d *Disk) Stat(ctx context.Context, key ObjectKey, options ReadOptions) (Ob
 		return ObjectInfo{}, err
 	}
 	if options.Range.IsSet() {
-		return ObjectInfo{}, Failure(Invalid, StatOperation, NotApplicable, nil)
+		return ObjectInfo{}, newFailure(Invalid, StatOperation, NotApplicable, nil)
 	}
 	op, release, err := d.begin(ctx, StatOperation)
 	if err != nil {
@@ -410,7 +410,7 @@ func (d *Disk) Exists(ctx context.Context, key ObjectKey) (bool, error) {
 		return true, nil
 	}
 	var missing *Error
-	if errors.As(err, &missing) && missing.Code() == NotFound {
+	if callback.ErrorAs(err, &missing) && missing.Code() == NotFound {
 		return false, nil
 	}
 	return false, err
@@ -477,7 +477,7 @@ func (d *Disk) List(ctx context.Context, options ListOptions) (Page, error) {
 // validatePage checks an adapter page as an untrusted boundary: bounds, order,
 // prefix containment and one-level shape for delimited listings.
 func validatePage(options ListOptions, page Page) error {
-	integrity := func(cause error) error { return Failure(IntegrityFailed, ListOperation, NotApplicable, cause) }
+	integrity := func(cause error) error { return newFailure(IntegrityFailed, ListOperation, NotApplicable, cause) }
 	if len(page.Objects)+len(page.Directories) > options.Limit || page.Skipped < 0 || len(page.Next.Token()) > MaxCursorBytes || !page.Next.IsZero() && page.Next == options.Cursor {
 		return integrity(nil)
 	}
@@ -511,7 +511,7 @@ func (d *Disk) Close(ctx context.Context) error {
 		return err
 	}
 	if ctx == nil {
-		return Failure(Invalid, CloseOperation, NotApplicable, nil)
+		return newFailure(Invalid, CloseOperation, NotApplicable, nil)
 	}
 	d.mu.Lock()
 	if !d.closing {
@@ -534,7 +534,7 @@ func (d *Disk) Close(ctx context.Context) error {
 	case <-d.done:
 		return d.closeErr
 	case <-ctx.Done():
-		return Failure(Unavailable, CloseOperation, NotApplicable, ctx.Err())
+		return newFailure(Unavailable, CloseOperation, NotApplicable, ctx.Err())
 	}
 }
 func (d *Disk) Done() <-chan struct{} {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -70,7 +71,7 @@ func (d *Dispatcher) WorkflowStatus(ctx context.Context, queue Queue, id Workflo
 	}
 	defer release()
 	if id.IsZero() {
-		return value.Optional[WorkflowStatus]{}, fault.New(fault.Invalid, "workflow status requires an identity")
+		return value.Optional[WorkflowStatus]{}, safeerror.NewFault(fault.Invalid, "workflow status requires an identity")
 	}
 	key, err := NewKey(d.config.Namespace, queue)
 	if err != nil {
@@ -78,7 +79,7 @@ func (d *Dispatcher) WorkflowStatus(ctx context.Context, queue Queue, id Workflo
 	}
 	backend, ok := d.backend.(WorkflowStatusBackend)
 	if !ok {
-		return value.Optional[WorkflowStatus]{}, fault.New(fault.Invalid, "job backend does not report workflow status")
+		return value.Optional[WorkflowStatus]{}, safeerror.NewFault(fault.Invalid, "job backend does not report workflow status")
 	}
 	return backend.JobWorkflowStatus(ctx, key, id)
 }
@@ -86,7 +87,7 @@ func (d *Dispatcher) WorkflowStatus(ctx context.Context, queue Queue, id Workflo
 // Status inspects this workflow's progress through dispatcher.
 func (w Workflow) Status(ctx context.Context, dispatcher *Dispatcher) (value.Optional[WorkflowStatus], error) {
 	if dispatcher == nil {
-		return value.Optional[WorkflowStatus]{}, fault.New(fault.Invalid, "workflow status requires a dispatcher")
+		return value.Optional[WorkflowStatus]{}, safeerror.NewFault(fault.Invalid, "workflow status requires a dispatcher")
 	}
 	return dispatcher.WorkflowStatus(ctx, w.envelope.Queue(), w.ID())
 }

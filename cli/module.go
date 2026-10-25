@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module installs the parsed invocation as the application's CLI kernel. Parse
@@ -14,7 +15,7 @@ import (
 func Module(name foundation.ProviderID, key foundation.Key[*Registry], registry *Registry, invocation Invocation, streams Streams, requires ...foundation.ProviderID) foundation.Module {
 	return foundation.Module{Name: name, Requires: append([]foundation.ProviderID(nil), requires...), OnRegister: func(r *foundation.Registrar) error {
 		if registry == nil || invocation.state == nil || invocation.state.registry != registry {
-			return fault.New(fault.Invalid, "CLI module requires an invocation parsed by its registry")
+			return safeerror.NewFault(fault.Invalid, "CLI module requires an invocation parsed by its registry")
 		}
 		if err := streams.Validate(); err != nil {
 			return err

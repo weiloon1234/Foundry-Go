@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	htmltemplate "html/template"
 	"io"
 	"log/slog"
@@ -65,15 +66,15 @@ type LocalizedTemplate[T any] struct {
 // source locale must belong to the set.
 func NewLocalizedTemplate[T any](locales i18n.LocaleSet, sources map[i18n.LocaleID]TemplateSource) (LocalizedTemplate[T], error) {
 	if locales.Validate() != nil {
-		return LocalizedTemplate[T]{}, Construction
+		return LocalizedTemplate[T]{}, emaildiag.Failure(Construction)
 	}
 	if _, ok := sources[locales.Default()]; !ok {
-		return LocalizedTemplate[T]{}, Construction
+		return LocalizedTemplate[T]{}, emaildiag.Failure(Construction)
 	}
 	result := LocalizedTemplate[T]{locales: locales, templates: make(map[i18n.LocaleID]Template[T], len(sources))}
 	for locale, source := range sources {
 		if !locales.Contains(locale) {
-			return LocalizedTemplate[T]{}, Construction
+			return LocalizedTemplate[T]{}, emaildiag.Failure(Construction)
 		}
 		template, err := NewTemplate[T](source)
 		if err != nil {
@@ -88,7 +89,7 @@ func NewLocalizedTemplate[T any](locales i18n.LocaleSet, sources map[i18n.Locale
 // or empty locale renders the default.
 func (t LocalizedTemplate[T]) Render(ctx context.Context, locale i18n.LocaleID, data T) (Body, error) {
 	if t.templates == nil {
-		return Body{}, Construction
+		return Body{}, emaildiag.Failure(Construction)
 	}
 	chain := []i18n.LocaleID{t.locales.Default()}
 	if matched, ok := t.locales.Match(locale); ok && locale != "" {
@@ -105,12 +106,12 @@ func (t LocalizedTemplate[T]) Render(ctx context.Context, locale i18n.LocaleID, 
 		body.Locale = candidate
 		return body, err
 	}
-	return Body{}, Construction
+	return Body{}, emaildiag.Failure(Construction)
 }
 func NewTemplate[T any](source TemplateSource) (Template[T], error) {
 	typ := reflect.TypeFor[T]()
 	if typ.Kind() != reflect.Struct || typ.Name() == "" {
-		return Template[T]{}, Construction
+		return Template[T]{}, emaildiag.Failure(Construction)
 	}
 	t, err := parseTemplates(source)
 	return Template[T]{templates: t}, err
@@ -121,16 +122,16 @@ func NewDynamicTemplate(source TemplateSource) (DynamicTemplate, error) {
 }
 func parseTemplates(s TemplateSource) (*renderedTemplates, error) {
 	if s.MaxBytes < 1 || s.MaxBytes > 32<<20 || s.Text == "" && s.HTML == "" || len(s.Subject)+len(s.Text)+len(s.HTML)+len(s.Layout.Text)+len(s.Layout.HTML) > s.MaxBytes {
-		return nil, Construction
+		return nil, emaildiag.Failure(Construction)
 	}
 	for _, layout := range []string{s.Layout.Text, s.Layout.HTML} {
 		if layout != "" && !strings.Contains(layout, `"content"`) {
-			return nil, Construction
+			return nil, emaildiag.Failure(Construction)
 		}
 	}
 	subject, err := texttemplate.New("subject").Option("missingkey=error").Parse(s.Subject)
 	if err != nil {
-		return nil, Construction
+		return nil, emaildiag.Failure(Construction)
 	}
 	text := texttemplate.New("text").Option("missingkey=error")
 	if s.Layout.Text != "" && s.Text != "" {
@@ -142,7 +143,7 @@ func parseTemplates(s TemplateSource) (*renderedTemplates, error) {
 		text, err = text.Parse(s.Text)
 	}
 	if err != nil {
-		return nil, Construction
+		return nil, emaildiag.Failure(Construction)
 	}
 	html := htmltemplate.New("html").Option("missingkey=error")
 	if s.Layout.HTML != "" && s.HTML != "" {
@@ -153,7 +154,7 @@ func parseTemplates(s TemplateSource) (*renderedTemplates, error) {
 		html, err = html.Parse(s.HTML)
 	}
 	if err != nil {
-		return nil, Construction
+		return nil, emaildiag.Failure(Construction)
 	}
 	return &renderedTemplates{subject: subject, text: text, html: html, limit: s.MaxBytes}, nil
 }
@@ -172,10 +173,10 @@ type boundedBuffer struct {
 
 func (b *boundedBuffer) Write(p []byte) (int, error) {
 	if b.ctx != nil && b.ctx.Err() != nil {
-		return 0, Construction
+		return 0, emaildiag.Failure(Construction)
 	}
 	if len(p) > b.remaining {
-		return 0, Construction
+		return 0, emaildiag.Failure(Construction)
 	}
 	b.remaining -= len(p)
 	return b.buffer.Write(p)
@@ -186,7 +187,7 @@ func (b *boundedBuffer) String() string                       { return b.buffer.
 func (b *boundedBuffer) Bytes() []byte                        { return b.buffer.Bytes() }
 func renderTemplates(ctx context.Context, t *renderedTemplates, data any) (Body, error) {
 	if ctx == nil || ctx.Err() != nil || t == nil {
-		return Body{}, Construction
+		return Body{}, emaildiag.Failure(Construction)
 	}
 	var result Body
 	err := callback.Isolated("render email template", func() error {
@@ -197,14 +198,14 @@ func renderTemplates(ctx context.Context, t *renderedTemplates, data any) (Body,
 		}{{t.subject.Execute, &result.Subject}, {t.text.Execute, &result.Text}, {t.html.Execute, &result.HTML}} {
 			b.Reset()
 			if err := part.execute(b, data); err != nil {
-				return Construction
+				return emaildiag.Failure(Construction)
 			}
 			*part.output = b.String()
 		}
 		return nil
 	})
 	if err != nil || ctx.Err() != nil || !headerText(result.Subject) || len(result.Subject) > 2000 {
-		return Body{}, Construction
+		return Body{}, emaildiag.Failure(Construction)
 	}
 	return result, nil
 }

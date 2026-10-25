@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -35,7 +36,7 @@ func (q Query[M]) hasQueryOptions() bool {
 func (s relationSpec[M, N]) bind(name string, source Query[M], target Query[N]) relationSpec[M, N] {
 	s.bindingError = nil
 	if source.hasQueryOptions() || target.hasQueryOptions() {
-		s.bindingError = fault.New(fault.Invalid, "relation Bind requires bare metadata queries; apply scopes to the relation descriptor")
+		s.bindingError = safeerror.NewFault(fault.Invalid, "relation Bind requires bare metadata queries; apply scopes to the relation descriptor")
 	}
 	s.name = name
 	s.source = source
@@ -45,7 +46,7 @@ func (s relationSpec[M, N]) bind(name string, source Query[M], target Query[N]) 
 
 func (s relationSpec[M, N]) validate(source string, depth int, limits RelationLimits) error {
 	if s.fetch == nil {
-		return fault.New(fault.Invalid, "relation requires typed key declarations")
+		return safeerror.NewFault(fault.Invalid, "relation requires typed key declarations")
 	}
 	return s.validateMetadata(source, depth, limits)
 }
@@ -58,10 +59,10 @@ func (s relationSpec[M, N]) validateMetadata(source string, depth int, limits Re
 		return s.bindingError
 	}
 	if depth > limits.MaxDepth {
-		return fault.New(fault.Invalid, "relation nesting exceeds its depth bound")
+		return safeerror.NewFault(fault.Invalid, "relation nesting exceeds its depth bound")
 	}
 	if s.name == "" || s.source.definition == nil || s.target.definition == nil {
-		return fault.New(fault.Invalid, "relation requires generated binding metadata")
+		return safeerror.NewFault(fault.Invalid, "relation requires generated binding metadata")
 	}
 	if err := s.source.validateCore(); err != nil {
 		return err
@@ -76,13 +77,13 @@ func (s relationSpec[M, N]) validateMetadata(source string, depth int, limits Re
 		return err
 	}
 	if _, ok := s.source.definition.modelField(s.local.Column); !ok {
-		return fault.New(fault.Invalid, "relation source key is not a generated model field")
+		return safeerror.NewFault(fault.Invalid, "relation source key is not a generated model field")
 	}
 	if _, ok := s.target.definition.modelField(s.foreign.Column); !ok {
-		return fault.New(fault.Invalid, "relation target key is not a generated model field")
+		return safeerror.NewFault(fault.Invalid, "relation target key is not a generated model field")
 	}
 	if s.target.queryCore.Limit.IsSet() || s.target.queryCore.Offset != 0 {
-		return fault.New(fault.Invalid, "relation scopes cannot use global limits or offsets")
+		return safeerror.NewFault(fault.Invalid, "relation scopes cannot use global limits or offsets")
 	}
 	if s.hop != nil {
 		if err := s.hop.validate(); err != nil {
@@ -203,7 +204,7 @@ func (r ManyRelation[M, N]) copyRelation() Relation[M] { return r }
 
 func (r OneRelation[M, N]) validateRelation(source string, depth int, limits RelationLimits) error {
 	if r.get == nil || r.set == nil {
-		return fault.New(fault.Invalid, "singular relation requires a typed slot")
+		return safeerror.NewFault(fault.Invalid, "singular relation requires a typed slot")
 	}
 	if err := r.validateOfMany(); err != nil {
 		return err
@@ -213,7 +214,7 @@ func (r OneRelation[M, N]) validateRelation(source string, depth int, limits Rel
 
 func (r ManyRelation[M, N]) validateRelation(source string, depth int, limits RelationLimits) error {
 	if r.get == nil || r.set == nil {
-		return fault.New(fault.Invalid, "collection relation requires a typed slot")
+		return safeerror.NewFault(fault.Invalid, "collection relation requires a typed slot")
 	}
 	return r.spec.validate(source, depth, limits)
 }
@@ -239,7 +240,7 @@ func (r OneRelation[M, N]) loadRelation(ctx context.Context, executor database.E
 	result := parents // owned by loadRelations, which copied the caller slice once
 	for i, group := range groups {
 		if len(group) > 1 {
-			return nil, database.NewError("singular relation cardinality", database.TooManyRows)
+			return nil, databaseFailure("singular relation cardinality", database.TooManyRows)
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -352,7 +353,7 @@ func fetchDirect[M, N any, K comparable](ctx context.Context, executor database.
 			return nil, err
 		}
 		if len(batch) > state.remaining {
-			return nil, fault.New(fault.Invalid, "related rows exceed the shared loading budget")
+			return nil, safeerror.NewFault(fault.Invalid, "related rows exceed the shared loading budget")
 		}
 		state.remaining -= len(batch)
 		rows = append(rows, batch...)
@@ -369,7 +370,7 @@ func fetchDirect[M, N any, K comparable](ctx context.Context, executor database.
 		}
 		k, present := key.Get()
 		if !present || !seen[k.identity] {
-			return nil, fault.New(fault.Invalid, "related row key does not match requested keys; check key equality semantics")
+			return nil, safeerror.NewFault(fault.Invalid, "related row key does not match requested keys; check key equality semantics")
 		}
 		groups[k.identity] = append(groups[k.identity], row)
 	}

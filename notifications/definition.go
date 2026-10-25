@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -84,7 +85,7 @@ func Bind[M model.Identifiable, K, P any](definition Definition[P], recipient Re
 				return err
 			}
 			if seen[c.definition.id] {
-				return fault.New(fault.Duplicate, "notification channel is already bound")
+				return safeerror.NewFault(fault.Duplicate, "notification channel is already bound")
 			}
 			seen[c.definition.id] = true
 			if c.definition.recipient != nil && c.definition.recipient != recipient.token {
@@ -123,7 +124,7 @@ func Bind[M model.Identifiable, K, P any](definition Definition[P], recipient Re
 			return err
 		})
 		if failure != nil {
-			return nil, "", fault.New(fault.Internal, "notification recipient check failed")
+			return nil, "", safeerror.NewFault(fault.Internal, "notification recipient check failed")
 		}
 		return subject, state, nil
 	}
@@ -167,15 +168,15 @@ func NewRegistry(items ...Registration) (*Registry, error) {
 			return nil, err
 		}
 		if _, exists := r.entries[d.key]; exists {
-			return nil, fault.New(fault.Duplicate, "notification binding is already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "notification binding is already registered")
 		}
 		if previous := recipients[d.key.recipient]; previous != nil && previous != d.recipientToken {
-			return nil, fault.New(fault.Duplicate, "notification recipient name is already declared")
+			return nil, safeerror.NewFault(fault.Duplicate, "notification recipient name is already declared")
 		}
 		recipients[d.key.recipient] = d.recipientToken
 		key := [2]string{string(d.key.name), stringVersion(d.key.version)}
 		if previous := definitions[key]; previous != nil && previous != d.definitionToken {
-			return nil, fault.New(fault.Duplicate, "notification name and version are already declared")
+			return nil, safeerror.NewFault(fault.Duplicate, "notification name and version are already declared")
 		}
 		definitions[key] = d.definitionToken
 		r.entries[d.key] = d

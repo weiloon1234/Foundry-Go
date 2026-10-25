@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -55,7 +56,7 @@ func compileSecurityHeaders(c SecurityHeadersConfig) (securityHeaderPolicy, erro
 		return securityHeaderPolicy{}, err
 	}
 	if len(c.Extra) > maxSecurityExtraHeaders {
-		return securityHeaderPolicy{}, fault.New(fault.Invalid, "security headers exceed their declaration bound")
+		return securityHeaderPolicy{}, safeerror.NewFault(fault.Invalid, "security headers exceed their declaration bound")
 	}
 	p := securityHeaderPolicy{}
 	if c.NoSniff {
@@ -108,7 +109,7 @@ func compileSecurityHeaders(c SecurityHeadersConfig) (securityHeaderPolicy, erro
 		size += len(header.Name) + len(header.Value) + 4
 	}
 	if size > maxSecurityHeaderBytes {
-		return securityHeaderPolicy{}, fault.New(fault.Invalid, "security headers exceed their byte bound")
+		return securityHeaderPolicy{}, safeerror.NewFault(fault.Invalid, "security headers exceed their byte bound")
 	}
 	for _, header := range c.Extra {
 		if err := header.Validate(); err != nil {
@@ -117,15 +118,15 @@ func compileSecurityHeaders(c SecurityHeadersConfig) (securityHeaderPolicy, erro
 		name, _ := header.Name.Canonical()
 		key := strings.ToLower(string(name))
 		if reservedSecurityHeader(key) {
-			return securityHeaderPolicy{}, fault.New(fault.Invalid, "custom security headers cannot replace typed policy or HTTP framing headers")
+			return securityHeaderPolicy{}, safeerror.NewFault(fault.Invalid, "custom security headers cannot replace typed policy or HTTP framing headers")
 		}
 		if seen[key] {
-			return securityHeaderPolicy{}, fault.New(fault.Duplicate, "custom security header is repeated")
+			return securityHeaderPolicy{}, safeerror.NewFault(fault.Duplicate, "custom security header is repeated")
 		}
 		seen[key] = true
 		size += len(name) + len(header.Value) + 4
 		if size > maxSecurityHeaderBytes {
-			return securityHeaderPolicy{}, fault.New(fault.Invalid, "security headers exceed their byte bound")
+			return securityHeaderPolicy{}, safeerror.NewFault(fault.Invalid, "security headers exceed their byte bound")
 		}
 		p.headers = append(p.headers, ResponseHeader{name, header.Value})
 	}

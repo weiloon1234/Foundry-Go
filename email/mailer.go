@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"io"
 	"log/slog"
 	"reflect"
@@ -17,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -35,13 +37,13 @@ func DefaultConfig() Config {
 }
 func (c Config) Validate() error {
 	if c.From != (Address{}) && c.From.Validate() != nil {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	if c.MaxActive < 1 || c.MaxActive > 1024 || c.MaxMessageBytes < 1024 || c.MaxMessageBytes > 32<<20 || c.MaxAttachmentBytes < 1 || c.MaxAttachmentBytes > c.MaxMessageBytes || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	if c.MessageIDDomain != "" && !messageIDDomain(c.MessageIDDomain) {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	return nil
 }
@@ -104,13 +106,13 @@ type sendKey struct{}
 // New borrows the transport and storage registry. It performs no I/O.
 func New(driver Driver, disks *storage.Registry, config Config, observer Observer) (*Mailer, error) {
 	if config.Validate() != nil || driver == nil {
-		return nil, Construction
+		return nil, emaildiag.Failure(Construction)
 	}
 	v := reflect.ValueOf(driver)
 	switch v.Kind() {
 	case reflect.Pointer, reflect.Func, reflect.Interface, reflect.Map, reflect.Slice, reflect.Chan:
 		if v.IsNil() {
-			return nil, Construction
+			return nil, emaildiag.Failure(Construction)
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -123,15 +125,15 @@ func New(driver Driver, disks *storage.Registry, config Config, observer Observe
 // give up or finish, and Close releases them promptly.
 func (m *Mailer) begin(ctx context.Context) (context.Context, func(), error) {
 	if m == nil || m.done == nil || ctx == nil {
-		return nil, nil, Construction
+		return nil, nil, emaildiag.Failure(Construction)
 	}
 	if ctx.Err() != nil {
-		return nil, nil, Transient
+		return nil, nil, emaildiag.Failure(Transient)
 	}
 	m.mu.Lock()
 	if m.diagnostics.Closing {
 		m.mu.Unlock()
-		return nil, nil, Transient
+		return nil, nil, emaildiag.Failure(Transient)
 	}
 	m.waiting++
 	m.mu.Unlock()
@@ -155,9 +157,9 @@ func (m *Mailer) begin(ctx context.Context) (context.Context, func(), error) {
 		}
 		m.mu.Unlock()
 		if err == nil || errors.Is(err, fault.Closed) {
-			return nil, nil, Transient
+			return nil, nil, emaildiag.Failure(Transient)
 		}
-		return nil, nil, errors.Join(Transient, err)
+		return nil, nil, safeerror.Join("operation failed", emaildiag.Failure(Transient), err)
 	}
 	m.diagnostics.Active++
 	m.diagnostics.Calls++
@@ -219,27 +221,27 @@ func (m *Mailer) Send(ctx context.Context, message Message, options SendOptions)
 		if kind == Ambiguous {
 			kind = Construction
 		}
-		return Result{}, kind
+		return Result{}, emaildiag.Failure(kind)
 	}
 	notice.Stage = Prepared
 	notice.Bytes = outbound.Size()
 	if !m.observe(ctx, notice) {
-		return Result{ObserverFailed: true}, Construction
+		return Result{ObserverFailed: true}, emaildiag.Failure(Construction)
 	}
 	if ctx.Err() != nil {
-		return Result{}, Transient
+		return Result{}, emaildiag.Failure(Transient)
 	}
 	var receipt Receipt
 	var sendErr error
 	failed = callback.Isolated("submit email", func() error { receipt, sendErr = m.driver.Send(ctx, outbound); return nil })
 	if failed != nil {
-		return Result{}, Ambiguous
+		return Result{}, emaildiag.Failure(Ambiguous)
 	}
 	if sendErr != nil {
-		return Result{}, Classification(sendErr)
+		return Result{}, emaildiag.Failure(Classification(sendErr))
 	}
 	if receipt.Validate() != nil {
-		return Result{}, Ambiguous
+		return Result{}, emaildiag.Failure(Ambiguous)
 	}
 	return Result{Receipt: receipt, Accepted: true}, nil
 }
@@ -251,20 +253,20 @@ func (m *Mailer) observe(ctx context.Context, n Notice) bool {
 }
 func (m *Mailer) prepare(ctx context.Context, message Message, options SendOptions) (Outbound, error) {
 	if message.Validate() != nil || options.IdempotencyKey.Validate() != nil || len(message.text)+len(message.html) > m.config.MaxMessageBytes {
-		return Outbound{}, Construction
+		return Outbound{}, emaildiag.Failure(Construction)
 	}
 	if ctx.Err() != nil {
-		return Outbound{}, Transient
+		return Outbound{}, emaildiag.Failure(Transient)
 	}
 	attachments := make([]ResolvedAttachment, 0, len(message.attachments))
 	remaining := m.config.MaxMessageBytes
 	for _, reference := range message.attachments {
 		if m.storage == nil {
-			return Outbound{}, Construction
+			return Outbound{}, emaildiag.Failure(Construction)
 		}
 		disk, err := m.storage.Disk(reference.Disk)
 		if err != nil {
-			return Outbound{}, Construction
+			return Outbound{}, emaildiag.Failure(Construction)
 		}
 		attachment, err := loadAttachment(ctx, disk, reference, min(m.config.MaxAttachmentBytes, remaining))
 		if err != nil {
@@ -275,7 +277,7 @@ func (m *Mailer) prepare(ctx context.Context, message Message, options SendOptio
 	}
 	for _, item := range message.data {
 		if len(item.data) > min(m.config.MaxAttachmentBytes, remaining) {
-			return Outbound{}, Construction
+			return Outbound{}, emaildiag.Failure(Construction)
 		}
 		remaining -= len(item.data)
 		attachments = append(attachments, ResolvedAttachment{reference: item.metadata, data: item.data})
@@ -288,7 +290,7 @@ func (m *Mailer) prepare(ctx context.Context, message Message, options SendOptio
 			size += (len(attachment.data) + 2) / 3 * 4
 		}
 		if size > m.config.MaxMessageBytes {
-			return Outbound{}, Construction
+			return Outbound{}, emaildiag.Failure(Construction)
 		}
 		return Outbound{message: message, attachments: attachments, size: max(size, 1), structured: true, key: options.IdempotencyKey}, nil
 	}
@@ -298,7 +300,7 @@ func (m *Mailer) prepare(ctx context.Context, message Message, options SendOptio
 	}
 	wire, err := buildMIME(message, attachments, m.config.MaxMessageBytes, id)
 	if err != nil {
-		return Outbound{}, Construction
+		return Outbound{}, emaildiag.Failure(Construction)
 	}
 	return Outbound{message: message, attachments: attachments, mime: wire, size: len(wire), key: options.IdempotencyKey}, nil
 }
@@ -308,7 +310,7 @@ func loadAttachment(ctx context.Context, disk *storage.Disk, reference Attachmen
 		defer func() {
 			if closeErr := body.Close(); closeErr != nil && err == nil {
 				result = ResolvedAttachment{}
-				err = Transient
+				err = emaildiag.Failure(Transient)
 			}
 		}()
 	}
@@ -316,17 +318,17 @@ func loadAttachment(ctx context.Context, disk *storage.Disk, reference Attachmen
 		return result, attachmentFailure(err)
 	}
 	if body == nil || info.Length < 0 || info.Length > int64(limit) {
-		return result, Construction
+		return result, emaildiag.Failure(Construction)
 	}
 	data, err := io.ReadAll(io.LimitReader(body, int64(limit)+1))
 	if err != nil {
 		return result, attachmentFailure(err)
 	}
 	if len(data) > limit || int64(len(data)) != info.Length {
-		return result, Construction
+		return result, emaildiag.Failure(Construction)
 	}
 	if ctx.Err() != nil {
-		return result, Transient
+		return result, emaildiag.Failure(Transient)
 	}
 	return ResolvedAttachment{reference: reference, data: data}, nil
 }
@@ -345,9 +347,9 @@ func attachmentFailure(err error) error {
 		return true
 	})
 	if !complete {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
-	return result
+	return emaildiag.Failure(result)
 }
 func (m *Mailer) Snapshot() Diagnostics {
 	if m == nil {
@@ -371,11 +373,11 @@ func (m *Mailer) Done() <-chan struct{} {
 // are not closed. Calling Close from an active send context returns fault.Cycle.
 func (m *Mailer) Close(ctx context.Context) error {
 	if m == nil || m.done == nil || ctx == nil {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	for frame, _ := ctx.Value(sendKey{}).(*sendFrame); frame != nil; frame = frame.parent {
 		if frame.mailer == m && frame.active.Load() {
-			return fault.New(fault.Cycle, "email callback cannot wait for itself")
+			return safeerror.NewFault(fault.Cycle, "email callback cannot wait for itself")
 		}
 	}
 	m.mu.Lock()

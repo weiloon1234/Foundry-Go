@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const (
@@ -29,11 +30,11 @@ func (Route) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("attrib
 
 func (r Route) Validate() error {
 	if r.Method == "" || len(r.Method) > MaxRouteMethodBytes || strings.IndexFunc(r.Method, func(c rune) bool { return c < 'A' || c > 'Z' }) >= 0 {
-		return fault.New(fault.Invalid, "invalid attribution route method")
+		return safeerror.NewFault(fault.Invalid, "invalid attribution route method")
 	}
 	if r.Name == "" || len(r.Name) > MaxRouteNameBytes || !utf8.ValidString(r.Name) ||
 		strings.IndexFunc(r.Name, func(c rune) bool { return unicode.IsControl(c) || unicode.IsSpace(c) }) >= 0 {
-		return fault.New(fault.Invalid, "invalid attribution route name")
+		return safeerror.NewFault(fault.Invalid, "invalid attribution route name")
 	}
 	return nil
 }
@@ -44,7 +45,7 @@ type routeContextKey struct{}
 // grants no authority and does not change the request's Origin.
 func WithRoute(ctx context.Context, route Route) (context.Context, error) {
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "attribution requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "attribution requires a context")
 	}
 	if err := route.Validate(); err != nil {
 		return nil, err

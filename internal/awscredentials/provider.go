@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RefreshInterval bounds how long credentials without a known expiry are
@@ -25,7 +26,7 @@ type Adapter struct{ Provider credentials.Provider }
 
 func (a Adapter) Retrieve(ctx context.Context) (aws.Credentials, error) {
 	if credential.IsNil(a.Provider) || ctx == nil {
-		return aws.Credentials{}, fault.New(fault.Invalid, "cloud credential provider is missing")
+		return aws.Credentials{}, safeerror.NewFault(fault.Invalid, "cloud credential provider is missing")
 	}
 	if err := ctx.Err(); err != nil {
 		return aws.Credentials{}, err

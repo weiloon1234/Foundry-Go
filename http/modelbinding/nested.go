@@ -2,9 +2,11 @@ package modelbinding
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -20,7 +22,7 @@ type Models[P, C any] struct {
 // must be concurrency-safe and retain ownership until they return after cancel.
 func Then[P, A, B any](parent Resolver[P, A], child func(context.Context, P, A) (value.Optional[B], error)) Resolver[P, Models[A, B]] {
 	if child == nil {
-		return Resolver[P, Models[A, B]]{err: fault.New(fault.Invalid, "nested binding requires a child resolver")}
+		return Resolver[P, Models[A, B]]{err: safeerror.NewFault(fault.Invalid, "nested binding requires a child resolver")}
 	}
 	// The composed check validates the parent once at registration; request
 	// lookups reuse the validated parent without revalidating every ancestor.
@@ -53,7 +55,7 @@ func Through[P, A, B any, K comparable](executor database.Executor, parent Resol
 // func(previous Models[Team,Project])Project{return previous.Child}.
 func ThroughSelected[P, A, M, B any, K comparable](executor database.Executor, parent Resolver[P, A], selectParent func(A) M, relation query.ScopedRelation[M, B], field query.KeyField[B, K], key func(P) K) Resolver[P, Models[A, B]] {
 	if nilValue(executor) || selectParent == nil || key == nil {
-		return Resolver[P, Models[A, B]]{err: fault.New(fault.Invalid, "nested binding requires an executor and typed selectors")}
+		return Resolver[P, Models[A, B]]{err: safeerror.NewFault(fault.Invalid, "nested binding requires an executor and typed selectors")}
 	}
 	lookup := query.RelatedUnique(relation, field)
 	result := Then(parent, func(ctx context.Context, path P, previous A) (value.Optional[B], error) {

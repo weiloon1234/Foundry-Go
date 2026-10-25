@@ -27,7 +27,7 @@ func (b *Backend) PublicURL(ctx context.Context, key storage.ObjectKey) (string,
 		return "", err
 	}
 	if b.config.PublicBase.IsZero() {
-		return "", storage.Failure(storage.Unsupported, storage.SignOperation, storage.NotApplicable, nil)
+		return "", newFailure(storage.Unsupported, storage.SignOperation, storage.NotApplicable, nil)
 	}
 	scoped, err := storage.ParseKey(full)
 	if err != nil {
@@ -40,7 +40,7 @@ func (b *Backend) PublicURL(ctx context.Context, key storage.ObjectKey) (string,
 // credential expiry. A synthetic refresh deadline is not a credential expiry.
 func (b *Backend) signingLifetime(ctx context.Context, requested time.Duration) (time.Duration, time.Time, error) {
 	if b.credentials == nil {
-		return 0, time.Time{}, storage.Failure(storage.Forbidden, storage.SignOperation, storage.NotApplicable, nil)
+		return 0, time.Time{}, newFailure(storage.Forbidden, storage.SignOperation, storage.NotApplicable, nil)
 	}
 	credentials, err := b.credentials.Retrieve(ctx)
 	if err != nil {
@@ -52,7 +52,7 @@ func (b *Backend) signingLifetime(ctx context.Context, requested time.Duration) 
 		lifetime = min(lifetime, expires.Sub(now).Truncate(time.Second))
 	}
 	if lifetime < time.Second {
-		return 0, time.Time{}, storage.Failure(storage.Forbidden, storage.SignOperation, storage.NotApplicable, nil)
+		return 0, time.Time{}, newFailure(storage.Forbidden, storage.SignOperation, storage.NotApplicable, nil)
 	}
 	return lifetime, now, nil
 }
@@ -68,7 +68,7 @@ func (b *Backend) TemporaryURL(ctx context.Context, key storage.ObjectKey, optio
 		return storage.TemporaryURL{}, err
 	}
 	if options.Version == "null" || options.Version != "" && !b.Capabilities().Versions {
-		return storage.TemporaryURL{}, storage.Failure(storage.Unsupported, storage.SignOperation, storage.NotApplicable, nil)
+		return storage.TemporaryURL{}, newFailure(storage.Unsupported, storage.SignOperation, storage.NotApplicable, nil)
 	}
 	lifetime, now, err := b.signingLifetime(ctx, options.ExpiresIn)
 	if err != nil {
@@ -90,12 +90,12 @@ func (b *Backend) TemporaryURL(ctx context.Context, key storage.ObjectKey, optio
 		return storage.TemporaryURL{}, failure(storage.SignOperation, storage.NotApplicable, err)
 	}
 	if request == nil || request.Method != "GET" {
-		return storage.TemporaryURL{}, storage.Failure(storage.IntegrityFailed, storage.SignOperation, storage.NotApplicable, nil)
+		return storage.TemporaryURL{}, newFailure(storage.IntegrityFailed, storage.SignOperation, storage.NotApplicable, nil)
 	}
 	// A bare URL must not hide additional mandatory caller-supplied headers.
 	for name := range request.SignedHeader {
 		if !strings.EqualFold(name, "Host") {
-			return storage.TemporaryURL{}, storage.Failure(storage.Unsupported, storage.SignOperation, storage.NotApplicable, nil)
+			return storage.TemporaryURL{}, newFailure(storage.Unsupported, storage.SignOperation, storage.NotApplicable, nil)
 		}
 	}
 	return storage.NewTemporaryURL(request.URL, now.Add(lifetime))
@@ -134,7 +134,7 @@ func (b *Backend) TemporaryUploadURL(ctx context.Context, key storage.ObjectKey,
 		return storage.UploadLink{}, failure(storage.SignOperation, storage.NotApplicable, err)
 	}
 	if request == nil || request.Method != http.MethodPut {
-		return storage.UploadLink{}, storage.Failure(storage.IntegrityFailed, storage.SignOperation, storage.NotApplicable, nil)
+		return storage.UploadLink{}, newFailure(storage.IntegrityFailed, storage.SignOperation, storage.NotApplicable, nil)
 	}
 	headers := make(http.Header, len(request.SignedHeader))
 	for name, values := range request.SignedHeader {
@@ -147,7 +147,7 @@ func (b *Backend) TemporaryUploadURL(ctx context.Context, key storage.ObjectKey,
 		}
 	}
 	if headers.Get("Content-Type") != string(options.ContentType) {
-		return storage.UploadLink{}, storage.Failure(storage.IntegrityFailed, storage.SignOperation, storage.NotApplicable, nil)
+		return storage.UploadLink{}, newFailure(storage.IntegrityFailed, storage.SignOperation, storage.NotApplicable, nil)
 	}
 	return storage.NewUploadLink(request.URL, http.MethodPut, headers, now.Add(lifetime))
 }
@@ -163,7 +163,7 @@ func (b *Backend) TemporaryUploadForm(ctx context.Context, key storage.ObjectKey
 		return storage.UploadForm{}, err
 	}
 	if b.config.Provider == R2 || b.config.Provider == Compatible && !b.config.Compatible.FormUploads {
-		return storage.UploadForm{}, storage.Failure(storage.Unsupported, storage.SignOperation, storage.NotApplicable, nil)
+		return storage.UploadForm{}, newFailure(storage.Unsupported, storage.SignOperation, storage.NotApplicable, nil)
 	}
 	full, err := b.object(key)
 	if err != nil {
@@ -192,7 +192,7 @@ func (b *Backend) TemporaryUploadForm(ctx context.Context, key storage.ObjectKey
 		return storage.UploadForm{}, failure(storage.SignOperation, storage.NotApplicable, err)
 	}
 	if request == nil || request.Values["key"] != full || request.Values["policy"] == "" {
-		return storage.UploadForm{}, storage.Failure(storage.IntegrityFailed, storage.SignOperation, storage.NotApplicable, nil)
+		return storage.UploadForm{}, newFailure(storage.IntegrityFailed, storage.SignOperation, storage.NotApplicable, nil)
 	}
 	fields := make([]storage.FormField, 0, len(request.Values)+len(extra))
 	for name, text := range request.Values {

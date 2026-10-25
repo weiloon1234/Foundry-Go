@@ -2,7 +2,6 @@ package upload
 
 import (
 	"context"
-	"errors"
 	"io"
 	"io/fs"
 	"mime"
@@ -12,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Capture stores bytes with a fixed scratch buffer. Limits account for attempted
@@ -22,7 +22,7 @@ func (b *Batch) Capture(ctx context.Context, source io.Reader, name, declaredTyp
 		return File{}, fs.ErrClosed
 	}
 	if ctx == nil || source == nil {
-		return File{}, fault.New(fault.Invalid, "upload capture requires a context and reader")
+		return File{}, safeerror.NewFault(fault.Invalid, "upload capture requires a context and reader")
 	}
 	file, key, err := b.create(ctx)
 	if err != nil {
@@ -35,7 +35,7 @@ func (b *Batch) Capture(ctx context.Context, source io.Reader, name, declaredTyp
 			result = File{}
 			removeErr := b.remove(key)
 			if closeErr != nil || removeErr != nil {
-				err = &CleanupError{Cause: errors.Join(err, closeErr, removeErr)}
+				err = safeerror.Owned("upload cleanup failed", &CleanupError{Cause: safeerror.Join("operation failed", err, closeErr, removeErr)})
 			}
 		}
 	}()
@@ -56,13 +56,13 @@ func (b *Batch) Capture(ctx context.Context, source io.Reader, name, declaredTyp
 			}
 			n, readErr := source.Read(buffer)
 			if n < 0 || n > len(buffer) {
-				failed = fault.New(fault.Internal, "upload reader returned an invalid byte count")
+				failed = safeerror.NewFault(fault.Internal, "upload reader returned an invalid byte count")
 				return nil
 			}
 			if n > 0 {
 				empty = 0
 				if int64(n) > b.config.MaxFileBytes-size {
-					failed = &LimitError{Kind: FileBytes}
+					failed = safeerror.Owned("upload resource limit exceeded", &LimitError{Kind: FileBytes})
 					return nil
 				}
 				if err := b.take(int64(n)); err != nil {
@@ -84,13 +84,13 @@ func (b *Batch) Capture(ctx context.Context, source io.Reader, name, declaredTyp
 			} else if readErr == nil {
 				empty++
 				if empty >= 100 {
-					failed = &ReadError{Cause: io.ErrNoProgress}
+					failed = safeerror.Owned("uploaded bytes could not be read", &ReadError{Cause: io.ErrNoProgress})
 					return nil
 				}
 			}
 			if readErr != nil {
 				if readErr != io.EOF {
-					failed = &ReadError{Cause: readErr}
+					failed = safeerror.Owned("uploaded bytes could not be read", &ReadError{Cause: readErr})
 				}
 				return nil
 			}

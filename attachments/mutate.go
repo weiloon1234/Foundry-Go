@@ -3,7 +3,6 @@ package attachments
 import (
 	"context"
 	"encoding/json"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -86,7 +85,7 @@ func (c Collection[M, K]) detach(ctx context.Context, m *Manager, owner model.Re
 		defer cancel()
 		pending, cleanupErr := m.cleanupMany(cleanupCtx, ids)
 		result.PendingCleanup = pending
-		return errors.Join(err, cleanupErr)
+		return joinFailures(err, cleanupErr)
 	})
 	return result, err
 }
@@ -98,13 +97,13 @@ func (m *Manager) cleanupMany(ctx context.Context, ids []model.ID[store.File]) (
 			for _, remaining := range ids[i:] {
 				pending = append(pending, operationID(remaining))
 			}
-			return pending, errors.Join(failures, err)
+			return pending, joinFailures(failures, err)
 		}
 		result, err := m.reconcile(ctx, id, false)
 		if result.State != Cleaned {
 			pending = append(pending, operationID(id))
 		}
-		failures = errors.Join(failures, err)
+		failures = joinFailures(failures, err)
 	}
 	return pending, failures
 }
@@ -126,7 +125,7 @@ func (c Collection[M, K]) Reorder(ctx context.Context, m *Manager, owner model.R
 		}
 		ids[i] = model.IDFromBytes[store.File](id.Bytes())
 		if seen[ids[i]] {
-			return nil, fault.New(fault.Duplicate, "attachment order contains duplicate IDs")
+			return nil, attachmentFailure(fault.Duplicate, "attachment order contains duplicate IDs")
 		}
 		seen[ids[i]] = true
 	}
@@ -147,11 +146,11 @@ func (c Collection[M, K]) Reorder(ctx context.Context, m *Manager, owner model.R
 				return err
 			}
 			if len(rows) != len(ids) {
-				return fault.New(fault.Conflict, "attachment order is not an exact collection permutation")
+				return attachmentFailure(fault.Conflict, "attachment order is not an exact collection permutation")
 			}
 			for _, row := range rows {
 				if !seen[row.ID] {
-					return fault.New(fault.Conflict, "attachment order contains a foreign ID")
+					return attachmentFailure(fault.Conflict, "attachment order contains a foreign ID")
 				}
 				if _, err := c.attachment(m, row); err != nil {
 					return err

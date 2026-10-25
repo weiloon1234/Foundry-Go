@@ -80,7 +80,7 @@ func prepareMetadata(input Upload) (Upload, error) {
 // ordinary uploads and downloads use the same acceptance and image policy.
 func prepareBytes(ctx context.Context, m *Manager, policy Policy, input Upload, body []byte, checksum storage.SHA256) (prepared, error) {
 	if int64(len(body)) > policy.MaxBytes {
-		return prepared{}, storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
+		return prepared{}, storageFailure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
 	}
 	detected, err := acceptMedia(ctx, m, policy, body, input.ContentType)
 	if err != nil {
@@ -105,7 +105,7 @@ func prepareBytes(ctx context.Context, m *Manager, policy Policy, input Upload, 
 		result.info.Height = info.Height
 	}
 	if result.info.Size > policy.MaxStoredBytes {
-		return prepared{}, storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
+		return prepared{}, storageFailure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
 	}
 	return result, nil
 }

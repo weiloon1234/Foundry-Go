@@ -2,7 +2,6 @@ package datatable
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"sync"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -185,7 +185,7 @@ func (m *Manager) Close(ctx context.Context) error {
 		return err
 	}
 	if m.delivering(ctx) {
-		return fault.New(fault.Cycle, "export delivery cannot wait for its own manager")
+		return safeerror.NewFault(fault.Cycle, "export delivery cannot wait for its own manager")
 	}
 	m.cleanupMu.Lock()
 	m.closing = true
@@ -203,7 +203,7 @@ func (m *Manager) Close(ctx context.Context) error {
 		// A failed removal stays owned in pendingCleanup and is reported below.
 		_ = artifact.Close()
 	}
-	return errors.Join(m.calls.Close(ctx), m.exports.Close(ctx), m.retryCleanup())
+	return safeerror.Join("operation failed", m.calls.Close(ctx), m.exports.Close(ctx), m.retryCleanup())
 }
 
 // beginArtifact retries previously failed removals, then waits (bounded) for a
@@ -232,10 +232,10 @@ func (m *Manager) admissible() error {
 	m.cleanupMu.Lock()
 	defer m.cleanupMu.Unlock()
 	if m.closing {
-		return fault.New(fault.Closed, "datatable manager is closed")
+		return safeerror.NewFault(fault.Closed, "datatable manager is closed")
 	}
 	if len(m.pendingCleanup) != 0 {
-		return fault.New(fault.Conflict, "export cleanup is pending")
+		return safeerror.NewFault(fault.Conflict, "export cleanup is pending")
 	}
 	return nil
 }
@@ -246,7 +246,7 @@ func (m *Manager) publish(artifact *Artifact) error {
 	m.cleanupMu.Lock()
 	defer m.cleanupMu.Unlock()
 	if m.closing {
-		return fault.New(fault.Closed, "datatable manager is closed")
+		return safeerror.NewFault(fault.Closed, "datatable manager is closed")
 	}
 	m.open[artifact] = struct{}{}
 	return nil
@@ -272,7 +272,7 @@ func (m *Manager) retryCleanup() error {
 	m.cleanupMu.Unlock()
 	var err error
 	for _, artifact := range pending {
-		err = errors.Join(err, artifact.Close())
+		err = safeerror.Join("operation failed", err, artifact.Close())
 	}
 	return err
 }
@@ -302,7 +302,7 @@ func (t Table[S, R, A]) check(m *Manager) error {
 	}
 	registration, ok := m.registry.entries[t.ID()]
 	if !ok || registration.identity != t.definition.identity {
-		return fault.New(fault.Missing, "exact datatable declaration is not registered")
+		return safeerror.NewFault(fault.Missing, "exact datatable declaration is not registered")
 	}
 	return nil
 }

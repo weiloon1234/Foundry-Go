@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -49,7 +50,7 @@ func newOffsetEndpoint[P, F, Page, Response any](route foundryhttp.Route[P], fil
 			return err
 		}
 		if page.Size > config.MaximumSize {
-			return fault.New(fault.Invalid, "page size exceeds endpoint maximum")
+			return safeerror.NewFault(fault.Invalid, "page size exceeds endpoint maximum")
 		}
 		if page.Number > maximumPage {
 			return errBeyondMaximumPage
@@ -60,7 +61,7 @@ func newOffsetEndpoint[P, F, Page, Response any](route foundryhttp.Route[P], fil
 }
 
 // errBeyondMaximumPage lets navigation omit a link the endpoint would reject.
-var errBeyondMaximumPage = fault.New(fault.Invalid, "page exceeds endpoint maximum depth")
+var errBeyondMaximumPage = safeerror.NewFault(fault.Invalid, "page exceeds endpoint maximum depth")
 
 func newPageEndpoint[P, F, W, Page, Response any](route foundryhttp.Route[P], parameters foundryhttp.Query[parameters[F, W]], rules validation.Rule[parameters[F, W]], response contract.JSON[Response], links LinkMode, validate func(W) error, finish func(pageRequest[P, F, W], Page, func(W) (string, error)) (Response, error)) pageEndpoint[P, F, W, Page, Response] {
 	return pageEndpoint[P, F, W, Page, Response]{
@@ -73,7 +74,7 @@ func (e pageEndpoint[P, F, W, Page, Response]) Validate() error {
 		return e.err
 	}
 	if e.finish == nil || e.validateWindow == nil || e.links != RelativeLinks && e.links != PublicLinks {
-		return fault.New(fault.Invalid, "pagination endpoint is not defined")
+		return safeerror.NewFault(fault.Invalid, "pagination endpoint is not defined")
 	}
 	return e.transport.Validate()
 }
@@ -143,7 +144,7 @@ func (e pageEndpoint[P, F, W, Page, Response]) Handle(handler func(context.Conte
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if handler == nil {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "pagination endpoint requires a handler"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "pagination endpoint requires a handler"))
 	}
 	return e.withLinkRequirements().transport.Handle(func(ctx context.Context, input foundryhttp.Input[P, parameters[F, W], foundryhttp.NoBody]) (Response, error) {
 		request := request(input)

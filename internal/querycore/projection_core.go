@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -22,12 +23,12 @@ type ProjectionMapping struct {
 
 func ValidateProjectionColumns(columns []ProjectionColumn, hasDecoder bool) error {
 	if len(columns) == 0 || len(columns) > MaxExpressionNodes || !hasDecoder {
-		return fault.New(fault.Invalid, "projection requires bounded columns and a complete decoder")
+		return safeerror.NewFault(fault.Invalid, "projection requires bounded columns and a complete decoder")
 	}
 	seen := make(map[string]bool, len(columns))
 	for _, column := range columns {
 		if !sqlname.Valid(column.Name) || seen[column.Name] || column.Typ == nil {
-			return fault.New(fault.Invalid, "invalid or repeated projection field")
+			return safeerror.NewFault(fault.Invalid, "invalid or repeated projection field")
 		}
 		seen[column.Name] = true
 	}
@@ -37,12 +38,12 @@ func ValidateProjectionColumns(columns []ProjectionColumn, hasDecoder bool) erro
 
 func SelectProjection(source SelectNode, columns []ProjectionColumn, mappings []ProjectionMapping) (SelectNode, error) {
 	if len(mappings) != len(columns) {
-		return SelectNode{}, fault.New(fault.Invalid, "projection must select every declared result field exactly once")
+		return SelectNode{}, safeerror.NewFault(fault.Invalid, "projection must select every declared result field exactly once")
 	}
 	byName := make(map[string]ProjectionMapping, len(mappings))
 	for _, m := range mappings {
 		if _, exists := byName[m.Column.Name]; exists {
-			return SelectNode{}, fault.New(fault.Invalid, "repeated projection field mapping")
+			return SelectNode{}, safeerror.NewFault(fault.Invalid, "repeated projection field mapping")
 		}
 		byName[m.Column.Name] = m
 	}
@@ -51,7 +52,7 @@ func SelectProjection(source SelectNode, columns []ProjectionColumn, mappings []
 	for i, column := range columns {
 		mapping, exists := byName[column.Name]
 		if !exists || mapping.Column.Typ != column.Typ {
-			return SelectNode{}, fault.New(fault.Invalid, "projection mapping does not match its declared field")
+			return SelectNode{}, safeerror.NewFault(fault.Invalid, "projection mapping does not match its declared field")
 		}
 		node.Selections[i] = SelectItem{Expression: mapping.Expression, Alias: column.Name}
 	}

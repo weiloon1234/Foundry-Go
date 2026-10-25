@@ -1,6 +1,10 @@
 package lockout
 
-import "time"
+import (
+	"time"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+)
 
 type Code string
 
@@ -44,12 +48,23 @@ type unavailable struct{ cause error }
 func (e *unavailable) Error() string        { return Unavailable.Error() }
 func (e *unavailable) Is(target error) bool { return target == Unavailable }
 func (e *unavailable) Unwrap() error        { return e.cause }
+
+func unavailableFailure(cause error) error {
+	failure := &unavailable{cause: cause}
+	return safeerror.Owned(failure.Error(), failure)
+}
+
+func rejectionFailure(retryAfter time.Duration, cause error, triggered bool) error {
+	failure := &Rejection{retryAfter: retryAfter, cause: cause, triggered: triggered}
+	return safeerror.Owned(failure.Error(), failure)
+}
+
 func decisionError(d Decision) error {
 	switch d.Status {
 	case StatusLocked:
-		return &Rejection{retryAfter: d.RetryAfter, triggered: d.Triggered}
+		return rejectionFailure(d.RetryAfter, nil, d.Triggered)
 	case StatusExpired:
-		return Expired
+		return safeerror.Owned(Expired.Error(), Expired)
 	}
 	return nil
 }

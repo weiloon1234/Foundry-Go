@@ -2,10 +2,11 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxBatchOperations bounds prepared source overlays retained by one session.
@@ -78,7 +79,10 @@ func inspectBatch(ctx context.Context, options []Options, timeout time.Duration,
 	if err != nil {
 		return nil, err
 	}
-	defer func() { closeErr := session.close(); err = errors.Join(err, ctx.Err(), closeErr) }()
+	defer func() {
+		closeErr := session.close()
+		err = safeerror.Join("operation failed", err, ctx.Err(), closeErr)
+	}()
 	var server ServerInfo
 	err = session.phase(timeout, func() error {
 		var failure error
@@ -130,7 +134,7 @@ func (s *session) phase(timeout time.Duration, work func() error) (err error) {
 		if !stop() {
 			<-done
 		}
-		err = errors.Join(err, ctx.Err())
+		err = safeerror.Join("operation failed", err, ctx.Err())
 		cancel()
 	}()
 	return work()

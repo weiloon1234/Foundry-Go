@@ -2,15 +2,17 @@ package application
 
 import (
 	"context"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlscope"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
-	"slices"
 )
 
 const OutboxProvider foundation.ProviderID = "foundry.application.outbox"
@@ -34,10 +36,10 @@ func registerOutbox(builder *foundation.Builder, s OutboxSettings, source clock.
 		switch kind {
 		case foundation.HTTP, foundation.CLI, foundation.Worker, foundation.Scheduler, foundation.WebSocket:
 		default:
-			return fault.New(fault.Invalid, "outbox publisher kernels must name known kernels")
+			return safeerror.NewFault(fault.Invalid, "outbox publisher kernels must name known kernels")
 		}
 		if slices.Contains(s.Kernels[:i], kind) {
-			return fault.New(fault.Duplicate, "outbox publisher kernel is listed more than once")
+			return safeerror.NewFault(fault.Duplicate, "outbox publisher kernel is listed more than once")
 		}
 	}
 	requires := []foundation.ProviderID{infrastructure.DatabaseProvider(s.Database)}
@@ -118,7 +120,7 @@ func (s Services) OutboxPublisher() (*publisher.Publisher, error) { return Resol
 func (s Services) JobOutbox(name jobs.ConnectionName) (*jobs.Outbox, error) {
 	if name == "" {
 		if s.Services == nil || s.Jobs == nil {
-			return nil, fault.New(fault.Missing, "jobs are not configured")
+			return nil, safeerror.NewFault(fault.Missing, "jobs are not configured")
 		}
 		name = s.Jobs.DefaultName()
 	}
@@ -128,7 +130,7 @@ func (s Services) JobOutbox(name jobs.ConnectionName) (*jobs.Outbox, error) {
 	}
 	producer, ok := producers[name]
 	if !ok {
-		return nil, fault.New(fault.Missing, "job outbox is not configured")
+		return nil, safeerror.NewFault(fault.Missing, "job outbox is not configured")
 	}
 	return producer, nil
 }

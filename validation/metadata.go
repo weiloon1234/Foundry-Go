@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RuleID identifies a rule independently of its public message. Built-in IDs
@@ -147,7 +148,7 @@ func cloneDescription(info Description) Description {
 	return info
 }
 
-func invalid(message string) error { return fault.New(fault.Invalid, message) }
+func invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }
 
 func cloneRecipe(recipe i18n.MessageRecipe) i18n.MessageRecipe {
 	recipe.Definition.Parameters = slices.Clone(recipe.Definition.Parameters)

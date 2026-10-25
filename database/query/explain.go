@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -146,7 +147,7 @@ func (p *planBytes) Scan(source any) error {
 }
 
 func invalidPlan() error {
-	return fault.New(fault.Invalid, "invalid or oversized PostgreSQL query plan")
+	return safeerror.NewFault(fault.Invalid, "invalid or oversized PostgreSQL query plan")
 }
 
 // Explain asks PostgreSQL to plan this SELECT without executing it. It reuses

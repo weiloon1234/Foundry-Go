@@ -11,6 +11,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"golang.org/x/text/language"
 )
 
@@ -222,4 +223,6 @@ func SnapshotLocales(ctx context.Context, c LocaleCatalog) (LocaleSet, error) {
 	}
 	return result, nil
 }
-func invalidLocale() error { return fault.New(fault.Invalid, "invalid locale or locale catalog") }
+func invalidLocale() error {
+	return safeerror.NewFault(fault.Invalid, "invalid locale or locale catalog")
+}

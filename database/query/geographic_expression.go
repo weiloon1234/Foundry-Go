@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -14,7 +15,7 @@ type GeographicPoint struct{ latitude, longitude float64 }
 
 func NewGeographicPoint(latitude, longitude float64) (GeographicPoint, error) {
 	if math.IsNaN(latitude) || math.IsInf(latitude, 0) || latitude < -90 || latitude > 90 || math.IsNaN(longitude) || math.IsInf(longitude, 0) || longitude < -180 || longitude > 180 {
-		return GeographicPoint{}, fault.New(fault.Invalid, "invalid geographic coordinates")
+		return GeographicPoint{}, safeerror.NewFault(fault.Invalid, "invalid geographic coordinates")
 	}
 	return GeographicPoint{latitude, longitude}, nil
 }

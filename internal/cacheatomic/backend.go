@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cacheint"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Record struct {
@@ -62,13 +63,13 @@ type Backend struct {
 
 func New(driver Driver, maxValue int) (*Backend, error) {
 	if driver == nil || !ValidValueLimit(maxValue) {
-		return nil, fault.New(fault.Invalid, "invalid persistent cache configuration")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid persistent cache configuration")
 	}
 	return &Backend{driver: driver, maxValue: maxValue}, nil
 }
 func (b *Backend) validate(ctx context.Context, key cache.EntryKey) error {
 	if b == nil || b.driver == nil || ctx == nil {
-		return fault.New(fault.Invalid, "cache backend is not initialized")
+		return safeerror.NewFault(fault.Invalid, "cache backend is not initialized")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -93,7 +94,7 @@ func (b *Backend) access(ctx context.Context, key cache.EntryKey, mode Mode, fn 
 			return nil, false, err
 		}
 		if next != nil && len(next.Data) > b.maxValue {
-			return nil, false, fault.New(fault.Invalid, "cache value exceeds limit")
+			return nil, false, safeerror.NewFault(fault.Invalid, "cache value exceeds limit")
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
@@ -155,7 +156,7 @@ func (b *Backend) write(ctx context.Context, key cache.EntryKey, data []byte, tt
 		return false, err
 	}
 	if len(data) > b.maxValue {
-		return false, fault.New(fault.Invalid, "cache value exceeds limit")
+		return false, safeerror.NewFault(fault.Invalid, "cache value exceeds limit")
 	}
 	mode := Metadata
 	if absent {

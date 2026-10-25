@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
@@ -54,7 +55,7 @@ type workerRun struct {
 
 func NewWorker(backend Backend, registry *Registry, config WorkerConfig, options ...WorkerOption) (*Worker, error) {
 	if backend == nil || isNil(backend) || registry == nil || registry.entries == nil {
-		return nil, fault.New(fault.Invalid, "worker requires a backend and registry")
+		return nil, safeerror.NewFault(fault.Invalid, "worker requires a backend and registry")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -62,7 +63,7 @@ func NewWorker(backend Backend, registry *Registry, config WorkerConfig, options
 	worker := &Worker{backend: backend, registry: registry, config: config.snapshot(), done: make(chan struct{})}
 	for _, option := range options {
 		if option == nil {
-			return nil, fault.New(fault.Invalid, "nil job worker option")
+			return nil, safeerror.NewFault(fault.Invalid, "nil job worker option")
 		}
 		if err := option(worker); err != nil {
 			return nil, err
@@ -88,7 +89,7 @@ func NewWorker(backend Backend, registry *Registry, config WorkerConfig, options
 // backoff; they never stop the worker or abandon an admitted handler.
 func (w *Worker) Run(ctx context.Context) error {
 	if w == nil || w.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "worker requires initialization and a context")
+		return safeerror.NewFault(fault.Invalid, "worker requires initialization and a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -96,7 +97,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	w.mu.Lock()
 	if w.running || w.stopped {
 		w.mu.Unlock()
-		return fault.New(fault.Closed, "worker is already running or stopped")
+		return safeerror.NewFault(fault.Closed, "worker is already running or stopped")
 	}
 	work, cancel := context.WithCancel(context.Background())
 	work = maintenance.WithContext(observability.WithContext(work, observability.FromContext(ctx)), admissionGate(ctx))
@@ -357,11 +358,11 @@ func (w *Worker) Drain(ctx context.Context) error {
 
 func (w *Worker) shutdown(ctx context.Context, begin func()) error {
 	if w == nil || w.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "worker shutdown requires initialization and context")
+		return safeerror.NewFault(fault.Invalid, "worker shutdown requires initialization and context")
 	}
 	frame, _ := ctx.Value(executionKey{}).(*executionFrame)
 	if frame != nil && frame.worker == w && frame.active.Load() {
-		return fault.New(fault.Cycle, "handler cannot wait for its own worker shutdown")
+		return safeerror.NewFault(fault.Cycle, "handler cannot wait for its own worker shutdown")
 	}
 	begin()
 	select {

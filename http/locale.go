@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -39,7 +40,7 @@ type LocaleNegotiation struct {
 
 func (n LocaleNegotiation) Validate() error {
 	if n.QueryParameter != "" && !httpquery.ValidName(n.QueryParameter) {
-		return fault.New(fault.Invalid, "locale query parameter name is invalid")
+		return safeerror.NewFault(fault.Invalid, "locale query parameter name is invalid")
 	}
 	if n.Cookie != "" {
 		if err := n.Cookie.Validate(); err != nil {

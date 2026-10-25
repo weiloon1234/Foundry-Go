@@ -14,6 +14,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -612,7 +613,7 @@ func (q FileQuery) foundryInsertMany(ctx context.Context, writer database.Transa
 }
 func (q FileQuery) foundryCreateMutations(drafts []FileDraft) ([]foundryquery.Mutation[File], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[File], len(drafts))
 	for i, draft := range drafts {
@@ -1158,7 +1159,7 @@ func (q FileQuery) DeleteAll(ctx context.Context, writer database.Transactor) (i
 // Increment adjusts one numeric field of every matching model by a typed delta, such as FileFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q FileQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[File], extra ...FileDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[File]
 	if len(extra) == 1 {
@@ -1173,7 +1174,7 @@ func (q FileQuery) Increment(ctx context.Context, writer database.Transactor, ad
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as FileFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q FileQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[File], extra ...FileDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[File]
 	if len(extra) == 1 {
@@ -1922,110 +1923,110 @@ func CompareFile(before, after foundryvalue.Optional[File], assigned FileDraft) 
 	var err error
 	changes.fields.ID, err = lifecycle.CompareModelField(codec.ID[File](), before, after, assigned.fieldID.IsSet(), func(item File) model.ID[File] { return item.ID })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.ID: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.ID", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.ID.Changed() || changes.fields.ID.Assigned()) {
-		return FileChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return FileChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Owner, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldOwner.IsSet(), func(item File) string { return item.Owner })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Owner: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Owner", err)
 	}
 	changes.fields.Scope, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldScope.IsSet(), func(item File) string { return item.Scope })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Scope: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Scope", err)
 	}
 	changes.fields.SubjectKey, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldSubjectKey.IsSet(), func(item File) string { return item.SubjectKey })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.SubjectKey: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.SubjectKey", err)
 	}
 	changes.fields.Identity, err = lifecycle.CompareModelField(codec.JSON[model.Identity](), before, after, assigned.fieldIdentity.IsSet(), func(item File) foundryvalue.JSON[model.Identity] { return item.Identity })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Identity: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Identity", err)
 	}
 	changes.fields.Collection, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldCollection.IsSet(), func(item File) string { return item.Collection })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Collection: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Collection", err)
 	}
 	changes.fields.Locale, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldLocale.IsSet(), func(item File) string { return item.Locale })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Locale: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Locale", err)
 	}
 	changes.fields.Single, err = lifecycle.CompareModelField(codec.Bool[bool](), before, after, assigned.fieldSingle.IsSet(), func(item File) bool { return item.Single })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Single: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Single", err)
 	}
 	changes.fields.Disk, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldDisk.IsSet(), func(item File) string { return item.Disk })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Disk: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Disk", err)
 	}
 	changes.fields.ObjectKey, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldObjectKey.IsSet(), func(item File) string { return item.ObjectKey })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.ObjectKey: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.ObjectKey", err)
 	}
 	changes.fields.OriginalName, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldOriginalName.IsSet(), func(item File) string { return item.OriginalName })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.OriginalName: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.OriginalName", err)
 	}
 	changes.fields.ContentType, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldContentType.IsSet(), func(item File) string { return item.ContentType })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.ContentType: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.ContentType", err)
 	}
 	changes.fields.Size, err = lifecycle.CompareModelField(codec.Signed[int64](), before, after, assigned.fieldSize.IsSet(), func(item File) int64 { return item.Size })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Size: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Size", err)
 	}
 	changes.fields.Digest, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldDigest.IsSet(), func(item File) string { return item.Digest })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Digest: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Digest", err)
 	}
 	changes.fields.ETag, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldETag.IsSet(), func(item File) string { return item.ETag })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.ETag: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.ETag", err)
 	}
 	changes.fields.ObjectVersion, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldObjectVersion.IsSet(), func(item File) string { return item.ObjectVersion })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.ObjectVersion: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.ObjectVersion", err)
 	}
 	changes.fields.Width, err = lifecycle.CompareModelField(codec.Signed[int32](), before, after, assigned.fieldWidth.IsSet(), func(item File) int32 { return item.Width })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Width: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Width", err)
 	}
 	changes.fields.Height, err = lifecycle.CompareModelField(codec.Signed[int32](), before, after, assigned.fieldHeight.IsSet(), func(item File) int32 { return item.Height })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Height: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Height", err)
 	}
 	changes.fields.Properties, err = lifecycle.CompareModelField(codec.JSON[json.RawMessage](), before, after, assigned.fieldProperties.IsSet(), func(item File) foundryvalue.JSON[json.RawMessage] { return item.Properties })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Properties: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Properties", err)
 	}
 	changes.fields.SortOrder, err = lifecycle.CompareModelField(codec.Signed[int32](), before, after, assigned.fieldSortOrder.IsSet(), func(item File) int32 { return item.SortOrder })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.SortOrder: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.SortOrder", err)
 	}
 	changes.fields.State, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldState.IsSet(), func(item File) string { return item.State })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.State: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.State", err)
 	}
 	changes.fields.WriterID, err = lifecycle.CompareModelField(codec.ID[Writer](), before, after, assigned.fieldWriterID.IsSet(), func(item File) model.ID[Writer] { return item.WriterID })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.WriterID: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.WriterID", err)
 	}
 	changes.fields.Attempts, err = lifecycle.CompareModelField(codec.Unsigned[uint32](), before, after, assigned.fieldAttempts.IsSet(), func(item File) uint32 { return item.Attempts })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.Attempts: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.Attempts", err)
 	}
 	changes.fields.LastFailure, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldLastFailure.IsSet(), func(item File) string { return item.LastFailure })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.LastFailure: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.LastFailure", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item File) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.CreatedAt: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.CreatedAt", err)
 	}
 	changes.fields.UpdatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldUpdatedAt.IsSet(), func(item File) temporal.DateTime { return item.UpdatedAt })
 	if err != nil {
-		return FileChanges{}, fmt.Errorf("compare File.UpdatedAt: %w", err)
+		return FileChanges{}, foundrydiagnostic.Prefix("compare File.UpdatedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -2267,7 +2268,7 @@ func (FileHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.Ob
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[File]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[File]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -2326,7 +2327,7 @@ func (FileHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.Ob
 					}
 				}
 			default:
-				return foundryquery.Mutation[File]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[File]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -2526,7 +2527,7 @@ func (FileHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle.Ob
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -2666,14 +2667,14 @@ type FileAuditPolicy struct {
 func (changes FileChanges) Audit(policy FileAuditPolicy) (record.Model[File, model.ID[File]], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[File, model.ID[File]]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[File, model.ID[File]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[File, model.ID[File]]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[File, model.ID[File]]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "id", policy.ID)
 	if err != nil {
@@ -2948,7 +2949,7 @@ func FileAuditing(policy FileAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() FileHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes FileChanges) error {

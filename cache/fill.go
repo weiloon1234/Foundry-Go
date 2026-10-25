@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // fillAttempts bounds how often a follower re-elects after an owner's fill
@@ -69,12 +70,12 @@ func (s *Store) joinFill(ctx context.Context, key EntryKey) (*fill, fillRole, er
 		// A loader reloading its own key (coalesced or direct) is a cycle, and
 		// so is any distributed fill of the key while its lease is held.
 		if ancestor.key == key && (ancestor.store == s || s.coordination != nil && ancestor.distributed) {
-			return nil, fillFollower, fault.New(fault.Cycle, "recursive cache fill")
+			return nil, fillFollower, safeerror.NewFault(fault.Cycle, "recursive cache fill")
 		}
 	}
 	if existing := s.fills[key]; existing != nil {
 		if existing.waiters >= s.config.MaxFillWaiters {
-			return nil, fillFollower, fault.New(fault.Overloaded, "cache fill waiter capacity is exhausted")
+			return nil, fillFollower, safeerror.NewFault(fault.Overloaded, "cache fill waiter capacity is exhausted")
 		}
 		existing.waiters++
 		return existing, fillFollower, nil

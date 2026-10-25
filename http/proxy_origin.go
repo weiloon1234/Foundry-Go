@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type proxyOriginFormat uint8
@@ -72,7 +73,7 @@ func (h ProxyOriginHeader) Validate() error {
 			return nil
 		}
 	}
-	return fault.New(fault.Invalid, "invalid proxy origin header descriptor")
+	return safeerror.NewFault(fault.Invalid, "invalid proxy origin header descriptor")
 }
 
 func validateProxyOriginHeaders(headers []ProxyOriginHeader) error {
@@ -90,7 +91,7 @@ func validateProxyOriginHeaders(headers []ProxyOriginHeader) error {
 				continue
 			}
 			if seen[name] {
-				return fault.New(fault.Duplicate, "proxy origin header source is repeated")
+				return safeerror.NewFault(fault.Duplicate, "proxy origin header source is repeated")
 			}
 			seen[name] = true
 		}
@@ -130,17 +131,17 @@ func (p proxyPolicy) forwardedOrigin(r *stdhttp.Request) (proxyRequestOrigin, er
 				peer = hop.address
 			}
 			if !found || !selected.valid {
-				return proxyRequestOrigin{}, BadRequest
+				return proxyRequestOrigin{}, BadRequest.WithCause(nil)
 			}
 			origin = proxyRequestOrigin{selected.scheme, selected.host}
 		} else {
 			if len(values) != 1 || len(values[0]) > maxOriginBytes || strings.Contains(values[0], ",") {
-				return proxyRequestOrigin{}, BadRequest
+				return proxyRequestOrigin{}, BadRequest.WithCause(nil)
 			}
 			origin.scheme = strings.Trim(values[0], " \t")
 			if source.format == proxyOriginPair {
 				if len(hosts) != 1 || len(hosts[0]) > maxOriginBytes || strings.Contains(hosts[0], ",") {
-					return proxyRequestOrigin{}, BadRequest
+					return proxyRequestOrigin{}, BadRequest.WithCause(nil)
 				}
 				origin.host = strings.Trim(hosts[0], " \t")
 			} else {
@@ -149,12 +150,12 @@ func (p proxyPolicy) forwardedOrigin(r *stdhttp.Request) (proxyRequestOrigin, er
 		}
 		origin.scheme = strings.ToLower(origin.scheme)
 		if origin.scheme != "http" && origin.scheme != "https" {
-			return proxyRequestOrigin{}, BadRequest
+			return proxyRequestOrigin{}, BadRequest.WithCause(nil)
 		}
 		// Shared origin grammar prevents userinfo, path/query fragments, invalid
 		// authorities and control characters from becoming a public URL base.
 		if _, err := ParseOrigin(origin.scheme + "://" + origin.host); err != nil {
-			return proxyRequestOrigin{}, BadRequest
+			return proxyRequestOrigin{}, BadRequest.WithCause(nil)
 		}
 		return origin, nil
 	}
@@ -176,7 +177,7 @@ func IsSecure(r *stdhttp.Request) bool {
 
 func requestOrigin(r *stdhttp.Request) (Origin, error) {
 	if r == nil {
-		return "", BadRequest
+		return "", BadRequest.WithCause(nil)
 	}
 	if origin, ok := r.Context().Value(proxyOriginContextKey{}).(proxyRequestOrigin); ok && origin.scheme != "" {
 		return ParseOrigin(origin.scheme + "://" + origin.host)

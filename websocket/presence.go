@@ -10,6 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -36,7 +37,7 @@ func WithPresence[C, R any, S model.Identifiable, D any](channel Channel[C, R, S
 		return err
 	}, token: &presenceToken{}, validate: func() error {
 		if !channel.private || member == nil {
-			return fault.New(fault.Invalid, "presence requires a private channel and safe member mapper")
+			return safeerror.NewFault(fault.Invalid, "presence requires a private channel and safe member mapper")
 		}
 		return payload.Validate()
 	}, description: payload.Description, encode: func(ctx context.Context, subject S, limits contract.JSONLimits) ([]byte, error) {
@@ -63,7 +64,7 @@ func (p PresenceChannel[C, R, S, D]) Members(ctx context.Context, hub *Hub, targ
 		return nil, err
 	}
 	if p.channel.presence == nil || hub.registry.channels[p.channel.id].presence != p.channel.presence.token {
-		return nil, fault.New(fault.Invalid, "presence declaration is not registered")
+		return nil, safeerror.NewFault(fault.Invalid, "presence declaration is not registered")
 	}
 	ctx, finish, err := hub.operation(ctx)
 	if err != nil {
@@ -103,7 +104,7 @@ func (p PresenceChannel[C, R, S, D]) Members(ctx context.Context, hub *Hub, targ
 }
 func memberID(subject SubjectReference) (MemberID, error) {
 	if subject.Identity.IsZero() {
-		return "", fault.New(fault.Invalid, "presence requires authenticated identity")
+		return "", safeerror.NewFault(fault.Invalid, "presence requires authenticated identity")
 	}
 	identity, err := json.Marshal(subject.Identity)
 	if err != nil {

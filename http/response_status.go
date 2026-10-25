@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // maxResponseStatuses bounds the success statuses one response declares.
@@ -44,11 +45,11 @@ func (j statusedJSON[R]) Encode(ctx context.Context, result Statused[R], limits 
 
 func validateResponseStatuses(statuses []int, primary int) error {
 	if len(statuses) < 2 || len(statuses) > maxResponseStatuses || statuses[0] != primary {
-		return fault.New(fault.Invalid, "response statuses require a primary and one to seven alternatives")
+		return safeerror.NewFault(fault.Invalid, "response statuses require a primary and one to seven alternatives")
 	}
 	for index, status := range statuses {
 		if !bodySuccessStatus(status) || slices.Contains(statuses[:index], status) {
-			return fault.New(fault.Invalid, "response statuses must be unique body-bearing success statuses")
+			return safeerror.NewFault(fault.Invalid, "response statuses must be unique body-bearing success statuses")
 		}
 	}
 	return nil
@@ -64,7 +65,7 @@ func (r Response[R]) selectedStatus(result R) (int, error) {
 		return r.status, nil
 	}
 	if !slices.Contains(r.statuses, status) {
-		return 0, InternalError.WithCause(fault.New(fault.Internal, "handler selected an undeclared response status"))
+		return 0, InternalError.WithCause(safeerror.NewFault(fault.Internal, "handler selected an undeclared response status"))
 	}
 	return status, nil
 }

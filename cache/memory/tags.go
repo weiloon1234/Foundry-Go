@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 var _ cache.TaggedBackend = (*Backend)(nil)
@@ -50,7 +51,7 @@ func (b *Backend) existingVersions(ctx context.Context, keys []cache.EntryKey) (
 		}
 		item := element.Value.(*entry)
 		if item.kind != tagMetadata {
-			return nil, false, fault.New(fault.Invalid, "cache tag metadata is corrupt")
+			return nil, false, safeerror.NewFault(fault.Invalid, "cache tag metadata is corrupt")
 		}
 		version, err := cache.ParseTagVersion(item.data)
 		if err != nil {
@@ -80,7 +81,7 @@ func (b *Backend) versions(ctx context.Context, keys []cache.EntryKey, replace b
 		return nil, err
 	}
 	if len(keys) > b.config.MaxEntries {
-		return nil, fault.New(fault.Invalid, "tag set exceeds memory entry budget")
+		return nil, safeerror.NewFault(fault.Invalid, "tag set exceeds memory entry budget")
 	}
 	now := b.clock.Now()
 	items := make([]*entry, len(keys))
@@ -92,7 +93,7 @@ func (b *Backend) versions(ctx context.Context, keys []cache.EntryKey, replace b
 		if old := b.lookup(key, now); old != nil {
 			item = old.Value.(*entry)
 			if item.kind != tagMetadata {
-				return nil, fault.New(fault.Invalid, "cache tag metadata is corrupt")
+				return nil, safeerror.NewFault(fault.Invalid, "cache tag metadata is corrupt")
 			}
 			version, err := cache.ParseTagVersion(item.data)
 			if err != nil {
@@ -115,7 +116,7 @@ func (b *Backend) versions(ctx context.Context, keys []cache.EntryKey, replace b
 			created[i] = true
 		}
 		if item.cost > b.config.MaxBytes-total {
-			return nil, fault.New(fault.Invalid, "tag set exceeds memory byte budget")
+			return nil, safeerror.NewFault(fault.Invalid, "tag set exceeds memory byte budget")
 		}
 		total += item.cost
 		items[i] = item
@@ -150,18 +151,18 @@ func (b *Backend) checkTags(key cache.TaggedKey, now time.Time) (*tagState, erro
 		// Non-mutating so read paths can check under the shared lock.
 		element := b.live(stamp.Key, now)
 		if element == nil {
-			return nil, fault.New(fault.Conflict, "cache tag snapshot expired")
+			return nil, safeerror.NewFault(fault.Conflict, "cache tag snapshot expired")
 		}
 		item := element.Value.(*entry)
 		if item.kind != tagMetadata {
-			return nil, fault.New(fault.Invalid, "cache tag metadata is corrupt")
+			return nil, safeerror.NewFault(fault.Invalid, "cache tag metadata is corrupt")
 		}
 		version, err := cache.ParseTagVersion(item.data)
 		if err != nil {
 			return nil, err
 		}
 		if version != stamp.Version {
-			return nil, fault.New(fault.Conflict, "cache tag snapshot changed")
+			return nil, safeerror.NewFault(fault.Conflict, "cache tag snapshot changed")
 		}
 		state.bytes += item.cost
 		state.elements = append(state.elements, element)
@@ -182,7 +183,7 @@ func (b *Backend) referenceTags(state *tagState) {
 }
 func (b *Backend) tagBudget(state *tagState, cost int) error {
 	if len(state.elements) >= b.config.MaxEntries || cost > b.config.MaxBytes-state.bytes {
-		return fault.New(fault.Invalid, "tagged entry and metadata exceed memory budget")
+		return safeerror.NewFault(fault.Invalid, "tagged entry and metadata exceed memory budget")
 	}
 	return nil
 }

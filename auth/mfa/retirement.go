@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -16,11 +17,11 @@ func (f *Factors[M, K]) withinTransaction(parent *database.Tx) (factorTransactio
 		return nil, err
 	}
 	if parent == nil {
-		return nil, fault.New(fault.Invalid, "MFA operation requires its owning transaction")
+		return nil, safeerror.NewFault(fault.Invalid, "MFA operation requires its owning transaction")
 	}
 	backend, ok := f.store.backend.(TransactionalBackend)
 	if !ok {
-		return nil, fault.New(fault.Invalid, "MFA backend cannot join a transaction")
+		return nil, safeerror.NewFault(fault.Invalid, "MFA backend cannot join a transaction")
 	}
 	return func(ctx context.Context, address Address, identity model.Identity, prepare func(context.Context, *database.Tx) error, change func(context.Context, *database.Tx, value.Optional[Record], temporal.DateTime) (Change, error)) (value.Optional[Record], error) {
 		return backend.WithinIn(ctx, parent, address, identity, prepare, change)
@@ -50,7 +51,7 @@ func (f *Factors[M, K]) RetireIn(ctx context.Context, parent *database.Tx, refer
 	var result M
 	err = f.mutate(ctx, identity, within, func(op context.Context, tx *database.Tx) (M, error) {
 		if !parent.SharesTransaction(tx) {
-			return *new(M), fault.New(fault.Invalid, "MFA backend substituted retirement transaction")
+			return *new(M), safeerror.NewFault(fault.Invalid, "MFA backend substituted retirement transaction")
 		}
 		found, err := f.model.Lock(op, tx, reference.Key())
 		if err != nil {
@@ -58,14 +59,14 @@ func (f *Factors[M, K]) RetireIn(ctx context.Context, parent *database.Tx, refer
 		}
 		current, present := found.Get()
 		if !present {
-			return *new(M), auth.Unauthenticated
+			return *new(M), auth.Unauthenticated.WithCause(nil)
 		}
 		actual, err := current.FoundryIdentity()
 		if err != nil {
 			return *new(M), err
 		}
 		if actual != identity {
-			return *new(M), fault.New(fault.Invalid, "MFA retirement resolved a different model")
+			return *new(M), safeerror.NewFault(fault.Invalid, "MFA retirement resolved a different model")
 		}
 		return current, nil
 	}, func(op context.Context, tx *database.Tx, current M, _ value.Optional[Record], _ temporal.DateTime) (Change, error) {

@@ -2,10 +2,12 @@ package http
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/value"
 	stdhttp "net/http"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type authenticatedRawTransport[P, S any] interface {
@@ -29,7 +31,7 @@ func (r OptionalAuthenticationRoute[P, M]) Signed(signer URLSigner) SignedAuthen
 }
 func (r SignedAuthenticatedRoute[P, S]) Validate() error {
 	if r.transport == nil {
-		return fault.New(fault.Invalid, "signed raw authentication requires a transport")
+		return safeerror.NewFault(fault.Invalid, "signed raw authentication requires a transport")
 	}
 	if err := r.transport.Validate(); err != nil {
 		return err

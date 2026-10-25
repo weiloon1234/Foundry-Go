@@ -1,6 +1,9 @@
 package auth
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+)
 
 // LimitPolicy selects what a credential store does when issuing would exceed a
 // subject's active-credential cap. Pending-MFA credentials use their own small
@@ -17,7 +20,7 @@ const (
 
 func (p LimitPolicy) Validate() error {
 	if p != RejectNew && p != EvictOldest {
-		return fault.New(fault.Invalid, "invalid credential limit policy")
+		return safeerror.NewFault(fault.Invalid, "invalid credential limit policy")
 	}
 	return nil
 }

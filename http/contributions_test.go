@@ -57,7 +57,8 @@ func TestPluginRoutesAndMiddlewareUseNativeRouter(t *testing.T) {
 	}
 	duplicate := plugin.Module{Declaration: plugin.Manifest{ID: "duplicate", Version: "1.0.0", Framework: "*"}, OnRegister: register("duplicate")}
 	_, err = foundation.NewBuilder().Register(routerModule).RegisterPlugin(extension, duplicate).Build(t.Context())
-	if !errors.Is(err, fault.Duplicate) || !strings.Contains(err.Error(), "plugin:reports") || !strings.Contains(err.Error(), "plugin:duplicate") {
+	var duplicateFault *fault.Error
+	if !errors.Is(err, fault.Duplicate) || !errors.As(err, &duplicateFault) || !strings.Contains(duplicateFault.Message(), "plugin:reports") || !strings.Contains(duplicateFault.Message(), "plugin:duplicate") {
 		t.Fatalf("duplicate route owners: %v", err)
 	}
 	_, err = foundation.NewBuilder().RegisterPlugin(extension).Build(t.Context())

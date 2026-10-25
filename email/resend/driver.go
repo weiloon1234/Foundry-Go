@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/email/internal/httptransport"
@@ -27,7 +28,7 @@ type Driver struct {
 
 func New(config Config) (*Driver, error) {
 	if !httptransport.Token(config.Token.Reveal()) {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	c, err := httptransport.New(config.HTTP, "https://api.resend.com")
 	if err != nil {
@@ -55,7 +56,7 @@ type attachment struct {
 
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.client == nil || out.Validate() != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	m := out.Message()
 	body := struct {
@@ -76,7 +77,7 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	r, err := d.client.Request(ctx, "/emails", "application/json", data)
 	if err != nil {
@@ -95,7 +96,7 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 			Name string `json:"name"`
 		}
 		if httptransport.JSON(data, &conflict) == nil && conflict.Name == "concurrent_idempotent_requests" {
-			return email.Receipt{}, email.Transient
+			return email.Receipt{}, emaildiag.Failure(email.Transient)
 		}
 	}
 	if err := httptransport.Status(status); err != nil {
@@ -105,7 +106,7 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 		ID string `json:"id"`
 	}
 	if httptransport.JSON(data, &result) != nil || result.ID == "" {
-		return email.Receipt{}, email.Ambiguous
+		return email.Receipt{}, emaildiag.Failure(email.Ambiguous)
 	}
 	receipt := email.Receipt{MessageID: result.ID}
 	return receipt, receipt.Validate()

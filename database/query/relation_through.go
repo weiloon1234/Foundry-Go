@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -53,7 +54,7 @@ func ManyToMany[M, N, P any, A, B comparable](local KeyField[M, A], pivotLocal K
 func (r ThroughRelation[M, N, P]) Bind(name string, source Query[M], target Query[N], pivot Query[P], get func(M) relation.Through[N, P], set func(M, relation.Through[N, P]) M) ThroughRelation[M, N, P] {
 	r.spec = r.spec.bind(name, source, target)
 	if pivot.hasQueryOptions() {
-		r.spec.bindingError = fault.New(fault.Invalid, "relation Bind requires bare pivot metadata")
+		r.spec.bindingError = safeerror.NewFault(fault.Invalid, "relation Bind requires bare pivot metadata")
 	}
 	r.pivot = r.pivot.bindModel(pivot)
 	r.get, r.set = get, set
@@ -109,7 +110,7 @@ func (r ThroughRelation[M, N, P]) copyRelation() Relation[M] { return r }
 
 func (r ThroughRelation[M, N, P]) validateRelation(source string, depth int, limits RelationLimits) error {
 	if r.get == nil || r.set == nil {
-		return fault.New(fault.Invalid, "many-to-many requires generated metadata, typed keys and a slot")
+		return safeerror.NewFault(fault.Invalid, "many-to-many requires generated metadata, typed keys and a slot")
 	}
 	if err := r.validateMetadata(source, depth, limits); err != nil {
 		return err
@@ -122,13 +123,13 @@ func (r ThroughRelation[M, N, P]) validateRelation(source string, depth int, lim
 
 func (r ThroughRelation[M, N, P]) validateMetadata(source string, depth int, limits RelationLimits) error {
 	if r.fetch == nil || r.pivot.definition == nil {
-		return fault.New(fault.Invalid, "many-to-many requires generated metadata and typed keys")
+		return safeerror.NewFault(fault.Invalid, "many-to-many requires generated metadata and typed keys")
 	}
 	if err := r.spec.validateMetadata(source, depth, limits); err != nil {
 		return err
 	}
 	if r.pivot.queryCore.Limit.IsSet() || r.pivot.queryCore.Offset != 0 {
-		return fault.New(fault.Invalid, "pivot scopes cannot use global windows")
+		return safeerror.NewFault(fault.Invalid, "pivot scopes cannot use global windows")
 	}
 	if err := r.pivot.validateAt(depth, limits); err != nil {
 		return err
@@ -138,11 +139,11 @@ func (r ThroughRelation[M, N, P]) validateMetadata(source string, depth int, lim
 			return err
 		}
 		if _, ok := r.pivot.definition.modelField(f.Column); !ok {
-			return fault.New(fault.Invalid, "pivot key is not a generated model field")
+			return safeerror.NewFault(fault.Invalid, "pivot key is not a generated model field")
 		}
 	}
 	if len(r.orders) > MaxExpressionNodes {
-		return fault.New(fault.Invalid, "relation ordering exceeds its resource bound")
+		return safeerror.NewFault(fault.Invalid, "relation ordering exceeds its resource bound")
 	}
 	type orderedField struct {
 		field fieldRef
@@ -164,7 +165,7 @@ func (r ThroughRelation[M, N, P]) validateMetadata(source string, depth int, lim
 		}
 		key := orderedField{field, o.pivot}
 		if seen[key] {
-			return fault.New(fault.Invalid, "repeated relation ordering column")
+			return safeerror.NewFault(fault.Invalid, "repeated relation ordering column")
 		}
 		seen[key] = true
 	}

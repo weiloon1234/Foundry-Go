@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Statement is a compiled parameterized PostgreSQL statement. SQL and Arguments
@@ -69,7 +70,7 @@ func (q Query[M]) compile(kind readKind) (Statement, error) {
 		return Statement{}, err
 	}
 	if q.definition == nil {
-		return Statement{}, fault.New(fault.Invalid, "model execution requires generated metadata and hydration")
+		return Statement{}, safeerror.NewFault(fault.Invalid, "model execution requires generated metadata and hydration")
 	}
 	result, err := q.queryCore.CompileModel(kind, q.definition.selections(q.queryCore.Table))
 	return statementFromCore(result), err

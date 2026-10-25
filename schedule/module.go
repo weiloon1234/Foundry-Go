@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
@@ -13,7 +14,7 @@ import (
 func Module(name foundation.ProviderID, key foundation.Key[*Scheduler], config Config, requires []foundation.ProviderID, construct func(foundation.Resolver) (*lease.Manager, []Declaration, error)) foundation.Module {
 	return foundation.Module{Name: name, Requires: slices.Clone(requires), OnRegister: func(r *foundation.Registrar) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "scheduler module requires a declaration/lease factory")
+			return safeerror.NewFault(fault.Invalid, "scheduler module requires a declaration/lease factory")
 		}
 		if err := config.Validate(); err != nil {
 			return err

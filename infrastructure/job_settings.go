@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/redis"
@@ -76,5 +77,5 @@ func (s JobConnectionSettings) validateMemory(name jobs.ConnectionName) error {
 	if s.Driver != MemoryJobs && s.Driver != SyncJobs || s.AllowMemory || localEnvironment(s.Dispatch.Namespace.Environment) {
 		return nil
 	}
-	return fault.New(fault.Invalid, "job connection "+string(name)+" uses a process-local "+string(s.Driver)+" driver outside a local or test environment; its jobs are not durable and can be lost. Configure the redis driver, or set allow_memory = true on this connection to opt in")
+	return safeerror.NewFault(fault.Invalid, "job connection "+string(name)+" uses a process-local "+string(s.Driver)+" driver outside a local or test environment; its jobs are not durable and can be lost. Configure the redis driver, or set allow_memory = true on this connection to opt in")
 }

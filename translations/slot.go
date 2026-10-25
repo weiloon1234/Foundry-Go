@@ -2,8 +2,8 @@ package translations
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"maps"
 	"slices"
 	"strings"
@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -68,7 +69,7 @@ func (Text) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("translated te
 func (Text) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
 func notLoaded() error {
-	return fault.New(fault.Missing, "translated slot is not loaded; load it with With or Load")
+	return safeerror.NewFault(fault.Missing, "translated slot is not loaded; load it with With or Load")
 }
 
 // TextSlot binds one model's Text field to its translated-field declaration.
@@ -151,7 +152,7 @@ func (s TextSlot[M, K]) bound() (*Manager, error) {
 	return s.manager, nil
 }
 func (s TextSlot[M, K]) unbound() error {
-	return fault.New(fault.Missing, "translated slot "+s.binding.Field+" is not bound to a translations manager; bind it with <Model>Extensions().From(runtime)")
+	return safeerror.NewFault(fault.Missing, "translated slot "+s.binding.Field+" is not bound to a translations manager; bind it with <Model>Extensions().From(runtime)")
 }
 
 func (s TextSlot[M, K]) relation(fetch query.SlotFetch[M, Text]) query.ExtensionSlot[M] {
@@ -195,7 +196,7 @@ func (s TextSlot[M, K]) fetch(ctx context.Context, executor database.Executor, p
 		result := make([]Text, len(part))
 		for i := range references {
 			values, err := batch.getAt(i)
-			if errors.Is(err, database.NotFound) {
+			if callback.ErrorIs(err, database.NotFound) {
 				continue
 			}
 			if err != nil {
@@ -369,7 +370,7 @@ func (s TextSlot[M, K]) sync(ctx context.Context, outer *database.Tx, owner M, i
 		}
 		for _, locale := range s.Options().Require.Required(locales) {
 			if strings.TrimSpace(input[locale]) == "" {
-				return fault.New(fault.Invalid, "translated slot "+s.binding.Field+" requires text for locale "+string(locale))
+				return safeerror.NewFault(fault.Invalid, "translated slot "+s.binding.Field+" requires text for locale "+string(locale))
 			}
 		}
 		if len(assignments) > 0 {

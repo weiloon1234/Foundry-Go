@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/mfastore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (b *Backend) Prune(ctx context.Context, address mfa.Address, limit int) (uint64, error) {
@@ -15,7 +16,7 @@ func (b *Backend) Prune(ctx context.Context, address mfa.Address, limit int) (ui
 		return 0, err
 	}
 	if limit < 1 || limit > mfa.MaxPrune {
-		return 0, fault.New(fault.Invalid, "invalid MFA prune limit")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid MFA prune limit")
 	}
 	var removed uint64
 	err = b.within(ctx, func(tx *database.Tx) error {

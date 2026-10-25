@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // DestinationMode selects ordinary networking or an enforced direct-connect policy.
@@ -47,7 +48,7 @@ func PublicDestinations() DestinationPolicy {
 	return DestinationPolicy{Mode: RestrictedDestinations, Schemes: []Scheme{HTTPS}, Ports: []uint16{443}}
 }
 
-var DestinationDenied = fault.New(fault.Invalid, "outbound destination is not permitted")
+var DestinationDenied = safeerror.Sentinel(fault.Invalid, "outbound destination is not permitted")
 
 func (p DestinationPolicy) Validate() error {
 	if p.Mode == UnrestrictedDestinations {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func bindAssignment(column columnData, bind func() (driver.Value, error)) (driver.Value, error) {
@@ -19,7 +20,7 @@ func (q Query[M]) mutationCompiler(kind mutationKind) (compiler, error) {
 // add a concrete primary identity only after their complete candidate selection.
 func (q Query[M]) modelWriteCompiler(kind mutationKind, requirePrimary bool) (compiler, error) {
 	if kind >= softDeleteModel && !q.queryCore.HasSoftDeletes() {
-		return compiler{}, fault.New(fault.Invalid, "special deletion writes require a soft-delete model")
+		return compiler{}, safeerror.NewFault(fault.Invalid, "special deletion writes require a soft-delete model")
 	}
 	if err := q.Validate(); err != nil {
 		return compiler{}, err

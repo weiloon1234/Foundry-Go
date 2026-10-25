@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Notice retains the declaration's concrete key for an explicit domain event or
@@ -28,10 +29,10 @@ func (t Throttle[K]) WithLockedObserver(observer func(context.Context, Notice[K]
 		return Throttle[K]{}, err
 	}
 	if observer == nil {
-		return Throttle[K]{}, fault.New(fault.Invalid, "lockout observer is nil")
+		return Throttle[K]{}, safeerror.NewFault(fault.Invalid, "lockout observer is nil")
 	}
 	if t.observer != nil {
-		return Throttle[K]{}, fault.New(fault.Duplicate, "lockout observer already configured")
+		return Throttle[K]{}, safeerror.NewFault(fault.Duplicate, "lockout observer already configured")
 	}
 	t.observer = observer
 	return t, nil

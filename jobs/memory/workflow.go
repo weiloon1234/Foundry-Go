@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -33,7 +34,7 @@ func (b *Backend) JobWorkflow(ctx context.Context, key jobs.Key, workflow jobs.W
 		return false, err
 	}
 	if workflow.Queue() != key.Queue() {
-		return false, fault.New(fault.Invalid, "workflow belongs to another queue")
+		return false, safeerror.NewFault(fault.Invalid, "workflow belongs to another queue")
 	}
 	data, err := workflow.MarshalJSON()
 	if err != nil {
@@ -61,7 +62,7 @@ func (b *Backend) JobWorkflow(ctx context.Context, key jobs.Key, workflow jobs.W
 	at := workflowAddress{key, workflow.ID()}
 	if previous, ok := b.workflows[at]; ok {
 		if previous.fingerprint != fingerprint {
-			return false, fault.New(fault.Conflict, "workflow identity already belongs to different members")
+			return false, safeerror.NewFault(fault.Conflict, "workflow identity already belongs to different members")
 		}
 		return false, nil
 	}
@@ -72,21 +73,21 @@ func (b *Backend) JobWorkflow(ctx context.Context, key jobs.Key, workflow jobs.W
 		}
 	}
 	if uint64(len(items)) > ^uint64(0)-b.sequence {
-		return false, fault.New(fault.Conflict, "memory job sequence exhausted")
+		return false, safeerror.NewFault(fault.Conflict, "memory job sequence exhausted")
 	}
 	if active >= b.config.MaxEntries || b.live+len(items) > b.config.MaxEntries || total > b.config.MaxBytes-b.liveBytes {
 		return false, jobs.ErrQueueFull
 	}
 	for _, item := range items {
 		if _, exists := b.entries[address{key, item.record.Envelope.ID()}]; exists {
-			return false, fault.New(fault.Conflict, "workflow job identity already exists")
+			return false, safeerror.NewFault(fault.Conflict, "workflow job identity already exists")
 		}
 		available := item.record.Envelope.AvailableAt()
 		if available.IsZero() {
 			available = now
 		}
 		if available.After(now.Add(jobs.MaxDelay)) {
-			return false, fault.New(fault.Invalid, "workflow schedule exceeds maximum delay")
+			return false, safeerror.NewFault(fault.Invalid, "workflow schedule exceeds maximum delay")
 		}
 		item.record.CreatedAt = now
 		item.record.AvailableAt = available
@@ -237,7 +238,7 @@ func (group *workflowEntry) workflowMembers() []jobs.ExecutionID {
 // JobWorkflowStatus reports one workflow's progress without payloads.
 func (b *Backend) JobWorkflowStatus(ctx context.Context, key jobs.Key, id jobs.WorkflowID) (value.Optional[jobs.WorkflowStatus], error) {
 	if id.IsZero() {
-		return value.Optional[jobs.WorkflowStatus]{}, fault.New(fault.Invalid, "workflow status requires an identity")
+		return value.Optional[jobs.WorkflowStatus]{}, safeerror.NewFault(fault.Invalid, "workflow status requires an identity")
 	}
 	_, release, err := b.begin(ctx, key)
 	if err != nil {
@@ -265,7 +266,7 @@ func (b *Backend) JobWorkflowStatus(ctx context.Context, key jobs.Key, id jobs.W
 
 func (b *Backend) JobCancelWorkflow(ctx context.Context, key jobs.Key, id jobs.WorkflowID) (bool, error) {
 	if id.IsZero() {
-		return false, fault.New(fault.Invalid, "workflow cancellation requires an identity")
+		return false, safeerror.NewFault(fault.Invalid, "workflow cancellation requires an identity")
 	}
 	now, release, err := b.begin(ctx, key)
 	if err != nil {

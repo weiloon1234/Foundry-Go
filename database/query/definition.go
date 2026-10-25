@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Column describes one persisted column at the generated declaration boundary.
@@ -50,17 +51,17 @@ func Define[M any](table, primary string, columns []Column, scan func(database.R
 
 func (d Definition[M]) Validate() error {
 	if d.hasReadAdapter && d.readHooks == nil {
-		return fault.New(fault.Invalid, "model retrieval hooks require an adapter")
+		return safeerror.NewFault(fault.Invalid, "model retrieval hooks require an adapter")
 	}
 	if (d.hasWriteHooks || d.hasObserverHooks) && d.writeHooks == nil {
-		return fault.New(fault.Invalid, "model write hooks require a factory")
+		return safeerror.NewFault(fault.Invalid, "model write hooks require a factory")
 	}
 	seen, err := d.modelDefinition.ValidateColumns(d.scan != nil)
 	if err != nil {
 		return err
 	}
 	if len(d.modelFields) > len(d.modelDefinition.Columns) {
-		return fault.New(fault.Invalid, "too many model field declarations")
+		return safeerror.NewFault(fault.Invalid, "too many model field declarations")
 	}
 	fieldSeen := make(map[string]bool, len(d.modelFields))
 	for _, field := range d.modelFields {

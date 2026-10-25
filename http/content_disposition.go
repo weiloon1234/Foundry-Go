@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Disposition selects how a browser should handle a file representation.
@@ -22,7 +23,7 @@ func (d Disposition) Validate() error {
 	case DispositionAttachment, DispositionInline:
 		return nil
 	default:
-		return fault.New(fault.Invalid, "invalid file content disposition")
+		return safeerror.NewFault(fault.Invalid, "invalid file content disposition")
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/authtransport"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -24,7 +25,7 @@ func MFAEnrollmentResponse[M any](status int, source clock.Clock) Response[mfa.E
 				return empty, err
 			}
 			if enrollment.ID().IsZero() || enrollment.Secret().Validate() != nil || enrollment.URI().IsZero() || now.UTC().Before(enrollment.CreatedAt().UTC()) || !now.UTC().Before(enrollment.ExpiresAt().UTC()) {
-				return empty, fault.New(fault.Invalid, "MFA enrollment is missing or expired")
+				return empty, safeerror.NewFault(fault.Invalid, "MFA enrollment is missing or expired")
 			}
 			id, err := model.ParseID[mfa.Record](enrollment.ID().String())
 			if err != nil {
@@ -45,7 +46,7 @@ func MFARecoveryResponse[M any](status int) Response[mfa.RecoveryCodes[M]] {
 			var empty authtransport.MFARecoveryResponse
 			codes := result.Codes()
 			if result.ID().IsZero() || len(codes) == 0 || len(codes) > mfa.MaxRecoveryCodes {
-				return empty, fault.New(fault.Invalid, "MFA recovery set is missing")
+				return empty, safeerror.NewFault(fault.Invalid, "MFA recovery set is missing")
 			}
 			raw := make([]string, len(codes))
 			for i, code := range codes {

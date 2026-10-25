@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	store "github.com/weiloon1234/Foundry-Go/internal/webhookstore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
@@ -91,7 +92,7 @@ func (s *Service) CreateEndpoint(ctx context.Context, options EndpointOptions) (
 				return err
 			}
 			if count >= int64(s.config.MaxEndpoints) {
-				return fault.New(fault.Conflict, "webhook endpoint registry is full")
+				return safeerror.NewFault(fault.Conflict, "webhook endpoint registry is full")
 			}
 			now, err := s.now()
 			if err != nil {
@@ -236,7 +237,7 @@ func (s *Service) RotateSecretWithGrace(ctx context.Context, id EndpointID, grac
 				return err
 			}
 			if len(active) >= MaxSigningSecrets && grace > 0 {
-				return fault.New(fault.Conflict, "webhook endpoint has too many signing secrets in rotation")
+				return safeerror.NewFault(fault.Conflict, "webhook endpoint has too many signing secrets in rotation")
 			}
 			for _, row := range active {
 				current, present := row.ExpiresAt.Get()
@@ -292,7 +293,7 @@ func (s *Service) signingSecrets(ctx context.Context, tx *database.Tx, endpoint 
 		return nil, err
 	}
 	if len(rows) > MaxSigningSecrets {
-		return nil, fault.New(fault.Conflict, "webhook endpoint has too many signing secrets")
+		return nil, safeerror.NewFault(fault.Conflict, "webhook endpoint has too many signing secrets")
 	}
 	return rows, nil
 }
@@ -316,12 +317,12 @@ func (s *Service) decryptSecrets(ctx context.Context, rows []store.Secret) ([][]
 		encoded, ok := strings.CutPrefix(plaintext.Reveal(), "whsec_")
 		material, err := base64.StdEncoding.DecodeString(encoded)
 		if !ok || err != nil || len(material) < 24 || len(material) > 64 {
-			return nil, fault.New(fault.Invalid, "stored webhook signing secret is malformed")
+			return nil, safeerror.NewFault(fault.Invalid, "stored webhook signing secret is malformed")
 		}
 		keys = append(keys, material)
 	}
 	if len(keys) == 0 {
-		return nil, fault.New(fault.Missing, "webhook endpoint has no signing secret")
+		return nil, safeerror.NewFault(fault.Missing, "webhook endpoint has no signing secret")
 	}
 	return slices.Clip(keys), nil
 }

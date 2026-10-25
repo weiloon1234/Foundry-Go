@@ -2,8 +2,10 @@ package jobs
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -17,7 +19,7 @@ type Connection struct {
 
 func NewConnection(dispatcher *Dispatcher, queue Queue) (*Connection, error) {
 	if dispatcher == nil || dispatcher.slots == nil {
-		return nil, fault.New(fault.Invalid, "job connection requires a dispatcher")
+		return nil, safeerror.NewFault(fault.Invalid, "job connection requires a dispatcher")
 	}
 	if err := queue.Validate(); err != nil {
 		return nil, err
@@ -55,13 +57,13 @@ func (d Definition[P]) On(connection *Connection) (Bound[P], error) {
 		return Bound[P]{}, err
 	}
 	if connection == nil || connection.dispatcher == nil {
-		return Bound[P]{}, fault.New(fault.Invalid, "job binding requires a connection")
+		return Bound[P]{}, safeerror.NewFault(fault.Invalid, "job binding requires a connection")
 	}
 	return Bound[P]{d, connection}, nil
 }
 func (b Bound[P]) options(options Options[P]) (Options[P], error) {
 	if b.connection == nil || b.connection.dispatcher == nil {
-		return options, fault.New(fault.Invalid, "job binding is not initialized")
+		return options, safeerror.NewFault(fault.Invalid, "job binding is not initialized")
 	}
 	if options.Queue == "" {
 		options.Queue = b.connection.queue
@@ -102,7 +104,7 @@ func (b Bound[P]) Enqueue(ctx context.Context, tx *database.Tx, producer *Outbox
 		return outbox.ID[P]{}, err
 	}
 	if producer == nil || producer.dispatcher != b.connection.dispatcher {
-		return outbox.ID[P]{}, fault.New(fault.Invalid, "job outbox belongs to a different connection")
+		return outbox.ID[P]{}, safeerror.NewFault(fault.Invalid, "job outbox belongs to a different connection")
 	}
 	return b.definition.Enqueue(ctx, tx, producer, payload, options)
 }

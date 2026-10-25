@@ -3,11 +3,13 @@ package audit
 import (
 	"context"
 	"fmt"
+	"log/slog"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlscope"
-	"log/slog"
 )
 
 // Scope is a concrete, immutable dependency for domain constructors. It borrows
@@ -21,7 +23,7 @@ type Scope struct {
 
 func NewScope(db *database.DB, schema string, recorder *Recorder) (*Scope, error) {
 	if db == nil || recorder == nil || !sqlname.Valid(schema) {
-		return nil, fault.New(fault.Invalid, "audit scope requires a database, schema and recorder")
+		return nil, safeerror.NewFault(fault.Invalid, "audit scope requires a database, schema and recorder")
 	}
 	if err := recorder.config.Validate(); err != nil {
 		return nil, err
@@ -34,7 +36,7 @@ func NewScope(db *database.DB, schema string, recorder *Recorder) (*Scope, error
 // not commit the caller's transaction, and another database's transaction fails.
 func (s *Scope) Within(ctx context.Context, tx *database.Tx, fn func(*database.Tx, *Recorder) error) error {
 	if s == nil || fn == nil {
-		return fault.New(fault.Invalid, "audit scope requires an initialized handle and callback")
+		return safeerror.NewFault(fault.Invalid, "audit scope requires an initialized handle and callback")
 	}
 	return sqlscope.InSchema(ctx, tx, s.db, s.schema, func(child *database.Tx) error { return fn(child, s.recorder) })
 }

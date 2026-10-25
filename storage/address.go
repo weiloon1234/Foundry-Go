@@ -14,7 +14,7 @@ type ObjectAddress struct{ store, object string }
 
 func NewObjectAddress(store, object string) (ObjectAddress, error) {
 	if store == "" || object == "" || len(store) > 8192 || len(object) > 8192 {
-		return ObjectAddress{}, Failure(Invalid, CopyOperation, Unchanged, nil)
+		return ObjectAddress{}, newFailure(Invalid, CopyOperation, Unchanged, nil)
 	}
 	return ObjectAddress{store, object}, nil
 }
@@ -33,7 +33,7 @@ func (d *Disk) address(ctx context.Context, key ObjectKey) (ObjectAddress, error
 	}
 	locator, ok := d.backend.(ObjectLocator)
 	if !ok {
-		return ObjectAddress{}, Failure(Unsupported, MoveOperation, Unchanged, nil)
+		return ObjectAddress{}, newFailure(Unsupported, MoveOperation, Unchanged, nil)
 	}
 	op, release, err := d.begin(ctx, MoveOperation)
 	if err != nil {

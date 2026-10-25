@@ -7,14 +7,15 @@ package failover
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"reflect"
 	"slices"
 	"sync/atomic"
 
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxTransports bounds one composition.
@@ -37,11 +38,11 @@ func RoundRobin(transports ...email.Driver) (*Driver, error) { return compose(tr
 
 func compose(rotate bool, transports []email.Driver) (*Driver, error) {
 	if len(transports) < 2 || len(transports) > MaxTransports {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	for i, transport := range transports {
 		if transport == nil || isNil(transport) || slices.ContainsFunc(transports[:i], func(other email.Driver) bool { return sameDriver(other, transport) }) {
-			return nil, email.Construction
+			return nil, emaildiag.Failure(email.Construction)
 		}
 	}
 	return &Driver{transports: slices.Clone(transports), rotate: rotate}, nil
@@ -67,7 +68,7 @@ func (*Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("email failov
 
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || len(d.transports) == 0 || ctx == nil || out.Validate() != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	start := 0
 	if d.rotate {
@@ -76,7 +77,7 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	var failures []error
 	for offset := range d.transports {
 		if ctx.Err() != nil {
-			return email.Receipt{}, errors.Join(append(failures, email.Transient)...)
+			return email.Receipt{}, safeerror.Join("operation failed", append(failures, emaildiag.Failure(email.Transient))...)
 		}
 		transport := d.transports[(start+offset)%len(d.transports)]
 		var receipt email.Receipt
@@ -93,5 +94,5 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 		}
 		failures = append(failures, err)
 	}
-	return email.Receipt{}, errors.Join(failures...)
+	return email.Receipt{}, safeerror.Join("operation failed", failures...)
 }

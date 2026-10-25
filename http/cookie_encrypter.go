@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -50,7 +51,7 @@ func (e CookieEncrypter) Validate() error {
 		return err
 	}
 	if nilCookieValue(e.clock) {
-		return fault.New(fault.Invalid, "cookie encrypter requires an application clock")
+		return safeerror.NewFault(fault.Invalid, "cookie encrypter requires an application clock")
 	}
 	return nil
 }
@@ -73,7 +74,7 @@ func (e CookieEncrypter) seal(ctx context.Context, name CookieName, options Cook
 		expires = options.Expires.Unix()
 	}
 	if (options.MaxAge > 0 || !options.Expires.IsZero()) && expires <= now.Unix() {
-		return "", fault.New(fault.Invalid, "encrypted cookie expiry must be in the future")
+		return "", safeerror.NewFault(fault.Invalid, "encrypted cookie expiry must be in the future")
 	}
 	binding, err := encryptedCookieBinding(name, options)
 	if err != nil {
@@ -84,18 +85,18 @@ func (e CookieEncrypter) seal(ctx context.Context, name CookieName, options Cook
 		return "", err
 	}
 	if len(ciphertext.Encoded()) > MaxCookieBytes {
-		return "", fault.New(fault.Invalid, "encrypted cookie exceeds its envelope bound")
+		return "", safeerror.NewFault(fault.Invalid, "encrypted cookie exceeds its envelope bound")
 	}
 	return ciphertext.Encoded(), nil
 }
 
 func (e CookieEncrypter) open(ctx context.Context, name CookieName, options CookieOptions, envelope string) (string, error) {
 	if len(envelope) > MaxCookieBytes {
-		return "", ErrInvalidEncryptedCookie
+		return "", safeerror.Owned(string(ErrInvalidEncryptedCookie), ErrInvalidEncryptedCookie)
 	}
 	ciphertext, err := encryption.ParseCiphertext(envelope)
 	if err != nil {
-		return "", ErrInvalidEncryptedCookie
+		return "", safeerror.Owned(string(ErrInvalidEncryptedCookie), ErrInvalidEncryptedCookie)
 	}
 	binding, err := encryptedCookieBinding(name, options)
 	if err != nil {
@@ -106,16 +107,16 @@ func (e CookieEncrypter) open(ctx context.Context, name CookieName, options Cook
 		if canceled := ctx.Err(); canceled != nil {
 			return "", canceled
 		}
-		return "", ErrInvalidEncryptedCookie
+		return "", safeerror.Owned(string(ErrInvalidEncryptedCookie), ErrInvalidEncryptedCookie)
 	}
 	version, rest, ok := strings.Cut(plain.Reveal(), ".")
 	expiresText, text, found := strings.Cut(rest, ".")
 	if !ok || !found || version != "v1" {
-		return "", ErrInvalidEncryptedCookie
+		return "", safeerror.Owned(string(ErrInvalidEncryptedCookie), ErrInvalidEncryptedCookie)
 	}
 	expires, err := strconv.ParseInt(expiresText, 10, 64)
 	if err != nil || expires < 0 || strconv.FormatInt(expires, 10) != expiresText {
-		return "", ErrInvalidEncryptedCookie
+		return "", safeerror.Owned(string(ErrInvalidEncryptedCookie), ErrInvalidEncryptedCookie)
 	}
 	if expires != 0 {
 		now, err := signingTime(e.clock, "cookie encryption clock")
@@ -123,7 +124,7 @@ func (e CookieEncrypter) open(ctx context.Context, name CookieName, options Cook
 			return "", err
 		}
 		if now.Unix() >= expires {
-			return "", ErrInvalidEncryptedCookie
+			return "", safeerror.Owned(string(ErrInvalidEncryptedCookie), ErrInvalidEncryptedCookie)
 		}
 	}
 	return text, nil

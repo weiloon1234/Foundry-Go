@@ -3,7 +3,6 @@ package websocket
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/netip"
 	"sync"
 	"sync/atomic"
@@ -14,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type subscriptionKey struct {
@@ -112,7 +112,7 @@ func (c *connectionState) run() {
 			}
 			request, err := DecodeRequest(data, c.hub.config.MaxFrameBytes)
 			if err != nil {
-				code, ok := err.(Code)
+				code, ok := safeerror.UnwrapOwned(err).(Code)
 				if !ok {
 					code = Malformed
 				}
@@ -174,7 +174,7 @@ func (h *Hub) encode(response Response) ([]byte, error) {
 	response.Version = ProtocolVersion
 	data, err := json.Marshal(response)
 	if err != nil || len(data) > h.config.MaxFrameBytes {
-		return nil, fault.New(fault.Invalid, "WebSocket output exceeds its frame bound")
+		return nil, safeerror.NewFault(fault.Invalid, "WebSocket output exceeds its frame bound")
 	}
 	return data, nil
 }
@@ -318,7 +318,7 @@ func (c *connectionState) leave(subscription *subscriptionState) error {
 	err = callback.Isolated("WebSocket leave hook", func() error {
 		remote := c.leaveCluster(ctx, subscription)
 		local := subscription.channel.leave(ctx, c.hub, c.id, subscription.key.roomPointer(), subscription.subject)
-		return errors.Join(remote, local)
+		return safeerror.Join("operation failed", remote, local)
 	})
 	if err != nil || ctx.Err() != nil {
 		c.hub.counters.failures.Add(1)

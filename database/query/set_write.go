@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type adjustment = querycore.Adjustment
@@ -61,7 +62,7 @@ func (q Query[M]) PatchAll(ctx context.Context, writer database.Transactor, muta
 // column of every matching row, with optional extra assignments.
 func (q Query[M]) AdjustAll(ctx context.Context, writer database.Transactor, adjust Adjustment[M], subtract bool, mutation Mutation[M]) (int64, error) {
 	if adjust.bind == nil {
-		return 0, fault.New(fault.Invalid, "numeric adjustment requires a generated field")
+		return 0, safeerror.NewFault(fault.Invalid, "numeric adjustment requires a generated field")
 	}
 	return q.setWrite(ctx, writer, updateModel, mutation, &adjustment{Field: adjust.field, Bind: adjust.bind, Subtract: subtract})
 }
@@ -85,7 +86,7 @@ func (q Query[M]) setWrite(ctx context.Context, writer database.Transactor, kind
 	}
 	q = q.inContext(ctx)
 	if q.definition == nil {
-		return 0, fault.New(fault.Invalid, "set-based writes require model metadata")
+		return 0, safeerror.NewFault(fault.Invalid, "set-based writes require model metadata")
 	}
 	if mutation.encrypted() {
 		return 0, errSetEncrypted()
@@ -116,7 +117,7 @@ func (q Query[M]) setWriteLifecycle(writer database.Transactor, kind mutationKin
 	}
 	observers, known := writerObservers(writer)
 	if q.definition.hasWriteHooks || !known || observedBy[M](observers, kind) {
-		return fault.New(fault.Invalid, "set-based writes skip per-model hooks and observers; use the Each methods or acknowledge with WithoutModelHooks")
+		return safeerror.NewFault(fault.Invalid, "set-based writes skip per-model hooks and observers; use the Each methods or acknowledge with WithoutModelHooks")
 	}
 	return nil
 }

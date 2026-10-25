@@ -2,8 +2,8 @@ package metadata
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -70,7 +71,7 @@ func DefineValue[M any, K comparable, V any](owner extensions.Owner[M, K], name 
 	var err error
 	if spec.JSON.IsZero() {
 		if inferred.IsZero() {
-			err = fault.New(fault.Invalid, "metadata slot "+binding.Field+" requires an explicit JSON contract in define<Model>Extensions")
+			err = safeerror.NewFault(fault.Invalid, "metadata slot "+binding.Field+" requires an explicit JSON contract in define<Model>Extensions")
 		}
 		spec.JSON = inferred
 	}
@@ -140,7 +141,7 @@ func (s ValueSlot[M, K, V]) bound() (*Manager, error) {
 	return s.manager, nil
 }
 func (s ValueSlot[M, K, V]) unbound() error {
-	return fault.New(fault.Missing, "metadata slot "+s.binding.Field+" is not bound to a metadata manager; bind it with <Model>Extensions().From(runtime)")
+	return safeerror.NewFault(fault.Missing, "metadata slot "+s.binding.Field+" is not bound to a metadata manager; bind it with <Model>Extensions().From(runtime)")
 }
 
 // fetch loads one relation batch of parents, halving it when it exceeds the
@@ -170,7 +171,7 @@ func (s ValueSlot[M, K, V]) fetch(ctx context.Context, executor database.Executo
 		result := make([]Value[V], len(part))
 		for i := range references {
 			stored, err := batch.getAt(ctx, i)
-			if errors.Is(err, database.NotFound) {
+			if callback.ErrorIs(err, database.NotFound) {
 				continue
 			}
 			if err != nil {

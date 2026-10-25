@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -27,7 +28,7 @@ func DefinePolicy[M, R any](name PolicyName, evaluate func(context.Context, M, R
 }
 func (p Policy[M, R]) Validate() error {
 	if p.definition == nil || !identifier.Semantic(string(p.definition.name)) || p.definition.evaluate == nil {
-		return fault.New(fault.Invalid, "authentication policy requires a semantic name and evaluator")
+		return safeerror.NewFault(fault.Invalid, "authentication policy requires a semantic name and evaluator")
 	}
 	return nil
 }
@@ -54,7 +55,7 @@ func (p Policy[M, R]) ValidateIn(registry *Registry) error {
 		return err
 	}
 	if !registry.policies[p.definition.id] {
-		return fault.New(fault.Missing, "authentication policy is not registered")
+		return safeerror.NewFault(fault.Missing, "authentication policy is not registered")
 	}
 	return nil
 }
@@ -132,7 +133,7 @@ func decide[M any](ctx context.Context, scope *Scope, id *declarationID, name Po
 }
 func denied(err error) (Decision, error) {
 	// Scope.run already inspected extension errors while retaining ownership.
-	denial, found := err.(*Denial)
+	denial, found := safeerror.UnwrapOwned(err).(*Denial)
 	if found && denial != nil {
 		return Decision{denial: denial}, nil
 	}

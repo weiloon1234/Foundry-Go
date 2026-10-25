@@ -20,6 +20,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const (
@@ -80,7 +81,7 @@ func (s *keySet) lookup(ctx context.Context, c *Client, kid, alg string) (public
 			}
 			if now.Sub(s.fetched) < keyRefreshFloor {
 				s.mu.Unlock()
-				return publicKey{}, auth.Unauthenticated.WithCause(fault.New(fault.Invalid, "ID token signing key is unknown"))
+				return publicKey{}, auth.Unauthenticated.WithCause(safeerror.NewFault(fault.Invalid, "ID token signing key is unknown"))
 			}
 		}
 		if wait := s.loading; wait != nil {
@@ -137,7 +138,7 @@ func (c *Client) fetchKeys(ctx context.Context) (map[string]publicKey, error) {
 		return nil, err
 	}
 	if len(document.Keys) > maxKeys {
-		return nil, fault.New(fault.Invalid, "provider JWKS has too many keys")
+		return nil, safeerror.NewFault(fault.Invalid, "provider JWKS has too many keys")
 	}
 	keys := make(map[string]publicKey, len(document.Keys))
 	for _, candidate := range document.Keys {
@@ -149,7 +150,7 @@ func (c *Client) fetchKeys(ctx context.Context) (map[string]publicKey, error) {
 			continue
 		}
 		if _, duplicate := keys[candidate.KeyID]; duplicate {
-			return nil, fault.New(fault.Invalid, "provider JWKS repeats a key ID")
+			return nil, safeerror.NewFault(fault.Invalid, "provider JWKS repeats a key ID")
 		}
 		keys[candidate.KeyID] = key
 	}
@@ -225,7 +226,7 @@ type idClaims struct {
 }
 
 func rejected(message string) error {
-	return auth.Unauthenticated.WithCause(fault.New(fault.Invalid, message))
+	return auth.Unauthenticated.WithCause(safeerror.NewFault(fault.Invalid, message))
 }
 
 // verifyIDToken checks the compact JWS signature with a JWKS key (RS256 or
@@ -307,7 +308,7 @@ func audienceList(raw json.RawMessage) ([]string, error) {
 	}
 	var many []string
 	if err := json.Unmarshal(raw, &many); err != nil || len(many) == 0 || len(many) > 16 {
-		return nil, fault.New(fault.Invalid, "invalid audience")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid audience")
 	}
 	return many, nil
 }
@@ -316,7 +317,7 @@ func audienceList(raw json.RawMessage) ([]string, error) {
 func numericDate(value json.Number) (time.Time, error) {
 	seconds, err := strconv.ParseFloat(value.String(), 64)
 	if err != nil || seconds <= 0 || seconds > 1e11 {
-		return time.Time{}, fault.New(fault.Invalid, "invalid numeric date")
+		return time.Time{}, safeerror.NewFault(fault.Invalid, "invalid numeric date")
 	}
 	whole := math.Floor(seconds)
 	return time.Unix(int64(whole), int64((seconds-whole)*float64(time.Second))).UTC(), nil

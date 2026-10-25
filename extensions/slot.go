@@ -2,7 +2,7 @@ package extensions
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"go/token"
 
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -75,7 +75,7 @@ func loadPart[M, S any](ctx context.Context, part []M, limit error, load func(co
 	}
 	values, err := load(ctx, part)
 	if err != nil {
-		if len(part) < 2 || limit == nil || !errors.Is(err, limit) {
+		if len(part) < 2 || limit == nil || !callback.ErrorIs(err, limit) {
 			return nil, err
 		}
 		half := len(part) / 2

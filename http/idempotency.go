@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TransactionHandler retains the concrete wire input/result and requires the
@@ -52,7 +53,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) ID() RouteID { return e.endpoint.ID() }
 // security, framing and request/trace headers never enter the stored outcome.
 func (e IdempotentEndpoint[P, Q, B, R]) WithHeaders(prepare func(context.Context, R) ([]ResponseHeader, error)) IdempotentEndpoint[P, Q, B, R] {
 	if prepare == nil || e.headers != nil {
-		e.err = fault.New(fault.Invalid, "idempotent response headers need one callback")
+		e.err = safeerror.NewFault(fault.Invalid, "idempotent response headers need one callback")
 	}
 	e.headers = prepare
 	return e
@@ -60,7 +61,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) WithHeaders(prepare func(context.Context
 func (e IdempotentEndpoint[P, Q, B, R]) Validate() error {
 	if e.endpoint.headers != nil {
 		// Replays must reproduce the stored outcome exactly.
-		return fault.New(fault.Invalid, "idempotent endpoints declare replayable headers with IdempotentEndpoint.WithHeaders")
+		return safeerror.NewFault(fault.Invalid, "idempotent endpoints declare replayable headers with IdempotentEndpoint.WithHeaders")
 	}
 	for _, err := range []error{e.err, e.endpoint.Validate(), e.store.Validate(), e.definition.Validate()} {
 		if err != nil {
@@ -68,22 +69,22 @@ func (e IdempotentEndpoint[P, Q, B, R]) Validate() error {
 		}
 	}
 	if e.endpoint.body.kind != payloadJSON && e.endpoint.body.kind != payloadEmpty && e.endpoint.body.kind != payloadForm {
-		return fault.New(fault.Invalid, "idempotent endpoints require JSON, form or empty input")
+		return safeerror.NewFault(fault.Invalid, "idempotent endpoints require JSON, form or empty input")
 	}
 	if e.endpoint.response.credentials || e.endpoint.response.kind != payloadJSON && e.endpoint.response.kind != payloadEmpty {
-		return fault.New(fault.Invalid, "idempotent endpoints require a non-credential JSON or empty response")
+		return safeerror.NewFault(fault.Invalid, "idempotent endpoints require a non-credential JSON or empty response")
 	}
 	switch e.endpoint.Method() {
 	case POST, PUT, PATCH, DELETE:
 	default:
-		return fault.New(fault.Invalid, "idempotency requires an unsafe operation method")
+		return safeerror.NewFault(fault.Invalid, "idempotency requires an unsafe operation method")
 	}
 	if err := validateIdempotentMiddlewares(e.endpoint.route.middlewares); err != nil {
 		return err
 	}
 	if e.endpoint.response.kind == payloadJSON {
 		if _, ok := e.endpoint.response.json.(replayJSON[R]); !ok {
-			return fault.New(fault.Invalid, "idempotent response codec cannot restore its concrete result")
+			return safeerror.NewFault(fault.Invalid, "idempotent response codec cannot restore its concrete result")
 		}
 	}
 	return nil
@@ -119,7 +120,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) contributionContract() contributionContr
 // Scope callbacks must authenticate/verify public webhook requests on every call.
 func (e IdempotentEndpoint[P, Q, B, R]) Handle(scope func(context.Context, Input[P, Q, B]) (idempotency.Scope, error), handler TransactionHandler[P, Q, B, R]) RouteRegistration {
 	if scope == nil || handler == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "idempotent endpoint requires scope and transaction callbacks"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "idempotent endpoint requires scope and transaction callbacks"))
 	}
 	return e.Prepare(func(ctx context.Context, in Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error) {
 		identity, err := scope(ctx, in)
@@ -134,7 +135,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) Prepare(prepare TransactionPreparation[P
 		return InvalidRouteRegistration(err)
 	}
 	if prepare == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "idempotent endpoint requires request preparation"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "idempotent endpoint requires request preparation"))
 	}
 	operation, err := idempotency.Define(e.store, e.definition, e.inputEncoding(), e.outputEncoding())
 	if err != nil {
@@ -147,7 +148,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) Prepare(prepare TransactionPreparation[P
 			return preparedResponse{}, err
 		}
 		if handler == nil {
-			return preparedResponse{}, InternalError
+			return preparedResponse{}, InternalError.WithCause(nil)
 		}
 		key, ok := ctx.Value(idempotencyKeyContext{}).(idempotency.Key)
 		if !ok {
@@ -193,7 +194,7 @@ func (e *idempotencyRetryError) Unwrap() error { return e.cause }
 func idempotencyHTTPError(err error, wait time.Duration) error {
 	switch {
 	case err == nil:
-		return InternalError
+		return InternalError.WithCause(nil)
 	case errorgraph.Is(err, idempotency.BadKey):
 		return IdempotencyBadKey.WithCause(err)
 	case errorgraph.Is(err, idempotency.Mismatch):

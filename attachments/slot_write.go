@@ -2,7 +2,7 @@ package attachments
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	"mime"
 
@@ -123,14 +123,14 @@ func (s slotDefinition[M, K, S]) Accepts(ctx context.Context, file FileSource) (
 			return err
 		}
 		body, err := io.ReadAll(io.LimitReader(workscope.Reader(ctx, reader), policy.MaxBytes+1))
-		if err = errors.Join(err, reader.Close()); err != nil {
+		if err = joinFailures(err, reader.Close()); err != nil {
 			return err
 		}
 		if int64(len(body)) > policy.MaxBytes {
 			return nil
 		}
 		if _, err := acceptMedia(ctx, m, policy, body, hintOf(file)); err != nil {
-			if errors.Is(err, fault.Invalid) {
+			if callback.ErrorIs(err, fault.Invalid) {
 				return nil
 			}
 			return err
@@ -207,7 +207,7 @@ func withFile[T any](ctx context.Context, file FileSource, run func(Upload) (T, 
 		return *new(T), err
 	}
 	result, err := run(Upload{Source: reader, OriginalName: file.Name(), ContentType: hintOf(file)})
-	return result, errors.Join(err, reader.Close())
+	return result, joinFailures(err, reader.Close())
 }
 
 // hintOf keeps a client content type only when it is a valid media type,

@@ -2,11 +2,11 @@ package database
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // observerOwner records the actual query caller and one resource owner. Its
@@ -28,7 +28,7 @@ type observerOwner struct {
 // It expires when fn returns. Declared model hooks are not dispatched here.
 func (r *Rows) WithObserverScope(ctx context.Context, fn func(context.Context) error) (err error) {
 	if ctx == nil || fn == nil {
-		return fault.New(fault.Invalid, "model observer scope requires a context and callback")
+		return safeerror.NewFault(fault.Invalid, "model observer scope requires a context and callback")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -38,7 +38,7 @@ func (r *Rows) WithObserverScope(ctx context.Context, fn func(context.Context) e
 		return err
 	}
 	defer finish()
-	defer func() { err = errors.Join(err, r.Close()) }()
+	defer func() { err = safeerror.Join("operation failed", err, r.Close()) }()
 	if err := work.Err(); err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (r *Rows) beginObserverScope(ctx context.Context) (context.Context, func(),
 // being released. A pool continuation may therefore survive Close beginning.
 func (o observerOwner) retain(ctx context.Context) (context.Context, func(), error) {
 	if o.ctx == nil || (o.db == nil) == (o.scope == nil) {
-		return nil, nil, fault.New(fault.Invalid, "row stream has no model observer scope owner")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "row stream has no model observer scope owner")
 	}
 	parents := []context.Context{o.ctx}
 	if o.scope != nil {

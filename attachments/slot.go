@@ -2,8 +2,8 @@ package attachments
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"iter"
 	"slices"
 
@@ -98,9 +98,9 @@ func defineSlot[M any, K comparable, S any](owner extensions.Owner[M, K], name N
 	var err error
 	switch {
 	case policy.Cardinality != 0 && policy.Cardinality != cardinality:
-		err = fault.New(fault.Invalid, "attachment slot "+binding.Field+" declares a cardinality different from its slot type")
+		err = attachmentFailure(fault.Invalid, "attachment slot "+binding.Field+" declares a cardinality different from its slot type")
 	case policy.Localized:
-		err = fault.New(fault.Invalid, "attachment slot "+binding.Field+" cannot be localized; use the explicit ForLocale collection API")
+		err = attachmentFailure(fault.Invalid, "attachment slot "+binding.Field+" cannot be localized; use the explicit ForLocale collection API")
 	}
 	policy.Cardinality = cardinality
 	return slotDefinition[M, K, S]{collection: Define(owner, name, policy), binding: binding, err: err}
@@ -117,7 +117,7 @@ func (s OneSlot[M, K]) From(m *Manager) OneSlot[M, K] {
 		case 1:
 			return One[M]{file: &files[0], loaded: true}, nil
 		}
-		return One[M]{}, fault.New(fault.Conflict, "stored attachment cardinality differs from its collection")
+		return One[M]{}, attachmentFailure(fault.Conflict, "stored attachment cardinality differs from its collection")
 	})
 	return s
 }
@@ -192,7 +192,7 @@ func (s slotDefinition[M, K, S]) files(ctx context.Context, executor database.Ex
 		result := make([]value.Optional[[]File[M]], len(part))
 		for i := range references {
 			attachments, err := batch.getAt(i)
-			if errors.Is(err, database.NotFound) {
+			if callback.ErrorIs(err, database.NotFound) {
 				continue
 			}
 			if err != nil {
@@ -227,7 +227,7 @@ func (s slotDefinition[M, K, S]) bound() (*Manager, error) {
 	return s.manager, nil
 }
 func (s slotDefinition[M, K, S]) unbound() error {
-	return fault.New(fault.Missing, "attachment slot "+s.binding.Field+" is not bound to an attachments manager; bind it with <Model>Extensions().From(runtime)")
+	return attachmentFailure(fault.Missing, "attachment slot "+s.binding.Field+" is not bound to an attachments manager; bind it with <Model>Extensions().From(runtime)")
 }
 
 // attachment restores the typed owner of a loaded file for link derivation;
@@ -342,7 +342,7 @@ func (s ManySlot[M, K]) PublicURLs(ctx context.Context, owner M) ([]string, erro
 }
 
 func notLoaded() error {
-	return fault.New(fault.Missing, "attachment slot is not loaded; load it with With or Load")
+	return attachmentFailure(fault.Missing, "attachment slot is not loaded; load it with With or Load")
 }
 func boolCount(present bool) int {
 	if present {

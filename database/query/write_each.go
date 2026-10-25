@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // enclosingTransaction runs a nested model write directly on the transaction of
@@ -18,7 +19,7 @@ type enclosingTransaction struct{ tx *database.Tx }
 
 func (e enclosingTransaction) Transaction(_ context.Context, fn func(*database.Tx) error, options ...database.TxOptions) error {
 	if len(options) != 0 {
-		return fault.New(fault.Invalid, "nested model writes cannot set transaction options")
+		return safeerror.NewFault(fault.Invalid, "nested model writes cannot set transaction options")
 	}
 	return fn(e.tx)
 }
@@ -69,7 +70,7 @@ func (q Query[M]) InsertEach(ctx context.Context, writer database.Transactor, mu
 // the actual transaction and must propagate its context to nested operations.
 func (q Query[M]) PatchEach(ctx context.Context, writer database.Transactor, limit int, draft func(context.Context, *database.Tx, M) (Mutation[M], error)) ([]M, error) {
 	if draft == nil {
-		return nil, fault.New(fault.Invalid, "per-model update requires a draft callback")
+		return nil, safeerror.NewFault(fault.Invalid, "per-model update requires a draft callback")
 	}
 	return q.writeEach(ctx, writer, updateModel, limit, draft)
 }
@@ -113,7 +114,7 @@ func (q Query[M]) writeEach(ctx context.Context, writer database.Transactor, kin
 
 func validatePerModelWriteLimit(limit int) error {
 	if limit < 1 || limit > MaxPerModelWriteRows {
-		return fault.New(fault.Invalid, "invalid per-model write row limit")
+		return safeerror.NewFault(fault.Invalid, "invalid per-model write row limit")
 	}
 	return nil
 }
@@ -163,7 +164,7 @@ func lockedModelWriteCandidates[M any](ctx context.Context, tx *database.Tx, q Q
 	}
 	primary, ok := q.definition.modelField(q.definition.modelDefinition.Primary)
 	if !ok || primary.get == nil {
-		return nil, fault.New(fault.Invalid, "per-model write requires a primary-key codec")
+		return nil, safeerror.NewFault(fault.Invalid, "per-model write requires a primary-key codec")
 	}
 	statement, err := q.OrderBy(Order[M]{field: fieldRef{Table: q.queryCore.Table, Column: q.definition.modelDefinition.Primary}}).ForUpdate().Limit(limit + 1).Compile()
 	if err != nil {
@@ -174,7 +175,7 @@ func lockedModelWriteCandidates[M any](ctx context.Context, tx *database.Tx, q Q
 		return nil, err
 	}
 	if len(candidates) > limit {
-		return nil, fault.New(fault.Invalid, "per-model write exceeds its row limit")
+		return nil, safeerror.NewFault(fault.Invalid, "per-model write exceeds its row limit")
 	}
 	if err := validateModelWriteIdentities(ctx, primary, candidates); err != nil {
 		return nil, err
@@ -196,14 +197,14 @@ func validateModelWriteIdentities[M any](ctx context.Context, primary ModelField
 			return err
 		}
 		if raw == nil {
-			return fault.New(fault.Invalid, "per-model write primary key cannot be NULL")
+			return safeerror.NewFault(fault.Invalid, "per-model write primary key cannot be NULL")
 		}
 		identity, err := recordEqualityKey(primary.kind, raw)
 		if err != nil {
 			return err
 		}
 		if seen[identity] {
-			return database.NewError("per-model write identity", database.TooManyRows)
+			return databaseFailure("per-model write identity", database.TooManyRows)
 		}
 		seen[identity] = true
 	}

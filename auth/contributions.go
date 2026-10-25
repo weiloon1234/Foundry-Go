@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type authorizationDeclaration interface {
@@ -26,7 +27,7 @@ func authorizationContributions(key foundation.Key[*Registry]) foundation.Collec
 // validation, and its exact declaration identity is retained for auth checks.
 func RegisterAuthorization[D authorizationDeclaration](r *foundation.Registrar, key foundation.Key[*Registry], declaration D) error {
 	if key.Name() == "" || r == nil {
-		return fault.New(fault.Invalid, "authorization contribution requires a registry and registrar")
+		return safeerror.NewFault(fault.Invalid, "authorization contribution requires a registry and registrar")
 	}
 	if err := declaration.Validate(); err != nil {
 		return err

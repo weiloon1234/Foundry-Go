@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -94,7 +95,7 @@ func (b Batch[M, K]) getAt(i int) (Values, error) {
 }
 func (b Batch[M, K]) get(subject string) (Values, error) {
 	if !b.active[subject] {
-		return Values{}, database.NotFound
+		return Values{}, safeerror.Owned(string(database.NotFound), database.NotFound)
 	}
 	return b.values[subject], nil
 }
@@ -122,7 +123,7 @@ func (f Field[M, K]) Load(ctx context.Context, m *Manager, owners []model.Refere
 
 // errBatchLimit reports a batch beyond MaxBatchRows pages' row bound or
 // MaxBatchBytes; slot loading retries such a batch in smaller parts.
-var errBatchLimit = fault.New(fault.Conflict, "translation batch exceeds its row or byte limit")
+var errBatchLimit = safeerror.NewFault(fault.Conflict, "translation batch exceeds its row or byte limit")
 
 // loadIn reads one owner batch inside tx, which is either the store's own
 // read-only snapshot or a savepoint joined to the caller's transaction.

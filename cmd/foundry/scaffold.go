@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"slices"
 	"strings"
@@ -24,10 +25,10 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		return err
 	}
 	if len(args) == 0 {
-		return cli.Usage(usage)
+		return clidiag.Usage(usage)
 	}
 	if !slices.Contains(kinds, generate.ScaffoldKind(args[0])) {
-		return cli.Usage(usage)
+		return clidiag.Usage(usage)
 	}
 	var positional string
 	if len(args) > 1 && !strings.HasPrefix(args[1], "-") {
@@ -81,11 +82,11 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	if flags.NArg() == 1 && positional == "" {
 		positional = flags.Arg(0)
 	} else if flags.NArg() != 0 {
-		return cli.Usage("scaffolding accepts one declaration name")
+		return clidiag.Usage("scaffolding accepts one declaration name")
 	}
 	if positional != "" {
 		if options.Name != "" {
-			return cli.Usage("select the declaration with a positional name or --name, not both")
+			return clidiag.Usage("select the declaration with a positional name or --name, not both")
 		}
 		options.Name = positional
 	}

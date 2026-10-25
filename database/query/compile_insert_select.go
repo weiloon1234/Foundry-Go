@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[string]valueExpression, map[string]mutationAssignment, error) {
@@ -19,7 +20,7 @@ func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[stri
 		return c, nil, nil, p.source.err
 	}
 	if len(p.mappings) > len(c.Columns) {
-		return c, nil, nil, fault.New(fault.Invalid, "insert mapping exceeds its field bound")
+		return c, nil, nil, safeerror.NewFault(fault.Invalid, "insert mapping exceeds its field bound")
 	}
 	values, err := q.validateMutationShape(insertModel, p.values, &c)
 	if err != nil {
@@ -34,13 +35,13 @@ func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[stri
 		_, repeat := mapped[name]
 		_, literal := values[name]
 		if repeat || literal {
-			return c, nil, nil, fault.New(fault.Invalid, "insert mapping repeats an assigned field")
+			return c, nil, nil, safeerror.NewFault(fault.Invalid, "insert mapping repeats an assigned field")
 		}
 		mapped[name] = mapping.expression
 	}
 	for name := range values {
 		if _, declared := q.definition.modelField(name); !declared {
-			return c, nil, nil, fault.New(fault.Invalid, "insert values require declared field codec metadata")
+			return c, nil, nil, safeerror.NewFault(fault.Invalid, "insert values require declared field codec metadata")
 		}
 	}
 	err = q.queryCore.RequireInsertFields(func(name string) bool {
@@ -53,7 +54,7 @@ func (p InsertSelect[S, M]) validateShape(allowManaged bool) (compiler, map[stri
 		return c, nil, nil, err
 	}
 	if len(mapped)+len(values) == 0 && !(allowManaged && q.hasTimestamps()) {
-		return c, nil, nil, fault.New(fault.Invalid, "insert from query requires at least one supplied column")
+		return c, nil, nil, safeerror.NewFault(fault.Invalid, "insert from query requires at least one supplied column")
 	}
 	return c, mapped, values, nil
 }
@@ -70,7 +71,7 @@ func (p InsertSelect[S, M]) prepare(returning bool) func(context.Context, *datab
 
 func (p InsertSelect[S, M]) prepareValues(ctx context.Context, source clock.Clock) (InsertSelect[S, M], error) {
 	if ctx == nil {
-		return p, fault.New(fault.Invalid, "insert preparation requires a context")
+		return p, safeerror.NewFault(fault.Invalid, "insert preparation requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return p, err

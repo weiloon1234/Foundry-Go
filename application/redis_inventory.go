@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // WithRedisStores registers typed application stores with the configured plan.
@@ -23,7 +24,7 @@ func WithRedisStores(stores ...infrastructure.RedisStore) Option {
 // are opaque; use WithRedisStores for application rate-limit/lockout consumers.
 func (b *Builder) RedisKeys() ([]infrastructure.RedisConnectionInventory, error) {
 	if b == nil || b.state == nil {
-		return nil, fault.New(fault.Invalid, "Redis inventory requires an application builder")
+		return nil, safeerror.NewFault(fault.Invalid, "Redis inventory requires an application builder")
 	}
 	b.state.mu.Lock()
 	defer b.state.mu.Unlock()

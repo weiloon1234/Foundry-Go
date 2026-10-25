@@ -2,7 +2,8 @@ package infrastructure
 
 import (
 	"context"
-	"errors"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/email/cloudflare"
@@ -16,8 +17,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/email/smtp"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
-	"slices"
 )
 
 func builtInMailDriver(driver MailDriver) bool {
@@ -55,15 +56,15 @@ func (p *Plan) mailCredentials(s MailerSettings) []credentials.Name {
 // composedMail validates a failover/roundrobin reference list.
 func (p *Plan) composedMail(s MailerSettings) error {
 	if len(s.Transports) < 2 || len(s.Transports) > failover.MaxTransports {
-		return fault.New(fault.Invalid, "a composed mailer requires 2 to 8 transports")
+		return safeerror.NewFault(fault.Invalid, "a composed mailer requires 2 to 8 transports")
 	}
 	for i, name := range s.Transports {
 		child, ok := p.settings.Mail.Mailers[name]
 		if !ok {
-			return fault.New(fault.Missing, "composed mailer transport is not configured")
+			return safeerror.NewFault(fault.Missing, "composed mailer transport is not configured")
 		}
 		if child.Driver == FailoverMail || child.Driver == RoundRobinMail || slices.Contains(s.Transports[:i], name) {
-			return fault.New(fault.Invalid, "composed mailer transports must be distinct, non-composed mailers")
+			return safeerror.NewFault(fault.Invalid, "composed mailer transports must be distinct, non-composed mailers")
 		}
 	}
 	return nil
@@ -153,12 +154,12 @@ func (p *Plan) mailAdapter(s MailerSettings, credential func(credentials.Name) (
 			for _, close := range closers {
 				failures = append(failures, close(ctx))
 			}
-			return errors.Join(failures...)
+			return safeerror.Join("operation failed", failures...)
 		}
 		for _, name := range s.Transports {
 			child, err := p.mailAdapter(p.settings.Mail.Mailers[name], credential)
 			if err != nil {
-				return nil, errors.Join(err, closeAll(context.Background()))
+				return nil, safeerror.Join("operation failed", err, closeAll(context.Background()))
 			}
 			transports = append(transports, child.value)
 			if child.close != nil {
@@ -171,14 +172,14 @@ func (p *Plan) mailAdapter(s MailerSettings, credential func(credentials.Name) (
 		}
 		driver, err := compose(transports...)
 		if err != nil {
-			return nil, errors.Join(err, closeAll(context.Background()))
+			return nil, safeerror.Join("operation failed", err, closeAll(context.Background()))
 		}
 		result.value = driver
 		result.close = closeAll
 	default:
 		driver, ok := p.options.mailDrivers[s.Driver]
 		if !ok {
-			return nil, fault.New(fault.Invalid, "unsupported mail driver")
+			return nil, safeerror.NewFault(fault.Invalid, "unsupported mail driver")
 		}
 		result.value = driver
 	}

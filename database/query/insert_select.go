@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // InsertSelect keeps the SELECT scope S separate from the destination model M.
@@ -30,7 +31,7 @@ func (InsertSelect[S, M]) Format(state fmt.State, _ rune) {
 func InsertFrom[S, M any](source ProjectionSource[S], destination Query[M], mappings ...InsertMapping[S, M]) InsertSelect[S, M] {
 	p := InsertSelect[S, M]{destination: destination, mappings: slices.Clone(mappings)}
 	if nilDescriptor(source) {
-		p.source.err = fault.New(fault.Invalid, "insert from query requires a source")
+		p.source.err = safeerror.NewFault(fault.Invalid, "insert from query requires a source")
 	} else {
 		p.source = source.projectionSource()
 	}
@@ -71,7 +72,7 @@ func (p InsertSelect[S, M]) Exec(ctx context.Context, writer database.Transactor
 func (p InsertSelect[S, M]) Returning(ctx context.Context, writer database.Transactor, limit int) ([]M, error) {
 	p.destination = p.destination.inContext(ctx)
 	if limit <= 0 || limit > MaxInsertRows {
-		return nil, fault.New(fault.Invalid, "insert returning requires a positive bounded result limit")
+		return nil, safeerror.NewFault(fault.Invalid, "insert returning requires a positive bounded result limit")
 	}
 	if err := p.validateExecution(ctx, writer); err != nil {
 		return nil, err

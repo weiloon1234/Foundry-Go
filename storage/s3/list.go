@@ -53,7 +53,7 @@ func (b *Backend) List(ctx context.Context, options storage.ListOptions) (storag
 			return storage.Page{}, failure(storage.ListOperation, storage.NotApplicable, err)
 		}
 		if cursor.Scope != b.scope() || cursor.Prefix != options.Prefix.String() || cursor.Delimited != options.Delimited || cursor.Token == "" {
-			return storage.Page{}, storage.Failure(storage.Invalid, storage.ListOperation, storage.NotApplicable, nil)
+			return storage.Page{}, newFailure(storage.Invalid, storage.ListOperation, storage.NotApplicable, nil)
 		}
 		input.ContinuationToken = aws.String(cursor.Token)
 	}
@@ -62,7 +62,7 @@ func (b *Backend) List(ctx context.Context, options storage.ListOptions) (storag
 		return storage.Page{}, failure(storage.ListOperation, storage.NotApplicable, err)
 	}
 	if result == nil || len(result.Contents)+len(result.CommonPrefixes) > options.Limit || !options.Delimited && len(result.CommonPrefixes) > 0 || result.EncodingType != types.EncodingTypeUrl {
-		return storage.Page{}, storage.Failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, nil)
+		return storage.Page{}, newFailure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, nil)
 	}
 	page := storage.Page{Objects: make([]storage.ObjectInfo, 0, len(result.Contents))}
 	previous := ""
@@ -94,7 +94,7 @@ func (b *Backend) List(ctx context.Context, options storage.ListOptions) (storag
 	if aws.ToBool(result.IsTruncated) {
 		token := aws.ToString(result.NextContinuationToken)
 		if token == "" || token == aws.ToString(input.ContinuationToken) {
-			return storage.Page{}, storage.Failure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, nil)
+			return storage.Page{}, newFailure(storage.IntegrityFailed, storage.ListOperation, storage.NotApplicable, nil)
 		}
 		page.Next, err = encodeCursor(listCursor{Scope: b.scope(), Prefix: options.Prefix.String(), Token: token, Delimited: options.Delimited})
 		if err != nil {

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
 	"github.com/weiloon1234/Foundry-Go/internal/ratewindow"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -73,7 +74,7 @@ func ValidateOperation(ctx context.Context, key Key, limit Limit, cost uint32) e
 // ValidateClear shares the adapter input boundary for ClearRateLimit.
 func ValidateClear(ctx context.Context, key Key) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "rate limiting requires a context")
+		return safeerror.NewFault(fault.Invalid, "rate limiting requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err

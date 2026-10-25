@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type proxyHeaderFormat uint8
@@ -45,18 +46,18 @@ func (h ProxyHeader) Validate() error {
 	switch h.format {
 	case proxySingleIP:
 		if name == "Forwarded" || name == "X-Forwarded-For" {
-			return fault.New(fault.Invalid, "chain headers require their typed forwarding descriptor")
+			return safeerror.NewFault(fault.Invalid, "chain headers require their typed forwarding descriptor")
 		}
 	case proxyIPChain:
 		if name != "X-Forwarded-For" {
-			return fault.New(fault.Invalid, "invalid X-Forwarded-For descriptor")
+			return safeerror.NewFault(fault.Invalid, "invalid X-Forwarded-For descriptor")
 		}
 	case proxyForwardedChain:
 		if name != "Forwarded" {
-			return fault.New(fault.Invalid, "invalid Forwarded descriptor")
+			return safeerror.NewFault(fault.Invalid, "invalid Forwarded descriptor")
 		}
 	default:
-		return fault.New(fault.Invalid, "proxy header requires a parser declaration")
+		return safeerror.NewFault(fault.Invalid, "proxy header requires a parser declaration")
 	}
 	return nil
 }
@@ -94,26 +95,26 @@ func (c TrustedProxyConfig) Validate() error { _, err := compileTrustedProxy(c);
 
 func compileTrustedProxy(c TrustedProxyConfig) (proxyPolicy, error) {
 	if len(c.Proxies) > maxProxyNetworks || len(c.Headers) > maxProxyHeaders || len(c.OriginHeaders) > maxProxyHeaders {
-		return proxyPolicy{}, fault.New(fault.Invalid, "trusted proxy configuration exceeds its declaration bound")
+		return proxyPolicy{}, safeerror.NewFault(fault.Invalid, "trusted proxy configuration exceeds its declaration bound")
 	}
 	if len(c.Proxies) != 0 && len(c.Headers) == 0 && len(c.OriginHeaders) == 0 {
-		return proxyPolicy{}, fault.New(fault.Invalid, "trusted proxy networks require explicit forwarding headers")
+		return proxyPolicy{}, safeerror.NewFault(fault.Invalid, "trusted proxy networks require explicit forwarding headers")
 	}
 	p := proxyPolicy{proxies: make([]netip.Prefix, 0, len(c.Proxies)), headers: slices.Clone(c.Headers), originHeaders: slices.Clone(c.OriginHeaders)}
 	networks := make(map[netip.Prefix]bool)
 	for _, network := range c.Proxies {
 		if !network.IsValid() || network.Addr().Zone() != "" {
-			return proxyPolicy{}, fault.New(fault.Invalid, "trusted proxy network is invalid")
+			return proxyPolicy{}, safeerror.NewFault(fault.Invalid, "trusted proxy network is invalid")
 		}
 		if network.Addr().Is4In6() {
 			if network.Bits() < 96 {
-				return proxyPolicy{}, fault.New(fault.Invalid, "mapped IPv4 proxy prefixes must include the mapped-address prefix")
+				return proxyPolicy{}, safeerror.NewFault(fault.Invalid, "mapped IPv4 proxy prefixes must include the mapped-address prefix")
 			}
 			network = netip.PrefixFrom(network.Addr().Unmap(), network.Bits()-96)
 		}
 		network = network.Masked()
 		if networks[network] {
-			return proxyPolicy{}, fault.New(fault.Duplicate, "trusted proxy network is repeated")
+			return proxyPolicy{}, safeerror.NewFault(fault.Duplicate, "trusted proxy network is repeated")
 		}
 		networks[network] = true
 		p.proxies = append(p.proxies, network)
@@ -126,7 +127,7 @@ func compileTrustedProxy(c TrustedProxyConfig) (proxyPolicy, error) {
 		name, _ := header.name.Canonical()
 		key := strings.ToLower(string(name))
 		if headers[key] {
-			return proxyPolicy{}, fault.New(fault.Duplicate, "trusted proxy header is repeated")
+			return proxyPolicy{}, safeerror.NewFault(fault.Duplicate, "trusted proxy header is repeated")
 		}
 		headers[key] = true
 		p.headers[i].name = name

@@ -2,11 +2,11 @@ package storage
 
 import (
 	"context"
-	"errors"
 	"io"
 	"math"
 	"sync"
 
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -21,10 +21,10 @@ func (d *Disk) OpenSeek(ctx context.Context, key ObjectKey, options ReadOptions)
 		return nil, ObjectInfo{}, err
 	}
 	if options.Range.IsSet() {
-		return nil, ObjectInfo{}, Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return nil, ObjectInfo{}, newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	if !d.capabilities.Ranges || !d.capabilities.Versions && !d.capabilities.ConditionalRead {
-		return nil, ObjectInfo{}, Failure(Unsupported, OpenOperation, NotApplicable, nil)
+		return nil, ObjectInfo{}, newFailure(Unsupported, OpenOperation, NotApplicable, nil)
 	}
 	info, err := d.Stat(ctx, key, options)
 	if err != nil {
@@ -35,7 +35,7 @@ func (d *Disk) OpenSeek(ctx context.Context, key ObjectKey, options ReadOptions)
 	} else if d.capabilities.ConditionalRead && info.ETag != "" {
 		options.IfMatch = info.ETag
 	} else {
-		return nil, ObjectInfo{}, Failure(Unsupported, OpenOperation, NotApplicable, nil)
+		return nil, ObjectInfo{}, newFailure(Unsupported, OpenOperation, NotApplicable, nil)
 	}
 	operation, cancel := context.WithCancel(ctx)
 	return &seekReader{disk: d, key: key, info: info, options: options, ctx: operation, cancel: cancel, done: make(chan struct{})}, info, nil
@@ -67,12 +67,12 @@ func (r *seekReader) Read(p []byte) (int, error) {
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
-		return 0, Failure(Closed, OpenOperation, NotApplicable, nil)
+		return 0, newFailure(Closed, OpenOperation, NotApplicable, nil)
 	}
 	body := r.body
 	r.mu.Unlock()
 	if err := r.ctx.Err(); err != nil {
-		return 0, Failure(Unavailable, OpenOperation, NotApplicable, err)
+		return 0, newFailure(Unavailable, OpenOperation, NotApplicable, err)
 	}
 	if body == nil {
 		if r.position >= r.info.Size {
@@ -87,12 +87,12 @@ func (r *seekReader) Read(p []byte) (int, error) {
 			return 0, err
 		}
 		if info.Object.Size != r.info.Size || info.Object.ETag != r.info.ETag || info.Object.Version != r.info.Version {
-			return 0, Failure(PreconditionFailed, OpenOperation, NotApplicable, closeBody(opened))
+			return 0, newFailure(PreconditionFailed, OpenOperation, NotApplicable, closeBody(opened))
 		}
 		r.mu.Lock()
 		if r.closed {
 			r.mu.Unlock()
-			return 0, Failure(Closed, OpenOperation, NotApplicable, closeBody(opened))
+			return 0, newFailure(Closed, OpenOperation, NotApplicable, closeBody(opened))
 		}
 		r.body, body = opened, opened
 		r.mu.Unlock()
@@ -107,10 +107,10 @@ func (r *seekReader) Seek(offset int64, whence int) (int64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
-		return 0, Failure(Closed, OpenOperation, NotApplicable, nil)
+		return 0, newFailure(Closed, OpenOperation, NotApplicable, nil)
 	}
 	if err := r.ctx.Err(); err != nil {
-		return 0, Failure(Unavailable, OpenOperation, NotApplicable, err)
+		return 0, newFailure(Unavailable, OpenOperation, NotApplicable, err)
 	}
 	base := int64(0)
 	switch whence {
@@ -120,10 +120,10 @@ func (r *seekReader) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekEnd:
 		base = r.info.Size
 	default:
-		return 0, Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return 0, newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	if offset > 0 && base > math.MaxInt64-offset || offset < -base {
-		return 0, Failure(Invalid, OpenOperation, NotApplicable, nil)
+		return 0, newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	next := base + offset
 	if next == r.position {
@@ -133,7 +133,7 @@ func (r *seekReader) Seek(offset int64, whence int) (int64, error) {
 		err := closeBody(r.body)
 		r.body = nil
 		if err != nil {
-			return 0, Failure(Unavailable, OpenOperation, NotApplicable, err)
+			return 0, newFailure(Unavailable, OpenOperation, NotApplicable, err)
 		}
 	}
 	r.position = next
@@ -153,7 +153,7 @@ func (r *seekReader) Close() error {
 		r.operation.Lock()
 		r.operation.Unlock()
 		if r.closeErr != nil {
-			r.closeErr = Failure(Unavailable, CloseOperation, NotApplicable, errors.Join(r.closeErr))
+			r.closeErr = newFailure(Unavailable, CloseOperation, NotApplicable, safeerror.Join("operation failed", r.closeErr))
 		}
 		close(r.done)
 	})

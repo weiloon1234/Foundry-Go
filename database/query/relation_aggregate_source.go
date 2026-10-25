@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // AggregateSource retains both the source and measured model. A many-to-many
@@ -26,7 +27,7 @@ func directAggregateInput[M, N any](spec relationSpec[M, N], validate func(strin
 	return aggregateInput[M, N]{source: spec.source, local: spec.local, inputTable: spec.target.queryCore.Table, inputAlias: spec.target.queryCore.Table, group: spec.foreign, singular: singular,
 		validate: func(depth int, limits RelationLimits) error {
 			if len(spec.target.relations) != 0 {
-				return fault.New(fault.Invalid, "aggregate input cannot request eager-loaded children")
+				return safeerror.NewFault(fault.Invalid, "aggregate input cannot request eager-loaded children")
 			}
 			return validate(spec.source.queryCore.Table, depth, limits)
 		},
@@ -40,7 +41,7 @@ func (r OneRelation[M, N]) aggregateInput() aggregateInput[M, N] {
 	validate := r.validateRelation
 	if r.ofMany != singleTarget || r.spec.morph != nil {
 		validate = func(string, int, RelationLimits) error {
-			return fault.New(fault.Invalid, "aggregates over a one-of-many relationship are not supported; aggregate its HasMany form")
+			return safeerror.NewFault(fault.Invalid, "aggregates over a one-of-many relationship are not supported; aggregate its HasMany form")
 		}
 	}
 	return directAggregateInput(r.spec, validate, true)
@@ -54,7 +55,7 @@ func (r ThroughRelation[M, N, P]) aggregateInput() aggregateInput[M, N] {
 	return aggregateInput[M, N]{source: r.spec.source, local: r.spec.local, inputTable: r.spec.target.queryCore.Table, inputAlias: throughTargetAlias, group: fieldRef{Table: throughPivotAlias, Column: r.pivotLocal.Column},
 		validate: func(depth int, limits RelationLimits) error {
 			if len(r.spec.target.relations) != 0 || len(r.pivot.relations) != 0 {
-				return fault.New(fault.Invalid, "aggregate input cannot request eager-loaded targets or pivots")
+				return safeerror.NewFault(fault.Invalid, "aggregate input cannot request eager-loaded targets or pivots")
 			}
 			return r.validateRelation(r.spec.source.queryCore.Table, depth, limits)
 		},

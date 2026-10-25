@@ -13,6 +13,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
@@ -473,7 +474,7 @@ func (q TranslationQuery) foundryInsertMany(ctx context.Context, writer database
 }
 func (q TranslationQuery) foundryCreateMutations(drafts []TranslationDraft) ([]foundryquery.Mutation[Translation], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Translation], len(drafts))
 	for i, draft := range drafts {
@@ -830,7 +831,7 @@ func (q TranslationQuery) DeleteAll(ctx context.Context, writer database.Transac
 // Increment adjusts one numeric field of every matching model by a typed delta, such as TranslationFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q TranslationQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Translation], extra ...TranslationDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Translation]
 	if len(extra) == 1 {
@@ -845,7 +846,7 @@ func (q TranslationQuery) Increment(ctx context.Context, writer database.Transac
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as TranslationFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q TranslationQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Translation], extra ...TranslationDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Translation]
 	if len(extra) == 1 {
@@ -1226,46 +1227,46 @@ func CompareTranslation(before, after foundryvalue.Optional[Translation], assign
 	var err error
 	changes.fields.Key, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldKey.IsSet(), func(item Translation) string { return item.Key })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.Key: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.Key", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.Key.Changed() || changes.fields.Key.Assigned()) {
-		return TranslationChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return TranslationChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Owner, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldOwner.IsSet(), func(item Translation) string { return item.Owner })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.Owner: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.Owner", err)
 	}
 	changes.fields.Scope, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldScope.IsSet(), func(item Translation) string { return item.Scope })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.Scope: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.Scope", err)
 	}
 	changes.fields.SubjectKey, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldSubjectKey.IsSet(), func(item Translation) string { return item.SubjectKey })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.SubjectKey: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.SubjectKey", err)
 	}
 	changes.fields.Identity, err = lifecycle.CompareModelField(codec.JSON[model.Identity](), before, after, assigned.fieldIdentity.IsSet(), func(item Translation) foundryvalue.JSON[model.Identity] { return item.Identity })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.Identity: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.Identity", err)
 	}
 	changes.fields.Field, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldField.IsSet(), func(item Translation) string { return item.Field })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.Field: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.Field", err)
 	}
 	changes.fields.Locale, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldLocale.IsSet(), func(item Translation) string { return item.Locale })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.Locale: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.Locale", err)
 	}
 	changes.fields.Value, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldValue.IsSet(), func(item Translation) string { return item.Value })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.Value: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.Value", err)
 	}
 	changes.fields.CreatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldCreatedAt.IsSet(), func(item Translation) temporal.DateTime { return item.CreatedAt })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.CreatedAt: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.CreatedAt", err)
 	}
 	changes.fields.UpdatedAt, err = lifecycle.CompareModelField(codec.DateTime(), before, after, assigned.fieldUpdatedAt.IsSet(), func(item Translation) temporal.DateTime { return item.UpdatedAt })
 	if err != nil {
-		return TranslationChanges{}, fmt.Errorf("compare Translation.UpdatedAt: %w", err)
+		return TranslationChanges{}, foundrydiagnostic.Prefix("compare Translation.UpdatedAt", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -1427,7 +1428,7 @@ func (TranslationHooks) foundryWriteHooks(ctx context.Context, observerSet lifec
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Translation]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Translation]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1486,7 +1487,7 @@ func (TranslationHooks) foundryWriteHooks(ctx context.Context, observerSet lifec
 					}
 				}
 			default:
-				return foundryquery.Mutation[Translation]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Translation]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1622,7 +1623,7 @@ func (TranslationHooks) foundryWriteHooks(ctx context.Context, observerSet lifec
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1730,14 +1731,14 @@ type TranslationAuditPolicy struct {
 func (changes TranslationChanges) Audit(policy TranslationAuditPolicy) (record.Model[Translation, string], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Translation, string]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Translation, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Translation, string]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Translation, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "key", policy.Key)
 	if err != nil {
@@ -1868,7 +1869,7 @@ func TranslationAuditing(policy TranslationAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() TranslationHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes TranslationChanges) error {

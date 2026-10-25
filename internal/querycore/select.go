@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -36,7 +37,7 @@ func (s TableSource) Name() string {
 func (c *Compiler) SourceSQL(s TableSource) (string, error) {
 	if s.Self != nil {
 		if c.Self != s.Self {
-			return "", fault.New(fault.Invalid, "recursive reference is outside its owning step")
+			return "", safeerror.NewFault(fault.Invalid, "recursive reference is outside its owning step")
 		}
 		text := Quoted(s.Self.Name)
 		if s.Alias != "" {
@@ -54,7 +55,7 @@ func (c *Compiler) SourceSQL(s TableSource) (string, error) {
 	}
 	if s.Cte != nil {
 		if c.Ctes[s.Cte.Name] != s.Cte {
-			return "", fault.New(fault.Invalid, "CTE reference is not available in this statement")
+			return "", safeerror.NewFault(fault.Invalid, "CTE reference is not available in this statement")
 		}
 		text := Quoted(s.Cte.Name)
 		if s.Alias != "" {
@@ -120,19 +121,19 @@ func (c *Compiler) SelectSQL(s SelectNode) (string, error) {
 
 func (c *Compiler) SelectSQLWithOuter(s SelectNode, outer *OuterScope) (string, error) {
 	if len(s.Locks) > 0 && !c.AllowLocks {
-		return "", fault.New(fault.Invalid, "row locks require a transaction-scoped query")
+		return "", safeerror.NewFault(fault.Invalid, "row locks require a transaction-scoped query")
 	}
 	c.SelectDepth++
 	c.SelectNodes++
 	defer func() { c.SelectDepth-- }()
 	if c.SelectDepth > MaxExpressionDepth || c.SelectNodes > MaxExpressionNodes {
-		return "", fault.New(fault.Invalid, "nested SELECT exceeds its resource bound")
+		return "", safeerror.NewFault(fault.Invalid, "nested SELECT exceeds its resource bound")
 	}
 	if len(s.Joins) > MaxExpressionNodes || len(s.Selections) > MaxExpressionNodes || len(s.Orders) > MaxExpressionNodes || len(s.GroupBy) > MaxExpressionNodes {
-		return "", fault.New(fault.Invalid, "select exceeds its resource bound")
+		return "", safeerror.NewFault(fault.Invalid, "select exceeds its resource bound")
 	}
 	if limit, set := s.Limit.Get(); (set && limit < 0) || s.Offset < 0 {
-		return "", fault.New(fault.Invalid, "select has a negative window")
+		return "", safeerror.NewFault(fault.Invalid, "select has a negative window")
 	}
 	previousSources, previousOuter, previousSelf := c.Sources, c.Outer, c.DirectSelf
 	defer func() { c.Sources, c.Outer, c.DirectSelf = previousSources, previousOuter, previousSelf }()
@@ -150,7 +151,7 @@ func (c *Compiler) SelectSQLWithOuter(s SelectNode, outer *OuterScope) (string, 
 	c.Sources = make(map[string]map[string]Column, len(s.Joins)+1)
 	add := func(source TableSource) error {
 		if c.Outer != nil && c.Outer.Sources[source.Name()] != nil {
-			return fault.New(fault.Invalid, "inner SELECT shadows a correlated outer source")
+			return safeerror.NewFault(fault.Invalid, "inner SELECT shadows a correlated outer source")
 		}
 		validSource := source.Query == nil && source.Cte == nil && source.Set == nil && source.Self == nil && sqlname.Table(source.Table)
 		if source.Query != nil {
@@ -176,15 +177,15 @@ func (c *Compiler) SelectSQLWithOuter(s SelectNode, outer *OuterScope) (string, 
 			validSource = source.Query == nil && source.Cte == nil && source.Set == nil && source.Table == "" && source.Self == c.Self && sqlname.Valid(source.Self.Name) && slices.Equal(source.Columns, source.Self.Columns)
 		}
 		if !validSource || (source.Alias != "" && !sqlname.Valid(source.Alias)) || c.Sources[source.Name()] != nil {
-			return fault.New(fault.Invalid, "invalid or repeated select source")
+			return safeerror.NewFault(fault.Invalid, "invalid or repeated select source")
 		}
 		columns := make(map[string]Column, len(source.Columns))
 		for _, column := range source.Columns {
 			if !sqlname.Valid(column.Name) {
-				return fault.New(fault.Invalid, "invalid select column")
+				return safeerror.NewFault(fault.Invalid, "invalid select column")
 			}
 			if _, exists := columns[column.Name]; exists {
-				return fault.New(fault.Invalid, "repeated select column")
+				return safeerror.NewFault(fault.Invalid, "repeated select column")
 			}
 			columns[column.Name] = column
 		}
@@ -197,11 +198,11 @@ func (c *Compiler) SelectSQLWithOuter(s SelectNode, outer *OuterScope) (string, 
 	nodes := &c.ExpressionNodes
 	for _, join := range s.Joins {
 		if join.Kind > CrossJoin {
-			return "", fault.New(fault.Invalid, "invalid join kind")
+			return "", safeerror.NewFault(fault.Invalid, "invalid join kind")
 		}
 		if join.Lateral != nil {
 			if join.Source.Query == nil || join.Kind == RightJoin || join.Kind == FullJoin {
-				return "", fault.New(fault.Invalid, "correlated lateral source requires an inner, left or cross derived join")
+				return "", safeerror.NewFault(fault.Invalid, "correlated lateral source requires an inner, left or cross derived join")
 			}
 			// Validate before adding this source: neither it nor a later source
 			// may satisfy its own preceding-input requirement.
@@ -214,7 +215,7 @@ func (c *Compiler) SelectSQLWithOuter(s SelectNode, outer *OuterScope) (string, 
 		}
 		if join.Kind == CrossJoin {
 			if join.On != nil {
-				return "", fault.New(fault.Invalid, "cross join cannot have an ON condition")
+				return "", safeerror.NewFault(fault.Invalid, "cross join cannot have an ON condition")
 			}
 			continue
 		}
@@ -284,7 +285,7 @@ func (c *Compiler) SelectSQLWithOuter(s SelectNode, outer *OuterScope) (string, 
 		}
 		if item.Alias != "" {
 			if !sqlname.Valid(item.Alias) || aliases[item.Alias] {
-				return "", fault.New(fault.Invalid, "invalid or repeated selection alias")
+				return "", safeerror.NewFault(fault.Invalid, "invalid or repeated selection alias")
 			}
 			aliases[item.Alias] = true
 			text += " AS " + Quoted(item.Alias)
@@ -401,7 +402,7 @@ func (c *Compiler) DeclaredField(f FieldRef) error {
 		}
 	}
 	if _, ok := columns[f.Column]; !ok {
-		return fault.New(fault.Invalid, "query uses an undeclared model column or source")
+		return safeerror.NewFault(fault.Invalid, "query uses an undeclared model column or source")
 	}
 	if err := f.Validate(f.Table); err != nil {
 		return err

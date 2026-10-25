@@ -3,6 +3,7 @@ package cache
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cacheint"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // CounterDeclaration binds one concrete key type to exact signed int64 values.
@@ -24,19 +25,19 @@ func (d CounterDeclaration[K]) Bind(store *Store) (Counter[K], error) {
 		return Counter[K]{}, err
 	}
 	if store == nil || store.backend == nil {
-		return Counter[K]{}, fault.New(fault.Invalid, "cache counter requires an initialized store")
+		return Counter[K]{}, safeerror.NewFault(fault.Invalid, "cache counter requires an initialized store")
 	}
 	backend, ok := store.backend.(CounterBackend)
 	if !ok {
-		return Counter[K]{}, fault.New(fault.Invalid, "cache backend does not support atomic counters")
+		return Counter[K]{}, safeerror.NewFault(fault.Invalid, "cache backend does not support atomic counters")
 	}
 	if _, scoped := store.backend.(TaggedBackend); scoped {
 		if _, ok := store.backend.(TaggedCounterBackend); !ok {
-			return Counter[K]{}, fault.New(fault.Invalid, "cache backend requires tagged counters for namespace protection")
+			return Counter[K]{}, safeerror.NewFault(fault.Invalid, "cache backend requires tagged counters for namespace protection")
 		}
 	}
 	if store.config.MaxValueBytes < cacheint.MaxBytes {
-		return Counter[K]{}, fault.New(fault.Invalid, "cache counter requires space for a full int64 value")
+		return Counter[K]{}, safeerror.NewFault(fault.Invalid, "cache counter requires space for a full int64 value")
 	}
 	bound, err := d.declaration.Bind(store)
 	if err != nil {

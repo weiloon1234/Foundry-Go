@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PruneBatch physically removes at most size models selected by the query, in
@@ -23,7 +24,7 @@ func (q Query[M]) PruneBatch(ctx context.Context, writer database.Transactor, si
 	}
 	q = q.inContext(ctx)
 	if q.definition == nil {
-		return 0, fault.New(fault.Invalid, "pruning requires model metadata")
+		return 0, safeerror.NewFault(fault.Invalid, "pruning requires model metadata")
 	}
 	kind := deleteModel
 	if q.queryCore.HasSoftDeletes() {
@@ -34,7 +35,7 @@ func (q Query[M]) PruneBatch(ctx context.Context, writer database.Transactor, si
 	}
 	primary, ok := q.definition.modelField(q.definition.modelDefinition.Primary)
 	if !ok || primary.get == nil {
-		return 0, fault.New(fault.Invalid, "pruning requires a primary-key codec")
+		return 0, safeerror.NewFault(fault.Invalid, "pruning requires a primary-key codec")
 	}
 	return executeWrite(ctx, writer, func(ctx context.Context, tx *database.Tx) (int64, error) {
 		statement, err := q.OrderBy(Order[M]{field: fieldRef{Table: q.queryCore.Table, Column: q.definition.modelDefinition.Primary}}).ForUpdate().Limit(size).Compile()

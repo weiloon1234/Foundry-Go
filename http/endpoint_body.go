@@ -33,7 +33,7 @@ func readEndpointBody(w stdhttp.ResponseWriter, r *stdhttp.Request, maxBytes int
 	if empty {
 		if r.ContentLength > 0 {
 			rejectUnreadBody(w, r)
-			return nil, BadRequest
+			return nil, BadRequest.WithCause(nil)
 		}
 		if r.Body == nil || r.Body == stdhttp.NoBody {
 			return nil, nil
@@ -41,11 +41,11 @@ func readEndpointBody(w stdhttp.ResponseWriter, r *stdhttp.Request, maxBytes int
 	} else {
 		if r.ContentLength > maxBytes {
 			rejectUnreadBody(w, r)
-			return nil, PayloadTooLarge
+			return nil, PayloadTooLarge.WithCause(nil)
 		}
 		if !media(r.Header) {
 			rejectUnreadBody(w, r)
-			return nil, UnsupportedMediaType
+			return nil, UnsupportedMediaType.WithCause(nil)
 		}
 	}
 	var data []byte
@@ -79,7 +79,7 @@ func readEndpointBody(w stdhttp.ResponseWriter, r *stdhttp.Request, maxBytes int
 	}
 	if empty && len(data) != 0 {
 		rejectUnreadBody(w, r)
-		return nil, BadRequest
+		return nil, BadRequest.WithCause(nil)
 	}
 	return data, nil
 }

@@ -32,7 +32,7 @@ func TestFailedConnectionAcquisitionRetainsClassifierOwner(t *testing.T) {
 	config := database.DefaultPoolConfig()
 	config.MaxIdle = 0
 	db, err := database.Open(t.Context(), database.Adapter{Connector: connector{state}, Classify: func(err error) database.Detail {
-		if err == cause {
+		if errors.Is(err, cause) {
 			close(entered)
 			<-release
 		}
@@ -74,8 +74,8 @@ func TestFailedConnectionAcquisitionRetainsClassifierOwner(t *testing.T) {
 }
 
 func TestRollbackErrorClassificationCannotEscape(t *testing.T) {
-	// database/sql itself inspects driver errors with Is before returning them.
-	// Its drivers must satisfy that contract; As exercises Foundry's classifier.
+	// Driver causes stay opaque inside database/sql. Once restored, hostile As
+	// methods still run inside Foundry's owned classifier.
 	state := &driverState{rollbackError: databaseClassificationError{method: "As", inspect: func() { runtime.Goexit() }}}
 	db := open(t, state, nil)
 	done := make(chan error, 1)

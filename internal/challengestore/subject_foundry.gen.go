@@ -13,6 +13,7 @@ import (
 	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	model "github.com/weiloon1234/Foundry-Go/model"
 	foundryvalue "github.com/weiloon1234/Foundry-Go/value"
 )
@@ -388,7 +389,7 @@ func (q SubjectQuery) foundryInsertMany(ctx context.Context, writer database.Tra
 }
 func (q SubjectQuery) foundryCreateMutations(drafts []SubjectDraft) ([]foundryquery.Mutation[Subject], error) {
 	if len(drafts) > foundryquery.MaxInsertRows {
-		return nil, foundryfault.New(foundryfault.Invalid, "model insert exceeds its row bound")
+		return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "model insert exceeds its row bound")
 	}
 	mutations := make([]foundryquery.Mutation[Subject], len(drafts))
 	for i, draft := range drafts {
@@ -670,7 +671,7 @@ func (q SubjectQuery) DeleteAll(ctx context.Context, writer database.Transactor)
 // Increment adjusts one numeric field of every matching model by a typed delta, such as SubjectFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q SubjectQuery) Increment(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Subject], extra ...SubjectDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Subject]
 	if len(extra) == 1 {
@@ -685,7 +686,7 @@ func (q SubjectQuery) Increment(ctx context.Context, writer database.Transactor,
 // Decrement adjusts one numeric field of every matching model by a typed delta, such as SubjectFields().Field.By(1), with an optional extra draft, in one UPDATE. SQL NULL stays NULL. Per-model hooks do not run.
 func (q SubjectQuery) Decrement(ctx context.Context, writer database.Transactor, adjustment foundryquery.Adjustment[Subject], extra ...SubjectDraft) (int64, error) {
 	if len(extra) > 1 {
-		return 0, foundryfault.New(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
+		return 0, foundrydiagnostic.NewFault(foundryfault.Invalid, "numeric adjustment accepts at most one extra draft")
 	}
 	var mutation foundryquery.Mutation[Subject]
 	if len(extra) == 1 {
@@ -849,18 +850,18 @@ func CompareSubject(before, after foundryvalue.Optional[Subject], assigned Subje
 	var err error
 	changes.fields.Key, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldKey.IsSet(), func(item Subject) string { return item.Key })
 	if err != nil {
-		return SubjectChanges{}, fmt.Errorf("compare Subject.Key: %w", err)
+		return SubjectChanges{}, foundrydiagnostic.Prefix("compare Subject.Key", err)
 	}
 	if before.IsSet() && after.IsSet() && (changes.fields.Key.Changed() || changes.fields.Key.Assigned()) {
-		return SubjectChanges{}, foundryfault.New(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
+		return SubjectChanges{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model change cannot replace or assign its existing primary key")
 	}
 	changes.fields.Scope, err = lifecycle.CompareModelField(codec.String[string](), before, after, assigned.fieldScope.IsSet(), func(item Subject) string { return item.Scope })
 	if err != nil {
-		return SubjectChanges{}, fmt.Errorf("compare Subject.Scope: %w", err)
+		return SubjectChanges{}, foundrydiagnostic.Prefix("compare Subject.Scope", err)
 	}
 	changes.fields.Identity, err = lifecycle.CompareModelField(codec.JSON[model.Identity](), before, after, assigned.fieldIdentity.IsSet(), func(item Subject) foundryvalue.JSON[model.Identity] { return item.Identity })
 	if err != nil {
-		return SubjectChanges{}, fmt.Errorf("compare Subject.Identity: %w", err)
+		return SubjectChanges{}, foundrydiagnostic.Prefix("compare Subject.Identity", err)
 	}
 	changes.before = before
 	changes.after = after
@@ -987,7 +988,7 @@ func (SubjectHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 			case lifecycle.Update, lifecycle.Delete, lifecycle.SoftDelete, lifecycle.Restore, lifecycle.ForceDelete:
 				current, present := before.Get()
 				if !present {
-					return foundryquery.Mutation[Subject]{}, foundryfault.New(foundryfault.Invalid, "model hook requires a stored snapshot")
+					return foundryquery.Mutation[Subject]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "model hook requires a stored snapshot")
 				}
 				switch operation {
 				case lifecycle.Update:
@@ -1046,7 +1047,7 @@ func (SubjectHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryquery.Mutation[Subject]{}, foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundryquery.Mutation[Subject]{}, foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			return draft.foundryMutation(false)
 		},
@@ -1154,7 +1155,7 @@ func (SubjectHooks) foundryWriteHooks(ctx context.Context, observerSet lifecycle
 					}
 				}
 			default:
-				return foundryfault.New(foundryfault.Invalid, "invalid model hook operation")
+				return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid model hook operation")
 			}
 			if operation == lifecycle.Create || operation == lifecycle.Update {
 				for _, hooks := range allHooks {
@@ -1248,14 +1249,14 @@ type SubjectAuditPolicy struct {
 func (changes SubjectChanges) Audit(policy SubjectAuditPolicy) (record.Model[Subject, string], error) {
 	operation, present := changes.operation.Get()
 	if !present {
-		return record.Model[Subject, string]{}, foundryfault.New(foundryfault.Missing, "audit requires captured model changes")
+		return record.Model[Subject, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires captured model changes")
 	}
 	item, present := changes.after.Get()
 	if !present {
 		item, present = changes.before.Get()
 	}
 	if !present {
-		return record.Model[Subject, string]{}, foundryfault.New(foundryfault.Missing, "audit requires a stored model snapshot")
+		return record.Model[Subject, string]{}, foundrydiagnostic.NewFault(foundryfault.Missing, "audit requires a stored model snapshot")
 	}
 	builder, err := record.NewBuilder(item.FoundryReference(), operation, "key", policy.Key)
 	if err != nil {
@@ -1321,7 +1322,7 @@ func SubjectAuditing(policy SubjectAuditPolicy) record.Declaration {
 				return nil, err
 			}
 			if writer == nil {
-				return nil, foundryfault.New(foundryfault.Invalid, "audit writer is not initialized")
+				return nil, foundrydiagnostic.NewFault(foundryfault.Invalid, "audit writer is not initialized")
 			}
 			return func() SubjectHooks {
 				write := func(ctx context.Context, tx *database.Tx, changes SubjectChanges) error {

@@ -18,23 +18,23 @@ type compressionPreferences struct {
 func parseAcceptEncoding(lines []string) (compressionPreferences, error) {
 	p := compressionPreferences{weights: make(map[string]int), present: len(lines) != 0}
 	if len(lines) > maxAcceptEncodingLines {
-		return p, BadRequest
+		return p, BadRequest.WithCause(nil)
 	}
 	bytes, slots := 0, 0
 	for _, line := range lines {
 		bytes += len(line)
 		if bytes > maxAcceptEncodingBytes {
-			return p, BadRequest
+			return p, BadRequest.WithCause(nil)
 		}
 		for i := range len(line) {
 			if line[i] < 32 && line[i] != '\t' || line[i] == 127 {
-				return p, BadRequest
+				return p, BadRequest.WithCause(nil)
 			}
 		}
 		for _, part := range strings.Split(line, ",") {
 			slots++
 			if slots > maxAcceptEncodingSlots {
-				return p, BadRequest
+				return p, BadRequest.WithCause(nil)
 			}
 			part = strings.Trim(part, " \t")
 			if part == "" {
@@ -43,21 +43,21 @@ func parseAcceptEncoding(lines []string) (compressionPreferences, error) {
 			name, weight, hasWeight := strings.Cut(part, ";")
 			name = strings.ToLower(strings.Trim(name, " \t"))
 			if err := HeaderName(name).Validate(); err != nil {
-				return p, BadRequest
+				return p, BadRequest.WithCause(nil)
 			}
 			if _, exists := p.weights[name]; exists {
-				return p, BadRequest
+				return p, BadRequest.WithCause(nil)
 			}
 			q := 1000
 			if hasWeight {
 				key, text, ok := strings.Cut(strings.Trim(weight, " \t"), "=")
 				if !ok || !strings.EqualFold(strings.Trim(key, " \t"), "q") {
-					return p, BadRequest
+					return p, BadRequest.WithCause(nil)
 				}
 				var valid bool
 				q, valid = parseCompressionQuality(strings.Trim(text, " \t"))
 				if !valid {
-					return p, BadRequest
+					return p, BadRequest.WithCause(nil)
 				}
 			}
 			p.weights[name] = q

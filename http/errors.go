@@ -13,7 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -94,12 +94,22 @@ func (c ErrorCode) Error() string {
 
 // WithCause retains an internal cause for errors.Is/errors.As without including
 // its text in the public response or this error's ordinary formatting.
-func (c ErrorCode) WithCause(cause error) error { return &responseError{code: c, cause: cause} }
+func (c ErrorCode) WithCause(cause error) error { return responseFailure(c, cause, nil) }
 
 type responseError struct {
-	code   ErrorCode
-	cause  error
-	issues []contract.Issue
+	decision bool
+	code     ErrorCode
+	cause    error
+	issues   []contract.Issue
+}
+
+func responseFailure(code ErrorCode, cause error, issues []contract.Issue) error {
+	decision := cause == nil
+	if decision {
+		cause = code
+	}
+	failure := &responseError{code: code, cause: cause, issues: issues, decision: decision}
+	return safeerror.Owned(failure.Error(), failure)
 }
 
 type classifiedError interface {
@@ -116,7 +126,7 @@ func (e responseError) Is(target error) bool              { return target == e.c
 
 // FoundryDiagnostic contributes the public transport code to redacted diagnostics.
 func (c ErrorCode) FoundryDiagnostic(seal errordiag.Seal) []fault.Attribute {
-	if !seal.Valid() {
+	if _, known := c.definition(); !seal.Valid() || !known {
 		return nil
 	}
 	return []fault.Attribute{{Key: "http_code", Value: string(c)}}
@@ -148,13 +158,12 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 	var presentationErr error
 	// Preserve ordinary Go wrapping/joining while owning arbitrary As/Unwrap
 	// methods. Classification never receives a writer, so callback failure
-	// cannot leave a partially committed error response. Framework hot paths
-	// use callback.Invoke (panic containment, no goroutine); Isolated is kept
-	// for application handlers and hooks, where Goexit must also be caught.
-	classificationErr := callback.Invoke("HTTP error classification", func() error {
-		classified, found, complete := errorgraph.As[classifiedError](err)
+	// cannot leave a partially committed error response. Retain ownership until
+	// inspection returns or exits, including custom methods calling Goexit.
+	classificationErr := callback.Isolated("HTTP error classification", func() error {
+		classified, found, complete := transportErrorAs[classifiedError](err)
 		if !complete {
-			return fault.New(fault.Invalid, "HTTP error classification exceeded traversal bounds")
+			return safeerror.NewFault(fault.Invalid, "HTTP error classification exceeded traversal bounds")
 		}
 		if found {
 			code = classified.httpErrorCode()
@@ -169,9 +178,9 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 				issues = detailed.httpErrorIssues()
 			}
 		} else {
-			rejected, found, complete := errorgraph.As[*validation.Errors](err)
+			rejected, found, complete := transportErrorAs[*validation.Errors](err)
 			if !complete {
-				return fault.New(fault.Invalid, "HTTP validation error classification exceeded traversal bounds")
+				return safeerror.NewFault(fault.Invalid, "HTTP validation error classification exceeded traversal bounds")
 			}
 			if found {
 				code = ValidationFailed
@@ -202,7 +211,7 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 			definition, valid = *custom, true
 		} else {
 			valid = false
-			classificationErr = fault.New(fault.Invalid, "endpoint returned an undeclared HTTP error")
+			classificationErr = safeerror.NewFault(fault.Invalid, "endpoint returned an undeclared HTTP error")
 		}
 	}
 	if !valid {
@@ -224,16 +233,15 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 // before writing status/body; a response already sent cannot be replaced. Nil
 // errors are rejected. Internal causes are retained by their originating error,
 // never exposed in JSON. Raw handlers may use this explicit transport adapter.
-// Classification runs custom error methods on the caller's goroutine; a panic
-// becomes a safe internal response before any headers or body are written;
-// a panic during retry lookup retains the selected response and omits its hint.
-// runtime.Goexit ends the calling goroutine as any Go call does. Error
-// methods must terminate and be safe for concurrent classification calls. Each
+// Classification contains custom error methods; panic or Goexit becomes a safe
+// internal response before headers or body are written. A failed retry lookup
+// retains the selected response and omits its hint. Error methods must terminate
+// and be safe for concurrent classification calls. Each
 // search is bounded to 256 nodes and 64 nested levels; exhausted classification
 // becomes InternalError, while an exhausted retry lookup omits Retry-After.
 func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 	if w == nil || r == nil || err == nil {
-		return fault.New(fault.Invalid, "HTTP error response requires a writer, request and error")
+		return safeerror.NewFault(fault.Invalid, "HTTP error response requires a writer, request and error")
 	}
 	// The error is the matched route's final response: response wrappers
 	// deliver it even after the route's deadline, unless the client left.
@@ -251,7 +259,7 @@ func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 	}
 	body, encodeErr := json.Marshal(payload)
 	if encodeErr != nil {
-		return fault.Wrap(fault.Internal, "HTTP error response could not be encoded", encodeErr)
+		return safeerror.WrapFault(fault.Internal, "HTTP error response could not be encoded", encodeErr)
 	}
 	// Clear representation-specific headers a decoder or handler may have set
 	// before failing. Preserve correlation, cookies, CORS and other policy headers.
@@ -271,8 +279,8 @@ func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 	}
 	if payload.Code == Unavailable && header.Get("Retry-After") == "" {
 		var overloaded bool
-		failure := callback.Invoke("HTTP overload retry classification", func() error {
-			overloaded = errorgraph.Is(err, fault.Overloaded)
+		failure := callback.Isolated("HTTP overload retry classification", func() error {
+			overloaded = transportErrorIs(err, fault.Overloaded)
 			return nil
 		})
 		if failure != nil {
@@ -284,10 +292,10 @@ func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 	}
 	if payload.Code == IdempotencyInProgress.definition.Code || payload.Code == IdempotencyCapacity.definition.Code || payload.Code == IdempotencyUnavailable.definition.Code {
 		var retry time.Duration
-		failure := callback.Invoke("HTTP idempotency retry classification", func() error {
-			rejected, found, complete := errorgraph.As[*idempotencyRetryError](err)
+		failure := callback.Isolated("HTTP idempotency retry classification", func() error {
+			rejected, found, complete := transportErrorAs[*idempotencyRetryError](err)
 			if !complete {
-				return fault.New(fault.Invalid, "HTTP idempotency retry classification exceeded traversal bounds")
+				return safeerror.NewFault(fault.Invalid, "HTTP idempotency retry classification exceeded traversal bounds")
 			}
 			if found && rejected.retry > 0 && rejected.retry <= 5*time.Minute {
 				retry = rejected.retry
@@ -316,7 +324,7 @@ func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 	}
 	_, writeErr := w.Write(append(body, '\n'))
 	if writeErr != nil {
-		return fault.Wrap(fault.Internal, "HTTP error response could not be written", writeErr)
+		return safeerror.WrapFault(fault.Internal, "HTTP error response could not be written", writeErr)
 	}
 	return nil
 }

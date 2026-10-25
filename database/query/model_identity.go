@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -31,7 +32,7 @@ func IdentityOf[M any, K comparable](q Query[M], primary KeyField[M, K]) ModelId
 
 func (d ModelIdentity[M, K]) Validate() error {
 	if d.query.definition == nil || d.query.hasQueryOptions() {
-		return fault.New(fault.Invalid, "model identity requires a bare generated query")
+		return safeerror.NewFault(fault.Invalid, "model identity requires a bare generated query")
 	}
 	if err := d.query.Validate(); err != nil {
 		return err
@@ -44,7 +45,7 @@ func (d ModelIdentity[M, K]) Validate() error {
 	}
 	field, ok := d.query.definition.modelField(d.primary.ref.Column)
 	if !ok || d.primary.ref.Column != d.query.definition.modelDefinition.Primary || field.typ != reflect.TypeFor[K]() || field.kind != d.primary.codec.ParameterType() || field.sensitive || d.primary.codec.SensitiveValues() {
-		return fault.New(fault.Invalid, "model identity requires its declared non-sensitive primary field")
+		return safeerror.NewFault(fault.Invalid, "model identity requires its declared non-sensitive primary field")
 	}
 	return nil
 }
@@ -76,7 +77,7 @@ func (d ModelIdentity[M, K]) KeyToken(key K) (string, error) {
 			return err
 		}
 		if raw == nil {
-			return fault.New(fault.Invalid, "model identity key cannot be null")
+			return safeerror.NewFault(fault.Invalid, "model identity key cannot be null")
 		}
 		field, _ := d.query.definition.modelField(d.primary.ref.Column)
 		encoded, err := recordEqualityKey(field.kind, raw)
@@ -101,7 +102,7 @@ func (d ModelIdentity[M, K]) reader(keys []K, retained, lock bool) readResult[K]
 		return r
 	}
 	if len(keys) > MaxIdentityBatch {
-		r.err = fault.New(fault.Invalid, "model identity batch exceeds its limit")
+		r.err = safeerror.NewFault(fault.Invalid, "model identity batch exceeds its limit")
 		return r
 	}
 	q := d.query.Where(d.primary.In(keys...)).OrderBy(d.primary.Asc())

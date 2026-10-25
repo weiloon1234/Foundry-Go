@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -54,7 +55,7 @@ func (q ValueQuery[S, V]) ForKeyShare() LockedResult[S, V] { return q.query.ForK
 // clauses, declare each target list in its RowLock descriptor instead.
 func (q LockedResult[S, R]) Of(targets ...LockTarget[S]) LockedResult[S, R] {
 	if len(q.locks) != 1 {
-		q.query.source.err = fault.New(fault.Invalid, "Of requires a single lock clause; declare per-input targets in LockRows")
+		q.query.source.err = safeerror.NewFault(fault.Invalid, "Of requires a single lock clause; declare per-input targets in LockRows")
 		return q
 	}
 	q.locks = slices.Clone(q.locks)
@@ -103,7 +104,7 @@ func (q LockedResult[S, R]) Offset(count int) LockedResult[S, R] {
 func (q LockedResult[S, R]) reader() readResult[R] {
 	r := q.query.reader()
 	if len(q.locks) == 0 && r.err == nil {
-		r.err = fault.New(fault.Invalid, "locked result requires at least one lock clause")
+		r.err = safeerror.NewFault(fault.Invalid, "locked result requires at least one lock clause")
 	}
 	r.node.Locks = q.locks
 	r.transaction = true

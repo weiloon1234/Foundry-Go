@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -45,7 +46,7 @@ func endpointValidationError(ctx context.Context, err error) error {
 	if canceled := ctx.Err(); canceled != nil && err == canceled {
 		return Unavailable.WithCause(err)
 	}
-	switch err.(type) {
+	switch safeerror.UnwrapOwned(err).(type) {
 	case *validation.Errors:
 		return err
 	case *validation.LimitError:

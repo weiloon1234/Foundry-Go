@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // SPAConfig declares an unmatched-route fallback. Prefix and Exclude are
@@ -35,7 +36,7 @@ func (c SPAConfig) Validate() error {
 		return err
 	}
 	if len(c.Exclude) > 64 {
-		return fault.New(fault.Invalid, "SPA exclusions exceed limit")
+		return safeerror.NewFault(fault.Invalid, "SPA exclusions exceed limit")
 	}
 	seen := make(map[string]bool, len(c.Exclude))
 	for _, prefix := range c.Exclude {
@@ -43,7 +44,7 @@ func (c SPAConfig) Validate() error {
 			return err
 		}
 		if seen[prefix] {
-			return fault.New(fault.Duplicate, "duplicate SPA exclusion")
+			return safeerror.NewFault(fault.Duplicate, "duplicate SPA exclusion")
 		}
 		seen[prefix] = true
 	}

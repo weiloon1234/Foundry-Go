@@ -3,15 +3,16 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/internal/doctor"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -28,18 +29,18 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		return err
 	}
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") || options.Timeout <= 0 || options.Timeout > time.Minute {
-		return cli.Usage("doctor accepts flags only, text/json format, and a positive timeout of at most one minute")
+		return clidiag.Usage("doctor accepts flags only, text/json format, and a positive timeout of at most one minute")
 	}
 	report, inspectErr := doctor.Inspect(ctx, options)
 	if *format == "json" {
-		return errors.Join(inspectErr, json.NewEncoder(stdout).Encode(report))
+		return safeerror.Join("operation failed", inspectErr, json.NewEncoder(stdout).Encode(report))
 	}
 	module := report.FrameworkModule
 	if module == "" {
 		module = "development build"
 	}
 	if _, err := fmt.Fprintf(stdout, "Foundry plugin API %s (framework module %s)\n", report.FrameworkAPI, module); err != nil {
-		return errors.Join(inspectErr, err)
+		return safeerror.Join("operation failed", inspectErr, err)
 	}
 	for _, check := range report.Checks {
 		status := "ok"
@@ -50,7 +51,7 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) err
 			}
 		}
 		if _, err := fmt.Fprintf(stdout, "%s: %s — %s\n", check.Name, status, check.Detail); err != nil {
-			return errors.Join(inspectErr, err)
+			return safeerror.Join("operation failed", inspectErr, err)
 		}
 	}
 	return inspectErr

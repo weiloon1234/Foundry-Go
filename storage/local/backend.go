@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	"io/fs"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/filelock"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -139,7 +141,7 @@ func initialize(ctx context.Context, config Config) (result *Backend, err error)
 	b := &Backend{root: root, config: config}
 	defer func() {
 		if err != nil {
-			err = errors.Join(err, failureIf(root.Close(), storage.CloseOperation, storage.NotApplicable))
+			err = safeerror.Join("operation failed", err, failureIf(root.Close(), storage.CloseOperation, storage.NotApplicable))
 		}
 	}()
 	// Reject unrelated directories before creating even the control lock file.
@@ -151,7 +153,7 @@ func initialize(ctx context.Context, config Config) (result *Backend, err error)
 		entries, readErr := directory.ReadDir(3)
 		closeErr := directory.Close()
 		if readErr != nil && !errors.Is(readErr, io.EOF) || closeErr != nil {
-			return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, errors.Join(readErr, closeErr))
+			return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, safeerror.Join("operation failed", readErr, closeErr))
 		}
 		for _, entry := range entries {
 			if entry.Name() != lockName {
@@ -196,7 +198,7 @@ func initialize(ctx context.Context, config Config) (result *Backend, err error)
 		entries, readErr := dir.ReadDir(3)
 		closeErr := dir.Close()
 		if readErr != nil && !errors.Is(readErr, io.EOF) || closeErr != nil {
-			return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, errors.Join(readErr, closeErr))
+			return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, safeerror.Join("operation failed", readErr, closeErr))
 		}
 		for _, entry := range entries {
 			if entry.Name() != lockName {
@@ -216,7 +218,7 @@ func initialize(ctx context.Context, config Config) (result *Backend, err error)
 		if e == nil && config.Sync {
 			e = file.Sync()
 		}
-		e = errors.Join(e, file.Close())
+		e = safeerror.Join("operation failed", e, file.Close())
 		if e != nil {
 			return nil, failure(storage.Unavailable, storage.OpenOperation, storage.Unknown, e)
 		}
@@ -280,10 +282,10 @@ func (b *Backend) ready(ctx context.Context, op storage.Operation) error {
 	}
 	return nil
 }
-func failure(code storage.Code, op storage.Operation, state storage.Outcome, err error) *storage.Error {
+func failure(code storage.Code, op storage.Operation, state storage.Outcome, err error) error {
 	var existing *storage.Error
 	var permission, missing, closed bool
-	complete := errorgraph.Walk(err, func(current error) bool {
+	complete := callback.ErrorWalk(err, func(current error) bool {
 		if detail, matched := errorgraph.AsShallow[*storage.Error](current); matched {
 			existing = detail
 			return false
@@ -293,8 +295,8 @@ func failure(code storage.Code, op storage.Operation, state storage.Outcome, err
 		closed = closed || errorgraph.Matches(current, fs.ErrClosed)
 		return true
 	})
-	if existing != nil {
-		code = existing.Code()
+	if complete && existing != nil {
+		return safeerror.Retain(err, storage.Failure(existing.Code(), op, state, err))
 	} else if complete {
 		switch {
 		case permission:
@@ -305,7 +307,7 @@ func failure(code storage.Code, op storage.Operation, state storage.Outcome, err
 			code = storage.Closed
 		}
 	}
-	return storage.Failure(code, op, state, err)
+	return newFailure(code, op, state, err)
 }
 func failureIf(err error, op storage.Operation, state storage.Outcome) error {
 	if err == nil {
@@ -318,7 +320,7 @@ func syncDirectory(root *os.Root) error {
 	if err != nil {
 		return err
 	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return safeerror.Join("operation failed", dir.Sync(), dir.Close())
 }
 
 // Each acquisition has a separate open-file description, so flock serializes
@@ -369,7 +371,7 @@ func (b *Backend) ensureShard(directory string, index byte) error {
 		if err != nil {
 			return err
 		}
-		if err = errors.Join(syncDirectory(objects), objects.Close(), syncDirectory(b.root)); err != nil {
+		if err = safeerror.Join("operation failed", syncDirectory(objects), objects.Close(), syncDirectory(b.root)); err != nil {
 			return err
 		}
 	}

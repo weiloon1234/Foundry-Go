@@ -1,9 +1,11 @@
 package s3
 
 import (
+	"errors"
+	"testing"
+
 	"github.com/aws/smithy-go"
 	"github.com/weiloon1234/Foundry-Go/storage"
-	"testing"
 )
 
 func TestMissingBucketPreservesEstablishedMutationOutcome(t *testing.T) {
@@ -14,8 +16,9 @@ func TestMissingBucketPreservesEstablishedMutationOutcome(t *testing.T) {
 		{storage.Applied, storage.Applied},
 	} {
 		err := failure(storage.PutOperation, tc.before, &smithy.GenericAPIError{Code: "NoSuchBucket"})
-		if err.Code() != storage.Unavailable || err.Outcome() != tc.after {
-			t.Fatalf("outcome %v became %v; want %v", tc.before, err.Outcome(), tc.after)
+		var detail *storage.Error
+		if !errors.As(err, &detail) || detail.Code() != storage.Unavailable || detail.Outcome() != tc.after {
+			t.Fatalf("outcome %v lost expected %v", tc.before, tc.after)
 		}
 	}
 }

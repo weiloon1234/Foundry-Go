@@ -10,6 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -17,18 +18,18 @@ import (
 
 func validateName(name string) error {
 	if len(name) > 128 || !utf8.ValidString(name) || strings.TrimSpace(name) != name {
-		return fault.New(fault.Invalid, "invalid token display name")
+		return safeerror.NewFault(fault.Invalid, "invalid token display name")
 	}
 	for _, r := range name {
 		if unicode.IsControl(r) {
-			return fault.New(fault.Invalid, "invalid token display name")
+			return safeerror.NewFault(fault.Invalid, "invalid token display name")
 		}
 	}
 	return nil
 }
 func restoreScopes[M any](names []auth.AccessScopeName) (auth.AccessScopes[M], error) {
 	if len(names) > auth.MaxAccessScopes {
-		return auth.AccessScopes[M]{}, fault.New(fault.Invalid, "stored token scope capacity exceeded")
+		return auth.AccessScopes[M]{}, safeerror.NewFault(fault.Invalid, "stored token scope capacity exceeded")
 	}
 	declarations := make([]auth.AccessScope[M], len(names))
 	for i, name := range names {
@@ -39,7 +40,7 @@ func restoreScopes[M any](names []auth.AccessScopeName) (auth.AccessScopes[M], e
 		return auth.AccessScopes[M]{}, err
 	}
 	if !slices.Equal(scopes.Names(), names) {
-		return auth.AccessScopes[M]{}, fault.New(fault.Invalid, "stored token scopes are not canonical")
+		return auth.AccessScopes[M]{}, safeerror.NewFault(fault.Invalid, "stored token scopes are not canonical")
 	}
 	return scopes, nil
 }
@@ -89,7 +90,7 @@ func (r Record) validateMetadata(address Address) error {
 		return err
 	}
 	if r.Address != address || r.ID.IsZero() || r.AccessHash.IsZero() {
-		return fault.New(fault.Invalid, "invalid token record scope or identity")
+		return safeerror.NewFault(fault.Invalid, "invalid token record scope or identity")
 	}
 	if _, err := address.SubjectKey(r.Subject); err != nil {
 		return err
@@ -109,18 +110,18 @@ func (r Record) validateMetadata(address Address) error {
 	refreshHash, hasRefresh := r.RefreshHash.Get()
 	if r.Mode == Renewable {
 		if r.Assurance != auth.Authenticated || !hasRefresh || refreshHash.IsZero() || refreshHash.Equal(r.AccessHash) || r.RotationLimit < 1 || r.RotationLimit > MaxRotations || r.Generation > r.RotationLimit {
-			return fault.New(fault.Invalid, "invalid renewable token metadata")
+			return safeerror.NewFault(fault.Invalid, "invalid renewable token metadata")
 		}
 	} else {
 		if hasRefresh || r.Generation != 0 || r.RotationLimit != 0 {
-			return fault.New(fault.Invalid, "nonrenewable token has refresh metadata")
+			return safeerror.NewFault(fault.Invalid, "nonrenewable token has refresh metadata")
 		}
 		if r.Mode == Challenge {
 			if r.Assurance != auth.PendingMFA || len(r.Scopes) != 0 {
-				return fault.New(fault.Invalid, "MFA challenge token cannot carry ordinary authority")
+				return safeerror.NewFault(fault.Invalid, "MFA challenge token cannot carry ordinary authority")
 			}
 		} else if r.Assurance != auth.Authenticated {
-			return fault.New(fault.Invalid, "personal token requires full assurance")
+			return safeerror.NewFault(fault.Invalid, "personal token requires full assurance")
 		}
 	}
 	return nil
@@ -131,18 +132,18 @@ func (r Record) Validate(address Address) error {
 	}
 	created, issued, seen, access, expires := r.CreatedAt.UTC(), r.IssuedAt.UTC(), r.LastSeenAt.UTC(), r.AccessExpiresAt.UTC(), r.ExpiresAt.UTC()
 	if r.CreatedAt.IsZero() || r.IssuedAt.IsZero() || r.LastSeenAt.IsZero() || r.AccessExpiresAt.IsZero() || r.ExpiresAt.IsZero() || issued.Before(created) || seen.Before(issued) || !access.After(seen) || access.After(expires) || !expires.Equal(created.Add(r.Lifetime.Absolute)) || !access.Equal(boundedExpiry(issued, r.Lifetime.Access, expires)) {
-		return fault.New(fault.Invalid, "invalid stored token lifetime")
+		return safeerror.NewFault(fault.Invalid, "invalid stored token lifetime")
 	}
 	refreshExpiry, hasExpiry := r.RefreshExpiresAt.Get()
 	if r.Mode == Renewable {
 		if !hasExpiry || refreshExpiry.IsZero() || !refreshExpiry.UTC().Equal(boundedExpiry(issued, r.Lifetime.RefreshIdle, expires)) {
-			return fault.New(fault.Invalid, "invalid stored refresh expiry")
+			return safeerror.NewFault(fault.Invalid, "invalid stored refresh expiry")
 		}
 	} else if hasExpiry || !issued.Equal(created) {
-		return fault.New(fault.Invalid, "nonrenewable token has refresh times")
+		return safeerror.NewFault(fault.Invalid, "nonrenewable token has refresh times")
 	}
 	if superseded, present := r.SupersededAt.Get(); present && (r.Mode != Renewable || superseded.UTC().Before(issued)) {
-		return fault.New(fault.Invalid, "invalid superseded token generation")
+		return safeerror.NewFault(fault.Invalid, "invalid superseded token generation")
 	}
 	return r.Device.Validate()
 }
@@ -171,7 +172,7 @@ func (r Record) Refreshed(now time.Time, access, refresh Digest) (Record, bool, 
 	}
 	previous, _ := r.RefreshHash.Get()
 	if access.IsZero() || refresh.IsZero() || access.Equal(refresh) || access.Equal(r.AccessHash) || access.Equal(previous) || refresh.Equal(previous) || refresh.Equal(r.AccessHash) {
-		return Record{}, false, fault.New(fault.Invalid, "refresh requires distinct new credential hashes")
+		return Record{}, false, safeerror.NewFault(fault.Invalid, "refresh requires distinct new credential hashes")
 	}
 	now = now.UTC().Truncate(time.Microsecond)
 	if !r.LiveRefresh(now) || r.Generation >= r.RotationLimit {
@@ -232,7 +233,7 @@ func (c Creation) metadata(address Address) Record {
 }
 func (c Creation) Validate(address Address) error {
 	if c.Maximum < 1 || c.PendingMaximum < 1 || c.Maximum+c.PendingMaximum > MaxTokens {
-		return fault.New(fault.Invalid, "invalid token subject capacity")
+		return safeerror.NewFault(fault.Invalid, "invalid token subject capacity")
 	}
 	if err := c.Limit.Validate(); err != nil {
 		return err

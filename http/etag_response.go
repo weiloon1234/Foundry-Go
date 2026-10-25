@@ -13,6 +13,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type etagResponse struct {
@@ -176,7 +177,7 @@ func (w *etagResponse) writeThrough(data []byte) (int, error) {
 	if len(data) == 0 {
 		n, err := w.native.Write(data)
 		if n != 0 {
-			err = fault.New(fault.Internal, "HTTP response writer returned an invalid count")
+			err = safeerror.NewFault(fault.Internal, "HTTP response writer returned an invalid count")
 		}
 		w.err = err
 		return 0, err
@@ -190,7 +191,7 @@ func (w *etagResponse) writeThrough(data []byte) (int, error) {
 		chunk := data[:min(len(data), responseBufferPageBytes)]
 		n, err := w.native.Write(chunk)
 		if n < 0 || n > len(chunk) {
-			w.err = fault.New(fault.Internal, "HTTP response writer returned an invalid count")
+			w.err = safeerror.NewFault(fault.Internal, "HTTP response writer returned an invalid count")
 			return total, w.err
 		}
 		total += n
@@ -271,7 +272,7 @@ func (w *etagResponse) ReadFrom(reader io.Reader) (int64, error) {
 		}
 		n, err := reader.Read(data)
 		if n < 0 || n > len(data) {
-			w.err = fault.New(fault.Internal, "HTTP response source returned an invalid count")
+			w.err = safeerror.NewFault(fault.Internal, "HTTP response source returned an invalid count")
 			return total, w.err
 		}
 		if n != 0 {

@@ -3,6 +3,7 @@ package email
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"log/slog"
 	"net/mail"
 	"reflect"
@@ -23,30 +24,30 @@ const MaxDisplayNameBytes = 256
 
 func ParseAddress(text string) (Address, error) {
 	if len(text) > MaxAddressBytes || !headerText(text) {
-		return Address{}, Construction
+		return Address{}, emaildiag.Failure(Construction)
 	}
 	parsed, err := mail.ParseAddress(text)
 	if err != nil {
-		return Address{}, Construction
+		return Address{}, emaildiag.Failure(Construction)
 	}
 	return NewAddress(parsed.Address, parsed.Name)
 }
 func NewAddress(mailbox, name string) (Address, error) {
 	if len(mailbox) > MaxMailboxBytes || len(name) > MaxDisplayNameBytes || !headerText(mailbox) || !headerText(name) {
-		return Address{}, Construction
+		return Address{}, emaildiag.Failure(Construction)
 	}
 	for _, c := range mailbox {
 		if c < 33 || c > 126 {
-			return Address{}, Construction
+			return Address{}, emaildiag.Failure(Construction)
 		}
 	}
 	parsed, err := mail.ParseAddress(mailbox)
 	if err != nil || parsed.Address != mailbox || parsed.Name != "" {
-		return Address{}, Construction
+		return Address{}, emaildiag.Failure(Construction)
 	}
 	local, domain, ok := strings.Cut(mailbox, "@")
 	if !ok || local == "" || domain == "" || len(local) > 64 || strings.Contains(domain, "@") {
-		return Address{}, Construction
+		return Address{}, emaildiag.Failure(Construction)
 	}
 	return Address{mailbox: mailbox, name: name}, nil
 }
@@ -66,11 +67,11 @@ func (a Address) MarshalJSON() ([]byte, error) {
 }
 func (a *Address) UnmarshalJSON(data []byte) error {
 	if a == nil || len(data) > MaxAddressBytes*6+2 {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	var text string
 	if err := json.Unmarshal(data, &text); err != nil {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	parsed, err := ParseAddress(text)
 	if err != nil {
@@ -109,7 +110,7 @@ func (a Address) MarshalText() ([]byte, error) {
 }
 func (a *Address) UnmarshalText(data []byte) error {
 	if a == nil {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	parsed, err := ParseAddress(string(data))
 	if err != nil {

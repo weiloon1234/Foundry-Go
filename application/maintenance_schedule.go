@@ -18,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs/archive"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/notifications"
@@ -116,16 +117,16 @@ func (s MaintenanceScheduleSettings) resolve(t MaintenanceTaskSettings) Maintena
 // validate checks one resolved task against its store's batch bound.
 func (t MaintenanceTaskSettings) validate(limit int, byAge bool) error {
 	if _, err := schedule.Interval(t.Interval); err != nil || t.Interval < time.Second {
-		return fault.New(fault.Invalid, "maintenance interval must be whole milliseconds from one second to one year")
+		return safeerror.NewFault(fault.Invalid, "maintenance interval must be whole milliseconds from one second to one year")
 	}
 	if t.Batch < 1 || t.Batch > limit || t.MaxBatches < 1 || t.MaxBatches > maxPruneBatches {
-		return fault.New(fault.Invalid, "maintenance batch or batch count is outside its store's bound")
+		return safeerror.NewFault(fault.Invalid, "maintenance batch or batch count is outside its store's bound")
 	}
 	if t.Timeout <= 0 || t.Timeout > 24*time.Hour {
-		return fault.New(fault.Invalid, "maintenance timeout must be positive and at most one day")
+		return safeerror.NewFault(fault.Invalid, "maintenance timeout must be positive and at most one day")
 	}
 	if byAge && t.Retention <= 0 {
-		return fault.New(fault.Invalid, "maintenance retention must be positive")
+		return safeerror.NewFault(fault.Invalid, "maintenance retention must be positive")
 	}
 	return nil
 }
@@ -155,7 +156,7 @@ type Pruning struct {
 
 func (p Pruning) validate() error {
 	if !identifier.Semantic(p.name) || p.run == nil || p.limit < 1 || p.kind < sessionPruning || p.kind > customPruning {
-		return fault.New(fault.Invalid, "invalid maintenance pruning declaration")
+		return safeerror.NewFault(fault.Invalid, "invalid maintenance pruning declaration")
 	}
 	return nil
 }
@@ -194,7 +195,7 @@ func PruneTokens[M model.Identifiable, K any](guard TokenGuard[M, K]) Pruning {
 // every target of one connection in one call.
 func PruneModels(s Services, connection database.ConnectionName, declare func(now time.Time) ([]prune.Target, error)) (Pruning, error) {
 	if declare == nil || s.clock == nil {
-		return Pruning{}, fault.New(fault.Invalid, "model pruning requires a declaration constructor and application services")
+		return Pruning{}, safeerror.NewFault(fault.Invalid, "model pruning requires a declaration constructor and application services")
 	}
 	registry := func(now time.Time) (*prune.Registry, error) {
 		targets, err := declare(now)
@@ -202,7 +203,7 @@ func PruneModels(s Services, connection database.ConnectionName, declare func(no
 			return nil, err
 		}
 		if len(targets) == 0 {
-			return nil, fault.New(fault.Invalid, "model pruning requires prunable declarations")
+			return nil, safeerror.NewFault(fault.Invalid, "model pruning requires prunable declarations")
 		}
 		return prune.New(targets...)
 	}
@@ -428,7 +429,7 @@ func maintenanceSchedules(s Settings, source clock.Clock) (Schedules, error) {
 			bound, runs = append(bound, task), append(runs, p.run)
 		}
 		if len(bound) > maxMaintenanceTasks {
-			return nil, fault.New(fault.Invalid, "too many maintenance tasks")
+			return nil, safeerror.NewFault(fault.Invalid, "too many maintenance tasks")
 		}
 		result := make([]schedule.Declaration, 0, len(bound))
 		for i, task := range bound {

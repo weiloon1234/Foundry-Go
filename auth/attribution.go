@@ -17,7 +17,7 @@ func (g Guard[M]) Origin(ctx context.Context) (attribution.Origin, error) {
 		return attribution.Origin{}, err
 	}
 	if !result.subject.IsSet() {
-		return attribution.Origin{}, Unauthenticated
+		return attribution.Origin{}, Unauthenticated.WithCause(nil)
 	}
 	origin, err := (attribution.Origin{}).WithRequest(attribution.FromContext(ctx).Request())
 	if err != nil {

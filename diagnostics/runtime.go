@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/health"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
@@ -23,7 +24,7 @@ type Config struct {
 func DefaultConfig() Config { return Config{MaxConcurrent: 8} }
 func (c Config) Validate() error {
 	if c.MaxConcurrent < 1 || c.MaxConcurrent > 64 {
-		return fault.New(fault.Invalid, "invalid diagnostics concurrency limit")
+		return safeerror.NewFault(fault.Invalid, "invalid diagnostics concurrency limit")
 	}
 	return nil
 }
@@ -46,7 +47,7 @@ func prepare(config Config, probes *health.Registry) (*Runtime, error) {
 		return nil, err
 	}
 	if probes == nil {
-		return nil, fault.New(fault.Invalid, "diagnostics requires an explicit readiness registry")
+		return nil, safeerror.NewFault(fault.Invalid, "diagnostics requires an explicit readiness registry")
 	}
 	return &Runtime{probes: probes, slots: make(chan struct{}, config.MaxConcurrent), profiling: config.Profiling, profile: make(chan struct{}, 1)}, nil
 }
@@ -55,7 +56,7 @@ func prepare(config Config, probes *health.Registry) (*Runtime, error) {
 // while the app is still being assembled, binding its lifecycle at boot.
 func New(app *foundation.App, probes *health.Registry, config Config) (*Runtime, error) {
 	if app == nil {
-		return nil, fault.New(fault.Invalid, "diagnostics requires an application")
+		return nil, safeerror.NewFault(fault.Invalid, "diagnostics requires an application")
 	}
 	runtime, err := prepare(config, probes)
 	if err != nil {
@@ -106,7 +107,7 @@ func (r *Runtime) Readiness(ctx context.Context) (ReadinessReport, error) {
 	state, _, gate := r.source()
 	report := ReadinessReport{State: state, Mode: gate.Mode(), Dependencies: health.Report{Results: []health.Result{}}}
 	if ctx == nil {
-		return report, fault.New(fault.Invalid, "readiness requires a context")
+		return report, safeerror.NewFault(fault.Invalid, "readiness requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return report, err

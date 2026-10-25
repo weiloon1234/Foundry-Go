@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/plugin/assets"
 	"github.com/weiloon1234/Foundry-Go/plugin/manifest"
 )
@@ -35,7 +36,7 @@ func New[T any](declaration manifest.Manifest, id ID, render func(context.Contex
 		return nil, err
 	}
 	if render == nil {
-		return nil, fault.New(fault.Invalid, "plugin scaffold requires a renderer")
+		return nil, safeerror.NewFault(fault.Invalid, "plugin scaffold requires a renderer")
 	}
 	return &Scaffold[T]{info, render}, nil
 }
@@ -50,7 +51,7 @@ func (s *Scaffold[T]) Info() manifest.Distribution {
 // Render returns validated caller-owned bytes without touching the filesystem.
 func (s *Scaffold[T]) Render(ctx context.Context, input T) (map[string][]byte, error) {
 	if s == nil || s.render == nil || ctx == nil {
-		return nil, fault.New(fault.Invalid, "invalid plugin scaffold or context")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid plugin scaffold or context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -62,7 +63,7 @@ func (s *Scaffold[T]) Render(ctx context.Context, input T) (map[string][]byte, e
 			return err
 		}
 		if len(files) == 0 {
-			return fault.New(fault.Invalid, "plugin scaffold rendered no files")
+			return safeerror.NewFault(fault.Invalid, "plugin scaffold rendered no files")
 		}
 		result, err = assets.Snapshot(files)
 		return err
@@ -95,7 +96,7 @@ func scaffoldKey[T any](owner manifest.ID, id ID) foundation.Key[*Scaffold[T]] {
 func Register[T any](r *foundation.Registrar, scaffold *Scaffold[T]) error {
 	declaration, ok := r.Plugin()
 	if !ok || scaffold == nil || scaffold.render == nil || scaffold.info.Plugin != declaration.ID || scaffold.info.Release != declaration.Version {
-		return fault.New(fault.Invalid, "scaffold differs from its plugin owner or release")
+		return safeerror.NewFault(fault.Invalid, "scaffold differs from its plugin owner or release")
 	}
 	if err := foundation.Provide(r, scaffoldKey[T](declaration.ID, ID(scaffold.info.Name)), scaffold); err != nil {
 		return err

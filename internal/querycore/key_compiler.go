@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Keys are local to one SELECT. Reusing their emitted SQL also reuses parameter
@@ -38,7 +39,7 @@ func (c *Compiler) RegisterKey(v ValueExpression, grouped bool) (*CompiledKey, e
 	}
 	if !found {
 		if len(c.Keys.Entries) >= MaxExpressionNodes {
-			return nil, fault.New(fault.Invalid, "select keys exceed their resource bound")
+			return nil, safeerror.NewFault(fault.Invalid, "select keys exceed their resource bound")
 		}
 		i = c.Keys.Index.Add(p)
 		entry := &CompiledKey{Node: v}
@@ -88,7 +89,7 @@ func (c *Compiler) KeySQL(key *CompiledKey, grouped map[FieldRef]bool, grouping 
 		return key.Sql, nil
 	}
 	if key.Rendering {
-		return "", fault.New(fault.Invalid, "recursive expression key")
+		return "", safeerror.NewFault(fault.Invalid, "recursive expression key")
 	}
 	key.Rendering = true
 	defer func() { key.Rendering = false }()
@@ -128,7 +129,7 @@ func (c *Compiler) GroupKeys(values []ValueExpression) (map[FieldRef]bool, error
 			return nil, err
 		}
 		if seen[key] {
-			return nil, fault.New(fault.Invalid, "repeated GROUP BY key")
+			return nil, safeerror.NewFault(fault.Invalid, "repeated GROUP BY key")
 		}
 		seen[key] = true
 		if f, ok := v.(FieldRef); ok {

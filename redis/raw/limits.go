@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -26,7 +27,7 @@ type ReplyLimits struct{ Bytes, Nodes, Depth int }
 func DefaultReplyLimits() ReplyLimits { return ReplyLimits{1 << 20, 8192, 32} }
 func (l ReplyLimits) Validate() error {
 	if l.Bytes <= 0 || l.Bytes > MaxReplyBytes || l.Nodes <= 0 || l.Nodes > MaxReplyNodes || l.Depth < 0 || l.Depth > MaxReplyDepth {
-		return fault.New(fault.Invalid, "invalid raw Redis reply bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid raw Redis reply bounds")
 	}
 	return nil
 }
@@ -39,7 +40,7 @@ type Limits struct {
 func DefaultLimits() Limits { return Limits{MaxArguments, 64, 1 << 20, DefaultReplyLimits()} }
 func (l Limits) Validate() error {
 	if l.Arguments <= 0 || l.Arguments > MaxArguments || l.Commands <= 0 || l.Commands > MaxCommands || l.RequestBytes <= 0 || l.RequestBytes > MaxRequestBytes {
-		return fault.New(fault.Invalid, "invalid raw Redis request bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid raw Redis request bounds")
 	}
 	return l.Reply.Validate()
 }
@@ -59,7 +60,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.MaxDeclarations <= 0 || c.MaxKeyBytes <= 0 || c.MaxKeyBytes > keyspace.MaxKeyBytes || c.MaxConcurrent <= 0 || c.MaxConcurrent > 65536 || c.Timeout <= 0 {
-		return fault.New(fault.Invalid, "invalid raw Redis store bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid raw Redis store bounds")
 	}
 	return c.Limits.Validate()
 }

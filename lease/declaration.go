@@ -2,6 +2,7 @@ package lease
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -26,7 +27,7 @@ func (d Declaration[K]) Name() Name {
 }
 func (d Declaration[K]) Validate() error {
 	if d.definition == nil || !keyspace.ValidName(string(d.Name())) {
-		return fault.New(fault.Invalid, "invalid lease declaration")
+		return safeerror.NewFault(fault.Invalid, "invalid lease declaration")
 	}
 	return d.definition.codec.Validate()
 }
@@ -37,20 +38,20 @@ func (d Declaration[K]) Bind(m *Manager) (Leases[K], error) {
 		return Leases[K]{}, err
 	}
 	if m == nil || m.done == nil {
-		return Leases[K]{}, fault.New(fault.Invalid, "lease binding requires a manager")
+		return Leases[K]{}, safeerror.NewFault(fault.Invalid, "lease binding requires a manager")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closing {
-		return Leases[K]{}, fault.New(fault.Closed, "lease manager is closed")
+		return Leases[K]{}, safeerror.NewFault(fault.Closed, "lease manager is closed")
 	}
 	id, exists := m.declarations[d.Name()]
 	if exists && id != &d.definition.id {
-		return Leases[K]{}, fault.New(fault.Duplicate, "lease family already has a different declaration")
+		return Leases[K]{}, safeerror.NewFault(fault.Duplicate, "lease family already has a different declaration")
 	}
 	if !exists {
 		if len(m.declarations) >= m.config.MaxDeclarations {
-			return Leases[K]{}, fault.New(fault.Invalid, "lease declaration limit exceeded")
+			return Leases[K]{}, safeerror.NewFault(fault.Invalid, "lease declaration limit exceeded")
 		}
 		m.declarations[d.Name()] = &d.definition.id
 	}

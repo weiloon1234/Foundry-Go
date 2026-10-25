@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -35,7 +36,7 @@ func Define[P, M any](lookup func(context.Context, P) (value.Optional[M], error)
 // an owned callback and is never invoked for lookup failures.
 func (r Resolver[P, M]) WithMissing(missing func(context.Context, P) error) Resolver[P, M] {
 	if missing == nil {
-		r.err = fault.New(fault.Invalid, "model binding missing handler is nil")
+		r.err = safeerror.NewFault(fault.Invalid, "model binding missing handler is nil")
 		return r
 	}
 	r.missing = missing
@@ -51,7 +52,7 @@ func (r Resolver[P, M]) Validate() error {
 		return r.err
 	}
 	if r.lookup == nil {
-		return fault.New(fault.Invalid, "model binding requires a resolver")
+		return safeerror.NewFault(fault.Invalid, "model binding requires a resolver")
 	}
 	if r.check == nil {
 		return nil
@@ -66,7 +67,7 @@ func (r Resolver[P, M]) Validate() error {
 // not authorize access or lock the row.
 func (r Resolver[P, M]) Resolve(ctx context.Context, path P) (M, error) {
 	if ctx == nil {
-		return *new(M), fault.New(fault.Invalid, "model binding requires a context")
+		return *new(M), safeerror.NewFault(fault.Invalid, "model binding requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return *new(M), err
@@ -107,7 +108,7 @@ func (r Resolver[P, M]) resolve(ctx context.Context, path P) (M, error) {
 
 func (r Resolver[P, M]) absent(ctx context.Context, path P) error {
 	if r.missing == nil {
-		return foundryhttp.NotFound
+		return foundryhttp.NotFound.WithCause(nil)
 	}
 	var returned error
 	if owned := callback.Isolated("HTTP model missing handler", func() error { returned = r.missing(ctx, path); return nil }); owned != nil {
@@ -117,7 +118,7 @@ func (r Resolver[P, M]) absent(ctx context.Context, path P) error {
 		return err
 	}
 	if returned == nil {
-		return foundryhttp.NotFound
+		return foundryhttp.NotFound.WithCause(nil)
 	}
 	return returned
 }

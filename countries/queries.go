@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -60,7 +61,7 @@ func list(ctx context.Context, store *extensions.Store, enabled bool) ([]Country
 			return err
 		}
 		if len(rows) > MaxCountries {
-			return fault.New(fault.Conflict, "country list exceeds its limit")
+			return safeerror.NewFault(fault.Conflict, "country list exceeds its limit")
 		}
 		result = rows
 		return nil

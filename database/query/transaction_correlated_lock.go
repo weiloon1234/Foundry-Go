@@ -2,13 +2,14 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Correlated SELECTs never execute independently. Store their locks on their
 // SELECT nodes while reusing the normal locked-result validation and policies.
 func lockedCorrelatedSelect[S, R any](locked LockedResult[S, R]) ProjectionQuery[S, R] {
 	if len(locked.locks) == 0 && locked.query.source.err == nil {
-		locked.query.source.err = fault.New(fault.Invalid, "correlated lock policy requires at least one lock clause")
+		locked.query.source.err = safeerror.NewFault(fault.Invalid, "correlated lock policy requires at least one lock clause")
 	}
 	locked.query.source.node.Locks = locked.locks
 	return locked.query

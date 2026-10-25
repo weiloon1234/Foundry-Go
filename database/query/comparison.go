@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Model fields and aggregate conditions share binding and comparison semantics.
@@ -16,7 +17,7 @@ func typedComparison[V any](operand valueExpression, op operator, c codec.Codec[
 	return comparison{Operand: operand, Operator: op, Values: bindings, Kind: c.ParameterType(), Bind: func(raw any) (driver.Value, error) {
 		v, ok := raw.(V)
 		if !ok {
-			return nil, fault.New(fault.Invalid, "invalid typed query binding")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid typed query binding")
 		}
 		return c.Bind(v)
 	}}

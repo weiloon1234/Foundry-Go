@@ -1,18 +1,18 @@
 package contract
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"go/token"
-	"io"
 	"reflect"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/gotype"
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -122,7 +122,7 @@ type JSONLimits struct {
 
 func (l JSONLimits) Validate() error {
 	if l.Bytes <= 0 || l.Nodes <= 0 || l.Steps <= 0 || l.Issues <= 0 || l.Depth < 0 || l.Depth > MaxJSONDepth {
-		return fault.New(fault.Invalid, "invalid JSON transport limits")
+		return safeerror.NewFault(fault.Invalid, "invalid JSON transport limits")
 	}
 	return nil
 }
@@ -140,6 +140,11 @@ func (e *DecodeError) GoString() string   { return e.Error() }
 func (*DecodeError) Is(target error) bool { return target == fault.Invalid }
 func (e *DecodeError) Unwrap() error      { return e.cause }
 func (e *DecodeError) Issues() []Issue    { return slices.Clone(e.issues) }
+
+func decodeFailure(issues []Issue, cause error) error {
+	failure := &DecodeError{issues: issues, cause: cause}
+	return safeerror.Owned(failure.Error(), failure)
+}
 
 // Decode validates exact names, required fields, nullability and declared value
 // representations before constructing a fresh T. It rejects duplicate keys and
@@ -173,7 +178,7 @@ func (s *compiledSchema) checkInput(ctx context.Context, data []byte, limits JSO
 		return err
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "JSON decode requires a context")
+		return safeerror.NewFault(fault.Invalid, "JSON decode requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -183,7 +188,7 @@ func (s *compiledSchema) checkInput(ctx context.Context, data []byte, limits JSO
 		return canceled
 	}
 	if err != nil {
-		return &DecodeError{cause: err}
+		return decodeFailure(nil, err)
 	}
 	issues, err := s.check(ctx, node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
 	if err != nil {
@@ -193,10 +198,10 @@ func (s *compiledSchema) checkInput(ctx context.Context, data []byte, limits JSO
 		if canceled := ctx.Err(); canceled != nil {
 			return canceled
 		}
-		return &DecodeError{issues: issues, cause: err}
+		return decodeFailure(issues, err)
 	}
 	if len(issues) != 0 {
-		return &DecodeError{issues: issues}
+		return decodeFailure(issues, nil)
 	}
 	return nil
 }
@@ -205,27 +210,18 @@ func decodeJSONOutcome(ctx context.Context, err error) error {
 	// Isolated returns its own panic/Goexit fault directly. Do not invoke an
 	// arbitrary codec error's Is/As/Unwrap methods while classifying it. Preserve
 	// an actual callback failure even if cancellation arrived during the codec.
-	if failure, ok := err.(*fault.Error); ok && failure.Code() == fault.Panicked {
-		return fault.Wrap(fault.Internal, "JSON DTO codec failed", err)
+	if safeerror.IsPanic(err) {
+		return safeerror.WrapFailure(fault.Internal, "JSON DTO codec failed", err)
 	}
 	if canceled := ctx.Err(); canceled != nil {
 		return canceled
 	}
 	if err != nil {
-		return &DecodeError{cause: err}
+		return decodeFailure(nil, err)
 	}
 	return nil
 }
 
 func decodeNativeJSON[T any](data []byte, result *T) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(result); err != nil {
-		return err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return fault.New(fault.Invalid, "invalid JSON input boundary")
-	}
-	return nil
+	return jsoncodec.UnmarshalExact(data, result, jsonv2.RejectUnknownMembers(true))
 }

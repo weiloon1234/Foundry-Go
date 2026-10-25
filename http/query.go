@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonpointer"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Query binds a query string to a concrete value without an untyped parameter
@@ -36,7 +37,7 @@ func DefineQuery[Q any](parameters ...QueryParameter[Q]) Query[Q] {
 		}
 		_, duplicate := d.indexes[parameter.info.Name]
 		if !httpquery.ValidName(parameter.info.Name) || duplicate || parameter.decode == nil || parameter.encode == nil {
-			d.err = fault.New(fault.Invalid, "query parameter requires a unique name, codec and field selector")
+			d.err = safeerror.NewFault(fault.Invalid, "query parameter requires a unique name, codec and field selector")
 			break
 		}
 		d.indexes[parameter.info.Name] = i
@@ -50,7 +51,7 @@ func (d Query[Q]) Validate() error {
 		return d.err
 	}
 	if d.indexes == nil {
-		return fault.New(fault.Invalid, "query descriptor is not defined")
+		return safeerror.NewFault(fault.Invalid, "query descriptor is not defined")
 	}
 	return nil
 }
@@ -85,7 +86,7 @@ func (l QueryLimits) Validate() error {
 		return err
 	}
 	if l.Issues <= 0 {
-		return fault.New(fault.Invalid, "invalid query diagnostic limit")
+		return safeerror.NewFault(fault.Invalid, "invalid query diagnostic limit")
 	}
 	return nil
 }
@@ -106,6 +107,11 @@ func (*QueryError) Is(target error) bool       { return target == fault.Invalid 
 func (e *QueryError) Unwrap() error            { return e.cause }
 func (e *QueryError) Issues() []contract.Issue { return slices.Clone(e.issues) }
 
+func queryFailure(issues []contract.Issue, cause error) error {
+	failure := &QueryError{issues: issues, cause: cause}
+	return safeerror.Owned(failure.Error(), failure)
+}
+
 func (d Query[Q]) prepare(ctx context.Context, limits QueryLimits) error {
 	if err := d.Validate(); err != nil {
 		return err
@@ -114,7 +120,7 @@ func (d Query[Q]) prepare(ctx context.Context, limits QueryLimits) error {
 		return err
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "query binding requires a context")
+		return safeerror.NewFault(fault.Invalid, "query binding requires a context")
 	}
 	return ctx.Err()
 }
@@ -137,7 +143,7 @@ func (d Query[Q]) Decode(ctx context.Context, raw string, limits QueryLimits) (Q
 		if canceled := ctx.Err(); canceled != nil {
 			return *new(Q), canceled
 		}
-		return *new(Q), &QueryError{cause: err, issues: []contract.Issue{{Code: contract.ValueIssue}}}
+		return *new(Q), queryFailure([]contract.Issue{{Code: contract.ValueIssue}}, err)
 	}
 	return d.decodeValues(ctx, values, limits.Issues)
 }
@@ -167,7 +173,7 @@ func (d Query[Q]) decodeValues(ctx context.Context, values url.Values, issueLimi
 		return *new(Q), err
 	}
 	if len(issues) != 0 {
-		return *new(Q), &QueryError{issues: issues}
+		return *new(Q), queryFailure(issues, nil)
 	}
 	var result Q
 	var failed *queryBindingFailure
@@ -229,7 +235,7 @@ func (d Query[Q]) Encode(ctx context.Context, input Q, limits QueryLimits) (stri
 		if canceled := ctx.Err(); canceled != nil {
 			return "", canceled
 		}
-		return "", &QueryError{cause: err}
+		return "", queryFailure(nil, err)
 	}
 	return encoded, nil
 }
@@ -237,10 +243,10 @@ func (d Query[Q]) Encode(ctx context.Context, input Q, limits QueryLimits) (stri
 func queryCallbackResult(ctx context.Context, callbackErr error, failed *queryBindingFailure, info QueryParameterInfo) error {
 	// No arbitrary error methods are invoked to classify codec failures.
 	if callbackErr != nil {
-		return fault.Wrap(fault.Internal, "query binding callback failed", callbackErr)
+		return safeerror.WrapFailure(fault.Internal, "query binding callback failed", callbackErr)
 	}
 	if failed != nil && failed.internal {
-		return fault.Wrap(fault.Internal, "query field binding failed", failed.cause)
+		return safeerror.WrapFailure(fault.Internal, "query field binding failed", failed.cause)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -252,7 +258,7 @@ func queryCallbackResult(ctx context.Context, callbackErr error, failed *queryBi
 	if info.Repeated {
 		path += "/" + strconv.Itoa(failed.index)
 	}
-	return &QueryError{issues: []contract.Issue{{Path: path, Code: contract.ValueIssue}}, cause: failed.cause}
+	return queryFailure([]contract.Issue{{Path: path, Code: contract.ValueIssue}}, failed.cause)
 }
 
 func queryIssuePath(name string) string {

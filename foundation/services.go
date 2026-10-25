@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	pluginmanifest "github.com/weiloon1234/Foundry-Go/plugin/manifest"
 )
 
@@ -39,7 +40,7 @@ type Resolver interface {
 func Resolve[T any](r Resolver, key Key[T]) (T, error) {
 	var zero T
 	if nilValue(r) || !validName(key.name) {
-		return zero, fault.New(fault.Invalid, "invalid service resolver or key")
+		return zero, safeerror.NewFault(fault.Invalid, "invalid service resolver or key")
 	}
 	value, err := r.resolve(ref(key))
 	if err != nil {
@@ -47,7 +48,7 @@ func Resolve[T any](r Resolver, key Key[T]) (T, error) {
 	}
 	result, ok := value.(T)
 	if !ok {
-		return zero, fault.New(fault.Internal, "service value does not match its declared type")
+		return zero, safeerror.NewFault(fault.Internal, "service value does not match its declared type")
 	}
 	return result, nil
 }
@@ -56,7 +57,7 @@ func Resolve[T any](r Resolver, key Key[T]) (T, error) {
 // acquired during Boot and registered with Runtime.OnShutdown.
 func Provide[T any](r *Registrar, key Key[T], value T) error {
 	if nilValue(value) {
-		return fault.New(fault.Invalid, "nil service value")
+		return safeerror.NewFault(fault.Invalid, "nil service value")
 	}
 	return Factory(r, key, func(Resolver) (T, error) { return value, nil })
 }
@@ -67,7 +68,7 @@ func Provide[T any](r *Registrar, key Key[T], value T) error {
 // Reflection records only the declared type; it never autowires.
 func Factory[T any](r *Registrar, key Key[T], create func(Resolver) (T, error)) error {
 	if r == nil || r.registry == nil || !validName(key.name) || create == nil {
-		return fault.New(fault.Invalid, "invalid service registration")
+		return safeerror.NewFault(fault.Invalid, "invalid service registration")
 	}
 	return r.registry.add(serviceDefinition{
 		ref: ref(key), owner: r.owner,
@@ -77,7 +78,7 @@ func Factory[T any](r *Registrar, key Key[T], create func(Resolver) (T, error)) 
 				return nil, err
 			}
 			if nilValue(value) {
-				return nil, fault.New(fault.Invalid, "constructor returned a nil service")
+				return nil, safeerror.NewFault(fault.Invalid, "constructor returned a nil service")
 			}
 			return value, nil
 		},
@@ -106,23 +107,23 @@ func (r *Registrar) Plugin() (pluginmanifest.Manifest, bool) {
 // Kernel registers one factory for a runtime kind. Duplicate kinds are errors.
 func (r *Registrar) Kernel(kind KernelKind, factory KernelFactory) error {
 	if r == nil || r.registry == nil || !kind.valid() || factory == nil {
-		return fault.New(fault.Invalid, "invalid kernel registration")
+		return registrationFailure(fault.Invalid, "invalid kernel registration")
 	}
 	r.registry.mu.Lock()
 	defer r.registry.mu.Unlock()
 	if r.registry.frozen {
-		return fault.New(fault.Closed, "registration is frozen")
+		return registrationFailure(fault.Closed, "registration is frozen")
 	}
 	previous, exists := r.registry.kernels[kind]
 	if r.override {
 		if !exists {
-			return fault.New(fault.Missing, "cannot override missing kernel "+string(kind))
+			return registrationFailure(fault.Missing, "cannot override missing kernel "+string(kind))
 		}
 		if previous.replaces != "" {
-			return fault.New(fault.Duplicate, "kernel override is already declared: "+string(kind))
+			return registrationFailure(fault.Duplicate, "kernel override is already declared: "+string(kind))
 		}
 	} else if exists {
-		return fault.New(fault.Duplicate, fmt.Sprintf("kernel %s belongs to both %s and %s", kind, previous.owner, r.owner))
+		return registrationFailure(fault.Duplicate, fmt.Sprintf("kernel %s belongs to both %s and %s", kind, previous.owner, r.owner))
 	}
 	definition := kernelDefinition{owner: r.owner, factory: factory}
 	if r.override {
@@ -160,22 +161,22 @@ func (r *registry) add(def serviceDefinition, replace bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.frozen {
-		return fault.New(fault.Closed, "registration is frozen")
+		return registrationFailure(fault.Closed, "registration is frozen")
 	}
 	previous, exists := r.services[def.ref.name]
 	if replace {
 		if !exists {
-			return fault.New(fault.Missing, "cannot override missing service "+def.ref.name)
+			return registrationFailure(fault.Missing, "cannot override missing service "+def.ref.name)
 		}
 		if previous.ref.typ != def.ref.typ || previous.schema != def.schema || previous.collection != def.collection {
-			return fault.New(fault.Invalid, "service override has a different type or schema: "+def.ref.name)
+			return registrationFailure(fault.Invalid, "service override has a different type or schema: "+def.ref.name)
 		}
 		if previous.replaces != "" {
-			return fault.New(fault.Duplicate, "service override is already declared: "+def.ref.name)
+			return registrationFailure(fault.Duplicate, "service override is already declared: "+def.ref.name)
 		}
 		def.replaces = previous.owner
 	} else if exists {
-		return fault.New(fault.Duplicate, fmt.Sprintf("service %s belongs to both %s and %s", def.ref.name, previous.owner, def.owner))
+		return registrationFailure(fault.Duplicate, fmt.Sprintf("service %s belongs to both %s and %s", def.ref.name, previous.owner, def.owner))
 	}
 	r.services[def.ref.name] = def
 	if !exists {
@@ -200,10 +201,10 @@ type serviceValue struct {
 func (s *Services) resolve(key serviceRef) (any, error) {
 	value, ok := s.values[key.name]
 	if !ok {
-		return nil, fault.New(fault.Missing, "service "+key.name+" is not registered")
+		return nil, safeerror.NewFault(fault.Missing, "service "+key.name+" is not registered")
 	}
 	if value.typ != key.typ {
-		return nil, fault.New(fault.Invalid, "service "+key.name+" was requested with a different type")
+		return nil, safeerror.NewFault(fault.Invalid, "service "+key.name+" was requested with a different type")
 	}
 	return value.value, nil
 }
@@ -224,11 +225,11 @@ type serviceBuild struct {
 
 func (r *constructionResolver) beginResolve() (func(), error) {
 	if !r.mu.TryLock() {
-		return nil, fault.New(fault.Conflict, "constructor dependencies must resolve sequentially")
+		return nil, safeerror.NewFault(fault.Conflict, "constructor dependencies must resolve sequentially")
 	}
 	if !r.active {
 		r.mu.Unlock()
-		return nil, fault.New(fault.Closed, "constructor resolver is no longer active")
+		return nil, safeerror.NewFault(fault.Closed, "constructor resolver is no longer active")
 	}
 	return r.mu.Unlock, nil
 }
@@ -248,14 +249,14 @@ func (r *constructionResolver) resolveLocked(key serviceRef) (any, error) {
 	}
 	def, ok := r.build.definitions[key.name]
 	if !ok {
-		return nil, fault.New(fault.Missing, "service "+key.name+" is not registered")
+		return nil, safeerror.NewFault(fault.Missing, "service "+key.name+" is not registered")
 	}
 	if def.ref.typ != key.typ {
-		return nil, fault.New(fault.Invalid, "service "+key.name+" was requested with a different type")
+		return nil, safeerror.NewFault(fault.Invalid, "service "+key.name+" was requested with a different type")
 	}
 	for _, name := range r.stack {
 		if name == key.name {
-			return nil, fault.New(fault.Cycle, "constructor cycle at service "+key.name)
+			return nil, safeerror.NewFault(fault.Cycle, "constructor cycle at service "+key.name)
 		}
 	}
 	child := &constructionResolver{build: r.build, stack: append(append([]string(nil), r.stack...), key.name), active: true}

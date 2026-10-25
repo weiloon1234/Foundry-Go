@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func scalarPresentation(name string, p contract.Presentation, describe func() (URLScalarInfo, error)) error {
@@ -12,7 +13,7 @@ func scalarPresentation(name string, p contract.Presentation, describe func() (U
 		return nil
 	}
 	if describe == nil {
-		return fault.New(fault.Invalid, "presentation requires a described scalar")
+		return safeerror.NewFault(fault.Invalid, "presentation requires a described scalar")
 	}
 	scalar, err := describe()
 	if err != nil {
@@ -22,7 +23,7 @@ func scalarPresentation(name string, p contract.Presentation, describe func() (U
 		return err
 	}
 	if p.ValidateType(scalar.Value) != nil {
-		return fault.New(fault.Invalid, fmt.Sprintf("client presentation on parameter %q contradicts its codec", name))
+		return safeerror.NewFault(fault.Invalid, fmt.Sprintf("client presentation on parameter %q contradicts its codec", name))
 	}
 	return nil
 }
@@ -42,7 +43,7 @@ func (p QueryParameter[Q]) WithPresentation(presentation contract.Presentation) 
 // in URLs, which proxies, logs and browser history retain.
 func urlPresentation(p contract.Presentation) error {
 	if p.Kind == contract.PasswordPresentation {
-		return fault.New(fault.Invalid, "password presentation cannot describe a URL parameter")
+		return safeerror.NewFault(fault.Invalid, "password presentation cannot describe a URL parameter")
 	}
 	return nil
 }
@@ -105,7 +106,7 @@ func (p MultipartPart[B]) WithPresentation(presentation contract.Presentation) M
 		if err == nil || presentation.Validate() != nil {
 			return err
 		}
-		return fault.New(fault.Invalid, fmt.Sprintf("client presentation on part %q contradicts its codec", p.info.Name))
+		return safeerror.NewFault(fault.Invalid, fmt.Sprintf("client presentation on part %q contradicts its codec", p.info.Name))
 	}
 	switch p.kind {
 	case MultipartText:
@@ -115,7 +116,7 @@ func (p MultipartPart[B]) WithPresentation(presentation contract.Presentation) M
 		p.err = contradiction(presentation.ValidateFile())
 	case MultipartJSON:
 		if p.schema == nil {
-			p.err = fault.New(fault.Invalid, "presentation requires a JSON part schema")
+			p.err = safeerror.NewFault(fault.Invalid, "presentation requires a JSON part schema")
 			break
 		}
 		schema, err := p.schema()
@@ -125,7 +126,7 @@ func (p MultipartPart[B]) WithPresentation(presentation contract.Presentation) M
 			p.err = contradiction(presentation.ValidateSchema(schema))
 		}
 	default:
-		p.err = fault.New(fault.Invalid, "presentation requires a multipart kind")
+		p.err = safeerror.NewFault(fault.Invalid, "presentation requires a multipart kind")
 	}
 	p.info.Presentation = presentation
 	return p

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RoundingMode selects how discarded digits change a rounded result. The zero
@@ -28,7 +29,7 @@ const (
 
 func (m RoundingMode) Validate() error {
 	if m < HalfUp || m > Ceiling {
-		return fault.New(fault.Invalid, "invalid decimal rounding mode")
+		return safeerror.NewFault(fault.Invalid, "invalid decimal rounding mode")
 	}
 	return nil
 }
@@ -52,7 +53,7 @@ func (m RoundingMode) String() string {
 }
 
 func invalidScale() error {
-	return fault.New(fault.Invalid, "decimal scale must be between 0 and MaxDigits")
+	return safeerror.NewFault(fault.Invalid, "decimal scale must be between 0 and MaxDigits")
 }
 
 // Round returns the value with at most scale fractional digits. Values that
@@ -82,7 +83,7 @@ func (d Decimal) Div(divisor Decimal, scale int, mode RoundingMode) (Decimal, er
 		return Decimal{}, invalidScale()
 	}
 	if divisor.IsZero() {
-		return Decimal{}, fault.New(fault.Invalid, "decimal division by zero")
+		return Decimal{}, safeerror.NewFault(fault.Invalid, "decimal division by zero")
 	}
 	if d.IsZero() {
 		return Decimal{}, nil
@@ -146,7 +147,7 @@ func (d Decimal) Fixed(scale int) (string, error) {
 	}
 	current := d.Scale()
 	if current > scale {
-		return "", fault.New(fault.Invalid, "decimal has more fractional digits than the fixed scale")
+		return "", safeerror.NewFault(fault.Invalid, "decimal has more fractional digits than the fixed scale")
 	}
 	text := d.String()
 	if scale == current {

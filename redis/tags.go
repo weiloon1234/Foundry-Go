@@ -9,6 +9,7 @@ import (
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const tagMetadataPrefix = "\x00foundry:cache:tag:v1\x00"
@@ -80,13 +81,13 @@ func (c *Client) tagVersions(ctx context.Context, keys []cache.EntryKey, replace
 		return nil, err
 	}
 	if code != 1 || len(fields) != len(keys) {
-		return nil, fault.New(fault.Internal, "invalid Redis tag version reply")
+		return nil, safeerror.NewFault(fault.Internal, "invalid Redis tag version reply")
 	}
 	versions := make([]cache.TagVersion, len(keys))
 	for i, field := range fields {
 		data, ok := field.(string)
 		if !ok {
-			return nil, fault.New(fault.Internal, "invalid Redis tag version type")
+			return nil, safeerror.NewFault(fault.Internal, "invalid Redis tag version type")
 		}
 		versions[i], err = cache.ParseTagVersion([]byte(data))
 		if err != nil {

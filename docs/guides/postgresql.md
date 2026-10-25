@@ -22,6 +22,60 @@ Configuration never obtains credentials or endpoint settings from libpq environm
 
 With a `Schema`, the connection's `search_path` is the application schema followed by `pg_temp`, so session temporary tables cannot shadow application tables. The scope is validated when a connection is established. On PostgreSQL 18 the server reports `search_path` changes, so a checkout re-establishes the scope only when a session changed it; older servers restore it on every checkout. Every checkout also discards a connection whose session created temporary objects (one simple-protocol catalog call when the scope is unchanged), so one borrower's temporary tables never reach the next. `StatementCacheCapacity` defaults to 512 per connection; zero disables statement caching and uses describe/execute. `MaxProtocolMessageBytes` defaults to 64 MiB and bounds a protocol message body, not the total query result. Streaming consumers must still close rows, set execution deadlines and bound application collections. An oversized protocol message fails the query; normal pool cleanup releases its connection ownership.
 
+## Custom PostgreSQL types
+
+Use `Config.RegisterTypes` to configure native PostgreSQL codecs once for each
+physical connection. Foundry calls the hook during connection setup, before the
+connection becomes available to queries. The hook receives a `*postgres.TypeRegistry`
+with three operations:
+
+- `LoadType(ctx, name)` loads an existing server type and returns `*pgtype.Type`.
+- `RegisterType(descriptor)` registers that descriptor with protected conversion
+  callbacks.
+- `RegisterDefaultPgType(value, name)` maps a Go type to a registered PostgreSQL
+  type for queries that need type inference.
+
+For example, after migrations have created `app.order_status`:
+
+```go
+type OrderStatus string
+
+config := postgres.DefaultConfig()
+// Supply endpoint and credentials from the application's typed configuration.
+config.RegisterTypes = func(ctx context.Context, types *postgres.TypeRegistry) error {
+    status, err := types.LoadType(ctx, "app.order_status")
+    if err != nil {
+        return err
+    }
+    if err := types.RegisterType(status); err != nil {
+        return err
+    }
+    return types.RegisterDefaultPgType(OrderStatus(""), status.Name)
+}
+```
+
+The registry is valid only while the hook runs. Do not retain it or mutate
+registered descriptors afterward. Foundry contains registry callbacks and keeps
+connection-owned descriptor graphs, including their shared child types and
+aliases. Registration failures prevent that connection from entering the pool.
+Use qualified names with `LoadType`. It resolves the target under the original
+search path, restricts native metadata discovery to `pg_catalog, pg_temp`, then
+restores the original path. These explicit setup queries run before application
+statements and are not query-observer events. Discovery or restoration failure
+prevents connection admission. The hook runs again
+when the pool creates a replacement connection. Ordinary queries and query
+rewriters do not trigger registration catalog reads.
+
+Move calls to native `conn.TypeMap().RegisterType` and `RegisterDefaultPgType`
+from query rewriters into this hook. Foundry checks the native encoding-plan
+cache before and after a custom rewriter through pgx's public API. Registration
+inside the rewriter invalidates that cache, so Foundry rejects the rewritten
+statement, directs the caller to `postgres.Config.RegisterTypes`, and discards
+the connection without automatically retrying the operation. Even re-registering
+the same descriptor pointer is rejected conservatively because pgx invalidates
+its cache for that call. Custom rewriters may still change SQL and arguments or
+execute their own SQL without changing the type registry.
+
 ## Errors and transaction outcomes
 
 The adapter classifies structured SQLSTATE values for unique, foreign-key, not-null, check, exclusion and restrict violations, serialization conflicts, deadlocks, `57014` query cancellation (`QueryCanceled`, including `statement_timeout`), `55P03` lock waits (`LockNotAvailable`), `55006` objects in use, `25006` read-only transactions, `25P03` idle-in-transaction timeouts, class 22 data errors (right truncation, invalid text representation, numeric range, datetime format/overflow, division by zero, otherwise `DataException`), class 53 resource exhaustion (`InsufficientResources`, with `53300` connection limits `Unavailable`) and unavailable connections. `database.Error` retains SQLSTATE and constraint identity. Normal error formatting omits statement text, bindings and driver messages; unwrapped driver causes may contain private data.

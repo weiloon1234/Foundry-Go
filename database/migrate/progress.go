@@ -2,12 +2,12 @@ package migrate
 
 import (
 	"context"
-	"errors"
 	"math"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type StepState string
@@ -41,7 +41,7 @@ const (
 	StatementNotApplied StatementOutcome = "not_applied"
 )
 
-var ErrReconciliationRequired = errors.New("nontransactional migration requires reconciliation")
+var ErrReconciliationRequired = safeerror.New("nontransactional migration requires reconciliation")
 
 type InterruptedMigration struct {
 	Progress Progress
@@ -76,14 +76,14 @@ PRIMARY KEY(origin,id))`)
 func (p *Postgres) progress(ctx context.Context, executor database.Executor) ([]Progress, error) {
 	var kind string
 	err := database.ScanOne(ctx, executor, `SELECT c.relkind::text FROM pg_catalog.pg_class AS c JOIN pg_catalog.pg_namespace AS n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relname=$2`, []any{p.config.Schema, p.progressName}, &kind)
-	if errors.Is(err, database.NotFound) {
+	if missingRelation(err) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	if kind != "r" {
-		return nil, fault.New(fault.Invalid, "migration progress relation must be an ordinary table")
+		return nil, safeerror.NewFault(fault.Invalid, "migration progress relation must be an ordinary table")
 	}
 	var records []Progress
 	err = database.ForEach(ctx, executor, "SELECT origin,id,version,checksum,batch,confirmed,state,revision,updated_at FROM "+p.progressTable+" ORDER BY origin,id LIMIT $1", []any{p.config.MaxHistory + 1}, func(row database.Row) (Progress, error) {
@@ -99,12 +99,12 @@ func (p *Postgres) progress(ctx context.Context, executor database.Executor) ([]
 		item.Checksum = parsed
 		item.UpdatedAt = item.UpdatedAt.UTC()
 		if !validKey(item.Key) || !validName(string(item.Version)) || item.Batch < 1 || item.Confirmed < 0 || item.Revision < 1 || item.UpdatedAt.IsZero() || item.State != StepReady && item.State != StepInFlight && item.State != StepUncertain {
-			return item, fault.New(fault.Invalid, "invalid migration progress record")
+			return item, safeerror.NewFault(fault.Invalid, "invalid migration progress record")
 		}
 		return item, nil
 	}, func(item Progress) error {
 		if len(records) >= p.config.MaxHistory {
-			return fault.New(fault.Invalid, "migration progress exceeds configured limit")
+			return safeerror.NewFault(fault.Invalid, "migration progress exceeds configured limit")
 		}
 		records = append(records, item)
 		return nil
@@ -172,7 +172,7 @@ func matchesProgress(record Progress, item migration) bool {
 }
 func (p *Postgres) moveProgress(ctx context.Context, session *database.Session, current Progress, state StepState, confirmed int) (Progress, error) {
 	if current.Revision == math.MaxInt64 {
-		return current, fault.New(fault.Invalid, "migration progress revision is exhausted")
+		return current, safeerror.NewFault(fault.Invalid, "migration progress revision is exhausted")
 	}
 	updated := current
 	updated.State = state
@@ -206,12 +206,12 @@ func (p *Postgres) applyNonTransactional(ctx context.Context, session *database.
 		}
 	}
 	if !matchesProgress(current, item) || current.State != StepReady {
-		return Applied{}, &InterruptedMigration{Progress: current, cause: ErrReconciliationRequired}
+		return Applied{}, safeerror.Owned("nontransactional migration interrupted; inspect progress and database state before resuming", &InterruptedMigration{Progress: current, cause: ErrReconciliationRequired})
 	}
 	for current.Confirmed < len(item.statements) {
 		running, err := p.moveProgress(ctx, session, current, StepInFlight, current.Confirmed)
 		if err != nil {
-			return Applied{}, &InterruptedMigration{Progress: current, cause: err}
+			return Applied{}, safeerror.Owned("nontransactional migration interrupted; inspect progress and database state before resuming", &InterruptedMigration{Progress: current, cause: err})
 		}
 		current = running
 		if _, err = session.Exec(ctx, item.statements[current.Confirmed]); err != nil {
@@ -221,11 +221,11 @@ func (p *Postgres) applyNonTransactional(ctx context.Context, session *database.
 			if markErr == nil {
 				current = failed
 			}
-			return Applied{}, &InterruptedMigration{Progress: current, cause: errors.Join(err, markErr)}
+			return Applied{}, safeerror.Owned("nontransactional migration interrupted; inspect progress and database state before resuming", &InterruptedMigration{Progress: current, cause: safeerror.Join("operation failed", err, markErr)})
 		}
 		confirmed, err := p.moveProgress(ctx, session, current, StepReady, current.Confirmed+1)
 		if err != nil {
-			return Applied{}, &InterruptedMigration{Progress: current, cause: err}
+			return Applied{}, safeerror.Owned("nontransactional migration interrupted; inspect progress and database state before resuming", &InterruptedMigration{Progress: current, cause: err})
 		}
 		current = confirmed
 	}
@@ -240,12 +240,12 @@ func (p *Postgres) applyNonTransactional(ctx context.Context, session *database.
 			return err
 		}
 		if result.RowsAffected != 1 {
-			return fault.New(fault.Conflict, "migration progress changed during finalization")
+			return safeerror.NewFault(fault.Conflict, "migration progress changed during finalization")
 		}
 		return nil
 	})
 	if err != nil {
-		return Applied{}, &InterruptedMigration{Progress: current, cause: err}
+		return Applied{}, safeerror.Owned("nontransactional migration interrupted; inspect progress and database state before resuming", &InterruptedMigration{Progress: current, cause: err})
 	}
 	applied.AppliedAt = applied.AppliedAt.UTC()
 	return applied, nil
@@ -257,7 +257,7 @@ func (p *Postgres) applyNonTransactional(ctx context.Context, session *database.
 // Up then resumes from the resulting checkpoint. Stale snapshots fail closed.
 func (p *Postgres) Reconcile(ctx context.Context, expected Progress, outcome StatementOutcome) (Progress, error) {
 	if outcome != StatementApplied && outcome != StatementNotApplied {
-		return Progress{}, fault.New(fault.Invalid, "invalid migration reconciliation outcome")
+		return Progress{}, safeerror.NewFault(fault.Invalid, "invalid migration reconciliation outcome")
 	}
 	var result Progress
 	err := p.locked(ctx, func(session *database.Session) error {
@@ -270,11 +270,11 @@ func (p *Postgres) Reconcile(ctx context.Context, expected Progress, outcome Sta
 				continue
 			}
 			if current != expected || current.State == StepReady {
-				return fault.New(fault.Conflict, "migration reconciliation snapshot is stale")
+				return safeerror.NewFault(fault.Conflict, "migration reconciliation snapshot is stale")
 			}
 			index, exists := p.registry.byKey[current.Key]
 			if !exists || !matchesProgress(current, p.registry.ordered[index]) {
-				return fault.New(fault.Conflict, "migration definition does not match interrupted progress")
+				return safeerror.NewFault(fault.Conflict, "migration definition does not match interrupted progress")
 			}
 			history, err := p.history(ctx, session)
 			if err != nil {
@@ -291,7 +291,7 @@ func (p *Postgres) Reconcile(ctx context.Context, expected Progress, outcome Sta
 			}
 			for _, entry := range history {
 				if entry.Key == current.Key {
-					return fault.New(fault.Conflict, "migration already has completion history")
+					return safeerror.NewFault(fault.Conflict, "migration already has completion history")
 				}
 			}
 			confirmed := current.Confirmed
@@ -301,7 +301,7 @@ func (p *Postgres) Reconcile(ctx context.Context, expected Progress, outcome Sta
 			result, err = p.moveProgress(ctx, session, current, StepReady, confirmed)
 			return err
 		}
-		return fault.New(fault.Missing, "migration progress no longer exists")
+		return safeerror.NewFault(fault.Missing, "migration progress no longer exists")
 	})
 	return result, err
 }

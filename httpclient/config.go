@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -195,7 +196,7 @@ func (t TLSConfig) build() (*tls.Config, error) {
 		if t.AppendSystemRoots {
 			system, err := x509.SystemCertPool()
 			if err != nil {
-				return nil, fault.Wrap(fault.Invalid, "system certificate roots are unavailable", err)
+				return nil, safeerror.WrapFault(fault.Invalid, "system certificate roots are unavailable", err)
 			}
 			pool = system
 		}
@@ -207,7 +208,7 @@ func (t TLSConfig) build() (*tls.Config, error) {
 	if !t.Certificate.IsZero() {
 		certificate, err := tls.X509KeyPair([]byte(t.Certificate.Reveal()), []byte(t.PrivateKey.Reveal()))
 		if err != nil {
-			return nil, fault.New(fault.Invalid, "invalid outbound HTTP client certificate")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid outbound HTTP client certificate")
 		}
 		config.Certificates = []tls.Certificate{certificate}
 	}

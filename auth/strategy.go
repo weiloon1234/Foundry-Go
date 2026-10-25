@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -25,7 +26,7 @@ func (a Assurance) valid() bool { return a == PendingMFA || a == Authenticated }
 // Validate checks a restored credential's assurance before it can be used.
 func (a Assurance) Validate() error {
 	if !a.valid() {
-		return fault.New(fault.Invalid, "invalid authentication assurance")
+		return safeerror.NewFault(fault.Invalid, "invalid authentication assurance")
 	}
 	return nil
 }
@@ -47,7 +48,7 @@ type Proof[M, K any] struct {
 func (Proof[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("authentication proof")) }
 func NewProof[M, K any](reference model.Reference[M, K], assurance Assurance) (Proof[M, K], error) {
 	if !assurance.valid() {
-		return Proof[M, K]{}, fault.New(fault.Invalid, "invalid authentication assurance")
+		return Proof[M, K]{}, safeerror.NewFault(fault.Invalid, "invalid authentication assurance")
 	}
 	identity, err := reference.Identity()
 	if err != nil {
@@ -76,7 +77,7 @@ func DefineStrategy[M, K any](source CredentialName, verify func(context.Context
 }
 func (s Strategy[M, K]) Validate() error {
 	if !identifier.Semantic(string(s.source)) || s.verify == nil || s.bindable && s.bound == nil {
-		return fault.New(fault.Invalid, "authentication strategy requires a source and verifier")
+		return safeerror.NewFault(fault.Invalid, "authentication strategy requires a source and verifier")
 	}
 	return nil
 }

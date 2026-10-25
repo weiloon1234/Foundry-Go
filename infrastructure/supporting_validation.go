@@ -2,8 +2,10 @@ package infrastructure
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/redis"
 )
@@ -21,7 +23,7 @@ func (p *Plan) redisReference(name redis.ConnectionName) (redis.ConnectionName, 
 		name = p.settings.Redis.Default
 	}
 	if _, ok := p.settings.Redis.Connections[name]; !ok {
-		return name, fault.New(fault.Missing, "dependent Redis connection is not configured")
+		return name, safeerror.NewFault(fault.Missing, "dependent Redis connection is not configured")
 	}
 	return name, nil
 }
@@ -45,7 +47,7 @@ func (p *Plan) validateSupporting() error {
 			return err
 		}
 		if err := c.Config.From.Validate(); err != nil {
-			return fault.New(fault.Invalid, "configured mailer requires a valid sender")
+			return safeerror.NewFault(fault.Invalid, "configured mailer requires a valid sender")
 		}
 		if c.Driver == SESMail && c.API.Credentials == "" {
 			c.API.Credentials = "default"
@@ -53,10 +55,10 @@ func (p *Plan) validateSupporting() error {
 		adapter, err := p.mailAdapter(c, func(name credentials.Name) (credentials.Provider, error) {
 			_, configured := s.Credentials[name]
 			if !configured && p.options.credentials[name] == nil {
-				return nil, fault.New(fault.Missing, "mail credential source is not configured")
+				return nil, safeerror.NewFault(fault.Missing, "mail credential source is not configured")
 			}
 			return credentials.ProviderFunc(func(context.Context) (credentials.Value, error) {
-				return credentials.Value{}, fault.New(fault.Internal, "validation-only credentials")
+				return credentials.Value{}, safeerror.NewFault(fault.Internal, "validation-only credentials")
 			}), nil
 		})
 		if err != nil {
@@ -72,7 +74,7 @@ func (p *Plan) validateSupporting() error {
 	for _, name := range keys(s.HTTPClients.Clients) {
 		c := s.HTTPClients.Clients[name]
 		if c.Config.Name != name {
-			return fault.New(fault.Invalid, "HTTP client name differs from its configured selector")
+			return safeerror.NewFault(fault.Invalid, "HTTP client name differs from its configured selector")
 		}
 		if err := c.Config.Validate(); err != nil {
 			return err
@@ -98,7 +100,7 @@ func (p *Plan) validateSupporting() error {
 				return err
 			}
 		default:
-			return fault.New(fault.Invalid, "unsupported jobs driver")
+			return safeerror.NewFault(fault.Invalid, "unsupported jobs driver")
 		}
 		s.Jobs.Connections[name] = c
 	}
@@ -117,7 +119,7 @@ func (p *Plan) validateSupporting() error {
 				return err
 			}
 		default:
-			return fault.New(fault.Invalid, "unsupported pub/sub driver")
+			return safeerror.NewFault(fault.Invalid, "unsupported pub/sub driver")
 		}
 		s.PubSub.Connections[name] = c
 	}
@@ -136,7 +138,7 @@ func (p *Plan) validateSupporting() error {
 				return err
 			}
 		default:
-			return fault.New(fault.Invalid, "unsupported realtime driver")
+			return safeerror.NewFault(fault.Invalid, "unsupported realtime driver")
 		}
 		s.Realtime.Connections[name] = c
 	}
@@ -149,7 +151,7 @@ func (p *Plan) validateSupporting() error {
 		switch c.Driver {
 		case MemoryCoordination:
 			if c.MaxEntries < 1 || c.MaxEntries > 1<<20 {
-				return fault.New(fault.Invalid, "invalid local lease capacity")
+				return safeerror.NewFault(fault.Invalid, "invalid local lease capacity")
 			}
 		case RedisCoordination:
 			var err error
@@ -158,7 +160,7 @@ func (p *Plan) validateSupporting() error {
 				return err
 			}
 		default:
-			return fault.New(fault.Invalid, "unsupported coordination driver")
+			return safeerror.NewFault(fault.Invalid, "unsupported coordination driver")
 		}
 		s.Coordination = c
 	}

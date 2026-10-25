@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"math"
 	"slices"
 	"strconv"
@@ -11,10 +12,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"log/slog"
-
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -166,7 +166,7 @@ func (f ContextFields) MarshalJSON() ([]byte, error) {
 
 func (f *ContextFields) UnmarshalJSON(data []byte) error {
 	if f == nil {
-		return fault.New(fault.Invalid, "context fields decoding requires a destination")
+		return safeerror.NewFault(fault.Invalid, "context fields decoding requires a destination")
 	}
 	attrs, err := decodeFields(data)
 	if err != nil {
@@ -223,7 +223,7 @@ func writeFieldObject(output *strings.Builder, attrs []slog.Attr) error {
 		case slog.KindTime:
 			encoded, err = json.Marshal(value.Time().Format(time.RFC3339Nano))
 		default:
-			return fault.New(fault.Invalid, "context log field is not serializable")
+			return safeerror.NewFault(fault.Invalid, "context log field is not serializable")
 		}
 		if err != nil {
 			return err
@@ -238,11 +238,11 @@ func writeFieldObject(output *strings.Builder, attrs []slog.Attr) error {
 func decodeFields(data []byte) ([]slog.Attr, error) {
 	node, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: maxContextJSONBytes, Depth: 2, Nodes: 2 * MaxContextFields * (MaxContextGroupItems + 1)})
 	if err != nil {
-		return nil, fault.New(fault.Invalid, "invalid context log fields")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid context log fields")
 	}
 	object, ok := node.(map[string]any)
 	if !ok {
-		return nil, fault.New(fault.Invalid, "context log fields require an object")
+		return nil, safeerror.NewFault(fault.Invalid, "context log fields require an object")
 	}
 	attrs, err := decodeFieldObject(object, true)
 	if err != nil {
@@ -276,11 +276,11 @@ func decodeFieldObject(object map[string]any, groups bool) ([]slog.Attr, error) 
 			} else if number, err := strconv.ParseFloat(string(value), 64); err == nil {
 				attrs = append(attrs, slog.Float64(key, number))
 			} else {
-				return nil, fault.New(fault.Invalid, "context log field number is out of range")
+				return nil, safeerror.NewFault(fault.Invalid, "context log field number is out of range")
 			}
 		case map[string]any:
 			if !groups {
-				return nil, fault.New(fault.Invalid, "context log fields allow one group level")
+				return nil, safeerror.NewFault(fault.Invalid, "context log fields allow one group level")
 			}
 			members, err := decodeFieldObject(value, false)
 			if err != nil {
@@ -288,7 +288,7 @@ func decodeFieldObject(object map[string]any, groups bool) ([]slog.Attr, error) 
 			}
 			attrs = append(attrs, slog.Attr{Key: key, Value: slog.GroupValue(members...)})
 		default:
-			return nil, fault.New(fault.Invalid, "context log fields accept only scalar values and groups")
+			return nil, safeerror.NewFault(fault.Invalid, "context log fields accept only scalar values and groups")
 		}
 	}
 	return attrs, nil

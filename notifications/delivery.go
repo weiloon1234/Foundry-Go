@@ -3,7 +3,6 @@ package notifications
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"math"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -127,7 +127,7 @@ func (m *Manager) deliver(ctx context.Context, id model.ID[store.Envelope]) ([]C
 	defer cancel()
 	deliveries, err = m.outcomes(cleanup, id)
 	if err != nil {
-		return nil, errors.Join(append(failures, err)...)
+		return nil, safeerror.Join("operation failed", append(failures, err)...)
 	}
 	statuses := make([]ChannelStatus, 0, len(deliveries))
 	bad := false
@@ -144,9 +144,9 @@ func (m *Manager) deliver(ctx context.Context, id model.ID[store.Envelope]) ([]C
 		}
 	}
 	if bad {
-		failures = append(failures, fault.New(fault.Internal, "notification has undelivered channels"))
+		failures = append(failures, safeerror.NewFault(fault.Internal, "notification has undelivered channels"))
 	}
-	return statuses, errors.Join(failures...)
+	return statuses, safeerror.Join("operation failed", failures...)
 }
 
 func (m *Manager) attempt(ctx context.Context, envelope store.Envelope, identity model.Identity, input json.RawMessage, registration *registration, index int, row store.Delivery) error {
@@ -290,7 +290,7 @@ func (m *Manager) attempt(ctx context.Context, envelope store.Envelope, identity
 			return err
 		}
 		if State(current.State) != Running || current.Claim != claim {
-			return fault.New(fault.Conflict, "notification delivery claim changed")
+			return safeerror.NewFault(fault.Conflict, "notification delivery claim changed")
 		}
 		now, err := m.now()
 		if err != nil {

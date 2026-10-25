@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -41,11 +42,11 @@ var regionPattern = regexp.MustCompile(`^[a-z]{2}(?:-[a-z]+)+-[0-9]+$`)
 
 func New(config Config) (*Driver, error) {
 	if !regionPattern.MatchString(config.Region) || len(config.Region) > 64 || config.Credentials == nil || len(config.ConfigurationSet) > 64 {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	for _, c := range config.ConfigurationSet {
 		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
-			return nil, email.Construction
+			return nil, emaildiag.Failure(email.Construction)
 		}
 	}
 	suffix := "amazonaws.com"
@@ -66,10 +67,10 @@ func (d *Driver) Close() {
 func (Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("SES driver")) }
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.client == nil || out.Validate() != nil || out.Size() > 10<<20 || ctx == nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	if ctx.Err() != nil {
-		return email.Receipt{}, email.Transient
+		return email.Receipt{}, emaildiag.Failure(email.Transient)
 	}
 	m := out.Message()
 	values := url.Values{"Action": {"SendRawEmail"}, "Version": {"2010-12-01"}, "Source": {m.From().Mailbox()}, "RawMessage.Data": {base64.StdEncoding.EncodeToString(out.MIME())}}
@@ -87,14 +88,14 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	r.Header.Set("Accept", "application/xml")
 	credentials, err := d.credentials.Retrieve(ctx)
 	if err != nil {
-		return email.Receipt{}, email.Transient
+		return email.Receipt{}, emaildiag.Failure(email.Transient)
 	}
 	if credentials.AccessKeyID == "" || credentials.SecretAccessKey == "" {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	hash := sha256.Sum256(data)
 	if d.signer.SignHTTP(ctx, credentials, r, hex.EncodeToString(hash[:]), "ses", d.region, time.Now().UTC()) != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	status, data, err := d.client.Do(r)
 	if err != nil {
@@ -107,9 +108,9 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 		if xml.Unmarshal(data, &failure) == nil {
 			switch failure.Code {
 			case "Throttling", "ThrottlingException", "ServiceUnavailable":
-				return email.Receipt{}, email.Transient
+				return email.Receipt{}, emaildiag.Failure(email.Transient)
 			case "MessageRejected", "MailFromDomainNotVerifiedException", "ConfigurationSetDoesNotExistException", "AccountSendingPausedException", "ConfigurationSetSendingPausedException":
-				return email.Receipt{}, email.Permanent
+				return email.Receipt{}, emaildiag.Failure(email.Permanent)
 			}
 		}
 		return email.Receipt{}, httptransport.Status(status)
@@ -118,7 +119,7 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 		ID string `xml:"SendRawEmailResult>MessageId"`
 	}
 	if xml.Unmarshal(data, &result) != nil || result.ID == "" {
-		return email.Receipt{}, email.Ambiguous
+		return email.Receipt{}, emaildiag.Failure(email.Ambiguous)
 	}
 	receipt := email.Receipt{MessageID: result.ID}
 	return receipt, receipt.Validate()

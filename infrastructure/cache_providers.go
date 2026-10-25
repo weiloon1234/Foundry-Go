@@ -2,7 +2,6 @@ package infrastructure
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	cachefile "github.com/weiloon1234/Foundry-Go/cache/file"
@@ -12,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
@@ -47,7 +47,7 @@ func (p *Plan) cache(name cache.StoreName, settings CacheSettings) {
 			result.close = func(ctx context.Context) error {
 				err := backend.Close(ctx)
 				<-backend.Done()
-				return errors.Join(err, backend.Close(context.Background()))
+				return safeerror.Join("operation failed", err, backend.Close(context.Background()))
 			}
 		case PostgresCache:
 			db, err := foundation.Resolve(r, DatabaseKey(settings.Database))
@@ -65,7 +65,7 @@ func (p *Plan) cache(name cache.StoreName, settings CacheSettings) {
 			result.close = func(ctx context.Context) error {
 				err := backend.Close(ctx)
 				<-backend.Done()
-				return errors.Join(err, backend.Close(context.Background()))
+				return safeerror.Join("operation failed", err, backend.Close(context.Background()))
 			}
 		case RedisCache:
 			client, err := foundation.Resolve(r, RedisKey(settings.Redis))
@@ -93,7 +93,7 @@ func (p *Plan) cache(name cache.StoreName, settings CacheSettings) {
 			return err
 		}
 		if err := r.OnShutdown("store", store.Close); err != nil {
-			return errors.Join(err, store.Close(ctx))
+			return safeerror.Join("operation failed", err, store.Close(ctx))
 		}
 		return nil
 	}, OnRegister: func(r *foundation.Registrar) error {

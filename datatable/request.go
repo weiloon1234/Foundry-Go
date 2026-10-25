@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TableID is a semantic registration identity, never a SQL table name.
@@ -95,7 +96,7 @@ const (
 // client rejection.
 func DecodeRequest(ctx context.Context, data []byte) (Request, error) {
 	request, err := RequestJSON().Decode(ctx, data, requestLimits())
-	if _, rejected := err.(*contract.DecodeError); rejected {
+	if _, rejected := safeerror.UnwrapOwned(err).(*contract.DecodeError); rejected {
 		return Request{}, foundryhttp.BadRequest.WithCause(err)
 	}
 	return request, err
@@ -116,7 +117,7 @@ func (r Request) page() (query.PageRequest, error) {
 	}
 	return p, nil
 }
-func invalid(message string) error { return fault.New(fault.Invalid, message) }
+func invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }
 
 // requestInvalid marks only rejected client input. Declaration/configuration and
 // extension failures must not use this helper: plain fault.Invalid remains an

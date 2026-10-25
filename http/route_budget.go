@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxRouteTimeout bounds a declared per-route request deadline. It is the
@@ -32,7 +33,7 @@ type routeBudget struct {
 func (r Route[P]) WithTimeout(timeout time.Duration) Route[P] {
 	if r.err == nil {
 		if timeout <= 0 || timeout > MaxRouteTimeout {
-			r.err = fault.New(fault.Invalid, "route timeout must be positive and at most MaxRouteTimeout")
+			r.err = safeerror.NewFault(fault.Invalid, "route timeout must be positive and at most MaxRouteTimeout")
 		} else {
 			r.budget.timeout = timeout
 		}
@@ -47,7 +48,7 @@ func (r Route[P]) WithTimeout(timeout time.Duration) Route[P] {
 func (r Route[P]) WithBodyLimit(bytes int64) Route[P] {
 	if r.err == nil {
 		if bytes <= 0 || bytes > MaxRouteBodyBytes {
-			r.err = fault.New(fault.Invalid, "route body limit must be positive and at most MaxRouteBodyBytes")
+			r.err = safeerror.NewFault(fault.Invalid, "route body limit must be positive and at most MaxRouteBodyBytes")
 		} else {
 			r.budget.bodyBytes = bytes
 		}

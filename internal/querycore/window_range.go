@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -23,19 +24,19 @@ func (d RangeDistance) Validate(kind codec.ParameterType) error {
 	}
 	if d.Interval != nil {
 		if d.Parameter.Kind != 0 || d.Parameter.Value != nil || d.Parameter.Err != nil {
-			return fault.New(fault.Invalid, "ambiguous RANGE distance")
+			return safeerror.NewFault(fault.Invalid, "ambiguous RANGE distance")
 		}
 		v := *d.Interval
 		if kind == codec.TypeTime {
 			// PostgreSQL silently ignores calendar fields for time-of-day ranges.
 			// Reject them so a declared day/month cannot accidentally become zero.
 			if v.Months() != 0 || v.Days() != 0 || v.Elapsed() < 0 {
-				return fault.New(fault.Invalid, "time-of-day RANGE requires a nonnegative elapsed interval")
+				return safeerror.NewFault(fault.Invalid, "time-of-day RANGE requires a nonnegative elapsed interval")
 			}
 			return nil
 		}
 		if kind != codec.TypeDate && kind != codec.TypeDateTime && kind != codec.TypeLocalDateTime {
-			return fault.New(fault.Invalid, "interval RANGE requires temporal ordering")
+			return safeerror.NewFault(fault.Invalid, "interval RANGE requires temporal ordering")
 		}
 		// PostgreSQL checks interval signs using 30-day months. Retain calendar
 		// components for evaluation; this comparison is only its sign check.
@@ -43,7 +44,7 @@ func (d RangeDistance) Validate(kind codec.ParameterType) error {
 		sign := new(big.Int).Mul(big.NewInt(days), big.NewInt(int64(24*time.Hour/time.Microsecond)))
 		sign.Add(sign, big.NewInt(int64(v.Elapsed()/time.Microsecond)))
 		if sign.Sign() < 0 {
-			return fault.New(fault.Invalid, "RANGE distance cannot be negative")
+			return safeerror.NewFault(fault.Invalid, "RANGE distance cannot be negative")
 		}
 		return nil
 	}
@@ -51,7 +52,7 @@ func (d RangeDistance) Validate(kind codec.ParameterType) error {
 		return err
 	}
 	if d.Parameter.Kind != kind {
-		return fault.New(fault.Invalid, "RANGE distance representation differs from its ordering")
+		return safeerror.NewFault(fault.Invalid, "RANGE distance representation differs from its ordering")
 	}
 	switch kind {
 	case codec.TypeInteger:
@@ -81,7 +82,7 @@ func (d RangeDistance) Validate(kind codec.ParameterType) error {
 			return nil
 		}
 	}
-	return fault.New(fault.Invalid, "RANGE requires a finite nonnegative distance")
+	return safeerror.NewFault(fault.Invalid, "RANGE requires a finite nonnegative distance")
 }
 
 func (c *Compiler) RangeDistanceSQL(d RangeDistance) (string, error) {

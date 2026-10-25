@@ -11,6 +11,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 )
 
@@ -33,7 +34,7 @@ type Body struct {
 
 func New(ctx context.Context, source io.ReadCloser, maximum, expected int64) (*Body, error) {
 	if ctx == nil || Nil(source) || maximum < 0 || expected < -1 {
-		return nil, fault.New(fault.Invalid, "invalid owned stream")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid owned stream")
 	}
 	if expected >= 0 {
 		maximum = min(maximum, expected)
@@ -59,12 +60,12 @@ func Nil(v any) bool {
 
 func (b *Body) Read(p []byte) (int, error) {
 	if b == nil {
-		return 0, fault.New(fault.Invalid, "invalid owned stream")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid owned stream")
 	}
 	b.readMu.Lock()
 	defer b.readMu.Unlock()
 	if b.closing.Load() {
-		return 0, fault.New(fault.Closed, "stream is closed")
+		return 0, safeerror.NewFault(fault.Closed, "stream is closed")
 	}
 	if err := b.ctx.Err(); err != nil {
 		return 0, err
@@ -80,11 +81,11 @@ func (b *Body) Read(p []byte) (int, error) {
 	var readErr error
 	err := callback.Isolated("stream read", func() error { n, readErr = b.reader.Read(p[:allowed]); return nil })
 	if err != nil {
-		b.failure = fault.Wrap(fault.Internal, "stream read failed", err)
+		b.failure = safeerror.WrapFailure(fault.Internal, "stream read failed", err)
 		return 0, b.failure
 	}
 	if n < 0 || n > allowed || int64(n) > b.maximum-b.read {
-		b.failure = fault.New(fault.Invalid, "stream exceeded its byte bound")
+		b.failure = safeerror.NewFault(fault.Invalid, "stream exceeded its byte bound")
 		return 0, b.failure
 	}
 	b.read += int64(n)
@@ -96,7 +97,7 @@ func (b *Body) Read(p []byte) (int, error) {
 		readErr = io.ErrUnexpectedEOF
 	}
 	if readErr != nil && readErr != io.EOF {
-		b.failure = fault.Wrap(fault.Internal, "stream read failed", readErr)
+		b.failure = safeerror.WrapFailure(fault.Internal, "stream read failed", readErr)
 		return n, b.failure
 	}
 	return n, readErr
@@ -116,7 +117,7 @@ func (b *Body) Close() error {
 		}
 		b.watchMu.Unlock()
 		if err := callback.Isolated("stream close", b.source.Close); err != nil {
-			b.closeErr = fault.Wrap(fault.Internal, "stream close failed", err)
+			b.closeErr = safeerror.WrapFailure(fault.Internal, "stream close failed", err)
 		}
 		b.readMu.Lock()
 		b.readMu.Unlock()

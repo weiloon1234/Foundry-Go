@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -43,7 +44,7 @@ func (q Query[M]) ChunkByID(ctx context.Context, executor database.Executor, siz
 // callbacks, even without eager relations.
 func (q Query[M]) EachChunked(ctx context.Context, executor database.Executor, size int, yield func(M) error) error {
 	if yield == nil {
-		return fault.New(fault.Invalid, "model iteration requires a callback")
+		return safeerror.NewFault(fault.Invalid, "model iteration requires a callback")
 	}
 	return q.Chunk(ctx, executor, size, eachBatch(ctx, yield))
 }
@@ -52,7 +53,7 @@ func (q Query[M]) EachChunked(ctx context.Context, executor database.Executor, s
 // ordering, window, callback and consistency contracts of ChunkByID.
 func (q Query[M]) EachByID(ctx context.Context, executor database.Executor, size int, yield func(M) error) error {
 	if yield == nil {
-		return fault.New(fault.Invalid, "model iteration requires a callback")
+		return safeerror.NewFault(fault.Invalid, "model iteration requires a callback")
 	}
 	return q.ChunkByID(ctx, executor, size, eachBatch(ctx, yield))
 }
@@ -84,7 +85,7 @@ type chunkPlan[M any] struct {
 
 func (q Query[M]) chunkPlan(size int, byID bool) (chunkPlan[M], error) {
 	if !validPageSize(size) {
-		return chunkPlan[M]{}, fault.New(fault.Invalid, "invalid model chunk size")
+		return chunkPlan[M]{}, safeerror.NewFault(fault.Invalid, "invalid model chunk size")
 	}
 	q, err := q.stableModelOrder()
 	if err != nil {
@@ -92,11 +93,11 @@ func (q Query[M]) chunkPlan(size int, byID bool) (chunkPlan[M], error) {
 	}
 	p := chunkPlan[M]{base: q, remaining: q.queryCore.Limit, size: size, offset: q.queryCore.Offset, byID: byID}
 	if byID && (q.queryCore.Offset != 0 || len(q.queryCore.Orders) != 1 || q.queryCore.Orders[0].Computed != nil || q.queryCore.Orders[0].Nulls != nullsDefault || q.queryCore.Orders[0].Field.Column != q.definition.modelDefinition.Primary) {
-		return chunkPlan[M]{}, fault.New(fault.Invalid, "primary-key chunks require key ordering and no Offset")
+		return chunkPlan[M]{}, safeerror.NewFault(fault.Invalid, "primary-key chunks require key ordering and no Offset")
 	}
 	p.keys = q.keysetFields()
 	if byID && p.keys == nil {
-		return chunkPlan[M]{}, fault.New(fault.Invalid, "primary-key chunks require a generated key codec and getter")
+		return chunkPlan[M]{}, safeerror.NewFault(fault.Invalid, "primary-key chunks require a generated key codec and getter")
 	}
 	p.base.queryCore.Limit = value.Optional[int]{}
 	// Validate even an empty selected window before promising successful iteration.
@@ -147,7 +148,7 @@ func (p chunkPlan[M]) window() Query[M] {
 func (p *chunkPlan[M]) advance(items []M) (bool, error) {
 	count, requested := len(items), p.take()
 	if count > requested {
-		return false, fault.New(fault.Invalid, "database exceeded the model chunk limit")
+		return false, safeerror.NewFault(fault.Invalid, "database exceeded the model chunk limit")
 	}
 	if remaining, bounded := p.remaining.Get(); bounded {
 		p.remaining = value.Set(remaining - count)
@@ -157,7 +158,7 @@ func (p *chunkPlan[M]) advance(items []M) (bool, error) {
 	}
 	if p.keys == nil {
 		if p.offset > math.MaxInt-count {
-			return false, fault.New(fault.Invalid, "model chunk offset overflow")
+			return false, safeerror.NewFault(fault.Invalid, "model chunk offset overflow")
 		}
 		p.offset += count
 		return true, nil
@@ -170,7 +171,7 @@ func (p *chunkPlan[M]) advance(items []M) (bool, error) {
 			return false, err
 		}
 		if key == nil && field.column == p.base.definition.modelDefinition.Primary {
-			return false, fault.New(fault.Invalid, "model chunk primary key cannot be NULL")
+			return false, safeerror.NewFault(fault.Invalid, "model chunk primary key cannot be NULL")
 		}
 		after[i] = key
 	}
@@ -186,7 +187,7 @@ func (q Query[M]) chunks(ctx context.Context, executor database.Executor, size i
 	}
 	q = q.inContext(ctx)
 	if yield == nil {
-		return fault.New(fault.Invalid, "model chunk iteration requires a callback")
+		return safeerror.NewFault(fault.Invalid, "model chunk iteration requires a callback")
 	}
 	p, err := q.chunkPlan(size, byID)
 	if err != nil {

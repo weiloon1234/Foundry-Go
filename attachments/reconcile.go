@@ -3,7 +3,7 @@ package attachments
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"math"
 	"time"
 
@@ -11,7 +11,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -60,14 +59,14 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 		case Ready, Cleaned, Retained:
 			return nil
 		case Writing, Uncertain:
-			return fault.New(fault.Conflict, "upload needs explicit writer and storage settlement")
+			return attachmentFailure(fault.Conflict, "upload needs explicit writer and storage settlement")
 		case Stored:
 			now, err := m.store.Now()
 			if err != nil {
 				return err
 			}
 			if !allowStored || m.isWriting(id) || now.UTC().Sub(row.UpdatedAt.UTC()) < m.config.StoredGrace {
-				return fault.New(fault.Conflict, "stored upload is still reserved for publication")
+				return attachmentFailure(fault.Conflict, "stored upload is still reserved for publication")
 			}
 			row, err = store.QueryFoundryAttachments().Update(ctx, tx, id, store.FileDraft{}.SetState(string(CleanupPending)).SetLastFailure("publication_abandoned").SetUpdatedAt(now))
 			return err
@@ -96,14 +95,14 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 	deleteErr := m.cleanupVariantsOf(ctx, id)
 	if deleteErr == nil {
 		deleteErr = disk.Delete(ctx, key, cleanupDelete(row))
-		if deleteErr != nil && (errorgraph.Is(deleteErr, storage.PreconditionFailed) || errorgraph.Is(deleteErr, storage.NotFound)) {
+		if deleteErr != nil && (callback.ErrorIs(deleteErr, storage.PreconditionFailed) || callback.ErrorIs(deleteErr, storage.NotFound)) {
 			// Conditional deletion of an already absent version may conflict. Only
 			// confirmed absence is success; a changed current object is never deleted.
 			_, statErr := disk.Stat(ctx, key, storage.ReadOptions{Version: storage.VersionID(row.ObjectVersion)})
-			if errorgraph.Is(statErr, storage.NotFound) {
+			if callback.ErrorIs(statErr, storage.NotFound) {
 				deleteErr = nil
 			} else if statErr != nil {
-				deleteErr = errors.Join(deleteErr, statErr)
+				deleteErr = joinFailures(deleteErr, statErr)
 			}
 		}
 	}
@@ -148,7 +147,7 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 		return nil
 	})
 	if journalErr != nil {
-		return status(row), errors.Join(deleteErr, journalErr)
+		return status(row), joinFailures(deleteErr, journalErr)
 	}
 	return result, deleteErr
 }
@@ -244,7 +243,7 @@ func (m *Manager) ReconcilePending(ctx context.Context, limit int) ([]ReconcileR
 		var failures error
 		for _, row := range rows {
 			if err := ctx.Err(); err != nil {
-				return errors.Join(failures, err)
+				return joinFailures(failures, err)
 			}
 			var state ReconcileResult
 			var err error
@@ -254,10 +253,10 @@ func (m *Manager) ReconcilePending(ctx context.Context, limit int) ([]ReconcileR
 				state, err = m.reconcile(ctx, row.ID, true)
 			}
 			result = append(result, state)
-			failures = errors.Join(failures, err)
+			failures = joinFailures(failures, err)
 		}
 		// Variant journal rows share the same bounded sweep and cutoff.
-		return errors.Join(failures, m.sweepVariants(ctx, settleCutoff, limit))
+		return joinFailures(failures, m.sweepVariants(ctx, settleCutoff, limit))
 	})
 	return result, err
 }
@@ -300,7 +299,7 @@ func automaticSettlement(cutoff temporal.DateTime) settlementPolicy {
 
 func (m *Manager) settle(ctx context.Context, target model.ID[store.File], policy settlementPolicy, queue *Queue) (ReconcileResult, error) {
 	if m.isWriting(target) {
-		return ReconcileResult{}, fault.New(fault.Conflict, "upload writer is still running")
+		return ReconcileResult{}, attachmentFailure(fault.Conflict, "upload writer is still running")
 	}
 	marker := "operator_settlement"
 	if policy.automatic {
@@ -317,10 +316,10 @@ func (m *Manager) settle(ctx context.Context, target model.ID[store.File], polic
 			return err
 		}
 		if row.State != string(Writing) && row.State != string(Uncertain) {
-			return fault.New(fault.Conflict, "upload does not require settlement")
+			return attachmentFailure(fault.Conflict, "upload does not require settlement")
 		}
 		if policy.automatic && row.UpdatedAt.UTC().After(policy.cutoff.UTC()) {
-			return fault.New(fault.Conflict, "upload is too recent for automatic settlement")
+			return attachmentFailure(fault.Conflict, "upload is too recent for automatic settlement")
 		}
 		now, err := m.store.Now()
 		if err != nil {
@@ -343,7 +342,7 @@ func (m *Manager) settle(ctx context.Context, target model.ID[store.File], polic
 		return result, err
 	}
 	info, statErr := disk.Stat(ctx, key, storage.ReadOptions{})
-	absent := errorgraph.Is(statErr, storage.NotFound)
+	absent := callback.ErrorIs(statErr, storage.NotFound)
 	if statErr != nil && !absent {
 		return result, statErr
 	}
@@ -363,7 +362,7 @@ func (m *Manager) settle(ctx context.Context, target model.ID[store.File], polic
 			return err
 		}
 		if current.State != string(Uncertain) || current.WriterID != m.writer {
-			return fault.New(fault.Conflict, "upload settlement changed concurrently")
+			return attachmentFailure(fault.Conflict, "upload settlement changed concurrently")
 		}
 		now, err := m.store.Now()
 		if err != nil {
@@ -405,7 +404,7 @@ func (m *Manager) matchesIntent(ctx context.Context, disk *storage.Disk, key sto
 		if automatic {
 			return false, nil
 		}
-		return false, storage.Failure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
+		return false, storageFailure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
 	}
 	if checksum, ok := info.Checksum.Get(); ok && automatic {
 		return checksum.String() == row.Digest, nil
@@ -419,7 +418,7 @@ func (m *Manager) matchesIntent(ctx context.Context, disk *storage.Disk, key sto
 		if automatic {
 			return false, nil
 		}
-		return false, storage.Failure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
+		return false, storageFailure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
 	}
 	return true, nil
 }
@@ -431,7 +430,7 @@ func (m *Manager) markAmbiguous(ctx context.Context, target model.ID[store.File]
 			return err
 		}
 		if current.State != string(Uncertain) || current.WriterID != m.writer {
-			return fault.New(fault.Conflict, "upload settlement changed concurrently")
+			return attachmentFailure(fault.Conflict, "upload settlement changed concurrently")
 		}
 		now, err := m.store.Now()
 		if err != nil {

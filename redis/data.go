@@ -8,6 +8,7 @@ import (
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/redis/data"
 )
 
@@ -80,17 +81,17 @@ func dataReply(reply any) ([]any, int64, error) {
 		return nil, 0, invalidDataReply()
 	}
 	if code == -1 && len(fields) == 1 {
-		return nil, 0, fault.New(fault.Invalid, "stored Redis data has the wrong type or exceeds its bound")
+		return nil, 0, safeerror.NewFault(fault.Invalid, "stored Redis data has the wrong type or exceeds its bound")
 	}
 	if code == -2 && len(fields) == 1 {
-		return nil, 0, fault.New(fault.Invalid, "Redis data value is not a number or would overflow")
+		return nil, 0, safeerror.NewFault(fault.Invalid, "Redis data value is not a number or would overflow")
 	}
 	if code != 0 && code != 1 || code == 0 && len(fields) != 1 {
 		return nil, 0, invalidDataReply()
 	}
 	return fields[1:], code, nil
 }
-func invalidDataReply() error { return fault.New(fault.Internal, "invalid Redis data reply") }
+func invalidDataReply() error { return safeerror.NewFault(fault.Internal, "invalid Redis data reply") }
 func dataBoolean(fields []any, code int64, err error) (bool, error) {
 	if err != nil {
 		return false, err
@@ -118,7 +119,7 @@ func checkDataKind(key data.Key, kind data.Kind) error {
 		return err
 	}
 	if key.Kind() != kind {
-		return fault.New(fault.Invalid, "wrong Redis data key kind")
+		return safeerror.NewFault(fault.Invalid, "wrong Redis data key kind")
 	}
 	return nil
 }

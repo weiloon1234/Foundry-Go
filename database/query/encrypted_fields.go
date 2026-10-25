@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -65,7 +66,7 @@ func sealMutation[M any](ctx context.Context, keys *encryption.Keyring, table st
 		return mutation, nil
 	}
 	if keys == nil {
-		return Mutation[M]{}, fault.New(fault.Missing, "database has no encryption key ring for encrypted model fields")
+		return Mutation[M]{}, safeerror.NewFault(fault.Missing, "database has no encryption key ring for encrypted model fields")
 	}
 	row, err := key()
 	if err != nil {
@@ -97,7 +98,7 @@ func assignedKey[M any](primary string, mutation Mutation[M]) func() (driver.Val
 				return assignment.Bind()
 			}
 		}
-		return nil, fault.New(fault.Invalid, "encrypted fields require an assigned primary key")
+		return nil, safeerror.NewFault(fault.Invalid, "encrypted fields require an assigned primary key")
 	}
 }
 
@@ -108,7 +109,7 @@ func predicateKey(predicates []expression, primary string) func() (driver.Value,
 		var present bool
 		if err := primaryEqualities(predicates, primary, func(value driver.Value) error {
 			if present && !sameKey(value, found) {
-				return fault.New(fault.Invalid, "encrypted fields require one primary key per write")
+				return safeerror.NewFault(fault.Invalid, "encrypted fields require one primary key per write")
 			}
 			found, present = value, true
 			return nil
@@ -116,7 +117,7 @@ func predicateKey(predicates []expression, primary string) func() (driver.Value,
 			return nil, err
 		}
 		if !present {
-			return nil, fault.New(fault.Invalid, "encrypted fields require a primary-key write")
+			return nil, safeerror.NewFault(fault.Invalid, "encrypted fields require a primary-key write")
 		}
 		return found, nil
 	}
@@ -143,7 +144,7 @@ func primaryEqualities(predicates []expression, primary string, visit func(drive
 				continue
 			}
 			if len(predicate.Values) != 1 || predicate.Bind == nil {
-				return fault.New(fault.Invalid, "encrypted fields require one primary key per write")
+				return safeerror.NewFault(fault.Invalid, "encrypted fields require one primary key per write")
 			}
 			bound, err := predicate.Bind(predicate.Values[0])
 			if err != nil {
@@ -198,7 +199,7 @@ func (p insertPlan[M]) sealRows(ctx context.Context, keys *encryption.Keyring) (
 		return p, nil
 	}
 	if p.query.definition == nil {
-		return insertPlan[M]{}, fault.New(fault.Invalid, "encrypted fields require model metadata")
+		return insertPlan[M]{}, safeerror.NewFault(fault.Invalid, "encrypted fields require model metadata")
 	}
 	rows := make([]Mutation[M], len(p.rows))
 	for i, row := range p.rows {
@@ -224,7 +225,7 @@ func transactionKeys(tx *database.Tx) *encryption.Keyring {
 // cannot decrypt fails the read instead of publishing ciphertext.
 func OpenEncrypted[V encrypted.Value[V], K any](row database.Row, table, column string, key codec.Codec[K], id K, field *V) error {
 	if field == nil {
-		return fault.New(fault.Invalid, "encrypted field destination is missing")
+		return safeerror.NewFault(fault.Invalid, "encrypted field destination is missing")
 	}
 	ctx, keys, binding, err := openScope(row, table, column, key, id)
 	if err != nil {
@@ -241,7 +242,7 @@ func OpenEncrypted[V encrypted.Value[V], K any](row database.Row, table, column 
 // OpenNullableEncrypted is OpenEncrypted for a nullable column; NULL stays NULL.
 func OpenNullableEncrypted[V encrypted.Value[V], K any](row database.Row, table, column string, key codec.Codec[K], id K, field *value.Nullable[V]) error {
 	if field == nil {
-		return fault.New(fault.Invalid, "encrypted field destination is missing")
+		return safeerror.NewFault(fault.Invalid, "encrypted field destination is missing")
 	}
 	item, present := field.Get()
 	if !present {
@@ -307,5 +308,5 @@ func forwardEncryption(row database.Row) (context.Context, *encryption.Keyring) 
 // errSetEncrypted rejects one literal written to many rows: each encrypted
 // value is bound to exactly one row's primary key.
 func errSetEncrypted() error {
-	return fault.New(fault.Invalid, "set-based writes cannot assign encrypted fields")
+	return safeerror.NewFault(fault.Invalid, "set-based writes cannot assign encrypted fields")
 }

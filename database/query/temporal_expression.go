@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -395,7 +396,7 @@ func TransactionTime[S any](source ScopeSource[S]) OrderedRowExpression[S, tempo
 	result := operationValue[S](transactionTimeOperation, codec.DateTime())
 	var err error
 	if nilDescriptor(source) {
-		err = fault.New(fault.Invalid, "database time requires a source scope")
+		err = safeerror.NewFault(fault.Invalid, "database time requires a source scope")
 	} else {
 		err = source.scopeSource().scopeRequirement.Err
 	}

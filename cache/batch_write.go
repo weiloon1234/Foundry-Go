@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Entry is one typed key/value pair written by PutMany.
@@ -27,7 +28,7 @@ func (c Cache[K, V]) PutMany(ctx context.Context, ttl TTL, entries ...Entry[K, V
 	var written uint64
 	err := c.operation(ctx, func(ctx context.Context) error {
 		if len(entries) > c.store.config.MaxBatchEntries {
-			return fault.New(fault.Invalid, "cache batch exceeds configured key limit")
+			return safeerror.NewFault(fault.Invalid, "cache batch exceeds configured key limit")
 		}
 		if len(entries) == 0 {
 			return nil

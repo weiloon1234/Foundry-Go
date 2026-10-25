@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/dependency"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Origin identifies the application, framework, or plugin owning a migration.
@@ -109,29 +110,29 @@ func New(definitions ...Definition) (*Registry, error) {
 	byKey := make(map[Key]migration, len(definitions))
 	for _, definition := range definitions {
 		if (definition.Mode != Transactional && definition.Mode != NonTransactional) || !validKey(definition.Key) || !validName(string(definition.Version)) || len(definition.SQL) == 0 {
-			return nil, fault.New(fault.Invalid, "invalid migration definition")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid migration definition")
 		}
 		if _, exists := byKey[definition.Key]; exists {
-			return nil, fault.New(fault.Duplicate, "migration key is duplicated: "+keyLabel(definition.Key))
+			return nil, safeerror.NewFault(fault.Duplicate, "migration key is duplicated: "+keyLabel(definition.Key))
 		}
 		statements := append([]string(nil), definition.SQL...)
 		down := append([]string(nil), definition.Down...)
 		for _, statement := range append(slices.Clone(statements), down...) {
 			if strings.TrimSpace(statement) == "" || !utf8.ValidString(statement) || strings.ContainsRune(statement, 0) {
-				return nil, fault.New(fault.Invalid, "invalid SQL in migration "+keyLabel(definition.Key))
+				return nil, safeerror.NewFault(fault.Invalid, "invalid SQL in migration "+keyLabel(definition.Key))
 			}
 		}
 		if len(down) != 0 && definition.Mode == NonTransactional {
-			return nil, fault.New(fault.Invalid, "nontransactional migration "+keyLabel(definition.Key)+" cannot declare Down SQL")
+			return nil, safeerror.NewFault(fault.Invalid, "nontransactional migration "+keyLabel(definition.Key)+" cannot declare Down SQL")
 		}
 		requires := append([]Key(nil), definition.Requires...)
 		sortKeys(requires)
 		for i, key := range requires {
 			if !validKey(key) || key == definition.Key {
-				return nil, fault.New(fault.Invalid, "invalid migration dependency in "+keyLabel(definition.Key))
+				return nil, safeerror.NewFault(fault.Invalid, "invalid migration dependency in "+keyLabel(definition.Key))
 			}
 			if i > 0 && key == requires[i-1] {
-				return nil, fault.New(fault.Duplicate, "migration dependency is duplicated")
+				return nil, safeerror.NewFault(fault.Duplicate, "migration dependency is duplicated")
 			}
 		}
 		// A length-aware encoding prevents concatenation collisions between SQL
@@ -146,7 +147,7 @@ func New(definitions ...Definition) (*Registry, error) {
 		}{1, definition.Key, definition.Version, statements, requires, definition.Mode}
 		encoded, err := json.Marshal(canonical)
 		if err != nil {
-			return nil, fault.Wrap(fault.Internal, "cannot encode migration definition", err)
+			return nil, safeerror.WrapFault(fault.Internal, "cannot encode migration definition", err)
 		}
 		byKey[definition.Key] = migration{entry: Entry{Mode: definition.Mode, Key: definition.Key, Version: definition.Version, Checksum: Checksum(sha256.Sum256(encoded)), Requires: requires, Reversible: len(down) != 0}, statements: statements, down: down}
 	}
@@ -158,9 +159,9 @@ func New(definitions ...Definition) (*Registry, error) {
 	ordered, failure := dependency.Order(keys, func(key Key) ([]Key, bool) { item, exists := byKey[key]; return item.entry.Requires, exists })
 	if failure != nil {
 		if failure.Kind == dependency.Cycle {
-			return nil, fault.New(fault.Cycle, "migration dependency cycle at "+keyLabel(failure.Key))
+			return nil, safeerror.NewFault(fault.Cycle, "migration dependency cycle at "+keyLabel(failure.Key))
 		}
-		return nil, fault.New(fault.Missing, "migration dependency is not registered: "+keyLabel(failure.Key))
+		return nil, safeerror.NewFault(fault.Missing, "migration dependency is not registered: "+keyLabel(failure.Key))
 	}
 	registry := &Registry{byKey: make(map[Key]int, len(byKey))}
 	for _, key := range ordered {

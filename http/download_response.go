@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -34,7 +35,7 @@ func DownloadResponse(media MediaType, additional ...MediaType) Response[Downloa
 
 func (f *fileResponse) Validate() error {
 	if f == nil || len(f.media) == 0 || len(f.media) > 16 {
-		return fault.New(fault.Invalid, "file response requires bounded declared media types")
+		return safeerror.NewFault(fault.Invalid, "file response requires bounded declared media types")
 	}
 	seen := make(map[string]struct{}, len(f.media))
 	for _, media := range f.media {
@@ -43,7 +44,7 @@ func (f *fileResponse) Validate() error {
 		}
 		normalized := normalizedFileMedia(media)
 		if _, duplicate := seen[normalized]; duplicate {
-			return fault.New(fault.Invalid, "duplicate file response media type")
+			return safeerror.NewFault(fault.Invalid, "duplicate file response media type")
 		}
 		seen[normalized] = struct{}{}
 	}

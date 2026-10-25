@@ -67,8 +67,7 @@ private-cause values never become fields in the public failure envelope.
 
 The ordinary HTTP adapter preserves HEAD behavior, correlation and policy
 headers, safe cache defaults, and ownership of custom error methods. Error
-classification runs on the request goroutine and contains panics before
-committing a response; `runtime.Goexit` in a custom error method ends that
-goroutine.
+classification contains panic and `runtime.Goexit` before committing a response.
+It waits for the custom method to finish and never formats an application cause.
 
 Combined transport full regression passed.

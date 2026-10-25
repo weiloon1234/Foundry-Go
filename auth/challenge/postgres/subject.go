@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -57,7 +58,7 @@ func subjectByKey(ctx context.Context, tx *database.Tx, address challenge.Addres
 		return challengestore.Subject{}, false, err
 	}
 	if subject.Key != key || key != expected || subject.Scope != scope {
-		return challengestore.Subject{}, false, fault.New(fault.Invalid, "stored challenge subject is inconsistent")
+		return challengestore.Subject{}, false, safeerror.NewFault(fault.Invalid, "stored challenge subject is inconsistent")
 	}
 	return subject, true, nil
 }
@@ -67,7 +68,7 @@ func record(address challenge.Address, subject challengestore.Subject, row chall
 		return challenge.Record{}, err
 	}
 	if row.ID.IsZero() || subject.Scope != scope || row.Scope != scope || row.SubjectKey != subject.Key {
-		return challenge.Record{}, fault.New(fault.Invalid, "stored challenge does not match its subject")
+		return challenge.Record{}, safeerror.NewFault(fault.Invalid, "stored challenge does not match its subject")
 	}
 	identity, err := subject.Identity.Decode()
 	if err != nil {
@@ -78,7 +79,7 @@ func record(address challenge.Address, subject challengestore.Subject, row chall
 		return challenge.Record{}, err
 	}
 	if key != subject.Key {
-		return challenge.Record{}, fault.New(fault.Invalid, "stored challenge identity is inconsistent")
+		return challenge.Record{}, safeerror.NewFault(fault.Invalid, "stored challenge identity is inconsistent")
 	}
 	hash, err := challenge.ParseDigest(row.SecretHash)
 	if err != nil {

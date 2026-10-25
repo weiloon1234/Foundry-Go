@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type compressionMode uint8
@@ -148,7 +149,7 @@ func (w *compressionResponse) writeData(data []byte) (int, error) {
 		}
 		n, err := target.Write(chunk)
 		if n < 0 || n > len(chunk) {
-			w.err = fault.New(fault.Internal, "HTTP compression writer returned an invalid count")
+			w.err = safeerror.NewFault(fault.Internal, "HTTP compression writer returned an invalid count")
 			return total, w.err
 		}
 		total += n
@@ -385,7 +386,7 @@ func (w *compressionResponse) ReadFrom(reader io.Reader) (int64, error) {
 		}
 		n, err := reader.Read(buffer)
 		if n < 0 || n > len(buffer) {
-			w.err = fault.New(fault.Internal, "HTTP compression source returned an invalid count")
+			w.err = safeerror.NewFault(fault.Internal, "HTTP compression source returned an invalid count")
 			return total, w.err
 		}
 		if n > 0 {
