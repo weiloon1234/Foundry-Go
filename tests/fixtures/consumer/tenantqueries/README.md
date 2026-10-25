@@ -9,5 +9,5 @@ unchanged. Inserts do not filter their input.
 `DocumentLinks` and `TagLinks` retain target and pivot ownership. Tests keep tenant
 isolation through reads, relations, scoped upserts, set writes, lookup defaults,
 concurrent pivot synchronization and bounded pruning. `prune.ORMSoftModel` requires
-the declared soft-delete token for physical pruning. Generated output remains for
-the integration barrier.
+the declared soft-delete token for physical pruning. Legacy scope/relation
+factories and model-generation directives are removed.

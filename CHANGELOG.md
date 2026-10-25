@@ -8,6 +8,15 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete the Stage 9 compiler catalogue (587 ported, 445 unaffected, zero pending)
+  and begin the generated-consumer cleanup barrier. Add the reviewed oracle freeze
+  harness; freezing and remaining legacy retirement are still pending.
+- Publish the [ORM migration guide](docs/guides/orm-migration.md) with compiled
+  examples and [breaking changes](docs/evidence/goway-breaking-changes.md): explicit
+  declarations/roles, typed assignments instead of drafts, explicit soft-delete
+  capabilities, lifecycle observers and reconciliation-aware write outcomes.
+  Business assignment helpers preserve supplied empty values and concrete owner keys.
+
 - Complete retrieval streaming and cursor/page consumers through ORM read terminals,
   including complete-record DISTINCT ON. Migrate scalar, key, JSON, frame, set,
   recursive and derived-report consumers while preserving explicit legacy SQL oracles.

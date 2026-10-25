@@ -5,7 +5,7 @@ import (
 
 	"foundry.test/consumer/internal/authfixture"
 	"foundry.test/consumer/mutatorqueries"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 )
@@ -31,8 +31,8 @@ func AuthenticatedCursor(binding foundryhttp.GuardBinding[Actor]) pagination.Aut
 }
 
 type AuthenticatedService interface {
-	List(context.Context, Actor, ListRequest) (query.Page[MemberResponse], error)
-	SimpleList(context.Context, Actor, ListRequest) (query.SimplePage[MemberResponse], error)
+	List(context.Context, Actor, ListRequest) (orm.PageResult[MemberResponse], error)
+	SimpleList(context.Context, Actor, ListRequest) (orm.SimplePage[MemberResponse], error)
 	CursorList(context.Context, Actor, CursorListRequest) (CursorListResult, error)
 }
 

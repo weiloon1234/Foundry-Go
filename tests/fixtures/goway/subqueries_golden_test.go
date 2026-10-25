@@ -38,7 +38,7 @@ func TestStage6b2SubqueryGolden(t *testing.T) {
 	}
 	runSubqueryOld(before)
 	runSubqueryNew(after)
-	if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+	if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "subqueries_golden/1", before.output.String(), after.output.String()) {
 		t.Fatalf("subquery parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 	}
 }
@@ -61,7 +61,7 @@ func runSubqueryOld(g *goldenCapture) {
 	})
 	exists := query.As[joinC](old.QueryOrders().Where(o.TotalCents.Gt(3)), "exists_orders")
 	q := query.Project(outer, schema, query.Map(a, query.ScalarQuery(outer, amount)), query.Map(c, query.ScalarQuery(outer, count)), query.Map(n, query.ScalarNullableQuery(outer, name))).Where(u.ID.InQuery(ids), u.Email.InNullableQuery(name).Not(), query.ExistsQuery(outer, exists), query.GreaterNullable(query.NullableRow(u.Age), query.ScalarRowQuery(outer, age)), query.ExistsQuery(outer, count.Limit(0)).Not()).OrderBy(u.Age.Asc())
-	fmt.Fprintln(&g.output, must(q.All(ctx, db)))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
 }
 func runSubqueryNew(g *goldenCapture) {
 	ctx := context.Background()
@@ -78,5 +78,5 @@ func runSubqueryNew(g *goldenCapture) {
 	exists := rowset.As[joinC](o.Query().Where(o.TotalCents.Gt(3)), "exists_orders")
 	s := subqueryRows
 	q := rowset.Select(outer, s, rowset.MapSelected(s.Amount, rowset.ScalarQuery(outer, amount)), rowset.MapSelected(s.Count, rowset.ScalarQuery(outer, count)), rowset.MapSelected(s.Name, rowset.ScalarNullableQuery(outer, name))).Where(rowset.InQuery(expr.Value(u.ID), ids), expr.Not(rowset.InNullableQuery(expr.Value(u.Email), name)), rowset.ExistsQuery(outer, exists), expr.GreaterNullable(expr.NullableRow(expr.Value(u.Age)), rowset.ScalarRowQuery(outer, age)), expr.Not(rowset.ExistsQuery(outer, countZero))).OrderBy(expr.Value(u.Age).Asc())
-	fmt.Fprintln(&g.output, must(q.All(ctx, db)))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
 }

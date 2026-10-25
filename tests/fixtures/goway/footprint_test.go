@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/testkit"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 )
 
 type footprintBudget struct {
@@ -320,35 +321,11 @@ func TestFootprintBudgets(t *testing.T) {
 	})
 }
 
-func parseFootprintSymbols(t *testing.T, data []byte) (functions int, definedSymbols int, auditFunctions int) {
+func parseFootprintSymbols(t *testing.T, data []byte) (int, int, int) {
 	t.Helper()
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) == 0 {
-			continue
-		}
-		var symType string
-		if len(fields) >= 2 && len(fields[1]) == 1 {
-			symType = fields[1]
-		} else if len(fields[0]) == 1 {
-			symType = fields[0]
-		} else {
-			t.Fatalf("unrecognized nm symbol format: %q", scanner.Text())
-		}
-		if symType != "U" {
-			definedSymbols++
-			if symType == "T" || symType == "t" {
-				functions++
-				if strings.Contains(scanner.Text(), "/audit/record.") || strings.Contains(scanner.Text(), "/database/orm.Audit") {
-					auditFunctions++
-				}
-			}
-		}
+	functions, symbols, audit, err := oracle.CountSymbols(data)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := scanner.Err(); err != nil {
-		t.Fatalf("scanning nm output: %v", err)
-	}
-	return functions, definedSymbols, auditFunctions
+	return functions, symbols, audit
 }

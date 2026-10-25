@@ -9,7 +9,7 @@ import (
 
 	"foundry.test/consumer/httppagination"
 	"foundry.test/consumer/mutatorqueries"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -20,12 +20,12 @@ type service struct {
 	t      *testing.T
 }
 
-func (s service) List(ctx context.Context, in httppagination.ListRequest) (query.Page[httppagination.MemberResponse], error) {
+func (s service) List(ctx context.Context, in httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
 	s.t.Helper()
 	if email, set := in.Filters.Email.Get(); !set || email != "member+filter@example.test" {
 		s.t.Error("generated filters changed")
 	}
-	return pagination.MapPage(ctx, query.Page[mutatorqueries.Member]{Items: []mutatorqueries.Member{s.member}, Number: in.Page.Number, Size: in.Page.Size, Total: 21, Pages: 2}, httppagination.PresentMember)
+	return pagination.MapPage(ctx, orm.PageResult[mutatorqueries.Member]{Items: []mutatorqueries.Member{s.member}, Number: in.Page.Number, Size: in.Page.Size, Total: 21, Pages: 2}, httppagination.PresentMember)
 }
 func TestGeneratedPageEndpointPreservesGettersAndContracts(t *testing.T) {
 	t.Parallel()

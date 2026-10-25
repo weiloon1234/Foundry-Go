@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"foundry.test/consumer/articles"
+	"foundry.test/consumer/internal/cleanupfixture"
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -14,20 +15,20 @@ import (
 	"github.com/weiloon1234/Foundry-Go/inspection"
 )
 
-// A generated owner keeps the scope of an equivalent hand-declared owner, so
-// data written through explicit declarations survives adopting slots.
+// The handwritten owner retains the frozen generated scope, so stored data
+// survives removing the generated owner.
 func TestGeneratedOwnerMatchesHandDeclaredScope(t *testing.T) {
-	generated := articles.ArticleExtensionOwner()
-	manual := articles.ArticleOwner
-	if err := generated.Validate(); err != nil {
+	owner := articles.ArticleOwner
+	baseline := cleanupfixture.Read(t)
+	if err := owner.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if generated.Scope() != manual.Scope() || generated.Name() != "articles" || generated.StorageModel() != "articles" {
-		t.Fatal("generated owner changed the persisted scope")
+	if owner.Scope() != baseline.Subject.Scope || owner.Name() != "articles" || owner.StorageModel() != "articles" {
+		t.Fatal("handwritten owner changed the persisted scope")
 	}
 	x := articles.ArticleSlots
 	if x.Title.Name() != "title" || x.Galleries.Name() != "galleries" || x.SEO.Name() != "seo" || x.Title.Options().Require != i18n.DefaultLocale {
-		t.Fatal("slot names or policy were not generated from the model")
+		t.Fatal("slot names or policy changed")
 	}
 	for _, err := range []error{x.Title.Validate(), x.Summary.Validate(), x.Logo.Validate(), x.Galleries.Validate(), x.SEO.Validate()} {
 		if err != nil {
@@ -44,7 +45,7 @@ func TestGeneratedOwnerMatchesHandDeclaredScope(t *testing.T) {
 	}
 	// A declared slot kind without its manager fails cleanup construction
 	// instead of silently skipping that kind's data.
-	if _, err := slots.NewCleanup(slots.Runtime{}, generated, parts, articles.ArticleIdentity.ReferenceOf); !errors.Is(err, fault.Missing) || !strings.Contains(err.Error(), "translations") {
+	if _, err := slots.NewCleanup(slots.Runtime{}, owner, parts, articles.ArticleIdentity.ReferenceOf); !errors.Is(err, fault.Missing) || !strings.Contains(err.Error(), "translations") {
 		t.Fatal("cleanup accepted a runtime without the declared translations manager", err)
 	}
 }

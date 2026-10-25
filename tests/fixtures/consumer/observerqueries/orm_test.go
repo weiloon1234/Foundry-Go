@@ -12,7 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func TestORMObserverDeclarationsAreSeparateFromLegacy(t *testing.T) {
+func TestORMObserverDeclarationsRejectForeignFamilies(t *testing.T) {
 	if err := orm.Check(observerqueries.Records, observerqueries.Plains, observerqueries.Effects); err != nil {
 		t.Fatal(err)
 	}
@@ -32,12 +32,15 @@ func TestORMObserverDeclarationsAreSeparateFromLegacy(t *testing.T) {
 	if !lifecycle.HasObservers[observerqueries.Record](set) || lifecycle.HasObservers[observerqueries.Record](empty) || calls != 0 {
 		t.Fatal("registration constructed a factory or leaked across instances")
 	}
-	legacy, err := observerqueries.NewRecordObserver("legacy").Declare(func() observerqueries.RecordHooks { return observerqueries.ObserverHooks("legacy") })
+	foreign, err := lifecycle.NewObserver[observerqueries.Record, struct{}]("foreign").Declare(func() struct{} { calls++; return struct{}{} })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := lifecycle.NewObservers(declaration, legacy); err == nil {
+	if _, err := lifecycle.NewObservers(declaration, foreign); err == nil {
 		t.Fatal("one model accepted incompatible observer families")
+	}
+	if calls != 0 {
+		t.Fatal("rejected registration constructed a hook factory")
 	}
 }
 

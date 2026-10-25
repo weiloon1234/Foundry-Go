@@ -1,0 +1,324 @@
+{
+  "slice": "stage9-d-final-catalogue",
+  "recorded_at": "2026-10-25T05:17:49.832684+00:00",
+  "base": "0ada5ac70cf54c2b172cfd1c712ff1def53d12a4",
+  "environment": "GOCACHE=/private/tmp/foundry-goway-codex-gocache-r12 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off",
+  "status": "zero pending catalogue rows; lead-owned summary snapshot update outstanding",
+  "ported": [
+    "auth_bound_resource_model",
+    "auth_bound_subject_model",
+    "auth_optional_bound_subject",
+    "http_model_binding_handler",
+    "http_model_binding_owner",
+    "http_model_binding_response",
+    "reference_key_type",
+    "reference_model_owner",
+    "reference_natural_key",
+    "workflow_bound_model"
+  ],
+  "unaffected": {
+    "importer_column_row": "Retained compile-fail case proves distinct ordinary DTO callback owners. No model generation, legacy query or ORM capability is involved; classify Framework integrations at stage \u2014. Generated dependency rejection remains tested."
+  },
+  "catalogue": {
+    "total": 1032,
+    "ported": 587,
+    "pending": 0,
+    "obsolete": 0,
+    "unaffected": 445,
+    "distinct_goway_cases": 579,
+    "changed_rows": [
+      "auth_bound_resource_model",
+      "auth_bound_subject_model",
+      "auth_optional_bound_subject",
+      "http_model_binding_handler",
+      "http_model_binding_owner",
+      "http_model_binding_response",
+      "importer_column_row",
+      "reference_key_type",
+      "reference_model_owner",
+      "reference_natural_key",
+      "workflow_bound_model"
+    ]
+  },
+  "checks": [
+    {
+      "name": "build",
+      "log": "/private/tmp/goway-final-rows-build.log",
+      "exit_code": 0,
+      "command": "GOCACHE=/private/tmp/foundry-goway-codex-gocache-r12 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go -C tests/fixtures/goway build ./models ./models/identity",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "pass"
+    },
+    {
+      "name": "vet",
+      "log": "/private/tmp/goway-final-rows-vet.log",
+      "exit_code": 0,
+      "command": "GOCACHE=/private/tmp/foundry-goway-codex-gocache-r12 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go -C tests/fixtures/goway vet . ./models/identity",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "pass"
+    },
+    {
+      "name": "race",
+      "log": "/private/tmp/goway-final-rows-race.log",
+      "exit_code": 0,
+      "command": "GOCACHE=/private/tmp/foundry-goway-codex-gocache-r12 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go -C tests/fixtures/goway test -race -v -run '^TestNestedORMBindingHasNoGlobalFallback$|^TestInvalidPublicContractsFailCompilation$/^(auth_bound_resource_model|auth_bound_subject_model|auth_optional_bound_subject|http_model_binding_handler|http_model_binding_owner|http_model_binding_response|reference_key_type|reference_model_owner|reference_natural_key|workflow_bound_model)$' .",
+      "log_sha256": "e886572043fdd532542ea5b4dc1fcfa8711411b4f4d6899d0386b8779c8f191a",
+      "result": "pass"
+    },
+    {
+      "name": "identity-race",
+      "log": "/private/tmp/goway-final-rows-identity-race.log",
+      "exit_code": 0,
+      "command": "GOCACHE=/private/tmp/foundry-goway-codex-gocache-r12 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go -C tests/fixtures/goway test -race ./models/identity",
+      "log_sha256": "7ac3a7a934d38c7303dc85afbc838b76df3cd19bf706cc956e85695ffa034c83",
+      "result": "pass"
+    },
+    {
+      "name": "retained-negatives",
+      "log": "/private/tmp/goway-final-rows-retained-negatives.log",
+      "exit_code": 0,
+      "command": "GOCACHE=/private/tmp/foundry-goway-codex-gocache-r12 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go -C tests/fixtures/consumer test -v -run '^TestInvalidPublicContractsFailCompilation$/^(auth_bound_resource_model|auth_bound_subject_model|auth_optional_bound_subject|http_model_binding_handler|http_model_binding_owner|http_model_binding_response|reference_key_type|reference_model_owner|reference_natural_key|workflow_bound_model|importer_column_row)$' .",
+      "log_sha256": "6b3293fefa31702f0745c94e17f20a3755feed071cd82d36aa3667703725df53",
+      "result": "pass"
+    },
+    {
+      "exit_code": 0,
+      "log": "/private/tmp/goway-final-rows-witness.log",
+      "name": "corrected_type_witnesses",
+      "command": "GOCACHE=/private/tmp/foundry-goway-codex-gocache-r12 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go -C tests/fixtures/goway test -vet=off '-run=^$' -overlay /private/tmp/goway-final-rows-witness/overlay.json ./testdata/compilefail/auth_bound_resource_model ./testdata/compilefail/auth_bound_subject_model ./testdata/compilefail/auth_optional_bound_subject ./testdata/compilefail/http_model_binding_handler ./testdata/compilefail/http_model_binding_owner ./testdata/compilefail/http_model_binding_response ./testdata/compilefail/reference_key_type ./testdata/compilefail/reference_model_owner ./testdata/compilefail/reference_natural_key ./testdata/compilefail/workflow_bound_model",
+      "log_sha256": "0be192702660de45356748753e8441b73b121607e5d0294014f92cc1d612ae03",
+      "result": "pass"
+    },
+    {
+      "name": "catalogue",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 tools/goway_catalogue.py",
+      "result": "pass: zero pending",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-final-rows-catalogue.log",
+      "log_sha256": "6329ef022e09704bed1fdeed64cafdafeed3f6a425abfbb8ae0ce5d513db8868"
+    },
+    {
+      "name": "catalogue_unit_tests",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'goway_catalogue_test.py'",
+      "result": "7 pass; only test_complete_reviewed_catalogue_and_summary fails: lead-owned blueprint README retains old totals. Assertion unchanged; Docs notes include replacement.",
+      "exit_code": 1,
+      "log": "/private/tmp/goway-final-rows-tools.log",
+      "log_sha256": "aca2076287a98638ad72f7f464080d6705dd1b2149027f840570045fd242cf81"
+    },
+    {
+      "name": "docs_check",
+      "command": "GOCACHE=/private/tmp/foundry-goway-codex-gocache-r12 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off make docs-check",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-final-rows-docs.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "name": "gofmt",
+      "command": "gofmt -l tests/fixtures/goway/compiler_cases_test.go tests/fixtures/goway/testdata/compilefail/auth_bound_resource_model/invalid.go tests/fixtures/goway/testdata/compilefail/auth_bound_subject_model/invalid.go tests/fixtures/goway/testdata/compilefail/auth_optional_bound_subject/invalid.go tests/fixtures/goway/testdata/compilefail/http_model_binding_handler/invalid.go tests/fixtures/goway/testdata/compilefail/http_model_binding_owner/invalid.go tests/fixtures/goway/testdata/compilefail/http_model_binding_response/invalid.go tests/fixtures/goway/testdata/compilefail/reference_key_type/invalid.go tests/fixtures/goway/testdata/compilefail/reference_model_owner/invalid.go tests/fixtures/goway/testdata/compilefail/reference_natural_key/invalid.go tests/fixtures/goway/testdata/compilefail/workflow_bound_model/invalid.go",
+      "result": "pass: no output",
+      "exit_code": 0
+    },
+    {
+      "name": "diff_check",
+      "command": "git diff --check",
+      "result": "pass",
+      "exit_code": 0
+    }
+  ],
+  "positive_witnesses": {
+    "method": "Temporary Go compiler overlays remove only the intended type mismatch from each new negative; all ten then compile. Tracked negative sources remain unchanged.",
+    "corrections": {
+      "auth_bound_resource_model": [
+        [
+          "modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Member]",
+          "modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Other]"
+        ]
+      ],
+      "auth_bound_subject_model": [
+        [
+          "func(context.Context, a.Other,",
+          "func(context.Context, a.Member,"
+        ]
+      ],
+      "auth_optional_bound_subject": [
+        [
+          "\"context\"",
+          "\"context\"\n\"github.com/weiloon1234/Foundry-Go/value\""
+        ],
+        [
+          "func(context.Context, a.Member,",
+          "func(context.Context, value.Optional[a.Member],"
+        ]
+      ],
+      "http_model_binding_handler": [
+        [
+          "modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Other]",
+          "modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Member]"
+        ]
+      ],
+      "http_model_binding_owner": [
+        [
+          "Bind[h.NoPath, h.NoQuery, h.NoBody, a.Other, h.NoContent]",
+          "Bind[h.NoPath, h.NoQuery, h.NoBody, a.Member, h.NoContent]"
+        ]
+      ],
+      "http_model_binding_response": [
+        [
+          ") (a.Member, error)",
+          ") (h.NoContent, error)"
+        ],
+        [
+          "return a.Member{}, nil",
+          "return h.NoContent{}, nil"
+        ]
+      ],
+      "reference_key_type": [
+        [
+          "import a \"foundry.test/goway/models/identity\"",
+          "import a \"foundry.test/goway/models/identity\"\nimport \"github.com/weiloon1234/Foundry-Go/model\""
+        ],
+        [
+          "var wrong string",
+          "var wrong model.ID[a.Member]"
+        ]
+      ],
+      "reference_model_owner": [
+        [
+          "model.Reference[a.Other, model.ID[a.Member]]",
+          "model.Reference[a.Member, model.ID[a.Member]]"
+        ]
+      ],
+      "reference_natural_key": [
+        [
+          "\n\t\"github.com/weiloon1234/Foundry-Go/model\"",
+          ""
+        ],
+        [
+          "var wrong model.ID[Group]",
+          "var wrong GroupCode"
+        ]
+      ],
+      "workflow_bound_model": [
+        [
+          "modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, models.Order]",
+          "modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, modelbinding.Models[models.User, models.Order]]"
+        ]
+      ]
+    },
+    "overlay_sha256": "ffe60177308eb68b9cf46179f387af45fa1c2e22b53d81053cad849ecd14f963"
+  },
+  "retained_originals": "All eleven original consumer compiler programs remain byte-identical and passed their negative compiler checks.",
+  "api_additions": [],
+  "method_surface_additions": [],
+  "footprint_changes": [],
+  "footprint_note": "No runtime code, probe input or ceiling changed. New cases are compiler-only testdata; no footprint remeasurement needed.",
+  "shared_files": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tools/goway_catalogue.py",
+    "tools/goway_catalogue_test.py"
+  ],
+  "source_sha256": {
+    "tools/goway_catalogue.py": "09d85558461569647b6250d2b10e0328111036cdd88ba3b6f483b6612afc1d2a",
+    "tools/goway_catalogue_test.py": "6fbbc7c2fb100f5e1bab4868dac1d1cd86e27f62e72371552151d1e59fba169f",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "bf2be8944a6fe0be3ff526a414bd814a26f1fa3f6f250561d5e19fb78bd767c9",
+    "tests/fixtures/goway/compiler_cases_test.go": "4b5ecb7e9c011c00bfb513eff1e60154ddee73d241520b7518b3d1809915f31e",
+    "docs/evidence/goway-stage9-d-final-catalogue-report.md": "be4683136acfea0144922d0f2c7970b3baeb9422b704fbe84c9f7daa740bd56b",
+    "tests/fixtures/goway/testdata/compilefail/auth_bound_resource_model/invalid.go": "7fcdc9a5d9cef502bb199e58b0d1f97681aa36e46ae4ea16550cf7a6e4abcbf0",
+    "tests/fixtures/goway/testdata/compilefail/auth_bound_subject_model/invalid.go": "8e86f2fcdee4d82c061d62e1528ec67b3fcbf1a2fb68f176e48179c02997df78",
+    "tests/fixtures/goway/testdata/compilefail/auth_optional_bound_subject/invalid.go": "7e651e8b5a76f163beb351d3215d4e01320f6c52c44455800597ec180f29fdff",
+    "tests/fixtures/goway/testdata/compilefail/http_model_binding_handler/invalid.go": "33a0757e4927d27863ce38d1f2790726160ef0d0c95a7561141b2541ef623157",
+    "tests/fixtures/goway/testdata/compilefail/http_model_binding_owner/invalid.go": "0c4f4658a1c3ca1d277b888f0ecc1f58be757a0be5fc4dc4fe559be3b5f445d6",
+    "tests/fixtures/goway/testdata/compilefail/http_model_binding_response/invalid.go": "4f08dba71c872fc2a69d6b121ce4251d19ca4da4caf8afb3e97c4861aa1d9c86",
+    "tests/fixtures/goway/testdata/compilefail/reference_key_type/invalid.go": "6c2ef39696231613bf935e790b3d61434873149510f92bb3beb4d6d989cf573d",
+    "tests/fixtures/goway/testdata/compilefail/reference_model_owner/invalid.go": "f677580a6e4039211fc9151dc90ae04b1794fa7740b4d547b12c902cc3a9dc23",
+    "tests/fixtures/goway/testdata/compilefail/reference_natural_key/invalid.go": "6f42e8ed3ebfdc04919b914e520d4c3e1e5227f99609ad4bc0dea90b92473af6",
+    "tests/fixtures/goway/testdata/compilefail/workflow_bound_model/invalid.go": "507ee140285839beb1aac03440704f235e1d7e05a0e5f20300be70c900aac285"
+  },
+  "retained_source_sha256": {
+    "tests/fixtures/consumer/testdata/compilefail/auth_bound_resource_model/invalid.go": "118df53a850f94e816b20e9dc8bafd1beac47e66dc4f5aea5f2de0fcde1a2a97",
+    "tests/fixtures/consumer/testdata/compilefail/auth_bound_subject_model/invalid.go": "4a992d5f6b0e3e4fdda94482e8c78331ba4b7a4c46756881bb43cf24376265e1",
+    "tests/fixtures/consumer/testdata/compilefail/auth_optional_bound_subject/invalid.go": "eed7ed25b0a97ad8d7833ebda77cccf16cabac34eef755c99a282c826f32dd90",
+    "tests/fixtures/consumer/testdata/compilefail/http_model_binding_handler/invalid.go": "e0c9c7a50707bbfdabd5d0d8fb79b04e5e1a9f4fe7d4a3e04dce31238cfc2795",
+    "tests/fixtures/consumer/testdata/compilefail/http_model_binding_owner/invalid.go": "e22d1748793e3444cea1dbb078c54d6feac5a0990e04c1e5b183400f793dfec8",
+    "tests/fixtures/consumer/testdata/compilefail/http_model_binding_response/invalid.go": "99b72edfddc737a0bd05ea8cd2c9ddfac81eba6dd8d3479127ff9cf47c8120cb",
+    "tests/fixtures/consumer/testdata/compilefail/reference_key_type/invalid.go": "66dc5b7fbe45bd8f2225324e4964a5458e649c4938b66c474d57a1987ee9e619",
+    "tests/fixtures/consumer/testdata/compilefail/reference_model_owner/invalid.go": "d1dbb6efabd6cba1587eb37358cd81ac0241a38a6b67dc72d398415cd1c81e85",
+    "tests/fixtures/consumer/testdata/compilefail/reference_natural_key/invalid.go": "7a31b2d084a0f04b39e719270d1cd9fb4135fe1fe2a7593951b99f36ce9c2a3c",
+    "tests/fixtures/consumer/testdata/compilefail/workflow_bound_model/invalid.go": "da93687a811b1a25368561edde4ce97ca646c4ae7b8874459ee3bf95ac2d8c0b",
+    "tests/fixtures/consumer/testdata/compilefail/importer_column_row/invalid.go": "d2a81d634e9d43e3cbeb8e072a4fc79ae18213f66358375c2163a223dd6b03ea"
+  },
+  "docs_notes": "Lead must replace the catalogue summary in blueprint/goway-data-layer/README.md; exact output is in goway-stage9-d-final-catalogue-report.md. This resolves the summary-snapshot unit failure. No lead-owned docs were edited.",
+  "not_run": {
+    "postgresql": "No runtime change; forbidden by lane rules.",
+    "agent_smoke": "No public/editor surface change; integration gate belongs to lead.",
+    "typescript": "No contract, manifest, OpenAPI or TypeScript changes.",
+    "generation": "No declaration or generator changes; cleanup barrier remains lead-owned."
+  },
+  "no_commit": true,
+  "integration_batch7g": {
+    "base": "7e4616df",
+    "evidence": "docs/evidence/goway-batch7g-integration.json",
+    "source_sha256": {
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "bf2be8944a6fe0be3ff526a414bd814a26f1fa3f6f250561d5e19fb78bd767c9",
+      "docs/evidence/goway-stage9-d-final-catalogue-report.md": "be4683136acfea0144922d0f2c7970b3baeb9422b704fbe84c9f7daa740bd56b",
+      "tests/fixtures/consumer/testdata/compilefail/auth_bound_resource_model/invalid.go": "118df53a850f94e816b20e9dc8bafd1beac47e66dc4f5aea5f2de0fcde1a2a97",
+      "tests/fixtures/consumer/testdata/compilefail/auth_bound_subject_model/invalid.go": "4a992d5f6b0e3e4fdda94482e8c78331ba4b7a4c46756881bb43cf24376265e1",
+      "tests/fixtures/consumer/testdata/compilefail/auth_optional_bound_subject/invalid.go": "eed7ed25b0a97ad8d7833ebda77cccf16cabac34eef755c99a282c826f32dd90",
+      "tests/fixtures/consumer/testdata/compilefail/http_model_binding_handler/invalid.go": "e0c9c7a50707bbfdabd5d0d8fb79b04e5e1a9f4fe7d4a3e04dce31238cfc2795",
+      "tests/fixtures/consumer/testdata/compilefail/http_model_binding_owner/invalid.go": "e22d1748793e3444cea1dbb078c54d6feac5a0990e04c1e5b183400f793dfec8",
+      "tests/fixtures/consumer/testdata/compilefail/http_model_binding_response/invalid.go": "99b72edfddc737a0bd05ea8cd2c9ddfac81eba6dd8d3479127ff9cf47c8120cb",
+      "tests/fixtures/consumer/testdata/compilefail/importer_column_row/invalid.go": "d2a81d634e9d43e3cbeb8e072a4fc79ae18213f66358375c2163a223dd6b03ea",
+      "tests/fixtures/consumer/testdata/compilefail/reference_key_type/invalid.go": "66dc5b7fbe45bd8f2225324e4964a5458e649c4938b66c474d57a1987ee9e619",
+      "tests/fixtures/consumer/testdata/compilefail/reference_model_owner/invalid.go": "d1dbb6efabd6cba1587eb37358cd81ac0241a38a6b67dc72d398415cd1c81e85",
+      "tests/fixtures/consumer/testdata/compilefail/reference_natural_key/invalid.go": "7a31b2d084a0f04b39e719270d1cd9fb4135fe1fe2a7593951b99f36ce9c2a3c",
+      "tests/fixtures/consumer/testdata/compilefail/workflow_bound_model/invalid.go": "da93687a811b1a25368561edde4ce97ca646c4ae7b8874459ee3bf95ac2d8c0b",
+      "tests/fixtures/goway/compiler_cases_test.go": "4b5ecb7e9c011c00bfb513eff1e60154ddee73d241520b7518b3d1809915f31e",
+      "tests/fixtures/goway/testdata/compilefail/auth_bound_resource_model/invalid.go": "7fcdc9a5d9cef502bb199e58b0d1f97681aa36e46ae4ea16550cf7a6e4abcbf0",
+      "tests/fixtures/goway/testdata/compilefail/auth_bound_subject_model/invalid.go": "8e86f2fcdee4d82c061d62e1528ec67b3fcbf1a2fb68f176e48179c02997df78",
+      "tests/fixtures/goway/testdata/compilefail/auth_optional_bound_subject/invalid.go": "7e651e8b5a76f163beb351d3215d4e01320f6c52c44455800597ec180f29fdff",
+      "tests/fixtures/goway/testdata/compilefail/http_model_binding_handler/invalid.go": "33a0757e4927d27863ce38d1f2790726160ef0d0c95a7561141b2541ef623157",
+      "tests/fixtures/goway/testdata/compilefail/http_model_binding_owner/invalid.go": "0c4f4658a1c3ca1d277b888f0ecc1f58be757a0be5fc4dc4fe559be3b5f445d6",
+      "tests/fixtures/goway/testdata/compilefail/http_model_binding_response/invalid.go": "4f08dba71c872fc2a69d6b121ce4251d19ca4da4caf8afb3e97c4861aa1d9c86",
+      "tests/fixtures/goway/testdata/compilefail/reference_key_type/invalid.go": "6c2ef39696231613bf935e790b3d61434873149510f92bb3beb4d6d989cf573d",
+      "tests/fixtures/goway/testdata/compilefail/reference_model_owner/invalid.go": "f677580a6e4039211fc9151dc90ae04b1794fa7740b4d547b12c902cc3a9dc23",
+      "tests/fixtures/goway/testdata/compilefail/reference_natural_key/invalid.go": "6f42e8ed3ebfdc04919b914e520d4c3e1e5227f99609ad4bc0dea90b92473af6",
+      "tests/fixtures/goway/testdata/compilefail/workflow_bound_model/invalid.go": "507ee140285839beb1aac03440704f235e1d7e05a0e5f20300be70c900aac285",
+      "tools/goway_catalogue.py": "09d85558461569647b6250d2b10e0328111036cdd88ba3b6f483b6612afc1d2a",
+      "tools/goway_catalogue_test.py": "6fbbc7c2fb100f5e1bab4868dac1d1cd86e27f62e72371552151d1e59fba169f"
+    }
+  },
+  "pre_integration_batch7g_hashes": {
+    "source_sha256": {
+      "tools/goway_catalogue.py": "09d85558461569647b6250d2b10e0328111036cdd88ba3b6f483b6612afc1d2a",
+      "tools/goway_catalogue_test.py": "6fbbc7c2fb100f5e1bab4868dac1d1cd86e27f62e72371552151d1e59fba169f",
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "fd9dd773e2c03f9af755dd4a17a66d08a7e9d17aaa10c9498d3986333962e17a",
+      "tests/fixtures/goway/compiler_cases_test.go": "4b5ecb7e9c011c00bfb513eff1e60154ddee73d241520b7518b3d1809915f31e",
+      "docs/evidence/goway-stage9-d-final-catalogue-report.md": "be4683136acfea0144922d0f2c7970b3baeb9422b704fbe84c9f7daa740bd56b",
+      "tests/fixtures/goway/testdata/compilefail/auth_bound_resource_model/invalid.go": "7fcdc9a5d9cef502bb199e58b0d1f97681aa36e46ae4ea16550cf7a6e4abcbf0",
+      "tests/fixtures/goway/testdata/compilefail/auth_bound_subject_model/invalid.go": "8e86f2fcdee4d82c061d62e1528ec67b3fcbf1a2fb68f176e48179c02997df78",
+      "tests/fixtures/goway/testdata/compilefail/auth_optional_bound_subject/invalid.go": "7e651e8b5a76f163beb351d3215d4e01320f6c52c44455800597ec180f29fdff",
+      "tests/fixtures/goway/testdata/compilefail/http_model_binding_handler/invalid.go": "33a0757e4927d27863ce38d1f2790726160ef0d0c95a7561141b2541ef623157",
+      "tests/fixtures/goway/testdata/compilefail/http_model_binding_owner/invalid.go": "0c4f4658a1c3ca1d277b888f0ecc1f58be757a0be5fc4dc4fe559be3b5f445d6",
+      "tests/fixtures/goway/testdata/compilefail/http_model_binding_response/invalid.go": "4f08dba71c872fc2a69d6b121ce4251d19ca4da4caf8afb3e97c4861aa1d9c86",
+      "tests/fixtures/goway/testdata/compilefail/reference_key_type/invalid.go": "6c2ef39696231613bf935e790b3d61434873149510f92bb3beb4d6d989cf573d",
+      "tests/fixtures/goway/testdata/compilefail/reference_model_owner/invalid.go": "f677580a6e4039211fc9151dc90ae04b1794fa7740b4d547b12c902cc3a9dc23",
+      "tests/fixtures/goway/testdata/compilefail/reference_natural_key/invalid.go": "6f42e8ed3ebfdc04919b914e520d4c3e1e5227f99609ad4bc0dea90b92473af6",
+      "tests/fixtures/goway/testdata/compilefail/workflow_bound_model/invalid.go": "507ee140285839beb1aac03440704f235e1d7e05a0e5f20300be70c900aac285"
+    },
+    "retained_source_sha256": {
+      "tests/fixtures/consumer/testdata/compilefail/auth_bound_resource_model/invalid.go": "118df53a850f94e816b20e9dc8bafd1beac47e66dc4f5aea5f2de0fcde1a2a97",
+      "tests/fixtures/consumer/testdata/compilefail/auth_bound_subject_model/invalid.go": "4a992d5f6b0e3e4fdda94482e8c78331ba4b7a4c46756881bb43cf24376265e1",
+      "tests/fixtures/consumer/testdata/compilefail/auth_optional_bound_subject/invalid.go": "eed7ed25b0a97ad8d7833ebda77cccf16cabac34eef755c99a282c826f32dd90",
+      "tests/fixtures/consumer/testdata/compilefail/http_model_binding_handler/invalid.go": "e0c9c7a50707bbfdabd5d0d8fb79b04e5e1a9f4fe7d4a3e04dce31238cfc2795",
+      "tests/fixtures/consumer/testdata/compilefail/http_model_binding_owner/invalid.go": "e22d1748793e3444cea1dbb078c54d6feac5a0990e04c1e5b183400f793dfec8",
+      "tests/fixtures/consumer/testdata/compilefail/http_model_binding_response/invalid.go": "99b72edfddc737a0bd05ea8cd2c9ddfac81eba6dd8d3479127ff9cf47c8120cb",
+      "tests/fixtures/consumer/testdata/compilefail/reference_key_type/invalid.go": "184be956937c7dae4386fa23fb801ab8b0e3fbe0e430eb7bc8c5e08b8546e2cd",
+      "tests/fixtures/consumer/testdata/compilefail/reference_model_owner/invalid.go": "5e2a88ba8e7068416c737791a18fd2ca8c751e3429d7c220883eb2d5b22e0d55",
+      "tests/fixtures/consumer/testdata/compilefail/reference_natural_key/invalid.go": "c7a2486ce7f448565aa12d6d948f8c31661f0aa40d60e40943925fe8f1cfae21",
+      "tests/fixtures/consumer/testdata/compilefail/workflow_bound_model/invalid.go": "da93687a811b1a25368561edde4ce97ca646c4ae7b8874459ee3bf95ac2d8c0b",
+      "tests/fixtures/consumer/testdata/compilefail/importer_column_row/invalid.go": "d2a81d634e9d43e3cbeb8e072a4fc79ae18213f66358375c2163a223dd6b03ea"
+    }
+  }
+}

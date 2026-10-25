@@ -15,24 +15,13 @@ import (
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-func linkDatabase(t *testing.T) (*database.DB, *testkit.Clock, string) {
-	return linkDatabaseWith(t, false)
-}
 func linkORMDatabase(t *testing.T) (*database.DB, *testkit.Clock, string) {
-	return linkDatabaseWith(t, true)
-}
-func linkDatabaseWith(t *testing.T, useORM bool) (*database.DB, *testkit.Clock, string) {
 	t.Helper()
 	source := testkit.NewClock(time.Date(2032, 3, 4, 5, 6, 7, 123456789, time.UTC))
 	pool := foundation.NewKey[*database.DB]("link.pool")
 	observers := foundation.Module{Name: "observers", OnRegister: func(r *foundation.Registrar) error {
-		if useORM {
-			return orm.RegisterObserver(r, pool, orm.NewObserver[linkqueries.Membership]("provider.link"), func(foundation.Resolver) (func() orm.Hooks[linkqueries.Membership], error) {
-				return func() orm.Hooks[linkqueries.Membership] { return linkqueries.ORMHooks("provider") }, nil
-			})
-		}
-		return linkqueries.RegisterMembershipObserver(r, pool, linkqueries.NewMembershipObserver("provider.link"), func(foundation.Resolver) (func() linkqueries.MembershipHooks, error) {
-			return func() linkqueries.MembershipHooks { return linkqueries.Hooks("provider") }, nil
+		return orm.RegisterObserver(r, pool, orm.NewObserver[linkqueries.Membership]("provider.link"), func(foundation.Resolver) (func() orm.Hooks[linkqueries.Membership], error) {
+			return func() orm.Hooks[linkqueries.Membership] { return linkqueries.ORMHooks("provider") }, nil
 		})
 	}}
 	app := testkit.Start(t, foundry.New(foundation.WithClock(source)).Register(postgres.Module("database", pool, pgtest.Config(t))).Register(observers))
@@ -71,24 +60,6 @@ func linkTransaction(ctx context.Context, db *database.DB, namespace string, wor
 		}
 		return work(tx)
 	})
-}
-
-func runLinks(t *testing.T, work func(*database.Tx, *testkit.Clock) error) {
-	t.Helper()
-	db, source, namespace := linkDatabase(t)
-	if err := linkTransaction(t.Context(), db, namespace, func(tx *database.Tx) error { return work(tx, source) }); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func endpoints(t *testing.T, tx *database.Tx) (linkqueries.Member, linkqueries.Group, error) {
-	t.Helper()
-	member, err := linkqueries.QueryLinkMembers().Create(t.Context(), tx, linkqueries.MemberDraft{}.SetName("member"))
-	if err != nil {
-		return member, linkqueries.Group{}, err
-	}
-	group, err := linkqueries.QueryLinkGroups().Create(t.Context(), tx, linkqueries.GroupDraft{}.SetCode("staff").SetName("staff"))
-	return member, group, err
 }
 
 type wrappedTransactor struct{ database.Transactor }

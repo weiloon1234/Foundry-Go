@@ -1,8 +1,9 @@
 package linkqueries_test
 
 import (
-	"context"
-	"errors"
+	"bytes"
+	"encoding/json"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -10,39 +11,45 @@ import (
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 )
-
-type statementCapture struct {
-	sql  string
-	args []any
-}
-
-var errCaptured = errors.New("captured statement")
-
-func (c *statementCapture) Query(_ context.Context, sql string, args ...any) (*database.Rows, error) {
-	c.sql = sql
-	c.args = append([]any(nil), args...)
-	return nil, errCaptured
-}
-func (*statementCapture) Exec(context.Context, string, ...any) (database.Result, error) {
-	return database.Result{}, errCaptured
-}
 
 func TestORMDeclarationsAndReadParity(t *testing.T) {
 	if err := orm.Check(linkqueries.Members, linkqueries.Groups, linkqueries.Memberships, linkqueries.NaturalLinks, linkqueries.NullableLinks, linkqueries.Friendships, linkqueries.Archives); err != nil {
 		t.Fatal(err)
 	}
-	old := &statementCapture{}
-	_, err := linkqueries.QueryLinkMembers().Where(linkqueries.MemberFields().Name.Eq("Ada")).OrderBy(linkqueries.MemberFields().Name.Asc()).Limit(5).All(t.Context(), old)
-	if !errors.Is(err, errCaptured) {
+	frozen, err := os.ReadFile("testdata/legacy-read.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var old struct {
+		SQL  string          `json:"sql"`
+		Args json.RawMessage `json:"args"`
+	}
+	if err := json.Unmarshal(frozen, &old); err != nil {
 		t.Fatal(err)
 	}
 	statement, err := orm.Compile(linkqueries.Members.Query().Where(linkqueries.Members.Name.Eq("Ada")).OrderBy(linkqueries.Members.Name.Asc()).Limit(5))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if statement.SQL() != old.sql || !reflect.DeepEqual(statement.Arguments(), old.args) {
-		t.Fatalf("read SQL or bindings changed: old=%s new=%s", old.sql, statement.SQL())
+	bindings := statement.Arguments()
+	// Preserve the old string binding and int64 LIMIT type as well as JSON values.
+	if len(bindings) != 2 {
+		t.Fatal("read binding count changed")
+	}
+	if _, ok := bindings[0].(string); !ok {
+		t.Fatal("name binding type changed")
+	}
+	if _, ok := bindings[1].(int64); !ok {
+		t.Fatal("limit binding type changed")
+	}
+	args, err := json.Marshal(bindings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statement.SQL() != old.SQL || !bytes.Equal(args, old.Args) || !oracleEqual(t, "consumer/linkqueries/orm_test/1", oracle.Snapshot([]any{old.SQL, old.Args}), oracle.Snapshot([]any{statement.SQL(), json.RawMessage(args)})) {
+		t.Fatalf("read SQL or bindings changed: old=%s new=%s", old.SQL, statement.SQL())
 	}
 	for _, relation := range []orm.Relation[linkqueries.Member]{linkqueries.MemberLinks.Groups, linkqueries.MemberLinks.NamedGroups, linkqueries.MemberLinks.AliasGroups, linkqueries.MemberLinks.Friends} {
 		if _, err := orm.Compile(linkqueries.Members.Query().With(relation)); err != nil {

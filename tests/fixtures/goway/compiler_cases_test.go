@@ -2,6 +2,17 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"auth_bound_resource_model", "cannot use"},
+		{"auth_bound_subject_model", "cannot use"},
+		{"auth_optional_bound_subject", "cannot use"},
+		{"http_model_binding_handler", "cannot use"},
+		{"http_model_binding_owner", "cannot use"},
+		{"http_model_binding_response", "cannot use"},
+		{"reference_key_type", "cannot use"},
+		{"reference_model_owner", "cannot use"},
+		{"reference_natural_key", "cannot use"},
+		{"workflow_bound_model", "cannot use"},
+
 		{"relation_expression_order_target", "does not match"},
 		{"relation_expression_order_phase", "does not match"},
 		{"relation_expression_pivot_target", "does not match"},

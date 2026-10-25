@@ -1,0 +1,48 @@
+package goway_test
+
+import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
+	"os"
+	"testing"
+)
+
+var frozenOracle = oracle.NewReplay("goway")
+
+func TestMain(m *testing.M) { os.Exit(frozenOracle.Main(m)) }
+func oracleEqual(t *testing.T, site, legacy, current string) bool {
+	t.Helper()
+	return frozenOracle.Equal(t, site, legacy, current)
+}
+func TestFrozenOracleIntegrity(t *testing.T) {
+	b, err := oracle.Load(oracleReadDirectory())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.Records) > 0 {
+		sites, _, err := oracle.Inventory(".")
+		if err != nil {
+			t.Fatal(err)
+		}
+		observed := map[string]bool{}
+		for _, r := range b.Records {
+			if r.Kind == "golden" && r.Package == "goway" {
+				observed[r.Site] = true
+			}
+		}
+		for site := range sites {
+			if !observed[site] {
+				t.Errorf("missing frozen site %s", site)
+			}
+		}
+		for site := range observed {
+			if !sites[site] {
+				t.Errorf("frozen comparison site removed: %s", site)
+			}
+		}
+	}
+	if len(b.Records) == 0 {
+		t.Log("oracle freeze is pending; live legacy comparison remains enabled")
+	}
+}
+
+func oracleReadDirectory() string { return oracle.Directory() }

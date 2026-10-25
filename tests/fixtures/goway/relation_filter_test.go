@@ -172,7 +172,7 @@ func TestRelationExpressionFilterSQLParity(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if captures[0].output.String() != captures[1].output.String() {
+			if !oracleEqual(t, "relation_filter/1", captures[0].output.String(), captures[1].output.String()) {
 				t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 			}
 		})

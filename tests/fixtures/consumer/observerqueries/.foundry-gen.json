@@ -1,8 +1,4 @@
 {
   "version": 1,
-  "files": {
-    "effect_foundry.gen.go": "7c5bd6f85b1c1b97fffeed3662287fe8a4b557f2caa90d753f8a4cbb0da4c5cf",
-    "plain_foundry.gen.go": "3b2f5710601cee624d7aff1a8fbd97c4a5c98b87026f9f7a2d67660f321e62f3",
-    "record_foundry.gen.go": "3978eb548545f35e65f546950e682b85a8eac824decb6205643e1e8cc99e0e2f"
-  }
+  "files": {}
 }

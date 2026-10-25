@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -27,7 +28,7 @@ func TestORMPaginationKeepsTransportIdentity(t *testing.T) {
 		{reflect.TypeFor[orm.CursorPage[models.User]](), reflect.TypeFor[query.CursorPage[models.User]]()},
 		{reflect.TypeFor[orm.CursorInputError](), reflect.TypeFor[query.CursorInputError]()},
 	} {
-		if pair[0] != pair[1] {
+		if pair[0] != pair[1] || !oracleEqual(t, "goway/integrations/pagination/types", oracle.Snapshot(pair[1].String()), oracle.Snapshot(pair[0].String())) {
 			t.Fatalf("transport identity changed: %v", pair)
 		}
 	}
@@ -39,7 +40,7 @@ func TestORMPaginationKeepsTransportIdentity(t *testing.T) {
 	for _, input := range []string{token, "", "bad!"} {
 		old, oldErr := query.ParseCursor[models.User](input)
 		current, err := orm.ParseCursor[models.User](input)
-		if (oldErr == nil) != (err == nil) || old.Token() != current.Token() {
+		if (oldErr == nil) != (err == nil) || old.Token() != current.Token() || !oracleEqual(t, "goway/integrations/pagination/parse", oracle.Snapshot([]any{oldErr == nil, old.Token()}), oracle.Snapshot([]any{err == nil, current.Token()})) {
 			t.Fatal("cursor transport changed")
 		}
 	}

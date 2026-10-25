@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -71,7 +70,7 @@ func TestMutatorsOldAndNewAgree(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if !reflect.DeepEqual(transcripts[0], transcripts[1]) {
+	if !oracleEqual(t, "mutators_golden/2", transcripts[0], transcripts[1]) {
 		t.Fatalf("mutator SQL/bindings differ:\n%s", goldenDiff(transcripts[0], transcripts[1]))
 	}
 }
@@ -187,7 +186,7 @@ func TestInputPrimaryKeyOldAndNewAgree(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if transcripts[0] != transcripts[1] {
+	if !oracleEqual(t, "mutators_golden/1", transcripts[0], transcripts[1]) {
 		t.Fatal(goldenDiff(transcripts[0], transcripts[1]))
 	}
 }

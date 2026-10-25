@@ -127,7 +127,7 @@ func TestFactoryORMAndGeneratedParity(t *testing.T) {
 				traces = append(traces, trace)
 				statements = append(statements, g.statements)
 			}
-			if transcripts[0] != transcripts[1] || !reflect.DeepEqual(traces[0], traces[1]) || statements[0] != statements[1] {
+			if !oracleEqual(t, "integration_adapters/1", transcripts[0], transcripts[1]) || !reflect.DeepEqual(traces[0], traces[1]) || !oracleEqual(t, "integration_adapters/traces", oracleSnapshot(traces[0]), oracleSnapshot(traces[1])) || !oracleEqual(t, "integration_adapters/statements", oracleSnapshot(statements[0]), oracleSnapshot(statements[1])) {
 				t.Fatalf("factory parity count=%d after=%t\nold %s %v\nnew %s %v", count, after, transcripts[0], traces[0], transcripts[1], traces[1])
 			}
 			expected := count
@@ -167,7 +167,7 @@ func TestORMModelBindingScopeAndDuplicateParity(t *testing.T) {
 				t.Fatal("binding statement count", g.statements)
 			}
 		}
-		if transcripts[0] != transcripts[1] || failures[0] != failures[1] {
+		if !oracleEqual(t, "integration_adapters/2", transcripts[0], transcripts[1]) || !oracleEqual(t, "integration_adapters/failures", oracleSnapshot(failures[0]), oracleSnapshot(failures[1])) {
 			t.Fatal("binding parity", transcripts, failures)
 		}
 	}

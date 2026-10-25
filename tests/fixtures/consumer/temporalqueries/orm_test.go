@@ -1,6 +1,7 @@
 package temporalqueries
 
 import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -19,7 +20,7 @@ func TestTemporalDeclarationSQLParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.SQL() != legacy.SQL() || !reflect.DeepEqual(got.Arguments(), legacy.Arguments()) {
+	if legacy.SQL() != got.SQL() || !reflect.DeepEqual(legacy.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/temporalqueries/orm_test/1", oracle.Snapshot([]any{legacy.SQL(), legacy.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 		t.Fatal("temporal row predicate SQL changed")
 	}
 	year := expr.Year(expr.Value(Samples.Date))
@@ -34,7 +35,7 @@ func TestTemporalDeclarationSQLParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.SQL() != legacy.SQL() || !reflect.DeepEqual(got.Arguments(), legacy.Arguments()) {
+	if legacy.SQL() != got.SQL() || !reflect.DeepEqual(legacy.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/temporalqueries/orm_test/2", oracle.Snapshot([]any{legacy.SQL(), legacy.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 		t.Fatal("temporal grouped projection SQL changed")
 	}
 }

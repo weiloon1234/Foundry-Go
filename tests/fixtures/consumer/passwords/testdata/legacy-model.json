@@ -1,0 +1,19 @@
+{
+  "Identity": {
+    "model": "password_accounts",
+    "key": {
+      "k": "string",
+      "t": "018f0000-0000-7000-8000-000000000001"
+    }
+  },
+  "Statements": {
+    "read": {
+      "SQL": "SELECT \"password_accounts\".\"id\", \"password_accounts\".\"email\", \"password_accounts\".\"digest\", \"password_accounts\".\"backup\", \"password_accounts\".\"enabled\" FROM \"password_accounts\" WHERE (\"password_accounts\".\"email\" = $1)",
+      "Arguments": [
+        "member@example.test"
+      ]
+    }
+  },
+  "Description": "",
+  "Subject": null
+}

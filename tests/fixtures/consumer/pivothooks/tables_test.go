@@ -1,6 +1,7 @@
 package pivothooks
 
 import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -19,7 +20,7 @@ func TestORMPivotDeclarationParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) {
+	if want.SQL() != got.SQL() || !reflect.DeepEqual(want.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/pivothooks/tables_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 		t.Fatal("pivot storage SQL changed")
 	}
 }

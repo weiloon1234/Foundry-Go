@@ -34,7 +34,7 @@ func TestStage6b2OnGolden(t *testing.T) {
 	}
 	runOnOld(before)
 	runOnNew(after)
-	if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+	if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "on_conditions_golden/1", before.output.String(), after.output.String()) {
 		t.Fatalf("ON parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 	}
 }
@@ -53,7 +53,7 @@ func runOnOld(g *goldenCapture) {
 		err := row.Scan(codec.Nullable(codec.String[string]()).Scan(&r.Email))
 		return r, err
 	})
-	fmt.Fprintln(&g.output, must(query.Project(j, schema, query.Map(field, query.Value(f.Email))).All(ctx, db)))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.Project(j, schema, query.Map(field, query.Value(f.Email))).All(ctx, db))}))
 }
 func runOnNew(g *goldenCapture) {
 	ctx := context.Background()
@@ -66,5 +66,5 @@ func runOnNew(g *goldenCapture) {
 	on := rowset.OnAnd(rowset.On(expr.At(rowset.Scope(a), models.Users.IntroducerID), expr.At(rowset.Scope(b), models.Users.ID)), rowset.OnOr(rowset.OnEqual(expr.Add(ai, ai), expr.Add(bi, bi)), rowset.OnNotEqual(ae, be), rowset.OnLess(ai, bi), rowset.OnLessOrEqual(ai, bi), rowset.OnGreater(ai, bi), rowset.OnGreaterOrEqual(ai, bi), rowset.OnLike(ae, be), rowset.OnDistinctFrom(an, bn), rowset.OnNotDistinctFrom(an, bn), rowset.OnLessNullable(expr.NullableRow(ai), expr.NullableRow(bi)), rowset.OnLessOrEqualNullable(expr.NullableRow(ai), expr.NullableRow(bi)), rowset.OnGreaterNullable(expr.NullableRow(ai), expr.NullableRow(bi)), rowset.OnGreaterOrEqualNullable(expr.NullableRow(ai), expr.NullableRow(bi)), rowset.OnLikeNullable(an, bn)).Not()).WhereLeft(expr.OrderRow(ai).Gt(1)).WhereRight(be.Ne("hidden"))
 	j := rowset.LeftJoin(a, b, on)
 	s := onRows
-	fmt.Fprintln(&g.output, must(rowset.Select(j, s, rowset.Map(s.Email, expr.AtNullable(rowset.NullableRightScope(j, rowset.Scope(b)), models.Users.Email))).All(ctx, db)))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, s, rowset.Map(s.Email, expr.AtNullable(rowset.NullableRightScope(j, rowset.Scope(b)), models.Users.Email))).All(ctx, db))}))
 }

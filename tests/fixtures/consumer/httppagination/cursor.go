@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"foundry.test/consumer/mutatorqueries"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 )
@@ -25,7 +26,7 @@ func CursorRouter(service CursorService) (*foundryhttp.Router, error) {
 }
 
 func (s DatabaseService) CursorList(ctx context.Context, in CursorListRequest) (CursorListResult, error) {
-	page, err := memberQuery(in.Filters).CursorPaginate(ctx, s.DB, in.Page)
+	page, err := orm.CursorPaginate(ctx, s.DB, memberQuery(in.Filters), in.Page)
 	if err != nil {
 		return CursorListResult{}, err
 	}

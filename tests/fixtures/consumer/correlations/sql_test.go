@@ -2,6 +2,7 @@ package correlations_test
 
 import (
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestORMCorrelatedGroupingAndRelationParity(t *testing.T) {
 	}
 	check := func(got orm.Statement, want query.Statement) {
 		t.Helper()
-		if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) {
+		if want.SQL() != got.SQL() || !reflect.DeepEqual(want.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/correlations/sql_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 			t.Fatalf("correlation SQL changed\nnew: %s\nold: %s", got.SQL(), want.SQL())
 		}
 	}

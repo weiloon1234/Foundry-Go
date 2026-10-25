@@ -15,11 +15,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:model table=mfa_accounts
 type Account struct {
 	ID    model.ID[Account]
 	Email string
-	// Foundry field behavior (generated): Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.
+	// Sensitive stored password hash: typed persistence uses password.Codec; ordinary formatting and JSON are redacted. Automatic audit values are redacted and cursor/identity keys are rejected. Compare-and-swap with the stored Hash; verify plaintext with password.Hasher.Check rather than SQL equality.
 	Password   password.Hash
 	Enabled    bool
 	MFAEnabled bool

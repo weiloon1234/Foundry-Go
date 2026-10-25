@@ -1,0 +1,13 @@
+{
+  "Identity": null,
+  "Statements": {
+    "read": {
+      "SQL": "SELECT \"workflow_projects\".\"id\", \"workflow_projects\".\"team_id\", \"workflow_projects\".\"slug\", \"workflow_projects\".\"title\", \"workflow_projects\".\"budget\", \"workflow_projects\".\"enabled\" FROM \"workflow_projects\" WHERE (\"workflow_projects\".\"slug\" = $1)",
+      "Arguments": [
+        "shared"
+      ]
+    }
+  },
+  "Description": "",
+  "Subject": null
+}

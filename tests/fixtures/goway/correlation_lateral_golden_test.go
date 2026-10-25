@@ -46,7 +46,7 @@ func TestStage6b3CorrelationAndLateralGolden(t *testing.T) {
 			}
 			runCorrelationOld(before, kind)
 			runCorrelationNew(after, kind)
-			if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+			if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "correlation_lateral_golden/1", before.output.String(), after.output.String()) {
 				t.Fatalf("correlation/lateral parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 			}
 		})
@@ -65,7 +65,7 @@ func runCorrelationOld(g *goldenCapture, kind string) {
 		count := query.SelectCorrelatedValue(c, query.Count[query.Correlation[old.User, old.Order]]().Value())
 		ids := query.SelectCorrelatedValue(c, query.Value(of.BuyerID))
 		got := must(oldCorrelationProjection(u, query.CorrelatedScalarQuery(count)).Where(c.Exists(), old.UserFields().ID.InCorrelatedQuery(ids)).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 		return
 	}
 	a, b := query.As[joinA](old.QueryUsers(), "a"), query.As[joinB](old.QueryOrders(), "b")
@@ -79,7 +79,7 @@ func runCorrelationOld(g *goldenCapture, kind string) {
 		local := old.OrderFieldsAt(query.InnerScope(nested, d.Scope()))
 		c = c.Where(nested.Where(local.BuyerID.EqColumn(outer.ID)).Limit(1).Exists())
 		count := query.SelectCorrelatedValue(c, query.Count[query.Correlation[query.Alias[joinA, old.User], query.Alias[joinB, old.Order]]]().Value())
-		fmt.Fprintln(&g.output, must(oldCorrelationProjection(a, query.CorrelatedScalarQuery(count)).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(oldCorrelationProjection(a, query.CorrelatedScalarQuery(count)).All(ctx, db))}))
 		return
 	}
 	record := query.SelectCorrelatedRecord(c, query.InnerScope(c, b.Scope())).OrderBy(of.TotalCents.Desc()).Limit(1)
@@ -88,20 +88,20 @@ func runCorrelationOld(g *goldenCapture, kind string) {
 	case "cross":
 		j := query.CrossJoinLateral(a, latest)
 		f := old.OrderFieldsAt(query.RightScope(j, latest.Scope()))
-		fmt.Fprintln(&g.output, must(oldCorrelationProjection(j, query.Nullable(query.Value(f.TotalCents))).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(oldCorrelationProjection(j, query.Nullable(query.Value(f.TotalCents))).All(ctx, db))}))
 	case "inner":
 		j := query.InnerJoinLateral(a, latest)
 		f := old.OrderFieldsAt(query.RightScope(j, latest.Scope()))
-		fmt.Fprintln(&g.output, must(oldCorrelationProjection(j, query.Nullable(query.Value(f.TotalCents))).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(oldCorrelationProjection(j, query.Nullable(query.Value(f.TotalCents))).All(ctx, db))}))
 	case "left":
 		j := query.LeftJoinLateral(a, latest)
 		f := old.OrderNullableFieldsAt(query.NullableRightScope(j, latest.Scope()))
-		fmt.Fprintln(&g.output, must(oldCorrelationProjection(j, query.Value(f.TotalCents)).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(oldCorrelationProjection(j, query.Value(f.TotalCents)).All(ctx, db))}))
 	case "on":
 		on := query.On(old.UserFieldsAt(a.Scope()).ID, old.OrderFieldsAt(latest.Scope()).BuyerID)
 		j := query.LeftJoinLateral(a, latest, on)
 		f := old.OrderNullableFieldsAt(query.NullableRightScope(j, latest.Scope()))
-		fmt.Fprintln(&g.output, must(oldCorrelationProjection(j, query.Value(f.TotalCents)).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(oldCorrelationProjection(j, query.Value(f.TotalCents)).All(ctx, db))}))
 	}
 }
 
@@ -119,7 +119,7 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 		count := rowset.SelectCorrelatedScalar(c, expr.Count[rowset.Correlation[models.User, models.Order]]().Value())
 		ids := rowset.SelectCorrelatedScalar(c, expr.Select(buyer))
 		q := rowset.Select(outer, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarQuery(count))).Where(c.Exists(), rowset.InCorrelatedQuery(expr.Value(models.Users.ID), ids))
-		fmt.Fprintln(&g.output, must(q.All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
 		return
 	}
 	a, b := rowset.As[joinA](models.Users.Query(), "a"), rowset.As[joinB](models.Orders.Query(), "b")
@@ -135,7 +135,7 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 		child := expr.At(rowset.InnerScope(nested, rowset.Scope(d)), models.Orders.BuyerID)
 		c = c.Where(nested.Where(expr.Equal(child, parent)).Limit(1).Exists())
 		count := rowset.SelectCorrelatedScalar(c, expr.Count[rowset.Correlation[rowset.Alias[joinA, models.User], rowset.Alias[joinB, models.Order]]]().Value())
-		fmt.Fprintln(&g.output, must(rowset.Select(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarQuery(count))).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarQuery(count))).All(ctx, db))}))
 		return
 	}
 	record := rowset.SelectCorrelatedRecord(c, inner).OrderBy(expr.At(inner, models.Orders.TotalCents).Desc()).Limit(1)
@@ -144,19 +144,19 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 	case "cross":
 		j := rowset.CrossJoinLateral(a, latest)
 		v := expr.At(rowset.RightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(v)))).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(v)))).All(ctx, db))}))
 	case "inner":
 		j := rowset.InnerJoinLateral(a, latest)
 		v := expr.At(rowset.RightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(v)))).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(v)))).All(ctx, db))}))
 	case "left":
 		j := rowset.LeftJoinLateral(a, latest)
 		v := expr.AtNullable(rowset.NullableRightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, must(rowset.Select(j, correlationGoldenRows, rowset.Map(correlationGoldenRows.Amount, v)).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.Map(correlationGoldenRows.Amount, v)).All(ctx, db))}))
 	case "on":
 		on := rowset.On(expr.At(rowset.Scope(a), models.Users.ID), expr.At(rowset.LateralScope(latest), models.Orders.BuyerID))
 		j := rowset.LeftJoinLateral(a, latest, on)
 		v := expr.AtNullable(rowset.NullableRightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, must(rowset.Select(j, correlationGoldenRows, rowset.Map(correlationGoldenRows.Amount, v)).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.Map(correlationGoldenRows.Amount, v)).All(ctx, db))}))
 	}
 }

@@ -1,8 +1,6 @@
 {
   "version": 1,
   "files": {
-    "navigation_row_foundry.gen.go": "749ccdfe1fc611a500363b9668df7e6539c2cf46f9b6de4736876f563c36cdd4",
-    "ranking_row_foundry.gen.go": "7f91e6db6d97bc6a5043be564545327a2c813dd67f898a9e7c1947925ca191fd",
-    "window_total_foundry.gen.go": "cea583e78606d24df3be7cee462c943db995ef181818a0bb023438e53c9d0374"
+    "ranking_row_foundry.gen.go": "7f91e6db6d97bc6a5043be564545327a2c813dd67f898a9e7c1947925ca191fd"
   }
 }

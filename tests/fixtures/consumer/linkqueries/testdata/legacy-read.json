@@ -1,0 +1,1 @@
+{"sql":"SELECT \"link_members\".\"id\", \"link_members\".\"name\", \"link_members\".\"alias\", \"link_members\".\"deleted_at\" FROM \"link_members\" WHERE (\"link_members\".\"name\" = $1) AND (\"link_members\".\"deleted_at\" IS NULL) ORDER BY \"link_members\".\"name\" ASC LIMIT $2","args":["Ada",5]}

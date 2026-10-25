@@ -21,10 +21,8 @@ type Summary struct {
 	Name string
 }
 
-//foundry:projection
 type Totals struct{ Count int64 }
 
-//foundry:projection
 type Pair struct {
 	Left  value.Nullable[int64]
 	Right value.Nullable[int64]

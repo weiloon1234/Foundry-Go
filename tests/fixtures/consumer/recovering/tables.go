@@ -30,3 +30,8 @@ func declareMembers() MemberTable {
 
 // MemberIdentity preserves the persisted model and key identity. Example: MemberIdentity.ReferenceOf(member).
 var MemberIdentity = orm.IdentityOf(MemberRecords.Table, MemberRecords.Key())
+
+// FoundryIdentity preserves stored attribution for authentication and recovery.
+func (m Member) FoundryIdentity() (model.Identity, error) {
+	return MemberIdentity.ReferenceOf(m).Identity()
+}

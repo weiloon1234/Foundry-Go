@@ -21,7 +21,9 @@ AREA_STAGES = {
     "Rows, CTEs and sets": {"2a", "6c"},
     "Windows and specialized expressions": {"6d"},
     "Bulk writes and conflict policies": {"6e"},
-    "Framework integrations": {"7"},
+    # DTO-only integrations can retain their existing compiler rule unchanged.
+    # The unaffected check still rejects generated model/projection dependencies.
+    "Framework integrations": {"7", "—"},
     "Authentication and security": {"—"},
     "Cache, Redis and coordination": {"—"},
     "Events, jobs and messaging": {"—"},

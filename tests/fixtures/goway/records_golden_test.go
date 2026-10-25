@@ -31,7 +31,7 @@ func TestStage6c1RecordGolden(t *testing.T) {
 			}
 			runRecordOld(before, kind)
 			runRecordNew(after, kind)
-			if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+			if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "records_golden/1", before.output.String(), after.output.String()) {
 				t.Fatalf("record parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 			}
 		})
@@ -48,7 +48,7 @@ func runRecordOld(g *goldenCapture, kind string) {
 	if kind == "projection" {
 		projected := oldCorrelationProjection(q, query.Nullable(query.Value(old.OrderFields().TotalCents))).OrderBy(old.OrderFields().TotalCents.Desc()).Limit(3).Offset(1)
 		a := query.As[joinA](projected, "r")
-		fmt.Fprintln(&g.output, must(query.SelectRecord(a, a.Scope()).Limit(2).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectRecord(a, a.Scope()).Limit(2).All(ctx, db))}))
 		return
 	}
 	if kind == "transaction_model" || kind == "transaction_projection" {
@@ -62,11 +62,11 @@ func runRecordOld(g *goldenCapture, kind string) {
 					return r, err
 				})
 				selected := query.ProjectTransaction(a, def, query.Map(field, query.Nullable(query.Value(old.OrderFieldsAt(a.Scope()).TotalCents))))
-				fmt.Fprintln(&g.output, must(selected.Limit(2).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(selected.Limit(2).All(ctx, tx))}))
 			} else {
 				got := must(query.SelectTransactionRecord(a, a.Scope()).Limit(2).All(ctx, tx))
 				for _, v := range got {
-					fmt.Fprintln(&g.output, v.ID, v.BuyerID, v.TotalCents)
+					fmt.Fprintln(&g.output, oracleSnapshot([]any{v.ID, v.BuyerID, v.TotalCents}))
 				}
 			}
 			return nil
@@ -76,7 +76,7 @@ func runRecordOld(g *goldenCapture, kind string) {
 	a := query.As[joinA](q, "r")
 	got := must(query.SelectRecord(a, a.Scope()).All(ctx, db))
 	for _, v := range got {
-		fmt.Fprintln(&g.output, v.ID, v.BuyerID, v.TotalCents)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{v.ID, v.BuyerID, v.TotalCents}))
 	}
 }
 func runRecordNew(g *goldenCapture, kind string) {
@@ -90,7 +90,7 @@ func runRecordNew(g *goldenCapture, kind string) {
 	if kind == "projection" {
 		projected := rowset.Offset(rowset.Limit(rowset.Select(rowset.From(q), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(expr.Value(models.Orders.TotalCents))))).OrderBy(expr.Value(models.Orders.TotalCents).Desc()), 3), 1)
 		a := rowset.AsRecord[joinA](rowset.RecordOf(projected), "r")
-		fmt.Fprintln(&g.output, must(rowset.SelectRecord(a, rowset.Scope(a)).Limit(2).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectRecord(a, rowset.Scope(a)).Limit(2).All(ctx, db))}))
 		return
 	}
 	if kind == "transaction_model" || kind == "transaction_projection" {
@@ -98,11 +98,11 @@ func runRecordNew(g *goldenCapture, kind string) {
 			a := rowset.AsTransaction[joinA](rowset.LockedRecord(q.Where(models.Orders.TotalCents.Gt(10)).ForUpdate().SkipLocked()), "r")
 			if kind == "transaction_projection" {
 				selected := rowset.SelectTransaction(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(expr.At(rowset.TransactionScope(a), models.Orders.TotalCents)))))
-				fmt.Fprintln(&g.output, must(selected.Limit(2).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(selected.Limit(2).All(ctx, tx))}))
 			} else {
 				got := must(rowset.SelectTransactionRecord(a, rowset.TransactionScope(a)).Limit(2).All(ctx, tx))
 				for _, v := range got {
-					fmt.Fprintln(&g.output, v.ID, v.BuyerID, v.TotalCents)
+					fmt.Fprintln(&g.output, oracleSnapshot([]any{v.ID, v.BuyerID, v.TotalCents}))
 				}
 			}
 			return nil
@@ -112,6 +112,6 @@ func runRecordNew(g *goldenCapture, kind string) {
 	a := rowset.AsRecord[joinA](rowset.ModelRecord(q), "r")
 	got := must(rowset.SelectRecord(a, rowset.Scope(a)).All(ctx, db))
 	for _, v := range got {
-		fmt.Fprintln(&g.output, v.ID, v.BuyerID, v.TotalCents)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{v.ID, v.BuyerID, v.TotalCents}))
 	}
 }

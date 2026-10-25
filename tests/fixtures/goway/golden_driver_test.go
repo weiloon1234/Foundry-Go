@@ -53,6 +53,7 @@ type goldenCapture struct {
 	detector        *database.StatementDetector
 	scopeContext    context.Context
 	output          bytes.Buffer
+	sql             bytes.Buffer
 	statements      int
 	generatedKey    bool
 	introducerKey   bool
@@ -71,6 +72,7 @@ func (g *goldenCapture) printSQL(s string, args []driver.NamedValue) {
 	if g.quiet {
 		return
 	}
+	fmt.Fprintln(&g.sql, s)
 	values := make([]any, len(args))
 	for i, a := range args {
 		values[i] = a.Value
@@ -84,7 +86,7 @@ func (g *goldenCapture) printSQL(s string, args []driver.NamedValue) {
 		}
 		values[0] = "<generated UUID>"
 	}
-	fmt.Fprintf(&g.output, "%s\n%#v\n", s, values)
+	fmt.Fprintf(&g.output, "%s\n", oracleSnapshot([]any{s, values}))
 }
 func (g *connection) ExecContext(_ context.Context, s string, args []driver.NamedValue) (driver.Result, error) {
 	g.printSQL(s, args)
@@ -215,13 +217,16 @@ func check(err error) {
 // Compare persisted fields; Stage 1b prints each requested loaded slot explicitly.
 // Get exposes Optional/Nullable presence; no private representation is printed.
 func (g *goldenCapture) show(v any) {
-	fmt.Fprintf(&g.output, "value: %+v\n", persisted(reflect.ValueOf(v)))
+	fmt.Fprintf(&g.output, "value: %s\n", oracleSnapshot(persisted(reflect.ValueOf(v))))
 }
 func persisted(v reflect.Value) any {
 	if !v.IsValid() {
 		return nil
 	}
 	if v.Kind() == reflect.Slice {
+		if v.IsNil() {
+			return []any(nil)
+		}
 		items := make([]any, v.Len())
 		for i := range items {
 			items[i] = persisted(v.Index(i))

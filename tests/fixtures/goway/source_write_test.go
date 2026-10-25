@@ -108,7 +108,7 @@ func TestSourceWriteScopesDefaultsAndImmutableValues(t *testing.T) {
 		}
 		_, err := p.Exec(context.WithValue(t.Context(), sourceTenant{}, int64(7)), db)
 		check(err)
-		sql := c.output.String()
+		sql := c.sql.String()
 		if !strings.Contains(sql, `"source_records"."tenant" =`) {
 			t.Fatal(sql)
 		}

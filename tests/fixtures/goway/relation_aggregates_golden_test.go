@@ -55,7 +55,7 @@ func relationAggregateGolden[V any](t *testing.T, before query.AggregateRelation
 			t.Fatal(err)
 		}
 	}
-	if captures[0].output.String() != captures[1].output.String() {
+	if !oracleEqual(t, "relation_aggregates_golden/1", captures[0].output.String(), captures[1].output.String()) {
 		t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 	}
 }

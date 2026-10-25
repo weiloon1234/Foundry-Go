@@ -157,10 +157,10 @@ func TestTerminalWritesGolden(t *testing.T) {
 						}))
 					}
 				}
-				fmt.Fprintln(&g.output, trace)
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{trace}))
 				transcripts = append(transcripts, g.output.String())
 			}
-			if transcripts[0] != transcripts[1] {
+			if !oracleEqual(t, "terminal_writes_golden/1", transcripts[0], transcripts[1]) {
 				t.Fatal(goldenDiff(transcripts[0], transcripts[1]))
 			}
 		})

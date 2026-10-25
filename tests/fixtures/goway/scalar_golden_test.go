@@ -47,9 +47,9 @@ func scalarGolden[V any](t *testing.T, ov query.Expression[scalars.Record, V], n
 	for i, r := range got {
 		values[i] = r.Value
 	}
-	fmt.Fprintln(&before.output, oldRows)
-	fmt.Fprintln(&after.output, values)
-	if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+	fmt.Fprintln(&before.output, oracleSnapshot([]any{oldRows}))
+	fmt.Fprintln(&after.output, oracleSnapshot([]any{values}))
+	if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "scalar_golden/1", before.output.String(), after.output.String()) {
 		t.Fatalf("scalar parity: %s", goldenDiff(before.output.String(), after.output.String()))
 	}
 }

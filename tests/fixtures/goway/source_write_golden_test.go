@@ -97,7 +97,7 @@ func TestSourceWriteOldAndNewAgree(t *testing.T) {
 		}
 		transcripts = append(transcripts, capture.output.String())
 	}
-	if transcripts[0] != transcripts[1] {
+	if !oracleEqual(t, "source_write_golden/1", transcripts[0], transcripts[1]) {
 		t.Fatalf("source write parity differs\n%s", goldenDiff(transcripts[0], transcripts[1]))
 	}
 }

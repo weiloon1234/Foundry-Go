@@ -2,13 +2,10 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"foundry.test/consumer/reports"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-type alias struct{}
-type other struct{}
-
-func invalid() {
-	_ = reports.ProjectScalarReport(models.QueryUsers()).SelectBuyerID(query.ScalarQuery(models.QueryOrders(), query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().ID))))
-}
+var inner = rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.ID)))
+var scalar = rows.ScalarRowQuery(rows.From(models.Orders.Query()), inner)
+var invalid = expr.Equal(expr.NullableRow(expr.Value(models.Users.ID)), scalar)

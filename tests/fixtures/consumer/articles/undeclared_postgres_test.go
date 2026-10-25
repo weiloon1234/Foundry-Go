@@ -15,8 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Renaming a slot field without pinning its stored name leaves rows under the
-// old name. The read-only undeclared command reports them by name only.
+// Changing a slot's explicit stored name leaves rows under the old name. The read-only undeclared command reports them by name only.
 func TestUndeclaredStoredNamesAfterARename(t *testing.T) {
 	f := startApplication(t)
 	runtime, err := f.services.ModelExtensions()

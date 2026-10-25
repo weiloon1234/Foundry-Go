@@ -2,9 +2,12 @@ package passwords_test
 
 import (
 	"bytes"
+	"encoding/json"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
+	"foundry.test/consumer/internal/cleanupfixture"
 	"foundry.test/consumer/passwords"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -19,8 +22,9 @@ func TestORMFoundationParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	record := passwords.Account{ID: id}
-	oldIdentity, err := record.FoundryReference().Identity()
-	if err != nil {
+	baseline := cleanupfixture.Read(t)
+	var oldIdentity model.Identity
+	if err := json.Unmarshal(baseline.Identity, &oldIdentity); err != nil {
 		t.Fatal(err)
 	}
 	nextIdentity, err := passwords.AccountIdentity.ReferenceOf(record).Identity()
@@ -35,22 +39,19 @@ func TestORMFoundationParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(before, after) {
+	if !bytes.Equal(before, after) || !oracleEqual(t, "consumer/passwords/tables_test/2", oracle.Snapshot(before), oracle.Snapshot(after)) {
 		t.Fatal("persisted reference changed")
 	}
 	parsed, err := passwords.AccountIdentity.Parse(oldIdentity)
 	if err != nil || parsed.Key() != id {
 		t.Fatal("existing reference rejected", err)
 	}
-	oldStatement, err := passwords.QueryPasswordAccounts().Where(passwords.AccountFields().Email.Eq("member@example.test")).Compile()
-	if err != nil {
-		t.Fatal(err)
-	}
+	oldStatement := baseline.Statements["read"]
 	nextStatement, err := orm.Compile(passwords.AccountRecords.Query().Where(passwords.AccountRecords.Email.Eq("member@example.test")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if oldStatement.SQL() != nextStatement.SQL() || !reflect.DeepEqual(oldStatement.Arguments(), nextStatement.Arguments()) {
-		t.Fatal("stored field read changed", oldStatement.SQL(), nextStatement.SQL())
+	if oldStatement.SQL != nextStatement.SQL() || !reflect.DeepEqual(oldStatement.Arguments, nextStatement.Arguments()) || !oracleEqual(t, "consumer/passwords/tables_test/1", oracle.Snapshot([]any{oldStatement.SQL, oldStatement.Arguments}), oracle.Snapshot([]any{nextStatement.SQL(), nextStatement.Arguments()})) {
+		t.Fatal("stored field read changed", oldStatement.SQL, nextStatement.SQL())
 	}
 }

@@ -37,14 +37,17 @@ func TestHandwrittenConsumerPackageGraph(t *testing.T) {
 }
 
 // The importing package needs no generated model output to construct a typed key assignment.
-func TestCrossPackageBusinessDraftHelper(t *testing.T) {
+func TestCrossPackageBusinessAssignmentHelper(t *testing.T) {
 	id, err := model.NewID[models.User]()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if creator, set := (catalog.Product{CreatorID: id}).CreatorDraft().ID().Get(); !set || creator != id {
-		t.Fatal("cross-package business method lost its typed identity")
-	}
+	assignment := (catalog.Product{CreatorID: id}).CreatorAssignment()
+	inspectInsertAssignments(t, models.Users.Table, []orm.Assignment[models.User]{assignment}, func(write *orm.Write[models.User]) {
+		if creator, set := orm.WriteGet(write, models.Users.ID.Set).Get(); !set || creator != id {
+			t.Error("cross-package business method lost its typed identity")
+		}
+	})
 }
 
 func userIdentityAssignment(id model.ID[models.User]) orm.Assignment[models.User] {

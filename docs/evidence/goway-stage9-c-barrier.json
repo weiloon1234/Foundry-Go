@@ -1,0 +1,808 @@
+{
+  "slice": "stage9-c-barrier-first-removal",
+  "base": "0ada5ac70cf54c2b172cfd1c712ff1def53d12a4",
+  "status": "targeted acceptance passed; oracle-dependent removal awaits lane A freeze",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r12",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "removed": {
+    "model_directives": 1,
+    "projection_directives": 13,
+    "generated_files": 14,
+    "factories": 0,
+    "helpers": []
+  },
+  "remaining": {
+    "model_directives": 24,
+    "projection_directives": 10,
+    "legacy_factories": 13,
+    "helpers": [
+      "models.User.CurrentEmailDraft",
+      "catalog.Product.CreatorDraft"
+    ]
+  },
+  "ported_negatives": [
+    "alias_predicate_owner",
+    "recursive_natural_key",
+    "scalar_scope"
+  ],
+  "owned_packages": [
+    "advancedqueries",
+    "chunkqueries",
+    "comparisonqueries",
+    "correlations",
+    "correlations/nullable",
+    "ctes",
+    "distinctqueries",
+    "expressionqueries",
+    "filterqueries",
+    "framequeries",
+    "intervalqueries",
+    "joinqueries",
+    "joinqueries/inner",
+    "joinqueries/natural",
+    "joinqueries/outer",
+    "jsonqueries",
+    "keyqueries",
+    "lateralqueries",
+    "lockqueries",
+    "projectionqueries",
+    "recordqueries",
+    "recursivequeries",
+    "reporting",
+    "reports",
+    "scalarqueries",
+    "setqueries",
+    "temporalqueries",
+    "transactionqueries",
+    "windowqueries",
+    "models",
+    "catalog",
+    "catalog/status",
+    "internal/queryfixture",
+    "migrations"
+  ],
+  "owned_compiler_passes": 373,
+  "checks": [
+    {
+      "name": "root-build",
+      "cwd": ".",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/root-build.log",
+      "log_sha256": "03044560c99f8731e2c659327d23e3a2d2797ccbff9c613a5417e64e6c4a0105"
+    },
+    {
+      "name": "root-vet",
+      "cwd": ".",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/root-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "consumer-build-final",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./framequeries",
+        "./intervalqueries",
+        "./jsonqueries",
+        "./keyqueries",
+        "./lateralqueries",
+        "./recursivequeries",
+        "./reporting",
+        "./reports",
+        "./scalarqueries",
+        "./temporalqueries",
+        "./transactionqueries",
+        "./windowqueries",
+        "./models",
+        "./catalog",
+        "./catalog/status",
+        "./internal/queryfixture",
+        "./migrations"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/consumer-build-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "consumer-vet",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./advancedqueries",
+        "./chunkqueries",
+        "./comparisonqueries",
+        "./correlations",
+        "./correlations/nullable",
+        "./ctes",
+        "./distinctqueries",
+        "./expressionqueries",
+        "./filterqueries",
+        "./framequeries",
+        "./intervalqueries",
+        "./joinqueries",
+        "./joinqueries/inner",
+        "./joinqueries/natural",
+        "./joinqueries/outer",
+        "./jsonqueries",
+        "./keyqueries",
+        "./lateralqueries",
+        "./lockqueries",
+        "./projectionqueries",
+        "./recordqueries",
+        "./recursivequeries",
+        "./reporting",
+        "./reports",
+        "./scalarqueries",
+        "./setqueries",
+        "./temporalqueries",
+        "./transactionqueries",
+        "./windowqueries",
+        "./models",
+        "./catalog",
+        "./catalog/status",
+        "./internal/queryfixture",
+        "./migrations"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/consumer-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "consumer-tests",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-timeout=20m",
+        "./advancedqueries",
+        "./chunkqueries",
+        "./comparisonqueries",
+        "./correlations",
+        "./correlations/nullable",
+        "./ctes",
+        "./distinctqueries",
+        "./expressionqueries",
+        "./filterqueries",
+        "./framequeries",
+        "./intervalqueries",
+        "./joinqueries",
+        "./joinqueries/inner",
+        "./joinqueries/natural",
+        "./joinqueries/outer",
+        "./jsonqueries",
+        "./keyqueries",
+        "./lateralqueries",
+        "./lockqueries",
+        "./projectionqueries",
+        "./recordqueries",
+        "./recursivequeries",
+        "./reporting",
+        "./reports",
+        "./scalarqueries",
+        "./setqueries",
+        "./temporalqueries",
+        "./transactionqueries",
+        "./windowqueries",
+        "./models",
+        "./catalog",
+        "./catalog/status",
+        "./internal/queryfixture",
+        "./migrations"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/consumer-tests.log",
+      "log_sha256": "866a5af13bb170009ad73a380aee775b40509719724e58bff26f7bcfcbf5a800"
+    },
+    {
+      "name": "consumer-race",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./advancedqueries",
+        "./chunkqueries",
+        "./comparisonqueries",
+        "./correlations",
+        "./correlations/nullable",
+        "./ctes",
+        "./distinctqueries",
+        "./expressionqueries",
+        "./filterqueries",
+        "./framequeries",
+        "./intervalqueries",
+        "./joinqueries",
+        "./joinqueries/inner",
+        "./joinqueries/natural",
+        "./joinqueries/outer",
+        "./jsonqueries",
+        "./keyqueries",
+        "./lateralqueries",
+        "./lockqueries",
+        "./projectionqueries",
+        "./recordqueries",
+        "./recursivequeries",
+        "./reporting",
+        "./reports",
+        "./scalarqueries",
+        "./setqueries",
+        "./temporalqueries",
+        "./transactionqueries",
+        "./windowqueries",
+        "./models",
+        "./catalog",
+        "./catalog/status",
+        "./internal/queryfixture",
+        "./migrations"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/consumer-race.log",
+      "log_sha256": "4d6873d6a31b725249ef13b388aae28c8e7b9c8c774bf85b7253ad67aac68e88"
+    },
+    {
+      "name": "fixture-vet",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "."
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/fixture-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "fixture-root-final",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-timeout=20m",
+        "-skip",
+        "^TestInvalidPublicContractsFailCompilation$",
+        "."
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/fixture-root-final.log",
+      "log_sha256": "98e9071449261a140894bf6464c31783676374d643c32c6163ed30c51d6dd95e"
+    },
+    {
+      "name": "owned-compiler",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-timeout=20m",
+        "-v",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(aggregate_enum_sum|aggregate_filter_after_window|aggregate_filter_boolean_order|aggregate_filter_having|aggregate_filter_nullable|aggregate_filter_owner|aggregate_filter_value|aggregate_input|aggregate_nonnullable_result|aggregate_order_model|aggregate_owner|aggregate_pivot_input|aggregate_result|aggregate_temporal_avg|aggregate_text_sum|alias_predicate_owner|arithmetic_compare_value|arithmetic_float_remainder|arithmetic_nullable_operand|arithmetic_nullable_result|arithmetic_owner|arithmetic_row_phase|arithmetic_text|arithmetic_value|binary_nullable_projection|case_aggregate_condition|case_aggregate_row_value|case_owner_conversion|case_result_nullable|case_result_owner|case_result_type|case_selected_predicate|case_unfinished|case_window_row_value|chunk_callback_owner|chunk_each_callback_owner|chunk_each_key_owner|chunk_key_callback_owner|coalesce_fallback_nullable|coalesce_owner|coalesce_value|column_enum_range|column_scope|column_value|computed_group_owner|computed_group_selected_list|computed_model_order_owner|computed_partition_owner|correlation_column_id|correlation_exists_owner|correlation_inner_scope|correlation_input_selection|correlation_membership_owner|correlation_model_fields|correlation_nullable_fields|correlation_nullable_membership|correlation_nullable_scope|correlation_outer_scope|correlation_query_escape|correlation_scalar_nullability|correlation_scalar_owner|correlation_scope_unlifted|correlation_source_escape|correlation_uncorrelated_membership|cross_join_nullable_scope|cross_join_scope_conversion|cte_membership_owner|cte_model_write|cte_nullable_value|cte_record_conversion|cte_record_fields|datatable_cell_value|datatable_column_row|datatable_column_scope|datatable_column_value|datatable_export_format|datatable_filter_nullability|datatable_filter_value|datatable_group_filter_value|datatable_having_phase|datatable_id|datatable_label|datatable_projection_row|datatable_relation_owner|datatable_subject|decimal_conversion_float|decimal_float|decimal_text_operator|derived_enum_operator|derived_nullable_scope|derived_predicate_owner|derived_record_owner|distinct_key_owner|distinct_predicate_owner|distinct_scalar_type|distinct_write|exists_scope|field_in_having|geographic_owner|having_boolean_range|having_combination_scope|having_in_where|having_nullable|having_scope|having_value|imported_enum_text_operator|importer_column_row|interval_clock_instant|interval_find_number|interval_like|interval_nullable|interval_projection_type|interval_result_phase|interval_selected_row|interval_sum_decimal|interval_wrong_owner|join_combination_scope|join_compare_nullable|join_compare_owner|join_compare_selected|join_compare_type|join_full_scope|join_key_type|join_kind_scope|join_like_number|join_natural_key|join_nullable_chain|join_nullable_fields|join_nullable_result|join_on_filter_scope|join_outer_preserved|join_right_scope|join_scope_outside|join_scope_unlifted|join_side_scope|join_where_model|json_contains_payload|json_kind_boolean|json_like|json_nullable_input|json_path_array_index|json_path_map_key|json_path_numeric_like|json_path_owner|json_path_payload|json_path_row_phase|json_path_scalar_type|json_path_unknown_field|json_predicate_owner|json_projection_payload|json_selected_row|json_sum|json_value_conversion|lateral_model_result|lateral_nullable_scope|lateral_on_owner|lateral_ordinary_join|lateral_outer|lateral_predicate_owner|lateral_projection_execute|lateral_projection_ordinary|lateral_projection_owner|lateral_projection_type|lateral_record_alias|lateral_record_cte|lateral_record_execute|lateral_scope_conversion|lateral_uncorrelated_alias|lock_clause_nullable|lock_clause_owner|lock_clause_owner_conversion|lock_clause_pool|lock_clause_session|lock_clause_source|locked_count|locked_key_owner|locked_model_id|locked_mutation|locked_nullable_target|locked_pool|locked_predicate_owner|locked_projection_pool|locked_result_owner|locked_subquery|locked_target_owner|named_window_owner|nested_locked_source|numeric_text_operator|parameter_id|parameter_nullable_field|parameter_owner|parameter_value|pivot_key|pivot_model|pivot_order|pivot_scope|predicate_owner_conversion|projected_record_write|projection_aggregate_group|projection_builder_value|projection_field|projection_group_owner|projection_mapping_owner|projection_nullability|projection_order_scope|projection_page_owner|projection_scope|projection_where_owner|projection_write|query_icontains_nullable|query_icontains_value|query_id|query_order_owner|query_owner|query_value|range_boundary_conversion|range_boundary_value|range_distance_type|range_nullable_distance|range_numeric_scope|range_numeric_text|range_ordinary_boundary|range_temporal_distance|range_temporal_number|record_selection_nullable|record_selection_result|record_selection_scope|record_selection_unlifted|record_selection_write|recursive_field_owner|recursive_natural_key|recursive_self_conversion|recursive_self_execute|recursive_self_owner|recursive_self_write|recursive_step_record|relation_exists_owner|relation_key|relation_owner|relation_scope|relation_target|result_cursor_fields_owner|result_cursor_key_owner|result_cursor_order_owner|result_cursor_predicate_owner|result_cursor_request_owner|result_cursor_source|result_cursor_write|routing_primary_lock|scalar_field_owner_conversion|scalar_nullability|scalar_nullable_input|scalar_row_identity_type|scalar_row_owner|scalar_scope|scoped_model_owner|selected_boolean_order|selected_calculation_order|selected_comparison_row|selected_distinct_owner|selected_group_phase|selected_key_conversion|selected_key_row_list|selected_partition_owner|set_input_scope|set_model_write|set_nullable_value|set_output_scope|set_projection_owner|set_record_conversion|set_record_owner|set_record_scalar|set_value_owner|simple_page_nullable|subquery_filter_scope|subquery_id|subquery_nullable|subquery_selection_scope|subquery_value|substring_text_position|temporal_calendar_result|temporal_clock_calendar|temporal_date_clock|temporal_date_unit|temporal_decimal_seconds|temporal_float_epoch|temporal_instant_calendar|temporal_nullable|temporal_predicate_owner|temporal_selected_row|temporal_selected_where|temporal_string_interval|temporal_string_zone|temporal_timestamp_unit|text_numeric|text_operand_owner|text_pattern_value|transaction_correlated_parent|transaction_correlated_projection_type|transaction_correlated_record_execute|transaction_correlated_record_ordinary|transaction_correlated_source_conversion|transaction_correlated_value_execute|transaction_correlated_value_ordinary|transaction_correlated_value_unbound|transaction_correlation_inner_scope|transaction_correlation_ordinary_source|transaction_correlation_outer_scope|transaction_correlation_scope_conversion|transaction_correlation_unbound_record|transaction_correlation_unlifted_scope|transaction_cte_conversion|transaction_exists_source|transaction_lateral_conversion|transaction_lateral_nullable_record|transaction_lateral_on_scope|transaction_lateral_ordinary_join|transaction_lateral_parent|transaction_lateral_pool|transaction_lateral_unbound|transaction_locked_value_count|transaction_locked_value_session|transaction_nullable_lock|transaction_nullable_record|transaction_ordinary_cte|transaction_owner|transaction_pool|transaction_projection_mutation|transaction_projection_ordinary|transaction_projection_type|transaction_record_owner|transaction_result|transaction_scope_conversion|transaction_session|transaction_source_alias|transaction_source_cte|transaction_source_join|transaction_source_projection|transaction_source_value|transaction_value_conversion|transaction_value_nullability|transaction_value_operand_type|transaction_value_ordinary_anchor|transaction_value_owner|transaction_value_owner_conversion|transaction_value_pool|transaction_value_result|transaction_value_scalar_escape|transaction_value_selected_operand|transaction_value_source|value_compare_like_number|value_compare_nullable|value_compare_order_bool|value_compare_owner|value_compare_selected_owner|value_compare_selected_row|value_compare_selected_where|value_compare_type|value_cursor_nullable|where_doesnt_have_owner|where_has_aggregate|where_has_find_owner|where_has_owner|window_aggregate_owner|window_fallback_value|window_frame_conversion|window_order_owner|window_partition_owner|window_range_distance|window_result_nullable|window_result_type|window_value_owner|window_where)$",
+        "."
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/owned-compiler.log",
+      "log_sha256": "276981515d3f21c99200fcb5fb136a061db21d3dca515970c570969198f77530"
+    },
+    {
+      "name": "restored-helper-vet",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./models",
+        "./catalog"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/restored-helper-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "restored-helper-tests",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-timeout=20m",
+        "./models",
+        "./catalog"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/restored-helper-tests.log",
+      "log_sha256": "3e560d15cf88263f20b8db99b9b0443489dbc2a2f1c5f0eb0a97949dae560e5e"
+    },
+    {
+      "name": "restored-helper-race",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./models",
+        "./catalog"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/restored-helper-race.log",
+      "log_sha256": "ab763b793af2fa2967601311352ba70f540f57e895439d42d87871de113bcc23"
+    },
+    {
+      "name": "catalogue-final",
+      "cwd": ".",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/catalogue-final.log",
+      "log_sha256": "f72d9b02dd00693f8720e4fe1fcbf9e4686058c6d1f893439e2f4dbb6fdb26cd"
+    },
+    {
+      "name": "generate-check",
+      "cwd": ".",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/generate-check.log",
+      "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4"
+    },
+    {
+      "name": "docs-check",
+      "cwd": ".",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/docs-check.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "name": "gofmt",
+      "cwd": ".",
+      "command": [
+        "gofmt",
+        "-w / -l",
+        "changed Go sources"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/gofmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "diff-check",
+      "cwd": ".",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-c-accept/diff-check.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "initial_failures_and_corrections": [
+    {
+      "check": "consumer-build",
+      "cause": "Explicit go build package list included 17 packages containing only tests.",
+      "fix": "Build the 17 packages with non-test source; all 34 remain in vet/test/race."
+    },
+    {
+      "check": "catalogue",
+      "cause": "Three migrated negatives had stale catalogue source/diagnostic rules.",
+      "fix": "Refresh exactly alias_predicate_owner, recursive_natural_key, scalar_scope through the catalogue rule function; preserve dispositions and mappings."
+    },
+    {
+      "check": "fixture-root",
+      "cause": "Lane D root assertions still call the two removed draft helpers.",
+      "fix": "Restore both helpers exactly from the base; retain until D updates the anchors. Root fixtures/compiler checks now pass."
+    }
+  ],
+  "all_check_attempts": [
+    {
+      "name": "root-build",
+      "exit_code": 0
+    },
+    {
+      "name": "consumer-build",
+      "exit_code": 1
+    },
+    {
+      "name": "consumer-vet",
+      "exit_code": 0
+    },
+    {
+      "name": "catalogue",
+      "exit_code": 1
+    },
+    {
+      "name": "consumer-tests",
+      "exit_code": 0
+    },
+    {
+      "name": "catalogue-final",
+      "exit_code": 0
+    },
+    {
+      "name": "consumer-race",
+      "exit_code": 0
+    },
+    {
+      "name": "fixture-root",
+      "exit_code": 1
+    },
+    {
+      "name": "gofmt",
+      "exit_code": 0
+    },
+    {
+      "name": "root-vet",
+      "exit_code": 0
+    },
+    {
+      "name": "generate-check",
+      "exit_code": 0
+    },
+    {
+      "name": "consumer-build-final",
+      "exit_code": 0
+    },
+    {
+      "name": "fixture-vet",
+      "exit_code": 0
+    },
+    {
+      "name": "fixture-root-final",
+      "exit_code": 0
+    },
+    {
+      "name": "owned-compiler",
+      "exit_code": 0
+    },
+    {
+      "name": "restored-helper-vet",
+      "exit_code": 0
+    },
+    {
+      "name": "restored-helper-tests",
+      "exit_code": 0
+    },
+    {
+      "name": "restored-helper-race",
+      "exit_code": 0
+    },
+    {
+      "name": "docs-check",
+      "exit_code": 0
+    },
+    {
+      "name": "diff-check",
+      "exit_code": 0
+    }
+  ],
+  "generation": {
+    "command": "make generate",
+    "exit_code": 0,
+    "removed_owned_files": 14,
+    "log": "/private/tmp/barrier-c-generate.log",
+    "log_sha256": "c3beb5985708f1a2e733b9e4dbe705885a3619a18d7dbed9128d6e5fa126de96"
+  },
+  "verification_limits": "Live PostgreSQL opt-in was not enabled. PostgreSQL sources compiled in ordinary/race test runs. Agent-smoke belongs to lane D under the barrier brief; no editor/integration result claimed.",
+  "blockers": [
+    {
+      "owner": "lane A oracle harness",
+      "symbols_by_caller": "docs/evidence/goway-stage9-c-barrier-freeze.tsv",
+      "files": 28,
+      "symbol_sites": 410,
+      "description": "26 C parity files and A httpmodels/tooling callers remain byte-identical to base until frozen expectations are available."
+    },
+    {
+      "owner": "lane D",
+      "symbols": [
+        "models.User.CurrentEmailDraft",
+        "catalog.Product.CreatorDraft"
+      ],
+      "callers": [
+        "tests/fixtures/consumer/generated_test.go:109",
+        "tests/fixtures/consumer/package_graph_test.go:45"
+      ],
+      "description": "Helpers restored and retained with these root assertions."
+    }
+  ],
+  "parity_source_sha256": {
+    "tests/fixtures/consumer/catalog/orm_test.go": "aed34b3f2b19aeff30b1965985acaacee0290329664eb2057d9024046a483556",
+    "tests/fixtures/consumer/comparisonqueries/scalar_clause_parity_test.go": "367f6eafa2afe42b94817fa623b1ab401b44af262f8c56f945dff3f60236a626",
+    "tests/fixtures/consumer/correlations/sql_test.go": "079fa6bc5f7256a421d715e711b3d17407db7a68e157e94ee29ae02b74ded3db",
+    "tests/fixtures/consumer/distinctqueries/clause_parity_test.go": "dabcf32e243272dad24d6d1e44b821f7e8d569200363c584d6ddec227c087085",
+    "tests/fixtures/consumer/distinctqueries/correlated_parity_test.go": "430385f9bd94e0a792d70b5fe4390ea6e15c1c04dc69c1a3a2c9a2e22718b114",
+    "tests/fixtures/consumer/distinctqueries/record_distinct_on_test.go": "969e0a3a784e5dab1e659b33d5bb3f62b2d865fa9b9660b4b236e8273305ca42",
+    "tests/fixtures/consumer/framequeries/sql_parity_test.go": "1e53b250d7ffa4a7732f8bb481f68d6f28c352001ac37eb83f0a1bce4f53b5f9",
+    "tests/fixtures/consumer/httpmodels/sql_parity_test.go": "f89f1f6d94b450af55f3772a62031d8e57c53e9888667def2f9f60afcf9d8363",
+    "tests/fixtures/consumer/intervalqueries/orm_test.go": "50ff02f934e37addab309347224269d68f57a1d821a36607e9e4f76a712178ae",
+    "tests/fixtures/consumer/jsonqueries/path_sql_test.go": "b3debaf4b1f1f87df2e227103f56b5ecf538cdb94d4afc2bef8807e8a1319a88",
+    "tests/fixtures/consumer/jsonqueries/relation_filter_test.go": "f1cc9edd9863c512a328cd47a3dce1fde1dfc7447387676dbce5dc28eea77250",
+    "tests/fixtures/consumer/jsonqueries/snapshot_parity_test.go": "8188c3fea79194ff440328b51b253eb82b2e47adf309fb79baa5d0446622da4e",
+    "tests/fixtures/consumer/keyqueries/clause_parity_test.go": "b2072bbd2af80519a5bfc960173649a22b03cbba552d9ef269d0e3f5037f0cc2",
+    "tests/fixtures/consumer/keyqueries/cursor_parity_test.go": "41d426f59c6b9dc41c88ad6488b8705e8d477fbce55e2a20c79e3c49de691d8a",
+    "tests/fixtures/consumer/lateralqueries/clause_parity_test.go": "9e549eb901606beb8aa33c51d258f36bfbd4c851559f0cb994119f6576bdf348",
+    "tests/fixtures/consumer/models/orm_postgres_test.go": "528f936bcc4d0a990a91547fb72b597b051d82997a9e77c84f332b15f3b3cd6a",
+    "tests/fixtures/consumer/models/orm_test.go": "fe5e4a6bd1b5a73e4c0e5317766d1061ed7fcb963537a2140a529b8ad3fcf8e1",
+    "tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go": "c535ea910bc05a72c16031cd4da9ddd97940298c446bbdfdab571074d9e7b382",
+    "tests/fixtures/consumer/recursivequeries/sql_parity_test.go": "51be31135f42303c36f6cd2ed0dc6e5151267748988a94f2e43f99ce4e3d2cd1",
+    "tests/fixtures/consumer/reporting/orm_test.go": "cc201e33078e2b3aad267b9edab344ad3f1e387b8e4c32947ed8404d04455b9d",
+    "tests/fixtures/consumer/reporting/source_golden_test.go": "e0dee195b74a0e832dbe12f465d89134a92170eb448b1108bfb4aaa69630fea0",
+    "tests/fixtures/consumer/reports/rows_test.go": "87c7c7a83effde2a3f91257589f66d7c48df69e1d422493fdb09225e273f7cc1",
+    "tests/fixtures/consumer/scalarqueries/projection_sql_test.go": "1597c8f3539a38354f81aa9ab96ae90f844439b067790c8dada7a3cbdfa1e166",
+    "tests/fixtures/consumer/setqueries/derived_aggregate_sql_test.go": "d3004e3c81b461fea00b7bb06cc223273afec42b6f200ceeed35a0b01e910e47",
+    "tests/fixtures/consumer/temporalqueries/orm_test.go": "c7c5b2e5e1ddc7aed8e3efbe0a2d9f1bfa8e26e4c9bc570f426d3c0b2cedf1ad",
+    "tests/fixtures/consumer/tooling/database_test.go": "01f47c0427e109f15a503327fb63e65f6e96d6c5e8b2a4fc9d74e362ca033a9e",
+    "tests/fixtures/consumer/transactionqueries/orm_test.go": "68828d630bbba302943d90a919b182d39afd613f43a6d8d7505952b95ae402fc",
+    "tests/fixtures/consumer/windowqueries/orm_test.go": "1877b617659ddd579beda1cf7480b580be830bc260bbc42c3f08f26c985c7238"
+  },
+  "source_changes": [
+    {
+      "path": "blueprint/goway-data-layer/compilefail-mapping.tsv",
+      "status": "M",
+      "sha256": "06784ae64f031e9d8f8bbe28c9bf4e0a8e8f844481f7416ab118fb5d97c3d863"
+    },
+    {
+      "path": "tests/fixtures/consumer/lateralqueries/.foundry-gen.json",
+      "status": "M",
+      "sha256": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e"
+    },
+    {
+      "path": "tests/fixtures/consumer/lateralqueries/ranked_order_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "381324c73137ba0dc6f9e68900fa8a7da8e7a6749ece3b996425c37ab0c619c0"
+    },
+    {
+      "path": "tests/fixtures/consumer/lateralqueries/reports.go",
+      "status": "M",
+      "sha256": "e1ef99bfa37feb8a7eb5f39d45d90eaddede3cc9c0d89b1979c1064cf0eafe77"
+    },
+    {
+      "path": "tests/fixtures/consumer/lateralqueries/user_order_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "39c7449f8dca1003f945acde3ddae943068d0fcc82f4c8bf4726361f6d824b20"
+    },
+    {
+      "path": "tests/fixtures/consumer/recursivequeries/.foundry-gen.json",
+      "status": "M",
+      "sha256": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e"
+    },
+    {
+      "path": "tests/fixtures/consumer/recursivequeries/node.go",
+      "status": "M",
+      "sha256": "07780d3e79b79625bde47fd9d3a088dab1d35a779bd7b20af83c08882fe14977"
+    },
+    {
+      "path": "tests/fixtures/consumer/recursivequeries/node_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "804f3e0282f3430adc83aaac717766a7ee40944755f08f05a4af47042289f48b"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/.foundry-gen.json",
+      "status": "M",
+      "sha256": "e24fd379514fb58623ec03f40611ac69baafeba03ed1968b03a54fb81433f8d8"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/README.md",
+      "status": "M",
+      "sha256": "1bdd9f615c008ff0d9a6f7ecae78e27ee1a3a372f38f197ab860f0e88dabe993"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/join_projections.go",
+      "status": "M",
+      "sha256": "4928fdd447fe865e8579e6a05e8b3fced459f2ee6295407fc8daef424b530716"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/location_row_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "003dcae94c2e34341529921323542e48c0edd19d3d9cc56eebef5c6d9fba57be"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/order_buyer_row_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "0707079b1d902632e023927aa887306ffd21aa42268a75758dd30182e880cc4c"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/referral_order_row_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "85d8e3fc01b9c08fa17f4a16d98d03d1c5fb6b1f5f4b168291408773aab25925"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/referral_row_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "80fcf77629b6529d0aa211e3a13845f729e2be59d7f6537c72fdcdd554b1279a"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/scalar_report_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "d6f845eed93a25cbf0659601bbc4d5788d6565c3e39c8b01fa79b22c58d7269e"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/subquery_projections.go",
+      "status": "M",
+      "sha256": "1e2e1190748e4382a43549c21b1f61d652f1d308d14a960123e427379944e386"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/user_order_stats_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "64915d67f7823c1885e795f25941c8953255c79e4cd393142924c57c245ff623"
+    },
+    {
+      "path": "tests/fixtures/consumer/reports/user_pair_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "eac250beda37cdf430decbc566e89f00016b1a38a8555abd51f5798d827e2636"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/alias_predicate_owner/invalid.go",
+      "status": "M",
+      "sha256": "775a2cee043fe29db7cebf6f6bb8d293c96fe79ec719eba6d2e5fc37617f1704"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/recursive_natural_key/invalid.go",
+      "status": "M",
+      "sha256": "d2c74c80f483a3928f1a173af7bdc9e6d3cc8834e27f546966b067a9988f40e8"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/scalar_scope/invalid.go",
+      "status": "M",
+      "sha256": "fa4a1b466f367101ff9bb61170206c04681d54c84117666fdcca11ab0ce1643a"
+    },
+    {
+      "path": "tests/fixtures/consumer/transactionqueries/.foundry-gen.json",
+      "status": "M",
+      "sha256": "7a710da220eaa45377044f763b4fc503371542ec632d5e0055ef920cc7691882"
+    },
+    {
+      "path": "tests/fixtures/consumer/transactionqueries/models.go",
+      "status": "M",
+      "sha256": "8b10b72521a050d4b2dbe9bb412a743cda6a0353490f33d7baf3a0ff3517c794"
+    },
+    {
+      "path": "tests/fixtures/consumer/transactionqueries/pair_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "c3be295ca1c18f964b5f0f2af5e28abf1bf1a67b872c3aba34bbe624f23008b0"
+    },
+    {
+      "path": "tests/fixtures/consumer/transactionqueries/totals_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "44b526c13e3ad17da4348b7dc80fbb68823361cc52ef3b95ed6d3d050f9b602f"
+    },
+    {
+      "path": "tests/fixtures/consumer/types_test.go",
+      "status": "M",
+      "sha256": "626738f681ec040c0e0122855d18c43ece171612915be36c93795072eee0205f"
+    },
+    {
+      "path": "tests/fixtures/consumer/windowqueries/.foundry-gen.json",
+      "status": "M",
+      "sha256": "f1631da2c1c20f86d83e036ca46a1b9bd4d32dfb6db14c086b667d1be83bd92d"
+    },
+    {
+      "path": "tests/fixtures/consumer/windowqueries/navigation_row_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "749ccdfe1fc611a500363b9668df7e6539c2cf46f9b6de4736876f563c36cdd4"
+    },
+    {
+      "path": "tests/fixtures/consumer/windowqueries/reports.go",
+      "status": "M",
+      "sha256": "8cb18dba53ecc9a0cb1922fb0af1f6a26ccdf1e6887da753669c5540c886b5e7"
+    },
+    {
+      "path": "tests/fixtures/consumer/windowqueries/window_total_foundry.gen.go",
+      "status": "D",
+      "base_sha256": "cea583e78606d24df3be7cee462c943db995ef181818a0bb023438e53c9d0374"
+    }
+  ],
+  "artifacts": {
+    "docs/evidence/goway-stage9-c-barrier-report.md": "9ad8dce425296f9fda186ee8f6d328a4ebd14507e3174edabd7462cce23ec95d",
+    "docs/evidence/goway-stage9-c-barrier-freeze.tsv": "8183ab839040b0a07d9fae81f49222a7f05aa149cd584f6f1765adf5a825d700"
+  },
+  "surface_additions": [],
+  "footprint_budget_changes": [],
+  "committed": false,
+  "integration_batch7g": {
+    "base": "7e4616df",
+    "evidence": "docs/evidence/goway-batch7g-integration.json",
+    "source_sha256": {
+      "tests/fixtures/consumer/catalog/orm_test.go": "aed34b3f2b19aeff30b1965985acaacee0290329664eb2057d9024046a483556",
+      "tests/fixtures/consumer/comparisonqueries/scalar_clause_parity_test.go": "367f6eafa2afe42b94817fa623b1ab401b44af262f8c56f945dff3f60236a626",
+      "tests/fixtures/consumer/correlations/sql_test.go": "079fa6bc5f7256a421d715e711b3d17407db7a68e157e94ee29ae02b74ded3db",
+      "tests/fixtures/consumer/distinctqueries/clause_parity_test.go": "dabcf32e243272dad24d6d1e44b821f7e8d569200363c584d6ddec227c087085",
+      "tests/fixtures/consumer/distinctqueries/correlated_parity_test.go": "430385f9bd94e0a792d70b5fe4390ea6e15c1c04dc69c1a3a2c9a2e22718b114",
+      "tests/fixtures/consumer/distinctqueries/record_distinct_on_test.go": "969e0a3a784e5dab1e659b33d5bb3f62b2d865fa9b9660b4b236e8273305ca42",
+      "tests/fixtures/consumer/framequeries/sql_parity_test.go": "1e53b250d7ffa4a7732f8bb481f68d6f28c352001ac37eb83f0a1bce4f53b5f9",
+      "tests/fixtures/consumer/httpmodels/sql_parity_test.go": "f89f1f6d94b450af55f3772a62031d8e57c53e9888667def2f9f60afcf9d8363",
+      "tests/fixtures/consumer/intervalqueries/orm_test.go": "50ff02f934e37addab309347224269d68f57a1d821a36607e9e4f76a712178ae",
+      "tests/fixtures/consumer/jsonqueries/path_sql_test.go": "b3debaf4b1f1f87df2e227103f56b5ecf538cdb94d4afc2bef8807e8a1319a88",
+      "tests/fixtures/consumer/jsonqueries/relation_filter_test.go": "f1cc9edd9863c512a328cd47a3dce1fde1dfc7447387676dbce5dc28eea77250",
+      "tests/fixtures/consumer/jsonqueries/snapshot_parity_test.go": "8188c3fea79194ff440328b51b253eb82b2e47adf309fb79baa5d0446622da4e",
+      "tests/fixtures/consumer/keyqueries/clause_parity_test.go": "b2072bbd2af80519a5bfc960173649a22b03cbba552d9ef269d0e3f5037f0cc2",
+      "tests/fixtures/consumer/keyqueries/cursor_parity_test.go": "41d426f59c6b9dc41c88ad6488b8705e8d477fbce55e2a20c79e3c49de691d8a",
+      "tests/fixtures/consumer/lateralqueries/clause_parity_test.go": "9e549eb901606beb8aa33c51d258f36bfbd4c851559f0cb994119f6576bdf348",
+      "tests/fixtures/consumer/models/orm_postgres_test.go": "528f936bcc4d0a990a91547fb72b597b051d82997a9e77c84f332b15f3b3cd6a",
+      "tests/fixtures/consumer/models/orm_test.go": "fe5e4a6bd1b5a73e4c0e5317766d1061ed7fcb963537a2140a529b8ad3fcf8e1",
+      "tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go": "c535ea910bc05a72c16031cd4da9ddd97940298c446bbdfdab571074d9e7b382",
+      "tests/fixtures/consumer/recursivequeries/sql_parity_test.go": "51be31135f42303c36f6cd2ed0dc6e5151267748988a94f2e43f99ce4e3d2cd1",
+      "tests/fixtures/consumer/reporting/orm_test.go": "cc201e33078e2b3aad267b9edab344ad3f1e387b8e4c32947ed8404d04455b9d",
+      "tests/fixtures/consumer/reporting/source_golden_test.go": "e0dee195b74a0e832dbe12f465d89134a92170eb448b1108bfb4aaa69630fea0",
+      "tests/fixtures/consumer/reports/rows_test.go": "87c7c7a83effde2a3f91257589f66d7c48df69e1d422493fdb09225e273f7cc1",
+      "tests/fixtures/consumer/scalarqueries/projection_sql_test.go": "1597c8f3539a38354f81aa9ab96ae90f844439b067790c8dada7a3cbdfa1e166",
+      "tests/fixtures/consumer/setqueries/derived_aggregate_sql_test.go": "d3004e3c81b461fea00b7bb06cc223273afec42b6f200ceeed35a0b01e910e47",
+      "tests/fixtures/consumer/temporalqueries/orm_test.go": "c7c5b2e5e1ddc7aed8e3efbe0a2d9f1bfa8e26e4c9bc570f426d3c0b2cedf1ad",
+      "tests/fixtures/consumer/tooling/database_test.go": "01f47c0427e109f15a503327fb63e65f6e96d6c5e8b2a4fc9d74e362ca033a9e",
+      "tests/fixtures/consumer/transactionqueries/orm_test.go": "68828d630bbba302943d90a919b182d39afd613f43a6d8d7505952b95ae402fc",
+      "tests/fixtures/consumer/windowqueries/orm_test.go": "1877b617659ddd579beda1cf7480b580be830bc260bbc42c3f08f26c985c7238"
+    }
+  },
+  "pre_integration_batch7g_hashes": {
+    "parity_source_sha256": {
+      "tests/fixtures/consumer/catalog/orm_test.go": "0ad5cd0930daddbc89bb1bbb2426bd7f8209991b83fee31e40de48c9c29d3da0",
+      "tests/fixtures/consumer/comparisonqueries/scalar_clause_parity_test.go": "4fa4edd09930695dd1fd88293187d22b581c35ead946d422dd7a2a5c6c0cc03e",
+      "tests/fixtures/consumer/correlations/sql_test.go": "215c0b47156711a4a527ef8e211c3eeeb10007ef6dad36c24c6747d51c3aa8c1",
+      "tests/fixtures/consumer/distinctqueries/clause_parity_test.go": "212c541b316f94e139826569810e1d68b7f3bea721fedbb6be31848d5be123c0",
+      "tests/fixtures/consumer/distinctqueries/correlated_parity_test.go": "a458cafd647954f4b97bebb0a213fce816652b71d764e868555730855a31cd7e",
+      "tests/fixtures/consumer/distinctqueries/record_distinct_on_test.go": "969e0a3a784e5dab1e659b33d5bb3f62b2d865fa9b9660b4b236e8273305ca42",
+      "tests/fixtures/consumer/framequeries/sql_parity_test.go": "51a6664f2971cec5763b23def20a3850d100fc2ece1bf244ed7af247d822fec6",
+      "tests/fixtures/consumer/httpmodels/sql_parity_test.go": "177dbb97866031a3899b59eb8233baf2cfd7451177c315c40396d2e7e9ac084e",
+      "tests/fixtures/consumer/intervalqueries/orm_test.go": "2ce43caf626d51d4e4e9a1f4dd26f18320c8caf7972fadbca02e9047ecfc355d",
+      "tests/fixtures/consumer/jsonqueries/path_sql_test.go": "4ad6b075a71d2643169109626a984700f6d5c9c44c812016aaceeb4d13ecfbb5",
+      "tests/fixtures/consumer/jsonqueries/relation_filter_test.go": "3029116b3ff22bc3ceb67f6dd35891c52ca7af0a1de10adbff83dd1a3c3627c9",
+      "tests/fixtures/consumer/jsonqueries/snapshot_parity_test.go": "4ab9b0c936d5db6ab44ee9280f7d3aef254c8dd86f0a84339c6a13a17e5dd933",
+      "tests/fixtures/consumer/keyqueries/clause_parity_test.go": "87525019cc504ae1c848c736334be642704d38f2518056d44f19e0bfc0a5ca7a",
+      "tests/fixtures/consumer/keyqueries/cursor_parity_test.go": "4639cbf0df273e1e99c3b0ecc70f35c70b4e3b27806cc59ce229ed75b3c7eee7",
+      "tests/fixtures/consumer/lateralqueries/clause_parity_test.go": "d3bc0bf11e1704e35701f353dddc00648495cc682761336bf563e01ae5dc0cfc",
+      "tests/fixtures/consumer/models/orm_postgres_test.go": "31bd7529e7564c0f69868d059c976747d65aa553a433757f981530f341a197a3",
+      "tests/fixtures/consumer/models/orm_test.go": "ac70ddcf6d224eb8abcc48ad6be229c01820f2d43aac32b72657acfe3ed625aa",
+      "tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go": "6f12a0ddfc613447f453bef8fcff3be7f201bb528574eea295b80558b5fde9fa",
+      "tests/fixtures/consumer/recursivequeries/sql_parity_test.go": "c72bd444c02a93704471818bda01f125d1a43026cf9a0577c527c9c251512c81",
+      "tests/fixtures/consumer/reporting/orm_test.go": "6c00693205ce63d520456e02f25ccd315e389a67da32d2b3ec5587685620cd1e",
+      "tests/fixtures/consumer/reporting/source_golden_test.go": "cdb746d64fa4d171e576b1d4f16deb81cb39601b5fd2d0556fda7b8b26cbf52a",
+      "tests/fixtures/consumer/reports/rows_test.go": "a8dabd92052d952d88ce52a6fdc87a9ac2b8157dd7c0eda590b0bba39a31ff4f",
+      "tests/fixtures/consumer/scalarqueries/projection_sql_test.go": "8fff7b852e1d3c081597d8ab00a427dc4e96ec1d29c14be84eb4dab42dce001d",
+      "tests/fixtures/consumer/setqueries/derived_aggregate_sql_test.go": "a5ebb6826f1c72a2007553575c7c8e4162d2460d2cea10d6300b02261d9ac407",
+      "tests/fixtures/consumer/temporalqueries/orm_test.go": "663081f47686a574de2b62f4a1942a26f8ed56c4c884dc4568b75ad639c8391b",
+      "tests/fixtures/consumer/tooling/database_test.go": "fd0031098c87ef1c07f39cba5e7376895c9e425422e63738b26ff6b0a6eb5f33",
+      "tests/fixtures/consumer/transactionqueries/orm_test.go": "42224219bce51e907d7db5fb9247701378000ff202ce583b0e1c28269c63ab7c",
+      "tests/fixtures/consumer/windowqueries/orm_test.go": "af12f2ccdc3f8a4a4ab17f7391e2e46ce0b0c49799205b2dbb09f4e7a5062b08"
+    }
+  }
+}

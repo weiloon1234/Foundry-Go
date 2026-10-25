@@ -1,0 +1,1863 @@
+{
+  "files": {
+    "consumer/advancedqueries/subqueries_postgres_test.go": {
+      "sha256": "8491d4e3bd86f1a3570af30735034266d56d42deeb2ff883b808bbfb918c0ca7"
+    },
+    "consumer/articles/application_postgres_test.go": {
+      "sha256": "7c2a117380235678ce7a7e28ed683408bb07e50b6a7d8aa0b018e7a5ac558108"
+    },
+    "consumer/articles/article_test.go": {
+      "sha256": "c12842199284b250260813a3b23cc9023604904a09800564e79551d5554b1d59"
+    },
+    "consumer/articles/cleanup_postgres_test.go": {
+      "sha256": "f3cc22d344efe7e859cee9c9745c07c13eb1fe88c9f86f51dbe1597ee26d17f6"
+    },
+    "consumer/articles/direct_postgres_test.go": {
+      "sha256": "158d57424258643dbfe0ec2880bb56b5c8c0b5b7a61693cd294c31697f4590a4"
+    },
+    "consumer/articles/durable_cleanup_postgres_test.go": {
+      "sha256": "321098693cd3a81f493883e34b949194a3b09af3988568adbdd352b0deca30b3"
+    },
+    "consumer/articles/email_postgres_test.go": {
+      "sha256": "8fe5f0842112378e17b02b7da0e540fd355ab2f2dafa8ff36959d96739ab097f"
+    },
+    "consumer/articles/http_postgres_test.go": {
+      "sha256": "97dc5df4635323e4ab50943197c64ffba7253b519bde04f8a6dfee7da9e9853c"
+    },
+    "consumer/articles/loading_benchmark_test.go": {
+      "sha256": "4556ec31a243d5ab12380511012e4074796caddec8dda8e64080cd23890d1230"
+    },
+    "consumer/articles/loading_postgres_test.go": {
+      "sha256": "1dd5d81276e9adbe1841470e110220a2153a89549288e48302eb17a080c97000"
+    },
+    "consumer/articles/oracle_test.go": {
+      "sha256": "b666ce9bc3a74687d2e9cada808bcb4032e8741534c790a2c083399935cd939a"
+    },
+    "consumer/articles/owner_postgres_test.go": {
+      "sha256": "2c0d047dc9e9077fe7218471a59dd87d91ed21a676199718022793fb046241ab"
+    },
+    "consumer/articles/statements_postgres_test.go": {
+      "sha256": "9cf2233c4b2b9a5cdcb000894f0c991fa592844aab0fe2e8968576e720e931a0"
+    },
+    "consumer/articles/tables_test.go": {
+      "paired_tests": [
+        "TestORMExtensionFoundationParity",
+        "TestORMFoundationParity"
+      ],
+      "sha256": "aaaf554e9a7e53d2c0dff9dac560ae854b56bae50d7e8fe86daa83937ac43c4d"
+    },
+    "consumer/articles/undeclared_postgres_test.go": {
+      "sha256": "37ccf775cbcf9b69c9d7a5ba97cbd512c1df225d65c0d96c1934f01e8fbd99b4"
+    },
+    "consumer/articles/writes_postgres_test.go": {
+      "sha256": "b702367548f35768da8102c8b4c4a236bb266fe76c8cb7766a4d2b64177c1078"
+    },
+    "consumer/assignment_inputs_test.go": {
+      "sha256": "a6b332e9cf85abd4cfee5210b772c88d07b4e975ee9ef2d017608536a672f25c"
+    },
+    "consumer/auditqueries/audit_postgres_test.go": {
+      "sha256": "9b03047dcf3567b6994183b0e7ac670290ce36d379200788519bb618b2fd5224"
+    },
+    "consumer/auditqueries/orm_test.go": {
+      "sha256": "e8ea25f3bba1a8e33a670cb0acde1d10f0087d4eb8b2142e2142096409a75612"
+    },
+    "consumer/auditqueries/registration_test.go": {
+      "sha256": "196c9e091509545838e351eae18a475ed6a60f3956000edf1e61a592516e5b80"
+    },
+    "consumer/authenticating/access_scopes_test.go": {
+      "sha256": "e848b21e7b116d54e8faae18f6493b42dae827cc9e0f79882e18af6d5d591cff"
+    },
+    "consumer/authenticating/accounts_test.go": {
+      "sha256": "c39de6d847d9e6fe40a16c9ea5c7ee4926f6377724630ade92ed6edb0ed45364"
+    },
+    "consumer/authenticating/browser_tokens_test.go": {
+      "sha256": "dff379ff97c57c8fc071e278de111d42c179a6be1f2be52f17cd46f59011e6da"
+    },
+    "consumer/authenticating/composed_routes_test.go": {
+      "sha256": "a3b02ed9e344ab3c040e8eebd470f2f25c11f33103ee9fab6d12e9e6982bfe6b"
+    },
+    "consumer/authenticating/sessions_test.go": {
+      "sha256": "43c22ca83dd4e8190095bf851207f63c3b13779509ba887600aba3a4cede4640"
+    },
+    "consumer/authenticating/tokens_test.go": {
+      "sha256": "1ff1ee7367ce7a9eb4196f33761e09e48b3fadcf37d734c86a55c63b16404697"
+    },
+    "consumer/background/module_test.go": {
+      "sha256": "df8cf2b87ecdda19f8c781d1c51dcb51e09f14d23ad1a3915a15605183823dd5"
+    },
+    "consumer/background/operations_test.go": {
+      "sha256": "9862346849041dd56f8a04ec5a49dac01417f174acd356c53b0ed985a93f52f3"
+    },
+    "consumer/background/welcome_test.go": {
+      "sha256": "13e2c84744e0ae26bd75478841a3039faaac31f5b6f7f6694f02a71e726cf627"
+    },
+    "consumer/binarymodels/draft_test.go": {
+      "sha256": "71d9e4f3c3d91f958143a88059577802dfc64707e386c803bcc5424c07841233"
+    },
+    "consumer/binarymodels/orm_test.go": {
+      "sha256": "e895d535a24227a3e4d955db19e93a71b7b71f0a3c7e716f5c0b5dd26ef98812"
+    },
+    "consumer/binarymodels/postgres_test.go": {
+      "sha256": "91bb22957f2d46591a6aa2a26d87e837ce9deb6b55aeab986d66bbbbfaed5ccd"
+    },
+    "consumer/binarymodels/record_test.go": {
+      "sha256": "a82830bbf873b75c9e33c39841bc5684018c49db69038dbce61a008f8b24e646"
+    },
+    "consumer/bootstrap/bootstrap_test.go": {
+      "sha256": "e5234b9b5d52ff8c855f3d265d0859bec6b1d6db7842977797b0acb71c7ffbcc"
+    },
+    "consumer/bootstrap/oracle_test.go": {
+      "sha256": "b9ab9ef03a5fc9818e275189fbd3a6c28fa283a6ae83643fb6963729a03f62c6"
+    },
+    "consumer/bootstrap/persistent_test.go": {
+      "sha256": "aac892127de1b41566da85ef4e7bc7041258d2720af80ad0a97c7ee005807957"
+    },
+    "consumer/bootstrap/redis_inventory_test.go": {
+      "sha256": "a8bd6bc73cc8f1ffd5816738025ac248d3f3c8597fb27c6188fd869fd2cddf97"
+    },
+    "consumer/bootstrap/tables_test.go": {
+      "paired_tests": [
+        "TestORMActorDeclarationParity"
+      ],
+      "sha256": "28975ea108adc28db10476b36682b8babfad00d88c429792ae68f675f415cccf"
+    },
+    "consumer/business_assignments_test.go": {
+      "sha256": "58ce44116dd69a713eb4edd5ca23cd269b0b2d662b0767eaa7843e24a1c0b30d"
+    },
+    "consumer/caching/counters_test.go": {
+      "sha256": "1640e897d15e27c5757f9772445b005429714ba5819f1809754e4ce0385fc142"
+    },
+    "consumer/caching/distributed_test.go": {
+      "sha256": "8ca0561762c3077b5cebb4e4ca34f7b56d1b04107727ed8f696f398f0a44b057"
+    },
+    "consumer/caching/entries_test.go": {
+      "sha256": "0ffb415c864587c7399c6074375b7ec2a9035d33870f4e5e07dcab61255c93d8"
+    },
+    "consumer/caching/flexible_test.go": {
+      "sha256": "edbe43d95551d85fe7074fdc7dbfdca31100083e26acbd3f1c8e3c39cdc48b66"
+    },
+    "consumer/caching/profiles_test.go": {
+      "sha256": "8cdbdaf45551fbe71e8d5c0fb131cf5c4c2cb2941a4d68d3e5e09eca6afcaebb"
+    },
+    "consumer/caching/redis_test.go": {
+      "sha256": "95f8ed45c3bb8f26ad365eef23f97035357288ff29d7266a622d21020a7341f7"
+    },
+    "consumer/caching/tags_test.go": {
+      "sha256": "9117ac0f2df00bd06080e2376e808ab27b70fd6bcb0883a1754e02f973eeb5a5"
+    },
+    "consumer/catalog/oracle_test.go": {
+      "sha256": "1eefae8f6521af7f0eaeb2c8c2757695b19ecd00e14da11eef288c726d5e757a"
+    },
+    "consumer/catalog/orm_test.go": {
+      "paired_tests": [
+        "TestProductORMParity"
+      ],
+      "sha256": "aed34b3f2b19aeff30b1965985acaacee0290329664eb2057d9024046a483556"
+    },
+    "consumer/chunkqueries/chunks_postgres_test.go": {
+      "sha256": "b99ea5b02bec89bb29be4e30fc6ad3595b749743553c829dabc52acb172f0b7b"
+    },
+    "consumer/clientcontracts/contracts_test.go": {
+      "sha256": "74ae627175d6e54ee3599f279cc3c7f90d613500b3fbe3e593008ceceb656b57"
+    },
+    "consumer/clientcontracts/descriptors_test.go": {
+      "sha256": "3a758a516be54c2928c405bf784e29f941003a5f6876513caecb19e9c6ac4865"
+    },
+    "consumer/clientcontracts/explicit_map_test.go": {
+      "sha256": "a80e3ac52cf64168fad49611e00bab61b179c7ab902941c6fce40b35931b163b"
+    },
+    "consumer/clientcontracts/form_adapters_test.go": {
+      "sha256": "09625e14606ea85097b1cbd79232bd9f28dcbdb411e672ef55730a0fa260b08e"
+    },
+    "consumer/clientcontracts/reporting_contracts_test.go": {
+      "sha256": "47c0eca4c80d62a8c35921402e31d09707883052c8f2273fed15df7df084a43c"
+    },
+    "consumer/clientcontracts/validation_fields_test.go": {
+      "sha256": "86f4065382a039e4f79240bfe11e8ec73acc755cbaf68dead84fc96fb4e2ad0a"
+    },
+    "consumer/codecs_test.go": {
+      "sha256": "8419d778a514dc81311754f5f602a308d9c267d8c8cd957e037ee4473aad4ef2"
+    },
+    "consumer/comparisonqueries/joins_postgres_test.go": {
+      "sha256": "2ee00041b5aa02f23f74f49b843c271cfb5244d490976d910e7f3812bdc1f08e"
+    },
+    "consumer/comparisonqueries/oracle_test.go": {
+      "sha256": "02ec828f75da0178e9d6b1f121483bf9c9e0b00a7402c876b9fd52337d90e788"
+    },
+    "consumer/comparisonqueries/predicates_postgres_test.go": {
+      "sha256": "788cd764c06e4ae87486af6df3593cad10575166dba12d967e01b9cbb1707ba6"
+    },
+    "consumer/comparisonqueries/scalar_clause_parity_test.go": {
+      "paired_tests": [
+        "TestAliasedScalarWindowSQLParity"
+      ],
+      "sha256": "367f6eafa2afe42b94817fa623b1ab401b44af262f8c56f945dff3f60236a626"
+    },
+    "consumer/comparisonqueries/subqueries_postgres_test.go": {
+      "sha256": "52631e7153bd7c7d39f3d0a1e8b215a37f614b76f02fddd06437cfabeb521214"
+    },
+    "consumer/compiler_batch_parser_test.go": {
+      "sha256": "d62eac0d414d57828335af6e139cac4d4661f26cd79ed56bcfed8c64c3814edd"
+    },
+    "consumer/compiler_batch_test.go": {
+      "sha256": "8c6365d13d8a67921d75984dc127836dac8fa9082379a82e271e6c8a68793e35"
+    },
+    "consumer/compiler_command_other_test.go": {
+      "sha256": "eec9c4987ae744c4df27864f9d64d4580ca6b38033b8b96ff4f10cce14f04c2c"
+    },
+    "consumer/compiler_command_unix_test.go": {
+      "sha256": "17eb78fedb457e1bf0ad25729abad2a60f840df3e8203c11545ade7ea3e126f2"
+    },
+    "consumer/configuration_test.go": {
+      "sha256": "56cf2b97beeb645ff02ae83a261b9a61c4c007e1e208db5a7dc0c7caab2ade47"
+    },
+    "consumer/configured/settings_test.go": {
+      "sha256": "3020023c8a44f0879af74c7c90bb86b3b2810b23910745a73aaa7c595749b446"
+    },
+    "consumer/configuredprofile/audit_scope_test.go": {
+      "sha256": "4efac4b9534748a7dba2e9959734b9c39f65ec47ea7385ee49dc0e7daf9caf76"
+    },
+    "consumer/configuredprofile/backend_switch_test.go": {
+      "sha256": "5766bc250957fc4aad07d7665a0738a7d87de184e5b7a61ca700db464a775c1e"
+    },
+    "consumer/configuredprofile/localization_test.go": {
+      "sha256": "6e2723dc98ccc454f39f83b490377404ddf0e6e08aae5e26e740ef1e3e58f250"
+    },
+    "consumer/configuredprofile/logging_test.go": {
+      "sha256": "216df3b7f0b4b7de5541a9ca21bfd875d6909989b49e4a6680b6bc0b714b1ce3"
+    },
+    "consumer/configuredprofile/maintenance_test.go": {
+      "sha256": "166c10492418942d4c450a4a519fe63313f1c1597860453f763da2823f5528e5"
+    },
+    "consumer/configuredprofile/profile_benchmark_test.go": {
+      "sha256": "52a08066eaa275931c1bee1c3c82aabc8f3fcc5e3abeae42c3a19ffd3b6eb9c7"
+    },
+    "consumer/configuredprofile/profile_test.go": {
+      "sha256": "ae5b0cf4fc20eae38d84f54197d7f5fa4aabf6b7ca066a4d2112a44dc25c6260"
+    },
+    "consumer/configuredprofile/timezone_test.go": {
+      "sha256": "a5cc66e553122fa6a29906ef9956d45053b15107f1ae40cf2121ca16cd374a69"
+    },
+    "consumer/contributions_test.go": {
+      "sha256": "b31e39b7373cf78c1af2b681036e9ce9941c357fefb13dbeb93d2bc3d18e0a3f"
+    },
+    "consumer/coordination/members_test.go": {
+      "sha256": "7e26df25aad1ac1f3b1fab180e6a95358f27bf28c3104be2fdaf5fc83bfe4911"
+    },
+    "consumer/correlations/correlations_postgres_test.go": {
+      "sha256": "4c0fed9a065191cad96c994780203daf1d9dc48b847f3598b49684e2d4b84d82"
+    },
+    "consumer/correlations/nullable/nullable_postgres_test.go": {
+      "sha256": "034efa6dc1b0857c91b1abcb59c2f8f10bb866dadf720ad8f2431ada029dd7c8"
+    },
+    "consumer/correlations/oracle_test.go": {
+      "sha256": "61f09c9a369e2cd317fe11275a34cbc36f636d7166baccc52b34bf75ebd1655b"
+    },
+    "consumer/correlations/sql_test.go": {
+      "paired_tests": [
+        "TestORMCorrelatedGroupingAndRelationParity"
+      ],
+      "sha256": "079fa6bc5f7256a421d715e711b3d17407db7a68e157e94ee29ae02b74ded3db"
+    },
+    "consumer/ctes/ctes_postgres_test.go": {
+      "sha256": "5e679d7d50f4a0a57bca6c17ebd07874eebe91620b421760555e0e820e30b410"
+    },
+    "consumer/cursorqueries/clauses_postgres_test.go": {
+      "sha256": "f140f50bfbaa4c97ccaa147819ef5a11e3333778117ee4ed86bf3a48c29d3c94"
+    },
+    "consumer/cursorqueries/cursors_postgres_test.go": {
+      "sha256": "e62ebe87ecf9900f41ee1fa9fe006a5b089afbed077ed7d210215c5f7cf577c5"
+    },
+    "consumer/cursorqueries/record_distinct_postgres_test.go": {
+      "sha256": "2e8aaf4d927fae2faffd1b731614e0019faee1ae5c5356e442f952202a537e1b"
+    },
+    "consumer/database_command_test.go": {
+      "sha256": "1bf20bec94160feaecb02996c9e15d9310bfb2a3e1c6aa58c8cd89619e4875c7"
+    },
+    "consumer/database_example_test.go": {
+      "sha256": "30e3c7f63ae8f69367dbee2bce307394f7fbadfd8f10138f8e7bb94d9a9408c6"
+    },
+    "consumer/distinctqueries/clause_parity_test.go": {
+      "sha256": "dabcf32e243272dad24d6d1e44b821f7e8d569200363c584d6ddec227c087085",
+      "paired_tests": [
+        "TestScalarGroupingDistinctSQLParity",
+        "TestScalarDistinctOnUnselectedKeySQLParity",
+        "TestRecordAndSetDistinctSQLParity",
+        "TestValueSetDistinctSQLParity"
+      ]
+    },
+    "consumer/distinctqueries/correlated_parity_test.go": {
+      "paired_tests": [
+        "TestCorrelatedDistinctOnSQLParity"
+      ],
+      "sha256": "430385f9bd94e0a792d70b5fe4390ea6e15c1c04dc69c1a3a2c9a2e22718b114"
+    },
+    "consumer/distinctqueries/distinct_postgres_test.go": {
+      "sha256": "e4c96fe0ba5ddfcf1b6f1e8573275b1ab0c58c94f3126de29771e5c54b178669"
+    },
+    "consumer/distinctqueries/oracle_test.go": {
+      "sha256": "710703f9387b60d58ae16d4258c3def326b7b7c00f8a3344bddc5c10e2cd119e"
+    },
+    "consumer/distinctqueries/record_distinct_on_test.go": {
+      "sha256": "969e0a3a784e5dab1e659b33d5bb3f62b2d865fa9b9660b4b236e8273305ca42",
+      "paired_tests": [
+        "TestRecordDistinctOnInputOrderingParity"
+      ]
+    },
+    "consumer/eventqueries/configured_outbox_postgres_test.go": {
+      "sha256": "19ed54d64e95922311156cdbebc7c162aaaef6e75553b297fb989c8f93cf02e8"
+    },
+    "consumer/eventqueries/durable_postgres_test.go": {
+      "sha256": "464a3e737060e3f8ce451fbcc19d84d1d1515709155d9ce363ff8abadbb631a8"
+    },
+    "consumer/eventqueries/events_postgres_test.go": {
+      "sha256": "3628bbdf4acc97d04d4c6f81faa6fc543f769a477bab45039f64bc1de8feda97"
+    },
+    "consumer/eventqueries/orm_test.go": {
+      "sha256": "9e270ddd7140b14e82e2f26165033e4dd6ee75f14af65cd66837ee88062c9276"
+    },
+    "consumer/expressionqueries/expressions_postgres_test.go": {
+      "sha256": "f70f981d911a0616cd6a4f476e27c634ba32bc9fe56c6e75531dd069e4649239"
+    },
+    "consumer/expressionqueries/expressions_test.go": {
+      "sha256": "1cad8f82d7783647c003ac86dbd52819770331c2b8550155b7832a0de0830a0b"
+    },
+    "consumer/filterqueries/filters_postgres_test.go": {
+      "sha256": "07e6fa3364b57b714b4940510efa4629c60288e4e488fc45dd1feeab5b62a3f1"
+    },
+    "consumer/footprint_test.go": {
+      "sha256": "5599d3ab37aad899a69464334eb8d1f947fb0a264989b44a2d5fc2d0c3e44974"
+    },
+    "consumer/framequeries/named_postgres_test.go": {
+      "sha256": "669e18ea9b5052576701a8a308d46e9881dcb26a82eea28564b99344c7e635ae"
+    },
+    "consumer/framequeries/oracle_test.go": {
+      "sha256": "986a534dd9190349f58a4809f2a83c3b76b33e5759dfc7b97c6cd56f7a193818"
+    },
+    "consumer/framequeries/ranges_postgres_test.go": {
+      "sha256": "ae55011d65e6d3618a4979ca260943cd7bd56c020329e82f209e196cfb563c0b"
+    },
+    "consumer/framequeries/sql_parity_test.go": {
+      "sha256": "1e53b250d7ffa4a7732f8bb481f68d6f28c352001ac37eb83f0a1bce4f53b5f9",
+      "paired_tests": [
+        "TestNamedFrameSQLParity"
+      ]
+    },
+    "consumer/generated_test.go": {
+      "sha256": "b75ddcd14b71862510faba79563893dac2a37e811ea9d46b4a0732a5afcc6cbe"
+    },
+    "consumer/genericdto/envelope_test.go": {
+      "sha256": "67d13a05093fbf43114bbc7a8fe07223178a3653629e520fbceaf49b64cd7e8d"
+    },
+    "consumer/hookqueries/after_commit_error_test.go": {
+      "sha256": "ea0d73a1071cd33ade898e11258699364e0e1c7bf8d18480dd797e2220593b63"
+    },
+    "consumer/hookqueries/hooks_postgres_test.go": {
+      "sha256": "8175ef7d8cefd8ceca42c33bfaf7b37476165a1ee88dac5d5baab8eb01f74b74"
+    },
+    "consumer/hookqueries/orm_test.go": {
+      "sha256": "851f572cb3395d7c5c0b635638dd95a3cdfe1e72d2507c04685336ed6401ddd7"
+    },
+    "consumer/httpassets/assets_test.go": {
+      "sha256": "70f219ed6efa9ab4d52f089bc1d136bbdff5d1148c0bb870590d4128d11946d4"
+    },
+    "consumer/httpcompression/compression_test.go": {
+      "sha256": "1af3d40feb1529d8f01845a93ef42a3d72f3083a4c5e122d9edcef201e0daf29"
+    },
+    "consumer/httpcookies/cookies_test.go": {
+      "sha256": "210b1eea37f7c005f162534f7663c9c6982c7f97c4f6922b5c6e269f10511652"
+    },
+    "consumer/httpcors/router_test.go": {
+      "sha256": "e29259d7b74a948ee4236821f89556ef2e2cbc5b17de595cb7248d6862e9d2a0"
+    },
+    "consumer/httpdownloads/downloads_test.go": {
+      "sha256": "0ddfe8f3288522ee975d1dc1782a891a4bde60fbb7f5d41deec2b7b8f0759efe"
+    },
+    "consumer/httpdto/custom_code_test.go": {
+      "sha256": "68f716d694eaf5c4680a0e4b3be45ad73221ec028b7f3a98ba6fca059f64a782"
+    },
+    "consumer/httpdto/dto_test.go": {
+      "sha256": "42417f77686e2989f790ca133492860bcc8a9c912978a11f08ac9b81c8af7532"
+    },
+    "consumer/httpdto/encoding_test.go": {
+      "sha256": "5825f232cac0b7f4ff0d43c31d242c3cd6841a88cba8c6b209db55e8ed9e3ff4"
+    },
+    "consumer/httpdto/map_keys_test.go": {
+      "sha256": "697a3a3247c9ba785f91614700a23889e751fe40e43adf3c71215704a059a659"
+    },
+    "consumer/httpdto/stream_test.go": {
+      "sha256": "dff56135241d36550cd8c00a06a8146a043b9ac766f305d25145684b67efc95c"
+    },
+    "consumer/httpendpoints/deadline_test.go": {
+      "sha256": "264272d4105a586049f1241ce012f6bce7dca15fe9472d634171849e825dd59a"
+    },
+    "consumer/httpendpoints/endpoints_test.go": {
+      "sha256": "a62e1cd8425adea3e25633aa4c548c990a0216b5a0a05864ab864ce964fa403f"
+    },
+    "consumer/httpendpoints/errors_test.go": {
+      "sha256": "b0b95e720b82c44aa032ec53dda7f320bcf4eef26f7d5d1d1e00b03a7e826c64"
+    },
+    "consumer/httpendpoints/retry_errors_test.go": {
+      "sha256": "f9b8169048f4f9ce636253b25da79b5b19acfe8fb1482682f76f7204fcae8a4e"
+    },
+    "consumer/httpetags/etags_test.go": {
+      "sha256": "d80c3a5fb1317a7bc93081314c53f6925bf0662db9d920985f7c5124ee24a24c"
+    },
+    "consumer/httpkernel/generated_routes_test.go": {
+      "sha256": "d34051f0d539db51c7895d2080b82dcfd8afdd0887ea20eb4d89c6124e7e2aff"
+    },
+    "consumer/httpkernel/kernel_test.go": {
+      "sha256": "e97d615934e4290cc079b0110885a61cfbb3a62ce29f54655b6c8e21c9687a80"
+    },
+    "consumer/httpkernel/request_test.go": {
+      "sha256": "911bfafd61db71f2508f7cd77b6a94fa7395f694e3a692f7e161e29dbb2864e4"
+    },
+    "consumer/httpkernel/routes_test.go": {
+      "sha256": "b4da12df365c56000988fb0e9c84ba32f99fdcc0d678364e7e7249735a3937c0"
+    },
+    "consumer/httpmiddleware/router_test.go": {
+      "sha256": "21fcbc98346a697ba53e4170240572ad33ff24b7fcb6980ae3e499a11a81b1ee"
+    },
+    "consumer/httpmodels/bindings_postgres_test.go": {
+      "sha256": "a5b92758ecce2ea5cc8cb320c1692a2b43f30cfe50dff8901912760a5a6bfc6c"
+    },
+    "consumer/httpmodels/bindings_test.go": {
+      "sha256": "0c0e882ef058e4a44704c6036721b64309b0be23e955aca3a79f909bcb8f185d"
+    },
+    "consumer/httpmodels/oracle_test.go": {
+      "sha256": "415036ccdffa25fa752d1428c4ef04ba290994586294fceb1cf5cbeabf459dc8"
+    },
+    "consumer/httpmodels/sql_parity_test.go": {
+      "paired_tests": [
+        "TestDeclaredBindingsPreserveLegacySQL"
+      ],
+      "sha256": "f89f1f6d94b450af55f3772a62031d8e57c53e9888667def2f9f60afcf9d8363"
+    },
+    "consumer/httppagination/cursor_test.go": {
+      "sha256": "dffd23ef332ca99c7803760f71db4b18e6fdc98f6be837eae18cb7a207464af4"
+    },
+    "consumer/httppagination/pagination_test.go": {
+      "sha256": "6f5109074e5006bed284f81989db37908be82debe84ef9fdf54d481cacaca40a"
+    },
+    "consumer/httpproxy/router_test.go": {
+      "sha256": "8e6ebbb506d43e66dd8773a6d8bddd13b9c9f125398408c48bcdb36f2712ac21"
+    },
+    "consumer/httpquery/composition_test.go": {
+      "sha256": "1d0a316a41cf811257e13e16d2f30ed3fc72d425bda235a84273dbca18cadcdf"
+    },
+    "consumer/httpquery/floats_test.go": {
+      "sha256": "866bbc734f0f258e7ba69058fb21519988e586f4c036385da445bb11c1aeff5f"
+    },
+    "consumer/httpquery/query_test.go": {
+      "sha256": "406a1f6a4709ec6b85ff561f73f88924785186c9a2b78fb50fc80bf5186fd561"
+    },
+    "consumer/httpquery/scalar_metadata_test.go": {
+      "sha256": "66bef09f5f80bd308ecf3f24101dcd40ce64cd1ad24f9ae2fdaf32f70a7da218"
+    },
+    "consumer/httpquery/source_identity_test.go": {
+      "sha256": "9a7d52374ef4bc82a2c1d6fa32b43d4bae66dd42c66d5aab8c7004b43788fc80"
+    },
+    "consumer/httpsecurity/csp_test.go": {
+      "sha256": "4632ffbc30c66115525eab635d40f48136317f42aab300b894358242e33a329e"
+    },
+    "consumer/httpsecurity/public_urls_test.go": {
+      "sha256": "06be5a033ba21cf41962e007f4e6a6405472e0346fc3ad37d969346110df00eb"
+    },
+    "consumer/httpsecurity/router_test.go": {
+      "sha256": "494cadb2c8361f1477bf817b343052f9a68eb7b139522cad3f61b676c96cd52f"
+    },
+    "consumer/httpsigned/links_test.go": {
+      "sha256": "a1043345ac44e501c51ab9ab5029cf194e60c7c1a86ba9c229b5c21c84eb00ce"
+    },
+    "consumer/httpstreams/streams_test.go": {
+      "sha256": "3b7daffd6b28ec998d640b0ed46e70cc6c6b5e3fec7c0eed18984b5cb74d219b"
+    },
+    "consumer/httpuploads/forms_test.go": {
+      "sha256": "2f012b60a24e6a9cca60ee6d12066cad13fc6afea9375441c2db47a3aa0a8241"
+    },
+    "consumer/httpvalidation/async_test.go": {
+      "sha256": "5866d92cb0dff5275187251ab5d4243b2ed047e046e46cf1481a5ad49da5c487"
+    },
+    "consumer/httpvalidation/validation_test.go": {
+      "sha256": "27a88d5dd879bb12227b8ead9063ca0411482be6a877717e781a14a239837446"
+    },
+    "consumer/idempotenthttp/client_test.go": {
+      "sha256": "d7ad58ba8cef758527b276ba6b7092866c4fae1b17ab48989bb4c3ad7a57bb0a"
+    },
+    "consumer/idempotenthttp/concurrency_test.go": {
+      "sha256": "92518996599b976f9c851856008d998414ceedbf7a784cd6c71eec8f6f37e40b"
+    },
+    "consumer/idempotenthttp/fixture_test.go": {
+      "sha256": "4ea77de8ce330c2fa7619220f8dbf68d532ca673f808b45abd5ce340bf612501"
+    },
+    "consumer/idempotenthttp/process_test.go": {
+      "sha256": "0b784635a961a48200ecb65e3e7ae26bdab4b827e85e4270bc31f518b80e1a1d"
+    },
+    "consumer/idempotenthttp/publication_test.go": {
+      "sha256": "935cf420a7b1fa1becc41cc3b2468748cb82c6fdefce735cf2f5bf6645b23dee"
+    },
+    "consumer/idempotenthttp/tables_test.go": {
+      "sha256": "334da9989c4b6dacd96320052a4ccdc4922b41602b0ba1b1d8ba795b08886c3b"
+    },
+    "consumer/inputqueries/inputs_postgres_test.go": {
+      "sha256": "951e0ffec003166fd335778a28273277010b82543f0b95aa4e4d5a0ef081543a"
+    },
+    "consumer/inputqueries/inputs_test.go": {
+      "sha256": "cedd4ebc9f18753cf62a64a0752542bf9e48bea60307b6418bfd42140ab2c069"
+    },
+    "consumer/inputqueries/orm_test.go": {
+      "sha256": "5e9d0dacd4690401e6174106b4d5622d42c2b0ada6068aa140dfc2686d612ae3"
+    },
+    "consumer/intervalqueries/calculation_postgres_test.go": {
+      "sha256": "ccff96597a3275dfce023f9d955efd1a4072626d35727ebc0d0e0965876ad8a4"
+    },
+    "consumer/intervalqueries/codec_postgres_test.go": {
+      "sha256": "75e7df1335540c230c1d6f3e852686f3e3f704dff4ec0a002a2c63acec2d54c7"
+    },
+    "consumer/intervalqueries/failure_postgres_test.go": {
+      "sha256": "8219190449328cb244d387434a82adee7730fabf0f6c89ad79ecc75209dec430"
+    },
+    "consumer/intervalqueries/fixture_test.go": {
+      "sha256": "6caa8709ffe8f000b4490145c1bf0a3eaeb6210ba4290c34dd7d193e572b8414"
+    },
+    "consumer/intervalqueries/oracle_test.go": {
+      "sha256": "ac8e8a7327c6c4f1502efb419dcec530f2605d59ac6930494dab1aa0b1ed5eb8"
+    },
+    "consumer/intervalqueries/orm_test.go": {
+      "paired_tests": [
+        "TestIntervalDeclarationSQLParity"
+      ],
+      "sha256": "50ff02f934e37addab309347224269d68f57a1d821a36607e9e4f76a712178ae"
+    },
+    "consumer/intervalqueries/relations_postgres_test.go": {
+      "sha256": "1c891806265cd33e1da00539eeb5b87a60c7faeac729e22c9fdf79a7d133412d"
+    },
+    "consumer/isolatedhttp/isolation_test.go": {
+      "sha256": "4bb1a90c3f15076ca6de1f62d67decc59e3cd7d923416c8f4ba43a9b6319013d"
+    },
+    "consumer/isolatedhttp/tables_test.go": {
+      "sha256": "0284e464dc11cdf3a002be0c55f72e0e70f4b3fa0f2df13bd64db2ece69ecb98"
+    },
+    "consumer/joinqueries/inner/inner_postgres_test.go": {
+      "sha256": "f55045afaf7a53060520e2e5549ef8496848c0431325a00c47d22c76ec010711"
+    },
+    "consumer/joinqueries/joins_postgres_test.go": {
+      "sha256": "9c8b383decce31f3d0f0a4bd60c0b2dbb4d6becdc0938ee6794d4178e310a7d9"
+    },
+    "consumer/joinqueries/natural/natural_postgres_test.go": {
+      "sha256": "18b5391c57911868d4ad08f1d6042bb21860dca0e661eb437c292c93cd25f64d"
+    },
+    "consumer/joinqueries/outer/outer_postgres_test.go": {
+      "sha256": "9fafaa069318e5db31513ca99896213892cbcf7a5a86ba5e49b827b77bd974d8"
+    },
+    "consumer/jsonqueries/composition_postgres_test.go": {
+      "sha256": "c963ac615feb4662abf0f9b966772d936118046e7782fd13404000ee33b40277"
+    },
+    "consumer/jsonqueries/failure_postgres_test.go": {
+      "sha256": "c9a6331290147e2f8e8d0ab61778ca8255ca2eddf597ca208c4564f65e6597a3"
+    },
+    "consumer/jsonqueries/fixture_test.go": {
+      "sha256": "cb501e963a8fede2cecaca4c5274a28f217fc3fa75534cab02d617cfd180353b"
+    },
+    "consumer/jsonqueries/oracle_test.go": {
+      "sha256": "a797dea7f0e3314dc2b4bcd93fc286a18377abce62e52971bb04433cd6cafbd3"
+    },
+    "consumer/jsonqueries/path_postgres_test.go": {
+      "sha256": "3692dfb6a212353538e7b21b6cab9d3c0dfaaf1572b03dafe4c03dfa105c9c0e"
+    },
+    "consumer/jsonqueries/path_sql_test.go": {
+      "sha256": "b3debaf4b1f1f87df2e227103f56b5ecf538cdb94d4afc2bef8807e8a1319a88",
+      "paired_tests": [
+        "TestDeclaredJSONPathSQLParity"
+      ]
+    },
+    "consumer/jsonqueries/query_postgres_test.go": {
+      "sha256": "0223640b392e2a1919de61337f9b1b1c2fa34c8b18049ab65b442bfc773bb116"
+    },
+    "consumer/jsonqueries/relation_filter_test.go": {
+      "paired_tests": [
+        "TestJSONNaturalKeyRelationFilterParity"
+      ],
+      "sha256": "f1cc9edd9863c512a328cd47a3dce1fde1dfc7447387676dbce5dc28eea77250"
+    },
+    "consumer/jsonqueries/snapshot_parity_test.go": {
+      "sha256": "8188c3fea79194ff440328b51b253eb82b2e47adf309fb79baa5d0446622da4e",
+      "paired_tests": [
+        "TestSnapshotJSONKindIdentityAndSQLParity"
+      ]
+    },
+    "consumer/jsonqueries/snapshot_postgres_test.go": {
+      "sha256": "38f58579ee50a89ce4dfb44358d978c40a6fbf05471ea79778e854ba3f1d1106"
+    },
+    "consumer/keyqueries/clause_parity_test.go": {
+      "sha256": "b2072bbd2af80519a5bfc960173649a22b03cbba552d9ef269d0e3f5037f0cc2",
+      "paired_tests": [
+        "TestCorrelatedSelectedKeySQLParity",
+        "TestValueSetSelectedKeySQLParity"
+      ]
+    },
+    "consumer/keyqueries/cursor_compile_test.go": {
+      "sha256": "84c3695b20d37b14547112198ac853279439ec38d297a4fd1b4bbef5cc93a76a"
+    },
+    "consumer/keyqueries/cursor_parity_test.go": {
+      "sha256": "41d426f59c6b9dc41c88ad6488b8705e8d477fbce55e2a20c79e3c49de691d8a",
+      "paired_tests": [
+        "TestCursorCompileSQLParity"
+      ]
+    },
+    "consumer/keyqueries/keys_postgres_test.go": {
+      "sha256": "8329553040ebb4507efc25a52e6d65598a5cfaee3a7a79d8fca87535223dcc39"
+    },
+    "consumer/keyqueries/keys_test.go": {
+      "sha256": "6075bd0d96dbce3eb992b94801cf15f04a5d817f7ea93023a11d7954162f0e54"
+    },
+    "consumer/keyqueries/oracle_test.go": {
+      "sha256": "b5629fd41b31d7ce3c629ae79279b2d7b4c9e06929ddadc03ea2451c5a61f32e"
+    },
+    "consumer/lateralqueries/clause_parity_test.go": {
+      "paired_tests": [
+        "TestCorrelatedRecordClauseSQLParity"
+      ],
+      "sha256": "9e549eb901606beb8aa33c51d258f36bfbd4c851559f0cb994119f6576bdf348"
+    },
+    "consumer/lateralqueries/composition_postgres_test.go": {
+      "sha256": "7415fdf7a3e8fef4dba1895453d35b0ef67c4240c241cc2012f84860e86b120c"
+    },
+    "consumer/lateralqueries/oracle_test.go": {
+      "sha256": "03fc758ebf51b7023869917020de9b2cfbfc8a3f490ca43b246b412ebc693864"
+    },
+    "consumer/lateralqueries/records_postgres_test.go": {
+      "sha256": "bde1e4b747e79918e81d1653ec89a5127dee14ec0e59d83e387fbbaa608aeafd"
+    },
+    "consumer/lifecycle_test.go": {
+      "sha256": "90a8a70876c92abcf0bb29c2331cb1081f7655af9e41d0991af0f5c43eeeec1e"
+    },
+    "consumer/limiting/members_test.go": {
+      "sha256": "c95fda98756bfd95418c260c5d934b11ef7f33363ddfbe36e02b0f142accccbf"
+    },
+    "consumer/linkqueries/concurrency_postgres_test.go": {
+      "sha256": "048bc704f0c99100561ca79c540a9064f8503fd9ed4f53f73278d23107ca98f8"
+    },
+    "consumer/linkqueries/each_concurrency_postgres_test.go": {
+      "sha256": "dccf01a2c09529c527b9cf3933d2244233b8e9e16c36ac9c2119ce3e55c95a3f"
+    },
+    "consumer/linkqueries/each_modes_postgres_test.go": {
+      "sha256": "d68f6a4a58a54557b755594e822f15a77f9348b9a665f0c1c4fb328618468a11"
+    },
+    "consumer/linkqueries/each_postgres_test.go": {
+      "sha256": "294a9be08eec8acfb70d9298e99117d9b1263964f42343964a3cf84bff0ffd02"
+    },
+    "consumer/linkqueries/fixture_test.go": {
+      "sha256": "88f9e91fefea97b41c4a16200424aee12f4277c7f394dc14599654b0e5462b18"
+    },
+    "consumer/linkqueries/insert_select_postgres_test.go": {
+      "sha256": "600488e2c7cd76417faf47f565ab377ed7ff5a37a40435b90aee3442fea61869"
+    },
+    "consumer/linkqueries/keys_postgres_test.go": {
+      "sha256": "dfba09678a053382046a527f892ad043d24343022f71af31911f09a80f31bfbb"
+    },
+    "consumer/linkqueries/lifecycle_postgres_test.go": {
+      "sha256": "2e2fc912958c7b98481f570b68c42a7685661154175f083a711f3c5d8572117a"
+    },
+    "consumer/linkqueries/lookup_concurrency_postgres_test.go": {
+      "sha256": "da414be3457628ca12e0ac4131d6fb82eab48e48796a67e4f9245e128a9c1165"
+    },
+    "consumer/linkqueries/lookup_postgres_test.go": {
+      "sha256": "5ef5d043e631bb820823c254698fe07fa9d822249ad05521177f2d5c2e5e9b25"
+    },
+    "consumer/linkqueries/oracle_test.go": {
+      "sha256": "64dfa201000e312d602a5f00fe9332295e918fc888d6f7e38bf9dab8d4ce54fc"
+    },
+    "consumer/linkqueries/orm_test.go": {
+      "paired_tests": [
+        "TestORMDeclarationsAndReadParity"
+      ],
+      "sha256": "227feaa41bbddbdbdfc1b42bcc3edb732b928de9b87c82aa967423fc43c023b2"
+    },
+    "consumer/linkqueries/source_write_postgres_test.go": {
+      "sha256": "a8720c553d7b1806dd9a3718cdc8a6fc6716db9dc30d460fa79f9fe2e5c6c5c5"
+    },
+    "consumer/localization/locale_preference_test.go": {
+      "sha256": "b3d834bbd48df4e3523804e167454abaa521bf4dd1c6b2703b38dc94e0e20bbb"
+    },
+    "consumer/localization/localization_test.go": {
+      "sha256": "9f78172f0bf9476760c4e23f3c81b99f97529c944eff4f8dc275a2bcbf42abff"
+    },
+    "consumer/localization/supporting_test.go": {
+      "sha256": "0b00d177d694a752b14e4f7cc6b0083a51bbb104f64c63802d56cb5480dcf709"
+    },
+    "consumer/localization/validation_test.go": {
+      "sha256": "10d6c2129a138bbbda0bcb9bfd303f50bb939119fa0812b199fed88c8b95c18b"
+    },
+    "consumer/lockqueries/clauses_postgres_test.go": {
+      "sha256": "9a6f93431b293c746f7ba31b28819b0a8f63d7f169d7665d3bd77246d06aaf0d"
+    },
+    "consumer/lockqueries/locking_postgres_test.go": {
+      "sha256": "a978b6c338931f0fe1e5fe45d3af76d23bbb86d961581b96a81ddbd88d94941a"
+    },
+    "consumer/lockqueries/source_acceptance_test.go": {
+      "sha256": "866f46c4557aff5ec9a4f4160c1226c232a114a9f0efccd6eeb9191f66763c3e"
+    },
+    "consumer/mailing/configured_test.go": {
+      "sha256": "ada2bc9f1212ff0668d5a0abf5dd372490e6be77409da65fcf6239ba89c67d4e"
+    },
+    "consumer/mailing/recipient_test.go": {
+      "sha256": "86e11c9a4a8a067229cf71b2a647f9ca5384ad924bbff449f37b487ba15aa8a2"
+    },
+    "consumer/mailing/uploads_test.go": {
+      "sha256": "8592b43e255b038e2dd2cd1d2dc89b80424714f28ed1768650f6ce9a9cb6db57"
+    },
+    "consumer/mailing/welcome_test.go": {
+      "sha256": "4a65c5813a69acc95f723faaa9f00e966074b598f52a81c2090bdb0a3e70142f"
+    },
+    "consumer/messaging/members_test.go": {
+      "sha256": "b954cf86ef841a1f866246510e2d1efb2d8f0c7a764a1ad2c7f963e76c32fc25"
+    },
+    "consumer/migrations_test.go": {
+      "sha256": "8cc20d18540d87c64769a4e119d59f74e70a3b6eaee43794fbf737d82f39bc84"
+    },
+    "consumer/model_adapter_editor_test.go": {
+      "sha256": "d530ad081d830b82f2f757cbfb18a47d8255e87398506d9b697b387d12581cc6"
+    },
+    "consumer/model_aggregates_postgres_test.go": {
+      "sha256": "9d2ba9e5e8fe1a119d9fd64f4a917886a79117f6f1b53059df83581b6ce94144"
+    },
+    "consumer/model_changes_test.go": {
+      "sha256": "aee0f4c405e8f2f6a514c55a4e4ecf11a0a2c00dea72c19bc43c40d908a4698c"
+    },
+    "consumer/model_pagination_postgres_test.go": {
+      "sha256": "6e5b95c878a864b922c69aaed57dd4a646237e5e5c5f1b5af71e3144f24bb0cc"
+    },
+    "consumer/model_query_postgres_test.go": {
+      "sha256": "02d540c5381a9a831352d8310875db61365e097f99912bb0f45131de9c8aa0a7"
+    },
+    "consumer/model_relations_postgres_test.go": {
+      "sha256": "2de468bd3d07eb996abe481d26de7526328db01e0582a25e7e2731eaf0c48963"
+    },
+    "consumer/model_through_postgres_test.go": {
+      "sha256": "fd711d9dbb39a64bfba961e2be657f38aad8fd646276f44db46f67f71397a2c3"
+    },
+    "consumer/model_validation_named_postgres_test.go": {
+      "sha256": "16af93ce7cc748ddd531ea685a3c12e8dd3c3c87433da24c7c06b30723c344af"
+    },
+    "consumer/model_validation_postgres_test.go": {
+      "sha256": "ada98bec13cc6b1716a026f58b29cb0ab8da043cd35a5ca443174f5a748d7130"
+    },
+    "consumer/model_write_postgres_test.go": {
+      "sha256": "e4578b991d414b7186e8a4bce513a86ba21c0fd79930bf13b0ee67fdad5e553a"
+    },
+    "consumer/models/oracle_test.go": {
+      "sha256": "dd359d03f3beb39f6c4d98e8179bc6fe11a05c3f2a5e7a71b507c7c71c46f971"
+    },
+    "consumer/models/orm_postgres_test.go": {
+      "sha256": "528f936bcc4d0a990a91547fb72b597b051d82997a9e77c84f332b15f3b3cd6a",
+      "paired_tests": [
+        "TestPostgresSharedDeclarationRelationParity"
+      ],
+      "postgres_tests": [
+        "TestPostgresSharedDeclarationRelationParity"
+      ]
+    },
+    "consumer/models/orm_test.go": {
+      "paired_tests": [
+        "TestORMDeclarationSQLParity"
+      ],
+      "sha256": "fe5e4a6bd1b5a73e4c0e5317766d1061ed7fcb963537a2140a529b8ad3fcf8e1"
+    },
+    "consumer/multifactor/completion_postgres_test.go": {
+      "sha256": "7d8464bad867334a2d2b202386ab47fea3c3711ed3e55479e28b4b1b6c728620"
+    },
+    "consumer/multifactor/factors_postgres_test.go": {
+      "sha256": "4243390d1032fbd897d0b2f53a4e60d8666dfee46e0031eebe009bfc0169e802"
+    },
+    "consumer/multifactor/http_postgres_test.go": {
+      "sha256": "26b58efeec44062693296bf87ee868cdfa47ba22a9abfe8e65d27ed7d2f8d4ac"
+    },
+    "consumer/multifactor/oracle_test.go": {
+      "sha256": "3b50a47857dde0a7cdfe011b8fb17d1d23a4b9ae9cef9cd50101f192cf502e48"
+    },
+    "consumer/multifactor/primitives_test.go": {
+      "sha256": "d54a7ee66e77e994cb5a65799c544c9ee5c2811dc7fd6786af67349b8d60146c"
+    },
+    "consumer/multifactor/security_postgres_test.go": {
+      "sha256": "2343ecac0b00be056a1b17b41805ae2fd175e29fd80bcb80f70f60f659631335"
+    },
+    "consumer/multifactor/tables_test.go": {
+      "paired_tests": [
+        "TestORMFoundationParity"
+      ],
+      "sha256": "429b9dec08265f1f9fa6cd5e209c22ee18d4f5d2b7ad6878e9b5620b0d72c7c4"
+    },
+    "consumer/mutatorqueries/accessors_test.go": {
+      "sha256": "0c60c78d6702a1c3be617c234b0a1668c35075b26d4497bc251f62aadfa9862f"
+    },
+    "consumer/mutatorqueries/changes_postgres_test.go": {
+      "sha256": "8bf0c49aee0ab5032299de115046fb65fdda59051bb7a3ecd811cf7f468afcd9"
+    },
+    "consumer/mutatorqueries/mutators_postgres_test.go": {
+      "sha256": "a59078d2669e9cee1ab609b723ddcb53294878e7705a4ae1311ab62032ab5a43"
+    },
+    "consumer/mutatorqueries/orm_test.go": {
+      "sha256": "725e80bd20d8eac97533d5acdadd1275859063b3179d12353edbedae24e915cd"
+    },
+    "consumer/mutatorqueries/reference_test.go": {
+      "sha256": "b4e35215ab114da2123b16ec9cf5de465df15930c6767f4515a2d70f46cfc415"
+    },
+    "consumer/nestedbindings/bindings_postgres_test.go": {
+      "sha256": "a72c643f874d63c092a9736588d00a3bb2caaae07a061f1750a077bb02685f2a"
+    },
+    "consumer/nestedbindings/identity_test.go": {
+      "sha256": "2112c8c67bdb6d74511c65ec9b7e9f5ff94aaa4466060263befefe662acf020c"
+    },
+    "consumer/nestedbindings/tables_test.go": {
+      "sha256": "79b145dfe9a8cb19fe3fdb97e07622b8e165fa4097a8fe5257ab14f210eb4800"
+    },
+    "consumer/notifying/orders_test.go": {
+      "sha256": "ad20693e5a2b273e048367fabf4da08593b1fb7202202af2dadb92df1fbdc7ef"
+    },
+    "consumer/observer_ownership_test.go": {
+      "sha256": "02069eab23977c4512abce4ebee34ae3f29afa39120ffb291f05b7fd96782bdd"
+    },
+    "consumer/observerqueries/observer_scope_postgres_test.go": {
+      "sha256": "92b0248e64961d5cc3224925cbb8e8e53f73768d9b2831fa9747275ddeb566f6"
+    },
+    "consumer/observerqueries/observers_postgres_test.go": {
+      "sha256": "d6c250b5e53006d002d6ad2254d367e711b74b73540353f0c1b2fc22652fd148"
+    },
+    "consumer/observerqueries/orm_test.go": {
+      "sha256": "95ca2f90cd79e8f2b7f477f22aee1b3e12ec1d868042ec12c756953cee734ea9"
+    },
+    "consumer/observerqueries/row_observers_postgres_test.go": {
+      "sha256": "3cfb198e10c909f631e054b12f95d497aa250f3779416a02757986cc447bdfec"
+    },
+    "consumer/officequeries/desk_scope_compile_test.go": {
+      "sha256": "69565bb317a983b86120ce22c6f89c009eaa5a3a27c87b5f5ae1683351b97c47"
+    },
+    "consumer/officequeries/desk_scope_postgres_test.go": {
+      "sha256": "edc47b5519b5b9ff8a870ec939433fb1caf6ddf550dd8d1210eefc1a540d59b0"
+    },
+    "consumer/officequeries/office_postgres_test.go": {
+      "sha256": "029100ac097817d46ad89e74bdd3383ba70e0998db2a94ffe0089119db88b78d"
+    },
+    "consumer/officequeries/oracle_test.go": {
+      "sha256": "68c79c0a36ba72b1eaa8f17cb16e4b650589fe4082ee797a12eb8a402035fb99"
+    },
+    "consumer/officequeries/related_value_test.go": {
+      "paired_tests": [
+        "TestOfficeRelatedValueSQLParity"
+      ],
+      "sha256": "dd659139727012b14853c26a301833f129d458cde8a7f818294d3acc41cce948"
+    },
+    "consumer/officequeries/tables_test.go": {
+      "paired_tests": [
+        "TestORMOfficeDeclarationParity"
+      ],
+      "sha256": "c4051aefd937641b2c83d38ef7add7ee23a3de8116a5188224fec276b1a62f15"
+    },
+    "consumer/orm_benchmark_test.go": {
+      "sha256": "d604e51987ac8006016975f8d7e716f7bf1193c9b523740793fa55463a7404e8"
+    },
+    "consumer/outgoing/client_test.go": {
+      "sha256": "f629f52a5f6aaf9ef98b1039a809451430d62979ddfb4fde8b25339fb4cc3069"
+    },
+    "consumer/package_graph_test.go": {
+      "sha256": "96e929345946d25b6b83e2f4bc53d2e3df198eefa46f30e50aa1a2a66fdb4521"
+    },
+    "consumer/pagequeries/clauses_postgres_test.go": {
+      "sha256": "95b74ef81667680f5f247d09676af41f0f31a34465a525dff79cf2ce582fb3a2"
+    },
+    "consumer/pagequeries/pages_postgres_test.go": {
+      "sha256": "35ee0d8feddce32fb48d6de4b3f66aee2c72cbeefb19ca4f95983c5a0ec8e9fd"
+    },
+    "consumer/pagequeries/record_distinct_postgres_test.go": {
+      "sha256": "6829e17fcc4fc0e1713b9fd1fa9f5609ac9ecf3c71f87c6fc0e00a1b21f7d1a6"
+    },
+    "consumer/passwords/account_postgres_test.go": {
+      "sha256": "e4c89721bec1e7a25261f8f0831c7b031a84e608621ed4a040afb08ac2d45c2e"
+    },
+    "consumer/passwords/lockout_postgres_test.go": {
+      "sha256": "04e38d81a419d346eb6619e06bde882ab5ea5259dce3016b8e14532dd250e5bc"
+    },
+    "consumer/passwords/login_postgres_test.go": {
+      "sha256": "9d4b9f767fc06b6106892f0fdfce6c7418a4d209f24a96f1b89de2527701c483"
+    },
+    "consumer/passwords/oracle_test.go": {
+      "sha256": "e3e728eee457d8a1b5a7ec80b07df54c0dd1927f6dfa3540e862d474c9782d3c"
+    },
+    "consumer/passwords/passwords_test.go": {
+      "sha256": "787cb3808903bf6c1aaf6cdb201acfb10e76cd012497d9b793b1872ec54399c0"
+    },
+    "consumer/passwords/tables_test.go": {
+      "paired_tests": [
+        "TestORMFoundationParity"
+      ],
+      "sha256": "111b541cd03741da4d777c4d218bc2ad6bae9e12aeafb269ecdcb0ecdb6c925a"
+    },
+    "consumer/pinned_tool_test.go": {
+      "sha256": "d31b428b399dad380f9d23fb4880defffdbd34912d11207629e0d3411878a485"
+    },
+    "consumer/pivothooks/create_or_first_postgres_test.go": {
+      "sha256": "69a9c1d3efc48bc7768110c85d79ff1c997e3d1f9397fcc8fa42d72109a7ea16"
+    },
+    "consumer/pivothooks/oracle_test.go": {
+      "sha256": "b6d65d760a6d184aa3157af911a228d38e8b942ab658e1e4328229085c13b694"
+    },
+    "consumer/pivothooks/pivot_hooks_postgres_test.go": {
+      "sha256": "ebd11d8ef07de5f4527c0d0e6c0acb14d4c809edf7249ec900020a695d067b0d"
+    },
+    "consumer/pivothooks/tables_test.go": {
+      "paired_tests": [
+        "TestORMPivotDeclarationParity"
+      ],
+      "sha256": "4ed63f4d68a438e617d9ee015c80c8d82767ae16b33001241088889bfdcb8c90"
+    },
+    "consumer/pluginusage/migrations_postgres_test.go": {
+      "sha256": "bdde9a3d4ae6014d4f4c65315317dea2d2d265bdb78324377650fcd247544852"
+    },
+    "consumer/pluginusage/plugins_test.go": {
+      "sha256": "b0fef92b37d616bfa991919f5520bab9a8d38bb12b66696d000fe016db481e5f"
+    },
+    "consumer/postgres_test.go": {
+      "sha256": "e8fcda6411aabd1133fc16d325f1dda002e12f4901686cfe44cc98dcfb7ef6ef"
+    },
+    "consumer/productionprofile/field_capabilities_bench_test.go": {
+      "sha256": "3b63fccafdab51f81e22eb141e116430fa2be38d287a7187eef691f73f3f787f"
+    },
+    "consumer/productionprofile/queries_test.go": {
+      "sha256": "0fe9b6ef3c05d0066288bcd4e61152cf23903f0936e72a76395cd5fc33d2c2da"
+    },
+    "consumer/profiles/animated_images_test.go": {
+      "sha256": "60bfa62c162451469212b085af568c766a86374664d55404f55b1eb12261b862"
+    },
+    "consumer/profiles/avif_images_test.go": {
+      "sha256": "f578496b56dcafc11475973510864dcbe3355aa4d00c98c3b34b4dc3bdb92804"
+    },
+    "consumer/profiles/image_encoding_test.go": {
+      "sha256": "051243dfe3080f33a15789f157f64f93494a6f29258b8d02d726bc584e938eb8"
+    },
+    "consumer/profiles/image_labels_test.go": {
+      "sha256": "af6071a996cadd5934a9e5689dd0ef09ddde7f8c9b5864e4dd9ccdf1c3172837"
+    },
+    "consumer/profiles/image_runtime_test.go": {
+      "sha256": "74a7bb3b2d849f8ea50bd285e47b74ebc4cf155e706b609bb4ec80555aab0a66"
+    },
+    "consumer/profiles/images_test.go": {
+      "sha256": "8497e98be3057d7ec71edef4af94ac02795b4263928c9cbc33c6772bca864ecf"
+    },
+    "consumer/profiles/native_images_test.go": {
+      "sha256": "35690bc08a9803e6c26ff12f8d531b9f3c446bd1d36da51eb36d8b62aa4b1a97"
+    },
+    "consumer/profiles/oracle_test.go": {
+      "sha256": "9762d2b26da22c2063a248a3a0a971885737b107ce56f18e831bff878356cbf9"
+    },
+    "consumer/profiles/profile_test.go": {
+      "sha256": "5ce2e1ace8cb2afc408a031d49ddc60e0a7278774fa84bcb57220efdc8bdf5ed"
+    },
+    "consumer/profiles/tables_test.go": {
+      "paired_tests": [
+        "TestORMFoundationParity",
+        "TestORMProfileExtensionScopeAndVisibilityParity"
+      ],
+      "sha256": "a9961d33b8c5943744f6ee190ebcaf5d020133300d168e2d308667998ad0eaec"
+    },
+    "consumer/projectionqueries/aggregate_contracts_test.go": {
+      "paired_tests": [
+        "TestFilteredAggregatePhaseSQLParity"
+      ],
+      "sha256": "c535ea910bc05a72c16031cd4da9ddd97940298c446bbdfdab571074d9e7b382"
+    },
+    "consumer/projectionqueries/oracle_test.go": {
+      "sha256": "20fa3d8bfeeed795a148f91b82c73121c585192cf767f31118afabbf0790a8c0"
+    },
+    "consumer/projectionqueries/projections_postgres_test.go": {
+      "sha256": "d8836b8b9a05711f2e6f7fa7db58d84be7587037bc3b5bc295984d97bc503bfc"
+    },
+    "consumer/realtime/orders_test.go": {
+      "sha256": "5575a5331412881c654450fb32245a9df83b40efed2d697bf6630e731afc57d1"
+    },
+    "consumer/recordqueries/records_postgres_test.go": {
+      "sha256": "4b684fe7b248bf5b40d2ac1f7733e1f685be3af966110ec08b7f7bdab3d1b8f9"
+    },
+    "consumer/recovering/credentials_postgres_test.go": {
+      "sha256": "ce1d15140f5d96a4d0d5e5e262bb8b77e792a20aed48ab4d71232f5b66b014e6"
+    },
+    "consumer/recovering/http_postgres_test.go": {
+      "sha256": "d1b1554c2a268d6b6119bc5f1dc0f6b8c723ffea800e6b6de9579a0d44dbdd14"
+    },
+    "consumer/recovering/identity_test.go": {
+      "sha256": "bf1981e22031bce7f01c8a928a7002e8eb92f5c96e2bddc81ab1f52eca09e725"
+    },
+    "consumer/recovering/link_requests_postgres_test.go": {
+      "sha256": "941fdfa440909f805b0844e486d302d5706cfd16bb8f0e85155e7a7941ec153c"
+    },
+    "consumer/recovering/recovery_postgres_test.go": {
+      "sha256": "e3018af91caba1254b92438b9a6f8e66d6e28583d119606ec1d18f45e67b8053"
+    },
+    "consumer/recovering/revision_postgres_test.go": {
+      "sha256": "9b8c4147bddfdda8ed75dd156c9c560d75c7fa88a21ee192123adb94a3b6edb9"
+    },
+    "consumer/recovering/tables_test.go": {
+      "sha256": "a08e5db2a4b303663d73f44e4e65bdacdbe280c92f14cac727d32c22ce5e1c94"
+    },
+    "consumer/recursivequeries/oracle_test.go": {
+      "sha256": "cfc2ce5cb81f7a8c99704453823c9637202a3e284af0bb24e96409da6a9511f6"
+    },
+    "consumer/recursivequeries/recursive_postgres_test.go": {
+      "sha256": "4f33f1edb7b3f25c284e6384796fad4e6a5bd1c66afbe6137f1575aa93c6bc31"
+    },
+    "consumer/recursivequeries/sql_parity_test.go": {
+      "sha256": "51be31135f42303c36f6cd2ed0dc6e5151267748988a94f2e43f99ce4e3d2cd1",
+      "paired_tests": [
+        "TestRecursiveRecordSQLParity"
+      ]
+    },
+    "consumer/rediscommands/commands_test.go": {
+      "sha256": "7383870033bc6e9a2efe1aed0c7a4dc760d843ef38a83f31356e661c2fa356ed"
+    },
+    "consumer/redisdata/members_test.go": {
+      "sha256": "5f58eb65520d5450da18f2c687d1504509119249d5497cdac964e3d2881c3150"
+    },
+    "consumer/redisdata/rankings_test.go": {
+      "sha256": "08d69fdda734a7f6f335f07beb2fb82b82a8cca29708e2093e8f20da8ac09a9a"
+    },
+    "consumer/relationshipfilters/filters_postgres_test.go": {
+      "sha256": "bfde9f8e500a1cfb575442df02ecab8167edf98b6a796d2a06b1c4283d5cecbe"
+    },
+    "consumer/reporting/application_test.go": {
+      "sha256": "8b58df01f0358d53f3178c382b3a91e47d49648b47328248278a5e6c6bc354e5"
+    },
+    "consumer/reporting/export_job_postgres_test.go": {
+      "sha256": "f29c89261c05d2598792be67ef9a213a826e0bbe296716e5d9d6572f7692bd67"
+    },
+    "consumer/reporting/fixture_test.go": {
+      "sha256": "ecde0ff68caf411a227e2f3c1697cb3347ce103631c42017dc717251687a10fb"
+    },
+    "consumer/reporting/http_postgres_test.go": {
+      "sha256": "de527551392092eb865e40296105ed5674f6be01ea0bfa12cbc4630a5f08c13f"
+    },
+    "consumer/reporting/member_import_test.go": {
+      "sha256": "7500c56c30ac4d33c478940ab9bc679f48accc760f3c592798c0826cbd3daf80"
+    },
+    "consumer/reporting/oracle_test.go": {
+      "sha256": "98aee999e21a4f211e5f1fdf9d79037c23e4c7aeb5ee99d6cc9a64406063b058"
+    },
+    "consumer/reporting/orm_test.go": {
+      "paired_tests": [
+        "TestOperatorORMIdentityAndLookupParity"
+      ],
+      "sha256": "cc201e33078e2b3aad267b9edab344ad3f1e387b8e4c32947ed8404d04455b9d"
+    },
+    "consumer/reporting/reporting_postgres_test.go": {
+      "sha256": "709af312bb7ea9a1a5cd3d159b43cd233e4d38b800e80aedd25afc91783b0632"
+    },
+    "consumer/reporting/source_golden_test.go": {
+      "paired_tests": [
+        "TestReportSourceGolden"
+      ],
+      "sha256": "e0dee195b74a0e832dbe12f465d89134a92170eb448b1108bfb4aaa69630fea0"
+    },
+    "consumer/reports/oracle_test.go": {
+      "sha256": "0e3d85cef587487840c93e86c53b98cc89254167641dc196723b0f6c05e9e94e"
+    },
+    "consumer/reports/rows_test.go": {
+      "paired_tests": [
+        "TestRowsSQLParity"
+      ],
+      "sha256": "87c7c7a83effde2a3f91257589f66d7c48df69e1d422493fdb09225e273f7cc1"
+    },
+    "consumer/requestflow/forms_test.go": {
+      "sha256": "eef35e2b0164e34cdf0726143694a6959b72df563f320fd2c3180fad7740cbe4"
+    },
+    "consumer/retrievalqueries/composition_postgres_test.go": {
+      "sha256": "ce8af92d78ad368b93d77a52fa0bffd3c870200d67297634e83803965209064e"
+    },
+    "consumer/retrievalqueries/iteration_postgres_test.go": {
+      "sha256": "2a48f480d7ec880703509c4ad2c145c140be685e5945d7ce40462d54b1e01eff"
+    },
+    "consumer/retrievalqueries/orm_test.go": {
+      "sha256": "b1b9fa003c0c5b0b4c047a9f31ebd918fdd459aad70cce8ab9d16e6df372eab2"
+    },
+    "consumer/retrievalqueries/record_iteration_postgres_test.go": {
+      "sha256": "2078e86b1c4c4f24115c60b615a61a27778207cebf33f29c0dd81ee737401444"
+    },
+    "consumer/retrievalqueries/retrieval_postgres_test.go": {
+      "sha256": "78408660580073c24cb4a0c37cb41a0ab5bf47b5389a1e6be89e1037d5a6a6b0"
+    },
+    "consumer/scalarqueries/composition_postgres_test.go": {
+      "sha256": "84ce7fc5460f569fbee43990535d8e4620d7a7f5844aae1e0f9793e6b231078f"
+    },
+    "consumer/scalarqueries/derived_aggregate_postgres_test.go": {
+      "sha256": "6a59a40ba297725a01ed1759703e632f677ecd578a21a3e2e420f4ea281beea0"
+    },
+    "consumer/scalarqueries/geographic_test.go": {
+      "sha256": "e9a4a3ac25461af1332ac9b09fb648eba2c07b2ca76ea9f3269b18e267c654bc"
+    },
+    "consumer/scalarqueries/oracle_test.go": {
+      "sha256": "32db8ba1b2b0991f73eb51d484db0a925dc97ebff3f853431e168c8f17ecaa40"
+    },
+    "consumer/scalarqueries/projection_sql_test.go": {
+      "sha256": "1597c8f3539a38354f81aa9ab96ae90f844439b067790c8dada7a3cbdfa1e166",
+      "paired_tests": [
+        "TestCalculationProjectionSQLParity",
+        "TestDerivedAggregateSQLParity",
+        "TestDerivedCountSQLParity"
+      ]
+    },
+    "consumer/scalarqueries/relation_order_postgres_test.go": {
+      "sha256": "33855f95f8a150dee6d059d7ce8202baa67fbf52e565ab401ced766c5a907230"
+    },
+    "consumer/scalarqueries/scalars_postgres_test.go": {
+      "sha256": "66b2f7d126a96312a9003eca0d25a708ced8e6d1e48c2a22d7ee11ebc3090dd9"
+    },
+    "consumer/scheduling/reports_test.go": {
+      "sha256": "005abdcd4cdb39705cf88105e70dcf32246fbf6727bb5f1bf85e51986c601573"
+    },
+    "consumer/security/configuration_test.go": {
+      "sha256": "c0fd5560303ef958bf0253130a6f371449bf047626d33636195bf00168305841"
+    },
+    "consumer/security/contracts_test.go": {
+      "sha256": "fecc84d42042596638353e396b6c7ea87fb5e32f198c68e88a2f28ab3acdbc70"
+    },
+    "consumer/setqueries/derived_aggregate_postgres_test.go": {
+      "sha256": "dbdb4303df60849d7206cd89daf1308711db8daf1b1c21a1ce9c36b436b07671"
+    },
+    "consumer/setqueries/derived_aggregate_sql_test.go": {
+      "sha256": "d3004e3c81b461fea00b7bb06cc223273afec42b6f200ceeed35a0b01e910e47",
+      "paired_tests": [
+        "TestDerivedSetAggregateSQLParity"
+      ]
+    },
+    "consumer/setqueries/oracle_test.go": {
+      "sha256": "89f46fda5ca5e954aeff345e51d1a90628bc288fca40ef47a7af2a530573c7d7"
+    },
+    "consumer/setqueries/sets_postgres_test.go": {
+      "sha256": "d2e41790588f66ffe5c74efac3622515c1cc86c42379ddaccb2ba1e2b54c3ace"
+    },
+    "consumer/softqueries/factory_postgres_test.go": {
+      "sha256": "3e84c9606b32345044b092748b0048caa2d54d030941c7533a457870abf22ec6"
+    },
+    "consumer/softqueries/fixture_test.go": {
+      "sha256": "0593fd07056c9e9925e0005f67c03444d8819a35fa095c4bd992992f31fb237b"
+    },
+    "consumer/softqueries/lifecycle_postgres_test.go": {
+      "sha256": "b492055e8710d8b6a74a88cb9c7357a9e248a3e7e1d428e1beca83a7edba3698"
+    },
+    "consumer/softqueries/orm_test.go": {
+      "sha256": "c40e82949820e90467f37387808b65708c44fca3abe2811bb50edd84eb2490f5"
+    },
+    "consumer/softqueries/visibility_postgres_test.go": {
+      "sha256": "2e16099ccac58f72cd19d8ccf582d248d93a93f9d3919b6b11df6e1dc1ac3419"
+    },
+    "consumer/spaportals/portals_test.go": {
+      "sha256": "86ad8c8c10ba803f82efa83b10bcf64933dceacb6a9770295989d1169db6f661"
+    },
+    "consumer/startupconfig/settings_test.go": {
+      "sha256": "26d057aeeb907d1c7ad72c93bc3b0f33de7ae2a21c45ffd2d58d9935ace5669a"
+    },
+    "consumer/storing/files_test.go": {
+      "sha256": "5dfdd9649ad28cf7555f25e10284caebb9e388f2f3d389dae802e6e6cb450e76"
+    },
+    "consumer/storing/upload_test.go": {
+      "sha256": "5d488aeb070d2312ba64750aaea89f740a3cef5d55350aa1d9d6a86b9c8ccdd8"
+    },
+    "consumer/teamworkflow/benchmark_test.go": {
+      "sha256": "09f981884447839a926bedc9fa50dd5ad83612a4adde5836df025862d3c1fcbe"
+    },
+    "consumer/teamworkflow/client_test.go": {
+      "sha256": "aaf7c3593dabfb2ed296d360332c591ed7d423fd830e663d9358fa18774b1a52"
+    },
+    "consumer/teamworkflow/fixture_test.go": {
+      "sha256": "239db3f9a62ad6105f32227f1ac32fe24bc803a5a54edbf934d7253e890fa14a"
+    },
+    "consumer/teamworkflow/process_test.go": {
+      "sha256": "232ff2c91b9f145752f0188982e5cfce7aa003819d18403cd9baf3d1d954381c"
+    },
+    "consumer/teamworkflow/rules_test.go": {
+      "sha256": "3265da5b3034be16f8361e62e637fac720824a7634d542331f014ffacf5e3e7a"
+    },
+    "consumer/teamworkflow/tables_test.go": {
+      "sha256": "b4110d2c7c50f4af097a52aa7cb831e1081b674c451a2e0f57c9fa7ae1a263a4"
+    },
+    "consumer/teamworkflow/workflow_test.go": {
+      "sha256": "11bf3621e34770bd567294ed4bc5d7937a069fddeecdf0b80791a4db85d3911a"
+    },
+    "consumer/temporalqueries/calendar_postgres_test.go": {
+      "sha256": "73572e09c3fa146aed701c77d9f096c97c547ac6689e58fe19957c3c5ef64e37"
+    },
+    "consumer/temporalqueries/composition_postgres_test.go": {
+      "sha256": "0469b58b8141d3a9a9b18020abcfdb8ed2e73f1a1790e36929c91c943827d41d"
+    },
+    "consumer/temporalqueries/extract_postgres_test.go": {
+      "sha256": "5ec29e36a9bdc3a11368beb738464b0dc6f7456426df0393636d43bdfa5125ce"
+    },
+    "consumer/temporalqueries/fixture_test.go": {
+      "sha256": "2317ba61cbb698789523902a9f358947cc8e0611ac43f5020319222cb6b4dae9"
+    },
+    "consumer/temporalqueries/oracle_test.go": {
+      "sha256": "5ff4640f5d6eaf55e72e599c69f8c2f4df3aff90a2f24249e95c21c7d31f865b"
+    },
+    "consumer/temporalqueries/orm_test.go": {
+      "paired_tests": [
+        "TestTemporalDeclarationSQLParity"
+      ],
+      "sha256": "c7c5b2e5e1ddc7aed8e3efbe0a2d9f1bfa8e26e4c9bc570f426d3c0b2cedf1ad"
+    },
+    "consumer/tenantqueries/orm_test.go": {
+      "sha256": "e2cdcee3c427e66b9f62c8e9b92c4083068b31dbac47e421943adc6c92e73ac3"
+    },
+    "consumer/tenantqueries/pivot_concurrency_postgres_test.go": {
+      "sha256": "4d21db4bca853ce2d0433ce71fd36299240e88423b39cb87f479c8c043295c74"
+    },
+    "consumer/tenantqueries/prune_postgres_test.go": {
+      "sha256": "82c34721f6856e999da2c418b45a66342db2ac29d761c79783cb4b0d9bf1b5ab"
+    },
+    "consumer/tenantqueries/tenant_postgres_test.go": {
+      "sha256": "46fca925ac90f0a72b53692d57bc02328482ceab2fce2f6515875ca7ca580e77"
+    },
+    "consumer/tenantqueries/upsert_scope_postgres_test.go": {
+      "sha256": "92293796066231351d5c8b020f09f3e6d604f4fcfb83564892835dab2e0aea0e"
+    },
+    "consumer/timequeries/clock_callbacks_test.go": {
+      "sha256": "d0d616e9a3ecb100398051809d705a213ee1e6d195a334b343d02d3e0fa992a4"
+    },
+    "consumer/timequeries/fixture_test.go": {
+      "sha256": "7db8707cd41260382db4935c060b024c1c769d4c3197ca11b87075370865a5bb"
+    },
+    "consumer/timequeries/orm_test.go": {
+      "sha256": "6b3b132aac0d719db5837987f63f4333e1319d98dd87e38c8720fb94f48bff57"
+    },
+    "consumer/timequeries/timestamps_postgres_test.go": {
+      "sha256": "fa4f5ae4ab87f63ed57f300ea995d26caeed31f6b00a56ba828f9627eb91d113"
+    },
+    "consumer/tooling/database_test.go": {
+      "paired_tests": [
+        "TestUserPlanAndRoutingSQLParity"
+      ],
+      "sha256": "01f47c0427e109f15a503327fb63e65f6e96d6c5e8b2a4fc9d74e362ca033a9e"
+    },
+    "consumer/tooling/helpers_test.go": {
+      "sha256": "5f719adf991859da535a917ea27587af3178762f0bfdb0f530e87d8e857a136d"
+    },
+    "consumer/tooling/oracle_test.go": {
+      "sha256": "1434b7aeef50589772d198112daddaf9d7d5199ed8f8278f7069cd83d3c5f6df"
+    },
+    "consumer/tooling/production_test.go": {
+      "sha256": "dfca7cacde4f4e75da738941d96d88cc566e6830b664fbda68086459a58fe89e"
+    },
+    "consumer/tooling/tooling_test.go": {
+      "sha256": "c4537244d8d48cae93c65279752b28ce9a47ebded723682f019c4b1a4a8ea4fc"
+    },
+    "consumer/transactionqueries/bindings_test.go": {
+      "sha256": "3c07f2be15e338132b300bc1ec53a4d964da1dea8f462b950575f5c83c7a6b2e"
+    },
+    "consumer/transactionqueries/composition_postgres_test.go": {
+      "sha256": "d214cded33e1b06730cd9f669bed71ab7b3dca19d5b5640157e0a82d035f4ce9"
+    },
+    "consumer/transactionqueries/correlations_postgres_test.go": {
+      "sha256": "481fabc9cb421243d30958f6ac911b35d371c2a86b93f5b5dcc06da98ec4fdf0"
+    },
+    "consumer/transactionqueries/joins_postgres_test.go": {
+      "sha256": "0b9c013d4aaafd9903341def066f87a8bd333b32b0837a020c4d74a6e897630c"
+    },
+    "consumer/transactionqueries/oracle_test.go": {
+      "sha256": "bede29b987b80f14b69f22b68eed2540ea7dea90ccc48853966227ec3f76f59b"
+    },
+    "consumer/transactionqueries/orm_test.go": {
+      "paired_tests": [
+        "TestTransactionDeclarationSQLParity"
+      ],
+      "sha256": "68828d630bbba302943d90a919b182d39afd613f43a6d8d7505952b95ae402fc"
+    },
+    "consumer/transactionqueries/subqueries_postgres_test.go": {
+      "sha256": "f528c90be7ff7b3a0593eb04df7ef3378cf815fa69fdf9a3f917469187926875"
+    },
+    "consumer/types_test.go": {
+      "sha256": "ac29334cc229de2ea411688910e34bfc40cdc8c81963ce1f164caf2d15f2a069"
+    },
+    "consumer/unions/payment_test.go": {
+      "sha256": "84df2d2ecd79485341e719138c4a653e672439241a33cdfaa51ca2e5e3a9116c"
+    },
+    "consumer/upsertqueries/calculations_postgres_test.go": {
+      "sha256": "144f6eca82171f098a81b1a619f7a059ec9f936f3c3d463d42f26dbbfe8ff67e"
+    },
+    "consumer/upsertqueries/index_targets_postgres_test.go": {
+      "sha256": "03d3bcbe4df9dd24aaf263dee6edc1158424052e99b29943d7a181a53bab4a14"
+    },
+    "consumer/upsertqueries/orm_test.go": {
+      "sha256": "bea3483e0ba7d464b1edee1be14af8b1adf7dabc394b7789c0af838316e8fce8"
+    },
+    "consumer/upsertqueries/upserts_postgres_test.go": {
+      "sha256": "97839220ceaed23b4c846ad413eaf3a8c06ac95e376e066e821ec7e1b9db3f1f"
+    },
+    "consumer/validationinput/input_test.go": {
+      "sha256": "abfed2d9e99fa54f48a5510741fb4b2f0b4b9cd8f981a175e83ed3544a04a07f"
+    },
+    "consumer/validationrules/expanded_test.go": {
+      "sha256": "8d8fa89a4e59db63885686266b9973cb66e781c077cd0c61f3f5cf37fc13ad29"
+    },
+    "consumer/validationrules/preferences_test.go": {
+      "sha256": "145543fe9998545aab9a9c33829c984520325c8003b53ad65af4e7b3534a1ba5"
+    },
+    "consumer/validationrules/presence_http_boundary_test.go": {
+      "sha256": "78e478246ecc532dae56b47cc49e7c74ba0420d7ff6014215527366f5ac02cf7"
+    },
+    "consumer/validationrules/presence_http_test.go": {
+      "sha256": "156ab5907db1b78c00c68bfea23a553d130620740af8389e81319e1abdd7ce4d"
+    },
+    "consumer/validationrules/presence_test.go": {
+      "sha256": "d0c57ed7134d3ca8bfa8b2af6ab53472a35463b01254d5f1ad43e376fb3dc0a5"
+    },
+    "consumer/validationrules/rules_test.go": {
+      "sha256": "ac24a01210a30cad9ebb75d4861d58476a5df55aaabe1f39171bb30571b29620"
+    },
+    "consumer/validationrules/window_test.go": {
+      "sha256": "4b5a1dbd2aeaa16436de4e0eb15b8e201282c4014c6a0af2d6797c2aa96421f6"
+    },
+    "consumer/values_test.go": {
+      "sha256": "198fbeb10e780e170dfb304cf5d539739809b0e71bf378a678702ac7e1b6d154"
+    },
+    "consumer/vault/entry_postgres_test.go": {
+      "sha256": "7bfda64d0b93dae0069918629f19415725bdee0fb0adafcfdf7b810947cabb44"
+    },
+    "consumer/vault/orm_test.go": {
+      "sha256": "390d04c78ae7ed89c46967f115dfd0d0bc035944099512f16454ab76b7b39d98"
+    },
+    "consumer/windowqueries/oracle_test.go": {
+      "sha256": "3925f9e78d2a545ebff15c7b3782ac9de6269dba44dd38711004505631e2c98d"
+    },
+    "consumer/windowqueries/orm_test.go": {
+      "paired_tests": [
+        "TestWindowReportSQLParity"
+      ],
+      "sha256": "1877b617659ddd579beda1cf7480b580be830bc260bbc42c3f08f26c985c7238"
+    },
+    "consumer/windowqueries/windows_postgres_test.go": {
+      "sha256": "279e076220ad4e4635129b2916c6c6385bf6f747cf96f7cc28ab007bcc415bac"
+    },
+    "goway/adjustments_golden_test.go": {
+      "paired_tests": [
+        "TestAdjustmentsGolden"
+      ],
+      "sha256": "91789ad3e7c83b6e3e863cf369b79f20b79014d172bd04abe7dd03bbdfb27f81"
+    },
+    "goway/aggregate_golden_test.go": {
+      "paired_tests": [
+        "TestStage6a3AggregateGolden"
+      ],
+      "sha256": "4a00791eca8cf7ce5636a14ac5383b91f4a376fb8d54acaa7525a3ed094096c2"
+    },
+    "goway/audit_golden_test.go": {
+      "paired_tests": [
+        "TestAuditOldAndNewAgree"
+      ],
+      "sha256": "4ae5ea966edb7c5656e7562711ff30b17b8ba56a7a7f53bf1013c2be3761f3a5"
+    },
+    "goway/bench/chain_test.go": {
+      "sha256": "9db283b8926487f0a88e737060f31e8fd2c35c380db1d1e5f9caa91dd785a505"
+    },
+    "goway/bench/hydrate_test.go": {
+      "sha256": "40f9409ee7dde623d57815e24fa1c8d1be9aeb7c66863119efefed1bcf70a254"
+    },
+    "goway/bench/insert_test.go": {
+      "sha256": "a3033a10ed83cecdde62fad173bec909cbdce35328ebaf6171e52303a05449fb"
+    },
+    "goway/bridge_capability_test.go": {
+      "sha256": "8255b310104f75dd5097116462dad2e4ea73eacb16b9e4ee425636ae4e50c41f"
+    },
+    "goway/cmd/freeze-oracles/main_test.go": {
+      "sha256": "fa8610347918bdbe4ebdd3ec0826070b04371212143cd1e5c103f3984f1b9af3"
+    },
+    "goway/column_kinds_test.go": {
+      "sha256": "fb0d9da937faf55e503026fd5f795b9552221caeeff84605a02120cd8777fe18"
+    },
+    "goway/compiler_batch_parser_test.go": {
+      "sha256": "1af60ce577d25431b8dbd2baa5780f65ab5743a72b13bd230adf963570864f0c"
+    },
+    "goway/compiler_batch_test.go": {
+      "sha256": "8af03f60e4a065ca96de7e91dd7254bcf2eb5123ccc86b82548cc0d720549422"
+    },
+    "goway/compiler_cases_test.go": {
+      "sha256": "4b5ecb7e9c011c00bfb513eff1e60154ddee73d241520b7518b3d1809915f31e"
+    },
+    "goway/compiler_command_other_test.go": {
+      "sha256": "e0c52efc5f2cd673de96e17aa09e66d83585776f57bdc17148e19f2363a3f81a"
+    },
+    "goway/compiler_command_unix_test.go": {
+      "sha256": "a7cbbd74876b47acb94758c4c4f11764c61d8a5601d497a28fc2a303d6f45dda"
+    },
+    "goway/composition_golden_test.go": {
+      "paired_tests": [
+        "TestStage6c2CompositionGolden"
+      ],
+      "sha256": "bd57e8b32abff7cd3156df26599fe5b29a4a7d558bcb329c2f3c5e811e94971e"
+    },
+    "goway/conditional_golden_test.go": {
+      "paired_tests": [
+        "TestStage6a2ConditionalGolden"
+      ],
+      "sha256": "438156c1e159ba9751ad635ba4cfd7fb372d9152518ca516aadef1d1c5b0f992"
+    },
+    "goway/conflict_advanced_golden_test.go": {
+      "paired_tests": [
+        "TestAdvancedConflictOldAndNewAgree"
+      ],
+      "sha256": "ac150af6688688e64250c92429eb3093b59d47ff4ea6742276498295004d1219"
+    },
+    "goway/conflict_advanced_test.go": {
+      "sha256": "2f7c8957f72f180e6e9c89b71dcafb6e9180a73bb0d52dadfd9be3b2635d7ac1"
+    },
+    "goway/conflict_embedding_test.go": {
+      "sha256": "401cf9f32816dc332a2943d6a4cf7c51d3ef6c0807f3aba13ddf2eb011e9bce3"
+    },
+    "goway/conflict_golden_test.go": {
+      "paired_tests": [
+        "TestConflictOldAndNewAgree"
+      ],
+      "sha256": "387c3d6b6ec4711d09a0ee411c67eff04e4347f8839999ac3b227d3ba6180076"
+    },
+    "goway/correlation_lateral_golden_test.go": {
+      "paired_tests": [
+        "TestStage6b3CorrelationAndLateralGolden"
+      ],
+      "sha256": "590f29f7477d4114a7f346b1884fa6eabcf74a8f984f087f763564834163c4d0"
+    },
+    "goway/expression_golden_test.go": {
+      "paired_tests": [
+        "TestStage6a1ExpressionGolden"
+      ],
+      "sha256": "509f313ace0c08a6d9d69d4f0e1b925f2bccd75e40d08c1179519ce4a27570a1"
+    },
+    "goway/extension_handles_test.go": {
+      "paired_tests": [
+        "TestThinExtensionHandlesPreserveLegacyPoliciesAndUnboundBehavior"
+      ],
+      "sha256": "3c3ed48b6c02d1b22150f4640d0964dd7aab18574bb0fb16a4990de0f028f72c"
+    },
+    "goway/extension_matching_test.go": {
+      "sha256": "8ea35ab312ea536948cbebb101518b03dac146979a9bbe7771c2645dfb9ee110",
+      "paired_tests": [
+        "TestExtensionMatchingUsesBoundedManagerQueries"
+      ]
+    },
+    "goway/footprint_test.go": {
+      "sha256": "e882202a2e7d7cf805d60d714fd6c87d8b023e56745ae0ab98283a9326f32a16"
+    },
+    "goway/golden_driver_test.go": {
+      "sha256": "2e2a28c63ceeccef396e05019c3451678ff65424f037c8cee288e6fa58836a1b"
+    },
+    "goway/golden_new_loading_test.go": {
+      "sha256": "d6de0b0c485a729d16655e93cb6c4053b54d013363c83c27a8bf3aaf00a88e3f"
+    },
+    "goway/golden_new_queries_test.go": {
+      "sha256": "0a16a310ffb576d6b6dcde0a488be31e9ee483cfde16feb045d76cacef017658"
+    },
+    "goway/golden_new_relations_test.go": {
+      "sha256": "a4dce62d0da21ad7125dc37e959d69f157cbd707dafe48f1a676ed55d081a017"
+    },
+    "goway/golden_old_loading_test.go": {
+      "sha256": "1c7e18c459c8602356ff261fdaab9edf7d837fccb815d21a64ebe76c67404b88"
+    },
+    "goway/golden_old_queries_test.go": {
+      "sha256": "03a69642ed430ebca2dac1493bc967829d7adac8f23322118f2cfc73d94d4031"
+    },
+    "goway/golden_old_relations_test.go": {
+      "sha256": "af64af7cfc710b633e4939cc80e25126c95019dbecab25e3907876f41891ee8c"
+    },
+    "goway/golden_test.go": {
+      "paired_tests": [
+        "TestOldAndNewDataLayersAgree"
+      ],
+      "sha256": "3ccf84402e056c25b090aeda23764bbe89191325d80e0a296d71fe464af6039d"
+    },
+    "goway/integration_adapters_test.go": {
+      "paired_tests": [
+        "TestFactoryORMAndGeneratedParity",
+        "TestORMModelBindingScopeAndDuplicateParity"
+      ],
+      "sha256": "3f1d06a0aacf4e3171c830a66e339bde3696ed6d56a3784c0151010193e0e907"
+    },
+    "goway/integrations/oracle_test.go": {
+      "sha256": "d735be86e48430f1a7e354d52372d702afd1ebdf245b9506099e24e146ede34c"
+    },
+    "goway/integrations/pagination_test.go": {
+      "sha256": "dbe3bf7cffea47af381ed22479facf35cbed4f57a2800b4f05ac2862f70af159",
+      "paired_tests": [
+        "TestORMPaginationKeepsTransportIdentity"
+      ]
+    },
+    "goway/join_boundary_test.go": {
+      "sha256": "2d6777681b22f16ce10bbdb92f88fc180204560746fd57e8fb88409245062589"
+    },
+    "goway/joins_golden_test.go": {
+      "paired_tests": [
+        "TestStage6b1JoinGolden"
+      ],
+      "sha256": "59a3c230b652e2bfa8270faf1f249f358d96be1564718628caac7e08c7859525"
+    },
+    "goway/json_path_golden_test.go": {
+      "paired_tests": [
+        "TestStage6d3JSONGolden"
+      ],
+      "sha256": "6664bc37a5c7c75b467600b73816262c8b682c6cc58e83409255e6b1928eafd7"
+    },
+    "goway/lifecycle_golden_test.go": {
+      "paired_tests": [
+        "TestLifecycleOldAndNewAgree"
+      ],
+      "sha256": "434eb0025215a28c8885bd03c7c776ec00c58b16febba3a1f189aba9865285a1"
+    },
+    "goway/load_query_golden_test.go": {
+      "paired_tests": [
+        "TestLoadFromQuerySQLMatchesLegacy"
+      ],
+      "sha256": "b483fbfe10843198cf1d9ba7dace7e2b2f5ff85dd4d36cdb9a748846f530eeb5"
+    },
+    "goway/migration/examples_test.go": {
+      "sha256": "af3cba9ae03b8bb12145977c4891707a221ec4fd2b7c994a8fd12afbb446f3a0"
+    },
+    "goway/migration/guide_test.go": {
+      "sha256": "cbfa827649f9aa2772764079661445d2639810a414a0af414701128b7393db09",
+      "paired_tests": [
+        "TestDeclarationsAndReadSQL"
+      ]
+    },
+    "goway/migration/oracle_test.go": {
+      "sha256": "19e71fc691ed74166190d64de08b817aa4787835474a2e00e959aa711cedfec6"
+    },
+    "goway/migration/sql_test.go": {
+      "sha256": "be4629fa807166255cade4c610df96cf3096a93bf2f43fd0df559ecb196db803"
+    },
+    "goway/models/identity/models_test.go": {
+      "sha256": "b9884a6ab1e0056d30562fdd27b0ff94fb28c5d1bbc28e7cc56d37ea0635819e"
+    },
+    "goway/models/tables_test.go": {
+      "sha256": "e18c4b42f0fd37f72d09ad2a5332cec2935290ce4e62e6a49327439548831a44"
+    },
+    "goway/mutators_golden_test.go": {
+      "paired_tests": [
+        "TestInputPrimaryKeyOldAndNewAgree",
+        "TestMutatorsOldAndNewAgree"
+      ],
+      "sha256": "6a9099cb8c434af5a981fd148ccfddb12548ed745597e08594424e321af89253"
+    },
+    "goway/nested_binding_orm_test.go": {
+      "paired_tests": [
+        "TestNestedORMBindingHasNoGlobalFallback"
+      ],
+      "sha256": "31cb2958dbfbde4ecdd7f333c7aaa3eaf12f03de11cf280b936ad16c1c376bb8"
+    },
+    "goway/on_conditions_golden_test.go": {
+      "paired_tests": [
+        "TestStage6b2OnGolden"
+      ],
+      "sha256": "57b1bbffd9acbbc2c2f97f1725ce0ba072031c9f211f653d91b464ee72a28212"
+    },
+    "goway/oracle_hydration_test.go": {
+      "sha256": "94609dfec5510bd998831be2d3cb2cb396b6b930494c1206cb2705497030a02e"
+    },
+    "goway/oracle_test.go": {
+      "sha256": "dc1d2139c7fa4683b5c91715cb9481c5ae004561d7390d9bb9954d66372a53f1"
+    },
+    "goway/pgsmoke/aggregates_test.go": {
+      "sha256": "60c7ccb350d369b8998da2a30ae99d93467bcd90c35a70a317e63c3dd1ca6c5e"
+    },
+    "goway/pgsmoke/audit_test.go": {
+      "sha256": "b4f14177f734370ced6573dbfb7f558e564f7bbfe35e0af95b2934f3d8b4a9a6"
+    },
+    "goway/pgsmoke/codecs_test.go": {
+      "sha256": "eb2ec20ec33c1de6fb68f7d1befda2ce466a3971d97353c03c8ed24ba7720bf3"
+    },
+    "goway/pgsmoke/composition_test.go": {
+      "sha256": "6f412fba3c9dd548d446b6d15d8489224b1d8469fc01637db239c78328776403"
+    },
+    "goway/pgsmoke/conditionals_test.go": {
+      "sha256": "712040796ec04c75e2edda726947afba5af3a019143541c78f21c7986c17a595"
+    },
+    "goway/pgsmoke/conflict_advanced_test.go": {
+      "sha256": "68635778b70ac2c844bbaa7c8466d5e3dc93c02ee62366b9a19f024b826eef35"
+    },
+    "goway/pgsmoke/conflict_test.go": {
+      "sha256": "f136407184ec44a02cde97f131a976f66fb36842f86828c7e2a34b569337a904"
+    },
+    "goway/pgsmoke/correlation_lateral_test.go": {
+      "sha256": "a4cd5b882553e86fb19ce9fabd37df631c86fa32a7f230a0031cda861ea3fd7e"
+    },
+    "goway/pgsmoke/expressions_test.go": {
+      "sha256": "a13145f586fe4519b8a46278921f82a5da98ec1e63d4bb5be9cf1793312c3701"
+    },
+    "goway/pgsmoke/integration_adapters_test.go": {
+      "sha256": "ee1f9c17ef78656794052a8e738874a5804cd38982f2dc50f9c87b5f88be1848"
+    },
+    "goway/pgsmoke/joins_test.go": {
+      "sha256": "e2c5b3bc719a26c1a8c9ec0da27a5114efb6382643ba054bd4686d8b0b0b74f9"
+    },
+    "goway/pgsmoke/json_paths_test.go": {
+      "sha256": "87f3a0c14fa16e9247ce5b8896d2a38d3d470a170100fa2035d31fa317f21a9e"
+    },
+    "goway/pgsmoke/lifecycle_test.go": {
+      "sha256": "bf01343c068fbbaa9b25dc0a7d2198461939678eb901602d8834df8d3ae17385"
+    },
+    "goway/pgsmoke/load_query_test.go": {
+      "sha256": "0c0e50686e7dbe5a3cf6c156090e6e70b76091ebd5a50093e5fedc96e50a44d5"
+    },
+    "goway/pgsmoke/mutators_test.go": {
+      "sha256": "1340052d2e561c7cc69bbd8b5aa7ee29d9af62e89b68a3daf4dffc7b4ce90369",
+      "paired_tests": [
+        "TestMutators"
+      ],
+      "postgres_tests": [
+        "TestMutators"
+      ]
+    },
+    "goway/pgsmoke/oracle_test.go": {
+      "sha256": "2aea222bcb141a9348f030d3c5d2d8aa1d47ca3f37c44a8aec8646a1b327560a"
+    },
+    "goway/pgsmoke/prune_registry_test.go": {
+      "sha256": "64768f1639deec56ad98f89b42facbb2dd5233eeedfbca7712f27dd08622387b"
+    },
+    "goway/pgsmoke/raw_fragments_test.go": {
+      "sha256": "467e6762863ffac907ddc82657f12bb93d3f9554746a297764dec0cc15939163"
+    },
+    "goway/pgsmoke/raw_test.go": {
+      "sha256": "d2daa5804079d5aa69d7cbde0a9317d58660bbd13ece3202dd66183402de328c"
+    },
+    "goway/pgsmoke/read_terminal_test.go": {
+      "sha256": "b7204e6d2c9bea21e51539562eae814ac0ff6173b47699603a46cfb75796944c"
+    },
+    "goway/pgsmoke/reads_test.go": {
+      "sha256": "cff3034c265d4d91e346dd3ddb3701692b8d0d012b53f131052f8eac24bb2c61"
+    },
+    "goway/pgsmoke/records_test.go": {
+      "sha256": "6ae453266e7b9badc6b9cd7c986ca0946951c33a4c1f497156671deacd2126a5"
+    },
+    "goway/pgsmoke/related_value_test.go": {
+      "sha256": "8065a9dbdc544e5f2e97ca9dd19c4105a1bcb3900cbd4b657b39686116057574"
+    },
+    "goway/pgsmoke/relation_aggregates_test.go": {
+      "sha256": "74fc77681f4a54a2bd397624cae1a43039388bf8f45d777683a0b5e8c121d03d"
+    },
+    "goway/pgsmoke/relation_writes_test.go": {
+      "sha256": "cc008447daaa146da3bbf88aba98a8005e0e2c4679423980ed155b46c688beec"
+    },
+    "goway/pgsmoke/relations_joined_test.go": {
+      "sha256": "841cc33c7691b068b1c8e301df499a186cef59528c68ae68bc73513dbd0ec201"
+    },
+    "goway/pgsmoke/relations_test.go": {
+      "sha256": "2512c09f1f1205c73ce820e7883ea4ed5f6af9c9e676bb65febefff06ea4bd1e"
+    },
+    "goway/pgsmoke/report_projection_test.go": {
+      "sha256": "2f8a4cbe051aba96ffb0b1b9d59ceccf1af8bd526ca079f176ecf360883cb09a"
+    },
+    "goway/pgsmoke/result_cursor_test.go": {
+      "sha256": "1a9c5783dbbd20ceb179556f511ac6570cb3a6363ab5a7b6c95d80be27379532"
+    },
+    "goway/pgsmoke/retrieval_scope_test.go": {
+      "sha256": "e42091ea276fbb658344f3f051753066fd9747a8586438152a332d558a129c92"
+    },
+    "goway/pgsmoke/scalars_test.go": {
+      "sha256": "784f6b65b343bf222a232e913d00891d879b21aa82032649c7c623fabd04f4c1"
+    },
+    "goway/pgsmoke/seeder_pagination_test.go": {
+      "sha256": "48a7262ec3d8f1174bfee63c84a2f5dd3b2506f71aa2971831e925f9bfba83ee"
+    },
+    "goway/pgsmoke/sensitive_test.go": {
+      "sha256": "045a4911a88bd2999982293079895222b2605adc9fe588c9dfeeeba9235959fb"
+    },
+    "goway/pgsmoke/smoke_test.go": {
+      "sha256": "ebcdecd23721e930b2288d068fb67f61b071758fadcccd2a2d74515594f50405"
+    },
+    "goway/pgsmoke/source_write_test.go": {
+      "sha256": "56f43f0699daf05d19bfd6986303c4aba0dfbc488a845cdd45bd18c83065d771"
+    },
+    "goway/pgsmoke/store_capabilities_test.go": {
+      "sha256": "5f44bf0daf4d699e0741cbdcb16416afc206e8200ff005486564379434eea545"
+    },
+    "goway/pgsmoke/subqueries_test.go": {
+      "sha256": "e3283d4da356e34e3103c71219641c004acb5cfa1ad050b4de11b4dc9448c37a"
+    },
+    "goway/pgsmoke/terminal_writes_test.go": {
+      "sha256": "d524cd5340ebf242bf4770716f9a791563d0ac77e285c0a4bd7bb46501bc8ba0"
+    },
+    "goway/pgsmoke/transaction_composition_test.go": {
+      "sha256": "8fca029916253923976cef7e725fb401e73a69d5d7fc2714098f4aafc7a8eb71"
+    },
+    "goway/pgsmoke/windows_test.go": {
+      "sha256": "75c176e46f9a1c8cda2bd1cfbbaaa66d48fe4305f0a34a93523cd107806dca1d"
+    },
+    "goway/prune_registry_test.go": {
+      "sha256": "facaac392abaca96b45c639ad5d693bc92045f2f50095625370d847cd01e0d35"
+    },
+    "goway/raw_fragment_test.go": {
+      "sha256": "dfa502e6021a6808f5f24f6bf0f481b309567934c4decd7a54dfc62e2b78b3c5"
+    },
+    "goway/read_terminal_golden_test.go": {
+      "paired_tests": [
+        "TestStage9ReadCTEScalarAndValueSetParity",
+        "TestStage9ReadScalarCompileParity"
+      ],
+      "sha256": "ada3e211a8bfeb0f67550a5c10b28097bf5809ef5d33e855d5f19e84d2632ef9"
+    },
+    "goway/reads_golden_test.go": {
+      "paired_tests": [
+        "TestReadSQLAndCursorTokensAgree"
+      ],
+      "sha256": "3be8860c6df1f47a13f4f23d88322f2c73ff63f8fba901f18f8d6b800e6e1194"
+    },
+    "goway/records_golden_test.go": {
+      "paired_tests": [
+        "TestStage6c1RecordGolden"
+      ],
+      "sha256": "324a8fc99bc79422638a56157c5945b1c2d8a7ab9bda89b2a1d9957a5a0eadde"
+    },
+    "goway/relation_aggregate_source_test.go": {
+      "sha256": "42c25f85ab341bec3792233f2054773438857930c5f17cbe3518373eeab95dcd"
+    },
+    "goway/relation_aggregates_bench_test.go": {
+      "sha256": "326de04fc4625c1cd334acdbb5b194e1d7cfc7a2ba0a58e8b086f99ca5979041"
+    },
+    "goway/relation_aggregates_golden_test.go": {
+      "paired_tests": [
+        "TestRelationAggregateGoldens"
+      ],
+      "sha256": "3f1e680378da299c58c71c5cdab35e77af16bfb9b2ccc58d8acb9798346cf6fd"
+    },
+    "goway/relation_aggregates_test.go": {
+      "sha256": "0a3f86df9b79ad043c87212cd21417835843d27ea3a93fecab40ab121037cf7e"
+    },
+    "goway/relation_filter_test.go": {
+      "paired_tests": [
+        "TestRelationExpressionFilterSQLParity"
+      ],
+      "sha256": "01c4a3f06389ccdcd4906151683f47ad6f16003e4e0b1a3ca86850bd50a55823"
+    },
+    "goway/relation_order_golden_test.go": {
+      "sha256": "c6a43213e0d9ea18a536cc98d7b2669636cfbaada1c2ec64147df478f66d43e6",
+      "paired_tests": [
+        "TestComputedRelationOrderSQLMatchesOldAPI"
+      ]
+    },
+    "goway/relation_writes_test.go": {
+      "paired_tests": [
+        "TestRelationWriteGoldens"
+      ],
+      "sha256": "d647ed098970b8b61304fddfd9e75f2a8da72794d5365477c3461af38579bc07"
+    },
+    "goway/relations_golden_test.go": {
+      "paired_tests": [
+        "TestDirectRelationSQLMatchesOldAPI"
+      ],
+      "sha256": "abc2cc37559a2280d26712b73a5dd6f265e20ab95c7b63e162f8fe3ba758f043"
+    },
+    "goway/relations_joined_golden_test.go": {
+      "paired_tests": [
+        "TestJoinedExistenceSQLMatchesOldAPI",
+        "TestJoinedFamiliesSQLMatchesOldAPI"
+      ],
+      "sha256": "4e50242a28b5fe4247c86a4ab17ff48089d2cbb8c8b0509e47bb37d2a8c87bc2"
+    },
+    "goway/relations_joined_test.go": {
+      "sha256": "c4ed99b9487e85ec8b03c345927ca98afd4edcfaad3f58fec5114f858feb6100"
+    },
+    "goway/report_projection_golden_test.go": {
+      "paired_tests": [
+        "TestReportFilterAdaptersGolden",
+        "TestReportProjectionGolden"
+      ],
+      "sha256": "bdcae2d50303ce105d53957db6100f21a44d22d49449a8a3c70284f7118a137f"
+    },
+    "goway/report_text_capability_test.go": {
+      "sha256": "5c75c056bc321902e0052bcfd5bb977b30cecda5dc1c200d0a99fee6510f75c7"
+    },
+    "goway/result_read_golden_test.go": {
+      "paired_tests": [
+        "TestStage6c3ResultGolden"
+      ],
+      "sha256": "052e5a1e2608c1d1e453a8a743bd349d902c34e93ed271464f5b76d97b192415"
+    },
+    "goway/retrieval_scope_golden_test.go": {
+      "paired_tests": [
+        "TestRetrievalAndScopeOldAndNewAgree"
+      ],
+      "sha256": "b298c78dd1ac3c8ea1ae891f2e26795c651f78bddaab678e076f0108c2047c31"
+    },
+    "goway/scalar_golden_test.go": {
+      "paired_tests": [
+        "TestStage6d2ScalarGolden"
+      ],
+      "sha256": "a4e5e142e9c1da281719599a8d322768b94afa0b4d8fdc96d6581593bf4acd84"
+    },
+    "goway/sensitive_driver_test.go": {
+      "sha256": "c1f62efab752d343240dccb6115d76c7a962a00bdba16cd140c1a9944f71f89c"
+    },
+    "goway/sensitive_golden_test.go": {
+      "paired_tests": [
+        "TestPasswordOldAndNewAgree",
+        "TestSensitiveOldAndNewAgree",
+        "TestSensitiveStreamingFailureParity"
+      ],
+      "sha256": "1be54ac2cc28fddbc084d45448c3952165b9e89960fc46d54fe03dd8ec87fb59"
+    },
+    "goway/source_write_golden_test.go": {
+      "paired_tests": [
+        "TestSourceWriteOldAndNewAgree"
+      ],
+      "sha256": "5da710abcd7893fa2884982fa732f40c1871ed3b11d2c747ef0dbd121269bae5"
+    },
+    "goway/source_write_test.go": {
+      "sha256": "e1a5157519b1ec47b45c00d70c7cb4f57efed01b61979c88a187b5fb31273947"
+    },
+    "goway/stage7_remainder_golden_test.go": {
+      "paired_tests": [
+        "TestStage7CursorMappingSQLParity",
+        "TestStage7SeederSQLParity"
+      ],
+      "sha256": "588e2698b15dd7b88573c60dd2f412a0e2b456ca2d52ab0326c459a9f8331239"
+    },
+    "goway/statement_detector_test.go": {
+      "sha256": "762ed4f46abea46cec9d5bd0af020ed3c6de42da3b024d1fa5f33b95fa17b7e1",
+      "paired_tests": [
+        "TestCompiledStatementsCarryTrustedShapes",
+        "TestCursorStatementsCarryTrustedShapes"
+      ]
+    },
+    "goway/store_capabilities_golden_test.go": {
+      "paired_tests": [
+        "TestStoreEachLifecycleGolden",
+        "TestStoreUUIDSeekGolden"
+      ],
+      "sha256": "e7514e5f7d990067ebc36585b187017bad6f23b84262dff4be80b148abe4effd"
+    },
+    "goway/subqueries_golden_test.go": {
+      "paired_tests": [
+        "TestStage6b2SubqueryGolden"
+      ],
+      "sha256": "d2f33e9b9d159654d480f739b4c8f57235f186b7739f170a23691635fca001e2"
+    },
+    "goway/terminal_writes_golden_test.go": {
+      "paired_tests": [
+        "TestTerminalWritesGolden"
+      ],
+      "sha256": "361a15b70eaffac95c9467827b17fb23cb04e4f176ff3946a91aac1eca0647eb"
+    },
+    "goway/transaction_composition_golden_test.go": {
+      "paired_tests": [
+        "TestStage6b4TransactionCompositionGolden"
+      ],
+      "sha256": "c0f2abc890d14071b02d21e30878b567e3ca19acdcb34340438bfa26fc171e8e"
+    },
+    "goway/validation_database_test.go": {
+      "paired_tests": [
+        "TestValidationDatabaseGlobalScopesWithoutRetrieval",
+        "TestValidationDatabaseObservationParity",
+        "TestValidationDatabaseRulesAndDescriptions"
+      ],
+      "sha256": "23dd6ead9a61e63a9b90ca1646bc3e1a0a60cac430ffc4e8b4c2c875cc87691d"
+    },
+    "goway/window_golden_test.go": {
+      "paired_tests": [
+        "TestStage6d1WindowGolden"
+      ],
+      "sha256": "729cbcc25c82c55c18c30e3f39031558915d2087f1e77a32bdd2a3e0560a6e42"
+    }
+  }
+}

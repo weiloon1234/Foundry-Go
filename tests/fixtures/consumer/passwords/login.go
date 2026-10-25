@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/password"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -21,8 +22,8 @@ type AccountStore interface {
 }
 
 func Accounts(db database.Executor) AccountProvider {
-	return auth.DefineProvider("password.accounts", (Account{}).FoundryReference(), func(ctx context.Context, id model.ID[Account]) (value.Optional[Account], error) {
-		return QueryPasswordAccounts().Find(ctx, db, id)
+	return auth.DefineProvider("password.accounts", AccountIdentity.ReferenceOf(Account{}), func(ctx context.Context, id model.ID[Account]) (value.Optional[Account], error) {
+		return AccountRecords.Find(ctx, db, id)
 	}, func(_ context.Context, account Account) (bool, error) { return account.Enabled, nil })
 }
 
@@ -31,14 +32,14 @@ func Accounts(db database.Executor) AccountProvider {
 func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*Login, error) {
 	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Account, string]{
 		Lock: func(ctx context.Context, tx *database.Tx, account Account) (value.Optional[Account], error) {
-			return QueryPasswordAccounts().ForUpdate().Find(ctx, tx, account.ID)
+			return AccountRecords.Query().Where(AccountRecords.Key().Eq(account.ID)).ForUpdate().First(ctx, tx)
 		},
 		Lookup: func(ctx context.Context, email string) (value.Optional[Account], error) {
-			return QueryPasswordAccounts().Where(AccountFields().Email.Eq(email)).First(ctx, db)
+			return AccountRecords.Query().Where(AccountRecords.Email.Eq(email)).First(ctx, db)
 		},
 		Hash: func(account Account) password.Hash { return account.Digest },
 		Rehash: func(ctx context.Context, account Account, old, next password.Hash) (value.Optional[Account], error) {
-			updated, err := QueryPasswordAccounts().Where(AccountFields().Digest.Eq(old)).Update(ctx, db, account.ID, AccountDraft{}.SetDigest(next))
+			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(AccountRecords.Digest.Eq(old)), AccountRecords.Key(), account.ID, AccountRecords.Digest.Set(next))
 			if errors.Is(err, database.NotFound) {
 				return value.Optional[Account]{}, nil
 			}

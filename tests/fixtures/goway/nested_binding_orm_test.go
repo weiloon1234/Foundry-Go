@@ -84,7 +84,7 @@ func TestNestedORMBindingHasNoGlobalFallback(t *testing.T) {
 				t.Fatal("nested binding refetched or fell back", capture.statements)
 			}
 		}
-		if transcripts[0] != transcripts[1] || !reflect.DeepEqual(results[0], results[1]) || absent[0] != absent[1] || absent[1] != (id == 2) {
+		if !oracleEqual(t, "nested_binding/sql", transcripts[0], transcripts[1]) || !oracleEqual(t, "nested_binding/results", oracleSnapshot(results[0]), oracleSnapshot(results[1])) || !oracleEqual(t, "nested_binding/absence", oracleSnapshot(absent[0]), oracleSnapshot(absent[1])) || !reflect.DeepEqual(results[0], results[1]) || absent[0] != absent[1] || absent[1] != (id == 2) {
 			t.Fatal("nested binding parity", transcripts, results, absent)
 		}
 	}

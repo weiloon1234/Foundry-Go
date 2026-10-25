@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/outbox"
 )
 
-var invalid = eventqueries.EventLinkDraft{}.SetMessageID(outbox.ID[string]{})
+var invalid = eventqueries.Links.MessageID.Set(outbox.ID[string]{})

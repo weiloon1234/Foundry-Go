@@ -10,14 +10,10 @@ import (
 )
 
 // Entry keeps an API token and optional connection settings encrypted at rest.
-//
-//foundry:model table=vault_entries
 type Entry struct {
-	ID    model.ID[Entry]
-	Label string
-	// Foundry field behavior (generated): Encrypted with the database key ring (AES-256-GCM, bound to this table, column and the row's primary key): drafts take plaintext, writes seal it inside the transaction and reads decrypt it while hydrating. Formatting, JSON and audit values are redacted. A fresh nonce per write means no comparison, ordering or conflict update; copied ciphertext does not decrypt in another row.
-	Token encrypted.Text
-	// Foundry field behavior (generated): Encrypted with the database key ring (AES-256-GCM, bound to this table, column and the row's primary key): drafts take plaintext, writes seal it inside the transaction and reads decrypt it while hydrating. Formatting, JSON and audit values are redacted. A fresh nonce per write means no comparison, ordering or conflict update; copied ciphertext does not decrypt in another row.
+	ID       model.ID[Entry]
+	Label    string
+	Token    encrypted.Text
 	Settings value.Nullable[encrypted.JSON[Settings]]
 }
 

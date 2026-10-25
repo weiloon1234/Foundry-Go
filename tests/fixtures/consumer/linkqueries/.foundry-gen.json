@@ -1,12 +1,6 @@
 {
   "version": 1,
   "files": {
-    "archive_foundry.gen.go": "cdee8b6f392572d73545b8e7aaba1b9be6e8aea09080948518fe44a2dc4379df",
-    "friendship_foundry.gen.go": "a3c49a3c0c2256fc4d23161b2f90e94c2b4775d99df7a0056546d3ff58d27d12",
-    "group_foundry.gen.go": "012495ec2e8d70aa8bdf24163a37dbd756bcef7d05e0c7614de407b0b00f5de8",
-    "member_foundry.gen.go": "d5af0547557c2406162b8dbd564b4bf2ddc6013396a4c2d090cb101f5fa6f94f",
-    "membership_foundry.gen.go": "1ce975b4bc05c34c36c33ac63c3ab456dd3228ad0272554dac514e22009ef838",
-    "natural_link_foundry.gen.go": "f2846c004a973e3f000173de2d3004f98880b93884cfd7a920469e19c48b5c34",
-    "nullable_link_foundry.gen.go": "f08fca54bfe476cd47e5afe28cc9baadec5ed3cc23493be84b7629e9a8ee7795"
+    "group_foundry.gen.go": "012495ec2e8d70aa8bdf24163a37dbd756bcef7d05e0c7614de407b0b00f5de8"
   }
 }

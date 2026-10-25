@@ -40,6 +40,11 @@ var TeamRecords = orm.Define("teams", func(b orm.Builder[Team], m *Team) TeamTab
 	return TeamTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), orm.ManyOf(b, &m.Projects)}
 })
 
+// FoundryIdentity preserves the stored team key used by authenticated bindings.
+func (m Team) FoundryIdentity() (model.Identity, error) {
+	return orm.IdentityOf(TeamRecords.Table, TeamRecords.Key()).ReferenceOf(m).Identity()
+}
+
 // ProjectRecords dispatches complete-model retrieval after hydration. Example: ProjectRecords.Query().
 var ProjectRecords = orm.Define("projects", func(b orm.Builder[Project], m *Project) ProjectTable {
 	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)

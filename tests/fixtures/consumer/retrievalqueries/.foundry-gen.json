@@ -1,9 +1,4 @@
 {
   "version": 1,
-  "files": {
-    "group_foundry.gen.go": "81b9dfe7a38e37bd6bbdaee39ae9847ec45e13b740bdee08b6f94a957b62be48",
-    "member_foundry.gen.go": "62f1dbc62a8e0ff3b6891e1c1989b71a415c3befc9967a5a34e7da30002f35b0",
-    "member_label_foundry.gen.go": "2f14d5612687b52a3c7960863982cf5af15ae655e4c25b164b7e664e1bac73f4",
-    "membership_foundry.gen.go": "f0d605648f4024f1d0bedea4a7afea975db97acb1398f925f2b5dfb3f0edfd10"
-  }
+  "files": {}
 }

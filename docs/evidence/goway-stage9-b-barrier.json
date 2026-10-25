@@ -1,0 +1,1184 @@
+{
+  "slice": "stage9-b-cleanup-barrier",
+  "base_commit": "0ada5ac70cf54c2b172cfd1c712ff1def53d12a4",
+  "status": "cleanup complete for independent declarations; acceptance passed in segments; two lane D callers block final removal",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r12",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "FOUNDRY_TEST_POSTGRES_URL": "",
+    "FOUNDRY_TEST_POSTGRES_REQUIRED": "0",
+    "FOUNDRY_TEST_REDIS_ADDR": "",
+    "FOUNDRY_TEST_REDIS_REQUIRED": "0"
+  },
+  "packages_in_scope": [
+    "auditqueries",
+    "binarymodels",
+    "eventqueries",
+    "hookqueries",
+    "inputqueries",
+    "linkqueries",
+    "mutatorqueries",
+    "observerqueries",
+    "retrievalqueries",
+    "softqueries",
+    "tenantqueries",
+    "timequeries",
+    "upsertqueries",
+    "vault",
+    "caching",
+    "coordination",
+    "messaging",
+    "limiting",
+    "redisdata",
+    "rediscommands",
+    "httpetags",
+    "recovering",
+    "authenticating",
+    "nestedbindings",
+    "notifying",
+    "realtime",
+    "cursorqueries",
+    "pagequeries",
+    "genericdto",
+    "internal/authfixture",
+    "localization",
+    "mailing",
+    "modelvalidation",
+    "outgoing",
+    "requestflow",
+    "security",
+    "storing",
+    "unions",
+    "validationinput",
+    "validationrules",
+    "clientcontracts"
+  ],
+  "directives_removed": [
+    {
+      "file": "tests/fixtures/consumer/auditqueries/models.go",
+      "directive": "//foundry:model table=audited_accounts hooks=accountHooks"
+    },
+    {
+      "file": "tests/fixtures/consumer/auditqueries/models.go",
+      "directive": "//foundry:model table=audited_labels primary=Code"
+    },
+    {
+      "file": "tests/fixtures/consumer/binarymodels/record.go",
+      "directive": "//foundry:model table=binary_records primary=ID"
+    },
+    {
+      "file": "tests/fixtures/consumer/binarymodels/record.go",
+      "directive": "//foundry:projection"
+    },
+    {
+      "file": "tests/fixtures/consumer/eventqueries/event_link.go",
+      "directive": "//foundry:model table=event_links primary=ID"
+    },
+    {
+      "file": "tests/fixtures/consumer/hookqueries/member.go",
+      "directive": "//foundry:model table=hook_members hooks=memberHooks"
+    },
+    {
+      "file": "tests/fixtures/consumer/hookqueries/member.go",
+      "directive": "//foundry:model table=hook_logs"
+    },
+    {
+      "file": "tests/fixtures/consumer/inputqueries/models.go",
+      "directive": "//foundry:model table=input_members hooks=memberHooks"
+    },
+    {
+      "file": "tests/fixtures/consumer/observerqueries/models.go",
+      "directive": "//foundry:model table=observed_records hooks=localHooks"
+    },
+    {
+      "file": "tests/fixtures/consumer/observerqueries/models.go",
+      "directive": "//foundry:model table=observed_plain"
+    },
+    {
+      "file": "tests/fixtures/consumer/observerqueries/models.go",
+      "directive": "//foundry:model table=observed_effects"
+    },
+    {
+      "file": "tests/fixtures/consumer/retrievalqueries/models.go",
+      "directive": "//foundry:model table=retrieval_members retrieval=memberRetrieval"
+    },
+    {
+      "file": "tests/fixtures/consumer/retrievalqueries/models.go",
+      "directive": "//foundry:model table=retrieval_groups primary=Code"
+    },
+    {
+      "file": "tests/fixtures/consumer/retrievalqueries/models.go",
+      "directive": "//foundry:model table=retrieval_memberships"
+    },
+    {
+      "file": "tests/fixtures/consumer/retrievalqueries/models.go",
+      "directive": "//foundry:projection"
+    },
+    {
+      "file": "tests/fixtures/consumer/softqueries/models.go",
+      "directive": "//foundry:model table=soft_members hooks=memberHooks"
+    },
+    {
+      "file": "tests/fixtures/consumer/softqueries/models.go",
+      "directive": "//foundry:model table=soft_groups primary=Code"
+    },
+    {
+      "file": "tests/fixtures/consumer/softqueries/models.go",
+      "directive": "//foundry:model table=soft_memberships"
+    },
+    {
+      "file": "tests/fixtures/consumer/softqueries/models.go",
+      "directive": "//foundry:projection"
+    },
+    {
+      "file": "tests/fixtures/consumer/tenantqueries/models.go",
+      "directive": "//foundry:model table=tenant_documents"
+    },
+    {
+      "file": "tests/fixtures/consumer/tenantqueries/models.go",
+      "directive": "//foundry:model table=tenant_tags primary=Code"
+    },
+    {
+      "file": "tests/fixtures/consumer/tenantqueries/models.go",
+      "directive": "//foundry:model table=tenant_document_tags"
+    },
+    {
+      "file": "tests/fixtures/consumer/timequeries/models.go",
+      "directive": "//foundry:model table=time_members hooks=memberHooks"
+    },
+    {
+      "file": "tests/fixtures/consumer/timequeries/models.go",
+      "directive": "//foundry:model table=time_manual timestamps=false"
+    },
+    {
+      "file": "tests/fixtures/consumer/upsertqueries/models.go",
+      "directive": "//foundry:model table=excluded primary=ID"
+    },
+    {
+      "file": "tests/fixtures/consumer/vault/entry.go",
+      "directive": "//foundry:model table=vault_entries"
+    },
+    {
+      "file": "tests/fixtures/consumer/recovering/member.go",
+      "directive": "//foundry:model table=recovery_members hooks=memberHooks"
+    },
+    {
+      "file": "tests/fixtures/consumer/nestedbindings/models.go",
+      "directive": "//foundry:model table=teams"
+    },
+    {
+      "file": "tests/fixtures/consumer/nestedbindings/models.go",
+      "directive": "//foundry:model table=projects retrieval=projectRetrieval"
+    },
+    {
+      "file": "tests/fixtures/consumer/nestedbindings/models.go",
+      "directive": "//foundry:model table=tasks"
+    },
+    {
+      "file": "tests/fixtures/consumer/linkqueries/models.go",
+      "directive": "//foundry:model table=link_members retrieval=memberReads"
+    },
+    {
+      "file": "tests/fixtures/consumer/linkqueries/models.go",
+      "directive": "//foundry:model table=link_memberships hooks=membershipHooks"
+    },
+    {
+      "file": "tests/fixtures/consumer/linkqueries/models.go",
+      "directive": "//foundry:model table=link_natural"
+    },
+    {
+      "file": "tests/fixtures/consumer/linkqueries/models.go",
+      "directive": "//foundry:model table=link_nullable"
+    },
+    {
+      "file": "tests/fixtures/consumer/linkqueries/models.go",
+      "directive": "//foundry:model table=link_friendships"
+    },
+    {
+      "file": "tests/fixtures/consumer/linkqueries/insert_models.go",
+      "directive": "//foundry:model table=link_archives hooks=archiveHooks retrieval=archiveReads"
+    }
+  ],
+  "functions_removed": [
+    "auditqueries/domain.go:accountHooks",
+    "hookqueries/member.go:memberHooks",
+    "inputqueries/hooks.go:memberHooks",
+    "observerqueries/models.go:localHooks",
+    "observerqueries/models.go:ObserverHooks",
+    "retrievalqueries/hooks.go:memberRetrieval",
+    "retrievalqueries/models.go:defineMemberRelations",
+    "softqueries/hooks.go:memberHooks",
+    "softqueries/hooks.go:Hooks",
+    "softqueries/models.go:defineMemberRelations",
+    "softqueries/models.go:defineMemberAggregates",
+    "recovering/hooks.go:memberHooks",
+    "nestedbindings/models.go:defineTeamRelations",
+    "nestedbindings/models.go:defineProjectRelations",
+    "nestedbindings/models.go:projectRetrieval",
+    "tenantqueries/models.go:defineDocumentGlobalScopes",
+    "tenantqueries/models.go:defineDocumentRelations",
+    "tenantqueries/models.go:defineTagRelations",
+    "timequeries/hooks.go:memberHooks",
+    "linkqueries/models.go:defineMemberRelations",
+    "linkqueries/models.go:memberReads",
+    "linkqueries/insert_models.go:archiveHooks",
+    "linkqueries/insert_models.go:archiveReads",
+    "linkqueries/hooks.go:membershipHooks",
+    "linkqueries/hooks.go:Hooks",
+    "linkqueries/fixture_test.go:linkDatabase",
+    "linkqueries/fixture_test.go:runLinks",
+    "linkqueries/fixture_test.go:endpoints"
+  ],
+  "helpers_migrated": [
+    "hookqueries.record: removed generated MemberChanges parameter; kept callback/log/veto behavior for native hooks"
+  ],
+  "generated_files_removed": [
+    "tests/fixtures/consumer/auditqueries/account_foundry.gen.go",
+    "tests/fixtures/consumer/auditqueries/label_foundry.gen.go",
+    "tests/fixtures/consumer/binarymodels/record_foundry.gen.go",
+    "tests/fixtures/consumer/binarymodels/view_foundry.gen.go",
+    "tests/fixtures/consumer/eventqueries/event_link_foundry.gen.go",
+    "tests/fixtures/consumer/hookqueries/log_foundry.gen.go",
+    "tests/fixtures/consumer/hookqueries/member_foundry.gen.go",
+    "tests/fixtures/consumer/inputqueries/member_foundry.gen.go",
+    "tests/fixtures/consumer/linkqueries/archive_foundry.gen.go",
+    "tests/fixtures/consumer/linkqueries/friendship_foundry.gen.go",
+    "tests/fixtures/consumer/linkqueries/member_foundry.gen.go",
+    "tests/fixtures/consumer/linkqueries/membership_foundry.gen.go",
+    "tests/fixtures/consumer/linkqueries/natural_link_foundry.gen.go",
+    "tests/fixtures/consumer/linkqueries/nullable_link_foundry.gen.go",
+    "tests/fixtures/consumer/nestedbindings/project_foundry.gen.go",
+    "tests/fixtures/consumer/nestedbindings/task_foundry.gen.go",
+    "tests/fixtures/consumer/nestedbindings/team_foundry.gen.go",
+    "tests/fixtures/consumer/observerqueries/effect_foundry.gen.go",
+    "tests/fixtures/consumer/observerqueries/plain_foundry.gen.go",
+    "tests/fixtures/consumer/observerqueries/record_foundry.gen.go",
+    "tests/fixtures/consumer/recovering/member_foundry.gen.go",
+    "tests/fixtures/consumer/retrievalqueries/group_foundry.gen.go",
+    "tests/fixtures/consumer/retrievalqueries/member_foundry.gen.go",
+    "tests/fixtures/consumer/retrievalqueries/member_label_foundry.gen.go",
+    "tests/fixtures/consumer/retrievalqueries/membership_foundry.gen.go",
+    "tests/fixtures/consumer/softqueries/group_foundry.gen.go",
+    "tests/fixtures/consumer/softqueries/member_foundry.gen.go",
+    "tests/fixtures/consumer/softqueries/member_label_foundry.gen.go",
+    "tests/fixtures/consumer/softqueries/membership_foundry.gen.go",
+    "tests/fixtures/consumer/tenantqueries/document_foundry.gen.go",
+    "tests/fixtures/consumer/tenantqueries/document_tag_foundry.gen.go",
+    "tests/fixtures/consumer/tenantqueries/tag_foundry.gen.go",
+    "tests/fixtures/consumer/timequeries/manual_foundry.gen.go",
+    "tests/fixtures/consumer/timequeries/member_foundry.gen.go",
+    "tests/fixtures/consumer/upsertqueries/excluded_record_foundry.gen.go",
+    "tests/fixtures/consumer/vault/entry_foundry.gen.go"
+  ],
+  "manifests_regenerated": [
+    "tests/fixtures/consumer/auditqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/binarymodels/.foundry-gen.json",
+    "tests/fixtures/consumer/eventqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/hookqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/inputqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/linkqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/nestedbindings/.foundry-gen.json",
+    "tests/fixtures/consumer/observerqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/recovering/.foundry-gen.json",
+    "tests/fixtures/consumer/retrievalqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/softqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/tenantqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/timequeries/.foundry-gen.json",
+    "tests/fixtures/consumer/upsertqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/vault/.foundry-gen.json"
+  ],
+  "negative_cases": [
+    "outbox_field_id"
+  ],
+  "frozen_read": {
+    "base_commit": "0ada5ac7",
+    "command": "go run /private/tmp/barrier-b-freeze.go",
+    "source_sha256": {
+      "tests/fixtures/consumer/linkqueries/member_foundry.gen.go": "d5af0547557c2406162b8dbd564b4bf2ddc6013396a4c2d090cb101f5fa6f94f"
+    },
+    "capture_sha256": "cf8acde2ad28dd6505cde06bcddee721027f50da64c5d888cf3adaaf3823011e",
+    "binding_types": [
+      "string",
+      "int64"
+    ],
+    "binding_type_source": "Old shared compiler binds LIMIT as int64 (internal/querycore/select.go:378); the captured Name field uses the string codec. The assertion checks both concrete types as well as captured JSON values."
+  },
+  "frozen_read_path": "tests/fixtures/consumer/linkqueries/testdata/legacy-read.json",
+  "replacement_coverage": {
+    "linkqueries/TestPostgresLegacyCreationAdapterIsLazy": {
+      "disposition": "obsolete application-implementable legacy creation adapter; ORM accepts sealed assignments",
+      "replacement": [
+        "linkqueries/TestPostgresLookupWritesChooseOneLifecycleBranch",
+        "database/orm/TestLookupExistingSkipsUnchosenDraftAndRetrieval"
+      ]
+    },
+    "observerqueries/TestORMObserverDeclarationsAreSeparateFromLegacy": "TestORMObserverDeclarationsRejectForeignFamilies retains incompatible-family rejection without generated types; also asserts factory laziness",
+    "identity": [
+      "recovering/TestIdentityRetainsStoredModelAndKey",
+      "nestedbindings/TestIdentityRetainsStoredModelAndKey"
+    ],
+    "complete_record_distinct_on": "Already migrated in base. Only stale legacy file/test names were changed; bodies remain identical."
+  },
+  "blocked": [
+    {
+      "owner": "lane D (httppagination) then lane B",
+      "caller": "tests/fixtures/consumer/httppagination/pagination.go:70-73",
+      "symbols": [
+        "mutatorqueries.MemberQuery",
+        "mutatorqueries.QueryMutatorMembers",
+        "mutatorqueries.MemberFields"
+      ],
+      "retained": [
+        "mutatorqueries model directive",
+        "member_foundry.gen.go",
+        "managed field notices"
+      ],
+      "note": "State enum output is independently retained."
+    },
+    {
+      "owner": "lane D (identity compiler case) then lane B",
+      "caller": "tests/fixtures/consumer/testdata/compilefail/reference_natural_key/invalid.go:8",
+      "symbols": [
+        "linkqueries.Group.FoundryReference"
+      ],
+      "retained": [
+        "Group model directive",
+        "linkqueries.groupReads",
+        "linkqueries/group_foundry.gen.go"
+      ],
+      "note": "Foreign case left untouched. Correctly rejected initial removal for undefined symbol; passed after retaining its generated dependency."
+    }
+  ],
+  "coordination_notes": [
+    "Lane C must preserve models.User identity when removing its generated methods; this slice does not edit shared models."
+  ],
+  "contracts": "DTO/enum/config/contract directives and retained generated output are unchanged. No schema, TypeScript, OpenAPI or wire change.",
+  "footprint": "Existing consumer root footprint assertions passed in the initial root test run; its only failure was the foreign reference_natural_key case, resolved by retaining Group generation. No ceilings changed.",
+  "checks": [
+    {
+      "name": "build",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./auditqueries",
+        "./binarymodels",
+        "./eventqueries",
+        "./hookqueries",
+        "./inputqueries",
+        "./linkqueries",
+        "./mutatorqueries",
+        "./observerqueries",
+        "./retrievalqueries",
+        "./softqueries",
+        "./tenantqueries",
+        "./timequeries",
+        "./upsertqueries",
+        "./vault",
+        "./caching",
+        "./coordination",
+        "./messaging",
+        "./limiting",
+        "./redisdata",
+        "./rediscommands",
+        "./httpetags",
+        "./recovering",
+        "./authenticating",
+        "./nestedbindings",
+        "./notifying",
+        "./realtime",
+        "./cursorqueries",
+        "./pagequeries",
+        "./genericdto",
+        "./internal/authfixture",
+        "./localization",
+        "./mailing",
+        "./modelvalidation",
+        "./outgoing",
+        "./requestflow",
+        "./security",
+        "./storing",
+        "./unions",
+        "./validationinput",
+        "./validationrules",
+        "./clientcontracts"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 24.88,
+      "log": "/private/tmp/barrier-b-build.log"
+    },
+    {
+      "name": "build",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./auditqueries",
+        "./binarymodels",
+        "./eventqueries",
+        "./hookqueries",
+        "./inputqueries",
+        "./linkqueries",
+        "./mutatorqueries",
+        "./observerqueries",
+        "./retrievalqueries",
+        "./softqueries",
+        "./tenantqueries",
+        "./timequeries",
+        "./upsertqueries",
+        "./vault",
+        "./caching",
+        "./coordination",
+        "./messaging",
+        "./limiting",
+        "./redisdata",
+        "./rediscommands",
+        "./httpetags",
+        "./recovering",
+        "./authenticating",
+        "./nestedbindings",
+        "./notifying",
+        "./realtime",
+        "./genericdto",
+        "./internal/authfixture",
+        "./localization",
+        "./mailing",
+        "./modelvalidation",
+        "./outgoing",
+        "./requestflow",
+        "./security",
+        "./storing",
+        "./unions",
+        "./validationinput",
+        "./validationrules",
+        "./clientcontracts"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.3,
+      "log": "/private/tmp/barrier-b-build.log"
+    },
+    {
+      "name": "vet",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./auditqueries",
+        "./binarymodels",
+        "./eventqueries",
+        "./hookqueries",
+        "./inputqueries",
+        "./linkqueries",
+        "./mutatorqueries",
+        "./observerqueries",
+        "./retrievalqueries",
+        "./softqueries",
+        "./tenantqueries",
+        "./timequeries",
+        "./upsertqueries",
+        "./vault",
+        "./caching",
+        "./coordination",
+        "./messaging",
+        "./limiting",
+        "./redisdata",
+        "./rediscommands",
+        "./httpetags",
+        "./recovering",
+        "./authenticating",
+        "./nestedbindings",
+        "./notifying",
+        "./realtime",
+        "./cursorqueries",
+        "./pagequeries",
+        "./genericdto",
+        "./internal/authfixture",
+        "./localization",
+        "./mailing",
+        "./modelvalidation",
+        "./outgoing",
+        "./requestflow",
+        "./security",
+        "./storing",
+        "./unions",
+        "./validationinput",
+        "./validationrules",
+        "./clientcontracts"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 4.23,
+      "log": "/private/tmp/barrier-b-vet.log"
+    },
+    {
+      "name": "vet",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./recovering",
+        "./nestedbindings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.32,
+      "log": "/private/tmp/barrier-b-vet.log"
+    },
+    {
+      "name": "test",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-timeout=20m",
+        "./auditqueries",
+        "./binarymodels",
+        "./eventqueries",
+        "./hookqueries",
+        "./inputqueries",
+        "./linkqueries",
+        "./mutatorqueries",
+        "./observerqueries",
+        "./retrievalqueries",
+        "./softqueries",
+        "./tenantqueries",
+        "./timequeries",
+        "./upsertqueries",
+        "./vault",
+        "./caching",
+        "./coordination",
+        "./messaging",
+        "./limiting",
+        "./redisdata",
+        "./rediscommands",
+        "./httpetags",
+        "./recovering",
+        "./authenticating",
+        "./nestedbindings",
+        "./notifying",
+        "./realtime",
+        "./cursorqueries",
+        "./pagequeries",
+        "./genericdto",
+        "./internal/authfixture",
+        "./localization",
+        "./mailing",
+        "./modelvalidation",
+        "./outgoing",
+        "./requestflow",
+        "./security",
+        "./storing",
+        "./unions",
+        "./validationinput",
+        "./validationrules",
+        "./clientcontracts"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 32.76,
+      "log": "/private/tmp/barrier-b-test.log"
+    },
+    {
+      "name": "race",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "./auditqueries",
+        "./binarymodels",
+        "./eventqueries",
+        "./hookqueries",
+        "./inputqueries",
+        "./linkqueries",
+        "./mutatorqueries",
+        "./observerqueries",
+        "./retrievalqueries",
+        "./softqueries",
+        "./tenantqueries",
+        "./timequeries",
+        "./upsertqueries",
+        "./vault",
+        "./caching",
+        "./coordination",
+        "./messaging",
+        "./limiting",
+        "./redisdata",
+        "./rediscommands",
+        "./httpetags",
+        "./recovering",
+        "./authenticating",
+        "./nestedbindings",
+        "./notifying",
+        "./realtime",
+        "./cursorqueries",
+        "./pagequeries",
+        "./genericdto",
+        "./internal/authfixture",
+        "./localization",
+        "./mailing",
+        "./modelvalidation",
+        "./outgoing",
+        "./requestflow",
+        "./security",
+        "./storing",
+        "./unions",
+        "./validationinput",
+        "./validationrules",
+        "./clientcontracts"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 94.14,
+      "log": "/private/tmp/barrier-b-race.log"
+    },
+    {
+      "name": "consumer",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-timeout=30m",
+        "."
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 85.09,
+      "log": "/private/tmp/barrier-b-consumer.log"
+    },
+    {
+      "name": "catalogue",
+      "cwd": ".",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 0.32,
+      "log": "/private/tmp/barrier-b-catalogue.log"
+    },
+    {
+      "name": "generate-check",
+      "cwd": ".",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.96,
+      "log": "/private/tmp/barrier-b-generate-check.log"
+    },
+    {
+      "name": "docs-check",
+      "cwd": ".",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.69,
+      "log": "/private/tmp/barrier-b-docs-check.log"
+    },
+    {
+      "name": "build-final",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./linkqueries"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.33,
+      "log": "/private/tmp/barrier-b-build-final.log"
+    },
+    {
+      "name": "vet-final",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./linkqueries"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.22,
+      "log": "/private/tmp/barrier-b-vet-final.log"
+    },
+    {
+      "name": "test-final",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "./linkqueries"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.31,
+      "log": "/private/tmp/barrier-b-test-final.log"
+    },
+    {
+      "name": "race-final",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./linkqueries"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 9.91,
+      "log": "/private/tmp/barrier-b-race-final.log"
+    },
+    {
+      "name": "compiler-final",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^reference_natural_key$",
+        "."
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.95,
+      "log": "/private/tmp/barrier-b-compiler-final.log"
+    },
+    {
+      "name": "generate-check-final",
+      "cwd": ".",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.07,
+      "log": "/private/tmp/barrier-b-generate-check-final.log"
+    },
+    {
+      "name": "docs-check-final",
+      "cwd": ".",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.38,
+      "log": "/private/tmp/barrier-b-docs-check-final.log"
+    },
+    {
+      "name": "test-listeners",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -timeout=20m ./httpetags ./realtime ./mailing ./validationrules",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-b-test-listeners.log",
+      "note": "Sandbox listener rejection resolved by approved local-listener access; PostgreSQL and Redis disabled."
+    },
+    {
+      "name": "race-listeners",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -race -timeout=20m ./httpetags ./realtime ./mailing ./validationrules",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-b-race-listeners.log",
+      "note": "Sandbox listener rejection resolved by approved local-listener access; PostgreSQL and Redis disabled."
+    },
+    {
+      "name": "catalogue-final",
+      "cwd": ".",
+      "command": "python3 tools/goway_catalogue.py",
+      "exit_code": 0,
+      "log": "/private/tmp/barrier-b-catalogue-final.log"
+    },
+    {
+      "name": "frozen-bindings-test",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -run '^TestORMDeclarationsAndReadParity$' ./linkqueries",
+      "exit_code": 0
+    },
+    {
+      "name": "frozen-bindings-race",
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -race -run '^TestORMDeclarationsAndReadParity$' ./linkqueries",
+      "exit_code": 0
+    },
+    {
+      "name": "docs-check-complete",
+      "cwd": ".",
+      "command": "make docs-check",
+      "exit_code": 0
+    },
+    {
+      "name": "format",
+      "cwd": ".",
+      "command": "gofmt -l (owned Go files)",
+      "exit_code": 0,
+      "output": "empty"
+    },
+    {
+      "name": "diff-check",
+      "cwd": ".",
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "generation": [
+    {
+      "command": "make generate",
+      "exit_code": 2,
+      "reason": "native hook recorder still called deleted helper; migrated helper signature and kept behavior"
+    },
+    {
+      "command": "make generate",
+      "exit_code": 0,
+      "result": "37 obsolete owned outputs removed; 14 source field-note rewrites; 15 ownership manifests refreshed"
+    },
+    {
+      "command": "make generate",
+      "exit_code": 0,
+      "result": "Restored Group directive/factory and regenerated its output for the active lane D negative. Final total: 36 removed generated files, 15 refreshed ownership manifests."
+    }
+  ],
+  "source_sha256": {
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "bf2be8944a6fe0be3ff526a414bd814a26f1fa3f6f250561d5e19fb78bd767c9",
+    "docs/evidence/goway-stage9-b-barrier.md": "cc4450b6717c7957e359d89330300875dd4189cdb7515daae4557c8b6805d93d",
+    "tests/fixtures/consumer/auditqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/auditqueries/README.md": "d37dfb281ab1dd9764e3870eea1a20ff957d08ea45d0e763ab10d98d56dca8f3",
+    "tests/fixtures/consumer/auditqueries/domain.go": "5ba3628b770f1032c5fcafd0c614e57285184cd1d08fcc6469c86ad3330276ca",
+    "tests/fixtures/consumer/auditqueries/models.go": "e2085c6d96a77b31093d85b6178899651e74332ca38a9874bd994aab0b9c98d0",
+    "tests/fixtures/consumer/binarymodels/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/binarymodels/README.md": "0ae115cd632cd21eedcbc81ca54d116dd3a832f253b9052b53a60262a3c392a6",
+    "tests/fixtures/consumer/binarymodels/record.go": "85ab4c84c41ec52b72849d052f15c596969a0431aec342e0985e062922c921e0",
+    "tests/fixtures/consumer/cursorqueries/README.md": "ba8d827b67985b68963ecd66f193db4d419eadc4abf7f350758afda4e34eca49",
+    "tests/fixtures/consumer/cursorqueries/record_distinct_postgres_test.go": "2e8aaf4d927fae2faffd1b731614e0019faee1ae5c5356e442f952202a537e1b",
+    "tests/fixtures/consumer/eventqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/eventqueries/event_link.go": "e6bdb3aa5bc6cd9682b43706bcf2c978df429609f5a58ffa744c9ec863940eab",
+    "tests/fixtures/consumer/hookqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/hookqueries/README.md": "2095f53b7bc6600e36d979abc3db10c083e97424e1100f48d11569abe394320a",
+    "tests/fixtures/consumer/hookqueries/member.go": "da5e2a86a113ed252d5260bb7390b42fe7cd008798b833008dd5888b84aba22b",
+    "tests/fixtures/consumer/hookqueries/orm_hooks.go": "9d7bfcc9d5f8975376f709ca86e404806069322ffdc3421920798ac0db5b945d",
+    "tests/fixtures/consumer/inputqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/inputqueries/README.md": "a9a5df69e522191b949d562de36c384640b15bd29340c320db5cc98e06a6a5fa",
+    "tests/fixtures/consumer/inputqueries/hooks.go": "75c03e0ab5512470134c9e5e53fb9e64b5afd4558cb3de200b72dee331452b4a",
+    "tests/fixtures/consumer/inputqueries/models.go": "ea488761188b7528eba798d34c9fb814f61cb749baa8e5ff3a4fe88d923a8b77",
+    "tests/fixtures/consumer/linkqueries/.foundry-gen.json": "b3554d4a03daa6a5541ff0b553a8597bd68dae51a5c674abd6cf825fee646b8d",
+    "tests/fixtures/consumer/linkqueries/README.md": "802cb0c8eedb7b56b0ee0075d80a093f6de085e0298357974519aa148b2e3afe",
+    "tests/fixtures/consumer/linkqueries/fixture_test.go": "88f9e91fefea97b41c4a16200424aee12f4277c7f394dc14599654b0e5462b18",
+    "tests/fixtures/consumer/linkqueries/hooks.go": "cb909db126652f1266860a80f931fbf497188a934ca8209274998151dbec3279",
+    "tests/fixtures/consumer/linkqueries/insert_models.go": "4d315d64401f25f599f55fbd382623d9e8d2a12bc4b57d588741a207c9b68759",
+    "tests/fixtures/consumer/linkqueries/models.go": "b4a707fb1ff7854ec7ef31746bb701e5a32c7b5ab430a12fc909a7cad92446aa",
+    "tests/fixtures/consumer/linkqueries/orm_test.go": "227feaa41bbddbdbdfc1b42bcc3edb732b928de9b87c82aa967423fc43c023b2",
+    "tests/fixtures/consumer/linkqueries/testdata/legacy-read.json": "cf8acde2ad28dd6505cde06bcddee721027f50da64c5d888cf3adaaf3823011e",
+    "tests/fixtures/consumer/nestedbindings/.foundry-gen.json": "e5e1cc9dc09a1b1c652ad2231e96cc0941043acefd4d0b1c6a345603c74a2041",
+    "tests/fixtures/consumer/nestedbindings/README.md": "22ba587ebab623e95c26586a2fad834ac0b1b2d11910467a65d204f872b3c01d",
+    "tests/fixtures/consumer/nestedbindings/identity_test.go": "2112c8c67bdb6d74511c65ec9b7e9f5ff94aaa4466060263befefe662acf020c",
+    "tests/fixtures/consumer/nestedbindings/models.go": "def376292bca5b712bfa7c4df3c54a2dad237b50c12709b88aabcbb7d6a923cb",
+    "tests/fixtures/consumer/nestedbindings/tables.go": "22294e3aac74dc339e94b5dc152b1b072add011b8decd95bc972156893a3c5b0",
+    "tests/fixtures/consumer/observerqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/observerqueries/README.md": "94a9f92d386e119bfba7cc7cd646a4c3603871d8d276e21679dd63b032d8879a",
+    "tests/fixtures/consumer/observerqueries/models.go": "4f198dcea6d7d8c57d377b4d1fe41d22a5846ecbcd1768752f9afc4b672649dd",
+    "tests/fixtures/consumer/observerqueries/orm_test.go": "95ca2f90cd79e8f2b7f477f22aee1b3e12ec1d868042ec12c756953cee734ea9",
+    "tests/fixtures/consumer/pagequeries/README.md": "285e7597204247f096d273f9ca32ede65255f5de7f8c8bfc3f0b5d0c8ea44353",
+    "tests/fixtures/consumer/pagequeries/record_distinct_postgres_test.go": "6829e17fcc4fc0e1713b9fd1fa9f5609ac9ecf3c71f87c6fc0e00a1b21f7d1a6",
+    "tests/fixtures/consumer/recovering/.foundry-gen.json": "4b7e7b3e81223ef926cce62b8f1c8dc5b198416555f9b66788a8232caeb6797a",
+    "tests/fixtures/consumer/recovering/README.md": "c2605ca84a90a7faad89348029ef8fe953a7565905556ed53a068fa2134a00b8",
+    "tests/fixtures/consumer/recovering/hooks.go": "913c4beff8d2c438fa0b5499246ae7474a9318d8765bfc2c888d367976721eb8",
+    "tests/fixtures/consumer/recovering/identity_test.go": "bf1981e22031bce7f01c8a928a7002e8eb92f5c96e2bddc81ab1f52eca09e725",
+    "tests/fixtures/consumer/recovering/member.go": "569325f4f882fd00e1f768284d5d3851ad3f0aaad899ec5f050ea7da9bb95819",
+    "tests/fixtures/consumer/recovering/tables.go": "1bc086b6ac06878ca03b2a750c42e998c04e8aee3763b7e62d5f0fcbb9ebde0a",
+    "tests/fixtures/consumer/retrievalqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/retrievalqueries/README.md": "3370906372767f92ae6a8988c06d1e431f4ba25f48fb83cac692cad3e07fece9",
+    "tests/fixtures/consumer/retrievalqueries/hooks.go": "0d0aa7e30e8d605a009e6b1564b1ef6d1a18589da981af64d42ad6868691dce8",
+    "tests/fixtures/consumer/retrievalqueries/models.go": "a91347435aba7f99d210e843d2c18c7e1afa6e2fc81cbd38d41d056ff4d326be",
+    "tests/fixtures/consumer/softqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/softqueries/README.md": "285f8f232e79b724166304312da3c097e1e55fd2455eb9c1a96b3c28317ddbf5",
+    "tests/fixtures/consumer/softqueries/hooks.go": "c603c5c5c0cfec99468247c6a814b0d50fe13a1965bb2faa1199eb1fe3cb7515",
+    "tests/fixtures/consumer/softqueries/models.go": "f4fa20b07b865a65a260b937bc08da616182fcf065f7f4e5d6659caaeb455f81",
+    "tests/fixtures/consumer/tenantqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/tenantqueries/README.md": "abb0cf69a59c47a349a525aa4869ae27a2f019e21a0678cac657662a199da7dd",
+    "tests/fixtures/consumer/tenantqueries/models.go": "56888fd79c1f69b8bdfbfe1a60cf6573d33bd55a5b7ef02b1d85c2826da1634e",
+    "tests/fixtures/consumer/testdata/compilefail/outbox_field_id/invalid.go": "7d1e33e7907aebd6b2c12c10439012d441a5807225af9ba2bb756c6b0793dc08",
+    "tests/fixtures/consumer/timequeries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/timequeries/README.md": "c8f28b36db11881701236e95e90b2f8aa242344d6b77d157ebb4ef7fac46bad6",
+    "tests/fixtures/consumer/timequeries/hooks.go": "7859bf7ca6a6e6fcfee19e94c272514d79c7318d09c0b32d6a3fe52d7badc54b",
+    "tests/fixtures/consumer/timequeries/models.go": "e5636d12d345d5dd262677680fc4dc6510b967a898eebe4f0ba16cff1fe2640b",
+    "tests/fixtures/consumer/upsertqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/upsertqueries/README.md": "c8799b151fae05a3b09789b3d7f53a629877e18e86490f4d6a4af13892e09db2",
+    "tests/fixtures/consumer/upsertqueries/models.go": "277bc1df2cdd47c72f9685fc5dbfb88ba7b412c755fe0940863422c2ddc45911",
+    "tests/fixtures/consumer/vault/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+    "tests/fixtures/consumer/vault/README.md": "8cf7285547df876c6307dc339bb164d4b0e853bce00bda93f83c1be1e22c860a",
+    "tests/fixtures/consumer/vault/entry.go": "0bb57d32ae84b91d93792da7216db96bdde32fe1b01060a7c53e34eb0d3572fd"
+  },
+  "removed_source_sha256": {
+    "tests/fixtures/consumer/auditqueries/account_foundry.gen.go": "45b7c411e10af01288c2b63c2fee74b91a66380cdcf8a209def8f54b00454067",
+    "tests/fixtures/consumer/auditqueries/label_foundry.gen.go": "fda2aa99d89e9f5e5e69385639a74b816b0925d854607a866794ae5c60eb485d",
+    "tests/fixtures/consumer/binarymodels/record_foundry.gen.go": "7ef831e2928b96853b46a1b82b59eb71842237ab23e7bc4ea071ad1d14e23549",
+    "tests/fixtures/consumer/binarymodels/view_foundry.gen.go": "4e23f1fcc11ffb76e9e3179135d080928593dd4178f6abd40c941fd95bc990ae",
+    "tests/fixtures/consumer/cursorqueries/legacy_clauses_postgres_test.go": "9e9c3707d2915f8a64391aea1cd12a4f7f275b1c30ec41a2b370eab649e4553b",
+    "tests/fixtures/consumer/eventqueries/event_link_foundry.gen.go": "edc41f459e407c6d04eeafca13bd0c5248f9a11b0dbbf18694fcd62df2c83416",
+    "tests/fixtures/consumer/hookqueries/log_foundry.gen.go": "edbd33bc4e0b5fed45ff5a19fdfdaca6daa6fdbbff227a49a5e432bb12516eeb",
+    "tests/fixtures/consumer/hookqueries/member_foundry.gen.go": "85dccc4d5b92ebd7eb6499adc321751f6ca68b87010f0b404c9c6534f4277ff5",
+    "tests/fixtures/consumer/inputqueries/member_foundry.gen.go": "d19fb7856e703a20322b9ca02ea9c575bbccfefe7cdbd1f77e567bc78b8c8885",
+    "tests/fixtures/consumer/linkqueries/archive_foundry.gen.go": "cdee8b6f392572d73545b8e7aaba1b9be6e8aea09080948518fe44a2dc4379df",
+    "tests/fixtures/consumer/linkqueries/friendship_foundry.gen.go": "a3c49a3c0c2256fc4d23161b2f90e94c2b4775d99df7a0056546d3ff58d27d12",
+    "tests/fixtures/consumer/linkqueries/legacy_creation_bridge_postgres_test.go": "d99897cff904bd7f338139a6a0319a129fc12322ee30172a322f1d8016a8fc7c",
+    "tests/fixtures/consumer/linkqueries/member_foundry.gen.go": "d5af0547557c2406162b8dbd564b4bf2ddc6013396a4c2d090cb101f5fa6f94f",
+    "tests/fixtures/consumer/linkqueries/membership_foundry.gen.go": "1ce975b4bc05c34c36c33ac63c3ab456dd3228ad0272554dac514e22009ef838",
+    "tests/fixtures/consumer/linkqueries/natural_link_foundry.gen.go": "f2846c004a973e3f000173de2d3004f98880b93884cfd7a920469e19c48b5c34",
+    "tests/fixtures/consumer/linkqueries/nullable_link_foundry.gen.go": "f08fca54bfe476cd47e5afe28cc9baadec5ed3cc23493be84b7629e9a8ee7795",
+    "tests/fixtures/consumer/nestedbindings/project_foundry.gen.go": "806404767fdea034839cd1bf53e25fe395f8964df88f1078191b37c144587e8a",
+    "tests/fixtures/consumer/nestedbindings/task_foundry.gen.go": "bc56e6575f406148cf2ffb6f0b24048bc89751947dd465ed5a69076d9b7e1e85",
+    "tests/fixtures/consumer/nestedbindings/team_foundry.gen.go": "4658d2a0505c30407b7e1095e24fa4885c2221a865569f272da17411607eabeb",
+    "tests/fixtures/consumer/observerqueries/effect_foundry.gen.go": "7c5bd6f85b1c1b97fffeed3662287fe8a4b557f2caa90d753f8a4cbb0da4c5cf",
+    "tests/fixtures/consumer/observerqueries/plain_foundry.gen.go": "3b2f5710601cee624d7aff1a8fbd97c4a5c98b87026f9f7a2d67660f321e62f3",
+    "tests/fixtures/consumer/observerqueries/record_foundry.gen.go": "3978eb548545f35e65f546950e682b85a8eac824decb6205643e1e8cc99e0e2f",
+    "tests/fixtures/consumer/pagequeries/legacy_clauses_postgres_test.go": "a18de3f846a3887ff53427b99a3424e7f2ce567f286942554ab97d12e406c5ed",
+    "tests/fixtures/consumer/recovering/member_foundry.gen.go": "7ad281efa6899bdbeef01eb584869df2286186988df5306238caa64a166f58e6",
+    "tests/fixtures/consumer/retrievalqueries/group_foundry.gen.go": "81b9dfe7a38e37bd6bbdaee39ae9847ec45e13b740bdee08b6f94a957b62be48",
+    "tests/fixtures/consumer/retrievalqueries/member_foundry.gen.go": "62f1dbc62a8e0ff3b6891e1c1989b71a415c3befc9967a5a34e7da30002f35b0",
+    "tests/fixtures/consumer/retrievalqueries/member_label_foundry.gen.go": "2f14d5612687b52a3c7960863982cf5af15ae655e4c25b164b7e664e1bac73f4",
+    "tests/fixtures/consumer/retrievalqueries/membership_foundry.gen.go": "f0d605648f4024f1d0bedea4a7afea975db97acb1398f925f2b5dfb3f0edfd10",
+    "tests/fixtures/consumer/softqueries/group_foundry.gen.go": "62fdf2373fb88e7d708e5c40d951903d872b4bf8f0ae0cbb6a2ccc76f6ace7e7",
+    "tests/fixtures/consumer/softqueries/member_foundry.gen.go": "32655db2103c593ccffd254364236218cdda767ca6839bf3ba649366f34d406d",
+    "tests/fixtures/consumer/softqueries/member_label_foundry.gen.go": "9dcc11ba01cee179302a2673699e20a9920896939e9124ca4120388e40758a04",
+    "tests/fixtures/consumer/softqueries/membership_foundry.gen.go": "407a531f15a1bc3fdab044ccf8fde104ca0ae90b8d62b38fa3177b62ab9ce0a9",
+    "tests/fixtures/consumer/tenantqueries/document_foundry.gen.go": "692cc9ed8f26bc29763eaa366a834f9800cc72c0772c5667a91e6654ca48cc0b",
+    "tests/fixtures/consumer/tenantqueries/document_tag_foundry.gen.go": "0125152a9794b9adecdf5ac6829ea8fa1d810a387cfcacd264a9cae3cfed1540",
+    "tests/fixtures/consumer/tenantqueries/tag_foundry.gen.go": "313612534e19f5ad9d3d35d4a683774c34ff3ff9a5b1c92ea5c7029a2919efe3",
+    "tests/fixtures/consumer/timequeries/manual_foundry.gen.go": "f6ca1b2b2507da54e5baf4deb22ba9d682722a60320b6b0e524996f2de342908",
+    "tests/fixtures/consumer/timequeries/member_foundry.gen.go": "6b2feded59dd757f51a79f25c4d3694991ba196e770e33c33e07bd7131bd4062",
+    "tests/fixtures/consumer/upsertqueries/excluded_record_foundry.gen.go": "76a4ef92223aaa6a538d8a9d6d4e85b6f580f1b4d5fce0cdec6b249e0b7f3711",
+    "tests/fixtures/consumer/vault/entry_foundry.gen.go": "7b7a18d82eafcbdfd4532ba765131cf695a1cbf50885ac4828a6ffa0f01b60c4"
+  },
+  "base_catalogue_discrepancy": {
+    "brief_pending_rows": 0,
+    "actual_HEAD_pending_rows": [
+      "auth_bound_resource_model",
+      "auth_bound_subject_model",
+      "auth_optional_bound_subject",
+      "http_model_binding_handler",
+      "http_model_binding_owner",
+      "http_model_binding_response",
+      "importer_column_row",
+      "reference_key_type",
+      "reference_model_owner",
+      "reference_natural_key",
+      "workflow_bound_model"
+    ],
+    "note": "Pre-existing; only the owned outbox_field_id row was changed."
+  },
+  "shared_files_touched": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv (outbox_field_id row only)",
+    "tests/fixtures/consumer/auditqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/binarymodels/.foundry-gen.json",
+    "tests/fixtures/consumer/eventqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/hookqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/inputqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/linkqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/nestedbindings/.foundry-gen.json",
+    "tests/fixtures/consumer/observerqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/recovering/.foundry-gen.json",
+    "tests/fixtures/consumer/retrievalqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/softqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/tenantqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/timequeries/.foundry-gen.json",
+    "tests/fixtures/consumer/upsertqueries/.foundry-gen.json",
+    "tests/fixtures/consumer/vault/.foundry-gen.json"
+  ],
+  "acceptance_summary": {
+    "build": "PASS; 39 non-test-only packages plus final linkqueries rerun",
+    "vet": "PASS in segments; initial new identity-test import alias collision fixed; only affected packages rerun",
+    "tests": "PASS in segments; 41 packages, with four local-listener packages rerun outside the sandbox",
+    "race": "PASS in segments; same 41 packages and local-listener reruns",
+    "consumer_root": "PASS in segments; initial root run failed only reference_natural_key; selective rerun passed after restoring its dependency",
+    "compiler_cases": "All consumer cases exercised by root suite; only the foreign reference_natural_key failure needed rerunning",
+    "catalogue": "PASS; 11 pre-existing pending rows remain",
+    "generate_check": "PASS after final regeneration",
+    "docs_check": "PASS",
+    "services": "No live PostgreSQL or Redis; test sources compiled.",
+    "api": "No framework API additions. Two handwritten identity methods replace equivalent generated methods."
+  },
+  "integration_batch7g": {
+    "base": "7e4616df",
+    "evidence": "docs/evidence/goway-batch7g-integration.json",
+    "source_sha256": {
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "bf2be8944a6fe0be3ff526a414bd814a26f1fa3f6f250561d5e19fb78bd767c9",
+      "docs/evidence/goway-stage9-b-barrier.md": "cc4450b6717c7957e359d89330300875dd4189cdb7515daae4557c8b6805d93d",
+      "tests/fixtures/consumer/auditqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/auditqueries/README.md": "d37dfb281ab1dd9764e3870eea1a20ff957d08ea45d0e763ab10d98d56dca8f3",
+      "tests/fixtures/consumer/auditqueries/domain.go": "5ba3628b770f1032c5fcafd0c614e57285184cd1d08fcc6469c86ad3330276ca",
+      "tests/fixtures/consumer/auditqueries/models.go": "e2085c6d96a77b31093d85b6178899651e74332ca38a9874bd994aab0b9c98d0",
+      "tests/fixtures/consumer/binarymodels/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/binarymodels/README.md": "0ae115cd632cd21eedcbc81ca54d116dd3a832f253b9052b53a60262a3c392a6",
+      "tests/fixtures/consumer/binarymodels/record.go": "85ab4c84c41ec52b72849d052f15c596969a0431aec342e0985e062922c921e0",
+      "tests/fixtures/consumer/cursorqueries/README.md": "ba8d827b67985b68963ecd66f193db4d419eadc4abf7f350758afda4e34eca49",
+      "tests/fixtures/consumer/cursorqueries/record_distinct_postgres_test.go": "2e8aaf4d927fae2faffd1b731614e0019faee1ae5c5356e442f952202a537e1b",
+      "tests/fixtures/consumer/eventqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/eventqueries/event_link.go": "e6bdb3aa5bc6cd9682b43706bcf2c978df429609f5a58ffa744c9ec863940eab",
+      "tests/fixtures/consumer/hookqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/hookqueries/README.md": "2095f53b7bc6600e36d979abc3db10c083e97424e1100f48d11569abe394320a",
+      "tests/fixtures/consumer/hookqueries/member.go": "da5e2a86a113ed252d5260bb7390b42fe7cd008798b833008dd5888b84aba22b",
+      "tests/fixtures/consumer/hookqueries/orm_hooks.go": "9d7bfcc9d5f8975376f709ca86e404806069322ffdc3421920798ac0db5b945d",
+      "tests/fixtures/consumer/inputqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/inputqueries/README.md": "a9a5df69e522191b949d562de36c384640b15bd29340c320db5cc98e06a6a5fa",
+      "tests/fixtures/consumer/inputqueries/hooks.go": "75c03e0ab5512470134c9e5e53fb9e64b5afd4558cb3de200b72dee331452b4a",
+      "tests/fixtures/consumer/inputqueries/models.go": "ea488761188b7528eba798d34c9fb814f61cb749baa8e5ff3a4fe88d923a8b77",
+      "tests/fixtures/consumer/linkqueries/.foundry-gen.json": "b3554d4a03daa6a5541ff0b553a8597bd68dae51a5c674abd6cf825fee646b8d",
+      "tests/fixtures/consumer/linkqueries/README.md": "802cb0c8eedb7b56b0ee0075d80a093f6de085e0298357974519aa148b2e3afe",
+      "tests/fixtures/consumer/linkqueries/fixture_test.go": "88f9e91fefea97b41c4a16200424aee12f4277c7f394dc14599654b0e5462b18",
+      "tests/fixtures/consumer/linkqueries/hooks.go": "cb909db126652f1266860a80f931fbf497188a934ca8209274998151dbec3279",
+      "tests/fixtures/consumer/linkqueries/insert_models.go": "4d315d64401f25f599f55fbd382623d9e8d2a12bc4b57d588741a207c9b68759",
+      "tests/fixtures/consumer/linkqueries/models.go": "b4a707fb1ff7854ec7ef31746bb701e5a32c7b5ab430a12fc909a7cad92446aa",
+      "tests/fixtures/consumer/linkqueries/orm_test.go": "227feaa41bbddbdbdfc1b42bcc3edb732b928de9b87c82aa967423fc43c023b2",
+      "tests/fixtures/consumer/linkqueries/testdata/legacy-read.json": "cf8acde2ad28dd6505cde06bcddee721027f50da64c5d888cf3adaaf3823011e",
+      "tests/fixtures/consumer/nestedbindings/.foundry-gen.json": "e5e1cc9dc09a1b1c652ad2231e96cc0941043acefd4d0b1c6a345603c74a2041",
+      "tests/fixtures/consumer/nestedbindings/README.md": "22ba587ebab623e95c26586a2fad834ac0b1b2d11910467a65d204f872b3c01d",
+      "tests/fixtures/consumer/nestedbindings/identity_test.go": "2112c8c67bdb6d74511c65ec9b7e9f5ff94aaa4466060263befefe662acf020c",
+      "tests/fixtures/consumer/nestedbindings/models.go": "def376292bca5b712bfa7c4df3c54a2dad237b50c12709b88aabcbb7d6a923cb",
+      "tests/fixtures/consumer/nestedbindings/tables.go": "22294e3aac74dc339e94b5dc152b1b072add011b8decd95bc972156893a3c5b0",
+      "tests/fixtures/consumer/observerqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/observerqueries/README.md": "94a9f92d386e119bfba7cc7cd646a4c3603871d8d276e21679dd63b032d8879a",
+      "tests/fixtures/consumer/observerqueries/models.go": "4f198dcea6d7d8c57d377b4d1fe41d22a5846ecbcd1768752f9afc4b672649dd",
+      "tests/fixtures/consumer/observerqueries/orm_test.go": "95ca2f90cd79e8f2b7f477f22aee1b3e12ec1d868042ec12c756953cee734ea9",
+      "tests/fixtures/consumer/pagequeries/README.md": "285e7597204247f096d273f9ca32ede65255f5de7f8c8bfc3f0b5d0c8ea44353",
+      "tests/fixtures/consumer/pagequeries/record_distinct_postgres_test.go": "6829e17fcc4fc0e1713b9fd1fa9f5609ac9ecf3c71f87c6fc0e00a1b21f7d1a6",
+      "tests/fixtures/consumer/recovering/.foundry-gen.json": "4b7e7b3e81223ef926cce62b8f1c8dc5b198416555f9b66788a8232caeb6797a",
+      "tests/fixtures/consumer/recovering/README.md": "c2605ca84a90a7faad89348029ef8fe953a7565905556ed53a068fa2134a00b8",
+      "tests/fixtures/consumer/recovering/hooks.go": "913c4beff8d2c438fa0b5499246ae7474a9318d8765bfc2c888d367976721eb8",
+      "tests/fixtures/consumer/recovering/identity_test.go": "bf1981e22031bce7f01c8a928a7002e8eb92f5c96e2bddc81ab1f52eca09e725",
+      "tests/fixtures/consumer/recovering/member.go": "569325f4f882fd00e1f768284d5d3851ad3f0aaad899ec5f050ea7da9bb95819",
+      "tests/fixtures/consumer/recovering/tables.go": "1bc086b6ac06878ca03b2a750c42e998c04e8aee3763b7e62d5f0fcbb9ebde0a",
+      "tests/fixtures/consumer/retrievalqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/retrievalqueries/README.md": "3370906372767f92ae6a8988c06d1e431f4ba25f48fb83cac692cad3e07fece9",
+      "tests/fixtures/consumer/retrievalqueries/hooks.go": "0d0aa7e30e8d605a009e6b1564b1ef6d1a18589da981af64d42ad6868691dce8",
+      "tests/fixtures/consumer/retrievalqueries/models.go": "a91347435aba7f99d210e843d2c18c7e1afa6e2fc81cbd38d41d056ff4d326be",
+      "tests/fixtures/consumer/softqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/softqueries/README.md": "285f8f232e79b724166304312da3c097e1e55fd2455eb9c1a96b3c28317ddbf5",
+      "tests/fixtures/consumer/softqueries/hooks.go": "c603c5c5c0cfec99468247c6a814b0d50fe13a1965bb2faa1199eb1fe3cb7515",
+      "tests/fixtures/consumer/softqueries/models.go": "f4fa20b07b865a65a260b937bc08da616182fcf065f7f4e5d6659caaeb455f81",
+      "tests/fixtures/consumer/tenantqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/tenantqueries/README.md": "abb0cf69a59c47a349a525aa4869ae27a2f019e21a0678cac657662a199da7dd",
+      "tests/fixtures/consumer/tenantqueries/models.go": "56888fd79c1f69b8bdfbfe1a60cf6573d33bd55a5b7ef02b1d85c2826da1634e",
+      "tests/fixtures/consumer/testdata/compilefail/outbox_field_id/invalid.go": "7d1e33e7907aebd6b2c12c10439012d441a5807225af9ba2bb756c6b0793dc08",
+      "tests/fixtures/consumer/timequeries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/timequeries/README.md": "c8f28b36db11881701236e95e90b2f8aa242344d6b77d157ebb4ef7fac46bad6",
+      "tests/fixtures/consumer/timequeries/hooks.go": "7859bf7ca6a6e6fcfee19e94c272514d79c7318d09c0b32d6a3fe52d7badc54b",
+      "tests/fixtures/consumer/timequeries/models.go": "e5636d12d345d5dd262677680fc4dc6510b967a898eebe4f0ba16cff1fe2640b",
+      "tests/fixtures/consumer/upsertqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/upsertqueries/README.md": "c8799b151fae05a3b09789b3d7f53a629877e18e86490f4d6a4af13892e09db2",
+      "tests/fixtures/consumer/upsertqueries/models.go": "277bc1df2cdd47c72f9685fc5dbfb88ba7b412c755fe0940863422c2ddc45911",
+      "tests/fixtures/consumer/vault/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/vault/README.md": "8cf7285547df876c6307dc339bb164d4b0e853bce00bda93f83c1be1e22c860a",
+      "tests/fixtures/consumer/vault/entry.go": "0bb57d32ae84b91d93792da7216db96bdde32fe1b01060a7c53e34eb0d3572fd"
+    }
+  },
+  "pre_integration_batch7g_hashes": {
+    "source_sha256": {
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "985d2d518dfc04615bd7736ea96f4828b211275620d78152b2a33a89ba157162",
+      "docs/evidence/goway-stage9-b-barrier.md": "cc4450b6717c7957e359d89330300875dd4189cdb7515daae4557c8b6805d93d",
+      "tests/fixtures/consumer/auditqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/auditqueries/README.md": "d37dfb281ab1dd9764e3870eea1a20ff957d08ea45d0e763ab10d98d56dca8f3",
+      "tests/fixtures/consumer/auditqueries/domain.go": "5ba3628b770f1032c5fcafd0c614e57285184cd1d08fcc6469c86ad3330276ca",
+      "tests/fixtures/consumer/auditqueries/models.go": "0f0972bbb331fbad484fccfb852c758b632747a9c312e5d7cd44b331e491303a",
+      "tests/fixtures/consumer/binarymodels/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/binarymodels/README.md": "0ae115cd632cd21eedcbc81ca54d116dd3a832f253b9052b53a60262a3c392a6",
+      "tests/fixtures/consumer/binarymodels/record.go": "85ab4c84c41ec52b72849d052f15c596969a0431aec342e0985e062922c921e0",
+      "tests/fixtures/consumer/cursorqueries/README.md": "ba8d827b67985b68963ecd66f193db4d419eadc4abf7f350758afda4e34eca49",
+      "tests/fixtures/consumer/cursorqueries/record_distinct_postgres_test.go": "2e8aaf4d927fae2faffd1b731614e0019faee1ae5c5356e442f952202a537e1b",
+      "tests/fixtures/consumer/eventqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/eventqueries/event_link.go": "e6bdb3aa5bc6cd9682b43706bcf2c978df429609f5a58ffa744c9ec863940eab",
+      "tests/fixtures/consumer/hookqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/hookqueries/README.md": "2095f53b7bc6600e36d979abc3db10c083e97424e1100f48d11569abe394320a",
+      "tests/fixtures/consumer/hookqueries/member.go": "da5e2a86a113ed252d5260bb7390b42fe7cd008798b833008dd5888b84aba22b",
+      "tests/fixtures/consumer/hookqueries/orm_hooks.go": "9d7bfcc9d5f8975376f709ca86e404806069322ffdc3421920798ac0db5b945d",
+      "tests/fixtures/consumer/inputqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/inputqueries/README.md": "a9a5df69e522191b949d562de36c384640b15bd29340c320db5cc98e06a6a5fa",
+      "tests/fixtures/consumer/inputqueries/hooks.go": "75c03e0ab5512470134c9e5e53fb9e64b5afd4558cb3de200b72dee331452b4a",
+      "tests/fixtures/consumer/inputqueries/models.go": "658cc483aace45162aec5e861cf919a84d8f1b179b437ff652df5ccbeab3f138",
+      "tests/fixtures/consumer/linkqueries/.foundry-gen.json": "b3554d4a03daa6a5541ff0b553a8597bd68dae51a5c674abd6cf825fee646b8d",
+      "tests/fixtures/consumer/linkqueries/README.md": "802cb0c8eedb7b56b0ee0075d80a093f6de085e0298357974519aa148b2e3afe",
+      "tests/fixtures/consumer/linkqueries/fixture_test.go": "88f9e91fefea97b41c4a16200424aee12f4277c7f394dc14599654b0e5462b18",
+      "tests/fixtures/consumer/linkqueries/hooks.go": "cb909db126652f1266860a80f931fbf497188a934ca8209274998151dbec3279",
+      "tests/fixtures/consumer/linkqueries/insert_models.go": "4d315d64401f25f599f55fbd382623d9e8d2a12bc4b57d588741a207c9b68759",
+      "tests/fixtures/consumer/linkqueries/models.go": "b4a707fb1ff7854ec7ef31746bb701e5a32c7b5ab430a12fc909a7cad92446aa",
+      "tests/fixtures/consumer/linkqueries/orm_test.go": "4281c926ee7c2d31de5c43b292487a14489a217927eeadf443151cea3f2d36c5",
+      "tests/fixtures/consumer/linkqueries/testdata/legacy-read.json": "cf8acde2ad28dd6505cde06bcddee721027f50da64c5d888cf3adaaf3823011e",
+      "tests/fixtures/consumer/nestedbindings/.foundry-gen.json": "e5e1cc9dc09a1b1c652ad2231e96cc0941043acefd4d0b1c6a345603c74a2041",
+      "tests/fixtures/consumer/nestedbindings/README.md": "22ba587ebab623e95c26586a2fad834ac0b1b2d11910467a65d204f872b3c01d",
+      "tests/fixtures/consumer/nestedbindings/identity_test.go": "2112c8c67bdb6d74511c65ec9b7e9f5ff94aaa4466060263befefe662acf020c",
+      "tests/fixtures/consumer/nestedbindings/models.go": "def376292bca5b712bfa7c4df3c54a2dad237b50c12709b88aabcbb7d6a923cb",
+      "tests/fixtures/consumer/nestedbindings/tables.go": "22294e3aac74dc339e94b5dc152b1b072add011b8decd95bc972156893a3c5b0",
+      "tests/fixtures/consumer/observerqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/observerqueries/README.md": "94a9f92d386e119bfba7cc7cd646a4c3603871d8d276e21679dd63b032d8879a",
+      "tests/fixtures/consumer/observerqueries/models.go": "4f198dcea6d7d8c57d377b4d1fe41d22a5846ecbcd1768752f9afc4b672649dd",
+      "tests/fixtures/consumer/observerqueries/orm_test.go": "95ca2f90cd79e8f2b7f477f22aee1b3e12ec1d868042ec12c756953cee734ea9",
+      "tests/fixtures/consumer/pagequeries/README.md": "285e7597204247f096d273f9ca32ede65255f5de7f8c8bfc3f0b5d0c8ea44353",
+      "tests/fixtures/consumer/pagequeries/record_distinct_postgres_test.go": "6829e17fcc4fc0e1713b9fd1fa9f5609ac9ecf3c71f87c6fc0e00a1b21f7d1a6",
+      "tests/fixtures/consumer/recovering/.foundry-gen.json": "4b7e7b3e81223ef926cce62b8f1c8dc5b198416555f9b66788a8232caeb6797a",
+      "tests/fixtures/consumer/recovering/README.md": "c2605ca84a90a7faad89348029ef8fe953a7565905556ed53a068fa2134a00b8",
+      "tests/fixtures/consumer/recovering/hooks.go": "913c4beff8d2c438fa0b5499246ae7474a9318d8765bfc2c888d367976721eb8",
+      "tests/fixtures/consumer/recovering/identity_test.go": "bf1981e22031bce7f01c8a928a7002e8eb92f5c96e2bddc81ab1f52eca09e725",
+      "tests/fixtures/consumer/recovering/member.go": "569325f4f882fd00e1f768284d5d3851ad3f0aaad899ec5f050ea7da9bb95819",
+      "tests/fixtures/consumer/recovering/tables.go": "1bc086b6ac06878ca03b2a750c42e998c04e8aee3763b7e62d5f0fcbb9ebde0a",
+      "tests/fixtures/consumer/retrievalqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/retrievalqueries/README.md": "3370906372767f92ae6a8988c06d1e431f4ba25f48fb83cac692cad3e07fece9",
+      "tests/fixtures/consumer/retrievalqueries/hooks.go": "0d0aa7e30e8d605a009e6b1564b1ef6d1a18589da981af64d42ad6868691dce8",
+      "tests/fixtures/consumer/retrievalqueries/models.go": "a91347435aba7f99d210e843d2c18c7e1afa6e2fc81cbd38d41d056ff4d326be",
+      "tests/fixtures/consumer/softqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/softqueries/README.md": "285f8f232e79b724166304312da3c097e1e55fd2455eb9c1a96b3c28317ddbf5",
+      "tests/fixtures/consumer/softqueries/hooks.go": "c603c5c5c0cfec99468247c6a814b0d50fe13a1965bb2faa1199eb1fe3cb7515",
+      "tests/fixtures/consumer/softqueries/models.go": "e86acdbecdb5de3e365c972edcdb32140978dc82d18b3b51c039339326a512ca",
+      "tests/fixtures/consumer/tenantqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/tenantqueries/README.md": "abb0cf69a59c47a349a525aa4869ae27a2f019e21a0678cac657662a199da7dd",
+      "tests/fixtures/consumer/tenantqueries/models.go": "56888fd79c1f69b8bdfbfe1a60cf6573d33bd55a5b7ef02b1d85c2826da1634e",
+      "tests/fixtures/consumer/testdata/compilefail/outbox_field_id/invalid.go": "7d1e33e7907aebd6b2c12c10439012d441a5807225af9ba2bb756c6b0793dc08",
+      "tests/fixtures/consumer/timequeries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/timequeries/README.md": "c8f28b36db11881701236e95e90b2f8aa242344d6b77d157ebb4ef7fac46bad6",
+      "tests/fixtures/consumer/timequeries/hooks.go": "7859bf7ca6a6e6fcfee19e94c272514d79c7318d09c0b32d6a3fe52d7badc54b",
+      "tests/fixtures/consumer/timequeries/models.go": "6e1da99be6ff5d32b98ddfbbeee67a1e685b171d6bcccd7f941dad9afad082b6",
+      "tests/fixtures/consumer/upsertqueries/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/upsertqueries/README.md": "c8799b151fae05a3b09789b3d7f53a629877e18e86490f4d6a4af13892e09db2",
+      "tests/fixtures/consumer/upsertqueries/models.go": "277bc1df2cdd47c72f9685fc5dbfb88ba7b412c755fe0940863422c2ddc45911",
+      "tests/fixtures/consumer/vault/.foundry-gen.json": "a60477c75697e970a7828b56ae9a9b148b74cb342e21d276e0bbf762efe08e3e",
+      "tests/fixtures/consumer/vault/README.md": "8cf7285547df876c6307dc339bb164d4b0e853bce00bda93f83c1be1e22c860a",
+      "tests/fixtures/consumer/vault/entry.go": "0bb57d32ae84b91d93792da7216db96bdde32fe1b01060a7c53e34eb0d3572fd"
+    },
+    "removed_source_sha256": {
+      "tests/fixtures/consumer/auditqueries/account_foundry.gen.go": "45b7c411e10af01288c2b63c2fee74b91a66380cdcf8a209def8f54b00454067",
+      "tests/fixtures/consumer/auditqueries/label_foundry.gen.go": "fda2aa99d89e9f5e5e69385639a74b816b0925d854607a866794ae5c60eb485d",
+      "tests/fixtures/consumer/binarymodels/record_foundry.gen.go": "7ef831e2928b96853b46a1b82b59eb71842237ab23e7bc4ea071ad1d14e23549",
+      "tests/fixtures/consumer/binarymodels/view_foundry.gen.go": "4e23f1fcc11ffb76e9e3179135d080928593dd4178f6abd40c941fd95bc990ae",
+      "tests/fixtures/consumer/cursorqueries/legacy_clauses_postgres_test.go": "9e9c3707d2915f8a64391aea1cd12a4f7f275b1c30ec41a2b370eab649e4553b",
+      "tests/fixtures/consumer/eventqueries/event_link_foundry.gen.go": "edc41f459e407c6d04eeafca13bd0c5248f9a11b0dbbf18694fcd62df2c83416",
+      "tests/fixtures/consumer/hookqueries/log_foundry.gen.go": "edbd33bc4e0b5fed45ff5a19fdfdaca6daa6fdbbff227a49a5e432bb12516eeb",
+      "tests/fixtures/consumer/hookqueries/member_foundry.gen.go": "85dccc4d5b92ebd7eb6499adc321751f6ca68b87010f0b404c9c6534f4277ff5",
+      "tests/fixtures/consumer/inputqueries/member_foundry.gen.go": "d19fb7856e703a20322b9ca02ea9c575bbccfefe7cdbd1f77e567bc78b8c8885",
+      "tests/fixtures/consumer/linkqueries/archive_foundry.gen.go": "cdee8b6f392572d73545b8e7aaba1b9be6e8aea09080948518fe44a2dc4379df",
+      "tests/fixtures/consumer/linkqueries/friendship_foundry.gen.go": "a3c49a3c0c2256fc4d23161b2f90e94c2b4775d99df7a0056546d3ff58d27d12",
+      "tests/fixtures/consumer/linkqueries/legacy_creation_bridge_postgres_test.go": "d99897cff904bd7f338139a6a0319a129fc12322ee30172a322f1d8016a8fc7c",
+      "tests/fixtures/consumer/linkqueries/member_foundry.gen.go": "d5af0547557c2406162b8dbd564b4bf2ddc6013396a4c2d090cb101f5fa6f94f",
+      "tests/fixtures/consumer/linkqueries/membership_foundry.gen.go": "1ce975b4bc05c34c36c33ac63c3ab456dd3228ad0272554dac514e22009ef838",
+      "tests/fixtures/consumer/linkqueries/natural_link_foundry.gen.go": "f2846c004a973e3f000173de2d3004f98880b93884cfd7a920469e19c48b5c34",
+      "tests/fixtures/consumer/linkqueries/nullable_link_foundry.gen.go": "f08fca54bfe476cd47e5afe28cc9baadec5ed3cc23493be84b7629e9a8ee7795",
+      "tests/fixtures/consumer/nestedbindings/project_foundry.gen.go": "806404767fdea034839cd1bf53e25fe395f8964df88f1078191b37c144587e8a",
+      "tests/fixtures/consumer/nestedbindings/task_foundry.gen.go": "bc56e6575f406148cf2ffb6f0b24048bc89751947dd465ed5a69076d9b7e1e85",
+      "tests/fixtures/consumer/nestedbindings/team_foundry.gen.go": "4658d2a0505c30407b7e1095e24fa4885c2221a865569f272da17411607eabeb",
+      "tests/fixtures/consumer/observerqueries/effect_foundry.gen.go": "7c5bd6f85b1c1b97fffeed3662287fe8a4b557f2caa90d753f8a4cbb0da4c5cf",
+      "tests/fixtures/consumer/observerqueries/plain_foundry.gen.go": "3b2f5710601cee624d7aff1a8fbd97c4a5c98b87026f9f7a2d67660f321e62f3",
+      "tests/fixtures/consumer/observerqueries/record_foundry.gen.go": "3978eb548545f35e65f546950e682b85a8eac824decb6205643e1e8cc99e0e2f",
+      "tests/fixtures/consumer/pagequeries/legacy_clauses_postgres_test.go": "a18de3f846a3887ff53427b99a3424e7f2ce567f286942554ab97d12e406c5ed",
+      "tests/fixtures/consumer/recovering/member_foundry.gen.go": "7ad281efa6899bdbeef01eb584869df2286186988df5306238caa64a166f58e6",
+      "tests/fixtures/consumer/retrievalqueries/group_foundry.gen.go": "81b9dfe7a38e37bd6bbdaee39ae9847ec45e13b740bdee08b6f94a957b62be48",
+      "tests/fixtures/consumer/retrievalqueries/member_foundry.gen.go": "62f1dbc62a8e0ff3b6891e1c1989b71a415c3befc9967a5a34e7da30002f35b0",
+      "tests/fixtures/consumer/retrievalqueries/member_label_foundry.gen.go": "2f14d5612687b52a3c7960863982cf5af15ae655e4c25b164b7e664e1bac73f4",
+      "tests/fixtures/consumer/retrievalqueries/membership_foundry.gen.go": "f0d605648f4024f1d0bedea4a7afea975db97acb1398f925f2b5dfb3f0edfd10",
+      "tests/fixtures/consumer/softqueries/group_foundry.gen.go": "62fdf2373fb88e7d708e5c40d951903d872b4bf8f0ae0cbb6a2ccc76f6ace7e7",
+      "tests/fixtures/consumer/softqueries/member_foundry.gen.go": "32655db2103c593ccffd254364236218cdda767ca6839bf3ba649366f34d406d",
+      "tests/fixtures/consumer/softqueries/member_label_foundry.gen.go": "9dcc11ba01cee179302a2673699e20a9920896939e9124ca4120388e40758a04",
+      "tests/fixtures/consumer/softqueries/membership_foundry.gen.go": "407a531f15a1bc3fdab044ccf8fde104ca0ae90b8d62b38fa3177b62ab9ce0a9",
+      "tests/fixtures/consumer/tenantqueries/document_foundry.gen.go": "692cc9ed8f26bc29763eaa366a834f9800cc72c0772c5667a91e6654ca48cc0b",
+      "tests/fixtures/consumer/tenantqueries/document_tag_foundry.gen.go": "0125152a9794b9adecdf5ac6829ea8fa1d810a387cfcacd264a9cae3cfed1540",
+      "tests/fixtures/consumer/tenantqueries/tag_foundry.gen.go": "313612534e19f5ad9d3d35d4a683774c34ff3ff9a5b1c92ea5c7029a2919efe3",
+      "tests/fixtures/consumer/timequeries/manual_foundry.gen.go": "f6ca1b2b2507da54e5baf4deb22ba9d682722a60320b6b0e524996f2de342908",
+      "tests/fixtures/consumer/timequeries/member_foundry.gen.go": "6b2feded59dd757f51a79f25c4d3694991ba196e770e33c33e07bd7131bd4062",
+      "tests/fixtures/consumer/upsertqueries/excluded_record_foundry.gen.go": "76a4ef92223aaa6a538d8a9d6d4e85b6f580f1b4d5fce0cdec6b249e0b7f3711",
+      "tests/fixtures/consumer/vault/entry_foundry.gen.go": "7b7a18d82eafcbdfd4532ba765131cf695a1cbf50885ac4828a6ffa0f01b60c4"
+    }
+  }
+}

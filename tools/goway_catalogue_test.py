@@ -74,6 +74,25 @@ class CatalogueTests(unittest.TestCase):
         '''
         self.assertEqual(catalogue.generated_references(source, {"example/models": {"MemberChanges"}}), [])
 
+    def test_unaffected_framework_integration_keeps_dto_owner_rule(self):
+        row = {"case": "importer_column_row", "area": "Framework integrations",
+               "stage": "—", "disposition": "unaffected"}
+        source, diagnostic = catalogue.cases()[row["case"]]
+        symbols = catalogue.generated_symbols()
+        catalogue.validate_classification(row, source, symbols)
+        self.assertIn("importer.Column[reporting.MemberImport]", source)
+        self.assertIn("func(row *reporting.OrderRow, v string)", source)
+        self.assertEqual(diagnostic, "cannot use")
+        # Allowing this area at stage — must not exempt legacy dependencies.
+        for legacy in ("var _ = user.FoundryReference()",
+                       "var _ = models.QueryUsers()",
+                       'import m "example/models"\nvar _ m.MemberRow'):
+            with self.subTest(legacy=legacy):
+                with self.assertRaisesRegex(ValueError, "generated data-layer"):
+                    catalogue.validate_classification(
+                        row, source + "\n" + legacy,
+                        {**symbols, "example/models": {"MemberRow"}})
+
     def test_area_and_stage_have_one_owner(self):
         for area, stages in catalogue.AREA_STAGES.items():
             for stage in stages:
@@ -81,7 +100,7 @@ class CatalogueTests(unittest.TestCase):
                     {"case": "valid", "area": area, "stage": stage, "disposition": "port"}, "", {})
         for area, stage in [("Core reads, writes and codecs", "6d"),
                             ("Windows and specialized expressions", "3"),
-                            ("Framework integrations", "—"), ("unknown", "3")]:
+                            ("Framework integrations", "6a"), ("unknown", "3")]:
             with self.subTest(area=area, stage=stage):
                 with self.assertRaisesRegex(ValueError, "inconsistent area/stage"):
                     catalogue.validate_classification(

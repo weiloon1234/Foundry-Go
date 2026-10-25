@@ -1,6 +1,7 @@
 package officequeries
 
 import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestOfficeRelatedValueSQLParity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) {
+		if want.SQL() != got.SQL() || !reflect.DeepEqual(want.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/officequeries/related_value_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 			t.Fatalf("new: %s %v\nold: %s %v", got.SQL(), got.Arguments(), want.SQL(), want.Arguments())
 		}
 	}

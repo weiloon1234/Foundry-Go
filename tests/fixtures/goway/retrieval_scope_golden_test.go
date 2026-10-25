@@ -91,7 +91,7 @@ func TestRetrievalAndScopeOldAndNewAgree(t *testing.T) {
 			q := o.QueryReadMembers()
 			items, err := q.Where(o.MemberFields().Name.Eq("explicit")).All(ctx, db)
 			check(err)
-			fmt.Fprintln(&capture.output, items[0].ID, items[0].Name)
+			fmt.Fprintln(&capture.output, oracleSnapshot([]any{items[0].ID, items[0].Name}))
 			_, err = q.Count(ctx, db)
 			check(err)
 			_, err = q.WithoutGlobalScope(o.MemberTenant()).Where(o.MemberFields().ID.Eq(1)).First(ctx, db)
@@ -108,7 +108,7 @@ func TestRetrievalAndScopeOldAndNewAgree(t *testing.T) {
 			q := n.Members.Query()
 			items, err := q.Where(n.Members.Name.Eq("explicit")).All(ctx, db)
 			check(err)
-			fmt.Fprintln(&capture.output, items[0].ID, items[0].Name)
+			fmt.Fprintln(&capture.output, oracleSnapshot([]any{items[0].ID, items[0].Name}))
 			_, err = q.Count(ctx, db)
 			check(err)
 			_, err = orm.WithoutGlobalScope(q, n.MemberTenant(n.Members)).Where(n.Members.ID.Eq(1)).First(ctx, db)
@@ -122,13 +122,13 @@ func TestRetrievalAndScopeOldAndNewAgree(t *testing.T) {
 			_, err = n.Members.Insert(ctx, db, n.Members.ID.Set(1), n.Members.TenantID.Set(7), n.Members.Name.Set("member"))
 			check(err)
 		}
-		fmt.Fprintln(&capture.output, trace)
+		fmt.Fprintln(&capture.output, oracleSnapshot([]any{trace}))
 		if !reflect.DeepEqual(trace, []string{"local.Retrieved", "observer.Retrieved", "local.Retrieved", "observer.Retrieved", "local.Retrieved", "observer.Retrieved", "local.Retrieved", "observer.Retrieved", "local.Retrieved", "observer.Retrieved", "group.Retrieved", "pivot.Retrieved", "local.Retrieved", "observer.Retrieved"}) {
 			t.Fatal("retrieval dispatch coverage", trace)
 		}
 		transcripts = append(transcripts, capture.output.String())
 	}
-	if transcripts[0] != transcripts[1] {
+	if !oracleEqual(t, "retrieval_scope_golden/1", transcripts[0], transcripts[1]) {
 		t.Fatal(goldenDiff(transcripts[0], transcripts[1]))
 	}
 }
@@ -175,7 +175,7 @@ func TestScopePropagationProjectionJoinsAggregatesAndRelationBypasses(t *testing
 	check(err)
 	_, err = rowset.Select(left, readCounts, rowset.MapSelected(readCounts.Count, expr.Count[rowset.Alias[readSide, n.Member]]().Value())).All(ctx, db)
 	check(err)
-	if len(trace) != 0 || strings.Contains(capture.output.String(), "99") || strings.Count(capture.output.String(), `"tenant_id" =`) != 4 {
+	if len(trace) != 0 || strings.Contains(capture.output.String(), "99") || strings.Count(capture.sql.String(), `"tenant_id" =`) != 4 {
 		t.Fatal("projection lost scope or retrieved", trace, capture.output.String())
 	}
 	// A relation keeps its concrete methods after the package-level bypass.

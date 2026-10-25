@@ -2,6 +2,7 @@ package httpmodels_test
 
 import (
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -45,14 +46,16 @@ func TestDeclaredBindingsPreserveLegacySQL(t *testing.T) {
 		}},
 	} {
 		t.Run(pair.name, func(t *testing.T) {
-			if err := pair.old(); !errors.Is(err, db.cause) {
-				t.Fatal(err)
+			oldErr := pair.old()
+			if !errors.Is(oldErr, db.cause) {
+				t.Fatal(oldErr)
 			}
 			sql, args := db.statement, db.arguments
-			if err := pair.current(); !errors.Is(err, db.cause) {
-				t.Fatal(err)
+			currentErr := pair.current()
+			if !errors.Is(currentErr, db.cause) {
+				t.Fatal(currentErr)
 			}
-			if sql != db.statement || !reflect.DeepEqual(args, db.arguments) {
+			if sql != db.statement || !reflect.DeepEqual(args, db.arguments) || !oracleEqual(t, "consumer/httpmodels/sql_parity_test/1", oracle.Snapshot([]any{sql, args, errors.Is(oldErr, db.cause)}), oracle.Snapshot([]any{db.statement, db.arguments, errors.Is(currentErr, db.cause)})) {
 				t.Fatal("old/new SQL or bindings differ", sql, db.statement)
 			}
 		})

@@ -4,6 +4,7 @@ package queryfixture
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"foundry.test/consumer/models"
@@ -16,7 +17,18 @@ import (
 // Run provides three users and three orders in a unique retained schema.
 func Run(t *testing.T, check func(*database.Tx, []models.User) error) {
 	t.Helper()
-	run(t, 3, func(i int, users []models.User, assignments []orm.Assignment[models.User]) []orm.Assignment[models.User] {
+	runDefault(t, false, check)
+}
+
+// RunStable uses fixed seed identities for repeatable capture/replay in fresh schemas.
+func RunStable(t *testing.T, check func(*database.Tx, []models.User) error) {
+	t.Helper()
+	runDefault(t, true, check)
+}
+
+func runDefault(t *testing.T, stable bool, check func(*database.Tx, []models.User) error) {
+	t.Helper()
+	run(t, 3, stable, func(i int, users []models.User, assignments []orm.Assignment[models.User]) []orm.Assignment[models.User] {
 		assignments = append(assignments, models.Users.Status.Set(models.StatusActive))
 		if i == 1 {
 			assignments = append(assignments, models.Users.IntroducerID.Set(users[0].ID), models.Users.Nickname.Set("Bee"))
@@ -29,7 +41,7 @@ func Run(t *testing.T, check func(*database.Tx, []models.User) error) {
 // It shares schema creation and base seeding with Run, in an isolated schema.
 func RunJoins(t *testing.T, check func(*database.Tx, []models.User) error) {
 	t.Helper()
-	run(t, 4, func(i int, users []models.User, assignments []orm.Assignment[models.User]) []orm.Assignment[models.User] {
+	run(t, 4, false, func(i int, users []models.User, assignments []orm.Assignment[models.User]) []orm.Assignment[models.User] {
 		if i == 1 {
 			assignments = append(assignments, models.Users.Status.Set(models.StatusDisabled))
 		} else {
@@ -45,7 +57,7 @@ func RunJoins(t *testing.T, check func(*database.Tx, []models.User) error) {
 	}, check)
 }
 
-func run(t *testing.T, userCount int, customize func(int, []models.User, []orm.Assignment[models.User]) []orm.Assignment[models.User], check func(*database.Tx, []models.User) error) {
+func run(t *testing.T, userCount int, stable bool, customize func(int, []models.User, []orm.Assignment[models.User]) []orm.Assignment[models.User], check func(*database.Tx, []models.User) error) {
 	t.Helper()
 	db := pgtest.Open(t)
 	namespace := pgtest.Namespace(t, db)
@@ -61,7 +73,14 @@ func run(t *testing.T, userCount int, customize func(int, []models.User, []orm.A
 		}
 		var users []models.User
 		for i, email := range []string{"a@example.test", "b@example.test", "c@example.test", "d@example.test"}[:userCount] {
-			assignments := []orm.Assignment[models.User]{models.Users.Email.Set(email), models.Users.Age.Set(20 + i), models.Users.Level.Set(models.LevelBasic)}
+			assignments := []orm.Assignment[models.User]{(models.User{Email: email}).CurrentEmailAssignment(), models.Users.Age.Set(20 + i), models.Users.Level.Set(models.LevelBasic)}
+			if stable {
+				id, err := model.ParseID[models.User](fmt.Sprintf("10000000-0000-0000-0000-%012d", i+1))
+				if err != nil {
+					return err
+				}
+				assignments = append(assignments, models.Users.Key().Set(id))
+			}
 			assignments = customize(i, users, assignments)
 			u, err := models.Users.Insert(t.Context(), tx, assignments...)
 			if err != nil {
@@ -70,7 +89,15 @@ func run(t *testing.T, userCount int, customize func(int, []models.User, []orm.A
 			users = append(users, u)
 		}
 		for i, buyer := range []model.ID[models.User]{users[0].ID, users[0].ID, users[1].ID} {
-			if _, err := models.Orders.Insert(t.Context(), tx, models.Orders.BuyerID.Set(buyer), models.Orders.TotalCents.Set(int64(i+1))); err != nil {
+			assignments := []orm.Assignment[models.Order]{models.Orders.BuyerID.Set(buyer), models.Orders.TotalCents.Set(int64(i + 1))}
+			if stable {
+				id, err := model.ParseID[models.Order](fmt.Sprintf("20000000-0000-0000-0000-%012d", i+1))
+				if err != nil {
+					return err
+				}
+				assignments = append(assignments, models.Orders.Key().Set(id))
+			}
+			if _, err := models.Orders.Insert(t.Context(), tx, assignments...); err != nil {
 				return err
 			}
 		}

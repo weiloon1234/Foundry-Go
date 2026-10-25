@@ -5,10 +5,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
+	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/translations"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // AuthorTable exposes stored author fields and the article slot. Example: Authors.Query().
@@ -89,13 +93,12 @@ type ArticleSlotHandles struct {
 
 // ArticleSlots reuses the existing policies and stored names. Example: ArticleSlots.From(runtime).
 var ArticleSlots = func() ArticleSlotHandles {
-	policy := defineArticleExtensions()
 	return ArticleSlotHandles{
-		Title:     translations.TextOf(ArticleOwner, "title", policy.Title, extensions.BindSlot(Articles.Key(), Articles.Title)),
-		Summary:   translations.TextOf(ArticleOwner, "summary", policy.Summary, extensions.BindSlot(Articles.Key(), Articles.Summary)),
-		Logo:      attachments.OneOf(ArticleOwner, "logo", policy.Logo, extensions.BindSlot(Articles.Key(), Articles.Logo)),
-		Galleries: attachments.ManyOf(ArticleOwner, "galleries", policy.Galleries, extensions.BindSlot(Articles.Key(), Articles.Galleries)),
-		SEO:       metadata.ValueOf(ArticleOwner, "seo", policy.SEO, SEOJSON(), extensions.BindSlot(Articles.Key(), Articles.SEO)),
+		Title:     translations.TextOf(ArticleOwner, "title", translations.Options{MaxBytes: 512, Require: i18n.DefaultLocale}, extensions.BindSlot(Articles.Key(), Articles.Title)),
+		Summary:   translations.TextOf(ArticleOwner, "summary", translations.Options{}, extensions.BindSlot(Articles.Key(), Articles.Summary)),
+		Logo:      attachments.OneOf(ArticleOwner, "logo", attachments.Policy{Disk: Files, Accepted: []storage.MediaType{"image/png"}, Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))}, extensions.BindSlot(Articles.Key(), Articles.Logo)),
+		Galleries: attachments.ManyOf(ArticleOwner, "galleries", attachments.Policy{Disk: Files, MaxFiles: 4, Accepted: []storage.MediaType{"image/png"}, Variants: []attachments.Variant{Thumbnail}}, extensions.BindSlot(Articles.Key(), Articles.Galleries)),
+		SEO:       metadata.ValueOf(ArticleOwner, "seo", metadata.Spec[SEO]{}, SEOJSON(), extensions.BindSlot(Articles.Key(), Articles.SEO)),
 	}
 }()
 
@@ -115,7 +118,7 @@ func (d ArticleSlotHandles) All() []orm.Relation[Article] {
 }
 
 // ORMExtensionDeclaration registers only the ORM cleanup observer family.
-// Example: builder.Models(ORMExtensionDeclaration()); do not also register ArticleExtensionDeclaration().
+// Example: builder.Models(ORMExtensionDeclaration()).
 func ORMExtensionDeclaration() slots.Declaration {
 	return slots.DeclareORM(ArticleOwner, slots.Parts{
 		Translations: []translations.Registration{ArticleSlots.Title.Registration(), ArticleSlots.Summary.Registration()},

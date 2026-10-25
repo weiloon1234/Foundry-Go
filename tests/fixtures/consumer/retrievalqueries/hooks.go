@@ -26,10 +26,6 @@ func WithTrace(ctx context.Context, trace *Trace) context.Context {
 	return context.WithValue(ctx, traceKey{}, trace)
 }
 
-func memberRetrieval() MemberRetrievalHooks {
-	return MemberRetrievalHooks{Retrieved: memberRetrieved(QueryRetrievalMembers().Count)}
-}
-
 func memberRetrieved(count func(context.Context, database.Executor) (int64, error)) func(context.Context, database.Executor, Member) error {
 	first := true
 	return func(ctx context.Context, executor database.Executor, member Member) error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"strings"
 	"testing"
@@ -86,14 +87,16 @@ func TestUserPlanAndRoutingSQLParity(t *testing.T) {
 		{"primary", func() error { _, err := models.QueryUsers().Limit(10).All(t.Context(), db.Primary()); return err }, func() error { _, err := tooling.ReadPrimaryUsers(t.Context(), db); return err }},
 	} {
 		t.Run(pair.name, func(t *testing.T) {
-			if err := pair.old(); !errors.Is(err, recorded.cause) {
-				t.Fatal(err)
+			oldErr := pair.old()
+			if !errors.Is(oldErr, recorded.cause) {
+				t.Fatal(oldErr)
 			}
 			sql, args := recorded.statement, recorded.arguments
-			if err := pair.current(); !errors.Is(err, recorded.cause) {
-				t.Fatal(err)
+			currentErr := pair.current()
+			if !errors.Is(currentErr, recorded.cause) {
+				t.Fatal(currentErr)
 			}
-			if sql != recorded.statement || !reflect.DeepEqual(args, recorded.arguments) {
+			if sql != recorded.statement || !reflect.DeepEqual(args, recorded.arguments) || !oracleEqual(t, "consumer/tooling/database_test/1", oracle.Snapshot([]any{sql, args, errors.Is(oldErr, recorded.cause)}), oracle.Snapshot([]any{recorded.statement, recorded.arguments, errors.Is(currentErr, recorded.cause)})) {
 				t.Fatal("old/new SQL or bindings differ", sql, recorded.statement)
 			}
 		})

@@ -6,7 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// AccountTable publishes typed stored fields alongside the retained generated API.
+// AccountTable publishes typed stored fields for the handwritten declaration.
 // Example: AccountRecords.Query().
 type AccountTable struct {
 	// Table owns the concrete account key. Example: AccountRecords.Key().Eq(id).
@@ -33,3 +33,9 @@ var AccountIdentity = orm.IdentityOf(AccountRecords.Table, AccountRecords.Key())
 
 // Tables publishes the account declaration. Example: orm.Check(Tables()...).
 func Tables() []orm.CheckedTable { return []orm.CheckedTable{AccountRecords} }
+
+// FoundryIdentity implements the concrete authentication subject contract.
+// Example: identity, err := account.FoundryIdentity().
+func (account Account) FoundryIdentity() (model.Identity, error) {
+	return AccountIdentity.ReferenceOf(account).Identity()
+}

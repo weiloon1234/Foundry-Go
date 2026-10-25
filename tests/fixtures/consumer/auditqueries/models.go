@@ -15,22 +15,18 @@ type Preferences struct {
 	APIToken string `json:"apiToken"`
 }
 
-//foundry:model table=audited_accounts hooks=accountHooks
 type Account struct {
 	ID model.ID[Account]
-	// Foundry field behavior (generated): Account.Email retains stored audited_accounts.email. Custom getter: [Account.AccessEmail]; choose the stored field or getter result explicitly when mapping a DTO.
-	// Foundry field behavior (generated): Account.Email retains stored audited_accounts.email. Custom setter: [Account.MutateEmail] transforms assigned values during persistence through [AccountDraft.SetEmail]. Direct field assignment and draft construction do not invoke it.
+	// Email stores the normalized address used by audit snapshots.
+	// MutateEmail normalizes input; AccessEmail returns display text without changing storage.
 	Email        string
 	PasswordHash string
 	Note         value.Nullable[string]
 	Balance      decimal.Decimal
 	Preferences  value.JSON[Preferences]
-	// Foundry field behavior (generated): Managed creation timestamp: persistence supplies the owning application clock when omitted, after before-write hooks and before field mutators. An explicit input is preserved.
-	CreatedAt temporal.DateTime
-	// Foundry field behavior (generated): Managed update timestamp: persistence replaces assigned or omitted input with the owning application clock after before-write hooks and before field mutators. Conflict updates copy its normalized proposed value.
-	UpdatedAt temporal.DateTime
-	// Foundry field behavior (generated): Managed soft-delete timestamp: Delete sets this stored field and Restore clears it. Ordinary queries exclude deleted models; WithTrashed and OnlyTrashed select visibility explicitly. Assigning this field directly through a draft uses ordinary create/update hooks rather than deletion/restoration events.
-	DeletedAt value.Nullable[temporal.DateTime]
+	CreatedAt    temporal.DateTime
+	UpdatedAt    temporal.DateTime
+	DeletedAt    value.Nullable[temporal.DateTime]
 }
 
 func (Account) MutateEmail(input string) (string, error) {
@@ -43,7 +39,6 @@ func (Account) MarshalJSON() ([]byte, error) { panic("model presentation must no
 
 type LabelCode string
 
-//foundry:model table=audited_labels primary=Code
 type Label struct {
 	Code LabelCode
 	Name string

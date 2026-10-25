@@ -157,7 +157,7 @@ func TestExtensionMatchingUsesBoundedManagerQueries(t *testing.T) {
 					capture.output.Reset()
 					before = capture.statements
 					prior, oldErr := test.legacy(t.Context())
-					if currentSQL != capture.output.String() || currentStatements != capture.statements-before || currentStatements != 2 {
+					if !oracleEqual(t, "goway/extension_matching/manager", capture.output.String(), currentSQL) || currentStatements != capture.statements-before || currentStatements != 2 {
 						t.Fatal("matching SQL, binds or statement count changed", currentSQL, capture.output.String())
 					}
 					if (err == nil) != (oldErr == nil) || (mode == "corrupt" || mode == "overflow") && err == nil {
@@ -176,7 +176,7 @@ func TestExtensionMatchingUsesBoundedManagerQueries(t *testing.T) {
 					}
 					next := must(orm.Compile(e.Articles.Query().Where(e.Articles.Key().Eq(99), current)))
 					old := must(oldQuery.Where(oldID.Eq(99), prior).Compile())
-					if next.SQL() != old.SQL() || !reflect.DeepEqual(next.Arguments(), old.Arguments()) {
+					if !oracleEqual(t, "goway/extension_matching/predicate", oracleSnapshot([]any{old.SQL(), old.Arguments()}), oracleSnapshot([]any{next.SQL(), next.Arguments()})) || next.SQL() != old.SQL() || !reflect.DeepEqual(next.Arguments(), old.Arguments()) {
 						t.Fatal("owner predicate changed or lost caller scope", next.SQL(), old.SQL())
 					}
 				})

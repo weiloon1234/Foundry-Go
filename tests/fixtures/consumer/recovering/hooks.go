@@ -60,25 +60,3 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 		},
 	}
 }
-
-// memberHooks retains the generator's callback contract until its retirement.
-// Both adapters use the same revision policy; consumers register only the ORM one.
-func memberHooks() MemberHooks {
-	return MemberHooks{
-		Saving: func(_ context.Context, _ *database.Tx, before value.Optional[Member], draft *MemberDraft) error {
-			revision, err := nextEmailRevision(before, draft.Email())
-			if err != nil {
-				return err
-			}
-			if next, ok := revision.Get(); ok {
-				*draft = draft.SetEmailRevision(next).SetEmailVerified(false)
-			} else {
-				*draft = draft.UnsetEmailRevision()
-			}
-			return nil
-		},
-		Saved: func(_ context.Context, _ *database.Tx, changes MemberChanges) error {
-			return checkEmailState(changes.After(), changes.Fields().Email.Changed(), changes.Fields().EmailRevision.Changed())
-		},
-	}
-}

@@ -1,6 +1,7 @@
 package keyqueries_test
 
 import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -16,6 +17,9 @@ import (
 
 func keyClauseParity(t *testing.T, got orm.Statement, want query.Statement) {
 	t.Helper()
+	if !oracleEqual(t, "consumer/keyqueries/clause_parity_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
+		t.Fatal("recorded SQL parity changed")
+	}
 	if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) || len(got.Arguments()) == 0 {
 		t.Fatalf("key clause SQL or bindings changed\nnew: %s\nold: %s", got.SQL(), want.SQL())
 	}

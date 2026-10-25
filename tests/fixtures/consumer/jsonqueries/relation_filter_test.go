@@ -1,6 +1,7 @@
 package jsonqueries_test
 
 import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -28,7 +29,7 @@ func TestJSONNaturalKeyRelationFilterParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if before.SQL() != after.SQL() || !reflect.DeepEqual(before.Arguments(), after.Arguments()) {
+	if before.SQL() != after.SQL() || !reflect.DeepEqual(before.Arguments(), after.Arguments()) || !oracleEqual(t, "consumer/jsonqueries/relation_filter_test/1", oracle.Snapshot([]any{before.SQL(), before.Arguments()}), oracle.Snapshot([]any{after.SQL(), after.Arguments()})) {
 		t.Fatalf("JSON relation SQL differs:\n%s\n%s\n%v\n%v", before.SQL(), after.SQL(), before.Arguments(), after.Arguments())
 	}
 }

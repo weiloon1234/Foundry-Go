@@ -6,7 +6,7 @@ import (
 
 	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -33,22 +33,22 @@ var List = pagination.DefineNumbered(
 )
 
 type Service interface {
-	List(context.Context, ListRequest) (query.Page[MemberResponse], error)
+	List(context.Context, ListRequest) (orm.PageResult[MemberResponse], error)
 }
 
 func Router(service Service) (*foundryhttp.Router, error) {
 	return foundryhttp.NewRouter(List.Handle(service.List))
 }
 
-// DatabaseService uses the normal generated ORM with the framework's parsed
+// DatabaseService uses the handwritten ORM declarations with the framework's parsed
 // page request. The endpoint owns page metadata, JSON contracts and links.
 type DatabaseService struct{ DB database.Executor }
 
-func (s DatabaseService) List(ctx context.Context, in ListRequest) (query.Page[MemberResponse], error) {
+func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResult[MemberResponse], error) {
 	builder := memberQuery(in.Filters)
 	page, err := builder.Paginate(ctx, s.DB, in.Page)
 	if err != nil {
-		return query.Page[MemberResponse]{}, err
+		return orm.PageResult[MemberResponse]{}, err
 	}
 	return pagination.MapPage(ctx, page, PresentMember)
 }
@@ -67,10 +67,10 @@ func PresentMember(member mutatorqueries.Member) (MemberResponse, error) {
 	return MemberResponse{ID: member.ID, Email: email, Nickname: nickname}, nil
 }
 
-func memberQuery(filters MemberFilters) mutatorqueries.MemberQuery {
-	builder := mutatorqueries.QueryMutatorMembers()
+func memberQuery(filters MemberFilters) orm.Query[mutatorqueries.Member] {
+	builder := mutatorqueries.Members.Query()
 	if email, set := filters.Email.Get(); set {
-		builder = builder.Where(mutatorqueries.MemberFields().Email.Eq(email))
+		builder = builder.Where(mutatorqueries.Members.Email.Eq(email))
 	}
 	return builder
 }

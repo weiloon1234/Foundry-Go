@@ -1,0 +1,167 @@
+{
+  "slice": "stage10-b-consumer-migration-guide",
+  "base_commit": "688859599b43888ab57dc5bbbfcc200289211488",
+  "status": "last-27 review corrections passed requested acceptance; LoadFrom and RegisterTypes examples remain blocked on integration",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r11",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "files_added": [
+    "docs/guides/orm-migration.md",
+    "docs/evidence/goway-breaking-changes.md",
+    "tests/fixtures/goway/migration/examples_test.go",
+    "tests/fixtures/goway/migration/sql_test.go",
+    "tests/fixtures/goway/migration/guide_test.go"
+  ],
+  "compiled_snippet_pairs": 35,
+  "checks": [
+    {
+      "directory": "tests/fixtures/goway",
+      "command": "go test -v ./migration",
+      "exit_code": 0,
+      "tests": [
+        "TestGuideSnippets",
+        "TestDeclarationsAndReadSQL"
+      ]
+    },
+    {
+      "directory": ".",
+      "command": "make docs-check",
+      "exit_code": 0
+    },
+    {
+      "directory": ".",
+      "command": "gofmt -l tests/fixtures/goway/migration/*.go",
+      "exit_code": 0,
+      "output": "empty"
+    },
+    {
+      "directory": ".",
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "blocked": [
+    {
+      "owner": "lane A + lead integration",
+      "item": "orm.LoadFrom/LoadMissingFrom example",
+      "reason": "Absent from checkout; accepted signatures present in laneA-full2-on-fdaff938.patch. No other lane code copied."
+    },
+    {
+      "owner": "PostgreSQL owner + lead",
+      "item": "postgres.Config.RegisterTypes compiled registration example",
+      "reason": "Accepted main H1 contract is now documented from read-only evidence and source. The example cannot compile until H1 is integrated into this branch."
+    }
+  ],
+  "coverage_limits": "Executor-taking examples are compiled, not executed against services. Declaration validation, snippet equality and old/new read SQL/binding parity execute locally. No live PostgreSQL or Redis.",
+  "rows_ported": [],
+  "surface_additions": [],
+  "footprint": "No framework, probe or budget changes; not remeasured.",
+  "shared_files_touched": [],
+  "contracts": "No model/DTO directives, generated outputs, manifests, OpenAPI or TypeScript changed in this slice.",
+  "docs_notes": "Breaking changes and stale sections of other guides are listed in goway-breaking-changes.md. Other guides and lead-owned documentation are untouched.",
+  "source_sha256": {
+    "docs/guides/orm-migration.md": "8716ece585c800fbe62dd7118765c978041711e30e9b6e6f70645780b42bf455",
+    "docs/evidence/goway-breaking-changes.md": "896a49d24b889e17d99e8b5a94113d6a7955a01662f8c1eed66f47a5394b5eb5",
+    "tests/fixtures/goway/migration/examples_test.go": "af3cba9ae03b8bb12145977c4891707a221ec4fd2b7c994a8fd12afbb446f3a0",
+    "tests/fixtures/goway/migration/sql_test.go": "be4629fa807166255cade4c610df96cf3096a93bf2f43fd0df559ecb196db803",
+    "tests/fixtures/goway/migration/guide_test.go": "cbfa827649f9aa2772764079661445d2639810a414a0af414701128b7393db09"
+  },
+  "prior_acceptance": {
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r10",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "checks": [
+      {
+        "directory": "tests/fixtures/goway",
+        "command": "go test -v ./migration",
+        "exit_code": 0,
+        "tests": [
+          "TestGuideSnippets",
+          "TestDeclarationsAndReadSQL"
+        ]
+      },
+      {
+        "directory": "tests/fixtures/goway",
+        "command": "go vet ./migration",
+        "exit_code": 0
+      },
+      {
+        "directory": "tests/fixtures/goway",
+        "command": "go test -race ./migration",
+        "exit_code": 0
+      },
+      {
+        "directory": "tests/fixtures/goway",
+        "command": "go build ./migration",
+        "exit_code": 1,
+        "note": "Test-only package has no non-test Go files. The passing go test command compiled every example."
+      },
+      {
+        "directory": ".",
+        "command": "make docs-check",
+        "exit_code": 0
+      },
+      {
+        "directory": ".",
+        "command": "python3 tools/goway_catalogue.py",
+        "exit_code": 0
+      },
+      {
+        "directory": ".",
+        "command": "gofmt -l tests/fixtures/goway/migration/*.go",
+        "exit_code": 0,
+        "output": "empty"
+      },
+      {
+        "directory": ".",
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ],
+    "source_sha256": {
+      "docs/guides/orm-migration.md": "def8656b92df00df33abfe5e391bbc2c9285a55f6aec99f62f6a627b925e54d0",
+      "docs/evidence/goway-breaking-changes.md": "6eda2393083340af34261983d3dba070cfb9650e96bb145ae017f0966a768cc5",
+      "tests/fixtures/goway/migration/examples_test.go": "212bec353d3850a6e20d08ee2b0998c28efaa403716d51db7f0dd8e63b34c318",
+      "tests/fixtures/goway/migration/sql_test.go": "be4629fa807166255cade4c610df96cf3096a93bf2f43fd0df559ecb196db803",
+      "tests/fixtures/goway/migration/guide_test.go": "dc676ee83665e3ff09743a9eb6316f263c40866bd2dab4e565664df29a405bd1"
+    },
+    "note": "Original slice results, before last-27 review corrections."
+  },
+  "review_corrections": [
+    "Compiled legacy RequireFirst to ORM Require in the paired read example; corrected model and locked-model prose.",
+    "Documented main H1 canonical JSON map-key MarshalText panic/Goexit HTTP 400 to 500 correction; ordinary returned errors remain 400. Documented safe diagnostics, preserved errors.Is/As and identity/type-based consumer matching.",
+    "Documented accepted main H1 Config.RegisterTypes signature, setup operations, callback ownership, admission failure, rejected rewriter registration, connection discard and no automatic retry. Retained branch compilation blocker."
+  ],
+  "read_only_main_sources": {
+    "/Users/weiloon/Projects/rust-go/Foundry-Go-mainfix/CHANGELOG.md": "dfdd8b33871d3b2a409beeaf1f00921c572235ac4a005e99126e05b6fde2caff",
+    "/Users/weiloon/Projects/rust-go/Foundry-Go-mainfix/docs/evidence/main-h1-error-containment.md": "ec1ac6f5af4b928eeb2369e0980bdf2e29f85b0131606a11f0e3543386aec618",
+    "/Users/weiloon/Projects/rust-go/Foundry-Go-mainfix/database/postgres/config.go": "44bffbed462537b74521311e1bd3dd1ccd9798076604ea9f68f2237e089547df",
+    "/Users/weiloon/Projects/rust-go/Foundry-Go-mainfix/database/postgres/type_registry.go": "fa5407a18997f33e736bb4cf59f852afdd2f2e7e833ffe40469b64e39941bc58"
+  },
+  "integration_batch7g": {
+    "base": "7e4616df",
+    "evidence": "docs/evidence/goway-batch7g-integration.json",
+    "source_sha256": {
+      "docs/evidence/goway-breaking-changes.md": "896a49d24b889e17d99e8b5a94113d6a7955a01662f8c1eed66f47a5394b5eb5",
+      "docs/guides/orm-migration.md": "8716ece585c800fbe62dd7118765c978041711e30e9b6e6f70645780b42bf455",
+      "tests/fixtures/goway/migration/examples_test.go": "af3cba9ae03b8bb12145977c4891707a221ec4fd2b7c994a8fd12afbb446f3a0",
+      "tests/fixtures/goway/migration/guide_test.go": "cbfa827649f9aa2772764079661445d2639810a414a0af414701128b7393db09",
+      "tests/fixtures/goway/migration/sql_test.go": "be4629fa807166255cade4c610df96cf3096a93bf2f43fd0df559ecb196db803"
+    }
+  },
+  "pre_integration_batch7g_hashes": {
+    "source_sha256": {
+      "docs/guides/orm-migration.md": "8716ece585c800fbe62dd7118765c978041711e30e9b6e6f70645780b42bf455",
+      "docs/evidence/goway-breaking-changes.md": "896a49d24b889e17d99e8b5a94113d6a7955a01662f8c1eed66f47a5394b5eb5",
+      "tests/fixtures/goway/migration/examples_test.go": "af3cba9ae03b8bb12145977c4891707a221ec4fd2b7c994a8fd12afbb446f3a0",
+      "tests/fixtures/goway/migration/sql_test.go": "be4629fa807166255cade4c610df96cf3096a93bf2f43fd0df559ecb196db803",
+      "tests/fixtures/goway/migration/guide_test.go": "dc676ee83665e3ff09743a9eb6316f263c40866bd2dab4e565664df29a405bd1"
+    }
+  }
+}

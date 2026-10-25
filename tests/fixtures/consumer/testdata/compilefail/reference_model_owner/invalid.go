@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var wrong model.Reference[linkqueries.Member, model.ID[mutatorqueries.Member]] = (mutatorqueries.Member{}).FoundryReference()
+var wrong model.Reference[linkqueries.Member, model.ID[mutatorqueries.Member]] = mutatorqueries.MemberIdentity.ReferenceOf(mutatorqueries.Member{})

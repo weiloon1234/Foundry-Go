@@ -24,11 +24,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:model table=profiles
 type Profile struct {
 	ID   model.ID[Profile]
 	Name string
-	// Foundry field behavior (generated): Managed soft-delete timestamp: Delete sets this stored field and Restore clears it. Ordinary queries exclude deleted models; WithTrashed and OnlyTrashed select visibility explicitly. Assigning this field directly through a draft uses ordinary create/update hooks rather than deletion/restoration events.
+	// Managed soft-delete timestamp: Delete sets this stored field and Restore clears it. Ordinary queries exclude deleted models; WithTrashed and OnlyTrashed select visibility explicitly. Assigning this field directly through typed assignments uses ordinary create/update hooks rather than deletion/restoration events.
 	DeletedAt value.Nullable[temporal.DateTime]
 }
 

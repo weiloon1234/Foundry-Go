@@ -193,7 +193,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 		}
 	}
 	for _, directory := range []string{
-		"database/orm", "internal/ormcore", "internal/modelmeta", "internal/querycore", "internal/noraw"} {
+		"database/orm", "internal/ormcore", "internal/modelmeta", "internal/querycore", "internal/noraw", "tests/oracle"} {
 		count := 0
 		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
@@ -235,6 +235,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 		"database/orm/rows/transactions.md",
 		"database/orm/transaction_phase_test.go",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
+		"docs/evidence/goway-stage9-c-barrier-freeze.tsv",
 		"internal/storemigration/testdata/challenge_prune_projection.json",
 		"internal/storemigration/testdata/challengestore_entry_read.json",
 		"internal/storemigration/testdata/challengestore_entry_write.json",
@@ -354,7 +355,7 @@ func TestGoWaySourceInventory(t *testing.T) {
 	for _, file := range fixture {
 		present[file.Path] = true
 	}
-	for _, name := range []string{"oldmodels/extensions/.foundry-gen.json", "pgsmoke/transaction_composition_test.go", "pgsmoke/integration_adapters_test.go", "go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json", "testdata/noraw/contracts/probe.go", "testdata/noraw/negative/interfaces.go", "testdata/noraw/negative/probe.go", "testdata/noraw/negative/refs_test.go", "testdata/noraw/negative/signatures.go", "testdata/noraw/positive/probe.go", "testdata/noraw/positive/signatures.go", "testdata/noraw/positive/typed.go", "testdata/noraw/raw.test/probe.go", "testdata/noraw/raw.test/probe_test.go", "relation_writes_test.go", "composition_golden_test.go", "conflict_golden_test.go", "pgsmoke/relation_writes_test.go", "pgsmoke/composition_test.go", "pgsmoke/conflict_test.go", "result_read_golden_test.go", "window_golden_test.go", "scalar_golden_test.go", "conflict_advanced_golden_test.go", "pgsmoke/result_cursor_test.go", "pgsmoke/windows_test.go", "pgsmoke/scalars_test.go", "pgsmoke/conflict_advanced_test.go", "source_write_golden_test.go", "json_path_golden_test.go", "store_capabilities_golden_test.go", "pgsmoke/source_write_test.go", "pgsmoke/json_paths_test.go", "pgsmoke/store_capabilities_test.go"} {
+	for _, name := range []string{"testdata/oracles/README.md", "testdata/oracles/comparisons.json", "testdata/oracles/state.json", "cmd/freeze-oracles/main.go", "migration/guide_test.go", "oldmodels/extensions/.foundry-gen.json", "pgsmoke/transaction_composition_test.go", "pgsmoke/integration_adapters_test.go", "go.mod", "golden_test.go", "compiler_batch_test.go", "footprint_test.go", "models/user.go", "oldmodels/models.go", "models/.foundry-gen.json", "oldmodels/.foundry-gen.json", "oldmodels/joined/.foundry-gen.json", "oldmodels/mutators/.foundry-gen.json", "oldmodels/hooks/.foundry-gen.json", "oldmodels/reads/.foundry-gen.json", "testdata/noraw/contracts/probe.go", "testdata/noraw/negative/interfaces.go", "testdata/noraw/negative/probe.go", "testdata/noraw/negative/refs_test.go", "testdata/noraw/negative/signatures.go", "testdata/noraw/positive/probe.go", "testdata/noraw/positive/signatures.go", "testdata/noraw/positive/typed.go", "testdata/noraw/raw.test/probe.go", "testdata/noraw/raw.test/probe_test.go", "relation_writes_test.go", "composition_golden_test.go", "conflict_golden_test.go", "pgsmoke/relation_writes_test.go", "pgsmoke/composition_test.go", "pgsmoke/conflict_test.go", "result_read_golden_test.go", "window_golden_test.go", "scalar_golden_test.go", "conflict_advanced_golden_test.go", "pgsmoke/result_cursor_test.go", "pgsmoke/windows_test.go", "pgsmoke/scalars_test.go", "pgsmoke/conflict_advanced_test.go", "source_write_golden_test.go", "json_path_golden_test.go", "store_capabilities_golden_test.go", "pgsmoke/source_write_test.go", "pgsmoke/json_paths_test.go", "pgsmoke/store_capabilities_test.go"} {
 		if !present[name] {
 			t.Errorf("Go-way consumer lost %s", name)
 		}
@@ -375,6 +376,14 @@ func TestReviewedConsumerAssets(t *testing.T) {
 		present[file.Path] = true
 	}
 	for _, name := range []string{
+		"linkqueries/testdata/legacy-read.json",
+		"articles/testdata/legacy-model.json",
+		"idempotenthttp/testdata/legacy-model.json",
+		"isolatedhttp/testdata/legacy-model.json",
+		"multifactor/testdata/legacy-model.json",
+		"passwords/testdata/legacy-model.json",
+		"profiles/testdata/legacy-model.json",
+		"teamworkflow/testdata/legacy-model.json",
 		"clientcontracts/testdata/datatable-baseline/README.md",
 		"clientcontracts/testdata/datatable-baseline/client/.foundry-gen.json",
 		"clientcontracts/testdata/datatable-baseline/client/contracts_foundry.gen.ts",

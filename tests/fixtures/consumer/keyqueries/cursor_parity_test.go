@@ -1,6 +1,7 @@
 package keyqueries_test
 
 import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -31,6 +32,9 @@ func TestCursorCompileSQLParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !oracleEqual(t, "consumer/keyqueries/cursor_parity_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
+		t.Fatal("recorded SQL parity changed")
+	}
 	if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) {
 		t.Fatalf("cursor compile parity\n%s\n%s", got.SQL(), want.SQL())
 	}
@@ -47,6 +51,9 @@ func TestCursorCompileSQLParity(t *testing.T) {
 	oldScalar, err := oldValues.OrderBy(oldValues.Value().Desc()).UniqueBy(oldValues.Key()).Compile()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !oracleEqual(t, "consumer/keyqueries/cursor_parity_test/scalar", oracle.Snapshot([]any{oldScalar.SQL(), oldScalar.Arguments()}), oracle.Snapshot([]any{scalar.SQL(), scalar.Arguments()})) {
+		t.Fatal("recorded scalar cursor parity changed")
 	}
 	if scalar.SQL() != oldScalar.SQL() || !reflect.DeepEqual(scalar.Arguments(), oldScalar.Arguments()) {
 		t.Fatalf("scalar cursor compile parity\n%s\n%s", scalar.SQL(), oldScalar.SQL())

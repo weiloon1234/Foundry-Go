@@ -6,4 +6,5 @@ equality or incoming-conflict capability. Omitted fields retain their envelopes.
 
 The existing PostgreSQL assertions exercise row-bound encryption, nulls, bulk
 inserts, copied-ciphertext rejection, key rotation and missing-key failures through
-ORM calls. Schema, wire values and generated declarations remain unchanged.
+ORM calls. Schema and wire values are unchanged; the model-generation directive
+is removed.

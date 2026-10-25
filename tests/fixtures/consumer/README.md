@@ -18,8 +18,7 @@ attachments and typed metadata as model extension slots, registers them with
 `Builder.Models` and exercises ORM deletion cleanup against PostgreSQL;
 see the [slot guide](../../../docs/guides/model-extension-slots.md).
 
-The Stage 9 foundations publish handwritten declarations beside the retained
-generated API: [profiles](profiles/tables.go), [articles](articles/tables.go),
+The Stage 9 foundations publish handwritten declarations: [profiles](profiles/tables.go), [articles](articles/tables.go),
 [passwords](passwords/tables.go) and [multifactor](multifactor/tables.go).
 Each package exposes `Tables()` for startup checking and an ORM identity that
 preserves existing stored references. Profiles' service cleanup uses ORM hooks;
@@ -27,13 +26,13 @@ article slots use `ArticleSlots.From(runtime)` and
 `Articles.Query().With(bound.All()...)`. Register `ORMExtensionDeclaration()`
 for ORM article writes. Its upload handler uses `attachments.AddFilesTo`; explicit
 batch-load and storage assertions use the typed package functions `FieldOf`,
-`KeyOf`, `OneCollection` and `ManyCollection`. Keep generated declarations until
-the legacy consumer cutover; never register both observer families in one application.
+`KeyOf`, `OneCollection` and `ManyCollection`. These packages register only their
+ORM observer families.
 
 DTO, enum, configuration, localization and client generation remain supported.
 The generic DTO, union, localization, upload and request-flow contracts are
-retained unchanged. Model directives and generated files remain during the
-foundation phase; the integration barrier owns regeneration and later removal.
+retained unchanged. The cleanup barrier removes model/projection directives and
+obsolete generated output from each migrated owner through `make generate`.
 
 The [portal consumer](spaportals/portals.go) declares browser portals with
 `Builder.SPA` beside a root public mount, content-hashed bundles and a typed API
@@ -272,9 +271,9 @@ Its public PostgreSQL consumer, seven compiler rejections and three real-gopls
 probes passed focused checks and the full native milestone acceptance gate.
 
 
-Milestone 18 adds [profiles](profiles/profile.go): generated profile/DTO declarations,
+Milestone 18 adds [profiles](profiles/profile.go): handwritten profile and generated DTO declarations,
 image and localized collection policy, typed metadata/settings/translations,
-explicit country seeding, and generated owner lifecycle cleanup. Its public
+explicit country seeding, and ORM owner lifecycle cleanup. Its public
 PostgreSQL and race checks, 15 compiler rejections, seven actual-gopls probes and
 the full native milestone gate passed. Parent rollback preserves extension rows
 and files; committed force deletion schedules conditional object cleanup.
@@ -329,8 +328,10 @@ The follow-on ORM consumers include `multifactor`, `idempotenthttp`,
 `isolatedhttp` and `teamworkflow`. Their existing tests retain credential
 freshness, transaction/rollback, idempotency, tenant binding, omitted/null/value
 and response assertions. Profiles also exercises the three bounded ORM
-extension-matching functions. Generated models remain temporarily as permitted
-by the Stage 9 generation barrier and as explicit parity oracles.
+extension-matching functions. Their model directives and obsolete generated files
+have been removed. The `testdata/legacy-model.json` snapshots preserve the legacy
+SQL, reference and extension expectations captured before removal; see the
+[freeze evidence](../../../docs/evidence/goway-stage9-d-barrier-freeze.json).
 
 ## Stage 9 handwritten declarations
 

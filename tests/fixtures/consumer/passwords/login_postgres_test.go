@@ -46,7 +46,7 @@ func TestPostgresModelFirstPasswordLoginAndRehash(t *testing.T) {
 		if result.Subject().ID != account.ID || result.Subject().Digest == account.Digest || result.Proof().Assurance() != auth.Authenticated {
 			return errors.New("login lost model or rehash result")
 		}
-		current, err := passwords.QueryPasswordAccounts().RequireFind(t.Context(), tx, account.ID)
+		current, err := passwords.AccountRecords.Require(t.Context(), tx, account.ID)
 		if err != nil {
 			return err
 		}
@@ -64,7 +64,7 @@ func TestPostgresModelFirstPasswordLoginAndRehash(t *testing.T) {
 		if result.Proof().Assurance() != auth.PendingMFA || result.Subject().Digest != current.Digest {
 			return errors.New("MFA policy ignored or current hash rewritten")
 		}
-		if _, err := passwords.QueryPasswordAccounts().Update(t.Context(), tx, account.ID, passwords.AccountDraft{}.SetEnabled(false)); err != nil {
+		if _, err := passwords.AccountRecords.Update(t.Context(), tx, account.ID, passwords.AccountRecords.Enabled.Set(false)); err != nil {
 			return err
 		}
 		result, err = passwords.Authenticate(t.Context(), login, request)

@@ -48,9 +48,9 @@ func TestStoreUUIDSeekGolden(t *testing.T) {
 				q = q.Where(newPred[i])
 			}
 			b := must(q.OrderBy(models.Orders.ID.Asc()).Limit(3).All(t.Context(), ndb))
-			fmt.Fprintln(&before.output, a)
-			fmt.Fprintln(&after.output, b)
-			if before.output.String() != after.output.String() {
+			fmt.Fprintln(&before.output, oracleSnapshot([]any{a}))
+			fmt.Fprintln(&after.output, oracleSnapshot([]any{b}))
+			if !oracleEqual(t, "store_capabilities_golden/1", before.output.String(), after.output.String()) {
 				t.Fatal(goldenDiff(before.output.String(), after.output.String()))
 			}
 		}
@@ -83,7 +83,7 @@ func TestStoreEachLifecycleGolden(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					fmt.Fprintln(&g.output, v)
+					fmt.Fprintln(&g.output, oracleSnapshot([]any{v}))
 				} else {
 					v, err := q.UpdateEach(ctx, db, 2, func(ctx context.Context, _ *database.Tx, m o.Member) (o.MemberDraft, error) {
 						coremodels.TraceLifecycle(ctx, "draft")
@@ -92,7 +92,7 @@ func TestStoreEachLifecycleGolden(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					fmt.Fprintln(&g.output, v)
+					fmt.Fprintln(&g.output, oracleSnapshot([]any{v}))
 				}
 			} else {
 				q := n.Members.Query().Where(n.Members.Name.Ne("omit"))
@@ -101,7 +101,7 @@ func TestStoreEachLifecycleGolden(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					fmt.Fprintln(&g.output, v)
+					fmt.Fprintln(&g.output, oracleSnapshot([]any{v}))
 				} else {
 					v, err := orm.UpdateEach(ctx, db, q, 2, func(ctx context.Context, _ *database.Tx, m n.Member) ([]orm.Assignment[n.Member], error) {
 						coremodels.TraceLifecycle(ctx, "draft")
@@ -110,16 +110,16 @@ func TestStoreEachLifecycleGolden(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					fmt.Fprintln(&g.output, v)
+					fmt.Fprintln(&g.output, oracleSnapshot([]any{v}))
 				}
 			}
-			fmt.Fprintln(&g.output, trace)
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{trace}))
 			if g.statements != 5 {
 				t.Fatal(g.statements)
 			}
 			transcripts = append(transcripts, g.output.String())
 		}
-		if transcripts[0] != transcripts[1] {
+		if !oracleEqual(t, "store_capabilities_golden/2", transcripts[0], transcripts[1]) {
 			t.Fatal(goldenDiff(transcripts[0], transcripts[1]))
 		}
 	}

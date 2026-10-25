@@ -1,6 +1,7 @@
 package distinctqueries_test
 
 import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -33,7 +34,7 @@ func TestCorrelatedDistinctOnSQLParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) {
+	if want.SQL() != got.SQL() || !reflect.DeepEqual(want.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/distinctqueries/correlated_parity_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 		t.Fatalf("correlated keys changed\nnew: %s\nold: %s", got.SQL(), want.SQL())
 	}
 }

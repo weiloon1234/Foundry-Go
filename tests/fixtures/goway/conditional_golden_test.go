@@ -39,7 +39,7 @@ func TestStage6a2ConditionalGolden(t *testing.T) {
 	}
 	runConditionalOld(before)
 	runConditionalNew(after)
-	if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+	if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "conditional_golden/1", before.output.String(), after.output.String()) {
 		t.Fatalf("conditional parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 	}
 	// Selected CASE also reuses the aggregate compiler, with identical binds.
@@ -50,7 +50,7 @@ func TestStage6a2ConditionalGolden(t *testing.T) {
 	}
 	runSelectedConditionalOld(before)
 	runSelectedConditionalNew(after)
-	if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+	if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "conditional_golden/2", before.output.String(), after.output.String()) {
 		t.Fatalf("selected conditional parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 	}
 }
@@ -71,7 +71,7 @@ func runConditionalOld(g *goldenCapture) {
 	})
 	nullable := query.When(f.Age.Gt(0), choice).ElseNull()
 	q := query.Project(a, schema, query.Map(required, choice.Value()), query.Map(missing, query.NullIfNullable(query.CoalesceNullable(nullable, f.Nickname), query.NullableRow(fallback)).Value())).Where(query.NullIf(choice, fallback).IsNotNull()).OrderBy(choice.Asc())
-	fmt.Fprintln(&g.output, must(q.All(ctx, db)))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
 }
 func runConditionalNew(g *goldenCapture) {
 	ctx := context.Background()
@@ -86,7 +86,7 @@ func runConditionalNew(g *goldenCapture) {
 	nullable := expr.When(age.Gt(0), choice).ElseNull()
 	s := conditionalRows
 	q := rowset.Select(a, s, rowset.MapSelected(s.Required, choice.Value()), rowset.MapSelected(s.Missing, expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.NullableRow(fallback)).Value())).Where(expr.NullIf(choice, fallback).IsNotNull()).OrderBy(choice.Asc())
-	fmt.Fprintln(&g.output, must(q.All(ctx, db)))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
 }
 func runSelectedConditionalOld(g *goldenCapture) {
 	ctx := context.Background()
@@ -106,7 +106,7 @@ func runSelectedConditionalOld(g *goldenCapture) {
 		return r, err
 	})
 	q := query.Project(a, schema, query.Map(number, result), query.Map(exact, query.DecimalValue(result)), query.Map(approx, query.FloatValue(result)), query.Map(missing, query.WhenValue(count.Gt(10), count.Value()).ElseNull()))
-	fmt.Fprintln(&g.output, must(q.All(ctx, db)))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
 }
 func runSelectedConditionalNew(g *goldenCapture) {
 	ctx := context.Background()
@@ -118,5 +118,5 @@ func runSelectedConditionalNew(g *goldenCapture) {
 	result := expr.CoalesceValue(expr.NullIfValue(choice, count.Param(0).Value()), count.Param(0).Value())
 	s := expressionRows
 	q := rowset.Select(a, s, rowset.MapSelected(s.Number, result), rowset.MapSelected(s.Exact, expr.DecimalValue(result)), rowset.MapSelected(s.Approx, expr.FloatValue(result)), rowset.MapSelected(s.Missing, expr.WhenValue(count.Gt(10), count.Value()).ElseNull()))
-	fmt.Fprintln(&g.output, must(q.All(ctx, db)))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
 }

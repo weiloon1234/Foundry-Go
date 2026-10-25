@@ -36,10 +36,10 @@ func TestStage7SeederSQLParity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fmt.Fprintln(&capture.output, result)
+		fmt.Fprintln(&capture.output, oracleSnapshot([]any{result}))
 		transcripts = append(transcripts, capture.output.String())
 	}
-	if transcripts[0] != transcripts[1] {
+	if !oracleEqual(t, "stage7_remainder_golden/1", transcripts[0], transcripts[1]) {
 		t.Fatal(goldenDiff(transcripts[0], transcripts[1]))
 	}
 }
@@ -73,10 +73,10 @@ func TestStage7CursorMappingSQLParity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fmt.Fprintln(&capture.output, string(encoded), token.Token())
+		fmt.Fprintln(&capture.output, oracleSnapshot([]any{string(encoded), token.Token()}))
 		transcripts = append(transcripts, capture.output.String())
 	}
-	if transcripts[0] != transcripts[1] {
+	if !oracleEqual(t, "stage7_remainder_golden/2", transcripts[0], transcripts[1]) {
 		t.Fatal(goldenDiff(transcripts[0], transcripts[1]))
 	}
 }

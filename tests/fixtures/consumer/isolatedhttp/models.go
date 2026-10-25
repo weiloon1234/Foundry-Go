@@ -3,7 +3,6 @@ package isolatedhttp
 
 import "github.com/weiloon1234/Foundry-Go/model"
 
-//foundry:model table=scope_records
 type Record struct {
 	ID   model.ID[Record]
 	Name string

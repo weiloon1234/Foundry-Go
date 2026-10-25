@@ -5,7 +5,7 @@ package goway_test
 import (
 	"bufio"
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"io"
 	"os"
 	"os/exec"
@@ -16,17 +16,7 @@ import (
 
 // The go command starts compiler children. Cancel its owned process group so a
 // timed-out negative example cannot leave compilation running in the background.
-func configureCompilerCommand(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		if errors.Is(err, syscall.ESRCH) {
-			return os.ErrProcessDone
-		}
-		return err
-	}
-	cmd.WaitDelay = time.Second
-}
+func configureCompilerCommand(cmd *exec.Cmd) { oracle.ConfigureCommand(cmd) }
 
 func TestCompilerCancellationClosesDescendantPipes(t *testing.T) {
 	shell, err := exec.LookPath("sh")

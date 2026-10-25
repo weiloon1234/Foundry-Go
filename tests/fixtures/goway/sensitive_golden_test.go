@@ -13,7 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
-	"reflect"
+	"github.com/weiloon1234/Foundry-Go/value"
 	"testing"
 )
 
@@ -110,12 +110,16 @@ func TestSensitiveOldAndNewAgree(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
+		if !oracleEqual(t, "sensitive_golden/decrypted", oracleSnapshot([]any{oldGot.Token.Reveal(), a.Region, oldGot.Backup.IsNull(), oldGot.Optional.IsNull()}), oracleSnapshot([]any{newGot.Token.Reveal(), b.Region, newGot.Backup.IsNull(), newGot.Optional.IsNull()})) {
+			t.Fatal("decrypted parity")
+		}
+
 		if oldGot.Token.Reveal() != "second" || newGot.Token.Reveal() != "second" || a.Region != b.Region || !oldGot.Backup.IsNull() || !newGot.Backup.IsNull() || !oldGot.Optional.IsNull() || !newGot.Optional.IsNull() {
 			t.Fatal("decrypted values differ")
 		}
 		transcripts = append(transcripts, store.transcript.String())
 	}
-	if !reflect.DeepEqual(transcripts[0], transcripts[1]) {
+	if !oracleEqual(t, "sensitive_golden/2", transcripts[0], transcripts[1]) {
 		t.Fatalf("sensitive SQL or binding shapes differ:\n%s", goldenDiff(transcripts[0], transcripts[1]))
 	}
 }
@@ -164,12 +168,16 @@ func TestPasswordOldAndNewAgree(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if !oracleEqual(t, "sensitive_golden/password", oracleSnapshot([]bool{old.Digest == hash, old.Backup == value.Of(hash)}), oracleSnapshot([]bool{current.Digest == hash, current.Backup == value.Of(hash)})) {
+			t.Fatal("password parity")
+		}
+
 		if old.Digest != current.Digest || old.Digest != hash || old.Backup != current.Backup {
 			t.Fatal("password hydrated values differ")
 		}
 		transcripts = append(transcripts, store.transcript.String())
 	}
-	if transcripts[0] != transcripts[1] {
+	if !oracleEqual(t, "sensitive_golden/1", transcripts[0], transcripts[1]) {
 		t.Fatalf("password SQL/bindings differ:\n%s", goldenDiff(transcripts[0], transcripts[1]))
 	}
 }
@@ -196,15 +204,18 @@ func TestSensitiveStreamingFailureParity(t *testing.T) {
 	bad := append([]driver.Value(nil), good...)
 	bad[0] = other.String()
 	store.readBatch = [][]driver.Value{good, bad, good}
+	observations := []string{}
 	for _, style := range []string{"old", "new"} {
 		t.Run(style, func(t *testing.T) {
 			seen := 0
+			values := []any{}
 			var err error
 			if style == "old" {
 				err = oldmodels.QuerySensitiveVaults().Each(t.Context(), db, func(m oldmodels.Vault) error {
 					if m.ID.String() != inserted.ID.String() || m.Token.Reveal() != "private" {
 						t.Fatal("partial or incorrect row yielded")
 					}
+					values = append(values, []any{m.ID.String() == inserted.ID.String(), m.Token.Reveal()})
 					seen++
 					return nil
 				})
@@ -213,13 +224,18 @@ func TestSensitiveStreamingFailureParity(t *testing.T) {
 					if m.ID != inserted.ID || m.Token.Reveal() != "private" {
 						t.Fatal("partial or incorrect row yielded")
 					}
+					values = append(values, []any{m.ID.String() == inserted.ID.String(), m.Token.Reveal()})
 					seen++
 					return nil
 				})
 			}
+			observations = append(observations, oracleSnapshot([]any{values, seen, errors.Is(err, fault.Invalid)}))
 			if !errors.Is(err, fault.Invalid) || seen != 1 {
 				t.Fatalf("stream yielded %d; fault %v", seen, err)
 			}
 		})
+	}
+	if !oracleEqual(t, "sensitive_golden/stream_failure", observations[0], observations[1]) {
+		t.Fatal("stream failure parity")
 	}
 }

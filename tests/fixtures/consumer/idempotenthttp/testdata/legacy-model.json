@@ -1,0 +1,13 @@
+{
+  "Identity": null,
+  "Statements": {
+    "read": {
+      "SQL": "SELECT \"idem_workspaces\".\"id\", \"idem_workspaces\".\"tenant\", \"idem_workspaces\".\"enabled\" FROM \"idem_workspaces\" WHERE (\"idem_workspaces\".\"tenant\" = $1)",
+      "Arguments": [
+        "tenant"
+      ]
+    }
+  },
+  "Description": "",
+  "Subject": null
+}

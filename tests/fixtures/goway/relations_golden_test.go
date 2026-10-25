@@ -24,6 +24,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 			if err != nil || len(orders) != 1 {
 				t.Fatal(err, len(orders))
 			}
+			g.showHydrated(orders)
 			buyer, _ := orders[0].Buyer.Get()
 			m, present := buyer.Get()
 			if !present || !m.Introducer.IsLoaded() {
@@ -33,6 +34,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 			if err != nil || len(users) != 1 || !users[0].Orders.IsLoaded() {
 				t.Fatal(err)
 			}
+			g.showHydrated(users)
 			for _, o := range users[0].Orders.All() {
 				if !o.Buyer.IsLoaded() {
 					t.Fatal("nested collection target missing")
@@ -43,6 +45,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 			if err != nil || !loaded[0].Introducer.IsLoaded() {
 				t.Fatal(err)
 			}
+			g.showHydrated(loaded)
 			constrained := ur.Orders.Where(or.Buyer.Where(uf.Age.Gt(18)).Exists())
 			if _, err = oldmodels.QueryUsers().WhereHas(constrained).All(ctx, db); err != nil {
 				t.Fatal(err)
@@ -57,6 +60,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 			if err != nil || len(orders) != 1 {
 				t.Fatal(err, len(orders))
 			}
+			g.showHydrated(orders)
 			buyer, _ := orders[0].Buyer.Get()
 			m, present := buyer.Get()
 			if !present || !m.Introducer.IsLoaded() {
@@ -66,6 +70,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 			if err != nil || len(users) != 1 || !users[0].Orders.IsLoaded() {
 				t.Fatal(err)
 			}
+			g.showHydrated(users)
 			for _, o := range users[0].Orders.All() {
 				if !o.Buyer.IsLoaded() {
 					t.Fatal("nested collection target missing")
@@ -76,6 +81,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 			if err != nil || !loaded[0].Introducer.IsLoaded() {
 				t.Fatal(err)
 			}
+			g.showHydrated(loaded)
 			nested := orm.Has(or.Buyer, uf.Age.Gt(18))
 			if _, err = uf.Query().Where(orm.Has(ur.Orders, nested)).All(ctx, db); err != nil {
 				t.Fatal(err)
@@ -91,7 +97,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 	if captures[0].statements != 9 || captures[1].statements != 9 {
 		t.Fatal("unexpected relation SQL count", captures[0].statements, captures[1].statements)
 	}
-	if captures[0].output.String() != captures[1].output.String() {
+	if !oracleEqual(t, "relations_golden/1", captures[0].output.String(), captures[1].output.String()) {
 		t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 	}
 }

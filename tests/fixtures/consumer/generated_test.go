@@ -103,11 +103,14 @@ func TestHandwrittenModelsAndAssignments(t *testing.T) {
 	})
 }
 
-// The shared model owners retain these business helpers until their generated
-// return types migrate. Keep their assertions during that coexistence window.
-func TestBusinessDraftHelpers(t *testing.T) {
-	if email, set := (models.User{Email: "typed"}).CurrentEmailDraft().Email().Get(); !set || email != "typed" {
-		t.Fatal("handwritten business method lost its input")
+func TestBusinessAssignmentHelpers(t *testing.T) {
+	for _, email := range []string{"typed", ""} {
+		assignment := (models.User{Email: email}).CurrentEmailAssignment()
+		inspectInsertAssignments(t, models.Users.Table, []orm.Assignment[models.User]{assignment}, func(write *orm.Write[models.User]) {
+			if got, set := orm.WriteGet(write, models.Users.Email.Set).Get(); !set || got != email {
+				t.Error("handwritten business method lost its supplied input")
+			}
+		})
 	}
 }
 

@@ -128,7 +128,7 @@ func TestRelationWriteGoldens(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if captures[0].output.String() != captures[1].output.String() {
+			if !oracleEqual(t, "relation_writes/1", captures[0].output.String(), captures[1].output.String()) {
 				t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 			}
 		})
@@ -161,7 +161,7 @@ func TestRelationWriteMorphDefaultsAndSingleStatements(t *testing.T) {
 			if g.statements != want {
 				t.Fatal(g.statements, want)
 			}
-			if mode == "morph" && !strings.Contains(g.output.String(), `"parent"`) {
+			if mode == "morph" && !strings.Contains(g.output.String(), oracleSnapshot("parent")) {
 				t.Fatal("missing morph default")
 			}
 		})

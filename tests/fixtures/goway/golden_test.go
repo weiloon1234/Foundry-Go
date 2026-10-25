@@ -17,7 +17,7 @@ func TestOldAndNewDataLayersAgree(t *testing.T) {
 			t.Fatalf("%s executed %d statements, want all 56", name, capture.statements)
 		}
 	}
-	if old.output.String() != current.output.String() {
+	if !oracleEqual(t, "golden/1", old.output.String(), current.output.String()) {
 		t.Fatalf("old/new SQL, bindings or hydrated values differ:\n%s", goldenDiff(old.output.String(), current.output.String()))
 	}
 }

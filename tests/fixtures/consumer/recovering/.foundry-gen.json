@@ -2,7 +2,6 @@
   "version": 1,
   "files": {
     "link_request_foundry.gen.go": "cd99ab6d8d3cdccc8b47932fd6f68b7d397cbb90c34c5d050a8566693f510e77",
-    "member_foundry.gen.go": "7ad281efa6899bdbeef01eb584869df2286186988df5306238caa64a166f58e6",
     "reset_request_foundry.gen.go": "90a4bd590547aefc7c511d7fff066b2054b9a5c1d3cfd326df1ae00873b104ba",
     "verification_request_foundry.gen.go": "8c4df98f54ff80c45d4c0d0d1ac6869661624821d2c0a887f89ae68719c307e7"
   }

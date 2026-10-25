@@ -6,11 +6,11 @@ values. `Member.AccessEmail` explicitly produces the unchanged `EmailLink` type.
 
 Before hooks use `orm.WriteGet` and `orm.WriteNullableGet` with these setters, so
 omitted, NULL and present inputs retain their distinct types. The declaration's
-local hooks capture persisted results in `State.ORMCaptured`; the generated suite
-keeps `State.Captured` during coexistence. Assignment formatting is redacted.
+local hooks capture persisted results in `State.ORMCaptured`. Assignment formatting
+is redacted.
 
-All five mutation-input compiler cases now exercise the ORM surface. Generated
-outputs and directives are retained until dependent cutovers and lead regeneration.
+All five mutation-input compiler cases exercise the ORM surface. Legacy hook
+state and the model-generation directive are removed.
 
 Live before-write callbacks can call `orm.WriteUnset(write, Members.Note.Set)` to
 restore omission, independently of SQL NULL and an explicit zero input. The fixture

@@ -13,6 +13,5 @@ synthesis leaves the caller's key omitted. Invalid and empty batches assert that
 no transaction opens; the retained `query.MaxInsertRows` compatibility constant
 supplies the shared insert bound without using the legacy query engine.
 
-PostgreSQL tests remain opt-in through the existing fixture helper. The generated
-APIs are retained for the lead's generator-retirement barrier; these scenarios and
-their compiler negatives use the ORM surface.
+PostgreSQL tests remain opt-in through the existing fixture helper. The model
+generation directive is removed; scenarios and compiler negatives use the ORM.

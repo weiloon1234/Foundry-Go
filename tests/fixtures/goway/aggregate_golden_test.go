@@ -52,7 +52,7 @@ func TestStage6a3AggregateGolden(t *testing.T) {
 	}
 	runAggregateOld(before)
 	runAggregateNew(after)
-	if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+	if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "aggregate_golden/1", before.output.String(), after.output.String()) {
 		t.Fatalf("aggregate parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 	}
 	// Complete-model DISTINCT and DISTINCT ON keep their result read-only.
@@ -65,11 +65,11 @@ func TestStage6a3AggregateGolden(t *testing.T) {
 	oldQ := old.QueryOrders().DistinctOn(oldF.BuyerID.Group()).OrderBy(oldF.BuyerID.Asc(), oldF.TotalCents.Desc())
 	newBuyer, newAmount := expr.Value(models.Orders.BuyerID), expr.Value(models.Orders.TotalCents)
 	newQ := rowset.DistinctOn(rowset.FromModel(models.Orders.Query()), expr.Group(newBuyer)).OrderBy(newBuyer.Asc(), newAmount.Desc())
-	fmt.Fprintln(&before.output, must(oldQ.All(ctx, oldDB)))
-	fmt.Fprintln(&after.output, must(newQ.All(ctx, newDB)))
-	fmt.Fprintln(&before.output, must(old.QueryOrders().Distinct().All(ctx, oldDB)))
-	fmt.Fprintln(&after.output, must(rowset.Distinct(rowset.FromModel(models.Orders.Query())).All(ctx, newDB)))
-	if before.output.String() != after.output.String() {
+	fmt.Fprintln(&before.output, oracleSnapshot([]any{must(oldQ.All(ctx, oldDB))}))
+	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(newQ.All(ctx, newDB))}))
+	fmt.Fprintln(&before.output, oracleSnapshot([]any{must(old.QueryOrders().Distinct().All(ctx, oldDB))}))
+	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(rowset.Distinct(rowset.FromModel(models.Orders.Query())).All(ctx, newDB))}))
+	if !oracleEqual(t, "aggregate_golden/2", before.output.String(), after.output.String()) {
 		t.Fatalf("distinct parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 	}
 }
@@ -96,7 +96,7 @@ func runAggregateOld(g *goldenCapture) {
 		return r, err
 	})
 	q := query.Project(a, schema, query.Map(buyer, query.Value(f.BuyerID)), query.Map(countField, count.Value()), query.Map(distinct, query.CountDistinctField(f.TotalCents).Value()), query.Map(sum, total.Value()), query.Map(average, query.Avg(f.TotalCents).Value()), query.Map(min, query.Min(f.TotalCents).Value()), query.Map(max, query.Max(f.TotalCents).Value())).GroupBy(f.BuyerID.Group()).Having(query.HavingAnd(count.Gt(0), query.HavingOr(total.IsNull(), total.Gt(decimal.FromInt64(1))))).OrderBy(count.Desc(), f.BuyerID.Asc())
-	fmt.Fprintln(&g.output, must(q.All(ctx, db)))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
 }
 func runAggregateNew(g *goldenCapture) {
 	ctx := context.Background()
@@ -117,5 +117,5 @@ func runAggregateNew(g *goldenCapture) {
 	for i, r := range got {
 		normalized[i] = aggregateGoldenResult{r.Buyer.String(), r.Count, r.Distinct, r.Total, r.Average, r.Min, r.Max}
 	}
-	fmt.Fprintln(&g.output, normalized)
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{normalized}))
 }

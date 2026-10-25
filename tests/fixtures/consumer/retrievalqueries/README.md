@@ -8,7 +8,8 @@ Tests cover hydration before callbacks, closed rows, per-batch factories, bounde
 streaming, complete records through joins/CTEs/unions, locked reads and cursors.
 Scalar and DTO reads skip model retrieval callbacks. Model accessors remain explicit.
 The shared default chunk-size constant remains a legacy compatibility alias;
-queries no longer use the generated engine. Generated output stays until the barrier.
+queries no longer use the generated engine. Legacy retrieval/relation factories
+and model/projection directives are removed.
 
 Complete-record CTE streaming uses `rows.EachRead`. Its offset/limit window,
 closed bounded batches, per-batch factory counts, nested SQL during delivery and

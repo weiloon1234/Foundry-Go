@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/testkit/postgres"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 )
 
 func TestMutators(t *testing.T) {
@@ -32,7 +33,7 @@ func TestMutators(t *testing.T) {
 	}
 	stored, err := old.QueryMutatorMembers().RequireFind(ctx, db, 1)
 	must(t, err)
-	if stored.Email != got.Email {
+	if stored.Email != got.Email || !oracleEqual(t, "goway/pgsmoke/mutators/hydration", oracle.Snapshot(stored.Email), oracle.Snapshot(got.Email)) {
 		t.Fatal("old read differs")
 	}
 	_, err = old.QueryMutatorMembers().Update(ctx, db, 1, old.MemberDraft{}.SetName(" Ada ").SetNote(coremodels.LabelInput{Text: " note "}))

@@ -91,11 +91,11 @@ func TestReadSQLAndCursorTokensAgree(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				if !reflect.DeepEqual(pages[0], pages[1]) {
+				if !reflect.DeepEqual(pages[0], pages[1]) || !oracleEqual(t, "reads_golden/pages", oracleSnapshot(pages[0]), oracleSnapshot(pages[1])) {
 					t.Fatal("old/new cursor results or token bytes differ")
 				}
 			}
-			if captures[0].output.String() != captures[1].output.String() {
+			if !oracleEqual(t, "reads_golden/1", captures[0].output.String(), captures[1].output.String()) {
 				t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 			}
 		})
@@ -110,7 +110,7 @@ func TestReadSQLAndCursorTokensAgree(t *testing.T) {
 		db := readDB(t, g)
 		g.scriptedBatches = [][][]driver.Value{{readUser(orderID, 1, nil)}, {readUser(buyerID, 2, nil)}, {}}
 		seen := 0
-		visit := func(items []oldmodels.User) error { seen += len(items); return nil }
+		visit := func(items []oldmodels.User) error { seen += len(items); g.show(items); return nil }
 		if i == 0 {
 			err = oldmodels.QueryUsers().ChunkByID(t.Context(), db, 1, visit)
 		} else {
@@ -132,7 +132,7 @@ func TestReadSQLAndCursorTokensAgree(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if captures[0].output.String() != captures[1].output.String() {
+	if !oracleEqual(t, "reads_golden/2", captures[0].output.String(), captures[1].output.String()) {
 		t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 	}
 }

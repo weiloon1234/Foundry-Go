@@ -22,6 +22,7 @@ func TestLoadFromQuerySQLMatchesLegacy(t *testing.T) {
 			if err != nil || len(loaded) != 1 || loaded[0].Orders.Len() != 1 || parents[0].Orders.IsLoaded() {
 				t.Fatal(loaded, err)
 			}
+			g.showHydrated(loaded)
 			if _, err = q.LoadMissing(t.Context(), db, loaded); err != nil {
 				t.Fatal(err)
 			}
@@ -36,6 +37,7 @@ func TestLoadFromQuerySQLMatchesLegacy(t *testing.T) {
 			if err != nil || len(loaded) != 1 || loaded[0].Orders.Len() != 1 || parents[0].Orders.IsLoaded() {
 				t.Fatal(loaded, err)
 			}
+			g.showHydrated(loaded)
 			if _, err = orm.LoadMissingFrom(t.Context(), db, q, loaded); err != nil {
 				t.Fatal(err)
 			}
@@ -50,7 +52,7 @@ func TestLoadFromQuerySQLMatchesLegacy(t *testing.T) {
 			t.Fatal("expected two nested loads and no parent statement", g.statements)
 		}
 	}
-	if captures[0].output.String() != captures[1].output.String() {
+	if !oracleEqual(t, "load_query_golden/1", captures[0].output.String(), captures[1].output.String()) {
 		t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 	}
 }

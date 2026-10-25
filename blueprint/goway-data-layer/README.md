@@ -108,7 +108,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 9 B reads | Retrieval streaming, scalar/DTO/complete-record pagination and safe draft-helper cleanup | Done pending the lead’s commit; EachRead retains callback identity and bounded iteration. |
 | 9 C terminals | Derived aggregates, JSONKind, complete-record DISTINCT ON, relation ordering and cursor inspection | Done pending the lead’s commit; scalarqueries/keyqueries and dependent query consumers migrated. |
 | 9 D loaders | Root direct, joined and aggregate relation tests; editor probes | Done pending the lead’s commit; LoadFrom/LoadMissingFrom preserve query-owned budgets and all existing assertions. |
-| 9 | Migrate consumer fixtures and compiler catalogue | In progress; batch 7f closes read/pagination/query-family and root relation callers. Eleven catalogue rows and generated-output cleanup remain open. |
+| 9 | Migrate consumer fixtures and compiler catalogue | Catalogue complete: 587 ported, 445 unaffected, zero pending. Batch 7g removes independent generated consumers; the barrier remains in progress pending the oracle freeze and remaining legacy owners. |
 | 10 | Guides, examples and editor coverage | Planned |
 | 11 | Full acceptance and whole-app performance evidence | Planned |
 | 12 | Consumer application migration, separately authorized | Later |
@@ -545,11 +545,11 @@ intentionally accepts byte slices, while identity does not.
 
 | Disposition | Cases |
 | --- | ---: |
-| ported | 577 |
-| port | 11 |
+| ported | 587 |
+| port | 0 |
 | merge | 0 |
 | obsolete | 0 |
-| unaffected | 444 |
+| unaffected | 445 |
 | **Total** | **1032** |
 
 | Area | Cases |
@@ -581,10 +581,10 @@ intentionally accepts byte slices, while identity does not.
 | 6c | 73 |
 | 6d | 60 |
 | 6e | 61 |
-| 7 | 81 |
-| — | 444 |
+| 7 | 80 |
+| — | 445 |
 
-577 old catalogue rows are covered by 569 distinct Go-way cases.
+587 old catalogue rows are covered by 579 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1942,3 +1942,33 @@ results and source hashes are recorded in the integrated
 [derived-field evidence](../../docs/evidence/goway-stage9-lane-c-derived-gaps.json),
 [terminal evidence](../../docs/evidence/goway-stage9-lane-c-final-gaps.json) and
 [loader evidence](../../docs/evidence/goway-stage9-d4-loaders.json).
+
+## Integration batch 7g: catalogue completion and cleanup barrier
+
+Stage 7 is complete. The Stage 9 catalogue now covers all 1,032 cases: 587 ported
+rows map to 579 distinct Go-way negatives, and 445 rows are unaffected. No row is
+pending or obsolete. Existing footprint ceilings and runtime method sets stay unchanged.
+
+The barrier removes 63 generated Go files, independent model/projection directives
+and legacy adapter factories from the accepted B/C/D consumers. The generator
+confirms 27 updated ownership manifests; 882 Go-way compiler cases and all 150
+unchanged footprint ceilings remain registered. Retained live SQL and
+hydration oracles and shared model identities still need their coordinated retirement;
+Stage 9 and the barrier are therefore in progress.
+
+The [migration guide](../../docs/guides/orm-migration.md) has compiled examples and
+[breaking-change notes](../../docs/evidence/goway-breaking-changes.md). Business
+helpers return typed assignments, including explicitly supplied empty values; root
+consumer assertions now call CurrentEmailAssignment and CreatorAssignment directly.
+
+The [oracle harness](../../tests/fixtures/goway/testdata/oracles/README.md) records
+paired legacy/new SQL, bindings and hydration observations with a reviewed source
+census, including the later scalar/key, JSON, window, set and relation-order
+comparisons added after the harness patch base. Its state is pending: this
+integration does not freeze expectations from the
+new implementation or claim PostgreSQL capture. Independent pre-removal snapshots
+remain checked in for retired consumers. Regeneration owns generated outputs and
+ownership manifests; no generated conflict is hand-merged.
+
+See [integration evidence](../../docs/evidence/goway-batch7g-integration.json) for
+conflicts, exact removals, source fingerprints and segmented acceptance results.

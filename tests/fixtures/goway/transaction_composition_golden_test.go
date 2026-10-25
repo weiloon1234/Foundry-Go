@@ -24,7 +24,7 @@ func TestStage6b4TransactionCompositionGolden(t *testing.T) {
 			}
 			runTransactionCompositionOld(a, kind)
 			runTransactionCompositionNew(b, kind)
-			if a.statements != 1 || b.statements != 1 || a.output.String() != b.output.String() {
+			if a.statements != 1 || b.statements != 1 || !oracleEqual(t, "transaction_composition_golden/1", a.output.String(), b.output.String()) {
 				t.Fatalf("transaction parity:\n%s", goldenDiff(a.output.String(), b.output.String()))
 			}
 		})
@@ -43,22 +43,22 @@ func runTransactionCompositionOld(g *goldenCapture, kind string) {
 		switch kind {
 		case "lift":
 			lifted := query.TransactionValueOf(query.SelectValue(old.QueryOrders().Limit(1), query.Value(old.OrderFields().TotalCents)))
-			fmt.Fprintln(&g.output, must(query.SelectTransactionValue(a, query.TransactionScalarQuery(a, lifted)).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(a, query.TransactionScalarQuery(a, lifted)).All(ctx, tx))}))
 		case "inner":
 			j := query.TransactionInnerJoin(a, b, on)
-			fmt.Fprintln(&g.output, must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.LeftScope(j, as)).TotalCents))).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.LeftScope(j, as)).TotalCents))).All(ctx, tx))}))
 		case "left":
 			j := query.TransactionLeftJoin(a, b, on)
-			fmt.Fprintln(&g.output, must(query.SelectTransactionValue(j, query.Value(old.OrderNullableFieldsAt(query.NullableRightScope(j, bs)).TotalCents)).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(j, query.Value(old.OrderNullableFieldsAt(query.NullableRightScope(j, bs)).TotalCents)).All(ctx, tx))}))
 		case "right":
 			j := query.TransactionRightJoin(a, b, on)
-			fmt.Fprintln(&g.output, must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.RightScope(j, bs)).TotalCents))).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.RightScope(j, bs)).TotalCents))).All(ctx, tx))}))
 		case "full":
 			j := query.TransactionFullJoin(a, b, on)
-			fmt.Fprintln(&g.output, must(query.SelectTransactionValue(j, query.Value(old.OrderNullableFieldsAt(query.NullableRightScope(j, bs)).TotalCents)).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(j, query.Value(old.OrderNullableFieldsAt(query.NullableRightScope(j, bs)).TotalCents)).All(ctx, tx))}))
 		case "cross":
 			j := query.TransactionCrossJoin(a, b)
-			fmt.Fprintln(&g.output, must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.RightScope(j, bs)).TotalCents))).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.RightScope(j, bs)).TotalCents))).All(ctx, tx))}))
 		case "scalar", "nullable_scalar", "membership", "exists":
 			v := query.SelectTransactionValue(b, query.Value(y)).Where(query.Greater(y, query.Param(y, int64(1)))).Limit(1)
 			locked := v.ForShare().NoWait()
@@ -73,7 +73,7 @@ func runTransactionCompositionOld(g *goldenCapture, kind string) {
 			if kind == "exists" {
 				q = q.Where(query.TransactionExistsQuery(a, locked))
 			}
-			fmt.Fprintln(&g.output, must(q.All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, tx))}))
 		default:
 			c := query.TransactionCorrelate(a, b)
 			is := query.InnerScope(c, bs)
@@ -88,7 +88,7 @@ func runTransactionCompositionOld(g *goldenCapture, kind string) {
 			}
 			if kind == "correlated" || kind == "nested" {
 				v := query.SelectTransactionCorrelatedValue(c, query.Value(inner)).Limit(1).ForShare().NoWait()
-				fmt.Fprintln(&g.output, must(query.SelectTransactionValue(a, query.TransactionCorrelatedScalarQuery(v)).Where(v.Exists(), query.TransactionInCorrelatedQuery(x, v)).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(a, query.TransactionCorrelatedScalarQuery(v)).Where(v.Exists(), query.TransactionInCorrelatedQuery(x, v)).All(ctx, tx))}))
 				return nil
 			}
 			r := query.SelectTransactionCorrelatedRecord(c, is).OrderBy(inner.Desc()).Limit(1).ForUpdate().Of(is).SkipLocked()
@@ -97,16 +97,16 @@ func runTransactionCompositionOld(g *goldenCapture, kind string) {
 			switch kind {
 			case "lateral_cross":
 				j := query.TransactionCrossJoinLateral(a, lat)
-				fmt.Fprintln(&g.output, must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.RightScope(j, ls)).TotalCents))).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.RightScope(j, ls)).TotalCents))).All(ctx, tx))}))
 			case "lateral_inner":
 				j := query.TransactionInnerJoinLateral(a, lat)
-				fmt.Fprintln(&g.output, must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.RightScope(j, ls)).TotalCents))).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(j, query.Nullable(query.Value(old.OrderFieldsAt(query.RightScope(j, ls)).TotalCents))).All(ctx, tx))}))
 			case "lateral_left":
 				j := query.TransactionLeftJoinLateral(a, lat)
-				fmt.Fprintln(&g.output, must(query.SelectTransactionValue(j, query.Value(old.OrderNullableFieldsAt(query.NullableRightScope(j, ls)).TotalCents)).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(j, query.Value(old.OrderNullableFieldsAt(query.NullableRightScope(j, ls)).TotalCents)).All(ctx, tx))}))
 			case "lateral_on":
 				j := query.TransactionLeftJoinLateral(a, lat, query.On(x, old.OrderFieldsAt(ls).TotalCents))
-				fmt.Fprintln(&g.output, must(query.SelectTransactionValue(j, query.Value(old.OrderNullableFieldsAt(query.NullableRightScope(j, ls)).TotalCents)).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectTransactionValue(j, query.Value(old.OrderNullableFieldsAt(query.NullableRightScope(j, ls)).TotalCents)).All(ctx, tx))}))
 			}
 		}
 		return nil
@@ -125,22 +125,22 @@ func runTransactionCompositionNew(g *goldenCapture, kind string) {
 		switch kind {
 		case "lift":
 			lifted := rowset.TransactionValueOf(rowset.Values(rowset.SelectScalar(rowset.From(models.Orders.Query().Limit(1)), expr.Select(expr.Value(models.Orders.TotalCents)))))
-			fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(a, rowset.TransactionScalarQuery(a, lifted)).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(a, rowset.TransactionScalarQuery(a, lifted)).All(ctx, tx))}))
 		case "inner":
 			j := rowset.TransactionInnerJoin(a, b, on)
-			fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.LeftScope(j, as), models.Orders.TotalCents)))).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.LeftScope(j, as), models.Orders.TotalCents)))).All(ctx, tx))}))
 		case "left":
 			j := rowset.TransactionLeftJoin(a, b, on)
-			fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(j, expr.Select(expr.AtNullable(rowset.NullableRightScope(j, bs), models.Orders.TotalCents))).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Select(expr.AtNullable(rowset.NullableRightScope(j, bs), models.Orders.TotalCents))).All(ctx, tx))}))
 		case "right":
 			j := rowset.TransactionRightJoin(a, b, on)
-			fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.RightScope(j, bs), models.Orders.TotalCents)))).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.RightScope(j, bs), models.Orders.TotalCents)))).All(ctx, tx))}))
 		case "full":
 			j := rowset.TransactionFullJoin(a, b, on)
-			fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(j, expr.Select(expr.AtNullable(rowset.NullableRightScope(j, bs), models.Orders.TotalCents))).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Select(expr.AtNullable(rowset.NullableRightScope(j, bs), models.Orders.TotalCents))).All(ctx, tx))}))
 		case "cross":
 			j := rowset.TransactionCrossJoin(a, b)
-			fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.RightScope(j, bs), models.Orders.TotalCents)))).All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.RightScope(j, bs), models.Orders.TotalCents)))).All(ctx, tx))}))
 		case "scalar", "nullable_scalar", "membership", "exists":
 			v := rowset.SelectTransactionValue(b, expr.Select(y)).Where(expr.Greater(y, expr.Select(y).Param(1))).Limit(1)
 			locked := rowset.TransactionScalarOf(v).ForShare().NoWait()
@@ -155,7 +155,7 @@ func runTransactionCompositionNew(g *goldenCapture, kind string) {
 			if kind == "exists" {
 				q = q.Where(rowset.TransactionExistsQuery(a, locked))
 			}
-			fmt.Fprintln(&g.output, must(q.All(ctx, tx)))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, tx))}))
 		default:
 			c := rowset.TransactionCorrelate(a, b)
 			is := rowset.TransactionInnerScope(c, bs)
@@ -170,7 +170,7 @@ func runTransactionCompositionNew(g *goldenCapture, kind string) {
 			}
 			if kind == "correlated" || kind == "nested" {
 				v := rowset.SelectTransactionCorrelatedScalar(c, expr.Select(inner)).Limit(1).ForShare().NoWait()
-				fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(a, rowset.TransactionCorrelatedScalarQuery(v)).Where(v.Exists(), rowset.TransactionInCorrelatedQuery(x, v)).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(a, rowset.TransactionCorrelatedScalarQuery(v)).Where(v.Exists(), rowset.TransactionInCorrelatedQuery(x, v)).All(ctx, tx))}))
 				return nil
 			}
 			r := rowset.SelectTransactionCorrelatedRecord(c, is).OrderBy(inner.Desc()).Limit(1).ForUpdate().Of(rowset.Target(is)).SkipLocked()
@@ -179,16 +179,16 @@ func runTransactionCompositionNew(g *goldenCapture, kind string) {
 			switch kind {
 			case "lateral_cross":
 				j := rowset.TransactionCrossJoinLateral(a, lat)
-				fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.RightScope(j, ls), models.Orders.TotalCents)))).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.RightScope(j, ls), models.Orders.TotalCents)))).All(ctx, tx))}))
 			case "lateral_inner":
 				j := rowset.TransactionInnerJoinLateral(a, lat)
-				fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.RightScope(j, ls), models.Orders.TotalCents)))).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Select(expr.At(rowset.RightScope(j, ls), models.Orders.TotalCents)))).All(ctx, tx))}))
 			case "lateral_left":
 				j := rowset.TransactionLeftJoinLateral(a, lat)
-				fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(j, expr.Select(expr.AtNullable(rowset.NullableRightScope(j, ls), models.Orders.TotalCents))).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Select(expr.AtNullable(rowset.NullableRightScope(j, ls), models.Orders.TotalCents))).All(ctx, tx))}))
 			case "lateral_on":
 				j := rowset.TransactionLeftJoinLateral(a, lat, rowset.On(x, expr.At(ls, models.Orders.TotalCents)))
-				fmt.Fprintln(&g.output, must(rowset.SelectTransactionValue(j, expr.Select(expr.AtNullable(rowset.NullableRightScope(j, ls), models.Orders.TotalCents))).All(ctx, tx)))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Select(expr.AtNullable(rowset.NullableRightScope(j, ls), models.Orders.TotalCents))).All(ctx, tx))}))
 			}
 		}
 		return nil

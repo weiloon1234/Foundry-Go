@@ -38,7 +38,7 @@ func TestStage6b1JoinGolden(t *testing.T) {
 			}
 			runJoinOld(before, kind)
 			runJoinNew(after, kind)
-			if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+			if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "joins_golden/1", before.output.String(), after.output.String()) {
 				t.Fatalf("join parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 			}
 		})
@@ -73,7 +73,7 @@ func runJoinOld(g *goldenCapture, kind string) {
 		lf := old.UserFieldsAt(ls)
 		rf := old.UserFieldsAt(rs)
 		got := must(query.Project(j, schema, query.Map(l, query.NullableRow(lf.Email).Value()), query.Map(r, query.NullableRow(rf.Email).Value()), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Left":
 		j := query.LeftJoin(a, b, on)
 		ls := query.LeftScope(j, a.Scope())
@@ -81,7 +81,7 @@ func runJoinOld(g *goldenCapture, kind string) {
 		lf := old.UserFieldsAt(ls)
 		rf := old.UserNullableFieldsAt(rs)
 		got := must(query.Project(j, schema, query.Map(l, query.NullableRow(lf.Email).Value()), query.Map(r, query.Value(rf.Email)), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Right":
 		j := query.RightJoin(a, b, on)
 		ls := query.NullableLeftScope(j, a.Scope())
@@ -89,7 +89,7 @@ func runJoinOld(g *goldenCapture, kind string) {
 		lf := old.UserNullableFieldsAt(ls)
 		rf := old.UserFieldsAt(rs)
 		got := must(query.Project(j, schema, query.Map(l, query.Value(lf.Email)), query.Map(r, query.NullableRow(rf.Email).Value()), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Full":
 		j := query.FullJoin(a, b, on)
 		ls := query.NullableLeftScope(j, a.Scope())
@@ -97,7 +97,7 @@ func runJoinOld(g *goldenCapture, kind string) {
 		lf := old.UserNullableFieldsAt(ls)
 		rf := old.UserNullableFieldsAt(rs)
 		got := must(query.Project(j, schema, query.Map(l, query.Value(lf.Email)), query.Map(r, query.Value(rf.Email)), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Cross":
 		j := query.CrossJoin(a, b)
 		ls := query.LeftScope(j, a.Scope())
@@ -105,7 +105,7 @@ func runJoinOld(g *goldenCapture, kind string) {
 		lf := old.UserFieldsAt(ls)
 		rf := old.UserFieldsAt(rs)
 		got := must(query.Project(j, schema, query.Map(l, query.NullableRow(lf.Email).Value()), query.Map(r, query.NullableRow(rf.Email).Value()), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Chain":
 		base := query.LeftJoin(a, b, on)
 		c := query.As[joinC](old.QueryUsers(), "c")
@@ -115,7 +115,7 @@ func runJoinOld(g *goldenCapture, kind string) {
 		lf := old.UserFieldsAt(ls)
 		rf := old.UserNullableFieldsAt(rs)
 		got := must(query.Project(j, schema, query.Map(l, query.NullableRow(lf.Email).Value()), query.Map(r, query.Value(rf.Email)), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	}
 }
 func runJoinNew(g *goldenCapture, kind string) {
@@ -135,7 +135,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		rf := expr.At(rs, models.Users.Email)
 		nick := expr.At(rs, models.Users.Nickname)
 		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Left":
 		j := rowset.LeftJoin(a, b, on)
 		ls := rowset.LeftScope(j, rowset.Scope(a))
@@ -144,7 +144,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		rf := expr.AtNullable(rs, models.Users.Email)
 		nick := expr.AtNullableValue(rs, models.Users.Nickname)
 		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Select(rf)), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Right":
 		j := rowset.RightJoin(a, b, on)
 		ls := rowset.NullableLeftScope(j, rowset.Scope(a))
@@ -153,7 +153,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		rf := expr.At(rs, models.Users.Email)
 		nick := expr.At(rs, models.Users.Nickname)
 		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.Select(lf)), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Full":
 		j := rowset.FullJoin(a, b, on)
 		ls := rowset.NullableLeftScope(j, rowset.Scope(a))
@@ -162,7 +162,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		rf := expr.AtNullable(rs, models.Users.Email)
 		nick := expr.AtNullableValue(rs, models.Users.Nickname)
 		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.Select(lf)), rowset.MapSelected(schema.RightEmail, expr.Select(rf)), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Cross":
 		j := rowset.CrossJoin(a, b)
 		ls := rowset.LeftScope(j, rowset.Scope(a))
@@ -171,7 +171,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		rf := expr.At(rs, models.Users.Email)
 		nick := expr.At(rs, models.Users.Nickname)
 		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Chain":
 		base := rowset.LeftJoin(a, b, on)
 		c := rowset.As[joinC](models.Users.Query(), "c")
@@ -182,6 +182,6 @@ func runJoinNew(g *goldenCapture, kind string) {
 		rf := expr.AtNullable(rs, models.Users.Email)
 		nick := expr.AtNullableValue(rs, models.Users.Nickname)
 		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Select(rf)), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, got)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	}
 }

@@ -1,0 +1,33 @@
+{
+  "Identity": {
+    "model": "profiles",
+    "key": {
+      "k": "string",
+      "t": "018f0000-0000-7000-8000-000000000001"
+    }
+  },
+  "Statements": {
+    "read": {
+      "SQL": "SELECT \"profiles\".\"id\", \"profiles\".\"name\", \"profiles\".\"deleted_at\" FROM \"profiles\" WHERE (\"profiles\".\"name\" = $1) AND (\"profiles\".\"deleted_at\" IS NULL)",
+      "Arguments": [
+        "Consumer"
+      ]
+    },
+    "trashed": {
+      "SQL": "SELECT \"profiles\".\"id\", \"profiles\".\"name\", \"profiles\".\"deleted_at\" FROM \"profiles\"",
+      "Arguments": null
+    }
+  },
+  "Description": "",
+  "Subject": {
+    "Scope": "51fb4a395b1730ac16b6a577bfefb8c5b8ad813f832c301e1dc5e22d05b67a74",
+    "Key": "8206eb0eefb4a78e2314a3ea85cfbc36bb4fdb6ae6fdc3d6a1e72b2dd092971d",
+    "Identity": {
+      "key": {
+        "k": "string",
+        "t": "018f0000-0000-7000-8000-000000000001"
+      },
+      "model": "profiles"
+    }
+  }
+}

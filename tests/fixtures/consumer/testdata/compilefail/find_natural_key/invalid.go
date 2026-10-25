@@ -5,4 +5,4 @@ import (
 	"foundry.test/consumer/models"
 )
 
-var invalid, _ = models.QueryCountries().Find(context.Background(), nil, models.StatusActive)
+var invalid, _ = models.Countries.Find(context.Background(), nil, models.StatusActive)

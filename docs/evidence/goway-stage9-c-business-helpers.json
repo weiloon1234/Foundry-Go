@@ -1,0 +1,219 @@
+{
+  "slice": "stage9-c-business-assignment-helpers",
+  "base": "0ada5ac70cf54c2b172cfd1c712ff1def53d12a4",
+  "layer": "Added on top of accepted barrier part 1; existing barrier delta preserved.",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r13",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "api": [
+    "func (u models.User) CurrentEmailAssignment() orm.Assignment[models.User]",
+    "func (p catalog.Product) CreatorAssignment() orm.Assignment[models.User]"
+  ],
+  "migrated_callers": [
+    "tests/fixtures/consumer/internal/queryfixture/postgres.go:64"
+  ],
+  "tests": {
+    "file": "tests/fixtures/consumer/business_assignments_test.go",
+    "names": [
+      "TestCurrentEmailAssignmentSuppliesExactInput",
+      "TestCreatorAssignmentSuppliesExactUserKey"
+    ],
+    "assertions": [
+      "Nonempty and empty email remain explicitly present with their exact captured values.",
+      "Two concrete User IDs remain explicitly present with their exact captured values.",
+      "Mutating the source User or Product after constructing the assignment does not change captured input.",
+      "Assignments have the concrete User owner and are inspected via existing real Creating-hook/rollback harness."
+    ]
+  },
+  "checks": [
+    {
+      "name": "build",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./models",
+        "./catalog",
+        "./internal/queryfixture"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/business-helper-accept/build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "gofmt",
+      "cwd": ".",
+      "command": [
+        "gofmt",
+        "-w / -l",
+        "four changed Go files"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/business-helper-accept/gofmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "vet",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./models",
+        "./catalog",
+        "./internal/queryfixture",
+        "."
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/business-helper-accept/vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-timeout=20m",
+        "-skip",
+        "^TestInvalidPublicContractsFailCompilation$",
+        "./models",
+        "./catalog",
+        "./internal/queryfixture",
+        "."
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/business-helper-accept/tests.log",
+      "log_sha256": "edbcec75fbf9816654cf17fe11f244b7aeee368d2f975a00263bec897cf3a536"
+    },
+    {
+      "name": "race",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-timeout=20m",
+        "-skip",
+        "^TestInvalidPublicContractsFailCompilation$",
+        "./models",
+        "./catalog",
+        "./internal/queryfixture",
+        "."
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/business-helper-accept/race.log",
+      "log_sha256": "96caaf512f6e7ea69e407d85cfe475046f7dd61c9cf72f275fdf96eb460c1985"
+    },
+    {
+      "name": "generate-check",
+      "cwd": ".",
+      "command": [
+        "make",
+        "generate-check"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/business-helper-accept/generate-check.log",
+      "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4"
+    },
+    {
+      "name": "catalogue",
+      "cwd": ".",
+      "command": [
+        "python3",
+        "-B",
+        "tools/goway_catalogue.py"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/business-helper-accept/catalogue.log",
+      "log_sha256": "f72d9b02dd00693f8720e4fe1fcbf9e4686058c6d1f893439e2f4dbb6fdb26cd"
+    },
+    {
+      "name": "docs-check",
+      "cwd": ".",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/business-helper-accept/docs-check.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "name": "diff-check",
+      "cwd": ".",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "result": "PASS",
+      "exit_code": 0,
+      "log": "/private/tmp/business-helper-accept/diff-check.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "retained_helpers": [
+    "models.User.CurrentEmailDraft",
+    "catalog.Product.CreatorDraft"
+  ],
+  "retained_helper_files_sha256": {
+    "tests/fixtures/consumer/models/models.go": "57df02ef42cd427f93d9132ee589d54f83f21fb6abbb00af79ce863642d9788e",
+    "tests/fixtures/consumer/catalog/product.go": "4b9c3f03c63dee65b6b61906562c33b1ce716beabc9f618ccaef3d0326819524"
+  },
+  "remaining_callers_owned_by_lane_d": [
+    "tests/fixtures/consumer/generated_test.go:109",
+    "tests/fixtures/consumer/package_graph_test.go:45"
+  ],
+  "new_shared_test_file": "tests/fixtures/consumer/business_assignments_test.go; reuses existing inspectInsertAssignments without editing lane D test files or duplicating the driver.",
+  "framework_surface_changes": [],
+  "footprint_budget_changes": [],
+  "catalogue_changes_this_slice": [],
+  "generation_changes_this_slice": [],
+  "verification_limits": "Live PostgreSQL opt-in not enabled. No editor/integration run claimed. Compiler-case sources are unchanged by this helper slice; their accepted barrier results remain separately recorded.",
+  "source_sha256": {
+    "tests/fixtures/consumer/models/business_assignments.go": "942f879e9862e8f7866ccf37a27e3d8dcd8d5ba2e56e5f597a52c0118ba0cc47",
+    "tests/fixtures/consumer/catalog/business_assignments.go": "04bb8edc24b7aa6090db304bc40053e089035da723a77203640bac24a9ba9444",
+    "tests/fixtures/consumer/business_assignments_test.go": "58ce44116dd69a713eb4edd5ca23cd269b0b2d662b0767eaa7843e24a1c0b30d",
+    "tests/fixtures/consumer/internal/queryfixture/postgres.go": "a3ef30c9955f9f63288d48de3debe83235273e03bd7fe49464b5803bdb16ff05",
+    "tests/fixtures/consumer/models/README.md": "162b52e54eb41ddeb9442fb5bef7d0b27f2011abf1e7054cdc85cfe4ef83f747"
+  },
+  "report_sha256": "90fd32db2163df729bd3015034ef673ba48d298de08fb1727c555673fee14a34",
+  "committed": false,
+  "integration_batch7g": {
+    "base": "7e4616df",
+    "evidence": "docs/evidence/goway-batch7g-integration.json",
+    "source_sha256": {
+      "tests/fixtures/consumer/business_assignments_test.go": "58ce44116dd69a713eb4edd5ca23cd269b0b2d662b0767eaa7843e24a1c0b30d",
+      "tests/fixtures/consumer/catalog/business_assignments.go": "04bb8edc24b7aa6090db304bc40053e089035da723a77203640bac24a9ba9444",
+      "tests/fixtures/consumer/catalog/product.go": "4b9c3f03c63dee65b6b61906562c33b1ce716beabc9f618ccaef3d0326819524",
+      "tests/fixtures/consumer/internal/queryfixture/postgres.go": "a3ef30c9955f9f63288d48de3debe83235273e03bd7fe49464b5803bdb16ff05",
+      "tests/fixtures/consumer/models/README.md": "162b52e54eb41ddeb9442fb5bef7d0b27f2011abf1e7054cdc85cfe4ef83f747",
+      "tests/fixtures/consumer/models/business_assignments.go": "942f879e9862e8f7866ccf37a27e3d8dcd8d5ba2e56e5f597a52c0118ba0cc47",
+      "tests/fixtures/consumer/models/models.go": "57df02ef42cd427f93d9132ee589d54f83f21fb6abbb00af79ce863642d9788e"
+    }
+  },
+  "pre_integration_batch7g_hashes": {
+    "retained_helper_files_sha256": {
+      "tests/fixtures/consumer/models/models.go": "57df02ef42cd427f93d9132ee589d54f83f21fb6abbb00af79ce863642d9788e",
+      "tests/fixtures/consumer/catalog/product.go": "4b9c3f03c63dee65b6b61906562c33b1ce716beabc9f618ccaef3d0326819524"
+    },
+    "source_sha256": {
+      "tests/fixtures/consumer/models/business_assignments.go": "942f879e9862e8f7866ccf37a27e3d8dcd8d5ba2e56e5f597a52c0118ba0cc47",
+      "tests/fixtures/consumer/catalog/business_assignments.go": "04bb8edc24b7aa6090db304bc40053e089035da723a77203640bac24a9ba9444",
+      "tests/fixtures/consumer/business_assignments_test.go": "58ce44116dd69a713eb4edd5ca23cd269b0b2d662b0767eaa7843e24a1c0b30d",
+      "tests/fixtures/consumer/internal/queryfixture/postgres.go": "a562be69e470e9957eb3633e75da178bebb4a3fd570dcc787d0c3fc2d12e7ab6",
+      "tests/fixtures/consumer/models/README.md": "162b52e54eb41ddeb9442fb5bef7d0b27f2011abf1e7054cdc85cfe4ef83f747"
+    }
+  }
+}

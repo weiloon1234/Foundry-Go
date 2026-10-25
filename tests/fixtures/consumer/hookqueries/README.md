@@ -7,4 +7,4 @@ persisted `orm.Changes[Member]`; `Trace.ORMChanges` records those snapshots.
 The ORM tests retain defaults, omitted/null/value inputs, transactional log writes,
 locked originals, hook vetoes, nested savepoints and after-commit ordering. Local
 and observer after-commit errors retain identity without invoking formatting.
-Generated declarations remain only for the integration barrier.
+The legacy hook factory and generated-model directives are removed.

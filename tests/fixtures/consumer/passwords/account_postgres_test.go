@@ -12,7 +12,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
@@ -51,8 +53,8 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if err != nil {
 			return err
 		}
-		q, f := passwords.QueryPasswordAccounts(), passwords.AccountFields()
-		loaded, err := q.RequireFind(ctx, tx, account.ID)
+		q, f := passwords.AccountRecords, passwords.AccountRecords
+		loaded, err := q.Require(ctx, tx, account.ID)
 		if err != nil {
 			return err
 		}
@@ -69,7 +71,8 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if strings.Contains(string(encoded), "$argon2id$") || strings.Contains(string(encoded), "exact password") {
 			return errors.New("model JSON disclosed password data")
 		}
-		projection, err := passwords.ProjectCredentialProjection(q).SelectDigest(query.Value(f.Digest)).Query().RequireFirst(ctx, tx)
+		projectionQuery := rows.Select(rows.From(q.Query()), passwords.CredentialRows, rows.Map(passwords.CredentialRows.Digest, expr.Value(f.Digest)))
+		projection, err := rows.Read(projectionQuery).RequireFirst(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -90,7 +93,7 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if _, err := passwords.ReplaceHash(ctx, tx, account, account.Digest); !errors.Is(err, database.NotFound) {
 			return errors.New("stale password replacement overwrote new hash")
 		}
-		updated, err = q.Update(ctx, tx, account.ID, passwords.AccountDraft{}.SetBackup(next))
+		updated, err = q.Update(ctx, tx, account.ID, f.Backup.Set(next))
 		if err != nil {
 			return err
 		}
@@ -98,27 +101,35 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if !ok || backup != next {
 			return errors.New("nullable password hydration changed value")
 		}
-		updated, err = q.Update(ctx, tx, account.ID, passwords.AccountDraft{}.ClearBackup())
+		updated, err = q.Update(ctx, tx, account.ID, f.Backup.SetNull())
 		if err != nil {
 			return err
 		}
 		if !updated.Backup.IsNull() {
 			return errors.New("explicit hash NULL lost")
 		}
-		changes, err := passwords.CompareAccount(value.Set(account), value.Set(updated), passwords.AccountDraft{}.SetDigest(next))
+		changes, err := orm.Compare(q.Table, value.Set(account), value.Set(updated), f.Digest.Set(next))
+		if err != nil {
+			return err
+		}
+		digestChange, err := orm.ChangeOf(changes, f.Digest)
+		if err != nil {
+			return err
+		}
+		idChange, err := orm.ChangeOf(changes, f.Key())
 		if err != nil {
 			return err
 		}
 		// The shared audit boundary must redact by codec, although the name is Digest.
-		captured, err := record.CaptureField[passwords.Account]("digest", password.Codec(), changes.Fields().Digest, record.Automatic)
+		captured, err := record.CaptureField[passwords.Account]("digest", password.Codec(), digestChange, record.Automatic)
 		if err != nil {
 			return err
 		}
-		builder, err := record.NewBuilder(account.FoundryReference(), lifecycle.Update, "id", record.Automatic)
+		builder, err := record.NewBuilder(passwords.AccountIdentity.ReferenceOf(account), lifecycle.Update, "id", record.Automatic)
 		if err != nil {
 			return err
 		}
-		id, err := record.CaptureField[passwords.Account]("id", codec.ID[passwords.Account](), changes.Fields().ID, record.Automatic)
+		id, err := record.CaptureField[passwords.Account]("id", codec.ID[passwords.Account](), idChange, record.Automatic)
 		if err != nil {
 			return err
 		}
@@ -151,18 +162,18 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if strings.Contains(payload, "$argon2id$") {
 			return errors.New("audit capture disclosed hash")
 		}
-		if _, err := q.OrderBy(f.Digest.Asc()).CursorPaginate(ctx, tx, query.CursorRequest[passwords.Account]{Size: 1}); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.CursorPaginate(ctx, tx, q.Query().OrderBy(f.Digest.Asc()), orm.CursorRequest[passwords.Account]{Size: 1}); !errors.Is(err, fault.Invalid) {
 			return errors.New("model cursor accepted sensitive sort key")
 		}
-		result := query.CursorFor(passwords.ProjectCredentialProjection(q).SelectDigest(query.Value(f.Digest)).Query())
-		rf := passwords.CredentialProjectionFieldsAt(result.Scope())
-		if _, err := result.OrderBy(rf.Digest.Asc()).UniqueBy(rf.Digest.Group()).Compile(); !errors.Is(err, fault.Invalid) {
+		result := rows.CursorFor(rows.RecordOf(projectionQuery))
+		rf := rows.At(result.Scope(), passwords.CredentialRows.Digest)
+		if _, err := rows.CompileCursor(result.OrderBy(rf.Asc()).UniqueBy(expr.Group(rf))); !errors.Is(err, fault.Invalid) {
 			return errors.New("projection cursor accepted sensitive key")
 		}
-		if _, err := q.Update(ctx, tx, account.ID, passwords.AccountDraft{}.SetDigest(password.Hash{})); !errors.Is(err, fault.Invalid) {
+		if _, err := q.Update(ctx, tx, account.ID, f.Digest.Set(password.Hash{})); !errors.Is(err, fault.Invalid) {
 			return errors.New("zero hash accepted")
 		}
-		preserved, err := q.RequireFind(ctx, tx, account.ID)
+		preserved, err := q.Require(ctx, tx, account.ID)
 		if err != nil {
 			return err
 		}

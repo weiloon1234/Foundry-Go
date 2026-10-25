@@ -67,19 +67,19 @@ func TestReportProjectionGolden(t *testing.T) {
 						switch operation {
 						case "compile":
 							s := must(q.Compile())
-							fmt.Fprintln(&g.output, s.SQL(), s.Arguments())
+							fmt.Fprintln(&g.output, oracleSnapshot([]any{s.SQL(), s.Arguments()}))
 						case "count":
-							fmt.Fprintln(&g.output, must(q.Count(t.Context(), db)))
+							fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.Count(t.Context(), db))}))
 						case "each":
-							if err := q.Each(t.Context(), db, func(r reportAmount) error { fmt.Fprintln(&g.output, r); return nil }); err != nil {
+							if err := q.Each(t.Context(), db, func(r reportAmount) error { fmt.Fprintln(&g.output, oracleSnapshot([]any{r})); return nil }); err != nil {
 								t.Fatal(err)
 							}
 						case "page":
 							p, err := q.Paginate(t.Context(), db, orm.Page(1, 1))
-							fmt.Fprintln(&g.output, p, err != nil)
+							fmt.Fprintln(&g.output, oracleSnapshot([]any{p, err != nil}))
 						case "simple":
 							p, err := q.SimplePaginate(t.Context(), db, orm.Page(1, 1))
-							fmt.Fprintln(&g.output, p, err != nil)
+							fmt.Fprintln(&g.output, oracleSnapshot([]any{p, err != nil}))
 						}
 					} else {
 						f := expr.Value(models.Orders.TotalCents)
@@ -100,24 +100,24 @@ func TestReportProjectionGolden(t *testing.T) {
 						switch operation {
 						case "compile":
 							s := must(rowset.Compile(q))
-							fmt.Fprintln(&g.output, s.SQL(), s.Arguments())
+							fmt.Fprintln(&g.output, oracleSnapshot([]any{s.SQL(), s.Arguments()}))
 						case "count":
-							fmt.Fprintln(&g.output, must(rowset.Count(t.Context(), db, q)))
+							fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Count(t.Context(), db, q))}))
 						case "each":
-							if err := rowset.Each(t.Context(), db, q, func(r reportAmount) error { fmt.Fprintln(&g.output, r); return nil }); err != nil {
+							if err := rowset.Each(t.Context(), db, q, func(r reportAmount) error { fmt.Fprintln(&g.output, oracleSnapshot([]any{r})); return nil }); err != nil {
 								t.Fatal(err)
 							}
 						case "page":
 							p, err := rowset.Paginate(t.Context(), db, q, orm.Page(1, 1))
-							fmt.Fprintln(&g.output, p, err != nil)
+							fmt.Fprintln(&g.output, oracleSnapshot([]any{p, err != nil}))
 						case "simple":
 							p, err := rowset.SimplePaginate(t.Context(), db, q, orm.Page(1, 1))
-							fmt.Fprintln(&g.output, p, err != nil)
+							fmt.Fprintln(&g.output, oracleSnapshot([]any{p, err != nil}))
 						}
 					}
 					transcripts = append(transcripts, g.output.String())
 				}
-				if transcripts[0] != transcripts[1] {
+				if !oracleEqual(t, "report_projection_golden/1", transcripts[0], transcripts[1]) {
 					t.Fatal(goldenDiff(transcripts[0], transcripts[1]))
 				}
 			})
@@ -152,8 +152,8 @@ func TestReportFilterAdaptersGolden(t *testing.T) {
 	for i, p := range oldPs {
 		a := must(old.QueryUsers().Where(p).Compile())
 		b := must(rowset.Compile(rowset.FromModel(models.Users.Query()).Where(newPs[i])))
-		before, after := fmt.Sprint(a.SQL(), a.Arguments()), fmt.Sprint(b.SQL(), b.Arguments())
-		if before != after {
+		before, after := oracleSnapshot([]any{a.SQL(), a.Arguments()}), oracleSnapshot([]any{b.SQL(), b.Arguments()})
+		if !oracleEqual(t, "report_projection_golden/filters", before, after) {
 			t.Fatal(goldenDiff(before, after))
 		}
 	}

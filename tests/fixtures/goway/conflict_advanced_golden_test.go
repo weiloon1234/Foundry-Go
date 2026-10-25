@@ -19,6 +19,7 @@ type conflictLookup struct{}
 
 func TestAdvancedConflictOldAndNewAgree(t *testing.T) {
 	var transcripts []string
+	var statements []string
 	for _, old := range []bool{true, false} {
 		stored := [][]driver.Value{{int64(1), "stored", true, nil, "3.00"}}
 		capture := &goldenCapture{scriptedColumns: []string{"code", "name", "enabled", "note", "amount"}, scriptedBatches: [][][]driver.Value{stored, stored, stored, stored}}
@@ -81,11 +82,12 @@ func TestAdvancedConflictOldAndNewAgree(t *testing.T) {
 			check(err)
 		}
 		transcripts = append(transcripts, capture.output.String())
+		statements = append(statements, capture.sql.String())
 	}
-	if transcripts[0] != transcripts[1] {
+	if !oracleEqual(t, "conflict_advanced_golden/1", transcripts[0], transcripts[1]) {
 		t.Fatalf("advanced conflict parity\n%s", goldenDiff(transcripts[0], transcripts[1]))
 	}
-	if !strings.Contains(transcripts[1], `O''Reilly`) || !strings.Contains(transcripts[1], `"excluded"."amount"`) {
+	if !strings.Contains(statements[1], `O''Reilly`) || !strings.Contains(statements[1], `"excluded"."amount"`) {
 		t.Fatal("missing schema literal or proposed calculation", transcripts[1])
 	}
 }

@@ -10,7 +10,7 @@ import (
 
 	"foundry.test/consumer/httppagination"
 	"foundry.test/consumer/mutatorqueries"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -19,7 +19,7 @@ import (
 
 type cursorService struct {
 	member mutatorqueries.Member
-	token  query.Cursor[mutatorqueries.Member]
+	token  orm.Cursor[mutatorqueries.Member]
 	t      *testing.T
 }
 
@@ -31,7 +31,7 @@ func (s cursorService) CursorList(ctx context.Context, in httppagination.CursorL
 	if in.Page.Size != 20 || !in.Page.After.IsSet() || in.Page.Before.IsSet() {
 		s.t.Error("typed cursor request lost")
 	}
-	return pagination.MapCursorPage(ctx, query.CursorPage[mutatorqueries.Member]{Items: []mutatorqueries.Member{s.member}, Size: in.Page.Size, Next: value.Set(s.token)}, httppagination.PresentMember)
+	return pagination.MapCursorPage(ctx, orm.CursorPage[mutatorqueries.Member]{Items: []mutatorqueries.Member{s.member}, Size: in.Page.Size, Next: value.Set(s.token)}, httppagination.PresentMember)
 }
 func TestGeneratedCursorEndpointPreservesModelAndDTOOwners(t *testing.T) {
 	t.Parallel()
@@ -40,7 +40,7 @@ func TestGeneratedCursorEndpointPreservesModelAndDTOOwners(t *testing.T) {
 		t.Fatal(err)
 	}
 	wire := `{"v":1,"scope":"` + strings.Repeat("a", 64) + `","values":[{"k":"string","t":"` + id.String() + `"}]}`
-	token, err := query.ParseCursor[mutatorqueries.Member](base64.RawURLEncoding.EncodeToString([]byte(wire)))
+	token, err := orm.ParseCursor[mutatorqueries.Member](base64.RawURLEncoding.EncodeToString([]byte(wire)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestGeneratedCursorEndpointPreservesModelAndDTOOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	location, err := httppagination.CursorList.URL(t.Context(), foundryhttp.NoPath{}, httppagination.MemberFilters{Email: value.Set("member+filter@example.test")}, query.CursorRequest[mutatorqueries.Member]{Size: 20, After: value.Set(token)})
+	location, err := httppagination.CursorList.URL(t.Context(), foundryhttp.NoPath{}, httppagination.MemberFilters{Email: value.Set("member+filter@example.test")}, orm.CursorRequest[mutatorqueries.Member]{Size: 20, After: value.Set(token)})
 	if err != nil {
 		t.Fatal(err)
 	}

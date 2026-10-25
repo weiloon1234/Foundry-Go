@@ -48,15 +48,17 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(pr.Peers.Where(tf.Rank.Gt(0)).WherePivot(vf.Role.Eq("admin")).OrderByPivot(vf.Role.Desc()).OrderBy(tf.Name.Asc()).With(tr.Parent).WithPivot(vr.Parent)).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(pr.Peers.Where(tf.Rank.Gt(0)).WherePivot(vf.Role.Eq("admin")).OrderByPivot(vf.Role.Desc()).OrderBy(tf.Name.Asc()).With(tr.Parent).WithPivot(vr.Parent)).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Peers.Where(j.Targets.Rank.Gt(0)).WherePivot(j.Pivots.Role.Eq("admin")).OrderByPivot(j.Pivots.Role.Desc()).OrderBy(j.Targets.Name.Asc()).With(j.TargetParent).WithPivot(j.PivotParent))
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Peers.Where(j.Targets.Rank.Gt(0)).WherePivot(j.Pivots.Role.Eq("admin")).OrderByPivot(j.Pivots.Role.Desc()).OrderBy(j.Targets.Name.Asc()).With(j.TargetParent).WithPivot(j.PivotParent))
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			}
 			if err := db.Close(ctx); err != nil {
 				t.Fatal(err)
@@ -65,7 +67,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/1", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -77,15 +79,17 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(pr.Targets).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(pr.Targets).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.TargetsThrough)
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.TargetsThrough)
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			}
 			if err := db.Close(ctx); err != nil {
 				t.Fatal(err)
@@ -94,7 +98,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/2", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -106,14 +110,22 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(pr.ChosenThrough).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(pr.ChosenThrough).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				for _, parent := range hydrated {
+					g.show(parent.ID)
+					g.showHydrated(parent.ChosenThrough)
+				}
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.ChosenThrough)
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.ChosenThrough)
 				if err != nil {
 					t.Fatal(err)
+				}
+				for _, parent := range hydrated {
+					g.show(parent.ID)
+					g.showHydrated(parent.Chosen)
 				}
 			}
 			if err := db.Close(ctx); err != nil {
@@ -123,7 +135,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/3", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -135,15 +147,17 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(pr.Chosen.OfMany(tf.Rank.Desc())).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(pr.Chosen.OfMany(tf.Rank.Desc())).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Chosen.OfMany(j.Targets.Rank.Desc()))
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Chosen.OfMany(j.Targets.Rank.Desc()))
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			}
 			if err := db.Close(ctx); err != nil {
 				t.Fatal(err)
@@ -152,7 +166,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/4", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -164,15 +178,17 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(pr.Chosen.LatestOfMany()).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(pr.Chosen.LatestOfMany()).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Chosen.LatestOfMany())
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Chosen.LatestOfMany())
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			}
 			if err := db.Close(ctx); err != nil {
 				t.Fatal(err)
@@ -181,7 +197,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/5", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -193,15 +209,17 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(pr.Chosen.OldestOfMany()).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(pr.Chosen.OldestOfMany()).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Chosen.OldestOfMany())
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Chosen.OldestOfMany())
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			}
 			if err := db.Close(ctx); err != nil {
 				t.Fatal(err)
@@ -210,7 +228,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/6", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -222,14 +240,22 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(pr.ChosenThrough.LatestOfMany()).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(pr.ChosenThrough.LatestOfMany()).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				for _, parent := range hydrated {
+					g.show(parent.ID)
+					g.showHydrated(parent.ChosenThrough)
+				}
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.ChosenThrough.LatestOfMany())
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.ChosenThrough.LatestOfMany())
 				if err != nil {
 					t.Fatal(err)
+				}
+				for _, parent := range hydrated {
+					g.show(parent.ID)
+					g.showHydrated(parent.Chosen)
 				}
 			}
 			if err := db.Close(ctx); err != nil {
@@ -239,7 +265,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/7", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -251,15 +277,17 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(pr.MorphChildren).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(pr.MorphChildren).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.MorphChildren)
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.MorphChildren)
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			}
 			if err := db.Close(ctx); err != nil {
 				t.Fatal(err)
@@ -268,7 +296,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/8", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -280,15 +308,17 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(pr.MorphChild).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(pr.MorphChild).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.MorphChild)
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.MorphChild)
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			}
 			if err := db.Close(ctx); err != nil {
 				t.Fatal(err)
@@ -297,7 +327,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/9", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -309,15 +339,17 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				pf, tf, vf := old.ParentFields(), old.TargetFields(), old.PivotFields()
 				pr, tr, vr := old.ParentRelations(), old.TargetRelations(), old.PivotRelations()
 				_, _, _, _, _, _ = pf, tf, vf, pr, tr, vr
-				_, err := old.QueryJoinedParents().With(query.MorphToMany(pf.ID, vf.ParentID, vf.Kind, vf.TargetID, tf.ID).Bind("Peers", old.QueryJoinedParents().Query, old.QueryJoinedTargets().Query, old.QueryJoinedPivots().Query, func(m old.Parent) relation.Through[old.Target, old.Pivot] { return m.Peers }, func(m old.Parent, v relation.Through[old.Target, old.Pivot]) old.Parent { m.Peers = v; return m })).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
+				hydrated, err := old.QueryJoinedParents().With(query.MorphToMany(pf.ID, vf.ParentID, vf.Kind, vf.TargetID, tf.ID).Bind("Peers", old.QueryJoinedParents().Query, old.QueryJoinedTargets().Query, old.QueryJoinedPivots().Query, func(m old.Parent) relation.Through[old.Target, old.Pivot] { return m.Peers }, func(m old.Parent, v relation.Through[old.Target, old.Pivot]) old.Parent { m.Peers = v; return m })).Load(ctx, db, []old.Parent{{ID: 1}, {ID: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			} else {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.MorphPeers)
+				hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.MorphPeers)
 				if err != nil {
 					t.Fatal(err)
 				}
+				g.showHydrated(hydrated)
 			}
 			if err := db.Close(ctx); err != nil {
 				t.Fatal(err)
@@ -326,7 +358,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				t.Fatal("statement count", g.statements)
 			}
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "relations_joined_golden/10", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	})
@@ -338,28 +370,32 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				db := g.open(ctx)
 				if side == 0 {
 					if inverse {
-						_, err := old.QueryJoinedTargets().With(old.TargetRelations().Inverse).Load(ctx, db, []old.Target{{ID: 10}})
+						hydrated, err := old.QueryJoinedTargets().With(old.TargetRelations().Inverse).Load(ctx, db, []old.Target{{ID: 10}})
 						if err != nil {
 							t.Fatal(err)
 						}
+						g.showHydrated(hydrated)
 					} else {
 						r := old.PivotRelations()
-						_, err := old.QueryJoinedPivots().With(r.MorphParent, r.MorphTarget).Load(ctx, db, []old.Pivot{{ID: 100, ParentID: value.Of(int64(1)), Kind: "parent"}, {ID: 101, ParentID: value.Of(int64(10)), Kind: "target"}})
+						hydrated, err := old.QueryJoinedPivots().With(r.MorphParent, r.MorphTarget).Load(ctx, db, []old.Pivot{{ID: 100, ParentID: value.Of(int64(1)), Kind: "parent"}, {ID: 101, ParentID: value.Of(int64(10)), Kind: "target"}})
 						if err != nil {
 							t.Fatal(err)
 						}
+						g.showHydrated(hydrated)
 					}
 				} else {
 					if inverse {
-						_, err := orm.Load(ctx, db, []j.Target{{ID: 10}}, j.Inverse)
+						hydrated, err := orm.Load(ctx, db, []j.Target{{ID: 10}}, j.Inverse)
 						if err != nil {
 							t.Fatal(err)
 						}
+						g.showHydrated(hydrated)
 					} else {
-						_, err := orm.Load(ctx, db, []j.Pivot{{ID: 100, ParentID: value.Of(int64(1)), Kind: "parent"}, {ID: 101, ParentID: value.Of(int64(10)), Kind: "target"}}, j.MorphParent, j.MorphTarget)
+						hydrated, err := orm.Load(ctx, db, []j.Pivot{{ID: 100, ParentID: value.Of(int64(1)), Kind: "parent"}, {ID: 101, ParentID: value.Of(int64(10)), Kind: "target"}}, j.MorphParent, j.MorphTarget)
 						if err != nil {
 							t.Fatal(err)
 						}
+						g.showHydrated(hydrated)
 					}
 				}
 				if err := db.Close(ctx); err != nil {
@@ -373,7 +409,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 					t.Fatal("statements", g.statements)
 				}
 			}
-			if captures[0].output.String() != captures[1].output.String() {
+			if !oracleEqual(t, "relations_joined_golden/11", captures[0].output.String(), captures[1].output.String()) {
 				t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 			}
 		})
@@ -424,7 +460,7 @@ func TestJoinedExistenceSQLMatchesOldAPI(t *testing.T) {
 					t.Fatal("existence statement count", g.statements)
 				}
 			}
-			if captures[0].output.String() != captures[1].output.String() {
+			if !oracleEqual(t, "relations_joined_golden/12", captures[0].output.String(), captures[1].output.String()) {
 				t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 			}
 		})

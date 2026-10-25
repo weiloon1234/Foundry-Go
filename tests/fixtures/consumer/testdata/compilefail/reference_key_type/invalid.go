@@ -4,4 +4,4 @@ import (
 	"foundry.test/consumer/mutatorqueries"
 )
 
-var wrong string = (mutatorqueries.Member{}).FoundryReference().Key()
+var wrong string = mutatorqueries.MemberIdentity.ReferenceOf(mutatorqueries.Member{}).Key()

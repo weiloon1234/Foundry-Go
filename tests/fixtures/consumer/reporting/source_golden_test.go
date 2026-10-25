@@ -1,6 +1,7 @@
 package reporting
 
 import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -19,7 +20,7 @@ type reportStatement interface {
 
 func assertReportStatement(t *testing.T, got, want reportStatement) {
 	t.Helper()
-	if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) {
+	if want.SQL() != got.SQL() || !reflect.DeepEqual(want.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/reporting/source_golden_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 		t.Fatalf("report source changed\nnew: %s %v\nold: %s %v", got.SQL(), got.Arguments(), want.SQL(), want.Arguments())
 	}
 }

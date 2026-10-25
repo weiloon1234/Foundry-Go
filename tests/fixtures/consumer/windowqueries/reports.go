@@ -20,7 +20,6 @@ type RankingRow struct {
 	Bucket     int32
 }
 
-//foundry:projection
 type NavigationRow struct {
 	Amount   int64
 	Previous value.Nullable[int64]
@@ -31,7 +30,6 @@ type NavigationRow struct {
 	Nth      value.Nullable[int64]
 }
 
-//foundry:projection
 type WindowTotal struct {
 	Amount  int64
 	Running value.Nullable[decimal.Decimal]

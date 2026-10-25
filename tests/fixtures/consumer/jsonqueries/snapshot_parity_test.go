@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"github.com/weiloon1234/Foundry-Go/value"
 	"reflect"
 	"testing"
@@ -33,6 +34,9 @@ func TestSnapshotJSONKindIdentityAndSQLParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !oracleEqual(t, "consumer/jsonqueries/snapshot_parity_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
+		t.Fatal("recorded SQL parity changed")
+	}
 	if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) {
 		t.Fatalf("Snapshot parity\n%s\n%s", got.SQL(), want.SQL())
 	}
@@ -45,6 +49,9 @@ func TestSnapshotJSONKindIdentityAndSQLParity(t *testing.T) {
 	newBytes, err := json.Marshal(after)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !oracleEqual(t, "consumer/jsonqueries/snapshot_parity_test/wire", oracle.Snapshot(oldBytes), oracle.Snapshot(newBytes)) {
+		t.Fatal("recorded JSON wire parity changed")
 	}
 	if string(oldBytes) != string(newBytes) || string(newBytes) != `{"ID":1,"Settings":{"theme":"dark"},"Kind":"object","BackupKind":"null","Matches":true}` {
 		t.Fatalf("Snapshot wire bytes changed: %s", newBytes)

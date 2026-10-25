@@ -99,7 +99,7 @@ func compareObservation[V comparable](t *testing.T, ctx context.Context, legacy,
 				}
 			}()
 		}
-		if captures[0].output.String() != captures[1].output.String() {
+		if !oracleEqual(t, "validation_database/1", captures[0].output.String(), captures[1].output.String()) {
 			t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 		}
 	}
@@ -138,23 +138,23 @@ func TestValidationDatabaseRulesAndDescriptions(t *testing.T) {
 		pairs := [][2]validation.Rule[string]{{validation.Exists(legacy), dbvalidation.Exists(db, models.Users.Query(), models.Users.Email)}, {validation.Unique(legacy), dbvalidation.Unique(db, models.Users.Query(), models.Users.Email)}}
 		for _, pair := range pairs {
 			before := g.statements
-			if !reflect.DeepEqual(must(pair[0].Description()), must(pair[1].Description())) {
+			if !reflect.DeepEqual(must(pair[0].Description()), must(pair[1].Description())) || !oracleEqual(t, "validation_database/value1", oracleSnapshot(must(pair[0].Description())), oracleSnapshot(must(pair[1].Description()))) {
 				t.Fatal("rule metadata changed")
 			}
 			if g.statements != before {
 				t.Fatal("description performed IO")
 			}
 			a, b := pair[0].Check(t.Context(), "secret", validation.DefaultLimits()), pair[1].Check(t.Context(), "secret", validation.DefaultLimits())
-			if !reflect.DeepEqual(validationIssues(a), validationIssues(b)) {
+			if !reflect.DeepEqual(validationIssues(a), validationIssues(b)) || !oracleEqual(t, "validation_database/value2", oracleSnapshot(validationIssues(a)), oracleSnapshot(validationIssues(b))) {
 				t.Fatalf("rule errors changed: %v / %v", a, b)
 			}
 		}
 		for _, pair := range [][2]validation.Rule[[]string]{{validation.ExistsAll[[]string](legacy), validation.ExistsAll[[]string](current)}, {validation.UniqueAll[[]string](legacy), validation.UniqueAll[[]string](current)}} {
-			if !reflect.DeepEqual(must(pair[0].Description()), must(pair[1].Description())) {
+			if !reflect.DeepEqual(must(pair[0].Description()), must(pair[1].Description())) || !oracleEqual(t, "validation_database/value1_later", oracleSnapshot(must(pair[0].Description())), oracleSnapshot(must(pair[1].Description()))) {
 				t.Fatal("batch metadata changed")
 			}
 			a, b := pair[0].Check(t.Context(), []string{"secret", "secret"}, validation.DefaultLimits()), pair[1].Check(t.Context(), []string{"secret", "secret"}, validation.DefaultLimits())
-			if !reflect.DeepEqual(validationIssues(a), validationIssues(b)) {
+			if !reflect.DeepEqual(validationIssues(a), validationIssues(b)) || !oracleEqual(t, "validation_database/value2_later", oracleSnapshot(validationIssues(a)), oracleSnapshot(validationIssues(b))) {
 				t.Fatalf("batch errors changed: %v / %v", a, b)
 			}
 		}
@@ -219,7 +219,12 @@ func TestValidationDatabaseRejectsBadSourcesAndRedacts(t *testing.T) {
 }
 
 func TestValidationDatabaseCheckTimeScopesAndExclusions(t *testing.T) {
-	g := &goldenCapture{reply: func(string, []driver.NamedValue) ([]string, [][]driver.Value) {
+	var bindings []any
+	g := &goldenCapture{reply: func(_ string, args []driver.NamedValue) ([]string, [][]driver.Value) {
+		bindings = make([]any, len(args))
+		for i, arg := range args {
+			bindings[i] = arg.Value
+		}
 		return []string{"exists"}, [][]driver.Value{{false}}
 	}}
 	db := g.open(t.Context())
@@ -238,11 +243,12 @@ func TestValidationDatabaseCheckTimeScopesAndExclusions(t *testing.T) {
 	rule := validation.Provide(slot, func(_ context.Context, v rename) (int64, error) { return v.Key, nil }, name.Rules(ignored))
 	for _, key := range []int64{17, 29} {
 		g.output.Reset()
+		g.sql.Reset()
 		if err := rule.Check(coremodels.TenantContext(t.Context(), key), rename{key, "candidate"}, validation.DefaultLimits()); err != nil {
 			t.Fatal(err)
 		}
-		sql := g.output.String()
-		if !strings.Contains(sql, `"name" <>`) || !strings.Contains(sql, `"id" <>`) || !strings.Contains(sql, `"tenant_id" =`) || !strings.Contains(sql, fmt.Sprint(key)) {
+		sql := g.sql.String()
+		if !strings.Contains(sql, `"name" <>`) || !strings.Contains(sql, `"id" <>`) || !strings.Contains(sql, `"tenant_id" =`) || !reflect.DeepEqual(bindings, []any{"tenant-private", key, "candidate", key, int64(1)}) {
 			t.Fatalf("scope/exclusion missing: %s", sql)
 		}
 	}

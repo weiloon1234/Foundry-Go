@@ -1,0 +1,19 @@
+{
+  "Identity": {
+    "model": "mfa_accounts",
+    "key": {
+      "k": "string",
+      "t": "018f0000-0000-7000-8000-000000000001"
+    }
+  },
+  "Statements": {
+    "read": {
+      "SQL": "SELECT \"mfa_accounts\".\"id\", \"mfa_accounts\".\"email\", \"mfa_accounts\".\"password\", \"mfa_accounts\".\"enabled\", \"mfa_accounts\".\"mfa_enabled\", \"mfa_accounts\".\"require_mfa\" FROM \"mfa_accounts\" WHERE (\"mfa_accounts\".\"email\" = $1)",
+      "Arguments": [
+        "member@example.test"
+      ]
+    }
+  },
+  "Description": "",
+  "Subject": null
+}

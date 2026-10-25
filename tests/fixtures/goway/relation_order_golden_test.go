@@ -75,7 +75,7 @@ func TestComputedRelationOrderSQLMatchesOldAPI(t *testing.T) {
 					t.Fatal("unexpected query count", g.statements)
 				}
 			}
-			if captures[0].output.String() != captures[1].output.String() {
+			if !oracleEqual(t, "goway/relation_order_golden/1", captures[0].output.String(), captures[1].output.String()) {
 				t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
 			}
 		})

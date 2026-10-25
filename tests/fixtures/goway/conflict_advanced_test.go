@@ -81,7 +81,7 @@ func TestAdvancedConflictInvalidPoliciesSendNoSQL(t *testing.T) {
 	capture.scriptedBatches = [][][]driver.Value{{{int64(1), "input", nil, []byte{1}, now, now, nil}}}
 	p = p.DoUpdate(r.SetConflictValue(hf.Name, expr.At(hr.Proposed(), hf.Name)))
 	got, err := orm.Upsert(t.Context(), db, hf.Query(), p, hf.Key().Set(1), hf.Name.Set(" input "), hf.Body.Set([]byte{1}))
-	if err != nil || !got.IsSet() || !strings.Contains(capture.output.String(), `"name" = "excluded"."name"`) {
+	if err != nil || !got.IsSet() || !strings.Contains(capture.sql.String(), `"name" = "excluded"."name"`) {
 		t.Fatal(got, err, capture.output.String())
 	}
 }
@@ -136,7 +136,7 @@ func TestAdvancedConflictSubqueryScopesFailClosed(t *testing.T) {
 	}
 	ctx := context.WithValue(t.Context(), advancedScopeKey{}, int64(9))
 	item, err := orm.Upsert(ctx, db, dest.Query(), policy, draft...)
-	if err != nil || !item.IsSet() || !strings.Contains(capture.output.String(), `"conflict_source"."tenant" =`) {
+	if err != nil || !item.IsSet() || !strings.Contains(capture.sql.String(), `"conflict_source"."tenant" =`) {
 		t.Fatal(item, err, capture.output.String())
 	}
 }

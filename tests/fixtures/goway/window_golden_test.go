@@ -41,9 +41,9 @@ func windowGolden[V any](t *testing.T, oldValue query.Expression[query.Alias[exp
 	for i, r := range got {
 		normalized[i] = r.Value
 	}
-	fmt.Fprintln(&before.output, oldRows)
-	fmt.Fprintln(&after.output, normalized)
-	if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+	fmt.Fprintln(&before.output, oracleSnapshot([]any{oldRows}))
+	fmt.Fprintln(&after.output, oracleSnapshot([]any{normalized}))
+	if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "window_golden/1", before.output.String(), after.output.String()) {
 		t.Fatalf("window SQL/bindings/hydration parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 	}
 }

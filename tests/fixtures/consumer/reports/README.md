@@ -18,5 +18,8 @@ handwritten rows declarations with `rows.Select` and `rows.Map`/`MapSelected`:
 
 `UserSummary.Email` retains its `contact_email` SQL alias. Nullable fields,
 model-owned IDs, enum codecs and exact decimal aggregates keep their types.
-Legacy projection directives and generated APIs remain until the lead's cleanup
-barrier; the SQL parity tests retain legacy calls as comparison oracles.
+The cleanup barrier has removed generation for the seven join/subquery result
+types. Their handwritten schemas above are the supported SQL entry points.
+`UserSummary`, `BuyerTotals` and `OrderSummary` still retain generated projection
+oracles until their SQL/binding expectations are frozen; their structs and rows
+schemas do not change at that boundary.

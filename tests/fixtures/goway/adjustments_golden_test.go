@@ -44,7 +44,7 @@ func TestAdjustmentsGolden(t *testing.T) {
 				}
 				transcripts = append(transcripts, g.output.String())
 			}
-			if transcripts[0] != transcripts[1] {
+			if !oracleEqual(t, "adjustments_golden/1", transcripts[0], transcripts[1]) {
 				t.Fatal(goldenDiff(transcripts[0], transcripts[1]))
 			}
 		})

@@ -5,14 +5,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:model table=idem_workspaces primary=ID
 type Workspace struct {
 	ID      int64
 	Tenant  string
 	Enabled bool
 }
 
-//foundry:model table=idem_orders
 type Order struct {
 	ID          model.ID[Order]
 	WorkspaceID int64

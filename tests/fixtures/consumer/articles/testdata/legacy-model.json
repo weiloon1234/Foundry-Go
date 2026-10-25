@@ -1,0 +1,29 @@
+{
+  "Identity": {
+    "model": "articles",
+    "key": {
+      "k": "string",
+      "t": "018f0000-0000-7000-8000-000000000001"
+    }
+  },
+  "Statements": {
+    "read": {
+      "SQL": "SELECT \"articles\".\"id\", \"articles\".\"slug\", \"articles\".\"author_id\", \"articles\".\"deleted_at\" FROM \"articles\" WHERE (\"articles\".\"slug\" = $1) AND (\"articles\".\"deleted_at\" IS NULL)",
+      "Arguments": [
+        "welcome"
+      ]
+    }
+  },
+  "Description": "slots.Description{Owner:extensions.OwnerDescription{Name:\"articles\", Model:\"articles\", StorageModel:\"articles\"}, Slots:[]extensions.SlotDescription{extensions.SlotDescription{Field:\"Title\", Kind:\"text\", Name:\"title\", Storage:\"foundry_model_translations\", MaxBytes:512, Require:\"default\", Disk:\"\", MaxFiles:0, Accepted:[]string(nil), Variants:[]string(nil), Version:0x0}, extensions.SlotDescription{Field:\"Summary\", Kind:\"text\", Name:\"summary\", Storage:\"foundry_model_translations\", MaxBytes:65536, Require:\"\", Disk:\"\", MaxFiles:0, Accepted:[]string(nil), Variants:[]string(nil), Version:0x0}, extensions.SlotDescription{Field:\"Logo\", Kind:\"one\", Name:\"logo\", Storage:\"foundry_attachments\", MaxBytes:8388608, Require:\"\", Disk:\"article-files\", MaxFiles:1, Accepted:[]string{\"image/png\"}, Variants:[]string(nil), Version:0x0}, extensions.SlotDescription{Field:\"Galleries\", Kind:\"many\", Name:\"galleries\", Storage:\"foundry_attachments\", MaxBytes:8388608, Require:\"\", Disk:\"article-files\", MaxFiles:4, Accepted:[]string{\"image/png\"}, Variants:[]string{\"thumbnail\"}, Version:0x0}, extensions.SlotDescription{Field:\"SEO\", Kind:\"value\", Name:\"seo\", Storage:\"foundry_model_metadata\", MaxBytes:262144, Require:\"\", Disk:\"\", MaxFiles:0, Accepted:[]string(nil), Variants:[]string(nil), Version:0x1}}}",
+  "Subject": {
+    "Scope": "1546ac64a22bc8ec4ab3f2b75424bf7bbd5e6d0f657c0fa0938d1a1f7b0792e2",
+    "Key": "8206eb0eefb4a78e2314a3ea85cfbc36bb4fdb6ae6fdc3d6a1e72b2dd092971d",
+    "Identity": {
+      "key": {
+        "k": "string",
+        "t": "018f0000-0000-7000-8000-000000000001"
+      },
+      "model": "articles"
+    }
+  }
+}

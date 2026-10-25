@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 )
@@ -30,6 +31,9 @@ func TestDeclaredJSONPathSQLParity(t *testing.T) {
 	want, err := query.SelectValue(jsonqueries.QueryJsonDocuments().Where(old.Eq(42)), old.Value()).Compile()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !oracleEqual(t, "consumer/jsonqueries/path_sql_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
+		t.Fatal("recorded SQL parity changed")
 	}
 	if got.SQL() != want.SQL() || !reflect.DeepEqual(got.Arguments(), want.Arguments()) {
 		t.Fatalf("JSON path parity\n%s\n%s\n%v\n%v", got.SQL(), want.SQL(), got.Arguments(), want.Arguments())

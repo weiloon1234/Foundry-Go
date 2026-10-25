@@ -1,6 +1,7 @@
 package reporting
 
 import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"reflect"
 	"testing"
 
@@ -21,7 +22,7 @@ func TestOperatorORMIdentityAndLookupParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !reflect.DeepEqual(got, want) || !oracleEqual(t, "consumer/reporting/identity", oracle.Snapshot(want), oracle.Snapshot(got)) {
 		t.Fatal("operator identity changed")
 	}
 	restored, err := OperatorIdentity.Parse(want)
@@ -29,7 +30,7 @@ func TestOperatorORMIdentityAndLookupParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	roundtrip, err := restored.Identity()
-	if err != nil || !reflect.DeepEqual(roundtrip, want) {
+	if err != nil || !reflect.DeepEqual(roundtrip, want) || !oracleEqual(t, "consumer/reporting/identity_roundtrip", oracle.Snapshot(want), oracle.Snapshot(roundtrip)) {
 		t.Fatal("operator identity roundtrip changed", err)
 	}
 	statement, err := orm.Compile(OperatorModels.Query().Where(OperatorModels.Key().Eq(id)).Limit(1))

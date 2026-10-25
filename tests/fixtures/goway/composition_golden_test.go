@@ -33,7 +33,7 @@ func TestStage6c2CompositionGolden(t *testing.T) {
 			}
 			runCompositionOld(before, kind)
 			runCompositionNew(after, kind)
-			if before.statements != 1 || after.statements != 1 || before.output.String() != after.output.String() {
+			if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "composition_golden/1", before.output.String(), after.output.String()) {
 				t.Fatalf("composition parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
 			}
 		})
@@ -62,7 +62,7 @@ func runCompositionOld(g *goldenCapture, kind string) {
 		case "value_ExceptAll":
 			q = x.ExceptAll(y)
 		}
-		fmt.Fprintln(&g.output, must(q.OrderBy(q.Value().Asc()).Limit(3).Offset(2).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.OrderBy(q.Value().Asc()).Limit(3).Offset(2).All(ctx, db))}))
 		return
 	}
 	if strings.HasPrefix(kind, "set_") {
@@ -83,7 +83,7 @@ func runCompositionOld(g *goldenCapture, kind string) {
 		}
 		got := must(q.Where(old.OrderFieldsAt(q.Scope()).TotalCents.Ne(0)).OrderBy(old.OrderFieldsAt(q.Scope()).TotalCents.Asc()).Limit(3).Offset(2).All(ctx, db))
 		for _, r := range got {
-			fmt.Fprintln(&g.output, r.ID, r.BuyerID, r.TotalCents)
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
 		}
 		return
 	}
@@ -92,7 +92,7 @@ func runCompositionOld(g *goldenCapture, kind string) {
 			c := query.TransactionCTE("claimed", a.ForUpdate().SkipLocked()).Materialized()
 			alias := query.AsTransaction[joinA](c, "r")
 			for _, r := range must(query.SelectTransactionRecord(alias, alias.Scope()).All(ctx, tx)) {
-				fmt.Fprintln(&g.output, r.ID, r.BuyerID, r.TotalCents)
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
 			}
 			return nil
 		}))
@@ -101,7 +101,7 @@ func runCompositionOld(g *goldenCapture, kind string) {
 	if kind == "projection" {
 		p := oldCorrelationProjection(a, query.Nullable(query.Value(old.OrderFields().TotalCents)))
 		alias := query.As[joinA](query.CTE("summary", p), "r")
-		fmt.Fprintln(&g.output, must(query.SelectRecord(alias, alias.Scope()).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectRecord(alias, alias.Scope()).All(ctx, db))}))
 		return
 	}
 	c := query.CTE("eligible", a)
@@ -123,7 +123,7 @@ func runCompositionOld(g *goldenCapture, kind string) {
 	}
 	alias := query.As[joinA](c, "r")
 	for _, r := range must(query.SelectRecord(alias, alias.Scope()).All(ctx, db)) {
-		fmt.Fprintln(&g.output, r.ID, r.BuyerID, r.TotalCents)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
 	}
 }
 func runCompositionNew(g *goldenCapture, kind string) {
@@ -149,7 +149,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 		case "value_ExceptAll":
 			q = rowset.ExceptAllValues(x, y)
 		}
-		fmt.Fprintln(&g.output, must(q.OrderBy(q.Value().Asc()).Limit(3).Offset(2).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.OrderBy(q.Value().Asc()).Limit(3).Offset(2).All(ctx, db))}))
 		return
 	}
 	if strings.HasPrefix(kind, "set_") {
@@ -171,7 +171,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 		}
 		got := must(q.Where(expr.At(q.Scope(), models.Orders.TotalCents).Ne(0)).OrderBy(expr.At(q.Scope(), models.Orders.TotalCents).Asc()).Limit(3).Offset(2).All(ctx, db))
 		for _, r := range got {
-			fmt.Fprintln(&g.output, r.ID, r.BuyerID, r.TotalCents)
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
 		}
 		return
 	}
@@ -180,7 +180,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 			c := rowset.TransactionCTE("claimed", rowset.LockedRecord(a.ForUpdate().SkipLocked())).Materialized()
 			alias := rowset.AsTransaction[joinA](c, "r")
 			for _, r := range must(rowset.SelectTransactionRecord(alias, rowset.TransactionScope(alias)).All(ctx, tx)) {
-				fmt.Fprintln(&g.output, r.ID, r.BuyerID, r.TotalCents)
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
 			}
 			return nil
 		}))
@@ -189,7 +189,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 	if kind == "projection" {
 		p := rowset.Select(rowset.From(a), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(expr.Value(models.Orders.TotalCents)))))
 		alias := rowset.AsRecord[joinA](rowset.CTE("summary", rowset.RecordOf(p)), "r")
-		fmt.Fprintln(&g.output, must(rowset.SelectRecord(alias, rowset.Scope(alias)).All(ctx, db)))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectRecord(alias, rowset.Scope(alias)).All(ctx, db))}))
 		return
 	}
 	c := rowset.CTE("eligible", rowset.ModelRecord(a))
@@ -211,6 +211,6 @@ func runCompositionNew(g *goldenCapture, kind string) {
 	}
 	alias := rowset.AsRecord[joinA](c, "r")
 	for _, r := range must(rowset.SelectRecord(alias, rowset.Scope(alias)).All(ctx, db)) {
-		fmt.Fprintln(&g.output, r.ID, r.BuyerID, r.TotalCents)
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
 	}
 }

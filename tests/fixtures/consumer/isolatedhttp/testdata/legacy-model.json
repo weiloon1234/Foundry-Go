@@ -1,0 +1,13 @@
+{
+  "Identity": null,
+  "Statements": {
+    "read": {
+      "SQL": "SELECT \"scope_records\".\"id\", \"scope_records\".\"name\", \"scope_records\".\"text\" FROM \"scope_records\" WHERE (\"scope_records\".\"name\" = $1)",
+      "Arguments": [
+        "fixture"
+      ]
+    }
+  },
+  "Description": "",
+  "Subject": null
+}

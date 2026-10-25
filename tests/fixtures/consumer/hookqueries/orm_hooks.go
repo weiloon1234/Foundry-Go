@@ -3,6 +3,8 @@ package hookqueries
 import (
 	"context"
 	"errors"
+	"runtime"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -26,10 +28,10 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 				return errors.New("factory reused across writes")
 			}
 			savingCalled = true
-			return record(ctx, tx, "saving", nil)
+			return record(ctx, tx, "saving")
 		},
 		Creating: func(ctx context.Context, tx *database.Tx, draft *orm.Write[Member]) error {
-			if err := record(ctx, tx, "creating", nil); err != nil {
+			if err := record(ctx, tx, "creating"); err != nil {
 				return err
 			}
 			if trace, _ := ctx.Value(traceKey{}).(*Trace); trace != nil && trace.Recurse {
@@ -53,7 +55,7 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 			return nil
 		},
 		Updating: func(ctx context.Context, tx *database.Tx, before Member, draft *orm.Write[Member]) error {
-			if err := record(ctx, tx, "updating", nil); err != nil {
+			if err := record(ctx, tx, "updating"); err != nil {
 				return err
 			}
 			// A hook may supply an otherwise empty patch using the locked model.
@@ -66,7 +68,7 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 		},
 		Deleting: func(ctx context.Context, tx *database.Tx, before Member) error {
 			trace, _ = ctx.Value(traceKey{}).(*Trace)
-			return record(ctx, tx, "deleting", nil)
+			return record(ctx, tx, "deleting")
 		},
 		Created: func(ctx context.Context, tx *database.Tx, changes orm.Changes[Member]) error {
 			return recordORM(ctx, tx, "created", changes)
@@ -81,11 +83,11 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 			if !savingCalled {
 				return errors.New("hook factory was recreated mid-write")
 			}
-			return record(ctx, tx, "saved", nil)
+			return record(ctx, tx, "saved")
 		},
 		AfterCommit: func(ctx context.Context, operation lifecycle.Operation, changes orm.Changes[Member]) error {
 			ctx = WithTrace(ctx, trace)
-			if err := record(ctx, nil, "committed", nil); err != nil {
+			if err := record(ctx, nil, "committed"); err != nil {
 				return err
 			}
 			if trace, _ := ctx.Value(traceKey{}).(*Trace); trace != nil {
@@ -103,5 +105,30 @@ func recordORM(ctx context.Context, tx *database.Tx, name string, changes orm.Ch
 	if trace, _ := ctx.Value(traceKey{}).(*Trace); trace != nil {
 		trace.ORMChanges = append(trace.ORMChanges, changes)
 	}
-	return record(ctx, tx, name, nil)
+	return record(ctx, tx, name)
+}
+
+func record(ctx context.Context, tx *database.Tx, name string) error {
+	trace, _ := ctx.Value(traceKey{}).(*Trace)
+	if trace != nil {
+		trace.Calls = append(trace.Calls, name)
+	}
+	if tx != nil {
+		if _, err := Logs.Insert(ctx, tx, Logs.Label.Set(name)); err != nil {
+			return err
+		}
+	}
+	if trace == nil || trace.FailAt != name {
+		return nil
+	}
+	switch trace.Failure {
+	case "panic":
+		panic("private hook panic")
+	case "goexit":
+		runtime.Goexit()
+	case "cancel":
+		trace.Cancel()
+		return nil
+	}
+	return Veto
 }

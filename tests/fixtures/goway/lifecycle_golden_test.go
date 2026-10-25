@@ -57,53 +57,23 @@ func TestLifecycleOldAndNewAgree(t *testing.T) {
 		t.Cleanup(func() { check(db.Close(context.Background())) })
 		if old {
 			q := o.QueryHookMembers()
-			_, err = q.Create(ctx, db, o.MemberDraft{}.SetID(1).SetName(" stored ").SetBody([]byte{1, 2}))
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = q.Update(ctx, db, 1, o.MemberDraft{}.SetName(" new ").ClearNote())
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = q.Delete(ctx, db, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = q.Restore(ctx, db, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = q.ForceDelete(ctx, db, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
+			capture.show(must(q.Create(ctx, db, o.MemberDraft{}.SetID(1).SetName(" stored ").SetBody([]byte{1, 2}))))
+			capture.show(must(q.Update(ctx, db, 1, o.MemberDraft{}.SetName(" new ").ClearNote())))
+			capture.show(must(q.Delete(ctx, db, 1)))
+			capture.show(must(q.Restore(ctx, db, 1)))
+			capture.show(must(q.ForceDelete(ctx, db, 1)))
 		} else {
 			q := n.Members
-			_, err = q.Insert(ctx, db, q.Key().Set(1), q.Name.Set(" stored "), q.Body.Set([]byte{1, 2}))
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = q.Update(ctx, db, 1, q.Name.Set(" new "), q.Note.SetNull())
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = q.Delete(ctx, db, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = q.Restore(ctx, db, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = q.ForceDelete(ctx, db, q.Soft, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
+			capture.show(must(q.Insert(ctx, db, q.Key().Set(1), q.Name.Set(" stored "), q.Body.Set([]byte{1, 2}))))
+			capture.show(must(q.Update(ctx, db, 1, q.Name.Set(" new "), q.Note.SetNull())))
+			capture.show(must(q.Delete(ctx, db, 1)))
+			capture.show(must(q.Restore(ctx, db, 1)))
+			capture.show(must(q.ForceDelete(ctx, db, q.Soft, 1)))
 		}
-		fmt.Fprintln(&capture.output, trace)
+		fmt.Fprintln(&capture.output, oracleSnapshot([]any{trace}))
 		transcripts = append(transcripts, capture.output.String())
 	}
-	if transcripts[0] != transcripts[1] {
+	if !oracleEqual(t, "lifecycle_golden/1", transcripts[0], transcripts[1]) {
 		t.Fatalf("lifecycle parity differs\nOLD:\n%s\nNEW:\n%s", transcripts[0], transcripts[1])
 	}
 	if len(transcripts) == 0 {

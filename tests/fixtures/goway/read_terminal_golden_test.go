@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -38,18 +37,19 @@ func readTerminalParity[S, V any](t *testing.T, oldQuery interface {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if before.SQL() != after.SQL() || !reflect.DeepEqual(before.Arguments(), after.Arguments()) {
+	if !oracleEqual(t, "read_terminal/compile", oracleSnapshot([]any{before.SQL(), before.Arguments()}), oracleSnapshot([]any{after.SQL(), after.Arguments()})) {
 		t.Fatalf("compile parity:\n%s\n%s\n%v\n%v", before.SQL(), after.SQL(), before.Arguments(), after.Arguments())
 	}
 	if err := rowset.PreflightRead(t.Context(), newQuery); err != nil {
 		t.Fatal(err)
 	}
+	var transcripts []string
 	for _, api := range []string{"legacy", "orm"} {
 		g := &goldenCapture{scriptedColumns: []string{"value"}, scriptedBatches: [][][]driver.Value{{{sample}, {sample}}}}
 		db := g.open(t.Context())
 		stop := errors.New("stop computed scalar")
 		seen := 0
-		yield := func(V) error { seen++; return stop }
+		yield := func(v V) error { seen++; g.show(v); return stop }
 		if api == "legacy" {
 			err = oldQuery.Each(t.Context(), db, yield)
 		} else {
@@ -58,10 +58,14 @@ func readTerminalParity[S, V any](t *testing.T, oldQuery interface {
 		if !errors.Is(err, stop) || seen != 1 || g.statements != 1 || db.Stats().InUse != 0 || db.Stats().Owners != 0 {
 			t.Fatal(api, seen, err, db.Stats())
 		}
-		if !strings.Contains(g.output.String(), before.SQL()) {
+		if !strings.Contains(g.sql.String(), before.SQL()) {
 			t.Fatal("stream changed compiled window", g.output.String())
 		}
 		db.Close(context.Background())
+		transcripts = append(transcripts, g.output.String())
+	}
+	if !oracleEqual(t, "read_terminal/stream", transcripts[0], transcripts[1]) {
+		t.Fatal("stream parity")
 	}
 }
 func TestStage9ReadScalarCompileParity(t *testing.T) {

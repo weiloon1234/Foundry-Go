@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 var ErrVeto = errors.New("relation fixture veto")
@@ -16,7 +14,6 @@ type Trace struct {
 	InspectArchive    func(*orm.Write[Archive]) error
 	InspectMembership func(*orm.Write[Membership]) error
 	Steps             []string
-	Changes           []MembershipChanges
 	ORMChanges        []orm.Changes[Membership]
 	Committed         []lifecycle.Operation
 	Reads             int
@@ -36,40 +33,6 @@ func traceFrom(ctx context.Context) *Trace { trace, _ := ctx.Value(traceKey{}).(
 func recordRead(ctx context.Context) {
 	if trace := traceFrom(ctx); trace != nil {
 		trace.Reads++
-	}
-}
-func membershipHooks() MembershipHooks { return Hooks("local") }
-
-func Hooks(owner string) MembershipHooks {
-	before, committed := membershipOperation(owner)
-	after := func(ctx context.Context, name string, changes MembershipChanges) error {
-		if trace := traceFrom(ctx); trace != nil {
-			trace.Changes = append(trace.Changes, changes)
-		}
-		return before(ctx, name)
-	}
-	return MembershipHooks{
-		Saving: func(ctx context.Context, _ *database.Tx, prior value.Optional[Membership], draft *MembershipDraft) error {
-			if !prior.IsSet() && (!draft.MemberID().IsSet() || !draft.GroupCode().IsSet()) {
-				return errors.New("pivot hooks did not receive derived keys")
-			}
-			return before(ctx, "saving")
-		},
-		Creating:      func(ctx context.Context, _ *database.Tx, _ *MembershipDraft) error { return before(ctx, "creating") },
-		Deleting:      func(ctx context.Context, _ *database.Tx, _ Membership) error { return before(ctx, "deleting") },
-		Restoring:     func(ctx context.Context, _ *database.Tx, _ Membership) error { return before(ctx, "restoring") },
-		ForceDeleting: func(ctx context.Context, _ *database.Tx, _ Membership) error { return before(ctx, "force-deleting") },
-		Created:       func(ctx context.Context, _ *database.Tx, c MembershipChanges) error { return after(ctx, "created", c) },
-		Saved:         func(ctx context.Context, _ *database.Tx, c MembershipChanges) error { return after(ctx, "saved", c) },
-		Deleted:       func(ctx context.Context, _ *database.Tx, c MembershipChanges) error { return after(ctx, "deleted", c) },
-		Restored:      func(ctx context.Context, _ *database.Tx, c MembershipChanges) error { return after(ctx, "restored", c) },
-		ForceDeleted: func(ctx context.Context, _ *database.Tx, c MembershipChanges) error {
-			return after(ctx, "force-deleted", c)
-		},
-		AfterCommit: func(_ context.Context, operation lifecycle.Operation, _ MembershipChanges) error {
-			committed(operation)
-			return nil
-		},
 	}
 }
 

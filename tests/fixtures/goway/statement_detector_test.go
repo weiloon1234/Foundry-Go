@@ -14,7 +14,8 @@ import (
 )
 
 func TestCompiledStatementsCarryTrustedShapes(t *testing.T) {
-	for _, old := range []bool{false, true} {
+	var observed []string
+	for _, old := range []bool{true, false} {
 		d, err := database.NewStatementDetector(database.StatementDetectorConfig{Threshold: 1, MaxShapes: 128})
 		if err != nil {
 			t.Fatal(err)
@@ -39,9 +40,13 @@ func TestCompiledStatementsCarryTrustedShapes(t *testing.T) {
 			}
 			total += v.Count
 		}
+		observed = append(observed, oracleSnapshot([]any{r.Overflow, total}))
 		if r.Overflow || total != 112 {
 			t.Fatalf("old=%v: %d/112 statements observed: %+v", old, total, r)
 		}
+	}
+	if !oracleEqual(t, "goway/statements/shapes", observed[0], observed[1]) {
+		t.Fatal("statement detection parity changed")
 	}
 }
 
@@ -134,7 +139,8 @@ func BenchmarkStatementDetectorConsumer(b *testing.B) {
 }
 
 func TestCursorStatementsCarryTrustedShapes(t *testing.T) {
-	for _, old := range []bool{false, true} {
+	var observed []string
+	for _, old := range []bool{true, false} {
 		d, err := database.NewStatementDetector(database.StatementDetectorConfig{Threshold: 1, MaxShapes: 8})
 		if err != nil {
 			t.Fatal(err)
@@ -161,5 +167,10 @@ func TestCursorStatementsCarryTrustedShapes(t *testing.T) {
 		if len(r.Violations) != 1 || r.Violations[0].Count != 2 || !strings.HasPrefix(r.Violations[0].Shape, "SELECT ") {
 			t.Fatalf("old=%v: %+v", old, r)
 		}
+		observed = append(observed, oracleSnapshot([]any{len(r.Violations), r.Violations[0].Count, strings.HasPrefix(r.Violations[0].Shape, "SELECT ")}))
+	}
+
+	if !oracleEqual(t, "goway/statements/cursor", observed[0], observed[1]) {
+		t.Fatal("cursor statement detection parity changed")
 	}
 }
