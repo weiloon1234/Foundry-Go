@@ -55,7 +55,7 @@ func TestPostgresTableRenameKeepsMetadataThroughStorageModelAndRescope(t *testin
 	}
 
 	// A declared storage model keeps the persisted scope: no data migration.
-	pinned := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
+	pinned := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
 	pinnedTheme := Define(pinned, "theme", 1, contract.StringJSON[string]())
 	pm, err := New(renamedStore(t, f, pinned), pinnedTheme.Registration())
 	if err != nil {
@@ -73,7 +73,7 @@ func TestPostgresTableRenameKeepsMetadataThroughStorageModelAndRescope(t *testin
 
 	// An undeclared rename changes the scope; rows are hidden, not corrupted.
 	// Re-scoping adopts them only once the earlier model is declared.
-	undeclared := extensions.DefineOwner("members", extensiontest.MemberIdentity("extension_people"))
+	undeclared := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{})
 	undeclaredTheme := Define(undeclared, "theme", 1, contract.StringJSON[string]())
 	um, err := New(renamedStore(t, f, undeclared), undeclaredTheme.Registration())
 	if err != nil {
@@ -83,7 +83,7 @@ func TestPostgresTableRenameKeepsMetadataThroughStorageModelAndRescope(t *testin
 	if err != nil || len(refused.Rows) != 0 || len(refused.Undeclared) != 2 {
 		t.Fatal("rows of an undeclared model were adopted", refused, err)
 	}
-	renamed := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{PreviousModels: []string{"extension_members"}})
+	renamed := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{PreviousModels: []string{"extension_members"}})
 	renamedTheme := Define(renamed, "theme", 1, contract.StringJSON[string]())
 	rm, err := New(renamedStore(t, f, renamed), renamedTheme.Registration())
 	if err != nil {

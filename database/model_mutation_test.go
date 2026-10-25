@@ -10,32 +10,32 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 type mutationRecord struct {
-	ID   int64
+	ID   int64 `foundry:"default=database"`
 	Name string
 }
 
-func mutationModel() query.Query[mutationRecord] {
-	return query.ForModel(mutationDefinition())
+type mutationTable struct {
+	orm.Table[mutationRecord, int64]
+	Name orm.Text[mutationRecord, string]
 }
 
-func mutationDefinition() query.Definition[mutationRecord] {
-	return query.Define("records", "id", []query.Column{{Name: "id", DatabaseDefault: true}, {Name: "name"}}, func(row database.Row) (mutationRecord, error) {
-		var record mutationRecord
-		if err := row.Scan(codec.Signed[int64]().Scan(&record.ID), codec.String[string]().Scan(&record.Name)); err != nil {
-			return mutationRecord{}, err
-		}
-		return record, nil
-	}, query.NewModelField("id", codec.Signed[int64](), func(m mutationRecord) int64 { return m.ID }), query.NewModelField("name", codec.String[string](), func(m mutationRecord) string { return m.Name }))
+func mutationDefinition(opts ...orm.Option) mutationTable {
+	return orm.Define("records", func(b orm.Builder[mutationRecord], m *mutationRecord) mutationTable {
+		return mutationTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
+	}, opts...)
 }
 
-func mutationValues() query.Mutation[mutationRecord] {
-	return query.Change(query.Assign[mutationRecord]("records", "name", codec.String[string](), "private record name"))
+var mutationFields = mutationDefinition()
+
+func mutationModel() orm.Query[mutationRecord] { return mutationFields.Query() }
+
+func mutationValues() []orm.Assignment[mutationRecord] {
+	return []orm.Assignment[mutationRecord]{mutationFields.Name.Set("private record name")}
 }
 
 func mutationDriver(values [][]driver.Value) *driverState {
@@ -68,7 +68,7 @@ func TestModelMutationReturnsOnlyOneHydratedModel(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			state := mutationDriver(test.rows)
 			db := open(t, state, nil)
-			model, err := mutationModel().Insert(t.Context(), transactionOnly{db}, mutationValues())
+			model, err := mutationFields.Insert(t.Context(), transactionOnly{db}, mutationValues()...)
 			if test.expected == nil {
 				if err != nil || model.ID != 42 || state.committed.Load() != 1 {
 					t.Fatalf("write failed: %v", err)
@@ -108,7 +108,7 @@ func TestModelInsertOnPoolRunsOneAutocommitStatement(t *testing.T) {
 				if pinned {
 					writer = db.Primary()
 				}
-				model, err := mutationModel().Insert(t.Context(), writer, mutationValues())
+				model, err := mutationFields.Insert(t.Context(), writer, mutationValues()...)
 				if begins.Load() != 0 || db.Stats().Owners != 0 || db.Stats().InUse != 0 {
 					t.Fatal("autocommit insert opened a transaction or retained its connection")
 				}
@@ -119,7 +119,7 @@ func TestModelInsertOnPoolRunsOneAutocommitStatement(t *testing.T) {
 					return
 				}
 				var classified *database.Error
-				var candidate *query.WriteError[mutationRecord]
+				var candidate *orm.WriteError[mutationRecord]
 				if !errors.Is(err, test.expected) || !errors.Is(err, database.CommitUnknown) || !errors.As(err, &classified) || classified.Outcome() != database.Unknown || model != (mutationRecord{}) || errors.As(err, &candidate) != test.candidate {
 					t.Fatalf("post-send failure not reported as unknown: %v", err)
 				}
@@ -135,7 +135,7 @@ func TestModelInsertOnPoolRunsOneAutocommitStatement(t *testing.T) {
 	}
 	db := open(t, state, nil)
 	var classified *database.Error
-	if _, err := mutationModel().Insert(t.Context(), db, mutationValues()); !errors.As(err, &classified) || classified.Outcome() != database.NoCommit {
+	if _, err := mutationFields.Insert(t.Context(), db, mutationValues()...); !errors.As(err, &classified) || classified.Outcome() != database.NoCommit {
 		t.Fatal("unsent autocommit statement was not reported as NoCommit", err)
 	}
 }
@@ -144,8 +144,8 @@ func TestModelMutationUnknownCommitRetainsTypedReconciliationCandidate(t *testin
 	state := mutationDriver([][]driver.Value{{int64(42), "private record name"}})
 	state.commitError = errors.New("commit response lost")
 	db := open(t, state, nil)
-	model, err := mutationModel().Insert(t.Context(), transactionOnly{db}, mutationValues())
-	var writeError *query.WriteError[mutationRecord]
+	model, err := mutationFields.Insert(t.Context(), transactionOnly{db}, mutationValues()...)
+	var writeError *orm.WriteError[mutationRecord]
 	var databaseError *database.Error
 	if model != (mutationRecord{}) || !errors.Is(err, database.CommitUnknown) || !errors.As(err, &writeError) || !errors.As(err, &databaseError) || databaseError.Outcome() != database.Unknown || writeError.Candidate().ID != 42 {
 		t.Fatalf("uncertain commit lost reconciliation information: %v", err)
@@ -168,14 +168,14 @@ func TestModelMutationNestedScopeAndValidationBeforeTransaction(t *testing.T) {
 		return transaction{state}, nil
 	}
 	db := open(t, state, nil)
-	if _, err := mutationModel().Insert(t.Context(), db, query.Change[mutationRecord]()); !errors.Is(err, fault.Missing) || begins.Load() != 0 {
+	if _, err := mutationFields.Insert(t.Context(), db); !errors.Is(err, fault.Missing) || begins.Load() != 0 {
 		t.Fatal("missing field bypassed validation")
 	}
 	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
 		if err := tx.Transaction(t.Context(), func(*database.Tx) error { return nil }, database.TxOptions{}); !errors.Is(err, fault.Invalid) {
 			return errors.New("nested isolation options were accepted")
 		}
-		if _, err := mutationModel().Insert(t.Context(), tx, mutationValues()); err != nil {
+		if _, err := mutationFields.Insert(t.Context(), tx, mutationValues()...); err != nil {
 			return err
 		}
 		if state.committed.Load() != 0 {
@@ -206,8 +206,8 @@ func TestModelMutationAfterCommitFailurePreservesCommittedCandidate(t *testing.T
 	state := mutationDriver([][]driver.Value{{int64(42), "private record name"}})
 	db := open(t, state, nil)
 	cause := errors.New("notification failed")
-	model, err := mutationModel().Insert(t.Context(), afterCommitTransactor{db, cause}, mutationValues())
-	var writeError *query.WriteError[mutationRecord]
+	model, err := mutationFields.Insert(t.Context(), afterCommitTransactor{db, cause}, mutationValues()...)
+	var writeError *orm.WriteError[mutationRecord]
 	var databaseError *database.Error
 	if model != (mutationRecord{}) || !errors.Is(err, database.AfterCommitFailed) || !errors.Is(err, cause) || !errors.As(err, &writeError) || !errors.As(err, &databaseError) || databaseError.Outcome() != database.Committed || writeError.Candidate().ID != 42 {
 		t.Fatalf("committed write lost its outcome or reconciliation data: %v", err)

@@ -13,23 +13,24 @@ import (
 	"foundry.test/goway/integrations"
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 func TestORMPaginationKeepsTransportIdentity(t *testing.T) {
-	for _, pair := range [][2]reflect.Type{
-		{reflect.TypeFor[orm.PageResult[models.User]](), reflect.TypeFor[query.Page[models.User]]()},
-		{reflect.TypeFor[orm.SimplePage[models.User]](), reflect.TypeFor[query.SimplePage[models.User]]()},
-		{reflect.TypeFor[orm.Cursor[models.User]](), reflect.TypeFor[query.Cursor[models.User]]()},
-		{reflect.TypeFor[orm.CursorRequest[models.User]](), reflect.TypeFor[query.CursorRequest[models.User]]()},
-		{reflect.TypeFor[orm.CursorPage[models.User]](), reflect.TypeFor[query.CursorPage[models.User]]()},
-		{reflect.TypeFor[orm.CursorInputError](), reflect.TypeFor[query.CursorInputError]()},
+	// These frozen type names came from the legacy aliases. Transport assignment
+	// compatibility is also exercised below through the public HTTP adapters.
+	for _, typ := range []reflect.Type{
+		reflect.TypeFor[orm.PageResult[models.User]](),
+		reflect.TypeFor[orm.SimplePage[models.User]](),
+		reflect.TypeFor[orm.Cursor[models.User]](),
+		reflect.TypeFor[orm.CursorRequest[models.User]](),
+		reflect.TypeFor[orm.CursorPage[models.User]](),
+		reflect.TypeFor[orm.CursorInputError](),
 	} {
-		if pair[0] != pair[1] || !oracleEqual(t, "goway/integrations/pagination/types", oracle.Snapshot(pair[1].String()), oracle.Snapshot(pair[0].String())) {
-			t.Fatalf("transport identity changed: %v", pair)
+		if !oracleMatch(t, "goway/integrations/pagination/types", oracle.Snapshot(typ.String())) {
+			t.Fatalf("transport identity changed: %v", typ)
 		}
 	}
 	token := base64.RawURLEncoding.EncodeToString([]byte(`{"v":1,"scope":"` + strings.Repeat("a", 64) + `","values":[{"k":"int","t":"42"}]}`))
@@ -38,9 +39,8 @@ func TestORMPaginationKeepsTransportIdentity(t *testing.T) {
 	}
 	// Valid tokens and invalid structures retain the legacy parse result.
 	for _, input := range []string{token, "", "bad!"} {
-		old, oldErr := query.ParseCursor[models.User](input)
 		current, err := orm.ParseCursor[models.User](input)
-		if (oldErr == nil) != (err == nil) || old.Token() != current.Token() || !oracleEqual(t, "goway/integrations/pagination/parse", oracle.Snapshot([]any{oldErr == nil, old.Token()}), oracle.Snapshot([]any{err == nil, current.Token()})) {
+		if !oracleMatch(t, "goway/integrations/pagination/parse", oracle.Snapshot([]any{err == nil, current.Token()})) {
 			t.Fatal("cursor transport changed")
 		}
 	}

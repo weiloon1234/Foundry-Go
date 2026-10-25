@@ -9,22 +9,13 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 type record struct{ ID int64 }
 
-func (record) FoundryModel() query.ModelRef[record] {
-	return query.NewModelRef(func() query.Query[record] {
-		return query.ForModel(query.Define("factory_records", "id", []query.Column{{Name: "id"}}, func(row database.Row) (record, error) {
-			var result record
-			err := row.Scan(&result.ID)
-			return result, err
-		}, query.NewModelField("id", codec.Signed[int64](), func(r record) int64 { return r.ID })))
-	})
-}
+var records = orm.Define("factory_records", func(b orm.Builder[record], r *record) orm.Table[record, int64] { return orm.TableOf(b, &r.ID) })
 
 type draft struct {
 	number  Sequence
@@ -32,17 +23,29 @@ type draft struct {
 	prepare func() error
 }
 
-func (d draft) FoundryCreateMutation(query.Mutation[record]) (query.Mutation[record], error) {
-	if d.prepare != nil {
-		if err := d.prepare(); err != nil {
-			return query.Mutation[record]{}, err
-		}
+// These core tests keep an inspectable domain draft. Their persistence seam
+// converts it to the same assignments accepted by the public ORM factory.
+func coreFactory(build Build[draft]) (*Factory[record, draft], error) {
+	native, err := Define(records, func(context.Context, Sequence) ([]orm.Assignment[record], error) { return nil, nil })
+	if err != nil {
+		return nil, err
 	}
-	return query.Change(query.Assign[record]("factory_records", "id", codec.Signed[int64](), int64(d.number))), nil
+	return &Factory[record, draft]{build: build, sequence: native.sequence, prepare: func(drafts []draft, single bool) (func(context.Context, database.Transactor) ([]record, error), error) {
+		assignments := make([][]orm.Assignment[record], len(drafts))
+		for i, d := range drafts {
+			if d.prepare != nil {
+				if err := d.prepare(); err != nil {
+					return nil, err
+				}
+			}
+			assignments[i] = []orm.Assignment[record]{records.Key().Set(int64(d.number))}
+		}
+		return native.prepare(assignments, single)
+	}}, nil
 }
 func newFactory(t *testing.T) *Factory[record, draft] {
 	t.Helper()
-	f, err := New[record](func(_ context.Context, n Sequence) (draft, error) { return draft{number: n}, nil })
+	f, err := coreFactory(func(_ context.Context, n Sequence) (draft, error) { return draft{number: n}, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +104,7 @@ func TestFailedBuildAndStateNeverPublishPartialDraft(t *testing.T) {
 	sentinel := errors.New("builder failure")
 	for _, kind := range []string{"error", "panic", "goexit", "state"} {
 		t.Run(kind, func(t *testing.T) {
-			f, err := New[record](func(_ context.Context, n Sequence) (draft, error) {
+			f, err := coreFactory(func(_ context.Context, n Sequence) (draft, error) {
 				if n == 1 {
 					switch kind {
 					case "error":
@@ -150,7 +153,7 @@ func (w *untouchedWriter) Transaction(context.Context, func(*database.Tx) error,
 func TestInvalidFactoryAndBatchFailBeforeDatabaseWork(t *testing.T) {
 	w := &untouchedWriter{}
 	f := newFactory(t)
-	if _, err := New[record, draft](nil); !errors.Is(err, fault.Invalid) {
+	if _, err := Define(records, nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	var zero *Factory[record, draft]
@@ -195,7 +198,7 @@ func TestInvalidFactoryAndBatchFailBeforeDatabaseWork(t *testing.T) {
 func TestDraftPreparationFailureDoesNotStartBatch(t *testing.T) {
 	w := &untouchedWriter{}
 	sentinel := errors.New("draft preparation")
-	f, err := New[record](func(_ context.Context, n Sequence) (draft, error) {
+	f, err := coreFactory(func(_ context.Context, n Sequence) (draft, error) {
 		return draft{number: n, prepare: func() error {
 			if n == 2 {
 				return sentinel
@@ -209,5 +212,38 @@ func TestDraftPreparationFailureDoesNotStartBatch(t *testing.T) {
 	items, err := f.CreateMany(t.Context(), w, 3)
 	if !errors.Is(err, sentinel) || len(items) != 0 || w.calls != 0 {
 		t.Fatal("preparation failure reached database", err)
+	}
+}
+
+func TestORMFactoryBuildFailureDoesNotStartBatch(t *testing.T) {
+	for _, mode := range []string{"error", "panic", "goexit"} {
+		t.Run(mode, func(t *testing.T) {
+			writer := &untouchedWriter{}
+			cause := errors.New("draft preparation")
+			f, err := Define(records, func(_ context.Context, n Sequence) ([]orm.Assignment[record], error) {
+				if n == 2 {
+					switch mode {
+					case "error":
+						return []orm.Assignment[record]{records.Key().Set(int64(n))}, cause
+					case "panic":
+						panic("private draft input")
+					case "goexit":
+						runtime.Goexit()
+					}
+				}
+				return []orm.Assignment[record]{records.Key().Set(int64(n))}, nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			items, err := f.CreateMany(t.Context(), writer, 3)
+			want := cause
+			if mode != "error" {
+				want = fault.Panicked
+			}
+			if !errors.Is(err, want) || items != nil || writer.calls != 0 || f.sequence.last != 2 {
+				t.Fatal("native draft failure published partial models, reused a sequence or reached the database", err)
+			}
+		})
 	}
 }

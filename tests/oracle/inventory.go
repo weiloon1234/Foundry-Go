@@ -43,10 +43,14 @@ func inventory(dir string, selected []string) (map[string]bool, []string, error)
 				return true
 			}
 			name, ok := call.Fun.(*ast.Ident)
-			if !ok || name.Name != "oracleEqual" {
+			if !ok || (name.Name != "oracleEqual" && name.Name != "oracleMatch") {
 				return true
 			}
-			if len(call.Args) != 4 {
+			wantArgs := 4
+			if name.Name == "oracleMatch" {
+				wantArgs = 3
+			}
+			if len(call.Args) != wantArgs {
 				problem = fmt.Errorf("invalid oracle assertion in %s", file)
 				return false
 			}
@@ -82,7 +86,7 @@ func inventory(dir string, selected []string) (map[string]bool, []string, error)
 				id, ok := call.Fun.(*ast.Ident)
 				if ok {
 					calls[fn.Name.Name][id.Name] = true
-					if id.Name == "oracleEqual" {
+					if id.Name == "oracleEqual" || id.Name == "oracleMatch" {
 						site, _ := strconv.Unquote(call.Args[1].(*ast.BasicLit).Value)
 						functionSites[fn.Name.Name] = append(functionSites[fn.Name.Name], site)
 					}
@@ -91,7 +95,7 @@ func inventory(dir string, selected []string) (map[string]bool, []string, error)
 			})
 		}
 	}
-	reaches := map[string]bool{"oracleEqual": true}
+	reaches := map[string]bool{"oracleEqual": true, "oracleMatch": true}
 	for changed := true; changed; {
 		changed = false
 		for name, callees := range calls {

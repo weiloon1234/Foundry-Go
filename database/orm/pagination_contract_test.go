@@ -17,7 +17,6 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -25,19 +24,19 @@ import (
 
 func TestPaginationContractsShareOneOwner(t *testing.T) {
 	for _, pair := range [][2]reflect.Type{
-		{reflect.TypeFor[orm.PageRequest](), reflect.TypeFor[query.PageRequest]()},
-		{reflect.TypeFor[orm.PageResult[int]](), reflect.TypeFor[query.Page[int]]()},
-		{reflect.TypeFor[orm.SimplePage[int]](), reflect.TypeFor[query.SimplePage[int]]()},
-		{reflect.TypeFor[orm.Cursor[int]](), reflect.TypeFor[query.Cursor[int]]()},
-		{reflect.TypeFor[orm.CursorRequest[int]](), reflect.TypeFor[query.CursorRequest[int]]()},
-		{reflect.TypeFor[orm.CursorPage[int]](), reflect.TypeFor[query.CursorPage[int]]()},
-		{reflect.TypeFor[orm.CursorInputError](), reflect.TypeFor[query.CursorInputError]()},
+		{reflect.TypeFor[orm.PageRequest](), reflect.TypeFor[querycore.PageRequest]()},
+		{reflect.TypeFor[orm.PageResult[int]](), reflect.TypeFor[querycore.Page[int]]()},
+		{reflect.TypeFor[orm.SimplePage[int]](), reflect.TypeFor[querycore.SimplePage[int]]()},
+		{reflect.TypeFor[orm.Cursor[int]](), reflect.TypeFor[querycore.Cursor[int]]()},
+		{reflect.TypeFor[orm.CursorRequest[int]](), reflect.TypeFor[querycore.CursorRequest[int]]()},
+		{reflect.TypeFor[orm.CursorPage[int]](), reflect.TypeFor[querycore.CursorPage[int]]()},
+		{reflect.TypeFor[orm.CursorInputError](), reflect.TypeFor[querycore.CursorInputError]()},
 	} {
 		if pair[0] != pair[1] || pair[0].PkgPath() != "github.com/weiloon1234/Foundry-Go/internal/querycore" {
 			t.Fatalf("pagination contract has multiple owners: %v", pair)
 		}
 	}
-	if orm.MaxPageSize != 1000 || query.MaxPageSize != orm.MaxPageSize || query.MaxCursorBytes != 64*1024 || query.MaxCursorFields != 16 {
+	if orm.MaxPageSize != 1000 || querycore.MaxPageSize != orm.MaxPageSize || querycore.MaxCursorBytes != 64*1024 || querycore.MaxCursorFields != 16 {
 		t.Fatal("pagination bounds changed")
 	}
 	for _, request := range []orm.PageRequest{{}, {Number: 1, Size: 1001}, {Number: math.MaxInt, Size: 2}} {
@@ -62,11 +61,11 @@ func TestPaginationContractBytesAndRedaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacy, err := query.ParseCursor[int](token)
-	if err != nil || current != legacy || current.Token() != want {
+	owner, err := querycore.ParseCursor[int](token)
+	if err != nil || current != owner || current.Token() != want {
 		t.Fatal("cursor aliases changed token bytes", err)
 	}
-	for _, input := range []any{current, legacy} {
+	for _, input := range []any{current, owner} {
 		for _, format := range []string{"%v", "%+v", "%#v"} {
 			text := fmt.Sprintf(format, input)
 			if strings.Contains(text, token) || strings.Contains(text, "private") {
@@ -90,14 +89,14 @@ func TestPaginationContractBytesAndRedaction(t *testing.T) {
 			t.Fatalf("pagination JSON changed: %s, %v", got, err)
 		}
 	}
-	for _, bad := range []string{"", "private", strings.Repeat("a", query.MaxCursorBytes+1), base64.RawURLEncoding.EncodeToString([]byte(strings.Replace(envelope, `"v":1`, `"v":2`, 1)))} {
+	for _, bad := range []string{"", "private", strings.Repeat("a", querycore.MaxCursorBytes+1), base64.RawURLEncoding.EncodeToString([]byte(strings.Replace(envelope, `"v":1`, `"v":2`, 1)))} {
 		if _, err := orm.ParseCursor[int](bad); !errors.Is(err, fault.Invalid) {
 			t.Fatal("malformed cursor accepted")
 		}
 	}
 	request := orm.CursorRequest[int]{Size: 1, After: value.Set(orm.Cursor[int]{})}
-	var legacyInput *query.CursorInputError
-	if err := request.Validate(); !errors.As(err, &legacyInput) || !errors.Is(err, fault.Invalid) || strings.Contains(fmt.Sprintf("%#v", err), "private") {
+	var ownerInput *querycore.CursorInputError
+	if err := request.Validate(); !errors.As(err, &ownerInput) || !errors.Is(err, fault.Invalid) || strings.Contains(fmt.Sprintf("%#v", err), "private") {
 		t.Fatal("cursor input classification or redaction changed")
 	}
 	var input *orm.CursorInputError

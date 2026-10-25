@@ -11,7 +11,6 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -39,8 +38,8 @@ func TestCursorChunksAndLocks(t *testing.T) {
 		return readTable{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.Rank), orm.NullableTextOf(b, &m.Name)}
 	})
 	q := r.Query().OrderBy(r.Name.Asc(), r.Rank.Desc())
-	request := query.CursorRequest[readRecord]{Size: 2}
-	var pages []query.CursorPage[readRecord]
+	request := orm.CursorRequest[readRecord]{Size: 2}
+	var pages []orm.CursorPage[readRecord]
 	var ids []int64
 	for {
 		page, err := orm.CursorPaginate(ctx, db, q, request)
@@ -61,20 +60,20 @@ func TestCursorChunksAndLocks(t *testing.T) {
 		t.Fatal("forward ties/NULLs", ids)
 	}
 	for i := len(pages) - 1; i > 0; i-- {
-		page, err := orm.CursorPaginate(ctx, db, q, query.CursorRequest[readRecord]{Size: 2, Before: pages[i].Previous})
+		page, err := orm.CursorPaginate(ctx, db, q, orm.CursorRequest[readRecord]{Size: 2, Before: pages[i].Previous})
 		must(t, err)
 		if !reflect.DeepEqual(page.Items, pages[i-1].Items) {
 			t.Fatal("backward ties/NULLs")
 		}
 	}
 	foreign := q.Where(r.Rank.Eq(9))
-	if _, err := orm.CursorPaginate(ctx, db, foreign, query.CursorRequest[readRecord]{Size: 2, After: pages[0].Next}); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.CursorPaginate(ctx, db, foreign, orm.CursorRequest[readRecord]{Size: 2, After: pages[0].Next}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("foreign cursor accepted", err)
 	}
 	token, _ := pages[0].Next.Get()
-	malformed, err := query.ParseCursor[readRecord](token.Token() + "!")
+	malformed, err := orm.ParseCursor[readRecord](token.Token() + "!")
 	if err == nil {
-		_, err = orm.CursorPaginate(ctx, db, q, query.CursorRequest[readRecord]{Size: 2, After: value.Set(malformed)})
+		_, err = orm.CursorPaginate(ctx, db, q, orm.CursorRequest[readRecord]{Size: 2, After: value.Set(malformed)})
 	}
 	if !errors.Is(err, fault.Invalid) {
 		t.Fatal("malformed token accepted", err)
@@ -125,7 +124,7 @@ func TestEditedCursorPositionPreservesPredicates(t *testing.T) {
 		return orm.TableOf(b, &m.ID)
 	})
 	q := r.Query().Where(tenant.Eq(7)).OrderBy(r.Key().Asc())
-	first, err := orm.CursorPaginate(ctx, db, q, query.CursorRequest[record]{Size: 1})
+	first, err := orm.CursorPaginate(ctx, db, q, orm.CursorRequest[record]{Size: 1})
 	must(t, err)
 	token, ok := first.Next.Get()
 	if !ok {
@@ -152,9 +151,9 @@ func TestEditedCursorPositionPreservesPredicates(t *testing.T) {
 			}
 			raw, err = json.Marshal(envelope)
 			must(t, err)
-			edited, err := query.ParseCursor[record](base64.RawURLEncoding.EncodeToString(raw))
+			edited, err := orm.ParseCursor[record](base64.RawURLEncoding.EncodeToString(raw))
 			must(t, err)
-			page, err := orm.CursorPaginate(ctx, db, q, query.CursorRequest[record]{Size: 10, After: value.Set(edited)})
+			page, err := orm.CursorPaginate(ctx, db, q, orm.CursorRequest[record]{Size: 10, After: value.Set(edited)})
 			must(t, err)
 			var ids []int64
 			for _, row := range page.Items {

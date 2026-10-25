@@ -9,15 +9,16 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// These batch cases exercise explicit transaction rollback and commit replies.
+// Native hook-free InsertMany on an exact pool uses the autocommit fast path.
 func TestModelUpsertAndBatchReturningFailures(t *testing.T) {
-	name := query.NewTextField[mutationRecord, string]("records", "name", codec.String[string]())
-	policy := query.OnConflict(name).Update(name)
+	name := mutationFields.Name
+	policy := orm.OnConflict(orm.ConflictKey(name)).DoUpdate(orm.ConflictIncoming(name))
 	for _, tc := range []struct {
 		name  string
 		rows  [][]driver.Value
@@ -36,13 +37,13 @@ func TestModelUpsertAndBatchReturningFailures(t *testing.T) {
 			var err error
 			if tc.batch {
 				var items []mutationRecord
-				items, err = mutationModel().InsertMany(t.Context(), db, []query.Mutation[mutationRecord]{mutationValues(), mutationValues()})
+				items, err = mutationFields.InsertMany(t.Context(), transactionOnly{db}, [][]orm.Assignment[mutationRecord]{mutationValues(), mutationValues()})
 				if err != nil && items != nil {
 					t.Fatal("partial batch returned")
 				}
 			} else {
 				var item value.Optional[mutationRecord]
-				item, err = mutationModel().InsertOnConflict(t.Context(), db, mutationValues(), policy)
+				item, err = orm.Upsert(t.Context(), db, mutationModel(), policy, mutationValues()...)
 				if item.IsSet() != (tc.want == nil && len(tc.rows) == 1) {
 					t.Fatal("optional model lost absence/failure")
 				}
@@ -61,8 +62,8 @@ func TestUpsertUnknownCommitRetainsActualResultType(t *testing.T) {
 	state := mutationDriver([][]driver.Value{{int64(42), "private candidate"}})
 	state.commitError = errors.New("commit response lost")
 	db := open(t, state, nil)
-	item, err := mutationModel().InsertOnConflict(t.Context(), db, mutationValues(), query.OnConflict[mutationRecord]().DoNothing())
-	var typed *query.WriteError[value.Optional[mutationRecord]]
+	item, err := orm.Upsert(t.Context(), db, mutationModel(), orm.OnConflict[mutationRecord]().DoNothing(), mutationValues()...)
+	var typed *orm.WriteError[value.Optional[mutationRecord]]
 	if item.IsSet() || !errors.As(err, &typed) || !errors.Is(err, database.CommitUnknown) {
 		t.Fatal("optional reconciliation result lost", err)
 	}
@@ -79,15 +80,15 @@ func TestBatchUnknownCommitAndValidEmptyWrite(t *testing.T) {
 	state := mutationDriver([][]driver.Value{{int64(1), "first"}, {int64(2), "second"}})
 	state.commitError = errors.New("commit response lost")
 	db := open(t, state, nil)
-	items, err := mutationModel().InsertMany(t.Context(), db, []query.Mutation[mutationRecord]{mutationValues(), mutationValues()})
-	var typed *query.WriteError[[]mutationRecord]
+	items, err := mutationFields.InsertMany(t.Context(), transactionOnly{db}, [][]orm.Assignment[mutationRecord]{mutationValues(), mutationValues()})
+	var typed *orm.WriteError[[]mutationRecord]
 	if items != nil || !errors.As(err, &typed) || len(typed.Candidate()) != 2 {
 		t.Fatal("batch reconciliation lost complete models", err)
 	}
 	state = mutationDriver(nil)
 	db = open(t, state, nil)
 	connections := state.connected.Load()
-	items, err = mutationModel().InsertManyOnConflict(t.Context(), db, nil, query.OnConflict[mutationRecord]().DoNothing())
+	items, err = orm.UpsertMany(t.Context(), db, mutationModel(), orm.OnConflict[mutationRecord]().DoNothing(), nil)
 	if err != nil || items == nil || len(items) != 0 || state.connected.Load() != connections || state.committed.Load() != 0 {
 		t.Fatal("empty upsert opened a transaction", err)
 	}
@@ -100,7 +101,7 @@ func TestBatchReturningCleanupFailureRollsBack(t *testing.T) {
 		return &resultRows{state: state, columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "complete"}}, closeError: cause}, nil
 	}
 	db := open(t, state, nil)
-	items, err := mutationModel().InsertMany(t.Context(), db, []query.Mutation[mutationRecord]{mutationValues()})
+	items, err := mutationFields.InsertMany(t.Context(), transactionOnly{db}, [][]orm.Assignment[mutationRecord]{mutationValues()})
 	if !errors.Is(err, cause) || items != nil || state.committed.Load() != 0 || state.rolledBack.Load() != 1 {
 		t.Fatal("failed cleanup published or committed models", err)
 	}

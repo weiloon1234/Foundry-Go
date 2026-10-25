@@ -199,14 +199,14 @@ func TestGoWaySourceInventory(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if !entry.IsDir() && filepath.Ext(path) == ".go" {
+			if !entry.IsDir() && (filepath.Ext(path) == ".go" || directory == "tests/oracle" && strings.Contains(filepath.ToSlash(path), "/testdata/")) {
 				count++
 				relative, err := filepath.Rel(root, path)
 				if err != nil {
 					return err
 				}
 				if !included[filepath.ToSlash(relative)] {
-					t.Errorf("runtime source omitted: %s", relative)
+					t.Errorf("source or oracle evidence omitted: %s", relative)
 				}
 			}
 			return nil

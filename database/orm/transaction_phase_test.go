@@ -152,37 +152,27 @@ func TestExportedTypesPreventPhaseConversions(t *testing.T) {
 }
 
 func TestTransactionLayoutSweepDetectsOriginalRecordConversion(t *testing.T) {
-	pkg := surfacePackageIn(t, "../query", `package query
- type TransactionLayoutProbe[R any] struct { record recordQuery[R] }
+	pkg := surfacePackageIn(t, "./rows", `package rows
+ import "github.com/weiloon1234/Foundry-Go/internal/ormcore"
+ type TransactionLayoutProbe[R any] struct { _ [0]*R; ordinaryRecord [0]struct{}; core ormcore.RecordSource }
  `)
-	found := false
-	for _, failure := range exportedLayoutConversions(t, pkg) {
-		if failure == "query.SetQuery <-> query.TransactionLayoutProbe" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("layout sweep missed the original transaction record escape")
+	if !slices.Contains(exportedLayoutConversions(t, pkg), "rows.Record <-> rows.TransactionLayoutProbe") {
+		t.Fatal("layout sweep missed ordinary/transaction record escape")
 	}
 }
 
-// None of these injected names uses a transaction/locked prefix. They restore
-// the four vulnerable legacy layouts so the guard must report each conversion.
-func TestPhaseSweepDetectsLegacyExpressionConversions(t *testing.T) {
-	pkg := surfacePackageIn(t, "../query", `package query
- import "github.com/weiloon1234/Foundry-Go/internal/querycore"
- type HavingLayoutProbe[S any] struct { _ [0]*S; expression *querycore.PredicateState }
- type ValueComparisonLayoutProbe[S,V any] struct { expression Expression[S,V] }
- type ValueCaseLayoutProbe[S,V any] struct { builder caseBuilder[S,V] }
- type ProjectionKeyLayoutProbe[S any] struct { _ [0]*S; node valueExpression }
+// Inject the ordinary native layouts under names belonging to later phases.
+// These probes deliberately reproduce the conversions that phase fields prevent.
+func TestPhaseSweepDetectsNativeExpressionConversions(t *testing.T) {
+	pkg := surfacePackageIn(t, "./expr", `package expr
+ import "github.com/weiloon1234/Foundry-Go/internal/ormcore"
+ type HavingLayoutProbe[S any] struct { predicatePhase [0]struct{}; _ [0]*S; core ormcore.Predicate }
+ type ValueComparisonLayoutProbe[S,V any] struct { rowPhase [0]struct{}; _ [0]*S; data rowData[V] }
+ type ValueCaseLayoutProbe[S,V any] struct { rowCasePhase [0]struct{}; _ [0]*S; builder ormcore.CaseBuilder; column ormcore.Column[V] }
+ type ProjectionKeyLayoutProbe[S any] struct { rowKeyPhase [0]struct{}; _ [0]*S; core ormcore.Expression }
  `)
 	pairs := exportedLayoutConversions(t, pkg)
-	for _, pair := range []string{
-		"query.HavingLayoutProbe <-> query.Predicate",
-		"query.RowExpression <-> query.ValueComparisonLayoutProbe",
-		"query.Case <-> query.ValueCaseLayoutProbe",
-		"query.Group <-> query.ProjectionKeyLayoutProbe",
-	} {
+	for _, pair := range []string{"expr.HavingLayoutProbe <-> expr.Predicate", "expr.RowExpression <-> expr.ValueComparisonLayoutProbe", "expr.Case <-> expr.ValueCaseLayoutProbe", "expr.GroupKey <-> expr.ProjectionKeyLayoutProbe"} {
 		if !slices.Contains(pairs, pair) {
 			t.Errorf("phase sweep missed %s", pair)
 		}

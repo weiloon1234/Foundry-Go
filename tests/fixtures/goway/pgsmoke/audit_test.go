@@ -10,7 +10,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/audit/record"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
@@ -79,7 +78,7 @@ func TestAuditRowsShareRollbackAndRestoreTypedHistory(t *testing.T) {
 	must(t, err)
 	subject, err := captured.Subject()
 	must(t, err)
-	history, err := audit.ModelHistory(ctx, db, recorder, subject, query.PageRequest{Number: 1, Size: 10})
+	history, err := audit.ModelHistory(ctx, db, recorder, subject, orm.PageRequest{Number: 1, Size: 10})
 	must(t, err)
 	if len(history.Items) != 2 {
 		t.Fatal("stored history", len(history.Items))

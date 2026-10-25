@@ -6,9 +6,11 @@ import (
 	"testing"
 )
 
+var matchingOracle = oracle.NewReplayAt("goway", "../../oracle/testdata/stage8d-matching")
+
 var frozenOracle = oracle.NewReplay("goway")
 
-func TestMain(m *testing.M) { os.Exit(frozenOracle.Main(m)) }
+func TestMain(m *testing.M) { os.Exit(matchingOracle.Finish(frozenOracle.Main(m))) }
 func oracleEqual(t *testing.T, site, legacy, current string) bool {
 	t.Helper()
 	return frozenOracle.Equal(t, site, legacy, current)
@@ -46,3 +48,8 @@ func TestFrozenOracleIntegrity(t *testing.T) {
 }
 
 func oracleReadDirectory() string { return oracle.Directory() }
+
+func oracleMatch(t *testing.T, site, current string) bool {
+	t.Helper()
+	return frozenOracle.Match(t, site, current)
+}

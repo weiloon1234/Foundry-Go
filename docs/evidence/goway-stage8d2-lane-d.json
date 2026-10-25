@@ -1,0 +1,174 @@
+{
+  "slice": "stage8d2-lane-d",
+  "recorded_at": "2026-10-25T09:42:34.302537+00:00",
+  "base_commit": "e7b4d8a45fd40f77d680930758e859d92681425f",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r15",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "FOUNDRY_TEST_POSTGRES_REQUIRED": "1 for backend suites"
+  },
+  "source_sha256": {
+    "attachments/collections_postgres_test.go": "a66fb86b76c03ecd414fe5eca83b463c89482d0cd10e375914febb94465e68ff",
+    "attachments/handle_files_test.go": "20f7d1b9e5081a01900ba4f6a6f44438a10907b0328510cf66b280290d42b2f6",
+    "attachments/slot_postgres_test.go": "148c4b29bea46a8d14c986369fe5e857c7bea401e6311e4c22362fd644547d6d",
+    "audit/history_postgres_test.go": "a4d4703139fb25d5015e68167296172ca4456617df08b29daa2e0475184c000f",
+    "database/decoding_paths_test.go": "9f938ace7a2246fab50755a8797d7f117cbaa94044c8ccf18eb65d4e26e2e2f4",
+    "database/orm/rows/result_cursor_test.go": "544006451424f30154d5fd79d3ff3d38ca3e35d151be7e815087cf0322ab3428",
+    "database/orm/rows/result_read_test.go": "2f56d11e83046092a2bc912337fdf884beebda5cc3b36fd21841ec0c6efd39e7",
+    "database/orm/rows/result_sensitivity_test.go": "7dcd961b725070c6dbd8c605a65805400a5f5c9eabf7a85aec81888d5eff3065",
+    "extensions/owner_test.go": "8f3283fd13537587ff3ded6295d94c877d478d4cc838cc3fa8dc84f968b4a69e",
+    "http/pagination/authenticated_endpoint_test.go": "9ff4e5257ab9ad26fcaab230a630f536e48cb53407617f5d037070af18254f5d",
+    "http/pagination/cursor_test.go": "f1627c042b3f630173972622283bc2f03898cb5a59a85addedf0a8e82093180b",
+    "http/pagination/endpoint_test.go": "d44a3c173e674d9bccba88b9ccf5abaad45aadbf5dc708db9fe71a50c6dc45ea",
+    "http/pagination/labels_test.go": "0af564369d203aa86162c92ea1652e06f114faf1719d349c8e3f80f6272847f7",
+    "http/pagination/map_test.go": "bfb484a4228c1dd7675cf835ede3c3950ee199e83c0c1a2742b3086a1fe1ef74",
+    "internal/extensionrow/identity_test.go": "09d80749b4612ac135c121e8acaffa4250a5cf6fd8dc222f87897324db313cf6",
+    "internal/extensiontest/fixture.go": "2af6410e954395536801463f2fbbe6f010e28a0184a824d733012f9a53a2c34c",
+    "metadata/rescope_postgres_test.go": "516e1d749e1dfe45e5fd386df83e4557d4c7f2fbbac43993323e267580e8eaf9",
+    "notifications/bulk_postgres_test.go": "4b6f4cf28ff93ed48f6ccc30d6d51040f3affaf8138e5c44e6175a493144f439",
+    "notifications/collision_postgres_test.go": "b491c420e5fd7ec11b96acd1bc38e4797af81a71f34c16cff4192e2c7e195ee9",
+    "notifications/delivery_postgres_test.go": "1eb758e88bbdaf44df28d8158464ed0eb55eef73e50a49744d6a36834eac1f77",
+    "notifications/operations_postgres_test.go": "57777466445e17c7d9f3d22c60f8892667bbf508b8dd98974c8997b81cca9c50",
+    "tests/fixtures/goway/integrations/oracle_test.go": "fe87b66f8f78413273c8a7099b76b8a0bbb860ae19b4820c06ba14ba741d3c05",
+    "tests/fixtures/goway/integrations/pagination_test.go": "3e25d33a3424716ed88688c152507d5a6878ebd8a1428982c3c4e8503b61dc09",
+    "tests/fixtures/goway/pgsmoke/audit_test.go": "8cb34b9d1263ddddacfa044806b8e575ff0ed967efa2eb5cc06767db687ba310",
+    "tests/fixtures/goway/pgsmoke/reads_test.go": "85e7ff27a485bc38dd9503562707e5a70a5a53ffccac84aaa6f5b01a8194d425",
+    "tests/fixtures/goway/pgsmoke/result_cursor_test.go": "c672120f354945964a399588db2c5d1e014c953348a822c3e5387760e7922f5a",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "7138d2960d42936c7a5daf26bd058a45fbc7ad2345c47fa5809a46c876066dcb",
+    "tests/oracle/inventory.go": "33e5d52ea766f651fd3e6c45421b582accbd4b9b34fc635c5824d4d6f3769f88",
+    "tests/oracle/replay.go": "5bbb1a91360d6fbef19506cf81a6822fd6e947acd915b72228f1eed736c4ba7e",
+    "tests/oracle/replay_test.go": "d9981a7ef35f516ca2435c4834b0768e691708a34af5c59cbd37abe5f129d435",
+    "translations/translations_paging_postgres_test.go": "353071fad95468e63e44e85cabdc85a5d45b2e6157dd1a89474faf89a85524d3"
+  },
+  "commands": [
+    {
+      "command": "go build ./...",
+      "result": "pass",
+      "note": "Non-fatal sandbox module stat-cache write warning; exit 0."
+    },
+    {
+      "command": "go vet ./...",
+      "result": "pass"
+    },
+    {
+      "command": "go test -race ./database ./database/orm/rows ./http/modelbinding ./http/pagination ./internal/extensiontest ./internal/extensionrow",
+      "result": "pass"
+    },
+    {
+      "command": "go test -race ./extensions ./attachments ./metadata ./translations ./audit ./notifications ./tests/oracle",
+      "result": "pass",
+      "backend": "PostgreSQL required; configured .env.test sourced privately; local-service access"
+    },
+    {
+      "command": "go test -race ./attachments -run 'TestAddFilesTo|TestPostgresSlot'",
+      "result": "pass",
+      "note": "Rerun after removing the last legacy attachment slot/preflight leg; PostgreSQL required."
+    },
+    {
+      "command": "go vet ./integrations ./pgsmoke",
+      "cwd": "tests/fixtures/goway",
+      "result": "pass"
+    },
+    {
+      "command": "go test -race ./integrations ./pgsmoke",
+      "cwd": "tests/fixtures/goway",
+      "result": "pass",
+      "backend": "PostgreSQL required; local-service access"
+    },
+    {
+      "command": "go test -race . -run '^TestFrozenOracleIntegrity$'",
+      "cwd": "tests/fixtures/goway",
+      "result": "pass"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 tools/goway_catalogue.py",
+      "result": "pass",
+      "note": "1032 rows, 587 ported, zero pending; no catalogue edits."
+    },
+    {
+      "command": "make docs-check",
+      "result": "pass"
+    },
+    {
+      "command": "git diff --name-only -- '*.go' | xargs gofmt -l",
+      "result": "pass",
+      "note": "Empty output after gofmt -w on edited files."
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "corrected_or_segmented_runs": [
+    {
+      "command": "initial go vet ./...",
+      "result": "failed",
+      "reason": "Port used expr.Value instead of expr.Select for scalar projection; decoding test had an unused database import. Both corrected before successful acceptance."
+    },
+    {
+      "command": "initial combined root race suites",
+      "result": "interrupted after partial pass",
+      "reason": "Sandbox blocked PostgreSQL startup. Database, rows, HTTP and extension-row suites passed. PostgreSQL packages were rerun with local-service access; final non-backend segment rerun separately."
+    }
+  ],
+  "frozen": {
+    "added_captures": 0,
+    "replayed_legacy_records": 9,
+    "legacy_commit": "c95f9606f6429ef6ae7214446a51fa81b307e626",
+    "source_manifest_sha256": "26e4fc21824cdee840766c2ac17542a8f12f614085bf3bcc2d9712de008649c8",
+    "records_and_receipt": "unchanged",
+    "census": "only five owned source hashes refreshed",
+    "shared_owner": "tests/oracle; no format/validator copied"
+  },
+  "footprint": {
+    "probes": "unchanged",
+    "ceilings": "unchanged",
+    "measurement": "not rerun; only behavior tests, test fixtures and oracle test infrastructure changed"
+  },
+  "surface": {
+    "framework_additions": [],
+    "framework_removals": [],
+    "test_infrastructure_additions": [
+      "tests/oracle.Replay.Match"
+    ]
+  },
+  "unported_invariants": [],
+  "remaining_engine_callers": [
+    "http/modelbinding/field.go",
+    "http/modelbinding/nested.go",
+    "extensions/owner_legacy.go",
+    "attachments/matching_legacy.go",
+    "attachments/slot_legacy.go",
+    "translations/matching_legacy.go",
+    "translations/slot_legacy.go",
+    "metadata/matching_legacy.go",
+    "metadata/slot_legacy.go"
+  ],
+  "remaining_alias_only_users": [
+    "audit/model.go",
+    "audit/retention.go",
+    "audit/timeline.go",
+    "audit/command/command.go",
+    "internal/auditstore/store.go",
+    "notifications/inbox.go"
+  ],
+  "shared_files": [
+    "attachments/collections_postgres_test.go",
+    "attachments/slot_postgres_test.go",
+    "attachments/handle_files_test.go",
+    "tests/oracle/inventory.go",
+    "tests/oracle/replay.go",
+    "tests/oracle/replay_test.go",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json"
+  ],
+  "report": "docs/evidence/goway-stage8d2-lane-d-report.md",
+  "committed": false,
+  "integration": {
+    "batch": 11,
+    "base": "e7b4d8a4",
+    "evidence": "docs/evidence/goway-batch11-integration.json",
+    "note": "Source hashes refreshed for the merged tree; lane command results remain historical."
+  }
+}

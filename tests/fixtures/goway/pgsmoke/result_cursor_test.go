@@ -8,7 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -25,24 +24,24 @@ func TestStage6c3ResultCursorAndReadTerminals(t *testing.T) {
 	})
 	c := rows.CursorFor(rows.ModelRecord(table.Query()))
 	c = c.OrderBy(expr.At(c.Scope(), table.ParentID).Asc()).UniqueBy(expr.Group(expr.At(c.Scope(), table.Key())))
-	first, err := c.Paginate(ctx, db, query.CursorRequest[treeNode]{Size: 1})
+	first, err := c.Paginate(ctx, db, orm.CursorRequest[treeNode]{Size: 1})
 	must(t, err)
-	next, err := c.Paginate(ctx, db, query.CursorRequest[treeNode]{Size: 1, After: first.Next})
+	next, err := c.Paginate(ctx, db, orm.CursorRequest[treeNode]{Size: 1, After: first.Next})
 	must(t, err)
-	previous, err := c.Paginate(ctx, db, query.CursorRequest[treeNode]{Size: 1, Before: next.Previous})
+	previous, err := c.Paginate(ctx, db, orm.CursorRequest[treeNode]{Size: 1, Before: next.Previous})
 	must(t, err)
 	if first.Items[0].ID != 1 || next.Items[0].ID != 2 || !reflect.DeepEqual(previous.Items, first.Items) {
 		t.Fatal(first, next, previous)
 	}
 	scalar := rows.Read(rows.SelectValue(table.Query(), table.ParentID)).OrderBy(expr.Value(table.Key()).Asc())
-	page, err := scalar.Paginate(ctx, db, query.PageRequest{Number: 2, Size: 2})
+	page, err := scalar.Paginate(ctx, db, orm.PageRequest{Number: 2, Size: 2})
 	must(t, err)
 	if page.Total != 3 || !reflect.DeepEqual(page.Items, []int64{1}) {
 		t.Fatal(page)
 	}
 	nullable := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.Nullable(expr.Select(expr.Value(table.Key()))))))
 	nullable = nullable.UniqueBy(nullable.Key())
-	p, err := nullable.Paginate(ctx, db, query.CursorRequest[value.Nullable[int64]]{Size: 2})
+	p, err := nullable.Paginate(ctx, db, orm.CursorRequest[value.Nullable[int64]]{Size: 2})
 	must(t, err)
 	if len(p.Items) != 2 || !p.Next.IsSet() {
 		t.Fatal(p)

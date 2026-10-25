@@ -77,3 +77,34 @@ func TestReplayPackageOwnershipDoesNotCaptureChildPackages(t *testing.T) {
 		t.Fatal(missing, err)
 	}
 }
+
+// Native replay consumes the same stable occurrence IDs as paired comparisons.
+func TestMatchConsumesFrozenLegacyObservations(t *testing.T) {
+	r := NewReplay("p")
+	r.once.Do(func() {})
+	id := "p/" + t.Name() + "/site/0"
+	r.bundle = sample()
+	r.bundle.Records = map[string]Record{id: {Package: "p", Kind: "golden", Site: "site", Transcript: "legacy observation"}}
+	if !r.Match(t, "site", "legacy observation") || !r.consumed[id] {
+		t.Fatal("native replay failed to consume the frozen occurrence")
+	}
+}
+
+func TestInventoryRetainsNativeReplaySites(t *testing.T) {
+	dir := t.TempDir()
+	source := `package example
+ func TestNative(t *testing.T) { compare(t) }
+ func compare(t *testing.T) { oracleMatch(t, "native/site", current) }
+ `
+	if err := os.WriteFile(filepath.Join(dir, "native_test.go"), []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	sites, tests, err := Inventory(dir)
+	if err != nil || len(sites) != 1 || !sites["native/site"] || len(tests) != 1 || tests[0] != "TestNative" {
+		t.Fatal(sites, tests, err)
+	}
+	selected, err := SelectedSites(dir, []string{"TestNative"})
+	if err != nil || !selected["native/site"] {
+		t.Fatal(selected, err)
+	}
+}

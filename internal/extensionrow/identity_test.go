@@ -4,10 +4,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/extensiontest"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -81,8 +81,8 @@ func TestRowsDecideAsFullValidation(t *testing.T) {
 // A row recorded under the declared storage model before a table rename has
 // a different identity text, so it takes the full path and stays readable.
 func TestRowsValidateRowsRecordedBeforeARename(t *testing.T) {
-	original := extensions.DefineOwner("members", extensiontest.MemberIdentity("extension_members"))
-	pinned := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
+	original := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_members"), extensions.OwnerOptions{})
+	pinned := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
 	row := stored(t, original, 7, "seo")
 	rows, err := For(pinned, []model.Reference[extensiontest.Member, int64]{pinned.Reference(7)})
 	if err != nil {
@@ -101,7 +101,7 @@ func TestRowsValidateRowsRecordedBeforeARename(t *testing.T) {
 
 func TestRowsBoundTheirBatch(t *testing.T) {
 	owner := extensiontest.Members
-	references := make([]model.Reference[extensiontest.Member, int64], query.MaxIdentityBatch+1)
+	references := make([]model.Reference[extensiontest.Member, int64], querycore.MaxIdentityBatch+1)
 	for i := range references {
 		references[i] = owner.Reference(int64(i + 1))
 	}

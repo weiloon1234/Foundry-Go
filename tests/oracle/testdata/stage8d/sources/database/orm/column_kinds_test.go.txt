@@ -1,0 +1,221 @@
+package orm
+
+import (
+	"database/sql/driver"
+	"fmt"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/auth/password"
+	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/temporal"
+	"github.com/weiloon1234/Foundry-Go/value"
+)
+
+type kindRecord struct {
+	ID            int64
+	Document      value.JSON[string]
+	MaybeDocument value.Nullable[value.JSON[string]]
+	Period        temporal.Interval
+	MaybePeriod   value.Nullable[temporal.Interval]
+	Name          string
+	MaybeName     value.Nullable[string]
+}
+type kindFields struct {
+	Table[kindRecord, int64]
+	Document      JSON[kindRecord, string]
+	MaybeDocument NullableJSON[kindRecord, string]
+	Period        Interval[kindRecord]
+	MaybePeriod   NullableInterval[kindRecord]
+	Name          Text[kindRecord, string]
+	MaybeName     NullableText[kindRecord, string]
+}
+
+func kindTable() kindFields {
+	return Define("kind_records", func(b Builder[kindRecord], m *kindRecord) kindFields {
+		return kindFields{TableOf(b, &m.ID), JSONOf(b, &m.Document), NullableJSONOf(b, &m.MaybeDocument), IntervalOf(b, &m.Period), NullableIntervalOf(b, &m.MaybePeriod), TextOf(b, &m.Name), NullableTextOf(b, &m.MaybeName)}
+	})
+}
+
+func TestColumnKindSQLAndHydration(t *testing.T) {
+	r := kindTable()
+	if err := Check(r); err != nil {
+		t.Fatal(err)
+	}
+	document, err := value.NewJSON("dark")
+	if err != nil {
+		t.Fatal(err)
+	}
+	interval := temporal.Days(2)
+	statement, err := Compile(r.Query().Where(r.Document.Eq(document), r.Period.Gt(interval), r.MaybeDocument.IsNull(), r.MaybePeriod.IsNotNull(), r.Name.IContains(`A%_\`), r.MaybeName.IContains(`A%_\`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(statement.SQL(), `"period" > $2`) || strings.Count(statement.SQL(), " ILIKE ") != 2 {
+		t.Fatal(statement.SQL())
+	}
+	args := statement.Arguments()
+	if len(args) != 4 || args[2] != `%A!%!_\%` || args[3] != args[2] {
+		t.Fatalf("literal IContains bindings: %#v", args)
+	}
+	db := testDB(t, testConnector{columns: []string{"id", "document", "maybe_document", "period", "maybe_period", "name", "maybe_name"}, values: [][]driver.Value{{int64(1), `"dark"`, nil, interval.String(), nil, "name", nil}}})
+	got, err := r.Query().All(t.Context(), db)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("hydrate: %v", err)
+	}
+	if got[0].Document != document || got[0].Period != interval || !got[0].MaybeDocument.IsNull() || !got[0].MaybePeriod.IsNull() {
+		t.Fatal("hydration changed values/nullness")
+	}
+}
+
+func TestNewColumnAssignmentsAndMalformedRows(t *testing.T) {
+	r := kindTable()
+	document, err := value.NewJSON("light")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := planWrite(r.Query().Where(r.Key().Eq(1)).state, querycore.UpdateModel, []Assignment[kindRecord]{r.MaybeDocument.Set(document), r.MaybePeriod.Set(temporal.Months(1))}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.assignments) != 2 {
+		t.Fatal("nullable assignments missing")
+	}
+	for _, assignment := range []Assignment[kindRecord]{r.MaybeDocument.SetNull(), r.MaybePeriod.SetNull()} {
+		bound, err := assignment.core.Bind()
+		if err != nil || bound != nil {
+			t.Fatalf("SetNull: %v", err)
+		}
+	}
+	for _, raw := range []driver.Value{`{"wrong":true}`, "invalid JSON"} {
+		db := testDB(t, testConnector{columns: []string{"id", "document", "maybe_document", "period", "maybe_period", "name", "maybe_name"}, values: [][]driver.Value{{int64(1), raw, nil, "+0 mons +1 days +0 microseconds", nil, "name", nil}}})
+		got, err := r.Query().All(t.Context(), db)
+		if err == nil || got != nil {
+			t.Fatal("malformed JSON published a model")
+		}
+	}
+	for _, typ := range []reflect.Type{reflect.TypeFor[JSON[kindRecord, string]](), reflect.TypeFor[NullableJSON[kindRecord, string]](), reflect.TypeFor[Interval[kindRecord]](), reflect.TypeFor[NullableInterval[kindRecord]]()} {
+		if typ.NumMethod() > 25 {
+			t.Errorf("%s has %d methods", typ, typ.NumMethod())
+		}
+	}
+}
+
+func TestJSONContainmentUsesSharedCompiler(t *testing.T) {
+	r := kindTable()
+	v, err := value.NewJSON("dark")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Compile(r.Query().Where(r.Document.Contains(v), r.MaybeDocument.ContainedBy(v)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(s.SQL(), " @> ") || !strings.Contains(s.SQL(), " <@ ") {
+		t.Fatal(s.SQL())
+	}
+	if !reflect.DeepEqual(s.Arguments(), []any{`"dark"`, true, `"dark"`, true}) {
+		t.Fatalf("containment bindings: %#v", s.Arguments())
+	}
+	var statements []string
+	db := testDB(t, testConnector{statements: &statements})
+	if _, err = r.Query().Where(r.Document.Contains(value.JSON[string]{})).Count(t.Context(), db); err == nil {
+		t.Fatal("invalid JSON accepted")
+	}
+	if len(statements) != 0 {
+		t.Fatal("invalid JSON sent SQL")
+	}
+	var unbound NullableJSON[kindRecord, string]
+	if _, err = Compile(r.Query().Where(unbound.Contains(v))); err == nil {
+		t.Fatal("unbound nullable JSON accepted")
+	}
+}
+
+func TestJSONOrderingAndNullUseSharedCompiler(t *testing.T) {
+	r := kindTable()
+	s, err := Compile(r.Query().Where(r.Document.IsJSONNull(), r.MaybeDocument.IsJSONNull()).OrderBy(r.Document.Asc(), r.MaybeDocument.Desc()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(s.SQL(), "JSONB_TYPEOF(") != 2 || !strings.Contains(s.SQL(), `ORDER BY "kind_records"."document" ASC, "kind_records"."maybe_document" DESC`) {
+		t.Fatal(s.SQL())
+	}
+	if !reflect.DeepEqual(s.Arguments(), []any{"null", "null"}) {
+		t.Fatalf("JSON kind bindings: %#v", s.Arguments())
+	}
+	var unbound JSON[kindRecord, string]
+	var nullable NullableJSON[kindRecord, string]
+	var statements []string
+	db := testDB(t, testConnector{statements: &statements})
+	for _, predicate := range []Predicate[kindRecord]{unbound.IsJSONNull(), nullable.IsJSONNull()} {
+		if _, err := r.Query().Where(predicate).Count(t.Context(), db); err == nil {
+			t.Fatal("unbound JSON null predicate accepted")
+		}
+	}
+	if len(statements) != 0 {
+		t.Fatal("unbound JSON sent SQL")
+	}
+}
+
+// Compare the old field's core completion list directly. Cross-column, query,
+// grouping and conflict APIs retain their separately scheduled parity slices.
+// Interval Sum/Avg require the old private summaryData capability, deferred to 6a.
+func TestColumnKindCoreParity(t *testing.T) {
+	deferred := map[string]string{
+		"EqColumn": "6b", "NeColumn": "6b", "GtColumn": "6b", "GteColumn": "6b", "LtColumn": "6b", "LteColumn": "6b",
+		"Group": "6a", "InQuery": "6b", "InNullableQuery": "6b", "InCorrelatedQuery": "6b", "InNullableCorrelatedQuery": "6b", "Incoming": "5",
+		"Kind": "6d", "Length": "6d",
+	}
+	pairs := []struct{ old, current reflect.Type }{
+		{reflect.TypeFor[query.ScalarField[kindRecord, password.Hash]](), reflect.TypeFor[Column[kindRecord, password.Hash]]()},
+		{reflect.TypeFor[query.NullableField[kindRecord, password.Hash]](), reflect.TypeFor[NullableColumn[kindRecord, password.Hash]]()},
+		{reflect.TypeFor[query.IntervalField[kindRecord, temporal.Interval]](), reflect.TypeFor[Interval[kindRecord]]()},
+		{reflect.TypeFor[query.NullableIntervalField[kindRecord, temporal.Interval]](), reflect.TypeFor[NullableInterval[kindRecord]]()},
+		{reflect.TypeFor[query.JSONField[kindRecord, value.JSON[string]]](), reflect.TypeFor[JSON[kindRecord, string]]()},
+		{reflect.TypeFor[query.NullableJSONField[kindRecord, value.JSON[string]]](), reflect.TypeFor[NullableJSON[kindRecord, string]]()},
+	}
+	for _, pair := range pairs {
+		t.Run(pair.current.Name(), func(t *testing.T) {
+			signatures := func(typ reflect.Type, old bool) map[string]string {
+				result := map[string]string{}
+				families := map[reflect.Type]string{
+					reflect.TypeFor[query.Predicate[kindRecord]]():      "Predicate",
+					reflect.TypeFor[Predicate[kindRecord]]():            "Predicate",
+					reflect.TypeFor[query.Order[kindRecord]]():          "Order",
+					reflect.TypeFor[Order[kindRecord]]():                "Order",
+					reflect.TypeFor[query.ConflictUpdate[kindRecord]](): "Assignment",
+					reflect.TypeFor[Assignment[kindRecord]]():           "Assignment",
+				}
+				for i := 0; i < typ.NumMethod(); i++ {
+					method := typ.Method(i)
+					if stage := deferred[method.Name]; stage != "" {
+						if !old {
+							t.Errorf("%s appeared before being un-deferred from Stage %s", method.Name, stage)
+						}
+						continue
+					}
+					sig := method.Type
+					shape := fmt.Sprintf("inputs=%d outputs=%d variadic=%t", sig.NumIn()-1, sig.NumOut(), sig.IsVariadic())
+					for j := 1; j < sig.NumIn(); j++ {
+						shape += fmt.Sprintf(" in:%s:%s", sig.In(j).Kind(), sig.In(j))
+					}
+					for j := 0; j < sig.NumOut(); j++ {
+						family, ok := families[sig.Out(j)]
+						if !ok {
+							t.Fatalf("unmapped result family %s for %s", sig.Out(j), method.Name)
+						}
+						shape += fmt.Sprintf(" out:%s:%s", sig.Out(j).Kind(), family)
+					}
+					result[method.Name] = shape
+				}
+				return result
+			}
+			captureLegacy(t, "signatures", signatures(pair.old, true))
+			if want, got := signatures(pair.old, true), signatures(pair.current, false); !reflect.DeepEqual(want, got) {
+				t.Fatalf("core signature shapes differ: old %v; new %v", want, got)
+			}
+		})
+	}
+}

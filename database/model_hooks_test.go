@@ -9,9 +9,8 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -21,14 +20,14 @@ func TestModelHookFactoriesRollbackPanicsAndGoexit(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			state := mutationDriver(nil)
 			db := open(t, state, nil)
-			q := query.ForModel(mutationDefinition().WithWriteHooks(func() query.WriteHooks[mutationRecord] {
+			q := mutationDefinition(orm.WithHooks(func() orm.Hooks[mutationRecord] {
 				if mode == "panic" {
 					panic("private factory payload")
 				}
 				runtime.Goexit()
-				return query.WriteHooks[mutationRecord]{}
+				return orm.Hooks[mutationRecord]{}
 			}))
-			got, err := q.Insert(t.Context(), db, mutationValues())
+			got, err := q.Insert(t.Context(), db, q.Name.Set("private record name"))
 			if !errors.Is(err, fault.Panicked) || got != (mutationRecord{}) || state.rolledBack.Load() != 1 || state.rowsClosed.Load() != 0 {
 				t.Fatalf("factory failure escaped transaction isolation: %v", err)
 			}
@@ -53,9 +52,8 @@ func TestModelHooksRejectAmbiguousLockedRowsBeforeCallbacks(t *testing.T) {
 			state := mutationDriver(test.rows)
 			db := open(t, state, nil)
 			calls := 0
-			q := query.ForModel(mutationDefinition().WithWriteHooks(func() query.WriteHooks[mutationRecord] { calls++; return query.WriteHooks[mutationRecord]{} }))
-			id := query.NewScalarField[mutationRecord, int64]("records", "id", codec.Signed[int64]())
-			got, err := q.Where(id.Eq(1)).Patch(t.Context(), db, mutationValues())
+			q := mutationDefinition(orm.WithHooks(func() orm.Hooks[mutationRecord] { calls++; return orm.Hooks[mutationRecord]{} }))
+			got, err := q.Update(t.Context(), db, 1, q.Name.Set("private record name"))
 			if !errors.Is(err, test.want) || got != (mutationRecord{}) || calls != 0 || state.rolledBack.Load() != 1 || state.rowsClosed.Load() != 1 {
 				t.Fatalf("invalid locked row ran factory or escaped rollback: %v", err)
 			}
@@ -79,16 +77,16 @@ func TestModelHooksCloseRowsAndPreserveCommitCandidates(t *testing.T) {
 				}
 				return &resultRows{state: state, columns: []string{"id", "name"}, values: [][]driver.Value{{int64(42), "private record name"}}}, nil
 			}
-			q := query.ForModel(mutationDefinition().WithWriteHooks(func() query.WriteHooks[mutationRecord] {
-				return query.WriteHooks[mutationRecord]{
-					Before: func(ctx context.Context, tx *database.Tx, op lifecycle.Operation, before value.Optional[mutationRecord], m query.Mutation[mutationRecord]) (query.Mutation[mutationRecord], error) {
-						if state.rowsClosed.Load() != 1 || op != lifecycle.Update || !before.IsSet() {
+			q := mutationDefinition(orm.WithHooks(func() orm.Hooks[mutationRecord] {
+				return orm.Hooks[mutationRecord]{
+					Saving: func(ctx context.Context, tx *database.Tx, before value.Optional[mutationRecord], _ *orm.Write[mutationRecord]) error {
+						if state.rowsClosed.Load() != 1 || !before.IsSet() {
 							t.Error("before callback ran with open/missing row")
 						}
-						return m, nil
+						return nil
 					},
-					After: func(ctx context.Context, tx *database.Tx, op lifecycle.Operation, before, after value.Optional[mutationRecord], m query.Mutation[mutationRecord]) error {
-						if state.rowsClosed.Load() != 2 || !after.IsSet() {
+					Updated: func(ctx context.Context, tx *database.Tx, changes orm.Changes[mutationRecord]) error {
+						if state.rowsClosed.Load() != 2 || !changes.After().IsSet() {
 							t.Error("after callback ran with open/missing result")
 						}
 						return tx.AfterCommit(func(context.Context) error {
@@ -101,15 +99,14 @@ func TestModelHooksCloseRowsAndPreserveCommitCandidates(t *testing.T) {
 					},
 				}
 			}))
-			id := query.NewScalarField[mutationRecord, int64]("records", "id", codec.Signed[int64]())
-			got, err := q.Where(id.Eq(42)).Patch(t.Context(), db, mutationValues())
+			got, err := q.Update(t.Context(), db, 42, q.Name.Set("private record name"))
 			if outcome == "success" {
 				if err != nil || got.ID != 42 || afterCommits != 1 {
 					t.Fatalf("successful hook write failed: %v", err)
 				}
 				return
 			}
-			var candidate *query.WriteError[mutationRecord]
+			var candidate *orm.WriteError[mutationRecord]
 			if got != (mutationRecord{}) || !errors.As(err, &candidate) || candidate.Candidate().ID != 42 {
 				t.Fatalf("hook write lost reconciliation candidate: %v", err)
 			}
@@ -126,8 +123,8 @@ func TestModelHooksCloseRowsAndPreserveCommitCandidates(t *testing.T) {
 	}
 }
 
-func TestRegisteredObserversRequireAdapterAndRunThroughActualTransaction(t *testing.T) {
-	for _, mode := range []string{"missing-adapter", "factory-error", "panic", "goexit", "before-veto"} {
+func TestRegisteredObserversRequireMatchingFamilyAndRunThroughActualTransaction(t *testing.T) {
+	for _, mode := range []string{"wrong-family", "panic", "goexit", "before-veto"} {
 		t.Run(mode, func(t *testing.T) {
 			state := mutationDriver([][]driver.Value{{int64(42), "record"}})
 			db, err := database.Prepare(database.Adapter{Connector: connector{state}}, database.DefaultPoolConfig())
@@ -139,7 +136,29 @@ func TestRegisteredObserversRequireAdapterAndRunThroughActualTransaction(t *test
 					t.Error(err)
 				}
 			})
-			declaration, err := lifecycle.NewObserver[mutationRecord, query.WriteHooks[mutationRecord]]("observer").Declare(func() query.WriteHooks[mutationRecord] { return query.WriteHooks[mutationRecord]{} })
+			veto := errors.New("registered veto")
+			calls := 0
+			var declaration lifecycle.Declaration
+			if mode == "wrong-family" {
+				// An application-supplied hook family cannot stand in for the native adapter.
+				declaration, err = lifecycle.NewObserver[mutationRecord, struct{}]("observer").Declare(func() struct{} { calls++; return struct{}{} })
+			} else {
+				declaration, err = orm.NewObserver[mutationRecord]("observer").Declare(func() orm.Hooks[mutationRecord] {
+					calls++
+					switch mode {
+					case "panic":
+						panic("private observer factory")
+					case "goexit":
+						runtime.Goexit()
+					}
+					return orm.Hooks[mutationRecord]{Creating: func(_ context.Context, tx *database.Tx, _ *orm.Write[mutationRecord]) error {
+						if !lifecycle.HasObservers[mutationRecord](tx.Observers()) {
+							t.Error("adapter lost owning transaction observers")
+						}
+						return veto
+					}}
+				})
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -153,31 +172,9 @@ func TestRegisteredObserversRequireAdapterAndRunThroughActualTransaction(t *test
 			if err := db.Start(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			veto := errors.New("registered veto")
-			definition := mutationDefinition()
-			calls := 0
-			if mode != "missing-adapter" {
-				definition = definition.WithObserverHooks(func(ctx context.Context, owned lifecycle.Observers) (query.WriteHooks[mutationRecord], error) {
-					calls++
-					if !lifecycle.HasObservers[mutationRecord](owned) {
-						t.Error("adapter lost owning transaction observers")
-					}
-					switch mode {
-					case "factory-error":
-						return query.WriteHooks[mutationRecord]{}, veto
-					case "panic":
-						panic("private observer factory")
-					case "goexit":
-						runtime.Goexit()
-					}
-					return query.WriteHooks[mutationRecord]{Before: func(ctx context.Context, tx *database.Tx, _ lifecycle.Operation, _ value.Optional[mutationRecord], _ query.Mutation[mutationRecord]) (query.Mutation[mutationRecord], error) {
-						return query.Mutation[mutationRecord]{}, veto
-					}}, nil
-				}, false)
-			}
-			_, err = query.ForModel(definition).Insert(t.Context(), observerTransactor{db}, mutationValues())
+			_, err = mutationFields.Insert(t.Context(), observerTransactor{db}, mutationValues()...)
 			want := veto
-			if mode == "missing-adapter" {
+			if mode == "wrong-family" {
 				want = fault.Invalid
 			} else if mode == "panic" || mode == "goexit" {
 				want = fault.Panicked
@@ -185,7 +182,7 @@ func TestRegisteredObserversRequireAdapterAndRunThroughActualTransaction(t *test
 			if !errors.Is(err, want) || state.rolledBack.Load() != 1 || state.rowsClosed.Load() != 0 {
 				t.Fatal("registered factory escaped transaction or executed SQL after failure", err)
 			}
-			if (mode == "missing-adapter" && calls != 0) || (mode != "missing-adapter" && calls != 1) {
+			if (mode == "wrong-family" && calls != 0) || (mode != "wrong-family" && calls != 1) {
 				t.Fatal("factory repeated or stale adapter called")
 			}
 		})
@@ -203,14 +200,26 @@ func TestObserverFreeWrapperRetainsSingleMutationStatement(t *testing.T) {
 		}
 		return &resultRows{state: state, columns: []string{"id", "name"}, values: [][]driver.Value{{int64(42), "record"}}}, nil
 	}
-	d := mutationDefinition().WithObserverHooks(func(context.Context, lifecycle.Observers) (query.WriteHooks[mutationRecord], error) {
+	// A registration on another pool must not turn this wrapper's write into
+	// an observed write or invoke an unrelated factory.
+	declaration, err := orm.NewObserver[mutationRecord]("other.pool").Declare(func() orm.Hooks[mutationRecord] {
 		t.Error("observer-free adapter invoked")
-		return query.WriteHooks[mutationRecord]{}, nil
-	}, false)
-	id := query.NewScalarField[mutationRecord, int64]("records", "id", codec.Signed[int64]())
-	if _, err := query.ForModel(d).Where(id.Eq(42)).Patch(t.Context(), observerTransactor{db}, mutationValues()); err != nil {
+		return orm.Hooks[mutationRecord]{}
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
+	otherObservers, err := lifecycle.NewObservers(declaration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = rowObserverPool(t, mutationDriver(nil), otherObservers)
+	// Native adapters are installed even without a local factory. The actual
+	// transaction's empty registry must avoid the lifecycle snapshot read.
+	if _, err := mutationFields.Update(t.Context(), observerTransactor{db}, 42, mutationValues()...); err != nil {
+		t.Fatal(err)
+	}
+
 	if queries != 1 || state.committed.Load() != 1 {
 		t.Fatal("wrapper fallback created extra transaction or query")
 	}

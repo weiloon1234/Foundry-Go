@@ -8,7 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -36,13 +35,13 @@ func TestResultCursorCompositionPreservesSensitivity(t *testing.T) {
 			state := &driverState{}
 			db := openTest(t, state)
 			c := CursorFor(source)
-			if p, err := c.UniqueBy(expr.Group(At(c.Scope(), schema.Name))).Paginate(t.Context(), db, query.CursorRequest[record]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" || p.Next.IsSet() || p.Items != nil {
+			if p, err := c.UniqueBy(expr.Group(At(c.Scope(), schema.Name))).Paginate(t.Context(), db, orm.CursorRequest[record]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" || p.Next.IsSet() || p.Items != nil {
 				t.Fatal("sensitive key reached execution", err, state.sql)
 			}
 			// Sensitivity belongs to each output, not to the whole result.
 			state.columns = []string{"id", "name"}
 			state.rows = [][]driver.Value{{int64(1), "private"}, {int64(2), "private"}}
-			p, err := c.UniqueBy(expr.Group(At(c.Scope(), schema.ID))).Paginate(t.Context(), db, query.CursorRequest[record]{Size: 1})
+			p, err := c.UniqueBy(expr.Group(At(c.Scope(), schema.ID))).Paginate(t.Context(), db, orm.CursorRequest[record]{Size: 1})
 			if err != nil || !p.Next.IsSet() {
 				t.Fatal("public identity rejected", err)
 			}
@@ -50,7 +49,7 @@ func TestResultCursorCompositionPreservesSensitivity(t *testing.T) {
 			selected := Values(SelectScalar(a, expr.Select(At(Scope(a), schema.Name))))
 			state.sql = ""
 			v := ValueCursorFor(selected)
-			if _, err := v.UniqueBy(v.Key()).Paginate(t.Context(), db, query.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+			if _, err := v.UniqueBy(v.Key()).Paginate(t.Context(), db, orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal("alias/scalar lost sensitivity", err, state.sql)
 			}
 		})
@@ -64,7 +63,7 @@ func TestResultCursorCompositionPreservesSensitivity(t *testing.T) {
 			state := &driverState{}
 			db := openTest(t, state)
 			c := ValueCursorFor(source)
-			if _, err := c.UniqueBy(c.Key()).Paginate(t.Context(), db, query.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+			if _, err := c.UniqueBy(c.Key()).Paginate(t.Context(), db, orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal(err, state.sql)
 			}
 		})
@@ -72,13 +71,13 @@ func TestResultCursorCompositionPreservesSensitivity(t *testing.T) {
 	combined := UnionAllValues(public, sensitive)
 	scalar := ValueCursorFor(Values(SelectScalar(combined, expr.Select(combined.Value()))))
 	state := &driverState{}
-	if _, err := scalar.UniqueBy(scalar.Key()).Paginate(t.Context(), openTest(t, state), query.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+	if _, err := scalar.UniqueBy(scalar.Key()).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal("set/scalar lost sensitivity", err, state.sql)
 	}
 	// Reusing the ordinary declaration/source must not inherit another query's flags.
 	clean := CursorFor(ordinary)
 	cleanState := &driverState{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(1), "a"}, {int64(2), "b"}}}
-	if p, err := clean.UniqueBy(expr.Group(At(clean.Scope(), schema.Name))).Paginate(t.Context(), openTest(t, cleanState), query.CursorRequest[record]{Size: 1}); err != nil || !p.Next.IsSet() {
+	if p, err := clean.UniqueBy(expr.Group(At(clean.Scope(), schema.Name))).Paginate(t.Context(), openTest(t, cleanState), orm.CursorRequest[record]{Size: 1}); err != nil || !p.Next.IsSet() {
 		t.Fatal("declaration mutated", err)
 	}
 }
@@ -101,7 +100,7 @@ func TestResultCursorComputedProjectionSensitivity(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c := ValueCursorFor(Values(SelectScalar(source, selected)))
 			state := &driverState{}
-			if _, err := c.UniqueBy(c.Key()).Paginate(t.Context(), openTest(t, state), query.CursorRequest[int64]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+			if _, err := c.UniqueBy(c.Key()).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[int64]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal(err, state.sql)
 			}
 		})

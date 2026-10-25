@@ -11,10 +11,9 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
@@ -31,36 +30,53 @@ type Other struct {
 }
 type Product struct{ SKU string }
 
-func productSource() query.ModelIdentity[Product, string] {
-	q := query.ForModel(query.Define[Product]("extension_products", "sku", []query.Column{{Name: "sku"}}, func(database.Row) (Product, error) { panic("owner lookup hydrated product") }, query.NewModelField("sku", codec.String[string](), func(p Product) string { return p.SKU })))
-	return query.IdentityOf(q, query.NewTextField[Product]("extension_products", "sku", codec.String[string]()))
+// Identity reads must never hydrate presentation models or invoke retrieval hooks.
+func noPresentation[M any]() orm.Option {
+	return orm.WithRetrievalHooks(func() orm.RetrievalHooks[M] {
+		panic("extension ownership must not hydrate model presentation")
+	})
 }
 
-var Products = extensions.DefineOwner("products", productSource())
+var products = orm.Define("extension_products", func(b orm.Builder[Product], m *Product) orm.Table[Product, string] {
+	return orm.TableOf(b, &m.SKU)
+}, noPresentation[Product]())
 
-func modelSource[M any](table string, getID func(M) int64, getDeleted func(M) value.Nullable[temporal.DateTime]) query.Query[M] {
-	return query.ForModel(query.Define[M](table, "id", []query.Column{{Name: "id"}, {Name: "deleted_at", Nullable: true}}, func(database.Row) (M, error) { panic("extension ownership must not hydrate model presentation") }, query.NewModelField("id", codec.Signed[int64](), getID), query.NewModelField("deleted_at", codec.Nullable(codec.DateTime()), getDeleted)).WithSoftDeletes("deleted_at"))
-}
-func source[M any](table string, getID func(M) int64, getDeleted func(M) value.Nullable[temporal.DateTime]) query.ModelIdentity[M, int64] {
-	return query.IdentityOf(modelSource(table, getID, getDeleted), query.NewExactField[M](table, "id", codec.Signed[int64]()))
-}
+var Products = extensions.DefineORMOwner("products", orm.IdentityOf(products, products.Key()), extensions.OwnerOptions{})
 
-func MemberQuery() query.Query[Member] {
-	return modelSource("extension_members", func(m Member) int64 { return m.ID }, func(m Member) value.Nullable[temporal.DateTime] { return m.DeletedAt })
-}
-func MemberIDField() query.ExactField[Member, int64] {
-	return query.NewExactField[Member]("extension_members", "id", codec.Signed[int64]())
+type memberTable struct {
+	orm.Table[Member, int64]
+	DeletedAt orm.SoftDelete[Member, temporal.DateTime]
 }
 
-var Members = extensions.DefineOwner("members", query.IdentityOf(MemberQuery(), MemberIDField()))
+func memberSource(table string) memberTable {
+	return orm.Define(table, func(b orm.Builder[Member], m *Member) memberTable {
+		return memberTable{orm.TableOf(b, &m.ID), orm.SoftDeleteOf(b, &m.DeletedAt)}
+	}, noPresentation[Member]())
+}
+
+var memberFields = memberSource("extension_members")
+
+func MemberQuery() orm.Query[Member]        { return memberFields.Query() }
+func MemberIDField() orm.Key[Member, int64] { return memberFields.Key() }
+
+var Members = extensions.DefineORMOwner("members", orm.IdentityOf(memberFields.Table, memberFields.Key()), extensions.OwnerOptions{})
 
 // MemberIdentity describes the member fixture model stored in table. Rename
 // scenarios declare the same owner over a renamed table with it.
-func MemberIdentity(table string) query.ModelIdentity[Member, int64] {
-	return source(table, func(m Member) int64 { return m.ID }, func(m Member) value.Nullable[temporal.DateTime] { return m.DeletedAt })
+func MemberIdentity(table string) orm.ModelIdentity[Member, int64] {
+	fields := memberSource(table)
+	return orm.IdentityOf(fields.Table, fields.Key())
 }
 
-var Others = extensions.DefineOwner("others", source("extension_others", func(m Other) int64 { return m.ID }, func(m Other) value.Nullable[temporal.DateTime] { return m.DeletedAt }))
+type otherTable struct {
+	orm.Table[Other, int64]
+	DeletedAt orm.SoftDelete[Other, temporal.DateTime]
+}
+
+var otherFields = orm.Define("extension_others", func(b orm.Builder[Other], m *Other) otherTable {
+	return otherTable{orm.TableOf(b, &m.ID), orm.SoftDeleteOf(b, &m.DeletedAt)}
+}, noPresentation[Other]())
+var Others = extensions.DefineORMOwner("others", orm.IdentityOf(otherFields.Table, otherFields.Key()), extensions.OwnerOptions{})
 
 type Fixture struct {
 	DB      *database.DB

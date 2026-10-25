@@ -1,0 +1,370 @@
+package database_test
+
+import (
+	"context"
+	"database/sql/driver"
+	"errors"
+	"fmt"
+	"reflect"
+	"regexp"
+	"runtime"
+	"strconv"
+	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/fault"
+)
+
+type iterationTable struct {
+	orm.Table[retrievalFixtureRecord, int]
+	Name orm.Text[retrievalFixtureRecord, string]
+}
+type iterationAlias struct{}
+type iterationOther struct{}
+
+type recordIterator struct {
+	compile func() (string, []any, error)
+	each    func(context.Context, database.Executor, func(retrievalFixtureRecord) error) error
+}
+
+func ormIterator[S any](q rows.ReadSource[S, retrievalFixtureRecord]) recordIterator {
+	return recordIterator{compile: func() (string, []any, error) {
+		s, err := rows.CompileRead(q)
+		return s.SQL(), s.Arguments(), err
+	}, each: func(ctx context.Context, ex database.Executor, yield func(retrievalFixtureRecord) error) error {
+		if err := rows.PreflightRead(ctx, q); err != nil {
+			return err
+		}
+		return rows.EachRead(ctx, ex, q, yield)
+	}}
+}
+func legacyIterator(q interface {
+	Compile() (query.Statement, error)
+	Each(context.Context, database.Executor, func(retrievalFixtureRecord) error) error
+}) recordIterator {
+	return recordIterator{compile: func() (string, []any, error) { s, err := q.Compile(); return s.SQL(), s.Arguments(), err }, each: q.Each}
+}
+func recordIterationQuery(api, kind string, factory func(), retrieved func(context.Context, database.Executor, retrievalFixtureRecord) error) recordIterator {
+	if api == "legacy" {
+		q := query.ForModel(retrievalFixtureDefinition().WithRetrievalHooks(func(context.Context, lifecycle.Observers) (query.RetrievalHooks[retrievalFixtureRecord], error) {
+			factory()
+			return query.RetrievalHooks[retrievalFixtureRecord]{Retrieved: retrieved}, nil
+		}, true))
+		if kind == "join" || kind == "cte-join" {
+			a, b := query.As[iterationAlias](q, "r"), query.As[iterationOther](q, "s")
+			id := query.NewScalarField[query.Alias[iterationAlias, retrievalFixtureRecord]]("r", "id", codec.Signed[int]())
+			other := query.NewScalarField[query.Alias[iterationOther, retrievalFixtureRecord]]("s", "id", codec.Signed[int]())
+			j := query.InnerJoin(a, b, query.On(id, other))
+			selected := query.SelectRecord(j, query.LeftScope(j, a.Scope()))
+			if kind == "cte-join" {
+				boundary := query.As[iterationAlias](query.CTE("joined", selected), "result")
+				return legacyIterator(query.SelectRecord(boundary, boundary.Scope()).Offset(3).Limit(205))
+			}
+			return legacyIterator(selected.Offset(3).Limit(205))
+		}
+		if kind == "set" || kind == "union-all" {
+			set := query.Union(q, q)
+			if kind == "union-all" {
+				set = query.UnionAll(q, q)
+			}
+			return legacyIterator(set.Offset(3).Limit(205))
+		}
+		var source query.RecordQuerySource[retrievalFixtureRecord] = q
+		switch kind {
+		case "cte", "ordered":
+			source = query.CTE("eligible", q.OrderBy(query.NewTextField[retrievalFixtureRecord]("retrieved_records", "name", codec.String[string]()).Asc()).Limit(231))
+		case "recursive":
+			source = query.RecursiveCTE("eligible", q, func(self query.RecursiveSelf[retrievalFixtureRecord]) query.RecordQuerySource[retrievalFixtureRecord] {
+				return self
+			})
+		case "distinct":
+			source = q.Distinct()
+		}
+		a := query.As[iterationAlias](source, "r")
+		r := query.SelectRecord(a, a.Scope()).Offset(3).Limit(205)
+		if kind == "ordered" {
+			r = r.OrderBy(query.NewTextField[query.Alias[iterationAlias, retrievalFixtureRecord]](a.Scope().Table(), "name", codec.String[string]()).Desc())
+		}
+		return legacyIterator(r)
+	}
+	table := orm.Define("retrieved_records", func(b orm.Builder[retrievalFixtureRecord], m *retrievalFixtureRecord) iterationTable {
+		return iterationTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
+	}, orm.WithRetrievalHooks(func() orm.RetrievalHooks[retrievalFixtureRecord] {
+		factory()
+		return orm.RetrievalHooks[retrievalFixtureRecord]{Retrieved: retrieved}
+	}))
+	q := table.Query()
+	if kind == "join" || kind == "cte-join" {
+		a, b := rows.As[iterationAlias](q, "r"), rows.As[iterationOther](q, "s")
+		j := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), table.Key()), expr.At(rows.Scope(b), table.Key())))
+		selected := rows.SelectRecord(j, rows.LeftScope(j, rows.Scope(a)))
+		if kind == "cte-join" {
+			boundary := rows.AsRecord[iterationAlias](rows.CTE("joined", selected), "result")
+			return ormIterator(rows.SelectRecord(boundary, rows.Scope(boundary)).Offset(3).Limit(205))
+		}
+		return ormIterator(selected.Offset(3).Limit(205))
+	}
+	if kind == "set" || kind == "union-all" {
+		set := rows.Union(rows.ModelRecord(q), rows.ModelRecord(q))
+		if kind == "union-all" {
+			set = rows.UnionAll(rows.ModelRecord(q), rows.ModelRecord(q))
+		}
+		return ormIterator(rows.ReadSet(set.Offset(3).Limit(205)))
+	}
+	var source rows.RecordSource[retrievalFixtureRecord] = rows.ModelRecord(q)
+	switch kind {
+	case "cte", "ordered":
+		source = rows.CTE("eligible", rows.ModelRecord(q.OrderBy(table.Name.Asc()).Limit(231)))
+	case "recursive":
+		source = rows.RecursiveCTE("eligible", rows.ModelRecord(q), func(self rows.RecursiveSelf[retrievalFixtureRecord]) rows.RecordSource[retrievalFixtureRecord] {
+			return self
+		})
+	case "distinct":
+		source = rows.RecordOf(rows.Distinct(rows.FromModel(q)))
+	}
+	a := rows.AsRecord[iterationAlias](source, "r")
+	r := rows.SelectRecord(a, rows.Scope(a)).Offset(3).Limit(205)
+	if kind == "ordered" {
+		r = r.OrderBy(expr.At(rows.Scope(a), table.Name).Desc())
+	}
+	if kind == "record-adapter" {
+		return ormIterator(rows.ReadRecord(r))
+	}
+	return ormIterator(r)
+}
+
+// The retained database/retrieval_dispatch_test.go bounded complete-record test
+// and consumer CTE/record/set/recursive/distinct early-stop assertions are the
+// oracle. Both APIs use the same executor, decoder values and observable trace.
+func TestRecordIterationLegacyParity(t *testing.T) {
+	for _, kind := range []string{"record", "record-adapter", "join", "cte-join", "union-all", "cte", "ordered", "set", "recursive", "distinct"} {
+		t.Run(kind, func(t *testing.T) {
+			var beforeSQL []string
+			var beforeArgs [][]any
+			for _, api := range []string{"legacy", "orm"} {
+				t.Run(api, func(t *testing.T) {
+					state := &driverState{}
+					var sqls []string
+					var bindings [][]any
+					var sizes, seen []int
+					factories, retrieved, keyed := 0, 0, 0
+					window := regexp.MustCompile(` LIMIT \$(\d+)(?: OFFSET \$(\d+))?$`)
+					seek := regexp.MustCompile(`"id" > \$(\d+)\)`)
+					state.query = func(_ context.Context, sql string, args []driver.NamedValue) (driver.Rows, error) {
+						sqls = append(sqls, sql)
+						var bound []any
+						for _, a := range args {
+							bound = append(bound, a.Value)
+						}
+						bindings = append(bindings, bound)
+						w := window.FindStringSubmatch(sql)
+						if w == nil {
+							return nil, errors.New("unbounded model batch")
+						}
+						n, _ := strconv.Atoi(w[1])
+						size := int(args[n-1].Value.(int64))
+						offset := 0
+						if w[2] != "" {
+							n, _ = strconv.Atoi(w[2])
+							offset = int(args[n-1].Value.(int64))
+						}
+						if s := seek.FindStringSubmatch(sql); s != nil {
+							n, _ = strconv.Atoi(s[1])
+							offset = int(args[n-1].Value.(int64))
+							keyed++
+						}
+						if size > 100 {
+							return nil, errors.New("oversized batch")
+						}
+						values := make([][]driver.Value, size)
+						for i := range values {
+							id := int64(offset + i + 1)
+							if kind == "join" || kind == "cte-join" || kind == "union-all" {
+								id = int64((offset+i)/2 + 1)
+							}
+							values[i] = []driver.Value{id, "stored"}
+						}
+						sizes = append(sizes, size)
+						return &resultRows{state: state, columns: []string{"id", "name"}, values: values}, nil
+					}
+					db := open(t, state, oneObserverConnection)
+					q := recordIterationQuery(api, kind, func() {
+						factories++
+						if state.rowsClosed.Load() != int64(len(sizes)) {
+							t.Error("factory ran with rows open")
+						}
+					}, func(ctx context.Context, ex database.Executor, _ retrievalFixtureRecord) error {
+						retrieved++
+						_, err := ex.Exec(ctx, "SELECT 1")
+						return err
+					})
+					sql, args, err := q.compile()
+					if err != nil {
+						t.Fatal(err)
+					}
+					sqls = append(sqls, sql)
+					bindings = append(bindings, args)
+					err = q.each(t.Context(), rowObserverExecutor{db}, func(item retrievalFixtureRecord) error {
+						if state.rowsClosed.Load() != int64(len(sizes)) {
+							t.Error("delivery ran with rows open")
+						}
+						seen = append(seen, item.ID)
+						return nil
+					})
+					wantKeyed := 2
+					if kind == "ordered" || kind == "join" || kind == "cte-join" || kind == "set" || kind == "union-all" || kind == "recursive" {
+						wantKeyed = 0
+					}
+					first, last := 4, 208
+					if kind == "join" || kind == "cte-join" || kind == "union-all" {
+						first, last = 2, 104
+					}
+					if err != nil || !reflect.DeepEqual(sizes, []int{100, 100, 5}) || factories != 3 || retrieved != 205 || len(seen) != 205 || seen[0] != first || seen[204] != last || keyed != wantKeyed {
+						t.Fatal(sizes, factories, retrieved, len(seen), keyed, err)
+					}
+					if db.Stats().Owners != 0 || db.Stats().InUse != 0 {
+						t.Fatal("retained connection or callbacks")
+					}
+					if api == "legacy" {
+						captureLegacy(t, "iteration", []any{sqls, bindings})
+						beforeSQL = sqls
+						beforeArgs = bindings
+					} else if !reflect.DeepEqual(sqls, beforeSQL) || !reflect.DeepEqual(bindings, beforeArgs) {
+						t.Fatalf("SQL/bindings differ:\n%v\n%v\n%v\n%v", beforeSQL, sqls, beforeArgs, bindings)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestRecordIterationFailuresReleasePoolAndSession(t *testing.T) {
+	for _, kind := range []string{"cte", "set", "recursive"} {
+		for _, mode := range []string{"stop", "error-goexit", "format-goexit", "cancel", "panic", "goexit", "scan", "close", "hook", "factory-panic", "factory-goexit", "canceled"} {
+			for _, api := range []string{"legacy", "orm"} {
+				for _, owner := range []string{"pool", "session"} {
+					t.Run(kind+"/"+api+"/"+owner+"/"+mode, func(t *testing.T) {
+						var stop error = errors.New("stop record stream")
+						if mode == "error-goexit" {
+							stop = &iterationErrorGoexit{}
+						}
+						if mode == "format-goexit" {
+							stop = &iterationFormatGoexit{}
+						}
+						values := [][]driver.Value{{int64(1), "stored"}, {int64(2), "stored"}}
+						if mode == "scan" {
+							values[1][0] = "invalid"
+						}
+						state := retrievalFixtureDriver(values)
+						// resultRows' existing close hook exposes failure after successful hydration.
+						if mode == "close" {
+							state.query = func(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
+								return &resultRows{state: state, columns: []string{"id", "name"}, values: values, closeError: stop}, nil
+							}
+						}
+						db := open(t, state, oneObserverConnection)
+						factories, retrieved, seen := 0, 0, 0
+						q := recordIterationQuery(api, kind, func() {
+							factories++
+							if mode == "factory-panic" {
+								panic("private")
+							}
+							if mode == "factory-goexit" {
+								runtime.Goexit()
+							}
+						}, func(context.Context, database.Executor, retrievalFixtureRecord) error {
+							retrieved++
+							if mode == "hook" {
+								return stop
+							}
+							return nil
+						})
+						ctx, cancel := context.WithCancel(t.Context())
+						defer cancel()
+						if mode == "canceled" {
+							cancel()
+						}
+						run := func(ex database.Executor) error {
+							err := q.each(ctx, ex, func(retrievalFixtureRecord) error {
+								seen++
+								switch mode {
+								case "stop", "error-goexit", "format-goexit":
+									return stop
+								case "cancel":
+									cancel()
+								case "panic":
+									panic("private")
+								case "goexit":
+									runtime.Goexit()
+								}
+								return nil
+							})
+							switch mode {
+							case "error-goexit", "format-goexit":
+								if err != stop || !errors.Is(err, stop) {
+									t.Fatal("returned error identity changed")
+								}
+							case "stop", "close", "hook":
+								if !errors.Is(err, stop) {
+									t.Fatal(err)
+								}
+							case "cancel", "canceled":
+								if !errors.Is(err, context.Canceled) {
+									t.Fatal(err)
+								}
+							case "panic", "goexit", "factory-panic", "factory-goexit":
+								if !errors.Is(err, fault.Panicked) {
+									t.Fatal(err)
+								}
+							case "scan":
+								if err == nil {
+									t.Fatal("scan succeeded")
+								}
+							default:
+								if err != nil {
+									t.Fatal(err)
+								}
+							}
+							if mode != "canceled" && state.rowsClosed.Load() != 1 {
+								t.Fatal("rows not closed")
+							}
+							if (mode == "scan" || mode == "close" || mode == "canceled") && (factories != 0 || retrieved != 0 || seen != 0) {
+								t.Fatal("partial batch published", factories, retrieved, seen)
+							}
+							if (mode == "stop" || mode == "error-goexit" || mode == "format-goexit") && (seen != 1 || factories != 1 || retrieved != 2) {
+								t.Fatal("early stop changed batch", seen, factories, retrieved)
+							}
+							_, err = ex.Exec(t.Context(), "SELECT 1")
+							return err
+						}
+						var err error
+						if owner == "session" {
+							err = db.Session(t.Context(), func(s *database.Session) error { return run(s) })
+						} else {
+							err = run(db)
+						}
+						if err != nil || db.Stats().Owners != 0 || db.Stats().InUse != 0 {
+							t.Fatal("owner not released", err, db.Stats())
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+// Neither error formatting hook may run while returning a consumer stop error.
+type iterationErrorGoexit struct{}
+
+func (*iterationErrorGoexit) Error() string { runtime.Goexit(); return "unreachable" }
+
+type iterationFormatGoexit struct{}
+
+func (*iterationFormatGoexit) Error() string          { return "stop" }
+func (*iterationFormatGoexit) Format(fmt.State, rune) { runtime.Goexit() }

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/jobs/memory"
@@ -119,7 +119,7 @@ func TestBulkEnqueueStoresBatchesAndPruneRemovesOldInboxRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page, err := inbox.List(a.context(t, 1), query.PageRequest{Number: 1, Size: 10}, false); err != nil || page.Total != 1 {
+	if page, err := inbox.List(a.context(t, 1), orm.PageRequest{Number: 1, Size: 10}, false); err != nil || page.Total != 1 {
 		t.Fatal("bulk notification not delivered", err)
 	}
 	if _, err := inbox.MarkAllRead(a.context(t, 1)); err != nil {

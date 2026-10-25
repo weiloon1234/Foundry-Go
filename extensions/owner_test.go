@@ -12,9 +12,9 @@ import (
 )
 
 func TestOwnerScopeFollowsTheDeclaredStorageModel(t *testing.T) {
-	original := extensions.DefineOwner("members", extensiontest.MemberIdentity("extension_members"))
-	renamed := extensions.DefineOwner("members", extensiontest.MemberIdentity("extension_people"))
-	pinned := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
+	original := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_members"), extensions.OwnerOptions{})
+	renamed := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{})
+	pinned := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
 	if original.StorageModel() != "extension_members" || pinned.StorageModel() != "extension_members" || pinned.ModelName() != "extension_people" {
 		t.Fatal("storage model", pinned.StorageModel(), pinned.ModelName())
 	}
@@ -44,13 +44,13 @@ func TestOwnerScopeFollowsTheDeclaredStorageModel(t *testing.T) {
 	if err != nil || after.Scope != before.Scope || after.Key != before.Key {
 		t.Fatal("pinned subject changed identity", err)
 	}
-	if err := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "bad name"}).Validate(); err == nil {
+	if err := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "bad name"}).Validate(); err == nil {
 		t.Fatal("invalid storage model accepted")
 	}
 }
 
 func TestRegistryRejectsStorageModelCollisionsAndAdoptsRenamedIdentities(t *testing.T) {
-	pinned := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_others"})
+	pinned := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_others"})
 	if _, err := extensions.NewRegistry(extensiontest.Others.Registration(), pinned.Registration()); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("storage model shadowed another owner's model", err)
 	}
@@ -62,7 +62,7 @@ func TestRegistryRejectsStorageModelCollisionsAndAdoptsRenamedIdentities(t *test
 		t.Fatal(err)
 	}
 	// Re-scoping adopts only models the owner declares.
-	undeclared := extensions.DefineOwner("members", extensiontest.MemberIdentity("extension_people"))
+	undeclared := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{})
 	strict, err := extensions.NewRegistry(undeclared.Registration())
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func TestRegistryRejectsStorageModelCollisionsAndAdoptsRenamedIdentities(t *test
 	if _, err := strict.AdoptSubject("members", legacy); !errors.Is(err, fault.Invalid) || strict.DeclaresModel("members", "extension_members") {
 		t.Fatal("re-scope adopted an undeclared earlier model", err)
 	}
-	renamed := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{PreviousModels: []string{"extension_members"}})
+	renamed := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{PreviousModels: []string{"extension_members"}})
 	if renamed.Scope() != undeclared.Scope() {
 		t.Fatal("previous models changed the current scope")
 	}
@@ -102,17 +102,17 @@ func TestRegistryRejectsStorageModelCollisionsAndAdoptsRenamedIdentities(t *test
 		"repeated":  {PreviousModels: []string{"extension_members", "extension_members"}},
 		"unbounded": {PreviousModels: make([]string, 17)},
 	} {
-		if err := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), options).Validate(); err == nil {
+		if err := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), options).Validate(); err == nil {
 			t.Fatal("invalid previous models accepted", name)
 		}
 	}
-	claimed := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{PreviousModels: []string{"extension_others"}})
+	claimed := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{PreviousModels: []string{"extension_others"}})
 	if _, err := extensions.NewRegistry(extensiontest.Others.Registration(), claimed.Registration()); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("previous model shadowed another owner's model", err)
 	}
 	// The declaration snapshots caller-owned options.
 	previous := []string{"extension_members"}
-	snapshot := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{PreviousModels: previous})
+	snapshot := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{PreviousModels: previous})
 	previous[0] = "extension_others"
 	if models := snapshot.RecordedModels(); len(models) != 2 || models[1] != "extension_members" {
 		t.Fatal("previous models were not snapshotted", models)
@@ -122,7 +122,7 @@ func TestRegistryRejectsStorageModelCollisionsAndAdoptsRenamedIdentities(t *test
 // SubjectKey is Subject's key without the identity snapshot, through both the
 // typed owner and the erased registry, including pre-rename identities.
 func TestSubjectKeyMatchesSubject(t *testing.T) {
-	pinned := extensions.DefineOwnerWith("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
+	pinned := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
 	registry, err := extensions.NewRegistry(pinned.Registration(), extensiontest.Others.Registration())
 	if err != nil {
 		t.Fatal(err)

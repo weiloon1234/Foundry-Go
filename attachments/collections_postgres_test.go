@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
@@ -167,7 +168,7 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	if _, err := testLocalized.ForLocale("en").LoadLocalized(t.Context(), f.manager, []model.Reference[extensiontest.Member, int64]{owner}); err == nil {
 		t.Fatal("bound collection accepted as all-locale descriptor")
 	}
-	predicate, err := testLocalized.ForLocale("en").Matching(t.Context(), f.manager)
+	predicate, err := Matching(t.Context(), f.manager, testLocalized.ForLocale("en"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +176,7 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		q := extensiontest.MemberQuery().Where(predicate)
 		var err error
-		keys, err = query.SelectValue(q, query.Value(extensiontest.MemberIDField())).All(ctx, tx)
+		keys, err = rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
 		return err
 	})
 	if err != nil || len(keys) != 1 || keys[0] != 1 {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/internal/outboxtest"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -165,7 +165,7 @@ func TestNotificationInboxMarkAllReadAndDeleteStayOwnerScoped(t *testing.T) {
 	if deleted, err := inbox.Delete(owner, first.ID()); err != nil || deleted {
 		t.Fatal("deleted record removed twice", err)
 	}
-	page, err := inbox.List(owner, query.PageRequest{Number: 1, Size: 10}, false)
+	page, err := inbox.List(owner, orm.PageRequest{Number: 1, Size: 10}, false)
 	if err != nil || page.Total != 2 {
 		t.Fatal("inbox after delete", page.Total, err)
 	}
@@ -173,7 +173,7 @@ func TestNotificationInboxMarkAllReadAndDeleteStayOwnerScoped(t *testing.T) {
 	if _, err := first.Send(t.Context(), m); err != nil {
 		t.Fatal(err)
 	}
-	if page, err := inbox.List(owner, query.PageRequest{Number: 1, Size: 10}, false); err != nil || page.Total != 2 {
+	if page, err := inbox.List(owner, orm.PageRequest{Number: 1, Size: 10}, false); err != nil || page.Total != 2 {
 		t.Fatal("deleted record was recreated", err)
 	}
 }

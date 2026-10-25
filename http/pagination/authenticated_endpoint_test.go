@@ -9,7 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -100,13 +100,13 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 		// decoded but invalid page may reach the policy; it never reaches a read.
 		return nil
 	})
-	registration := endpoint.Handle(func(ctx context.Context, actor pageActor, in pageInput) (query.Page[Item], error) {
+	registration := endpoint.Handle(func(ctx context.Context, actor pageActor, in pageInput) (orm.PageResult[Item], error) {
 		reads++
 		again, err := binding.Guard().Require(ctx)
 		if err != nil || actor != again || actor.ID != 1 {
 			t.Error("actor not delivered/reused", err)
 		}
-		return query.Page[Item]{Items: []Item{{Label: "visible"}}, Number: in.Page.Number, Size: in.Page.Size, Total: 21, Pages: 2}, nil
+		return orm.PageResult[Item]{Items: []Item{{Label: "visible"}}, Number: in.Page.Number, Size: in.Page.Size, Total: 21, Pages: 2}, nil
 	})
 	for _, tc := range []struct {
 		token, suffix string
@@ -135,7 +135,7 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 	if reads != 1 || policies != 4 {
 		t.Fatal("denied/invalid request reached page read", reads, policies)
 	}
-	location, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, filters{}, query.PageRequest{Number: 2, Size: 20})
+	location, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, filters{}, orm.PageRequest{Number: 2, Size: 20})
 	if err != nil || location != "/api/items?page=2&per_page=20" {
 		t.Fatal(location, err)
 	}
@@ -156,11 +156,11 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 func TestAuthenticatedSimpleAndCursorKeepNavigationAndValidation(t *testing.T) {
 	binding, _, _ := pageBinding(t)
 	simple := pagination.Authenticated(pagination.DefineSimple(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()), binding)
-	simpleRegistration := simple.Handle(func(_ context.Context, actor pageActor, in pageInput) (query.SimplePage[Item], error) {
+	simpleRegistration := simple.Handle(func(_ context.Context, actor pageActor, in pageInput) (orm.SimplePage[Item], error) {
 		if actor.ID != 1 {
 			t.Error("simple actor lost")
 		}
-		return query.SimplePage[Item]{Items: []Item{{Label: "visible"}}, Number: in.Page.Number, Size: in.Page.Size, HasMore: true}, nil
+		return orm.SimplePage[Item]{Items: []Item{{Label: "visible"}}, Number: in.Page.Number, Size: in.Page.Size, HasMore: true}, nil
 	})
 	if pageResponse(t, simpleRegistration, "/items?per_page=1", "").Code != 401 {
 		t.Fatal("simple accepted anonymous")
@@ -183,9 +183,9 @@ func TestAuthenticatedSimpleAndCursorKeepNavigationAndValidation(t *testing.T) {
 			return pagination.CursorResult[cursorSource, Item]{}, nil
 		}
 		if term, _ := in.Filters.Term.Get(); term == "scope" {
-			return pagination.CursorResult[cursorSource, Item]{}, (query.CursorRequest[cursorSource]{}).Validate()
+			return pagination.CursorResult[cursorSource, Item]{}, (orm.CursorRequest[cursorSource]{}).Validate()
 		}
-		return pagination.MapCursorPage(ctx, query.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "visible"}}, Size: in.Page.Size, Next: value.Set(token)}, cursorDTO)
+		return pagination.MapCursorPage(ctx, orm.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "visible"}}, Size: in.Page.Size, Next: value.Set(token)}, cursorDTO)
 	})
 	for _, tc := range []struct {
 		suffix, credential string
@@ -215,24 +215,24 @@ func TestAuthenticatedPageCompletionKeepsErrorsCancellationAndInvalidDeclaration
 	base := pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()).WithErrors(declared)
 	endpoint := pagination.Authenticated(base, binding)
 	for _, tc := range []struct {
-		page   query.Page[Item]
+		page   orm.PageResult[Item]
 		err    error
 		status int
 	}{
-		{query.Page[Item]{}, nil, 500},
-		{query.Page[Item]{Number: 1, Size: 20}, errors.New("private-handler-error"), 500},
-		{query.Page[Item]{}, declared.WithCause(auth.Forbidden), 409},
-		{query.Page[Item]{Number: 1, Size: 20}, nil, 200},
+		{orm.PageResult[Item]{}, nil, 500},
+		{orm.PageResult[Item]{Number: 1, Size: 20}, errors.New("private-handler-error"), 500},
+		{orm.PageResult[Item]{}, declared.WithCause(auth.Forbidden), 409},
+		{orm.PageResult[Item]{Number: 1, Size: 20}, nil, 200},
 	} {
-		response := pageResponse(t, endpoint.Handle(func(context.Context, pageActor, pageInput) (query.Page[Item], error) { return tc.page, tc.err }), "/items", "valid")
+		response := pageResponse(t, endpoint.Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) { return tc.page, tc.err }), "/items", "valid")
 		if response.Code != tc.status || strings.Contains(response.Body.String(), "private-handler-error") {
 			t.Fatal("completion/error mapping changed", response.Code, response.Body)
 		}
 	}
 	ctx, cancel := context.WithCancel(t.Context())
-	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, pageActor, pageInput) (query.Page[Item], error) {
+	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
 		cancel()
-		return query.Page[Item]{Number: 1, Size: 20}, nil
+		return orm.PageResult[Item]{Number: 1, Size: 20}, nil
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -246,9 +246,15 @@ func TestAuthenticatedPageCompletionKeepsErrorsCancellationAndInvalidDeclaration
 	}
 	for _, registration := range []foundryhttp.RouteRegistration{
 		endpoint.Handle(nil),
-		endpoint.WithAuthorization(nil).Handle(func(context.Context, pageActor, pageInput) (query.Page[Item], error) { return query.Page[Item]{}, nil }),
-		pagination.Authenticated(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.Config{}), binding).Handle(func(context.Context, pageActor, pageInput) (query.Page[Item], error) { return query.Page[Item]{}, nil }),
-		pagination.Authenticated(base, foundryhttp.GuardBinding[pageActor]{}).Handle(func(context.Context, pageActor, pageInput) (query.Page[Item], error) { return query.Page[Item]{}, nil }),
+		endpoint.WithAuthorization(nil).Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
+			return orm.PageResult[Item]{}, nil
+		}),
+		pagination.Authenticated(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.Config{}), binding).Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
+			return orm.PageResult[Item]{}, nil
+		}),
+		pagination.Authenticated(base, foundryhttp.GuardBinding[pageActor]{}).Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
+			return orm.PageResult[Item]{}, nil
+		}),
 	} {
 		if _, err := foundryhttp.NewRouter(registration); err == nil {
 			t.Fatal("invalid authenticated page assembled")

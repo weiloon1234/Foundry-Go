@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/internal/extensiontest"
@@ -61,7 +62,7 @@ func TestPostgresSlotAcceptsAgreesWithWrites(t *testing.T) {
 		Get: func(extensiontest.Member) Many[extensiontest.Member] { return Many[extensiontest.Member]{} },
 		Set: func(m extensiontest.Member, _ Many[extensiontest.Member]) extensiontest.Member { return m },
 	}
-	documents := DefineMany(extensiontest.Members, "slot-documents", Policy{Disk: testDisk, Accepted: []storage.MediaType{docx, "text/plain"}, MaxFiles: 8}, binding)
+	documents := ManyOf(extensiontest.Members, "slot-documents", Policy{Disk: testDisk, Accepted: []storage.MediaType{docx, "text/plain"}, MaxFiles: 8}, binding)
 	f := openAttachments(t, documents.Registration())
 	documents = documents.From(f.manager)
 	owner := extensiontest.Member{ID: 3}
@@ -102,22 +103,40 @@ func TestPostgresSlotAcceptsAgreesWithWrites(t *testing.T) {
 // files, in collection order, without further database or storage I/O.
 func TestPostgresSlotLinksMatchCollectionLinks(t *testing.T) {
 	f := openAttachments(t)
-	loaded := map[int64]Many[extensiontest.Member]{}
-	binding := extensions.SlotBinding[extensiontest.Member, int64, Many[extensiontest.Member]]{
-		Field: "Gallery",
-		Reference: func(m extensiontest.Member) model.Reference[extensiontest.Member, int64] {
-			return extensiontest.Members.Reference(m.ID)
-		},
-		Get: func(m extensiontest.Member) Many[extensiontest.Member] { return loaded[m.ID] },
-		Set: func(m extensiontest.Member, slot Many[extensiontest.Member]) extensiontest.Member {
-			loaded[m.ID] = slot
-			return m
-		},
+	type ownerModel struct {
+		ID      int64
+		Gallery Many[ownerModel]
 	}
-	gallery := DefineMany(extensiontest.Members, "slot-gallery", Policy{Disk: testDisk, Accepted: []storage.MediaType{"text/plain"}, MaxFiles: 4}, binding)
+	type ownerTable struct {
+		orm.Table[ownerModel, int64]
+		Gallery orm.Slot[ownerModel, Many[ownerModel]]
+	}
+	fields := orm.Define("extension_members", func(b orm.Builder[ownerModel], m *ownerModel) ownerTable {
+		return ownerTable{orm.TableOf(b, &m.ID), orm.SlotOf(b, &m.Gallery)}
+	})
+	owners := extensions.DefineORMOwner("members", orm.IdentityOf(fields.Table, fields.Key()), extensions.OwnerOptions{})
+	// Register this concrete slot owner; a same-named declaration is not a capability.
+	registry, err := extensions.NewRegistry(owners.Registration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := extensions.DefaultConfig()
+	settings.Schema = f.Schema
+	f.Store, err = extensions.New(f.DB, registry, settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := f.Store.Close(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+	gallery := ManyOf(owners, "slot-gallery", Policy{Disk: testDisk, Accepted: []storage.MediaType{"text/plain"}, MaxFiles: 4}, extensions.BindSlot(fields.Key(), fields.Gallery))
 	m, _, _ := linkedManager(t, f, gallery.Registration())
 	gallery = gallery.From(m)
-	owner := extensiontest.Member{ID: 4}
+	owner := ownerModel{ID: 4}
 	if _, err := gallery.PublicURLs(t.Context(), owner); err == nil {
 		t.Fatal("an unloaded slot produced links")
 	}
@@ -126,22 +145,24 @@ func TestPostgresSlotLinksMatchCollectionLinks(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := extensiontest.MemberQuery().With(gallery).Load(t.Context(), f.DB, []extensiontest.Member{owner}); err != nil {
+	loaded, err := orm.Load(t.Context(), f.DB, []ownerModel{owner}, gallery.Relation(fields.Gallery))
+	if err != nil {
 		t.Fatal(err)
 	}
+	owner = loaded[0]
 	urls, err := gallery.PublicURLs(t.Context(), owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, err := gallery.Collection().List(t.Context(), m, extensiontest.Members.Reference(owner.ID))
+	files, err := ManyCollection(gallery).List(t.Context(), m, owners.Reference(owner.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := gallery.Collection().PublicURLsOf(t.Context(), m, files)
+	want, err := ManyCollection(gallery).PublicURLsOf(t.Context(), m, files)
 	if err != nil || len(urls) != 2 || urls[0] != want[0] || urls[1] != want[1] {
 		t.Fatal("slot links differ from collection links", urls, want, err)
 	}
-	first, _ := loaded[owner.ID].Get()
+	first, _ := owner.Gallery.Get()
 	if url, err := gallery.URL(t.Context(), owner, first[0]); err != nil || url != want[0] {
 		t.Fatal("single slot link", url, err)
 	}

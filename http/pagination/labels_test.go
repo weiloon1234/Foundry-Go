@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -29,9 +29,9 @@ func issues(t *testing.T, response *httptest.ResponseRecorder) []contract.Issue 
 // application's catalog translates, and export their label keys.
 func TestPaginationParametersCarryTranslatableLabels(t *testing.T) {
 	t.Parallel()
-	handler := func(context.Context, pageInput) (query.Page[Item], error) {
+	handler := func(context.Context, pageInput) (orm.PageResult[Item], error) {
 		t.Error("bad input reached service")
-		return query.Page[Item]{}, nil
+		return orm.PageResult[Item]{}, nil
 	}
 	endpoint := numbered(pagination.DefaultConfig())
 	for target, want := range map[string]contract.Issue{

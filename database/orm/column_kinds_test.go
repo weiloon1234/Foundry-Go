@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/auth/password"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -159,41 +158,28 @@ func TestJSONOrderingAndNullUseSharedCompiler(t *testing.T) {
 	}
 }
 
-// Compare the old field's core completion list directly. Cross-column, query,
-// grouping and conflict APIs retain their separately scheduled parity slices.
-// Interval Sum/Avg require the old private summaryData capability, deferred to 6a.
+// Frozen legacy signatures preserve value/nullability and result capabilities.
+// Advanced operations are package functions, not extra column methods.
 func TestColumnKindCoreParity(t *testing.T) {
-	deferred := map[string]string{
+	packageOperations := map[string]string{
 		"EqColumn": "6b", "NeColumn": "6b", "GtColumn": "6b", "GteColumn": "6b", "LtColumn": "6b", "LteColumn": "6b",
 		"Group": "6a", "InQuery": "6b", "InNullableQuery": "6b", "InCorrelatedQuery": "6b", "InNullableCorrelatedQuery": "6b", "Incoming": "5",
 		"Kind": "6d", "Length": "6d",
 	}
-	pairs := []struct{ old, current reflect.Type }{
-		{reflect.TypeFor[query.ScalarField[kindRecord, password.Hash]](), reflect.TypeFor[Column[kindRecord, password.Hash]]()},
-		{reflect.TypeFor[query.NullableField[kindRecord, password.Hash]](), reflect.TypeFor[NullableColumn[kindRecord, password.Hash]]()},
-		{reflect.TypeFor[query.IntervalField[kindRecord, temporal.Interval]](), reflect.TypeFor[Interval[kindRecord]]()},
-		{reflect.TypeFor[query.NullableIntervalField[kindRecord, temporal.Interval]](), reflect.TypeFor[NullableInterval[kindRecord]]()},
-		{reflect.TypeFor[query.JSONField[kindRecord, value.JSON[string]]](), reflect.TypeFor[JSON[kindRecord, string]]()},
-		{reflect.TypeFor[query.NullableJSONField[kindRecord, value.JSON[string]]](), reflect.TypeFor[NullableJSON[kindRecord, string]]()},
-	}
-	for _, pair := range pairs {
-		t.Run(pair.current.Name(), func(t *testing.T) {
-			signatures := func(typ reflect.Type, old bool) map[string]string {
+	types := []reflect.Type{reflect.TypeFor[Column[kindRecord, password.Hash]](), reflect.TypeFor[NullableColumn[kindRecord, password.Hash]](), reflect.TypeFor[Interval[kindRecord]](), reflect.TypeFor[NullableInterval[kindRecord]](), reflect.TypeFor[JSON[kindRecord, string]](), reflect.TypeFor[NullableJSON[kindRecord, string]]()}
+	for _, typ := range types {
+		t.Run(typ.Name(), func(t *testing.T) {
+			signatures := func(typ reflect.Type) map[string]string {
 				result := map[string]string{}
 				families := map[reflect.Type]string{
-					reflect.TypeFor[query.Predicate[kindRecord]]():      "Predicate",
-					reflect.TypeFor[Predicate[kindRecord]]():            "Predicate",
-					reflect.TypeFor[query.Order[kindRecord]]():          "Order",
-					reflect.TypeFor[Order[kindRecord]]():                "Order",
-					reflect.TypeFor[query.ConflictUpdate[kindRecord]](): "Assignment",
-					reflect.TypeFor[Assignment[kindRecord]]():           "Assignment",
+					reflect.TypeFor[Predicate[kindRecord]]():  "Predicate",
+					reflect.TypeFor[Order[kindRecord]]():      "Order",
+					reflect.TypeFor[Assignment[kindRecord]](): "Assignment",
 				}
 				for i := 0; i < typ.NumMethod(); i++ {
 					method := typ.Method(i)
-					if stage := deferred[method.Name]; stage != "" {
-						if !old {
-							t.Errorf("%s appeared before being un-deferred from Stage %s", method.Name, stage)
-						}
+					if stage := packageOperations[method.Name]; stage != "" {
+						t.Errorf("%s belongs to the Stage %s package-function surface, not column methods", method.Name, stage)
 						continue
 					}
 					sig := method.Type
@@ -212,9 +198,7 @@ func TestColumnKindCoreParity(t *testing.T) {
 				}
 				return result
 			}
-			if want, got := signatures(pair.old, true), signatures(pair.current, false); !reflect.DeepEqual(want, got) {
-				t.Fatalf("core signature shapes differ: old %v; new %v", want, got)
-			}
+			frozenMatch(t, "signatures", signatures(typ))
 		})
 	}
 }

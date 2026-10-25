@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -65,7 +64,7 @@ func TestLockedFirstSharesOrderingAndCallerTransaction(t *testing.T) {
 	var escaped *database.Tx
 	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
 		escaped = tx
-		m, err := mutationModel().ForKeyShare().RequireFirst(t.Context(), tx)
+		m, err := mutationModel().ForKeyShare().Require(t.Context(), tx)
 		if err != nil || m.ID != 7 {
 			t.Fatal("locked hydration failed", err)
 		}
@@ -85,8 +84,8 @@ func TestLockedFirstSharesOrderingAndCallerTransaction(t *testing.T) {
 	if _, err := mutationModel().ForUpdate().All(ctx, escaped); !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled query changed error", err)
 	}
-	id := query.NewOrderedField[mutationRecord, int64]("records", "id", codec.Signed[int64]())
-	if _, err := query.SelectValue(mutationModel(), query.Value(id)).ForUpdate().All(t.Context(), nil); !errors.Is(err, fault.Invalid) {
+	id := mutationFields.Key()
+	if _, err := rows.ForUpdate(rows.Read(rows.SelectValue(mutationModel(), id))).All(t.Context(), nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("scalar locked read accepted nil transaction", err)
 	}
 }

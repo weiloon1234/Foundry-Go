@@ -12,7 +12,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -146,20 +145,6 @@ func TestInferredCapabilityCatchersNeverReceiveAuthority(t *testing.T) {
 	capture := &goldenCapture{}
 	db := capture.open(t.Context())
 	defer db.Close(t.Context())
-	legacyOrders := query.ForModel(query.Define("orders", "id", []query.Column{{Name: "id"}, {Name: "buyer_id"}, {Name: "total_cents"}}, func(row database.Row) (models.Order, error) {
-		var m models.Order
-		err := row.Scan(codec.ID[models.Order]().Scan(&m.ID), codec.ID[models.User]().Scan(&m.BuyerID), codec.Signed[int64]().Scan(&m.TotalCents))
-		return m, err
-	}))
-	createOld := func(writer database.Transactor) {
-		t.Helper()
-		id := must(model.ParseID[models.Order](orderID))
-		buyer := must(model.ParseID[models.User](buyerID))
-		row, err := legacyOrders.Insert(t.Context(), writer, query.Change(query.Assign[models.Order]("orders", "id", codec.ID[models.Order](), id), query.Assign[models.Order]("orders", "buyer_id", codec.ID[models.User](), buyer), query.Assign[models.Order]("orders", "total_cents", codec.Signed[int64](), int64(500))))
-		if err != nil || row.ID != id {
-			t.Fatal(row, err)
-		}
-	}
 	createORM := func(writer database.Transactor) {
 		t.Helper()
 		id := must(model.ParseID[models.Order](orderID))
@@ -169,26 +154,24 @@ func TestInferredCapabilityCatchersNeverReceiveAuthority(t *testing.T) {
 			t.Fatal(row, err)
 		}
 	}
-	// Exercise both read and mutation observer lookup in the old API. A wrapper
+	// Exercise both native read and mutation observer lookup. A wrapper
 	// may supply transactions but may not prove observer absence or receive a seal.
 	observer := catchObservers(db, db.FoundryObservers)
-	if _, err := legacyOrders.All(t.Context(), observer); err != nil {
+	if _, err := models.Orders.Query().All(t.Context(), observer); err != nil {
 		t.Fatal(err)
 	}
-	createOld(observer)
 	createORM(observer)
-	if observer.calls != 0 || observer.transactions != 2 {
+	if observer.calls != 0 || observer.transactions != 1 {
 		t.Fatal("untrusted observer owner received authority", observer.calls, observer.transactions)
 	}
 	// Method values passed to autocommit helpers must also come from the concrete
 	// DB/PrimaryExecutor switch, never from a structural wrapper assertion.
 	autocommit := catchAutocommit(db, db.FoundryAutocommitQuery)
-	createOld(autocommit)
 	createORM(autocommit)
-	if autocommit.calls != 0 || autocommit.transactions != 2 {
+	if autocommit.calls != 0 || autocommit.transactions != 1 {
 		t.Fatal("untrusted autocommit owner received authority", autocommit.calls, autocommit.transactions)
 	}
-	if capture.statements != 5 {
+	if capture.statements != 3 {
 		t.Fatal("unexpected statement count", capture.statements)
 	}
 }

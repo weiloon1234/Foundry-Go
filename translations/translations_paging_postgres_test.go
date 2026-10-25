@@ -192,7 +192,7 @@ func TestPostgresTranslationMatchingUsesValueHashIndex(t *testing.T) {
 		}
 	}
 	for text, want := range map[string]int64{"Red": 2, "Blue": 1, long: 1, "Green": 0} {
-		predicate, err := name.Matching(t.Context(), m, "en", text)
+		predicate, err := Matching(t.Context(), m, name, "en", text)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,0 +1,45 @@
+package oracle
+
+import (
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestFrameworkCaptureIntegrity(t *testing.T) {
+	b, err := Load("testdata/stage8d")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.Records) != 41 {
+		t.Fatal("framework capture coverage changed", len(b.Records))
+	}
+	// Sources are historical inputs: compare archived capture files, not the
+	// migrated tests. All other hashes belong to the recorded immutable commit.
+	err = filepath.WalkDir("testdata/stage8d/sources", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel("testdata/stage8d/sources", path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		original := strings.TrimSuffix(filepath.ToSlash(rel), ".txt")
+		if b.Sources[original] != Digest(data) {
+			t.Errorf("archived capture source changed: %s", original)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

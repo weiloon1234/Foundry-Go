@@ -7,7 +7,6 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -63,9 +62,6 @@ func TestObserverCatcherCannotProveAbsenceOrCaptureCapability(t *testing.T) {
 			}
 			var statements []string
 			db := hookDB(t, testConnector{statements: &statements, columns: hookColumns, values: hookValues("name", nil, nil)}, declarations...)
-			if _, known := unsealedObservers(query.FoundryObservers, db); known {
-				t.Fatal("zero capability opened the shared observer bridge")
-			}
 			if _, known := unsealedObservers(database.FoundryObservers, db); known {
 				t.Fatal("zero capability opened the concrete-owner bridge")
 			}

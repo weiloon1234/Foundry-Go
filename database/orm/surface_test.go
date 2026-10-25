@@ -89,7 +89,7 @@ func (w *surfaceWalker) walk(typ types.Type, path string) {
 		for i := 0; i < t.NumFields(); i++ {
 			f := t.Field(i)
 			// Function-typed fields are intentionally exempt. Measured evidence:
-			// query.GlobalScope[M]'s func field mentioning Query[M] adds only four
+			// The historical query.GlobalScope[M] callback probe added only four
 			// functions (+4), unlike a heavy struct field or method signature.
 			// The exemption applies only here, never to method parameters/results.
 			if _, ok := types.Unalias(f.Type()).Underlying().(*types.Signature); ok {
@@ -273,8 +273,7 @@ func TestSurfaceWalkerRejectsTransitivePrivateViolations(t *testing.T) {
 
 func TestSurfaceWalkerBudgetsAndFunctionFieldExemption(t *testing.T) {
 	source := `package orm
- import "github.com/weiloon1234/Foundry-Go/database/query"
- type functionField[V any] struct { allowed func() query.Query[V] }
+ type functionField[V any] struct { allowed func() Query[V] }
  type tooMany[V any] struct{}
  type atLimit[V any] struct{}
  func (atLimit[V]) orderedColumn() {}
@@ -314,12 +313,13 @@ func TestSurfaceWalkerRejectsORMEngineFieldsAndReverseLayers(t *testing.T) {
 
 func TestSurfaceWalkerCursorTransportIsThinButBuildersRemainForbidden(t *testing.T) {
 	pkg := surfacePackage(t, `package orm
- import "github.com/weiloon1234/Foundry-Go/database/query"
- type cursorTransport[R any] struct{Position query.Cursor[R];Request query.CursorRequest[R];Page query.CursorPage[R]}
- type cursorEngine[R any] struct{Builder query.CursorQuery[R]}
+ import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
+ type CursorTransportProbe[R any] struct{Position Cursor[R];Request CursorRequest[R];Page CursorPage[R]}
+ type CursorEngineProbe[R any] struct{Builder rows.CursorQuery[R]}
+ type cursorModelEngine[R any] struct{Builder Query[R]}
  `)
 	violations := strings.Join(checkSurface(pkg), "\n")
-	if strings.Contains(violations, "cursorTransport") || !strings.Contains(violations, "cursorEngine") {
+	if strings.Contains(violations, "CursorTransportProbe") || !strings.Contains(violations, "CursorEngineProbe") || !strings.Contains(violations, "cursorModelEngine") {
 		t.Fatal(violations)
 	}
 }

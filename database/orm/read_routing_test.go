@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
 func TestCursorChunksAndLockedLookupRouting(t *testing.T) {
@@ -16,7 +15,7 @@ func TestCursorChunksAndLockedLookupRouting(t *testing.T) {
 	db := testDB(t, testConnector{statements: &primary, columns: columns, values: values}, database.WithReadPool(func() (database.Adapter, error) {
 		return database.Adapter{Connector: testConnector{statements: &replica, columns: columns, values: values}}, nil
 	}, database.DefaultPoolConfig(), 2*database.DefaultPoolConfig().MaxOpen))
-	if _, err := CursorPaginate(t.Context(), db, r.Query(), query.CursorRequest[record]{Size: 2}); err != nil {
+	if _, err := CursorPaginate(t.Context(), db, r.Query(), CursorRequest[record]{Size: 2}); err != nil {
 		t.Fatal(err)
 	}
 	if err := ChunkByKey(t.Context(), db, r.Query().Limit(1), r.ID, 2, func([]record) error { return nil }); err != nil {

@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "phase": "frozen",
+  "bundle_sha256": "86d46f8de29267c35048994c3d5ffbf31377b11ab37a29d030b7def527a1a76c",
+  "authorization_command": "go run ./cmd/freeze-oracles --freeze"
+}

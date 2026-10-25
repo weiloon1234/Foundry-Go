@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -58,7 +58,7 @@ func TestNotificationPartialRetryPreservesInboxAndRenderedOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := a.context(t, 1)
-	page, err := inbox.List(ctx, query.PageRequest{Number: 1, Size: 10}, true)
+	page, err := inbox.List(ctx, orm.PageRequest{Number: 1, Size: 10}, true)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 {
 		t.Fatal("inbox duplicated", err)
 	}
@@ -92,7 +92,7 @@ func TestNotificationInboxOwnershipReadUnreadAndFreshEligibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner, other := a.context(t, 1), a.context(t, 2)
-	if page, err := inbox.List(other, query.PageRequest{Number: 1, Size: 10}, false); err != nil || page.Total != 0 {
+	if page, err := inbox.List(other, orm.PageRequest{Number: 1, Size: 10}, false); err != nil || page.Total != 0 {
 		t.Fatal("foreign inbox listed", err)
 	}
 	if found, err := inbox.MarkRead(other, p.ID()); err != nil || found {
@@ -107,7 +107,7 @@ func TestNotificationInboxOwnershipReadUnreadAndFreshEligibility(t *testing.T) {
 	if found, err := inbox.MarkRead(owner, p.ID()); err != nil || !found {
 		t.Fatal(err)
 	}
-	page, err := inbox.List(owner, query.PageRequest{Number: 1, Size: 10}, false)
+	page, err := inbox.List(owner, orm.PageRequest{Number: 1, Size: 10}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestNotificationInboxOwnershipReadUnreadAndFreshEligibility(t *testing.T) {
 	if found, err := inbox.MarkRead(owner, p.ID()); err != nil || !found {
 		t.Fatal(err)
 	}
-	again, err := inbox.List(owner, query.PageRequest{Number: 1, Size: 10}, false)
+	again, err := inbox.List(owner, orm.PageRequest{Number: 1, Size: 10}, false)
 	if err != nil || again.Items[0].ReadAt != when {
 		t.Fatal("read timestamp changed", err)
 	}
@@ -125,7 +125,7 @@ func TestNotificationInboxOwnershipReadUnreadAndFreshEligibility(t *testing.T) {
 	if count, err := inbox.UnreadCount(owner); err != nil || count != 1 {
 		t.Fatal(count, err)
 	}
-	if _, err := inbox.List(t.Context(), query.PageRequest{Number: 1, Size: 10}, false); err == nil {
+	if _, err := inbox.List(t.Context(), orm.PageRequest{Number: 1, Size: 10}, false); err == nil {
 		t.Fatal("unverified context read inbox")
 	}
 	a.set(Member{ID: 1, Enabled: false, Allowed: true})

@@ -80,9 +80,11 @@ func (policy sourcePolicy) sourceName(path string) bool {
 	case ".go", ".md", ".lua", ".json", ".ts", ".sh", ".version", ".html", ".css", ".mjs", ".tab", ".py":
 		return true
 	}
-	// Reviewed imaging codec fixtures and their upstream patent notice. Keep
-	// binary allowance scoped to these test directories, never arbitrary assets.
 	relative := filepath.ToSlash(path)
+	// Historical Go capture inputs are evidence, never compiled source.
+	if strings.HasPrefix(relative, "tests/oracle/testdata/stage8d/sources/") || strings.HasPrefix(relative, "tests/oracle/testdata/stage8d-matching/sources/") {
+		return strings.HasSuffix(relative, ".go.txt")
+	}
 	// Reviewed Go-way catalogue, snapshots and capability evidence, plus consumer
 	// fixtures. Keep allowances at exact paths rather than broadening extensions.
 	// The TOML is loaded by mailing/configured_test.go; SPA assets by portals.go.
@@ -103,6 +105,8 @@ func (policy sourcePolicy) sourceName(path string) bool {
 		"spaportals/web/public/robots.txt":
 		return true
 	}
+	// Reviewed imaging codec fixtures and their upstream patent notice. Keep
+	// binary allowance scoped to these test directories, never arbitrary assets.
 	if strings.HasPrefix(relative, "imaging/testdata/avif/") {
 		return filepath.Ext(name) == ".avif" || name == "PATENTS"
 	}

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -38,12 +38,10 @@ func routedPool(t *testing.T, primary, read *driverState) *database.DB {
 
 type routedRecord struct{ ID int64 }
 
-func routedQuery() query.Query[routedRecord] {
-	return query.ForModel(query.Define("routed_records", "id", []query.Column{{Name: "id"}}, func(row database.Row) (routedRecord, error) {
-		var item routedRecord
-		err := row.Scan(&item.ID)
-		return item, err
-	}))
+func routedQuery() orm.Query[routedRecord] {
+	return orm.Define("routed_records", func(b orm.Builder[routedRecord], m *routedRecord) orm.Table[routedRecord, int64] {
+		return orm.TableOf(b, &m.ID)
+	}).Query()
 }
 
 func TestReadRoutingPreservesRawPrimaryAndActualTransaction(t *testing.T) {

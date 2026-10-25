@@ -1371,7 +1371,7 @@
       "sha256": "a3033a10ed83cecdde62fad173bec909cbdce35328ebaf6171e52303a05449fb"
     },
     "goway/bridge_capability_test.go": {
-      "sha256": "da2eeac0c9fd6f3b7bfc3ce45e3dd1522be47c66473b1c5ca908993add99b0f6"
+      "sha256": "fd3d88acb386903701d34fbc361bc660f1cc287960df46d16ed4b762a0354d5b"
     },
     "goway/cmd/freeze-oracles/legacy_imports_test.go": {
       "sha256": "772ee4e5916a315560837e67625bbc15a39434946d28961a10d641933d9875f8"
@@ -1449,7 +1449,7 @@
       "sha256": "2f6ebd81330929d7ee6bb2df43d703176a1605a9e739de2e5b4eda054069d5fa"
     },
     "goway/extension_matching_test.go": {
-      "sha256": "8ea35ab312ea536948cbebb101518b03dac146979a9bbe7771c2645dfb9ee110",
+      "sha256": "ad313df7e6647e4c12c0103aad9e7d663e18d498f47f5b236375edc2171028db",
       "paired_tests": [
         "TestExtensionMatchingUsesBoundedManagerQueries"
       ]
@@ -1516,10 +1516,10 @@
       "sha256": "d3c2e79703e7e0878e5c9a035ad458b248c9af633d0904d5fe84b8a7bce96943"
     },
     "goway/integrations/oracle_test.go": {
-      "sha256": "d735be86e48430f1a7e354d52372d702afd1ebdf245b9506099e24e146ede34c"
+      "sha256": "fe87b66f8f78413273c8a7099b76b8a0bbb860ae19b4820c06ba14ba741d3c05"
     },
     "goway/integrations/pagination_test.go": {
-      "sha256": "dbe3bf7cffea47af381ed22479facf35cbed4f57a2800b4f05ac2862f70af159",
+      "sha256": "3e25d33a3424716ed88688c152507d5a6878ebd8a1428982c3c4e8503b61dc09",
       "paired_tests": [
         "TestORMPaginationKeepsTransportIdentity"
       ]
@@ -1576,7 +1576,7 @@
       "sha256": "e18c4b42f0fd37f72d09ad2a5332cec2935290ce4e62e6a49327439548831a44"
     },
     "goway/mutators_behavior_test.go": {
-      "sha256": "af55a4e8a1988a991e23d5d8620eefec06d8b2d64f6cf38792408635a16f00bb"
+      "sha256": "8df037f5e0016a5f6f26a61bbc1a85bb59c50a6c1a40cb7caa282f8c4389a961"
     },
     "goway/mutators_golden_test.go": {
       "paired_tests": [
@@ -1589,7 +1589,7 @@
       "paired_tests": [
         "TestNestedORMBindingHasNoGlobalFallback"
       ],
-      "sha256": "31cb2958dbfbde4ecdd7f333c7aaa3eaf12f03de11cf280b936ad16c1c376bb8"
+      "sha256": "a671be0a237f26b459b8207125c77d8ca4aa6211cebc9787918a88e8c22aa7ca"
     },
     "goway/on_conditions_golden_test.go": {
       "paired_tests": [
@@ -1601,7 +1601,7 @@
       "sha256": "94609dfec5510bd998831be2d3cb2cb396b6b930494c1206cb2705497030a02e"
     },
     "goway/oracle_test.go": {
-      "sha256": "dc1d2139c7fa4683b5c91715cb9481c5ae004561d7390d9bb9954d66372a53f1"
+      "sha256": "1b8096a2c2f5261837049150ba2ba6e12744063be164bf026910c786657278e1"
     },
     "goway/pgsmoke/adjustment_test.go": {
       "sha256": "291522095c337c37051cc1f04fdaf7d834ae21dcd5fc961405eb6375758dfb3b"
@@ -1610,7 +1610,7 @@
       "sha256": "60c7ccb350d369b8998da2a30ae99d93467bcd90c35a70a317e63c3dd1ca6c5e"
     },
     "goway/pgsmoke/audit_test.go": {
-      "sha256": "b4f14177f734370ced6573dbfb7f558e564f7bbfe35e0af95b2934f3d8b4a9a6"
+      "sha256": "8cb34b9d1263ddddacfa044806b8e575ff0ed967efa2eb5cc06767db687ba310"
     },
     "goway/pgsmoke/codecs_test.go": {
       "sha256": "eb2ec20ec33c1de6fb68f7d1befda2ce466a3971d97353c03c8ed24ba7720bf3"
@@ -1676,7 +1676,7 @@
       "sha256": "b7204e6d2c9bea21e51539562eae814ac0ff6173b47699603a46cfb75796944c"
     },
     "goway/pgsmoke/reads_test.go": {
-      "sha256": "cff3034c265d4d91e346dd3ddb3701692b8d0d012b53f131052f8eac24bb2c61"
+      "sha256": "85e7ff27a485bc38dd9503562707e5a70a5a53ffccac84aaa6f5b01a8194d425"
     },
     "goway/pgsmoke/records_test.go": {
       "sha256": "6ae453266e7b9badc6b9cd7c986ca0946951c33a4c1f497156671deacd2126a5"
@@ -1700,7 +1700,7 @@
       "sha256": "2f8a4cbe051aba96ffb0b1b9d59ceccf1af8bd526ca079f176ecf360883cb09a"
     },
     "goway/pgsmoke/result_cursor_test.go": {
-      "sha256": "1a9c5783dbbd20ceb179556f511ac6570cb3a6363ab5a7b6c95d80be27379532"
+      "sha256": "c672120f354945964a399588db2c5d1e014c953348a822c3e5387760e7922f5a"
     },
     "goway/pgsmoke/retrieval_scope_test.go": {
       "sha256": "e42091ea276fbb658344f3f051753066fd9747a8586438152a332d558a129c92"

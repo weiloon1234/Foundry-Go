@@ -8,8 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 func TestResultCursorOwnsRowsAndDiscardsFailure(t *testing.T) {
@@ -36,14 +37,14 @@ func TestResultCursorOwnsRowsAndDiscardsFailure(t *testing.T) {
 				return rows, nil
 			}
 			db := open(t, state, nil)
-			c := query.CursorFor(mutationModel())
-			id := query.NewOrderedField[query.CursorScope[mutationRecord], int64](c.Scope().Table(), "id", codec.Signed[int64]())
-			page, err := c.UniqueBy(id.Group()).Paginate(t.Context(), db, query.CursorRequest[mutationRecord]{Size: 1})
+			c := rows.CursorFor(rows.ModelRecord(mutationModel()))
+			id := expr.At(c.Scope(), mutationFields.Key())
+			page, err := c.UniqueBy(expr.Group(id)).Paginate(t.Context(), db, orm.CursorRequest[mutationRecord]{Size: 1})
 			if kind == "success" {
 				if err != nil || !reflect.DeepEqual(page.Items, []mutationRecord{{ID: 1, Name: "first"}}) || !page.Next.IsSet() || page.Previous.IsSet() {
 					t.Fatal("wrong cursor page", page, err)
 				}
-			} else if err == nil || !reflect.DeepEqual(page, query.CursorPage[mutationRecord]{}) {
+			} else if err == nil || !reflect.DeepEqual(page, orm.CursorPage[mutationRecord]{}) {
 				t.Fatal("failure leaked page", page, err)
 			}
 			if (kind == "query" || kind == "close") && !errors.Is(err, cause) {

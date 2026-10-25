@@ -8,6 +8,11 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete Stage 8d2 behavior-test ports for database writes/reads, maintenance,
+  factories, extension ownership/matching/slots, decoding and pagination. Native
+  tests replay 53 captured legacy observations and retain existing frozen IDs,
+  including nine pagination observations. Public legacy APIs and the engine remain
+  for the separately authorized retirement step.
 - Handle concurrent first-subject inserts across both unique indexes in token,
   session and challenge stores. Preserve credential contention/admission fault
   classifications while custom `As`-exposed committed or unknown outcomes remain

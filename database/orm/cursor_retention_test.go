@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -21,11 +20,7 @@ func TestCursorTokensStayPrivateThroughWrappers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacy, err := query.ParseCursor[predicateOwner](token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if current != legacy || current.Token() != token || legacy.Token() != token || current.Validate() != nil || legacy.Validate() != nil {
+	if current.Token() != token || current.Validate() != nil {
 		t.Fatal("explicit cursor token or validation changed")
 	}
 	envelope, err := querycore.DecodeCursor(current.Token())
@@ -38,11 +33,10 @@ func TestCursorTokensStayPrivateThroughWrappers(t *testing.T) {
 	}
 	for _, sentinel := range []string{secret, token} {
 		assertRetentionRedacted(t, "orm/cursor", current, sentinel)
-		assertRetentionRedacted(t, "legacy/cursor", legacy, sentinel)
 		assertRetentionRedacted(t, "orm/request", orm.CursorRequest[predicateOwner]{Size: 2, After: value.Set(current)}, sentinel)
-		assertRetentionRedacted(t, "legacy/request", query.CursorRequest[predicateOwner]{Size: 2, Before: value.Set(legacy)}, sentinel)
+		assertRetentionRedacted(t, "orm/before", orm.CursorRequest[predicateOwner]{Size: 2, Before: value.Set(current)}, sentinel)
+		assertRetentionRedacted(t, "orm/previous", orm.CursorPage[predicateOwner]{Items: []predicateOwner{{ID: "public-item"}}, Size: 2, Previous: value.Set(current)}, sentinel)
 		assertRetentionRedacted(t, "orm/page", orm.CursorPage[predicateOwner]{Items: []predicateOwner{{ID: "public-item"}}, Size: 2, Next: value.Set(current)}, sentinel)
-		assertRetentionRedacted(t, "legacy/page", query.CursorPage[predicateOwner]{Items: []predicateOwner{{ID: "public-item"}}, Size: 2, Previous: value.Set(legacy)}, sentinel)
 	}
 	var zero orm.Cursor[predicateOwner]
 	if zero.Token() != "" || zero.Validate() == nil {

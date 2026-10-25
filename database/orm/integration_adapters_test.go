@@ -10,8 +10,6 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionslot"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
@@ -35,74 +33,44 @@ func extensionFields() extensionTable {
 		return extensionTable{TableOf(b, &m.ID), SlotOf(b, &m.External)}
 	})
 }
-func extensionOld() query.Query[extensionModel] {
-	return query.ForModel(query.Define("adapter_owners", "id", []query.Column{{Name: "id"}}, func(row database.Row) (extensionModel, error) {
-		var m extensionModel
-		err := row.Scan(&m.ID)
-		return m, err
-	}, query.NewModelField("id", codec.Signed[int64](), func(m extensionModel) int64 { return m.ID })))
-}
 func TestExtensionAdapterBatchAndMissingParity(t *testing.T) {
 	for _, missing := range []bool{false, true} {
 		for _, limit := range []int{10, 2} {
-			var outcomes []struct {
+			fields := extensionFields()
+			parents := []extensionModel{{ID: 1}, {ID: 2, External: externalValue{Loaded: true, Value: "retained"}}, {ID: 3}, {ID: 4}, {ID: 5}}
+			var batches []int
+			binding := extensionslot.Binding[extensionModel, externalValue]{Name: "External", Table: "adapter_owners", Get: func(m extensionModel) externalValue { return m.External }, Set: func(m extensionModel, v externalValue) extensionModel { m.External = v; return m }, Loaded: func(v externalValue) bool { return v.Loaded }, Count: func(externalValue) int { return 1 }, Fetch: func(_ context.Context, _ database.Executor, parents []extensionModel) ([]externalValue, error) {
+				batches = append(batches, len(parents))
+				out := make([]externalValue, len(parents))
+				for i := range out {
+					out[i] = externalValue{true, "loaded"}
+				}
+				return out, nil
+			}}
+			db := hookDB(t, testConnector{})
+			limits := DefaultRelationLimits()
+			limits.BatchSize = 2
+			limits.MaxRows = limit
+			p := FoundryExtension(fields.External, extensionslot.New(binding), sqlowner.Queries())
+			p.plan = relationWithLimits(p.plan, &limits)
+			var result []extensionModel
+			var err error
+			if missing {
+				result, err = LoadMissing(t.Context(), db, parents, p)
+			} else {
+				result, err = Load(t.Context(), db, parents, p)
+			}
+			if parents[0].External.Loaded {
+				t.Fatal("caller mutated")
+			}
+			outcome := struct {
 				Rows    []extensionModel
 				Batches []int
 				Invalid bool
-			}
-			for _, mode := range []string{"legacy", "compatibility", "native"} {
-				fields := extensionFields()
-				parents := []extensionModel{{ID: 1}, {ID: 2, External: externalValue{Loaded: true, Value: "retained"}}, {ID: 3}, {ID: 4}, {ID: 5}}
-				var batches []int
-				binding := query.ExtensionBinding[extensionModel, externalValue]{Name: "External", Table: "adapter_owners", Get: func(m extensionModel) externalValue { return m.External }, Set: func(m extensionModel, v externalValue) extensionModel { m.External = v; return m }, Loaded: func(v externalValue) bool { return v.Loaded }, Count: func(v externalValue) int { return 1 }, Fetch: func(_ context.Context, _ database.Executor, parents []extensionModel) ([]externalValue, error) {
-					batches = append(batches, len(parents))
-					out := make([]externalValue, len(parents))
-					for i := range out {
-						out[i] = externalValue{true, "loaded"}
-					}
-					return out, nil
-				}}
-				slot := query.NewExtensionSlot(binding)
-				db := hookDB(t, testConnector{})
-				limits := DefaultRelationLimits()
-				limits.BatchSize = 2
-				limits.MaxRows = limit
-				var result []extensionModel
-				var err error
-				if mode == "legacy" {
-					q := extensionOld().WithRelationLimits(limits).With(slot)
-					if missing {
-						result, err = q.LoadMissing(t.Context(), db, parents)
-					} else {
-						result, err = q.Load(t.Context(), db, parents)
-					}
-				} else {
-					p := Extension(fields.External, slot)
-					if mode == "native" {
-						source := extensionslot.New(extensionslot.Binding[extensionModel, externalValue]{Name: binding.Name, Table: binding.Table, Get: binding.Get, Set: binding.Set, Loaded: binding.Loaded, Count: binding.Count, Fetch: extensionslot.Fetch[extensionModel, externalValue](binding.Fetch)})
-						p = FoundryExtension(fields.External, source, sqlowner.Queries())
-					}
-					p.plan = relationWithLimits(p.plan, &limits)
-					if missing {
-						result, err = LoadMissing(t.Context(), db, parents, p)
-					} else {
-						result, err = Load(t.Context(), db, parents, p)
-					}
-				}
-				if parents[0].External.Loaded {
-					t.Fatal("caller mutated")
-				}
-				outcomes = append(outcomes, struct {
-					Rows    []extensionModel
-					Batches []int
-					Invalid bool
-				}{result, batches, errors.Is(err, fault.Invalid)})
-			}
-			if !reflect.DeepEqual(outcomes[0], outcomes[1]) || !reflect.DeepEqual(outcomes[0], outcomes[2]) {
-				t.Fatalf("extension parity: %#v", outcomes)
-			}
-			if limit == 10 && len(outcomes[1].Batches) != (5-btoi(missing)+1)/2 {
-				t.Fatal("batch count", outcomes)
+			}{result, batches, errors.Is(err, fault.Invalid)}
+			frozenMatch(t, fmt.Sprintf("extension_%t_%d", missing, limit), outcome)
+			if limit == 10 && len(batches) != (5-btoi(missing)+1)/2 {
+				t.Fatal("batch count", batches)
 			}
 		}
 	}
@@ -119,89 +87,66 @@ func TestExtensionAdapterRejectsInvalidBindingsAndZeroCapabilities(t *testing.T)
 	if !errors.Is(err, fault.Invalid) || ref != nil || get != nil || set != nil {
 		t.Fatal("zero capability escaped")
 	}
-	_, _, _, err, load := query.FoundryExtension(query.ExtensionSlot[extensionModel]{}, sqlowner.QuerySeal{})
-	if !errors.Is(err, fault.Invalid) || load != nil {
+	if err := Check(FoundryExtension(fields.External, extensionslot.Slot[extensionModel]{}, sqlowner.QuerySeal{})); !errors.Is(err, fault.Invalid) {
 		t.Fatal("zero query capability escaped")
 	}
-	if err := Check(Extension(fields.External, query.ExtensionSlot[extensionModel]{})); !errors.Is(err, fault.Invalid) {
+	if err := Check(FoundryExtension(fields.External, extensionslot.Slot[extensionModel]{}, sqlowner.Queries())); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	other := extensionFields()
 	if _, _, _, _, err := FoundrySlot(other.Key(), fields.External, sqlowner.Metadata()); !errors.Is(err, fault.Invalid) {
 		t.Fatal("foreign key accepted")
 	}
-	slot := query.NewExtensionSlot(query.ExtensionBinding[extensionModel, string]{Name: "External", Table: "adapter_owners", Get: func(extensionModel) string { return "" }, Set: func(m extensionModel, _ string) extensionModel { return m }, Loaded: func(string) bool { return false }, Count: func(string) int { return 1 }, Fetch: func(_ context.Context, _ database.Executor, m []extensionModel) ([]string, error) {
+	slot := extensionslot.New(extensionslot.Binding[extensionModel, string]{Name: "External", Table: "adapter_owners", Get: func(extensionModel) string { return "" }, Set: func(m extensionModel, _ string) extensionModel { return m }, Loaded: func(string) bool { return false }, Count: func(string) int { return 1 }, Fetch: func(_ context.Context, _ database.Executor, m []extensionModel) ([]string, error) {
 		return make([]string, len(m)), nil
 	}})
-	if err := Check(Extension(fields.External, slot)); !errors.Is(err, fault.Invalid) {
+	if err := Check(FoundryExtension(fields.External, slot, sqlowner.Queries())); !errors.Is(err, fault.Invalid) {
 		t.Fatal("wrong slot value accepted", err)
 	}
 }
 func TestIdentityAdapterParity(t *testing.T) {
 	fields := extensionFields()
 	current := IdentityOf(fields.Table, fields.Key())
-	old := query.IdentityOf(extensionOld(), query.NewScalarField[extensionModel]("adapter_owners", "id", codec.Signed[int64]()))
-	if current.Validate() != nil {
-		t.Fatal(current.Validate())
+	if err := current.Validate(); err != nil {
+		t.Fatal(err)
 	}
-	a, _ := current.Reference(7).Identity()
-	b, _ := old.Reference(7).Identity()
-	if !reflect.DeepEqual(a, b) {
-		t.Fatal("identity changed")
+	identity, err := current.Reference(7).Identity()
+	if err != nil {
+		t.Fatal(err)
 	}
-	ta, _ := current.KeyToken(7)
-	tb, _ := old.KeyToken(7)
-	if ta != tb {
-		t.Fatal("equality token changed")
+	token, err := current.KeyToken(7)
+	if err != nil {
+		t.Fatal(err)
 	}
+	frozenMatch(t, "identity", []any{identity, token})
 	for _, mode := range []string{"active", "retained", "lock"} {
 		t.Run(mode, func(t *testing.T) {
-			var statements [][]string
-			for _, legacy := range []bool{true, false} {
-				var sql []string
-				begins := 0
-				db := hookDB(t, testConnector{statements: &sql, onBegin: func() { begins++ }, columns: []string{"id"}, values: [][]driver.Value{{int64(7)}}})
-				var keys []int64
-				var err error
-				switch mode {
-				case "active":
-					if legacy {
-						keys, err = old.ActiveKeys(t.Context(), db, []int64{7})
-					} else {
-						keys, err = current.ActiveKeys(t.Context(), db, []int64{7})
+			var sql []string
+			begins := 0
+			db := hookDB(t, testConnector{statements: &sql, onBegin: func() { begins++ }, columns: []string{"id"}, values: [][]driver.Value{{int64(7)}}})
+			var keys []int64
+			var err error
+			switch mode {
+			case "active":
+				keys, err = current.ActiveKeys(t.Context(), db, []int64{7})
+			case "retained":
+				keys, err = current.RetainedKeys(t.Context(), db, []int64{7})
+			case "lock":
+				err = db.Transaction(t.Context(), func(tx *database.Tx) error {
+					found, lockErr := current.LockActive(t.Context(), tx, 7)
+					if found {
+						keys = []int64{7}
 					}
-				case "retained":
-					if legacy {
-						keys, err = old.RetainedKeys(t.Context(), db, []int64{7})
-					} else {
-						keys, err = current.RetainedKeys(t.Context(), db, []int64{7})
-					}
-				case "lock":
-					err = db.Transaction(t.Context(), func(tx *database.Tx) error {
-						var found bool
-						var lockErr error
-						if legacy {
-							found, lockErr = old.LockActive(t.Context(), tx, 7)
-						} else {
-							found, lockErr = current.LockActive(t.Context(), tx, 7)
-						}
-						if found {
-							keys = []int64{7}
-						}
-						return lockErr
-					})
-				}
-				if err != nil || !reflect.DeepEqual(keys, []int64{7}) {
-					t.Fatal(keys, err)
-				}
-				if len(sql) != 1 || (mode == "lock" && begins != 1) || (mode != "lock" && begins != 0) {
-					t.Fatal("identity statement count", begins, sql)
-				}
-				statements = append(statements, sql)
+					return lockErr
+				})
 			}
-			if !reflect.DeepEqual(statements[0], statements[1]) {
-				t.Fatal("identity SQL parity", statements)
+			if err != nil || !reflect.DeepEqual(keys, []int64{7}) {
+				t.Fatal(keys, err)
 			}
+			if len(sql) != 1 || (mode == "lock" && begins != 1) || (mode != "lock" && begins != 0) {
+				t.Fatal("identity statement count", begins, sql)
+			}
+			frozenMatch(t, "identity_sql", sql)
 		})
 	}
 	if err := IdentityOf(fields.Table, extensionFields().Key()).Validate(); !errors.Is(err, fault.Invalid) {
@@ -409,10 +354,6 @@ func TestNativeExtensionBridgeRequiresCapabilityAndSlotType(t *testing.T) {
 	}
 	if err := Check(FoundryExtension(fields.External, source, sqlowner.Queries())); err != nil {
 		t.Fatal(err)
-	}
-	legacy := query.FoundryExtensionSlot(source, sqlowner.QuerySeal{})
-	if err := Check(Extension(fields.External, legacy)); !errors.Is(err, fault.Invalid) {
-		t.Fatal("zero legacy capability accepted", err)
 	}
 	wrongValue := extensionslot.New(extensionslot.Binding[extensionModel, string]{Name: "External", Table: "adapter_owners", Get: func(extensionModel) string { return "" }, Set: func(m extensionModel, _ string) extensionModel { return m }, Loaded: func(string) bool { return false }, Count: func(string) int { return 1 }, Fetch: func(context.Context, database.Executor, []extensionModel) ([]string, error) {
 		t.Fatal("wrong-value loader dispatched")

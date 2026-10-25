@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 )
@@ -18,7 +18,7 @@ func TestResultReadTerminals(t *testing.T) {
 	q := Read(SelectValue(m.Query(), m.Name))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{"Ada"}, {"Lin"}}}
 	db := openTest(t, state)
-	page, err := q.OrderBy(expr.Value(m.ID).Asc()).SimplePaginate(t.Context(), db, query.PageRequest{Number: 1, Size: 1})
+	page, err := q.OrderBy(expr.Value(m.ID).Asc()).SimplePaginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 1})
 	if err != nil || len(page.Items) != 1 || page.Items[0] != "Ada" || !page.HasMore || !state.closed {
 		t.Fatal(page, err)
 	}
@@ -39,7 +39,7 @@ func TestResultReadTerminals(t *testing.T) {
 	}
 	state.sql = ""
 	for _, bad := range []Result[member, string]{q, q.OrderBy(expr.Value(m.ID).Asc()).Limit(1), q.OrderBy(expr.Value(m.ID).Asc()).Offset(1)} {
-		if _, err := bad.Paginate(t.Context(), db, query.PageRequest{Number: 1, Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+		if _, err := bad.Paginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 			t.Fatal(err, state.sql)
 		}
 	}

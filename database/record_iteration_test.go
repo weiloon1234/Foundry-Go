@@ -12,12 +12,9 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -44,55 +41,7 @@ func ormIterator[S any](q rows.ReadSource[S, retrievalFixtureRecord]) recordIter
 		return rows.EachRead(ctx, ex, q, yield)
 	}}
 }
-func legacyIterator(q interface {
-	Compile() (query.Statement, error)
-	Each(context.Context, database.Executor, func(retrievalFixtureRecord) error) error
-}) recordIterator {
-	return recordIterator{compile: func() (string, []any, error) { s, err := q.Compile(); return s.SQL(), s.Arguments(), err }, each: q.Each}
-}
-func recordIterationQuery(api, kind string, factory func(), retrieved func(context.Context, database.Executor, retrievalFixtureRecord) error) recordIterator {
-	if api == "legacy" {
-		q := query.ForModel(retrievalFixtureDefinition().WithRetrievalHooks(func(context.Context, lifecycle.Observers) (query.RetrievalHooks[retrievalFixtureRecord], error) {
-			factory()
-			return query.RetrievalHooks[retrievalFixtureRecord]{Retrieved: retrieved}, nil
-		}, true))
-		if kind == "join" || kind == "cte-join" {
-			a, b := query.As[iterationAlias](q, "r"), query.As[iterationOther](q, "s")
-			id := query.NewScalarField[query.Alias[iterationAlias, retrievalFixtureRecord]]("r", "id", codec.Signed[int]())
-			other := query.NewScalarField[query.Alias[iterationOther, retrievalFixtureRecord]]("s", "id", codec.Signed[int]())
-			j := query.InnerJoin(a, b, query.On(id, other))
-			selected := query.SelectRecord(j, query.LeftScope(j, a.Scope()))
-			if kind == "cte-join" {
-				boundary := query.As[iterationAlias](query.CTE("joined", selected), "result")
-				return legacyIterator(query.SelectRecord(boundary, boundary.Scope()).Offset(3).Limit(205))
-			}
-			return legacyIterator(selected.Offset(3).Limit(205))
-		}
-		if kind == "set" || kind == "union-all" {
-			set := query.Union(q, q)
-			if kind == "union-all" {
-				set = query.UnionAll(q, q)
-			}
-			return legacyIterator(set.Offset(3).Limit(205))
-		}
-		var source query.RecordQuerySource[retrievalFixtureRecord] = q
-		switch kind {
-		case "cte", "ordered":
-			source = query.CTE("eligible", q.OrderBy(query.NewTextField[retrievalFixtureRecord]("retrieved_records", "name", codec.String[string]()).Asc()).Limit(231))
-		case "recursive":
-			source = query.RecursiveCTE("eligible", q, func(self query.RecursiveSelf[retrievalFixtureRecord]) query.RecordQuerySource[retrievalFixtureRecord] {
-				return self
-			})
-		case "distinct":
-			source = q.Distinct()
-		}
-		a := query.As[iterationAlias](source, "r")
-		r := query.SelectRecord(a, a.Scope()).Offset(3).Limit(205)
-		if kind == "ordered" {
-			r = r.OrderBy(query.NewTextField[query.Alias[iterationAlias, retrievalFixtureRecord]](a.Scope().Table(), "name", codec.String[string]()).Desc())
-		}
-		return legacyIterator(r)
-	}
+func recordIterationQuery(kind string, factory func(), retrieved func(context.Context, database.Executor, retrievalFixtureRecord) error) recordIterator {
 	table := orm.Define("retrieved_records", func(b orm.Builder[retrievalFixtureRecord], m *retrievalFixtureRecord) iterationTable {
 		return iterationTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
 	}, orm.WithRetrievalHooks(func() orm.RetrievalHooks[retrievalFixtureRecord] {
@@ -139,16 +88,13 @@ func recordIterationQuery(api, kind string, factory func(), retrieved func(conte
 	return ormIterator(r)
 }
 
-// The retained database/retrieval_dispatch_test.go bounded complete-record test
-// and consumer CTE/record/set/recursive/distinct early-stop assertions are the
-// oracle. Both APIs use the same executor, decoder values and observable trace.
+// The frozen legacy stream records retain SQL and bindings for every source shape.
+// Native execution still checks bounds, callback ordering and resource ownership.
 func TestRecordIterationLegacyParity(t *testing.T) {
 	for _, kind := range []string{"record", "record-adapter", "join", "cte-join", "union-all", "cte", "ordered", "set", "recursive", "distinct"} {
 		t.Run(kind, func(t *testing.T) {
-			var beforeSQL []string
-			var beforeArgs [][]any
-			for _, api := range []string{"legacy", "orm"} {
-				t.Run(api, func(t *testing.T) {
+			{
+				t.Run("legacy", func(t *testing.T) {
 					state := &driverState{}
 					var sqls []string
 					var bindings [][]any
@@ -194,7 +140,7 @@ func TestRecordIterationLegacyParity(t *testing.T) {
 						return &resultRows{state: state, columns: []string{"id", "name"}, values: values}, nil
 					}
 					db := open(t, state, oneObserverConnection)
-					q := recordIterationQuery(api, kind, func() {
+					q := recordIterationQuery(kind, func() {
 						factories++
 						if state.rowsClosed.Load() != int64(len(sizes)) {
 							t.Error("factory ran with rows open")
@@ -231,12 +177,7 @@ func TestRecordIterationLegacyParity(t *testing.T) {
 					if db.Stats().Owners != 0 || db.Stats().InUse != 0 {
 						t.Fatal("retained connection or callbacks")
 					}
-					if api == "legacy" {
-						beforeSQL = sqls
-						beforeArgs = bindings
-					} else if !reflect.DeepEqual(sqls, beforeSQL) || !reflect.DeepEqual(bindings, beforeArgs) {
-						t.Fatalf("SQL/bindings differ:\n%v\n%v\n%v\n%v", beforeSQL, sqls, beforeArgs, bindings)
-					}
+					frozenMatch(t, "iteration", []any{sqls, bindings})
 				})
 			}
 		})
@@ -246,9 +187,9 @@ func TestRecordIterationLegacyParity(t *testing.T) {
 func TestRecordIterationFailuresReleasePoolAndSession(t *testing.T) {
 	for _, kind := range []string{"cte", "set", "recursive"} {
 		for _, mode := range []string{"stop", "error-goexit", "format-goexit", "cancel", "panic", "goexit", "scan", "close", "hook", "factory-panic", "factory-goexit", "canceled"} {
-			for _, api := range []string{"legacy", "orm"} {
+			{
 				for _, owner := range []string{"pool", "session"} {
-					t.Run(kind+"/"+api+"/"+owner+"/"+mode, func(t *testing.T) {
+					t.Run(kind+"/orm/"+owner+"/"+mode, func(t *testing.T) {
 						var stop error = errors.New("stop record stream")
 						if mode == "error-goexit" {
 							stop = &iterationErrorGoexit{}
@@ -269,7 +210,7 @@ func TestRecordIterationFailuresReleasePoolAndSession(t *testing.T) {
 						}
 						db := open(t, state, oneObserverConnection)
 						factories, retrieved, seen := 0, 0, 0
-						q := recordIterationQuery(api, kind, func() {
+						q := recordIterationQuery(kind, func() {
 							factories++
 							if mode == "factory-panic" {
 								panic("private")

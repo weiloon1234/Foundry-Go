@@ -1,0 +1,29 @@
+package goway_test
+
+import (
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func captureLegacy(t *testing.T, site string, legacy any) {
+	t.Helper()
+	id := "goway/" + t.Name() + "/" + site + "/0"
+	record := oracle.Observation{ID: id, Record: oracle.Record{Package: "goway", Site: site, Kind: "golden", Transcript: oracle.Snapshot(legacy)}}
+	data, err := oracle.JSON(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(os.Getenv("STAGE8D_CAPTURE"), oracle.Digest([]byte(id))+".record.json")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
+	}
+}

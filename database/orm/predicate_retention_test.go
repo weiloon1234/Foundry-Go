@@ -1,14 +1,13 @@
 package orm_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
-	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
@@ -56,6 +55,7 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 		t.Fatal("predicate adapter changed SQL or binding")
 	}
 	assertRetentionRedacted(t, "orm/key-lookup", orm.Keyed(q, table.Key()), secret)
+	assertRetentionRedacted(t, "orm/global-scope", orm.Scope(table, "private_scope", func(context.Context) (orm.Predicate[predicateOwner], error) { return p, nil }), secret)
 	assertRetentionRedacted(t, "orm/query", q, secret)
 	assertRetentionRedacted(t, "orm/locked-query", q.ForUpdate(), secret)
 	assertRetentionRedacted(t, "orm/bridge", orm.FoundryPredicate(p, sqlowner.Metadata()), secret)
@@ -105,37 +105,9 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	assertRetentionRedacted(t, "rows/cross-join", rows.CrossJoin(left, right), secret)
 	assertRetentionRedacted(t, "rows/correlation", rows.Correlate(left, right), secret)
 
-	field := query.NewTextField[predicateOwner]("predicate_owners", "id", codec.String[string]())
-	prior := field.Eq(secret)
-	old := query.For[predicateOwner]("predicate_owners").Where(prior)
-	oldParam := query.Value(field).Param(secret)
-	oldValue := query.Value(field)
-	oldScope := query.NewGlobalScope("private_scope", prior)
-	oldOn := query.On(field, field).WhereLeft(prior).WhereRight(prior)
-	oldScalar := query.SelectValue(old, oldParam.Value())
-	oldWindow := query.WindowFor(old).PartitionBy(oldParam.Group()).OrderBy(oldParam.Asc())
-	assertRetentionRedacted(t, "legacy/query", old, secret)
-	assertRetentionRedacted(t, "legacy/global-scope", oldScope, secret)
-	assertRetentionRedacted(t, "legacy/join-on", oldOn, secret)
-	assertRetentionRedacted(t, "legacy/left-predicate", query.On(field, field).WhereLeft(prior), secret)
-	assertRetentionRedacted(t, "legacy/right-predicate", query.On(field, field).WhereRight(prior), secret)
-	assertRetentionRedacted(t, "legacy/join-negation", oldOn.Not(), secret)
-	assertRetentionRedacted(t, "legacy/join-junction", query.OnAnd(oldOn, oldOn), secret)
-	assertRetentionRedacted(t, "legacy/row-param", oldParam, secret)
-	assertRetentionRedacted(t, "legacy/selected", oldParam.Value(), secret)
-	assertRetentionRedacted(t, "legacy/group", oldParam.Group(), secret)
-	assertRetentionRedacted(t, "legacy/order", oldParam.Asc(), secret)
-	assertRetentionRedacted(t, "legacy/case", query.When(prior, oldParam), secret)
-	assertRetentionRedacted(t, "legacy/selected-case", query.WhenValue(query.Grouped(prior), oldParam.Value()), secret)
-	assertRetentionRedacted(t, "legacy/aggregate-filter", query.Count[predicateOwner]().Filter(prior), secret)
-	assertRetentionRedacted(t, "legacy/window", oldWindow, secret)
-	assertRetentionRedacted(t, "legacy/window-fallback", query.LagOr(oldValue, 1, secret, query.WindowFor(old)), secret)
-	assertRetentionRedacted(t, "legacy/value-query", oldScalar, secret)
-	assertRetentionRedacted(t, "legacy/scalar-expression", query.ScalarQuery(old, oldScalar), secret)
-	assertRetentionRedacted(t, "legacy/exists", query.ExistsQuery(old, oldScalar), secret)
-	assertRetentionRedacted(t, "legacy/annotated-query", query.WithValue(old, oldParam), secret)
-	assertRetentionRedacted(t, "legacy/cte", query.CTE("private_records", old), secret)
-	assertRetentionRedacted(t, "legacy/alias", query.As[retentionLeft](old, "l"), secret)
+	assertRetentionRedacted(t, "rows/join-negation", on.Not(), secret)
+	assertRetentionRedacted(t, "rows/join-junction", rows.OnAnd(on, on), secret)
+	assertRetentionRedacted(t, "rows/annotated-query", rows.WithValue(q, param), secret)
 }
 
 func TestWindowOffsetsRetainOpaqueLiterals(t *testing.T) {
@@ -143,7 +115,4 @@ func TestWindowOffsetsRetainOpaqueLiterals(t *testing.T) {
 	assertRetentionRedacted(t, "orm/preceding", expr.Preceding(945817263), secret)
 	assertRetentionRedacted(t, "orm/following", expr.Following(945817263), secret)
 	assertRetentionRedacted(t, "orm/window-function", expr.NTile(945817263, expr.Window[predicateOwner]{}), secret)
-	assertRetentionRedacted(t, "legacy/preceding", query.Preceding(945817263), secret)
-	assertRetentionRedacted(t, "legacy/following", query.Following(945817263), secret)
-	assertRetentionRedacted(t, "legacy/window-function", query.NTile(945817263, query.Window[predicateOwner]{}), secret)
 }

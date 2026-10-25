@@ -16,7 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -148,7 +148,7 @@ func TestAuditHistoryKeepsTransactionOrderAndPagesByKeyset(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := within(ctx, func(tx *database.Tx) error {
-		page, err := audit.ModelHistory(ctx, tx, recorder, subjectRef(), query.PageRequest{Number: 1, Size: 10})
+		page, err := audit.ModelHistory(ctx, tx, recorder, subjectRef(), orm.PageRequest{Number: 1, Size: 10})
 		if err != nil {
 			return err
 		}
@@ -382,7 +382,7 @@ VALUES ($1::uuid, 'test.audit', $2::smallint, $3, $4::bigint, $5::jsonb, $6::jso
 		if activity.Items[2].Sequence() != 1 || activity.Items[1].Sequence() != 2 || activity.Items[0].Sequence() <= 2 {
 			return errors.New("new rows did not follow backfilled sequences")
 		}
-		history, err := audit.ModelHistory(ctx, tx, recorder, subjectRef(), query.PageRequest{Number: 1, Size: 10})
+		history, err := audit.ModelHistory(ctx, tx, recorder, subjectRef(), orm.PageRequest{Number: 1, Size: 10})
 		if err != nil || len(history.Items) != 2 || history.Items[1].Changes().Entry().Redaction() != record.RedactionV1 {
 			return errors.New("legacy model history became unreadable")
 		}

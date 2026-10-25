@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 // PostgreSQL caches 64 subtransaction IDs per backend; a savepoint per batch
@@ -26,18 +26,18 @@ func TestPerModelBatchWritesRunWithoutPerRowSavepoints(t *testing.T) {
 		return &resultRows{state: state, columns: []string{"id", "name"}, values: [][]driver.Value{{next.Add(1), "stored"}}}, nil
 	}
 	db := open(t, state, nil)
-	mutations := make([]query.Mutation[mutationRecord], 70)
+	mutations := make([][]orm.Assignment[mutationRecord], 70)
 	for i := range mutations {
 		mutations[i] = mutationValues()
 	}
-	created, err := mutationModel().InsertEach(t.Context(), db, mutations)
+	created, err := orm.CreateEach(t.Context(), db, mutationModel(), mutations)
 	if err != nil || len(created) != len(mutations) || created[69].ID != 70 || savepoints.Load() != 0 || state.committed.Load() != 1 {
 		t.Fatal("pool batch used per-row savepoints or lost rows", len(created), savepoints.Load(), err)
 	}
 	// A caller-owned transaction keeps one savepoint around the whole batch so
 	// a failed batch can still be recovered from without per-row subtransactions.
 	err = db.Transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := mutationModel().InsertEach(t.Context(), tx, mutations)
+		_, err := orm.CreateEach(t.Context(), tx, mutationModel(), mutations)
 		return err
 	})
 	if err != nil || savepoints.Load() != 1 || state.committed.Load() != 2 {

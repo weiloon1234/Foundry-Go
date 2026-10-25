@@ -51,10 +51,9 @@ func TestAddFilesToValidatesBeforeOpening(t *testing.T) {
 	collection := state.collection
 	manager := &Manager{collections: map[string]Registration{collection.registrationKey(): collection.Registration()}}
 	state = state.From(manager)
-	old, oldErr := AddFiles(t.Context(), ManySlot[batchOwner, int64]{slotDefinition: state.slotDefinition}, batchOwner{ID: 1}, files)
 	next, nextErr := AddFilesTo(t.Context(), ManyHandle[batchOwner, int64]{core: wrapManyHandle(state)}, batchOwner{ID: 1}, files)
-	if !errors.Is(oldErr, fault.Invalid) || !errors.Is(nextErr, fault.Invalid) || old != nil || next != nil || opened != 0 {
-		t.Fatal("batch preflight changed", oldErr, nextErr, opened)
+	if !errors.Is(nextErr, fault.Invalid) || next != nil || opened != 0 {
+		t.Fatal("batch preflight changed", nextErr, opened)
 	}
 }
 

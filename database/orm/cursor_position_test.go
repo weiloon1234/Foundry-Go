@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -28,7 +27,7 @@ func TestEditedCursorPositionPreservesPredicates(t *testing.T) {
 	})
 	q := r.Query().Where(tenant.Eq(7)).OrderBy(r.Key().Asc())
 	initial := testDB(t, testConnector{columns: []string{"id", "tenant", "deleted_at"}, values: [][]driver.Value{{int64(1), int64(7), nil}, {int64(40), int64(7), nil}}})
-	first, err := CursorPaginate(t.Context(), initial, q, query.CursorRequest[positionRecord]{Size: 1})
+	first, err := CursorPaginate(t.Context(), initial, q, CursorRequest[positionRecord]{Size: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +49,7 @@ func TestEditedCursorPositionPreservesPredicates(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		edited, err := query.ParseCursor[positionRecord](base64.RawURLEncoding.EncodeToString(encoded))
+		edited, err := ParseCursor[positionRecord](base64.RawURLEncoding.EncodeToString(encoded))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,7 +70,7 @@ func TestEditedCursorPositionPreservesPredicates(t *testing.T) {
 			}
 			return []string{"id", "tenant", "deleted_at"}, [][]driver.Value{{int64(40), int64(7), nil}}, nil
 		}})
-		page, err := CursorPaginate(t.Context(), db, q, query.CursorRequest[positionRecord]{Size: 1, After: value.Set(edited)})
+		page, err := CursorPaginate(t.Context(), db, q, CursorRequest[positionRecord]{Size: 1, After: value.Set(edited)})
 		if err != nil || calls != 1 || len(page.Items) != 1 {
 			t.Fatalf("edited position: %+v %v calls=%d", page, err, calls)
 		}

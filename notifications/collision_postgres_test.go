@@ -6,7 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -70,7 +70,7 @@ func TestNotificationStoredKeysCannotCrossModelOrGuardScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := inbox.List(scope.Context(), query.PageRequest{Number: 1, Size: 10}, false)
+	page, err := inbox.List(scope.Context(), orm.PageRequest{Number: 1, Size: 10}, false)
 	if err != nil || page.Total != 1 {
 		t.Fatal("cross-model key collision", err)
 	}

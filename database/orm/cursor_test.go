@@ -8,7 +8,6 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -26,27 +25,27 @@ func TestCursorRejectsForeignBoundariesBeforeSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cursor, err := query.ParseCursor[record](token)
+	cursor, err := ParseCursor[record](token)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
 		name    string
 		q       Query[record]
-		request query.CursorRequest[record]
+		request CursorRequest[record]
 	}{
-		{"scope", r.Query().Where(r.Name.Ne("different")).OrderBy(r.Note.Asc(), r.ID.Desc()), query.CursorRequest[record]{Size: 2, After: value.Set(cursor)}},
-		{"order", r.Query().Where(r.Name.Ne("hidden")).OrderBy(r.Note.Desc(), r.ID.Desc()), query.CursorRequest[record]{Size: 2, After: value.Set(cursor)}},
-		{"size_zero", q, query.CursorRequest[record]{}},
-		{"size_large", q, query.CursorRequest[record]{Size: query.MaxPageSize + 1}},
-		{"both", q, query.CursorRequest[record]{Size: 2, After: value.Set(cursor), Before: value.Set(cursor)}},
-		{"zero_token", q, query.CursorRequest[record]{Size: 2, After: value.Set(query.Cursor[record]{})}},
+		{"scope", r.Query().Where(r.Name.Ne("different")).OrderBy(r.Note.Asc(), r.ID.Desc()), CursorRequest[record]{Size: 2, After: value.Set(cursor)}},
+		{"order", r.Query().Where(r.Name.Ne("hidden")).OrderBy(r.Note.Desc(), r.ID.Desc()), CursorRequest[record]{Size: 2, After: value.Set(cursor)}},
+		{"size_zero", q, CursorRequest[record]{}},
+		{"size_large", q, CursorRequest[record]{Size: MaxPageSize + 1}},
+		{"both", q, CursorRequest[record]{Size: 2, After: value.Set(cursor), Before: value.Set(cursor)}},
+		{"zero_token", q, CursorRequest[record]{Size: 2, After: value.Set(Cursor[record]{})}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var statements []string
 			db := testDB(t, testConnector{statements: &statements})
 			_, err := CursorPaginate(t.Context(), db, tc.q, tc.request)
-			var input *query.CursorInputError
+			var input *CursorInputError
 			if !errors.As(err, &input) || !errors.Is(err, fault.Invalid) || len(statements) != 0 {
 				t.Fatal("invalid cursor not rejected before SQL", err)
 			}
@@ -57,20 +56,20 @@ func TestCursorRejectsForeignBoundariesBeforeSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	badCursor, err := query.ParseCursor[record](bad)
+	badCursor, err := ParseCursor[record](bad)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	_, err = CursorPaginate(t.Context(), db, q, query.CursorRequest[record]{Size: 2, After: value.Set(badCursor)})
-	var input *query.CursorInputError
+	_, err = CursorPaginate(t.Context(), db, q, CursorRequest[record]{Size: 2, After: value.Set(badCursor)})
+	var input *CursorInputError
 	if !errors.As(err, &input) || len(statements) != 0 {
 		t.Fatal("bad codec boundary", err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := CursorPaginate(ctx, db, q, query.CursorRequest[record]{Size: 2}); !errors.Is(err, context.Canceled) || len(statements) != 0 {
+	if _, err := CursorPaginate(ctx, db, q, CursorRequest[record]{Size: 2}); !errors.Is(err, context.Canceled) || len(statements) != 0 {
 		t.Fatal("canceled cursor sent SQL", err)
 	}
 	// Wrong model, even with identical declaration/SQL, retains a different scope.
@@ -83,11 +82,11 @@ func TestCursorRejectsForeignBoundariesBeforeSQL(t *testing.T) {
 		NumberOf(b, &v.Amount)
 		return TableOf(b, &v.ID)
 	})
-	foreign, err := query.ParseCursor[another](token)
+	foreign, err := ParseCursor[another](token)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = CursorPaginate(t.Context(), db, other.Query().Where(name.Ne("hidden")).OrderBy(note.Asc(), other.Key().Desc()), query.CursorRequest[another]{Size: 2, After: value.Set(foreign)})
+	_, err = CursorPaginate(t.Context(), db, other.Query().Where(name.Ne("hidden")).OrderBy(note.Asc(), other.Key().Desc()), CursorRequest[another]{Size: 2, After: value.Set(foreign)})
 	if !errors.As(err, &input) || len(statements) != 0 {
 		t.Fatal("foreign model accepted", err)
 	}
@@ -100,11 +99,11 @@ func TestCursorReadAndOutputFailurePublishNothing(t *testing.T) {
 		rows [][]driver.Value
 	}{
 		{"later_decode", [][]driver.Value{{int64(1), "ok", nil, "1"}, {"bad", "bad", nil, "1"}}},
-		{"oversized_token", [][]driver.Value{{int64(1), strings.Repeat("x", query.MaxCursorBytes+1), nil, "1"}, {int64(2), "ok", nil, "1"}}},
+		{"oversized_token", [][]driver.Value{{int64(1), strings.Repeat("x", querycore.MaxCursorBytes+1), nil, "1"}, {int64(2), "ok", nil, "1"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := testDB(t, testConnector{columns: []string{"id", "display_name", "note", "amount"}, values: tc.rows})
-			p, err := CursorPaginate(t.Context(), db, r.Query().OrderBy(r.Name.Asc()), query.CursorRequest[record]{Size: 1})
+			p, err := CursorPaginate(t.Context(), db, r.Query().OrderBy(r.Name.Asc()), CursorRequest[record]{Size: 1})
 			if err == nil || p.Items != nil || p.Next.IsSet() {
 				t.Fatal("partial cursor page published")
 			}

@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
@@ -22,10 +22,10 @@ import (
 type cursorSource struct{ Stored string }
 type cursorInput = pagination.CursorRequest[foundryhttp.NoPath, filters, cursorSource]
 
-func tokenFor[M any](t *testing.T) query.Cursor[M] {
+func tokenFor[M any](t *testing.T) orm.Cursor[M] {
 	t.Helper()
 	wire := `{"v":1,"scope":"` + strings.Repeat("a", 64) + `","values":[{"k":"int","t":"42"}]}`
-	token, err := query.ParseCursor[M](base64.RawURLEncoding.EncodeToString([]byte(wire)))
+	token, err := orm.ParseCursor[M](base64.RawURLEncoding.EncodeToString([]byte(wire)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestCursorEndpointOwnsDefaultsDirectionsAndFilterLinks(t *testing.T) {
 			if term, _ := in.Filters.Term.Get(); term != "a+b /" {
 				t.Error("filter escaping lost")
 			}
-			return pagination.MapCursorPage(ctx, query.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "raw"}}, Size: in.Page.Size, Next: value.Set(token), Previous: value.Set(token)}, cursorDTO)
+			return pagination.MapCursorPage(ctx, orm.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "raw"}}, Size: in.Page.Size, Next: value.Set(token), Previous: value.Set(token)}, cursorDTO)
 		}), target)
 		if response.Code != 200 {
 			t.Fatalf("status=%d body=%s", response.Code, response.Body)
@@ -125,7 +125,7 @@ func TestCursorInputFailuresStopBeforeService(t *testing.T) {
 func TestCursorMappingKeepsSourceOwnershipAndEmptyShape(t *testing.T) {
 	t.Parallel()
 	token := tokenFor[cursorSource](t)
-	source := query.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "secret"}}, Size: 20, Next: value.Set(token)}
+	source := orm.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "secret"}}, Size: 20, Next: value.Set(token)}
 	mapped, err := pagination.MapCursorPage(t.Context(), source, cursorDTO)
 	if err != nil || mapped.Size() != 20 {
 		t.Fatal(err)
@@ -140,7 +140,7 @@ func TestCursorMappingKeepsSourceOwnershipAndEmptyShape(t *testing.T) {
 		t.Fatal("mapped container aliases source/accessor output")
 	}
 	response := serve(t, cursorEndpoint(pagination.DefaultCursorConfig()).Handle(func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
-		return pagination.MapCursorPage(ctx, query.CursorPage[cursorSource]{Size: in.Page.Size}, cursorDTO)
+		return pagination.MapCursorPage(ctx, orm.CursorPage[cursorSource]{Size: in.Page.Size}, cursorDTO)
 	}), "/items")
 	var got pagination.CursorResponse[Item]
 	if response.Code != 200 {
@@ -161,7 +161,7 @@ func TestCursorMappingKeepsSourceOwnershipAndEmptyShape(t *testing.T) {
 
 func TestCursorEndpointSeparatesInvalidInputAndServerResults(t *testing.T) {
 	t.Parallel()
-	badInput := (query.CursorRequest[cursorSource]{}).Validate()
+	badInput := (orm.CursorRequest[cursorSource]{}).Validate()
 	for _, tc := range []struct {
 		failure error
 		status  int
@@ -180,7 +180,7 @@ func TestCursorEndpointSeparatesInvalidInputAndServerResults(t *testing.T) {
 			if zero {
 				return pagination.CursorResult[cursorSource, Item]{}, nil
 			}
-			return pagination.MapCursorPage(ctx, query.CursorPage[cursorSource]{Size: in.Page.Size + 1}, cursorDTO)
+			return pagination.MapCursorPage(ctx, orm.CursorPage[cursorSource]{Size: in.Page.Size + 1}, cursorDTO)
 		}), "/items")
 		if response.Code != 500 || strings.Contains(response.Body.String(), `"data"`) {
 			t.Fatal("invalid cursor service result published")
@@ -195,7 +195,7 @@ func TestCursorLinksRequireApprovedPublicOrigins(t *testing.T) {
 	config.Links = pagination.PublicLinks
 	endpoint := cursorEndpoint(config)
 	handler := func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
-		return pagination.MapCursorPage(ctx, query.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "raw"}}, Size: in.Page.Size, Next: value.Set(token)}, cursorDTO)
+		return pagination.MapCursorPage(ctx, orm.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "raw"}}, Size: in.Page.Size, Next: value.Set(token)}, cursorDTO)
 	}
 	response := serve(t, endpoint.Handle(handler), "http://evil.example/items")
 	if response.Code != 500 {
@@ -231,7 +231,7 @@ func TestCursorQueryCodecPreservesTypedPosition(t *testing.T) {
 	if err != nil || decoded != token {
 		t.Fatal("cursor codec changed its typed position")
 	}
-	if _, err := codec.Format(query.Cursor[cursorSource]{}); err == nil {
+	if _, err := codec.Format(orm.Cursor[cursorSource]{}); err == nil {
 		t.Fatal("zero cursor encoded")
 	}
 	if _, err := codec.Parse("bad"); err == nil {
@@ -246,7 +246,7 @@ func TestCursorSizeChangesAndInvalidDeclarations(t *testing.T) {
 		if in.Page.Size != 2 {
 			t.Error("explicit size was replaced by default")
 		}
-		return pagination.MapCursorPage(ctx, query.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "row"}}, Size: in.Page.Size, Next: value.Set(token)}, cursorDTO)
+		return pagination.MapCursorPage(ctx, orm.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "row"}}, Size: in.Page.Size, Next: value.Set(token)}, cursorDTO)
 	}), "/items?per_page=2&after="+token.Token())
 	if response.Code != 200 {
 		t.Fatalf("changed size: %d %s", response.Code, response.Body)
@@ -262,7 +262,7 @@ func TestCursorSizeChangesAndInvalidDeclarations(t *testing.T) {
 	}
 	configs := []pagination.CursorConfig{{}, pagination.DefaultCursorConfig(), pagination.DefaultCursorConfig(), pagination.DefaultCursorConfig()}
 	configs[1].AfterParam = configs[1].BeforeParam
-	configs[2].MaximumSize = query.MaxPageSize + 1
+	configs[2].MaximumSize = orm.MaxPageSize + 1
 	configs[3].BeforeParam = ""
 	for _, config := range configs {
 		if cursorEndpoint(config).Validate() == nil {
@@ -272,7 +272,7 @@ func TestCursorSizeChangesAndInvalidDeclarations(t *testing.T) {
 	if _, err := foundryhttp.NewRouter(endpoint.Handle(nil)); err == nil {
 		t.Fatal("nil cursor handler accepted")
 	}
-	if _, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, filters{}, query.CursorRequest[cursorSource]{Size: 20, After: value.Set(query.Cursor[cursorSource]{})}); err == nil {
+	if _, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, filters{}, orm.CursorRequest[cursorSource]{Size: 20, After: value.Set(orm.Cursor[cursorSource]{})}); err == nil {
 		t.Fatal("zero cursor became URL")
 	}
 }
@@ -296,7 +296,7 @@ func TestCursorHandlerErrorInspectionIsBoundedAndNextRequestSucceeds(t *testing.
 		if fail {
 			return pagination.CursorResult[cursorSource, Item]{}, cycle
 		}
-		return pagination.MapCursorPage(ctx, query.CursorPage[cursorSource]{Size: in.Page.Size}, cursorDTO)
+		return pagination.MapCursorPage(ctx, orm.CursorPage[cursorSource]{Size: in.Page.Size}, cursorDTO)
 	}))
 	if err != nil {
 		t.Fatal(err)

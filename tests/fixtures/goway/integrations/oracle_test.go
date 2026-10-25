@@ -13,3 +13,8 @@ func oracleEqual(t *testing.T, site, legacy, current string) bool {
 	t.Helper()
 	return frozenOracle.Equal(t, site, legacy, current)
 }
+
+func oracleMatch(t *testing.T, site, current string) bool {
+	t.Helper()
+	return frozenOracle.Match(t, site, current)
+}
