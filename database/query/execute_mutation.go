@@ -59,7 +59,7 @@ func (q Query[M]) removal() (Query[M], mutationKind) {
 	if q.queryCore.HasSoftDeletes() {
 		kind = softDeleteModel
 		if q.queryCore.SoftDeleteScope == trashedRecords {
-			q = q.Where(Predicate[M]{expression: q.queryCore.DeletionPredicate(isNull)})
+			q = q.Where(Predicate[M]{expression: retainPredicate(q.queryCore.DeletionPredicate(isNull))})
 		} else {
 			q = q.WithoutTrashed()
 		}

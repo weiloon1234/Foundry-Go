@@ -171,7 +171,7 @@ func (l RelatedLookup[P, M, K]) Find(ctx context.Context, ex database.Executor, 
 		if err != nil {
 			return err
 		}
-		q.state = where(q.state, []Predicate[M]{{owner: p.target, expression: querycore.Comparison{Operand: p.foreign, Operator: querycore.Equal, Values: []any{stored.Value}, Bind: func(any) (driver.Value, error) { return stored.Bind() }}}})
+		q.state = where(q.state, []Predicate[M]{{owner: p.target, expression: querycore.RetainPredicate(querycore.Comparison{Operand: p.foreign, Operator: querycore.Equal, Values: querycore.RetainComparisonValues([]any{querycore.StoredInput(stored.Value)}), Bind: func(any) (driver.Value, error) { return stored.Bind() }})}})
 		present = true
 		return nil
 	})

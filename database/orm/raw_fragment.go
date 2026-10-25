@@ -11,7 +11,7 @@ import (
 // Example: Users.Query().Where(orm.WhereRaw[User]("score > ?", 10)).
 func WhereRaw[M any](sql string, args ...any) Predicate[M] {
 	node := querycore.NewRawFragment(sql, args)
-	return Predicate[M]{expression: node, rawScope: reflect.TypeFor[M](), err: node.Validate()}
+	return Predicate[M]{expression: querycore.RetainPredicate(node), rawScope: reflect.TypeFor[M](), err: node.Validate()}
 }
 
 func predicateOwnerMatches(owner *tableCore, scope reflect.Type, target *tableCore) bool {

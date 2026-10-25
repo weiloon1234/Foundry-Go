@@ -100,9 +100,11 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 9 A read/filter | Ordinary read inspection/iteration, callback identity and relation expression filters | Done pending the lead’s commit; one shared iteration owner and retained construction errors. |
 | 9 B upsert | Shared-model conflict/upsert consumer cutover | Done pending the lead’s commit; 24 consumer negatives migrated with existing catalogue dispositions. |
 | 9 C results | Scalar GROUP BY/HAVING/DISTINCT/DISTINCT ON and record/set DISTINCT | Done pending the lead’s commit; eight package functions, runtime consumers and seven new Go-way negatives. |
-| 9 A2 | Application/profile, pivot lifecycle, relationship-filter and correlation consumers | Done pending the lead’s commit; ordinary ORM tables and thin application registration. Office relation-value callers remain open. |
+| 9 A2 | Application/profile, pivot lifecycle, relationship-filter and correlation consumers | Done pending the lead’s commit; ordinary ORM tables and thin application registration. Office relation-value callers are integrated in batch 7e. |
 | 9 D3/client | Recovery/authentication, nested binding, service and client-contract consumers | Done pending the lead’s commit; six Stage 7 catalogue rows ported. Pagination clause callers remain partial. |
 | 9 C keys | Correlated grouping/selected ordering and value-set selected DISTINCT ON | Done pending the lead’s commit; four package functions, ten negatives and one bounded probe. |
+| 9 A3/load | Office annotations, tooling/HTTP models and existing-parent relation limits | Done pending the lead’s commit; RelatedValue/WithValue and LoadFrom/LoadMissingFrom retain shared hydration and batching. |
+| 9 D matching/D4 | Extension matching, attachment batches, diagnostic redaction and root/editor harness | Done pending the lead’s commit; lane B’s nestedbindings remains authoritative. Legacy relation oracle migration and generated cleanup remain open. |
 | 9 | Migrate consumer fixtures and compiler catalogue | In progress; B1–B3/upsert, A read/filter/A2, D1/D3/client contracts and C source/result/key clauses integrated. Remaining dependent cutovers and generated-output cleanup stay open. |
 | 10 | Guides, examples and editor coverage | Planned |
 | 11 | Full acceptance and whole-app performance evidence | Planned |
@@ -540,8 +542,8 @@ intentionally accepts byte slices, while identity does not.
 
 | Disposition | Cases |
 | --- | ---: |
-| ported | 576 |
-| port | 12 |
+| ported | 577 |
+| port | 11 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
@@ -579,7 +581,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 81 |
 | — | 444 |
 
-576 old catalogue rows are covered by 568 distinct Go-way cases.
+577 old catalogue rows are covered by 569 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1866,3 +1868,38 @@ current integration results are recorded in the [A2 evidence](../../docs/evidenc
 [client-contract evidence](../../docs/evidence/goway-stage9-clientcontracts.json)
 and [computed-key evidence](../../docs/evidence/goway-stage9-lane-c-key-clauses.json).
 Live PostgreSQL remains the lead's gate.
+
+## Integration batch 7e: annotations, extension consumers and redaction
+
+`expr.RelatedValue` preserves aggregate nullability and composes with existing row
+predicates/orderings. `rows.WithValue` returns complete models and computed values
+as `rows.Annotated`, retaining retrieval callbacks and eager loading. Office,
+tooling and HTTP-model consumers now use handwritten declarations.
+
+`orm.LoadFrom` and `LoadMissingFrom` accept the query carrying `WithRelationLimits`
+and `With` descriptors. They load copies of supplied parents, issue no parent SQL,
+and share batching, depth and row budgets with existing loaders. Parent predicates,
+ordering and windows are validated but do not filter/reorder the supplied parents;
+callers retain responsibility for parent authorization.
+
+Attachments, translations and metadata expose bounded owner-typed `Matching`;
+`attachments.AddFilesTo` preserves bound-slot validation, batch limits and partial
+publication outcomes. Extension consumers and the root harness use ORM declarations.
+Lane B’s accepted nestedbindings implementation is retained. Editor anchors follow
+handwritten declarations; generated artifacts and wire contracts remain at their
+existing cleanup barrier.
+
+Predicate, statement, assignment, numeric-bound, plan, cursor and pivot diagnostic
+state uses private holders so nested formatting cannot expose retained values.
+Explicit SQL/argument/value accessors retain their contracts and cursor equality.
+
+The registry union contains 861 Go-way compiler cases and 146 footprint probes.
+Existing Go-way ceilings are unchanged; the root assignment probe records its new
+measurement separately from the frozen legacy baseline. Stage 9 remains in progress:
+legacy root relation/through/aggregate oracles still need migration using the new
+loader adapter, remaining pagination callers and generated cleanup remain open.
+
+Current integration commands and source hashes are recorded with the
+[office evidence](../../docs/evidence/goway-stage9-office.json),
+[loader evidence](../../docs/evidence/goway-stage9-load-query.json), and
+[root/redaction evidence](../../docs/evidence/goway-stage9-d4.json).

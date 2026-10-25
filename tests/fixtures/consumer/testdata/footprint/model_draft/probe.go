@@ -1,5 +1,9 @@
 package model_draft
 
-import "foundry.test/consumer/models"
+import (
+	"foundry.test/consumer/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+)
 
-func Empty(d models.LedgerEntryDraft) bool { return d.IsEmpty() }
+// Empty checks the replacement for a generated draft: an assignment list.
+func Empty(assignments []orm.Assignment[models.LedgerEntry]) bool { return len(assignments) == 0 }

@@ -73,7 +73,7 @@ func fetchRelationAggregate[M, N, V any](ctx context.Context, executor database.
 		if err != nil {
 			return nil, err
 		}
-		err = database.ForEach(statement.executionContext(ctx), readExecutor{executor}, statement.sql, statement.arguments, func(row database.Row) (groupedAggregate[V], error) {
+		err = database.ForEach(statement.executionContext(ctx), readExecutor{executor}, statement.SQL(), statement.coreStatement().Bindings, func(row database.Row) (groupedAggregate[V], error) {
 			var raw any
 			var result V
 			var count, distinct int64

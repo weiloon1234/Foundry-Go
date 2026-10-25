@@ -25,6 +25,7 @@ type ValueHandle[M any, K comparable, V any] struct {
 // Callback pointers are created and consumed together here; they never cross the public API.
 // Calls are synchronous: no callback retains a pointer to an argument or result.
 type valueHandleCore struct {
+	key          func(unsafe.Pointer)
 	bind         func(*Manager) *valueHandleCore
 	relation     func(unsafe.Pointer)
 	validate     func() error
@@ -45,6 +46,7 @@ func ValueOf[M any, K comparable, V any](owner extensions.Owner[M, K], name Name
 
 func wrapValueHandle[M any, K comparable, V any](state valueSlot[M, K, V]) *valueHandleCore {
 	return &valueHandleCore{
+		key:          func(out unsafe.Pointer) { *(*Key[M, K, V])(out) = state.key },
 		bind:         func(m *Manager) *valueHandleCore { return wrapValueHandle(state.From(m)) },
 		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
 		validate:     state.Validate,

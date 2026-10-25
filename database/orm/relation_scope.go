@@ -165,5 +165,5 @@ func (r BelongsTo[M, N]) OldestOfMany() BelongsTo[M, N] { r.plan = ofMany(r.plan
 // Expression filters and EXISTS share target-owner and scope validation.
 func relationExpressionPredicate[N any](plan *relationPlan, p ormcore.Predicate) Predicate[N] {
 	source := ormcore.Source{Scope: reflect.TypeFor[N](), Owners: map[string]any{plan.target.model.Table: plan.target}}
-	return Predicate[N]{owner: plan.target, expression: p.Node, err: errors.Join(p.Err, ormcore.CheckReferenceSet(source, p.Refs, p.ReferenceFree))}
+	return Predicate[N]{owner: plan.target, expression: querycore.RetainPredicate(p.Node), err: errors.Join(p.Err, ormcore.CheckReferenceSet(source, p.Refs, p.ReferenceFree))}
 }

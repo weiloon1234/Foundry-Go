@@ -21,11 +21,11 @@ func columnDataSlice(columns []Column) []columnData {
 	return owned
 }
 func statementFromCore(statement querycore.Statement) Statement {
-	return Statement{sql: statement.SQLText, arguments: statement.Bindings, shape: statement.Shape}
+	return Statement{core: querycore.RetainStatement(statement)}
 }
 
 func (s Statement) coreStatement() querycore.Statement {
-	return querycore.Statement{SQLText: s.sql, Bindings: s.arguments, Shape: s.shape}
+	return querycore.StatementValue(s.core)
 }
 func (s Statement) executionContext(ctx context.Context) context.Context {
 	return s.coreStatement().Context(ctx)

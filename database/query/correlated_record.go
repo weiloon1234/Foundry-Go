@@ -68,7 +68,7 @@ func (q CorrelatedRecordQuery[O, I, R]) DistinctOnValues(keys ...ProjectionKey[C
 // Exists keeps the selected record's grouping, filters and result window.
 func (q CorrelatedRecordQuery[O, I, R]) Exists() Predicate[O] {
 	r := q.correlatedRecord()
-	return Predicate[O]{expression: subqueryPredicate{Query: subquery{Node: r.query.node, Err: r.query.err, Correlation: &r.outer}}}
+	return Predicate[O]{expression: retainPredicate(subqueryPredicate{Query: subquery{Node: r.query.node, Err: r.query.err, Correlation: &r.outer}})}
 }
 
 // CorrelatedRecordSource retains both the outer scope and complete record type.

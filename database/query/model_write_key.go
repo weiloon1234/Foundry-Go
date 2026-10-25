@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // modelWritePredicate reads a stored identity through its own declared codec.
@@ -25,5 +26,5 @@ func modelWriteFieldPredicate[M any](q Query[M], ref fieldRef, model M) (Predica
 	if raw == nil {
 		return Predicate[M]{}, fault.New(fault.Missing, "model write requires a non-null key")
 	}
-	return Predicate[M]{expression: comparison{Operand: fieldRef{Table: q.queryCore.Table, Column: field.column}, Operator: equal, Values: []any{raw}, Bind: field.decode}}, nil
+	return Predicate[M]{expression: retainPredicate(comparison{Operand: fieldRef{Table: q.queryCore.Table, Column: field.column}, Operator: equal, Values: querycore.RetainComparisonValues([]any{raw}), Bind: field.decode})}, nil
 }

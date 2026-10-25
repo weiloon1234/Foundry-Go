@@ -72,7 +72,7 @@ func (a transactionCorrelatedValueAdapter[O, V]) correlatedValue() correlatedVal
 
 // Exists retains the parent requirement, inner result window and locks.
 func (q TransactionCorrelatedValueQuery[O, I, V]) Exists() Predicate[O] {
-	return Predicate[O]{expression: subqueryPredicate{Query: q.transactionCorrelatedValue().value.subquery}}
+	return Predicate[O]{expression: retainPredicate(subqueryPredicate{Query: q.transactionCorrelatedValue().value.subquery})}
 }
 
 // TransactionCorrelatedScalarQuery returns NULL for no row and preserves database cardinality errors.

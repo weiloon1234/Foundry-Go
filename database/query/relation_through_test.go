@@ -31,7 +31,7 @@ func TestThroughAliasedScopesAndStableOrder(t *testing.T) {
 	if err := cursorQuery().With(r).Validate(); err != nil {
 		t.Fatal(err)
 	}
-	s, err := r.compileThrough(t.Context(), id.In(4, 5).expression, 6)
+	s, err := r.compileThrough(t.Context(), predicateExpression(id.In(4, 5).expression), 6)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -110,7 +110,7 @@ func RecordBatches(ctx context.Context, node querycore.SelectNode, primaryIndex 
 			if node.Orders[0].Descending {
 				op = querycore.Less
 			}
-			after := querycore.Comparison{Operand: primary, Operator: op, Values: []any{key}, Bind: func(raw any) (driver.Value, error) { return raw, nil }}
+			after := querycore.Comparison{Operand: primary, Operator: op, Values: querycore.RetainComparisonValues([]any{key}), Bind: func(raw any) (driver.Value, error) { return raw, nil }}
 			node.Predicates = append(slices.Clip(predicates), after)
 			node.Offset = 0
 		} else if more {

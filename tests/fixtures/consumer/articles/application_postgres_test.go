@@ -57,13 +57,13 @@ func articleSettings(t *testing.T, configure ...func(*application.Settings)) (ap
 }
 
 // startApplication assembles the consumer the way an application does: typed
-// settings plus Models(articles.FoundryExtensions()...). Migrations are applied
+// settings plus Models(articles.ORMExtensionDeclaration()). Migrations are applied
 // explicitly; startup never creates schemas or tables.
 func startApplication(t *testing.T, configure ...func(*application.Settings)) fixture {
 	t.Helper()
 	s, schema := articleSettings(t, configure...)
 	app, err := application.New(s, application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).
-		Models(articles.FoundryExtensions()...).
+		Models(articles.ORMExtensionDeclaration()).
 		Build(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -142,11 +142,11 @@ func (f fixture) createArticle(t *testing.T, slug string) articles.Article {
 	t.Helper()
 	var article articles.Article
 	if err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		author, err := articles.QueryArticleAuthors().Create(ctx, tx, articles.AuthorDraft{}.SetName("Author "+slug))
+		author, err := articles.Authors.Insert(ctx, tx, articles.Authors.Name.Set("Author "+slug))
 		if err != nil {
 			return err
 		}
-		article, err = articles.QueryArticles().Create(ctx, tx, articles.ArticleDraft{}.SetSlug(slug).SetAuthorID(author.ID))
+		article, err = articles.Articles.Insert(ctx, tx, articles.Articles.Slug.Set(slug), articles.Articles.AuthorID.Set(author.ID))
 		return err
 	}); err != nil {
 		t.Fatal(err)

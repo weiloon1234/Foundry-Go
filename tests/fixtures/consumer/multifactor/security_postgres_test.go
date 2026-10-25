@@ -182,7 +182,7 @@ func TestPostgresMFARetirementSharesOuterRollbackAndAcceptsDisabledAccounts(t *t
 	}
 	// A disabled account can still be retired by an authorized administrator.
 	if err := s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := multifactor.QueryMfaAccounts().Update(t.Context(), tx, s.account.ID, multifactor.AccountDraft{}.SetEnabled(false).SetRequireMFA(true))
+		_, err := multifactor.AccountRecords.Update(t.Context(), tx, s.account.ID, multifactor.AccountRecords.Enabled.Set(false), multifactor.AccountRecords.RequireMFA.Set(true))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -210,14 +210,14 @@ func TestPostgresMFARetirementSharesOuterRollbackAndAcceptsDisabledAccounts(t *t
 		t.Fatal("retirement event missing")
 	}
 	if err := s.within(t.Context(), func(tx *database.Tx) error {
-		found, err := multifactor.QueryMfaAccounts().Find(t.Context(), tx, s.account.ID)
+		found, err := multifactor.AccountRecords.Find(t.Context(), tx, s.account.ID)
 		if err != nil {
 			return err
 		}
 		if found.IsSet() {
 			return errors.New("account not retired")
 		}
-		_, err = s.factors.RetireIn(t.Context(), tx, s.account.FoundryReference())
+		_, err = s.factors.RetireIn(t.Context(), tx, multifactor.AccountIdentity.ReferenceOf(s.account))
 		if !errors.Is(err, auth.Unauthenticated) {
 			return errors.New("missing account accepted for retirement")
 		}

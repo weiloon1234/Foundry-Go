@@ -8,12 +8,8 @@ import (
 )
 
 // Statement is a compiled parameterized PostgreSQL statement. SQL and Arguments
-// are explicit inspection/integration boundaries. Formatting omits bindings.
-type Statement struct {
-	sql       string
-	arguments []any
-	shape     string
-}
+// are explicit inspection/integration boundaries. Formatting omits SQL and bindings.
+type Statement struct{ core *querycore.StatementState }
 
 type readKind = querycore.ReadKind
 
@@ -45,10 +41,10 @@ func likePattern(op operator, text string) string { return querycore.LikePattern
 
 func comparisonOperator(op operator) (string, bool) { return querycore.ComparisonOperator(op) }
 
-func (s Statement) SQL() string { return s.sql }
+func (s Statement) SQL() string { return s.coreStatement().SQLText }
 
 func (s Statement) Arguments() []any {
-	result := slices.Clone(s.arguments)
+	result := slices.Clone(s.coreStatement().Bindings)
 	for i, v := range result {
 		if data, ok := v.([]byte); ok {
 			result[i] = slices.Clone(data)
@@ -57,9 +53,9 @@ func (s Statement) Arguments() []any {
 	return result
 }
 
-func (s Statement) String() string { return s.sql }
+func (s Statement) String() string { return "query statement (redacted)" }
 
-func (s Statement) GoString() string { return s.sql }
+func (s Statement) GoString() string { return "query statement (redacted)" }
 
 // Compile validates declarations and codecs, then compiles a complete model
 // SELECT. It never connects or interpolates values into statement text.

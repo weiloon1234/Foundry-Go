@@ -4,6 +4,7 @@ import (
 	"context"
 	"foundry.test/consumer/genericdto"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
@@ -40,22 +41,22 @@ func present(project Project) ProjectView {
 	return ProjectView{ID: project.ID, Slug: project.Slug, Title: project.Title, Budget: project.Budget}
 }
 func (s *Service) Patch(ctx context.Context, _ Actor, in PatchRequest) (ActionEnvelope, error) {
-	draft := ProjectDraft{}
+	var draft []orm.Assignment[Project]
 	if title, supplied := in.Request.Body.Title.Get(); supplied {
 		if text, present := title.Get(); present {
-			draft = draft.SetTitle(text)
+			draft = append(draft, Projects.Title.Set(text))
 		} else {
-			draft = draft.ClearTitle()
+			draft = append(draft, Projects.Title.SetNull())
 		}
 	}
 	if budget, supplied := in.Request.Body.Budget.Get(); supplied {
-		draft = draft.SetBudget(budget)
+		draft = append(draft, Projects.Budget.Set(budget))
 	}
 	project := in.Model.Child
-	if !draft.IsEmpty() {
+	if len(draft) != 0 {
 		err := s.db.Transaction(ctx, func(tx *database.Tx) error {
 			var err error
-			project, err = QueryWorkflowProjects().Update(ctx, tx, project.ID, draft)
+			project, err = Projects.Update(ctx, tx, project.ID, draft...)
 			return err
 		})
 		if err != nil {
@@ -69,7 +70,7 @@ func (s *Service) Submit(ctx context.Context, tx *database.Tx, _ Actor, in Submi
 	if s.hooks.Calls != nil {
 		s.hooks.Calls.Add(1)
 	}
-	row, err := QueryWorkflowSubmissions().Create(ctx, tx, SubmissionDraft{}.SetProjectID(in.Model.Child.ID).SetName(in.Request.Body.Name))
+	row, err := Submissions.Insert(ctx, tx, Submissions.ProjectID.Set(in.Model.Child.ID), Submissions.Name.Set(in.Request.Body.Name))
 	if err != nil {
 		return ActionEnvelope{}, err
 	}

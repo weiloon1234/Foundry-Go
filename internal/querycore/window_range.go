@@ -36,7 +36,7 @@ func (d RangeDistance) Validate(kind codec.ParameterType) error {
 		return d.Err
 	}
 	if d.Interval != nil {
-		if d.Parameter.Kind != 0 || d.Parameter.Value != nil || d.Parameter.Err != nil {
+		if d.Parameter.Kind != 0 || LiteralValue(d.Parameter.Value) != nil || d.Parameter.Err != nil {
 			return fault.New(fault.Invalid, "ambiguous RANGE distance")
 		}
 		v := *d.Interval
@@ -69,18 +69,18 @@ func (d RangeDistance) Validate(kind codec.ParameterType) error {
 	}
 	switch kind {
 	case codec.TypeInteger:
-		v, ok := d.Parameter.Value.(int64)
+		v, ok := LiteralValue(d.Parameter.Value).(int64)
 		if ok && v >= 0 {
 			return nil
 		}
 	case codec.TypeFloat:
-		v, ok := d.Parameter.Value.(float64)
+		v, ok := LiteralValue(d.Parameter.Value).(float64)
 		if ok && v >= 0 && !math.IsInf(v, 0) && !math.IsNaN(v) {
 			return nil
 		}
 	case codec.TypeDecimal:
 		var text string
-		switch v := d.Parameter.Value.(type) {
+		switch v := LiteralValue(d.Parameter.Value).(type) {
 		case string:
 			text = v
 		case []byte:

@@ -6,6 +6,7 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -30,11 +31,16 @@ func TestConsumerCodecsReuseEnumRulesAndPreserveNamedTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	draft := models.LedgerEntryDraft{}.SetAmount(amount).ClearBalance()
-	if pending, ok := draft.Amount().Get(); !ok || pending != amount {
-		t.Fatal("generated decimal mutation changed exact value")
-	}
-	if err := models.QueryLedgerEntries().Where(models.LedgerEntryFields().Amount.Gte(amount), models.LedgerEntryFields().Balance.IsNull()).Validate(); err != nil {
+	inspectInsertAssignments(t, models.LedgerEntries.Table, []orm.Assignment[models.LedgerEntry]{models.LedgerEntries.Amount.Set(amount)}, func(write *orm.Write[models.LedgerEntry]) {
+		if v, ok := orm.WriteGet(write, models.LedgerEntries.Amount.Set).Get(); !ok || v != amount {
+			t.Error("decimal assignment changed exact value")
+		}
+	})
+	statement, err := orm.Compile(models.LedgerEntries.Query().Where(models.LedgerEntries.Amount.Gte(amount), models.LedgerEntries.Balance.IsNull()))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if args := statement.Arguments(); len(args) != 1 || args[0] != amount.String() {
+		t.Fatal("decimal binding changed exact value")
 	}
 }

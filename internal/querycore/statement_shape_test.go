@@ -21,7 +21,7 @@ func TestCompilerStatementShape(t *testing.T) {
 				values[i] = "canary-private"
 			}
 			calls := 0
-			sql, err := c.Expression(Comparison{Operand: FieldRef{Table: "records", Column: "id"}, Operator: In, Values: values, Kind: kind, Bind: func(v any) (driver.Value, error) { calls++; return v.(string), nil }})
+			sql, err := c.Expression(Comparison{Operand: FieldRef{Table: "records", Column: "id"}, Operator: In, Values: RetainComparisonValues(values), Kind: kind, Bind: func(v any) (driver.Value, error) { calls++; return v.(string), nil }})
 			if err != nil {
 				t.Fatal(err)
 			}

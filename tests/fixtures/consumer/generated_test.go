@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 var _ driver.Valuer = models.StatusActive
@@ -50,38 +52,62 @@ func TestGeneratedEnumPersistenceAndDescriptor(t *testing.T) {
 	}
 }
 
-func TestGeneratedModelsQueriesAndDrafts(t *testing.T) {
+func TestHandwrittenModelsAndAssignments(t *testing.T) {
 	id, err := model.NewID[models.User]()
 	if err != nil {
 		t.Fatal(err)
 	}
-	fields := models.UserFields()
-	q := models.QueryUsers().Where(fields.ID.Eq(id), query.Or(fields.Email.Contains("@example.test"), fields.Nickname.IsNull()), fields.Age.Gte(18), fields.Status.Eq(models.StatusActive)).OrderBy(fields.Age.Desc())
-	if err := q.Validate(); err != nil || q.Table() != "users" {
+	fields := models.Users
+	q := fields.Query().Where(fields.ID.Eq(id), orm.Or(fields.Email.Contains("@example.test"), fields.Nickname.IsNull()), fields.Age.Gte(18), fields.Status.Eq(models.StatusActive)).OrderBy(fields.Age.Desc())
+	if statement, err := orm.Compile(q); err != nil || !strings.Contains(statement.SQL(), `"users"`) {
 		t.Fatalf("query declaration: %v", err)
 	}
-	if err := models.QueryCountries().Where(models.CountryFields().Code.Eq(models.CountryCode("MY"))).Validate(); err != nil {
+	if _, err := orm.Compile(models.Countries.Query().Where(models.Countries.Code.Eq(models.CountryCode("MY")))); err != nil {
 		t.Fatal(err)
 	}
-	if err := models.QueryUsers().Where(fields.IntroducerID.Eq(id)).Validate(); err != nil {
+	if _, err := orm.Compile(fields.Query().Where(fields.IntroducerID.Eq(id))); err != nil {
 		t.Fatal("self-reference lost its owner")
 	}
-	base := models.UserDraft{}
-	changed := base.SetID(id).SetAge(0).SetEmail("").ClearNickname().SetIntroducerID(id)
-	if !base.IsEmpty() || changed.IsEmpty() {
-		t.Fatal("draft derivation mutated original")
+	var base []orm.Assignment[models.User]
+	changed := append(base, userIdentityAssignment(id), fields.Age.Set(0), fields.Email.Set(""), fields.Nickname.SetNull(), fields.IntroducerID.Set(id))
+	if len(base) != 0 || len(changed) != 5 {
+		t.Fatal("assignment derivation mutated original")
 	}
-	if age, set := changed.Age().Get(); !set || age != 0 {
-		t.Fatal("explicit zero lost")
-	}
-	if nickname, set := changed.Nickname().Get(); !set || !nickname.IsNull() {
-		t.Fatal("explicit null lost")
-	}
-	if changed.UnsetNickname().Nickname().IsSet() {
-		t.Fatal("unset became null")
-	}
+	inspectInsertAssignments(t, fields.Table, changed, func(write *orm.Write[models.User]) {
+		if v, ok := orm.WriteGet(write, fields.ID.Set).Get(); !ok || v != id {
+			t.Error("typed identity input lost")
+		}
+		if v, ok := orm.WriteGet(write, fields.Age.Set).Get(); !ok || v != 0 {
+			t.Error("explicit zero lost")
+		}
+		if v, ok := orm.WriteGet(write, fields.Email.Set).Get(); !ok || v != "" {
+			t.Error("explicit empty string lost")
+		}
+		if v, ok := orm.WriteNullableGet(write, fields.Nickname.Set).Get(); !ok || !v.IsNull() {
+			t.Error("explicit null lost")
+		}
+		if v, ok := orm.WriteNullableGet(write, fields.IntroducerID.Set).Get(); !ok || v != value.Of(id) {
+			t.Error("typed self-reference input lost")
+		}
+		if err := orm.WriteUnset(write, fields.Nickname.Set); err != nil {
+			t.Error(err)
+		}
+		if orm.WriteNullableGet(write, fields.Nickname.Set).IsSet() {
+			t.Error("unset nickname remained supplied")
+		}
+	})
+	inspectInsertAssignments(t, fields.Table, base, func(write *orm.Write[models.User]) {
+		if orm.WriteIsSet(write, fields.Age.Set) || orm.WriteIsSet(write, fields.Email.Set) || orm.WriteIsSet(write, fields.Nickname.Set) || orm.WriteIsSet(write, fields.IntroducerID.Set) {
+			t.Error("assignment derivation populated the original input")
+		}
+	})
+}
+
+// The shared model owners retain these business helpers until their generated
+// return types migrate. Keep their assertions during that coexistence window.
+func TestBusinessDraftHelpers(t *testing.T) {
 	if email, set := (models.User{Email: "typed"}).CurrentEmailDraft().Email().Get(); !set || email != "typed" {
-		t.Fatal("handwritten business method lost generated type")
+		t.Fatal("handwritten business method lost its input")
 	}
 }
 

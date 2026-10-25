@@ -21,7 +21,7 @@ func CursorPredicate(orders []QueryOrder, keys []driver.Value, nullable func(Que
 		if orders[0].Descending {
 			op = Less
 		}
-		return RowComparison{Operands: operands, Operator: op, Values: slices.Clone(keys)}
+		return RowComparison{Operands: operands, Operator: op, Values: RetainRowValues(slices.Clone(keys))}
 	}
 	var alternatives []Expression
 	var prefix []Expression
@@ -30,7 +30,7 @@ func CursorPredicate(orders []QueryOrder, keys []driver.Value, nullable func(Que
 		compare := func(op Operator) Expression {
 			p := Comparison{Operand: order.Field, Operator: op}
 			if op != IsNull && op != IsNotNull {
-				p.Values = []any{key}
+				p.Values = RetainComparisonValues([]any{key})
 				p.Bind = func(raw any) (driver.Value, error) { return raw, nil }
 			}
 			return p

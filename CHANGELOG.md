@@ -8,6 +8,16 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add complete-model relation aggregate reads through expr.RelatedValue and
+  rows.WithValue/Annotated, and LoadFrom/LoadMissingFrom for loading existing
+  parents with query-owned relation limits. No parent statement is issued.
+- Migrate office, tooling, HTTP model, extension and root-harness consumers to
+  ORM declarations; retain generated coexistence and explicit legacy parity tests.
+  Add owner-typed extension matching and AddFilesTo for bound attachment batches.
+- Redact retained predicate, statement, assignment, numeric-bound, plan, cursor
+  and pivot values, including private/nested formatting; explicit accessors keep
+  their existing values and ownership contracts.
+
 - Migrate application/profile, pivot lifecycle, relationship-filter and correlation
   consumers to ORM declarations. Migrate recovery, authentication and nested binding
   consumers while retaining model-first locking and typed reconciliation outcomes.

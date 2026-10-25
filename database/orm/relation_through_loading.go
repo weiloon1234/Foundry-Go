@@ -30,7 +30,7 @@ func throughLoader[M, N, P any, A, B comparable](local columnData[A], pivotLocal
 			if err != nil {
 				return 0, err
 			}
-			node.Predicates = append(node.Predicates, querycore.Requalify(comparison[P](pivotLocal, querycore.In, keys[start:end]).expression, querycore.RelationPivotAlias))
+			node.Predicates = append(node.Predicates, querycore.Requalify(querycore.PredicateNode(comparison[P](pivotLocal, querycore.In, keys[start:end]).expression), querycore.RelationPivotAlias))
 			node.Limit = value.Set(limit)
 			n, pc := len(p.target.columns), len(p.join.pivot.table.columns)
 			fetched := 0

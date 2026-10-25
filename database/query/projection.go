@@ -71,7 +71,7 @@ func (q ProjectionQuery[S, P]) Where(predicates ...Predicate[S]) ProjectionQuery
 func (s projectionSource[S]) where(predicates ...Predicate[S]) projectionSource[S] {
 	s.node.Predicates = slices.Clone(s.node.Predicates)
 	for _, p := range predicates {
-		s.node.Predicates = append(s.node.Predicates, p.expression)
+		s.node.Predicates = append(s.node.Predicates, predicateExpression(p.expression))
 	}
 	return s
 }
@@ -92,7 +92,7 @@ func (q ProjectionQuery[S, P]) OrderBy(orders ...ProjectionOrder[S]) ProjectionQ
 func (q ProjectionQuery[S, P]) Having(predicates ...HavingPredicate[S]) ProjectionQuery[S, P] {
 	q.source.node.Having = slices.Clone(q.source.node.Having)
 	for _, p := range predicates {
-		q.source.node.Having = append(q.source.node.Having, p.expression)
+		q.source.node.Having = append(q.source.node.Having, predicateExpression(p.expression))
 	}
 	return q
 }

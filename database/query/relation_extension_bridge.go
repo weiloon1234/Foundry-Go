@@ -44,5 +44,5 @@ func FoundryPredicate[M any](expression querycore.Expression, seal sqlowner.Quer
 	if !seal.Valid() {
 		return Predicate[M]{}
 	}
-	return Predicate[M]{expression: expression}
+	return Predicate[M]{expression: retainPredicate(expression)}
 }

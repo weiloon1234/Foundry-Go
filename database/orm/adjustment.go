@@ -19,16 +19,21 @@ var ErrBoundExceeded = errors.New("numeric adjustment bound exceeded")
 // column +/- amount before comparing the bound. int64/float64 overflow returns
 // a database out-of-range error; it never silently passes the guard.
 type Bound[V NumberValue] struct {
-	value   V
+	_       [0]*V
+	value   *querycore.InputState
 	minimum bool
 	ok      bool
 }
 
 // AtLeast requires the decremented value to remain at or above floor.
-func AtLeast[V NumberValue](floor V) Bound[V] { return Bound[V]{value: floor, minimum: true, ok: true} }
+func AtLeast[V NumberValue](floor V) Bound[V] {
+	return Bound[V]{value: querycore.RetainInput(floor), minimum: true, ok: true}
+}
 
 // AtMost requires the incremented value to remain at or below ceiling.
-func AtMost[V NumberValue](ceiling V) Bound[V] { return Bound[V]{value: ceiling, ok: true} }
+func AtMost[V NumberValue](ceiling V) Bound[V] {
+	return Bound[V]{value: querycore.RetainInput(ceiling), ok: true}
+}
 
 // Increment adds a strictly positive amount in the UPDATE statement.
 // Example: Orders.TotalCents.Increment(100, orm.AtMost[int64](1000)).
@@ -88,7 +93,7 @@ func adjustment[M any, V NumberValue](c columnData[V], amount V, subtract bool, 
 		if limit.minimum != subtract {
 			return fail("use AtLeast with Decrement and AtMost with Increment")
 		}
-		ceiling, err := c.bind(limit.value)
+		ceiling, err := c.bind(querycore.StoredInput(limit.value).(V))
 		if err != nil {
 			return fail("invalid adjustment bound")
 		}
@@ -98,9 +103,9 @@ func adjustment[M any, V NumberValue](c columnData[V], amount V, subtract bool, 
 		}
 		kind := c.core.kind
 		operand := querycore.OperationNode{Kind: op, Result: kind, Arguments: []querycore.OperationArgument{
-			{Value: field, Kind: kind}, {Value: querycore.ParameterNode{Kind: kind, Value: bound}, Kind: kind},
+			{Value: field, Kind: kind}, {Value: querycore.ParameterNode{Kind: kind, Value: querycore.RetainLiteral(bound)}, Kind: kind},
 		}}
-		a.guard = querycore.BinaryComparison{Left: operand, Right: querycore.ParameterNode{Kind: kind, Value: ceiling}, Operator: comparison}
+		a.guard = querycore.BinaryComparison{Left: operand, Right: querycore.ParameterNode{Kind: kind, Value: querycore.RetainLiteral(ceiling)}, Operator: comparison}
 	}
 	return a
 }

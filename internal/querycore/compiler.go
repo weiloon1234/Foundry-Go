@@ -206,7 +206,7 @@ func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping 
 	case IsNotNull:
 		return "(" + field + " IS NOT NULL)", nil
 	case In, NotIn:
-		if len(e.Values) == 0 {
+		if len(ComparisonValues(e.Values)) == 0 {
 			// Validate the complete operand, but the constant emits none of its
 			// SQL. Retaining its parameters would leave holes or unused bindings.
 			c.DiscardArguments(argumentStart)
@@ -215,12 +215,12 @@ func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping 
 			}
 			return "FALSE", nil
 		}
-		if len(e.Values) > MaxMembershipValues {
+		if len(ComparisonValues(e.Values)) > MaxMembershipValues {
 			return "", fault.New(fault.Invalid, "membership list exceeds its value bound")
 		}
 	}
-	bound := make([]driver.Value, len(e.Values))
-	for i, value := range e.Values {
+	bound := make([]driver.Value, len(ComparisonValues(e.Values)))
+	for i, value := range ComparisonValues(e.Values) {
 		v, err := e.Bind(value)
 		if err != nil {
 			return "", safeerror.Wrap("query comparison binding failed", err)
@@ -298,11 +298,11 @@ func LikePattern(op Operator, text string) string {
 // rowComparison compiles (a, b) > ($1, $2) for keyset traversal.
 func (c *Compiler) RowComparison(e RowComparison, grouped map[FieldRef]bool, grouping bool) (string, error) {
 	op, ok := ComparisonOperator(e.Operator)
-	if !ok || len(e.Operands) != len(e.Values) || len(e.Operands) == 0 {
+	if !ok || len(e.Operands) != len(RowValues(e.Values)) || len(e.Operands) == 0 {
 		return "", fault.New(fault.Invalid, "invalid row comparison")
 	}
 	left := make([]string, len(e.Operands))
-	right := make([]string, len(e.Values))
+	right := make([]string, len(RowValues(e.Values)))
 	for i, operand := range e.Operands {
 		text, err := c.SelectedExpression(operand, grouped, grouping)
 		if err != nil {
@@ -310,7 +310,7 @@ func (c *Compiler) RowComparison(e RowComparison, grouped map[FieldRef]bool, gro
 		}
 		left[i] = text
 	}
-	for i, v := range e.Values {
+	for i, v := range RowValues(e.Values) {
 		parameter, err := c.Parameter(v)
 		if err != nil {
 			return "", err

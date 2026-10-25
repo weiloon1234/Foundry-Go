@@ -13,7 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 )
 
-func aggregateSelect(a *aggregatePlan, ctx context.Context, keys []driver.Value, limit int) (querycore.SelectNode, error) {
+func aggregateInputSelect(a *aggregatePlan, ctx context.Context) (querycore.SelectNode, string, querycore.FieldRef, querycore.FieldRef) {
 	r := a.input.plan
 	target := r.query.ast
 	target.ScopeContext = ctx
@@ -40,7 +40,12 @@ func aggregateSelect(a *aggregatePlan, ctx context.Context, keys []driver.Value,
 			}
 		}
 	}
-	return querycore.RelationAggregateSelect(node, aggregateOwner(a.input).model.Table, alias, group, a.measure, r.singular, unique, keys, limit)
+	return node, alias, group, unique
+}
+
+func aggregateSelect(a *aggregatePlan, ctx context.Context, keys []driver.Value, limit int) (querycore.SelectNode, error) {
+	node, alias, group, unique := aggregateInputSelect(a, ctx)
+	return querycore.RelationAggregateSelect(node, aggregateOwner(a.input).model.Table, alias, group, a.measure, a.input.plan.singular, unique, keys, limit)
 }
 
 func loadAggregate(ctx context.Context, ex database.Executor, p *relationPlan, base unsafe.Pointer, count int, budget *relationBudget, depth int, missing bool) error {

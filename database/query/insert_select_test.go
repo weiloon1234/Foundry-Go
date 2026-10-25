@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"reflect"
 	"strings"
 	"testing"
@@ -148,7 +149,7 @@ func TestInsertSelectLiteralInputsNormalizeOnceWithoutBypass(t *testing.T) {
 			t.Fatal("literal insertion input bypassed normalization", err)
 		}
 	}
-	if calls != 2 || plan.values.assignments[0].Value != (insertTagInput{" tag "}) {
+	if calls != 2 || querycore.StoredInput(plan.values.assignments[0].Value) != (insertTagInput{" tag "}) {
 		t.Fatal("input transformed repeatedly or original mutated", calls)
 	}
 	bad := InsertFrom(source, destination, MapInsert(name, Value(input)), MapInsert(tag, Value(input)))

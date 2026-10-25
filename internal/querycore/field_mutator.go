@@ -62,7 +62,7 @@ func NewNullableFieldMutator[I, V any](column string, c codec.Codec[V], mutate f
 // Example: CaptureAssignment(codec.String[string](), "stored").
 func CaptureAssignment[V any](c codec.Codec[V], v V) AssignmentValue {
 	v = c.Clone(v)
-	return AssignmentValue{Value: v, CopyValue: func() any { return c.Clone(v) }, Bind: func() (driver.Value, error) { return c.Bind(c.Clone(v)) }}
+	return AssignmentValue{Value: RetainInput(v), CopyValue: func() any { return c.Clone(v) }, Bind: func() (driver.Value, error) { return c.Bind(c.Clone(v)) }}
 }
 
 // CaptureInput defers binding until transformation, cloning mutable inputs when declared.
@@ -71,7 +71,7 @@ func CaptureInput[I any](input I, clone func(I) I) AssignmentValue {
 	if clone != nil {
 		input = clone(input)
 	}
-	a := AssignmentValue{Value: input, Bind: func() (driver.Value, error) {
+	a := AssignmentValue{Value: RetainInput(input), Bind: func() (driver.Value, error) {
 		return nil, fault.New(fault.Invalid, "mutation input must be transformed before SQL binding")
 	}}
 	if clone != nil {
@@ -90,7 +90,7 @@ func MutateAssignments(ctx context.Context, assignments []MutationAssignment, fi
 		indices[a.Field.Column] = i
 	}
 	for _, f := range fields {
-		if i, set := indices[f.Column]; set && reflect.TypeOf(result[i].Value) != f.Input {
+		if i, set := indices[f.Column]; set && reflect.TypeOf(StoredInput(result[i].Value)) != f.Input {
 			return nil, fault.New(fault.Invalid, "mutation value does not match its declared field type")
 		}
 	}

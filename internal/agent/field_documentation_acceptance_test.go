@@ -46,7 +46,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		{"validation-field", "clientcontracts/validation_fields_test.go", "clientcontracts.PayloadValidationFields().", "Titles", "/clientcontracts/payload_foundry.gen.go", []string{"keyed by the catalog's supported locales", "titles"}},
 		{"projection-selection", "projectionqueries/projections_postgres_test.go", "rows.Map(reports.UserSummaries.", "Email", "/reports/rows.go", []string{"buyer contact address selected for this report"}},
 		{"orm-row-selection", "reporting/members.go", "rows.MapSelected(MemberRows.", "Name", "/reporting/rows.go", []string{"Display name selected for the member report"}},
-		{"extension-descriptor", "articles/loading_postgres_test.go", "articles.ArticleExtensions().", "Title", "/articles/article_foundry.gen.go", []string{"localized article heading shown to readers"}},
+		{"extension-descriptor", "articles/loading_postgres_test.go", "s.x.", "Title", "/articles/tables.go", []string{"localized article heading shown to readers", "keeps its locale input and owner", "ArticleSlots.Title.Rule"}},
 		{"changes-field", "mutatorqueries/changes_postgres_test.go", "orm.ChangeOf(changes, q.", "Email", "/mutatorqueries/orm.go", []string{"delivery address.", "stored values", "MutateEmail"}},
 		{"json-property", "jsonqueries/path_postgres_test.go", "prefs.", "Theme", "/jsonqueries/document_foundry.gen.go", []string{"reader appearance", "omitted uses the application default"}},
 	} {
@@ -165,20 +165,22 @@ func TestRealGoplsStoredFieldCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(workspace, "mutatorqueries/mutators_postgres_test.go")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, probe := range []struct {
-		name, prefix, symbol string
-		methods              []string
+		name, file, prefix, symbol string
+		methods, forbidden         []string
 	}{
-		{"text", "q.Query().Where(f.Email.", "Eq", []string{"Eq", "Like", "Contains", "Set"}},
-		{"numeric", "mutatorqueries.Members.Attempts.", "Set", []string{"Eq", "Gte", "Set", "Asc"}},
+		{"text", "mutatorqueries/mutators_postgres_test.go", "q.Query().Where(f.Email.", "Eq", []string{"Eq", "Like", "Contains", "Set"}, nil},
+		{"numeric", "mutatorqueries/mutators_postgres_test.go", "mutatorqueries.Members.Attempts.", "Set", []string{"Eq", "Gte", "Set", "Asc"}, nil},
+		{"nullable-clearing", "generated_test.go", "fields.Nickname.", "SetNull", []string{"Set", "SetNull"}, nil},
+		{"required-no-clearing", "generated_test.go", "fields.Email.", "Set", []string{"Set"}, []string{"SetNull"}},
 	} {
 		t.Run(probe.name, func(t *testing.T) {
 			parallelRealGopls(t)
+			path := filepath.Join(workspace, probe.file)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
 			source := string(data)
 			start := strings.Index(source, probe.prefix+probe.symbol)
 			if start < 0 {
@@ -206,7 +208,7 @@ func TestRealGoplsStoredFieldCapabilities(t *testing.T) {
 					t.Fatalf("gopls lost stored-field method %s: %s", want, result.Payload)
 				}
 			}
-			for _, removed := range []string{"Value", "Param", "Count", "CountDistinct", "Min", "Max", "Sum", "Avg"} {
+			for _, removed := range append([]string{"Value", "Param", "Count", "CountDistinct", "Min", "Max", "Sum", "Avg"}, probe.forbidden...) {
 				if labels[removed] {
 					t.Fatalf("gopls suggested removed stored-field method %s", removed)
 				}

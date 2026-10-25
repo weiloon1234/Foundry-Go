@@ -75,7 +75,7 @@ var ArticleOwner = extensions.DefineORMOwner("articles", ArticleIdentity, extens
 
 // ArticleSlotHandles groups the thin external-store handles. Example: ArticleSlots.From(runtime).
 type ArticleSlotHandles struct {
-	// Title keeps its locale input and owner. Example: ArticleSlots.Title.Rule().
+	// Title is the localized article heading shown to readers; it keeps its locale input and owner. Example: ArticleSlots.Title.Rule().
 	Title translations.TextHandle[Article, model.ID[Article]]
 	// Summary keeps its optional locale input. Example: ArticleSlots.Summary.MergeRule().
 	Summary translations.TextHandle[Article, model.ID[Article]]

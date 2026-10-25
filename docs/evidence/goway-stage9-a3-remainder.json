@@ -1,0 +1,2311 @@
+{
+  "slice": "stage9-a3-remainder",
+  "base_commit": "fdaff938",
+  "worktree": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r10",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "status": "targeted acceptance passed; two nestedbindings negatives blocked on lane D",
+  "packages_migrated": [
+    "tooling",
+    "httpmodels"
+  ],
+  "original_waiting_cases": {
+    "total": 26,
+    "A1_native": 18,
+    "accepted_A2_native": 6,
+    "blocked_on_lane_D_nestedbindings": 2
+  },
+  "new_rows_ported": 0,
+  "negative_cases": [
+    {
+      "case": "aggregate_input",
+      "diagnostic": "does not match inferred type",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/aggregate_input/invalid.go": "0d7c54ccaf86c2808e2316158d762633aa0f11154b14315d3a29953e44faebfb"
+      }
+    },
+    {
+      "case": "aggregate_nonnullable_result",
+      "diagnostic": "cannot use",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/aggregate_nonnullable_result/invalid.go": "9e2ee9a390f520d1ba32c7025be36c0e0f9a8a841c06892adf1295f954a069cd"
+      }
+    },
+    {
+      "case": "aggregate_owner",
+      "diagnostic": "as orm.Relation[models.Order]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/aggregate_owner/invalid.go": "92f77adbf4fbe1f4f09167394aaa732e72812e077ec2391a2263e0c1f4f3ecf2"
+      }
+    },
+    {
+      "case": "aggregate_pivot_input",
+      "diagnostic": "does not match inferred type",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/aggregate_pivot_input/invalid.go": "06fdce3692f2ff2ffe5ec9b0e6054c376a8c438c4197c24105c3c52b4ad0fc28"
+      }
+    },
+    {
+      "case": "aggregate_result",
+      "diagnostic": "cannot use",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/aggregate_result/invalid.go": "917bec71fe1016e4fed4a6606c2eb2c28eb8ef07b1eb46b5263d3626a229f195"
+      }
+    },
+    {
+      "case": "application_event_outbox_key",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/application_event_outbox_key/invalid.go": "ce5f20812ca3476a51017bfd4b3c7c30ce62d74d67034be3f0791f9aee309a5d"
+      }
+    },
+    {
+      "case": "application_timezone",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/application_timezone/invalid.go": "ff0b84b46338ee07b9dbac7f5fa92f2e66ffcc67969c9c0b8db53a2897118281"
+      }
+    },
+    {
+      "case": "cli_command_name",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/cli_command_name/invalid.go": "d9e2ebd886ddc6ca5f25d19e01dd3a92aad6272a16abed67de192deb7d53cbff"
+      }
+    },
+    {
+      "case": "cli_handler_arguments",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/cli_handler_arguments/invalid.go": "d7e8c073a41bc7dc520d68b6acb602292060d7a940c142b4bd7045dbab8efb44"
+      }
+    },
+    {
+      "case": "cli_registry_key",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/cli_registry_key/invalid.go": "34d0eb4c89be4e227d27c736725e5e846fb17f3d6677e6687f42ec54b0775260"
+      }
+    },
+    {
+      "case": "config_owner",
+      "diagnostic": "does not implement config.Field[second]",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/config_owner/invalid.go": "51373f723d55090937f8afc4a8bb04a05c74449255a827a775b2c5ec579a63a1"
+      }
+    },
+    {
+      "case": "config_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/config_value/invalid.go": "91cd40ee866b6d332d0fbd90abd30852e520518daeb2fdc5e4175cf6cb34f7d4"
+      }
+    },
+    {
+      "case": "contribution_result_type",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/contribution_result_type/invalid.go": "969f911872fffae4ce439aa70912bbdbeda396461e0e5fbc0f1d79bf9b8f5ba6"
+      }
+    },
+    {
+      "case": "email_address_type",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/email_address_type/invalid.go": "fcf58fa0b5b4c1afb8c8395e4989adef9923292ece480eec8870de577a627d43"
+      }
+    },
+    {
+      "case": "email_attachment_key",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/email_attachment_key/invalid.go": "811d706a0283e5679c62821762d8adc3925f4ca67ad6750d2f28329067508854"
+      }
+    },
+    {
+      "case": "email_idempotency_key",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/email_idempotency_key/invalid.go": "57bc766e33ec6baf7f216a09ad25b56e97a82f5b39fda2bb1350c8659d121153"
+      }
+    },
+    {
+      "case": "email_job_payload",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/email_job_payload/invalid.go": "0f8b1eac480bea5d436f1c7c9f4323498fc05f130f2a753c6f5450b5773afe72"
+      }
+    },
+    {
+      "case": "email_stored_source",
+      "diagnostic": "does not implement",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/email_stored_source/invalid.go": "0b6606fa7a3a612deb09cc177bb1016ab9abfe3856956993cd1224b2de5fb6cf"
+      }
+    },
+    {
+      "case": "email_template_data",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/email_template_data/invalid.go": "dd0cbd668d4d5053d075f2c2f88b7b78c1004da6a1443a87dc1d77d8cdc799d9"
+      }
+    },
+    {
+      "case": "email_upload_source",
+      "diagnostic": "does not implement",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/email_upload_source/invalid.go": "db4ac270d74e165efc7e57509fc08a86914e0e651e64eb316926a020476e3fc5"
+      }
+    },
+    {
+      "case": "event_listener_payload",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/event_listener_payload/invalid.go": "a0b6e0508a2112fee1f287a065110f528caac3f7c1f51087f5f30cdf883440f3"
+      }
+    },
+    {
+      "case": "event_model_id",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/event_model_id/invalid.go": "b186863281a2573033000d4ec66300f64cf5f6aa75fa949cec981d35d919e335"
+      }
+    },
+    {
+      "case": "event_payload_type",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/event_payload_type/invalid.go": "8bf13490077abbb2466f948d999f4418dff19ea10235e8e258c11b1631fde18d"
+      }
+    },
+    {
+      "case": "event_topic_conversion",
+      "diagnostic": "cannot convert",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/event_topic_conversion/invalid.go": "008ec8a2a080edcdb6f292979188f90c9c5bbc29f1f05f1c2ec899dd65969a77"
+      }
+    },
+    {
+      "case": "form_actor",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/form_actor/invalid.go": "d386d3f0a28d89ff1a99df2386a2e2dfa932c78f35df4f2717b491c975e25fae"
+      }
+    },
+    {
+      "case": "form_handler",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/form_handler/invalid.go": "25dfb0a39eb8a05004eda5174fc06f23b23bec3794bf2b6ee9b2685f85b91f5b"
+      }
+    },
+    {
+      "case": "form_optional_actor",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/form_optional_actor/invalid.go": "70aae3b04da38bd292562f165972d5ef551f6f171f76c9d2d73d36091c489ac5"
+      }
+    },
+    {
+      "case": "form_prepare_input",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/form_prepare_input/invalid.go": "ccb084842623a5d34b81f3fad89b5843b45b94b2887e065fbabfd45eba2018fb"
+      }
+    },
+    {
+      "case": "form_prepare_output",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/form_prepare_output/invalid.go": "629795455da651c9b6790dbb5210482194a126e5efc9b7f32b7b4b4077eb3431"
+      }
+    },
+    {
+      "case": "generated_config_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/generated_config_owner/invalid.go": "74f339cf978f96f9e1f682d80cdbd49d70d72ef1af804c9bce16c8f8f9565809"
+      }
+    },
+    {
+      "case": "generated_config_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/generated_config_value/invalid.go": "8398dee7d3c8fbf1e884884e3bff054c41d00f9ca15792900d9c8285eb8cf3bf"
+      }
+    },
+    {
+      "case": "generic_dto_argument",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/generic_dto_argument/invalid.go": "04b165f35a3b3b57035c64ef9166102aa9dabc4b01163e5e4cb7061908ec3a49"
+      }
+    },
+    {
+      "case": "generic_dto_handler",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/generic_dto_handler/invalid.go": "aa386ba8520f9b0f7af8a90e3bba2b972d7b5ae31e2fbdafbaf591de397ce7e3"
+      }
+    },
+    {
+      "case": "generic_dto_rule",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/generic_dto_rule/invalid.go": "983566933aecc7507d6494842b14bd715391f99bbe937229d6b97c90ab2444f8"
+      }
+    },
+    {
+      "case": "health_probe_callback",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/health_probe_callback/invalid.go": "13596f49a51c0b13e738a3ceda40daf8e8fd5e39ac310b5480954c674657d328"
+      }
+    },
+    {
+      "case": "health_probe_identity",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/health_probe_identity/invalid.go": "58b8c74d4e7b780b128f00bacc2d4b1016afb845ce3baa723f6827f8dbe29686"
+      }
+    },
+    {
+      "case": "http_asset_media",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_asset_media/invalid.go": "910c143e5264cc13d0c8f05ed39237d74089dbdd7af42007c43b587e81cc8d85"
+      }
+    },
+    {
+      "case": "http_asset_path",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_asset_path/invalid.go": "e78291de4e12404503aec3a99a13be7ea46abe1d53ae40666d6d5908147af58b"
+      }
+    },
+    {
+      "case": "http_asset_service_key",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_asset_service_key/invalid.go": "a7ea92add3614b082cc897d9cb9c949635e10643df94717d0e3ffb730c90f14c"
+      }
+    },
+    {
+      "case": "http_asset_source",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_asset_source/invalid.go": "a93862f2148c022c69f4f4148027eccfb2c51b3a9dff361b78b79b3a1c343bd1"
+      }
+    },
+    {
+      "case": "http_compression_encoders",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_compression_encoders/invalid.go": "b983e2ff860b29a296770c15d98492666074df136eba836e58537f16c6b54bbd"
+      }
+    },
+    {
+      "case": "http_compression_level",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_compression_level/invalid.go": "1c2c766854315f006d5d61b3564bf299a5f7cbaa85400999e8426dcc67d60e0b"
+      }
+    },
+    {
+      "case": "http_cookie_model",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_cookie_model/invalid.go": "c923392fa6ec2d42da9538774460ee8c6c131a91fff5dca0ca6d6382558065f5"
+      }
+    },
+    {
+      "case": "http_cookie_name",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_cookie_name/invalid.go": "711af61ef6b8f950565eae75fa3057c6e69939f46aa034ebb41b112af405699e"
+      }
+    },
+    {
+      "case": "http_cookie_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_cookie_value/invalid.go": "9f5436efd875ea7dfd1f7b389aaaa1b8f7929005fbe6ae6561cc49e6b0294b27"
+      }
+    },
+    {
+      "case": "http_cors_header",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_cors_header/invalid.go": "8342242f2cce22f6ac3b523997550960be1a239e00343b97c8013a10e08e2a44"
+      }
+    },
+    {
+      "case": "http_cors_origin",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_cors_origin/invalid.go": "2f691d5194a858c9e564d2376eb58ec23ea9769b8b12e2360f7be74c1ee65973"
+      }
+    },
+    {
+      "case": "http_csp_hash",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_csp_hash/invalid.go": "eb28e05464e522292e22c36ef19b77ea754c8aff1d41b55d7cb6166bd214c80d"
+      }
+    },
+    {
+      "case": "http_csp_sandbox",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_csp_sandbox/invalid.go": "53581105a886e121f7a25cc6ea5d427341ebd78b57021257c5b9f493890e81fb"
+      }
+    },
+    {
+      "case": "http_csp_source",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_csp_source/invalid.go": "0ace0218934b6496cd3a1e69e7ece5faa1fc64e29e26ede5e69ed3f1363e1795"
+      }
+    },
+    {
+      "case": "http_download_body",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_download_body/invalid.go": "564b54f8cddeba19908ef4dcb64f69d9ee5d57cc5d139abc0cf2e23ae85d3d33"
+      }
+    },
+    {
+      "case": "http_download_disposition",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_download_disposition/invalid.go": "862479b63c67292d467312339a97e64b97166f3226d49f4872b961caef73fae4"
+      }
+    },
+    {
+      "case": "http_download_handler",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_download_handler/invalid.go": "134f1dfb94eb2ac656545531096f72b9c2038733362fd72d64b362fc90616a2a"
+      }
+    },
+    {
+      "case": "http_download_media",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_download_media/invalid.go": "8e441f530838978d4ab02d76c61c017ad12ad4202fab0d3c5b3f8baf3a5493ec"
+      }
+    },
+    {
+      "case": "http_download_model_id",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_download_model_id/invalid.go": "84887bb48c5aa4f39faa8e03eca673afc8bd7692ffa41df7c5d9618d91a1a7cb"
+      }
+    },
+    {
+      "case": "http_download_source",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_download_source/invalid.go": "17b1ca26f7d8b9df72dba628c6e3bf32dfe9a6a9f38de5beade3a5b34b5f0bf6"
+      }
+    },
+    {
+      "case": "http_dto_descriptor_conversion",
+      "diagnostic": "cannot convert",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_descriptor_conversion/invalid.go": "53baa9c59c0e9d5451b778c62ddb22d9175b2c8b210f002d4acd024b345c2dab"
+      }
+    },
+    {
+      "case": "http_dto_descriptor_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_descriptor_owner/invalid.go": "8d3266c0d19c4b625e1d773a7b207d15b3c4053981f258543c4b329a1cd7d5a8"
+      }
+    },
+    {
+      "case": "http_dto_encode_nullable_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_encode_nullable_value/invalid.go": "4156aab128e1cd83262ac4674d890fc55663e4957e67e131e2ff6118486ee403"
+      }
+    },
+    {
+      "case": "http_dto_encode_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_encode_owner/invalid.go": "f52d84e22c4f76b78db47b3432aa0ee022c81dbe748632c23a0a12e161efc135"
+      }
+    },
+    {
+      "case": "http_dto_encode_slice_items",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_encode_slice_items/invalid.go": "20e3647e6e118d28869dee976c02aa8a106a90ba13c427897e21a9656d1c13d0"
+      }
+    },
+    {
+      "case": "http_dto_enum_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_enum_value/invalid.go": "176882b04dc1a4d72060c619ef48a4c0224e0fbe9c61fb6f50c1aa46591642b0"
+      }
+    },
+    {
+      "case": "http_dto_model_id",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_model_id/invalid.go": "0dba8736828edfc42607044da264241a8edd110d9bf0e5022cbd3302b1fb577f"
+      }
+    },
+    {
+      "case": "http_dto_nullable_owner",
+      "diagnostic": "cannot convert",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_nullable_owner/invalid.go": "cd7374a97cd1293f137ad28b752576a8e138f43aa520c25c94d190a21cb8d944"
+      }
+    },
+    {
+      "case": "http_dto_patch_state",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_patch_state/invalid.go": "9f87c0b4aa615852fac55af4c8c91fe68ed086daeeef76f8d9094ffcd6d0bd8c"
+      }
+    },
+    {
+      "case": "http_dto_result_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_result_owner/invalid.go": "3406d949e64d859d895bdff740352bae3e52e613ad1404daa70bc53c73d9fca1"
+      }
+    },
+    {
+      "case": "http_dto_slice_owner",
+      "diagnostic": "cannot convert",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_dto_slice_owner/invalid.go": "355bcb19495de1a304e4e0519c40f1979706fb6aa2475af39c408e61119ccb6f"
+      }
+    },
+    {
+      "case": "http_endpoint_body",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_endpoint_body/invalid.go": "16d71d310f71f5e9b8ccec6f95657c2ebccf76e94106d95ecc364bcddcb0c5f4"
+      }
+    },
+    {
+      "case": "http_endpoint_body_descriptor",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_endpoint_body_descriptor/invalid.go": "90cee497c9d3731a48ba695e2d20e40afcba1e0f9b684cec076b9dcbcb9de159"
+      }
+    },
+    {
+      "case": "http_endpoint_path",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_endpoint_path/invalid.go": "17d54627b162c9124967af79c28add291587bc8f5a5aa390f4e7f593bf4e715d"
+      }
+    },
+    {
+      "case": "http_endpoint_query",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_endpoint_query/invalid.go": "d4a39df239183ac4f7f5fb1a4c60f7663eeecbd7068e6fca29f32970ff52a72c"
+      }
+    },
+    {
+      "case": "http_endpoint_response",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_endpoint_response/invalid.go": "bdc222d3bd5e35a97a0bc0a9a4c182994efcbe13eb7e4d80a093c26f8679c9be"
+      }
+    },
+    {
+      "case": "http_endpoint_url_query",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_endpoint_url_query/invalid.go": "db93b598badc020e92b214a3870323085a2d673f0565e5ce1c61c4d47c353deb"
+      }
+    },
+    {
+      "case": "http_enum_codec_descriptor",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_enum_codec_descriptor/invalid.go": "fb303de6ce914e0592adc3078597f44c25356a96f555243fe1d22eabe682f5f1"
+      }
+    },
+    {
+      "case": "http_error_code",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_error_code/invalid.go": "84a6420e097cf96ec4735697e582df03a4bc4a18f759e53374c060c90593757b"
+      }
+    },
+    {
+      "case": "http_error_declaration",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_error_declaration/invalid.go": "680aeecca70061d4042e96212c27a9fa1480d781aa9d3eed78878f8a15de635d"
+      }
+    },
+    {
+      "case": "http_etag_config",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_etag_config/invalid.go": "d1c4af25bbd56502deee7a9ba9c64e54dffefeae9c4fc3863320ecb1b3cb8ef6"
+      }
+    },
+    {
+      "case": "http_float_integer",
+      "diagnostic": "does not satisfy",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_float_integer/invalid.go": "3b2f85a47824bc7159c284a8bcf9e24420b624f13dfbec9af45ff6b2718ae39f"
+      }
+    },
+    {
+      "case": "http_float_named",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_float_named/invalid.go": "782999410e05fffa15add5af6b60e5cf8f44efe46ff3bf85eff085cbd2883c92"
+      }
+    },
+    {
+      "case": "http_float_width",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_float_width/invalid.go": "6b73a640d019f1608decf75a97db1f0b26136b0becbb0e8743a2afeed926a78c"
+      }
+    },
+    {
+      "case": "http_generated_path_enum",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_generated_path_enum/invalid.go": "414a64b1361766d39e85e560f2b244c34fb499c7d0dfd8322837d6143028baa6"
+      }
+    },
+    {
+      "case": "http_generated_path_model",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_generated_path_model/invalid.go": "8cdaaa3c6b33d1176e3a3499aee5f608c6d0d34eedac3449d0ec5e290f541c62"
+      }
+    },
+    {
+      "case": "http_generated_path_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_generated_path_owner/invalid.go": "d5ab8a4968f01065ac57b7441e019f97234f54a4fc034af774ad7ea6fe95bd86"
+      }
+    },
+    {
+      "case": "http_header_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_header_value/invalid.go": "9b570e23167d5993b27f94ea66d336e3028b9540ec148f90d064843d3368bab0"
+      }
+    },
+    {
+      "case": "http_json_codec_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_json_codec_owner/invalid.go": "4ea8a1fae08649d7c221df824d41cfa25cb061fe5dbad603f47f5f7d6d82b83d"
+      }
+    },
+    {
+      "case": "http_json_key_conversion",
+      "diagnostic": "cannot convert",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_json_key_conversion/invalid.go": "74d4f4faa3df9ed3d0a8da567265ddc1567781168cf735acd6f3e97967c91cdc"
+      }
+    },
+    {
+      "case": "http_json_key_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_json_key_owner/invalid.go": "4d93d4ab369919792902fc4131abc06da00b5a535d3cab1bf3109b497a762605"
+      }
+    },
+    {
+      "case": "http_json_map_owner",
+      "diagnostic": "does not satisfy ~map[K]V",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_json_map_owner/invalid.go": "61b3e873d436b78d24ac6fb2625eee48a44d9e811ce990cfb9aa78cf86144fc6"
+      }
+    },
+    {
+      "case": "http_json_scalar_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_json_scalar_owner/invalid.go": "d99d7aec581bcccea55de475e95562da9e06652153a31b3323e3c4186c55a894"
+      }
+    },
+    {
+      "case": "http_middleware_id",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_middleware_id/invalid.go": "59453bdd7a9377fe6bec452651bd54adfe68805e54be3d07670745cf5912f91c"
+      }
+    },
+    {
+      "case": "http_multipart_file_slice",
+      "diagnostic": "does not satisfy",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_multipart_file_slice/invalid.go": "822d4229f716c3289a99d5ab53bf25824bad7fda33f8dc13fbca84d97b5fbe70"
+      }
+    },
+    {
+      "case": "http_multipart_file_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_multipart_file_value/invalid.go": "e8baedd002006629a4e9e0e1763e0061e6b1d567438e7205ea2e7fa47291fcbd"
+      }
+    },
+    {
+      "case": "http_multipart_handler",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_multipart_handler/invalid.go": "7896a2eb4dcb2b15d4f75fe742a20ffadd83bc5fac52a8a6cd055988bb0938cc"
+      }
+    },
+    {
+      "case": "http_multipart_json_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_multipart_json_value/invalid.go": "d7a5e2efd1ebe4e45812cfc0ec7c84a5e51b00ffffa23caef13be6a0d549450a"
+      }
+    },
+    {
+      "case": "http_multipart_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_multipart_owner/invalid.go": "1cbe5d7fafff4cd6453c15dc5e67a051c7cfb842c6fe2097363c079c10dda601"
+      }
+    },
+    {
+      "case": "http_path_codec_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_path_codec_value/invalid.go": "250ff30d41a4618edff12efe151bc061d560c0036910fadbdf6717b84426e9e9"
+      }
+    },
+    {
+      "case": "http_path_field_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_path_field_value/invalid.go": "29abac24164af67b26522c7b6358d065d0922519bb635611edf6b637fc3e903a"
+      }
+    },
+    {
+      "case": "http_proxy_header",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_proxy_header/invalid.go": "7673804e11a4c2b40b74dcfc6b8c71650c35caca43d1c7292b538f839b1cdf82"
+      }
+    },
+    {
+      "case": "http_proxy_network",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_proxy_network/invalid.go": "eb2e6c48b8086cb8194d9b1cac178b8d3986d271bed98e4818ac6758dcfd64d5"
+      }
+    },
+    {
+      "case": "http_proxy_origin",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_proxy_origin/invalid.go": "21ffe985e6b8d90d3c4f0e38822bd514fe5885fcfefa10f3ceef7e0fe57508a1"
+      }
+    },
+    {
+      "case": "http_public_origin",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_public_origin/invalid.go": "a5d32330cc789923344228471831165a41044e49495b6b97443bfc94342fb13b"
+      }
+    },
+    {
+      "case": "http_query_conversion",
+      "diagnostic": "cannot convert",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_query_conversion/invalid.go": "52c1976cedfea3240ae6f42f5c13e4cd1d8e77280cfd272adf5ada89ca4820e9"
+      }
+    },
+    {
+      "case": "http_query_default_value",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_query_default_value/invalid.go": "c174e2c5a031ddeb0510b22894fcd886e144616f514c276f307f11047ceff3fa"
+      }
+    },
+    {
+      "case": "http_query_embed_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_query_embed_owner/invalid.go": "d48c2f9b919dcb4feb6045e9a6b7dbe891d278592b5f12f95c79079b47fe5335"
+      }
+    },
+    {
+      "case": "http_query_merge_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_query_merge_owner/invalid.go": "b2d97f4963c8ca18f3a4c228e2fd7835ac9e05109f6597a56560150092fa1d46"
+      }
+    },
+    {
+      "case": "http_query_model_id",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_query_model_id/invalid.go": "4771e67775db75c11230a57279d4306f0fc17c7cad58ffc4c3e19cc1732319ab"
+      }
+    },
+    {
+      "case": "http_query_optional_field",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_query_optional_field/invalid.go": "4d4eba13a8f0357788b933679123c12bb9d2529108041b22d67596006005a171"
+      }
+    },
+    {
+      "case": "http_query_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_query_owner/invalid.go": "0685837391b6467226c09bfee862558185d5884deff71b17a8daa03b17e90788"
+      }
+    },
+    {
+      "case": "http_query_repeated_field",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_query_repeated_field/invalid.go": "0cec2b9907aadf88450b80ad8ac95731262ba22e80cec21f7fb7b0006709c2d1"
+      }
+    },
+    {
+      "case": "http_query_scalar_field",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_query_scalar_field/invalid.go": "bfa1a782412fcfead64099c608ade8dc8d13a9dd4a45ce1527addd0b428f5c7d"
+      }
+    },
+    {
+      "case": "http_route_handler",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_route_handler/invalid.go": "a376fda75583a4645f976ddea93432dcfdd454fd234f234240011a51558865bf"
+      }
+    },
+    {
+      "case": "http_route_model_id",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_route_model_id/invalid.go": "a67fc37b0e118157fd79a98dc8b3266a01adfa5a646ac5c9a0a96116923e3f13"
+      }
+    },
+    {
+      "case": "http_route_path_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_route_path_owner/invalid.go": "22cf03deaf62a4779b4859951475a327de0120f6ceb85c7105dd015ede1abc57"
+      }
+    },
+    {
+      "case": "http_scalar_conversion",
+      "diagnostic": "cannot convert",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_scalar_conversion/invalid.go": "93b0a82695a82c1b2ac0d9556bb67c8f73837fdf66374cfbd276129fa2c1f592"
+      }
+    },
+    {
+      "case": "http_scalar_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_scalar_owner/invalid.go": "9d6a013ce6b3fa813af9a37e2593ab78495249b5799bb055cb8c26d27f09d8f8"
+      }
+    },
+    {
+      "case": "http_security_policy",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_security_policy/invalid.go": "3291b88534cf5b026f0917e9e733d1fb0836b5d3b6c3f7942544eb5b86a762da"
+      }
+    },
+    {
+      "case": "http_signed_handler",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_signed_handler/invalid.go": "a28fc4913d445229a20935084d33ddb4eb3a12bcf3ed4420fbd21fcee631fd5a"
+      }
+    },
+    {
+      "case": "http_signed_model",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_signed_model/invalid.go": "784ace00856c75250135cb78c64b77a57cbff3028146708e6b2580641f750b52"
+      }
+    },
+    {
+      "case": "http_signed_origin",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_signed_origin/invalid.go": "0ab8b445681613f47088707c2b219748d985facdc4ba398eefc0df68d73b4c89"
+      }
+    },
+    {
+      "case": "http_signed_query",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_signed_query/invalid.go": "7eb6a8332e7e4a28843cfa0d8895edcfc5fb4a3a3b33d3546f9ce35049fd9e4c"
+      }
+    },
+    {
+      "case": "http_signing_key_id",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_signing_key_id/invalid.go": "6c3ca4a08acfea79149b29054c98a26cddd3be98a04423c3f9488705f77abc20"
+      }
+    },
+    {
+      "case": "http_spa_index",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_spa_index/invalid.go": "f68bb6d0c2cdf13dcf92cfe7044dc19edb9fe7bbb8816db1bf0687c61dd66c1a"
+      }
+    },
+    {
+      "case": "http_stream_body",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_stream_body/invalid.go": "3f5ac040990339afe04accbe9eabcc63ad588e57ca77182271bbee4c83ef3d54"
+      }
+    },
+    {
+      "case": "http_stream_disposition",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_stream_disposition/invalid.go": "a467f3d8841ec162407b5026edf83c8527c8638561a3d7e060e8458591cf9e34"
+      }
+    },
+    {
+      "case": "http_stream_handler",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_stream_handler/invalid.go": "63f885774552dee324a4c61a90341b2130c96566e2d53bdba534fa0f066a2f88"
+      }
+    },
+    {
+      "case": "http_stream_length",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_stream_length/invalid.go": "e3e291ab834e92e84851e6ca4d9beda453c9f6c5f118a2ab833326a91f13d3ec"
+      }
+    },
+    {
+      "case": "http_stream_media",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_stream_media/invalid.go": "eff5c59047ee7ad9ac01f65e46577a50db9f72fc4163a3d63b96386b5ae35144"
+      }
+    },
+    {
+      "case": "http_stream_source",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_stream_source/invalid.go": "f8f58cb036fa4c77947ac534344a2f4aa212c6afc44ef6eb08691b803c2e9879"
+      }
+    },
+    {
+      "case": "http_test_response_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_test_response_owner/invalid.go": "fe567af8e378844356d702d4f1e73016ce0e8a1f63dd064f6a22bf6ac16625b7"
+      }
+    },
+    {
+      "case": "http_text_path_pointer",
+      "diagnostic": "does not satisfy",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_text_path_pointer/invalid.go": "78282a86a76f86985ae3d5309c528804f9da51fb70cd64d3d568353471ed7534"
+      }
+    },
+    {
+      "case": "http_url_source_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_url_source_owner/invalid.go": "1fbf2c831b4cf2c210f466adbb82c3da51f0f607a8491a367665aa26a51ea648"
+      }
+    },
+    {
+      "case": "http_validation_body",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_validation_body/invalid.go": "949333bb972e24d05c32a930d77a93e21d25515924dec7d241758a0294130909"
+      }
+    },
+    {
+      "case": "http_validation_input",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_validation_input/invalid.go": "8e90844527b31d57c3b5989e0c2376276ced4491897208b2fbfb80a36ec1cc47"
+      }
+    },
+    {
+      "case": "http_validation_path",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_validation_path/invalid.go": "32e91df6d5121167d45663811f454455f5629ffaec94cfdf1147ca380d1c569a"
+      }
+    },
+    {
+      "case": "http_validation_query",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/http_validation_query/invalid.go": "557ffa4e4c8886403f148c8c463ada4aad998a9adb0df0fa7f14128fe8d7f284"
+      }
+    },
+    {
+      "case": "inspection_section_type",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/inspection_section_type/invalid.go": "434a86e82a3d4eda0349dfa5c7f1d4636412001624d592e20620a511d9719460"
+      }
+    },
+    {
+      "case": "job_envelope_version_type",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_envelope_version_type/invalid.go": "2966797d7710a3561527a89ff246edf7659fb197090884ff49930912467c0826"
+      }
+    },
+    {
+      "case": "job_handler_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_handler_owner/invalid.go": "485e14bea884b53d93d5c8176ec1d15b0ebbf878faea92e1aa6aa56877963b2b"
+      }
+    },
+    {
+      "case": "job_identity_conversion",
+      "diagnostic": "cannot convert",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_identity_conversion/invalid.go": "2767e8301443fb293fd33911f1c16254e845ad67550df74f0789faef8d2dda2d"
+      }
+    },
+    {
+      "case": "job_identity_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_identity_owner/invalid.go": "e45194cf2ec998d116c59c0568d6ececb54377f0843708a0947a3c84c744c02e"
+      }
+    },
+    {
+      "case": "job_middleware_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_middleware_owner/invalid.go": "3daeed0c4140b6bfa6c85ab59a09b224a9fb0613bce06ee803c7c85c5ff05d44"
+      }
+    },
+    {
+      "case": "job_options_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_options_owner/invalid.go": "b34f3059b17e8f99eb248f5c196b5996f7991fe3079b3a0a89ee31bb3be51b93"
+      }
+    },
+    {
+      "case": "job_payload_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_payload_owner/invalid.go": "019c4d9fa7564d53d4d4726de82dce3fac25e54477ef43de4e63addf3b889ffd"
+      }
+    },
+    {
+      "case": "job_retry_identity",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_retry_identity/invalid.go": "e2bb9eb7495874c766cca09fc4f8f94d6e3b59fe801951a857b6b283218b331a"
+      }
+    },
+    {
+      "case": "job_test_identity_owner",
+      "diagnostic": "does not match inferred type",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_test_identity_owner/invalid.go": "53d6a5d2287bb5b3b1805d2fdffbe5a0326894008fd4a9c077eb3070cd82f793"
+      }
+    },
+    {
+      "case": "job_unique_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_unique_owner/invalid.go": "1528fdd4299a3eb507299e76eb55bfd0ab495241d8aecf2ceed74a9e782cab14"
+      }
+    },
+    {
+      "case": "job_with_middleware_owner",
+      "diagnostic": "does not match inferred type",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_with_middleware_owner/invalid.go": "cc9684f75082293dd973ab69637bd3209ef683aa76bb1561b82217b027cad01e"
+      }
+    },
+    {
+      "case": "job_workflow_payload",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/job_workflow_payload/invalid.go": "717db09f3aedb1f71bd3fa576249ebf36c6c16267ae010e5f93aa9adbf6afc0d"
+      }
+    },
+    {
+      "case": "migration_identity",
+      "diagnostic": "as migrate.Origin value in struct literal",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/migration_identity/invalid.go": "71a9cdca03592db9d7b812727662f165b8daf6a308ecad3690e61d16da28eceb"
+      }
+    },
+    {
+      "case": "named_cache_store",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/named_cache_store/invalid.go": "fd949abad99b88d90d3b996003855c3b429cbda9d190a0cafcd40427d4c6696f"
+      }
+    },
+    {
+      "case": "named_config_collection",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/named_config_collection/invalid.go": "8c53723e5cd08b98b9bf43634a314e54ddd01b19a06191b7f204bcb53b30b711"
+      }
+    },
+    {
+      "case": "named_database_connection",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/named_database_connection/invalid.go": "434aa95e6a17c1b9a742f73839013ceefaa77fe8167aa68df84bef58cb5d4d0b"
+      }
+    },
+    {
+      "case": "nested_field_owner",
+      "diagnostic": "cannot use",
+      "status": "blocked: lane D nestedbindings",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/nested_field_owner/invalid.go": "aa44e32338198d19e9483d10e8dcc784b40cc7def9493e65f5358483f340f201"
+      }
+    },
+    {
+      "case": "nested_policy_actor",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/nested_policy_actor/invalid.go": "b5f7c899ffc7bb816074ea2d14ac702b249272d44b7440984c663480c6d9ac1b"
+      }
+    },
+    {
+      "case": "nested_relation_owner",
+      "diagnostic": "cannot use",
+      "status": "blocked: lane D nestedbindings",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/nested_relation_owner/invalid.go": "a0ccd66c4420c636891df0eb3789f9968a7c4593d67a51f053bfdfa7c20a812a"
+      }
+    },
+    {
+      "case": "observation_operation_name",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/observation_operation_name/invalid.go": "111d06089b2e95c8e726616879879530ad269d94f5aa90c5642145d9b4cc55e3"
+      }
+    },
+    {
+      "case": "observation_reporter_payload",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/observation_reporter_payload/invalid.go": "eb89595465ff8beeeddc1ab160cf99f42e50290d3b285b535b01e6a5353931bb"
+      }
+    },
+    {
+      "case": "pivot_key",
+      "diagnostic": "does not match inferred type",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/pivot_key/invalid.go": "a8e9d599378d6d57006a71cdfb8b4efd16c482ae0ea22051f1cc16e97cf897e9"
+      }
+    },
+    {
+      "case": "pivot_model",
+      "diagnostic": "does not match inferred type",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/pivot_model/invalid.go": "e23af78b8f3b65835bc5c17a599a3b6dfd9e3ea4d5bec036aca3985864811139"
+      }
+    },
+    {
+      "case": "pivot_order",
+      "diagnostic": "as orm.Order[models.Membership]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/pivot_order/invalid.go": "6e73264d0bf99acc0fa3fafdc4ef8b7fcf03625523cf9a975ddddc13ea59b47f"
+      }
+    },
+    {
+      "case": "pivot_payload",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/pivot_payload/invalid.go": "d91b9fe35a6c549a50024aa0bf1667cdb70521f5428a427b31995f7c6d2b80cc"
+      }
+    },
+    {
+      "case": "pivot_scope",
+      "diagnostic": "as orm.Predicate[models.Membership]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/pivot_scope/invalid.go": "fed41cd6668aec8070cd09992300ea8aedcb658baacac11263a67baa1ecdf8ff"
+      }
+    },
+    {
+      "case": "plugin_asset_identity",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_asset_identity/invalid.go": "a8635165c6a91c18a819c0932a1223846eed0e625672bc2478a242bc51da34ed"
+      }
+    },
+    {
+      "case": "plugin_collection_schema",
+      "diagnostic": "does not match inferred type",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_collection_schema/invalid.go": "e5d7ea3dd7b3a48a2a8bb8991a79539aee1752f6e963c2ddad67bbb3e1979bb9"
+      }
+    },
+    {
+      "case": "plugin_config_override",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_config_override/invalid.go": "189ce31495a05cf0345e5f00c3299768ee50a8980c6e179ae6b941d76c0c1c24"
+      }
+    },
+    {
+      "case": "plugin_identity",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_identity/invalid.go": "f2c8a51d54126f98bcb0e4c98d8c4c0fcef859baac3ced5c0e4bf2f713504faf"
+      }
+    },
+    {
+      "case": "plugin_job_schema",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_job_schema/invalid.go": "7b464cfcc271a4fadeef52d15ae30ff2e4a2eb46f9b0931bd292d310bee6f1b0"
+      }
+    },
+    {
+      "case": "plugin_migration_registry",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_migration_registry/invalid.go": "b3d91fbd5b67b3d35806cc3bb704f4ea2f776694e20dd90db3bbf36ab3d27336"
+      }
+    },
+    {
+      "case": "plugin_provider_wrapper",
+      "diagnostic": "missing method Manifest",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_provider_wrapper/invalid.go": "b16699bc9bd617eb8cdc3728b81a0665903793b80100efb4d52f09436fdd5518"
+      }
+    },
+    {
+      "case": "plugin_requirement",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_requirement/invalid.go": "b428e1bd49728b0264d3829e1e8725b4332346285375bf26b430e31916c8da98"
+      }
+    },
+    {
+      "case": "plugin_route_scope",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_route_scope/invalid.go": "fdc9ba55b96d3eb89453d21a91f1c8c8d7e3bc3ee5b8495ec32cb379ce7225aa"
+      }
+    },
+    {
+      "case": "plugin_scaffold_input",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/plugin_scaffold_input/invalid.go": "0614911086e84749796bd17f5240e5369400ac0a286bf695c9c8b1cf20d32b3e"
+      }
+    },
+    {
+      "case": "relation_attach_draft",
+      "diagnostic": "does not match",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_attach_draft/invalid.go": "419a687bd2489bebeaa1c97b37b2ece30e9c548b786426780f51a206b395bb90"
+      }
+    },
+    {
+      "case": "relation_attach_source",
+      "diagnostic": "does not match",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_attach_source/invalid.go": "67e26f6b7ff00f9a2c214c93cb20f544499af920fcdef77fbdb82691bba10865"
+      }
+    },
+    {
+      "case": "relation_attach_target",
+      "diagnostic": "does not match",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_attach_target/invalid.go": "43c53c57db5381d5231741bbbe68bdaacde9280bfab8ae59431703ca66eba4cf"
+      }
+    },
+    {
+      "case": "relation_create_defaults_owner",
+      "diagnostic": "does not match",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_create_defaults_owner/invalid.go": "4c69fd2a57358571effbadd4c87cfd94a90d610e7cab4e16e4cb6781c5725b32"
+      }
+    },
+    {
+      "case": "relation_detach_result",
+      "diagnostic": "cannot use",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_detach_result/invalid.go": "1e7c80033e1fa18333659eecc74ea28f8b9ac420103451d6c6ee3fbd9228ad6c"
+      }
+    },
+    {
+      "case": "relation_exists_owner",
+      "diagnostic": "as orm.Predicate[models.Order]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_exists_owner/invalid.go": "21ef0b574e33dc5cb7ca3aebe487ac029b58a5d54c16179f2acb20e5a567e68e"
+      }
+    },
+    {
+      "case": "relation_key",
+      "diagnostic": "does not match inferred type",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_key/invalid.go": "d43369431e44df1a544b18be19a7336ce2cf1b455d5bdb3ffc62701d93c911e6"
+      }
+    },
+    {
+      "case": "relation_owner",
+      "diagnostic": "as orm.Relation[models.User]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_owner/invalid.go": "18a28b17834bc6740816990ef7321aea483dba1d143a0912f1281c3794657b5b"
+      }
+    },
+    {
+      "case": "relation_scope",
+      "diagnostic": "as orm.Predicate[models.Order]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_scope/invalid.go": "5021f4ce91587b0ad75869b948e843d88c765e82dd7602082a05bca29b6a5053"
+      }
+    },
+    {
+      "case": "relation_target",
+      "diagnostic": "as orm.HasOne[models.User, models.User]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/relation_target/invalid.go": "f094e335382932c6fe9b09ebadc2bec874f6f4e2fe22309d84e41b71b1551ef9"
+      }
+    },
+    {
+      "case": "routing_endpoint_role",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/routing_endpoint_role/invalid.go": "45b382a3c67a82780343790c08c702cea15e9dffa42349a371f31be8fdba0f71"
+      }
+    },
+    {
+      "case": "routing_read_config",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/routing_read_config/invalid.go": "760cae88dc65b28526c10c67c674ba436f9c11e3695218f40e1d3670c920fe81"
+      }
+    },
+    {
+      "case": "schedule_id_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/schedule_id_owner/invalid.go": "8221ea568ae2213f2a6d777bc903ad5487d0e07ac5be08d1e09a01bf0d232dce"
+      }
+    },
+    {
+      "case": "schedule_job_payload",
+      "diagnostic": "does not match inferred type",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/schedule_job_payload/invalid.go": "4c072a6ab2b441d4d0a95419e75d1120735762c25b55c424ecfcf42e77f4b078"
+      }
+    },
+    {
+      "case": "schedule_occurrence_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/schedule_occurrence_owner/invalid.go": "8506a4a33ad4a4d027af80893e0ffb76c3bc5f484a6b67ec2710c42110655ba7"
+      }
+    },
+    {
+      "case": "scoped_connection_name",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/scoped_connection_name/invalid.go": "5ee8c76bf849e6e2a7a38e60602485d1a0db9a298002243da8d3096836bf33d4"
+      }
+    },
+    {
+      "case": "scoped_database_settings",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/scoped_database_settings/invalid.go": "e52e57c9d9b7d3046d784fd44df7cdcf9e0511104cdddc884927d82da146586d"
+      }
+    },
+    {
+      "case": "service_value",
+      "diagnostic": "as int value in argument to foundation.Provide",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/service_value/invalid.go": "cd0fb395bab3a4756fbc879a9181ffbb58aa619d83bad274b9d5111a9615bbb2"
+      }
+    },
+    {
+      "case": "settings_value_contract",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/settings_value_contract/invalid.go": "52ae1eb23149c4ed737a33f06277f924d3b8f0effb1453699df47859742562ad"
+      }
+    },
+    {
+      "case": "soft_pivot_scope",
+      "diagnostic": "cannot use",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/soft_pivot_scope/invalid.go": "db29ce84c0a3b76508af78129da0c7e3471904a1474bedb0d60e07a796ead1da"
+      }
+    },
+    {
+      "case": "startup_broker_name",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/startup_broker_name/invalid.go": "728ebb07e344cc88541930f3b0e416a67b6ccee826d20ee26666cfea39287506"
+      }
+    },
+    {
+      "case": "startup_browser_actor",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/startup_browser_actor/invalid.go": "8afae30eb9063779a399990a7a6a225cf1b993729490030fc143a463e0051dac"
+      }
+    },
+    {
+      "case": "startup_http_name",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/startup_http_name/invalid.go": "df2a4e6ed1a13f24e4d63776aaad6d85e8ab413a01b2b911cc25693deeb149c7"
+      }
+    },
+    {
+      "case": "startup_job_payload",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/startup_job_payload/invalid.go": "5f68210979bc1cea73375b10c0b1ff59f06136d0fab012fc91ccc8ee9b0513d0"
+      }
+    },
+    {
+      "case": "startup_log_name",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/startup_log_name/invalid.go": "55c21ea860cf273d610813cf1a59ff6ea39605edba516aa4f26b644227f8d173"
+      }
+    },
+    {
+      "case": "startup_mail_name",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/startup_mail_name/invalid.go": "26a33b980a8bb371a1a0f003d1ed34e8b0cfeb7d1ee1b09acaab8643ca6d63be"
+      }
+    },
+    {
+      "case": "trace_exporter_payload",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/trace_exporter_payload/invalid.go": "c21070415cdd2fd5cbfa18d6f428e4efa47cb284d13fe4047436f61274cdcfe5"
+      }
+    },
+    {
+      "case": "trace_identity_type",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/trace_identity_type/invalid.go": "6bcbf996bc55aa37471069f003f18d75fdc6e95fe9d044530541199f1bf59ade"
+      }
+    },
+    {
+      "case": "union_constructor",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/union_constructor/invalid.go": "a752389d2e54792e92c9873c24909b771311f1a2d4779bceee1e445a2ab31217"
+      }
+    },
+    {
+      "case": "union_handler",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/union_handler/invalid.go": "ed63ef92419e8f7570c2872eeb6f1ba04cab74d6cc6dae75a42cd08171a1dbc6"
+      }
+    },
+    {
+      "case": "union_owner",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/union_owner/invalid.go": "a7178791f6ba6a5cc10e39b99fedba3c4365bddeeed7b924ebfe3696a8b9d387"
+      }
+    },
+    {
+      "case": "union_visitor",
+      "diagnostic": "not enough arguments",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/union_visitor/invalid.go": "914f104899b64d2ea407a9c3f51ce1c25eb4ea13a69475b28454af48ca4feaca"
+      }
+    },
+    {
+      "case": "webhook_account",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/webhook_account/invalid.go": "6e10753e54a254ed0f2eac5b51e8d0796a8d918fa53a637fece6dfe4b6397c9e"
+      }
+    },
+    {
+      "case": "webhook_verifier",
+      "diagnostic": "cannot use",
+      "status": "retained public contract",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/webhook_verifier/invalid.go": "da93eb593123a745f01a3aa7eb68fc4c74055307d519adf4e4ac20b776b3ff9a"
+      }
+    },
+    {
+      "case": "where_doesnt_have_owner",
+      "diagnostic": "as orm.Predicate[models.User]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/where_doesnt_have_owner/invalid.go": "75e5af5940fa3814f33e899c07ce492a43d7d22289cfc4f9436ebd9075d07af7"
+      }
+    },
+    {
+      "case": "where_has_aggregate",
+      "diagnostic": "does not match inferred type orm.ExistenceRelation",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/where_has_aggregate/invalid.go": "7bbd526239e76f1b7e35ddfdd4b0791f7f6c240b89375e66a7a611a5afb02678"
+      }
+    },
+    {
+      "case": "where_has_find_owner",
+      "diagnostic": "as model.ID[models.User]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/where_has_find_owner/invalid.go": "95f808a55662e8f3f4ed5b29a53f354b45119a8513fdb289b8aeb0268afe9181"
+      }
+    },
+    {
+      "case": "where_has_owner",
+      "diagnostic": "as orm.Predicate[models.User]",
+      "status": "native ORM",
+      "source_sha256": {
+        "tests/fixtures/consumer/testdata/compilefail/where_has_owner/invalid.go": "cfb6416e191026d228dd436b237b45ad39b384f4b8cdd9a39e03c2078c6a5956"
+      }
+    }
+  ],
+  "additional_dependent_case": "factory_state_owner (lane D; wrong owner still rejected, legacy state input remains)",
+  "surface_additions": [],
+  "footprint_changes": [],
+  "generated_or_contract_changes": [],
+  "source_sha256": {
+    "tests/fixtures/consumer/tooling/tooling_test.go": "c4537244d8d48cae93c65279752b28ce9a47ebded723682f019c4b1a4a8ea4fc",
+    "tests/fixtures/consumer/tooling/production_test.go": "dfca7cacde4f4e75da738941d96d88cc566e6830b664fbda68086459a58fe89e",
+    "tests/fixtures/consumer/tooling/database.go": "aff40d6fcce14946b99d199f6e679ac069914407ce800e70790d15946e6508bb",
+    "tests/fixtures/consumer/tooling/database_test.go": "fd0031098c87ef1c07f39cba5e7376895c9e425422e63738b26ff6b0a6eb5f33",
+    "tests/fixtures/consumer/tooling/routing.go": "1245b447478af49523559b4889b6301c486eb0db5a9a010322449ee100425844",
+    "tests/fixtures/consumer/tooling/helpers_test.go": "5f719adf991859da535a917ea27587af3178762f0bfdb0f530e87d8e857a136d",
+    "tests/fixtures/consumer/tooling/production.go": "f6d62c12f24d27577c3264369e4579e4dae316ab49eb6720652ac5db17b51a44",
+    "tests/fixtures/consumer/tooling/commands.go": "9018dd245ab56229ea66fe7f22d9012650db831e2eb37c2db0d5b5aa99f9955f",
+    "tests/fixtures/consumer/httpmodels/bindings_postgres_test.go": "a5b92758ecce2ea5cc8cb320c1692a2b43f30cfe50dff8901912760a5a6bfc6c",
+    "tests/fixtures/consumer/httpmodels/bindings.go": "475c0e465a6b9fd6b7039b8770ca7c4764f341e97b199e49b2629e407ac1733b",
+    "tests/fixtures/consumer/httpmodels/sql_parity_test.go": "177dbb97866031a3899b59eb8233baf2cfd7451177c315c40396d2e7e9ac084e",
+    "tests/fixtures/consumer/httpmodels/bindings_test.go": "0c0e882ef058e4a44704c6036721b64309b0be23e955aca3a79f909bcb8f185d"
+  },
+  "logs": "/private/tmp/goway-stage9-a3-remainder",
+  "checks": [
+    {
+      "name": "build",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./tooling",
+        "./httpmodels"
+      ],
+      "exit_code": 0,
+      "seconds": 23.68
+    },
+    {
+      "name": "vet",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./tooling",
+        "./httpmodels"
+      ],
+      "exit_code": 0,
+      "seconds": 17.4
+    },
+    {
+      "name": "test",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "./tooling",
+        "./httpmodels"
+      ],
+      "exit_code": 1,
+      "seconds": 8.99
+    },
+    {
+      "name": "race",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./tooling",
+        "./httpmodels"
+      ],
+      "exit_code": 1,
+      "seconds": 58.62
+    },
+    {
+      "name": "compiler",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        ".",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(aggregate_input|aggregate_nonnullable_result|aggregate_owner|aggregate_pivot_input|aggregate_result|application_event_outbox_key|application_timezone|cli_command_name|cli_handler_arguments|cli_registry_key|config_owner|config_value|contribution_result_type|email_address_type|email_attachment_key|email_idempotency_key|email_job_payload|email_stored_source|email_template_data|email_upload_source|event_listener_payload|event_model_id|event_payload_type|event_topic_conversion|form_actor|form_handler|form_optional_actor|form_prepare_input|form_prepare_output|generated_config_owner|generated_config_value|generic_dto_argument|generic_dto_handler|generic_dto_rule|health_probe_callback|health_probe_identity|http_asset_media|http_asset_path|http_asset_service_key|http_asset_source|http_compression_encoders|http_compression_level|http_cookie_model|http_cookie_name|http_cookie_value|http_cors_header|http_cors_origin|http_csp_hash|http_csp_sandbox|http_csp_source|http_download_body|http_download_disposition|http_download_handler|http_download_media|http_download_model_id|http_download_source|http_dto_descriptor_conversion|http_dto_descriptor_owner|http_dto_encode_nullable_value|http_dto_encode_owner|http_dto_encode_slice_items|http_dto_enum_value|http_dto_model_id|http_dto_nullable_owner|http_dto_patch_state|http_dto_result_owner|http_dto_slice_owner|http_endpoint_body|http_endpoint_body_descriptor|http_endpoint_path|http_endpoint_query|http_endpoint_response|http_endpoint_url_query|http_enum_codec_descriptor|http_error_code|http_error_declaration|http_etag_config|http_float_integer|http_float_named|http_float_width|http_generated_path_enum|http_generated_path_model|http_generated_path_owner|http_header_value|http_json_codec_owner|http_json_key_conversion|http_json_key_owner|http_json_map_owner|http_json_scalar_owner|http_middleware_id|http_multipart_file_slice|http_multipart_file_value|http_multipart_handler|http_multipart_json_value|http_multipart_owner|http_path_codec_value|http_path_field_value|http_proxy_header|http_proxy_network|http_proxy_origin|http_public_origin|http_query_conversion|http_query_default_value|http_query_embed_owner|http_query_merge_owner|http_query_model_id|http_query_optional_field|http_query_owner|http_query_repeated_field|http_query_scalar_field|http_route_handler|http_route_model_id|http_route_path_owner|http_scalar_conversion|http_scalar_owner|http_security_policy|http_signed_handler|http_signed_model|http_signed_origin|http_signed_query|http_signing_key_id|http_spa_index|http_stream_body|http_stream_disposition|http_stream_handler|http_stream_length|http_stream_media|http_stream_source|http_test_response_owner|http_text_path_pointer|http_url_source_owner|http_validation_body|http_validation_input|http_validation_path|http_validation_query|inspection_section_type|job_envelope_version_type|job_handler_owner|job_identity_conversion|job_identity_owner|job_middleware_owner|job_options_owner|job_payload_owner|job_retry_identity|job_test_identity_owner|job_unique_owner|job_with_middleware_owner|job_workflow_payload|migration_identity|named_cache_store|named_config_collection|named_database_connection|nested_field_owner|nested_policy_actor|nested_relation_owner|observation_operation_name|observation_reporter_payload|pivot_key|pivot_model|pivot_order|pivot_payload|pivot_scope|plugin_asset_identity|plugin_collection_schema|plugin_config_override|plugin_identity|plugin_job_schema|plugin_migration_registry|plugin_provider_wrapper|plugin_requirement|plugin_route_scope|plugin_scaffold_input|relation_attach_draft|relation_attach_source|relation_attach_target|relation_create_defaults_owner|relation_detach_result|relation_exists_owner|relation_key|relation_owner|relation_scope|relation_target|routing_endpoint_role|routing_read_config|schedule_id_owner|schedule_job_payload|schedule_occurrence_owner|scoped_connection_name|scoped_database_settings|service_value|settings_value_contract|soft_pivot_scope|startup_broker_name|startup_browser_actor|startup_http_name|startup_job_payload|startup_log_name|startup_mail_name|trace_exporter_payload|trace_identity_type|union_constructor|union_handler|union_owner|union_visitor|webhook_account|webhook_verifier|where_doesnt_have_owner|where_has_aggregate|where_has_find_owner|where_has_owner|factory_state_owner)$",
+        "-v"
+      ],
+      "exit_code": 0,
+      "seconds": 41.25
+    },
+    {
+      "name": "catalogue",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.37
+    },
+    {
+      "name": "format",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "command": [
+        "make",
+        "fmt-check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.91
+    },
+    {
+      "name": "docs",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "exit_code": 0,
+      "seconds": 2.13
+    },
+    {
+      "name": "diff",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.03
+    },
+    {
+      "name": "tooling-test-listener-rerun",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "./tooling"
+      ],
+      "exit_code": 0,
+      "sandbox": "local listener permitted",
+      "result": "ok  foundry.test/consumer/tooling 0.728s"
+    },
+    {
+      "name": "tooling-race-listener-rerun",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA9/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./tooling"
+      ],
+      "exit_code": 0,
+      "sandbox": "local listener permitted",
+      "result": "ok  foundry.test/consumer/tooling 1.888s"
+    },
+    {
+      "name": "final-report-docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "final-diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "limitations": [
+    "PostgreSQL sources compile only; live integration lead-owned.",
+    "nested_field_owner and nested_relation_owner await lane D nestedbindings.",
+    "Legacy APIs remain only in explicit SQL parity oracles in these migrated packages."
+  ],
+  "acceptance_notes": [
+    "The initial tooling test and race runs stopped at the existing HTTP helper because the sandbox denied binding a loopback port. Both full tooling-package reruns passed with local-listener access. httpmodels passed both initial runs.",
+    "All 210 originally assigned cases plus the dependent factory_state_owner case passed. The two blocked nestedbindings cases were checked as retained legacy negatives, not claimed as native ports.",
+    "No source corrections were needed after compilation. Existing footprint probes and framework sources are unchanged by this turn."
+  ],
+  "catalogue": {
+    "ported": 570,
+    "port": 18,
+    "unaffected": 444,
+    "total": 1032,
+    "new_rows_this_turn": 0
+  },
+  "updated_at_utc": "2026-10-25T02:56:45.134623+00:00",
+  "integration_batch7e_historical_sources": {
+    "tests/fixtures/consumer/tooling/tooling_test.go": "c4537244d8d48cae93c65279752b28ce9a47ebded723682f019c4b1a4a8ea4fc",
+    "tests/fixtures/consumer/tooling/production_test.go": "dfca7cacde4f4e75da738941d96d88cc566e6830b664fbda68086459a58fe89e",
+    "tests/fixtures/consumer/tooling/database.go": "aff40d6fcce14946b99d199f6e679ac069914407ce800e70790d15946e6508bb",
+    "tests/fixtures/consumer/tooling/database_test.go": "fd0031098c87ef1c07f39cba5e7376895c9e425422e63738b26ff6b0a6eb5f33",
+    "tests/fixtures/consumer/tooling/routing.go": "1245b447478af49523559b4889b6301c486eb0db5a9a010322449ee100425844",
+    "tests/fixtures/consumer/tooling/helpers_test.go": "5f719adf991859da535a917ea27587af3178762f0bfdb0f530e87d8e857a136d",
+    "tests/fixtures/consumer/tooling/production.go": "f6d62c12f24d27577c3264369e4579e4dae316ab49eb6720652ac5db17b51a44",
+    "tests/fixtures/consumer/tooling/commands.go": "9018dd245ab56229ea66fe7f22d9012650db831e2eb37c2db0d5b5aa99f9955f",
+    "tests/fixtures/consumer/httpmodels/bindings_postgres_test.go": "a5b92758ecce2ea5cc8cb320c1692a2b43f30cfe50dff8901912760a5a6bfc6c",
+    "tests/fixtures/consumer/httpmodels/bindings.go": "475c0e465a6b9fd6b7039b8770ca7c4764f341e97b199e49b2629e407ac1733b",
+    "tests/fixtures/consumer/httpmodels/sql_parity_test.go": "177dbb97866031a3899b59eb8233baf2cfd7451177c315c40396d2e7e9ac084e",
+    "tests/fixtures/consumer/httpmodels/bindings_test.go": "0c0e882ef058e4a44704c6036721b64309b0be23e955aca3a79f909bcb8f185d"
+  },
+  "integration_batch7e": {
+    "base": "68885959",
+    "worktree": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-int4",
+    "status": "acceptance passed; pending lead commit",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r10",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "conflicts": {
+      "A": [
+        "database/orm/expr/README.md",
+        "database/orm/method_surface_test.go",
+        "docs/evidence/goway-stage9-a2.json",
+        "docs/evidence/goway-stage9-a3.json",
+        "docs/evidence/goway-stage9-read-terminals.json",
+        "docs/evidence/goway-stage9-relation-filters.json",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ],
+      "D": [
+        "tests/fixtures/consumer/nestedbindings/bindings.go",
+        "tests/fixtures/consumer/nestedbindings/bindings_postgres_test.go",
+        "tests/fixtures/consumer/nestedbindings/models.go",
+        "tests/fixtures/consumer/nestedbindings/tables.go",
+        "tests/fixtures/consumer/nestedbindings/tables_test.go",
+        "tests/fixtures/goway/compiler_cases_test.go",
+        "tests/fixtures/goway/footprint_test.go"
+      ]
+    },
+    "resolution": "Union registries, snapshot and evidence; preserve base lane B nestedbindings; update migrated tooling editor anchors.",
+    "counts": {
+      "catalogue_rows": 1032,
+      "ported": 577,
+      "pending": 11,
+      "unaffected": 444,
+      "goway_compiler_cases": 861,
+      "goway_footprint_probes": 146
+    },
+    "generated_outputs": "unchanged; no regeneration",
+    "release_inventory": "No new non-Go testdata; representative runtime sources added to existing inventory test.",
+    "checks": {
+      "build": {
+        "command": "go build ./...",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/build.log"
+      },
+      "catalogue": {
+        "command": "python3 tools/goway_catalogue.py",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/catalogue.log"
+      },
+      "vet": {
+        "command": "go vet ./...",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/vet.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "race": {
+        "command": "go test -race -timeout=20m ./database/... ./internal/... (six-package batches)",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/race.log",
+        "log_sha256": "42d4531ae6366ec60787f3d914776f5ba2fe211433d8a988b35ef9a717522d38"
+      },
+      "fixture": {
+        "command": "make fixture-check (vet and tests for all four modules)",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/fixture.log",
+        "log_sha256": "90243d41d6667755941502e73a227024995f2cf728f7a895c6575fd4032d9dcb"
+      },
+      "extensions-race": {
+        "command": "go test -race -timeout=20m ./attachments/... ./translations/... ./metadata/... ./http/pagination/...",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/extensions-race.log",
+        "log_sha256": "4c488e641146bd9961685ba7dc474443c71e9e5d9b4b5b96d28423b44034a595"
+      },
+      "generate": {
+        "command": "make generate-check",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/generate.log",
+        "log_sha256": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4"
+      },
+      "release": {
+        "command": "make release-tools-check",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/release.log",
+        "log_sha256": "a0bb4abc0bad4fb0a9b4a660236e27b26220570fadb2fba1c1dba32d755777dc"
+      },
+      "docs": {
+        "command": "make docs-check",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/docs.log",
+        "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+      },
+      "fmt": {
+        "command": "make fmt-check (native gofmt)",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/fmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "agent": {
+        "command": "FOUNDRY_TEST_GOPLS=/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls make agent-smoke",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/agent.log",
+        "log_sha256": "7586defa66a964dc45c2f3a05194dda8fe8b35233b4327a9d902e9892a4b114e"
+      },
+      "typescript": {
+        "command": "make typescript-check with approved Node v24.21.0 and TypeScript compiler",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/typescript.log",
+        "log_sha256": "b09e35d436ce14edb5f612c496beaa3668f8fc82fe8bcc352888a44127c7aa1d"
+      },
+      "diff": {
+        "command": "git diff --check; git diff --cached --check",
+        "status": "passed",
+        "log": ".cache/goway-batch7e/diff.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "not_run": [
+      "Live PostgreSQL remains lead-owned."
+    ],
+    "committed": false,
+    "source_sha256": {
+      "CHANGELOG.md": "b5aa6a53835d4a0ccf9f5e46bac053fd8c00922e52d3e022d6354fccb1df80de",
+      "attachments/handle_collection.go": "2c74c529478565cba8c926b7c2891b199248eb3adac63dc86a5f89424d4ed5b8",
+      "attachments/handle_core.go": "1f0a6327d3f34d3c90918da65f05136459cb1a4996a6c502020c088126dcfbf2",
+      "attachments/handle_files.go": "62c997d1d5e301b4a991e6afa18827df6e6431519326ebbac337a1149264c810",
+      "attachments/handle_files_test.go": "41281841ceadf071f60b15b42c3b6b17b1e3a9bc136feb30224c7e980492db11",
+      "attachments/handle_many.go": "00250e37cfc4efb1ac18b26f78cf74e78bb39cd0fe0431883c9da41593f63b55",
+      "attachments/handle_one.go": "921006a11b50e1cc1223c20881d269bb0df7e0f6326eb08ac59f19fd99259f9e",
+      "attachments/matching.go": "d202896e4eeb4f96ccb74b9b1ad59ca2bd40654e7d9ea296d29ab12da6cac64e",
+      "attachments/slot_write.go": "0fb3cd8b3335432ab3a040b6636488cb56ecf5fc9a22e28bac1b9cc1d4001211",
+      "blueprint/00-master-architecture-and-parity.md": "8abbe3c7d1b0368430191e6ba52574e64e187533232e149cbc040a611de616bb",
+      "blueprint/goway-data-layer/README.md": "d1c7e14be71428269512b4ae6bef0214e202fc597974dd37f99434ae4027f854",
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "bd500686b1535e752b4d1f32bfa7f7f934931f0a40d1229721891dc53f610cf4",
+      "database/orm/README.md": "d55cafed470d840d5caa9927e046921426e714dd791286dcf783c18fce23dc00",
+      "database/orm/adjustment.go": "39ff1f42a680031ee895276db146e3a36bf77e38cc50ff535a98bdffc4103437",
+      "database/orm/column.go": "009a9e000bf51af2854ffe21126013b1ceac8fb07d88c0cfd2d5e44446dc27d5",
+      "database/orm/column_json.go": "5b486ae08128b2f6fc01f84a88e33e35ab26c85005b3f99254bb1025ce6ba766",
+      "database/orm/conflict.go": "9ddcbe6058b33d49a46409b97c47e4f8e348da0d2abb73d8aaac0ebaeecf943a",
+      "database/orm/cursor_retention_test.go": "66adfae54170eaa1a92a18705f991a374b20877ca3cce10adaefdb74e066772c",
+      "database/orm/diagnostic_retention_test.go": "01eba2a1886430fbb64c4a70ddd4794e8ec746f96c75dc4d75e6f9e076d4cfe8",
+      "database/orm/expr/README.md": "6035dd471bc53b8f07122c168ee0e5c52f5122fdad6938083565da0246a84346",
+      "database/orm/expr/expression.go": "53b4b26854d1ba3b044a0dd97421f27ce33aa74c0ac62f09079778ed10300750",
+      "database/orm/expr/operation.go": "67b4361aaa6e0d805f06e57a876e7226b0e96e650dcfa02bc0e9a05dcabbe9e1",
+      "database/orm/expr/relation_aggregate.go": "bc30a40ee7c51e10c9d654b6b960178b84b9227dffc949e02f701f197ffec731",
+      "database/orm/expr/scalar_parameter.go": "10c6387cbfdd7b9e8a2fc2f53ac36fafed959fbe8c503c42b80285aa4b73064b",
+      "database/orm/expr/value.go": "df122313aa23316a64b47a2c61c03f4ba100c7455466dab9c0f23e4b8496129f",
+      "database/orm/expr/window.go": "2b3c8719bce6c9564bca34dd34deb6d3cfddd4a2efef145183c2e4f92f88cde9",
+      "database/orm/expr/window_function.go": "8ed3ec6d15fb2b64ca3dec3e0db1b1fde90d99df54129be4fcbfd832960c740d",
+      "database/orm/global_scope.go": "d35010fb7b680b5760d600bb6ccb3d2adb2a12b98feceb917127f86191316654",
+      "database/orm/identity_legacy.go": "9dc06e7e26474aad2c64541eec9e89cb21602f073e6adabde0f95b035d19ed96",
+      "database/orm/lookup.go": "70d207759f3957628c1f877adcc1f0f01a799051838df07685ce206ffc6999da",
+      "database/orm/lookup_value.go": "d2dec60a49ccd863cbfb094ad6c68c3d8ae9e246118342114e2f7e6efc0b2a0f",
+      "database/orm/method_surface_test.go": "462f916cdacb8ccd0d7b4a42a72544e2c5bdc543f7f6c161219ce316705564bb",
+      "database/orm/model_read.go": "41dcaa8bf0f1d8b1b88a1df1ab289895e275636dd4246a0e7c74a3434c34d7a4",
+      "database/orm/predicate_format_test.go": "8848783c2aa3f99649be37d7340d0c9eac2d06308d07c3555ea8ee34233efe58",
+      "database/orm/predicate_retention_test.go": "d51f45614d4ae9f7da24b9a1cef5609c9a9a18c7c5b497a14e40805c94316f73",
+      "database/orm/projection_bridge.go": "09c7a9db703e855ed8ff1c1b47253df7cfb093c3440d5d13bfb0a0473903ba8f",
+      "database/orm/prune.go": "328d67afddbb2df275e3cc31d28a1335b26f6512a3dfa59993ec43ccbd8c43df",
+      "database/orm/query.go": "b9916ec28d4cbdac410ee153a0e174c4874ce7c9b84106cf532f9d5d8ef7e6a8",
+      "database/orm/raw_fragment.go": "94489c9832c11f3ea1ad80f3962e5fd6a7abe377dd6b39481b8af922c507e588",
+      "database/orm/raw_fragment_test.go": "fe0a73985abc158d22e0adbdc786d05dffcb3d449f7767ccf0ffbfc64987687b",
+      "database/orm/relation_aggregate.go": "6aa1dbf00835edc6d6d88fb4cff9d59328b75f18fbea93b780f5d14ca06cac3a",
+      "database/orm/relation_aggregate_loading.go": "34143d030d713d39c1964bd35a0047ce48a78984a640eae81c94da0a542db8c2",
+      "database/orm/relation_join_plan_test.go": "e591f1ca4d7f4d2cb96fcd7875c5c8977773b1405e89169ffdd41abc2ca0a61a",
+      "database/orm/relation_load_query_test.go": "616c27c0ea592c262f80f114fd148f18a4d20b0fb75d4af2bc0f9cda8a0b0d01",
+      "database/orm/relation_loading.go": "01098613367559c63f2bf7238100a1df0da6e85f0233e9b56273d357dfd9f3a1",
+      "database/orm/relation_predicate.go": "380b0ac57a69a4c525289ad3921d5e06b88ed36e8c2eed6ccb371778f89f84b9",
+      "database/orm/relation_scope.go": "74eeb523a0191334de8c1f77897ba6ef007636f4e47547cfb211c96e0c5d5459",
+      "database/orm/relation_test.go": "ebd62a9da53fed0843ab68a935ed625665a8270de9c67f026b446679fa984080",
+      "database/orm/relation_through_loading.go": "f0f70d76b464e1b31e5f913e1625caf8c6580d312e5c2b732a67dabea7e35bf4",
+      "database/orm/relation_tree.go": "f9be866cd45ee0d687a5624b43eee60d8acfff670346811d4bc67ce43233d2e3",
+      "database/orm/relation_value.go": "f2e3d805320fbae49f2ac86780b3d05f7cf539a2c3397a77107dc04a83959355",
+      "database/orm/relation_value_test.go": "df8c58b98210269b392f56e6e1404ce7b214612489005b2f26232e03e316237f",
+      "database/orm/relation_write_core.go": "23c872957fb20967f8282f5b5301bb3620c38aea00e2d61fc8daf55c15eef571",
+      "database/orm/rows/annotated.go": "28db6fad6f6ba78809b44b3ac8846eb22d4747365188ec7423766c626f22b874",
+      "database/orm/rows/annotated_test.go": "5dd1dce449481cf21631dd5582c1ccecedbd679b0b2b1f854d606809bb330f29",
+      "database/orm/rows/each_test.go": "ae08b29c56daecacd4f22797eac31c086abbfe5f6eb8380b609749fd874742f2",
+      "database/orm/rows/records.md": "36fd24f64313c6ad0ca736302e6c0d5ce7950cc13c0fcede193c706f8ebfa94a",
+      "database/orm/rows/value_set.go": "953aa1bf4394d0a45b79b84427183e9e00747455d3b519c675dbe974cba0b929",
+      "database/orm/source.go": "9da22a72bcb19920a7b08053ceaf086bb13a0d7b42d538a23224c0550eb056cd",
+      "database/orm/testdata/public-methods.txt": "3de649e7feda2ee0f1e4395256c76cd3482e056391d5759012ba0d5aa82541d7",
+      "database/orm/transaction_phase_test.go": "e6e01e763c504e248ef82c2b5a8a387a4e0e02104a5409e89d8bcd2495b70de8",
+      "database/orm/write_draft.go": "d8656e3d2634c3eeafb9a594453d3fda89e1981e80868e489bb8bd950a72dca3",
+      "database/orm/write_each.go": "e7e6375bd91747d406afd87190fb9c8f1e948397558957e7f5d7e069dc2ced87",
+      "database/query/aggregate_condition.go": "8c082ed7f88d2d26f34640701fb19eb5385c6c306d4d289648e68e6e8db195cd",
+      "database/query/aggregate_filter_test.go": "b39cb6d1fdaba42b2f23bb037322f219a2d66503b64788ad5ddddf5c23261572",
+      "database/query/ast.go": "6e125397d0f7e167524424f3f6ebf5f07edfa25df2da1991b5baa53f8b88e4be",
+      "database/query/ast_test.go": "cf1c7265107abfd755d82ffe5c15ea1bece9953b18a29f075455d8c43444b4da",
+      "database/query/binary_ownership_test.go": "82a74cbb68a2da34e8cadeb6cf5604029164362f6055602443a8292d4619c35e",
+      "database/query/column_comparison.go": "055931172f2d8af41c90c70c0efa4f5c81b649c301f2f22c55b06b49c066a76d",
+      "database/query/comparison.go": "27f2c97386a0c2d51756096fccee6fa13d7db3af39598deaa63e11b769486da1",
+      "database/query/compiler.go": "d07905f1f4a0555a1cce12879f56988c652c1f43da264ee19960f708f20dde61",
+      "database/query/conditional_expression.go": "bae88bf89b3dbe73619156d2ca2fbafbc74ad3d168bcd4e1acebbc3c714f4cba",
+      "database/query/conditional_expression_test.go": "a15d97f9f70d58cde15b322fc7f34b1907f85ea94aa26c6db1fccc21148145b6",
+      "database/query/conflict.go": "06c64502f6a53a884fbd57528ef8bb61d767c99201fa2bbc713884297b2e42ef",
+      "database/query/conflict_target_test.go": "c225fdfd986d2b4d3f424e1b178e25f284e8aa125e7c21459d31a94f83efb6f0",
+      "database/query/core_metadata.go": "8f17864eda8a039e9a1ada2fe65c4c96f349e1bb76c5a836f5148ec6f39996e4",
+      "database/query/correlated_record.go": "2db1ca8bafc384862af1800b98feff2378e831f97c7cdc7faa5099e39826facd",
+      "database/query/correlated_value.go": "67925fb36c01b06d10b1c679a3c87d4abc85012ef876e5935d637ff732db8f7c",
+      "database/query/correlation_scope.go": "1a1bbc601256103740f1074b9cb4dc84bbb23091fea2cb757200f0c4adf8b720",
+      "database/query/correlation_test.go": "6315400b15cd380e2467c251fff472d7356e403607080e3a92798154b1d843dd",
+      "database/query/cursor_token.go": "a8a77f9d1fa70d923645c45a33129613036932ff51e9fc97cfee953c97c822b5",
+      "database/query/encrypted_fields.go": "72e020c9e9bdacbff4e4677c5be5d9298081f9d4d7a2ad7da09ffcb4f31938cf",
+      "database/query/execute_autocommit.go": "0dea4a757433bc23064c061cf54286055a41a666fcc9220c58f9072cee338bcc",
+      "database/query/execute_mutation.go": "a82abe00d5a65ae6f46971314168b325278d9275f2fb529b1f8e45069b8f4ed1",
+      "database/query/execution.go": "10ad44d63b0ce5bff6bd78d5d7acecd3b51afac46e1ef0e2539eee6394aa70e2",
+      "database/query/expression_comparison.go": "e42bcb5b53510bf2768ba9570073618e4580d6b7abe3d279166e336fa85dba03",
+      "database/query/field.go": "c17cae1819cafb9df68f3b76f42ce5ccd778dc9b6d7c96c50a761b787af6806f",
+      "database/query/field_binary.go": "50fe6ec6cb825a85ac416fff7ee0752e8062b5286f131d48279f18a133cbeff7",
+      "database/query/global_scope.go": "4bdc20af28201b9cd57882f4ee323015c3983b297298635bccae47cce488011d",
+      "database/query/global_scope_test.go": "3d60983787266199dc68a90bae48c476c82242e57a5183e9b6a44bc1506e6e7f",
+      "database/query/having.go": "f37e571182e71fc6c61303c3436000cbc3951980a9a065ef6e5f7bd40f712d3a",
+      "database/query/having_test.go": "66796fbea55f7b0afb227814bfb5a10a07e4965568b3ccb4747d58d8e54d50a0",
+      "database/query/insert_select.go": "5cb88093848f92d2df8c5385a893aeb3c292ddc5aeb5fa0fb19671421f5c8b8b",
+      "database/query/insert_select_test.go": "7d714c8e25633c547171c1b6c6e35f02de1b0a113acb30a09b752ab3c05c2dd0",
+      "database/query/join_condition.go": "35346ebc46de445f973d49d6e95a79a297bc0516960371d2d51545dfad49f99d",
+      "database/query/join_test.go": "7ed5acb004511c7dac3ac0dc4b801e938343151ff7eabf4e882245909f61a568",
+      "database/query/keyset_test.go": "db5e9ac018a15288fce00a6289ba29ebe79feadf1602022285c08e63506bc950",
+      "database/query/lateral_join_test.go": "3162ca5f17f8197707a16d296133849fa9e25fc78651179944c06beeeb90977b",
+      "database/query/model_write_key.go": "d00f834ba1c3fe5f16514c237e2bd36c3ae294892f1d30d2331d97f8a277ec22",
+      "database/query/projection.go": "4b041297e344e72efdd4bd6cb6f48e977bc6fc28f79e2d2fa168ee5b8dbac36c",
+      "database/query/prune_batch.go": "6e4b2c56681ae6b0deb29960f98727c0b3a7df41af2294a35f761a8f9880720d",
+      "database/query/read_lifecycle.go": "cb6aec0da33af6304711e8b43712dbf7e894bb1013be2ccbbfaea90ecc03cce2",
+      "database/query/read_result.go": "3b3503c1b09553b8bc12d4854f9d44d7523b17bb1e202341a1de37b10fa90725",
+      "database/query/relation_aggregate_loading.go": "114607557b2a74b9600bd65bee357f384e3834dd5b7776afeaf5f13153b1c5e8",
+      "database/query/relation_extension_bridge.go": "b6098a612705225802ee5f17fd3e14d18f3d47139b6619b4dcf5bdaace982199",
+      "database/query/relation_morph.go": "e771d13b92c5453ebf93ecba9bbfc24dceb4e2d9d872c96bbbdd047806ff878e",
+      "database/query/relation_pivot_redaction_test.go": "a24d2919cd0f45b0864cbbbceed2466b45048a62d1c06a60cea12f817e762f03",
+      "database/query/relation_pivot_sync.go": "6fb30f818d2a6ee9b758ecc6510c7c6a2772e1c4ecfe173467ca11181155c42d",
+      "database/query/relation_predicate.go": "bcae5737d8ed33168a9ec4b3beef82cf3b4ccf2f29df2ffaf3942ac39d2c69d4",
+      "database/query/relation_through_hop.go": "d75149c60a95d5237bc3fa42a3021a9ad56f742f69e40cf71048ff21365311d9",
+      "database/query/relation_through_loading.go": "19028cc4bcab9242fc8e85b9b0bdd1f07ab1c97c9d12d26c0e42f5a589fbb6b8",
+      "database/query/relation_through_test.go": "f3ccf6aab31bb93801c0d0834fbefd56ea1b91a2478c40b6bf21917836160e70",
+      "database/query/relation_value.go": "933bae0f336d621a2b2793bd315eb23e195d3d2576388635c2551e9af898a0f1",
+      "database/query/relation_write_keys.go": "e318dc22fbdea28bc8501531e26af3f03c7e38312733679f14129164949d2c5a",
+      "database/query/row_expression.go": "964564a5a65cad6be15214eb70c1abcaac13dd9a64bc3bb19ffec61702f93329",
+      "database/query/set.go": "f3bce80b27a076fc976c892e2831798a154b76ae85f3259bb5bb21bab47ad646",
+      "database/query/set_write.go": "80e2b21f9eee9d91224eb676df3a4f16ed1d04ac1fb9cd92ccb11dd9af5d351f",
+      "database/query/source_write_execution.go": "e30a60fb367032f184a8550a26f63603d9281b00badab313a9df107ac08568f4",
+      "database/query/source_write_test.go": "2d8ab712eb250addbc539115ed0837015fd68eebeb34e28062ad046fc6c7b208",
+      "database/query/statement_retention_test.go": "64bdc2fa293f53927c27c3c12e732fb2bfe35c6ab88aa17d4e8da92fd376f0d5",
+      "database/query/statement_shape_alloc_test.go": "dc6c427425d12236ed219528faace0c5af0bdfad367d2e3fc1493f953c87c684",
+      "database/query/subquery.go": "a43fcd05b117e786d1ad05c9146146dd7ea2a8292ce463e4f53df8659dae2bec",
+      "database/query/subquery_test.go": "dc0e71221164896f3b36b704dbbe90868d712be7e938a6fa86d4eae40666961a",
+      "database/query/text_capability.go": "553a179cbb67da7934299431f77405ae5e92c1502c3822a1a917854f05f6c7e8",
+      "database/query/transaction_composition_test.go": "e12a3f17dde1ceaddeb3c093237eddb4d9c686724957ccf3643e2c5235c81eda",
+      "database/query/transaction_correlated_record.go": "548503fa4b1f182f6fdc12353d484b79c724cc61033da571de013060c3af1081",
+      "database/query/transaction_correlated_value.go": "19366a74a1f8cadb0bce526c1ce9bb00f46a900220cbfeb23ea73d444b2b79df",
+      "database/query/transaction_correlation.go": "a4413978de8c67cd72c5a6361b8cce49997fae768c0cbc8004086f42cf35e83b",
+      "database/query/transaction_subquery.go": "512a23c454da0fbed8fd3d88b6dbcd664e0c008fcaa71de8d803861656689b74",
+      "database/query/transaction_value_test.go": "bc7e581c460ae2ba28c9d5ac0b5e5fc39b15dfb906c833c6ff0692bb3ddace0d",
+      "database/query/value_comparison.go": "4234294631838e3692edca73af95992c5b3700e3bbd6ade1197526024b024d3d",
+      "database/query/value_comparison_test.go": "5dadce4ca908d9852f743bb7c826928b664221f3bee00207926e50cbb9847af1",
+      "database/query/window.go": "61cee23f3951dd810272f3f5bea9a55bc2ab215c51b55f88bba60b97ba8a3560",
+      "database/query/window_function.go": "05a2a15a99ffe1bb3efc0cd27328433265d61e66480f46182de76c7c71902925",
+      "docs/guides/model-extension-slots.md": "a39b511cc495a5d27686c929ab75760442faa805aae714fceaa6d43473e5f509",
+      "docs/guides/model-extensions.md": "18e629d7678e760fa027fbfb1905625d2d7086d0c81f3eed30209e1d8e7d4a0a",
+      "docs/guides/model-pagination.md": "53485ac674f451524adf171e11ea13401d5236875636074063fde96e47524db0",
+      "docs/guides/model-queries.md": "765bddc0ba587962dc75b4f024ce9c8589d1d0b2aa13116317a9f67df2929741",
+      "docs/guides/model-upserts.md": "777688d35d2b56cc9468b4180308b530c5c57b74bd6f52bcee08c53fa1c53836",
+      "internal/agent/field_documentation_acceptance_test.go": "bea2f31356434a7c875e833c2ea45980120d51392ba670348f240a0155a8fd69",
+      "internal/agent/gopls_acceptance_test.go": "68453667af0e9af87a143de91371ff25d9233f88c619afb8a4dde20ae8d5f147",
+      "internal/ormcore/json_predicate.go": "7a544d364d8af65807a15dc2ec21d350ad30d367614e059c9dfb651ddd4a9aef",
+      "internal/ormcore/record_iteration.go": "e479534537e9c55377f8cc2a50135bc927b588dae950bb0797c9130f8666dd0f",
+      "internal/querycore/ast.go": "d735b629f5a98a5d0ba6c7f89ad1857310564542ebaed0e30a09ea6467ef7d3c",
+      "internal/querycore/compile_insert_select.go": "200ce9b8226620aab0e74596ff6fe5bbdb140fc3cd10155f38b9bd85e8f817ae",
+      "internal/querycore/compiler.go": "5709f43fb1fb37fd2230f2c1ff1d02b0393102e7049e16bee81097f5cd632477",
+      "internal/querycore/compiler_binding_test.go": "330d5c8e3c5562916698ea6b8523b4cdfd0213834f2c8663ccc760953a050942",
+      "internal/querycore/conflict_mutator.go": "ac0a71c7eb5fe6b0fa1544804da7753194e9b5ffecfc789ebb09617e1ac78a6d",
+      "internal/querycore/cursor_contract.go": "6eed192ff0e6cb361ecafdd06f38ef05baf0260f84e93ce1b11f4b3f202f5eae",
+      "internal/querycore/cursor_predicate.go": "bf76b350778a98bd23b3a5647b7608c3e5ca8698200c0c07cfc69557d0905cf6",
+      "internal/querycore/encrypted_fields.go": "b6cf12c25b27e169694d1f62ded4e8e58633dbe4d1365b2df11f03298f184a92",
+      "internal/querycore/explain.go": "03127e0dea9ce1c448d47da9b9c992541a18444a34a9fcb0987e09c23263de46",
+      "internal/querycore/explain_decode.go": "76896f34e131581bf94536a186633a9461489cffbdd889d15f3d57e69056fa73",
+      "internal/querycore/field_mutator.go": "d005be36a787df6a973d522c15ba6407c182aa487c57fead56b69b101e12b403",
+      "internal/querycore/literal_state.go": "871db883e04dfe865464d8d4ffa4ef792b0902905b2030765735b910854d95ea",
+      "internal/querycore/literal_state_test.go": "e4c77e828095be2fcd4b5bcd962b380f1b58393056f146928fbc0b9a45c7788e",
+      "internal/querycore/lookup_defaults.go": "5931754ef195a2c8cb8818b52663106df0216782b51387ef287101f197d67f4a",
+      "internal/querycore/lookup_defaults_test.go": "09abb017f04b8e034b1b96057acf030dd5ff5ea87bdf19612d556fc982804867",
+      "internal/querycore/mutation.go": "f548f8c62135303378b179cc8103ff97822cee911b2e1ceea1f7727d608215cb",
+      "internal/querycore/parameter_expression.go": "acbc38e72bd7eeda3451eac488cff617fc4b57fc039ef86277f6e2e5dbc034ca",
+      "internal/querycore/predicate_state.go": "5f71ae692511cba5b8793353875dc670ad78001969b451590a50aeb23806eee5",
+      "internal/querycore/raw_fragment.go": "be895ed6e43dbe6a8d2ad95de8d91148888217ced69d2f647ea2c2f2831d1d78",
+      "internal/querycore/record_core.go": "120dc4095bd54701223b36d8c9b6baf3f79fb370449c2bd2fe75abcc44c0d904",
+      "internal/querycore/relation_aggregate.go": "eda47f5f07df96c5cd08e4931d6ee55e8749728fd3acc18323c9a9ae36e361a3",
+      "internal/querycore/retained_state.go": "b96fd2c4e7860f1abb36ee7d2e86aafbb3148d12d254d507fca6e612384b2ef0",
+      "internal/querycore/retained_state_test.go": "18446a24ff71bbbfbba74034b62abf01ad56db387be63c7954101b2139727471",
+      "internal/querycore/select_sensitivity_test.go": "dd5db28d3858c664a0887ee8aea300a1f0f243ff785c3a215b722fd19ea8d141",
+      "internal/querycore/statement_shape_test.go": "580af61f8523e89fc9743619fd1f68ccd1d28289222a6a34b8db635b090e941e",
+      "internal/querycore/text_capability_test.go": "1a4b359e8be6d057119fb7fad80f426afb64a4eaa10c333d6d5f3f3fa7fd27a6",
+      "internal/querycore/window.go": "d55d6c348119f97f2fff79f30124718e46706b35a83391f5d73864454fbd8a1d",
+      "internal/querycore/window_compiler.go": "77f96d742e5d2d1637f5e483887937874b1f50d6c3fab35469ff9ca7b0171f90",
+      "internal/querycore/window_function.go": "39c1625947592d9f81831c86c4e5f83376341bb99b4f0589f1ddb97f62e2e58e",
+      "internal/querycore/window_range.go": "f1c01b2ce098aee8a6088d99a8efc4c838328625b2da330b8e60a062e2fe2fe6",
+      "metadata/handle.go": "71ae231b291f0154e8c400eab25a88bf65bf5f4bcb98ff375332a6d1e54cd07e",
+      "metadata/handle_key.go": "1c027e157fcd66ef952c990a1d274c9174dececddc9972a85f67bec76f037af7",
+      "metadata/matching.go": "1fc9b2220934691934f16065c73da365784f91379b8e0017598ef376745d1860",
+      "tests/fixtures/consumer/README.md": "24b518fc49a6fcf9b4b9022c24f34af606705a5c9a82f0b9a8b60942f6d85bf8",
+      "tests/fixtures/consumer/articles/application_postgres_test.go": "7c2a117380235678ce7a7e28ed683408bb07e50b6a7d8aa0b018e7a5ac558108",
+      "tests/fixtures/consumer/articles/article_test.go": "badce660da2dc100bd1f6d4390a65022be95d4de240d1b0b4a7ed2869dfd2325",
+      "tests/fixtures/consumer/articles/cleanup_postgres_test.go": "f3cc22d344efe7e859cee9c9745c07c13eb1fe88c9f86f51dbe1597ee26d17f6",
+      "tests/fixtures/consumer/articles/direct_postgres_test.go": "158d57424258643dbfe0ec2880bb56b5c8c0b5b7a61693cd294c31697f4590a4",
+      "tests/fixtures/consumer/articles/durable_cleanup_postgres_test.go": "321098693cd3a81f493883e34b949194a3b09af3988568adbdd352b0deca30b3",
+      "tests/fixtures/consumer/articles/email_postgres_test.go": "8fe5f0842112378e17b02b7da0e540fd355ab2f2dafa8ff36959d96739ab097f",
+      "tests/fixtures/consumer/articles/http.go": "7f0879fbdc5f23662772ab246804b4eec96cdc1c8373ba2644227150f4284121",
+      "tests/fixtures/consumer/articles/loading_benchmark_test.go": "4556ec31a243d5ab12380511012e4074796caddec8dda8e64080cd23890d1230",
+      "tests/fixtures/consumer/articles/loading_postgres_test.go": "1dd5d81276e9adbe1841470e110220a2153a89549288e48302eb17a080c97000",
+      "tests/fixtures/consumer/articles/owner_postgres_test.go": "2c0d047dc9e9077fe7218471a59dd87d91ed21a676199718022793fb046241ab",
+      "tests/fixtures/consumer/articles/statements_postgres_test.go": "9cf2233c4b2b9a5cdcb000894f0c991fa592844aab0fe2e8968576e720e931a0",
+      "tests/fixtures/consumer/articles/tables.go": "629efb0c207f22bbd6026d578a9e67f3b5e2d78fd6ee1511cc8be7a48c4f8cab",
+      "tests/fixtures/consumer/articles/undeclared_postgres_test.go": "f4d85ffcf2de3282f3a63deace462dc61d6c6673ce26aa270bb7220d659d4e84",
+      "tests/fixtures/consumer/articles/writes_postgres_test.go": "b702367548f35768da8102c8b4c4a236bb266fe76c8cb7766a4d2b64177c1078",
+      "tests/fixtures/consumer/assignment_inputs_test.go": "a6b332e9cf85abd4cfee5210b772c88d07b4e975ee9ef2d017608536a672f25c",
+      "tests/fixtures/consumer/codecs_test.go": "8419d778a514dc81311754f5f602a308d9c267d8c8cd957e037ee4473aad4ef2",
+      "tests/fixtures/consumer/footprint_test.go": "5599d3ab37aad899a69464334eb8d1f947fb0a264989b44a2d5fc2d0c3e44974",
+      "tests/fixtures/consumer/generated_test.go": "e6de5cee967931fa10f1f6ec61d1cf8b23576a758379fc58c8841d48278b22ee",
+      "tests/fixtures/consumer/httpmodels/bindings.go": "475c0e465a6b9fd6b7039b8770ca7c4764f341e97b199e49b2629e407ac1733b",
+      "tests/fixtures/consumer/httpmodels/bindings_postgres_test.go": "a5b92758ecce2ea5cc8cb320c1692a2b43f30cfe50dff8901912760a5a6bfc6c",
+      "tests/fixtures/consumer/httpmodels/bindings_test.go": "0c0e882ef058e4a44704c6036721b64309b0be23e955aca3a79f909bcb8f185d",
+      "tests/fixtures/consumer/httpmodels/sql_parity_test.go": "177dbb97866031a3899b59eb8233baf2cfd7451177c315c40396d2e7e9ac084e",
+      "tests/fixtures/consumer/idempotenthttp/application.go": "cc596c97d99e7e3d9449bb49338114846cb5f1e2ce9ab0097c036bf51676d9da",
+      "tests/fixtures/consumer/idempotenthttp/concurrency_test.go": "92518996599b976f9c851856008d998414ceedbf7a784cd6c71eec8f6f37e40b",
+      "tests/fixtures/consumer/idempotenthttp/publication_test.go": "935cf420a7b1fa1becc41cc3b2468748cb82c6fdefce735cf2f5bf6645b23dee",
+      "tests/fixtures/consumer/idempotenthttp/tables.go": "175af0fb084427f2c83f252dcd6db72495ee64e8d16c257d046e762627206cfb",
+      "tests/fixtures/consumer/idempotenthttp/tables_test.go": "fac6f71514c7ce43723ef1f4380e65b60c5bf2dfab38a4a2c497a38c312bc6d3",
+      "tests/fixtures/consumer/isolatedhttp/application.go": "a6604fa7e76f9e1edef394c64a0b43d8325f61bde3fdb961f25de1ca7051888c",
+      "tests/fixtures/consumer/isolatedhttp/isolation_test.go": "4bb1a90c3f15076ca6de1f62d67decc59e3cd7d923416c8f4ba43a9b6319013d",
+      "tests/fixtures/consumer/isolatedhttp/tables.go": "e4c9211978e27dc97c88aa59964836a5e52e3a9fb7e36df6a910ab6c552465e0",
+      "tests/fixtures/consumer/isolatedhttp/tables_test.go": "c9d1b07b1877c04c8f2e4c619f269b2a5984edb7b3591e12b87984699837ed0a",
+      "tests/fixtures/consumer/model_changes_test.go": "aee0f4c405e8f2f6a514c55a4e4ecf11a0a2c00dea72c19bc43c40d908a4698c",
+      "tests/fixtures/consumer/model_pagination_postgres_test.go": "6e5b95c878a864b922c69aaed57dd4a646237e5e5c5f1b5af71e3144f24bb0cc",
+      "tests/fixtures/consumer/model_query_postgres_test.go": "02d540c5381a9a831352d8310875db61365e097f99912bb0f45131de9c8aa0a7",
+      "tests/fixtures/consumer/model_write_postgres_test.go": "e4578b991d414b7186e8a4bce513a86ba21c0fd79930bf13b0ee67fdad5e553a",
+      "tests/fixtures/consumer/multifactor/account.go": "79f855317a83b5773f9db2b5e23507c3409edddf068dfa275cd0ab30804740bb",
+      "tests/fixtures/consumer/multifactor/completion_postgres_test.go": "7d8464bad867334a2d2b202386ab47fea3c3711ed3e55479e28b4b1b6c728620",
+      "tests/fixtures/consumer/multifactor/factors_postgres_test.go": "4243390d1032fbd897d0b2f53a4e60d8666dfee46e0031eebe009bfc0169e802",
+      "tests/fixtures/consumer/multifactor/security.go": "94d2d1fea76e51038de8c9c1cca26e0beef94c2f9814ce0739f33515cb76a172",
+      "tests/fixtures/consumer/multifactor/security_postgres_test.go": "2343ecac0b00be056a1b17b41805ae2fd175e29fd80bcb80f70f60f659631335",
+      "tests/fixtures/consumer/observer_ownership_test.go": "02069eab23977c4512abce4ebee34ae3f29afa39120ffb291f05b7fd96782bdd",
+      "tests/fixtures/consumer/officequeries/desk_scope_postgres_test.go": "edc47b5519b5b9ff8a870ec939433fb1caf6ddf550dd8d1210eefc1a540d59b0",
+      "tests/fixtures/consumer/officequeries/office_postgres_test.go": "029100ac097817d46ad89e74bdd3383ba70e0998db2a94ffe0089119db88b78d",
+      "tests/fixtures/consumer/officequeries/related_value_test.go": "81732f797ea27407af6d122a4e1143c8724f55a23c2ad515a0d6c1145cce0663",
+      "tests/fixtures/consumer/orm_benchmark_test.go": "d604e51987ac8006016975f8d7e716f7bf1193c9b523740793fa55463a7404e8",
+      "tests/fixtures/consumer/package_graph_test.go": "4117fb1da455226040c000fee268e7a99625b66d325cecf0b8dd1dcb2766462b",
+      "tests/fixtures/consumer/profiles/profile_test.go": "5ce2e1ace8cb2afc408a031d49ddc60e0a7278774fa84bcb57220efdc8bdf5ed",
+      "tests/fixtures/consumer/teamworkflow/client_test.go": "aaf7c3593dabfb2ed296d360332c591ed7d423fd830e663d9358fa18774b1a52",
+      "tests/fixtures/consumer/teamworkflow/routes.go": "90df3c2bae38589467ffbbbd894d188ebf2476f741e1c02cedd22aa8e78a36fa",
+      "tests/fixtures/consumer/teamworkflow/service.go": "cb1297dd9cad40bc97ab58ac0a94a018739eb973404fc0ae7aadba1249102186",
+      "tests/fixtures/consumer/teamworkflow/tables.go": "4b83fda213022fd7ed3d7bc264d260209f46e7a4906f6650111c4abc92fce4d3",
+      "tests/fixtures/consumer/teamworkflow/tables_test.go": "b209609c1ff6cb5050f91206b75854c3010327dd4a6e4f439e5df3f34cd44eda",
+      "tests/fixtures/consumer/teamworkflow/workflow_test.go": "11bf3621e34770bd567294ed4bc5d7937a069fddeecdf0b80791a4db85d3911a",
+      "tests/fixtures/consumer/testdata/compilefail/attachment_query_owner/invalid.go": "2f176b00196d93c38c34fa379521090212eba5e89336e2b44c60d00434187b72",
+      "tests/fixtures/consumer/testdata/footprint/model_draft/probe.go": "61b4ffd24ae291cc2fcc57fae0d0e1e3394913506dec864684cef2eb9013d31e",
+      "tests/fixtures/consumer/tooling/database.go": "aff40d6fcce14946b99d199f6e679ac069914407ce800e70790d15946e6508bb",
+      "tests/fixtures/consumer/tooling/database_test.go": "fd0031098c87ef1c07f39cba5e7376895c9e425422e63738b26ff6b0a6eb5f33",
+      "tests/fixtures/consumer/tooling/production_test.go": "dfca7cacde4f4e75da738941d96d88cc566e6830b664fbda68086459a58fe89e",
+      "tests/fixtures/consumer/tooling/routing.go": "1245b447478af49523559b4889b6301c486eb0db5a9a010322449ee100425844",
+      "tests/fixtures/consumer/tooling/tooling_test.go": "c4537244d8d48cae93c65279752b28ce9a47ebded723682f019c4b1a4a8ea4fc",
+      "tests/fixtures/goway/compiler_cases_test.go": "1aedefb86db50da7d3688e2b350fdc19d29aeeb8450cf1d739c3d55fdbce4c5e",
+      "tests/fixtures/goway/extension_matching_test.go": "1fb7f20bbc3de2c2df5b62a8de94bc60e31f651d2645fed7536beaefcb786a66",
+      "tests/fixtures/goway/footprint_test.go": "020ef0187ffa88c70bfb59cf3ee365c9ac5217eae36876aaceb446bad051ebbe",
+      "tests/fixtures/goway/load_query_golden_test.go": "e4e82bb5f76bb7d387a8c7295af0498624079f9987265b0e694ec71c3d07ed57",
+      "tests/fixtures/goway/pgsmoke/load_query_test.go": "0c0e50686e7dbe5a3cf6c156090e6e70b76091ebd5a50093e5fedc96e50a44d5",
+      "tests/fixtures/goway/pgsmoke/related_value_test.go": "8065a9dbdc544e5f2e97ca9dd19c4105a1bcb3900cbd4b657b39686116057574",
+      "tests/fixtures/goway/testdata/compilefail/annotated_owner/invalid.go": "edd19559164f087aa8f1a3558eb5f217d82b0d288b9b97e00a78b257cfc9e79a",
+      "tests/fixtures/goway/testdata/compilefail/annotated_selected/invalid.go": "addcf56280a5981ad4499cff47b1cf51bf31d7992edc41cfcd8134725db6809b",
+      "tests/fixtures/goway/testdata/compilefail/attachment_files_key/invalid.go": "6c3dd62db1686938c1e7b9de5b7c0a168123c1dcdda6ad539628c62de8edd507",
+      "tests/fixtures/goway/testdata/compilefail/attachment_files_owner/invalid.go": "912bf23fb8e813000a1607b1a25b4bf2dcde6298528037065a5d122dcb5ca9ec",
+      "tests/fixtures/goway/testdata/compilefail/attachment_files_single/invalid.go": "c6dbc594d9ee482a97d1249ea20aa1dd57ab7adf2e5c3da4ef3a5322bfdc81e8",
+      "tests/fixtures/goway/testdata/compilefail/attachment_query_owner/invalid.go": "d044221d2a6ca9b19b187d2479b752ddddaabb9eebe4b8ec99b4c014ad0d353b",
+      "tests/fixtures/goway/testdata/compilefail/load_query_locked/invalid.go": "77e5bfb1a822fe4e963a2ce39ca36ef60a5037784ebd2d5f840ea2ad93495283",
+      "tests/fixtures/goway/testdata/compilefail/load_query_owner/invalid.go": "2b0385387ec745ebb9195156dba06d419015abb44a0015e9f56add274c98f03b",
+      "tests/fixtures/goway/testdata/compilefail/metadata_matching_owner/invalid.go": "835b8bd64ae5c10a37e9c96bc45d7af6a7f74243a3341ece2bd39266a12cc29f",
+      "tests/fixtures/goway/testdata/compilefail/metadata_matching_value/invalid.go": "a09a4705e56ef5f2722ee0b16d4ce63bdcc3957a87b118a5168901f7ad9ba32e",
+      "tests/fixtures/goway/testdata/compilefail/related_value_input/invalid.go": "1a0d9d4e1ca92b9347c1a36840be07ca2103d46c60f0d4209b51dd00cbae270d",
+      "tests/fixtures/goway/testdata/compilefail/translation_matching_locale/invalid.go": "7723eddeaa241c79ed2746a552a002048377d15c22f4f7696261b0a7aadefa04",
+      "tests/fixtures/goway/testdata/compilefail/translation_matching_owner/invalid.go": "f8825810de975ca850b0c8efa6956321c4addd57966d093ba8c87f3a1578c05a",
+      "tests/fixtures/goway/testdata/footprint/extension_files/probe.go": "d7d70dacaa890128014185ac18fd7800dd042880406e8782a52c42ddb1f7fea3",
+      "tests/fixtures/goway/testdata/footprint/extension_files_old/probe.go": "e507829f9bf6a74f67700982b8a3315cd4b3e4cced0927caa635bb0ba58a663b",
+      "tests/fixtures/goway/testdata/footprint/extension_matching/probe.go": "3241559f346f27859b5cd863469bf52eb31ecd11ca9664865d8750b896b3e12f",
+      "tests/fixtures/goway/testdata/footprint/extension_matching_old/probe.go": "c5b30b9ed5970548004e0c59811320ff8597c2815f57dbaf1b6fae4a54246cab",
+      "tests/fixtures/goway/testdata/footprint/load_query/p.go": "637f2128437a5acdecb4284f5e9cb1522b846946f9e3253e86afcf7c00a991d5",
+      "tests/fixtures/goway/testdata/footprint/related_value/probe.go": "9716ee705572fe0339e262c60ad9f4eafb4abf23561a354fee5ad4350b17cef3",
+      "tools/release/release_test.go": "85940b118c9adbd47ff04e9e1815e36877704576ea8d4097647ade9a9ec39a1d",
+      "translations/handle.go": "3f935f60a7fed095ee1aeac25262bde199f42ed9ae7f6f2f078e897fc680843d",
+      "translations/handle_field.go": "dfbf92adb7fd23c866904c8bbd9d66a074a90471a65e9f417897246b2266cc79",
+      "translations/matching.go": "7eabe000d3066c338cea2439ae2e86f147713e658248abfccc0e6161bca0951d"
+    },
+    "native_tools": {
+      "gopls": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls",
+      "node": "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+      "typescript": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js"
+    },
+    "integrity": {
+      "generated_outputs_and_manifests_unchanged": 398,
+      "protected_client_contract_files_unchanged": 45,
+      "retained_compiler_cases": 848,
+      "retained_footprint_budgets": 140,
+      "real_gopls_subtests_passed": 496,
+      "lane_B_packages": "unchanged",
+      "legacy_footprint_evidence": "frozen historical hashes preserved"
+    }
+  }
+}

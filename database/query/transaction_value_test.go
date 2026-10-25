@@ -56,11 +56,11 @@ func TestTransactionComputedMembershipQualificationAndBindings(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), int64(9)}) {
 		t.Fatal("computed IN binding order", statement, err)
 	}
-	changed := requalify(predicate.expression, "renamed")
+	changed := requalify(predicateExpression(predicate.expression), "renamed")
 	for _, test := range []struct {
 		input expression
 		want  string
-	}{{predicate.expression, "outer_records"}, {changed, "renamed"}} {
+	}{{predicateExpression(predicate.expression), "outer_records"}, {changed, "renamed"}} {
 		var fields []string
 		walk := selectWalk{LocalSelect: true, Field: func(f fieldRef) { fields = append(fields, f.Table) }}
 		walk.Expression(test.input, 0)

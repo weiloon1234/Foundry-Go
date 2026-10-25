@@ -11,7 +11,9 @@ import (
 
 // RawFragment owns lexed SQL and normalized arguments. Private state prevents
 // bypassing construction validation or mutating a fragment through an AST copy.
-type RawFragment struct {
+type RawFragment struct{ state *rawFragmentState }
+
+type rawFragmentState struct {
 	parts     []string
 	arguments []driver.Value
 	err       error
@@ -22,34 +24,37 @@ func (RawFragment) ExpressionNode() {}
 
 func NewRawFragment(sql string, arguments []any) RawFragment {
 	parts, err := rawParts(sql)
-	r := RawFragment{parts: parts, err: err}
+	r := RawFragment{state: &rawFragmentState{parts: parts, err: err}}
 	if err != nil {
 		return r
 	}
 	if len(arguments) > MaxParameters || len(parts) != len(arguments)+1 {
-		r.err = rawInvalid("placeholder count does not match arguments")
+		r.state.err = rawInvalid("placeholder count does not match arguments")
 		return r
 	}
-	r.arguments = make([]driver.Value, len(arguments))
+	r.state.arguments = make([]driver.Value, len(arguments))
 	for i, arg := range arguments {
 		v, err := driver.DefaultParameterConverter.ConvertValue(arg)
 		if err != nil || !driver.IsValue(v) {
-			r.err = rawInvalid("unsupported argument")
+			r.state.err = rawInvalid("unsupported argument")
 			return r
 		}
 		if b, ok := v.([]byte); ok {
 			v = slices.Clone(b)
 		}
-		r.arguments[i] = v
+		r.state.arguments[i] = v
 	}
 	return r
 }
 func rawInvalid(message string) error { return fault.New(fault.Invalid, "raw fragment: "+message) }
 func (r RawFragment) Validate() error {
-	if r.err != nil {
-		return r.err
+	if r.state == nil {
+		return rawInvalid("uninitialized fragment")
 	}
-	if len(r.parts) == 0 {
+	if r.state.err != nil {
+		return r.state.err
+	}
+	if len(r.state.parts) == 0 {
 		return rawInvalid("uninitialized fragment")
 	}
 	return nil
@@ -61,7 +66,7 @@ func (c *Compiler) RawSQL(r RawFragment) (string, error) {
 	if c.IndexTarget {
 		return "", rawInvalid("not allowed in schema expressions")
 	}
-	for _, part := range r.parts {
+	for _, part := range r.state.parts {
 		c.ScalarSQLBytes += len(part)
 	}
 	if c.ScalarSQLBytes > MaxScalarSQLBytes {
@@ -70,9 +75,9 @@ func (c *Compiler) RawSQL(r RawFragment) (string, error) {
 	c.opaque = true
 	var out strings.Builder
 	out.WriteByte('(')
-	for i, part := range r.parts {
+	for i, part := range r.state.parts {
 		if i > 0 {
-			p, err := c.Parameter(r.arguments[i-1])
+			p, err := c.Parameter(r.state.arguments[i-1])
 			if err != nil {
 				return "", err
 			}

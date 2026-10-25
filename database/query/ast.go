@@ -91,7 +91,7 @@ func validateExpressionValues(e expression, operand func(valueExpression) error,
 // retain immutable expression structure; they never interpolate SQL strings.
 type Predicate[M any] struct {
 	_          [0]*M
-	expression expression
+	expression *querycore.PredicateState
 }
 
 // And requires all predicates to match. An empty conjunction is TRUE, so a
@@ -102,22 +102,24 @@ func And[M any](predicates ...Predicate[M]) Predicate[M] { return combine(false,
 func Or[M any](predicates ...Predicate[M]) Predicate[M] { return combine(true, predicates) }
 
 // True is the neutral predicate for composing dynamic filters with And.
-func True[M any]() Predicate[M] { return Predicate[M]{expression: junction{}} }
+func True[M any]() Predicate[M] { return Predicate[M]{expression: retainPredicate(junction{})} }
 
 // False matches no rows; it is the neutral predicate for Or.
-func False[M any]() Predicate[M] { return Predicate[M]{expression: junction{Any: true}} }
+func False[M any]() Predicate[M] {
+	return Predicate[M]{expression: retainPredicate(junction{Any: true})}
+}
 
 func combine[M any](any bool, predicates []Predicate[M]) Predicate[M] {
 	children := make([]expression, len(predicates))
 	for i, p := range predicates {
-		children[i] = p.expression
+		children[i] = predicateExpression(p.expression)
 	}
-	return Predicate[M]{expression: junction{Any: any, Children: children}}
+	return Predicate[M]{expression: retainPredicate(junction{Any: any, Children: children})}
 }
 
 // Not negates this expression without changing it.
 func (p Predicate[M]) Not() Predicate[M] {
-	return Predicate[M]{expression: negation{Child: p.expression}}
+	return Predicate[M]{expression: retainPredicate(negation{Child: predicateExpression(p.expression)})}
 }
 
 // Order belongs to one model and orders a declared field or typed row value.
@@ -187,4 +189,12 @@ func (q Query[M]) validateCore() error {
 		return q.definition.validated()
 	}
 	return nil
+}
+
+// Both predicate families use querycore's opaque storage; the AST stays shared.
+func retainPredicate(node expression) *querycore.PredicateState {
+	return querycore.RetainPredicate(node)
+}
+func predicateExpression(state *querycore.PredicateState) expression {
+	return querycore.PredicateNode(state)
 }

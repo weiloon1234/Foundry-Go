@@ -6,13 +6,14 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-func TestPostgresGeneratedModelWrites(t *testing.T) {
+func TestPostgresORMModelWrites(t *testing.T) {
 	db := pgtest.Open(t)
 	namespace := pgtest.Namespace(t, db)
 	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
@@ -25,8 +26,8 @@ func TestPostgresGeneratedModelWrites(t *testing.T) {
 				return err
 			}
 		}
-		q := models.QueryWriteRecords()
-		first, err := q.Create(t.Context(), tx, models.WriteRecordDraft{}.SetName("first"))
+		q := models.WriteRecords.Query()
+		first, err := models.WriteRecords.Insert(t.Context(), tx, models.WriteRecords.Name.Set("first"))
 		if err != nil {
 			return err
 		}
@@ -37,34 +38,34 @@ func TestPostgresGeneratedModelWrites(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		draft := models.WriteRecordDraft{}.SetCode(models.RecordKey(1000)).SetName("second").SetEnabled(false).ClearNote().SetAmount(amount)
-		second, err := q.Create(t.Context(), tx, draft)
+		draft := []orm.Assignment[models.WriteRecord]{models.WriteRecords.Code.Set(models.RecordKey(1000)), models.WriteRecords.Name.Set("second"), models.WriteRecords.Enabled.Set(false), models.WriteRecords.Note.SetNull(), models.WriteRecords.Amount.Set(amount)}
+		second, err := models.WriteRecords.Insert(t.Context(), tx, draft...)
 		if err != nil {
 			return err
 		}
 		if second.Code != 1000 || second.Enabled || !second.Note.IsNull() || second.Amount != amount {
 			t.Error("explicit zero/null/decimal values were replaced by defaults")
 		}
-		patched, err := q.Update(t.Context(), tx, first.Code, models.WriteRecordDraft{}.SetName("").SetEnabled(false).ClearNote())
+		patched, err := orm.Update(t.Context(), tx, q, models.WriteRecords.Key(), first.Code, models.WriteRecords.Name.Set(""), models.WriteRecords.Enabled.Set(false), models.WriteRecords.Note.SetNull())
 		if err != nil {
 			return err
 		}
 		if patched.Code != first.Code || patched.Name != "" || patched.Enabled || !patched.Note.IsNull() || !patched.Amount.IsZero() {
 			t.Error("typed patch overwrote omitted data or lost zero/null")
 		}
-		if _, err := q.Update(t.Context(), tx, first.Code, models.WriteRecordDraft{}.SetName("ignored").UnsetName()); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.Update(t.Context(), tx, q, models.WriteRecords.Key(), first.Code); !errors.Is(err, fault.Invalid) {
 			t.Error("empty patch was accepted")
 		}
-		if _, err := q.Update(t.Context(), tx, first.Code, models.WriteRecordDraft{}.SetCode(99)); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.Update(t.Context(), tx, q, models.WriteRecords.Key(), first.Code, models.WriteRecords.Code.Set(99)); !errors.Is(err, fault.Invalid) {
 			t.Error("primary-key patch was accepted")
 		}
-		if _, err := q.Where(models.WriteRecordFields().Name.Eq("not allowed")).Update(t.Context(), tx, second.Code, models.WriteRecordDraft{}.SetName("forbidden")); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Update(t.Context(), tx, q.Where(models.WriteRecords.Name.Eq("not allowed")), models.WriteRecords.Key(), second.Code, models.WriteRecords.Name.Set("forbidden")); !errors.Is(err, database.NotFound) {
 			t.Error("write ignored query authorization scope")
 		}
-		if _, err := q.Create(t.Context(), tx, models.WriteRecordDraft{}); !errors.Is(err, fault.Missing) {
+		if _, err := models.WriteRecords.Insert(t.Context(), tx); !errors.Is(err, fault.Missing) {
 			t.Error("missing required field reached SQL")
 		}
-		if _, err := q.Create(t.Context(), tx, draft); !errors.Is(err, database.UniqueViolation) {
+		if _, err := models.WriteRecords.Insert(t.Context(), tx, draft...); !errors.Is(err, database.UniqueViolation) {
 			t.Error("duplicate key did not roll back its savepoint")
 		}
 		count, err := q.Count(t.Context(), tx)
@@ -76,20 +77,20 @@ func TestPostgresGeneratedModelWrites(t *testing.T) {
 		}
 		// Only this test's newly inserted record is deleted. No existing schema or
 		// data is reset, and the rest of the retained test records remain intact.
-		removed, err := q.Delete(t.Context(), tx, first.Code)
+		removed, err := orm.Delete(t.Context(), tx, q, models.WriteRecords.Key(), first.Code)
 		if err != nil {
 			return err
 		}
 		if removed.Code != first.Code || removed.Name != "" {
 			t.Error("delete did not return the complete pre-deletion model")
 		}
-		if _, err := q.Delete(t.Context(), tx, first.Code); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Delete(t.Context(), tx, q, models.WriteRecords.Key(), first.Code); !errors.Is(err, database.NotFound) {
 			t.Error("missing delete did not report NotFound")
 		}
 		if _, err := tx.Exec(t.Context(), `ALTER TABLE write_records ALTER COLUMN amount SET DEFAULT 'NaN'::numeric`); err != nil {
 			return err
 		}
-		if model, err := q.Create(t.Context(), tx, models.WriteRecordDraft{}.SetName("invalid default")); err == nil || model.Code != 0 {
+		if model, err := models.WriteRecords.Insert(t.Context(), tx, models.WriteRecords.Name.Set("invalid default")); err == nil || model.Code != 0 {
 			t.Error("invalid returned model was published")
 		}
 		count, err = q.Count(t.Context(), tx)
@@ -102,17 +103,25 @@ func TestPostgresGeneratedModelWrites(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `ALTER TABLE write_records ALTER COLUMN amount SET DEFAULT 0`); err != nil {
 			return err
 		}
-		ledgerDraft := models.LedgerEntryDraft{}.SetAmount(amount)
-		entry, err := models.QueryLedgerEntries().Create(t.Context(), tx, ledgerDraft)
+		ledgerDraft := []orm.Assignment[models.LedgerEntry]{models.LedgerEntries.Amount.Set(amount)}
+		entry, err := models.LedgerEntries.Insert(t.Context(), tx, ledgerDraft...)
 		if err != nil {
 			return err
 		}
-		if entry.ID.IsZero() || entry.ID.Bytes()[6]>>4 != 7 || entry.Amount != amount || ledgerDraft.ID().IsSet() {
+		supplied, err := orm.Compare(models.LedgerEntries.Table, value.Optional[models.LedgerEntry]{}, value.Set(entry), ledgerDraft...)
+		if err != nil {
+			return err
+		}
+		keyChange, err := orm.ChangeOf(supplied, models.LedgerEntries.ID)
+		if err != nil {
+			return err
+		}
+		if entry.ID.IsZero() || entry.ID.Bytes()[6]>>4 != 7 || entry.Amount != amount || len(ledgerDraft) != 1 || keyChange.Assigned() {
 			t.Error("UUID generation failed or mutated the caller's draft")
 		}
 		rollback := errors.New("abort model work")
 		if err := tx.Transaction(t.Context(), func(child *database.Tx) error {
-			if _, err := q.Create(t.Context(), child, models.WriteRecordDraft{}.SetName("rolled back")); err != nil {
+			if _, err := models.WriteRecords.Insert(t.Context(), child, models.WriteRecords.Name.Set("rolled back")); err != nil {
 				return err
 			}
 			return rollback

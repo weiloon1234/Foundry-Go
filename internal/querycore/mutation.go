@@ -18,7 +18,7 @@ type MutationAssignment struct {
 // every model/query scope while the public Assignment/Conflict retain ownership.
 type AssignmentValue struct {
 	Bind      func() (driver.Value, error)
-	Value     any // Private type erasure; generated metadata checks the exact V before mutation.
+	Value     *InputState // Private type erasure; metadata checks the exact V before mutation.
 	CopyValue func() any
 }
 
@@ -26,7 +26,7 @@ func (v AssignmentValue) InputValue() any {
 	if v.CopyValue != nil {
 		return v.CopyValue()
 	}
-	return v.Value
+	return StoredInput(v.Value)
 }
 
 type MutationKind uint8

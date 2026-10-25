@@ -26,7 +26,12 @@ type footprintBudget struct {
 
 const footprintFailureAdvice = "a method or field on a model or endpoint type probably reaches a framework generic (query engine, signed/idempotent endpoint) again; see docs/guides/query-build-resources.md#model-and-endpoint-edges"
 
-// Measured values on this branch versus pre-change baseline (closure-free Tier A).
+// Legacy measurements below are historical, not relabelled ORM measurements.
+// D4 froze them in docs/evidence/goway-stage9-d4-legacy-footprint.json before
+// replacing model_draft with model_assignments. The replacement measured 233
+// functions, 1647 symbols and 1060408 bytes; its ceilings use ceil(measured * 1.15).
+// The other three probe bodies and ceilings remain unchanged.
+// Measured values on the original branch versus pre-change baseline (closure-free Tier A).
 // Baseline measurements are taken from Foundry-Go commit dd188a7 with the same probe bodies.
 //
 // Probe case       Pre-change baseline         This branch (measured)      Committed budget (ceil 1.25x)
@@ -48,11 +53,11 @@ var footprintBudgets = map[string]footprintBudget{
 		maxSymbols:   1314,
 		maxBytes:     786148,
 	},
-	"model_draft": {
+	"model_assignments": {
 		pkg:          "./testdata/footprint/model_draft",
-		maxFunctions: 282,
-		maxSymbols:   1958,
-		maxBytes:     1239298,
+		maxFunctions: 268,
+		maxSymbols:   1895,
+		maxBytes:     1219470,
 	},
 	"endpoint_plain": {
 		pkg:          "./testdata/footprint/endpoint_plain",
@@ -65,7 +70,7 @@ var footprintBudgets = map[string]footprintBudget{
 func TestFootprintBudgets(t *testing.T) {
 	testkit.TrackExternalInputs(t)
 
-	probeOrder := []string{"model_type", "model_isolated", "model_draft", "endpoint_plain"}
+	probeOrder := []string{"model_type", "model_isolated", "model_assignments", "endpoint_plain"}
 	pkgArgs := make([]string, 0, len(probeOrder))
 	for _, name := range probeOrder {
 		pkgArgs = append(pkgArgs, footprintBudgets[name].pkg)

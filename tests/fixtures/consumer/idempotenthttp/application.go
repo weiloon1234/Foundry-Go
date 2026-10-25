@@ -5,6 +5,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
@@ -97,7 +98,7 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 			}
 			return nil
 		})
-		resolver := modelbinding.ByKey(db, QueryIdemWorkspaces(), func(path Path) int64 { return path.Workspace })
+		resolver := modelbinding.ByKey(db, orm.Keyed(Workspaces.Query(), Workspaces.Key()), func(path Path) int64 { return path.Workspace })
 		bound := modelbinding.BindAuthenticated(required, resolver).WithAuthorization(func(_ context.Context, actor Actor, in BoundRequest) error {
 			if !in.Model.Enabled || in.Model.Tenant != actor.Tenant || hooks.Deny != nil && hooks.Deny.Load() {
 				return http.Forbidden
@@ -113,7 +114,7 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 			if hooks.Calls != nil {
 				hooks.Calls.Add(1)
 			}
-			order, err := QueryIdemOrders().Create(ctx, tx, OrderDraft{}.SetWorkspaceID(in.Model.ID).SetCaller(actor.ID).SetName(in.Request.Body.Name))
+			order, err := Orders.Insert(ctx, tx, Orders.WorkspaceID.Set(in.Model.ID), Orders.Caller.Set(actor.ID), Orders.Name.Set(in.Request.Body.Name))
 			if err != nil {
 				return Receipt{}, err
 			}

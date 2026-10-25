@@ -151,12 +151,12 @@ func jsonContainment[M, V any](c columnData[V], op querycore.ScalarOperation, v 
 		return Predicate[M]{err: invalid("uninitialized JSON column")}
 	}
 	document, err := c.bind(v)
-	return Predicate[M]{owner: c.core.owner, expression: ormcore.JSONContainment(querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, op, document, err)}
+	return Predicate[M]{owner: c.core.owner, expression: querycore.RetainPredicate(ormcore.JSONContainment(querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, op, document, err))}
 }
 
 func jsonNull[M, V any](c columnData[V]) Predicate[M] {
 	if c.core == nil || c.core.owner == nil {
 		return Predicate[M]{err: invalid("uninitialized JSON column")}
 	}
-	return Predicate[M]{owner: c.core.owner, expression: ormcore.JSONIsNull(querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name})}
+	return Predicate[M]{owner: c.core.owner, expression: querycore.RetainPredicate(ormcore.JSONIsNull(querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}))}
 }

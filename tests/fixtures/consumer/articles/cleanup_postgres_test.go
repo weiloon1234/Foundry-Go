@@ -31,19 +31,19 @@ func TestGeneratedDeclarationCleansExtensionDataOnHardDelete(t *testing.T) {
 	if models := f.app.Models(); len(models) != 1 || models[0].Owner().Name() != "articles" {
 		t.Fatal("the application does not report its registered model declarations", len(models))
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	article := f.createArticle(t, "cleanup")
 	if article.Title.IsLoaded() || article.Logo.IsLoaded() || article.SEO.IsLoaded() {
 		t.Fatal("a written model's extension slots must start unloaded")
 	}
-	ref := article.FoundryReference()
-	if err := x.Title.Field().Set(t.Context(), runtime.Translations, ref, "en", "Hello"); err != nil {
+	ref := articles.ArticleIdentity.ReferenceOf(article)
+	if err := translations.FieldOf(x.Title).Set(t.Context(), runtime.Translations, ref, "en", "Hello"); err != nil {
 		t.Fatal(err)
 	}
-	if err := x.SEO.Key().Set(t.Context(), runtime.Metadata, ref, articles.SEO{Canonical: value.Set("/hello")}); err != nil {
+	if err := metadata.KeyOf(x.SEO).Set(t.Context(), runtime.Metadata, ref, articles.SEO{Canonical: value.Set("/hello")}); err != nil {
 		t.Fatal(err)
 	}
-	upload, err := x.Logo.Collection().Replace(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 40)), OriginalName: "logo.png"})
+	upload, err := attachments.OneCollection(x.Logo).Replace(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 40)), OriginalName: "logo.png"})
 	if err != nil || upload.Publication != attachments.Published {
 		t.Fatal("logo publication", err)
 	}
@@ -54,21 +54,21 @@ func TestGeneratedDeclarationCleansExtensionDataOnHardDelete(t *testing.T) {
 
 	// Soft deletion keeps extension data for restoration.
 	if err := write(func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().Delete(ctx, tx, article.ID)
+		_, err := articles.Articles.Delete(ctx, tx, article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := x.Title.Field().Get(t.Context(), runtime.Translations, ref, "en"); !errors.Is(err, database.NotFound) {
+	if _, err := translations.FieldOf(x.Title).Get(t.Context(), runtime.Translations, ref, "en"); !errors.Is(err, database.NotFound) {
 		t.Fatal("soft-deleted owner remained readable", err)
 	}
 	if err := write(func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().Restore(ctx, tx, article.ID)
+		_, err := articles.Articles.Restore(ctx, tx, article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	text, err := x.Title.Field().Get(t.Context(), runtime.Translations, ref, "en")
+	text, err := translations.FieldOf(x.Title).Get(t.Context(), runtime.Translations, ref, "en")
 	if restored, ok := text.Get(); err != nil || !ok || restored != "Hello" {
 		t.Fatal("restored translation lost", err)
 	}
@@ -76,23 +76,23 @@ func TestGeneratedDeclarationCleansExtensionDataOnHardDelete(t *testing.T) {
 	// A rolled-back hard deletion rolls back its cleanup and keeps the file.
 	rollback := errors.New("rollback deletion")
 	if err := write(func(ctx context.Context, tx *database.Tx) error {
-		if _, err := articles.QueryArticles().ForceDelete(ctx, tx, article.ID); err != nil {
+		if _, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID); err != nil {
 			return err
 		}
 		return rollback
 	}); !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	if _, err := x.Logo.Collection().Find(t.Context(), runtime.Attachments, ref, logo.ID()); err != nil {
+	if _, err := attachments.OneCollection(x.Logo).Find(t.Context(), runtime.Attachments, ref, logo.ID()); err != nil {
 		t.Fatal("parent rollback lost the logo", err)
 	}
-	if stored, err := x.SEO.Key().Get(t.Context(), runtime.Metadata, ref); err != nil || !stored.IsSet() {
+	if stored, err := metadata.KeyOf(x.SEO).Get(t.Context(), runtime.Metadata, ref); err != nil || !stored.IsSet() {
 		t.Fatal("parent rollback lost metadata", err)
 	}
 
 	// The committed hard deletion removes rows and schedules file cleanup.
 	if err := write(func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().ForceDelete(ctx, tx, article.ID)
+		_, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func TestGeneratedDeclarationCleansExtensionDataOnHardDelete(t *testing.T) {
 	if state, err := runtime.Attachments.Inspect(t.Context(), upload.Operation); err != nil || state.State != attachments.Cleaned {
 		t.Fatal("generated hard-delete observer kept the logo", err)
 	}
-	owner := articles.ArticleExtensionOwner()
+	owner := articles.ArticleOwner
 	if page, err := metadata.InspectOrphans(t.Context(), runtime.Metadata, owner.Name(), metadata.Cursor{}, 10); err != nil || len(page.Orphans) != 0 {
 		t.Fatal("metadata rows survived hard deletion", err)
 	}
@@ -149,26 +149,26 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	if err != nil || writer == f.store.Database() {
 		t.Fatal("the writer pool must differ from the extension store's", err)
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	article := f.createArticle(t, "cross-pool")
-	ref := article.FoundryReference()
-	if err := x.Title.Field().Set(t.Context(), runtime.Translations, ref, "en", "Hello"); err != nil {
+	ref := articles.ArticleIdentity.ReferenceOf(article)
+	if err := translations.FieldOf(x.Title).Set(t.Context(), runtime.Translations, ref, "en", "Hello"); err != nil {
 		t.Fatal(err)
 	}
-	if err := x.SEO.Key().Set(t.Context(), runtime.Metadata, ref, articles.SEO{Canonical: value.Set("/hello")}); err != nil {
+	if err := metadata.KeyOf(x.SEO).Set(t.Context(), runtime.Metadata, ref, articles.SEO{Canonical: value.Set("/hello")}); err != nil {
 		t.Fatal(err)
 	}
-	upload, err := x.Logo.Collection().Replace(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 40)), OriginalName: "logo.png"})
+	upload, err := attachments.OneCollection(x.Logo).Replace(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 40)), OriginalName: "logo.png"})
 	if err != nil || upload.Publication != attachments.Published {
 		t.Fatal("logo publication", err)
 	}
 	logo, _ := upload.Attachment.Get()
 	kept := func(stage string) {
 		t.Helper()
-		if _, err := x.Logo.Collection().Find(t.Context(), runtime.Attachments, ref, logo.ID()); err != nil {
+		if _, err := attachments.OneCollection(x.Logo).Find(t.Context(), runtime.Attachments, ref, logo.ID()); err != nil {
 			t.Fatal(stage, "lost the logo", err)
 		}
-		if stored, err := x.SEO.Key().Get(t.Context(), runtime.Metadata, ref); err != nil || !stored.IsSet() {
+		if stored, err := metadata.KeyOf(x.SEO).Get(t.Context(), runtime.Metadata, ref); err != nil || !stored.IsSet() {
 			t.Fatal(stage, "lost metadata", err)
 		}
 	}
@@ -176,16 +176,18 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	// The cleanup observer observes only deletions, so on every connection a
 	// set-based update needs no WithoutModelHooks while a set-based deletion,
 	// which would skip cleanup, still requires the acknowledgement.
-	only := articles.QueryArticles().Where(articles.ArticleFields().ID.Eq(article.ID))
+	only := articles.Articles.Query().Where(articles.Articles.Key().Eq(article.ID))
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		_, err := only.UpdateAll(ctx, tx, articles.ArticleDraft{}.SetSlug(article.Slug))
+		_, err := only.UpdateAll(ctx, tx, articles.Articles.Slug.Set(article.Slug))
 		return err
 	}); err != nil {
 		t.Fatal("a set-based update was refused because of the deletion observer", err)
 	}
 	for name, remove := range map[string]func(context.Context, *database.Tx) (int64, error){
-		"soft":  func(ctx context.Context, tx *database.Tx) (int64, error) { return only.DeleteAll(ctx, tx) },
-		"force": func(ctx context.Context, tx *database.Tx) (int64, error) { return only.ForceDeleteAll(ctx, tx) },
+		"soft": func(ctx context.Context, tx *database.Tx) (int64, error) { return only.DeleteAll(ctx, tx) },
+		"force": func(ctx context.Context, tx *database.Tx) (int64, error) {
+			return only.ForceDeleteAll(ctx, tx, articles.Articles.Soft)
+		},
 	} {
 		if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error { _, err := remove(ctx, tx); return err }); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name+" set-based deletion skipped cleanup without acknowledgement", err)
@@ -193,7 +195,7 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	}
 	rollback := errors.New("rollback deletion")
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		if _, err := articles.QueryArticles().ForceDelete(ctx, tx, article.ID); err != nil {
+		if _, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID); err != nil {
 			return err
 		}
 		return rollback
@@ -204,10 +206,10 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 
 	// Deleted and created again before commit: the owner exists, so nothing is removed.
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		if _, err := articles.QueryArticles().ForceDelete(ctx, tx, article.ID); err != nil {
+		if _, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID); err != nil {
 			return err
 		}
-		_, err := articles.QueryArticles().Create(ctx, tx, articles.ArticleDraft{}.SetID(article.ID).SetSlug(article.Slug).SetAuthorID(article.AuthorID))
+		_, err := articles.Articles.Insert(ctx, tx, articles.Articles.Key().Set(article.ID), articles.Articles.Slug.Set(article.Slug), articles.Articles.AuthorID.Set(article.AuthorID))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -215,7 +217,7 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	kept("a re-created owner")
 
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().ForceDelete(ctx, tx, article.ID)
+		_, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -223,7 +225,7 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	if state, err := runtime.Attachments.Inspect(t.Context(), upload.Operation); err != nil || state.State != attachments.Cleaned {
 		t.Fatal("cleanup after the committed deletion kept the logo", err)
 	}
-	owner := articles.ArticleExtensionOwner()
+	owner := articles.ArticleOwner
 	if page, err := metadata.InspectOrphans(t.Context(), runtime.Metadata, owner.Name(), metadata.Cursor{}, 10); err != nil || len(page.Orphans) != 0 {
 		t.Fatal("metadata rows survived the deletion", err)
 	}
@@ -241,18 +243,18 @@ func TestCleanupThroughAnotherPoolWithOneStoreSlot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	article := f.createArticle(t, "one-slot")
-	if err := x.SEO.Key().Set(t.Context(), runtime.Metadata, article.FoundryReference(), articles.SEO{Canonical: value.Set("/one-slot")}); err != nil {
+	if err := metadata.KeyOf(x.SEO).Set(t.Context(), runtime.Metadata, articles.ArticleIdentity.ReferenceOf(article), articles.SEO{Canonical: value.Set("/one-slot")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().ForceDelete(ctx, tx, article.ID)
+		_, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID)
 		return err
 	}); err != nil {
 		t.Fatal("cleanup after the deletion failed with one store slot", err)
 	}
-	if page, err := metadata.InspectOrphans(t.Context(), runtime.Metadata, articles.ArticleExtensionOwner().Name(), metadata.Cursor{}, 10); err != nil || len(page.Orphans) != 0 {
+	if page, err := metadata.InspectOrphans(t.Context(), runtime.Metadata, articles.ArticleOwner.Name(), metadata.Cursor{}, 10); err != nil || len(page.Orphans) != 0 {
 		t.Fatal("metadata rows survived the deletion", err)
 	}
 }

@@ -17,7 +17,7 @@ func fetchThrough[M, N, P any, A, B comparable](ctx context.Context, executor da
 	var rows []relation.Link[N, P]
 	for offset := 0; offset < len(keys); offset += state.limits.BatchSize {
 		end := min(offset+state.limits.BatchSize, len(keys))
-		statement, err := r.compileThrough(ctx, pivotLocal.In(keys[offset:end]...).expression, state.remaining+1)
+		statement, err := r.compileThrough(ctx, predicateExpression(pivotLocal.In(keys[offset:end]...).expression), state.remaining+1)
 		if err != nil {
 			return nil, err
 		}

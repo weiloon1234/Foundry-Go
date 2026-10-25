@@ -76,7 +76,7 @@ func FoundryWhere[M any](q Query[M], p ormcore.Predicate, seal sqlowner.QuerySea
 
 	source := ormcore.Source{Scope: reflect.TypeFor[M](), Owners: map[string]any{q.state.ast.Table: q.state.table}}
 	err := errors.Join(p.Err, ormcore.CheckReferenceSet(source, p.Refs, p.ReferenceFree))
-	return q.Where(Predicate[M]{owner: q.state.table, expression: p.Node, err: err})
+	return q.Where(Predicate[M]{owner: q.state.table, expression: querycore.RetainPredicate(p.Node), err: err})
 }
 
 // FoundryOrderBy appends sealed computed row ordering in a model's original scope.

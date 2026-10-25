@@ -59,7 +59,7 @@ func pruneBatch[M any](ctx context.Context, writer database.Transactor, q queryS
 			values[i] = key
 		}
 		selected = p.query
-		selected.ast.Predicates = append(slices.Clone(selected.ast.Predicates), querycore.Comparison{Operand: querycore.FieldRef{Table: q.ast.Table, Column: q.table.model.Primary}, Operator: querycore.In, Values: values, Kind: q.table.primary.kind, Bind: func(v any) (driver.Value, error) {
+		selected.ast.Predicates = append(slices.Clone(selected.ast.Predicates), querycore.Comparison{Operand: querycore.FieldRef{Table: q.ast.Table, Column: q.table.model.Primary}, Operator: querycore.In, Values: querycore.RetainComparisonValues(values), Kind: q.table.primary.kind, Bind: func(v any) (driver.Value, error) {
 			a, err := q.table.primary.automatic(v)
 			if err != nil {
 				return nil, err

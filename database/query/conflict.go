@@ -114,7 +114,7 @@ func (c Conflict[M]) Where(predicates ...Predicate[M]) Conflict[M] {
 func appendPredicates[M any](base []expression, predicates []Predicate[M]) []expression {
 	base = slices.Clone(base)
 	for _, p := range predicates {
-		base = append(base, p.expression)
+		base = append(base, predicateExpression(p.expression))
 	}
 	return base
 }

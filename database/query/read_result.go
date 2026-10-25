@@ -40,7 +40,7 @@ func (q readResult[P]) Each(ctx context.Context, executor database.Executor, yie
 	if err != nil {
 		return err
 	}
-	return database.ForEach(s.executionContext(ctx), readExecutor{executor}, s.sql, s.arguments, q.scan, yield)
+	return database.ForEach(s.executionContext(ctx), readExecutor{executor}, s.SQL(), s.coreStatement().Bindings, q.scan, yield)
 }
 
 func (q readResult[P]) All(ctx context.Context, executor database.Executor) ([]P, error) {
@@ -95,7 +95,7 @@ func (q readResult[P]) Count(ctx context.Context, executor database.Executor) (i
 	prefix, suffix := querycore.ReadEnvelope(querycore.ReadCount)
 	s = s.envelope(prefix, suffix)
 	var n int64
-	err = database.ScanOne(s.executionContext(ctx), readExecutor{executor}, s.sql, s.arguments, codec.Signed[int64]().Scan(&n))
+	err = database.ScanOne(s.executionContext(ctx), readExecutor{executor}, s.SQL(), s.coreStatement().Bindings, codec.Signed[int64]().Scan(&n))
 	return n, err
 }
 
@@ -114,6 +114,6 @@ func (q readResult[P]) Exists(ctx context.Context, executor database.Executor) (
 	prefix, suffix := querycore.ReadEnvelope(querycore.ReadExists)
 	s = s.envelope(prefix, suffix)
 	var exists bool
-	err = database.ScanOne(s.executionContext(ctx), readExecutor{executor}, s.sql, s.arguments, codec.Bool[bool]().Scan(&exists))
+	err = database.ScanOne(s.executionContext(ctx), readExecutor{executor}, s.SQL(), s.coreStatement().Bindings, codec.Bool[bool]().Scan(&exists))
 	return exists, err
 }

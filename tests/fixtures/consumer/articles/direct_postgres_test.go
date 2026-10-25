@@ -48,7 +48,7 @@ func openDirect(tb testing.TB, observer database.QueryObserver) (*extensions.Sto
 		tb.Fatal(err)
 	}
 	schema := pgtest.Namespace(tb, db)
-	declaration := articles.ArticleExtensionDeclaration()
+	declaration := articles.ORMExtensionDeclaration()
 	registry, err := extensions.NewRegistry(declaration.Owner())
 	if err != nil {
 		tb.Fatal(err)
@@ -104,15 +104,15 @@ func openDirect(tb testing.TB, observer database.QueryObserver) (*extensions.Sto
 // seedArticles writes count articles with two translated fields and metadata.
 func seedArticles(tb testing.TB, store *extensions.Store, runtime slots.Runtime, count int) {
 	tb.Helper()
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	for i := range count {
 		var article articles.Article
 		if err := store.Write(tb.Context(), func(ctx context.Context, tx *database.Tx) error {
-			author, err := articles.QueryArticleAuthors().Create(ctx, tx, articles.AuthorDraft{}.SetName("Author"))
+			author, err := articles.Authors.Insert(ctx, tx, articles.Authors.Name.Set("Author"))
 			if err != nil {
 				return err
 			}
-			article, err = articles.QueryArticles().Create(ctx, tx, articles.ArticleDraft{}.SetSlug(fmt.Sprintf("slug-%05d", i)).SetAuthorID(author.ID))
+			article, err = articles.Articles.Insert(ctx, tx, articles.Articles.Slug.Set(fmt.Sprintf("slug-%05d", i)), articles.Articles.AuthorID.Set(author.ID))
 			if err != nil {
 				return err
 			}

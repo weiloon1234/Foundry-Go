@@ -152,7 +152,7 @@ func (p Conflict[M]) Where(predicates ...Predicate[M]) Conflict[M] {
 		if predicate.err != nil {
 			p.state.err = predicate.err
 		}
-		p.state.core.Condition = append(p.state.core.Condition, predicate.expression)
+		p.state.core.Condition = append(p.state.core.Condition, querycore.PredicateNode(predicate.expression))
 	}
 	return p
 }
@@ -176,7 +176,7 @@ func (p Conflict[M]) TargetWhere(predicates ...Predicate[M]) Conflict[M] {
 		if predicate.err != nil {
 			p.state.err = predicate.err
 		}
-		p.state.core.TargetCondition = append(p.state.core.TargetCondition, predicate.expression)
+		p.state.core.TargetCondition = append(p.state.core.TargetCondition, querycore.PredicateNode(predicate.expression))
 	}
 	return p
 }

@@ -11,3 +11,13 @@ func Related[M, N, V any](source orm.AggregateSource[M, N], computation Aggregat
 	expression, column := FoundryAggregate(computation, sqlowner.Expressions())
 	return orm.FoundryRelated(source, expression, column, sqlowner.Expressions())
 }
+
+// RelatedValue computes a relation aggregate per parent without a model slot.
+// The aggregate keeps its own nullability: COUNT is present, an empty SUM is NULL.
+// Example: count := expr.RelatedValue(UserRelations.Orders,expr.Count[Order]()).
+func RelatedValue[M, N, V any](source orm.AggregateSource[M, N], computation AggregateExpression[N, V]) RowExpression[M, V] {
+	expression, column := FoundryAggregate(computation, sqlowner.Expressions())
+	core := orm.FoundryRelatedValue(source, expression, column, sqlowner.Expressions())
+	column.Sensitive = column.Sensitive || core.Sensitive
+	return FoundryRowExpression[M](core, column, sqlowner.Expressions())
+}

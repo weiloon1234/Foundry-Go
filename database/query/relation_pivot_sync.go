@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // UpdateDraft is the generated bridge for typed infrastructure that updates a
@@ -339,11 +340,11 @@ func keyMembership[M any](ref fieldRef, field ModelField[M], keys []pivotKey) Pr
 	for i, key := range keys {
 		values[i] = key.raw
 	}
-	return Predicate[M]{expression: comparison{Operand: ref, Operator: in, Values: values, Bind: field.decode, Kind: field.kind}}
+	return Predicate[M]{expression: retainPredicate(comparison{Operand: ref, Operator: in, Values: querycore.RetainComparisonValues(values), Bind: field.decode, Kind: field.kind})}
 }
 
 func keyEquality[M any](ref fieldRef, field ModelField[M], key pivotKey) Predicate[M] {
-	return Predicate[M]{expression: comparison{Operand: ref, Operator: equal, Values: []any{key.raw}, Bind: field.decode, Kind: field.kind}}
+	return Predicate[M]{expression: retainPredicate(comparison{Operand: ref, Operator: equal, Values: querycore.RetainComparisonValues([]any{key.raw}), Bind: field.decode, Kind: field.kind})}
 }
 
 // sourceLinks selects the source's pivots within the pivot filters.
@@ -466,7 +467,7 @@ func (r ThroughRelation[M, N, P]) createPivots(ctx context.Context, tx *database
 			return nil, err
 		}
 		for _, fixed := range r.pivotFixed {
-			if defaults, err = pivot.withModelValue(defaults, fixed.column, fixed.raw); err != nil {
+			if defaults, err = pivot.withModelValue(defaults, fixed.column, querycore.LiteralValue(fixed.raw)); err != nil {
 				return nil, err
 			}
 		}
@@ -504,13 +505,13 @@ func (r ThroughRelation[M, N, P]) requireLinks(ctx context.Context, tx *database
 	}
 	local, _ := r.pivot.definition.modelField(r.pivotLocal.Column)
 	filter := And(keyMembership[P](fieldRef{Table: r.pivot.queryCore.Table, Column: r.pivot.definition.modelDefinition.Primary}, primary, keys), keyEquality[P](r.pivotLocal, local, source))
-	statement, err := r.compileThrough(ctx, filter.expression, len(created)+1)
+	statement, err := r.compileThrough(ctx, predicateExpression(filter.expression), len(created)+1)
 	if err != nil {
 		return err
 	}
 	var matched int64
 	statement = statement.envelope(`SELECT COUNT(*) FROM (`, `) AS "foundry_links"`)
-	if err := database.ScanOne(statement.executionContext(ctx), tx, statement.sql, statement.arguments, codec.Signed[int64]().Scan(&matched)); err != nil {
+	if err := database.ScanOne(statement.executionContext(ctx), tx, statement.SQL(), statement.coreStatement().Bindings, codec.Signed[int64]().Scan(&matched)); err != nil {
 		return err
 	}
 	if matched != int64(len(created)) {

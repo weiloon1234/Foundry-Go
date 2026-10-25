@@ -42,7 +42,7 @@ func (on JoinOn[L, R]) Not() JoinOn[L, R] {
 func (on JoinOn[L, R]) WhereLeft(predicates ...Predicate[L]) JoinOn[L, R] {
 	children := []expression{on.expression}
 	for _, p := range predicates {
-		children = append(children, p.expression)
+		children = append(children, predicateExpression(p.expression))
 	}
 	on.expression = junction{Children: children}
 	return on
@@ -52,7 +52,7 @@ func (on JoinOn[L, R]) WhereLeft(predicates ...Predicate[L]) JoinOn[L, R] {
 func (on JoinOn[L, R]) WhereRight(predicates ...Predicate[R]) JoinOn[L, R] {
 	children := []expression{on.expression}
 	for _, p := range predicates {
-		children = append(children, p.expression)
+		children = append(children, predicateExpression(p.expression))
 	}
 	on.expression = junction{Children: children}
 	return on

@@ -14,6 +14,7 @@ import (
 	"foundry.test/consumer/retrievalqueries"
 	"foundry.test/consumer/softqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -60,18 +61,18 @@ func TestPostgresModelBindingHydratesUUIDOnceAndPreservesScope(t *testing.T) {
 			}
 		}
 		// Refresh model state on the next request; no request-global model cache.
-		if _, err := models.QueryUsers().Update(ctx, tx, users[0].ID, models.UserDraft{}.SetStatus(models.StatusDisabled)); err != nil {
+		if _, err := models.Users.Update(ctx, tx, users[0].ID, models.Users.Status.Set(models.StatusDisabled)); err != nil {
 			return err
 		}
 		request(t, ctx, r, "/api/users/"+users[0].ID.String(), 404)
-		orders, err := models.QueryOrders().Where(models.OrderFields().BuyerID.Eq(users[2].ID)).All(ctx, tx)
+		orders, err := models.Orders.Query().Where(models.Orders.BuyerID.Eq(users[2].ID)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if len(orders) != 0 {
 			return errors.New("unexpected seeded child")
 		}
-		order, err := models.QueryOrders().Where(models.OrderFields().BuyerID.Eq(users[0].ID)).RequireFirst(ctx, tx)
+		order, err := models.Orders.Query().Where(models.Orders.BuyerID.Eq(users[0].ID)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -98,10 +99,10 @@ func TestPostgresModelBindingNaturalKeysAndSoftDeleteVisibility(t *testing.T) {
 				return err
 			}
 		}
-		if _, err := models.QueryCountries().Create(ctx, tx, models.CountryDraft{}.SetCode("a/b + %").SetName("country")); err != nil {
+		if _, err := models.Countries.Insert(ctx, tx, models.Countries.Key().Set("a/b + %"), models.Countries.Name.Set("country")); err != nil {
 			return err
 		}
-		if _, err := models.QueryWriteRecords().Create(ctx, tx, models.WriteRecordDraft{}.SetCode(42).SetName("record")); err != nil {
+		if _, err := models.WriteRecords.Insert(ctx, tx, models.WriteRecords.Key().Set(42), models.WriteRecords.Name.Set("record")); err != nil {
 			return err
 		}
 		countries := foundryhttp.DefineEndpoint(
@@ -119,7 +120,7 @@ func TestPostgresModelBindingNaturalKeysAndSoftDeleteVisibility(t *testing.T) {
 			foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "records.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
 				foundryhttp.DefinePath("/records/{record}", foundryhttp.Param("record", foundryhttp.IntegerPath[models.RecordKey](), func(p *numberPath) *models.RecordKey { return &p.Code }))),
 			foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-		recordRoute := modelbinding.Bind(records, modelbinding.ByKey(tx, models.QueryWriteRecords(), func(p numberPath) models.RecordKey { return p.Code })).Handle(func(_ context.Context, in modelbinding.Input[numberPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.WriteRecord]) (foundryhttp.NoContent, error) {
+		recordRoute := modelbinding.Bind(records, modelbinding.ByKey(tx, orm.Keyed(models.WriteRecords.Query(), models.WriteRecords.Key()), func(p numberPath) models.RecordKey { return p.Code })).Handle(func(_ context.Context, in modelbinding.Input[numberPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.WriteRecord]) (foundryhttp.NoContent, error) {
 			if in.Model.Code != 42 || in.Model.Name != "record" {
 				return foundryhttp.NoContent{}, errors.New("numeric key hydration failed")
 			}
@@ -138,20 +139,20 @@ func TestPostgresModelBindingNaturalKeysAndSoftDeleteVisibility(t *testing.T) {
 		request(t, ctx, r, "/records/42", 204)
 		request(t, ctx, r, "/records/99", 404)
 		request(t, ctx, r, "/records/no-number", 400)
-		groups := softqueries.QuerySoftGroups()
-		group, err := groups.Create(ctx, tx, softqueries.GroupDraft{}.SetCode("hidden").SetName("group"))
+		groups := softqueries.Groups.Query()
+		group, err := softqueries.Groups.Insert(ctx, tx, softqueries.Groups.Key().Set("hidden"), softqueries.Groups.Name.Set("group"))
 		if err != nil {
 			return err
 		}
-		if _, err := groups.Delete(ctx, tx, group.Code); err != nil {
+		if _, err := softqueries.Groups.Delete(ctx, tx, group.Code); err != nil {
 			return err
 		}
 		type groupPath struct{ Code softqueries.GroupCode }
 		selectKey := func(p groupPath) softqueries.GroupCode { return p.Code }
-		if _, err := modelbinding.ByKey(tx, groups, selectKey).Resolve(ctx, groupPath{group.Code}); !errors.Is(err, foundryhttp.NotFound) {
+		if _, err := modelbinding.ByKey(tx, orm.Keyed(groups, softqueries.Groups.Key()), selectKey).Resolve(ctx, groupPath{group.Code}); !errors.Is(err, foundryhttp.NotFound) {
 			return errors.New("default binding exposed deleted model")
 		}
-		got, err := modelbinding.ByKey(tx, groups.WithTrashed(), selectKey).Resolve(ctx, groupPath{group.Code})
+		got, err := modelbinding.ByKey(tx, orm.Keyed(groups.WithTrashed(), softqueries.Groups.Key()), selectKey).Resolve(ctx, groupPath{group.Code})
 		if err != nil || got.DeletedAt.IsNull() {
 			return errors.New("explicit deleted visibility lost")
 		}
@@ -165,19 +166,19 @@ func TestPostgresModelBindingRetainsRetrievedHooksAndStoredFields(t *testing.T) 
 		if _, err := tx.Exec(ctx, `CREATE TABLE retrieval_members(id uuid PRIMARY KEY,name text NOT NULL,nickname text,parent_id uuid)`); err != nil {
 			return err
 		}
-		q := retrievalqueries.QueryRetrievalMembers()
-		parent, err := q.Create(ctx, tx, retrievalqueries.MemberDraft{}.SetName(" PARENT "))
+		q := retrievalqueries.Members.Query()
+		parent, err := retrievalqueries.Members.Insert(ctx, tx, retrievalqueries.Members.Name.Set(" PARENT "))
 		if err != nil {
 			return err
 		}
-		child, err := q.Create(ctx, tx, retrievalqueries.MemberDraft{}.SetName(" CHILD ").SetParentID(parent.ID))
+		child, err := retrievalqueries.Members.Insert(ctx, tx, retrievalqueries.Members.Name.Set(" CHILD "), retrievalqueries.Members.ParentID.Set(parent.ID))
 		if err != nil {
 			return err
 		}
 		type memberPath struct {
 			ID model.ID[retrievalqueries.Member]
 		}
-		resolver := modelbinding.ByKey(tx, q.With(retrievalqueries.MemberRelations().Parent), func(p memberPath) model.ID[retrievalqueries.Member] { return p.ID })
+		resolver := modelbinding.ByKey(tx, orm.Keyed(q.With(retrievalqueries.MemberLinks.Parent), retrievalqueries.Members.Key()), func(p memberPath) model.ID[retrievalqueries.Member] { return p.ID })
 		endpoint := foundryhttp.DefineEndpoint(
 			foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "retrieval.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
 				foundryhttp.DefinePath("/retrieval/{member}", foundryhttp.Param("member", foundryhttp.ModelIDPath[retrievalqueries.Member](), func(p *memberPath) *model.ID[retrievalqueries.Member] { return &p.ID }))),

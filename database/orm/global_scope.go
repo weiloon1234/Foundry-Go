@@ -31,7 +31,7 @@ func Scope[M any, K comparable](table Table[M, K], name string, resolve func(con
 			if p.owner == nil || p.owner != table.core {
 				return nil, invalid("global scope predicate belongs to a different table declaration")
 			}
-			return p.expression, p.err
+			return querycore.PredicateNode(p.expression), p.err
 		}
 	}
 	return GlobalScope[M]{owner: table.core, definition: definition}

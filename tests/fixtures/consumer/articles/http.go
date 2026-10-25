@@ -6,7 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -93,12 +93,12 @@ type ArticleList struct {
 // transactions; an application with ordinary tables uses its database handle.
 type Service struct {
 	store *extensions.Store
-	x     ArticleExtensionSlots
+	x     ArticleSlotHandles
 }
 
 // NewService binds the extension runtime once.
 func NewService(store *extensions.Store, runtime slots.Runtime) *Service {
-	return &Service{store: store, x: ArticleExtensions().From(runtime)}
+	return &Service{store: store, x: ArticleSlots.From(runtime)}
 }
 
 // Routes declares the article endpoints. Translated and file rules come from
@@ -140,18 +140,18 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 func (s *Service) Create(ctx context.Context, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ArticleInput]) (ArticleView, error) {
 	var article Article
 	err := s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		author, err := QueryArticleAuthors().Create(ctx, tx, AuthorDraft{}.SetName(in.Body.Author))
+		author, err := Authors.Insert(ctx, tx, Authors.Name.Set(in.Body.Author))
 		if err != nil {
 			return err
 		}
-		created, err := QueryArticles().Create(ctx, tx, ArticleDraft{}.SetSlug(in.Body.Slug).SetAuthorID(author.ID))
+		created, err := Articles.Insert(ctx, tx, Articles.Slug.Set(in.Body.Slug), Articles.AuthorID.Set(author.ID))
 		if err != nil {
 			return err
 		}
 		if err := s.writeText(ctx, tx, created, in.Body); err != nil {
 			return err
 		}
-		article, err = QueryArticles().With(s.x.All()...).RequireFind(ctx, tx, created.ID)
+		article, err = Articles.Query().With(s.x.All()...).Where(Articles.Key().Eq(created.ID)).Require(ctx, tx)
 		return err
 	})
 	if err != nil {
@@ -165,18 +165,18 @@ func (s *Service) Create(ctx context.Context, in foundryhttp.Input[foundryhttp.N
 func (s *Service) Update(ctx context.Context, in foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, ArticleInput]) (ArticleView, error) {
 	var article Article
 	err := s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		existing, err := QueryArticles().RequireFind(ctx, tx, in.Path.Article)
+		existing, err := Articles.Query().Where(Articles.Key().Eq(in.Path.Article)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
-		updated, err := QueryArticles().Update(ctx, tx, existing.ID, ArticleDraft{}.SetSlug(in.Body.Slug))
+		updated, err := Articles.Update(ctx, tx, existing.ID, Articles.Slug.Set(in.Body.Slug))
 		if err != nil {
 			return err
 		}
 		if err := s.writeText(ctx, tx, updated, in.Body); err != nil {
 			return err
 		}
-		article, err = QueryArticles().With(s.x.All()...).RequireFind(ctx, tx, updated.ID)
+		article, err = Articles.Query().With(s.x.All()...).Where(Articles.Key().Eq(updated.ID)).Require(ctx, tx)
 		return err
 	})
 	if err != nil {
@@ -216,7 +216,7 @@ func (s *Service) Upload(ctx context.Context, in foundryhttp.Input[ArticleMediaP
 			return ArticleView{}, err
 		}
 	}
-	if _, err := attachments.AddFiles(ctx, s.x.Galleries, article, in.Body.Galleries); err != nil {
+	if _, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, in.Body.Galleries); err != nil {
 		return ArticleView{}, err
 	}
 	return s.Show(ctx, foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, foundryhttp.NoBody]{Path: ArticlePath{Article: in.Path.Article}})
@@ -236,7 +236,7 @@ func (s *Service) List(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPa
 	var list []Article
 	if err := s.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		list, err = QueryArticles().With(s.x.Title, s.x.Summary, s.x.Logo, s.x.Galleries, s.x.SEO).OrderBy(ArticleFields().Slug.Asc()).All(ctx, tx)
+		list, err = Articles.Query().With(s.x.Title.Relation(Articles.Title), s.x.Summary.Relation(Articles.Summary), s.x.Logo.Relation(Articles.Logo), s.x.Galleries.Relation(Articles.Galleries), s.x.SEO.Relation(Articles.SEO)).OrderBy(Articles.Slug.Asc()).All(ctx, tx)
 		return err
 	}); err != nil {
 		return ArticleList{}, err
@@ -251,20 +251,20 @@ func (s *Service) List(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPa
 	return result, nil
 }
 
-// Delete removes the article; generated cleanup removes its extension data.
+// Delete removes the article; declared cleanup removes its extension data.
 func (s *Service) Delete(ctx context.Context, in foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 	err := s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		_, err := QueryArticles().ForceDelete(ctx, tx, in.Path.Article)
+		_, err := Articles.ForceDelete(ctx, tx, Articles.Soft, in.Path.Article)
 		return err
 	})
 	return foundryhttp.NoContent{}, notFound(err)
 }
 
-func (s *Service) find(ctx context.Context, id model.ID[Article], relations ...query.Relation[Article]) (Article, error) {
+func (s *Service) find(ctx context.Context, id model.ID[Article], relations ...orm.Relation[Article]) (Article, error) {
 	var article Article
 	err := s.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		article, err = QueryArticles().With(relations...).RequireFind(ctx, tx, id)
+		article, err = Articles.Query().With(relations...).Where(Articles.Key().Eq(id)).Require(ctx, tx)
 		return err
 	})
 	return article, notFound(err)

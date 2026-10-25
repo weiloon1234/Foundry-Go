@@ -73,7 +73,7 @@ func (q SetQuery[R]) Scope() RecordScope[Set[R], R] {
 func (q SetQuery[R]) Where(predicates ...Predicate[Set[R]]) SetQuery[R] {
 	q.record.node.Predicates = slices.Clone(q.record.node.Predicates)
 	for _, p := range predicates {
-		q.record.node.Predicates = append(q.record.node.Predicates, p.expression)
+		q.record.node.Predicates = append(q.record.node.Predicates, predicateExpression(p.expression))
 	}
 	return q
 }

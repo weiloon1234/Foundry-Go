@@ -1,9 +1,5 @@
 package querycore
 
-import (
-	"database/sql/driver"
-)
-
 type WindowFunction uint8
 
 const (
@@ -26,8 +22,8 @@ type WindowNode struct {
 	Window      WindowSpec
 	Input       ValueExpression
 	Aggregate   AggregateNode
-	N           int32
-	Fallback    driver.Value
+	N           *OffsetState
+	Fallback    *LiteralState
 	HasFallback bool
 	Err         error
 }

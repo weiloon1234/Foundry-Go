@@ -222,8 +222,12 @@ func validateAggregateMetadata(p *relationPlan, owner *tableCore) error {
 	if owner != nil && owner != p.slot.owner {
 		return invalid("aggregate belongs to a different table declaration")
 	}
-	r := a.input.plan
-	if r == nil || r.slot == nil || r.slot.owner != p.slot.owner || aggregateLocal(r) == nil || aggregateOwner(a.input) == nil || a.input.keyScan == nil {
+	return errors.Join(p.slot.err, tableError(p.slot.owner), validateAggregateInput(a.input, p.slot.owner))
+}
+
+func validateAggregateInput(input aggregateInput, owner *tableCore) error {
+	r := input.plan
+	if r == nil || r.slot == nil || r.slot.owner != owner || aggregateLocal(r) == nil || aggregateOwner(input) == nil || input.keyScan == nil {
 		return invalid("aggregate source and slot must belong to the same table declaration")
 	}
 	if r.choice != 0 || r.morph != nil {
@@ -232,5 +236,5 @@ func validateAggregateMetadata(p *relationPlan, owner *tableCore) error {
 	if len(r.query.relations) != 0 || r.join != nil && len(r.join.pivot.relations) != 0 {
 		return invalid("aggregate inputs cannot request eager-loaded children")
 	}
-	return errors.Join(p.slot.err, tableError(p.slot.owner))
+	return r.err
 }

@@ -73,5 +73,5 @@ func (q TransactionCorrelatedRecordQuery[O, I, R]) transactionCorrelatedRecord()
 // Exists yields a Tx-owned parent predicate and retains this SELECT's locks.
 func (q TransactionCorrelatedRecordQuery[O, I, R]) Exists() Predicate[O] {
 	r := q.transactionCorrelatedRecord()
-	return Predicate[O]{expression: subqueryPredicate{Query: subquery{Node: r.query.node, Err: r.query.err, Correlation: &r.outer}}}
+	return Predicate[O]{expression: retainPredicate(subqueryPredicate{Query: subquery{Node: r.query.node, Err: r.query.err, Correlation: &r.outer}})}
 }

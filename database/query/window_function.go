@@ -68,7 +68,7 @@ func CumeDist[S any](w Window[S]) Expression[S, float64] {
 func NTile[S any](buckets int32, w Window[S]) Expression[S, int32] {
 	e := windowExpression(ntileWindow, w, codec.Signed[int32]())
 	n := e.node.(windowNode)
-	n.N = buckets
+	n.N = querycore.RetainOffset(int64(buckets))
 	e.node = n
 	return e
 }
@@ -80,7 +80,7 @@ func (a Aggregate[S, V]) Over(w Window[S]) Expression[S, V] {
 }
 
 func windowValue[S, V any](kind windowFunction, input Expression[S, V], n int32, w Window[S]) Expression[S, V] {
-	return Expression[S, V]{node: windowNode{Kind: kind, Input: input.node, N: n, Window: w.node}, codec: input.codec}
+	return Expression[S, V]{node: windowNode{Kind: kind, Input: input.node, N: querycore.RetainOffset(int64(n)), Window: w.node}, codec: input.codec}
 }
 
 func nullableWindowValue[S, V any](kind windowFunction, input Expression[S, V], n int32, w Window[S]) Expression[S, value.Nullable[V]] {
@@ -117,7 +117,8 @@ func windowFallback[S, V any](kind windowFunction, input Expression[S, V], offse
 	e := windowValue(kind, input, offset, w)
 	n := e.node.(windowNode)
 	n.HasFallback = true
-	n.Fallback, n.Err = input.codec.Bind(fallback)
+	bound, err := input.codec.Bind(fallback)
+	n.Fallback, n.Err = querycore.RetainLiteral(bound), err
 	e.node = n
 	return e
 }

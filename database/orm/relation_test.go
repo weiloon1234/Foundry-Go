@@ -214,7 +214,7 @@ func TestRelationTargetGlobalScopeUsesExecutionContext(t *testing.T) {
 		if ctx.Value("tenant") != int64(7) {
 			return nil, fmt.Errorf("missing execution context")
 		}
-		return p.Name.Eq("scoped").expression, nil
+		return querycore.PredicateNode(p.Name.Eq("scoped").expression), nil
 	}}}
 	rel := BelongsToOf(p.Manager, p.ManagerID, p.ID)
 	var statements []string

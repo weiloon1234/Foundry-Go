@@ -15,7 +15,7 @@ see the [tooling guide](../../../docs/guides/developer-tooling-and-testing.md).
 
 The [articles consumer](articles/article.go) declares translated text,
 attachments and typed metadata as model extension slots, registers them with
-`Builder.Models` and exercises generated deletion cleanup against PostgreSQL;
+`Builder.Models` and exercises ORM deletion cleanup against PostgreSQL;
 see the [slot guide](../../../docs/guides/model-extension-slots.md).
 
 The Stage 9 foundations publish handwritten declarations beside the retained
@@ -25,8 +25,10 @@ Each package exposes `Tables()` for startup checking and an ORM identity that
 preserves existing stored references. Profiles' service cleanup uses ORM hooks;
 article slots use `ArticleSlots.From(runtime)` and
 `Articles.Query().With(bound.All()...)`. Register `ORMExtensionDeclaration()`
-for ORM article writes; keep the generated declaration for legacy writes until
-their cutover, and never register both observer families in one application.
+for ORM article writes. Its upload handler uses `attachments.AddFilesTo`; explicit
+batch-load and storage assertions use the typed package functions `FieldOf`,
+`KeyOf`, `OneCollection` and `ManyCollection`. Keep generated declarations until
+the legacy consumer cutover; never register both observer families in one application.
 
 DTO, enum, configuration, localization and client generation remain supported.
 The generic DTO, union, localization, upload and request-flow contracts are
@@ -119,15 +121,22 @@ This independent module imports the public Foundry-Go root package through a loc
 
 The [lifecycle test](lifecycle_test.go) loads typed configuration, resolves concrete services, boots two fake providers, runs a cancellable kernel with an injected clock, and verifies reverse-order cleanup. The [value test](values_test.go) exercises model-owned IDs and typed nullable patches. The [compiler tests](types_test.go) invoke the selected Go compiler against intentionally invalid packages under `testdata/compilefail`; those failures are required assertions, not broken framework packages.
 
-The [handwritten models](models/models.go) own model fields, column tags, enum constants, and business methods. The [generated API tests](generated_test.go) verify typed queries, mutation states, self-reference IDs, natural keys, enum serialization, SQL codecs and contract descriptors. The [catalog model](catalog/product.go), its [separate enum package](catalog/status/status.go), and [package graph test](package_graph_test.go) exercise generated dependencies across package boundaries. Generated files and each package's `.foundry-gen.json` are generator-owned. Root `make generate` processes this entire consumer package graph; `make verify` checks that outputs are current.
+The [handwritten models](models/models.go) own stored fields, tags and enum constants;
+[ORM declarations](models/orm.go) bind their typed fields. The [declaration and
+contract tests](generated_test.go) verify queries, assignment presence, self-owned
+IDs, natural keys and retained generated enums. The [catalog declaration](catalog/orm.go),
+its [separate enum package](catalog/status/status.go), and the [package graph test](package_graph_test.go)
+exercise handwritten declarations across package boundaries. Generated DTO/config/enum
+outputs and `.foundry-gen.json` manifests remain generator-owned. The lead runs the
+Makefile generation barrier after consumer migration.
 
 The [configuration test](configuration_test.go) consumes the optional TOML adapter, loading typed scalar/collection settings and applying a typed override with source provenance. Its parser dependency follows the framework's pinned module version.
 
-The [codec tests](codecs_test.go) reuse generated enum codecs and preserve named natural keys. The [ledger model](models/ledger.go) exercises exact decimal fields and nullable drafts. Compiler-failure cases reject wrong codec owners/values, float decimal assignments and unsupported decimal text operators. The PostgreSQL consumer also verifies generated enum codecs against valid and malformed stored values.
+The [codec tests](codecs_test.go) reuse generated enum codecs and preserve named natural keys. The [ledger model](models/ledger.go) exercises exact decimal fields and nullable assignments. Compiler-failure cases reject wrong codec owners/values, float decimal assignments and unsupported decimal text operators. The PostgreSQL consumer also verifies generated enum codecs against valid and malformed stored values.
 
-The [generated model query acceptance](model_query_postgres_test.go) executes typed reads, complete hydration, filtered primary-key lookup, exact decimal/natural-key models, window aggregates and streaming against its own isolated schema. It rejects partial results from malformed stored rows. Query keys remain typed after fluent derivation, with required compilation failures for mismatched owners and natural-key types.
+The [ORM model query acceptance](model_query_postgres_test.go) executes typed reads, complete hydration, filtered primary-key lookup, exact decimal/natural-key models, window aggregates and streaming against its own isolated schema. It rejects partial results from malformed stored rows. Query keys remain typed after fluent derivation, with required compilation failures for mismatched owners and natural-key types.
 
-The [generated model write acceptance](model_write_postgres_test.go) creates, patches and deletes isolated fixture records using typed drafts and keys. The [write-record model](models/write_record.go) declares database-owned defaults. Coverage includes omission versus zero/null, UUID preparation, exact decimals, filtered writes, failed hydration, uniqueness and nested rollback. Negative compiler fixtures reject incompatible write drafts and keys.
+The [ORM model write acceptance](model_write_postgres_test.go) creates, patches and deletes isolated fixture records using typed assignments and keys. The [write-record model](models/write_record.go) declares database-owned defaults. Coverage includes omission versus zero/null, UUID preparation, exact decimals, filtered writes, failed hydration, uniqueness and nested rollback. Negative compiler fixtures reject incompatible assignment owners and keys.
 
 The [row-locking acceptance](lockqueries/locking_postgres_test.go) exercises competing transactions, lock-strength compatibility, skip-locked slices, natural-key lookup, offset locks, savepoint release/rollback, context cancellation, typed join targets, eager parent reads and stream cleanup. Compiler failures enforce transaction ownership, exact keys/results and non-nullable join scopes; real gopls inspects the generated and shared locking methods.
 
@@ -315,3 +324,39 @@ development headers. `image_runtime_test.go` proves missing/unloadable-library
 startup warnings, portable operation, explicit native errors and required-native
 startup failure in isolated processes. Codec dependencies remain inside Foundry.
 Typed compiler cases cover backend and crop-interest declarations.
+
+The follow-on ORM consumers include `multifactor`, `idempotenthttp`,
+`isolatedhttp` and `teamworkflow`. Their existing tests retain credential
+freshness, transaction/rollback, idempotency, tenant binding, omitted/null/value
+and response assertions. Profiles also exercises the three bounded ORM
+extension-matching functions. Generated models remain temporarily as permitted
+by the Stage 9 generation barrier and as explicit parity oracles.
+
+## Stage 9 handwritten declarations
+
+The root model read, write, pagination, codec, changes and observer examples now
+use `models.Users`, `models.WriteRecords` and the other handwritten declarations.
+The package graph checks typed fields and assignments imported from `catalog`;
+`TestModulePinnedFoundryTool` still exercises retained config generation through
+the module-selected CLI. The editor gate resolves the handwritten declarations,
+while DTO, enum and config probes still resolve their generated contracts.
+
+`nestedbindings.Tables()` registers `Teams`, `ProjectRecords` and `Tasks`.
+`TeamProjects`, `ProjectTeam` and `ProjectTasks` retain concrete parent/child keys.
+The route resolvers use `ByColumn`, `ThroughRelation` and
+`ThroughSelectedRelation`, preserving uniqueness, soft-delete visibility and
+retrieval hooks.
+
+The legacy `model_draft` footprint was frozen before replacing its body with an
+assignment-list probe named `model_assignments` in the budget catalogue. The
+other three probe bodies and ceilings are unchanged. Historical values remain in
+[the frozen evidence](../../../docs/evidence/goway-stage9-d4-legacy-footprint.json).
+
+The root relation, pivot and aggregate PostgreSQL tests still use the legacy API:
+they need custom limits for loading existing parents, which `orm.Load` and
+`orm.LoadMissing` do not yet accept. Their assertions remain intact. Generated
+model directives and ownership manifests remain until the lead's final barrier.
+
+The existing `make typescript-check` wiring still selects both real client and
+optional form-adapter tests in `clientcontracts`; its public wire artifacts and
+TypeScript sources are unchanged. The lead runs that integration gate.

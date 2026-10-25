@@ -38,31 +38,36 @@ type valueRecordDefinition struct{ record ormcore.Record }
 // Values adapts a typed scalar selection for value set operations.
 // Example: rows.Values(rows.SelectScalar(rows.From(Users.Query()),expr.Select(expr.Value(Users.ID)))).
 func Values[S, V any](q Scalar[S, V]) ValueRecord[V] {
+	d := scalarRecord(q.column)
+	r := ormcore.RecordSource{Source: q.source, Record: d.record}
+	r.Source.Err = ormcore.ValidateRecordSource(r, reflect.TypeFor[V](), false)
+	return ValueRecord[V]{core: r, column: q.column}
+}
+
+func scalarRecord[V any](column ormcore.Column[V]) *valueRecordDefinition {
 	d := &valueRecordDefinition{}
 	d.record = ormcore.Record{Fields: func() []ormcore.RecordField {
-		return []ormcore.RecordField{{Name: "value", Sensitive: q.column.Sensitive, Get: func(p unsafe.Pointer) (driver.Value, error) { return q.column.Bind(*(*V)(p)) }, Decode: func(raw any) (driver.Value, error) {
+		return []ormcore.RecordField{{Name: "value", Sensitive: column.Sensitive, Get: func(p unsafe.Pointer) (driver.Value, error) { return column.Bind(*(*V)(p)) }, Decode: func(raw any) (driver.Value, error) {
 			var v V
-			scanner, ok := q.column.Scan(&v).(interface{ Scan(any) error })
+			scanner, ok := column.Scan(&v).(interface{ Scan(any) error })
 			if !ok {
 				return nil, ormcore.Invalid("cursor value requires a scanner")
 			}
 			if err := scanner.Scan(raw); err != nil {
 				return nil, err
 			}
-			return q.column.Bind(v)
+			return column.Bind(v)
 		}}}
-	}, Type: reflect.TypeFor[V](), Owner: d, Columns: []querycore.Column{{Name: "value", Nullable: value.IsNullableType[V]()}}, Err: q.column.Err, Scan: func(row database.Row, p unsafe.Pointer) error {
-		if q.column.Scan == nil {
+	}, Type: reflect.TypeFor[V](), Owner: d, Columns: []querycore.Column{{Name: "value", Nullable: value.IsNullableType[V]()}}, Err: column.Err, Scan: func(row database.Row, p unsafe.Pointer) error {
+		if column.Scan == nil {
 			return ormcore.Invalid("value source requires a decoder")
 		}
-		return row.Scan(q.column.Scan((*V)(p)))
+		return row.Scan(column.Scan((*V)(p)))
 	}}
-	if q.column.Scan == nil || q.column.Bind == nil || q.column.Clone == nil {
+	if column.Scan == nil || column.Bind == nil || column.Clone == nil {
 		d.record.Err = errors.Join(d.record.Err, ormcore.Invalid("value source requires its codec"))
 	}
-	r := ormcore.RecordSource{Source: q.source, Record: d.record}
-	r.Source.Err = ormcore.ValidateRecordSource(r, reflect.TypeFor[V](), false)
-	return ValueRecord[V]{core: r, column: q.column}
+	return d
 }
 
 func valueSource[V any](q ValueSource[V]) (ormcore.RecordSource, ormcore.Column[V]) {

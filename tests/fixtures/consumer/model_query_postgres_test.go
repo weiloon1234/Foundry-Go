@@ -8,7 +8,7 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -53,8 +53,8 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 			return err
 		}
 
-		fields := models.UserFields()
-		base := models.QueryUsers().OrderBy(fields.Age.Asc())
+		fields := models.Users
+		base := models.Users.Query().OrderBy(fields.Age.Asc())
 		users, err := base.All(t.Context(), tx)
 		if err != nil {
 			return err
@@ -66,8 +66,8 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if !ok || birthday.String() != "2000-02-29" {
 			t.Error("nullable date hydration failed")
 		}
-		byBirthday := models.QueryUsers().OrderBy(fields.Birthday.Asc())
-		cursorPage, err := byBirthday.CursorPaginate(t.Context(), tx, query.CursorRequest[models.User]{Size: 1})
+		byBirthday := models.Users.Query().OrderBy(fields.Birthday.Asc())
+		cursorPage, err := orm.CursorPaginate(t.Context(), tx, byBirthday, orm.CursorRequest[models.User]{Size: 1})
 		if err != nil {
 			return err
 		}
@@ -75,42 +75,42 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if !ok || len(cursorPage.Items) != 1 || cursorPage.Items[0].ID != firstID {
 			return errors.New("nullable date cursor did not start at the non-null row")
 		}
-		lastPage, err := byBirthday.CursorPaginate(t.Context(), tx, query.CursorRequest[models.User]{Size: 1, After: value.Set(nextCursor)})
+		lastPage, err := orm.CursorPaginate(t.Context(), tx, byBirthday, orm.CursorRequest[models.User]{Size: 1, After: value.Set(nextCursor)})
 		if err != nil {
 			return err
 		}
 		if len(lastPage.Items) != 1 || lastPage.Items[0].ID != secondID || lastPage.Next.IsSet() {
 			t.Error("temporal/UUID cursor lost its exact boundary")
 		}
-		match, err := base.Where(fields.Email.Contains("_%!'")).RequireFirst(t.Context(), tx)
+		match, err := base.Where(fields.Email.Contains("_%!'")).Require(t.Context(), tx)
 		if err != nil {
 			return err
 		}
 		if match.ID != firstID {
 			t.Error("Contains treated literal wildcard characters as operators")
 		}
-		matches, err := base.Where(query.Or(fields.Age.Lt(22), fields.Status.Eq(models.StatusDisabled)), fields.ID.In(firstID, secondID)).All(t.Context(), tx)
+		matches, err := base.Where(orm.Or(fields.Age.Lt(22), fields.Status.Eq(models.StatusDisabled)), fields.ID.In(firstID, secondID)).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
 		if len(matches) != 2 {
 			t.Error("typed predicate composition changed meaning")
 		}
-		found, err := base.Where(fields.Age.Gte(30)).Find(t.Context(), tx, secondID)
+		found, err := base.Where(fields.Age.Gte(30), fields.ID.Eq(secondID)).First(t.Context(), tx)
 		if err != nil {
 			return err
 		}
 		if v, ok := found.Get(); !ok || v.ID != secondID {
 			t.Error("typed Find lost filters or identity")
 		}
-		missing, err := base.Where(fields.Age.Lt(30)).Find(t.Context(), tx, secondID)
+		missing, err := base.Where(fields.Age.Lt(30), fields.ID.Eq(secondID)).First(t.Context(), tx)
 		if err != nil {
 			return err
 		}
 		if missing.IsSet() {
 			t.Error("missing model used a zero model sentinel")
 		}
-		if _, err := base.Where(fields.Age.Lt(0)).RequireFirst(t.Context(), tx); !errors.Is(err, database.NotFound) {
+		if _, err := base.Where(fields.Age.Lt(0)).Require(t.Context(), tx); !errors.Is(err, database.NotFound) {
 			t.Error("required missing model did not report NotFound")
 		}
 		page := base.Limit(1).Offset(1)
@@ -122,7 +122,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 			t.Error("offset window incorrect")
 		}
 		for _, item := range []struct {
-			q      models.UserQuery
+			q      orm.Query[models.User]
 			count  int64
 			exists bool
 		}{{base, 2, true}, {page, 1, true}, {base.Limit(0), 0, false}, {base.Offset(2), 0, false}} {
@@ -138,7 +138,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 				t.Error("aggregate did not honor selected query window")
 			}
 		}
-		country, err := models.QueryCountries().RequireFind(t.Context(), tx, models.CountryCode("MY"))
+		country, err := models.Countries.Require(t.Context(), tx, models.CountryCode("MY"))
 		if err != nil {
 			return err
 		}
@@ -149,7 +149,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		entry, err := models.QueryLedgerEntries().Where(models.LedgerEntryFields().Amount.Eq(amount)).RequireFind(t.Context(), tx, entryID)
+		entry, err := models.LedgerEntries.Query().Where(models.LedgerEntries.Amount.Eq(amount), models.LedgerEntries.Key().Eq(entryID)).Require(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if partial, err := base.All(t.Context(), tx); err == nil || partial != nil {
 			t.Error("malformed row published a partial model collection")
 		}
-		if partial, err := base.CursorPaginate(t.Context(), tx, query.CursorRequest[models.User]{Size: 1}); err == nil || partial.Items != nil {
+		if partial, err := orm.CursorPaginate(t.Context(), tx, base, orm.CursorRequest[models.User]{Size: 1}); err == nil || partial.Items != nil {
 			t.Error("malformed lookahead row published a cursor page")
 		}
 		if _, err := tx.Exec(t.Context(), `UPDATE users SET status='disabled' WHERE id=$1`, secondID.String()); err != nil {
@@ -191,8 +191,8 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 	}
 }
 
-func TestGeneratedModelSQLUsesOnlyDeclaredColumns(t *testing.T) {
-	statement, err := models.QueryUsers().Where(models.UserFields().Email.Eq("secret'; --")).Compile()
+func TestORMModelSQLUsesOnlyDeclaredColumns(t *testing.T) {
+	statement, err := orm.Compile(models.Users.Query().Where(models.Users.Email.Eq("secret'; --")))
 	if err != nil {
 		t.Fatal(err)
 	}

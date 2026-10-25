@@ -13,6 +13,8 @@ import (
 // Private callbacks retain shared slot operations without exposing their generic descriptor graph.
 // Argument/result pointers are synchronous and never retained by these callbacks.
 type attachmentHandleCore struct {
+	collection   func(unsafe.Pointer)
+	checkFiles   func(int) error
 	bind         func(*Manager) *attachmentHandleCore
 	relation     func(unsafe.Pointer)
 	validate     func() error

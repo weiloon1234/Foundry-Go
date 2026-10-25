@@ -206,6 +206,33 @@ func Load[M any](ctx context.Context, ex database.Executor, parents []M, rels ..
 func LoadMissing[M any](ctx context.Context, ex database.Executor, parents []M, rels ...Relation[M]) ([]M, error) {
 	return loadExisting(ctx, ex, parents, true, rels)
 }
+
+// LoadFrom loads the query's relations onto copies of existing parents using its
+// relation limits. Parent filters and windows are validated but do not re-fetch
+// or filter supplied models. Errors publish no partial result.
+// Example: loaded, err := orm.LoadFrom(ctx, db, q.With(OrderRelations.Buyer), orders).
+func LoadFrom[M any](ctx context.Context, ex database.Executor, q Query[M], parents []M) ([]M, error) {
+	return loadExistingQuery(ctx, ex, q.state, parents, false)
+}
+
+// LoadMissingFrom uses the query's relation limits while preserving loaded slots,
+// including loaded-empty slots. It performs no parent statement.
+// Example: loaded, err := orm.LoadMissingFrom(ctx, db, q.With(OrderRelations.Buyer), orders).
+func LoadMissingFrom[M any](ctx context.Context, ex database.Executor, q Query[M], parents []M) ([]M, error) {
+	return loadExistingQuery(ctx, ex, q.state, parents, true)
+}
+
+func loadExistingQuery[M any](ctx context.Context, ex database.Executor, q queryState, parents []M, missing bool) ([]M, error) {
+	if err := executionContext(ctx, ex); err != nil {
+		return nil, err
+	}
+	q.ast.ScopeContext = ctx
+	if err := validateQuery(q); err != nil {
+		return nil, err
+	}
+	return loadExistingPlans(ctx, ex, parents, missing, q.relations)
+}
+
 func loadExisting[M any](ctx context.Context, ex database.Executor, parents []M, missing bool, rels []Relation[M]) ([]M, error) {
 	if err := executionContext(ctx, ex); err != nil {
 		return nil, err
@@ -214,10 +241,13 @@ func loadExisting[M any](ctx context.Context, ex database.Executor, parents []M,
 	if err := validateRelations(q); err != nil {
 		return nil, err
 	}
+	return loadExistingPlans(ctx, ex, parents, missing, q.relations)
+}
+func loadExistingPlans[M any](ctx context.Context, ex database.Executor, parents []M, missing bool, plans []*relationPlan) ([]M, error) {
 	result := slices.Clone(parents)
-	limits := rootRelationLimits(q.relations)
+	limits := rootRelationLimits(plans)
 	budget := relationBudget{limits: limits, remaining: limits.MaxRows, attachments: limits.MaxRows}
-	if err := loadPlansAt(ctx, ex, unsafe.Pointer(unsafe.SliceData(result)), len(result), q.relations, &budget, 0, missing); err != nil {
+	if err := loadPlansAt(ctx, ex, unsafe.Pointer(unsafe.SliceData(result)), len(result), plans, &budget, 0, missing); err != nil {
 		return nil, err
 	}
 	return result, nil

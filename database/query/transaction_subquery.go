@@ -106,5 +106,5 @@ func transactionMembership[S TransactionScope, V any](left RowValue[S, V], inner
 	if operand == nil {
 		inner.Err = fault.New(fault.Invalid, "transaction membership requires a row operand")
 	}
-	return Predicate[S]{expression: subqueryPredicate{Query: inner, Operand: operand}}
+	return Predicate[S]{expression: retainPredicate(subqueryPredicate{Query: inner, Operand: operand})}
 }

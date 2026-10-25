@@ -2,6 +2,7 @@ package query
 
 import (
 	"bytes"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -17,8 +18,8 @@ func TestBinaryPredicatesOwnLazyBindings(t *testing.T) {
 	predicates := []Predicate[binaryRecord]{f.Eq(input), f.Ne(input), f.In(input)}
 	input[0] = 9
 	for _, p := range predicates {
-		comparison := p.expression.(comparison)
-		bound, err := comparison.Bind(comparison.Values[0])
+		comparison := predicateExpression(p.expression).(comparison)
+		bound, err := comparison.Bind(querycore.ComparisonValues(comparison.Values)[0])
 		if err != nil || !bytes.Equal(bound.([]byte), []byte{1, 2}) {
 			t.Fatal("predicate did not capture binary data", err)
 		}

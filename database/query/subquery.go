@@ -50,7 +50,7 @@ func (f ScalarField[M, V]) InNullableQuery(source ValueQuerySource[value.Nullabl
 }
 
 func (f ScalarField[M, V]) inSubquery(q subquery) Predicate[M] {
-	return Predicate[M]{expression: subqueryPredicate{Query: q, Operand: f.rowValue().node}}
+	return Predicate[M]{expression: retainPredicate(subqueryPredicate{Query: q, Operand: f.rowValue().node})}
 }
 
 // ExistsQuery is an uncorrelated existence predicate. Outer anchors the result
@@ -66,7 +66,7 @@ func ExistsQuery[S any](outer ProjectionSource[S], inner SubquerySource) Predica
 	if err := outerScopeError(outer); err != nil {
 		q.Err = err
 	}
-	return Predicate[S]{expression: subqueryPredicate{Query: q}}
+	return Predicate[S]{expression: retainPredicate(subqueryPredicate{Query: q})}
 }
 
 // ScalarQuery selects an uncorrelated single value into the outer scope. No row

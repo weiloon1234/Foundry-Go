@@ -40,7 +40,7 @@ func cursorStatementScope[M any](statement Statement, identity ...string) (strin
 }
 
 func cursorStatementScopeFor(modelIdentity string, statement Statement, identity []string) (string, error) {
-	return querycore.CursorStatementScopeFor(modelIdentity, querycore.Statement{SQLText: statement.sql, Bindings: statement.arguments}, identity)
+	return querycore.CursorStatementScopeFor(modelIdentity, querycore.Statement{SQLText: statement.SQL(), Bindings: statement.coreStatement().Bindings}, identity)
 }
 func makeCursor[M any](scope string, fields []ModelField[M], model M) (Cursor[M], error) {
 	token, err := querycore.BuildCursor(scope, len(fields), func(i int) (driver.Value, error) {

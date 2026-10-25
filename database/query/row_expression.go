@@ -38,7 +38,7 @@ func (e RowExpression[S, V]) IsNull() Predicate[S] { return e.compare(isNull) }
 func (e RowExpression[S, V]) IsNotNull() Predicate[S] { return e.compare(isNotNull) }
 
 func (e RowExpression[S, V]) compare(op operator, v ...V) Predicate[S] {
-	return Predicate[S]{expression: typedComparison(e.expression.node, op, e.expression.codec, v)}
+	return Predicate[S]{expression: retainPredicate(typedComparison(e.expression.node, op, e.expression.codec, v))}
 }
 
 func rowInput[S, V any](source RowValue[S, V]) RowExpression[S, V] {
@@ -69,7 +69,7 @@ func (a NullableOrderedAggregate[S, V]) Param(v V) RowExpression[S, V] {
 
 func parameterExpression[S, V any](v V, c codec.Codec[V]) RowExpression[S, V] {
 	bound, err := c.Bind(v)
-	return RowExpression[S, V]{Expression[S, V]{node: parameterNode{Kind: c.ParameterType(), Value: bound, Err: err, Sensitive: c.SensitiveValues()}, codec: c}}
+	return RowExpression[S, V]{Expression[S, V]{node: parameterNode{Kind: c.ParameterType(), Value: querycore.RetainLiteral(bound), Err: err, Sensitive: c.SensitiveValues()}, codec: c}}
 }
 
 // NullableRow explicitly widens a row value to one nullable layer without

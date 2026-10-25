@@ -25,7 +25,7 @@ func TestUndeclaredStoredNamesAfterARename(t *testing.T) {
 	}
 	article := f.createArticle(t, "renamed")
 	// Declared slots hold data too; only the old name may be reported.
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	if err := x.Title.Save(t.Context(), article, map[i18n.LocaleID]string{"en": "Current title"}); err != nil {
 		t.Fatal(err)
 	}
@@ -36,12 +36,12 @@ func TestUndeclaredStoredNamesAfterARename(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The field was once declared as Headline; its rows keep that name.
-	headline := translations.Define(articles.ArticleExtensionOwner(), "headline", translations.Options{})
+	headline := translations.Define(articles.ArticleOwner, "headline", translations.Options{})
 	previous, err := translations.New(f.store, mustLocales(t, f), headline.Registration())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := headline.Set(t.Context(), previous, article.FoundryReference(), "en", "Old headline"); err != nil {
+	if err := headline.Set(t.Context(), previous, articles.ArticleIdentity.ReferenceOf(article), "en", "Old headline"); err != nil {
 		t.Fatal(err)
 	}
 	report, err := translations.InspectUndeclared(t.Context(), runtime.Translations, "articles")
@@ -68,7 +68,7 @@ func TestUndeclaredStoredNamesAfterARename(t *testing.T) {
 		t.Fatalf("attachment command output %q: %v", output.String(), err)
 	}
 	// The report never alters data: the old text is still stored.
-	if text, err := headline.Get(t.Context(), previous, article.FoundryReference(), "en"); err != nil || !text.IsSet() {
+	if text, err := headline.Get(t.Context(), previous, articles.ArticleIdentity.ReferenceOf(article), "en"); err != nil || !text.IsSet() {
 		t.Fatal("inspection modified stored text", err)
 	}
 }

@@ -43,7 +43,7 @@ func (q Query[M]) eachRows(ctx context.Context, executor database.Executor, yiel
 	if err != nil {
 		return err
 	}
-	return database.ForEach(statement.executionContext(ctx), readExecutor{executor}, statement.sql, statement.arguments, q.definition.scan, yield)
+	return database.ForEach(statement.executionContext(ctx), readExecutor{executor}, statement.SQL(), statement.coreStatement().Bindings, q.definition.scan, yield)
 }
 
 // All collects complete models. On any error it discards the entire partial
@@ -125,7 +125,7 @@ func (q Query[M]) Count(ctx context.Context, executor database.Executor) (int64,
 		return 0, err
 	}
 	var count int64
-	err = database.ScanOne(statement.executionContext(ctx), readExecutor{executor}, statement.sql, statement.arguments, &count)
+	err = database.ScanOne(statement.executionContext(ctx), readExecutor{executor}, statement.SQL(), statement.coreStatement().Bindings, &count)
 	return count, err
 }
 
@@ -140,6 +140,6 @@ func (q Query[M]) Exists(ctx context.Context, executor database.Executor) (bool,
 		return false, err
 	}
 	var exists bool
-	err = database.ScanOne(statement.executionContext(ctx), readExecutor{executor}, statement.sql, statement.arguments, &exists)
+	err = database.ScanOne(statement.executionContext(ctx), readExecutor{executor}, statement.SQL(), statement.coreStatement().Bindings, &exists)
 	return exists, err
 }

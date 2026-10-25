@@ -39,7 +39,7 @@ func (f ScalarField[M, V]) Asc() Order[M] { return rowOrder[M](f.rowValue().node
 func (f ScalarField[M, V]) Desc() Order[M] { return rowOrder[M](f.rowValue().node, true) }
 
 func (f ScalarField[M, V]) compare(op operator, values ...V) Predicate[M] {
-	return Predicate[M]{expression: typedComparison(f.ref, op, f.codec, values)}
+	return Predicate[M]{expression: retainPredicate(typedComparison(f.ref, op, f.codec, values))}
 }
 
 // OrderedField adds range comparisons for types selected by the generator's

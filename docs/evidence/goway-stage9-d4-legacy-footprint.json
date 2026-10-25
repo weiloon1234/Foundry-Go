@@ -1,0 +1,49 @@
+{
+  "captured_at": "2026-10-25T02:39:42.071713+00:00",
+  "base": "79db1cf8",
+  "phase": "legacy probes, before D4 migration",
+  "command": "GOCACHE=/private/tmp/foundry-goway-codex-gocache-r9 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go test -run ^TestFootprintBudgets$ -count=1 -v .",
+  "cwd": "tests/fixtures/consumer",
+  "result": "pass",
+  "probes": {
+    "model_type": {
+      "functions": 1159,
+      "max_functions": 1449,
+      "symbols": 7267,
+      "max_symbols": 9084,
+      "bytes": 4771108,
+      "max_bytes": 5959555
+    },
+    "model_isolated": {
+      "functions": 139,
+      "max_functions": 174,
+      "symbols": 1051,
+      "max_symbols": 1314,
+      "bytes": 632268,
+      "max_bytes": 786148
+    },
+    "model_draft": {
+      "functions": 225,
+      "max_functions": 282,
+      "symbols": 1569,
+      "max_symbols": 1958,
+      "bytes": 999256,
+      "max_bytes": 1239298
+    },
+    "endpoint_plain": {
+      "functions": 1085,
+      "max_functions": 1332,
+      "symbols": 7807,
+      "max_symbols": 9143,
+      "bytes": 5050190,
+      "max_bytes": 6059643
+    }
+  },
+  "source_sha256": {
+    "tests/fixtures/consumer/testdata/footprint/model_draft/probe.go": "e8e171a7a66c2df2aca0e02a0bd9a16195c2273f35645157afbf3ab585a983f3",
+    "tests/fixtures/consumer/testdata/footprint/model_isolated/probe.go": "7958fed240ab82bdf64b1b71cfbeaa59c847042b9a5e4bf9a303ff40116b3208",
+    "tests/fixtures/consumer/testdata/footprint/model_type/probe.go": "96e5af62ca0a893f743df2eb02c16413ba559a7c55f96655976b2f9f7e6eb2e6",
+    "tests/fixtures/consumer/testdata/footprint/endpoint_plain/probe.go": "7c0e9efbde79780c9e86b4166858e3f311c4eaaa059e2d409efdee25767f9a26",
+    "tests/fixtures/consumer/footprint_test.go": "8808a4d868ff3500f053731c4502047fb6801641023658a9adc1ab3581a84f2a"
+  }
+}

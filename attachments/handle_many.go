@@ -32,6 +32,8 @@ func ManyOf[M any, K comparable](owner extensions.Owner[M, K], name Name, policy
 
 func wrapManyHandle[M any, K comparable](state manySlot[M, K]) *attachmentHandleCore {
 	return &attachmentHandleCore{
+		collection:   func(out unsafe.Pointer) { *(*Collection[M, K])(out) = state.collection },
+		checkFiles:   func(count int) error { return checkAddFiles(state.slotDefinition, count) },
 		bind:         func(m *Manager) *attachmentHandleCore { return wrapManyHandle(state.From(m)) },
 		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
 		validate:     state.Validate,

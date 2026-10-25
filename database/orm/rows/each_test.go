@@ -142,13 +142,14 @@ func streamProjection() rows.Query[streamRecord, streamRecord] {
 }
 
 type streamState struct {
-	sql      string
-	args     []driver.NamedValue
-	queries  int
-	columns  []string
-	values   [][]driver.Value
-	closed   atomic.Bool
-	closeErr error
+	beforeQuery func(string)
+	sql         string
+	args        []driver.NamedValue
+	queries     int
+	columns     []string
+	values      [][]driver.Value
+	closed      atomic.Bool
+	closeErr    error
 }
 type streamConnector struct{ state *streamState }
 
@@ -163,6 +164,9 @@ func (*streamConn) Close() error                        { return nil }
 func (*streamConn) Begin() (driver.Tx, error)           { return nil, errors.New("unexpected transaction") }
 func (*streamConn) Ping(context.Context) error          { return nil }
 func (c *streamConn) QueryContext(_ context.Context, sql string, args []driver.NamedValue) (driver.Rows, error) {
+	if c.state.beforeQuery != nil {
+		c.state.beforeQuery(sql)
+	}
 	c.state.sql = sql
 	c.state.args = append([]driver.NamedValue(nil), args...)
 	c.state.queries++

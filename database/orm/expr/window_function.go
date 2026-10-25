@@ -11,7 +11,7 @@ import (
 )
 
 func windowExpression[S, V any](kind querycore.WindowFunction, n int32, w Window[S], c ormcore.Column[V]) Selected[S, V] {
-	core := ormcore.WindowExpression(ownedWindow(w), querycore.WindowNode{Kind: kind, N: n, Err: c.Err}, nil)
+	core := ormcore.WindowExpression(ownedWindow(w), querycore.WindowNode{Kind: kind, N: querycore.RetainOffset(int64(n)), Err: c.Err}, nil)
 	return Selected[S, V]{data: rowData[V]{core: core, column: c}}
 }
 
@@ -23,13 +23,13 @@ func Over[S, V any](aggregate AggregateExpression[S, V], w Window[S]) Selected[S
 	return Selected[S, V]{data: rowData[V]{column: c, core: ormcore.WindowExpression(ownedWindow(w), querycore.WindowNode{Kind: querycore.AggregateWindow, Aggregate: node, Err: c.Err}, &core)}}
 }
 func windowValue[S, V any](kind querycore.WindowFunction, input Selected[S, V], n int32, w Window[S]) Selected[S, V] {
-	input.data.core = ormcore.WindowExpression(ownedWindow(w), querycore.WindowNode{Kind: kind, Input: input.data.core.Node, N: n, Err: input.data.column.Err}, &input.data.core)
+	input.data.core = ormcore.WindowExpression(ownedWindow(w), querycore.WindowNode{Kind: kind, Input: input.data.core.Node, N: querycore.RetainOffset(int64(n)), Err: input.data.column.Err}, &input.data.core)
 	return input
 }
 func windowFallback[S, V any](kind querycore.WindowFunction, input Selected[S, V], n int32, fallback V, w Window[S]) Selected[S, V] {
 	captured := parameter[S](input.data, fallback)
 	parameterNode := captured.data.core.Node.(querycore.ParameterNode)
-	node := querycore.WindowNode{Kind: kind, Input: input.data.core.Node, N: n, HasFallback: true, Fallback: parameterNode.Value, Err: errors.Join(input.data.column.Err, captured.data.core.Err)}
+	node := querycore.WindowNode{Kind: kind, Input: input.data.core.Node, N: querycore.RetainOffset(int64(n)), HasFallback: true, Fallback: parameterNode.Value, Err: errors.Join(input.data.column.Err, captured.data.core.Err)}
 	input.data.core = ormcore.WindowExpression(ownedWindow(w), node, &input.data.core)
 	return input
 }

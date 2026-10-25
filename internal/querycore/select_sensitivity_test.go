@@ -63,7 +63,7 @@ func TestSelectSensitivityFailsClosedAndUsesOutputPositions(t *testing.T) {
 		t.Fatal("unbounded provenance accepted", err)
 	}
 	constant := left
-	constant.Selections = []SelectItem{{Expression: ParameterNode{Kind: codec.TypeText, Value: "private", Sensitive: true}}, {Expression: ParameterNode{Kind: codec.TypeText, Value: "public"}}}
+	constant.Selections = []SelectItem{{Expression: ParameterNode{Kind: codec.TypeText, Value: RetainLiteral("private"), Sensitive: true}}, {Expression: ParameterNode{Kind: codec.TypeText, Value: RetainLiteral("public")}}}
 	flags, err := SelectSensitivity(constant)
 	if err != nil || !reflect.DeepEqual(flags, []bool{true, false}) {
 		t.Fatal(flags, err)

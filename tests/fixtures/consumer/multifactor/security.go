@@ -37,9 +37,9 @@ func WithSecurityEvents(factors *Factors, producer *events.Outbox) (*Factors, er
 // RetireAccount is application-domain orchestration after an administrative
 // policy has authorized this operation. The caller owns the outer transaction.
 func RetireAccount(ctx context.Context, tx *database.Tx, factors *Factors, account Account) error {
-	if _, err := factors.RetireIn(ctx, tx, account.FoundryReference()); err != nil {
+	if _, err := factors.RetireIn(ctx, tx, AccountIdentity.ReferenceOf(account)); err != nil {
 		return err
 	}
-	_, err := QueryMfaAccounts().Delete(ctx, tx, account.ID)
+	_, err := AccountRecords.Delete(ctx, tx, account.ID)
 	return err
 }

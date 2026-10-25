@@ -9,6 +9,7 @@ import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/tooling"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/health"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -55,10 +56,11 @@ func TestProductionCompositionUsesConcreteOperatorAndSharedRuntime(t *testing.T)
 		t.Fatal(err)
 	}
 	user := models.User{ID: id, Status: models.StatusActive}
-	provider := auth.DefineProvider("operators", user.FoundryReference(), func(context.Context, model.ID[models.User]) (value.Optional[models.User], error) {
+	identity := orm.IdentityOf(models.Users.Table, models.Users.Key())
+	provider := auth.DefineProvider("operators", identity.ReferenceOf(user), func(context.Context, model.ID[models.User]) (value.Optional[models.User], error) {
 		return value.Set(user), nil
 	}, func(context.Context, models.User) (bool, error) { return true, nil })
-	proof, err := auth.NewProof(user.FoundryReference(), auth.Authenticated)
+	proof, err := auth.NewProof(identity.ReferenceOf(user), auth.Authenticated)
 	if err != nil {
 		t.Fatal(err)
 	}

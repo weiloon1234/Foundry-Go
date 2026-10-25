@@ -119,13 +119,13 @@ func (p FrameOffset) frameBoundary() frameBound { return p.bound }
 // Preceding identifies count rows or peer groups before the current row/group.
 // Negative counts are invalid.
 func Preceding(count int64) FrameOffset {
-	return FrameOffset{frameBound{Kind: precedingBound, Offset: count}}
+	return FrameOffset{frameBound{Kind: precedingBound, Offset: querycore.RetainOffset(count)}}
 }
 
 // Following identifies count rows or peer groups after the current row/group.
 // Negative counts are invalid.
 func Following(count int64) FrameOffset {
-	return FrameOffset{frameBound{Kind: followingBound, Offset: count}}
+	return FrameOffset{frameBound{Kind: followingBound, Offset: querycore.RetainOffset(count)}}
 }
 
 func (w Window[S]) between(kind frameKind, start, end FrameBoundary) Window[S] {

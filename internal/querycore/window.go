@@ -32,7 +32,7 @@ const (
 
 type FrameBound struct {
 	Kind     FrameBoundKind
-	Offset   int64
+	Offset   *OffsetState
 	Distance *RangeDistance
 }
 

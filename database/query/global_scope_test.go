@@ -104,7 +104,7 @@ func TestGlobalScopesReachRelationsAndAliases(t *testing.T) {
 		t.Fatal("relation scope removal ignored", statement.SQL(), err)
 	}
 	through := ManyToMany(id, id, id, id).Bind("Links", cursorQuery(), scoped, scoped, testThrough().get, testThrough().set)
-	statement, err = through.compileThrough(ctx, id.In(1).expression, 3)
+	statement, err = through.compileThrough(ctx, predicateExpression(id.In(1).expression), 3)
 	if err != nil || !strings.Contains(statement.SQL(), `"foundry_target"."rank" < `) || !strings.Contains(statement.SQL(), `"foundry_pivot"."rank" < `) {
 		t.Fatal("through relation did not requalify scopes", statement.SQL(), err)
 	}

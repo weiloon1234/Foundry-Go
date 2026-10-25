@@ -25,6 +25,7 @@ type TextHandle[M any, K comparable] struct {
 // Callback pointers are created and consumed together here; they never cross the public API.
 // Calls are synchronous: no callback retains a pointer to an argument or result.
 type textHandleCore struct {
+	field        func(unsafe.Pointer)
 	bind         func(*Manager) *textHandleCore
 	relation     func(unsafe.Pointer)
 	validate     func() error
@@ -52,6 +53,7 @@ func TextOf[M any, K comparable](owner extensions.Owner[M, K], name Name, option
 
 func wrapTextHandle[M any, K comparable](state textSlot[M, K]) *textHandleCore {
 	return &textHandleCore{
+		field:        func(out unsafe.Pointer) { *(*Field[M, K])(out) = state.field },
 		bind:         func(m *Manager) *textHandleCore { return wrapTextHandle(state.From(m)) },
 		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
 		validate:     state.Validate,

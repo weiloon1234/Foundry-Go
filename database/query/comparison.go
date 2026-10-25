@@ -14,7 +14,7 @@ func typedComparison[V any](operand valueExpression, op operator, c codec.Codec[
 	for i, v := range values {
 		bindings[i] = c.Clone(v)
 	}
-	return comparison{Operand: querycore.WithSensitivity(operand, c.SensitiveValues()), Operator: op, Values: bindings, Text: len(text) == 1 && text[0], Kind: c.ParameterType(), Bind: func(raw any) (driver.Value, error) {
+	return comparison{Operand: querycore.WithSensitivity(operand, c.SensitiveValues()), Operator: op, Values: querycore.RetainComparisonValues(bindings), Text: len(text) == 1 && text[0], Kind: c.ParameterType(), Bind: func(raw any) (driver.Value, error) {
 		v, ok := raw.(V)
 		if !ok {
 			return nil, fault.New(fault.Invalid, "invalid typed query binding")

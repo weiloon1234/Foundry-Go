@@ -31,7 +31,7 @@ func TestKeysetPredicateUsesRowComparisonOnlyForNotNullKeys(t *testing.T) {
 	rank := NewNullableOrderedField[cursorRecord, int64]("records", "rank", codec.Signed[int64]())
 	notNull := func(queryOrder) bool { return false }
 	compile := func(p expression) string {
-		statement, err := cursorQuery().Where(Predicate[cursorRecord]{expression: p}).Compile()
+		statement, err := cursorQuery().Where(Predicate[cursorRecord]{expression: retainPredicate(p)}).Compile()
 		if err != nil {
 			t.Fatal(err)
 		}

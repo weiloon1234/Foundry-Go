@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // RelatedValue computes a typed aggregate over a relationship's matching
@@ -46,35 +47,7 @@ func relatedValueNode[M, N any](input aggregateInput[M, N], measure aggregateNod
 	if err := input.validate(0, DefaultRelationLimits()); err != nil {
 		return selectNode{}, err
 	}
-	field := func(f fieldRef) error { return f.Validate(input.inputTable) }
-	if err := measure.Validate(field); err != nil {
-		return selectNode{}, err
-	}
-	nodes := 0
-	if err := measure.ValidateFilter(field, &nodes); err != nil {
-		return selectNode{}, err
-	}
-	node := input.selectNode()
-	node.Selections, node.Orders, node.GroupBy = nil, nil, nil
-	alias, group := input.inputAlias, input.group
-	if input.inputAlias == input.inputTable {
-		names, err := namesInSelects(node)
-		if err != nil {
-			return selectNode{}, err
-		}
-		names.Used[input.source.queryCore.Table] = true
-		alias = names.Allocate("foundry_related")
-		node.Source.Alias = alias
-		predicates := make([]expression, len(node.Predicates))
-		for i, predicate := range node.Predicates {
-			predicates[i] = requalify(predicate, alias)
-		}
-		node.Predicates = predicates
-		group = fieldRef{Table: alias, Column: input.group.Column}
-	}
-	node.Selections = []selectItem{{Expression: requalifyAggregate(measure, alias)}}
-	node.Predicates = append(node.Predicates, binaryComparison{Left: group, Right: input.local, Operator: equal})
-	return node, nil
+	return querycore.RelatedValueSelect(input.selectNode(), input.inputTable, input.inputAlias, input.group, input.local, measure)
 }
 
 // Annotated pairs a complete model with one computed value from the same row.
@@ -107,7 +80,7 @@ func (q AnnotatedQuery[M, V]) reader() readResult[Annotated[M, V]] {
 		return r
 	}
 	r.node = q.query.modelSelect()
-	r.node.Selections = append(r.node.Selections, selectItem{Expression: q.value.expression.node, Alias: "foundry_value"})
+	r.node.Selections = append(r.node.Selections, selectItem{Expression: q.value.expression.node, Alias: querycore.AnnotatedValueAlias})
 	columns := len(definition.modelDefinition.Columns)
 	codec := q.value.expression.codec
 	r.scan = func(row database.Row) (Annotated[M, V], error) {

@@ -45,7 +45,7 @@ type GlobalScope[M any] struct {
 
 // NewGlobalScope declares a scope with a fixed typed predicate.
 func NewGlobalScope[M any](name GlobalScopeName, predicate Predicate[M]) GlobalScope[M] {
-	return GlobalScope[M]{scopeDefinition: scopeDefinition{Name: scopeNameData(name), Predicate: predicate.expression}}
+	return GlobalScope[M]{scopeDefinition: scopeDefinition{Name: scopeNameData(name), Predicate: predicateExpression(predicate.expression)}}
 }
 
 // NewContextScope declares a scope whose predicate depends on the executing
@@ -58,7 +58,10 @@ func NewGlobalScope[M any](name GlobalScopeName, predicate Predicate[M]) GlobalS
 func NewContextScope[M any](name GlobalScopeName, resolve func(context.Context) (Predicate[M], error)) GlobalScope[M] {
 	var lowered func(context.Context) (expression, error)
 	if resolve != nil {
-		lowered = func(ctx context.Context) (expression, error) { p, err := resolve(ctx); return p.expression, err }
+		lowered = func(ctx context.Context) (expression, error) {
+			p, err := resolve(ctx)
+			return predicateExpression(p.expression), err
+		}
 	}
 	return GlobalScope[M]{scopeDefinition: scopeDefinition{Name: scopeNameData(name), Resolve: lowered}}
 }

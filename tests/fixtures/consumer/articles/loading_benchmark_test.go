@@ -7,7 +7,9 @@ import (
 
 	"foundry.test/consumer/articles"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/translations"
 )
 
 // BenchmarkSlotListLoading measures one list read of two translated fields
@@ -16,9 +18,9 @@ import (
 // with make-style native PostgreSQL; results depend on host and database.
 func BenchmarkSlotListLoading(b *testing.B) {
 	store, runtime := openDirect(b, nil)
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	seedArticles(b, store, runtime, 1000)
-	fields := articles.ArticleFields()
+	fields := articles.Articles
 	read := func(b *testing.B, run func(context.Context, *database.Tx) error) {
 		b.Helper()
 		if err := store.Read(b.Context(), run); err != nil {
@@ -29,7 +31,7 @@ func BenchmarkSlotListLoading(b *testing.B) {
 		b.Run(fmt.Sprintf("parents-only/%d", size), func(b *testing.B) {
 			for b.Loop() {
 				read(b, func(ctx context.Context, tx *database.Tx) error {
-					_, err := articles.QueryArticles().OrderBy(fields.Slug.Asc()).Limit(size).All(ctx, tx)
+					_, err := articles.Articles.Query().OrderBy(fields.Slug.Asc()).Limit(size).All(ctx, tx)
 					return err
 				})
 			}
@@ -37,7 +39,7 @@ func BenchmarkSlotListLoading(b *testing.B) {
 		b.Run(fmt.Sprintf("slots/%d", size), func(b *testing.B) {
 			for b.Loop() {
 				read(b, func(ctx context.Context, tx *database.Tx) error {
-					_, err := articles.QueryArticles().With(x.Title, x.Summary, x.SEO).OrderBy(fields.Slug.Asc()).Limit(size).All(ctx, tx)
+					_, err := articles.Articles.Query().With(x.Title.Relation(articles.Articles.Title), x.Summary.Relation(articles.Articles.Summary), x.SEO.Relation(articles.Articles.SEO)).OrderBy(fields.Slug.Asc()).Limit(size).All(ctx, tx)
 					return err
 				})
 			}
@@ -47,24 +49,24 @@ func BenchmarkSlotListLoading(b *testing.B) {
 				var list []articles.Article
 				read(b, func(ctx context.Context, tx *database.Tx) error {
 					var err error
-					list, err = articles.QueryArticles().OrderBy(fields.Slug.Asc()).Limit(size).All(ctx, tx)
+					list, err = articles.Articles.Query().OrderBy(fields.Slug.Asc()).Limit(size).All(ctx, tx)
 					return err
 				})
 				references := make([]model.Reference[articles.Article, model.ID[articles.Article]], len(list))
 				for i, article := range list {
-					references[i] = article.FoundryReference()
+					references[i] = articles.ArticleIdentity.ReferenceOf(article)
 				}
 				// Resolve every owner from each batch, as the slot path does
 				// when it fills parents, so both variants do equivalent work.
-				titles, err := x.Title.Field().Load(b.Context(), runtime.Translations, references)
+				titles, err := translations.FieldOf(x.Title).Load(b.Context(), runtime.Translations, references)
 				if err != nil {
 					b.Fatal(err)
 				}
-				summaries, err := x.Summary.Field().Load(b.Context(), runtime.Translations, references)
+				summaries, err := translations.FieldOf(x.Summary).Load(b.Context(), runtime.Translations, references)
 				if err != nil {
 					b.Fatal(err)
 				}
-				seo, err := x.SEO.Key().Load(b.Context(), runtime.Metadata, references)
+				seo, err := metadata.KeyOf(x.SEO).Load(b.Context(), runtime.Metadata, references)
 				if err != nil {
 					b.Fatal(err)
 				}

@@ -93,7 +93,7 @@ func (s CorrelatedSource[O, I]) Offset(count int) CorrelatedSource[O, I] {
 
 // Exists yields a predicate owned by the required outer scope, not the inner one.
 func (s CorrelatedSource[O, I]) Exists() Predicate[O] {
-	return Predicate[O]{expression: subqueryPredicate{Query: subquery{Node: s.source.node, Err: s.source.err, Correlation: &s.outer.scopeRequirement}}}
+	return Predicate[O]{expression: retainPredicate(subqueryPredicate{Query: subquery{Node: s.source.node, Err: s.source.err, Correlation: &s.outer.scopeRequirement}})}
 }
 
 // Private source adaptation reuses projection execution without exposing an

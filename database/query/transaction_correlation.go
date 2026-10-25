@@ -80,5 +80,5 @@ func (s TransactionCorrelatedSource[O, I]) Offset(count int) TransactionCorrelat
 
 // Exists retains the parent requirement and any locks in the inner sources.
 func (s TransactionCorrelatedSource[O, I]) Exists() Predicate[O] {
-	return Predicate[O]{expression: subqueryPredicate{Query: subquery{Node: s.source.node, Err: s.source.err, Correlation: &s.outer.scopeRequirement}}}
+	return Predicate[O]{expression: retainPredicate(subqueryPredicate{Query: subquery{Node: s.source.node, Err: s.source.err, Correlation: &s.outer.scopeRequirement}})}
 }

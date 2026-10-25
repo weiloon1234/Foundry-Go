@@ -42,17 +42,17 @@ func (c *Compiler) ValidateWindow(n WindowNode, grouped map[FieldRef]bool, group
 	}
 	switch n.Kind {
 	case RowNumberWindow, RankWindow, DenseRankWindow, PercentRankWindow, CumeDistWindow, FirstValueWindow, LastValueWindow:
-		if n.N != 0 {
+		if OffsetValue(n.N) != 0 {
 			return fault.New(fault.Invalid, "window function has an unexpected position")
 		}
 	case NtileWindow, NthValueWindow:
-		if n.N <= 0 {
+		if OffsetValue(n.N) <= 0 {
 			return fault.New(fault.Invalid, "window position or bucket count must be positive")
 		}
 	case LagWindow, LeadWindow:
 		// PostgreSQL permits negative offsets (the opposite direction).
 	case AggregateWindow:
-		if n.N != 0 || n.Aggregate.Kind == CountDistinct {
+		if OffsetValue(n.N) != 0 || n.Aggregate.Kind == CountDistinct {
 			return fault.New(fault.Invalid, "unsupported aggregate window declaration")
 		}
 		if err := n.Aggregate.Validate(func(f FieldRef) error { return check(f) }); err != nil {
@@ -64,10 +64,10 @@ func (c *Compiler) ValidateWindow(n WindowNode, grouped map[FieldRef]bool, group
 	default:
 		return fault.New(fault.Invalid, "invalid window function")
 	}
-	if (n.HasFallback || n.Fallback != nil) && n.Kind != LagWindow && n.Kind != LeadWindow {
+	if (n.HasFallback || LiteralValue(n.Fallback) != nil) && n.Kind != LagWindow && n.Kind != LeadWindow {
 		return fault.New(fault.Invalid, "only lag/lead accept fallback values")
 	}
-	if !n.HasFallback && n.Fallback != nil {
+	if !n.HasFallback && LiteralValue(n.Fallback) != nil {
 		return fault.New(fault.Invalid, "unexpected window fallback")
 	}
 	var seen ValueIndex
@@ -120,18 +120,18 @@ func (w WindowSpec) ValidateFrame() error {
 	for _, bound := range []FrameBound{f.Start, f.End} {
 		switch bound.Kind {
 		case UnboundedPreceding, CurrentRow, UnboundedFollowing:
-			if bound.Offset != 0 || bound.Distance != nil {
+			if OffsetValue(bound.Offset) != 0 || bound.Distance != nil {
 				return fault.New(fault.Invalid, "frame position has an unexpected offset")
 			}
 		case PrecedingBound, FollowingBound:
 			if f.Kind == RangeFrame {
-				if bound.Offset != 0 || bound.Distance == nil || f.RangeType == 0 {
+				if OffsetValue(bound.Offset) != 0 || bound.Distance == nil || f.RangeType == 0 {
 					return fault.New(fault.Invalid, "RANGE offset requires a typed distance")
 				}
 				if err := bound.Distance.Validate(f.RangeType); err != nil {
 					return err
 				}
-			} else if bound.Offset < 0 || bound.Distance != nil {
+			} else if OffsetValue(bound.Offset) < 0 || bound.Distance != nil {
 				return fault.New(fault.Invalid, "frame offset requires a nonnegative ROWS/GROUPS distance")
 			}
 		default:
@@ -173,14 +173,14 @@ func (c *Compiler) WindowSQL(n WindowNode, grouped map[FieldRef]bool, grouping b
 			args = append(args, text)
 		}
 		if n.Kind == NtileWindow || n.Kind == LagWindow || n.Kind == LeadWindow || n.Kind == NthValueWindow {
-			p, err := c.Parameter(int64(n.N))
+			p, err := c.Parameter(OffsetValue(n.N))
 			if err != nil {
 				return "", err
 			}
 			args = append(args, p)
 		}
 		if n.HasFallback {
-			p, err := c.Parameter(n.Fallback)
+			p, err := c.Parameter(LiteralValue(n.Fallback))
 			if err != nil {
 				return "", err
 			}
@@ -260,7 +260,7 @@ func (c *Compiler) FrameBoundSQL(b FrameBound) (string, error) {
 		if b.Distance != nil {
 			p, err = c.RangeDistanceSQL(*b.Distance)
 		} else {
-			p, err = c.Parameter(b.Offset)
+			p, err = c.Parameter(OffsetValue(b.Offset))
 		}
 		if b.Kind == PrecedingBound {
 			return p + " PRECEDING", err

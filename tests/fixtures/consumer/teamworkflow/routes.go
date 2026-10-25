@@ -5,7 +5,7 @@ import (
 	"foundry.test/consumer/genericdto"
 	"foundry.test/consumer/internal/authfixture"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
@@ -19,8 +19,8 @@ var Rejected = http.DefineError("workflow_rejected", 422, "The submission was re
 var NameRules = validation.All(validation.NonBlank[string](), validation.MinLength[string](2), validation.MaxLength[string](40))
 
 func projectResolver[P any](db database.Executor, team func(P) int64, slug func(P) Slug) modelbinding.Resolver[P, Resources] {
-	parents := modelbinding.ByKey(db, QueryWorkflowTeams(), team)
-	return modelbinding.Through(db, parents, TeamRelations().Projects, ProjectFields().Slug, slug)
+	parents := modelbinding.ByKey(db, orm.Keyed(Teams.Query(), Teams.Key()), team)
+	return modelbinding.ThroughRelation(db, parents, TeamProjects, Projects.Slug, slug)
 }
 func authorized(actor Actor, resources Resources) error {
 	if actor.Tenant != resources.Parent.Tenant || !resources.Child.Enabled {
@@ -83,14 +83,14 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 		boundShow.Handle(func(_ context.Context, _ Actor, in modelbinding.Input[ProjectPath, http.NoQuery, http.NoBody, Resources]) (ProjectEnvelope, error) {
 			return ProjectEnvelope{Data: present(in.Model.Child), Trace: "workflow"}, nil
 		}),
-		catalogue.Handle(func(ctx context.Context, in pagination.Request[http.NoPath, CatalogueFilters]) (query.Page[CatalogueItem], error) {
-			rows := QueryWorkflowProjects().Where(ProjectFields().Enabled.Eq(true)).OrderBy(ProjectFields().ID.Asc())
+		catalogue.Handle(func(ctx context.Context, in pagination.Request[http.NoPath, CatalogueFilters]) (orm.PageResult[CatalogueItem], error) {
+			rows := Projects.Query().Where(Projects.Enabled.Eq(true)).OrderBy(Projects.Key().Asc())
 			if team, set := in.Filters.Team.Get(); set {
-				rows = rows.Where(ProjectFields().TeamID.Eq(team))
+				rows = rows.Where(Projects.TeamID.Eq(team))
 			}
 			page, err := rows.Paginate(ctx, s.db, in.Page)
 			if err != nil {
-				return query.Page[CatalogueItem]{}, err
+				return orm.PageResult[CatalogueItem]{}, err
 			}
 			return pagination.MapPage(ctx, page, func(row Project) (CatalogueItem, error) { return CatalogueItem{Slug: row.Slug}, nil })
 		}),

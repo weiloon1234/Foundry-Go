@@ -12,5 +12,5 @@ func LegacyIdentityScope[M any, K comparable](d ModelIdentity[M, K], keys ...K) 
 	if d.Validate() != nil || len(keys) > querycore.MaxIdentityBatch {
 		return query.Predicate[M]{}
 	}
-	return query.FoundryPredicate[M](d.Scope(keys...).expression, sqlowner.Queries())
+	return query.FoundryPredicate[M](querycore.PredicateNode(d.Scope(keys...).expression), sqlowner.Queries())
 }

@@ -121,7 +121,7 @@ func CompareValue[S, V any](v Expression[S, V]) ValueComparison[S, V] {
 }
 
 func (e ValueComparison[S, V]) compare(op operator, v ...V) HavingPredicate[S] {
-	return HavingPredicate[S]{expression: typedComparison(e.expression.node, op, e.expression.codec, v)}
+	return HavingPredicate[S]{expression: retainPredicate(typedComparison(e.expression.node, op, e.expression.codec, v))}
 }
 
 func (e ValueComparison[S, V]) Eq(v V) HavingPredicate[S] { return e.compare(equal, v) }

@@ -93,12 +93,12 @@ func UnboundedFollowing() FramePosition { return FramePosition{kind: querycore.U
 
 // Preceding counts nonnegative rows/groups before the current row. Example: expr.Preceding(2).
 func Preceding(count int64) FrameOffset {
-	return FrameOffset{bound: querycore.FrameBound{Kind: querycore.PrecedingBound, Offset: count}}
+	return FrameOffset{bound: querycore.FrameBound{Kind: querycore.PrecedingBound, Offset: querycore.RetainOffset(count)}}
 }
 
 // Following counts nonnegative rows/groups after the current row. Example: expr.Following(2).
 func Following(count int64) FrameOffset {
-	return FrameOffset{bound: querycore.FrameBound{Kind: querycore.FollowingBound, Offset: count}}
+	return FrameOffset{bound: querycore.FrameBound{Kind: querycore.FollowingBound, Offset: querycore.RetainOffset(count)}}
 }
 func (w Window[S]) between(kind querycore.FrameKind, start, end FrameBoundary) Window[S] {
 	if ormcore.NilDescriptor(start) || ormcore.NilDescriptor(end) {

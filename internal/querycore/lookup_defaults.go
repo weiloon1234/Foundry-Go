@@ -37,13 +37,13 @@ func LookupDefaults(ctx context.Context, q QueryCore, eligible func(string) bool
 			return collect(resolved)
 		case Comparison:
 			field, ok := UnwrapSensitivity(e.Operand).(FieldRef)
-			if !ok || field.Table != q.Table || e.Operator != Equal || len(e.Values) != 1 || e.Bind == nil {
+			if !ok || field.Table != q.Table || e.Operator != Equal || len(ComparisonValues(e.Values)) != 1 || e.Bind == nil {
 				return nil
 			}
 			if !eligible(field.Column) {
 				return nil
 			}
-			raw, err := e.Bind(e.Values[0])
+			raw, err := e.Bind(ComparisonValues(e.Values)[0])
 			if err != nil || raw == nil {
 				return err
 			}

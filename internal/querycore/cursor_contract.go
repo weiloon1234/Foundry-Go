@@ -1,6 +1,8 @@
 package querycore
 
 import (
+	"unique"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -10,10 +12,23 @@ import (
 // every request. Token explicitly exports the transport value; formatting omits it.
 type Cursor[M any] struct {
 	_     [0]*M
-	token string
+	state cursorState
 }
 
-func (c Cursor[M]) Token() string { return c.token }
+// The method-free private type retains only an opaque pointer. Interning keeps
+// independently parsed equal tokens comparable without exposing their bytes.
+type cursorState unique.Handle[string]
+
+func retainCursor(token string) cursorState { return cursorState(unique.Make(token)) }
+
+func cursorToken(state cursorState) string {
+	if state == (cursorState{}) {
+		return ""
+	}
+	return unique.Handle[string](state).Value()
+}
+
+func (c Cursor[M]) Token() string { return cursorToken(c.state) }
 
 func (c Cursor[M]) String() string { return "[cursor]" }
 
@@ -25,7 +40,7 @@ func ParseCursor[M any](token string) (Cursor[M], error) {
 	if _, err := DecodeCursor(token); err != nil {
 		return Cursor[M]{}, err
 	}
-	return Cursor[M]{token: token}, nil
+	return Cursor[M]{state: retainCursor(token)}, nil
 }
 
 // CursorRequest selects a bounded forward or backward page in the query's
@@ -45,7 +60,7 @@ type CursorPage[M any] struct {
 
 // Validate checks the token's bounded structure without database I/O. Query
 // execution still verifies the query fingerprint and every ordered key codec.
-func (c Cursor[R]) Validate() error { _, err := DecodeCursor(c.token); return err }
+func (c Cursor[R]) Validate() error { _, err := DecodeCursor(c.Token()); return err }
 
 // Validate checks size, exclusive directions and supplied token structure.
 // Omit both directions for the first page; a supplied zero cursor is invalid.

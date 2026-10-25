@@ -70,7 +70,7 @@ func compare[S, V, P any](e Expression[S, V, P], op querycore.Operator, v V) Pre
 	if e.column.Bind == nil || e.column.Clone == nil {
 		return Predicate[S]{core: ormcore.Predicate{Err: ormcore.Invalid("uninitialized expression")}}
 	}
-	return Predicate[S]{core: ormcore.Predicate{Refs: e.core.Refs, ReferenceFree: e.core.ReferenceFree, Err: err, Node: querycore.Comparison{Operand: e.core.Node, Operator: op, Values: []any{e.column.Clone(v)}, Kind: e.column.Kind, Bind: func(v any) (driver.Value, error) { return e.column.Bind(v.(V)) }}}}
+	return Predicate[S]{core: ormcore.Predicate{Refs: e.core.Refs, ReferenceFree: e.core.ReferenceFree, Err: err, Node: querycore.Comparison{Operand: e.core.Node, Operator: op, Values: querycore.RetainComparisonValues([]any{e.column.Clone(v)}), Kind: e.column.Kind, Bind: func(v any) (driver.Value, error) { return e.column.Bind(v.(V)) }}}}
 }
 
 // Asc orders a scoped value ascending. Example: orderID.Asc().

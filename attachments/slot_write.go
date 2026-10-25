@@ -179,15 +179,28 @@ func (s manySlot[M, K]) Reorder(ctx context.Context, owner M, order []ID[M]) ([]
 // failed one, and never claims all-or-nothing publication: files before a
 // failure stay published.
 func AddFiles[F FileSource, M any, K comparable](ctx context.Context, slot ManySlot[M, K], owner M, files []F) ([]Result[M, K], error) {
+	return addFiles(ctx, files, func(count int) error { return checkAddFiles(slot.slotDefinition, count) }, func(ctx context.Context, file FileSource) (Result[M, K], error) {
+		return slot.AddFile(ctx, owner, file)
+	})
+}
+
+func checkAddFiles[M any, K comparable](slot slotDefinition[M, K, Many[M]], count int) error {
 	if _, err := slot.bound(); err != nil {
+		return err
+	}
+	if count > slot.collection.definition.policy.MaxFiles {
+		return invalid()
+	}
+	return nil
+}
+
+func addFiles[F FileSource, R any](ctx context.Context, files []F, validate func(int) error, add func(context.Context, FileSource) (R, error)) ([]R, error) {
+	if err := validate(len(files)); err != nil {
 		return nil, err
 	}
-	if len(files) > slot.collection.definition.policy.MaxFiles {
-		return nil, invalid()
-	}
-	results := make([]Result[M, K], 0, len(files))
+	results := make([]R, 0, len(files))
 	for _, file := range files {
-		result, err := slot.AddFile(ctx, owner, file)
+		result, err := add(ctx, file)
 		results = append(results, result)
 		if err != nil {
 			return results, err

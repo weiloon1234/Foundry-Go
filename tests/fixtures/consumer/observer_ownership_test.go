@@ -9,33 +9,31 @@ import (
 	"foundry.test/consumer/models"
 	foundry "github.com/weiloon1234/Foundry-Go"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-// This fixture checks observer construction and ownership, not automatic model
-// callback dispatch. The generated adapter integration is the next increment.
+// Exercise observer construction, injected defaults and automatic ORM dispatch.
 func TestPostgresObserverOwnershipFromProviders(t *testing.T) {
 	pool := foundation.NewKey[*database.DB]("observer.database")
 	defaultEmail := foundation.NewKey[string]("observer.default-email")
 	var constructed int
 	var instantiated []string
 	register := func(r *foundation.Registrar, name string) error {
-		observer := lifecycle.NewObserver[models.User, models.UserHooks](name)
-		return database.RegisterObserver(r, pool, observer, func(resolver foundation.Resolver) (func() models.UserHooks, error) {
+		observer := orm.NewObserver[models.User](name)
+		return orm.RegisterObserver(r, pool, observer, func(resolver foundation.Resolver) (func() orm.Hooks[models.User], error) {
 			constructed++
 			email, err := foundation.Resolve(resolver, defaultEmail)
 			if err != nil {
 				return nil, err
 			}
-			return func() models.UserHooks {
+			return func() orm.Hooks[models.User] {
 				instantiated = append(instantiated, name)
-				return models.UserHooks{Creating: func(_ context.Context, _ *database.Tx, draft *models.UserDraft) error {
-					*draft = draft.SetEmail(email)
-					return nil
+				return orm.Hooks[models.User]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[models.User]) error {
+					return orm.WriteSet(draft, models.Users.Email.Set(email))
 				}}
 			}, nil
 		})
@@ -57,27 +55,24 @@ func TestPostgresObserverOwnershipFromProviders(t *testing.T) {
 	if constructed != 2 || len(instantiated) != 0 {
 		t.Fatal("bootstrap invoked write factories or repeated dependency construction")
 	}
+	namespace := pgtest.Namespace(t, db)
+	if _, err := db.Exec(t.Context(), `CREATE TABLE "`+namespace+`".users (id uuid PRIMARY KEY, email_address text NOT NULL, age bigint NOT NULL, nickname text, status text NOT NULL, level smallint NOT NULL, birthday date, introducer_id uuid)`); err != nil {
+		t.Fatal(err)
+	}
 	check := func(tx *database.Tx) error {
-		factories, err := lifecycle.ObserverFactories[models.User, models.UserHooks](tx.Observers())
+		if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+namespace+`"`); err != nil {
+			return err
+		}
+		item, err := models.Users.Insert(t.Context(), tx, models.Users.Email.Set("original"), models.Users.Age.Set(0), models.Users.Status.Set(models.StatusActive), models.Users.Level.Set(models.LevelBasic))
 		if err != nil {
 			return err
 		}
-		if len(factories) != 2 {
-			return errors.New("transaction lost observers")
-		}
-		var draft models.UserDraft
-		for _, factory := range factories {
-			// Invoke the typed callback directly to check the injected dependency.
-			// This is not an assertion about automatic Create/Update dispatch.
-			if err := factory().Creating(t.Context(), tx, &draft); err != nil {
-				return err
-			}
-		}
-		if got, ok := draft.Email().Get(); !ok || got != "default@example.test" {
+		if item.Email != "default@example.test" {
 			return errors.New("typed injected dependency missing")
 		}
 		return nil
 	}
+
 	if err := db.Transaction(t.Context(), func(tx *database.Tx) error { return tx.Savepoint(t.Context(), check) }); err != nil {
 		t.Fatal(err)
 	}

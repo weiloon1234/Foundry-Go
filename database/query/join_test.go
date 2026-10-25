@@ -124,7 +124,7 @@ func TestDerivedSelectRejectsCyclesAndOuterReferences(t *testing.T) {
 		t.Fatal("cyclic SELECT was not bounded", err)
 	}
 	inner := cursorQuery().modelSelect()
-	inner.Predicates = []expression{NewScalarField[cursorRecord, int64]("outer", "id", codec.Signed[int64]()).Eq(1).expression}
+	inner.Predicates = []expression{predicateExpression(NewScalarField[cursorRecord, int64]("outer", "id", codec.Signed[int64]()).Eq(1).expression)}
 	outer := selectNode{Source: tableSource{Alias: "outer", Columns: []columnData{{Name: "id"}}, Query: &inner}}
 	c = compiler{}
 	if _, err := c.SelectSQL(outer); !errors.Is(err, fault.Invalid) {

@@ -77,7 +77,7 @@ func TestLateralRejectsMissingOrForwardScopesEvenWithZeroLimit(t *testing.T) {
 			case "missing":
 				join.Lateral = &scopeRequirement{}
 			case "cross ON":
-				join.Kind, join.On = crossJoin, scopedID(a.Scope()).Eq(1).expression
+				join.Kind, join.On = crossJoin, predicateExpression(scopedID(a.Scope()).Eq(1).expression)
 			}
 			if _, err := bad.Limit(0).Compile(); !errors.Is(err, fault.Invalid) {
 				t.Fatal(err)

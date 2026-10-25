@@ -71,8 +71,8 @@ func TestCorrelationInvalidBoundariesAndRequalification(t *testing.T) {
 	c := Correlate(outer, inner)
 	x, y := scopedID(OuterScope(c, outer.Scope())), scopedID(InnerScope(c, inner.Scope()))
 	p := c.Where(y.EqColumn(x)).Exists()
-	qualified := requalify(p.expression, "parent_alias").(subqueryPredicate)
-	if qualified.Query.Correlation.Sources["parent_alias"] == nil || p.expression.(subqueryPredicate).Query.Correlation.Sources["records"] == nil {
+	qualified := requalify(predicateExpression(p.expression), "parent_alias").(subqueryPredicate)
+	if qualified.Query.Correlation.Sources["parent_alias"] == nil || predicateExpression(p.expression).(subqueryPredicate).Query.Correlation.Sources["records"] == nil {
 		t.Fatal("qualification mutated original scope")
 	}
 	alias := As[firstAlias](cursorQuery(), "parent_alias")
@@ -148,7 +148,7 @@ func TestCorrelationQualificationBoundsCycles(t *testing.T) {
 	outer := cursorQuery()
 	child := As[secondAlias](outer, "child")
 	c := Correlate(outer, child)
-	p := c.Exists().expression.(subqueryPredicate)
+	p := predicateExpression(c.Exists().expression).(subqueryPredicate)
 	// Shared slice storage deliberately creates a malformed private AST cycle.
 	p.Query.Node.Predicates = make([]expression, 1)
 	p.Query.Node.Predicates[0] = p

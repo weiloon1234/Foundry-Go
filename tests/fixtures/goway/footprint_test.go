@@ -30,6 +30,8 @@ const footprintFailureAdvice = "a generic method, field or codec helper has expa
 // Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
 var footprintBudgets = map[string]footprintBudget{
+	"load_query":                    {"./testdata/footprint/load_query", 1265},
+	"related_value":                 {"./testdata/footprint/related_value", 1757},
 	"relation_filter":               {"./testdata/footprint/relation_filter", 1831},
 	"read_scalar":                   {"./testdata/footprint/read_scalar", 1165},
 	"read_record":                   {"./testdata/footprint/read_record", 1002},
@@ -73,6 +75,8 @@ var footprintBudgets = map[string]footprintBudget{
 	"write_unset":                   {"./testdata/footprint/write_unset", 266},
 	"observer_counts":               {"./testdata/footprint/observer_counts", 63},
 	"source_clauses":                {"./testdata/footprint/source_clauses", 2505},
+	"extension_files":               {"./testdata/footprint/extension_files", 1474},
+	"extension_files_old":           {"./testdata/footprint/extension_files_old", 7244},
 
 	"cte_recursive": {"./testdata/footprint/cte_recursive", 1076},
 	"record_sets":   {"./testdata/footprint/record_sets", 1288},
@@ -83,14 +87,16 @@ var footprintBudgets = map[string]footprintBudget{
 	"json_paths":     {"./testdata/footprint/json_paths", 6146},
 	"json_functions": {"./testdata/footprint/json_functions", 2736},
 
-	"scalar_text":           {"./testdata/footprint/scalar_text", 2312},
-	"scalar_temporal":       {"./testdata/footprint/scalar_temporal", 2625},
-	"extension_handles":     {"./testdata/footprint/extension_handles", 1481},
-	"extension_declaration": {"foundry.test/goway/models/extensions", 30434},
-	"extension_slots":       {"./testdata/footprint/extension_slots", 2154},
-	"extension_slots_old":   {"./testdata/footprint/extension_slots_old", 30493},
-	"orm_factory":           {"./testdata/footprint/orm_factory", 1093},
-	"orm_binding":           {"./testdata/footprint/orm_binding", 1089},
+	"scalar_text":            {"./testdata/footprint/scalar_text", 2312},
+	"scalar_temporal":        {"./testdata/footprint/scalar_temporal", 2625},
+	"extension_matching":     {"./testdata/footprint/extension_matching", 8438},
+	"extension_matching_old": {"./testdata/footprint/extension_matching_old", 8432},
+	"extension_handles":      {"./testdata/footprint/extension_handles", 1481},
+	"extension_declaration":  {"foundry.test/goway/models/extensions", 30434},
+	"extension_slots":        {"./testdata/footprint/extension_slots", 2154},
+	"extension_slots_old":    {"./testdata/footprint/extension_slots_old", 30493},
+	"orm_factory":            {"./testdata/footprint/orm_factory", 1093},
+	"orm_binding":            {"./testdata/footprint/orm_binding", 1089},
 
 	"framework_countries":        {"github.com/weiloon1234/Foundry-Go/countries", 4122},
 	"framework_jobarchive":       {"github.com/weiloon1234/Foundry-Go/internal/jobarchive", 2280},

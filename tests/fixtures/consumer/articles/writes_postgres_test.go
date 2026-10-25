@@ -44,14 +44,14 @@ func TestSlotWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	article := f.createArticle(t, "writes")
 	title := func() map[i18n.LocaleID]string {
 		t.Helper()
 		var loaded articles.Article
 		if err := f.store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 			var err error
-			loaded, err = articles.QueryArticles().With(x.Title, x.SEO).RequireFind(ctx, tx, article.ID)
+			loaded, err = articles.Articles.Query().With(x.Title.Relation(articles.Articles.Title), x.SEO.Relation(articles.Articles.SEO)).Where(articles.Articles.Key().Eq(article.ID)).Require(ctx, tx)
 			return err
 		}); err != nil {
 			t.Fatal(err)
@@ -104,7 +104,7 @@ func TestSlotWrites(t *testing.T) {
 	if got := title(); got["en"] != "Only" {
 		t.Fatal("rolled-back text survived", got)
 	}
-	if stored, err := x.SEO.Key().Get(t.Context(), runtime.Metadata, article.FoundryReference()); err != nil || stored.IsSet() {
+	if stored, err := metadata.KeyOf(x.SEO).Get(t.Context(), runtime.Metadata, articles.ArticleIdentity.ReferenceOf(article)); err != nil || stored.IsSet() {
 		t.Fatal("rolled-back metadata survived", err)
 	}
 	if err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
@@ -129,7 +129,7 @@ func TestSlotWrites(t *testing.T) {
 	}
 
 	// Writes through unbound descriptors fail instead of finding services.
-	unbound := articles.ArticleExtensions()
+	unbound := articles.ArticleSlots
 	if err := unbound.Title.Save(t.Context(), article, map[i18n.LocaleID]string{"en": "x"}); !errors.Is(err, fault.Missing) {
 		t.Fatal("unbound translated write", err)
 	}
@@ -150,12 +150,12 @@ func TestSlotWrites(t *testing.T) {
 		t.Fatal("logo publication", err)
 	}
 	gallery := []memoryFile{{"a.png", pngImage(t, 8)}, {"b.png", pngImage(t, 8)}, {"c.png", pngImage(t, 8)}}
-	if results, err := attachments.AddFiles(t.Context(), x.Galleries, article, gallery); err != nil || len(results) != 3 {
+	if results, err := attachments.AddFilesTo(t.Context(), x.Galleries, article, gallery); err != nil || len(results) != 3 {
 		t.Fatal("gallery publication", err)
 	}
 	// The collection holds four files: the fifth file fails after the fourth
 	// published, and both attempts are reported.
-	results, err := attachments.AddFiles(t.Context(), x.Galleries, article, []memoryFile{{"d.png", pngImage(t, 8)}, {"e.png", pngImage(t, 8)}})
+	results, err := attachments.AddFilesTo(t.Context(), x.Galleries, article, []memoryFile{{"d.png", pngImage(t, 8)}, {"e.png", pngImage(t, 8)}})
 	if err == nil || len(results) != 2 || results[0].Publication != attachments.Published || results[1].Publication != attachments.Unpublished {
 		t.Fatal("partial gallery publication was not reported", len(results), err)
 	}
@@ -169,18 +169,18 @@ func TestSlotMetadataVersionMismatchFailsTheLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	article := f.createArticle(t, "versioned")
-	newer := metadata.Define(articles.ArticleExtensionOwner(), "seo", 2, articles.SEOJSON())
+	newer := metadata.Define(articles.ArticleOwner, "seo", 2, articles.SEOJSON())
 	manager, err := metadata.New(f.store, newer.Registration())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := newer.Set(t.Context(), manager, article.FoundryReference(), articles.SEO{Canonical: value.Set("/v2")}); err != nil {
+	if err := newer.Set(t.Context(), manager, articles.ArticleIdentity.ReferenceOf(article), articles.SEO{Canonical: value.Set("/v2")}); err != nil {
 		t.Fatal(err)
 	}
 	err = f.store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().With(x.SEO).RequireFind(ctx, tx, article.ID)
+		_, err := articles.Articles.Query().With(x.SEO.Relation(articles.Articles.SEO)).Where(articles.Articles.Key().Eq(article.ID)).Require(ctx, tx)
 		return err
 	})
 	if !errors.Is(err, fault.Conflict) {
@@ -203,7 +203,7 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	logo, gallery := memoryFile{name: "logo.png", data: pngImage(t, 40)}, memoryFile{name: "gallery.png", data: pngImage(t, 24)}
 	state := func(operation attachments.OperationID) attachments.State {
 		t.Helper()
@@ -234,11 +234,11 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 	}
 	var article articles.Article
 	if err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		author, err := articles.QueryArticleAuthors().Create(ctx, tx, articles.AuthorDraft{}.SetName("Author in transaction"))
+		author, err := articles.Authors.Insert(ctx, tx, articles.Authors.Name.Set("Author in transaction"))
 		if err != nil {
 			return err
 		}
-		if article, err = articles.QueryArticles().Create(ctx, tx, articles.ArticleDraft{}.SetID(id).SetSlug("in-transaction").SetAuthorID(author.ID)); err != nil {
+		if article, err = articles.Articles.Insert(ctx, tx, articles.Articles.Key().Set(id), articles.Articles.Slug.Set("in-transaction"), articles.Articles.AuthorID.Set(author.ID)); err != nil {
 			return err
 		}
 		if result, err := x.Logo.ReplaceIn(ctx, tx, article, first); err != nil || result.Publication != attachments.Published {
@@ -256,7 +256,7 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 	var loaded articles.Article
 	if err := f.store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		loaded, err = articles.QueryArticles().With(x.Logo, x.Galleries).RequireFind(ctx, tx, article.ID)
+		loaded, err = articles.Articles.Query().With(x.Logo.Relation(articles.Articles.Logo), x.Galleries.Relation(articles.Articles.Galleries)).Where(articles.Articles.Key().Eq(article.ID)).Require(ctx, tx)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -358,7 +358,7 @@ func TestPreparedUploadAfterTheSnapshotIsReportedInvisible(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	article := f.createArticle(t, "snapshot")
 	if err := f.store.Database().Transaction(t.Context(), func(tx *database.Tx) error {
 		var one int
@@ -387,10 +387,10 @@ func TestPrepareLocksAnExistingOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	article := f.createArticle(t, "locked")
 	if err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		if _, err := articles.QueryArticles().ForUpdate().RequireFind(ctx, tx, article.ID); err != nil {
+		if _, err := articles.Articles.Query().ForUpdate().Where(articles.Articles.Key().Eq(article.ID)).Require(ctx, tx); err != nil {
 			return err
 		}
 		waiting, cancel := context.WithTimeout(ctx, 300*time.Millisecond)

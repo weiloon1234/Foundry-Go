@@ -80,7 +80,7 @@ func relationExistence[M any](p *relationPlan) Predicate[M] {
 	}
 	node := relationExistsNode(p)
 	node.RelationCheck = func() error { return validateRelationMetadata(p, nil) }
-	result.expression = querycore.SubqueryPredicate{Query: node}
+	result.expression = querycore.RetainPredicate(querycore.SubqueryPredicate{Query: node})
 	return result
 }
 
@@ -90,7 +90,7 @@ func relationExistsNode(p *relationPlan) querycore.Subquery {
 		node := querycore.DirectRelationExists(p.query.ast.ModelSelect(nil), p.local, p.foreign, columns)
 		if p.morph != nil {
 			c := p.morph.kind
-			node.Node.Predicates = append(node.Node.Predicates, querycore.Comparison{Operand: querycore.FieldRef{Table: p.slot.owner.model.Table, Column: c.metadata.Name}, Operator: querycore.Equal, Values: []any{p.morph.name}, Bind: func(v any) (driver.Value, error) { return v, nil }})
+			node.Node.Predicates = append(node.Node.Predicates, querycore.Comparison{Operand: querycore.FieldRef{Table: p.slot.owner.model.Table, Column: c.metadata.Name}, Operator: querycore.Equal, Values: querycore.RetainComparisonValues([]any{p.morph.name}), Bind: func(v any) (driver.Value, error) { return v, nil }})
 		}
 		return node
 	}

@@ -10,7 +10,7 @@ import (
 // Fixed literal codecs belong outside generic shells. These private arguments
 // are consumed only by operations whose typed operand establishes ownership.
 func scalarParameter(kind codec.ParameterType, v driver.Value, err error) ormcore.OperationArgument {
-	return ormcore.OperationArgument{Kind: kind, Value: ormcore.Expression{Node: querycore.ParameterNode{Kind: kind, Value: v, Err: err}, ReferenceFree: true, Err: err}}
+	return ormcore.OperationArgument{Kind: kind, Value: ormcore.Expression{Node: querycore.ParameterNode{Kind: kind, Value: querycore.RetainLiteral(v), Err: err}, ReferenceFree: true, Err: err}}
 }
 func integerArgument(value int32) ormcore.OperationArgument {
 	v, err := codec.Signed[int32]().Bind(value)

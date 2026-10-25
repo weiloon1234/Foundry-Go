@@ -10,7 +10,7 @@ import (
 type ParameterNode struct {
 	Sensitive bool
 	Kind      codec.ParameterType
-	Value     driver.Value
+	Value     *LiteralState
 	Err       error
 	// literal renders a generated declaration constant, such as a JSON
 	// property name, inline as an escaped schema literal instead of a bind
@@ -58,7 +58,7 @@ func (p ParameterNode) Validate() error {
 	if p.Err != nil {
 		return p.Err
 	}
-	if !driver.IsValue(p.Value) {
+	if !driver.IsValue(LiteralValue(p.Value)) {
 		return fault.New(fault.Invalid, "parameter expression has an invalid driver value")
 	}
 	_, err := ParameterSQLType(p.Kind)
@@ -71,9 +71,9 @@ func (c *Compiler) ParameterSQL(p ParameterNode) (string, error) {
 	}
 	typeName, _ := ParameterSQLType(p.Kind)
 	if p.Literal {
-		text, err := c.SchemaLiteral(p.Value)
+		text, err := c.SchemaLiteral(LiteralValue(p.Value))
 		return "CAST(" + text + " AS " + typeName + ")", err
 	}
-	placeholder, err := c.Parameter(p.Value)
+	placeholder, err := c.Parameter(LiteralValue(p.Value))
 	return "CAST(" + placeholder + " AS " + typeName + ")", err
 }

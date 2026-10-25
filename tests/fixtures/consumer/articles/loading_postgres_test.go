@@ -11,18 +11,20 @@ import (
 	"foundry.test/consumer/internal/queryfixture"
 	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/translations"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // seeded is one application with a fully populated and an empty article.
 type seeded struct {
 	fixture
-	x           articles.ArticleExtensionSlots
+	x           articles.ArticleSlotHandles
 	full, empty articles.Article
 }
 
@@ -33,25 +35,25 @@ func seed(t *testing.T) seeded {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	full, empty := f.createArticle(t, "a-full"), f.createArticle(t, "b-empty")
-	ref := full.FoundryReference()
+	ref := articles.ArticleIdentity.ReferenceOf(full)
 	for locale, text := range map[i18n.LocaleID]string{"en": "Hello", "ms": "Helo"} {
-		if err := x.Title.Field().Set(t.Context(), runtime.Translations, ref, locale, text); err != nil {
+		if err := translations.FieldOf(x.Title).Set(t.Context(), runtime.Translations, ref, locale, text); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := x.Summary.Field().Set(t.Context(), runtime.Translations, ref, "en", ""); err != nil {
+	if err := translations.FieldOf(x.Summary).Set(t.Context(), runtime.Translations, ref, "en", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := x.SEO.Key().Set(t.Context(), runtime.Metadata, ref, articles.SEO{Canonical: value.Set("/hello"), Keywords: value.Set([]string{"go"})}); err != nil {
+	if err := metadata.KeyOf(x.SEO).Set(t.Context(), runtime.Metadata, ref, articles.SEO{Canonical: value.Set("/hello"), Keywords: value.Set([]string{"go"})}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := x.Logo.Collection().Replace(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 40)), OriginalName: "logo.png"}); err != nil {
+	if _, err := attachments.OneCollection(x.Logo).Replace(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 40)), OriginalName: "logo.png"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"first.png", "second.png"} {
-		if _, err := x.Galleries.Collection().Add(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 24)), OriginalName: name}); err != nil {
+		if _, err := attachments.ManyCollection(x.Galleries).Add(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 24)), OriginalName: name}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -69,7 +71,7 @@ func (s seeded) read(t *testing.T, run func(ctx context.Context, tx *database.Tx
 // not loaded, loaded empty and loaded present without further I/O.
 func TestSlotsLoadThroughWith(t *testing.T) {
 	s := seed(t)
-	fields := articles.ArticleFields()
+	fields := articles.Articles
 	for name, executor := range map[string]func(*database.Tx) database.Executor{
 		"joined transaction": func(tx *database.Tx) database.Executor { return tx },
 		"store snapshot":     func(tx *database.Tx) database.Executor { return &queryfixture.QueryCounter{Executor: tx} },
@@ -78,8 +80,8 @@ func TestSlotsLoadThroughWith(t *testing.T) {
 			var list []articles.Article
 			s.read(t, func(ctx context.Context, tx *database.Tx) error {
 				var err error
-				list, err = articles.QueryArticles().
-					With(articles.ArticleRelations().Author, s.x.Title, s.x.Summary, s.x.Logo, s.x.Galleries, s.x.SEO).
+				list, err = articles.Articles.Query().
+					With(articles.ArticleAuthor, s.x.Title.Relation(articles.Articles.Title), s.x.Summary.Relation(articles.Articles.Summary), s.x.Logo.Relation(articles.Articles.Logo), s.x.Galleries.Relation(articles.Articles.Galleries), s.x.SEO.Relation(articles.Articles.SEO)).
 					OrderBy(fields.Slug.Asc()).All(ctx, executor(tx))
 				return err
 			})
@@ -148,7 +150,7 @@ func TestSlotsLoadThroughWith(t *testing.T) {
 	var plain articles.Article
 	s.read(t, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		plain, err = articles.QueryArticles().RequireFind(ctx, tx, s.full.ID)
+		plain, err = articles.Articles.Query().Where(articles.Articles.Key().Eq(s.full.ID)).Require(ctx, tx)
 		return err
 	})
 	if plain.Title.IsLoaded() || plain.Galleries.IsLoaded() {
@@ -169,17 +171,17 @@ func TestSlotLinksMatchCollectionLinks(t *testing.T) {
 	}
 	var full, empty articles.Article
 	s.read(t, func(ctx context.Context, tx *database.Tx) error {
-		loaded, err := articles.QueryArticles().With(s.x.Logo, s.x.Galleries).OrderBy(articles.ArticleFields().Slug.Asc()).All(ctx, tx)
+		loaded, err := articles.Articles.Query().With(s.x.Logo.Relation(articles.Articles.Logo), s.x.Galleries.Relation(articles.Articles.Galleries)).OrderBy(articles.Articles.Slug.Asc()).All(ctx, tx)
 		if err == nil {
 			full, empty = loaded[0], loaded[1]
 		}
 		return err
 	})
-	stored, err := s.x.Logo.Collection().List(t.Context(), runtime.Attachments, full.FoundryReference())
+	stored, err := attachments.OneCollection(s.x.Logo).List(t.Context(), runtime.Attachments, articles.ArticleIdentity.ReferenceOf(full))
 	if err != nil || len(stored) != 1 {
 		t.Fatal("explicit list", err)
 	}
-	_, want := s.x.Logo.Collection().PublicURLOf(t.Context(), runtime.Attachments, stored[0])
+	_, want := attachments.OneCollection(s.x.Logo).PublicURLOf(t.Context(), runtime.Attachments, stored[0])
 	_, got := s.x.Logo.PublicURL(t.Context(), full)
 	if (want == nil) != (got == nil) || (want != nil && want.Error() != got.Error()) {
 		t.Fatal("slot link differs from the collection link", want, got)
@@ -191,7 +193,7 @@ func TestSlotLinksMatchCollectionLinks(t *testing.T) {
 		t.Fatal("an unloaded slot produced a link", err)
 	}
 	file, _ := full.Galleries.Get()
-	_, want = s.x.Galleries.Collection().VariantPublicURLOf(t.Context(), runtime.Attachments, galleryAttachment(t, s, runtime, file[0].ID()), articles.Thumbnail)
+	_, want = attachments.ManyCollection(s.x.Galleries).VariantPublicURLOf(t.Context(), runtime.Attachments, galleryAttachment(t, s, runtime, file[0].ID()), articles.Thumbnail)
 	_, got = s.x.Galleries.VariantURL(t.Context(), full, file[0], articles.Thumbnail)
 	if (want == nil) != (got == nil) || (want != nil && want.Error() != got.Error()) {
 		t.Fatal("slot variant link differs from the collection link", want, got)
@@ -202,9 +204,9 @@ func TestSlotLinksMatchCollectionLinks(t *testing.T) {
 // LoadMissing, pagination, chunking and nested relations.
 func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 	s := seed(t)
-	fields := articles.ArticleFields()
+	fields := articles.Articles
 	s.read(t, func(ctx context.Context, tx *database.Tx) error {
-		loaded, err := articles.QueryArticles().With(s.x.Title).Load(ctx, tx, []articles.Article{s.full, s.full})
+		loaded, err := orm.Load(ctx, tx, []articles.Article{s.full, s.full}, s.x.Title.Relation(articles.Articles.Title))
 		if err != nil {
 			return err
 		}
@@ -213,28 +215,28 @@ func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 		}
 		// LoadMissing's zero-statement case is measured with a statement
 		// observer in TestSlotLoadingStatementsDoNotGrowWithParents.
-		missing, err := articles.QueryArticles().With(s.x.Title).LoadMissing(ctx, tx, loaded)
+		missing, err := orm.LoadMissing(ctx, tx, loaded, s.x.Title.Relation(articles.Articles.Title))
 		if err != nil {
 			return err
 		}
 		if !missing[0].Title.IsLoaded() {
 			t.Fatal("LoadMissing dropped a loaded slot")
 		}
-		page, err := articles.QueryArticles().With(s.x.SEO).OrderBy(fields.Slug.Asc()).Paginate(ctx, tx, query.PageRequest{Number: 1, Size: 1})
+		page, err := articles.Articles.Query().With(s.x.SEO.Relation(articles.Articles.SEO)).OrderBy(fields.Slug.Asc()).Paginate(ctx, tx, orm.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err
 		}
 		if len(page.Items) != 1 || !page.Items[0].SEO.IsLoaded() || page.Total != 2 {
 			t.Fatal("paginated slot loading")
 		}
-		simple, err := articles.QueryArticles().With(s.x.SEO).OrderBy(fields.Slug.Asc()).SimplePaginate(ctx, tx, query.PageRequest{Number: 1, Size: 1})
+		simple, err := articles.Articles.Query().With(s.x.SEO.Relation(articles.Articles.SEO)).OrderBy(fields.Slug.Asc()).SimplePaginate(ctx, tx, orm.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err
 		}
 		if len(simple.Items) != 1 || !simple.Items[0].SEO.IsLoaded() || !simple.HasMore {
 			t.Fatal("simple paginated slot loading")
 		}
-		cursor, err := articles.QueryArticles().With(s.x.Title).OrderBy(fields.Slug.Asc()).CursorPaginate(ctx, tx, query.CursorRequest[articles.Article]{Size: 1})
+		cursor, err := orm.CursorPaginate(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).OrderBy(fields.Slug.Asc()), orm.CursorRequest[articles.Article]{Size: 1})
 		if err != nil {
 			return err
 		}
@@ -242,7 +244,7 @@ func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 		if len(cursor.Items) != 1 || !cursor.Items[0].Title.IsLoaded() || !more {
 			t.Fatal("cursor paginated slot loading")
 		}
-		following, err := articles.QueryArticles().With(s.x.Title).OrderBy(fields.Slug.Asc()).CursorPaginate(ctx, tx, query.CursorRequest[articles.Article]{Size: 1, After: value.Set(next)})
+		following, err := orm.CursorPaginate(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).OrderBy(fields.Slug.Asc()), orm.CursorRequest[articles.Article]{Size: 1, After: value.Set(next)})
 		if err != nil {
 			return err
 		}
@@ -250,7 +252,7 @@ func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 			t.Fatal("second cursor page slot loading")
 		}
 		chunked := 0
-		if err := articles.QueryArticles().With(s.x.Galleries).EachChunked(ctx, tx, 1, func(article articles.Article) error {
+		if err := articles.Articles.Query().With(s.x.Galleries.Relation(articles.Articles.Galleries)).EachChunked(ctx, tx, 1, func(article articles.Article) error {
 			if !article.Galleries.IsLoaded() {
 				t.Fatal("chunked slot loading")
 			}
@@ -262,7 +264,7 @@ func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 		if chunked != 2 {
 			t.Fatal("chunk count", chunked)
 		}
-		authors, err := articles.QueryArticleAuthors().With(articles.AuthorRelations().Articles.With(s.x.Title)).All(ctx, tx)
+		authors, err := articles.Authors.Query().With(articles.AuthorArticles.With(s.x.Title.Relation(articles.Articles.Title))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -289,36 +291,36 @@ func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 func TestSlotLoadingBoundaries(t *testing.T) {
 	s := seed(t)
 	if err := s.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().Delete(ctx, tx, s.empty.ID)
+		_, err := articles.Articles.Delete(ctx, tx, s.empty.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	s.read(t, func(ctx context.Context, tx *database.Tx) error {
-		trashed, err := articles.QueryArticles().OnlyTrashed().With(s.x.Title, s.x.Galleries).All(ctx, tx)
+		trashed, err := articles.Articles.Query().OnlyTrashed().With(s.x.Title.Relation(articles.Articles.Title), s.x.Galleries.Relation(articles.Articles.Galleries)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if len(trashed) != 1 || trashed[0].Title.IsLoaded() || trashed[0].Galleries.IsLoaded() {
 			t.Fatal("a soft-deleted owner's slots must stay unloaded")
 		}
-		if _, err := articles.QueryArticles().With(articles.ArticleExtensions().Title).All(ctx, tx); !errors.Is(err, fault.Missing) {
+		if _, err := articles.Articles.Query().With(articles.ArticleSlots.Title.Relation(articles.Articles.Title)).All(ctx, tx); !errors.Is(err, fault.Missing) {
 			t.Fatal("an unbound slot must fail before loading", err)
 		}
-		limited := query.RelationLimits{BatchSize: 500, MaxRows: 1, MaxDepth: 8}
-		if _, err := articles.QueryArticles().WithRelationLimits(limited).With(s.x.Galleries).All(ctx, tx); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "exceed the shared loading budget") {
+		limited := orm.RelationLimits{BatchSize: 500, MaxRows: 1, MaxDepth: 8}
+		if _, err := orm.WithRelationLimits(articles.Articles.Query(), limited).With(s.x.Galleries.Relation(articles.Articles.Galleries)).All(ctx, tx); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "exceed the shared loading budget") {
 			t.Fatal("two gallery files exceeded a one-value relation budget", err)
 		}
-		if _, err := articles.QueryArticles().With(s.x.Title, s.x.Title).All(ctx, tx); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "registered more than once") {
+		if _, err := articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title), s.x.Title.Relation(articles.Articles.Title)).All(ctx, tx); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "registered more than once") {
 			t.Fatal("a repeated slot was accepted", err)
 		}
-		shallow := query.RelationLimits{BatchSize: 500, MaxRows: 100, MaxDepth: 1}
-		if _, err := articles.QueryArticleAuthors().WithRelationLimits(shallow).With(articles.AuthorRelations().Articles.With(s.x.Title)).All(ctx, tx); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "depth bound") {
+		shallow := orm.RelationLimits{BatchSize: 500, MaxRows: 100, MaxDepth: 1}
+		if _, err := orm.WithRelationLimits(articles.Authors.Query(), shallow).With(articles.AuthorArticles.With(s.x.Title.Relation(articles.Articles.Title))).All(ctx, tx); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "depth bound") {
 			t.Fatal("a slot nested beyond MaxDepth was accepted", err)
 		}
 		cancelled, cancel := context.WithCancel(ctx)
 		cancel()
-		if _, err := articles.QueryArticles().With(s.x.Title).Load(cancelled, tx, []articles.Article{s.full}); !errors.Is(err, context.Canceled) {
+		if _, err := orm.Load(cancelled, tx, []articles.Article{s.full}, s.x.Title.Relation(articles.Articles.Title)); !errors.Is(err, context.Canceled) {
 			t.Fatal("a cancelled slot load ran", err)
 		}
 		return nil
@@ -335,10 +337,10 @@ func TestSlotLoadingReadsTheCallersTransaction(t *testing.T) {
 	}
 	rollback := errors.New("discard draft")
 	err = s.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		if err := s.x.Title.Field().SetIn(ctx, tx, runtime.Translations, s.empty.FoundryReference(), "en", "Draft"); err != nil {
+		if err := translations.FieldOf(s.x.Title).SetIn(ctx, tx, runtime.Translations, articles.ArticleIdentity.ReferenceOf(s.empty), "en", "Draft"); err != nil {
 			return err
 		}
-		joined, err := articles.QueryArticles().With(s.x.Title).RequireFind(ctx, tx, s.empty.ID)
+		joined, err := articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).Where(articles.Articles.Key().Eq(s.empty.ID)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -347,7 +349,7 @@ func TestSlotLoadingReadsTheCallersTransaction(t *testing.T) {
 		} else if draft, _ := text.Get(); draft != "Draft" {
 			t.Fatal("the joined load missed its own write", err)
 		}
-		separate, err := articles.QueryArticles().With(s.x.Title).RequireFind(ctx, &queryfixture.QueryCounter{Executor: tx}, s.empty.ID)
+		separate, err := articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)).Where(articles.Articles.Key().Eq(s.empty.ID)).Require(ctx, &queryfixture.QueryCounter{Executor: tx})
 		if err != nil {
 			return err
 		}
@@ -363,7 +365,7 @@ func TestSlotLoadingReadsTheCallersTransaction(t *testing.T) {
 
 func galleryAttachment(t *testing.T, s seeded, runtime slots.Runtime, id attachments.ID[articles.Article]) attachments.Attachment[articles.Article, model.ID[articles.Article]] {
 	t.Helper()
-	file, err := s.x.Galleries.Collection().Find(t.Context(), runtime.Attachments, s.full.FoundryReference(), id)
+	file, err := attachments.ManyCollection(s.x.Galleries).Find(t.Context(), runtime.Attachments, articles.ArticleIdentity.ReferenceOf(s.full), id)
 	if err != nil {
 		t.Fatal(err)
 	}

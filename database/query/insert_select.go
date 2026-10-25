@@ -59,7 +59,7 @@ func (p InsertSelect[S, M]) Exec(ctx context.Context, writer database.Transactor
 		return 0, err
 	}
 	return executeModelStatement(ctx, writer, p.needsPreparation(), p.prepare(false), func(ctx context.Context, tx *database.Tx, statement Statement) (int64, error) {
-		result, err := tx.Exec(statement.executionContext(ctx), statement.sql, statement.arguments...)
+		result, err := tx.Exec(statement.executionContext(ctx), statement.SQL(), statement.coreStatement().Bindings...)
 		return result.RowsAffected, err
 	})
 }

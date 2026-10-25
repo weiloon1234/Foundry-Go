@@ -231,7 +231,7 @@ func eachCandidates[M any](ctx context.Context, tx *database.Tx, q queryState, s
 	return candidates, keys, nil
 }
 func eachPrimary(q queryState, key driver.Value) querycore.Expression {
-	return querycore.Comparison{Operand: querycore.FieldRef{Table: q.ast.Table, Column: q.table.model.Primary}, Operator: querycore.Equal, Values: []any{key}, Bind: func(v any) (driver.Value, error) { return v, nil }}
+	return querycore.Comparison{Operand: querycore.FieldRef{Table: q.ast.Table, Column: q.table.model.Primary}, Operator: querycore.Equal, Values: querycore.RetainComparisonValues([]any{key}), Bind: func(v any) (driver.Value, error) { return v, nil }}
 }
 
 func eachMutation[M any](ctx context.Context, tx *database.Tx, q queryState, kind querycore.MutationKind, assignments []Assignment[M]) (M, error) {

@@ -20,7 +20,7 @@ func ValidateConflictMutator(u ConflictUpdate, field FieldMutator) error {
 		if u.MutatedLiteral {
 			expected = field.Output
 		}
-		if reflect.TypeOf(u.Literal.Value) != expected {
+		if reflect.TypeOf(StoredInput(u.Literal.Value)) != expected {
 			return fault.New(fault.Invalid, "conflict literal does not match its declared mutated field type")
 		}
 		return nil

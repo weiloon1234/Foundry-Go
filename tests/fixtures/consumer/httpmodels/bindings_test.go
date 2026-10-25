@@ -17,7 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-func TestGeneratedModelBindingKeepsStoredModelOutOfResponse(t *testing.T) {
+func TestDeclaredModelBindingKeepsStoredModelOutOfResponse(t *testing.T) {
 	id, err := model.ParseID[models.User]("018f47aa-7c89-7f10-bf8f-9df04f572d86")
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func (e *failingExecutor) Query(_ context.Context, statement string, args ...any
 	return nil, e.cause
 }
 
-func TestGeneratedKeyBindingsUseScopedParameterizedQueries(t *testing.T) {
+func TestDeclaredKeyBindingsUseScopedParameterizedQueries(t *testing.T) {
 	cause := errors.New("private database failure")
 	db := &failingExecutor{cause: cause}
 	id, err := model.ParseID[models.User]("018f47aa-7c89-7f10-bf8f-9df04f572d86")

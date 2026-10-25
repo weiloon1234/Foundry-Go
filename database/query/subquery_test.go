@@ -35,7 +35,7 @@ func TestSubqueriesShareScopesAndParameterOrder(t *testing.T) {
 	}
 	// Requalification touches only the outer membership column, preserving the
 	// inner table reference even when its original name matches the outer one.
-	p := id.InQuery(inner).expression
+	p := predicateExpression(id.InQuery(inner).expression)
 	changed := requalify(p, "outer_record").(subqueryPredicate)
 	if changed.Operand.(fieldRef).Table != "outer_record" || p.(subqueryPredicate).Operand.(fieldRef).Table != "records" || changed.Query.Node.Source.Table != "records" {
 		t.Fatal("membership requalification crossed a SELECT boundary")

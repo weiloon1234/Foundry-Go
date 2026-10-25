@@ -116,18 +116,18 @@ func mfaSetup(t *testing.T) *mfaFixture {
 		if _, err := tx.Exec(t.Context(), `CREATE TABLE mfa_accounts(id uuid PRIMARY KEY,email text NOT NULL,password text NOT NULL,enabled boolean NOT NULL,mfa_enabled boolean NOT NULL,require_mfa boolean NOT NULL)`); err != nil {
 			return err
 		}
-		s.account, err = multifactor.QueryMfaAccounts().Create(t.Context(), tx, multifactor.AccountDraft{}.SetEmail("member@example.test").SetPassword(hash).SetEnabled(true).SetMFAEnabled(false).SetRequireMFA(false))
+		s.account, err = multifactor.AccountRecords.Insert(t.Context(), tx, multifactor.AccountRecords.Email.Set("member@example.test"), multifactor.AccountRecords.Password.Set(hash), multifactor.AccountRecords.Enabled.Set(true), multifactor.AccountRecords.MFAEnabled.Set(false), multifactor.AccountRecords.RequireMFA.Set(false))
 		return err
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.provider = auth.DefineProvider("mfa.accounts", (multifactor.Account{}).FoundryReference(), func(ctx context.Context, id model.ID[multifactor.Account]) (value.Optional[multifactor.Account], error) {
+	s.provider = auth.DefineProvider("mfa.accounts", multifactor.AccountIdentity.ReferenceOf(multifactor.Account{}), func(ctx context.Context, id model.ID[multifactor.Account]) (value.Optional[multifactor.Account], error) {
 		s.providerLookups.Add(1)
 		var found value.Optional[multifactor.Account]
 		err := s.within(ctx, func(tx *database.Tx) error {
 			var err error
-			found, err = multifactor.QueryMfaAccounts().Find(ctx, tx, id)
+			found, err = multifactor.AccountRecords.Find(ctx, tx, id)
 			return err
 		})
 		return found, err
@@ -236,7 +236,7 @@ func (s *mfaFixture) current(t *testing.T) multifactor.Account {
 	t.Helper()
 	var account multifactor.Account
 	err := s.within(t.Context(), func(tx *database.Tx) error {
-		found, err := multifactor.QueryMfaAccounts().Find(t.Context(), tx, s.account.ID)
+		found, err := multifactor.AccountRecords.Find(t.Context(), tx, s.account.ID)
 		if err != nil {
 			return err
 		}
@@ -263,11 +263,11 @@ func (s *mfaFixture) issue(t *testing.T, result multifactor.PasswordResult) {
 }
 func (s *mfaFixture) countCredentials(t *testing.T, want int) {
 	t.Helper()
-	sessions, err := s.sessions.List(t.Context(), s.account.FoundryReference())
+	sessions, err := s.sessions.List(t.Context(), multifactor.AccountIdentity.ReferenceOf(s.account))
 	if err != nil || len(sessions) != want {
 		t.Fatalf("session count=%d want=%d: %v", len(sessions), want, err)
 	}
-	tokens, err := s.tokens.List(t.Context(), s.account.FoundryReference())
+	tokens, err := s.tokens.List(t.Context(), multifactor.AccountIdentity.ReferenceOf(s.account))
 	if err != nil || len(tokens) != want {
 		t.Fatalf("token count=%d want=%d: %v", len(tokens), want, err)
 	}
@@ -498,7 +498,7 @@ func TestPostgresMFAPrunesOnlyPendingAndPreservesRequiredPolicy(t *testing.T) {
 		t.Fatal("confirmed factor pruned", removed, err)
 	}
 	err = s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := multifactor.QueryMfaAccounts().Update(t.Context(), tx, s.account.ID, multifactor.AccountDraft{}.SetRequireMFA(true))
+		_, err := multifactor.AccountRecords.Update(t.Context(), tx, s.account.ID, multifactor.AccountRecords.RequireMFA.Set(true))
 		return err
 	})
 	if err != nil {

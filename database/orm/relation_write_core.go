@@ -92,7 +92,7 @@ func pivotKeyPredicate(c *columnCore, keys []pivotWriteKey, membership bool) que
 	if membership {
 		op = querycore.In
 	}
-	return querycore.Comparison{Operand: querycore.FieldRef{Table: c.owner.model.Table, Column: c.metadata.Name}, Operator: op, Values: values, Kind: c.kind, Bind: func(raw any) (driver.Value, error) {
+	return querycore.Comparison{Operand: querycore.FieldRef{Table: c.owner.model.Table, Column: c.metadata.Name}, Operator: op, Values: querycore.RetainComparisonValues(values), Kind: c.kind, Bind: func(raw any) (driver.Value, error) {
 		v, err := c.storedAssignment(raw)
 		if err != nil {
 			return nil, err

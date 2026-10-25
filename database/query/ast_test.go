@@ -2,6 +2,7 @@ package query
 
 import (
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"sync"
 	"testing"
 
@@ -17,7 +18,7 @@ func TestQueryAndBindingsAreIndependent(t *testing.T) {
 	values := []int{1, 2}
 	p := age.In(values...)
 	values[0] = 99
-	if p.expression.(comparison).Values[0] != 1 {
+	if querycore.ComparisonValues(predicateExpression(p.expression).(comparison).Values)[0] != 1 {
 		t.Fatal("membership inputs alias query")
 	}
 	base := For[user]("users").Where(name.Eq("base")).OrderBy(name.Asc())

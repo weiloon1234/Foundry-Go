@@ -80,7 +80,7 @@ func (l ValueLookup[M, V]) batch(ctx context.Context, ex database.Executor, inpu
 			predicates := make([]Predicate[M], 0, len(batch))
 			for _, item := range batch {
 				inner := q.Where(comparison[M](l.valueCore.field, querycore.Equal, []V{item}))
-				predicates = append(predicates, Predicate[M]{owner: q.state.table, expression: querycore.SubqueryPredicate{Query: querycore.Subquery{Node: inner.state.ast.ModelSelect(q.state.table.selections), Err: inner.state.err}}})
+				predicates = append(predicates, Predicate[M]{owner: q.state.table, expression: querycore.RetainPredicate(querycore.SubqueryPredicate{Query: querycore.Subquery{Node: inner.state.ast.ModelSelect(q.state.table.selections), Err: inner.state.err}})})
 			}
 			q = q.Where(predicates...)
 		} else {

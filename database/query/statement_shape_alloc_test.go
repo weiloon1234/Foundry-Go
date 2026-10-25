@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/statementmeta"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -13,7 +14,7 @@ import (
 func TestInactiveRelationBatchCompileAllocations(t *testing.T) {
 	r := testThrough()
 	id := NewScalarField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	keys := id.In(1, 2, 3).expression
+	keys := predicateExpression(id.In(1, 2, 3).expression)
 	for _, ctx := range []context.Context{nil, context.Background()} {
 		// The low-level SELECT compiler is the control: no tracking is installed.
 		control := func() (Statement, error) {
@@ -22,7 +23,7 @@ func TestInactiveRelationBatchCompileAllocations(t *testing.T) {
 			node.Limit = value.Set(10)
 			c := compiler{ScopeContext: ctx, ScopeShapeOnly: ctx == nil}
 			sql, err := c.CompileSelect(node)
-			return Statement{sql: sql, arguments: c.Arguments}, err
+			return statementFromCore(querycore.Statement{SQLText: sql, Bindings: c.Arguments}), err
 		}
 		var got Statement
 		var err error
@@ -39,8 +40,8 @@ func TestInactiveRelationBatchCompileAllocations(t *testing.T) {
 				panic(err)
 			}
 		})
-		if inactive != ordinary || got.shape != "" || !reflect.DeepEqual(got, expected) {
-			t.Fatalf("ctx=%v: inactive %.0f, ordinary %.0f; equal=%v, shape=%q", ctx, inactive, ordinary, reflect.DeepEqual(got, expected), got.shape)
+		if inactive != ordinary || got.coreStatement().Shape != "" || !reflect.DeepEqual(got, expected) {
+			t.Fatalf("ctx=%v: inactive %.0f, ordinary %.0f; equal=%v, shape=%q", ctx, inactive, ordinary, reflect.DeepEqual(got, expected), got.coreStatement().Shape)
 		}
 		t.Logf("ctx=%v: inactive=control=%.0f allocations", ctx, inactive)
 	}
@@ -55,7 +56,7 @@ func TestInactiveRelationBatchCompileAllocations(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := ctx != nil && statementmeta.Active(ctx)
-		if (through.shape != "") != want || (aggregate.shape != "") != want {
+		if (through.coreStatement().Shape != "") != want || (aggregate.coreStatement().Shape != "") != want {
 			t.Fatal("relation compilation did not re-evaluate scope")
 		}
 	}
@@ -69,7 +70,7 @@ func TestCompileInOverridesStoredDiagnosticScope(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if (s.shape != "") != statementmeta.Active(ctx) {
+		if (s.coreStatement().Shape != "") != statementmeta.Active(ctx) {
 			t.Fatal("stored plan scope overrode execution scope")
 		}
 	}

@@ -11,17 +11,18 @@ attachments and metadata as typed fields on the model itself.
 
 ## Shared owners
 
-Declare an owner from the generated model query and primary field once:
+Declare an owner from the ORM table and its primary handle once:
 
 ```go
-var Users = extensions.DefineOwner("users",
-    query.IdentityOf(models.QueryUsers().Query, models.UserFields().ID))
+var Users = extensions.DefineORMOwner("users",
+    orm.IdentityOf(models.Users.Table, models.Users.Key()),
+    extensions.OwnerOptions{StorageModel: "users"})
 ```
 
-`IdentityOf` requires bare generated model metadata and the actual primary field.
-Different model/key types fail at compilation; wrong manually supplied fields,
-scoped queries and sensitive keys fail validation. It retains the primary codec,
-including natural keys, and the generated soft-delete policy. It selects stored
+`orm.IdentityOf` requires the table declaration and its actual primary handle.
+Different model/key types fail at compilation; a handle from another declaration
+and sensitive keys fail validation. It retains the primary codec, including
+natural keys, and the declared soft-delete policy. It selects stored
 keys directly, without model presentation getters or retrieval observers.
 
 Register each owner with `extensions.NewRegistry(Users.Registration(), ...)`,
@@ -149,9 +150,20 @@ should use ordinary typed model tables.
 retains model ownership and does not implicitly serialize its private value.
 Decode it with its matching key or use `DynamicValue` explicitly for an
 administrative export. `Forget` removes one key, while `DeleteAll` removes the
-owner's metadata. `Theme.Matching(ctx, manager, value)` returns a typed membership
+owner's metadata. `metadata.Matching(ctx, manager, Theme, input)` returns an ORM membership
 predicate for at most 1000 matching stored owners. It is a materialized scope;
 the subsequent model query retains its own visibility and authorization filters.
+
+For ORM owners declared with `extensions.DefineORMOwner`, use the package
+functions `attachments.Matching(ctx, manager, Avatar.ForLocale("en"))`,
+`translations.Matching(ctx, manager, Label, "en", "Hello")`, and
+`metadata.Matching(ctx, manager, Theme, input)`. Pass the returned predicate to
+`Profiles.Query().Where(predicate)`. Its concrete owner type prevents using it
+on another model's query. These adapters reuse the existing bounded matching
+reads, validate stored identities, preserve exact locale/version selection and
+return a false predicate for no matches. Check the error before using the
+predicate. Zero declarations and legacy owners fail before database work.
+Legacy descriptor methods remain available for `database/query` consumers.
 
 ## Cleanup and orphan inspection
 

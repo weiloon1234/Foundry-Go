@@ -21,7 +21,7 @@ func (q QueryCore) CompileInsertSelect(c Compiler, node SelectNode, mapped map[s
 			if err != nil {
 				return Statement{}, err
 			}
-			expression = ParameterNode{Kind: kind(column.Name), Value: bound}
+			expression = ParameterNode{Kind: kind(column.Name), Value: RetainLiteral(bound)}
 		} else {
 			continue
 		}

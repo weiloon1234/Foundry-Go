@@ -31,29 +31,19 @@ func TestRealGoplsConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Check the shared probe catalogue before starting any gopls requests.
-	// This also makes a focused run catch stale consumer expressions promptly.
-	for _, probe := range consumerEditorProbes() {
-		data, err := os.ReadFile(filepath.Join(workspace, probe.file))
-		if err != nil {
-			t.Fatalf("editor probe %s: %v", probe.name, err)
-		}
-		if !strings.Contains(string(data), probe.prefix+probe.symbol) {
-			t.Fatalf("editor probe %s: consumer expression was removed from %s", probe.name, probe.file)
-		}
-	}
-	path := filepath.Join(workspace, "catalog", "product.go")
+	checkConsumerEditorAnchors(t, workspace)
+	path := filepath.Join(workspace, "package_graph_test.go")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(data)
-	marker := "models.UserDraft{}.SetID"
+	marker := "models.Users.ID.Set"
 	start := strings.Index(source, marker)
 	if start < 0 {
 		t.Fatal("consumer expression for semantic inspection was removed")
 	}
-	selector := start + len("models.UserDraft{}.")
+	selector := start + len("models.Users.")
 	for _, operation := range []string{"complete", "hover", "definition"} {
 		t.Run(operation, func(t *testing.T) {
 			parallelRealGopls(t)
@@ -93,30 +83,26 @@ func TestRealGoplsConsumer(t *testing.T) {
 				for _, item := range list.Items {
 					labels[item.Label] = true
 				}
-				for _, method := range []string{"SetEmail", "SetID", "ClearNickname"} {
+				for _, method := range []string{"Email", "ID", "Nickname"} {
 					found := false
 					for label := range labels {
 						found = found || label == method || strings.HasPrefix(label, method+"(")
 					}
 					if !found {
-						t.Fatalf("gopls did not complete generated %s: %s", method, result.Payload)
+						t.Fatalf("gopls did not complete declaration field %s: %s", method, result.Payload)
 					}
 				}
-				for label := range labels {
-					if label == "ClearEmail" || strings.HasPrefix(label, "ClearEmail(") {
-						t.Fatal("gopls exposed null clearing for non-nullable Email")
-					}
-				}
+
 			case "hover":
 				text := string(result.Payload)
-				for _, signature := range []string{"SetID", "ID[", "UserDraft"} {
+				for _, signature := range []string{"Primary[", "ID[", "User"} {
 					if !strings.Contains(text, signature) {
-						t.Fatalf("hover lost generated model signature %s: %s", signature, text)
+						t.Fatalf("hover lost handwritten model signature %s: %s", signature, text)
 					}
 				}
 			case "definition":
-				if !strings.Contains(string(result.Payload), "/models/user_foundry.gen.go") {
-					t.Fatalf("definition did not resolve the installed consumer dependency's generated method: %s", result.Payload)
+				if !strings.Contains(string(result.Payload), "/models/orm.go") {
+					t.Fatalf("definition did not resolve the installed consumer's handwritten declaration: %s", result.Payload)
 				}
 			}
 			current, err := os.ReadFile(path)
@@ -194,6 +180,29 @@ func TestRealGoplsConsumer(t *testing.T) {
 	}
 }
 
+// Check source anchors even when the real gopls gate is reserved for integration.
+func TestConsumerEditorProbeAnchors(t *testing.T) {
+	testkit.TrackExternalInputs(t)
+	checkConsumerEditorAnchors(t, "../../tests/fixtures/consumer")
+}
+
+func checkConsumerEditorAnchors(t *testing.T, workspace string) {
+	t.Helper()
+	for _, probe := range consumerEditorProbes() {
+		data, err := os.ReadFile(filepath.Join(workspace, probe.file))
+		if err != nil {
+			t.Errorf("editor probe %s: %v", probe.name, err)
+			continue
+		}
+		if !strings.Contains(string(data), probe.prefix+probe.symbol) {
+			t.Errorf("editor probe %s: consumer expression was removed from %s", probe.name, probe.file)
+		}
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+}
+
 // consumerEditorProbe owns one consumer expression and its semantic assertions.
 // The preflight and actual gopls calls use this same catalogue.
 type consumerEditorProbe struct {
@@ -243,10 +252,10 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"tooling-cli-parse", "tooling/commands.go", "registry.", "Parse", []string{"Parse", "Describe"}, []string{"Invocation", "[]string", "Writer"}, "/cli/command.go"},
 		{"tooling-cli-invocation", "tooling/commands.go", "invocation.", "Run", []string{"Run", "Name"}, []string{"Context", "Resolver", "Streams"}, "/cli/command.go"},
 		{"tooling-inspection", "tooling/commands.go", "inspection.", "Collect", []string{"Collect", "Command", "Write"}, []string{"Sources", "Report", "error"}, "/inspection/report.go"},
-		{"tooling-factory-new", "tooling/database.go", "factory.", "New", []string{"New", "Sequence", "Factory"}, []string{"Build[", "Factory[", "error"}, "/testkit/factory/factory.go"},
-		{"tooling-query-plan", "tooling/database.go", "models.QueryUsers().Limit(10).", "Explain", []string{"Explain", "ExplainAnalyze", "All"}, []string{"Executor", "Plan", "error"}, "/database/query/explain.go"},
-		{"tooling-locked-analysis", "tooling/database.go", "models.QueryUsers().ForUpdate().", "ExplainAnalyze", []string{"Explain", "ExplainAnalyze", "NoWait"}, []string{"Tx", "Plan", "error"}, "/database/query/explain.go"},
-		{"tooling-factory-draft", "tooling/tooling_test.go", "records.", "Draft", []string{"Draft", "Create", "CreateMany", "WithStates"}, []string{"WriteRecordDraft", "Context", "error"}, "/testkit/factory/factory.go"},
+		{"tooling-factory-new", "tooling/database.go", "factory.", "Define", []string{"Define", "Sequence", "Factory"}, []string{"Build[", "Assignment[", "error"}, "/testkit/factory/orm.go"},
+		{"tooling-query-plan", "tooling/database.go", "orm.", "Explain", []string{"Explain", "ExplainAnalyze", "ExplainLocked"}, []string{"Executor", "Plan", "error"}, "/database/orm/explain.go"},
+		{"tooling-locked-analysis", "tooling/database.go", "orm.", "ExplainAnalyzeLocked", []string{"ExplainLocked", "ExplainAnalyzeLocked"}, []string{"Tx", "LockedQuery[", "Plan", "error"}, "/database/orm/explain.go"},
+		{"tooling-factory-draft", "tooling/database_test.go", "records.", "Create", []string{"Draft", "Create", "CreateMany", "WithStates"}, []string{"WriteRecord", "Context", "error"}, "/testkit/factory/factory.go"},
 		{"plugin-registration", "pluginusage/bootstrap.go", "foundry.New().", "RegisterPlugin", []string{"RegisterPlugin", "Register", "Build", "Inspect", "OverrideContributions"}, []string{"Plugin", "Builder"}, "/foundation/plugins.go"},
 		{"plugin-inspection", "pluginusage/bootstrap.go", "builder.", "Inspect", []string{"Inspect", "Build", "RegisterPlugin"}, []string{"context.Context", "Inspection", "error"}, "/foundation/inspection.go"},
 		{"plugin-override", "pluginusage/bootstrap.go", "builder.", "OverrideContributions", []string{"OverrideContributions", "RegisterPlugin", "Replace"}, []string{"ProviderID", "Registrar", "Builder"}, "/foundation/inspection.go"},
@@ -263,7 +272,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"idempotency-configured-store", "idempotenthttp/application.go", "services.", "Idempotency", []string{"Idempotency", "Database", "Events"}, []string{"Store", "error"}, "/application/idempotency.go"},
 		{"scoped-pool-settings", "isolatedhttp/isolation_test.go", "environment.", "Settings", []string{"Settings", "Start", "Migrate"}, []string{"DatabaseSettings"}, "/testkit/postgres/application/environment.go"},
 		{"scoped-named-connection", "isolatedhttp/isolation_test.go", "pgapp.", "On", []string{"On", "Bind"}, []string{"ConnectionName", "Selection"}, "/testkit/postgres/application/environment.go"},
-		{"scoped-generated-draft", "isolatedhttp/application.go", "RecordDraft{}.", "SetName", []string{"SetName", "SetText"}, []string{"string", "RecordDraft"}, "/isolatedhttp/record_foundry.gen.go"},
+		{"scoped-orm-fields", "isolatedhttp/application.go", "RecordRows.", "Name", []string{"Name", "Text", "Key", "Query"}, []string{"string", "Record"}, "/isolatedhttp/tables.go"},
 		{"nested-project-field", "nestedbindings/bindings.go", "input.Model.Parent.Child.", "Slug", []string{"ID", "TeamID", "Slug", "Team", "Tasks"}, []string{"Slug"}, "/nestedbindings/models.go"},
 		{"nested-task-field", "nestedbindings/bindings.go", "input.Model.Child.", "Slug", []string{"ID", "ProjectID", "Slug"}, []string{"Slug"}, "/nestedbindings/models.go"},
 		{"nested-alternate-key", "nestedbindings/bindings.go", "modelbinding.", "ByColumn", []string{"ByColumn", "ThroughRelation", "ThroughSelectedRelation", "Then"}, []string{"KeyColumn", "Resolver", "Executor"}, "/http/modelbinding/orm.go"},
@@ -524,18 +533,18 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"generated-http-dto-patch", "httpdto/dto_test.go", "input.", "State", []string{"Email", "Nickname", "State"}, []string{"Optional[", "Status"}, "/httpdto/dto.go"},
 		{"generated-http-path-url", "httpkernel/generated_routes_test.go", "httpkernel.UserPathDescriptor().", "URL", []string{"URL", "Pattern"}, []string{"UserPath", "string", "error"}, "/http/path.go"},
 		{"generated-http-path-id", "httpkernel/generated_routes_test.go", "input.", "User", []string{"User"}, []string{"ID[", "User"}, "/httpkernel/path_declarations.go"},
-		{"generated-model-query", "model_query_postgres_test.go", "base.Where(fields.Age.Gte(30)).", "Find", []string{"All", "First", "Find", "Count", "Each", "Where", "Create", "Update", "Delete", "Paginate", "CursorPaginate", "With", "Load", "LoadMissing"}, []string{"Find", "ID[", "User", "Optional["}, "/models/user_foundry.gen.go"},
+		{"orm-model-query", "model_query_postgres_test.go", "base.Where(fields.Age.Gte(30), fields.ID.Eq(secondID)).", "First", []string{"All", "First", "Count", "Each", "Where", "Paginate", "With"}, []string{"First", "User", "Optional["}, "/database/orm/query.go"},
 		{"generated-relation-set", "model_relations_postgres_test.go", "models.UserRelations().", "Introducer", []string{"Introducer", "Referrals", "Orders", "SingleOrder"}, []string{"Introducer", "OneRelation[", "User"}, "/models/user_foundry.gen.go"},
 		{"generated-pivot-relation", "model_through_postgres_test.go", "models.UserRelations().", "Groups", []string{"Groups", "Friends"}, []string{"Groups", "ThroughRelation[", "User", "Group", "Membership"}, "/models/user_foundry.gen.go"},
-		{"generated-extension-owner", "articles/cleanup_postgres_test.go", "articles.", "ArticleExtensionOwner", []string{"ArticleExtensionOwner", "ArticleExtensions", "ArticleExtensionDeclaration", "FoundryExtensions"}, []string{"ArticleExtensionOwner", "Owner[", "Article"}, "/articles/article_foundry.gen.go"},
-		{"generated-extension-binding", "articles/cleanup_postgres_test.go", "articles.ArticleExtensions().", "From", []string{"From", "Title", "Summary", "Logo", "Galleries", "SEO"}, []string{"From", "Runtime", "ArticleExtensionSlots"}, "/articles/article_foundry.gen.go"},
-		{"generated-extension-slot", "articles/cleanup_postgres_test.go", "x.", "Title", []string{"Title", "Summary", "Logo", "Galleries", "SEO", "From"}, []string{"Title", "TextSlot[", "Article"}, "/articles/article_foundry.gen.go"},
+		{"orm-extension-owner", "articles/cleanup_postgres_test.go", "articles.", "ArticleOwner", []string{"ArticleOwner", "ArticleSlots", "ORMExtensionDeclaration", "Tables"}, []string{"ArticleOwner", "Owner[", "Article"}, "/articles/tables.go"},
+		{"orm-extension-binding", "articles/cleanup_postgres_test.go", "articles.ArticleSlots.", "From", []string{"From", "Title", "Summary", "Logo", "Galleries", "SEO"}, []string{"From", "Runtime", "ArticleSlotHandles"}, "/articles/tables.go"},
+		{"orm-extension-slot", "articles/cleanup_postgres_test.go", "x.", "Title", []string{"Title", "Summary", "Logo", "Galleries", "SEO", "From"}, []string{"Title", "TextHandle[", "Article"}, "/articles/tables.go"},
 		{"extension-slot-read", "articles/loading_postgres_test.go", "full.Title.", "Resolve", []string{"Resolve", "ResolveRequest", "Exact", "Values", "IsLoaded"}, []string{"Resolve", "Optional[", "Resolved"}, "/translations/slot.go"},
-		{"extension-slot-link", "articles/loading_postgres_test.go", "s.x.Logo.", "PublicURL", []string{"PublicURL", "URL", "TemporaryURL", "VariantURL", "Collection", "From"}, []string{"PublicURL", "Optional[", "string"}, "/attachments/slot_legacy.go"},
-		{"extension-slot-write", "articles/writes_postgres_test.go", "x.Title.", "SaveIn", []string{"Save", "SaveIn", "Sync", "SyncIn", "ForgetIn", "ClearIn", "Rule", "Field"}, []string{"SaveIn", "Tx", "LocaleID"}, "/translations/slot_legacy.go"},
-		{"extension-file-accepts", "articles/writes_postgres_test.go", "x.Logo.", "Accepts", []string{"Accepts", "ReplaceFile", "Replace", "Detach", "Clear", "PublicURL"}, []string{"Accepts", "FileSource", "bool"}, "/attachments/slot_write.go"},
-		{"extension-file-prepare", "articles/writes_postgres_test.go", "x.Logo.", "PrepareFile", []string{"PrepareFile", "Prepare", "ReplaceIn", "ReplaceFile", "Discard"}, []string{"PrepareFile", "FileSource", "Prepared["}, "/attachments/slot_write.go"},
-		{"extension-files-in-transaction", "articles/writes_postgres_test.go", "x.Galleries.", "AddIn", []string{"AddIn", "AddFile", "Add", "PrepareFile", "Reorder"}, []string{"AddIn", "Tx", "Prepared["}, "/attachments/slot_legacy.go"},
+		{"extension-slot-link", "articles/loading_postgres_test.go", "s.x.Logo.", "PublicURL", []string{"PublicURL", "URL", "TemporaryURL", "VariantURL", "From"}, []string{"PublicURL", "Optional[", "string"}, "/attachments/handle_one.go"},
+		{"extension-slot-write", "articles/writes_postgres_test.go", "x.Title.", "SaveIn", []string{"Save", "SaveIn", "Sync", "SyncIn", "ForgetIn", "ClearIn", "Rule"}, []string{"SaveIn", "Tx", "LocaleID"}, "/translations/handle.go"},
+		{"extension-file-accepts", "articles/writes_postgres_test.go", "x.Logo.", "Accepts", []string{"Accepts", "ReplaceFile", "Replace", "Detach", "Clear", "PublicURL"}, []string{"Accepts", "FileSource", "bool"}, "/attachments/handle_one.go"},
+		{"extension-file-prepare", "articles/writes_postgres_test.go", "x.Logo.", "PrepareFile", []string{"PrepareFile", "Prepare", "ReplaceIn", "ReplaceFile", "Discard"}, []string{"PrepareFile", "FileSource", "Prepared["}, "/attachments/handle_one.go"},
+		{"extension-files-in-transaction", "articles/writes_postgres_test.go", "x.Galleries.", "AddIn", []string{"AddIn", "AddFile", "Add", "PrepareFile", "Reorder"}, []string{"AddIn", "Tx", "Prepared["}, "/attachments/handle_many.go"},
 		{"extension-owner-active-subjects", "articles/owner_postgres_test.go", "owner.", "ActiveSubjects", []string{"ActiveSubjects", "Active", "SubjectKey", "Subject", "Lock"}, []string{"ActiveSubjects", "map[string]bool", "[]string"}, "/extensions/owner.go"},
 		{"extension-identity-cleanup", "articles/cleanup_postgres_test.go", "metadata.", "CleanupIdentity", []string{"CleanupIdentity", "Cleanup", "InspectOrphans", "PruneOrphans"}, []string{"CleanupIdentity", "OwnerName", "Identity"}, "/metadata/records.go"},
 		{"extension-cleanup-job", "articles/durable_cleanup_postgres_test.go", "slots.", "DefineCleanupJob", []string{"DefineCleanupJob", "NewCleanup", "Declare", "ObserverName"}, []string{"DefineCleanupJob", "Name", "Policy", "CleanupJob"}, "/extensions/slots/cleanup_job.go"},
@@ -679,14 +688,14 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"typed-mutation-input-field-notice", "inputqueries/inputs_postgres_test.go", "member.", "Email", []string{"Email", "Note", "AccessEmail", "MutateEmail"}, []string{"StoredEmail", "Custom setter", "EmailInput", "Custom getter"}, "/inputqueries/models.go"},
 		{"typed-automatic-mutator", "mutatorqueries/member_foundry.gen.go", "(Member{}).", "MutateEmail", []string{"MutateEmail", "MutateNickname", "MutateAttempts"}, []string{"MutateEmail", "string", "error"}, "/mutatorqueries/member.go"},
 		{"typed-field-change", "mutatorqueries/changes_postgres_test.go", "email.", "Assigned", []string{"Assigned", "Changed", "Before", "After"}, []string{"Assigned", "bool"}, "/database/lifecycle/change.go"},
-		{"generated-model-changes", "model_changes_test.go", "changes.", "Before", []string{"Before", "After", "Fields", "Assigned", "Changed"}, []string{"Before", "Optional[", "User"}, "/models/user_foundry.gen.go"},
-		{"generated-field-changes", "model_changes_test.go", "changes.Fields().", "Email", []string{"ID", "Email", "Nickname", "IntroducerID"}, []string{"FieldChange[", "string"}, "/models/user_foundry.gen.go"},
+		{"orm-model-changes", "model_changes_test.go", "changes.", "Before", []string{"Before", "After", "Assigned", "Changed"}, []string{"Before", "Optional[", "User"}, "/database/orm/changes.go"},
+		{"orm-field-changes", "model_changes_test.go", "emailChange.", "After", []string{"Before", "After", "Assigned", "Changed"}, []string{"FieldChange[", "string"}, "/database/lifecycle/change.go"},
 		{"typed-hook-draft", "hookqueries/member.go", "draft.", "SetIntroducerID", []string{"SetIntroducerID", "ClearIntroducerID", "UnsetIntroducerID"}, []string{"SetIntroducerID", "ID[", "MemberDraft"}, "/hookqueries/member_foundry.gen.go"},
 		{"typed-hook-callback", "hookqueries/member_foundry.gen.go", "hooks.", "Creating", []string{"Creating", "Updating", "Deleting", "AfterCommit"}, []string{"Context", "Tx", "MemberDraft", "error"}, "/hookqueries/member_foundry.gen.go"},
 		{"typed-retrieval-callback", "retrievalqueries/member_foundry.gen.go", "hooks.", "Retrieved", []string{"Retrieved"}, []string{"Context", "Executor", "Member", "error"}, "/retrievalqueries/member_foundry.gen.go"},
 		{"generated-retrieval-registration", "retrievalqueries/retrieval_postgres_test.go", "retrievalqueries.", "RegisterMemberRetrievalObserver", []string{"RegisterMemberRetrievalObserver", "NewMemberRetrievalObserver", "RegisterGroupRetrievalObserver"}, []string{"MemberRetrievalObserver", "MemberRetrievalHooks", "Resolver"}, "/retrievalqueries/member_foundry.gen.go"},
 		{"typed-provider-contributions", "contributions_test.go", "foundation.", "ResolveAll", []string{"ResolveAll", "Resolve", "Factory", "Provide"}, []string{"ResolveAll", "Resolver", "error"}, "/foundation/resolve_all.go"},
-		{"typed-observer-registration", "observer_ownership_test.go", "database.", "RegisterObserver", []string{"RegisterObserver", "Module", "Prepare"}, []string{"Observer[", "Resolver", "error"}, "/database/observers.go"},
+		{"typed-observer-registration", "observer_ownership_test.go", "orm.", "RegisterObserver", []string{"RegisterObserver", "NewObserver", "RegisterRetrievalObserver"}, []string{"Observer[", "Resolver", "error"}, "/database/orm/hooks.go"},
 		{"database-startup-diagnostics", "database_example_test.go", "database.", "WithStartupLog", []string{"WithStartupLog", "WithSlowQueryLog", "WithQueryObserver"}, []string{"slog.Logger", "Option"}, "/database/startup_logging.go"},
 		{"generated-observer-registration", "observerqueries/observers_postgres_test.go", "orm.", "RegisterObserver", []string{"RegisterObserver", "NewObserver", "RegisterRetrievalObserver"}, []string{"Observer[", "Hooks[", "Resolver"}, "/database/orm/hooks.go"},
 		{"typed-nullable-field-snapshot", "mutatorqueries/changes_postgres_test.go", "nickname.", "After", []string{"Assigned", "Changed", "Before", "After"}, []string{"After", "Optional[", "Nullable[", "string"}, "/database/lifecycle/change.go"},

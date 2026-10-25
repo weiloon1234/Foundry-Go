@@ -282,14 +282,17 @@ q := Users.Query().Where(orm.Has(UserRelations.Orders, Orders.TotalCents.Gt(100)
 q = orm.WithRelationLimits(q, orm.RelationLimits{
     BatchSize: 100, MaxRows: 5000, MaxDepth: 4,
 })
-missing, err := orm.LoadMissing(ctx, db, users, UserRelations.Orders)
+missing, err := orm.LoadMissingFrom(ctx, db, q.With(UserRelations.Orders), users)
 ```
 
 Each query load executes one parent statement plus, for each tree branch,
 `ceil(distinct eligible non-null keys / batch size)` statements. Nested branches
 batch the complete fetched target collection. `Load` and `LoadMissing` issue no
 parent statement; the latter preserves already-loaded slots, including empty
-ones. Supplied parent provenance/authorization belongs to the caller. Related
+ones. `LoadFrom` and `LoadMissingFrom` accept a query with `With` relations and
+`WithRelationLimits` overrides. They validate that query without fetching or
+filtering the supplied parents; parent predicates, order and window do not change
+the input collection. All four functions share the same copy-and-load engine. Supplied parent provenance/authorization belongs to the caller. Related
 soft-delete and declared scopes still apply. `Has`/`DoesntHave` are correlated
 EXISTS predicates, compose recursively, and add zero statements or eager loads.
 
@@ -1012,6 +1015,22 @@ they do not expose legacy `Field`, `Collection` or `Key` descriptor families.
 `OneHandle` and `ManyHandle` remain distinct, non-convertible capabilities.
 Lookup diagnostics (`Keyed`, `Unique`, `RelatedUnique`) redact scoped values under
 ordinary, detailed and Go-syntax formatting.
+
+## Diagnostic redaction
+
+ORM and legacy query handles redact retained predicate literals, bound data values,
+assignment inputs, numeric guard bounds, cursor tokens, plan contents and fixed
+pivot bindings from `fmt` formatting and interpolating errors such as
+`fmt.Errorf("query: %+v", q)`. This includes `%v`, `%+v` and `%#v` through private
+and nested wrapper fields. Structural query metadata, including `LIMIT`/`OFFSET`,
+identifiers and SQL shape, is outside this guarantee and may remain visible, even
+when the compiler sends it as a parameter. Compiled statement formatting omits its
+retained SQL text too, because explicit raw SQL can contain literals.
+
+Explicit accessors such as `Statement.SQL()`, `Statement.Arguments()`,
+`Cursor.Token()`, mutation input readers and `Plan.Root()`/`Plan.JSON()` still
+return their inspection data. Formatting the returned data is an explicit
+disclosure; the guarantee does not redact hydrated models or page items.
 
 ## Lifecycle terminals and query plans
 

@@ -105,10 +105,10 @@ func PrimaryEqualities(predicates []Expression, primary string, visit func(drive
 			if !ok || field.Column != primary || predicate.Operator != Equal {
 				continue
 			}
-			if len(predicate.Values) != 1 || predicate.Bind == nil {
+			if len(ComparisonValues(predicate.Values)) != 1 || predicate.Bind == nil {
 				return fault.New(fault.Invalid, "encrypted fields require one primary key per write")
 			}
-			bound, err := predicate.Bind(predicate.Values[0])
+			bound, err := predicate.Bind(ComparisonValues(predicate.Values)[0])
 			if err != nil {
 				return err
 			}

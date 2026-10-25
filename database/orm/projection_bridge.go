@@ -14,7 +14,7 @@ func FoundryStatement(s querycore.Statement, seal sqlowner.MetadataSeal) (Statem
 	if !seal.Valid() {
 		return Statement{}, invalid("invalid SQL owner capability")
 	}
-	return Statement{core: s}, nil
+	return Statement{core: querycore.RetainStatement(s)}, nil
 }
 
 // FoundryPredicate retains model declaration ownership in a projection. Example: FoundryPredicate(p,sqlowner.Metadata()).
@@ -22,7 +22,7 @@ func FoundryPredicate[M any](p Predicate[M], seal sqlowner.MetadataSeal) ormcore
 	if !seal.Valid() {
 		return ormcore.Predicate{Err: invalid("invalid SQL owner capability")}
 	}
-	result := ormcore.Predicate{Node: p.expression, Err: p.err}
+	result := ormcore.Predicate{Node: querycore.PredicateNode(p.expression), Err: p.err}
 	if p.owner != nil {
 		result.Err = errors.Join(result.Err, declarationCoreError(p.owner))
 		result.Refs = []ormcore.Reference{{Scope: reflect.TypeFor[M](), Table: p.owner.model.Table, Owner: p.owner}}

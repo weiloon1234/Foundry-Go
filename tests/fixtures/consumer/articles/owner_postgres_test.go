@@ -16,13 +16,13 @@ func TestOwnerActiveSubjectsFollowReferenceOrder(t *testing.T) {
 	f := startApplication(t)
 	first, second := f.createArticle(t, "first"), f.createArticle(t, "second")
 	if err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().Delete(ctx, tx, second.ID)
+		_, err := articles.Articles.Delete(ctx, tx, second.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	owner := articles.ArticleExtensionOwner()
-	references := []model.Reference[articles.Article, model.ID[articles.Article]]{second.FoundryReference(), first.FoundryReference(), first.FoundryReference()}
+	owner := articles.ArticleOwner
+	references := []model.Reference[articles.Article, model.ID[articles.Article]]{articles.ArticleIdentity.ReferenceOf(second), articles.ArticleIdentity.ReferenceOf(first), articles.ArticleIdentity.ReferenceOf(first)}
 	var active map[string]bool
 	var subjects []string
 	if err := f.store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {

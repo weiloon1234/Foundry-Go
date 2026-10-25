@@ -57,7 +57,7 @@ func TestDurableCleanupRefusesAConnectionToAnotherDatabase(t *testing.T) {
 		}
 		s.Services.Database.Connections["elsewhere"] = elsewhere
 	})
-	app, err := application.New(s, application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).Models(articles.FoundryExtensions()...).Build(t.Context())
+	app, err := application.New(s, application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).Models(articles.ORMExtensionDeclaration()).Build(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,16 +129,16 @@ func TestDurableCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	if runtime.CleanupQueue != nil {
 		t.Fatal("descriptor runtimes must not carry the cleanup queue")
 	}
-	x := articles.ArticleExtensions().From(runtime)
+	x := articles.ArticleSlots.From(runtime)
 	article := f.createArticle(t, "durable")
-	ref := article.FoundryReference()
-	if err := x.Title.Field().Set(t.Context(), runtime.Translations, ref, "en", "Hello"); err != nil {
+	ref := articles.ArticleIdentity.ReferenceOf(article)
+	if err := translations.FieldOf(x.Title).Set(t.Context(), runtime.Translations, ref, "en", "Hello"); err != nil {
 		t.Fatal(err)
 	}
-	if err := x.SEO.Key().Set(t.Context(), runtime.Metadata, ref, articles.SEO{Canonical: value.Set("/hello")}); err != nil {
+	if err := metadata.KeyOf(x.SEO).Set(t.Context(), runtime.Metadata, ref, articles.SEO{Canonical: value.Set("/hello")}); err != nil {
 		t.Fatal(err)
 	}
-	upload, err := x.Logo.Collection().Replace(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 40)), OriginalName: "logo.png"})
+	upload, err := attachments.OneCollection(x.Logo).Replace(t.Context(), runtime.Attachments, ref, attachments.Upload{Source: bytes.NewReader(pngImage(t, 40)), OriginalName: "logo.png"})
 	if err != nil || upload.Publication != attachments.Published {
 		t.Fatal("logo publication", err)
 	}
@@ -154,7 +154,7 @@ func TestDurableCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	}
 	orphans := func() int {
 		t.Helper()
-		owner := articles.ArticleExtensionOwner().Name()
+		owner := articles.ArticleOwner.Name()
 		meta, err := metadata.InspectOrphans(t.Context(), runtime.Metadata, owner, metadata.Cursor{}, 10)
 		if err != nil {
 			t.Fatal(err)
@@ -168,7 +168,7 @@ func TestDurableCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 
 	rollback := errors.New("rollback deletion")
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		if _, err := articles.QueryArticles().ForceDelete(ctx, tx, article.ID); err != nil {
+		if _, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID); err != nil {
 			return err
 		}
 		return rollback
@@ -182,7 +182,7 @@ func TestDurableCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	// No worker or publisher runs yet: the committed deletion leaves exactly one
 	// outbox row, and its data waits for it, as after a crash.
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().ForceDelete(ctx, tx, article.ID)
+		_, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)

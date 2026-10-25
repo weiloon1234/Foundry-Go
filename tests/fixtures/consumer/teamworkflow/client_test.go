@@ -52,7 +52,7 @@ func TestGeneratedWorkflowClientAgainstCompleteApplication(t *testing.T) {
 	}
 	tools.Check(t, source, app.client.URL, "testdata")
 	db, _ := app.app.Resources().Database()
-	project, err := QueryWorkflowProjects().Where(ProjectFields().TeamID.Eq(1)).RequireFirst(t.Context(), db)
+	project, err := Projects.Query().Where(Projects.TeamID.Eq(1)).Require(t.Context(), db)
 	if err != nil {
 		t.Fatal(err)
 	}

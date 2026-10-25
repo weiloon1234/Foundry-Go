@@ -12,9 +12,9 @@ func JSONContainment(field querycore.FieldRef, op querycore.ScalarOperation, doc
 	return querycore.BinaryComparison{
 		Left: querycore.OperationNode{Kind: op, Result: codec.TypeBoolean, Arguments: []querycore.OperationArgument{
 			{Value: field, Kind: codec.TypeJSON},
-			{Value: querycore.ParameterNode{Kind: codec.TypeJSON, Value: document, Err: err}, Kind: codec.TypeJSON},
+			{Value: querycore.ParameterNode{Kind: codec.TypeJSON, Value: querycore.RetainLiteral(document), Err: err}, Kind: codec.TypeJSON},
 		}},
-		Right: querycore.ParameterNode{Kind: codec.TypeBoolean, Value: true}, Operator: querycore.Equal,
+		Right: querycore.ParameterNode{Kind: codec.TypeBoolean, Value: querycore.RetainLiteral(true)}, Operator: querycore.Equal,
 	}
 }
 
@@ -23,6 +23,6 @@ func JSONContainment(field querycore.FieldRef, op querycore.ScalarOperation, doc
 func JSONIsNull(field querycore.FieldRef) querycore.Expression {
 	return querycore.BinaryComparison{
 		Left:  querycore.OperationNode{Kind: querycore.JsonKindOperation, Result: codec.TypeText, Arguments: []querycore.OperationArgument{{Value: field, Kind: codec.TypeJSON}}},
-		Right: querycore.ParameterNode{Kind: codec.TypeText, Value: "null"}, Operator: querycore.Equal,
+		Right: querycore.ParameterNode{Kind: codec.TypeText, Value: querycore.RetainLiteral("null")}, Operator: querycore.Equal,
 	}
 }

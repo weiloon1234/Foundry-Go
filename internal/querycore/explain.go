@@ -52,23 +52,38 @@ type PlanEnvelope struct {
 // hydrate models, run retrieval hooks or execute eager relation queries. JSON
 // may contain predicates and bound values; only explicit accessors expose it.
 type Plan struct {
-	document PlanEnvelope
-	json     []byte
+	state    *planState
 	analyzed bool
 	nodes    int
+}
+
+type planState struct {
+	document PlanEnvelope
+	json     []byte
+}
+
+func planValue(p Plan) planState {
+	if p.state == nil {
+		return planState{}
+	}
+	return *p.state
 }
 
 func (p Plan) Analyzed() bool { return p.analyzed }
 
 func (p Plan) NodeCount() int { return p.nodes }
 
-func (p Plan) Root() PlanNode { return clonePlanNode(p.document.Plan) }
+func (p Plan) Root() PlanNode { return clonePlanNode(planValue(p).document.Plan) }
 
-func (p Plan) PlanningMilliseconds() value.Optional[float64] { return p.document.PlanningTime }
+func (p Plan) PlanningMilliseconds() value.Optional[float64] {
+	return planValue(p).document.PlanningTime
+}
 
-func (p Plan) ExecutionMilliseconds() value.Optional[float64] { return p.document.ExecutionTime }
+func (p Plan) ExecutionMilliseconds() value.Optional[float64] {
+	return planValue(p).document.ExecutionTime
+}
 
-func (p Plan) JSON() []byte { return slices.Clone(p.json) }
+func (p Plan) JSON() []byte { return slices.Clone(planValue(p).json) }
 
 func (p Plan) Format(state fmt.State, _ rune) {
 	_, _ = fmt.Fprintf(state, "query plan (nodes %d, analyzed %t)", p.nodes, p.analyzed)

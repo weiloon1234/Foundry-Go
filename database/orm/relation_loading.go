@@ -50,7 +50,7 @@ func relationLoader[M, N any, K comparable](local columnData[K], foreign columnD
 			if err != nil {
 				return 0, err
 			}
-			node.Predicates = append(node.Predicates, querycore.Requalify(comparison[N](foreign, querycore.In, unique[start:end]).expression, querycore.RelationHopAlias))
+			node.Predicates = append(node.Predicates, querycore.Requalify(querycore.PredicateNode(comparison[N](foreign, querycore.In, unique[start:end]).expression), querycore.RelationHopAlias))
 			node.Selections = append(node.Selections, querycore.SelectItem{Expression: querycore.FieldRef{Table: querycore.RelationHopAlias, Column: p.join.first.Column}, Alias: "foundry_parent_key"})
 			node.Limit = value.Set(limit)
 			n := len(p.target.columns)

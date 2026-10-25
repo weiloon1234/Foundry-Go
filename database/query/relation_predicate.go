@@ -96,7 +96,7 @@ func (s relationSpec[M, N]) exists() Predicate[M] {
 	if s.morph != nil {
 		// The outer row must also store this target type's morph name.
 		node.Predicates = append(node.Predicates, comparison{Operand: fieldRef{Table: s.source.queryCore.Table, Column: s.morph.kind.Column}, Operator: equal,
-			Values: []any{string(s.morph.name)}, Bind: func(v any) (driver.Value, error) { return v, nil }})
+			Values: querycore.RetainComparisonValues([]any{string(s.morph.name)}), Bind: func(v any) (driver.Value, error) { return v, nil }})
 	}
 	return s.existencePredicate(node)
 }
@@ -106,5 +106,5 @@ func (s relationSpec[M, N]) existencePredicate(node selectNode) Predicate[M] {
 }
 
 func existsPredicate[M any](q subquery) Predicate[M] {
-	return Predicate[M]{expression: subqueryPredicate{Query: q}}
+	return Predicate[M]{expression: retainPredicate(subqueryPredicate{Query: q})}
 }

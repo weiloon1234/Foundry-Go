@@ -63,3 +63,17 @@ CTEs, recursive CTEs, sets and result cursors build on these adapters in later
 Stage 6c slices. Pagination, count/first/stream terminals, scalar transaction
 reads and explicit projection lock clauses also remain for those slices.
 Transaction joins/correlation/LATERAL belong to 6b4 after the 6c foundations.
+
+A model can carry an ad-hoc relation aggregate without adding a model slot:
+
+```go
+count := expr.RelatedValue(UserRelations.Orders, expr.Count[Order]())
+query := expr.OrderBy(expr.Where(Users.Query(), expr.OrderRow(count).Gte(2)), count.Desc())
+annotated := rows.WithValue(query, count)
+items, err := annotated.All(ctx, db) // []rows.Annotated[User, int64]
+```
+
+Each item has the complete `Model` and its computed `Value`. Retrieval hooks run
+with closed rows; eager relations on the input query remain loaded. The returned
+record supports `rows.CompileRead`, `rows.PreflightRead` and `rows.EachRead`.
+COUNT remains non-null, while an empty SUM retains its nullable aggregate type.

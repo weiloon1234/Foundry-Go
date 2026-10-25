@@ -60,18 +60,3 @@ func TestHTTPHelperUsesGeneratedRequestAndResponseContracts(t *testing.T) {
 		t.Fatal("typed response changed", err)
 	}
 }
-
-func TestFactoryRecipeBuildsConcreteGeneratedDrafts(t *testing.T) {
-	records, err := tooling.Records()
-	if err != nil {
-		t.Fatal(err)
-	}
-	draft, err := records.Draft(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	name, present := draft.Name().Get()
-	if !present || name != "record-1" {
-		t.Fatal("factory recipe lost generated draft")
-	}
-}

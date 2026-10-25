@@ -171,7 +171,8 @@ func TestTransactionLayoutSweepDetectsOriginalRecordConversion(t *testing.T) {
 // the four vulnerable legacy layouts so the guard must report each conversion.
 func TestPhaseSweepDetectsLegacyExpressionConversions(t *testing.T) {
 	pkg := surfacePackageIn(t, "../query", `package query
- type HavingLayoutProbe[S any] struct { _ [0]*S; expression expression }
+ import "github.com/weiloon1234/Foundry-Go/internal/querycore"
+ type HavingLayoutProbe[S any] struct { _ [0]*S; expression *querycore.PredicateState }
  type ValueComparisonLayoutProbe[S,V any] struct { expression Expression[S,V] }
  type ValueCaseLayoutProbe[S,V any] struct { builder caseBuilder[S,V] }
  type ProjectionKeyLayoutProbe[S any] struct { _ [0]*S; node valueExpression }

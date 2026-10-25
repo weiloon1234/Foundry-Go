@@ -93,7 +93,7 @@ func DecodePlan(ctx context.Context, data []byte, analyze bool) (Plan, error) {
 			pending = append(pending, frame{&node.Plans[i], child, current.depth + 1})
 		}
 	}
-	return Plan{document: document, json: append([]byte(nil), data...), analyzed: analyze, nodes: count}, nil
+	return Plan{state: &planState{document: document, json: append([]byte(nil), data...)}, analyzed: analyze, nodes: count}, nil
 }
 
 func validPlanNumber(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) && n >= 0 }

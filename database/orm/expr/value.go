@@ -79,7 +79,8 @@ func parameter[S, V any](exemplar rowData[V], v V) RowExpression[S, V] {
 	if c.Bind == nil || c.Clone == nil {
 		err = errors.Join(err, ormcore.Invalid("uninitialized parameter codec"))
 	} else if err == nil {
-		node.Value, node.Err = c.Bind(c.Clone(v))
+		bound, bindErr := c.Bind(c.Clone(v))
+		node.Value, node.Err = querycore.RetainLiteral(bound), bindErr
 	}
 	node.Kind = c.Kind
 	node.Sensitive = c.Sensitive

@@ -106,7 +106,7 @@ capabilities and the alias's input scope. `.Filter(exprPredicate...)` appends
 same-scope row conditions with AND for that aggregate only; it retains empty-input
 semantics. Query WHERE filters every aggregate; HAVING filters completed groups.
 `AggregateExpression[S,V]` is the sealed reusable descriptor for relation aggregate
-slots: it retains native aggregate metadata, complete ownership and the typed
+slots and ad-hoc values: it retains native aggregate metadata, complete ownership and the typed
 result codec/scanner. Selected calculations do not implement this interface.
 
 ```go
@@ -439,3 +439,8 @@ users, err := Users.Query().Where(orm.Has(orders)).With(orders).All(ctx, db)
 The adapter retains correlated references and uses the same owner validation as
 `expr.Has`. It also permits JSON operators on a natural primary key through
 `expr.Value(Policies.Key())`, without binding the primary field a second time.
+
+`RelatedValue(source, computation)` returns a row expression with the aggregate's
+exact nullability. Use existing `OrderBy`/`Where` adapters to rank and filter models,
+and `rows.WithValue` to read a complete model alongside the value. See the
+[complete model and computed value recipe](../rows/records.md).

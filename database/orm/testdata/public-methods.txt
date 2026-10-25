@@ -1701,6 +1701,8 @@ orm.FoundryRelationPredicate func[M, N any](r github.com/weiloon1234/Foundry-Go/
 orm.FoundryExtension func[M, S any](slot github.com/weiloon1234/Foundry-Go/database/orm.Slot[M, S], source github.com/weiloon1234/Foundry-Go/internal/extensionslot.Slot[M], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal) github.com/weiloon1234/Foundry-Go/database/orm.ExtensionRelation[M]
 orm.Lookup func[M any, V comparable](source github.com/weiloon1234/Foundry-Go/database/orm.Query[M], field github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, V]) github.com/weiloon1234/Foundry-Go/database/orm.ValueLookup[M, V]
 orm.FoundryRelationFilter func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], p github.com/weiloon1234/Foundry-Go/internal/ormcore.Predicate, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]
+orm.FoundryModelRead func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource
+orm.FoundryRelatedValue func[M, N, V any](source github.com/weiloon1234/Foundry-Go/database/orm.AggregateSource[M, N], expression github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression, column github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.ExpressionSeal) github.com/weiloon1234/Foundry-Go/internal/ormcore.Expression
 orm.PrimaryOf func[M any, K comparable](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], key github.com/weiloon1234/Foundry-Go/database/orm.Key[M, K]) github.com/weiloon1234/Foundry-Go/database/orm.Primary[M, K]
 orm.SoftDeletes func[M any, V github.com/weiloon1234/Foundry-Go/database/orm.InstantValue](field github.com/weiloon1234/Foundry-Go/database/orm.SoftDelete[M, V]) github.com/weiloon1234/Foundry-Go/database/orm.SoftDeletable[M]
 orm.CreatedAtOf func[M any, V github.com/weiloon1234/Foundry-Go/database/orm.InstantValue](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *V) github.com/weiloon1234/Foundry-Go/database/orm.CreatedAt[M, V]
@@ -1754,6 +1756,8 @@ orm.HasOneOf func[M, N any, K comparable](slot github.com/weiloon1234/Foundry-Go
 orm.Has func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
 orm.DoesntHave func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
 orm.LoadMissing func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, parents []M, rels ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[M]) ([]M, error)
+orm.LoadFrom func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], parents []M) ([]M, error)
+orm.LoadMissingFrom func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], parents []M) ([]M, error)
 orm.DefaultRelationLimits func() github.com/weiloon1234/Foundry-Go/database/orm.RelationLimits
 orm.WithRelationLimits func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], limits github.com/weiloon1234/Foundry-Go/database/orm.RelationLimits) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
 orm.ThroughOf func[M, N, P any](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *github.com/weiloon1234/Foundry-Go/database/relation.Through[N, P]) github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P]
@@ -1872,6 +1876,10 @@ rows.Alias
 *rows.Alias
 rows.Aliased
 *rows.Aliased
+rows.Annotated
+  field Model M
+  field Value V
+*rows.Annotated
 rows.Builder
   Row func() github.com/weiloon1234/Foundry-Go/database/orm/rows.Row[R]
 *rows.Builder
@@ -2543,6 +2551,7 @@ rows.GroupByCorrelatedScalar func[O, I, V any](q github.com/weiloon1234/Foundry-
 rows.DistinctOnCorrelatedScalarValues func[O, I, V any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.CorrelatedScalar[O, I, V], keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.Correlation[O, I]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CorrelatedScalar[O, I, V]
 rows.OrderCorrelatedScalar func[O, I, V any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.CorrelatedScalar[O, I, V], orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.Correlation[O, I]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.CorrelatedScalar[O, I, V]
 rows.DistinctOnValueSet func[V any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V], keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
+rows.WithValue func[M, V any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], computed github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[M, V]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[M, github.com/weiloon1234/Foundry-Go/database/orm/rows.Annotated[M, V]]
 rows.Raw func[R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, schema github.com/weiloon1234/Foundry-Go/database/orm/rows.Schema[R], sql string, args ...any) ([]R, error)
 expr.Aggregate
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
@@ -3568,3 +3577,4 @@ expr.TextNullableRow func[S any, V ~string](column github.com/weiloon1234/Foundr
 expr.TextRowAt func[S, M any, V ~string](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column github.com/weiloon1234/Foundry-Go/database/orm.TextExpressionColumn[M, V, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.TextRowExpression[S, V]
 expr.TextNullableRowAt func[S, M any, V ~string](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column github.com/weiloon1234/Foundry-Go/database/orm.TextExpressionColumn[M, V, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableTextRowExpression[S, V]
 expr.RelationFilter func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], p github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]
+expr.RelatedValue func[M, N, V any](source github.com/weiloon1234/Foundry-Go/database/orm.AggregateSource[M, N], computation github.com/weiloon1234/Foundry-Go/database/orm/expr.AggregateExpression[N, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[M, V]

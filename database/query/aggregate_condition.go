@@ -12,7 +12,7 @@ func (a Aggregate[M, V]) Ne(v V) HavingPredicate[M] { return a.compare(notEqual,
 func (a Aggregate[M, V]) In(values ...V) HavingPredicate[M] { return a.compare(in, values...) }
 
 func (a Aggregate[M, V]) compare(op operator, values ...V) HavingPredicate[M] {
-	return HavingPredicate[M]{expression: typedComparison(a.node, op, a.codec, values)}
+	return HavingPredicate[M]{expression: retainPredicate(typedComparison(a.node, op, a.codec, values))}
 }
 
 // OrderedAggregate adds range comparisons to an ordered, non-nullable result.
@@ -61,5 +61,5 @@ func (a NullableOrderedAggregate[M, V]) IsNull() HavingPredicate[M] { return a.c
 func (a NullableOrderedAggregate[M, V]) IsNotNull() HavingPredicate[M] { return a.compare(isNotNull) }
 
 func (a NullableOrderedAggregate[M, V]) compare(op operator, values ...V) HavingPredicate[M] {
-	return HavingPredicate[M]{expression: typedComparison(a.node, op, a.comparisonCodec, values)}
+	return HavingPredicate[M]{expression: retainPredicate(typedComparison(a.node, op, a.comparisonCodec, values))}
 }

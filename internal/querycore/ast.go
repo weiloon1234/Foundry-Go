@@ -63,7 +63,7 @@ type Expression interface{ ExpressionNode() }
 type RowComparison struct {
 	Operands []ValueExpression
 	Operator Operator
-	Values   []driver.Value
+	Values   *RowValuesState
 }
 
 func (RowComparison) ExpressionNode() {}
@@ -73,7 +73,7 @@ type Comparison struct {
 	Text     bool
 	Operand  ValueExpression
 	Operator Operator
-	Values   []any
+	Values   *ComparisonValuesState
 	Bind     func(any) (driver.Value, error)
 	// kind is the operand codec's scalar representation. Membership tests over
 	// supported scalar kinds bind one array parameter instead of one per value.
@@ -142,15 +142,15 @@ func ValidateExpressionValues(e Expression, operand func(ValueExpression) error,
 		}
 		switch e.Operator {
 		case IsNull, IsNotNull:
-			if len(e.Values) == 0 {
+			if len(ComparisonValues(e.Values)) == 0 {
 				return nil
 			}
 		case In, NotIn:
-			if len(e.Values) <= MaxMembershipValues && e.Bind != nil {
+			if len(ComparisonValues(e.Values)) <= MaxMembershipValues && e.Bind != nil {
 				return nil
 			}
 		case Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Like, Contains, InsensitiveContains, StartsWith, EndsWith, InsensitiveStartsWith, InsensitiveEndsWith, InsensitiveLike:
-			if len(e.Values) == 1 && e.Bind != nil {
+			if len(ComparisonValues(e.Values)) == 1 && e.Bind != nil {
 				return nil
 			}
 		}
@@ -171,11 +171,11 @@ func ValidateExpressionValues(e Expression, operand func(ValueExpression) error,
 		}
 		return nil
 	case RowComparison:
-		if (e.Operator != Less && e.Operator != Greater) || len(e.Operands) < 2 || len(e.Operands) != len(e.Values) || len(e.Operands) > MaxCursorFields {
+		if (e.Operator != Less && e.Operator != Greater) || len(e.Operands) < 2 || len(e.Operands) != len(RowValues(e.Values)) || len(e.Operands) > MaxCursorFields {
 			return fault.New(fault.Invalid, "invalid row comparison")
 		}
 		for i, item := range e.Operands {
-			if !driver.IsValue(e.Values[i]) || e.Values[i] == nil {
+			if !driver.IsValue(RowValues(e.Values)[i]) || RowValues(e.Values)[i] == nil {
 				return fault.New(fault.Invalid, "row comparison requires non-NULL database values")
 			}
 			if err := operand(item); err != nil {

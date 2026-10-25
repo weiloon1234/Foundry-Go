@@ -6,6 +6,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
+// AnnotatedValueAlias is the computed column paired with a complete model.
+const AnnotatedValueAlias = "foundry_value"
+
 func SelectRecordNode(node SelectNode, table string, columns []Column, hasDecoder bool) (SelectNode, error) {
 	if table == "" || !hasDecoder || len(columns) == 0 || len(columns) > MaxExpressionNodes || len(node.Joins) > MaxExpressionNodes {
 		return SelectNode{}, fault.New(fault.Invalid, "record selection requires a bounded, complete source and decoder")

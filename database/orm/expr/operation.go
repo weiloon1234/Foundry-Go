@@ -38,7 +38,7 @@ func rowCompare[V any](d rowData[V], op querycore.Operator, values ...V) ormcore
 	for i, v := range values {
 		captured[i] = d.column.Clone(v)
 	}
-	return ormcore.Predicate{Node: querycore.Comparison{Operand: d.core.Node, Operator: op, Values: captured, Text: d.column.Text, Kind: d.column.Kind, Bind: func(v any) (driver.Value, error) { return d.column.Bind(v.(V)) }}, Refs: d.core.Refs, ReferenceFree: d.core.ReferenceFree, Err: err}
+	return ormcore.Predicate{Node: querycore.Comparison{Operand: d.core.Node, Operator: op, Values: querycore.RetainComparisonValues(captured), Text: d.column.Text, Kind: d.column.Kind, Bind: func(v any) (driver.Value, error) { return d.column.Bind(v.(V)) }}, Refs: d.core.Refs, ReferenceFree: d.core.ReferenceFree, Err: err}
 }
 func presentValues[V any](vs []V) []value.Nullable[V] {
 	out := make([]value.Nullable[V], len(vs))

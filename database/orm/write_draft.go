@@ -66,10 +66,7 @@ func WriteGet[M, I any](write *Write[M], setter func(I) Assignment[M]) value.Opt
 	if !ok {
 		return value.Optional[I]{}
 	}
-	raw := a.Value
-	if a.CopyValue != nil {
-		raw = a.CopyValue()
-	}
+	raw := a.InputValue()
 	input, ok := raw.(I)
 	if !ok {
 		write.state.err = invalid("required draft getter has a different input type; use WriteNullableGet for nullable fields")
@@ -85,10 +82,7 @@ func WriteNullableGet[M, I any](write *Write[M], setter func(I) Assignment[M]) v
 	if !ok {
 		return value.Optional[value.Nullable[I]]{}
 	}
-	raw := a.Value
-	if a.CopyValue != nil {
-		raw = a.CopyValue()
-	}
+	raw := a.InputValue()
 	input, ok := raw.(value.Nullable[I])
 	if !ok {
 		write.state.err = invalid("nullable draft getter has a different input type")

@@ -1,11 +1,13 @@
 package query
 
+import "github.com/weiloon1234/Foundry-Go/internal/querycore"
+
 // HavingPredicate filters groups and cannot be used as a row-level Predicate.
 // Aggregate comparison methods and Grouped construct these values.
 type HavingPredicate[S any] struct {
 	havingPhase [0]struct{}
 	_           [0]*S
-	expression  expression
+	expression  *querycore.PredicateState
 }
 
 // Grouped lifts a row predicate into HAVING. Every referenced ordinary column
@@ -15,7 +17,7 @@ func Grouped[S any](p Predicate[S]) HavingPredicate[S] {
 }
 
 func (p HavingPredicate[S]) Not() HavingPredicate[S] {
-	return HavingPredicate[S]{expression: negation{Child: p.expression}}
+	return HavingPredicate[S]{expression: retainPredicate(negation{Child: predicateExpression(p.expression)})}
 }
 
 // HavingAnd requires all group predicates to match. An empty operand list is
@@ -33,7 +35,7 @@ func HavingOr[S any](predicates ...HavingPredicate[S]) HavingPredicate[S] {
 func combineHaving[S any](any bool, predicates []HavingPredicate[S]) HavingPredicate[S] {
 	children := make([]expression, len(predicates))
 	for i, p := range predicates {
-		children[i] = p.expression
+		children[i] = predicateExpression(p.expression)
 	}
-	return HavingPredicate[S]{expression: junction{Any: any, Children: children}}
+	return HavingPredicate[S]{expression: retainPredicate(junction{Any: any, Children: children})}
 }

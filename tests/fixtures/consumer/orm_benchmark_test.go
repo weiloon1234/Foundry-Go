@@ -13,14 +13,14 @@ import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-// Benchmarks use existing generated models. Direct SQL is compiled by Foundry
-// before timing, then uses the same adapter and codecs as the generated decoder.
+// Benchmarks use handwritten ORM declarations. Direct SQL is compiled by Foundry
+// before timing, then uses the same adapter and codecs as the ORM decoder.
 // This isolates query compilation and runtime ownership from database/codec cost.
 func ormBenchmarkStore(t testing.TB) (*database.DB, *sql.DB) {
 	t.Helper()
@@ -62,13 +62,13 @@ func ormBenchmarkStore(t testing.TB) (*database.DB, *sql.DB) {
 	return db, raw
 }
 
-func ormBenchmarkQuery(size int) models.UserQuery {
-	f := models.UserFields()
-	return models.QueryUsers().Where(f.Age.Gte(1), f.Status.Eq(models.StatusActive)).OrderBy(f.Age.Asc()).Limit(size)
+func ormBenchmarkQuery(size int) orm.Query[models.User] {
+	f := models.Users
+	return models.Users.Query().Where(f.Age.Gte(1), f.Status.Eq(models.StatusActive)).OrderBy(f.Age.Asc()).Limit(size)
 }
 
 // Keep concrete scanners identical to the persisted types in the declaration.
-// The agreement test detects drift from the generated decoder.
+// The agreement test detects drift from the ORM decoder.
 var ormBenchmarkScanUser = func() func(database.Row) (models.User, error) {
 	id, email, age := codec.ID[models.User](), codec.String[string](), codec.Signed[int]()
 	nickname := codec.Nullable(codec.String[string]())
@@ -85,7 +85,7 @@ var ormBenchmarkScanUser = func() func(database.Row) (models.User, error) {
 	}
 }()
 
-func ormBenchmarkRaw(ctx context.Context, raw *sql.DB, statement query.Statement) (items []models.User, err error) {
+func ormBenchmarkRaw(ctx context.Context, raw *sql.DB, statement orm.Statement) (items []models.User, err error) {
 	rows, err := raw.QueryContext(ctx, statement.SQL(), statement.Arguments()...)
 	if err != nil {
 		return nil, err
@@ -105,7 +105,7 @@ func ormBenchmarkRaw(ctx context.Context, raw *sql.DB, statement query.Statement
 	return items, rows.Err()
 }
 
-func ormBenchmarkFrameworkSQL(ctx context.Context, db *database.DB, statement query.Statement) ([]models.User, error) {
+func ormBenchmarkFrameworkSQL(ctx context.Context, db *database.DB, statement orm.Statement) ([]models.User, error) {
 	items := make([]models.User, 0)
 	err := database.ForEach(ctx, db, statement.SQL(), statement.Arguments(), ormBenchmarkScanUser, func(item models.User) error {
 		items = append(items, item)
@@ -118,14 +118,14 @@ func TestORMBenchmarkReadsAgree(t *testing.T) {
 	db, raw := ormBenchmarkStore(t)
 	for _, size := range []int{1, 100, 1000} {
 		q := ormBenchmarkQuery(size)
-		statement, err := q.Compile()
+		statement, err := orm.Compile(q)
 		if err != nil {
 			t.Fatal(err)
 		}
 		counter := &queryfixture.QueryCounter{Executor: db}
 		want, err := q.All(t.Context(), counter)
 		if err != nil || len(want) != size || counter.Queries.Load() != 1 {
-			t.Fatal("generated benchmark read failed", err)
+			t.Fatal("ORM benchmark read failed", err)
 		}
 		for name, read := range map[string]func() ([]models.User, error){
 			"direct":        func() ([]models.User, error) { return ormBenchmarkRaw(t.Context(), raw, statement) },
@@ -133,7 +133,7 @@ func TestORMBenchmarkReadsAgree(t *testing.T) {
 		} {
 			got, err := read()
 			if err != nil || !reflect.DeepEqual(got, want) {
-				t.Fatalf("%s benchmark decoder differs from generated models: %v", name, err)
+				t.Fatalf("%s benchmark decoder differs from ORM models: %v", name, err)
 			}
 		}
 	}
@@ -143,7 +143,7 @@ func BenchmarkORMPostgresReads(b *testing.B) {
 	db, raw := ormBenchmarkStore(b)
 	for _, size := range []int{1, 100, 1000} {
 		q := ormBenchmarkQuery(size)
-		statement, err := q.Compile()
+		statement, err := orm.Compile(q)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -174,27 +174,27 @@ func BenchmarkORMPostgresReads(b *testing.B) {
 }
 
 func BenchmarkORMCompile(b *testing.B) {
-	f := models.UserFields()
+	f := models.Users
 	date, err := temporal.ParseDate("2000-01-01")
 	if err != nil {
 		b.Fatal(err)
 	}
 	for _, variant := range []struct {
 		name  string
-		build func() models.UserQuery
+		build func() orm.Query[models.User]
 	}{
-		{"list", func() models.UserQuery { return ormBenchmarkQuery(100) }},
-		{"filters", func() models.UserQuery {
-			return models.QueryUsers().Where(query.Or(f.Email.Contains("_%!'"), f.Age.In(21, 35, 42)), f.Nickname.IsNotNull(), f.Birthday.Gte(date)).OrderBy(f.Age.Desc(), f.ID.Asc()).Limit(100).Offset(20)
+		{"list", func() orm.Query[models.User] { return ormBenchmarkQuery(100) }},
+		{"filters", func() orm.Query[models.User] {
+			return models.Users.Query().Where(orm.Or(f.Email.Contains("_%!'"), f.Age.In(21, 35, 42)), f.Nickname.IsNotNull(), f.Birthday.Gte(date)).OrderBy(f.Age.Desc(), f.ID.Asc()).Limit(100).Offset(20)
 		}},
 	} {
 		b.Run(variant.name, func(b *testing.B) {
-			if _, err := variant.build().Compile(); err != nil {
+			if _, err := orm.Compile(variant.build()); err != nil {
 				b.Fatal(err)
 			}
 			b.ReportAllocs()
 			for b.Loop() {
-				if _, err := variant.build().Compile(); err != nil {
+				if _, err := orm.Compile(variant.build()); err != nil {
 					b.Fatal(err)
 				}
 			}

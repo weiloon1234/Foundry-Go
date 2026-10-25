@@ -299,9 +299,13 @@ commit the model, its text and metadata first, then publish files and inspect
 `attachments.FileSource`, such as `foundryhttp.UploadedFile`,
 and open and close it within the call; request cleanup still owns the spooled
 file. The client content type is only the existing text hint, with parameters
-dropped. `attachments.AddFiles(ctx, x.Galleries, article, files)` publishes files
-in order and stops at the first failure, returning every attempted result;
-files before a failure stay published.
+dropped. For an ORM `ManyHandle`, call
+`attachments.AddFilesTo(ctx, x.Galleries, article, files)`. The retained generated
+`ManySlot` uses `attachments.AddFiles` with the same arguments. Both validate the
+bound slot and batch limit before opening files, then publish in order and stop
+at the first failure, returning every attempted result including the failed one.
+Files before a failure stay published; inspect unknown publication outcomes for
+reconciliation rather than retrying the batch.
 
 ## Request input and validation
 
@@ -433,3 +437,15 @@ observers only, since descriptors never need it.
 Remove any hand-written cleanup hook when adopting slots; a duplicate cleanup
 after deletion is harmless. Bulk model deletes skip observers, so the existing
 orphan inspection and pruning commands still apply.
+
+### Explicit reads from ORM handles
+
+Use `translations.FieldOf(slot)`, `metadata.KeyOf(slot)`,
+`attachments.OneCollection(slot)` or `attachments.ManyCollection(slot)` when
+an explicit batch read or collection operation is needed. Each function returns
+the existing declaration, retaining its registration identity, owner, key and
+value type. For example, `translations.FieldOf(bound.Title).Load(ctx, manager,
+references)` reads the same field registered by `ArticleSlots.Title`.
+The handles retain only shared callback state; the descriptor's larger API is
+instantiated only by callers that request it. Zero handles return invalid zero
+descriptors. Ordinary slot reads and writes continue to use the handle directly.

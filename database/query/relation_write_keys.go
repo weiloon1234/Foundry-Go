@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // Internal ownership reads deliberately skip Retrieved callbacks, like the
@@ -42,7 +43,7 @@ func (r ThroughRelation[M, N, P]) writeKeys(source M, target N) (relationWriteKe
 		return relationWriteKeys[P]{}, err
 	}
 	for _, fixed := range r.pivotFixed {
-		if defaults, err = r.pivot.withModelValue(defaults, fixed.column, fixed.raw); err != nil {
+		if defaults, err = r.pivot.withModelValue(defaults, fixed.column, querycore.LiteralValue(fixed.raw)); err != nil {
 			return relationWriteKeys[P]{}, err
 		}
 	}
@@ -66,7 +67,7 @@ func relationPivotKey[M, P any](source Query[M], sourceRef fieldRef, model M, pi
 		return nil, Predicate[P]{}, fault.New(fault.Missing, "relation writes require non-null endpoint keys")
 	}
 	// The same codec validates the comparison and automatic draft default.
-	predicate := Predicate[P]{expression: comparison{Operand: pivotRef, Operator: equal, Values: []any{raw}, Bind: pivotField.decode}}
+	predicate := Predicate[P]{expression: retainPredicate(comparison{Operand: pivotRef, Operator: equal, Values: querycore.RetainComparisonValues([]any{raw}), Bind: pivotField.decode})}
 	return raw, predicate, nil
 }
 

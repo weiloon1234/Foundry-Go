@@ -52,7 +52,7 @@ func TestConflictIndexRejectsInvalidTargets(t *testing.T) {
 	var absent *TextField[user, string]
 	scalar := ScalarRowQuery(q, SelectValue(q, Value(name)).Limit(1))
 	hidden := Group[user]{node: caseNode{
-		Branches:  []caseBranch{{Condition: ExistsQuery(q, q).expression, Result: name.ref}},
+		Branches:  []caseBranch{{Condition: predicateExpression(ExistsQuery(q, q).expression), Result: name.ref}},
 		Otherwise: name.ref,
 	}}
 	policies := []Conflict[user]{

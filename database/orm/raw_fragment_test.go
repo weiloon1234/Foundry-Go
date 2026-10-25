@@ -20,7 +20,7 @@ func TestWhereRawKeepsScopesAndTransaction(t *testing.T) {
 		if ctx.Value(tenantKey{}) != int64(7) {
 			return nil, errors.New("missing tenant")
 		}
-		return r.Key().Eq(7).expression, nil
+		return querycore.PredicateNode(r.Key().Eq(7).expression), nil
 	}}}
 	began := false
 	calls := 0

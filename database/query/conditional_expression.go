@@ -106,7 +106,7 @@ func When[S, V any](condition Predicate[S], result RowValue[S, V]) Case[S, V] {
 }
 
 func (c Case[S, V]) When(condition Predicate[S], result RowValue[S, V]) Case[S, V] {
-	c.builder = c.builder.append(condition.expression, rowInput(result).Value())
+	c.builder = c.builder.append(predicateExpression(condition.expression), rowInput(result).Value())
 	return c
 }
 
@@ -125,7 +125,7 @@ func WhenValue[S, V any](condition HavingPredicate[S], result Expression[S, V]) 
 }
 
 func (c ValueCase[S, V]) When(condition HavingPredicate[S], result Expression[S, V]) ValueCase[S, V] {
-	c.builder = c.builder.append(condition.expression, result)
+	c.builder = c.builder.append(predicateExpression(condition.expression), result)
 	return c
 }
 

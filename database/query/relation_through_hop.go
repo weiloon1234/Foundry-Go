@@ -81,7 +81,7 @@ func hopSpec[M any, I ModelQuery[I], N any, A, B comparable](local KeyField[M, A
 		}
 		node := hop.node()
 		node.Selections = []selectItem{{Expression: fieldRef{Table: hopAlias, Column: s.ref.Column}}}
-		node.Predicates = append(node.Predicates, requalify(f.Eq(key.value).expression, hopAlias))
+		node.Predicates = append(node.Predicates, requalify(predicateExpression(f.Eq(key.value).expression), hopAlias))
 		return target.Where(b.inSubquery(subquery{Node: node})), true, nil
 	}
 	spec.fetch = func(ctx context.Context, executor database.Executor, source Query[M], target Query[N], parents []M, state *relationLoadState, depth int) ([][]N, error) {
@@ -152,7 +152,7 @@ func fetchHop[M, I, N any, A, B comparable](ctx context.Context, executor databa
 	for offset := 0; offset < len(keys); offset += state.limits.BatchSize {
 		end := min(offset+state.limits.BatchSize, len(keys))
 		node := hop.join(ordered.modelSelect(), target.queryCore.Table, foreign.ref)
-		node.Predicates = append(node.Predicates, requalify(first.In(keys[offset:end]...).expression, hopAlias))
+		node.Predicates = append(node.Predicates, requalify(predicateExpression(first.In(keys[offset:end]...).expression), hopAlias))
 		node.Selections = append(node.Selections, selectItem{Expression: fieldRef{Table: hopAlias, Column: hop.first.Column}, Alias: "foundry_parent_key"})
 		node.Limit = value.Set(state.remaining + 1)
 		batch, err := readResult[hopRow[N]]{node: node, scan: scan, lifecycle: lifecycle, scopeContext: ctx}.All(ctx, executor)

@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"database/sql/driver"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -135,7 +134,7 @@ func morphPivot[M, N, P any](r ThroughRelation[M, N, P], kind KeyField[P, MorphN
 		r.spec.declarationError = bindErr
 		return r
 	}
-	r.pivotFixed = append(r.pivotFixed, pivotAssignment{column: field.ref.Column, raw: raw})
+	r.pivotFixed = append(r.pivotFixed, pivotAssignment{column: field.ref.Column, raw: querycore.RetainLiteral(raw)})
 	return r
 }
 
@@ -143,7 +142,7 @@ func morphPivot[M, N, P any](r ThroughRelation[M, N, P], kind KeyField[P, MorphN
 // created pivots like the relationship keys.
 type pivotAssignment struct {
 	column string
-	raw    driver.Value
+	raw    *querycore.LiteralState
 }
 
 // morphSource restricts a MorphTo to parents storing one morph name.

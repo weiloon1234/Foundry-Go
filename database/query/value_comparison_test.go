@@ -64,11 +64,11 @@ func TestValueComparisonPhasesAndInvalidOperands(t *testing.T) {
 	for _, p := range []Predicate[cursorRecord]{
 		Equal[cursorRecord, int64](nil, id),
 		Equal[cursorRecord, int64](id, nil),
-		{expression: binaryComparison{Left: id.ref, Right: id.ref, Operator: contains}},
-		{expression: binaryComparison{Left: id.ref, Right: id.ref, Operator: insensitiveContains}},
-		{expression: binaryComparison{Left: id.ref, Right: id.ref, Operator: 255}},
-		{expression: binaryComparison{Left: id.ref, Right: count.Value().node, Operator: equal}},
-		{expression: binaryComparison{Left: count.Value().node, Right: id.ref, Operator: equal}},
+		{expression: retainPredicate(binaryComparison{Left: id.ref, Right: id.ref, Operator: contains})},
+		{expression: retainPredicate(binaryComparison{Left: id.ref, Right: id.ref, Operator: insensitiveContains})},
+		{expression: retainPredicate(binaryComparison{Left: id.ref, Right: id.ref, Operator: 255})},
+		{expression: retainPredicate(binaryComparison{Left: id.ref, Right: count.Value().node, Operator: equal})},
+		{expression: retainPredicate(binaryComparison{Left: count.Value().node, Right: id.ref, Operator: equal})},
 		Equal(id, NewExactField[cursorRecord, int64]("wrong", "id", codec.Signed[int64]())),
 		Equal(ScalarRowQuery[cursorRecord, int64](q, nil), NullableRow(id)),
 	} {
@@ -113,7 +113,7 @@ func TestComputedJoinAndCrossBoundaries(t *testing.T) {
 
 func TestBinaryComparisonRequalificationOwnsStructure(t *testing.T) {
 	id := NewExactField[cursorRecord, int64]("records", "id", codec.Signed[int64]())
-	original := Equal(Add(id, Param(id, 1)), Subtract(id, Param(id, 2))).expression
+	original := predicateExpression(Equal(Add(id, Param(id, 1)), Subtract(id, Param(id, 2))).expression)
 	changed := requalify(original, "other")
 	collect := func(e expression) []string {
 		var tables []string

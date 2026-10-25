@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
@@ -69,7 +70,7 @@ func Build(ctx context.Context, s application.Settings, committed func(context.C
 			create.Handle(func(ctx context.Context, input http.Input[http.NoPath, http.NoQuery, Submission]) (Receipt, error) {
 				var receipt Receipt
 				err := db.Transaction(ctx, func(tx *database.Tx) error {
-					record, err := QueryScopeRecords().Create(ctx, tx, RecordDraft{}.SetName(input.Body.Name).SetText(input.Body.Text))
+					record, err := RecordRows.Insert(ctx, tx, RecordRows.Name.Set(input.Body.Name), RecordRows.Text.Set(input.Body.Text))
 					if err != nil {
 						return err
 					}
@@ -90,15 +91,15 @@ func Build(ctx context.Context, s application.Settings, committed func(context.C
 				return receipt, err
 			}),
 			get.Handle(func(ctx context.Context, input http.Input[RecordPath, http.NoQuery, http.NoBody]) (Receipt, error) {
-				record, err := QueryScopeRecords().Where(RecordFields().Name.Eq(input.Path.Name)).RequireFirst(ctx, db)
+				record, err := RecordRows.Query().Where(RecordRows.Name.Eq(input.Path.Name)).Require(ctx, db)
 				return Receipt{Name: record.Name, Text: record.Text}, err
 			}),
 		}, nil
 	}).Build(ctx)
 }
 
-func Records(text string) (*factory.Factory[Record, RecordDraft], error) {
-	return factory.New[Record](func(context.Context, factory.Sequence) (RecordDraft, error) {
-		return RecordDraft{}.SetName("fixture").SetText(text), nil
+func Records(text string) (*factory.Factory[Record, []orm.Assignment[Record]], error) {
+	return factory.Define(RecordRows.Table, func(context.Context, factory.Sequence) ([]orm.Assignment[Record], error) {
+		return []orm.Assignment[Record]{RecordRows.Name.Set("fixture"), RecordRows.Text.Set(text)}, nil
 	})
 }

@@ -225,6 +225,8 @@ func TestGoWaySourceInventory(t *testing.T) {
 		"database/orm/rows/scalar_clauses.go",
 		"database/orm/rows/correlated_clauses.go",
 		"database/orm/rows/read_terminal.go",
+		"database/orm/rows/annotated.go",
+		"database/orm/expr/relation_aggregate.go",
 		"database/orm/rows/record_clauses.go",
 		"internal/ormcore/record_iteration.go",
 		"database/orm/rows/transactions.md",

@@ -142,11 +142,11 @@ func NewNullableEncryptedField[M, V any](table, column string, c codec.Codec[V])
 }
 
 func (f NullableEncryptedField[M, V]) IsNull() Predicate[M] {
-	return Predicate[M]{expression: typedComparison(f.ref, isNull, f.codec, nil)}
+	return Predicate[M]{expression: retainPredicate(typedComparison(f.ref, isNull, f.codec, nil))}
 }
 
 func (f NullableEncryptedField[M, V]) IsNotNull() Predicate[M] {
-	return Predicate[M]{expression: typedComparison(f.ref, isNotNull, f.codec, nil)}
+	return Predicate[M]{expression: retainPredicate(typedComparison(f.ref, isNotNull, f.codec, nil))}
 }
 
 // forwardEncryption lets framework row adapters keep the decryption scope of

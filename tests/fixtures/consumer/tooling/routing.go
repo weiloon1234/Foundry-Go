@@ -16,11 +16,11 @@ func RoutedDatabase(name foundation.ProviderID, key foundation.Key[*database.DB]
 }
 
 func ReadUsers(ctx context.Context, db *database.DB) ([]models.User, error) {
-	return models.QueryUsers().Limit(10).All(ctx, db)
+	return models.Users.Query().Limit(10).All(ctx, db)
 }
 
 func ReadPrimaryUsers(ctx context.Context, db *database.DB) ([]models.User, error) {
-	return models.QueryUsers().Limit(10).All(ctx, db.Primary())
+	return models.Users.Query().Limit(10).All(ctx, db.Primary())
 }
 
 func DatabaseEndpoints(ctx context.Context, db *database.DB) ([]database.PoolHealth, database.RoutingStats) {

@@ -8,7 +8,7 @@ import (
 
 	"foundry.test/consumer/articles"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 // Loading slots costs a constant number of statements per parent batch,
@@ -18,14 +18,14 @@ func TestSlotLoadingStatementsDoNotGrowWithParents(t *testing.T) {
 	var statements atomic.Int64
 	store, runtime := openDirect(t, func(context.Context, database.QueryEvent) { statements.Add(1) })
 	// Attachment slots stay unbound without an attachments manager.
-	x := articles.ArticleExtensions().From(runtime)
-	measure := func(limits query.RelationLimits, relations ...query.Relation[articles.Article]) (int64, []articles.Article) {
+	x := articles.ArticleSlots.From(runtime)
+	measure := func(limits orm.RelationLimits, relations ...orm.Relation[articles.Article]) (int64, []articles.Article) {
 		t.Helper()
 		var loaded []articles.Article
 		statements.Store(0)
 		if err := store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 			var err error
-			loaded, err = articles.QueryArticles().WithRelationLimits(limits).With(relations...).All(ctx, tx)
+			loaded, err = orm.WithRelationLimits(articles.Articles.Query(), limits).With(relations...).All(ctx, tx)
 			return err
 		}); err != nil {
 			t.Fatal(err)
@@ -37,22 +37,22 @@ func TestSlotLoadingStatementsDoNotGrowWithParents(t *testing.T) {
 		}
 		return statements.Load(), loaded
 	}
-	defaults := query.DefaultRelationLimits()
+	defaults := orm.DefaultRelationLimits()
 	seedArticles(t, store, runtime, 1)
 	base, _ := measure(defaults)
-	few, loaded := measure(defaults, x.Title, x.Summary, x.SEO)
+	few, loaded := measure(defaults, x.Title.Relation(articles.Articles.Title), x.Summary.Relation(articles.Articles.Summary), x.SEO.Relation(articles.Articles.SEO))
 	if len(loaded) != 1 {
 		t.Fatal("unexpected parent count", len(loaded))
 	}
 	seedArticles(t, store, runtime, 99)
-	many, loaded := measure(defaults, x.Title, x.Summary, x.SEO)
+	many, loaded := measure(defaults, x.Title.Relation(articles.Articles.Title), x.Summary.Relation(articles.Articles.Summary), x.SEO.Relation(articles.Articles.SEO))
 	if len(loaded) != 100 {
 		t.Fatal("unexpected parent count", len(loaded))
 	}
 	// Two parent batches cost exactly two batches of slot statements.
 	split := defaults
 	split.BatchSize = 50
-	batched, _ := measure(split, x.Title, x.Summary, x.SEO)
+	batched, _ := measure(split, x.Title.Relation(articles.Articles.Title), x.Summary.Relation(articles.Articles.Summary), x.SEO.Relation(articles.Articles.SEO))
 	t.Logf("slot loading used %d statements for one article, %d for 100 and %d for 100 in two batches (%d without slots)", few, many, batched, base)
 	if few != many || batched != base+2*(few-base) {
 		t.Fatalf("slot statements are not constant per parent batch: %d, %d, %d (base %d)", few, many, batched, base)
@@ -69,13 +69,13 @@ func TestSlotLoadingStatementsDoNotGrowWithParents(t *testing.T) {
 	}
 	empty := transaction(func(context.Context, *database.Tx) error { return nil })
 	missing := transaction(func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.QueryArticles().With(x.Title, x.Summary, x.SEO).LoadMissing(ctx, tx, loaded)
+		_, err := orm.LoadMissing(ctx, tx, loaded, x.Title.Relation(articles.Articles.Title), x.Summary.Relation(articles.Articles.Summary), x.SEO.Relation(articles.Articles.SEO))
 		return err
 	})
 	if missing != empty {
 		t.Fatalf("LoadMissing on loaded slots issued %d statements; an empty transaction issues %d", missing, empty)
 	}
-	if _, err := articles.QueryArticles().With(x.Logo).All(t.Context(), store.Database()); err == nil || !strings.Contains(err.Error(), "not bound") {
+	if _, err := articles.Articles.Query().With(x.Logo.Relation(articles.Articles.Logo)).All(t.Context(), store.Database()); err == nil || !strings.Contains(err.Error(), "not bound") {
 		t.Fatal("an attachment slot without a manager must report that it is unbound", err)
 	}
 }

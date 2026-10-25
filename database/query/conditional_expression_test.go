@@ -67,7 +67,7 @@ func TestConditionalValuePhaseAndBounds(t *testing.T) {
 	if _, err := SelectValue(q, Lag(wrapped, 1, WindowFor(q))).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("CASE concealed nested window", err)
 	}
-	having := HavingPredicate[cursorRecord]{expression: typedComparison(wrapped.node, equal, codec.Signed[int64](), []int64{1})}
+	having := HavingPredicate[cursorRecord]{expression: retainPredicate(typedComparison(wrapped.node, equal, codec.Signed[int64](), []int64{1}))}
 	if _, err := SelectValue(q, count.Value()).Having(having).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("CASE concealed window in HAVING", err)
 	}
@@ -78,7 +78,7 @@ func TestConditionalValuePhaseAndBounds(t *testing.T) {
 		"nested aggregate": conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{count.node}},
 		"nested window":    conditionalNode{Kind: coalesceValues, Arguments: []valueExpression{window.node}},
 	} {
-		predicate := Predicate[cursorRecord]{expression: typedComparison(node, equal, codec.Signed[int64](), []int64{1})}
+		predicate := Predicate[cursorRecord]{expression: retainPredicate(typedComparison(node, equal, codec.Signed[int64](), []int64{1}))}
 		if _, err := q.Where(predicate).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
 		}
@@ -88,7 +88,7 @@ func TestConditionalValuePhaseAndBounds(t *testing.T) {
 	if _, err := SelectValue(q, Expression[cursorRecord, int64]{node: cyclic, codec: codec.Signed[int64]()}).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("conditional cycle accepted", err)
 	}
-	if _, err := q.Where(Predicate[cursorRecord]{expression: typedComparison(cyclic, equal, codec.Signed[int64](), []int64{1})}).Compile(); !errors.Is(err, fault.Invalid) {
+	if _, err := q.Where(Predicate[cursorRecord]{expression: retainPredicate(typedComparison(cyclic, equal, codec.Signed[int64](), []int64{1}))}).Compile(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("row-value cycle accepted", err)
 	}
 	items := make([]valueExpression, MaxExpressionNodes+1)
@@ -114,7 +114,7 @@ func TestParameterCaptureAndCodecTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	first.Arguments()[0].([]byte)[0] = 8
-	first.arguments[0].([]byte)[0] = 7 // even an internal executor's buffer must not alias the declaration
+	first.coreStatement().Bindings[0].([]byte)[0] = 7 // even an internal executor's buffer must not alias the declaration
 	second, err := SelectValue(cursorQuery(), p.Value()).Compile()
 	if err != nil || encodings != 1 || !reflect.DeepEqual(second.Arguments(), []any{[]byte{1, 2}}) {
 		t.Fatal("parameter capture/ownership", second.Arguments(), encodings, err)

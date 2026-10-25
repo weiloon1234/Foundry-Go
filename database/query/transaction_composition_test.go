@@ -30,7 +30,7 @@ func TestTransactionNestedLocksRejectOrdinaryGenericQueries(t *testing.T) {
 		var ignored int64
 		err := row.Scan(&ignored)
 		return owner{}, err
-	})).Where(Predicate[owner]{expression: subqueryPredicate{Query: subquery{Node: inner.node}}})
+	})).Where(Predicate[owner]{expression: retainPredicate(subqueryPredicate{Query: subquery{Node: inner.node}})})
 	for _, kind := range []readKind{readModels, readCount, readExists} {
 		statement, err := ordinary.compile(kind)
 		if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "transaction-scoped") || statement.SQL() != "" {

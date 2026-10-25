@@ -66,11 +66,11 @@ func (p sourceMutation[S, M]) exec(ctx context.Context, writer database.Transact
 	p.destination = p.destination.inContext(ctx)
 	return executeModelStatement(ctx, writer, p.needsPreparation(), p.prepare(false), func(ctx context.Context, tx *database.Tx, statement Statement) (int64, error) {
 		if len(p.mappings) == 0 {
-			result, err := tx.Exec(statement.executionContext(ctx), statement.sql, statement.arguments...)
+			result, err := tx.Exec(statement.executionContext(ctx), statement.SQL(), statement.coreStatement().Bindings...)
 			return result.RowsAffected, err
 		}
 		var affected, maximum int64
-		if err := database.ScanOne(statement.executionContext(ctx), tx, statement.sql, statement.arguments, &affected, &maximum); err != nil {
+		if err := database.ScanOne(statement.executionContext(ctx), tx, statement.SQL(), statement.coreStatement().Bindings, &affected, &maximum); err != nil {
 			return 0, err
 		}
 		if maximum > 1 {

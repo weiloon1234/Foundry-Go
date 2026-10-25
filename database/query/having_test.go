@@ -100,7 +100,10 @@ func TestHavingAndOrderingImplyGrouping(t *testing.T) {
 			n.Orders = []orderNode{{Expression: Count[cursorRecord]().node}}
 			return n
 		},
-		func(n selectNode) selectNode { n.Having = []expression{Grouped(id.Eq(1)).expression}; return n },
+		func(n selectNode) selectNode {
+			n.Having = []expression{predicateExpression(Grouped(id.Eq(1)).expression)}
+			return n
+		},
 	} {
 		var c compiler
 		if _, err := c.SelectSQL(derive(node)); !errors.Is(err, fault.Invalid) {

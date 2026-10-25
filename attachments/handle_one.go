@@ -33,6 +33,7 @@ func OneOf[M any, K comparable](owner extensions.Owner[M, K], name Name, policy 
 
 func wrapOneHandle[M any, K comparable](state oneSlot[M, K]) *attachmentHandleCore {
 	return &attachmentHandleCore{
+		collection:   func(out unsafe.Pointer) { *(*Collection[M, K])(out) = state.collection },
 		bind:         func(m *Manager) *attachmentHandleCore { return wrapOneHandle(state.From(m)) },
 		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
 		validate:     state.Validate,

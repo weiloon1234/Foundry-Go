@@ -43,7 +43,7 @@ type keyColumn[M any, K comparable, R columnRole] struct {
 // Predicate is a model-owned SQL condition. Example: Orders.ID.Eq(id).
 type Predicate[M any] struct {
 	_          [0]*M
-	expression querycore.Expression
+	expression *querycore.PredicateState
 	owner      *tableCore
 	rawScope   reflect.Type
 	err        error
@@ -135,7 +135,7 @@ func comparison[M, V any](c columnData[V], op querycore.Operator, vs []V, text .
 	for i, v := range vs {
 		values[i] = c.clone(v)
 	}
-	return Predicate[M]{owner: c.core.owner, expression: querycore.Comparison{Operand: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Operator: op, Values: values, Text: len(text) == 1 && text[0], Kind: c.core.kind, Bind: func(v any) (driver.Value, error) { return c.bind(v.(V)) }}}
+	return Predicate[M]{owner: c.core.owner, expression: querycore.RetainPredicate(querycore.Comparison{Operand: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Operator: op, Values: querycore.RetainComparisonValues(values), Text: len(text) == 1 && text[0], Kind: c.core.kind, Bind: func(v any) (driver.Value, error) { return c.bind(v.(V)) }})}
 }
 
 func columnOrder[M, V any](c columnData[V], descending bool) Order[M] {
@@ -379,7 +379,7 @@ func Not[M any](p Predicate[M]) Predicate[M] {
 	if p.owner == nil && p.rawScope != reflect.TypeFor[M]() {
 		p.err = errors.Join(p.err, invalid("predicate has no table declaration"))
 	}
-	p.expression = querycore.Negation{Child: p.expression}
+	p.expression = querycore.RetainPredicate(querycore.Negation{Child: querycore.PredicateNode(p.expression)})
 	return p
 }
 func junction[M any](or bool, ps []Predicate[M]) Predicate[M] {
@@ -401,12 +401,12 @@ func junction[M any](or bool, ps []Predicate[M]) Predicate[M] {
 			}
 			p.rawScope = x.rawScope
 		}
-		children[i] = x.expression
+		children[i] = querycore.PredicateNode(x.expression)
 	}
 	if len(ps) == 0 {
 		p.err = invalid("predicate has no table declaration")
 	}
-	p.expression = querycore.Junction{Any: or, Children: children}
+	p.expression = querycore.RetainPredicate(querycore.Junction{Any: or, Children: children})
 	return p
 }
 

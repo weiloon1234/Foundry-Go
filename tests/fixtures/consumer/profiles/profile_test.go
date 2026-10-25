@@ -208,11 +208,52 @@ func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 	if err != nil || !ok || selected.Locale() != "en" {
 		t.Fatal("localized file batch", err)
 	}
+	// Matching goes through the same bounded extension reads as the legacy API.
+	// The owner query still owns visibility and caller filters.
+	attachmentMatch, err := attachments.Matching(t.Context(), services.Attachments, profiles.Localized.ForLocale("en"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadataMatch, err := metadata.Matching(t.Context(), services.Metadata, profiles.PreferencesKey, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	translationMatch, err := translations.Matching(t.Context(), services.Translations, profiles.Label, "en", "Profile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := []orm.Predicate[profiles.Profile]{attachmentMatch, metadataMatch, translationMatch}
+	for _, predicate := range matches {
+		if err := store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+			count, err := profiles.Profiles.Query().Where(predicate).Count(ctx, tx)
+			if err != nil || count != 1 {
+				t.Fatal("extension match", count, err)
+			}
+			count, err = profiles.Profiles.Query().Where(predicate, profiles.Profiles.Name.Eq("not this profile")).Count(ctx, tx)
+			if err != nil || count != 0 {
+				t.Fatal("matching lost caller filter", count, err)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		_, err := profiles.Profiles.Delete(ctx, tx, profile.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
+	}
+	for _, predicate := range matches {
+		if err := store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+			count, err := profiles.Profiles.Query().Where(predicate).Count(ctx, tx)
+			if err != nil || count != 0 {
+				t.Fatal("matching bypassed current soft-delete visibility", count, err)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if _, err := profiles.Avatar.List(t.Context(), services.Attachments, profiles.ProfileIdentity.ReferenceOf(profile)); !errors.Is(err, database.NotFound) {
 		t.Fatal("ORM soft delete not respected", err)

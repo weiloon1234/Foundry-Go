@@ -129,7 +129,7 @@ func where[M any](q queryState, ps []Predicate[M]) queryState {
 		if !predicateOwnerMatches(p.owner, p.rawScope, q.table) {
 			q.err = errors.Join(q.err, invalid("predicate belongs to a different table declaration"))
 		}
-		q.ast.Predicates = append(q.ast.Predicates, p.expression)
+		q.ast.Predicates = append(q.ast.Predicates, querycore.PredicateNode(p.expression))
 	}
 	return q
 }
@@ -397,14 +397,14 @@ func compileRead(q queryState, kind querycore.ReadKind) (querycore.Statement, er
 }
 
 // Statement is an immutable compiled statement. Example: s,err := Compile(Orders.Query()).
-type Statement struct{ core querycore.Statement }
+type Statement struct{ core *querycore.StatementState }
 
 // SQL exposes parameterized SQL. Example: statement.SQL().
-func (s Statement) SQL() string { return s.core.SQLText }
+func (s Statement) SQL() string { return querycore.StatementValue(s.core).SQLText }
 
 // Arguments returns an owned binding snapshot. Example: statement.Arguments().
 func (s Statement) Arguments() []any {
-	a := slices.Clone(s.core.Bindings)
+	a := slices.Clone(querycore.StatementValue(s.core).Bindings)
 	for i, v := range a {
 		if b, ok := v.([]byte); ok {
 			a[i] = slices.Clone(b)
@@ -413,22 +413,22 @@ func (s Statement) Arguments() []any {
 	return a
 }
 
-// String omits bindings from diagnostics. Example: fmt.Sprint(statement).
-func (s Statement) String() string { return s.SQL() }
+// String omits SQL and bindings from diagnostics. Example: fmt.Sprint(statement).
+func (s Statement) String() string { return "query statement (redacted)" }
 
-// GoString omits bindings from diagnostics. Example: fmt.Sprintf("%#v",statement).
-func (s Statement) GoString() string { return s.SQL() }
+// GoString omits SQL and bindings from diagnostics. Example: fmt.Sprintf("%#v",statement).
+func (s Statement) GoString() string { return "query statement (redacted)" }
 
 // Compile inspects a read without I/O. Example: Compile(Orders.Query()).
 func Compile[M any](q Query[M]) (Statement, error) {
 	s, err := compileRead(q.state, querycore.ReadModels)
-	return Statement{s}, err
+	return Statement{querycore.RetainStatement(s)}, err
 }
 
 // CompileLocked inspects a locked read without I/O. Example: CompileLocked(Orders.Query().ForUpdate()).
 func CompileLocked[M any](q LockedQuery[M]) (Statement, error) {
 	s, err := compileRead(q.state, querycore.ReadModels)
-	return Statement{s}, err
+	return Statement{querycore.RetainStatement(s)}, err
 }
 
 func lockContext(ctx context.Context, tx *database.Tx) error {

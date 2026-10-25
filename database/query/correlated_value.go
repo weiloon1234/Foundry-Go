@@ -51,7 +51,7 @@ func (q CorrelatedValueQuery[O, I, V]) Offset(count int) CorrelatedValueQuery[O,
 
 // Exists tests the selected inner result, including grouping and its window.
 func (q CorrelatedValueQuery[O, I, V]) Exists() Predicate[O] {
-	return Predicate[O]{expression: subqueryPredicate{Query: q.correlatedValue().value.subquery}}
+	return Predicate[O]{expression: retainPredicate(subqueryPredicate{Query: q.correlatedValue().value.subquery})}
 }
 
 // CorrelatedValueSource preserves both the required outer scope and result type.

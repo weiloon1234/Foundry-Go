@@ -30,13 +30,13 @@ func TestJoinedHasCompilesEachLevelOnce(t *testing.T) {
 	var nested Predicate[node]
 	for i := depth - 1; i >= 0; i-- {
 		p := nodes.Key().Eq(int64(i + 1))
-		comparison := p.expression.(querycore.Comparison)
+		comparison := querycore.PredicateNode(p.expression).(querycore.Comparison)
 		bind := comparison.Bind
 		comparison.Bind = func(v any) (driver.Value, error) {
 			calls[i]++
 			return bind(v)
 		}
-		p.expression = comparison
+		p.expression = querycore.RetainPredicate(comparison)
 		if i == depth-1 {
 			nested = Has(links, p)
 		} else {

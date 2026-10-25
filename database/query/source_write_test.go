@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"reflect"
 	"strings"
 	"testing"
@@ -127,7 +128,7 @@ func TestSourceWritesShareLiteralMutatorsAndSoftDeleteConventions(t *testing.T) 
 			t.Fatal("fixed update lost normalization or unnecessarily rejects duplicate source keys", statement, err)
 		}
 	}
-	if calls != 2 || plan.plan.values.assignments[0].Value != (insertTagInput{" tag "}) {
+	if calls != 2 || querycore.StoredInput(plan.plan.values.assignments[0].Value) != (insertTagInput{" tag "}) {
 		t.Fatal("source update changed original or repeatedly normalized it")
 	}
 	tag := NewTextField[insertArchive, string]("archives", "tag", codec.String[string]())

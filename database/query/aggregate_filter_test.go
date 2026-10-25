@@ -57,7 +57,7 @@ func TestAggregateFilterWindowAndValidation(t *testing.T) {
 	for name, bad := range map[string]Predicate[cursorRecord]{
 		"zero": {}, "foreign": foreign.Gt(0),
 		"aggregate": {expression: Count[cursorRecord]().Gt(0).expression},
-		"window":    {expression: comparison{Operand: RowNumber(w).node, Operator: isNull}},
+		"window":    {expression: retainPredicate(comparison{Operand: RowNumber(w).node, Operator: isNull})},
 	} {
 		if _, err := SelectValue(q, Count[cursorRecord]().Filter(bad).Value()).Compile(); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
