@@ -3,7 +3,8 @@ package invalid
 import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
-	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var invalid = reports.UserSummarySelection[models.User]{Email: foundryquery.Value(models.UserFields().Age)}
+var invalid = rows.Map(reports.UserSummaries.Email, expr.Value(models.Users.Age))

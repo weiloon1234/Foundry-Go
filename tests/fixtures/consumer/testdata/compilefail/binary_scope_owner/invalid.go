@@ -2,7 +2,7 @@ package compilefail
 
 import (
 	"foundry.test/consumer/binarymodels"
-	"foundry.test/consumer/models"
+	"foundry.test/consumer/linkqueries"
 )
 
-var _ = models.QueryUsers().Where(binarymodels.RecordFields().Body.Eq(binarymodels.Payload{1}))
+var _ = linkqueries.Members.Query().Where(binarymodels.Records.Body.Eq(binarymodels.Payload{1}))

@@ -1,0 +1,454 @@
+{
+  "slice": "stage9-lane-c-source-clauses",
+  "base_commit": "6d801119400fab31a6f9bd66bc2988ada795bf2d",
+  "recorded_at": "2026-10-24T21:11:57.943851+00:00",
+  "status": "Six source-clause helpers implemented; lateralqueries migrated; comparisonqueries and distinctqueries partially migrated. No commit.",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "toolchain": "go1.27.1 darwin/arm64",
+  "services": "Go test/build/vet commands explicitly unset FOUNDRY_TEST_POSTGRES_URL and FOUNDRY_TEST_POSTGRES_REQUIRED; PostgreSQL execution remains lead-owned.",
+  "surface_additions": [
+    "rows.OrderScalar",
+    "rows.LimitScalar",
+    "rows.OffsetScalar",
+    "rows.HavingCorrelatedRecord",
+    "rows.DistinctCorrelatedRecord",
+    "rows.DistinctOnCorrelatedScalar"
+  ],
+  "surface_removals": [],
+  "new_query_table_methods": [],
+  "convertibility_allowlist_additions": [],
+  "consumer_cases_ported": [
+    "lateral_model_result",
+    "lateral_nullable_scope",
+    "lateral_on_owner",
+    "lateral_ordinary_join",
+    "lateral_outer",
+    "lateral_predicate_owner",
+    "lateral_projection_execute",
+    "lateral_projection_ordinary",
+    "lateral_projection_owner",
+    "lateral_projection_type",
+    "lateral_record_alias",
+    "lateral_record_cte",
+    "lateral_record_execute",
+    "lateral_scope_conversion",
+    "lateral_uncorrelated_alias"
+  ],
+  "new_goway_cases": [
+    "scalar_clause_order_owner",
+    "correlated_clause_having_owner",
+    "correlated_clause_having_row",
+    "correlated_clause_distinct_owner",
+    "correlated_clause_distinct_selected"
+  ],
+  "owned_consumer_cases_checked": 373,
+  "owned_compiler_filter": "^TestInvalidPublicContractsFailCompilation$/^(aggregate_enum_sum|aggregate_filter_after_window|aggregate_filter_boolean_order|aggregate_filter_having|aggregate_filter_nullable|aggregate_filter_owner|aggregate_filter_value|aggregate_input|aggregate_nonnullable_result|aggregate_order_model|aggregate_owner|aggregate_pivot_input|aggregate_result|aggregate_temporal_avg|aggregate_text_sum|alias_predicate_owner|arithmetic_compare_value|arithmetic_float_remainder|arithmetic_nullable_operand|arithmetic_nullable_result|arithmetic_owner|arithmetic_row_phase|arithmetic_text|arithmetic_value|binary_nullable_projection|case_aggregate_condition|case_aggregate_row_value|case_owner_conversion|case_result_nullable|case_result_owner|case_result_type|case_selected_predicate|case_unfinished|case_window_row_value|chunk_callback_owner|chunk_each_callback_owner|chunk_each_key_owner|chunk_key_callback_owner|coalesce_fallback_nullable|coalesce_owner|coalesce_value|column_enum_range|column_scope|column_value|computed_group_owner|computed_group_selected_list|computed_model_order_owner|computed_partition_owner|correlation_column_id|correlation_exists_owner|correlation_inner_scope|correlation_input_selection|correlation_membership_owner|correlation_model_fields|correlation_nullable_fields|correlation_nullable_membership|correlation_nullable_scope|correlation_outer_scope|correlation_query_escape|correlation_scalar_nullability|correlation_scalar_owner|correlation_scope_unlifted|correlation_source_escape|correlation_uncorrelated_membership|cross_join_nullable_scope|cross_join_scope_conversion|cte_membership_owner|cte_model_write|cte_nullable_value|cte_record_conversion|cte_record_fields|datatable_cell_value|datatable_column_row|datatable_column_scope|datatable_column_value|datatable_export_format|datatable_filter_nullability|datatable_filter_value|datatable_group_filter_value|datatable_having_phase|datatable_id|datatable_label|datatable_projection_row|datatable_relation_owner|datatable_subject|decimal_conversion_float|decimal_float|decimal_text_operator|derived_enum_operator|derived_nullable_scope|derived_predicate_owner|derived_record_owner|distinct_key_owner|distinct_predicate_owner|distinct_scalar_type|distinct_write|exists_scope|field_in_having|geographic_owner|having_boolean_range|having_combination_scope|having_in_where|having_nullable|having_scope|having_value|imported_enum_text_operator|importer_column_row|interval_clock_instant|interval_find_number|interval_like|interval_nullable|interval_projection_type|interval_result_phase|interval_selected_row|interval_sum_decimal|interval_wrong_owner|join_combination_scope|join_compare_nullable|join_compare_owner|join_compare_selected|join_compare_type|join_full_scope|join_key_type|join_kind_scope|join_like_number|join_natural_key|join_nullable_chain|join_nullable_fields|join_nullable_result|join_on_filter_scope|join_outer_preserved|join_right_scope|join_scope_outside|join_scope_unlifted|join_side_scope|join_where_model|json_contains_payload|json_kind_boolean|json_like|json_nullable_input|json_path_array_index|json_path_map_key|json_path_numeric_like|json_path_owner|json_path_payload|json_path_row_phase|json_path_scalar_type|json_path_unknown_field|json_predicate_owner|json_projection_payload|json_selected_row|json_sum|json_value_conversion|lateral_model_result|lateral_nullable_scope|lateral_on_owner|lateral_ordinary_join|lateral_outer|lateral_predicate_owner|lateral_projection_execute|lateral_projection_ordinary|lateral_projection_owner|lateral_projection_type|lateral_record_alias|lateral_record_cte|lateral_record_execute|lateral_scope_conversion|lateral_uncorrelated_alias|lock_clause_nullable|lock_clause_owner|lock_clause_owner_conversion|lock_clause_pool|lock_clause_session|lock_clause_source|locked_count|locked_key_owner|locked_model_id|locked_mutation|locked_nullable_target|locked_pool|locked_predicate_owner|locked_projection_pool|locked_result_owner|locked_subquery|locked_target_owner|named_window_owner|nested_locked_source|numeric_text_operator|parameter_id|parameter_nullable_field|parameter_owner|parameter_value|pivot_key|pivot_model|pivot_order|pivot_scope|predicate_owner_conversion|projected_record_write|projection_aggregate_group|projection_builder_value|projection_field|projection_group_owner|projection_mapping_owner|projection_nullability|projection_order_scope|projection_page_owner|projection_scope|projection_where_owner|projection_write|query_icontains_nullable|query_icontains_value|query_id|query_order_owner|query_owner|query_value|range_boundary_conversion|range_boundary_value|range_distance_type|range_nullable_distance|range_numeric_scope|range_numeric_text|range_ordinary_boundary|range_temporal_distance|range_temporal_number|record_selection_nullable|record_selection_result|record_selection_scope|record_selection_unlifted|record_selection_write|recursive_field_owner|recursive_natural_key|recursive_self_conversion|recursive_self_execute|recursive_self_owner|recursive_self_write|recursive_step_record|relation_exists_owner|relation_key|relation_owner|relation_scope|relation_target|result_cursor_fields_owner|result_cursor_key_owner|result_cursor_order_owner|result_cursor_predicate_owner|result_cursor_request_owner|result_cursor_source|result_cursor_write|routing_primary_lock|scalar_field_owner_conversion|scalar_nullability|scalar_nullable_input|scalar_row_identity_type|scalar_row_owner|scalar_scope|scoped_model_owner|selected_boolean_order|selected_calculation_order|selected_comparison_row|selected_distinct_owner|selected_group_phase|selected_key_conversion|selected_key_row_list|selected_partition_owner|set_input_scope|set_model_write|set_nullable_value|set_output_scope|set_projection_owner|set_record_conversion|set_record_owner|set_record_scalar|set_value_owner|simple_page_nullable|subquery_filter_scope|subquery_id|subquery_nullable|subquery_selection_scope|subquery_value|substring_text_position|temporal_calendar_result|temporal_clock_calendar|temporal_date_clock|temporal_date_unit|temporal_decimal_seconds|temporal_float_epoch|temporal_instant_calendar|temporal_nullable|temporal_predicate_owner|temporal_selected_row|temporal_selected_where|temporal_string_interval|temporal_string_zone|temporal_timestamp_unit|text_numeric|text_operand_owner|text_pattern_value|transaction_correlated_parent|transaction_correlated_projection_type|transaction_correlated_record_execute|transaction_correlated_record_ordinary|transaction_correlated_source_conversion|transaction_correlated_value_execute|transaction_correlated_value_ordinary|transaction_correlated_value_unbound|transaction_correlation_inner_scope|transaction_correlation_ordinary_source|transaction_correlation_outer_scope|transaction_correlation_scope_conversion|transaction_correlation_unbound_record|transaction_correlation_unlifted_scope|transaction_cte_conversion|transaction_exists_source|transaction_lateral_conversion|transaction_lateral_nullable_record|transaction_lateral_on_scope|transaction_lateral_ordinary_join|transaction_lateral_parent|transaction_lateral_pool|transaction_lateral_unbound|transaction_locked_value_count|transaction_locked_value_session|transaction_nullable_lock|transaction_nullable_record|transaction_ordinary_cte|transaction_owner|transaction_pool|transaction_projection_mutation|transaction_projection_ordinary|transaction_projection_type|transaction_record_owner|transaction_result|transaction_scope_conversion|transaction_session|transaction_source_alias|transaction_source_cte|transaction_source_join|transaction_source_projection|transaction_source_value|transaction_value_conversion|transaction_value_nullability|transaction_value_operand_type|transaction_value_ordinary_anchor|transaction_value_owner|transaction_value_owner_conversion|transaction_value_pool|transaction_value_result|transaction_value_scalar_escape|transaction_value_selected_operand|transaction_value_source|value_compare_like_number|value_compare_nullable|value_compare_order_bool|value_compare_owner|value_compare_selected_owner|value_compare_selected_row|value_compare_selected_where|value_compare_type|value_cursor_nullable|where_doesnt_have_owner|where_has_aggregate|where_has_find_owner|where_has_owner|window_aggregate_owner|window_fallback_value|window_frame_conversion|window_order_owner|window_partition_owner|window_range_distance|window_result_nullable|window_result_type|window_value_owner|window_where)$",
+  "sql_parity": [
+    "comparisonqueries.TestAliasedScalarWindowSQLParity",
+    "lateralqueries.TestCorrelatedRecordClauseSQLParity",
+    "distinctqueries.TestCorrelatedDistinctOnSQLParity"
+  ],
+  "footprint": {
+    "metric": "T/t symbols in package archive",
+    "probes_passed": 126,
+    "source_clauses": {
+      "measured": 2505,
+      "ceiling": 2881,
+      "archive_bytes": 11930914
+    },
+    "q_with": {
+      "measured": 1211,
+      "ceiling": 1211
+    },
+    "aggregate_families": {
+      "measured": 4366,
+      "ceiling": 4369
+    },
+    "existing_ceilings_changed": false
+  },
+  "checks": [
+    {
+      "cwd": ".",
+      "command": "go build ./database/orm/...",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "cwd": ".",
+      "command": "go vet ./database/orm/...",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "cwd": ".",
+      "command": "go test ./database/orm/rows",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-rows-final.log",
+      "log_sha256": "fe51f853e184145a7503ed5467b9b353c380dc353327e2c91370e2fa1040f808"
+    },
+    {
+      "cwd": ".",
+      "command": "go test ./database/orm/rows -run 'TestScalarClauses|TestCorrelatedClauses'",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-clauses-final.log",
+      "log_sha256": "fc9b5c4291a5fa480abfab8357e00cdebe5a4d5cc27bb4e280c400707b6f42c8"
+    },
+    {
+      "cwd": ".",
+      "command": "go test -race ./database/orm/rows",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-race.log",
+      "log_sha256": "62908b4a03d858f030318795314c6b02c326f77b00dfe52c56ebcb255fb1e56c"
+    },
+    {
+      "cwd": ".",
+      "command": "go test ./database/orm -run '^(TestPublicMethodSurface|TestExportedTypesPreventPhaseConversions)$'",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-guards.log",
+      "log_sha256": "53849047466af4a6751c53e3456b0f09ff92fd27ddd8d7f483f5d4a22210aa53"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go build ./models ./reports ./lateralqueries",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-consumer-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go vet ./lateralqueries ./comparisonqueries ./distinctqueries",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-consumer-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test ./lateralqueries ./comparisonqueries",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-consumer-final.log",
+      "log_sha256": "cc2b9c63a19107cbd573ecf53c3a69f3553975d7adc00ff78d57e81068a68fc2"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test -race ./lateralqueries ./comparisonqueries ./distinctqueries",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-consumer-race.log",
+      "log_sha256": "fdb4f6c1c57077f887eb5740e700c858a05e3e1e46ce9ee6bfe9858fad60fac4"
+    },
+    {
+      "cwd": "tests/fixtures/consumer",
+      "command": "go test . -run \"$OWNED_COMPILER_FILTER\"",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-consumer-compiler.log",
+      "log_sha256": "2aa057f6a8df97c1883a933ca7f02bb3caedfefd814fbb86566c4aab60fac258"
+    },
+    {
+      "cwd": "tests/fixtures/goway",
+      "command": "go test . -run '^TestInvalidPublicContractsFailCompilation$/(scalar_clause_order_owner|correlated_clause_having_owner|correlated_clause_having_row|correlated_clause_distinct_owner|correlated_clause_distinct_selected)$' -v",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-compiler.log",
+      "log_sha256": "2da4902dec2ade24d45427204d2491cf853bd2d6b9c5bc2d7f373f86f8b1370e"
+    },
+    {
+      "cwd": "tests/fixtures/goway",
+      "command": "go test . -run '^(TestInvalidPublicContractsFailCompilation/(scalar_clause_order_owner|correlated_clause_having_owner|correlated_clause_having_row|correlated_clause_distinct_owner|correlated_clause_distinct_selected)|TestFootprintBudgets)$' -v",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-footprint.log",
+      "log_sha256": "48b432a650801a0d8e7866e0087593b55fe87ac982c76b405a01423b2ace510b"
+    },
+    {
+      "cwd": "tests/fixtures/goway",
+      "command": "go vet . ./testdata/footprint/source_clauses ./pgsmoke",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-fixture-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "cwd": "tests/fixtures/goway",
+      "command": "go test ./pgsmoke -run '^$'",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-pgsmoke.log",
+      "log_sha256": "253688a3f0042314fcddf6a2aaf058dd81d31a0af753c125ee64eaaa583e540d"
+    },
+    {
+      "cwd": ".",
+      "command": "python3 -B tools/goway_catalogue.py",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-catalogue.log",
+      "log_sha256": "14246701806e1ebd0347fcca5ca500223fe5d8d4a73956bfc839c9091e9d7777"
+    },
+    {
+      "cwd": ".",
+      "command": "gofmt -l <all changed and untracked Go files>",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-format.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "cwd": ".",
+      "command": "git diff --check",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-diffcheck.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "cwd": ".",
+      "command": "make docs-check",
+      "result": "PASS",
+      "log": "/private/tmp/goway-stage9-c-source-docs.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    }
+  ],
+  "verification_notes": [
+    "Initial rows test used the package Param constructor with an expression exemplar; corrected to the existing column exemplar contract before passing.",
+    "Initial consumer build used Gt on generic Expression; migrated to OrderRow/OrderNullableRow, then affected packages passed.",
+    "Surface test first reported the six intended additions; snapshot updated with no removals and guard passed.",
+    "Combined compiler/footprint filter selected footprint only; the five compiler cases were subsequently run with their own exact filter and passed.",
+    "Live PostgreSQL was not run; the migrated SQL/persistence assertions remain for the integration gate."
+  ],
+  "remaining_routing": [
+    "Lane A owns read-family compile/preflight/stream terminals and expression predicates in relation filters. TODOs preserve blocked assertions.",
+    "Remaining DISTINCT migration also needs scalar GROUP BY/HAVING/DISTINCT/DISTINCT ON and ordinary record/set DISTINCT; lead asked to route the additional clauses."
+  ],
+  "shared_files": [
+    "database/orm/method_surface_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/orm/rows/README.md",
+    "tests/fixtures/consumer/types_test.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "blueprint/goway-data-layer/compilefail-mapping.tsv"
+  ],
+  "source_sha256": {
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "a1f195a69129fdb329fec33dad29abbddddb825084f2fc2699aaec1417d90856",
+    "database/orm/method_surface_test.go": "d278cf5e72dca230c5969915fba6afc26aced69312a90e40b56c673678f491d0",
+    "database/orm/rows/README.md": "36629b970558e597c258517042d66fc3b6943d8532157f7d7e4485b30a4183b1",
+    "database/orm/rows/correlated_clauses.go": "b1a483df2f9231691dde39be43c557e599ac00d3ef2f635ddefda33f0e5aa0fa",
+    "database/orm/rows/scalar_clauses.go": "b155aba3b22539b55a05783cac8f37790cbbb280b10036fc857ebaca0cf994d2",
+    "database/orm/rows/scalar_clauses_test.go": "6de3aa31ee7626176c5d0ca3b76d11e9de7b37e6c7850cffe4bab4ba0a02f4c9",
+    "database/orm/testdata/public-methods.txt": "354978b3cf1cbb0ec5616aaae7ce350dcb4fc9dd4b1d02a8ef1b91ee401ef2d2",
+    "tests/fixtures/consumer/comparisonqueries/scalar_clause_parity_test.go": "4fa4edd09930695dd1fd88293187d22b581c35ead946d422dd7a2a5c6c0cc03e",
+    "tests/fixtures/consumer/comparisonqueries/subqueries_postgres_test.go": "062a65bb7a635e0df44dd72d5dbd36db142c9d5cdc94fc9c820ab4db739c821c",
+    "tests/fixtures/consumer/distinctqueries/correlated_parity_test.go": "a458cafd647954f4b97bebb0a213fce816652b71d764e868555730855a31cd7e",
+    "tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go": "bd740f86f97a64fd323318c3b487b0c0ce826e9badd9b9a1f31a2cb5274fe327",
+    "tests/fixtures/consumer/lateralqueries/README.md": "5aeeaa2672ba8a884b519f34e3df2255f2a75a57546d923042fbc3b843aeb6dd",
+    "tests/fixtures/consumer/lateralqueries/clause_parity_test.go": "d3bc0bf11e1704e35701f353dddc00648495cc682761336bf563e01ae5dc0cfc",
+    "tests/fixtures/consumer/lateralqueries/composition_postgres_test.go": "7415fdf7a3e8fef4dba1895453d35b0ef67c4240c241cc2012f84860e86b120c",
+    "tests/fixtures/consumer/lateralqueries/records_postgres_test.go": "bde1e4b747e79918e81d1653ec89a5127dee14ec0e59d83e387fbbaa608aeafd",
+    "tests/fixtures/consumer/lateralqueries/rows.go": "99c6193381832d59287d98808ea98953fe9a86648962e7bcd6d9529d2aa1a694",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_model_result/invalid.go": "41dfe349f8abd9aa4709c423a79d0c95e753ef56fb6f8cf0ea94e42019a34173",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_nullable_scope/invalid.go": "2ec668daf3012ad247520b6c4d05d5c1b19e397f81ecf9b5e7684e3190a007d6",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_on_owner/invalid.go": "3a097cebd4c3ab1a7f8818d265594604fcda9f6df89b6524d2ed20d611bd73e1",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_ordinary_join/invalid.go": "0ef82b6e9a7e0d4127c5f9a572f0a469588c88f632d4e4d5ef33298608ed4779",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_outer/invalid.go": "7a81f4d7cd44b568e9f643e7a0aede1467ef75beb45b1ada8e2cc93d2dba6977",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_predicate_owner/invalid.go": "7bf78ef1d352a36813ce7c925f6e1b958d85a25a5f7857c2ad9f324812acea80",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_projection_execute/invalid.go": "cd47e787a998619bd688fb250f332dcc2cb61a25d8f904f380dc39033405d8fa",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_projection_ordinary/invalid.go": "d1629bb1e7395d517bd5b872e209dbe53062be4c3de1ce7c6a1f31e098a4c8c9",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_projection_owner/invalid.go": "fa75cf297706609bef2d136802e1db4a974864bb0c73a14012605eb02fdfdf47",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_projection_type/invalid.go": "9223087f4b08ea81bd41ebde6ace019ba72df83a9f0d41ec448ac51cb6c7e2a0",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_record_alias/invalid.go": "9e71d011868c9c370173dc16ea395c9b7b8a2cc4306bc16946e5a8c46c29f13e",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_record_cte/invalid.go": "95d2f4b631534d715c0e7df89a21f514dd4837f3f7e951a239578e6588491a59",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_record_execute/invalid.go": "ed67ecb2c8747af62455a6ec0b285e8d74b46f98cd8a83d58ce967cc2302e154",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_scope_conversion/invalid.go": "128be5813b5aa26210378a1c6bcc12e0763b643ba642639a526c3f9c5de0b8ff",
+    "tests/fixtures/consumer/testdata/compilefail/lateral_uncorrelated_alias/invalid.go": "88ab5e9a44dfb45af0b84c591159343c89f8e44ec4bb2b7ce70870060fbf7d0c",
+    "tests/fixtures/consumer/types_test.go": "e27b448c4413d055b6b469d7d0548d0f07ddd8ceeb25cb2e7bfc7d0b2a647e82",
+    "tests/fixtures/goway/compiler_cases_test.go": "2916601e448178a49784d76bac4e052f54ed46fc416b55d197406e538ca289b3",
+    "tests/fixtures/goway/footprint_test.go": "24fbd95bc273442f7623b748297d383ec988a421885a2d378319c99f4acebe08",
+    "tests/fixtures/goway/testdata/compilefail/correlated_clause_distinct_owner/invalid.go": "6882b66a2e762a867af2cdfa8eaadb5a58379f97a35e7d5ff4ec0a0a69268c63",
+    "tests/fixtures/goway/testdata/compilefail/correlated_clause_distinct_selected/invalid.go": "e972f3f7412efd3bfc1c3daf759825c6b33f105ba6ec19258ca09a0dd97fd3ec",
+    "tests/fixtures/goway/testdata/compilefail/correlated_clause_having_owner/invalid.go": "b238446bd71d90089a225a1efee05ff1b824bb4cfa333500ba587e24a9267a7a",
+    "tests/fixtures/goway/testdata/compilefail/correlated_clause_having_row/invalid.go": "b25d780425e7fc6908c5dbe8dfb78f2bc4edff8c9661480f510e93a195945c34",
+    "tests/fixtures/goway/testdata/compilefail/scalar_clause_order_owner/invalid.go": "34bb2a844fbd0bdc82d04477438416d49471879addc1d316cfc68aae1135f141",
+    "tests/fixtures/goway/testdata/footprint/source_clauses/probe.go": "a2198451371bf2b75653ad9a2ec45a1d0ea766c4020f90b9c90c9a0e8815c39e",
+    "blueprint/00-master-architecture-and-parity.md": "061e63c9eccba6239f4ae2141ba91a712025e799d0e9ee8b0195978821367145",
+    "tools/release/release_test.go": "46a46a4ab85b3bbdf9843aeeea85830312e5d48d1c5ffc2f998ca6d8675aefe8",
+    "internal/agent/gopls_acceptance_test.go": "f0a121e6216c08edace743b423e7840b5b08b54140dfbe9f6fe75ea055e559f1",
+    "tools/goway_catalogue_test.py": "7fb955d7222290defcee9395ff10b4849fba508441734761f40d5576edc15767",
+    "internal/agent/field_documentation_acceptance_test.go": "119d4e19f45f5542847f6d377fc2d0b45b5f67c6670ff837c3d2b56f1004687b",
+    "blueprint/goway-data-layer/README.md": "0eea0ede21db307e0c28689ca9716ff946228bca9b65353218e30c3225c7addd",
+    "CHANGELOG.md": "239223698475e6663c1a5aec038c8bd655af4500ba9a91dbd412fe473b735961",
+    "tests/fixtures/consumer/mutatorqueries/orm.go": "f0a3e3c05aca419488d082964921adfc539a00e055c31317eb8ba20fa7470d6d",
+    "tests/fixtures/consumer/reports/rows.go": "aa9e32c59b86c8f6ab1ce30dd78b791282f04d8a7e2ff4e421f88c93a056edde"
+  },
+  "generated_outputs_or_directives_changed": false,
+  "integration_batch7b": {
+    "historical_lane_source_hashes": {
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "7f3d3ed10a10790cf70fdbe480cbe6eae0f8bddb08121331371891bf70ff998c",
+      "database/orm/method_surface_test.go": "4a263015dac792beef2e309343856654535bcac619c5f2063cad8b31adf6cf95",
+      "database/orm/rows/README.md": "36629b970558e597c258517042d66fc3b6943d8532157f7d7e4485b30a4183b1",
+      "database/orm/rows/correlated_clauses.go": "b1a483df2f9231691dde39be43c557e599ac00d3ef2f635ddefda33f0e5aa0fa",
+      "database/orm/rows/scalar_clauses.go": "b155aba3b22539b55a05783cac8f37790cbbb280b10036fc857ebaca0cf994d2",
+      "database/orm/rows/scalar_clauses_test.go": "6de3aa31ee7626176c5d0ca3b76d11e9de7b37e6c7850cffe4bab4ba0a02f4c9",
+      "database/orm/testdata/public-methods.txt": "baf18d1937133dad60bea802eeeff92454f2de840941ce5054022c19ec3b9ec0",
+      "tests/fixtures/consumer/comparisonqueries/scalar_clause_parity_test.go": "4fa4edd09930695dd1fd88293187d22b581c35ead946d422dd7a2a5c6c0cc03e",
+      "tests/fixtures/consumer/comparisonqueries/subqueries_postgres_test.go": "062a65bb7a635e0df44dd72d5dbd36db142c9d5cdc94fc9c820ab4db739c821c",
+      "tests/fixtures/consumer/distinctqueries/correlated_parity_test.go": "a458cafd647954f4b97bebb0a213fce816652b71d764e868555730855a31cd7e",
+      "tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go": "bd740f86f97a64fd323318c3b487b0c0ce826e9badd9b9a1f31a2cb5274fe327",
+      "tests/fixtures/consumer/lateralqueries/README.md": "5aeeaa2672ba8a884b519f34e3df2255f2a75a57546d923042fbc3b843aeb6dd",
+      "tests/fixtures/consumer/lateralqueries/clause_parity_test.go": "d3bc0bf11e1704e35701f353dddc00648495cc682761336bf563e01ae5dc0cfc",
+      "tests/fixtures/consumer/lateralqueries/composition_postgres_test.go": "7415fdf7a3e8fef4dba1895453d35b0ef67c4240c241cc2012f84860e86b120c",
+      "tests/fixtures/consumer/lateralqueries/records_postgres_test.go": "bde1e4b747e79918e81d1653ec89a5127dee14ec0e59d83e387fbbaa608aeafd",
+      "tests/fixtures/consumer/lateralqueries/rows.go": "99c6193381832d59287d98808ea98953fe9a86648962e7bcd6d9529d2aa1a694",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_model_result/invalid.go": "41dfe349f8abd9aa4709c423a79d0c95e753ef56fb6f8cf0ea94e42019a34173",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_nullable_scope/invalid.go": "2ec668daf3012ad247520b6c4d05d5c1b19e397f81ecf9b5e7684e3190a007d6",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_on_owner/invalid.go": "3a097cebd4c3ab1a7f8818d265594604fcda9f6df89b6524d2ed20d611bd73e1",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_ordinary_join/invalid.go": "0ef82b6e9a7e0d4127c5f9a572f0a469588c88f632d4e4d5ef33298608ed4779",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_outer/invalid.go": "7a81f4d7cd44b568e9f643e7a0aede1467ef75beb45b1ada8e2cc93d2dba6977",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_predicate_owner/invalid.go": "7bf78ef1d352a36813ce7c925f6e1b958d85a25a5f7857c2ad9f324812acea80",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_projection_execute/invalid.go": "cd47e787a998619bd688fb250f332dcc2cb61a25d8f904f380dc39033405d8fa",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_projection_ordinary/invalid.go": "d1629bb1e7395d517bd5b872e209dbe53062be4c3de1ce7c6a1f31e098a4c8c9",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_projection_owner/invalid.go": "fa75cf297706609bef2d136802e1db4a974864bb0c73a14012605eb02fdfdf47",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_projection_type/invalid.go": "9223087f4b08ea81bd41ebde6ace019ba72df83a9f0d41ec448ac51cb6c7e2a0",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_record_alias/invalid.go": "9e71d011868c9c370173dc16ea395c9b7b8a2cc4306bc16946e5a8c46c29f13e",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_record_cte/invalid.go": "95d2f4b631534d715c0e7df89a21f514dd4837f3f7e951a239578e6588491a59",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_record_execute/invalid.go": "ed67ecb2c8747af62455a6ec0b285e8d74b46f98cd8a83d58ce967cc2302e154",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_scope_conversion/invalid.go": "128be5813b5aa26210378a1c6bcc12e0763b643ba642639a526c3f9c5de0b8ff",
+      "tests/fixtures/consumer/testdata/compilefail/lateral_uncorrelated_alias/invalid.go": "88ab5e9a44dfb45af0b84c591159343c89f8e44ec4bb2b7ce70870060fbf7d0c",
+      "tests/fixtures/consumer/types_test.go": "aacae201deb43a087c33a5c910bf96233b9614c4f160fe8d28111f54cb8511fb",
+      "tests/fixtures/goway/compiler_cases_test.go": "3c51588a46ad75230ad113987a423ae9809ae117ba8183c7c06ba0928cdaefa5",
+      "tests/fixtures/goway/footprint_test.go": "c40cdd0713ec3a0802c0f2a6d1b30ede3fb36d3649f5450378a3b95c88697c4c",
+      "tests/fixtures/goway/testdata/compilefail/correlated_clause_distinct_owner/invalid.go": "6882b66a2e762a867af2cdfa8eaadb5a58379f97a35e7d5ff4ec0a0a69268c63",
+      "tests/fixtures/goway/testdata/compilefail/correlated_clause_distinct_selected/invalid.go": "e972f3f7412efd3bfc1c3daf759825c6b33f105ba6ec19258ca09a0dd97fd3ec",
+      "tests/fixtures/goway/testdata/compilefail/correlated_clause_having_owner/invalid.go": "b238446bd71d90089a225a1efee05ff1b824bb4cfa333500ba587e24a9267a7a",
+      "tests/fixtures/goway/testdata/compilefail/correlated_clause_having_row/invalid.go": "b25d780425e7fc6908c5dbe8dfb78f2bc4edff8c9661480f510e93a195945c34",
+      "tests/fixtures/goway/testdata/compilefail/scalar_clause_order_owner/invalid.go": "34bb2a844fbd0bdc82d04477438416d49471879addc1d316cfc68aae1135f141",
+      "tests/fixtures/goway/testdata/footprint/source_clauses/probe.go": "a2198451371bf2b75653ad9a2ec45a1d0ea766c4020f90b9c90c9a0e8815c39e"
+    },
+    "base_commit": "d802336",
+    "status": "integrated; requested acceptance passed with targeted corrections; pending lead commit",
+    "worktree": "Foundry-Go-goway-int2",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r8",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "conflicts": {
+      "lane_b": 17,
+      "lane_c": 5,
+      "resolution": "preserve both lane behaviors; union registries and mapping rows; retain batch7a historical evidence and handwritten field documentation"
+    },
+    "catalogue": {
+      "total": 1032,
+      "ported": 570,
+      "port": 18,
+      "unaffected": 444
+    },
+    "goway_compiler_cases": 819,
+    "goway_footprint_probes": 134,
+    "existing_footprint_ceilings": "unchanged",
+    "generated_outputs": "not hand edited; checked against generation owner",
+    "postgres": "not run; lead-owned service gate",
+    "release_inventory": "new runtime Go sources pinned; no new non-Go testdata assets",
+    "commands": {
+      "go build ./...": {
+        "result": "pass",
+        "log": "build.log",
+        "note": "exit 0; sandbox module-stat-cache write warning only"
+      },
+      "go vet ./...": {
+        "result": "pass",
+        "log": "vet.log"
+      },
+      "python3 tools/goway_catalogue.py": {
+        "result": "pass",
+        "log": "catalogue.log"
+      },
+      "go test -race -timeout=20m ./database/... ./internal/...": {
+        "result": "pass after targeted surface rerun",
+        "log": "race.log",
+        "correction": "six rows function entries reordered to match union registry; entries and signatures unchanged"
+      },
+      "go test -race -timeout=20m ./database/orm -run TestPublicMethodSurface": {
+        "result": "pass",
+        "log": "surface-rerun.log"
+      },
+      "make fixture-check": {
+        "result": "pass",
+        "log": "fixtures.log",
+        "coverage": "vet and tests for plugin_base, plugin_dep, consumer and goway; optional live services not enabled"
+      },
+      "make generate-check": {
+        "result": "pass",
+        "log": "generate.log",
+        "note": "no regeneration required; generated outputs and ownership manifests unchanged"
+      },
+      "make release-tools-check": {
+        "result": "pass",
+        "log": "release.log",
+        "note": "Go release inventory tests and all 26 Python tests passed"
+      },
+      "make agent-smoke": {
+        "result": "pass segmented: 486 passed initially, all 8 corrected probes passed on targeted rerun",
+        "log": "agent.log",
+        "subtests": 494,
+        "initial_passed": 486,
+        "initial_failed": [
+          "TestRealGoplsConsumer/typed-source-update-returning",
+          "TestRealGoplsConsumer/typed-insert-select-values",
+          "TestRealGoplsConsumer/typed-insert-select-returning",
+          "TestRealGoplsConsumer/typed-per-model-create",
+          "TestRealGoplsConsumer/typed-lock-transaction",
+          "TestRealGoplsConsumer/typed-lock-clause-transaction",
+          "TestRealGoplsConsumer/typed-soft-delete-pivot",
+          "TestRealGoplsConsumer/typed-model-chunk-callback"
+        ],
+        "tool": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+      },
+      "agent-smoke targeted rerun": {
+        "result": "pass",
+        "log": "agent-rerun.log",
+        "subtests": 8,
+        "command": "go test -timeout=20m -count=1 -v ./internal/agent -run '^TestRealGoplsConsumer$/^(typed-source-update-returning|typed-insert-select-values|typed-insert-select-returning|typed-per-model-create|typed-lock-transaction|typed-lock-clause-transaction|typed-soft-delete-pivot|typed-model-chunk-callback)$'"
+      },
+      "go vet ./internal/agent": {
+        "result": "pass",
+        "log": "agent-vet-final.log"
+      },
+      "go test -race -timeout=20m ./internal/agent": {
+        "result": "pass",
+        "log": "agent-race-final.log"
+      },
+      "gofmt (repository format-go.sh check)": {
+        "result": "pass",
+        "log": "gofmt.log"
+      },
+      "make docs-check": {
+        "result": "pass",
+        "log": "docs.log"
+      },
+      "git diff --check; git diff --cached --check": {
+        "result": "pass",
+        "log": "diff-check.log"
+      }
+    },
+    "remaining_scope": "Stage 9 remains in progress; remaining caller migration and generated cleanup are not completed by this integration",
+    "commit": "none",
+    "log_sha256": {
+      "release.log": "d67e6b28bf853d638070afc755c3e7a9f6a4da280dff3a8967f813cf5aea3d57",
+      "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "catalogue.log": "8e7dcb91c59cad1a8ce2cb7500ccc0d09e1e176bb6d08e24a70caf84f07157da",
+      "apply-c.log": "bf429680feb7959daa13b219270083dc39f5d7625a832b20af07adb46f3356c6",
+      "apply-b.log": "c5ee1d68b3d22a42dd282d6a21d03721a50be10af4fdff69d9af890984d40fb4",
+      "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+      "gofmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "race.log": "51a3b934b7fa7fae62b05f5d23706e479214bc3867bd82215e31ca85922fcd47",
+      "surface-rerun.log": "e814dc8f40104b437a66fbdf7fd2e7557be115339bf19a5964cab6e5274ad994",
+      "agent-race-final.log": "e36ed2f19329031e873b97f552fd38d20361c100aede081a6317c8a21fe2ddc5",
+      "agent-rerun.log": "01aec46c42833e364ca91c19cc47c107406a9463934b44df596a08af604574d9",
+      "fixtures.log": "d79ce26b392ae9b923fc1c6d7e0e457083ac9af003227a8fe18ef1cd9a88ea3f",
+      "agent-vet-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "agent.log": "ad36fe1c36c37f05eae41a4db00079349ef21cb23558919bb430215fb9678cb5",
+      "generate.log": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+      "build.log": "91daa536af1fc8eac86a9111c0e7b0199cb51a3ab4bd4003f3776b7589e2428c"
+    }
+  }
+}

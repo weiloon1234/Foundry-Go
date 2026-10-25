@@ -2,4 +2,4 @@ package invalid
 
 import "foundry.test/consumer/models"
 
-var _, _ = models.QueryUsers().ForUpdate().Count(nil, nil)
+var _, _ = models.Users.Query().ForUpdate().Count(nil, nil)

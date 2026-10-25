@@ -8,14 +8,14 @@ import (
 
 	"foundry.test/consumer/timequeries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 	runTimed(t, func(tx *database.Tx, clock *countingClock) error {
-		q, f := timequeries.QueryTimeMembers(), timequeries.MemberFields()
-		member, err := q.Create(t.Context(), tx, timequeries.MemberDraft{}.SetName("original"))
+		q, f := timequeries.Members, timequeries.Members
+		member, err := q.Insert(t.Context(), tx, timequeries.Members.Name.Set("original"))
 		if err != nil {
 			return err
 		}
@@ -25,13 +25,13 @@ func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 				before := clock.calls.Load()
 				clock.nextAction.Store(action)
 				if bulk {
-					result, failure := q.Upsert(t.Context(), tx, timequeries.MemberDraft{}.SetID(member.ID).SetName("failed"), query.OnConflict(f.ID).DoUpdate(f.Name.Incoming()))
+					result, failure := orm.Upsert(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(orm.ConflictIncoming(f.Name)), timequeries.Members.Key().Set(member.ID), timequeries.Members.Name.Set("failed"))
 					if result.IsSet() {
 						return errors.New("failed clock returned an upsert result")
 					}
 					err = failure
 				} else {
-					result, failure := q.Update(t.Context(), tx, member.ID, timequeries.MemberDraft{}.SetName("failed"))
+					result, failure := q.Update(t.Context(), tx, member.ID, timequeries.Members.Name.Set("failed"))
 					if result != (timequeries.Member{}) {
 						return errors.New("failed clock returned a model")
 					}
@@ -40,7 +40,7 @@ func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 				if !errors.Is(err, fault.Panicked) || strings.Contains(err.Error(), "private clock fixture payload") || clock.calls.Load() != before+1 {
 					return errors.New("clock panic or Goexit escaped isolation, leaked its payload, or was retried")
 				}
-				current, err := q.RequireFind(t.Context(), tx, member.ID)
+				current, err := q.Require(t.Context(), tx, member.ID)
 				if err != nil {
 					return err
 				}
@@ -49,7 +49,7 @@ func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 				}
 			}
 		}
-		updated, err := q.Update(t.Context(), tx, member.ID, timequeries.MemberDraft{}.SetName("recovered"))
+		updated, err := q.Update(t.Context(), tx, member.ID, timequeries.Members.Name.Set("recovered"))
 		if err != nil {
 			return err
 		}

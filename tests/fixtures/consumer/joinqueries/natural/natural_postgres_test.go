@@ -1,12 +1,14 @@
 package natural_test
 
 import (
+	"testing"
+
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
-	"testing"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type countryAlias struct{}
@@ -30,14 +32,14 @@ func TestPostgresNaturalKeyJoins(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `INSERT INTO locations VALUES ('KL','MY')`); err != nil {
 			return err
 		}
-		countries := query.As[countryAlias](models.QueryCountries(), "country")
-		locations := query.As[locationAlias](models.QueryLocations(), "location")
-		country := models.CountryFieldsAt(countries.Scope())
-		location := models.LocationFieldsAt(locations.Scope())
-		natural := query.InnerJoin(countries, locations, query.On(country.Code, location.CountryCode))
-		nc := models.CountryFieldsAt(query.LeftScope(natural, countries.Scope()))
-		nl := models.LocationFieldsAt(query.RightScope(natural, locations.Scope()))
-		naturalReport := reports.ProjectLocationRow(natural).SelectCountryCode(query.Value(nc.Code)).SelectLocationCode(query.Value(nl.Code)).SelectCountryName(query.Value(nc.Name)).Query()
+		countries := rows.As[countryAlias](models.Countries.Query(), "country")
+		locations := rows.As[locationAlias](models.Locations.Query(), "location")
+		country := rows.Scope(countries)
+		location := rows.Scope(locations)
+		natural := rows.InnerJoin(countries, locations, rows.On(expr.At(country, models.Countries.Code), expr.At(location, models.Locations.CountryCode)))
+		nc := rows.LeftScope(natural, rows.Scope(countries))
+		nl := rows.RightScope(natural, rows.Scope(locations))
+		naturalReport := rows.Select(natural, reports.LocationRows, rows.MapSelected(reports.LocationRows.CountryCode, expr.Select(expr.At(nc, models.Countries.Code))), rows.MapSelected(reports.LocationRows.LocationCode, expr.Select(expr.At(nl, models.Locations.Code))), rows.MapSelected(reports.LocationRows.CountryName, expr.Select(expr.At(nc, models.Countries.Name))))
 		naturalRows, err := naturalReport.All(t.Context(), counter)
 		if err != nil {
 			return err

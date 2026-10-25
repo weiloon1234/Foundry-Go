@@ -6,49 +6,50 @@ import (
 
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
 func TestPostgresRelationStoredNaturalAndNullableKeys(t *testing.T) {
-	runLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
+	runORMLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
 		ctx := t.Context()
-		member, group, err := endpoints(t, tx)
+		member, group, err := ormEndpoints(t, tx)
 		if err != nil {
 			return err
 		}
-		members, groups := linkqueries.QueryLinkMembers(), linkqueries.QueryLinkGroups()
-		if _, err := members.Update(ctx, tx, member.ID, linkqueries.MemberDraft{}.SetName("current-member")); err != nil {
+		members, groups := linkqueries.Members, linkqueries.Groups
+		if _, err := members.Update(ctx, tx, member.ID, linkqueries.Members.Name.Set("current-member")); err != nil {
 			return err
 		}
-		if _, err := groups.Update(ctx, tx, group.Code, linkqueries.GroupDraft{}.SetName("current-group")); err != nil {
+		if _, err := groups.Update(ctx, tx, group.Code, linkqueries.Groups.Name.Set("current-group")); err != nil {
 			return err
 		}
-		relations := linkqueries.MemberRelations()
-		pivot, err := relations.NamedGroups.Attach(ctx, tx, member, group, linkqueries.NaturalLinkDraft{})
+		relations := linkqueries.MemberLinks
+		pivot, err := orm.Attach(ctx, tx, relations.NamedGroups, member, group)
 		if err != nil {
 			return err
 		}
 		if pivot.MemberName != "current-member" || pivot.GroupName != "current-group" {
 			return errors.New("relation attachment trusted stale stored key fields")
 		}
-		duplicate, err := groups.Create(ctx, tx, linkqueries.GroupDraft{}.SetCode("duplicate").SetName("current-group"))
+		duplicate, err := groups.Insert(ctx, tx, linkqueries.Groups.Key().Set("duplicate"), linkqueries.Groups.Name.Set("current-group"))
 		if err != nil {
 			return err
 		}
-		if _, err := relations.NamedGroups.Attach(ctx, tx, member, group, linkqueries.NaturalLinkDraft{}); !errors.Is(err, database.TooManyRows) {
+		if _, err := orm.Attach(ctx, tx, relations.NamedGroups, member, group); !errors.Is(err, database.TooManyRows) {
 			return errors.New("ambiguous target key acquired a pivot")
 		}
-		if _, err := groups.Update(ctx, tx, duplicate.Code, linkqueries.GroupDraft{}.SetName("different-group")); err != nil {
+		if _, err := groups.Update(ctx, tx, duplicate.Code, linkqueries.Groups.Name.Set("different-group")); err != nil {
 			return err
 		}
-		if _, err := relations.AliasGroups.Attach(ctx, tx, member, group, linkqueries.NullableLinkDraft{}); !errors.Is(err, fault.Missing) {
+		if _, err := orm.Attach(ctx, tx, relations.AliasGroups, member, group); !errors.Is(err, fault.Missing) {
 			return errors.New("NULL endpoint key acquired a link")
 		}
-		if _, err := members.Update(ctx, tx, member.ID, linkqueries.MemberDraft{}.SetAlias("alias")); err != nil {
+		if _, err := members.Update(ctx, tx, member.ID, linkqueries.Members.Alias.Set("alias")); err != nil {
 			return err
 		}
-		nullable, err := relations.AliasGroups.Attach(ctx, tx, member, group, linkqueries.NullableLinkDraft{})
+		nullable, err := orm.Attach(ctx, tx, relations.AliasGroups, member, group)
 		if err != nil {
 			return err
 		}
@@ -57,7 +58,7 @@ func TestPostgresRelationStoredNaturalAndNullableKeys(t *testing.T) {
 		if !hasAlias || alias != "alias" || !hasName || name != "current-group" {
 			return errors.New("nullable pivot keys lost their stored values")
 		}
-		removed, err := relations.AliasGroups.Detach(ctx, tx, member, group)
+		removed, err := orm.Detach(ctx, tx, relations.AliasGroups, member, group)
 		if err != nil {
 			return err
 		}
@@ -69,33 +70,33 @@ func TestPostgresRelationStoredNaturalAndNullableKeys(t *testing.T) {
 }
 
 func TestPostgresRelationEndpointVisibilityAndSelfLinks(t *testing.T) {
-	runLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
+	runORMLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
 		ctx := t.Context()
-		member, group, err := endpoints(t, tx)
+		member, group, err := ormEndpoints(t, tx)
 		if err != nil {
 			return err
 		}
-		members, groups := linkqueries.QueryLinkMembers(), linkqueries.QueryLinkGroups()
-		friend, err := members.Create(ctx, tx, linkqueries.MemberDraft{}.SetName("friend"))
+		members, groups := linkqueries.Members, linkqueries.Groups
+		friend, err := members.Insert(ctx, tx, linkqueries.Members.Name.Set("friend"))
 		if err != nil {
 			return err
 		}
-		r := linkqueries.MemberRelations()
-		edge, err := r.Friends.Attach(ctx, wrappedTransactor{tx}, member, friend, linkqueries.FriendshipDraft{})
+		r := linkqueries.MemberLinks
+		edge, err := orm.Attach(ctx, wrappedTransactor{tx}, r.Friends, member, friend)
 		if err != nil {
 			return err
 		}
 		if edge.FromID != member.ID || edge.ToID != friend.ID {
 			return errors.New("self relation reversed its endpoints")
 		}
-		none, err := r.Friends.Detach(ctx, tx, friend, member)
+		none, err := orm.Detach(ctx, tx, r.Friends, friend, member)
 		if err != nil {
 			return err
 		}
 		if len(none) != 0 {
 			return errors.New("reverse self relation removed an unrelated link")
 		}
-		detached, err := r.Friends.Detach(ctx, wrappedTransactor{tx}, member, friend)
+		detached, err := orm.Detach(ctx, wrappedTransactor{tx}, r.Friends, member, friend)
 		if err != nil {
 			return err
 		}
@@ -105,19 +106,19 @@ func TestPostgresRelationEndpointVisibilityAndSelfLinks(t *testing.T) {
 		if _, err := groups.Delete(ctx, tx, group.Code); err != nil {
 			return err
 		}
-		if _, err := r.Groups.Attach(ctx, tx, member, group, linkqueries.MembershipDraft{}.SetRole("admin")); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Attach(ctx, tx, r.Groups, member, group, linkqueries.Memberships.Role.Set("admin")); !errors.Is(err, database.NotFound) {
 			return errors.New("attachment ignored deleted target visibility")
 		}
-		if _, err := r.Groups.WithTrashed().Attach(ctx, tx, member, group, linkqueries.MembershipDraft{}.SetRole("admin")); err != nil {
+		if _, err := orm.Attach(ctx, tx, r.Groups.WithTrashed(), member, group, linkqueries.Memberships.Role.Set("admin")); err != nil {
 			return err
 		}
-		if removed, err := r.Groups.WithTrashed().Detach(ctx, tx, member, group); err != nil || len(removed) != 1 {
+		if removed, err := orm.Detach(ctx, tx, r.Groups.WithTrashed(), member, group); err != nil || len(removed) != 1 {
 			return errors.New("explicit deleted-target scope was lost")
 		}
 		if _, err := members.Delete(ctx, tx, member.ID); err != nil {
 			return err
 		}
-		if _, err := r.Groups.WithTrashed().Attach(ctx, tx, member, group, linkqueries.MembershipDraft{}.SetRole("admin")); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Attach(ctx, tx, r.Groups.WithTrashed(), member, group, linkqueries.Memberships.Role.Set("admin")); !errors.Is(err, database.NotFound) {
 			return errors.New("attachment accepted an inactive source model")
 		}
 		return nil

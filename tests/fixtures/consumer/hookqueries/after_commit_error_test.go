@@ -13,6 +13,7 @@ import (
 	"foundry.test/consumer/hookqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -31,19 +32,22 @@ func (e *privateAfterCommitError) Error() string {
 	}
 	return "private-hook-value"
 }
-func TestGeneratedAfterCommitNeverFormatsLocalOrObserverErrors(t *testing.T) {
+func TestORMAfterCommitNeverFormatsLocalOrObserverErrors(t *testing.T) {
 	for _, source := range []string{"local", "observer"} {
 		for _, mode := range []string{"return", "panic", "goexit"} {
 			t.Run(source+"/"+mode, func(t *testing.T) {
 				cause := &privateAfterCommitError{mode: mode}
 				calls := 0
-				fail := func(context.Context, lifecycle.Operation, hookqueries.MemberChanges) error { calls++; return cause }
+				fail := func(context.Context, lifecycle.Operation, orm.Changes[hookqueries.Member]) error {
+					calls++
+					return cause
+				}
 				trace := &hookqueries.Trace{}
 				var declarations []lifecycle.Declaration
 				if source == "local" {
-					trace.AfterCommit = fail
+					trace.ORMAfterCommit = fail
 				} else {
-					declaration, err := hookqueries.NewMemberObserver("private-error").Declare(func() hookqueries.MemberHooks { return hookqueries.MemberHooks{AfterCommit: fail} })
+					declaration, err := orm.NewObserver[hookqueries.Member]("private-error").Declare(func() orm.Hooks[hookqueries.Member] { return orm.Hooks[hookqueries.Member]{AfterCommit: fail} })
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -72,26 +76,26 @@ func TestGeneratedAfterCommitNeverFormatsLocalOrObserverErrors(t *testing.T) {
 				if err = db.Start(t.Context()); err != nil {
 					t.Fatal(err)
 				}
-				_, err = hookqueries.QueryHookMembers().Create(hookqueries.WithTrace(t.Context(), trace), db, hookqueries.MemberDraft{}.SetID(id).SetEmail("stored@example.test").SetIntroducerID(id))
+				_, err = hookqueries.Members.Insert(hookqueries.WithTrace(t.Context(), trace), db, hookqueries.Members.Key().Set(id), hookqueries.Members.Email.Set("stored@example.test"), hookqueries.Members.IntroducerID.Set(id))
 				var original *privateAfterCommitError
 				var outcome *database.Error
 				if !errors.Is(err, cause) || !errors.As(err, &original) || original != cause || !errors.As(err, &outcome) || outcome.Outcome() != database.Committed || !errors.Is(err, database.AfterCommitFailed) {
-					t.Fatal("generated callback lost cause or outcome", err)
+					t.Fatal("ORM callback lost cause or outcome", err)
 				}
 				for _, s := range []string{err.Error(), fmt.Sprintf("%v", err), fmt.Sprintf("%+v", err), fmt.Sprintf("%#v", err)} {
 					if strings.Contains(s, "private-hook-value") {
-						t.Fatal("generated callback disclosed application text")
+						t.Fatal("ORM callback disclosed application text")
 					}
 				}
 				if cause.formatted != 0 || calls != 1 || db.Stats().Owners != 0 {
-					t.Fatal("generated callback formatted, retried or leaked ownership", cause.formatted, calls)
+					t.Fatal("ORM callback formatted, retried or leaked ownership", cause.formatted, calls)
 				}
 			})
 		}
 	}
 }
 
-// Real database.Rows and transactions exercise the generated adapter without PostgreSQL.
+// Real database.Rows and transactions exercise the ORM adapter without PostgreSQL.
 type afterCommitConnector struct{ id string }
 
 func (c afterCommitConnector) Connect(context.Context) (driver.Conn, error) {

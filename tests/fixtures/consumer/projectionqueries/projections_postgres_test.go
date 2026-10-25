@@ -10,16 +10,19 @@ import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-func userSummarySelection() reports.UserSummarySelection[models.User] {
-	f := models.UserFields()
-	return reports.UserSummarySelection[models.User]{ID: query.Value(f.ID), Email: query.Value(f.Email), Nickname: query.Value(f.Nickname), Status: query.Value(f.Status)}
+func userSummarySelection() []rows.Mapping[models.User, reports.UserSummary] {
+	f := models.Users
+	return []rows.Mapping[models.User, reports.UserSummary]{
+		rows.Map(reports.UserSummaries.ID, expr.Value(f.ID)), rows.Map(reports.UserSummaries.Email, expr.Value(f.Email)), rows.Map(reports.UserSummaries.Nickname, expr.Value(f.Nickname)), rows.Map(reports.UserSummaries.Status, expr.Value(f.Status)),
+	}
 }
 
 func TestPostgresDeclaredProjections(t *testing.T) {
@@ -52,76 +55,76 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			buyer model.ID[models.User]
 			total int64
 		}{{first, 2}, {first, 3}, {second, 9}} {
-			if _, err := models.QueryOrders().Create(t.Context(), tx, models.OrderDraft{}.SetBuyerID(order.buyer).SetTotalCents(order.total)); err != nil {
+			if _, err := models.Orders.Insert(t.Context(), tx, models.Orders.BuyerID.Set(order.buyer), models.Orders.TotalCents.Set(order.total)); err != nil {
 				return err
 			}
 		}
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		base := models.QueryUsers().OrderBy(models.UserFields().Email.Asc())
-		report := reports.SelectUserSummary(base, userSummarySelection())
-		statement, err := report.Compile()
+		base := models.Users.Query().OrderBy(models.Users.Email.Asc())
+		report := rows.Select(rows.From(base), reports.UserSummaries, userSummarySelection()...)
+		statement, err := rows.Compile(report)
 		if err != nil {
 			return err
 		}
 		if strings.Contains(statement.SQL(), "birthday") || !strings.Contains(statement.SQL(), `"users"."email_address" AS "contact_email"`) {
 			t.Error("projection selected undeclared columns or lost output alias")
 		}
-		rows, err := report.All(t.Context(), counter)
+		items, err := report.All(t.Context(), counter)
 		if err != nil {
 			return err
 		}
-		if len(rows) != 2 {
+		if len(items) != 2 {
 			return errors.New("projection row count mismatch")
 		}
-		if rows[0].ID != first || rows[0].Email != "a@example.test" || !rows[0].Nickname.IsNull() || rows[1].Status != models.StatusDisabled {
+		if items[0].ID != first || items[0].Email != "a@example.test" || !items[0].Nickname.IsNull() || items[1].Status != models.StatusDisabled {
 			t.Error("projection lost model-owned IDs, nullable values or imported enum codec")
 		}
 		widened := userSummarySelection()
-		widened.Nickname = query.Nullable(query.Value(models.UserFields().Email))
-		promoted, err := reports.SelectUserSummary(base, widened).RequireFirst(t.Context(), counter)
+		widened[2] = rows.MapSelected(reports.UserSummaries.Nickname, expr.Select(expr.NullableRow(expr.Value(models.Users.Email))))
+		promoted, err := rows.Read(rows.Select(rows.From(base), reports.UserSummaries, widened...)).RequireFirst(t.Context(), counter)
 		if err != nil {
 			return err
 		}
 		if nickname, ok := promoted.Nickname.Get(); !ok || nickname != promoted.Email {
 			t.Error("explicit nullable promotion changed the SQL value")
 		}
-		if n, err := report.Count(t.Context(), counter); err != nil || n != 2 {
+		if n, err := rows.Count(t.Context(), counter, report); err != nil || n != 2 {
 			t.Error("projection count incorrect", err)
 		}
-		if n, err := report.Limit(1).Offset(1).Count(t.Context(), counter); err != nil || n != 1 {
+		if n, err := rows.Count(t.Context(), counter, rows.Offset(rows.Limit(report, 1), 1)); err != nil || n != 1 {
 			t.Error("projection count ignored selected window", err)
 		}
-		if exists, err := report.Limit(0).Exists(t.Context(), counter); err != nil || exists {
+		if exists, err := rows.Read(rows.Limit(report, 0)).Exists(t.Context(), counter); err != nil || exists {
 			t.Error("zero projection window exists", err)
 		}
-		one, err := report.Offset(1).RequireFirst(t.Context(), counter)
+		one, err := rows.Read(rows.Offset(report, 1)).RequireFirst(t.Context(), counter)
 		if err != nil {
 			return err
 		}
 		if one.ID != second {
 			t.Error("projection First ignored source order/offset")
 		}
-		empty, err := report.Where(models.UserFields().Email.Eq("missing")).First(t.Context(), counter)
+		empty, err := rows.Read(report.Where(expr.ModelPredicate(models.Users.Email.Eq("missing")))).First(t.Context(), counter)
 		if err != nil {
 			return err
 		}
 		if empty.IsSet() {
 			t.Error("missing projection returned a record")
 		}
-		if _, err := report.Limit(0).RequireFirst(t.Context(), counter); !errors.Is(err, database.NotFound) {
+		if _, err := rows.Read(rows.Limit(report, 0)).RequireFirst(t.Context(), counter); !errors.Is(err, database.NotFound) {
 			t.Error("required projection did not report NotFound")
 		}
 		stop := errors.New("stop stream")
 		seen := 0
-		if err := report.Each(t.Context(), counter, func(reports.UserSummary) error { seen++; return stop }); !errors.Is(err, stop) || seen != 1 {
+		if err := rows.Each(t.Context(), counter, report, func(reports.UserSummary) error { seen++; return stop }); !errors.Is(err, stop) || seen != 1 {
 			t.Error("projection did not stop and close its stream")
 		}
-		if _, err := report.Count(t.Context(), counter); err != nil {
+		if _, err := rows.Count(t.Context(), counter, report); err != nil {
 			return err
 		}
-		fields := models.OrderFields()
-		selection := reports.BuyerTotalsSelection[models.Order]{BuyerID: query.Value(fields.BuyerID), Total: query.Sum(fields.TotalCents).Value(), Orders: query.Count[models.Order]().Value(), Average: query.Avg(fields.TotalCents).Value()}
-		totals := reports.SelectBuyerTotals(models.QueryOrders(), selection).GroupBy(fields.BuyerID.Group()).OrderBy(fields.BuyerID.Asc())
+		fields := models.Orders
+		selection := []rows.Mapping[models.Order, reports.BuyerTotals]{rows.Map(reports.BuyerTotalRows.BuyerID, expr.Value(fields.BuyerID)), rows.MapSelected(reports.BuyerTotalRows.Total, expr.Sum(fields.TotalCents).Value()), rows.MapSelected(reports.BuyerTotalRows.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(reports.BuyerTotalRows.Average, expr.Avg(fields.TotalCents).Value())}
+		totals := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows, selection...), expr.Group(expr.Value(fields.BuyerID))), expr.Value(fields.BuyerID).Asc())
 		grouped, err := totals.All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -142,14 +145,13 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 				t.Error("grouped report attached wrong buyer")
 			}
 		}
-		if n, err := totals.Count(t.Context(), counter); err != nil || n != 2 {
-			t.Error("grouped projection count counted input rows", err)
+		if n, err := rows.Count(t.Context(), counter, totals); err != nil || n != 2 {
+			t.Error("grouped projection count counted input items", err)
 		}
-		if n, err := totals.Where(fields.BuyerID.Eq(first)).Count(t.Context(), counter); err != nil || n != 1 {
+		if n, err := rows.Count(t.Context(), counter, totals.Where(expr.ModelPredicate(fields.BuyerID.Eq(first)))); err != nil || n != 1 {
 			t.Error("grouped projection lost typed input filters", err)
 		}
-		ranked := reports.SelectBuyerTotals(models.QueryOrders(), selection).
-			GroupBy(fields.BuyerID.Group()).OrderBy(query.Sum(fields.TotalCents).Desc(), fields.BuyerID.Asc())
+		ranked := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows, selection...), expr.Group(expr.Value(fields.BuyerID))), expr.Sum(fields.TotalCents).Desc(), expr.Value(fields.BuyerID).Asc())
 		ranking, err := ranked.All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -157,7 +159,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if len(ranking) != 2 || ranking[0].BuyerID != second || ranking[1].BuyerID != first {
 			t.Error("aggregate ordering did not rank totals")
 		}
-		qualified := ranked.Having(query.HavingAnd(query.Count[models.Order]().Gte(2), query.Sum(fields.TotalCents).Gt(decimal.FromInt64(4))))
+		qualified := rows.Having(ranked, expr.HavingAnd(expr.Count[models.Order]().Gte(2), expr.Sum(fields.TotalCents).Gt(decimal.FromInt64(4))))
 		qualifiedRows, err := qualified.All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -165,14 +167,14 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if len(qualifiedRows) != 1 || qualifiedRows[0].BuyerID != first {
 			t.Error("HAVING did not filter grouped totals")
 		}
-		if n, err := qualified.Count(t.Context(), counter); err != nil || n != 1 {
+		if n, err := rows.Count(t.Context(), counter, qualified); err != nil || n != 1 {
 			t.Error("Count ignored HAVING", err)
 		}
-		if exists, err := qualified.Offset(1).Exists(t.Context(), counter); err != nil || exists {
+		if exists, err := rows.Read(rows.Offset(qualified, 1)).Exists(t.Context(), counter); err != nil || exists {
 			t.Error("Exists ignored filtered window", err)
 		}
-		mixed := ranked.Where(fields.TotalCents.Gt(2)).Having(query.HavingOr(
-			query.Grouped(fields.BuyerID.Eq(first)), query.Sum(fields.TotalCents).Lt(decimal.FromInt64(9)),
+		mixed := rows.Having(ranked.Where(expr.ModelPredicate(fields.TotalCents.Gt(2))), expr.HavingOr(
+			expr.Grouped(expr.ModelPredicate(fields.BuyerID.Eq(first))), expr.Sum(fields.TotalCents).Lt(decimal.FromInt64(9)),
 		))
 		mixedRows, err := mixed.All(t.Context(), counter)
 		if err != nil {
@@ -187,11 +189,11 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 				t.Error("WHERE did not filter aggregate inputs")
 			}
 		}
-		if n, err := ranked.Having(query.Count[models.Order]().In()).Count(t.Context(), counter); err != nil || n != 0 {
+		if n, err := rows.Count(t.Context(), counter, rows.Having(ranked, expr.Count[models.Order]().In())); err != nil || n != 0 {
 			t.Error("empty aggregate membership matched groups", err)
 		}
-		scalar := reports.SelectOrderSummary(models.QueryOrders(), reports.OrderSummarySelection[models.Order]{Total: query.Sum(fields.TotalCents).Value(), Count: query.Count[models.Order]().Value()})
-		summary, err := scalar.RequireFirst(t.Context(), counter)
+		scalar := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Total, expr.Sum(fields.TotalCents).Value()), rows.MapSelected(reports.OrderSummaries.Count, expr.Count[models.Order]().Value()))
+		summary, err := rows.Read(scalar).RequireFirst(t.Context(), counter)
 		if err != nil {
 			return err
 		}
@@ -199,52 +201,52 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if !present || total.String() != "14" || summary.Count != 3 {
 			t.Error("scalar aggregate projection changed values")
 		}
-		summary, err = scalar.Where(fields.TotalCents.Lt(0)).RequireFirst(t.Context(), counter)
+		summary, err = rows.Read(scalar.Where(expr.ModelPredicate(fields.TotalCents.Lt(0)))).RequireFirst(t.Context(), counter)
 		if err != nil {
 			return err
 		}
 		if !summary.Total.IsNull() || summary.Count != 0 {
 			t.Error("empty scalar aggregate projection lost its single NULL/zero result")
 		}
-		if n, err := scalar.Where(fields.TotalCents.Lt(0)).Count(t.Context(), counter); err != nil || n != 1 {
+		if n, err := rows.Count(t.Context(), counter, scalar.Where(expr.ModelPredicate(fields.TotalCents.Lt(0)))); err != nil || n != 1 {
 			t.Error("scalar aggregate result count confused with input count", err)
 		}
-		emptyScalar := scalar.Where(fields.TotalCents.Lt(0))
+		emptyScalar := scalar.Where(expr.ModelPredicate(fields.TotalCents.Lt(0)))
 		for _, check := range []struct {
-			condition query.HavingPredicate[models.Order]
+			condition expr.HavingPredicate[models.Order]
 			count     int64
 		}{
-			{query.Sum(fields.TotalCents).IsNull(), 1}, {query.Sum(fields.TotalCents).IsNotNull(), 0},
-			{query.Sum(fields.TotalCents).Ne(decimal.FromInt64(0)), 0},
-			{query.Sum(fields.TotalCents).Gt(decimal.FromInt64(0)).Not(), 0},
-			{query.Count[models.Order]().Eq(0), 1}, {query.Exists[models.Order]().Eq(false), 1},
+			{expr.Sum(fields.TotalCents).IsNull(), 1}, {expr.Sum(fields.TotalCents).IsNotNull(), 0},
+			{expr.Sum(fields.TotalCents).Ne(decimal.FromInt64(0)), 0},
+			{expr.Sum(fields.TotalCents).Gt(decimal.FromInt64(0)).Not(), 0},
+			{expr.Count[models.Order]().Eq(0), 1}, {expr.Exists[models.Order]().Eq(false), 1},
 		} {
-			if n, err := emptyScalar.Having(check.condition).Count(t.Context(), counter); err != nil || n != check.count {
+			if n, err := rows.Count(t.Context(), counter, rows.Having(emptyScalar, check.condition)); err != nil || n != check.count {
 				t.Error("scalar HAVING changed SQL NULL or empty-group semantics", err)
 			}
 		}
 		counter.Queries.Store(0)
-		if rows, err := totals.Having(query.Grouped(fields.TotalCents.Gt(0))).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || rows != nil || counter.Queries.Load() != 0 {
+		if items, err := rows.Having(totals, expr.Grouped(expr.ModelPredicate(fields.TotalCents.Gt(0)))).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || items != nil || counter.Queries.Load() != 0 {
 			t.Error("ungrouped HAVING column executed SQL")
 		}
-		if rows, err := reports.SelectUserSummary(base, reports.UserSummarySelection[models.User]{}).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || rows != nil || counter.Queries.Load() != 0 {
+		if items, err := rows.Select(rows.From(base), reports.UserSummaries).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || items != nil || counter.Queries.Load() != 0 {
 			t.Error("missing projection mapping executed SQL")
 		}
-		if rows, err := reports.SelectBuyerTotals(models.QueryOrders(), selection).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || rows != nil || counter.Queries.Load() != 0 {
+		if items, err := rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows, selection...).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || items != nil || counter.Queries.Load() != 0 {
 			t.Error("ungrouped selected fields executed SQL")
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		if rows, err := report.All(ctx, counter); !errors.Is(err, context.Canceled) || rows != nil || counter.Queries.Load() != 0 {
+		if items, err := report.All(ctx, counter); !errors.Is(err, context.Canceled) || items != nil || counter.Queries.Load() != 0 {
 			t.Error("canceled projection executed SQL")
 		}
 		if _, err := tx.Exec(t.Context(), `UPDATE users SET status='invalid' WHERE id=$1`, second.String()); err != nil {
 			return err
 		}
-		if rows, err := report.All(t.Context(), counter); err == nil || rows != nil {
+		if items, err := report.All(t.Context(), counter); err == nil || items != nil {
 			t.Error("bad projected enum published partial result")
 		}
-		if _, err := report.Count(t.Context(), counter); err != nil {
+		if _, err := rows.Count(t.Context(), counter, report); err != nil {
 			return err
 		}
 		return nil

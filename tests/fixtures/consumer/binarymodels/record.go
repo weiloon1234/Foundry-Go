@@ -4,7 +4,8 @@ import (
 	"encoding/hex"
 	"slices"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -40,16 +41,17 @@ type View struct {
 	Note value.Nullable[Payload]
 }
 
-func Draft(id int, input Input) RecordDraft {
-	return RecordDraft{}.SetID(id).SetBody(input).SetRaw([]byte{}).ClearNote().SetEncoded(input)
+// Draft captures input buffers; assignments preserve omitted, NULL and empty values.
+func Draft(id int, input Input) []orm.Assignment[Record] {
+	return []orm.Assignment[Record]{Records.Key().Set(id), Records.Body.Set(input), Records.RawBytes.Set([]byte{}), Records.Note.SetNull(), Records.Encoded.Set(input)}
 }
 
-func Matching(body Payload) query.Predicate[Record] { return RecordFields().Body.Eq(body) }
-func NullableView() query.Expression[Record, value.Nullable[Payload]] {
-	return query.Value(RecordFields().Note)
+func Matching(body Payload) orm.Predicate[Record] { return Records.Body.Eq(body) }
+func NullableView() expr.Expression[Record, Payload, value.Nullable[Payload]] {
+	return expr.Value(Records.Note)
 }
-func Nulls() query.Predicate[Record]                      { return RecordFields().Note.IsNull() }
-func ChangeBody(input Input) query.ConflictUpdate[Record] { return RecordFields().Body.Set(input) }
-func BinaryChanges(before, after Record) (RecordChanges, error) {
-	return CompareRecord(value.Set(before), value.Set(after), RecordDraft{}.SetBody(Input(after.Body)))
+func Nulls() orm.Predicate[Record]                      { return Records.Note.IsNull() }
+func ChangeBody(input Input) orm.ConflictUpdate[Record] { return orm.ConflictSet(Records.Body, input) }
+func BinaryChanges(before, after Record) (orm.Changes[Record], error) {
+	return orm.Compare(Records.Table, value.Set(before), value.Set(after), Records.Body.Set(Input(after.Body)))
 }

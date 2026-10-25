@@ -9,7 +9,9 @@ import (
 	"foundry.test/consumer/lateralqueries"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -18,34 +20,34 @@ type ordersAlias struct{}
 type latestAlias struct{}
 type statsAlias struct{}
 
-func userOrders[L any](outer query.ScopeSource[L], scope query.RecordScope[L, models.User]) (query.CorrelatedSource[L, query.Alias[ordersAlias, models.Order]], query.RecordScope[query.Correlation[L, query.Alias[ordersAlias, models.Order]], models.Order]) {
-	orders := query.As[ordersAlias](models.QueryOrders(), "orders_for_user")
-	c := query.Correlate(outer, orders)
-	inner := query.InnerScope(c, orders.Scope())
-	u, o := models.UserFieldsAt(query.OuterScope(c, scope)), models.OrderFieldsAt(inner)
-	return c.Where(query.Equal(o.BuyerID, u.ID)), inner
+func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.User]) (rows.CorrelatedSource[L, rows.Alias[ordersAlias, models.Order]], expr.Scope[rows.Correlation[L, rows.Alias[ordersAlias, models.Order]], models.Order]) {
+	orders := rows.As[ordersAlias](models.Orders.Query(), "orders_for_user")
+	c := rows.Correlate(outer, orders)
+	inner := rows.InnerScope(c, rows.Scope(orders))
+	u, o := rows.OuterScope(c, scope), inner
+	return c.Where(expr.Equal(expr.At(o, models.Orders.BuyerID), expr.At(u, models.Users.ID))), inner
 }
 
 func TestPostgresLateralPerParentRecords(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
-		outer := query.As[usersAlias](models.QueryUsers(), "buyer")
-		c, scope := userOrders(outer, outer.Scope())
-		o := models.OrderFieldsAt(scope)
-		record := query.SelectCorrelatedRecord(c, scope).OrderBy(o.TotalCents.Desc(), o.ID.Asc())
-		if n, err := query.SelectRecord(outer, outer.Scope()).Where(record.Exists()).Count(t.Context(), tx); err != nil || n != 2 {
+		outer := rows.As[usersAlias](models.Users.Query(), "buyer")
+		c, scope := userOrders(outer, rows.Scope(outer))
+		o := scope
+		record := rows.SelectCorrelatedRecord(c, scope).OrderBy(expr.At(o, models.Orders.TotalCents).Desc(), expr.At(o, models.Orders.ID).Asc())
+		if n, err := rows.ReadRecord(rows.SelectRecord(outer, rows.Scope(outer)).Where(record.Exists())).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal("correlated complete-record existence", n, err)
 		}
-		latest := query.AsLateral[latestAlias](record.Limit(1), "latest")
-		joined := query.LeftJoinLateral(outer, latest)
-		u := models.UserFieldsAt(query.LeftScope(joined, outer.Scope()))
-		r := models.OrderNullableFieldsAt(query.NullableRightScope(joined, latest.Scope()))
-		results := lateralqueries.ProjectUserOrder(joined).SelectUserID(query.Value(u.ID)).SelectOrderID(query.Value(r.ID)).SelectTotal(query.Value(r.TotalCents)).Query().OrderBy(u.Age.Asc())
+		latest := rows.AsLateral[latestAlias](record.Limit(1), "latest")
+		joined := rows.LeftJoinLateral(outer, latest)
+		u := rows.LeftScope(joined, rows.Scope(outer))
+		r := rows.NullableRightScope(joined, rows.LateralScope(latest))
+		results := rows.Select(joined, lateralqueries.UserOrders, rows.MapSelected(lateralqueries.UserOrders.UserID, expr.Select(expr.At(u, models.Users.ID))), rows.MapSelected(lateralqueries.UserOrders.OrderID, expr.Select(expr.AtNullable(r, models.Orders.ID))), rows.MapSelected(lateralqueries.UserOrders.Total, expr.Select(expr.AtNullable(r, models.Orders.TotalCents)))).OrderBy(expr.At(u, models.Users.Age).Asc())
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		rows, err := results.All(t.Context(), counter)
-		if err != nil || len(rows) != 4 || counter.Queries.Load() != 1 {
-			t.Fatal(rows, err, counter.Queries.Load())
+		items, err := results.All(t.Context(), counter)
+		if err != nil || len(items) != 4 || counter.Queries.Load() != 1 {
+			t.Fatal(items, err, counter.Queries.Load())
 		}
-		for i, row := range rows {
+		for i, row := range items {
 			if row.UserID != users[i].ID {
 				t.Fatal(row)
 			}
@@ -54,9 +56,9 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 				t.Fatal(row)
 			}
 		}
-		// The full right record keeps its generated decoder and model-specific ID.
-		crossed := query.CrossJoinLateral(outer, latest)
-		complete, err := query.SelectRecord(crossed, query.RightScope(crossed, latest.Scope())).All(t.Context(), tx)
+		// The full right record keeps its declared decoder and model-specific ID.
+		crossed := rows.CrossJoinLateral(outer, latest)
+		complete, err := rows.SelectRecord(crossed, rows.RightScope(crossed, rows.LateralScope(latest))).All(t.Context(), tx)
 		if err != nil || len(complete) != 2 {
 			t.Fatal(complete, err)
 		}
@@ -65,23 +67,23 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 				t.Fatal(order)
 			}
 		}
-		inner := query.InnerJoinLateral(outer, latest)
-		count, err := query.SelectRecord(inner, query.LeftScope(inner, outer.Scope())).Count(t.Context(), tx)
+		inner := rows.InnerJoinLateral(outer, latest)
+		count, err := rows.ReadRecord(rows.SelectRecord(inner, rows.LeftScope(inner, rows.Scope(outer)))).Count(t.Context(), tx)
 		if err != nil || count != 2 {
 			t.Fatal(count, err)
 		}
 		// A per-parent offset is not a single offset over the completed join.
-		second := query.AsLateral[latestAlias](record.Limit(1).Offset(1), "second")
-		secondJoin := query.CrossJoinLateral(outer, second)
-		secondRows, err := query.SelectRecord(secondJoin, query.RightScope(secondJoin, second.Scope())).All(t.Context(), tx)
+		second := rows.AsLateral[latestAlias](record.Limit(1).Offset(1), "second")
+		secondJoin := rows.CrossJoinLateral(outer, second)
+		secondRows, err := rows.SelectRecord(secondJoin, rows.RightScope(secondJoin, rows.LateralScope(second))).All(t.Context(), tx)
 		if err != nil || len(secondRows) != 1 || secondRows[0].TotalCents != 1 {
 			t.Fatal(secondRows, err)
 		}
-		uf, of := models.UserFieldsAt(outer.Scope()), models.OrderFieldsAt(latest.Scope())
-		on := query.On(uf.ID, of.BuyerID).WhereRight(of.TotalCents.Gt(2))
-		filteredJoin := query.LeftJoinLateral(outer, latest, on)
-		filtered := models.OrderNullableFieldsAt(query.NullableRightScope(filteredJoin, latest.Scope()))
-		values, err := query.SelectValue(filteredJoin, query.Value(filtered.ID)).All(t.Context(), tx)
+		uf, of := rows.Scope(outer), rows.LateralScope(latest)
+		on := rows.On(expr.At(uf, models.Users.ID), expr.At(of, models.Orders.BuyerID)).WhereRight(expr.OrderRow(expr.At(of, models.Orders.TotalCents)).Gt(2))
+		filteredJoin := rows.LeftJoinLateral(outer, latest, on)
+		filtered := rows.NullableRightScope(filteredJoin, rows.LateralScope(latest))
+		values, err := rows.ReadScalar(rows.SelectScalar(filteredJoin, expr.Select(expr.AtNullable(filtered, models.Orders.ID)))).All(t.Context(), tx)
 		if err != nil || len(values) != 4 {
 			t.Fatal(values, err)
 		}
@@ -94,22 +96,22 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		if nonNull != 1 {
 			t.Fatal(values)
 		}
-		if count, err := results.Where(r.TotalCents.Gt(2)).Count(t.Context(), tx); err != nil || count != 1 {
+		if count, err := rows.Count(t.Context(), tx, results.Where(expr.OrderNullableRow(expr.AtNullable(r, models.Orders.TotalCents)).Gt(2))); err != nil || count != 1 {
 			t.Fatal(count, err)
 		}
 		// Existing result pagination, CTE/set composition and transaction locks retain the join.
-		page, err := results.Paginate(t.Context(), tx, query.PageRequest{Number: 1, Size: 2})
+		page, err := rows.Paginate(t.Context(), tx, results, orm.PageRequest{Number: 1, Size: 2})
 		if err != nil || len(page.Items) != 2 || page.Total != 4 {
 			t.Fatal(page, err)
 		}
-		materialized := query.As[statsAlias](query.CTE("lateral_results", results).Materialized(), "cached")
-		if count, err := query.SelectRecord(materialized, materialized.Scope()).Count(t.Context(), tx); err != nil || count != 4 {
+		materialized := rows.AsRecord[statsAlias](rows.CTE("lateral_results", rows.RecordOf(results)).Materialized(), "cached")
+		if count, err := rows.ReadRecord(rows.SelectRecord(materialized, rows.Scope(materialized))).Count(t.Context(), tx); err != nil || count != 4 {
 			t.Fatal(count, err)
 		}
-		if count, err := results.UnionAll(results).Count(t.Context(), tx); err != nil || count != 8 {
+		if count, err := rows.ReadSet(rows.UnionAll(rows.RecordOf(results), rows.RecordOf(results))).Count(t.Context(), tx); err != nil || count != 8 {
 			t.Fatal(count, err)
 		}
-		if locked, err := query.SelectRecord(joined, query.LeftScope(joined, outer.Scope())).ForUpdate().Of(query.LeftScope(joined, outer.Scope())).All(t.Context(), tx); err != nil || len(locked) != 4 {
+		if locked, err := rows.ForUpdate(rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(outer)))).Of(rows.Target(rows.LeftScope(joined, rows.Scope(outer)))).All(t.Context(), tx); err != nil || len(locked) != 4 {
 			t.Fatal(locked, err)
 		}
 		return nil
@@ -117,26 +119,26 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 }
 
 func TestLateralInvalidContractsBeforeIO(t *testing.T) {
-	outer := query.As[usersAlias](models.QueryUsers(), "buyer")
-	c, scope := userOrders(outer, outer.Scope())
-	record := query.SelectCorrelatedRecord(c, scope)
-	for _, source := range []query.LateralSource[latestAlias, query.Alias[usersAlias, models.User], models.Order]{
-		query.AsLateral[latestAlias](record, "bad.name"),
-		query.AsLateral[latestAlias](record, "buyer"),
-		query.AsLateral[latestAlias](record.Limit(-1), "latest"),
+	outer := rows.As[usersAlias](models.Users.Query(), "buyer")
+	c, scope := userOrders(outer, rows.Scope(outer))
+	record := rows.SelectCorrelatedRecord(c, scope)
+	for _, source := range []rows.LateralSource[latestAlias, rows.Alias[usersAlias, models.User], models.Order]{
+		rows.AsLateral[latestAlias](record, "bad.name"),
+		rows.AsLateral[latestAlias](record, "buyer"),
+		rows.AsLateral[latestAlias](record.Limit(-1), "latest"),
 		{},
 	} {
-		j := query.LeftJoinLateral(outer, source)
-		_, err := query.SelectRecord(j, query.LeftScope(j, outer.Scope())).Limit(0).All(t.Context(), queryfixture.NoQueries(t))
+		j := rows.LeftJoinLateral(outer, source)
+		_, err := rows.SelectRecord(j, rows.LeftScope(j, rows.Scope(outer))).Limit(0).All(t.Context(), queryfixture.NoQueries(t))
 		if !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
-	latest := query.AsLateral[latestAlias](record, "latest")
-	j := query.CrossJoinLateral(outer, latest)
+	latest := rows.AsLateral[latestAlias](record, "latest")
+	j := rows.CrossJoinLateral(outer, latest)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := query.SelectRecord(j, query.RightScope(j, latest.Scope())).All(ctx, queryfixture.NoQueries(t)); !errors.Is(err, context.Canceled) {
+	if _, err := rows.SelectRecord(j, rows.RightScope(j, rows.LateralScope(latest))).All(ctx, queryfixture.NoQueries(t)); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 }

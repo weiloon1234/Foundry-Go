@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -42,14 +43,17 @@ func (Member) MutateNickname(v string) (string, error) { return v + "!", nil }
 // Trace is fixture instrumentation supplied per operation through context,
 // keeping tests independent without a mutable package-wide hook registry.
 type Trace struct {
-	Calls       []string
-	Changes     []MemberChanges
-	Operations  []lifecycle.Operation
-	FailAt      string
-	Failure     string
-	Cancel      context.CancelFunc
-	Recurse     bool
-	AfterCommit func(context.Context, lifecycle.Operation, MemberChanges) error
+	Inspect        func(*orm.Write[Member]) error
+	Calls          []string
+	Changes        []MemberChanges
+	ORMChanges     []orm.Changes[Member]
+	ORMAfterCommit func(context.Context, lifecycle.Operation, orm.Changes[Member]) error
+	Operations     []lifecycle.Operation
+	FailAt         string
+	Failure        string
+	Cancel         context.CancelFunc
+	Recurse        bool
+	AfterCommit    func(context.Context, lifecycle.Operation, MemberChanges) error
 }
 type traceKey struct{}
 
@@ -66,7 +70,7 @@ func record(ctx context.Context, tx *database.Tx, name string, changes *MemberCh
 		}
 	}
 	if tx != nil {
-		if _, err := QueryHookLogs().Create(ctx, tx, LogDraft{}.SetLabel(name)); err != nil {
+		if _, err := Logs.Insert(ctx, tx, Logs.Label.Set(name)); err != nil {
 			return err
 		}
 	}

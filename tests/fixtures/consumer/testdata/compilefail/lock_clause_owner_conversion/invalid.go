@@ -2,7 +2,7 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = query.RowLock[models.User](query.RowLock[models.Country]{})
+var invalid = rows.RowLock[models.User](rows.RowLock[models.Country]{})

@@ -37,6 +37,27 @@ func DeleteEach[M any](ctx context.Context, writer database.Transactor, q Query[
 	return writeEach[M](ctx, writer, q.state, querycore.DeleteModel, limit, nil)
 }
 
+// RestoreEach restores the selected deleted models in one bounded transaction.
+// It retains predicates, selects only trashed rows, and runs each restore lifecycle.
+// Example: orm.RestoreEach(ctx, db, Users.Query(), Users.Soft, 100).
+func RestoreEach[M any](ctx context.Context, writer database.Transactor, q Query[M], soft SoftDeletable[M], limit int) ([]M, error) {
+	if err := checkSoftDelete(soft.capability, q.state.table); err != nil {
+		return nil, err
+	}
+	return writeEach[M](ctx, writer, q.state, querycore.RestoreModel, limit, nil)
+}
+
+// ForceDeleteEach physically deletes selected soft-delete models in one bounded
+// transaction, preserving the query's visibility and running each force-delete
+// lifecycle. Returned models describe their persisted state before deletion.
+// Example: orm.ForceDeleteEach(ctx, db, Users.Query().OnlyTrashed(), Users.Soft, 100).
+func ForceDeleteEach[M any](ctx context.Context, writer database.Transactor, q Query[M], soft SoftDeletable[M], limit int) ([]M, error) {
+	if err := checkSoftDelete(soft.capability, q.state.table); err != nil {
+		return nil, err
+	}
+	return writeEach[M](ctx, writer, q.state, querycore.ForceDeleteModel, limit, nil)
+}
+
 // eachTransaction is private and only used inside the batch transaction. It
 // avoids a savepoint per row; any row failure aborts the enclosing atomic batch.
 // It carries no capabilities and does not call application-provided interfaces.

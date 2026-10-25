@@ -8,5 +8,5 @@ import (
 )
 
 func invalid(ctx context.Context, db *database.DB, r *audit.Recorder, id audit.ModelID[auditqueries.Label]) {
-	_, _ = audit.FindModel(ctx, db, r, (auditqueries.Account{}).FoundryReference(), id)
+	_, _ = audit.FindModel(ctx, db, r, auditqueries.AccountIdentity.ReferenceOf(auditqueries.Account{}), id)
 }

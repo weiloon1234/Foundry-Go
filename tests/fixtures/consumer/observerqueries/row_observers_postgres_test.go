@@ -32,21 +32,16 @@ func (r forwardingReader) Query(ctx context.Context, sql string, args ...any) (*
 
 func checkReadObservers(rows *database.Rows) error {
 	set := rows.Observers()
-	records, err := lifecycle.ObserverFactories[observerqueries.Record, observerqueries.RecordHooks](set)
-	if err != nil {
-		return err
-	}
-	plains, err := lifecycle.ObserverFactories[observerqueries.Plain, observerqueries.PlainHooks](set)
-	if err != nil {
-		return err
-	}
-	if len(records) != 2 || len(plains) != 1 || lifecycle.HasObservers[observerqueries.Effect](set) {
+	records := lifecycle.CountObservers[observerqueries.Record](set)
+	plains := lifecycle.CountObservers[observerqueries.Plain](set)
+	effects := lifecycle.CountObservers[observerqueries.Effect](set)
+	if records.Write != 2 || plains.Write != 1 || effects.Write != 0 {
 		return errors.New("forwarded row stream lost the database's typed observer registrations")
 	}
-	reads, err := lifecycle.RetrievalObserverFactories[observerqueries.Record, observerqueries.RecordRetrievalHooks](set)
-	if err != nil || len(reads) != 1 || !lifecycle.HasRetrievalObservers[observerqueries.Effect](set) {
-		return errors.Join(errors.New("forwarded row stream lost its separate retrieval registrations"), err)
+	if records.Retrieval != 1 || effects.Retrieval != 1 {
+		return errors.New("forwarded row stream lost its separate retrieval registrations")
 	}
+
 	return nil
 }
 
@@ -54,7 +49,7 @@ func TestPostgresReadsRetainObserversWithoutConstructingWriteHooks(t *testing.T)
 	db, stats, namespace := observerApp(t)
 	var streams []*database.Rows
 	read := func(tx *database.Tx) error {
-		items, err := observerqueries.QueryObservedRecords().All(t.Context(), forwardingReader{tx, &streams})
+		items, err := observerqueries.Records.Query().All(t.Context(), forwardingReader{tx, &streams})
 		if err != nil {
 			return err
 		}

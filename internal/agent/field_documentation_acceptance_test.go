@@ -37,14 +37,14 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 		{"raw-field-both", "mutatorqueries/accessors_test.go", "storedEmail := member.", "Email", "/mutatorqueries/member.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "email_address", "Delivery address."}},
 		{"raw-field-getter", "mutatorqueries/accessors_test.go", "if member.", "ID", "/mutatorqueries/member.go", []string{"Custom getter", "AccessID", "ID is the database identity."}},
 		{"raw-field-setter", "mutatorqueries/accessors_test.go", "|| member.", "Attempts", "/mutatorqueries/member.go", []string{"Custom setter", "MutateAttempts", "persistence", "Direct field assignment"}},
-		{"query-field", "mutatorqueries/mutators_postgres_test.go", "q.Where(f.", "Email", "/mutatorqueries/member_foundry.gen.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "Delivery address."}},
+		{"query-field", "mutatorqueries/mutators_postgres_test.go", "q.Query().Where(f.", "Email", "/mutatorqueries/orm.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "delivery address."}},
 		{"extension-slot-field", "articles/cleanup_postgres_test.go", "if article.", "Title", "/articles/article.go", []string{"Extension slot, not a column", "foundry_model_translations", "ArticleExtensions().Title", "From(runtime)", "localized article heading shown to readers"}},
-		{"draft-setter", "mutatorqueries/mutators_postgres_test.go", "mutatorqueries.MemberDraft{}.", "SetEmail", "/mutatorqueries/member_foundry.gen.go", []string{"Custom getter", "AccessEmail", "Custom setter", "MutateEmail", "draft construction", "Delivery address."}},
+		{"draft-setter", "mutatorqueries/mutators_postgres_test.go", "mutatorqueries.Members.", "Email", "/mutatorqueries/orm.go", []string{"MutateEmail", "not during assignment construction", "delivery address."}},
 		{"config-group", "startupconfig/settings_test.go", "Overrides: []config.Override[startupconfig.Settings]{keys.", "HTTP", "/startupconfig/settings_foundry.gen.go", []string{"public listener", "request timeout"}},
 		{"config-trailing-field", "startupconfig/settings_test.go", "keys.HTTP.", "Port", "/startupconfig/settings_foundry.gen.go", []string{"public listener port", "http.port", "Port"}},
 		{"imported-config-field", "bootstrap/bootstrap_test.go", "keys.App.Features.Outbox.", "Events", "/bootstrap/settings_foundry.gen.go", []string{"EventOutbox", "durable job connections", "Empty connection selects the default", "jobs.DefaultPolicy"}},
 		{"validation-field", "clientcontracts/validation_fields_test.go", "clientcontracts.PayloadValidationFields().", "Titles", "/clientcontracts/payload_foundry.gen.go", []string{"keyed by the catalog's supported locales", "titles"}},
-		{"projection-selection", "projectionqueries/projections_postgres_test.go", "ID: query.Value(f.ID), ", "Email", "/reports/user_summary_foundry.gen.go", []string{"buyer contact address selected for this report"}},
+		{"projection-selection", "projectionqueries/projections_postgres_test.go", "rows.Map(reports.UserSummaries.", "Email", "/reports/rows.go", []string{"buyer contact address selected for this report"}},
 		{"orm-row-selection", "reporting/members.go", "rows.MapSelected(MemberRows.", "Name", "/reporting/rows.go", []string{"Display name selected for the member report"}},
 		{"extension-descriptor", "articles/loading_postgres_test.go", "articles.ArticleExtensions().", "Title", "/articles/article_foundry.gen.go", []string{"localized article heading shown to readers"}},
 		{"changes-field", "mutatorqueries/changes_postgres_test.go", "orm.ChangeOf(changes, q.", "Email", "/mutatorqueries/orm.go", []string{"delivery address.", "stored values", "MutateEmail"}},
@@ -174,8 +174,8 @@ func TestRealGoplsStoredFieldCapabilities(t *testing.T) {
 		name, prefix, symbol string
 		methods              []string
 	}{
-		{"text", "q.Where(f.Email.", "Eq", []string{"Eq", "Like", "Contains", "Set"}},
-		{"numeric", "f.Attempts.", "Set", []string{"Eq", "Gte", "Set", "Asc"}},
+		{"text", "q.Query().Where(f.Email.", "Eq", []string{"Eq", "Like", "Contains", "Set"}},
+		{"numeric", "mutatorqueries.Members.Attempts.", "Set", []string{"Eq", "Gte", "Set", "Asc"}},
 	} {
 		t.Run(probe.name, func(t *testing.T) {
 			parallelRealGopls(t)

@@ -128,3 +128,14 @@ Nested hook-aware writes propagate a context-bound depth counter and fail at `qu
 `CreateMany`, `Upsert`, and `UpsertMany` explicitly skip per-model factories and callbacks, even for one input. Their assigned field inputs and conflict literals retain the documented mutator behavior. A normal `Create` or `Update` never silently switches to bulk semantics. [Relation writes](model-relation-writes.md) use the ordinary pivot lifecycle: attach creates one model, while bounded detach invokes deletion for each selected pivot inside one atomic operation.
 
 This implementation covers model-local and provider-registered create/update/delete/restore/force-delete callbacks, automatic write capture, and composition by callback stage. [Explicit read getters](model-accessors.md) preserve stored fields and have automatic field documentation; they are separate from [retrieval callbacks](model-retrieval.md). [Distinct mutation inputs](model-mutators.md#different-input-and-stored-types) remain typed in before-hook drafts while after-write changes retain stored snapshots. [Per-model batch writes](model-batch-writes.md) reuse these normal lifecycle stages with a bounded atomic candidate set. [Lookup writes](model-lookup-writes.md) provide typed `FirstOrCreate` and `UpdateOrCreate` through the same ordinary write pipeline, with explicit branch and concurrency behavior. [Events](events.md#dispatching-from-a-model-lifecycle), the [transactional outbox](outbox.md) and [typed audit](audit.md) integrate with these callbacks. Enqueue durable effects or write audit records through the supplied transaction. See the [owning blueprint](../../blueprint/07-model-lifecycle-events-and-audit.md) for their design.
+
+
+## Go-way branch write drafts
+
+Within a live ORM before-write callback, `orm.WriteUnset(write, Members.Email.Set)`
+removes a pending assignment. It restores omission rather than assigning NULL or a
+zero value; database defaults and automatic conventions still apply. Use the
+field's typed setter so model and input ownership remain checked. Expired or
+foreign drafts fail through the shared write validation path. See the
+[ORM lifecycle recipe](../../database/orm/README.md) for typed getters, replacement
+and per-model batch operations.

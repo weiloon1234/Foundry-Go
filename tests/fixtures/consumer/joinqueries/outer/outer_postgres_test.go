@@ -1,12 +1,14 @@
 package outer_test
 
 import (
+	"testing"
+
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
-	"testing"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type referralAlias struct{}
@@ -16,22 +18,22 @@ type purchaseAlias struct{}
 func TestPostgresOuterAndChainedJoins(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		referrals := query.As[referralAlias](models.QueryUsers(), "referral")
-		sponsors := query.As[sponsorAlias](models.QueryUsers(), "sponsor")
-		r := models.UserFieldsAt(referrals.Scope())
-		s := models.UserFieldsAt(sponsors.Scope())
-		joined := query.LeftJoin(referrals, sponsors, query.On(r.IntroducerID, s.ID))
-		referralScope := query.LeftScope(joined, referrals.Scope())
-		sponsorScope := query.NullableRightScope(joined, sponsors.Scope())
-		sponsor := models.UserNullableFieldsAt(sponsorScope)
-		purchases := query.As[purchaseAlias](models.QueryOrders(), "purchase")
-		p := models.OrderFieldsAt(purchases.Scope())
+		referrals := rows.As[referralAlias](models.Users.Query(), "referral")
+		sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")
+		r := rows.Scope(referrals)
+		s := rows.Scope(sponsors)
+		joined := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
+		referralScope := rows.LeftScope(joined, rows.Scope(referrals))
+		sponsorScope := rows.NullableRightScope(joined, rows.Scope(sponsors))
+		sponsor := sponsorScope
+		purchases := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
+		p := rows.Scope(purchases)
 		// A third source preserves earlier nullable scopes through another left join.
-		chain := query.LeftJoin(joined, purchases, query.On(sponsor.ID, p.BuyerID))
-		cr := models.UserFieldsAt(query.LeftScope(chain, referralScope))
-		cs := models.UserNullableFieldsAt(query.LeftNullableScope(chain, sponsorScope))
-		cp := models.OrderNullableFieldsAt(query.NullableRightScope(chain, purchases.Scope()))
-		chainReport := reports.ProjectReferralOrderRow(chain).SelectUserID(query.Value(cr.ID)).SelectIntroducerID(query.Value(cs.ID)).SelectIntroducerOrderID(query.Value(cp.ID)).Query()
+		chain := rows.LeftJoin(joined, purchases, rows.On(expr.AtNullable(sponsor, models.Users.ID), expr.At(p, models.Orders.BuyerID)))
+		cr := rows.LeftScope(chain, referralScope)
+		cs := rows.LeftNullableScope(chain, sponsorScope)
+		cp := rows.NullableRightScope(chain, rows.Scope(purchases))
+		chainReport := rows.Select(chain, reports.ReferralOrderRows, rows.MapSelected(reports.ReferralOrderRows.UserID, expr.Select(expr.At(cr, models.Users.ID))), rows.MapSelected(reports.ReferralOrderRows.IntroducerID, expr.Select(expr.AtNullable(cs, models.Users.ID))), rows.MapSelected(reports.ReferralOrderRows.IntroducerOrderID, expr.Select(expr.AtNullable(cp, models.Orders.ID))))
 		chainRows, err := chainReport.All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -39,25 +41,25 @@ func TestPostgresOuterAndChainedJoins(t *testing.T) {
 		if len(chainRows) != 6 {
 			t.Error("chained joins changed one-to-many row multiplicity")
 		}
-		if n, err := chainReport.Where(cp.ID.IsNull()).Count(t.Context(), counter); err != nil || n != 1 {
+		if n, err := rows.Count(t.Context(), counter, chainReport.Where(expr.AtNullable(cp, models.Orders.ID).IsNull())); err != nil || n != 1 {
 			t.Error("chained outer nullability lost", err)
 		}
 		// Right and full joins require nullable left field sets.
-		right := query.RightJoin(referrals, sponsors, query.On(r.IntroducerID, s.ID))
-		rl := models.UserNullableFieldsAt(query.NullableLeftScope(right, referrals.Scope()))
-		rr := models.UserFieldsAt(query.RightScope(right, sponsors.Scope()))
-		rightReport := reports.ProjectUserPair(right).SelectLeftID(query.Value(rl.ID)).SelectRightID(query.Nullable(query.Value(rr.ID))).Query()
-		if n, err := rightReport.Count(t.Context(), counter); err != nil || n != 5 {
+		right := rows.RightJoin(referrals, sponsors, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
+		rl := rows.NullableLeftScope(right, rows.Scope(referrals))
+		rr := rows.RightScope(right, rows.Scope(sponsors))
+		rightReport := rows.Select(right, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Select(expr.AtNullable(rl, models.Users.ID))), rows.MapSelected(reports.UserPairs.RightID, expr.Nullable(expr.Select(expr.At(rr, models.Users.ID)))))
+		if n, err := rows.Count(t.Context(), counter, rightReport); err != nil || n != 5 {
 			t.Error("right join did not preserve unmatched sponsors", err)
 		}
-		if n, err := rightReport.Where(rl.ID.IsNull()).Count(t.Context(), counter); err != nil || n != 2 {
+		if n, err := rows.Count(t.Context(), counter, rightReport.Where(expr.AtNullable(rl, models.Users.ID).IsNull())); err != nil || n != 2 {
 			t.Error("right join null extension incorrect", err)
 		}
-		full := query.FullJoin(referrals, sponsors, query.On(r.IntroducerID, s.ID))
-		fl := models.UserNullableFieldsAt(query.NullableLeftScope(full, referrals.Scope()))
-		fright := models.UserNullableFieldsAt(query.NullableRightScope(full, sponsors.Scope()))
-		fullReport := reports.ProjectUserPair(full).SelectLeftID(query.Value(fl.ID)).SelectRightID(query.Value(fright.ID)).Query()
-		if n, err := fullReport.Count(t.Context(), counter); err != nil || n != 6 {
+		full := rows.FullJoin(referrals, sponsors, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
+		fl := rows.NullableLeftScope(full, rows.Scope(referrals))
+		fright := rows.NullableRightScope(full, rows.Scope(sponsors))
+		fullReport := rows.Select(full, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Select(expr.AtNullable(fl, models.Users.ID))), rows.MapSelected(reports.UserPairs.RightID, expr.Select(expr.AtNullable(fright, models.Users.ID))))
+		if n, err := rows.Count(t.Context(), counter, fullReport); err != nil || n != 6 {
 			t.Error("full join changed unmatched sides", err)
 		}
 		return nil

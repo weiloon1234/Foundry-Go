@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 )
 
-var _, _ = models.QueryUsers().ForUpdate().All(nil, (*database.DB)(nil))
+var _, _ = models.Users.Query().ForUpdate().All(nil, (*database.DB)(nil))

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var invalid = models.UserFields().ID.Eq(model.ID[models.Order]{})
+var invalid = models.Users.ID.Eq(model.ID[models.Order]{})

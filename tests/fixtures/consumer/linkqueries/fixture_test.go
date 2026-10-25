@@ -92,3 +92,20 @@ func endpoints(t *testing.T, tx *database.Tx) (linkqueries.Member, linkqueries.G
 }
 
 type wrappedTransactor struct{ database.Transactor }
+
+func runORMLinks(t *testing.T, work func(*database.Tx, *testkit.Clock) error) {
+	t.Helper()
+	db, source, namespace := linkORMDatabase(t)
+	if err := linkTransaction(t.Context(), db, namespace, func(tx *database.Tx) error { return work(tx, source) }); err != nil {
+		t.Fatal(err)
+	}
+}
+func ormEndpoints(t *testing.T, tx *database.Tx) (linkqueries.Member, linkqueries.Group, error) {
+	t.Helper()
+	member, err := linkqueries.Members.Insert(t.Context(), tx, linkqueries.Members.Name.Set("member"))
+	if err != nil {
+		return member, linkqueries.Group{}, err
+	}
+	group, err := linkqueries.Groups.Insert(t.Context(), tx, linkqueries.Groups.Key().Set("staff"), linkqueries.Groups.Name.Set("staff"))
+	return member, group, err
+}

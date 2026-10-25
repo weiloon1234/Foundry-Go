@@ -2,4 +2,4 @@ package invalid
 
 import "foundry.test/consumer/models"
 
-var invalid = models.UserFields().Email.Eq(42)
+var invalid = models.Users.Email.Eq(42)

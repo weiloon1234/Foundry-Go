@@ -10,7 +10,7 @@ import (
 	"foundry.test/consumer/hookqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -27,8 +27,8 @@ func prepare(t *testing.T, tx *database.Tx, namespace string) error {
 			return err
 		}
 	}
-	_, err := hookqueries.QueryHookMembers().CreateMany(t.Context(), tx, []hookqueries.MemberDraft{
-		hookqueries.MemberDraft{}.SetEmail(" INTRODUCER@EXAMPLE.TEST ").SetIsIntroducer(true),
+	_, err := hookqueries.Members.InsertMany(t.Context(), tx, [][]orm.Assignment[hookqueries.Member]{
+		{hookqueries.Members.Email.Set(" INTRODUCER@EXAMPLE.TEST "), hookqueries.Members.IsIntroducer.Set(true)},
 	})
 	return err
 }
@@ -41,42 +41,55 @@ func TestPostgresAutomaticModelHooks(t *testing.T) {
 		if err := prepare(t, tx, namespace); err != nil {
 			return err
 		}
-		q := hookqueries.QueryHookMembers()
-		input := hookqueries.MemberDraft{}.SetNickname("")
-		member, err := q.Create(hookqueries.WithTrace(t.Context(), &create), tx, input)
+		q := hookqueries.Members
+		input := []orm.Assignment[hookqueries.Member]{hookqueries.Members.Nickname.Set("")}
+		member, err := q.Insert(hookqueries.WithTrace(t.Context(), &create), tx, input...)
 		if err != nil {
 			return err
 		}
 		if member.Email != "default@example.test" || member.Nickname != value.Of("!") || member.IntroducerID.IsNull() || member.Rank != 100 {
 			t.Fatal("hook default, mutator or database default was lost")
 		}
-		if input.Email().IsSet() || input.ID().IsSet() || input.IntroducerID().IsSet() {
-			t.Fatal("hook modified caller's immutable draft")
+		inspectDone := errors.New("original draft inspected")
+		inspected := false
+		inspection := hookqueries.Trace{Inspect: func(w *orm.Write[hookqueries.Member]) error {
+			nickname, set := orm.WriteNullableGet(w, q.Nickname.Set).Get()
+			name, nonnull := nickname.Get()
+			if !set || !nonnull || name != "" || orm.WriteIsSet(w, q.Email.Set) || orm.WriteIsSet(w, q.Key().Set) || orm.WriteIsSet(w, q.IntroducerID.Set) {
+				return errors.New("hook modified caller values or omissions")
+			}
+			inspected = true
+			return inspectDone
+		}}
+		_, inspectErr := q.Insert(hookqueries.WithTrace(t.Context(), &inspection), tx, input...)
+		if !inspected || !errors.Is(inspectErr, inspectDone) {
+			return errors.New("original draft inspection failed")
 		}
+
 		if !reflect.DeepEqual(create.Calls, []string{"saving", "creating", "created", "saved"}) {
 			t.Fatalf("create order: %v", create.Calls)
 		}
-		changes := create.Changes[0]
-		if changes.Before().IsSet() || !changes.After().IsSet() || !changes.Fields().ID.Assigned() || !changes.Fields().IntroducerID.Assigned() || changes.Fields().Rank.Assigned() || !changes.Fields().Rank.Changed() {
+		changes := create.ORMChanges[0]
+		if changes.Before().IsSet() || !changes.After().IsSet() || !checkedChange(orm.ChangeOf(changes, hookqueries.Members.Key())).Assigned() || !checkedChange(orm.NullableChangeOf(changes, hookqueries.Members.IntroducerID)).Assigned() || checkedChange(orm.ChangeOf(changes, hookqueries.Members.Rank)).Assigned() || !checkedChange(orm.ChangeOf(changes, hookqueries.Members.Rank)).Changed() {
 			t.Fatal("automatic capture lost UUID, hook assignment or omitted default")
 		}
-		member, err = q.Update(hookqueries.WithTrace(t.Context(), &update), tx, member.ID, hookqueries.MemberDraft{}.SetEmail(" DEFAULT@EXAMPLE.TEST ").ClearNickname())
+		member, err = q.Update(hookqueries.WithTrace(t.Context(), &update), tx, member.ID, hookqueries.Members.Email.Set(" DEFAULT@EXAMPLE.TEST "), hookqueries.Members.Nickname.SetNull())
 		if err != nil {
 			return err
 		}
-		changes = update.Changes[0]
-		if !changes.Before().IsSet() || !changes.After().IsSet() || !changes.Fields().Email.Assigned() || changes.Fields().Email.Changed() || !changes.Fields().Nickname.Changed() || !member.Nickname.IsNull() {
+		changes = update.ORMChanges[0]
+		if !changes.Before().IsSet() || !changes.After().IsSet() || !checkedChange(orm.ChangeOf(changes, hookqueries.Members.Email)).Assigned() || checkedChange(orm.ChangeOf(changes, hookqueries.Members.Email)).Changed() || !checkedChange(orm.NullableChangeOf(changes, hookqueries.Members.Nickname)).Changed() || !member.Nickname.IsNull() {
 			t.Fatal("update capture lost assigned-versus-changed or NULL")
 		}
 		if !reflect.DeepEqual(update.Calls, []string{"saving", "updating", "updated", "saved"}) {
 			t.Fatalf("update order: %v", update.Calls)
 		}
 		var empty hookqueries.Trace
-		member, err = q.Update(hookqueries.WithTrace(t.Context(), &empty), tx, member.ID, hookqueries.MemberDraft{})
+		member, err = q.Update(hookqueries.WithTrace(t.Context(), &empty), tx, member.ID)
 		if err != nil {
 			return err
 		}
-		if member.Rank != 101 || !empty.Changes[0].Fields().Rank.Assigned() {
+		if member.Rank != 101 || !checkedChange(orm.ChangeOf(empty.ORMChanges[0], hookqueries.Members.Rank)).Assigned() {
 			t.Fatal("before hook could not supply an empty patch")
 		}
 		deleted, err := q.Delete(hookqueries.WithTrace(t.Context(), &remove), tx, member.ID)
@@ -86,7 +99,7 @@ func TestPostgresAutomaticModelHooks(t *testing.T) {
 		if deleted != member || !reflect.DeepEqual(remove.Calls, []string{"deleting", "deleted"}) {
 			t.Fatal("delete hook order or result changed")
 		}
-		changes = remove.Changes[0]
+		changes = remove.ORMChanges[0]
 		if !changes.Before().IsSet() || changes.After().IsSet() || changes.Assigned() {
 			t.Fatal("deletion capture lost absence or assignment state")
 		}
@@ -120,12 +133,12 @@ func TestPostgresHookRollbackAndBulkSemantics(t *testing.T) {
 		if err := prepare(t, tx, namespace); err != nil {
 			return err
 		}
-		q, logs := hookqueries.QueryHookMembers(), hookqueries.QueryHookLogs()
-		member, err := q.Create(t.Context(), tx, hookqueries.MemberDraft{}.SetEmail("existing"))
+		q, logs := hookqueries.Members, hookqueries.Logs
+		member, err := q.Insert(t.Context(), tx, hookqueries.Members.Email.Set("existing"))
 		if err != nil {
 			return err
 		}
-		baseline, err := logs.Count(t.Context(), tx)
+		baseline, err := logs.Query().Count(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -137,11 +150,11 @@ func TestPostgresHookRollbackAndBulkSemantics(t *testing.T) {
 				var err error
 				switch name {
 				case "updating", "updated":
-					got, err = q.Update(ctx, tx, member.ID, hookqueries.MemberDraft{}.SetEmail("changed"))
+					got, err = q.Update(ctx, tx, member.ID, hookqueries.Members.Email.Set("changed"))
 				case "deleting", "deleted":
 					got, err = q.Delete(ctx, tx, member.ID)
 				default:
-					got, err = q.Create(ctx, tx, hookqueries.MemberDraft{}.SetEmail("new"))
+					got, err = q.Insert(ctx, tx, hookqueries.Members.Email.Set("new"))
 				}
 				want := hookqueries.Veto
 				if mode == "panic" || mode == "goexit" {
@@ -153,16 +166,16 @@ func TestPostgresHookRollbackAndBulkSemantics(t *testing.T) {
 				if strings.Contains(err.Error(), "private hook panic") {
 					t.Fatal("panic payload exposed")
 				}
-				if count, err := logs.Count(t.Context(), tx); err != nil || count != baseline {
+				if count, err := logs.Query().Count(t.Context(), tx); err != nil || count != baseline {
 					t.Fatalf("hook writes escaped rollback: %d %v", count, err)
 				}
-				if stored, err := q.RequireFind(t.Context(), tx, member.ID); err != nil || stored != member {
+				if stored, err := q.Require(t.Context(), tx, member.ID); err != nil || stored != member {
 					t.Fatalf("failed hooks modified model: %v", err)
 				}
 			}
 		}
 		if err := tx.Transaction(t.Context(), func(child *database.Tx) error {
-			_, err := q.Create(hookqueries.WithTrace(t.Context(), &rolledBack), child, hookqueries.MemberDraft{}.SetEmail("rollback"))
+			_, err := q.Insert(hookqueries.WithTrace(t.Context(), &rolledBack), child, hookqueries.Members.Email.Set("rollback"))
 			if err != nil {
 				return err
 			}
@@ -172,23 +185,23 @@ func TestPostgresHookRollbackAndBulkSemantics(t *testing.T) {
 		}
 		var bulk hookqueries.Trace
 		ctx := hookqueries.WithTrace(t.Context(), &bulk)
-		if _, err := q.CreateMany(ctx, tx, []hookqueries.MemberDraft{hookqueries.MemberDraft{}.SetEmail(" BULK ")}); err != nil {
+		if _, err := q.InsertMany(ctx, tx, [][]orm.Assignment[hookqueries.Member]{{hookqueries.Members.Email.Set(" BULK ")}}); err != nil {
 			return err
 		}
-		if _, err := q.Upsert(ctx, tx, hookqueries.MemberDraft{}.SetEmail(" BULK "), query.OnConflict[hookqueries.Member](hookqueries.MemberFields().Email).DoNothing()); err != nil {
+		if _, err := orm.Upsert(ctx, tx, q.Query(), orm.OnConflict(orm.ConflictKey(hookqueries.Members.Email)).DoNothing(), hookqueries.Members.Email.Set(" BULK ")); err != nil {
 			return err
 		}
-		if _, err := q.UpsertMany(ctx, tx, []hookqueries.MemberDraft{hookqueries.MemberDraft{}.SetEmail(" BULK ")}, query.OnConflict[hookqueries.Member](hookqueries.MemberFields().Email).DoNothing()); err != nil {
+		if _, err := orm.UpsertMany(ctx, tx, q.Query(), orm.OnConflict(orm.ConflictKey(hookqueries.Members.Email)).DoNothing(), [][]orm.Assignment[hookqueries.Member]{{hookqueries.Members.Email.Set(" BULK ")}}); err != nil {
 			return err
 		}
 		if len(bulk.Calls) != 0 {
 			t.Fatal("set-based writes ran per-model hooks")
 		}
 		var invalid hookqueries.Trace
-		if _, err := q.Update(hookqueries.WithTrace(t.Context(), &invalid), tx, member.ID, hookqueries.MemberDraft{}.SetID(member.ID)); !errors.Is(err, fault.Invalid) || len(invalid.Calls) != 0 {
+		if _, err := q.Update(hookqueries.WithTrace(t.Context(), &invalid), tx, member.ID, hookqueries.Members.Key().Set(member.ID)); !errors.Is(err, fault.Invalid) || len(invalid.Calls) != 0 {
 			t.Fatalf("invalid primary mutation ran hooks: %v", err)
 		}
-		if _, err := q.Where(hookqueries.MemberFields().Email.Eq("missing")).Update(hookqueries.WithTrace(t.Context(), &invalid), tx, member.ID, hookqueries.MemberDraft{}.SetEmail("change")); !errors.Is(err, database.NotFound) || len(invalid.Calls) != 0 {
+		if _, err := orm.Update(hookqueries.WithTrace(t.Context(), &invalid), tx, q.Query().Where(q.Email.Eq("missing")), q.Key(), member.ID, hookqueries.Members.Email.Set("change")); !errors.Is(err, database.NotFound) || len(invalid.Calls) != 0 {
 			t.Fatalf("scope mismatch ran hooks: %v", err)
 		}
 		return nil
@@ -209,11 +222,11 @@ func TestPostgresHookCancellationRecursionAndCommitFailure(t *testing.T) {
 		if err := prepare(t, tx, namespace); err != nil {
 			return err
 		}
-		q := hookqueries.QueryHookMembers()
+		q := hookqueries.Members
 		for _, stage := range []string{"saving", "creating", "created", "saved"} {
 			ctx, cancel := context.WithCancel(t.Context())
 			trace := hookqueries.Trace{FailAt: stage, Failure: "cancel", Cancel: cancel}
-			_, err := q.Create(hookqueries.WithTrace(ctx, &trace), tx, hookqueries.MemberDraft{})
+			_, err := q.Insert(hookqueries.WithTrace(ctx, &trace), tx)
 			cancel()
 			if !errors.Is(err, context.Canceled) {
 				t.Fatalf("%s cancellation: %v", stage, err)
@@ -221,13 +234,13 @@ func TestPostgresHookCancellationRecursionAndCommitFailure(t *testing.T) {
 		}
 		trace := hookqueries.Trace{Recurse: true}
 		var diagnostic *fault.Error
-		if _, err := q.Create(hookqueries.WithTrace(t.Context(), &trace), tx, hookqueries.MemberDraft{}); !errors.Is(err, fault.Invalid) || !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message(), "nesting") {
+		if _, err := q.Insert(hookqueries.WithTrace(t.Context(), &trace), tx); !errors.Is(err, fault.Invalid) || !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message(), "nesting") {
 			t.Fatalf("recursive hooks lacked bounded diagnostics: %v", err)
 		}
-		if count, err := hookqueries.QueryHookLogs().Count(t.Context(), tx); err != nil || count != 0 {
+		if count, err := hookqueries.Logs.Query().Count(t.Context(), tx); err != nil || count != 0 {
 			t.Fatalf("cancellation/recursion leaked hook rows: %d %v", count, err)
 		}
-		_, err := q.Create(hookqueries.WithTrace(t.Context(), &commit), tx, hookqueries.MemberDraft{})
+		_, err := q.Insert(hookqueries.WithTrace(t.Context(), &commit), tx)
 		return err
 	})
 	var outcome *database.Error
@@ -238,7 +251,7 @@ func TestPostgresHookCancellationRecursionAndCommitFailure(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+namespace+`"`); err != nil {
 			return err
 		}
-		count, err := hookqueries.QueryHookMembers().Count(t.Context(), tx)
+		count, err := hookqueries.Members.Query().Count(t.Context(), tx)
 		if err == nil && count != 2 {
 			t.Fatal("committed hook error rolled back persisted data")
 		}
@@ -247,4 +260,11 @@ func TestPostgresHookCancellationRecursionAndCommitFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func checkedChange[V any](field lifecycle.FieldChange[V], err error) lifecycle.FieldChange[V] {
+	if err != nil {
+		panic(err)
+	}
+	return field
 }

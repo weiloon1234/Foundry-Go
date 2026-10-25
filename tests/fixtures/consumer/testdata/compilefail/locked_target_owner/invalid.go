@@ -2,7 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().Email)).ForUpdate().Of(models.QueryOrders().Scope())
+var invalid = rows.ForUpdate(rows.ReadScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Email))))).Of(rows.Target(rows.ModelScope(models.Orders.Query())))

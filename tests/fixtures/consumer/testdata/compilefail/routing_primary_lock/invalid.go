@@ -7,5 +7,5 @@ import (
 )
 
 func invalid(ctx context.Context, db *database.DB) {
-	_, _ = models.QueryUsers().ForUpdate().All(ctx, db.Primary())
+	_, _ = models.Users.Query().ForUpdate().All(ctx, db.Primary())
 }

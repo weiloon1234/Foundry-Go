@@ -41,6 +41,7 @@ func (Record) MutateName(name string) (string, error) {
 var Veto = errors.New("observer veto")
 
 type Trace struct {
+	Inspect    func(*orm.Write[Record]) error
 	Calls      []string
 	Changes    []RecordChanges
 	ORMChanges []orm.Changes[Record]

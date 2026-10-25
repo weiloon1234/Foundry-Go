@@ -2,4 +2,4 @@ package compilefail
 
 import "foundry.test/consumer/binarymodels"
 
-var _ = binarymodels.RecordDraft{}.SetBody(binarymodels.Payload{1})
+var _ = binarymodels.Records.Body.Set(binarymodels.Payload{1})

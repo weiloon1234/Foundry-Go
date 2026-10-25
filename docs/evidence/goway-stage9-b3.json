@@ -1,0 +1,3004 @@
+{
+  "slice": "stage9-b3",
+  "base_commit": "6d801119400fab31a6f9bd66bc2988ada795bf2d",
+  "status": "B3 review corrected; RestoreEach/ForceDeleteEach implemented and link batch consumers migrated; targeted acceptance complete",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r7",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "postgres": "sources compiled; no service execution",
+  "api": [
+    "orm.WriteUnset[M, I any](*orm.Write[M], func(I) orm.Assignment[M]) error",
+    "orm.RestoreEach[M any](context.Context, database.Transactor, orm.Query[M], orm.SoftDeletable[M], int) ([]M, error)",
+    "orm.ForceDeleteEach[M any](context.Context, database.Transactor, orm.Query[M], orm.SoftDeletable[M], int) ([]M, error)"
+  ],
+  "framework_surface_additions": [
+    "orm.WriteUnset",
+    "orm.RestoreEach",
+    "orm.ForceDeleteEach"
+  ],
+  "fixture_files_changed": {
+    "binarymodels": 7,
+    "eventqueries": 8,
+    "hookqueries": 3,
+    "inputqueries": 5,
+    "linkqueries": 16,
+    "mutatorqueries": 4,
+    "observerqueries": 3,
+    "upsertqueries": 5,
+    "vault": 4
+  },
+  "consumer_cases_updated": [
+    "binary_comparison_type",
+    "binary_identity_key",
+    "binary_mutation_input",
+    "binary_nullable_projection",
+    "binary_scalar_key",
+    "binary_scope_owner",
+    "each_force_owner",
+    "each_force_token",
+    "each_restore_owner",
+    "each_restore_result",
+    "encrypted_conflict_update",
+    "encrypted_draft_plaintext",
+    "encrypted_field_order",
+    "encrypted_field_predicate",
+    "write_unset_owner"
+  ],
+  "compiler_selection": {
+    "consumer": [
+      "audit_field_value",
+      "audit_history_id",
+      "audit_model_owner",
+      "audit_policy_conversion",
+      "audit_policy_owner",
+      "binary_comparison_type",
+      "binary_identity_key",
+      "binary_mutation_input",
+      "binary_nullable_projection",
+      "binary_scalar_key",
+      "binary_scope_owner",
+      "each_create_draft",
+      "each_delete_result",
+      "each_force_owner",
+      "each_force_token",
+      "each_restore_owner",
+      "each_restore_result",
+      "each_update_draft",
+      "each_update_model",
+      "each_write_limit",
+      "encrypted_conflict_update",
+      "encrypted_draft_plaintext",
+      "encrypted_field_order",
+      "encrypted_field_predicate",
+      "generated_observer_factory",
+      "generated_observer_owner",
+      "global_scope_owner_conversion",
+      "hook_callback_typo",
+      "hook_changes_owner",
+      "hook_draft_owner",
+      "hook_snapshot_owner",
+      "insert_select_draft",
+      "insert_select_id",
+      "insert_select_mutator",
+      "insert_select_nullable",
+      "insert_select_owner",
+      "insert_select_result",
+      "insert_select_timestamp",
+      "insert_select_value",
+      "lookup_create_draft",
+      "lookup_result",
+      "lookup_update_create_draft",
+      "lookup_update_draft",
+      "lookup_update_model",
+      "model_change_draft",
+      "model_change_field_result",
+      "model_change_snapshots",
+      "model_change_unknown_field",
+      "mutation_input_conflict",
+      "mutation_input_draft",
+      "mutation_input_nullable",
+      "mutation_input_predicate",
+      "mutation_input_scope",
+      "mutator_nullable",
+      "mutator_owner",
+      "mutator_value",
+      "observer_constructor_owner",
+      "observer_counts_adapters",
+      "observer_factory_owner",
+      "retrieval_callback_owner",
+      "retrieval_callback_typo",
+      "retrieval_observer_factory",
+      "retrieval_observer_owner",
+      "retrieval_write_observer",
+      "soft_change_operation",
+      "soft_force_key",
+      "soft_restore_hook",
+      "soft_restore_key",
+      "source_delete_force",
+      "source_delete_id",
+      "source_delete_values",
+      "source_update_draft",
+      "source_update_id",
+      "source_update_mutator",
+      "source_update_nullable",
+      "source_update_primary",
+      "source_update_result",
+      "source_update_scope",
+      "source_update_timestamp",
+      "source_update_value",
+      "timestamp_draft",
+      "write_unset_owner"
+    ],
+    "goway": [
+      "audit_field_value",
+      "audit_history_id",
+      "audit_model_owner",
+      "audit_policy_conversion",
+      "audit_policy_owner",
+      "binary_comparison_type",
+      "binary_identity_key",
+      "binary_mutation_input",
+      "binary_nullable_projection",
+      "binary_scalar_key",
+      "binary_scope_owner",
+      "each_create_draft",
+      "each_delete_result",
+      "each_force_owner",
+      "each_force_token",
+      "each_restore_owner",
+      "each_restore_result",
+      "each_update_draft",
+      "each_update_model",
+      "each_write_limit",
+      "encrypted_conflict_update",
+      "encrypted_draft_plaintext",
+      "encrypted_field_order",
+      "encrypted_field_predicate",
+      "generated_observer_factory",
+      "generated_observer_owner",
+      "global_scope_owner_conversion",
+      "hook_callback_typo",
+      "hook_changes_owner",
+      "hook_draft_owner",
+      "hook_snapshot_owner",
+      "insert_select_draft",
+      "insert_select_id",
+      "insert_select_mutator",
+      "insert_select_nullable",
+      "insert_select_owner",
+      "insert_select_result",
+      "insert_select_timestamp",
+      "insert_select_value",
+      "lookup_create_draft",
+      "lookup_result",
+      "lookup_update_create_draft",
+      "lookup_update_draft",
+      "lookup_update_model",
+      "model_change_draft",
+      "model_change_field_result",
+      "model_change_snapshots",
+      "model_change_unknown_field",
+      "mutation_input_conflict",
+      "mutation_input_draft",
+      "mutation_input_nullable",
+      "mutation_input_predicate",
+      "mutation_input_scope",
+      "mutator_nullable",
+      "mutator_owner",
+      "mutator_value",
+      "observer_constructor_owner",
+      "observer_counts_adapters",
+      "observer_factory_owner",
+      "retrieval_callback_owner",
+      "retrieval_callback_typo",
+      "retrieval_observer_factory",
+      "retrieval_observer_owner",
+      "retrieval_write_observer",
+      "soft_change_operation",
+      "soft_force_key",
+      "soft_restore_hook",
+      "soft_restore_key",
+      "source_delete_force",
+      "source_delete_id",
+      "source_delete_values",
+      "source_update_draft",
+      "source_update_id",
+      "source_update_mutator",
+      "source_update_nullable",
+      "source_update_primary",
+      "source_update_result",
+      "source_update_scope",
+      "source_update_timestamp",
+      "source_update_value",
+      "timestamp_draft",
+      "write_unset_owner"
+    ]
+  },
+  "footprint": {
+    "aggregate_families": {
+      "functions": 4366,
+      "baseline": 3799,
+      "ceiling": 4369
+    },
+    "aggregate_group": {
+      "functions": 2533,
+      "baseline": 2426,
+      "ceiling": 2790
+    },
+    "aggregate_slot_declaration": {
+      "functions": 1127,
+      "baseline": 1112,
+      "ceiling": 1279
+    },
+    "aggregate_slot_direct": {
+      "functions": 1490,
+      "baseline": 1490,
+      "ceiling": 1714
+    },
+    "aggregate_slot_nested": {
+      "functions": 2050,
+      "baseline": 2048,
+      "ceiling": 2356
+    },
+    "aggregate_slot_pivot": {
+      "functions": 2092,
+      "baseline": 2095,
+      "ceiling": 2410
+    },
+    "audit": {
+      "functions": 1337,
+      "baseline": 1313,
+      "ceiling": 1510
+    },
+    "column_encrypted_json": {
+      "functions": 1321,
+      "baseline": 1217,
+      "ceiling": 1400
+    },
+    "column_encrypted_text": {
+      "functions": 1231,
+      "baseline": 1127,
+      "ceiling": 1297
+    },
+    "column_enum": {
+      "functions": 1344,
+      "baseline": 1232,
+      "ceiling": 1417
+    },
+    "column_interval": {
+      "functions": 1293,
+      "baseline": 1178,
+      "ceiling": 1355
+    },
+    "column_json": {
+      "functions": 1391,
+      "baseline": 1280,
+      "ceiling": 1472
+    },
+    "column_nullable_encrypted_json": {
+      "functions": 1562,
+      "baseline": 1449,
+      "ceiling": 1667
+    },
+    "column_nullable_encrypted_text": {
+      "functions": 1472,
+      "baseline": 1359,
+      "ceiling": 1563
+    },
+    "column_nullable_interval": {
+      "functions": 1530,
+      "baseline": 1406,
+      "ceiling": 1617
+    },
+    "column_nullable_json": {
+      "functions": 1642,
+      "baseline": 1522,
+      "ceiling": 1751
+    },
+    "column_nullable_password": {
+      "functions": 1535,
+      "baseline": 1417,
+      "ceiling": 1630
+    },
+    "column_nullable_text": {
+      "functions": 1584,
+      "baseline": 1456,
+      "ceiling": 1675
+    },
+    "column_number": {
+      "functions": 1267,
+      "baseline": 1172,
+      "ceiling": 1348
+    },
+    "column_password": {
+      "functions": 1299,
+      "baseline": 1190,
+      "ceiling": 1369
+    },
+    "column_time": {
+      "functions": 1309,
+      "baseline": 1194,
+      "ceiling": 1374
+    },
+    "conditional_row": {
+      "functions": 1805,
+      "baseline": 1681,
+      "ceiling": 1934
+    },
+    "conditional_selected": {
+      "functions": 1649,
+      "baseline": 1511,
+      "ceiling": 1738
+    },
+    "conflict": {
+      "functions": 968,
+      "baseline": 944,
+      "ceiling": 1086
+    },
+    "conflict_advanced": {
+      "functions": 1808,
+      "baseline": 1817,
+      "ceiling": 2090
+    },
+    "correlation": {
+      "functions": 2991,
+      "baseline": 2752,
+      "ceiling": 3165
+    },
+    "cte_recursive": {
+      "functions": 1131,
+      "baseline": 1076,
+      "ceiling": 1238
+    },
+    "cursor": {
+      "functions": 1186,
+      "baseline": 1127,
+      "ceiling": 1297
+    },
+    "datatable_projection": {
+      "functions": 2951,
+      "baseline": 2951,
+      "ceiling": 3394
+    },
+    "distinct": {
+      "functions": 1174,
+      "baseline": 1135,
+      "ceiling": 1306
+    },
+    "each_soft_writes": {
+      "functions": 1567,
+      "baseline": 1567,
+      "ceiling": 1803
+    },
+    "each_writes": {
+      "functions": 879,
+      "baseline": 888,
+      "ceiling": 1022
+    },
+    "expr_arithmetic": {
+      "functions": 1256,
+      "baseline": 1162,
+      "ceiling": 1337
+    },
+    "expr_selected": {
+      "functions": 1698,
+      "baseline": 1551,
+      "ceiling": 1784
+    },
+    "extension_declaration": {
+      "functions": 11379,
+      "baseline": 30434,
+      "ceiling": 35000
+    },
+    "extension_handles": {
+      "functions": 1481,
+      "baseline": 1481,
+      "ceiling": 1704
+    },
+    "extension_slots": {
+      "functions": 2083,
+      "baseline": 2154,
+      "ceiling": 2478
+    },
+    "extension_slots_old": {
+      "functions": 9730,
+      "baseline": 30493,
+      "ceiling": 35067
+    },
+    "framework_attachmentstore": {
+      "functions": 4792,
+      "baseline": 4729,
+      "ceiling": 5439
+    },
+    "framework_auditstore": {
+      "functions": 4753,
+      "baseline": 4753,
+      "ceiling": 5466
+    },
+    "framework_challengestore": {
+      "functions": 2560,
+      "baseline": 2558,
+      "ceiling": 2942
+    },
+    "framework_countries": {
+      "functions": 4157,
+      "baseline": 4122,
+      "ceiling": 4741
+    },
+    "framework_extensionstore": {
+      "functions": 5640,
+      "baseline": 5407,
+      "ceiling": 6219
+    },
+    "framework_idempotencystore": {
+      "functions": 2253,
+      "baseline": 2249,
+      "ceiling": 2587
+    },
+    "framework_jobarchive": {
+      "functions": 2280,
+      "baseline": 2280,
+      "ceiling": 2622
+    },
+    "framework_mfastore": {
+      "functions": 2947,
+      "baseline": 2947,
+      "ceiling": 3390
+    },
+    "framework_notificationstore": {
+      "functions": 5165,
+      "baseline": 5119,
+      "ceiling": 5887
+    },
+    "framework_outbox": {
+      "functions": 2896,
+      "baseline": 2896,
+      "ceiling": 3331
+    },
+    "framework_sessionstore": {
+      "functions": 4166,
+      "baseline": 4166,
+      "ceiling": 4791
+    },
+    "framework_tokenstore": {
+      "functions": 5315,
+      "baseline": 5315,
+      "ceiling": 6113
+    },
+    "framework_webhookstore": {
+      "functions": 4769,
+      "baseline": 4705,
+      "ceiling": 5411
+    },
+    "global_scopes": {
+      "functions": 1389,
+      "baseline": 1374,
+      "ceiling": 1581
+    },
+    "has": {
+      "functions": 1412,
+      "baseline": 1302,
+      "ceiling": 1498
+    },
+    "has_one": {
+      "functions": 1403,
+      "baseline": 1281,
+      "ceiling": 1474
+    },
+    "input_column_kinds": {
+      "functions": 5321,
+      "baseline": 5088,
+      "ceiling": 5852
+    },
+    "input_key": {
+      "functions": 1049,
+      "baseline": 982,
+      "ceiling": 1130
+    },
+    "json_functions": {
+      "functions": 2739,
+      "baseline": 2736,
+      "ceiling": 3147
+    },
+    "json_paths": {
+      "functions": 6148,
+      "baseline": 6146,
+      "ceiling": 7068
+    },
+    "key_chunk": {
+      "functions": 862,
+      "baseline": 812,
+      "ceiling": 934
+    },
+    "lateral": {
+      "functions": 3049,
+      "baseline": 2852,
+      "ceiling": 3280
+    },
+    "lifecycle_changes": {
+      "functions": 1093,
+      "baseline": 1050,
+      "ceiling": 1208
+    },
+    "lifecycle_write": {
+      "functions": 973,
+      "baseline": 930,
+      "ceiling": 1070
+    },
+    "model_type": {
+      "functions": 299,
+      "baseline": 299,
+      "ceiling": 344
+    },
+    "models": {
+      "functions": 6838,
+      "baseline": 6147,
+      "ceiling": 7070
+    },
+    "models_1": {
+      "functions": 1751,
+      "baseline": 1619,
+      "ceiling": 1862
+    },
+    "models_3": {
+      "functions": 2605,
+      "baseline": 2435,
+      "ceiling": 2801
+    },
+    "morph": {
+      "functions": 1155,
+      "baseline": 1088,
+      "ceiling": 1252
+    },
+    "mutator_explicit": {
+      "functions": 1717,
+      "baseline": 1605,
+      "ceiling": 1846
+    },
+    "mutators": {
+      "functions": 855,
+      "baseline": 801,
+      "ceiling": 922
+    },
+    "nested_with": {
+      "functions": 1403,
+      "baseline": 1281,
+      "ceiling": 1474
+    },
+    "nullable_join_chain": {
+      "functions": 1854,
+      "baseline": 1695,
+      "ceiling": 1950
+    },
+    "observer_counts": {
+      "functions": 63,
+      "baseline": 63,
+      "ceiling": 73
+    },
+    "on_comparisons": {
+      "functions": 1593,
+      "baseline": 1454,
+      "ceiling": 1673
+    },
+    "onequery": {
+      "functions": 854,
+      "baseline": 803,
+      "ceiling": 924
+    },
+    "orm_binding": {
+      "functions": 1101,
+      "baseline": 1089,
+      "ceiling": 1253
+    },
+    "orm_factory": {
+      "functions": 1093,
+      "baseline": 1093,
+      "ceiling": 1257
+    },
+    "outbox_publisher": {
+      "functions": 1324,
+      "baseline": 1324,
+      "ceiling": 1523
+    },
+    "outer_join": {
+      "functions": 1789,
+      "baseline": 1668,
+      "ceiling": 1919
+    },
+    "pivot": {
+      "functions": 1072,
+      "baseline": 1005,
+      "ceiling": 1156
+    },
+    "prune_registry": {
+      "functions": 933,
+      "baseline": 933,
+      "ceiling": 1073
+    },
+    "q_join": {
+      "functions": 1766,
+      "baseline": 1598,
+      "ceiling": 1838
+    },
+    "q_select": {
+      "functions": 895,
+      "baseline": 836,
+      "ceiling": 962
+    },
+    "q_with": {
+      "functions": 1211,
+      "baseline": 1053,
+      "ceiling": 1211
+    },
+    "raw": {
+      "functions": 1096,
+      "baseline": 1045,
+      "ceiling": 1202
+    },
+    "raw_fragments": {
+      "functions": 1380,
+      "baseline": 1331,
+      "ceiling": 1531
+    },
+    "record_sets": {
+      "functions": 1294,
+      "baseline": 1288,
+      "ceiling": 1482
+    },
+    "records": {
+      "functions": 1327,
+      "baseline": 1313,
+      "ceiling": 1510
+    },
+    "relation_with": {
+      "functions": 2047,
+      "baseline": 1847,
+      "ceiling": 2125
+    },
+    "relation_write_attach": {
+      "functions": 1110,
+      "baseline": 1110,
+      "ceiling": 1277
+    },
+    "relation_write_declaration": {
+      "functions": 361,
+      "baseline": 361,
+      "ceiling": 416
+    },
+    "relation_write_sync": {
+      "functions": 1124,
+      "baseline": 1124,
+      "ceiling": 1293
+    },
+    "report_filters": {
+      "functions": 2112,
+      "baseline": 2095,
+      "ceiling": 2410
+    },
+    "report_pipeline": {
+      "functions": 2120,
+      "baseline": 1905,
+      "ceiling": 2191
+    },
+    "report_reads": {
+      "functions": 1063,
+      "baseline": 1063,
+      "ceiling": 1223
+    },
+    "result_cursor": {
+      "functions": 2229,
+      "baseline": 2229,
+      "ceiling": 2564
+    },
+    "result_reads": {
+      "functions": 1385,
+      "baseline": 1351,
+      "ceiling": 1554
+    },
+    "retrieval_read": {
+      "functions": 831,
+      "baseline": 826,
+      "ceiling": 950
+    },
+    "role_input_same": {
+      "functions": 1360,
+      "baseline": 1360,
+      "ceiling": 1564
+    },
+    "role_lookup_input": {
+      "functions": 1213,
+      "baseline": 1226,
+      "ceiling": 1410
+    },
+    "role_primary_number": {
+      "functions": 1182,
+      "baseline": 1195,
+      "ceiling": 1375
+    },
+    "role_primary_text": {
+      "functions": 1216,
+      "baseline": 1216,
+      "ceiling": 1399
+    },
+    "role_soft_read": {
+      "functions": 1548,
+      "baseline": 1548,
+      "ceiling": 1781
+    },
+    "role_soft_write": {
+      "functions": 620,
+      "baseline": 620,
+      "ceiling": 713
+    },
+    "role_source": {
+      "functions": 905,
+      "baseline": 905,
+      "ceiling": 1041
+    },
+    "role_time_read": {
+      "functions": 1394,
+      "baseline": 1394,
+      "ceiling": 1604
+    },
+    "rows_each": {
+      "functions": 899,
+      "baseline": 899,
+      "ceiling": 1034
+    },
+    "scalar_temporal": {
+      "functions": 2629,
+      "baseline": 2625,
+      "ceiling": 3019
+    },
+    "scalar_text": {
+      "functions": 2315,
+      "baseline": 2312,
+      "ceiling": 2659
+    },
+    "scoped_write": {
+      "functions": 1111,
+      "baseline": 1111,
+      "ceiling": 1278
+    },
+    "sensitive_models": {
+      "functions": 2821,
+      "baseline": 2606,
+      "ceiling": 2997
+    },
+    "source_write": {
+      "functions": 1302,
+      "baseline": 1311,
+      "ceiling": 1508
+    },
+    "subqueries": {
+      "functions": 3061,
+      "baseline": 2837,
+      "ceiling": 3263
+    },
+    "table_ref": {
+      "functions": 854,
+      "baseline": 803,
+      "ceiling": 924
+    },
+    "terminal_adjustment": {
+      "functions": 1382,
+      "baseline": 1382,
+      "ceiling": 1590
+    },
+    "terminal_create_or_first": {
+      "functions": 880,
+      "baseline": 880,
+      "ceiling": 1012
+    },
+    "terminal_explain": {
+      "functions": 1322,
+      "baseline": 1318,
+      "ceiling": 1516
+    },
+    "terminal_lookup": {
+      "functions": 893,
+      "baseline": 893,
+      "ceiling": 1027
+    },
+    "terminal_prune": {
+      "functions": 930,
+      "baseline": 930,
+      "ceiling": 1070
+    },
+    "through": {
+      "functions": 986,
+      "baseline": 928,
+      "ceiling": 1068
+    },
+    "transaction_correlation": {
+      "functions": 2908,
+      "baseline": 2908,
+      "ceiling": 3345
+    },
+    "transaction_joins": {
+      "functions": 1835,
+      "baseline": 1835,
+      "ceiling": 2111
+    },
+    "transaction_records": {
+      "functions": 1406,
+      "baseline": 1296,
+      "ceiling": 1491
+    },
+    "uuid_seeks": {
+      "functions": 1023,
+      "baseline": 1023,
+      "ceiling": 1177
+    },
+    "validation_database": {
+      "functions": 1441,
+      "baseline": 1441,
+      "ceiling": 1658
+    },
+    "value_sets": {
+      "functions": 2237,
+      "baseline": 2230,
+      "ceiling": 2565
+    },
+    "window_frames": {
+      "functions": 1769,
+      "baseline": 1767,
+      "ceiling": 2033
+    },
+    "window_rank": {
+      "functions": 1346,
+      "baseline": 1345,
+      "ceiling": 1547
+    },
+    "write_unset": {
+      "functions": 266,
+      "baseline": 266,
+      "ceiling": 306
+    }
+  },
+  "footprint_changes": {
+    "write_unset": {
+      "before": null,
+      "after": 266,
+      "ceiling": 306
+    },
+    "each_soft_writes": {
+      "before": null,
+      "after": 1567,
+      "ceiling": 1803
+    }
+  },
+  "checks": [
+    {
+      "name": "consumer-vet",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./binarymodels",
+        "./vault",
+        "./eventqueries",
+        "./inputqueries",
+        "./mutatorqueries",
+        "./linkqueries",
+        "./upsertqueries"
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/stage9-b3-consumer-vet.log"
+    },
+    {
+      "name": "consumer-test",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "./binarymodels",
+        "./vault",
+        "./eventqueries",
+        "./inputqueries",
+        "./mutatorqueries",
+        "./linkqueries",
+        "./upsertqueries"
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/stage9-b3-consumer-test.log"
+    },
+    {
+      "name": "consumer-compiler",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(audit_field_value|audit_history_id|audit_model_owner|audit_policy_conversion|audit_policy_owner|binary_comparison_type|binary_identity_key|binary_mutation_input|binary_nullable_projection|binary_scalar_key|binary_scope_owner|each_create_draft|each_delete_result|each_update_draft|each_update_model|each_write_limit|encrypted_conflict_update|encrypted_draft_plaintext|encrypted_field_order|encrypted_field_predicate|generated_observer_factory|generated_observer_owner|global_scope_owner_conversion|hook_callback_typo|hook_changes_owner|hook_draft_owner|hook_snapshot_owner|insert_select_draft|insert_select_id|insert_select_mutator|insert_select_nullable|insert_select_owner|insert_select_result|insert_select_timestamp|insert_select_value|lookup_create_draft|lookup_result|lookup_update_create_draft|lookup_update_draft|lookup_update_model|model_change_draft|model_change_field_result|model_change_snapshots|model_change_unknown_field|mutation_input_conflict|mutation_input_draft|mutation_input_nullable|mutation_input_predicate|mutation_input_scope|mutator_nullable|mutator_owner|mutator_value|observer_constructor_owner|observer_counts_adapters|observer_factory_owner|retrieval_callback_owner|retrieval_callback_typo|retrieval_observer_factory|retrieval_observer_owner|retrieval_write_observer|soft_change_operation|soft_force_key|soft_restore_hook|soft_restore_key|source_delete_force|source_delete_id|source_delete_values|source_update_draft|source_update_id|source_update_mutator|source_update_nullable|source_update_primary|source_update_result|source_update_scope|source_update_timestamp|source_update_value|timestamp_draft|write_unset_owner)$",
+        "."
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/stage9-b3-consumer-compiler.log"
+    },
+    {
+      "name": "goway-compiler",
+      "cwd": "tests/fixtures/goway",
+      "command": [
+        "go",
+        "test",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(audit_field_value|audit_history_id|audit_model_owner|audit_policy_conversion|audit_policy_owner|binary_comparison_type|binary_identity_key|binary_mutation_input|binary_nullable_projection|binary_scalar_key|binary_scope_owner|each_create_draft|each_delete_result|each_update_draft|each_update_model|each_write_limit|encrypted_conflict_update|encrypted_draft_plaintext|encrypted_field_order|encrypted_field_predicate|generated_observer_factory|generated_observer_owner|global_scope_owner_conversion|hook_callback_typo|hook_changes_owner|hook_draft_owner|hook_snapshot_owner|insert_select_draft|insert_select_id|insert_select_mutator|insert_select_nullable|insert_select_owner|insert_select_result|insert_select_timestamp|insert_select_value|lookup_create_draft|lookup_result|lookup_update_create_draft|lookup_update_draft|lookup_update_model|model_change_draft|model_change_field_result|model_change_snapshots|model_change_unknown_field|mutation_input_conflict|mutation_input_draft|mutation_input_nullable|mutation_input_predicate|mutation_input_scope|mutator_nullable|mutator_owner|mutator_value|observer_constructor_owner|observer_counts_adapters|observer_factory_owner|retrieval_callback_owner|retrieval_callback_typo|retrieval_observer_factory|retrieval_observer_owner|retrieval_write_observer|soft_change_operation|soft_force_key|soft_restore_hook|soft_restore_key|source_delete_force|source_delete_id|source_delete_values|source_update_draft|source_update_id|source_update_mutator|source_update_nullable|source_update_primary|source_update_result|source_update_scope|source_update_timestamp|source_update_value|timestamp_draft|write_unset_owner)$",
+        "."
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/stage9-b3-goway-compiler.log"
+    },
+    {
+      "name": "orm-build",
+      "cwd": ".",
+      "command": [
+        "go",
+        "build",
+        "./database/orm"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "consumer-build",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./binarymodels",
+        "./vault",
+        "./eventqueries",
+        "./inputqueries",
+        "./mutatorqueries",
+        "./linkqueries",
+        "./upsertqueries"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "orm-vet",
+      "cwd": ".",
+      "command": [
+        "go",
+        "vet",
+        "./database/orm"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "orm-race",
+      "cwd": ".",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm"
+      ],
+      "exit_code": 0,
+      "note": "Replayed after interrupted r6 run on r7; includes public surface snapshot and unset regressions."
+    },
+    {
+      "name": "consumer-race",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./binarymodels",
+        "./vault",
+        "./eventqueries",
+        "./inputqueries",
+        "./mutatorqueries",
+        "./linkqueries",
+        "./upsertqueries"
+      ],
+      "exit_code": 1,
+      "note": "Initial r7 run: six packages passed; binary projection used a nonexistent Require method. Final segmented coverage passes after the targeted reruns below."
+    },
+    {
+      "name": "footprint",
+      "cwd": "tests/fixtures/goway",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "-run",
+        "^TestFootprintBudgets$",
+        "."
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/stage9-b3-footprint-test.log"
+    },
+    {
+      "name": "consumer-race-correction-1",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./binarymodels",
+        "./linkqueries"
+      ],
+      "exit_code": 1,
+      "note": "Linkqueries passed. Binary startup correctly rejected a Raw handle shadowing Table.Raw."
+    },
+    {
+      "name": "consumer-race-correction-2",
+      "cwd": "tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./binarymodels"
+      ],
+      "exit_code": 0,
+      "note": "RawBytes handle correction passes draft buffer ownership and declaration validation. Completes race coverage of all seven packages."
+    },
+    {
+      "name": "catalogue",
+      "cwd": ".",
+      "command": [
+        "python3",
+        "-B",
+        "tools/goway_catalogue.py"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "docs",
+      "cwd": ".",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "formatting",
+      "cwd": ".",
+      "command": [
+        "gofmt",
+        "-l",
+        "<all B3 Go files>"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "name": "diff",
+      "cwd": ".",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "shared_files": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/orm/README.md",
+    "database/orm/column_role.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/orm/write_draft.go",
+    "database/orm/write_each.go",
+    "tests/fixtures/consumer/types_test.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go"
+  ],
+  "changed_files": [
+    "blueprint/goway-data-layer/compilefail-mapping.tsv",
+    "database/orm/README.md",
+    "database/orm/column_role.go",
+    "database/orm/method_surface_test.go",
+    "database/orm/testdata/public-methods.txt",
+    "database/orm/write_draft.go",
+    "database/orm/write_each.go",
+    "database/orm/write_each_soft_test.go",
+    "database/orm/write_unset_test.go",
+    "tests/fixtures/consumer/binarymodels/README.md",
+    "tests/fixtures/consumer/binarymodels/draft_test.go",
+    "tests/fixtures/consumer/binarymodels/orm.go",
+    "tests/fixtures/consumer/binarymodels/orm_test.go",
+    "tests/fixtures/consumer/binarymodels/postgres_test.go",
+    "tests/fixtures/consumer/binarymodels/record.go",
+    "tests/fixtures/consumer/binarymodels/record_test.go",
+    "tests/fixtures/consumer/eventqueries/README.md",
+    "tests/fixtures/consumer/eventqueries/configured_outbox_postgres_test.go",
+    "tests/fixtures/consumer/eventqueries/durable.go",
+    "tests/fixtures/consumer/eventqueries/durable_postgres_test.go",
+    "tests/fixtures/consumer/eventqueries/events.go",
+    "tests/fixtures/consumer/eventqueries/events_postgres_test.go",
+    "tests/fixtures/consumer/eventqueries/orm.go",
+    "tests/fixtures/consumer/eventqueries/orm_test.go",
+    "tests/fixtures/consumer/hookqueries/hooks_postgres_test.go",
+    "tests/fixtures/consumer/hookqueries/member.go",
+    "tests/fixtures/consumer/hookqueries/orm_hooks.go",
+    "tests/fixtures/consumer/inputqueries/README.md",
+    "tests/fixtures/consumer/inputqueries/hooks.go",
+    "tests/fixtures/consumer/inputqueries/inputs_postgres_test.go",
+    "tests/fixtures/consumer/inputqueries/inputs_test.go",
+    "tests/fixtures/consumer/inputqueries/orm.go",
+    "tests/fixtures/consumer/linkqueries/README.md",
+    "tests/fixtures/consumer/linkqueries/concurrency_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/each_concurrency_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/each_modes_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/each_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/fixture_test.go",
+    "tests/fixtures/consumer/linkqueries/hooks.go",
+    "tests/fixtures/consumer/linkqueries/insert_select_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/keys_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/legacy_creation_bridge_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/lifecycle_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/lookup_concurrency_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/lookup_postgres_test.go",
+    "tests/fixtures/consumer/linkqueries/orm.go",
+    "tests/fixtures/consumer/linkqueries/orm_hooks.go",
+    "tests/fixtures/consumer/linkqueries/source_write_postgres_test.go",
+    "tests/fixtures/consumer/mutatorqueries/README.md",
+    "tests/fixtures/consumer/mutatorqueries/mutators_postgres_test.go",
+    "tests/fixtures/consumer/mutatorqueries/orm.go",
+    "tests/fixtures/consumer/mutatorqueries/reference_test.go",
+    "tests/fixtures/consumer/observerqueries/models.go",
+    "tests/fixtures/consumer/observerqueries/observers_postgres_test.go",
+    "tests/fixtures/consumer/observerqueries/orm.go",
+    "tests/fixtures/consumer/testdata/compilefail/binary_comparison_type/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/binary_identity_key/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/binary_mutation_input/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/binary_nullable_projection/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/binary_scalar_key/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/binary_scope_owner/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/each_force_owner/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/each_force_token/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/each_restore_owner/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/each_restore_result/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/encrypted_conflict_update/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/encrypted_draft_plaintext/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/encrypted_field_order/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/encrypted_field_predicate/invalid.go",
+    "tests/fixtures/consumer/testdata/compilefail/write_unset_owner/invalid.go",
+    "tests/fixtures/consumer/types_test.go",
+    "tests/fixtures/consumer/upsertqueries/README.md",
+    "tests/fixtures/consumer/upsertqueries/calculations_postgres_test.go",
+    "tests/fixtures/consumer/upsertqueries/orm.go",
+    "tests/fixtures/consumer/upsertqueries/orm_test.go",
+    "tests/fixtures/consumer/upsertqueries/upserts_postgres_test.go",
+    "tests/fixtures/consumer/vault/README.md",
+    "tests/fixtures/consumer/vault/entry_postgres_test.go",
+    "tests/fixtures/consumer/vault/orm.go",
+    "tests/fixtures/consumer/vault/orm_test.go",
+    "tests/fixtures/goway/compiler_cases_test.go",
+    "tests/fixtures/goway/footprint_test.go",
+    "tests/fixtures/goway/testdata/compilefail/each_force_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/each_force_token/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/each_restore_owner/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/each_restore_result/invalid.go",
+    "tests/fixtures/goway/testdata/compilefail/write_unset_owner/invalid.go",
+    "tests/fixtures/goway/testdata/footprint/each_soft_writes/p.go",
+    "tests/fixtures/goway/testdata/footprint/write_unset/p.go"
+  ],
+  "source_sha256": {
+    "blueprint/goway-data-layer/compilefail-mapping.tsv": "a1f195a69129fdb329fec33dad29abbddddb825084f2fc2699aaec1417d90856",
+    "database/orm/README.md": "2fd52677399a6124cc73bbdaf1bc80748e3d3ac590d0f83d8c68845a9b5be991",
+    "database/orm/column_role.go": "e33d4bd7c36ac2ed8e25b6c2b6ffbfd9ae30979ae6342fda2489a95b809738b1",
+    "database/orm/method_surface_test.go": "d278cf5e72dca230c5969915fba6afc26aced69312a90e40b56c673678f491d0",
+    "database/orm/testdata/public-methods.txt": "354978b3cf1cbb0ec5616aaae7ce350dcb4fc9dd4b1d02a8ef1b91ee401ef2d2",
+    "database/orm/write_draft.go": "c6e96d43406239dbf8e61894675918205b52248142b6aaa9a6a4095eb0163514",
+    "database/orm/write_each.go": "974ea7feac1cbf8208ca8ad899111575819cf605885afe0fe0951ca5f0dea342",
+    "database/orm/write_each_soft_test.go": "9658d754907edd2d0e196db6d80b84eeac2b7d307b19b6484545f20973da2046",
+    "database/orm/write_unset_test.go": "7131581e9a67a6f784398a0d4d772840b87bc144ddc329c7642c7a8b67dd6aff",
+    "tests/fixtures/consumer/binarymodels/README.md": "26718f24bb3f4f3da28f43b46e95f24c19541d7081af3d8a4da479b83cc1563b",
+    "tests/fixtures/consumer/binarymodels/draft_test.go": "71d9e4f3c3d91f958143a88059577802dfc64707e386c803bcc5424c07841233",
+    "tests/fixtures/consumer/binarymodels/orm.go": "d1a7febdb6e8869ba836a2d91aca446eaf102ff62543717dec37747411740c51",
+    "tests/fixtures/consumer/binarymodels/orm_test.go": "e895d535a24227a3e4d955db19e93a71b7b71f0a3c7e716f5c0b5dd26ef98812",
+    "tests/fixtures/consumer/binarymodels/postgres_test.go": "91bb22957f2d46591a6aa2a26d87e837ce9deb6b55aeab986d66bbbbfaed5ccd",
+    "tests/fixtures/consumer/binarymodels/record.go": "96f9cc2cb3c67494dde53fc23a99a1780ae3484e8818868bdfa31a7fd1179815",
+    "tests/fixtures/consumer/binarymodels/record_test.go": "a82830bbf873b75c9e33c39841bc5684018c49db69038dbce61a008f8b24e646",
+    "tests/fixtures/consumer/eventqueries/README.md": "a91728048d506df57a50e5f2a2e05cf4d4e6b4fc30dab64740c9046a9f123655",
+    "tests/fixtures/consumer/eventqueries/configured_outbox_postgres_test.go": "19ed54d64e95922311156cdbebc7c162aaaef6e75553b297fb989c8f93cf02e8",
+    "tests/fixtures/consumer/eventqueries/durable.go": "135c08894178a892ba9b0877c8eb9c2667fe02eab3b2081f5a2f9c098f6a4b54",
+    "tests/fixtures/consumer/eventqueries/durable_postgres_test.go": "464a3e737060e3f8ce451fbcc19d84d1d1515709155d9ce363ff8abadbb631a8",
+    "tests/fixtures/consumer/eventqueries/events.go": "0699c44fa98077ebcf55fc55fe9ccadf9900e89705efbd3cd9a05c06b6c0db57",
+    "tests/fixtures/consumer/eventqueries/events_postgres_test.go": "3628bbdf4acc97d04d4c6f81faa6fc543f769a477bab45039f64bc1de8feda97",
+    "tests/fixtures/consumer/eventqueries/orm.go": "bdec282865cdb3a261b3c1a7af84c88e1b10f663bb2df8ab670631b8feeea606",
+    "tests/fixtures/consumer/eventqueries/orm_test.go": "9e270ddd7140b14e82e2f26165033e4dd6ee75f14af65cd66837ee88062c9276",
+    "tests/fixtures/consumer/hookqueries/hooks_postgres_test.go": "8175ef7d8cefd8ceca42c33bfaf7b37476165a1ee88dac5d5baab8eb01f74b74",
+    "tests/fixtures/consumer/hookqueries/member.go": "2455256921dbfc7a0846061fc8201f44b0a453bd5a6ba19d8433b0c2932562ec",
+    "tests/fixtures/consumer/hookqueries/orm_hooks.go": "954137e0c486626385960149c794ce67ec25cd24738a8cd5ddc7ebccfae92232",
+    "tests/fixtures/consumer/inputqueries/README.md": "bdaafdb2bb5047aa98dfdb8b2ad0d23364043bf8b5587453eaa52d1c667f0ad9",
+    "tests/fixtures/consumer/inputqueries/hooks.go": "9b863b1e164198bfe9bf9b50d38b8c969346d6a558f2450318005bfae8b488d3",
+    "tests/fixtures/consumer/inputqueries/inputs_postgres_test.go": "951e0ffec003166fd335778a28273277010b82543f0b95aa4e4d5a0ef081543a",
+    "tests/fixtures/consumer/inputqueries/inputs_test.go": "cedd4ebc9f18753cf62a64a0752542bf9e48bea60307b6418bfd42140ab2c069",
+    "tests/fixtures/consumer/inputqueries/orm.go": "f00d23394435fa7f6ec3f0c7ff8e02ffe09237c7315e9aecc7f79507cba4ffa7",
+    "tests/fixtures/consumer/linkqueries/README.md": "3cc0e0847e4a69b01fc1fc40f7c7bb3504ea10f182932eb14eb1537c54d3cf60",
+    "tests/fixtures/consumer/linkqueries/concurrency_postgres_test.go": "048bc704f0c99100561ca79c540a9064f8503fd9ed4f53f73278d23107ca98f8",
+    "tests/fixtures/consumer/linkqueries/each_concurrency_postgres_test.go": "dccf01a2c09529c527b9cf3933d2244233b8e9e16c36ac9c2119ce3e55c95a3f",
+    "tests/fixtures/consumer/linkqueries/each_modes_postgres_test.go": "d68f6a4a58a54557b755594e822f15a77f9348b9a665f0c1c4fb328618468a11",
+    "tests/fixtures/consumer/linkqueries/each_postgres_test.go": "294a9be08eec8acfb70d9298e99117d9b1263964f42343964a3cf84bff0ffd02",
+    "tests/fixtures/consumer/linkqueries/fixture_test.go": "941f5de3c553b74a70e67c77bc4cd8c27bf1bebd3483b297ae3b37289c4bbf0a",
+    "tests/fixtures/consumer/linkqueries/hooks.go": "2d076cd0ab7d7d7d0da0f3b537eeb72589231c0c0fb13077a692d05bbe0a384c",
+    "tests/fixtures/consumer/linkqueries/insert_select_postgres_test.go": "600488e2c7cd76417faf47f565ab377ed7ff5a37a40435b90aee3442fea61869",
+    "tests/fixtures/consumer/linkqueries/keys_postgres_test.go": "dfba09678a053382046a527f892ad043d24343022f71af31911f09a80f31bfbb",
+    "tests/fixtures/consumer/linkqueries/legacy_creation_bridge_postgres_test.go": "d99897cff904bd7f338139a6a0319a129fc12322ee30172a322f1d8016a8fc7c",
+    "tests/fixtures/consumer/linkqueries/lifecycle_postgres_test.go": "2e2fc912958c7b98481f570b68c42a7685661154175f083a711f3c5d8572117a",
+    "tests/fixtures/consumer/linkqueries/lookup_concurrency_postgres_test.go": "da414be3457628ca12e0ac4131d6fb82eab48e48796a67e4f9245e128a9c1165",
+    "tests/fixtures/consumer/linkqueries/lookup_postgres_test.go": "5ef5d043e631bb820823c254698fe07fa9d822249ad05521177f2d5c2e5e9b25",
+    "tests/fixtures/consumer/linkqueries/orm.go": "68c94be5d70ad1dde3a9f864a9cd81554033478b54cdf419843d169f4ef52d93",
+    "tests/fixtures/consumer/linkqueries/orm_hooks.go": "c36ddea3d2d4233c6f5e07779bb45e9d9f9833bc2b8928b0ed3f2daf01d77eed",
+    "tests/fixtures/consumer/linkqueries/source_write_postgres_test.go": "a8720c553d7b1806dd9a3718cdc8a6fc6716db9dc30d460fa79f9fe2e5c6c5c5",
+    "tests/fixtures/consumer/mutatorqueries/README.md": "d1bf43ac062aca63b3be290035b406bf95feac08c94012ba625727ec7efab421",
+    "tests/fixtures/consumer/mutatorqueries/mutators_postgres_test.go": "a59078d2669e9cee1ab609b723ddcb53294878e7705a4ae1311ab62032ab5a43",
+    "tests/fixtures/consumer/mutatorqueries/orm.go": "f0a3e3c05aca419488d082964921adfc539a00e055c31317eb8ba20fa7470d6d",
+    "tests/fixtures/consumer/mutatorqueries/reference_test.go": "b4e35215ab114da2123b16ec9cf5de465df15930c6767f4515a2d70f46cfc415",
+    "tests/fixtures/consumer/observerqueries/models.go": "5c51bab6c4264c5b8c3d931dbdfcffc6e96adaf5dba2c84dc61a84de05fa19d5",
+    "tests/fixtures/consumer/observerqueries/observers_postgres_test.go": "d6c250b5e53006d002d6ad2254d367e711b74b73540353f0c1b2fc22652fd148",
+    "tests/fixtures/consumer/observerqueries/orm.go": "e8a06a95bc9657e8f654b8d300f03f2263c3a07a8a14b1bddae73649ad1aa0a4",
+    "tests/fixtures/consumer/testdata/compilefail/binary_comparison_type/invalid.go": "d0bac7d6efa9fb1747c8da361d91d0db6444f24d7f27cebcd91b8cdec5232eef",
+    "tests/fixtures/consumer/testdata/compilefail/binary_identity_key/invalid.go": "ef71ec13e36011eb67b21f2aa4e40245999b1037536f9c952e5fe51e421302f6",
+    "tests/fixtures/consumer/testdata/compilefail/binary_mutation_input/invalid.go": "3d3ea2bfe004615ca340fab69d1144e982ec6fd94de33c7d6068954c916819ac",
+    "tests/fixtures/consumer/testdata/compilefail/binary_nullable_projection/invalid.go": "25a56030d7bb73713e3c4d2a5e5f57eb1ff7cb5e52bafc8a66c883f736402dbe",
+    "tests/fixtures/consumer/testdata/compilefail/binary_scalar_key/invalid.go": "79b269bbaf5289ef7ea5edfbdeec235d8f286d646cc1c6f0383c942abb6d041d",
+    "tests/fixtures/consumer/testdata/compilefail/binary_scope_owner/invalid.go": "90ae8b7370be97cbcd56a0ce985ba4bbebf9ddf3fe07afb006c0750902049df6",
+    "tests/fixtures/consumer/testdata/compilefail/each_force_owner/invalid.go": "638efbae48ba4b0ecb0cec3f5e8edb1113848c3780dd2fa768fee5c50d261fd9",
+    "tests/fixtures/consumer/testdata/compilefail/each_force_token/invalid.go": "c4977f992ddaa918ff8785729d190b487607e1704ffcdec6c4f6281a4b33ee54",
+    "tests/fixtures/consumer/testdata/compilefail/each_restore_owner/invalid.go": "e1db4f58ac6323f0b199bf905ba5c01daa6716fd5a2cb99f2e5bcec02949de66",
+    "tests/fixtures/consumer/testdata/compilefail/each_restore_result/invalid.go": "fb19d5999de4006348b34e28dc8c73943b879ddbe01a6e19102cdb4373c5268e",
+    "tests/fixtures/consumer/testdata/compilefail/encrypted_conflict_update/invalid.go": "8239a7677f163662c2f20f1b1fa25f2face3e8d516422dd402fdb2a958ae87d8",
+    "tests/fixtures/consumer/testdata/compilefail/encrypted_draft_plaintext/invalid.go": "3a51192d6f67dc2ff7188a4ec139e828c130b5b899320c04ee84cf1f4423351e",
+    "tests/fixtures/consumer/testdata/compilefail/encrypted_field_order/invalid.go": "e8700eba7355f7a6d37b8f433234930b84db143167740460461f0246a05b1977",
+    "tests/fixtures/consumer/testdata/compilefail/encrypted_field_predicate/invalid.go": "87e609398d9b8c210867bcb8114ebfb0c64f1e4907a48196985c9cd6395ac58c",
+    "tests/fixtures/consumer/testdata/compilefail/write_unset_owner/invalid.go": "51a56460a59a7e515bd079f41d6d53e6f64fcd50c9b32f0c12a01137b421079b",
+    "tests/fixtures/consumer/types_test.go": "e27b448c4413d055b6b469d7d0548d0f07ddd8ceeb25cb2e7bfc7d0b2a647e82",
+    "tests/fixtures/consumer/upsertqueries/README.md": "8b3d6bc3f6e3553759d8ff28f599844c9687e5637bc7934748754f6bc0abc3d0",
+    "tests/fixtures/consumer/upsertqueries/calculations_postgres_test.go": "0eea40c74e42983d44d44bd59a462d0c02cdab24dd078b2134596230b7388891",
+    "tests/fixtures/consumer/upsertqueries/orm.go": "8d9c0b2c49559db97c429d329cf79bdd2c8e147af5fad393b910faeec8032fe2",
+    "tests/fixtures/consumer/upsertqueries/orm_test.go": "bea3483e0ba7d464b1edee1be14af8b1adf7dabc394b7789c0af838316e8fce8",
+    "tests/fixtures/consumer/upsertqueries/upserts_postgres_test.go": "7895e86c388b393eb3f0c8bfb257ad71fa77e466bdb59ef1128627449a18bee6",
+    "tests/fixtures/consumer/vault/README.md": "33f1420cae371f3ca3d333a5168e7b72acafbf7e0200ce75bd154a7fd3ace3f9",
+    "tests/fixtures/consumer/vault/entry_postgres_test.go": "7bfda64d0b93dae0069918629f19415725bdee0fb0adafcfdf7b810947cabb44",
+    "tests/fixtures/consumer/vault/orm.go": "a470833c7ad0da5a9f100b93b3501704e7d1c74acbfe73bf9b4194eb47942085",
+    "tests/fixtures/consumer/vault/orm_test.go": "390d04c78ae7ed89c46967f115dfd0d0bc035944099512f16454ab76b7b39d98",
+    "tests/fixtures/goway/compiler_cases_test.go": "2916601e448178a49784d76bac4e052f54ed46fc416b55d197406e538ca289b3",
+    "tests/fixtures/goway/footprint_test.go": "24fbd95bc273442f7623b748297d383ec988a421885a2d378319c99f4acebe08",
+    "tests/fixtures/goway/testdata/compilefail/each_force_owner/invalid.go": "638efbae48ba4b0ecb0cec3f5e8edb1113848c3780dd2fa768fee5c50d261fd9",
+    "tests/fixtures/goway/testdata/compilefail/each_force_token/invalid.go": "c4977f992ddaa918ff8785729d190b487607e1704ffcdec6c4f6281a4b33ee54",
+    "tests/fixtures/goway/testdata/compilefail/each_restore_owner/invalid.go": "e1db4f58ac6323f0b199bf905ba5c01daa6716fd5a2cb99f2e5bcec02949de66",
+    "tests/fixtures/goway/testdata/compilefail/each_restore_result/invalid.go": "fb19d5999de4006348b34e28dc8c73943b879ddbe01a6e19102cdb4373c5268e",
+    "tests/fixtures/goway/testdata/compilefail/write_unset_owner/invalid.go": "51a536b1d8e47551df92275909697a21a5f39db585b88e0c7d75df2dc7f30966",
+    "tests/fixtures/goway/testdata/footprint/each_soft_writes/p.go": "771a3aa99891418e579302b06c9aba8c781369a18ca6042c6d944670fdbfb9f9",
+    "tests/fixtures/goway/testdata/footprint/write_unset/p.go": "2ecd6096e1bd569bf6b5f5fe04e70ccae9530c88d1effad1504600c0887c5ab5",
+    "blueprint/00-master-architecture-and-parity.md": "061e63c9eccba6239f4ae2141ba91a712025e799d0e9ee8b0195978821367145",
+    "tools/goway_catalogue_test.py": "7fb955d7222290defcee9395ff10b4849fba508441734761f40d5576edc15767",
+    "internal/agent/field_documentation_acceptance_test.go": "119d4e19f45f5542847f6d377fc2d0b45b5f67c6670ff837c3d2b56f1004687b",
+    "blueprint/goway-data-layer/README.md": "0eea0ede21db307e0c28689ca9716ff946228bca9b65353218e30c3225c7addd",
+    "CHANGELOG.md": "239223698475e6663c1a5aec038c8bd655af4500ba9a91dbd412fe473b735961",
+    "tests/fixtures/consumer/reports/rows.go": "aa9e32c59b86c8f6ab1ce30dd78b791282f04d8a7e2ff4e421f88c93a056edde",
+    "tools/release/release_test.go": "46a46a4ab85b3bbdf9843aeeea85830312e5d48d1c5ffc2f998ca6d8675aefe8",
+    "internal/agent/gopls_acceptance_test.go": "f0a121e6216c08edace743b423e7840b5b08b54140dfbe9f6fe75ea055e559f1"
+  },
+  "limitations": [
+    "Shared-model upsert scenarios await lane C.",
+    "Complete-record streaming awaits lane A; its legacy assertion is untouched.",
+    "Legacy creation-adapter oracle retained separately.",
+    "No PostgreSQL, generator, wire or integration gate run in this lane."
+  ],
+  "protected_changes": [],
+  "footprint_before": {
+    "aggregate_families": {
+      "functions": 4366,
+      "baseline": 3799,
+      "ceiling": 4369
+    },
+    "aggregate_group": {
+      "functions": 2533,
+      "baseline": 2426,
+      "ceiling": 2790
+    },
+    "aggregate_slot_declaration": {
+      "functions": 1127,
+      "baseline": 1112,
+      "ceiling": 1279
+    },
+    "aggregate_slot_direct": {
+      "functions": 1490,
+      "baseline": 1490,
+      "ceiling": 1714
+    },
+    "aggregate_slot_nested": {
+      "functions": 2050,
+      "baseline": 2048,
+      "ceiling": 2356
+    },
+    "aggregate_slot_pivot": {
+      "functions": 2092,
+      "baseline": 2095,
+      "ceiling": 2410
+    },
+    "audit": {
+      "functions": 1337,
+      "baseline": 1313,
+      "ceiling": 1510
+    },
+    "column_encrypted_json": {
+      "functions": 1321,
+      "baseline": 1217,
+      "ceiling": 1400
+    },
+    "column_encrypted_text": {
+      "functions": 1231,
+      "baseline": 1127,
+      "ceiling": 1297
+    },
+    "column_enum": {
+      "functions": 1344,
+      "baseline": 1232,
+      "ceiling": 1417
+    },
+    "column_interval": {
+      "functions": 1293,
+      "baseline": 1178,
+      "ceiling": 1355
+    },
+    "column_json": {
+      "functions": 1391,
+      "baseline": 1280,
+      "ceiling": 1472
+    },
+    "column_nullable_encrypted_json": {
+      "functions": 1562,
+      "baseline": 1449,
+      "ceiling": 1667
+    },
+    "column_nullable_encrypted_text": {
+      "functions": 1472,
+      "baseline": 1359,
+      "ceiling": 1563
+    },
+    "column_nullable_interval": {
+      "functions": 1530,
+      "baseline": 1406,
+      "ceiling": 1617
+    },
+    "column_nullable_json": {
+      "functions": 1642,
+      "baseline": 1522,
+      "ceiling": 1751
+    },
+    "column_nullable_password": {
+      "functions": 1535,
+      "baseline": 1417,
+      "ceiling": 1630
+    },
+    "column_nullable_text": {
+      "functions": 1584,
+      "baseline": 1456,
+      "ceiling": 1675
+    },
+    "column_number": {
+      "functions": 1267,
+      "baseline": 1172,
+      "ceiling": 1348
+    },
+    "column_password": {
+      "functions": 1299,
+      "baseline": 1190,
+      "ceiling": 1369
+    },
+    "column_time": {
+      "functions": 1309,
+      "baseline": 1194,
+      "ceiling": 1374
+    },
+    "conditional_row": {
+      "functions": 1805,
+      "baseline": 1681,
+      "ceiling": 1934
+    },
+    "conditional_selected": {
+      "functions": 1649,
+      "baseline": 1511,
+      "ceiling": 1738
+    },
+    "conflict": {
+      "functions": 968,
+      "baseline": 944,
+      "ceiling": 1086
+    },
+    "conflict_advanced": {
+      "functions": 1808,
+      "baseline": 1817,
+      "ceiling": 2090
+    },
+    "correlation": {
+      "functions": 2991,
+      "baseline": 2752,
+      "ceiling": 3165
+    },
+    "cte_recursive": {
+      "functions": 1131,
+      "baseline": 1076,
+      "ceiling": 1238
+    },
+    "cursor": {
+      "functions": 1186,
+      "baseline": 1127,
+      "ceiling": 1297
+    },
+    "datatable_projection": {
+      "functions": 2951,
+      "baseline": 2951,
+      "ceiling": 3394
+    },
+    "distinct": {
+      "functions": 1174,
+      "baseline": 1135,
+      "ceiling": 1306
+    },
+    "each_writes": {
+      "functions": 879,
+      "baseline": 888,
+      "ceiling": 1022
+    },
+    "expr_arithmetic": {
+      "functions": 1256,
+      "baseline": 1162,
+      "ceiling": 1337
+    },
+    "expr_selected": {
+      "functions": 1698,
+      "baseline": 1551,
+      "ceiling": 1784
+    },
+    "extension_declaration": {
+      "functions": 11379,
+      "baseline": 30434,
+      "ceiling": 35000
+    },
+    "extension_handles": {
+      "functions": 1481,
+      "baseline": 1481,
+      "ceiling": 1704
+    },
+    "extension_slots": {
+      "functions": 2083,
+      "baseline": 2154,
+      "ceiling": 2478
+    },
+    "extension_slots_old": {
+      "functions": 9730,
+      "baseline": 30493,
+      "ceiling": 35067
+    },
+    "framework_attachmentstore": {
+      "functions": 4792,
+      "baseline": 4729,
+      "ceiling": 5439
+    },
+    "framework_auditstore": {
+      "functions": 4753,
+      "baseline": 4753,
+      "ceiling": 5466
+    },
+    "framework_challengestore": {
+      "functions": 2560,
+      "baseline": 2558,
+      "ceiling": 2942
+    },
+    "framework_countries": {
+      "functions": 4157,
+      "baseline": 4122,
+      "ceiling": 4741
+    },
+    "framework_extensionstore": {
+      "functions": 5640,
+      "baseline": 5407,
+      "ceiling": 6219
+    },
+    "framework_idempotencystore": {
+      "functions": 2253,
+      "baseline": 2249,
+      "ceiling": 2587
+    },
+    "framework_jobarchive": {
+      "functions": 2280,
+      "baseline": 2280,
+      "ceiling": 2622
+    },
+    "framework_mfastore": {
+      "functions": 2947,
+      "baseline": 2947,
+      "ceiling": 3390
+    },
+    "framework_notificationstore": {
+      "functions": 5165,
+      "baseline": 5119,
+      "ceiling": 5887
+    },
+    "framework_outbox": {
+      "functions": 2896,
+      "baseline": 2896,
+      "ceiling": 3331
+    },
+    "framework_sessionstore": {
+      "functions": 4166,
+      "baseline": 4166,
+      "ceiling": 4791
+    },
+    "framework_tokenstore": {
+      "functions": 5315,
+      "baseline": 5315,
+      "ceiling": 6113
+    },
+    "framework_webhookstore": {
+      "functions": 4769,
+      "baseline": 4705,
+      "ceiling": 5411
+    },
+    "global_scopes": {
+      "functions": 1389,
+      "baseline": 1374,
+      "ceiling": 1581
+    },
+    "has": {
+      "functions": 1412,
+      "baseline": 1302,
+      "ceiling": 1498
+    },
+    "has_one": {
+      "functions": 1403,
+      "baseline": 1281,
+      "ceiling": 1474
+    },
+    "input_column_kinds": {
+      "functions": 5321,
+      "baseline": 5088,
+      "ceiling": 5852
+    },
+    "input_key": {
+      "functions": 1049,
+      "baseline": 982,
+      "ceiling": 1130
+    },
+    "json_functions": {
+      "functions": 2739,
+      "baseline": 2736,
+      "ceiling": 3147
+    },
+    "json_paths": {
+      "functions": 6148,
+      "baseline": 6146,
+      "ceiling": 7068
+    },
+    "key_chunk": {
+      "functions": 862,
+      "baseline": 812,
+      "ceiling": 934
+    },
+    "lateral": {
+      "functions": 3049,
+      "baseline": 2852,
+      "ceiling": 3280
+    },
+    "lifecycle_changes": {
+      "functions": 1093,
+      "baseline": 1050,
+      "ceiling": 1208
+    },
+    "lifecycle_write": {
+      "functions": 973,
+      "baseline": 930,
+      "ceiling": 1070
+    },
+    "model_type": {
+      "functions": 299,
+      "baseline": 299,
+      "ceiling": 344
+    },
+    "models": {
+      "functions": 6838,
+      "baseline": 6147,
+      "ceiling": 7070
+    },
+    "models_1": {
+      "functions": 1751,
+      "baseline": 1619,
+      "ceiling": 1862
+    },
+    "models_3": {
+      "functions": 2605,
+      "baseline": 2435,
+      "ceiling": 2801
+    },
+    "morph": {
+      "functions": 1155,
+      "baseline": 1088,
+      "ceiling": 1252
+    },
+    "mutator_explicit": {
+      "functions": 1717,
+      "baseline": 1605,
+      "ceiling": 1846
+    },
+    "mutators": {
+      "functions": 855,
+      "baseline": 801,
+      "ceiling": 922
+    },
+    "nested_with": {
+      "functions": 1403,
+      "baseline": 1281,
+      "ceiling": 1474
+    },
+    "nullable_join_chain": {
+      "functions": 1854,
+      "baseline": 1695,
+      "ceiling": 1950
+    },
+    "observer_counts": {
+      "functions": 63,
+      "baseline": 63,
+      "ceiling": 73
+    },
+    "on_comparisons": {
+      "functions": 1593,
+      "baseline": 1454,
+      "ceiling": 1673
+    },
+    "onequery": {
+      "functions": 854,
+      "baseline": 803,
+      "ceiling": 924
+    },
+    "orm_binding": {
+      "functions": 1101,
+      "baseline": 1089,
+      "ceiling": 1253
+    },
+    "orm_factory": {
+      "functions": 1093,
+      "baseline": 1093,
+      "ceiling": 1257
+    },
+    "outbox_publisher": {
+      "functions": 1324,
+      "baseline": 1324,
+      "ceiling": 1523
+    },
+    "outer_join": {
+      "functions": 1789,
+      "baseline": 1668,
+      "ceiling": 1919
+    },
+    "pivot": {
+      "functions": 1072,
+      "baseline": 1005,
+      "ceiling": 1156
+    },
+    "prune_registry": {
+      "functions": 933,
+      "baseline": 933,
+      "ceiling": 1073
+    },
+    "q_join": {
+      "functions": 1766,
+      "baseline": 1598,
+      "ceiling": 1838
+    },
+    "q_select": {
+      "functions": 895,
+      "baseline": 836,
+      "ceiling": 962
+    },
+    "q_with": {
+      "functions": 1211,
+      "baseline": 1053,
+      "ceiling": 1211
+    },
+    "raw": {
+      "functions": 1096,
+      "baseline": 1045,
+      "ceiling": 1202
+    },
+    "raw_fragments": {
+      "functions": 1380,
+      "baseline": 1331,
+      "ceiling": 1531
+    },
+    "record_sets": {
+      "functions": 1294,
+      "baseline": 1288,
+      "ceiling": 1482
+    },
+    "records": {
+      "functions": 1327,
+      "baseline": 1313,
+      "ceiling": 1510
+    },
+    "relation_with": {
+      "functions": 2047,
+      "baseline": 1847,
+      "ceiling": 2125
+    },
+    "relation_write_attach": {
+      "functions": 1110,
+      "baseline": 1110,
+      "ceiling": 1277
+    },
+    "relation_write_declaration": {
+      "functions": 361,
+      "baseline": 361,
+      "ceiling": 416
+    },
+    "relation_write_sync": {
+      "functions": 1124,
+      "baseline": 1124,
+      "ceiling": 1293
+    },
+    "report_filters": {
+      "functions": 2112,
+      "baseline": 2095,
+      "ceiling": 2410
+    },
+    "report_pipeline": {
+      "functions": 2120,
+      "baseline": 1905,
+      "ceiling": 2191
+    },
+    "report_reads": {
+      "functions": 1063,
+      "baseline": 1063,
+      "ceiling": 1223
+    },
+    "result_cursor": {
+      "functions": 2229,
+      "baseline": 2229,
+      "ceiling": 2564
+    },
+    "result_reads": {
+      "functions": 1385,
+      "baseline": 1351,
+      "ceiling": 1554
+    },
+    "retrieval_read": {
+      "functions": 831,
+      "baseline": 826,
+      "ceiling": 950
+    },
+    "role_input_same": {
+      "functions": 1360,
+      "baseline": 1360,
+      "ceiling": 1564
+    },
+    "role_lookup_input": {
+      "functions": 1213,
+      "baseline": 1226,
+      "ceiling": 1410
+    },
+    "role_primary_number": {
+      "functions": 1182,
+      "baseline": 1195,
+      "ceiling": 1375
+    },
+    "role_primary_text": {
+      "functions": 1216,
+      "baseline": 1216,
+      "ceiling": 1399
+    },
+    "role_soft_read": {
+      "functions": 1548,
+      "baseline": 1548,
+      "ceiling": 1781
+    },
+    "role_soft_write": {
+      "functions": 620,
+      "baseline": 620,
+      "ceiling": 713
+    },
+    "role_source": {
+      "functions": 905,
+      "baseline": 905,
+      "ceiling": 1041
+    },
+    "role_time_read": {
+      "functions": 1394,
+      "baseline": 1394,
+      "ceiling": 1604
+    },
+    "rows_each": {
+      "functions": 899,
+      "baseline": 899,
+      "ceiling": 1034
+    },
+    "scalar_temporal": {
+      "functions": 2629,
+      "baseline": 2625,
+      "ceiling": 3019
+    },
+    "scalar_text": {
+      "functions": 2315,
+      "baseline": 2312,
+      "ceiling": 2659
+    },
+    "scoped_write": {
+      "functions": 1111,
+      "baseline": 1111,
+      "ceiling": 1278
+    },
+    "sensitive_models": {
+      "functions": 2821,
+      "baseline": 2606,
+      "ceiling": 2997
+    },
+    "source_write": {
+      "functions": 1302,
+      "baseline": 1311,
+      "ceiling": 1508
+    },
+    "subqueries": {
+      "functions": 3061,
+      "baseline": 2837,
+      "ceiling": 3263
+    },
+    "table_ref": {
+      "functions": 854,
+      "baseline": 803,
+      "ceiling": 924
+    },
+    "terminal_adjustment": {
+      "functions": 1382,
+      "baseline": 1382,
+      "ceiling": 1590
+    },
+    "terminal_create_or_first": {
+      "functions": 880,
+      "baseline": 880,
+      "ceiling": 1012
+    },
+    "terminal_explain": {
+      "functions": 1322,
+      "baseline": 1318,
+      "ceiling": 1516
+    },
+    "terminal_lookup": {
+      "functions": 893,
+      "baseline": 893,
+      "ceiling": 1027
+    },
+    "terminal_prune": {
+      "functions": 930,
+      "baseline": 930,
+      "ceiling": 1070
+    },
+    "through": {
+      "functions": 986,
+      "baseline": 928,
+      "ceiling": 1068
+    },
+    "transaction_correlation": {
+      "functions": 2908,
+      "baseline": 2908,
+      "ceiling": 3345
+    },
+    "transaction_joins": {
+      "functions": 1835,
+      "baseline": 1835,
+      "ceiling": 2111
+    },
+    "transaction_records": {
+      "functions": 1406,
+      "baseline": 1296,
+      "ceiling": 1491
+    },
+    "uuid_seeks": {
+      "functions": 1023,
+      "baseline": 1023,
+      "ceiling": 1177
+    },
+    "validation_database": {
+      "functions": 1441,
+      "baseline": 1441,
+      "ceiling": 1658
+    },
+    "value_sets": {
+      "functions": 2237,
+      "baseline": 2230,
+      "ceiling": 2565
+    },
+    "window_frames": {
+      "functions": 1769,
+      "baseline": 1767,
+      "ceiling": 2033
+    },
+    "window_rank": {
+      "functions": 1346,
+      "baseline": 1345,
+      "ceiling": 1547
+    }
+  },
+  "segmented_race_coverage": "All seven touched consumers passed on r7; unchanged successful packages were not rerun.",
+  "review_acceptance": [
+    {
+      "name": "root-build",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB",
+      "command": [
+        "go",
+        "build",
+        "./database/orm"
+      ],
+      "log": "/private/tmp/stage9-b3-review-root-build.log",
+      "exit_code": 0
+    },
+    {
+      "name": "root-vet",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB",
+      "command": [
+        "go",
+        "vet",
+        "./database/orm"
+      ],
+      "log": "/private/tmp/stage9-b3-review-root-vet.log",
+      "exit_code": 0
+    },
+    {
+      "name": "consumer-build",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./hookqueries",
+        "./inputqueries",
+        "./linkqueries"
+      ],
+      "log": "/private/tmp/stage9-b3-review-consumer-build.log",
+      "exit_code": 0
+    },
+    {
+      "name": "consumer-vet",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./hookqueries",
+        "./inputqueries",
+        "./linkqueries"
+      ],
+      "log": "/private/tmp/stage9-b3-review-consumer-vet.log",
+      "exit_code": 0
+    },
+    {
+      "name": "consumer-race",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./hookqueries",
+        "./inputqueries",
+        "./linkqueries"
+      ],
+      "log": "/private/tmp/stage9-b3-review-consumer-race.log",
+      "exit_code": 0
+    },
+    {
+      "name": "consumer-compiler",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(audit_field_value|audit_history_id|audit_model_owner|audit_policy_conversion|audit_policy_owner|binary_comparison_type|binary_identity_key|binary_mutation_input|binary_nullable_projection|binary_scalar_key|binary_scope_owner|each_create_draft|each_delete_result|each_force_owner|each_force_token|each_restore_owner|each_restore_result|each_update_draft|each_update_model|each_write_limit|encrypted_conflict_update|encrypted_draft_plaintext|encrypted_field_order|encrypted_field_predicate|generated_observer_factory|generated_observer_owner|global_scope_owner_conversion|hook_callback_typo|hook_changes_owner|hook_draft_owner|hook_snapshot_owner|insert_select_draft|insert_select_id|insert_select_mutator|insert_select_nullable|insert_select_owner|insert_select_result|insert_select_timestamp|insert_select_value|lookup_create_draft|lookup_result|lookup_update_create_draft|lookup_update_draft|lookup_update_model|model_change_draft|model_change_field_result|model_change_snapshots|model_change_unknown_field|mutation_input_conflict|mutation_input_draft|mutation_input_nullable|mutation_input_predicate|mutation_input_scope|mutator_nullable|mutator_owner|mutator_value|observer_constructor_owner|observer_counts_adapters|observer_factory_owner|retrieval_callback_owner|retrieval_callback_typo|retrieval_observer_factory|retrieval_observer_owner|retrieval_write_observer|soft_change_operation|soft_force_key|soft_restore_hook|soft_restore_key|source_delete_force|source_delete_id|source_delete_values|source_update_draft|source_update_id|source_update_mutator|source_update_nullable|source_update_primary|source_update_result|source_update_scope|source_update_timestamp|source_update_value|timestamp_draft|write_unset_owner)$",
+        "."
+      ],
+      "log": "/private/tmp/stage9-b3-review-consumer-compiler.log",
+      "exit_code": 0
+    },
+    {
+      "name": "goway-compiler",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB/tests/fixtures/goway",
+      "command": [
+        "go",
+        "test",
+        "-run",
+        "^TestInvalidPublicContractsFailCompilation$/^(audit_field_value|audit_history_id|audit_model_owner|audit_policy_conversion|audit_policy_owner|binary_comparison_type|binary_identity_key|binary_mutation_input|binary_nullable_projection|binary_scalar_key|binary_scope_owner|each_create_draft|each_delete_result|each_force_owner|each_force_token|each_restore_owner|each_restore_result|each_update_draft|each_update_model|each_write_limit|encrypted_conflict_update|encrypted_draft_plaintext|encrypted_field_order|encrypted_field_predicate|generated_observer_factory|generated_observer_owner|global_scope_owner_conversion|hook_callback_typo|hook_changes_owner|hook_draft_owner|hook_snapshot_owner|insert_select_draft|insert_select_id|insert_select_mutator|insert_select_nullable|insert_select_owner|insert_select_result|insert_select_timestamp|insert_select_value|lookup_create_draft|lookup_result|lookup_update_create_draft|lookup_update_draft|lookup_update_model|model_change_draft|model_change_field_result|model_change_snapshots|model_change_unknown_field|mutation_input_conflict|mutation_input_draft|mutation_input_nullable|mutation_input_predicate|mutation_input_scope|mutator_nullable|mutator_owner|mutator_value|observer_constructor_owner|observer_counts_adapters|observer_factory_owner|retrieval_callback_owner|retrieval_callback_typo|retrieval_observer_factory|retrieval_observer_owner|retrieval_write_observer|soft_change_operation|soft_force_key|soft_restore_hook|soft_restore_key|source_delete_force|source_delete_id|source_delete_values|source_update_draft|source_update_id|source_update_mutator|source_update_nullable|source_update_primary|source_update_result|source_update_scope|source_update_timestamp|source_update_value|timestamp_draft|write_unset_owner)$",
+        "."
+      ],
+      "log": "/private/tmp/stage9-b3-review-goway-compiler.log",
+      "exit_code": 0
+    },
+    {
+      "name": "additional-build",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "build",
+        "./mutatorqueries",
+        "./observerqueries"
+      ],
+      "log": "/private/tmp/stage9-b3-review-additional-build.log",
+      "exit_code": 0
+    },
+    {
+      "name": "additional-vet",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "vet",
+        "./mutatorqueries",
+        "./observerqueries"
+      ],
+      "log": "/private/tmp/stage9-b3-review-additional-vet.log",
+      "exit_code": 0
+    },
+    {
+      "name": "additional-race",
+      "cwd": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneB/tests/fixtures/consumer",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./mutatorqueries",
+        "./observerqueries"
+      ],
+      "log": "/private/tmp/stage9-b3-review-additional-race.log",
+      "exit_code": 0
+    },
+    {
+      "name": "orm-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./database/orm"
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/stage9-b3-review-orm-race.log"
+    },
+    {
+      "name": "footprint",
+      "command": [
+        "go",
+        "test",
+        "-v",
+        "-run",
+        "^TestFootprintBudgets$",
+        "."
+      ],
+      "cwd": "tests/fixtures/goway",
+      "exit_code": 0,
+      "log": "/private/tmp/stage9-b3-review-footprint-test.log"
+    },
+    {
+      "name": "catalogue",
+      "command": [
+        "python3",
+        "tools/goway_catalogue.py"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "docs",
+      "command": [
+        "make",
+        "docs-check"
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/stage9-b3-review-docs.log"
+    },
+    {
+      "name": "formatting",
+      "command": [
+        "gofmt",
+        "-w",
+        "changed Go files"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "review_footprint_before": {
+    "aggregate_families": {
+      "functions": 4366,
+      "baseline": 3799,
+      "ceiling": 4369
+    },
+    "aggregate_group": {
+      "functions": 2533,
+      "baseline": 2426,
+      "ceiling": 2790
+    },
+    "aggregate_slot_declaration": {
+      "functions": 1127,
+      "baseline": 1112,
+      "ceiling": 1279
+    },
+    "aggregate_slot_direct": {
+      "functions": 1490,
+      "baseline": 1490,
+      "ceiling": 1714
+    },
+    "aggregate_slot_nested": {
+      "functions": 2050,
+      "baseline": 2048,
+      "ceiling": 2356
+    },
+    "aggregate_slot_pivot": {
+      "functions": 2092,
+      "baseline": 2095,
+      "ceiling": 2410
+    },
+    "audit": {
+      "functions": 1337,
+      "baseline": 1313,
+      "ceiling": 1510
+    },
+    "column_encrypted_json": {
+      "functions": 1321,
+      "baseline": 1217,
+      "ceiling": 1400
+    },
+    "column_encrypted_text": {
+      "functions": 1231,
+      "baseline": 1127,
+      "ceiling": 1297
+    },
+    "column_enum": {
+      "functions": 1344,
+      "baseline": 1232,
+      "ceiling": 1417
+    },
+    "column_interval": {
+      "functions": 1293,
+      "baseline": 1178,
+      "ceiling": 1355
+    },
+    "column_json": {
+      "functions": 1391,
+      "baseline": 1280,
+      "ceiling": 1472
+    },
+    "column_nullable_encrypted_json": {
+      "functions": 1562,
+      "baseline": 1449,
+      "ceiling": 1667
+    },
+    "column_nullable_encrypted_text": {
+      "functions": 1472,
+      "baseline": 1359,
+      "ceiling": 1563
+    },
+    "column_nullable_interval": {
+      "functions": 1530,
+      "baseline": 1406,
+      "ceiling": 1617
+    },
+    "column_nullable_json": {
+      "functions": 1642,
+      "baseline": 1522,
+      "ceiling": 1751
+    },
+    "column_nullable_password": {
+      "functions": 1535,
+      "baseline": 1417,
+      "ceiling": 1630
+    },
+    "column_nullable_text": {
+      "functions": 1584,
+      "baseline": 1456,
+      "ceiling": 1675
+    },
+    "column_number": {
+      "functions": 1267,
+      "baseline": 1172,
+      "ceiling": 1348
+    },
+    "column_password": {
+      "functions": 1299,
+      "baseline": 1190,
+      "ceiling": 1369
+    },
+    "column_time": {
+      "functions": 1309,
+      "baseline": 1194,
+      "ceiling": 1374
+    },
+    "conditional_row": {
+      "functions": 1805,
+      "baseline": 1681,
+      "ceiling": 1934
+    },
+    "conditional_selected": {
+      "functions": 1649,
+      "baseline": 1511,
+      "ceiling": 1738
+    },
+    "conflict": {
+      "functions": 968,
+      "baseline": 944,
+      "ceiling": 1086
+    },
+    "conflict_advanced": {
+      "functions": 1808,
+      "baseline": 1817,
+      "ceiling": 2090
+    },
+    "correlation": {
+      "functions": 2991,
+      "baseline": 2752,
+      "ceiling": 3165
+    },
+    "cte_recursive": {
+      "functions": 1131,
+      "baseline": 1076,
+      "ceiling": 1238
+    },
+    "cursor": {
+      "functions": 1186,
+      "baseline": 1127,
+      "ceiling": 1297
+    },
+    "datatable_projection": {
+      "functions": 2951,
+      "baseline": 2951,
+      "ceiling": 3394
+    },
+    "distinct": {
+      "functions": 1174,
+      "baseline": 1135,
+      "ceiling": 1306
+    },
+    "each_writes": {
+      "functions": 879,
+      "baseline": 888,
+      "ceiling": 1022
+    },
+    "expr_arithmetic": {
+      "functions": 1256,
+      "baseline": 1162,
+      "ceiling": 1337
+    },
+    "expr_selected": {
+      "functions": 1698,
+      "baseline": 1551,
+      "ceiling": 1784
+    },
+    "extension_declaration": {
+      "functions": 11379,
+      "baseline": 30434,
+      "ceiling": 35000
+    },
+    "extension_handles": {
+      "functions": 1481,
+      "baseline": 1481,
+      "ceiling": 1704
+    },
+    "extension_slots": {
+      "functions": 2083,
+      "baseline": 2154,
+      "ceiling": 2478
+    },
+    "extension_slots_old": {
+      "functions": 9730,
+      "baseline": 30493,
+      "ceiling": 35067
+    },
+    "framework_attachmentstore": {
+      "functions": 4792,
+      "baseline": 4729,
+      "ceiling": 5439
+    },
+    "framework_auditstore": {
+      "functions": 4753,
+      "baseline": 4753,
+      "ceiling": 5466
+    },
+    "framework_challengestore": {
+      "functions": 2560,
+      "baseline": 2558,
+      "ceiling": 2942
+    },
+    "framework_countries": {
+      "functions": 4157,
+      "baseline": 4122,
+      "ceiling": 4741
+    },
+    "framework_extensionstore": {
+      "functions": 5640,
+      "baseline": 5407,
+      "ceiling": 6219
+    },
+    "framework_idempotencystore": {
+      "functions": 2253,
+      "baseline": 2249,
+      "ceiling": 2587
+    },
+    "framework_jobarchive": {
+      "functions": 2280,
+      "baseline": 2280,
+      "ceiling": 2622
+    },
+    "framework_mfastore": {
+      "functions": 2947,
+      "baseline": 2947,
+      "ceiling": 3390
+    },
+    "framework_notificationstore": {
+      "functions": 5165,
+      "baseline": 5119,
+      "ceiling": 5887
+    },
+    "framework_outbox": {
+      "functions": 2896,
+      "baseline": 2896,
+      "ceiling": 3331
+    },
+    "framework_sessionstore": {
+      "functions": 4166,
+      "baseline": 4166,
+      "ceiling": 4791
+    },
+    "framework_tokenstore": {
+      "functions": 5315,
+      "baseline": 5315,
+      "ceiling": 6113
+    },
+    "framework_webhookstore": {
+      "functions": 4769,
+      "baseline": 4705,
+      "ceiling": 5411
+    },
+    "global_scopes": {
+      "functions": 1389,
+      "baseline": 1374,
+      "ceiling": 1581
+    },
+    "has": {
+      "functions": 1412,
+      "baseline": 1302,
+      "ceiling": 1498
+    },
+    "has_one": {
+      "functions": 1403,
+      "baseline": 1281,
+      "ceiling": 1474
+    },
+    "input_column_kinds": {
+      "functions": 5321,
+      "baseline": 5088,
+      "ceiling": 5852
+    },
+    "input_key": {
+      "functions": 1049,
+      "baseline": 982,
+      "ceiling": 1130
+    },
+    "json_functions": {
+      "functions": 2739,
+      "baseline": 2736,
+      "ceiling": 3147
+    },
+    "json_paths": {
+      "functions": 6148,
+      "baseline": 6146,
+      "ceiling": 7068
+    },
+    "key_chunk": {
+      "functions": 862,
+      "baseline": 812,
+      "ceiling": 934
+    },
+    "lateral": {
+      "functions": 3049,
+      "baseline": 2852,
+      "ceiling": 3280
+    },
+    "lifecycle_changes": {
+      "functions": 1093,
+      "baseline": 1050,
+      "ceiling": 1208
+    },
+    "lifecycle_write": {
+      "functions": 973,
+      "baseline": 930,
+      "ceiling": 1070
+    },
+    "model_type": {
+      "functions": 299,
+      "baseline": 299,
+      "ceiling": 344
+    },
+    "models": {
+      "functions": 6838,
+      "baseline": 6147,
+      "ceiling": 7070
+    },
+    "models_1": {
+      "functions": 1751,
+      "baseline": 1619,
+      "ceiling": 1862
+    },
+    "models_3": {
+      "functions": 2605,
+      "baseline": 2435,
+      "ceiling": 2801
+    },
+    "morph": {
+      "functions": 1155,
+      "baseline": 1088,
+      "ceiling": 1252
+    },
+    "mutator_explicit": {
+      "functions": 1717,
+      "baseline": 1605,
+      "ceiling": 1846
+    },
+    "mutators": {
+      "functions": 855,
+      "baseline": 801,
+      "ceiling": 922
+    },
+    "nested_with": {
+      "functions": 1403,
+      "baseline": 1281,
+      "ceiling": 1474
+    },
+    "nullable_join_chain": {
+      "functions": 1854,
+      "baseline": 1695,
+      "ceiling": 1950
+    },
+    "observer_counts": {
+      "functions": 63,
+      "baseline": 63,
+      "ceiling": 73
+    },
+    "on_comparisons": {
+      "functions": 1593,
+      "baseline": 1454,
+      "ceiling": 1673
+    },
+    "onequery": {
+      "functions": 854,
+      "baseline": 803,
+      "ceiling": 924
+    },
+    "orm_binding": {
+      "functions": 1101,
+      "baseline": 1089,
+      "ceiling": 1253
+    },
+    "orm_factory": {
+      "functions": 1093,
+      "baseline": 1093,
+      "ceiling": 1257
+    },
+    "outbox_publisher": {
+      "functions": 1324,
+      "baseline": 1324,
+      "ceiling": 1523
+    },
+    "outer_join": {
+      "functions": 1789,
+      "baseline": 1668,
+      "ceiling": 1919
+    },
+    "pivot": {
+      "functions": 1072,
+      "baseline": 1005,
+      "ceiling": 1156
+    },
+    "prune_registry": {
+      "functions": 933,
+      "baseline": 933,
+      "ceiling": 1073
+    },
+    "q_join": {
+      "functions": 1766,
+      "baseline": 1598,
+      "ceiling": 1838
+    },
+    "q_select": {
+      "functions": 895,
+      "baseline": 836,
+      "ceiling": 962
+    },
+    "q_with": {
+      "functions": 1211,
+      "baseline": 1053,
+      "ceiling": 1211
+    },
+    "raw": {
+      "functions": 1096,
+      "baseline": 1045,
+      "ceiling": 1202
+    },
+    "raw_fragments": {
+      "functions": 1380,
+      "baseline": 1331,
+      "ceiling": 1531
+    },
+    "record_sets": {
+      "functions": 1294,
+      "baseline": 1288,
+      "ceiling": 1482
+    },
+    "records": {
+      "functions": 1327,
+      "baseline": 1313,
+      "ceiling": 1510
+    },
+    "relation_with": {
+      "functions": 2047,
+      "baseline": 1847,
+      "ceiling": 2125
+    },
+    "relation_write_attach": {
+      "functions": 1110,
+      "baseline": 1110,
+      "ceiling": 1277
+    },
+    "relation_write_declaration": {
+      "functions": 361,
+      "baseline": 361,
+      "ceiling": 416
+    },
+    "relation_write_sync": {
+      "functions": 1124,
+      "baseline": 1124,
+      "ceiling": 1293
+    },
+    "report_filters": {
+      "functions": 2112,
+      "baseline": 2095,
+      "ceiling": 2410
+    },
+    "report_pipeline": {
+      "functions": 2120,
+      "baseline": 1905,
+      "ceiling": 2191
+    },
+    "report_reads": {
+      "functions": 1063,
+      "baseline": 1063,
+      "ceiling": 1223
+    },
+    "result_cursor": {
+      "functions": 2229,
+      "baseline": 2229,
+      "ceiling": 2564
+    },
+    "result_reads": {
+      "functions": 1385,
+      "baseline": 1351,
+      "ceiling": 1554
+    },
+    "retrieval_read": {
+      "functions": 831,
+      "baseline": 826,
+      "ceiling": 950
+    },
+    "role_input_same": {
+      "functions": 1360,
+      "baseline": 1360,
+      "ceiling": 1564
+    },
+    "role_lookup_input": {
+      "functions": 1213,
+      "baseline": 1226,
+      "ceiling": 1410
+    },
+    "role_primary_number": {
+      "functions": 1182,
+      "baseline": 1195,
+      "ceiling": 1375
+    },
+    "role_primary_text": {
+      "functions": 1216,
+      "baseline": 1216,
+      "ceiling": 1399
+    },
+    "role_soft_read": {
+      "functions": 1548,
+      "baseline": 1548,
+      "ceiling": 1781
+    },
+    "role_soft_write": {
+      "functions": 620,
+      "baseline": 620,
+      "ceiling": 713
+    },
+    "role_source": {
+      "functions": 905,
+      "baseline": 905,
+      "ceiling": 1041
+    },
+    "role_time_read": {
+      "functions": 1394,
+      "baseline": 1394,
+      "ceiling": 1604
+    },
+    "rows_each": {
+      "functions": 899,
+      "baseline": 899,
+      "ceiling": 1034
+    },
+    "scalar_temporal": {
+      "functions": 2629,
+      "baseline": 2625,
+      "ceiling": 3019
+    },
+    "scalar_text": {
+      "functions": 2315,
+      "baseline": 2312,
+      "ceiling": 2659
+    },
+    "scoped_write": {
+      "functions": 1111,
+      "baseline": 1111,
+      "ceiling": 1278
+    },
+    "sensitive_models": {
+      "functions": 2821,
+      "baseline": 2606,
+      "ceiling": 2997
+    },
+    "source_write": {
+      "functions": 1302,
+      "baseline": 1311,
+      "ceiling": 1508
+    },
+    "subqueries": {
+      "functions": 3061,
+      "baseline": 2837,
+      "ceiling": 3263
+    },
+    "table_ref": {
+      "functions": 854,
+      "baseline": 803,
+      "ceiling": 924
+    },
+    "terminal_adjustment": {
+      "functions": 1382,
+      "baseline": 1382,
+      "ceiling": 1590
+    },
+    "terminal_create_or_first": {
+      "functions": 880,
+      "baseline": 880,
+      "ceiling": 1012
+    },
+    "terminal_explain": {
+      "functions": 1322,
+      "baseline": 1318,
+      "ceiling": 1516
+    },
+    "terminal_lookup": {
+      "functions": 893,
+      "baseline": 893,
+      "ceiling": 1027
+    },
+    "terminal_prune": {
+      "functions": 930,
+      "baseline": 930,
+      "ceiling": 1070
+    },
+    "through": {
+      "functions": 986,
+      "baseline": 928,
+      "ceiling": 1068
+    },
+    "transaction_correlation": {
+      "functions": 2908,
+      "baseline": 2908,
+      "ceiling": 3345
+    },
+    "transaction_joins": {
+      "functions": 1835,
+      "baseline": 1835,
+      "ceiling": 2111
+    },
+    "transaction_records": {
+      "functions": 1406,
+      "baseline": 1296,
+      "ceiling": 1491
+    },
+    "uuid_seeks": {
+      "functions": 1023,
+      "baseline": 1023,
+      "ceiling": 1177
+    },
+    "validation_database": {
+      "functions": 1441,
+      "baseline": 1441,
+      "ceiling": 1658
+    },
+    "value_sets": {
+      "functions": 2237,
+      "baseline": 2230,
+      "ceiling": 2565
+    },
+    "window_frames": {
+      "functions": 1769,
+      "baseline": 1767,
+      "ceiling": 2033
+    },
+    "window_rank": {
+      "functions": 1346,
+      "baseline": 1345,
+      "ceiling": 1547
+    },
+    "write_unset": {
+      "functions": 266,
+      "baseline": 266,
+      "ceiling": 306
+    }
+  },
+  "review_footprint_changes": {
+    "each_soft_writes": {
+      "before": null,
+      "after": {
+        "functions": 1567,
+        "baseline": 1567,
+        "ceiling": 1803
+      }
+    }
+  },
+  "review_new_probe": {
+    "probe": "each_soft_writes",
+    "functions": 1567,
+    "ceiling": 1803,
+    "archive_bytes": 6594812,
+    "toolchain": "go version go1.27.1 darwin/arm64"
+  },
+  "review": {
+    "findings": "last-20.md: caller input immutability restored with exact before-write inspection.",
+    "assertion_sweep": {
+      "linkqueries/insert_select_postgres_test.go": "Reused assignments preserve raw tag, exact amount/JSON/created time and omitted ID/UpdatedAt.",
+      "linkqueries/lifecycle_postgres_test.go": "Reused pivot input preserves raw role and omitted derived keys/ID/UpdatedAt.",
+      "hookqueries/hooks_postgres_test.go": "Reused input preserves nickname value and omitted Email/ID/IntroducerID.",
+      "inputqueries/inputs_postgres_test.go": "Reused distinct inputs preserve email/nullable label and omitted ID.",
+      "mutatorqueries/mutators_postgres_test.go": "Exact original raw inputs are inspected before normalization; reusable persisted-result oracle retained.",
+      "observerqueries/observers_postgres_test.go": "Exact raw input and omitted ID inspected before local/observer callbacks; reusable returned-value oracle retained.",
+      "remaining_tests": "Removed diagnostic strings and changed conditions compared against HEAD across all Stage 9 consumer test edits. Binary ownership, audit disclosure, timestamps, scopes, SQL, errors, and relocated legacy oracles remain."
+    },
+    "resolved_blocker": "linkqueries each_postgres_test.go and each_modes_postgres_test.go now use ORM throughout.",
+    "runtime": "Both terminals validate the declaration-owned soft token and use writeEach, preserving limits, scopes, callback isolation, row closure, locking, atomicity and reconciliation.",
+    "postgres": "New bound/veto/cancellation persisted-state rollback regressions compile; no PostgreSQL run.",
+    "command_corrections": [
+      "Initial make docs-check lacked exported Go environment and hit sandbox default-cache denial; rerun with the required r7 environment passed."
+    ]
+  },
+  "integration_batch7b": {
+    "historical_lane_source_hashes": {
+      "blueprint/goway-data-layer/compilefail-mapping.tsv": "06addb9958f705f9b84f9816a5b16ada72037d0af27631ccc882210ba5a5da73",
+      "database/orm/README.md": "2fd52677399a6124cc73bbdaf1bc80748e3d3ac590d0f83d8c68845a9b5be991",
+      "database/orm/column_role.go": "e33d4bd7c36ac2ed8e25b6c2b6ffbfd9ae30979ae6342fda2489a95b809738b1",
+      "database/orm/method_surface_test.go": "73f6b32f2d87a6615b93339b90ebdfe3fda1c0a5d80d573e3e755a9b9cfbc7d4",
+      "database/orm/testdata/public-methods.txt": "5923a7dbbcdc8e7609988b890b0ac693e6d7d5a046431a2283cfc225134ff861",
+      "database/orm/write_draft.go": "c6e96d43406239dbf8e61894675918205b52248142b6aaa9a6a4095eb0163514",
+      "database/orm/write_each.go": "974ea7feac1cbf8208ca8ad899111575819cf605885afe0fe0951ca5f0dea342",
+      "database/orm/write_each_soft_test.go": "9658d754907edd2d0e196db6d80b84eeac2b7d307b19b6484545f20973da2046",
+      "database/orm/write_unset_test.go": "7131581e9a67a6f784398a0d4d772840b87bc144ddc329c7642c7a8b67dd6aff",
+      "tests/fixtures/consumer/binarymodels/README.md": "26718f24bb3f4f3da28f43b46e95f24c19541d7081af3d8a4da479b83cc1563b",
+      "tests/fixtures/consumer/binarymodels/draft_test.go": "71d9e4f3c3d91f958143a88059577802dfc64707e386c803bcc5424c07841233",
+      "tests/fixtures/consumer/binarymodels/orm.go": "d1a7febdb6e8869ba836a2d91aca446eaf102ff62543717dec37747411740c51",
+      "tests/fixtures/consumer/binarymodels/orm_test.go": "e895d535a24227a3e4d955db19e93a71b7b71f0a3c7e716f5c0b5dd26ef98812",
+      "tests/fixtures/consumer/binarymodels/postgres_test.go": "91bb22957f2d46591a6aa2a26d87e837ce9deb6b55aeab986d66bbbbfaed5ccd",
+      "tests/fixtures/consumer/binarymodels/record.go": "96f9cc2cb3c67494dde53fc23a99a1780ae3484e8818868bdfa31a7fd1179815",
+      "tests/fixtures/consumer/binarymodels/record_test.go": "a82830bbf873b75c9e33c39841bc5684018c49db69038dbce61a008f8b24e646",
+      "tests/fixtures/consumer/eventqueries/README.md": "a91728048d506df57a50e5f2a2e05cf4d4e6b4fc30dab64740c9046a9f123655",
+      "tests/fixtures/consumer/eventqueries/configured_outbox_postgres_test.go": "19ed54d64e95922311156cdbebc7c162aaaef6e75553b297fb989c8f93cf02e8",
+      "tests/fixtures/consumer/eventqueries/durable.go": "135c08894178a892ba9b0877c8eb9c2667fe02eab3b2081f5a2f9c098f6a4b54",
+      "tests/fixtures/consumer/eventqueries/durable_postgres_test.go": "464a3e737060e3f8ce451fbcc19d84d1d1515709155d9ce363ff8abadbb631a8",
+      "tests/fixtures/consumer/eventqueries/events.go": "0699c44fa98077ebcf55fc55fe9ccadf9900e89705efbd3cd9a05c06b6c0db57",
+      "tests/fixtures/consumer/eventqueries/events_postgres_test.go": "3628bbdf4acc97d04d4c6f81faa6fc543f769a477bab45039f64bc1de8feda97",
+      "tests/fixtures/consumer/eventqueries/orm.go": "bdec282865cdb3a261b3c1a7af84c88e1b10f663bb2df8ab670631b8feeea606",
+      "tests/fixtures/consumer/eventqueries/orm_test.go": "9e270ddd7140b14e82e2f26165033e4dd6ee75f14af65cd66837ee88062c9276",
+      "tests/fixtures/consumer/hookqueries/hooks_postgres_test.go": "8175ef7d8cefd8ceca42c33bfaf7b37476165a1ee88dac5d5baab8eb01f74b74",
+      "tests/fixtures/consumer/hookqueries/member.go": "2455256921dbfc7a0846061fc8201f44b0a453bd5a6ba19d8433b0c2932562ec",
+      "tests/fixtures/consumer/hookqueries/orm_hooks.go": "954137e0c486626385960149c794ce67ec25cd24738a8cd5ddc7ebccfae92232",
+      "tests/fixtures/consumer/inputqueries/README.md": "bdaafdb2bb5047aa98dfdb8b2ad0d23364043bf8b5587453eaa52d1c667f0ad9",
+      "tests/fixtures/consumer/inputqueries/hooks.go": "9b863b1e164198bfe9bf9b50d38b8c969346d6a558f2450318005bfae8b488d3",
+      "tests/fixtures/consumer/inputqueries/inputs_postgres_test.go": "951e0ffec003166fd335778a28273277010b82543f0b95aa4e4d5a0ef081543a",
+      "tests/fixtures/consumer/inputqueries/inputs_test.go": "cedd4ebc9f18753cf62a64a0752542bf9e48bea60307b6418bfd42140ab2c069",
+      "tests/fixtures/consumer/inputqueries/orm.go": "f00d23394435fa7f6ec3f0c7ff8e02ffe09237c7315e9aecc7f79507cba4ffa7",
+      "tests/fixtures/consumer/linkqueries/README.md": "3cc0e0847e4a69b01fc1fc40f7c7bb3504ea10f182932eb14eb1537c54d3cf60",
+      "tests/fixtures/consumer/linkqueries/concurrency_postgres_test.go": "048bc704f0c99100561ca79c540a9064f8503fd9ed4f53f73278d23107ca98f8",
+      "tests/fixtures/consumer/linkqueries/each_concurrency_postgres_test.go": "dccf01a2c09529c527b9cf3933d2244233b8e9e16c36ac9c2119ce3e55c95a3f",
+      "tests/fixtures/consumer/linkqueries/each_modes_postgres_test.go": "d68f6a4a58a54557b755594e822f15a77f9348b9a665f0c1c4fb328618468a11",
+      "tests/fixtures/consumer/linkqueries/each_postgres_test.go": "294a9be08eec8acfb70d9298e99117d9b1263964f42343964a3cf84bff0ffd02",
+      "tests/fixtures/consumer/linkqueries/fixture_test.go": "941f5de3c553b74a70e67c77bc4cd8c27bf1bebd3483b297ae3b37289c4bbf0a",
+      "tests/fixtures/consumer/linkqueries/hooks.go": "2d076cd0ab7d7d7d0da0f3b537eeb72589231c0c0fb13077a692d05bbe0a384c",
+      "tests/fixtures/consumer/linkqueries/insert_select_postgres_test.go": "600488e2c7cd76417faf47f565ab377ed7ff5a37a40435b90aee3442fea61869",
+      "tests/fixtures/consumer/linkqueries/keys_postgres_test.go": "dfba09678a053382046a527f892ad043d24343022f71af31911f09a80f31bfbb",
+      "tests/fixtures/consumer/linkqueries/legacy_creation_bridge_postgres_test.go": "d99897cff904bd7f338139a6a0319a129fc12322ee30172a322f1d8016a8fc7c",
+      "tests/fixtures/consumer/linkqueries/lifecycle_postgres_test.go": "2e2fc912958c7b98481f570b68c42a7685661154175f083a711f3c5d8572117a",
+      "tests/fixtures/consumer/linkqueries/lookup_concurrency_postgres_test.go": "da414be3457628ca12e0ac4131d6fb82eab48e48796a67e4f9245e128a9c1165",
+      "tests/fixtures/consumer/linkqueries/lookup_postgres_test.go": "5ef5d043e631bb820823c254698fe07fa9d822249ad05521177f2d5c2e5e9b25",
+      "tests/fixtures/consumer/linkqueries/orm.go": "68c94be5d70ad1dde3a9f864a9cd81554033478b54cdf419843d169f4ef52d93",
+      "tests/fixtures/consumer/linkqueries/orm_hooks.go": "c36ddea3d2d4233c6f5e07779bb45e9d9f9833bc2b8928b0ed3f2daf01d77eed",
+      "tests/fixtures/consumer/linkqueries/source_write_postgres_test.go": "a8720c553d7b1806dd9a3718cdc8a6fc6716db9dc30d460fa79f9fe2e5c6c5c5",
+      "tests/fixtures/consumer/mutatorqueries/README.md": "d1bf43ac062aca63b3be290035b406bf95feac08c94012ba625727ec7efab421",
+      "tests/fixtures/consumer/mutatorqueries/mutators_postgres_test.go": "a59078d2669e9cee1ab609b723ddcb53294878e7705a4ae1311ab62032ab5a43",
+      "tests/fixtures/consumer/mutatorqueries/orm.go": "3dd0c4aee96285416232d2553692181c7bd514416505d381bcb498c90effea0d",
+      "tests/fixtures/consumer/mutatorqueries/reference_test.go": "b4e35215ab114da2123b16ec9cf5de465df15930c6767f4515a2d70f46cfc415",
+      "tests/fixtures/consumer/observerqueries/models.go": "5c51bab6c4264c5b8c3d931dbdfcffc6e96adaf5dba2c84dc61a84de05fa19d5",
+      "tests/fixtures/consumer/observerqueries/observers_postgres_test.go": "52c0d20297e07695e1c193df644a4098ea827ad5419e961b6531bf73300603b5",
+      "tests/fixtures/consumer/observerqueries/orm.go": "e8a06a95bc9657e8f654b8d300f03f2263c3a07a8a14b1bddae73649ad1aa0a4",
+      "tests/fixtures/consumer/testdata/compilefail/binary_comparison_type/invalid.go": "d0bac7d6efa9fb1747c8da361d91d0db6444f24d7f27cebcd91b8cdec5232eef",
+      "tests/fixtures/consumer/testdata/compilefail/binary_identity_key/invalid.go": "ef71ec13e36011eb67b21f2aa4e40245999b1037536f9c952e5fe51e421302f6",
+      "tests/fixtures/consumer/testdata/compilefail/binary_mutation_input/invalid.go": "3d3ea2bfe004615ca340fab69d1144e982ec6fd94de33c7d6068954c916819ac",
+      "tests/fixtures/consumer/testdata/compilefail/binary_nullable_projection/invalid.go": "25a56030d7bb73713e3c4d2a5e5f57eb1ff7cb5e52bafc8a66c883f736402dbe",
+      "tests/fixtures/consumer/testdata/compilefail/binary_scalar_key/invalid.go": "79b269bbaf5289ef7ea5edfbdeec235d8f286d646cc1c6f0383c942abb6d041d",
+      "tests/fixtures/consumer/testdata/compilefail/binary_scope_owner/invalid.go": "90ae8b7370be97cbcd56a0ce985ba4bbebf9ddf3fe07afb006c0750902049df6",
+      "tests/fixtures/consumer/testdata/compilefail/each_force_owner/invalid.go": "638efbae48ba4b0ecb0cec3f5e8edb1113848c3780dd2fa768fee5c50d261fd9",
+      "tests/fixtures/consumer/testdata/compilefail/each_force_token/invalid.go": "c4977f992ddaa918ff8785729d190b487607e1704ffcdec6c4f6281a4b33ee54",
+      "tests/fixtures/consumer/testdata/compilefail/each_restore_owner/invalid.go": "e1db4f58ac6323f0b199bf905ba5c01daa6716fd5a2cb99f2e5bcec02949de66",
+      "tests/fixtures/consumer/testdata/compilefail/each_restore_result/invalid.go": "fb19d5999de4006348b34e28dc8c73943b879ddbe01a6e19102cdb4373c5268e",
+      "tests/fixtures/consumer/testdata/compilefail/encrypted_conflict_update/invalid.go": "8239a7677f163662c2f20f1b1fa25f2face3e8d516422dd402fdb2a958ae87d8",
+      "tests/fixtures/consumer/testdata/compilefail/encrypted_draft_plaintext/invalid.go": "3a51192d6f67dc2ff7188a4ec139e828c130b5b899320c04ee84cf1f4423351e",
+      "tests/fixtures/consumer/testdata/compilefail/encrypted_field_order/invalid.go": "e8700eba7355f7a6d37b8f433234930b84db143167740460461f0246a05b1977",
+      "tests/fixtures/consumer/testdata/compilefail/encrypted_field_predicate/invalid.go": "87e609398d9b8c210867bcb8114ebfb0c64f1e4907a48196985c9cd6395ac58c",
+      "tests/fixtures/consumer/testdata/compilefail/write_unset_owner/invalid.go": "51a56460a59a7e515bd079f41d6d53e6f64fcd50c9b32f0c12a01137b421079b",
+      "tests/fixtures/consumer/types_test.go": "5835ffad23d92f6e82b2d8e37674d39f7de1df9214714da186f1e4284c00199f",
+      "tests/fixtures/consumer/upsertqueries/README.md": "8b3d6bc3f6e3553759d8ff28f599844c9687e5637bc7934748754f6bc0abc3d0",
+      "tests/fixtures/consumer/upsertqueries/calculations_postgres_test.go": "0eea40c74e42983d44d44bd59a462d0c02cdab24dd078b2134596230b7388891",
+      "tests/fixtures/consumer/upsertqueries/orm.go": "8d9c0b2c49559db97c429d329cf79bdd2c8e147af5fad393b910faeec8032fe2",
+      "tests/fixtures/consumer/upsertqueries/orm_test.go": "bea3483e0ba7d464b1edee1be14af8b1adf7dabc394b7789c0af838316e8fce8",
+      "tests/fixtures/consumer/upsertqueries/upserts_postgres_test.go": "7895e86c388b393eb3f0c8bfb257ad71fa77e466bdb59ef1128627449a18bee6",
+      "tests/fixtures/consumer/vault/README.md": "33f1420cae371f3ca3d333a5168e7b72acafbf7e0200ce75bd154a7fd3ace3f9",
+      "tests/fixtures/consumer/vault/entry_postgres_test.go": "7bfda64d0b93dae0069918629f19415725bdee0fb0adafcfdf7b810947cabb44",
+      "tests/fixtures/consumer/vault/orm.go": "a470833c7ad0da5a9f100b93b3501704e7d1c74acbfe73bf9b4194eb47942085",
+      "tests/fixtures/consumer/vault/orm_test.go": "390d04c78ae7ed89c46967f115dfd0d0bc035944099512f16454ab76b7b39d98",
+      "tests/fixtures/goway/compiler_cases_test.go": "4f8d427fe06ece201bbb0c576742e367dc37fc8bf8fd96c81773e2b719d79421",
+      "tests/fixtures/goway/footprint_test.go": "cea6a23d98e49bbc667b847ff0f8ee62cf3c496ea1fd8cf15400483f20479147",
+      "tests/fixtures/goway/testdata/compilefail/each_force_owner/invalid.go": "638efbae48ba4b0ecb0cec3f5e8edb1113848c3780dd2fa768fee5c50d261fd9",
+      "tests/fixtures/goway/testdata/compilefail/each_force_token/invalid.go": "c4977f992ddaa918ff8785729d190b487607e1704ffcdec6c4f6281a4b33ee54",
+      "tests/fixtures/goway/testdata/compilefail/each_restore_owner/invalid.go": "e1db4f58ac6323f0b199bf905ba5c01daa6716fd5a2cb99f2e5bcec02949de66",
+      "tests/fixtures/goway/testdata/compilefail/each_restore_result/invalid.go": "fb19d5999de4006348b34e28dc8c73943b879ddbe01a6e19102cdb4373c5268e",
+      "tests/fixtures/goway/testdata/compilefail/write_unset_owner/invalid.go": "51a536b1d8e47551df92275909697a21a5f39db585b88e0c7d75df2dc7f30966",
+      "tests/fixtures/goway/testdata/footprint/each_soft_writes/p.go": "771a3aa99891418e579302b06c9aba8c781369a18ca6042c6d944670fdbfb9f9",
+      "tests/fixtures/goway/testdata/footprint/write_unset/p.go": "2ecd6096e1bd569bf6b5f5fe04e70ccae9530c88d1effad1504600c0887c5ab5"
+    },
+    "base_commit": "d802336",
+    "status": "integrated; requested acceptance passed with targeted corrections; pending lead commit",
+    "worktree": "Foundry-Go-goway-int2",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r8",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "conflicts": {
+      "lane_b": 17,
+      "lane_c": 5,
+      "resolution": "preserve both lane behaviors; union registries and mapping rows; retain batch7a historical evidence and handwritten field documentation"
+    },
+    "catalogue": {
+      "total": 1032,
+      "ported": 570,
+      "port": 18,
+      "unaffected": 444
+    },
+    "goway_compiler_cases": 819,
+    "goway_footprint_probes": 134,
+    "existing_footprint_ceilings": "unchanged",
+    "generated_outputs": "not hand edited; checked against generation owner",
+    "postgres": "not run; lead-owned service gate",
+    "release_inventory": "new runtime Go sources pinned; no new non-Go testdata assets",
+    "commands": {
+      "go build ./...": {
+        "result": "pass",
+        "log": "build.log",
+        "note": "exit 0; sandbox module-stat-cache write warning only"
+      },
+      "go vet ./...": {
+        "result": "pass",
+        "log": "vet.log"
+      },
+      "python3 tools/goway_catalogue.py": {
+        "result": "pass",
+        "log": "catalogue.log"
+      },
+      "go test -race -timeout=20m ./database/... ./internal/...": {
+        "result": "pass after targeted surface rerun",
+        "log": "race.log",
+        "correction": "six rows function entries reordered to match union registry; entries and signatures unchanged"
+      },
+      "go test -race -timeout=20m ./database/orm -run TestPublicMethodSurface": {
+        "result": "pass",
+        "log": "surface-rerun.log"
+      },
+      "make fixture-check": {
+        "result": "pass",
+        "log": "fixtures.log",
+        "coverage": "vet and tests for plugin_base, plugin_dep, consumer and goway; optional live services not enabled"
+      },
+      "make generate-check": {
+        "result": "pass",
+        "log": "generate.log",
+        "note": "no regeneration required; generated outputs and ownership manifests unchanged"
+      },
+      "make release-tools-check": {
+        "result": "pass",
+        "log": "release.log",
+        "note": "Go release inventory tests and all 26 Python tests passed"
+      },
+      "make agent-smoke": {
+        "result": "pass segmented: 486 passed initially, all 8 corrected probes passed on targeted rerun",
+        "log": "agent.log",
+        "subtests": 494,
+        "initial_passed": 486,
+        "initial_failed": [
+          "TestRealGoplsConsumer/typed-source-update-returning",
+          "TestRealGoplsConsumer/typed-insert-select-values",
+          "TestRealGoplsConsumer/typed-insert-select-returning",
+          "TestRealGoplsConsumer/typed-per-model-create",
+          "TestRealGoplsConsumer/typed-lock-transaction",
+          "TestRealGoplsConsumer/typed-lock-clause-transaction",
+          "TestRealGoplsConsumer/typed-soft-delete-pivot",
+          "TestRealGoplsConsumer/typed-model-chunk-callback"
+        ],
+        "tool": "/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls"
+      },
+      "agent-smoke targeted rerun": {
+        "result": "pass",
+        "log": "agent-rerun.log",
+        "subtests": 8,
+        "command": "go test -timeout=20m -count=1 -v ./internal/agent -run '^TestRealGoplsConsumer$/^(typed-source-update-returning|typed-insert-select-values|typed-insert-select-returning|typed-per-model-create|typed-lock-transaction|typed-lock-clause-transaction|typed-soft-delete-pivot|typed-model-chunk-callback)$'"
+      },
+      "go vet ./internal/agent": {
+        "result": "pass",
+        "log": "agent-vet-final.log"
+      },
+      "go test -race -timeout=20m ./internal/agent": {
+        "result": "pass",
+        "log": "agent-race-final.log"
+      },
+      "gofmt (repository format-go.sh check)": {
+        "result": "pass",
+        "log": "gofmt.log"
+      },
+      "make docs-check": {
+        "result": "pass",
+        "log": "docs.log"
+      },
+      "git diff --check; git diff --cached --check": {
+        "result": "pass",
+        "log": "diff-check.log"
+      }
+    },
+    "remaining_scope": "Stage 9 remains in progress; remaining caller migration and generated cleanup are not completed by this integration",
+    "commit": "none",
+    "log_sha256": {
+      "release.log": "d67e6b28bf853d638070afc755c3e7a9f6a4da280dff3a8967f813cf5aea3d57",
+      "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "catalogue.log": "8e7dcb91c59cad1a8ce2cb7500ccc0d09e1e176bb6d08e24a70caf84f07157da",
+      "apply-c.log": "bf429680feb7959daa13b219270083dc39f5d7625a832b20af07adb46f3356c6",
+      "apply-b.log": "c5ee1d68b3d22a42dd282d6a21d03721a50be10af4fdff69d9af890984d40fb4",
+      "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "docs.log": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06",
+      "gofmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "race.log": "51a3b934b7fa7fae62b05f5d23706e479214bc3867bd82215e31ca85922fcd47",
+      "surface-rerun.log": "e814dc8f40104b437a66fbdf7fd2e7557be115339bf19a5964cab6e5274ad994",
+      "agent-race-final.log": "e36ed2f19329031e873b97f552fd38d20361c100aede081a6317c8a21fe2ddc5",
+      "agent-rerun.log": "01aec46c42833e364ca91c19cc47c107406a9463934b44df596a08af604574d9",
+      "fixtures.log": "d79ce26b392ae9b923fc1c6d7e0e457083ac9af003227a8fe18ef1cd9a88ea3f",
+      "agent-vet-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "agent.log": "ad36fe1c36c37f05eae41a4db00079349ef21cb23558919bb430215fb9678cb5",
+      "generate.log": "aff9fb69af141873e6432dbf8aac79dce91e16c5bcf0f4ccc0cf5187ac3d14e4",
+      "build.log": "91daa536af1fc8eac86a9111c0e7b0199cb51a3ab4bd4003f3776b7589e2428c"
+    }
+  }
+}

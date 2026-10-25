@@ -10,6 +10,7 @@ import (
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -30,7 +31,7 @@ func (e *chunkExecutor) Query(ctx context.Context, sql string, args ...any) (*da
 
 func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
-		base := models.QueryUsers().OrderBy(models.UserFields().Age.Asc())
+		base := models.Users.Query().OrderBy(models.Users.Age.Asc())
 		for _, test := range []struct{ size, offset, limit int }{{1, 0, 3}, {2, 0, 3}, {3, 1, 1}, {2, 1, 10}, {1, 5, 2}, {2, 0, 0}} {
 			e := &chunkExecutor{Executor: tx}
 			var got []model.ID[models.User]
@@ -45,7 +46,7 @@ func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 					got = append(got, u.ID)
 				}
 				// The parent read must be closed before callback queries on this Tx.
-				_, err := models.QueryUsers().Count(t.Context(), tx)
+				_, err := models.Users.Query().Count(t.Context(), tx)
 				return err
 			})
 			if err != nil {
@@ -65,9 +66,9 @@ func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 				t.Fatal("later chunk reused caller backing array")
 			}
 		}
-		limits := query.DefaultRelationLimits()
+		limits := orm.DefaultRelationLimits()
 		limits.MaxRows = 2
-		eager := base.Limit(3).With(models.UserRelations().Orders).WithRelationLimits(limits)
+		eager := orm.WithRelationLimits(base.Limit(3).With(models.UserLinks.Orders), limits)
 		e := &chunkExecutor{Executor: tx}
 		seen := 0
 		if err := eager.Chunk(t.Context(), e, 1, func(batch []models.User) error {
@@ -85,18 +86,18 @@ func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 		}
 		// Each automatically uses complete batches when relations are requested.
 		for i := 0; i < query.DefaultChunkSize; i++ {
-			if _, err := models.QueryUsers().Create(t.Context(), tx, models.UserDraft{}.SetEmail("chunk@example.test").SetAge(50+i).SetStatus(models.StatusActive).SetLevel(models.LevelBasic)); err != nil {
+			if _, err := models.Users.Insert(t.Context(), tx, models.Users.Email.Set("chunk@example.test"), models.Users.Age.Set(50+i), models.Users.Status.Set(models.StatusActive), models.Users.Level.Set(models.LevelBasic)); err != nil {
 				return err
 			}
 		}
 		e = &chunkExecutor{Executor: tx}
 		seen = 0
-		if err := base.With(models.UserRelations().Orders).Each(t.Context(), e, func(u models.User) error {
+		if err := base.With(models.UserLinks.Orders).Each(t.Context(), e, func(u models.User) error {
 			if !u.Orders.IsLoaded() {
 				t.Fatal("Each did not eager load")
 			}
 			seen++
-			_, err := models.QueryUsers().Count(t.Context(), tx)
+			_, err := models.Users.Query().Count(t.Context(), tx)
 			return err
 		}); err != nil {
 			return err
@@ -110,17 +111,17 @@ func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 
 func TestPostgresPrimaryKeyChunksOwnBoundariesDuringUpdates(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, _ []models.User) error {
-		u := models.UserFields()
-		expected, err := models.QueryUsers().OrderBy(u.ID.Asc()).All(t.Context(), tx)
+		u := models.Users
+		expected, err := models.Users.Query().OrderBy(u.ID.Asc()).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
-		q := models.QueryUsers().Where(u.Status.Eq(models.StatusActive))
+		q := models.Users.Query().Where(u.Status.Eq(models.StatusActive))
 		var visited []model.ID[models.User]
-		if err := q.ChunkByID(t.Context(), tx, 1, func(batch []models.User) error {
+		if err := orm.ChunkByKey(t.Context(), tx, q, models.Users.ID, 1, func(batch []models.User) error {
 			for i, user := range batch {
 				visited = append(visited, user.ID)
-				if _, err := models.QueryUsers().Update(t.Context(), tx, user.ID, models.UserDraft{}.SetStatus(models.StatusDisabled)); err != nil {
+				if _, err := models.Users.Update(t.Context(), tx, user.ID, models.Users.Status.Set(models.StatusDisabled)); err != nil {
 					return err
 				}
 				batch[i].ID = model.ID[models.User]{}
@@ -141,20 +142,20 @@ func TestPostgresPrimaryKeyChunksOwnBoundariesDuringUpdates(t *testing.T) {
 			return err
 		}
 		for _, code := range []models.CountryCode{"AA", "BB", "CC", "DD"} {
-			if _, err := models.QueryCountries().Create(t.Context(), tx, models.CountryDraft{}.SetCode(code).SetName("country")); err != nil {
+			if _, err := models.Countries.Insert(t.Context(), tx, models.Countries.Code.Set(code), models.Countries.Name.Set("country")); err != nil {
 				return err
 			}
 		}
 		var codes []models.CountryCode
-		countries := models.QueryCountries().OrderBy(models.CountryFields().Code.Desc()).Limit(3)
-		if err := countries.EachByID(t.Context(), tx, 2, func(c models.Country) error { codes = append(codes, c.Code); return nil }); err != nil {
+		countries := models.Countries.Query().OrderBy(models.Countries.Code.Desc()).Limit(3)
+		if err := orm.EachByKey(t.Context(), tx, countries, models.Countries.Code, 2, func(c models.Country) error { codes = append(codes, c.Code); return nil }); err != nil {
 			return err
 		}
 		if !slices.Equal(codes, []models.CountryCode{"DD", "CC", "BB"}) {
 			t.Fatal("descending natural-key traversal lost limit", codes)
 		}
 		var retained [][]models.Country
-		if err := models.QueryCountries().ChunkByID(t.Context(), tx, 2, func(batch []models.Country) error { retained = append(retained, batch); return nil }); err != nil {
+		if err := orm.ChunkByKey(t.Context(), tx, models.Countries.Query(), models.Countries.Code, 2, func(batch []models.Country) error { retained = append(retained, batch); return nil }); err != nil {
 			return err
 		}
 		if len(retained) != 2 || retained[0][0].Code != "AA" || retained[1][0].Code != "CC" {
@@ -166,7 +167,7 @@ func TestPostgresPrimaryKeyChunksOwnBoundariesDuringUpdates(t *testing.T) {
 
 func TestPostgresChunkFailureAndCallbackSemantics(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
-		q := models.QueryUsers().OrderBy(models.UserFields().Age.Asc())
+		q := models.Users.Query().OrderBy(models.Users.Age.Asc())
 		stop := errors.New("stop chunk")
 		e := &chunkExecutor{Executor: tx, failAt: 2, err: stop}
 		seen := 0
@@ -196,7 +197,7 @@ func TestPostgresChunkFailureAndCallbackSemantics(t *testing.T) {
 			t.Fatal("callback panic held database rows", err)
 		}
 		seen = 0
-		if err := q.With(models.UserRelations().SingleOrder).Chunk(t.Context(), tx, 1, func([]models.User) error { seen++; return nil }); !errors.Is(err, database.TooManyRows) || seen != 0 {
+		if err := q.With(models.UserLinks.SingleOrder).Chunk(t.Context(), tx, 1, func([]models.User) error { seen++; return nil }); !errors.Is(err, database.TooManyRows) || seen != 0 {
 			t.Fatal("failed eager batch partially published", err)
 		}
 		if _, err := tx.Exec(t.Context(), `UPDATE users SET status = 'invalid' WHERE id = $1`, users[1].ID.String()); err != nil {
@@ -211,15 +212,19 @@ func TestPostgresChunkFailureAndCallbackSemantics(t *testing.T) {
 }
 
 func TestChunkInvalidInputsUseNoDatabase(t *testing.T) {
-	q := models.QueryUsers()
+	q := models.Users.Query()
 	noop := func([]models.User) error { return nil }
 	for _, run := range []func() error{
 		func() error { return q.Chunk(t.Context(), queryfixture.NoQueries(t), 0, noop) },
-		func() error { return q.Offset(1).ChunkByID(t.Context(), queryfixture.NoQueries(t), 2, noop) },
 		func() error {
-			return q.OrderBy(models.UserFields().Age.Asc()).ChunkByID(t.Context(), queryfixture.NoQueries(t), 2, noop)
+			return orm.ChunkByKey(t.Context(), queryfixture.NoQueries(t), q.Offset(1), models.Users.ID, 2, noop)
 		},
-		func() error { return q.ChunkByID(t.Context(), queryfixture.NoQueries(t), 2, nil) },
+		func() error {
+			return orm.ChunkByKey(t.Context(), queryfixture.NoQueries(t), q.OrderBy(models.Users.Age.Asc()), models.Users.ID, 2, noop)
+		},
+		func() error {
+			return orm.ChunkByKey(t.Context(), queryfixture.NoQueries(t), q, models.Users.ID, 2, nil)
+		},
 	} {
 		if err := run(); err == nil {
 			t.Fatal("invalid chunk accepted")

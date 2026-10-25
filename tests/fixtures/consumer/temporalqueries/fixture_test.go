@@ -7,7 +7,9 @@ import (
 
 	"foundry.test/consumer/temporalqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
@@ -48,11 +50,12 @@ func runTemporal(t *testing.T, check func(*database.Tx, []temporalqueries.Sample
 			if err != nil {
 				return err
 			}
-			draft := temporalqueries.SampleDraft{}.SetID(i + 1).SetMillis(at.UnixMilli()).SetAt(at).SetInstant(instant).SetDate(date).SetLocal(local).SetClock(clock)
+			f := temporalqueries.Samples
+			assignments := []orm.Assignment[temporalqueries.Sample]{f.ID.Set(i + 1), f.Millis.Set(at.UnixMilli()), f.At.Set(at), f.Instant.Set(instant), f.Date.Set(date), f.Local.Set(local), f.Clock.Set(clock)}
 			if i != 1 {
-				draft = draft.SetMaybeAt(at).SetMaybeDate(date).SetMaybeLocal(local).SetMaybeClock(clock)
+				assignments = append(assignments, f.MaybeAt.Set(at), f.MaybeDate.Set(date), f.MaybeLocal.Set(local), f.MaybeClock.Set(clock))
 			}
-			sample, err := temporalqueries.QueryTemporalSamples().Create(t.Context(), tx, draft)
+			sample, err := temporalqueries.Samples.Insert(t.Context(), tx, assignments...)
 			if err != nil {
 				return err
 			}
@@ -65,17 +68,17 @@ func runTemporal(t *testing.T, check func(*database.Tx, []temporalqueries.Sample
 	}
 }
 
-func temporalValues[V any](t *testing.T, tx *database.Tx, expression query.Expression[temporalqueries.Sample, V], want []V) {
+func temporalValues[V any](t *testing.T, tx *database.Tx, expression expr.Selected[temporalqueries.Sample, V], want []V) {
 	t.Helper()
-	q := temporalqueries.QueryTemporalSamples().OrderBy(temporalqueries.SampleFields().ID.Asc())
-	got, err := query.SelectValue(q, expression).All(t.Context(), tx)
+	q := temporalqueries.Samples.Query().OrderBy(temporalqueries.Samples.ID.Asc())
+	got, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expression)).All(t.Context(), tx)
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatal("temporal result", got, want, err)
 	}
 }
-func temporalOne[V any](t *testing.T, tx *database.Tx, expression query.Expression[temporalqueries.Sample, V]) V {
+func temporalOne[V any](t *testing.T, tx *database.Tx, expression expr.Selected[temporalqueries.Sample, V]) V {
 	t.Helper()
-	got, err := query.SelectValue(temporalqueries.QueryTemporalSamples().Limit(1), expression).RequireFirst(t.Context(), tx)
+	got, err := rows.ReadScalar(rows.SelectScalar(rows.From(temporalqueries.Samples.Query().Limit(1)), expression)).RequireFirst(t.Context(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}

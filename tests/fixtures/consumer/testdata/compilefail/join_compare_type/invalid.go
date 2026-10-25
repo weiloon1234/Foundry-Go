@@ -2,14 +2,15 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type aTag struct{}
 type bTag struct{}
 
-var a = query.As[aTag](models.QueryUsers(), "a")
-var b = query.As[bTag](models.QueryUsers(), "b")
-var af = models.UserFieldsAt(a.Scope())
-var bf = models.UserFieldsAt(b.Scope())
-var _ = query.OnEqual(af.Age, bf.Email)
+var a = rows.As[aTag](models.Users.Query(), "a")
+var b = rows.As[bTag](models.Users.Query(), "b")
+var af = rows.Scope(a)
+var bf = rows.Scope(b)
+var _ = rows.OnEqual(expr.At(af, models.Users.Age), expr.At(bf, models.Users.Email))

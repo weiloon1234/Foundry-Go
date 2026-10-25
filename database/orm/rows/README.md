@@ -201,3 +201,15 @@ DISTINCT ON and an empty order list; nested windows and scopes survive.
 decoding failure or cancellation closes the rows; completed callbacks cannot be
 undone. It does not run complete-model retrieval hooks, matching projection reads.
 Exports should set their own row limit and stop on the first excess row.
+
+Scalar SELECTs keep their subquery boundary when composed with `OrderScalar`,
+`LimitScalar` and `OffsetScalar`. These package functions also accept scalars
+selected from CTE aliases. Ordering accepts row and selected orders in the same
+scope; negative bounds and foreign declarations fail normal compile/preflight
+validation. No implicit limit hides scalar cardinality errors.
+
+Use `HavingCorrelatedRecord` and `DistinctCorrelatedRecord` before `AsLateral`,
+and `DistinctOnCorrelatedScalar` before a correlated scalar/EXISTS operation.
+HAVING takes lifted group predicates; DISTINCT ON takes lifted row keys and keeps
+PostgreSQL's ordering validation. The resulting descriptors retain their parent,
+input and result types and do not acquire independent execution capabilities.

@@ -2,7 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var invalid = query.ManyToMany(models.UserFields().ID, models.MembershipFields().UserID, models.MembershipFields().GroupCode, models.UserFields().ID)
+var slot orm.Through[models.User, models.User, models.Membership]
+var invalid = orm.ManyToManyOf(slot, models.Users.ID, models.Memberships.UserID, models.Memberships.GroupCode, models.Users.ID)

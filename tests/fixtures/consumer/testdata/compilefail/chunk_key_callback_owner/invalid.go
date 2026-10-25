@@ -1,7 +1,10 @@
 package invalid
 
-import "foundry.test/consumer/models"
+import (
+	"foundry.test/consumer/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+)
 
 func wrong() {
-	_ = models.QueryUsers().ChunkByID(nil, nil, 2, func([]models.Order) error { return nil })
+	_ = orm.ChunkByKey(nil, nil, models.Users.Query(), models.Users.ID, 2, func([]models.Order) error { return nil })
 }

@@ -2,4 +2,4 @@ package invalid
 
 import "foundry.test/consumer/models"
 
-var invalid = models.QueryUsers().OrderBy(models.OrderFields().ID.Desc())
+var invalid = models.Users.Query().OrderBy(models.Orders.ID.Desc())

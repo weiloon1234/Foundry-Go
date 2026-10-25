@@ -63,6 +63,10 @@ var footprintBudgets = map[string]footprintBudget{
 	"framework_registration":        {"./integrations/registration", 7559},
 	"framework_pagination":          {"./integrations", 5286},
 	"framework_seeder":              {"./integrations/seeding", 867},
+	"each_soft_writes":              {"./testdata/footprint/each_soft_writes", 1567},
+	"write_unset":                   {"./testdata/footprint/write_unset", 266},
+	"observer_counts":               {"./testdata/footprint/observer_counts", 63},
+	"source_clauses":                {"./testdata/footprint/source_clauses", 2505},
 
 	"cte_recursive": {"./testdata/footprint/cte_recursive", 1076},
 	"record_sets":   {"./testdata/footprint/record_sets", 1288},

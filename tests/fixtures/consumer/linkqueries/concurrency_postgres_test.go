@@ -9,6 +9,7 @@ import (
 
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 type attachmentResult struct {
@@ -17,12 +18,12 @@ type attachmentResult struct {
 }
 
 func TestPostgresRelationEndpointLocksSurvivePivotHooks(t *testing.T) {
-	db, _, namespace := linkDatabase(t)
+	db, _, namespace := linkORMDatabase(t)
 	var member linkqueries.Member
 	var group linkqueries.Group
 	if err := linkTransaction(t.Context(), db, namespace, func(tx *database.Tx) error {
 		var err error
-		member, group, err = endpoints(t, tx)
+		member, group, err = ormEndpoints(t, tx)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -52,7 +53,7 @@ func TestPostgresRelationEndpointLocksSurvivePivotHooks(t *testing.T) {
 		var result attachmentResult
 		result.err = linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
 			var err error
-			result.pivot, err = linkqueries.MemberRelations().Groups.Attach(linkqueries.WithTrace(ctx, trace), tx, member, group, linkqueries.MembershipDraft{}.SetRole("admin"))
+			result.pivot, err = orm.Attach(linkqueries.WithTrace(ctx, trace), tx, linkqueries.MemberLinks.Groups, member, group, linkqueries.Memberships.Role.Set("admin"))
 			return err
 		})
 		done <- result
@@ -66,11 +67,11 @@ func TestPostgresRelationEndpointLocksSurvivePivotHooks(t *testing.T) {
 	}
 	for name, attempt := range map[string]func(*database.Tx) error{
 		"source": func(tx *database.Tx) error {
-			_, err := linkqueries.QueryLinkMembers().ForUpdate().NoWait().RequireFind(ctx, tx, member.ID)
+			_, err := linkqueries.Members.Query().Where(linkqueries.Members.Key().Eq(member.ID)).ForUpdate().NoWait().Require(ctx, tx)
 			return err
 		},
 		"target": func(tx *database.Tx) error {
-			_, err := linkqueries.QueryLinkGroups().ForUpdate().NoWait().RequireFind(ctx, tx, group.Code)
+			_, err := linkqueries.Groups.Query().Where(linkqueries.Groups.Key().Eq(group.Code)).ForUpdate().NoWait().Require(ctx, tx)
 			return err
 		},
 	} {
@@ -90,10 +91,10 @@ func TestPostgresRelationEndpointLocksSurvivePivotHooks(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		if _, err := linkqueries.QueryLinkMembers().ForUpdate().NoWait().RequireFind(ctx, tx, member.ID); err != nil {
+		if _, err := linkqueries.Members.Query().Where(linkqueries.Members.Key().Eq(member.ID)).ForUpdate().NoWait().Require(ctx, tx); err != nil {
 			return err
 		}
-		_, err := linkqueries.QueryLinkGroups().ForUpdate().NoWait().RequireFind(ctx, tx, group.Code)
+		_, err := linkqueries.Groups.Query().Where(linkqueries.Groups.Key().Eq(group.Code)).ForUpdate().NoWait().Require(ctx, tx)
 		return err
 	}); err != nil {
 		t.Fatal("relation completion retained endpoint locks", err)
@@ -104,12 +105,12 @@ func TestPostgresRelationEndpointLocksSurvivePivotHooks(t *testing.T) {
 }
 
 func TestPostgresCompetingRelationAttachmentsRetainUniqueness(t *testing.T) {
-	db, _, namespace := linkDatabase(t)
+	db, _, namespace := linkORMDatabase(t)
 	var member linkqueries.Member
 	var group linkqueries.Group
 	if err := linkTransaction(t.Context(), db, namespace, func(tx *database.Tx) error {
 		var err error
-		member, group, err = endpoints(t, tx)
+		member, group, err = ormEndpoints(t, tx)
 		if err != nil {
 			return err
 		}
@@ -147,7 +148,7 @@ func TestPostgresCompetingRelationAttachmentsRetainUniqueness(t *testing.T) {
 		var result attachmentResult
 		result.err = linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
 			var err error
-			result.pivot, err = linkqueries.MemberRelations().Groups.Attach(linkqueries.WithTrace(ctx, trace), tx, member, group, linkqueries.MembershipDraft{}.SetRole("admin"))
+			result.pivot, err = orm.Attach(linkqueries.WithTrace(ctx, trace), tx, linkqueries.MemberLinks.Groups, member, group, linkqueries.Memberships.Role.Set("admin"))
 			return err
 		})
 		done <- result
@@ -192,7 +193,7 @@ func TestPostgresCompetingRelationAttachmentsRetainUniqueness(t *testing.T) {
 		t.Fatal("failed competitor retained after-commit callbacks")
 	}
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		count, err := linkqueries.QueryLinkMemberships().Count(ctx, tx)
+		count, err := linkqueries.Memberships.Query().Count(ctx, tx)
 		if err != nil {
 			return err
 		}

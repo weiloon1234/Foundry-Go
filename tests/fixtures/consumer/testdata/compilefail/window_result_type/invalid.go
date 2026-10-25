@@ -3,7 +3,8 @@ package invalid
 import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/windowqueries"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = windowqueries.ProjectRankingRow(models.QueryOrders()).SelectNumber(query.PercentRank(query.WindowFor(models.QueryOrders())))
+var _ = rows.MapSelected(windowqueries.Rankings.Number, expr.PercentRank(expr.WindowFor(rows.ModelScope(models.Orders.Query()))))

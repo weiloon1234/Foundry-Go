@@ -7,7 +7,9 @@ import (
 
 	"foundry.test/consumer/binarymodels"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
@@ -24,32 +26,32 @@ func TestPostgresBinaryModelsAndProjections(t *testing.T) {
 				return err
 			}
 		}
+		fields := binarymodels.Records
 		input := binarymodels.Input{0, 255, 1}
 		draft := binarymodels.Draft(1, input)
 		input[1] = 0
-		created, err := binarymodels.QueryBinaryRecords().Create(t.Context(), tx, draft)
+		created, err := binarymodels.Records.Insert(t.Context(), tx, draft...)
 		if err != nil {
 			return err
 		}
 		if !bytes.Equal(created.Body, []byte{0, 255, 1}) || created.Raw == nil || len(created.Raw) != 0 || !created.Note.IsNull() || created.Encoded != "00ff01" {
 			return errors.New("binary persistence lost bytes, empty, NULL or custom input")
 		}
-		if _, err := binarymodels.QueryBinaryRecords().Create(t.Context(), tx, binarymodels.Draft(2, binarymodels.Input{}).SetNote(binarymodels.Input{})); err != nil {
+		if _, err := binarymodels.Records.Insert(t.Context(), tx, fields.Key().Set(2), fields.Body.Set(binarymodels.Input{}), fields.RawBytes.Set([]byte{}), fields.Note.Set(binarymodels.Input{}), fields.Encoded.Set(binarymodels.Input{})); err != nil {
 			return err
 		}
-		fields := binarymodels.RecordFields()
 		needle := binarymodels.Payload{0, 255, 1}
-		selected := binarymodels.QueryBinaryRecords().Where(fields.Body.In(needle)).OrderBy(fields.Body.Asc())
+		selected := binarymodels.Records.Query().Where(fields.Body.In(needle)).OrderBy(fields.Body.Asc())
 		needle[0] = 7
-		rows, err := selected.All(t.Context(), tx)
+		records, err := selected.All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
-		if len(rows) != 1 || rows[0].ID != 1 {
+		if len(records) != 1 || records[0].ID != 1 {
 			return errors.New("binary membership retained caller input")
 		}
-		view := binarymodels.SelectView(binarymodels.QueryBinaryRecords().Where(fields.ID.Eq(2)), binarymodels.ViewSelection[binarymodels.Record]{Body: query.Value(fields.Body), Note: query.Value(fields.Note)})
-		projected, err := view.RequireFirst(t.Context(), tx)
+		view := rows.Select(rows.From(binarymodels.Records.Query().Where(fields.Key().Eq(2))), binarymodels.Views.Row, rows.Map(binarymodels.Views.Body, expr.Value(fields.Body)), rows.Map(binarymodels.Views.Note, expr.Value(fields.Note)))
+		projected, err := rows.Read(view).RequireFirst(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -57,13 +59,13 @@ func TestPostgresBinaryModelsAndProjections(t *testing.T) {
 		if projected.Body == nil || len(projected.Body) != 0 || !present || note == nil || len(note) != 0 {
 			return errors.New("binary projection collapsed empty into NULL")
 		}
-		if n, err := binarymodels.QueryBinaryRecords().Where(fields.Note.IsNull()).Count(t.Context(), tx); err != nil || n != 1 {
+		if n, err := binarymodels.Records.Query().Where(fields.Note.IsNull()).Count(t.Context(), tx); err != nil || n != 1 {
 			return errors.New("binary null comparison failed")
 		}
 		update := binarymodels.Input{4, 5}
-		conflict := query.OnConflict[binarymodels.Record](fields.ID).DoUpdate(fields.Body.Set(update), fields.Note.SetNull())
+		conflict := orm.OnConflict(orm.ConflictKey(fields.Key())).DoUpdate(orm.ConflictSet(fields.Body, update), orm.ConflictNull(fields.Note))
 		update[0] = 8
-		result, err := binarymodels.QueryBinaryRecords().Upsert(t.Context(), tx, draft, conflict)
+		result, err := orm.Upsert(t.Context(), tx, binarymodels.Records.Query(), conflict, draft...)
 		if err != nil {
 			return err
 		}
@@ -71,7 +73,7 @@ func TestPostgresBinaryModelsAndProjections(t *testing.T) {
 		if !present || !bytes.Equal(item.Body, []byte{4, 5}) || !item.Note.IsNull() {
 			return errors.New("binary conflict lost owned custom input")
 		}
-		if _, err := binarymodels.QueryBinaryRecords().Create(t.Context(), tx, binarymodels.Draft(3, binarymodels.Input{}).SetRaw(nil)); !errors.Is(err, fault.Invalid) {
+		if _, err := binarymodels.Records.Insert(t.Context(), tx, fields.Key().Set(3), fields.Body.Set(binarymodels.Input{}), fields.RawBytes.Set(nil), fields.Note.SetNull(), fields.Encoded.Set(binarymodels.Input{})); !errors.Is(err, fault.Invalid) {
 			return errors.New("nil binary model value was accepted")
 		}
 		return nil

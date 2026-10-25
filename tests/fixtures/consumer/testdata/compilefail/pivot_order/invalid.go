@@ -2,4 +2,4 @@ package invalid
 
 import "foundry.test/consumer/models"
 
-var invalid = models.UserRelations().Groups.OrderByPivot(models.GroupFields().Name.Asc())
+var invalid = models.UserLinks.Groups.OrderByPivot(models.Groups.Name.Asc())

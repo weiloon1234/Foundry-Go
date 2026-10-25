@@ -1,12 +1,14 @@
 package inner_test
 
 import (
+	"testing"
+
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
-	"testing"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type referralAlias struct{}
@@ -15,16 +17,19 @@ type purchaseAlias struct{}
 func TestPostgresInnerJoinsAndGrouping(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		referrals := query.As[referralAlias](models.QueryUsers(), "referral")
-		r := models.UserFieldsAt(referrals.Scope())
+		referrals := rows.As[referralAlias](models.Users.Query(), "referral")
+		r := rows.Scope(referrals)
 		// Inner joins preserve non-nullable fields and support aggregates in the joined scope.
-		purchases := query.As[purchaseAlias](models.QueryOrders(), "purchase")
-		p := models.OrderFieldsAt(purchases.Scope())
-		inner := query.InnerJoin(purchases, referrals, query.On(p.BuyerID, r.ID))
-		order := models.OrderFieldsAt(query.LeftScope(inner, purchases.Scope()))
-		buyer := models.UserFieldsAt(query.RightScope(inner, referrals.Scope()))
-		orderReport := reports.ProjectOrderBuyerRow(inner).SelectOrderID(query.Value(order.ID)).SelectBuyerID(query.Value(buyer.ID)).
-			SelectBuyerEmail(query.Value(buyer.Email)).SelectTotalCents(query.Value(order.TotalCents)).Query().OrderBy(order.TotalCents.Asc())
+		purchases := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
+		p := rows.Scope(purchases)
+		inner := rows.InnerJoin(purchases, referrals, rows.OnEqual(expr.At(p, models.Orders.BuyerID), expr.At(r, models.Users.ID)))
+		order := rows.LeftScope(inner, rows.Scope(purchases))
+		buyer := rows.RightScope(inner, rows.Scope(referrals))
+		orderReport := rows.OrderBy(rows.Select(inner, reports.OrderBuyerRows,
+			rows.Map(reports.OrderBuyerRows.OrderID, expr.At(order, models.Orders.ID)),
+			rows.Map(reports.OrderBuyerRows.BuyerID, expr.At(buyer, models.Users.ID)),
+			rows.Map(reports.OrderBuyerRows.BuyerEmail, expr.At(buyer, models.Users.Email)),
+			rows.Map(reports.OrderBuyerRows.TotalCents, expr.At(order, models.Orders.TotalCents))), expr.At(order, models.Orders.TotalCents).Asc())
 		orders, err := orderReport.All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -32,9 +37,13 @@ func TestPostgresInnerJoinsAndGrouping(t *testing.T) {
 		if len(orders) != 3 || orders[2].BuyerID != users[1].ID || orders[0].BuyerEmail != users[0].Email {
 			t.Error("inner joined projection decoded the wrong source")
 		}
-		totals := reports.ProjectBuyerTotals(inner).SelectBuyerID(query.Value(buyer.ID)).SelectTotal(query.Sum(order.TotalCents).Value()).
-			SelectOrders(query.CountField(order.ID).Value()).SelectAverage(query.Avg(order.TotalCents).Value()).Query().
-			GroupBy(buyer.ID.Group()).Having(query.CountField(order.ID).Gt(1)).OrderBy(query.Sum(order.TotalCents).Desc())
+		total := expr.SumAt(order, models.Orders.TotalCents)
+		count := expr.CountFieldAt(order, models.Orders.ID)
+		totals := rows.OrderBy(rows.Having(rows.GroupBy(rows.Select(inner, reports.BuyerTotalRows,
+			rows.Map(reports.BuyerTotalRows.BuyerID, expr.At(buyer, models.Users.ID)),
+			rows.MapSelected(reports.BuyerTotalRows.Total, total.Value()),
+			rows.MapSelected(reports.BuyerTotalRows.Orders, count.Value()),
+			rows.MapSelected(reports.BuyerTotalRows.Average, expr.AvgAt(order, models.Orders.TotalCents).Value())), expr.Group(expr.At(buyer, models.Users.ID))), count.Gt(1)), total.Desc())
 		groups, err := totals.All(t.Context(), counter)
 		if err != nil {
 			return err

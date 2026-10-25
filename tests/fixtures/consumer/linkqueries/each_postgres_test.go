@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/testkit"
@@ -19,23 +21,23 @@ import (
 
 func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 	trace := &linkqueries.Trace{}
-	runLinks(t, func(tx *database.Tx, clock *testkit.Clock) error {
-		member, group, err := endpoints(t, tx)
+	runORMLinks(t, func(tx *database.Tx, clock *testkit.Clock) error {
+		member, group, err := ormEndpoints(t, tx)
 		if err != nil {
 			return err
 		}
 		ctx := linkqueries.WithTrace(t.Context(), trace)
-		q := linkqueries.QueryLinkMemberships()
-		fields := linkqueries.MembershipFields()
-		draft := linkqueries.MembershipDraft{}.SetMemberID(member.ID).SetGroupCode(group.Code)
-		inputs := []linkqueries.MembershipDraft{draft.SetRole(" ADMIN "), draft.SetRole(" VIEWER ")}
+		q := linkqueries.Memberships.Query()
+		fields := linkqueries.Memberships
+		draft := []orm.Assignment[linkqueries.Membership]{linkqueries.Memberships.MemberID.Set(member.ID), linkqueries.Memberships.GroupCode.Set(group.Code)}
+		inputs := [][]orm.Assignment[linkqueries.Membership]{append(slices.Clone(draft), linkqueries.Memberships.Role.Set(" ADMIN ")), append(slices.Clone(draft), linkqueries.Memberships.Role.Set(" VIEWER "))}
 		trace.OnPhase = func(_ context.Context, phase string) error {
 			if phase == "local.creating" {
 				clock.Advance(time.Second)
 			}
 			return nil
 		}
-		created, err := q.CreateEach(ctx, wrappedTransactor{tx}, inputs)
+		created, err := orm.CreateEach(ctx, wrappedTransactor{tx}, q, inputs)
 		if err != nil {
 			return err
 		}
@@ -46,12 +48,24 @@ func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 		if created[1].CreatedAt.Sub(created[0].CreatedAt) != time.Second {
 			return errors.New("creation batch did not sample time in each normal lifecycle")
 		}
-		for _, input := range inputs {
-			if input.ID().IsSet() {
-				return errors.New("batch creation changed its input draft")
+		for i, input := range inputs {
+			inspected := false
+			inspectDone := errors.New("batch input inspected")
+			trace.InspectMembership = func(w *orm.Write[linkqueries.Membership]) error {
+				role, ok := orm.WriteGet(w, fields.Role.Set).Get()
+				if !ok || role != []string{" ADMIN ", " VIEWER "}[i] || orm.WriteIsSet(w, fields.Key().Set) || orm.WriteIsSet(w, fields.CreatedAt.Set) || orm.WriteIsSet(w, fields.UpdatedAt.Set) {
+					return errors.New("batch creation changed its input draft")
+				}
+				inspected = true
+				return inspectDone
+			}
+			_, err := linkqueries.Memberships.Insert(ctx, tx, input...)
+			trace.InspectMembership = nil
+			if !inspected || !errors.Is(err, inspectDone) {
+				return errors.New("batch input inspection failed")
 			}
 		}
-		ordered, err := q.OrderBy(fields.ID.Asc()).All(t.Context(), tx)
+		ordered, err := q.OrderBy(fields.Key().Asc()).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -59,23 +73,23 @@ func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 		for _, row := range ordered {
 			expected = append(expected, row.ID)
 		}
-		callback := func(ctx context.Context, owner *database.Tx, current linkqueries.Membership) (linkqueries.MembershipDraft, error) {
+		callback := func(ctx context.Context, owner *database.Tx, current linkqueries.Membership) ([]orm.Assignment[linkqueries.Membership], error) {
 			visited = append(visited, current.ID)
 			// A callback can perform typed I/O on the same connection after
 			// candidate rows close, retaining the actual transaction owner.
 			if count, err := q.Count(ctx, owner); err != nil || count != 2 {
-				return linkqueries.MembershipDraft{}, errors.New("callback lost its usable transaction")
+				return []orm.Assignment[linkqueries.Membership]{}, errors.New("callback lost its usable transaction")
 			}
-			return linkqueries.MembershipDraft{}.SetRole(" OWNER-" + current.Role + " "), nil
+			return []orm.Assignment[linkqueries.Membership]{linkqueries.Memberships.Role.Set(" OWNER-" + current.Role + " ")}, nil
 		}
 		trace.Steps = nil
-		if rows, err := q.UpdateEach(ctx, tx, 1, callback); !errors.Is(err, fault.Invalid) || rows != nil {
+		if rows, err := orm.UpdateEach(ctx, tx, q, 1, callback); !errors.Is(err, fault.Invalid) || rows != nil {
 			return errors.New("oversized update did not fail atomically")
 		}
 		if len(visited) != 0 || len(trace.Steps) != 0 {
 			return errors.New("oversized set invoked callbacks or hooks")
 		}
-		updated, err := q.UpdateEach(ctx, wrappedTransactor{tx}, 2, callback)
+		updated, err := orm.UpdateEach(ctx, wrappedTransactor{tx}, q, 2, callback)
 		if err != nil {
 			return err
 		}
@@ -88,10 +102,10 @@ func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 			}
 		}
 		trace.Steps = nil
-		if rows, err := q.DeleteEach(ctx, tx, 1); !errors.Is(err, fault.Invalid) || rows != nil || len(trace.Steps) != 0 {
+		if rows, err := orm.DeleteEach(ctx, tx, q, 1); !errors.Is(err, fault.Invalid) || rows != nil || len(trace.Steps) != 0 {
 			return errors.New("oversized deletion ran a pivot hook")
 		}
-		deleted, err := q.DeleteEach(ctx, tx, 2)
+		deleted, err := orm.DeleteEach(ctx, tx, q, 2)
 		if err != nil {
 			return err
 		}
@@ -103,11 +117,11 @@ func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 				return errors.New("per-model deletion bypassed soft deletion")
 			}
 		}
-		none, err := q.OnlyTrashed().DeleteEach(ctx, tx, 2)
+		none, err := orm.DeleteEach(ctx, tx, q.OnlyTrashed(), 2)
 		if err != nil || len(none) != 0 {
 			return errors.New("ordinary per-model deletion rewrote trashed rows")
 		}
-		restored, err := q.RestoreEach(ctx, tx, 2)
+		restored, err := orm.RestoreEach(ctx, tx, q, linkqueries.Memberships.Soft, 2)
 		if err != nil {
 			return err
 		}
@@ -119,7 +133,7 @@ func TestPostgresPerModelBatchLifecycle(t *testing.T) {
 				return errors.New("per-model restoration retained its timestamp")
 			}
 		}
-		removed, err := q.ForceDeleteEach(ctx, tx, 2)
+		removed, err := orm.ForceDeleteEach(ctx, tx, q, linkqueries.Memberships.Soft, 2)
 		if err != nil {
 			return err
 		}
@@ -150,29 +164,29 @@ func TestPostgresPerModelCallbackFailuresAreAtomic(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			trace := &linkqueries.Trace{}
 			callbackCommits := 0
-			runLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
-				member, group, err := endpoints(t, tx)
+			runORMLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
+				member, group, err := ormEndpoints(t, tx)
 				if err != nil {
 					return err
 				}
-				q := linkqueries.QueryLinkMemberships()
-				draft := linkqueries.MembershipDraft{}.SetMemberID(member.ID).SetGroupCode(group.Code).SetRole("admin")
-				if _, err := q.CreateEach(t.Context(), tx, []linkqueries.MembershipDraft{draft, draft}); err != nil {
+				q := linkqueries.Memberships.Query()
+				draft := []orm.Assignment[linkqueries.Membership]{linkqueries.Memberships.MemberID.Set(member.ID), linkqueries.Memberships.GroupCode.Set(group.Code), linkqueries.Memberships.Role.Set("admin")}
+				if _, err := orm.CreateEach(t.Context(), tx, q, [][]orm.Assignment[linkqueries.Membership]{draft, draft}); err != nil {
 					return err
 				}
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				ctx = linkqueries.WithTrace(ctx, trace)
 				calls := 0
-				changed, err := q.UpdateEach(ctx, tx, 2, func(ctx context.Context, owner *database.Tx, current linkqueries.Membership) (linkqueries.MembershipDraft, error) {
+				changed, err := orm.UpdateEach(ctx, tx, q, 2, func(ctx context.Context, owner *database.Tx, current linkqueries.Membership) ([]orm.Assignment[linkqueries.Membership], error) {
 					calls++
 					if err := owner.AfterCommit(func(context.Context) error { callbackCommits++; return nil }); err != nil {
-						return linkqueries.MembershipDraft{}, err
+						return []orm.Assignment[linkqueries.Membership]{}, err
 					}
 					if calls == 2 {
 						switch mode {
 						case "error":
-							return linkqueries.MembershipDraft{}, linkqueries.ErrVeto
+							return []orm.Assignment[linkqueries.Membership]{}, linkqueries.ErrVeto
 						case "panic":
 							panic("private batch callback payload")
 						case "goexit":
@@ -181,7 +195,7 @@ func TestPostgresPerModelCallbackFailuresAreAtomic(t *testing.T) {
 							cancel()
 						}
 					}
-					return linkqueries.MembershipDraft{}.SetRole("changed"), nil
+					return []orm.Assignment[linkqueries.Membership]{linkqueries.Memberships.Role.Set("changed")}, nil
 				})
 				want := linkqueries.ErrVeto
 				if mode == "panic" || mode == "goexit" {
@@ -229,14 +243,14 @@ func TestPostgresPerModelCreationAfterHookFailureRollsBack(t *testing.T) {
 		}
 		return nil
 	}
-	runLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
-		member, group, err := endpoints(t, tx)
+	runORMLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
+		member, group, err := ormEndpoints(t, tx)
 		if err != nil {
 			return err
 		}
-		q := linkqueries.QueryLinkMemberships()
-		draft := linkqueries.MembershipDraft{}.SetMemberID(member.ID).SetGroupCode(group.Code).SetRole("admin")
-		rows, err := q.CreateEach(linkqueries.WithTrace(t.Context(), trace), tx, []linkqueries.MembershipDraft{draft, draft})
+		q := linkqueries.Memberships.Query()
+		draft := []orm.Assignment[linkqueries.Membership]{linkqueries.Memberships.MemberID.Set(member.ID), linkqueries.Memberships.GroupCode.Set(group.Code), linkqueries.Memberships.Role.Set("admin")}
+		rows, err := orm.CreateEach(linkqueries.WithTrace(t.Context(), trace), tx, q, [][]orm.Assignment[linkqueries.Membership]{draft, draft})
 		if !errors.Is(err, linkqueries.ErrVeto) || rows != nil || createdCallbacks != 2 {
 			return errors.New("later post-insert hook did not fail the creation batch")
 		}
@@ -247,5 +261,94 @@ func TestPostgresPerModelCreationAfterHookFailureRollsBack(t *testing.T) {
 	})
 	if len(trace.Committed) != 0 {
 		t.Fatal("failed creation batch retained after-commit callbacks")
+	}
+}
+
+func TestPostgresEachSoftFailuresRollBackStoredModels(t *testing.T) {
+	for _, operation := range []string{"restore", "force-delete"} {
+		for _, mode := range []string{"bound", "before", "after", "cancel"} {
+			t.Run(operation+"/"+mode, func(t *testing.T) {
+				trace := &linkqueries.Trace{}
+				runORMLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
+					member, group, err := ormEndpoints(t, tx)
+					if err != nil {
+						return err
+					}
+					fields := linkqueries.Memberships
+					draft := []orm.Assignment[linkqueries.Membership]{fields.MemberID.Set(member.ID), fields.GroupCode.Set(group.Code), fields.Role.Set("member")}
+					if _, err := orm.CreateEach(t.Context(), tx, fields.Query(), [][]orm.Assignment[linkqueries.Membership]{draft, draft}); err != nil {
+						return err
+					}
+					if _, err := orm.DeleteEach(t.Context(), tx, fields.Query(), 2); err != nil {
+						return err
+					}
+					before, err := fields.Query().OnlyTrashed().OrderBy(fields.Key().Asc()).All(t.Context(), tx)
+					if err != nil {
+						return err
+					}
+					ctx, cancel := context.WithCancel(t.Context())
+					defer cancel()
+					ctx = linkqueries.WithTrace(ctx, trace)
+					phase := "local.restoring"
+					if operation == "force-delete" {
+						phase = "local.force-deleting"
+					}
+					if mode == "after" {
+						phase = "local.restored"
+						if operation == "force-delete" {
+							phase = "local.force-deleted"
+						}
+					}
+					calls := 0
+					trace.OnPhase = func(_ context.Context, current string) error {
+						if current == phase {
+							calls++
+							if calls == 2 {
+								if mode == "cancel" {
+									cancel()
+									return nil
+								}
+								return linkqueries.ErrVeto
+							}
+						}
+						return nil
+					}
+					limit := 2
+					if mode == "bound" {
+						limit = 1
+					}
+					var changed []linkqueries.Membership
+					if operation == "restore" {
+						changed, err = orm.RestoreEach(ctx, tx, fields.Query(), fields.Soft, limit)
+					} else {
+						changed, err = orm.ForceDeleteEach(ctx, tx, fields.Query().OnlyTrashed(), fields.Soft, limit)
+					}
+					want := linkqueries.ErrVeto
+					if mode == "bound" {
+						want = fault.Invalid
+					}
+					if mode == "cancel" {
+						want = context.Canceled
+					}
+					if !errors.Is(err, want) || changed != nil {
+						return errors.New("soft batch failure published models or lost its classification")
+					}
+					if mode == "bound" && len(trace.Steps) != 0 {
+						return errors.New("oversized soft batch invoked hooks")
+					}
+					after, err := fields.Query().WithTrashed().OrderBy(fields.Key().Asc()).All(t.Context(), tx)
+					if err != nil {
+						return err
+					}
+					if !reflect.DeepEqual(before, after) {
+						return errors.New("failed soft batch retained an earlier model change")
+					}
+					return nil
+				})
+				if len(trace.Committed) != 0 {
+					t.Fatal("failed soft batch published after-commit work")
+				}
+			})
+		}
 	}
 }

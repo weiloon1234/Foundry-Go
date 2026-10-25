@@ -2,41 +2,40 @@ package lockqueries_test
 
 import (
 	"errors"
+	"testing"
+
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"testing"
 )
 
 func TestPostgresIndependentInputLockStrengths(t *testing.T) {
 	ctx, db, path := lockFixture(t)
-	countries := query.As[countryAlias](models.QueryCountries(), "country")
-	locations := query.As[locationAlias](models.QueryLocations(), "location")
-	c, l := models.CountryFieldsAt(countries.Scope()), models.LocationFieldsAt(locations.Scope())
-	joined := query.InnerJoin(countries, locations, query.On(c.Code, l.CountryCode))
-	country := query.LeftScope(joined, countries.Scope())
-	location := query.RightScope(joined, locations.Scope())
-	selected := query.SelectRecord(joined, country).LockRows(
-		query.UpdateLock(country),
-		query.KeyShareLock(location),
-	)
+	countries := rows.As[countryAlias](models.Countries.Query(), "country")
+	locations := rows.As[locationAlias](models.Locations.Query(), "location")
+	c, l := rows.Scope(countries), rows.Scope(locations)
+	joined := rows.InnerJoin(countries, locations, rows.On(expr.At(c, models.Countries.Code), expr.At(l, models.Locations.CountryCode)))
+	country := rows.LeftScope(joined, rows.Scope(countries))
+	location := rows.RightScope(joined, rows.Scope(locations))
+	selected := rows.LockRows(rows.SelectRecord(joined, country), rows.UpdateLock(rows.Target(country)), rows.KeyShareLock(rows.Target(location)))
 	finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
 		_, err := selected.All(ctx, tx)
 		return err
 	})
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := models.QueryCountries().ForKeyShare().NoWait().RequireFind(ctx, tx, models.CountryCode("A"))
+		_, err := models.Countries.Query().ForKeyShare().NoWait().Where(models.Countries.Code.Eq(models.CountryCode("A"))).Require(ctx, tx)
 		return err
 	}))
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := models.QueryLocations().ForNoKeyUpdate().NoWait().RequireFind(ctx, tx, models.LocationCode("one"))
+		_, err := models.Locations.Query().ForNoKeyUpdate().NoWait().Where(models.Locations.Code.Eq(models.LocationCode("one"))).Require(ctx, tx)
 		return err
 	}); err != nil {
 		t.Fatal("key-share clause became a stronger lock", err)
 	}
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := models.QueryLocations().ForUpdate().NoWait().RequireFind(ctx, tx, models.LocationCode("one"))
+		_, err := models.Locations.Query().ForUpdate().NoWait().Where(models.Locations.Code.Eq(models.LocationCode("one"))).Require(ctx, tx)
 		return err
 	}))
 	finish()
@@ -46,29 +45,26 @@ func TestPostgresIndependentInputLockPolicies(t *testing.T) {
 	for _, held := range []string{"country", "location"} {
 		t.Run(held, func(t *testing.T) {
 			ctx, db, path := lockFixture(t)
-			countries := query.As[countryAlias](models.QueryCountries(), "country")
-			locations := query.As[locationAlias](models.QueryLocations(), "location")
-			c, l := models.CountryFieldsAt(countries.Scope()), models.LocationFieldsAt(locations.Scope())
-			joined := query.InnerJoin(countries, locations, query.On(c.Code, l.CountryCode))
-			country := query.LeftScope(joined, countries.Scope())
-			location := query.RightScope(joined, locations.Scope())
-			selected := query.SelectRecord(joined, country).LockRows(
-				query.UpdateLock(country).SkipLocked(),
-				query.KeyShareLock(location).NoWait(),
-			)
+			countries := rows.As[countryAlias](models.Countries.Query(), "country")
+			locations := rows.As[locationAlias](models.Locations.Query(), "location")
+			c, l := rows.Scope(countries), rows.Scope(locations)
+			joined := rows.InnerJoin(countries, locations, rows.On(expr.At(c, models.Countries.Code), expr.At(l, models.Locations.CountryCode)))
+			country := rows.LeftScope(joined, rows.Scope(countries))
+			location := rows.RightScope(joined, rows.Scope(locations))
+			selected := rows.LockRows(rows.SelectRecord(joined, country), rows.UpdateLock(rows.Target(country)).SkipLocked(), rows.KeyShareLock(rows.Target(location)).NoWait())
 			finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
 				if held == "country" {
-					_, err := models.QueryCountries().ForUpdate().RequireFind(ctx, tx, models.CountryCode("A"))
+					_, err := models.Countries.Query().ForUpdate().Where(models.Countries.Code.Eq(models.CountryCode("A"))).Require(ctx, tx)
 					return err
 				}
-				_, err := models.QueryLocations().ForUpdate().RequireFind(ctx, tx, models.LocationCode("one"))
+				_, err := models.Locations.Query().ForUpdate().Where(models.Locations.Code.Eq(models.LocationCode("one"))).Require(ctx, tx)
 				return err
 			})
 			defer finish()
 			err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-				rows, err := selected.All(ctx, tx)
-				if err == nil && len(rows) != 0 {
-					return errors.New("conflicting join returned rows")
+				items, err := selected.All(ctx, tx)
+				if err == nil && len(items) != 0 {
+					return errors.New("conflicting join returned items")
 				}
 				return err
 			})
@@ -83,38 +79,38 @@ func TestPostgresIndependentInputLockPolicies(t *testing.T) {
 
 func TestPostgresOverlappingInputLockPrecedence(t *testing.T) {
 	ctx, db, path := lockFixture(t)
-	countries := query.As[countryAlias](models.QueryCountries(), "country")
-	scope := countries.Scope()
-	selected := query.SelectRecord(countries, scope)
+	countries := rows.As[countryAlias](models.Countries.Query(), "country")
+	scope := rows.Scope(countries)
+	selected := rows.SelectRecord(countries, scope)
 	finish := holdLock(t, ctx, db, path, func(tx *database.Tx) error {
-		_, err := selected.LockRows(query.UpdateLock(scope), query.KeyShareLock(scope)).All(ctx, tx)
+		_, err := rows.LockRows(selected, rows.UpdateLock(rows.Target(scope)), rows.KeyShareLock(rows.Target(scope))).All(ctx, tx)
 		return err
 	})
 	assertLockError(t, inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		_, err := models.QueryCountries().ForKeyShare().NoWait().RequireFind(ctx, tx, models.CountryCode("A"))
+		_, err := models.Countries.Query().ForKeyShare().NoWait().Where(models.Countries.Code.Eq(models.CountryCode("A"))).Require(ctx, tx)
 		return err
 	}))
 	finish()
 	finish = holdLock(t, ctx, db, path, func(tx *database.Tx) error {
-		_, err := models.QueryCountries().ForUpdate().All(ctx, tx)
+		_, err := models.Countries.Query().ForUpdate().All(ctx, tx)
 		return err
 	})
 	defer finish()
 	for _, test := range []struct {
 		name    string
-		clauses []query.RowLock[query.Alias[countryAlias, models.Country]]
+		clauses []rows.RowLock[rows.Alias[countryAlias, models.Country]]
 		noWait  bool
 	}{
-		{"nowait-then-skip", []query.RowLock[query.Alias[countryAlias, models.Country]]{query.KeyShareLock(scope).NoWait(), query.UpdateLock(scope).SkipLocked()}, true},
-		{"skip-then-nowait", []query.RowLock[query.Alias[countryAlias, models.Country]]{query.UpdateLock(scope).SkipLocked(), query.KeyShareLock(scope).NoWait()}, true},
-		{"skip-then-wait", []query.RowLock[query.Alias[countryAlias, models.Country]]{query.UpdateLock(scope).SkipLocked(), query.ShareLock(scope)}, false},
-		{"wait-then-skip", []query.RowLock[query.Alias[countryAlias, models.Country]]{query.ShareLock(scope), query.UpdateLock(scope).SkipLocked()}, false},
+		{"nowait-then-skip", []rows.RowLock[rows.Alias[countryAlias, models.Country]]{rows.KeyShareLock(rows.Target(scope)).NoWait(), rows.UpdateLock(rows.Target(scope)).SkipLocked()}, true},
+		{"skip-then-nowait", []rows.RowLock[rows.Alias[countryAlias, models.Country]]{rows.UpdateLock(rows.Target(scope)).SkipLocked(), rows.KeyShareLock(rows.Target(scope)).NoWait()}, true},
+		{"skip-then-wait", []rows.RowLock[rows.Alias[countryAlias, models.Country]]{rows.UpdateLock(rows.Target(scope)).SkipLocked(), rows.ShareLock(rows.Target(scope))}, false},
+		{"wait-then-skip", []rows.RowLock[rows.Alias[countryAlias, models.Country]]{rows.ShareLock(rows.Target(scope)), rows.UpdateLock(rows.Target(scope)).SkipLocked()}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-				rows, err := selected.LockRows(test.clauses...).All(ctx, tx)
-				if err == nil && len(rows) != 0 {
-					return errors.New("overlapping SKIP LOCKED returned locked rows")
+				items, err := rows.LockRows(selected, test.clauses...).All(ctx, tx)
+				if err == nil && len(items) != 0 {
+					return errors.New("overlapping SKIP LOCKED returned locked items")
 				}
 				return err
 			})
@@ -129,24 +125,24 @@ func TestPostgresOverlappingInputLockPrecedence(t *testing.T) {
 
 func TestPostgresLockWindowValidationPreservesTransaction(t *testing.T) {
 	ctx, db, path := lockFixture(t)
-	q := models.QueryCountries()
-	rank := query.RowNumber(query.WindowFor(q))
-	calculation := query.AddValue(rank, rank)
-	invalid := query.SelectValue(q, calculation).LockRows(query.UpdateLock(q.Scope()))
+	q := models.Countries.Query()
+	rank := expr.RowNumber(expr.WindowFor(rows.ModelScope(q)))
+	calculation := expr.AddValue(rank, rank)
+	invalid := rows.LockRows(rows.ReadScalar(rows.SelectScalar(rows.From(q), calculation)), rows.UpdateLock(rows.Target(rows.ModelScope(q))))
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
 		if _, err := invalid.All(ctx, tx); !errors.Is(err, fault.Invalid) {
 			return errors.New("invalid window lock was not rejected before SQL")
 		}
-		inner := query.SelectValue(q, calculation).Limit(1)
-		outer := query.SelectValue(q, query.ScalarQuery(q, inner)).LockRows(query.UpdateLock(q.Scope()))
-		rows, err := outer.All(ctx, tx)
+		inner := rows.SelectScalar(rows.From(q.Limit(1)), calculation)
+		outer := rows.LockRows(rows.ReadScalar(rows.SelectScalar(rows.From(q), rows.ScalarQuery(rows.From(q), inner))), rows.UpdateLock(rows.Target(rows.ModelScope(q))))
+		items, err := outer.All(ctx, tx)
 		if err != nil {
 			return err
 		}
-		if len(rows) != 2 {
+		if len(items) != 2 {
 			return errors.New("independent window changed outer result count")
 		}
-		for _, row := range rows {
+		for _, row := range items {
 			if n, present := row.Get(); !present || n != 2 {
 				return errors.New("independent window calculation lost its value")
 			}

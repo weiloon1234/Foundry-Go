@@ -2,7 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = query.Related(models.UserRelations().Groups.Pivot(), query.CountDistinctField(models.GroupFields().Code))
+var invalid = expr.Related(orm.Pivot(models.UserLinks.Groups), expr.CountDistinctField(models.Groups.Code))

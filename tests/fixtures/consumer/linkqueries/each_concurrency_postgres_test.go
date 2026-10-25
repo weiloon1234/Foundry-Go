@@ -9,22 +9,23 @@ import (
 
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 func TestPostgresPerModelSelectionLocksAndConcurrentInsert(t *testing.T) {
-	db, _, namespace := linkDatabase(t)
-	q := linkqueries.QueryLinkMembers()
-	fields := linkqueries.MemberFields()
+	db, _, namespace := linkORMDatabase(t)
+	q := linkqueries.Members
+	fields := linkqueries.Members
 	var original []linkqueries.Member
 	if err := linkTransaction(t.Context(), db, namespace, func(tx *database.Tx) error {
-		if _, err := q.CreateEach(t.Context(), tx, []linkqueries.MemberDraft{
-			linkqueries.MemberDraft{}.SetName("batch-one"),
-			linkqueries.MemberDraft{}.SetName("batch-two"),
+		if _, err := orm.CreateEach(t.Context(), tx, q.Query(), [][]orm.Assignment[linkqueries.Member]{
+			[]orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("batch-one")},
+			[]orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("batch-two")},
 		}); err != nil {
 			return err
 		}
 		var err error
-		original, err = q.OrderBy(fields.ID.Asc()).All(t.Context(), tx)
+		original, err = q.Query().OrderBy(fields.Key().Asc()).All(t.Context(), tx)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -51,17 +52,17 @@ func TestPostgresPerModelSelectionLocksAndConcurrentInsert(t *testing.T) {
 		var output result
 		output.err = linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
 			var err error
-			output.rows, err = q.Where(fields.Name.Like("batch%")).UpdateEach(linkqueries.WithTrace(ctx, trace), tx, 2, func(ctx context.Context, _ *database.Tx, current linkqueries.Member) (linkqueries.MemberDraft, error) {
+			output.rows, err = orm.UpdateEach(linkqueries.WithTrace(ctx, trace), tx, q.Query().Where(fields.Name.Like("batch%")), 2, func(ctx context.Context, _ *database.Tx, current linkqueries.Member) ([]orm.Assignment[linkqueries.Member], error) {
 				calls++
 				if calls == 1 {
 					close(entered)
 					select {
 					case <-release:
 					case <-ctx.Done():
-						return linkqueries.MemberDraft{}, ctx.Err()
+						return []orm.Assignment[linkqueries.Member]{}, ctx.Err()
 					}
 				}
-				return linkqueries.MemberDraft{}.SetName(current.Name + "-updated"), nil
+				return []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set(current.Name + "-updated")}, nil
 			})
 			return err
 		})
@@ -75,7 +76,7 @@ func TestPostgresPerModelSelectionLocksAndConcurrentInsert(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 	err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		_, err := q.ForUpdate().NoWait().RequireFind(ctx, tx, original[1].ID)
+		_, err := q.Query().Where(q.Key().Eq(original[1].ID)).ForUpdate().NoWait().Require(ctx, tx)
 		return err
 	})
 	var locked *database.Error
@@ -85,7 +86,7 @@ func TestPostgresPerModelSelectionLocksAndConcurrentInsert(t *testing.T) {
 	var late linkqueries.Member
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
 		var err error
-		late, err = q.Create(ctx, tx, linkqueries.MemberDraft{}.SetName("batch-late"))
+		late, err = q.Insert(ctx, tx, linkqueries.Members.Name.Set("batch-late"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -103,14 +104,14 @@ func TestPostgresPerModelSelectionLocksAndConcurrentInsert(t *testing.T) {
 		t.Fatal("batch included a later insert or dispatched internal retrieval callbacks")
 	}
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		stored, err := q.RequireFind(ctx, tx, late.ID)
+		stored, err := q.Require(ctx, tx, late.ID)
 		if err != nil {
 			return err
 		}
 		if stored.Name != "batch-late" {
 			return errors.New("batch claimed a row inserted after selection")
 		}
-		count, err := q.Where(fields.Name.Like("%-updated")).Count(ctx, tx)
+		count, err := q.Query().Where(fields.Name.Like("%-updated")).Count(ctx, tx)
 		if err != nil {
 			return err
 		}

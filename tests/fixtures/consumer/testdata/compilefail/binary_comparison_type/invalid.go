@@ -2,4 +2,4 @@ package compilefail
 
 import "foundry.test/consumer/binarymodels"
 
-var _ = binarymodels.RecordFields().Body.Eq("text")
+var _ = binarymodels.Records.Body.Eq("text")

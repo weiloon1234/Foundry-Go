@@ -2,16 +2,17 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type leftTag struct{}
 type rightTag struct{}
 type outsideTag struct{}
 
-var a = query.As[leftTag](models.QueryUsers(), "a")
-var b = query.As[rightTag](models.QueryUsers(), "b")
-var af, bf = models.UserFieldsAt(a.Scope()), models.UserFieldsAt(b.Scope())
-var j = query.LeftJoin(a, b, query.On(af.IntroducerID, bf.ID))
-var o = query.As[outsideTag](models.QueryOrders(), "o")
-var invalid = query.On(af.ID, models.OrderFieldsAt(o.Scope()).ID)
+var a = rows.As[leftTag](models.Users.Query(), "a")
+var b = rows.As[rightTag](models.Users.Query(), "b")
+var af, bf = rows.Scope(a), rows.Scope(b)
+var j = rows.LeftJoin(a, b, rows.On(expr.At(af, models.Users.IntroducerID), expr.At(bf, models.Users.ID)))
+var o = rows.As[outsideTag](models.Orders.Query(), "o")
+var invalid = rows.On(expr.At(af, models.Users.ID), expr.At(rows.Scope(o), models.Orders.ID))

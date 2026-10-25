@@ -53,7 +53,7 @@ func PrimaryOf[M any, K comparable](b Builder[M], key Key[M, K]) Primary[M, K] {
 	return Primary[M, K]{key: key.key}
 }
 
-// SoftDeletable is a declaration-owned capability for physical soft-model deletion.
+// SoftDeletable authorizes restoring or physically deleting soft-delete models.
 // Example: Soft SoftDeletable[User]. Its zero value is invalid.
 type SoftDeletable[M any] struct {
 	_          [0]*M

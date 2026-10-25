@@ -15,7 +15,7 @@ import (
 // Expose only the ordinary executor methods, preserving the returned Rows.
 type observerScopeReader struct{ database.Executor }
 
-// This exercises the runtime adapter boundary. Generated retrieval dispatch is
+// This exercises the runtime adapter boundary. Model retrieval dispatch is
 // still a separate integration; the test invokes the observer scope explicitly.
 func TestPostgresObserverScopeAllowsTypedCallbackIOOnOneConnection(t *testing.T) {
 	db := pgtest.Open(t, func(config *postgres.Config) {
@@ -60,8 +60,8 @@ func TestPostgresObserverScopeAllowsTypedCallbackIOOnOneConnection(t *testing.T)
 						if len(values) != 1 || values[0] != 42 || ctx.Err() != nil {
 							return errors.New("stored hydration failed or closing rows canceled observer work")
 						}
-						q := observerqueries.QueryObservedEffects()
-						created, err := q.Create(ctx, tx, observerqueries.EffectDraft{}.SetLabel(name))
+						q := observerqueries.Effects
+						created, err := q.Insert(ctx, tx, observerqueries.Effects.Label.Set(name))
 						if err != nil {
 							return err
 						}
@@ -89,7 +89,7 @@ func TestPostgresObserverScopeAllowsTypedCallbackIOOnOneConnection(t *testing.T)
 					t.Fatal("observer retained its context or database resources")
 				}
 				if err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-					items, err := observerqueries.QueryObservedEffects().All(t.Context(), tx)
+					items, err := observerqueries.Effects.Query().All(t.Context(), tx)
 					if err != nil {
 						return err
 					}

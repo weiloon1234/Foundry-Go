@@ -26,6 +26,13 @@ func membershipORMHooks(owner string, fields MembershipTable) orm.Hooks[Membersh
 	}
 	return orm.Hooks[Membership]{
 		Saving: func(ctx context.Context, _ *database.Tx, prior value.Optional[Membership], draft *orm.Write[Membership]) error {
+			if owner == "local" {
+				if trace := traceFrom(ctx); trace != nil && trace.InspectMembership != nil {
+					if err := trace.InspectMembership(draft); err != nil {
+						return err
+					}
+				}
+			}
 			if !prior.IsSet() && (!orm.WriteIsSet(draft, fields.MemberID.Set) || !orm.WriteIsSet(draft, fields.GroupCode.Set)) {
 				return errors.New("pivot hooks did not receive derived keys")
 			}

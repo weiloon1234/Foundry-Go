@@ -4,4 +4,4 @@ import (
 	"foundry.test/consumer/vault"
 )
 
-func bad() { _ = vault.EntryFields().Token.Asc() }
+func bad() { _ = vault.Entries.Token.Asc() }

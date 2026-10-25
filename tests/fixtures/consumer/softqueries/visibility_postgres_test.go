@@ -6,7 +6,9 @@ import (
 
 	"foundry.test/consumer/softqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
@@ -16,50 +18,50 @@ type parentAlias struct{}
 func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 	runSoft(t, func(tx *database.Tx, _ *testkit.Clock) error {
 		ctx := t.Context()
-		q, f := softqueries.QuerySoftMembers(), softqueries.MemberFields()
-		parent, err := q.Create(ctx, tx, softqueries.MemberDraft{}.SetName("parent"))
+		q, f := softqueries.Members.Query(), softqueries.Members
+		parent, err := softqueries.Members.Insert(ctx, tx, softqueries.Members.Name.Set("parent"))
 		if err != nil {
 			return err
 		}
-		active, err := q.Create(ctx, tx, softqueries.MemberDraft{}.SetName("child-active").SetParentID(parent.ID))
+		active, err := softqueries.Members.Insert(ctx, tx, softqueries.Members.Name.Set("child-active"), softqueries.Members.ParentID.Set(parent.ID))
 		if err != nil {
 			return err
 		}
-		deleted, err := q.Create(ctx, tx, softqueries.MemberDraft{}.SetName("child-deleted").SetParentID(parent.ID))
+		deleted, err := softqueries.Members.Insert(ctx, tx, softqueries.Members.Name.Set("child-deleted"), softqueries.Members.ParentID.Set(parent.ID))
 		if err != nil {
 			return err
 		}
-		if _, err := q.Delete(ctx, tx, deleted.ID); err != nil {
+		if _, err := orm.Delete(ctx, tx, q, softqueries.Members.Key(), deleted.ID); err != nil {
 			return err
 		}
-		groups := softqueries.QuerySoftGroups()
-		group, err := groups.Create(ctx, tx, softqueries.GroupDraft{}.SetCode("active").SetName("active"))
+		groups := softqueries.Groups.Query()
+		group, err := softqueries.Groups.Insert(ctx, tx, softqueries.Groups.Key().Set("active"), softqueries.Groups.Name.Set("active"))
 		if err != nil {
 			return err
 		}
-		hidden, err := groups.Create(ctx, tx, softqueries.GroupDraft{}.SetCode("deleted").SetName("deleted"))
+		hidden, err := softqueries.Groups.Insert(ctx, tx, softqueries.Groups.Key().Set("deleted"), softqueries.Groups.Name.Set("deleted"))
 		if err != nil {
 			return err
 		}
-		if _, err := groups.Delete(ctx, tx, hidden.Code); err != nil {
+		if _, err := orm.Delete(ctx, tx, groups, softqueries.Groups.Key(), hidden.Code); err != nil {
 			return err
 		}
-		pivots := softqueries.QuerySoftMemberships()
-		if _, err := pivots.Create(ctx, tx, softqueries.MembershipDraft{}.SetMemberID(parent.ID).SetGroupCode(group.Code)); err != nil {
+		pivots := softqueries.Memberships.Query()
+		if _, err := softqueries.Memberships.Insert(ctx, tx, softqueries.Memberships.MemberID.Set(parent.ID), softqueries.Memberships.GroupCode.Set(group.Code)); err != nil {
 			return err
 		}
-		if _, err := pivots.Create(ctx, tx, softqueries.MembershipDraft{}.SetMemberID(parent.ID).SetGroupCode(hidden.Code)); err != nil {
+		if _, err := softqueries.Memberships.Insert(ctx, tx, softqueries.Memberships.MemberID.Set(parent.ID), softqueries.Memberships.GroupCode.Set(hidden.Code)); err != nil {
 			return err
 		}
-		pivot, err := pivots.Create(ctx, tx, softqueries.MembershipDraft{}.SetMemberID(parent.ID).SetGroupCode(group.Code))
+		pivot, err := softqueries.Memberships.Insert(ctx, tx, softqueries.Memberships.MemberID.Set(parent.ID), softqueries.Memberships.GroupCode.Set(group.Code))
 		if err != nil {
 			return err
 		}
-		if _, err := pivots.Delete(ctx, tx, pivot.ID); err != nil {
+		if _, err := orm.Delete(ctx, tx, pivots, softqueries.Memberships.Key(), pivot.ID); err != nil {
 			return err
 		}
-		r, a := softqueries.MemberRelations(), softqueries.MemberAggregates()
-		loaded, err := q.With(r.Children, a.ChildCount).RequireFind(ctx, tx, parent.ID)
+		r := softqueries.MemberLinks
+		loaded, err := q.With(r.Children, softqueries.MemberCounts.Children).Where(f.Key().Eq(parent.ID)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -69,7 +71,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 			return errors.New("direct eager loading or aggregate included deleted children")
 		}
 		allChildren := r.Children.WithTrashed()
-		loaded, err = q.With(allChildren, a.ChildCount.Using(query.Related(allChildren, query.Count[softqueries.Member]()))).RequireFind(ctx, tx, parent.ID)
+		loaded, err = q.With(allChildren, softqueries.Members.ChildCount.Using(expr.Related(allChildren, expr.Count[softqueries.Member]()))).Where(f.Key().Eq(parent.ID)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -78,12 +80,12 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 		if !present || len(children) != 2 || !counted || count != 2 {
 			return errors.New("explicit child visibility did not reach eager loading and aggregate")
 		}
-		scoped := q.Where(f.ID.Eq(parent.ID))
-		if count, err := scoped.WhereHas(r.Children.OnlyTrashed()).Count(ctx, tx); err != nil || count != 1 {
+		scoped := q.Where(f.Key().Eq(parent.ID))
+		if count, err := scoped.Where(orm.Has(r.Children.OnlyTrashed())).Count(ctx, tx); err != nil || count != 1 {
 			return errors.New("direct EXISTS lost deleted-child scope")
 		}
 		for _, test := range []struct {
-			descriptor query.ThroughRelation[softqueries.Member, softqueries.Group, softqueries.Membership]
+			descriptor orm.ThroughRelation[softqueries.Member, softqueries.Group, softqueries.Membership]
 			expected   int
 		}{
 			{r.Groups, 1},
@@ -94,7 +96,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 			{r.Groups.OnlyTrashedPivot(), 1},
 			{r.Groups.OnlyTrashed().OnlyTrashedPivot(), 0},
 		} {
-			loaded, err = q.With(test.descriptor, a.GroupCount.Using(query.Related(test.descriptor, query.Count[softqueries.Group]()))).RequireFind(ctx, tx, parent.ID)
+			loaded, err = q.With(test.descriptor, softqueries.Members.GroupCount.Using(expr.Related(test.descriptor, expr.Count[softqueries.Group]()))).Where(f.Key().Eq(parent.ID)).Require(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -103,7 +105,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 			if !present || len(links) != test.expected || !counted || count != int64(test.expected) {
 				return errors.New("target/pivot visibility differs between eager loading and aggregate")
 			}
-			matched, err := scoped.WhereHas(test.descriptor).Exists(ctx, tx)
+			matched, err := scoped.Where(orm.Has(test.descriptor)).Exists(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -119,7 +121,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 			return errors.New("WithTrashed count lost a child")
 		}
 		visited := 0
-		if err := childQuery.EachByID(ctx, tx, 1, func(member softqueries.Member) error {
+		if err := orm.EachByKey(ctx, tx, childQuery, f.Key(), 1, func(member softqueries.Member) error {
 			visited++
 			if member.ID != active.ID {
 				return errors.New("keyset iteration exposed a deleted child")
@@ -132,52 +134,52 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 			return errors.New("keyset iteration lost an active child")
 		}
 		visited = 0
-		if err := childQuery.WithTrashed().EachByID(ctx, tx, 1, func(softqueries.Member) error { visited++; return nil }); err != nil {
+		if err := orm.EachByKey(ctx, tx, childQuery.WithTrashed(), f.Key(), 1, func(softqueries.Member) error { visited++; return nil }); err != nil {
 			return err
 		}
 		if visited != 2 {
 			return errors.New("keyset iteration discarded explicit visibility")
 		}
-		labels, err := softqueries.ProjectMemberLabel(childQuery).SelectID(query.Value(f.ID)).SelectName(query.Value(f.Name)).Query().All(ctx, tx)
+		labels, err := rows.Select(rows.From(childQuery), softqueries.MemberLabels, rows.Map(softqueries.MemberLabels.ID, expr.Value(f.Key())), rows.Map(softqueries.MemberLabels.Name, expr.Value(f.Name))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if len(labels) != 1 || labels[0].ID != active.ID {
 			return errors.New("DTO projection lost the default deletion scope")
 		}
-		visible := query.As[childAlias](query.CTE("soft_visible", childQuery), "visible")
-		visibleRows, err := query.SelectRecord(visible, visible.Scope()).All(ctx, tx)
+		visible := rows.AsRecord[childAlias](rows.CTE("soft_visible", rows.ModelRecord(childQuery)), "visible")
+		visibleRows, err := rows.SelectRecord(visible, rows.Scope(visible)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if len(visibleRows) != 1 || visibleRows[0].ID != active.ID {
 			return errors.New("CTE lost its model visibility")
 		}
-		combined, err := query.UnionAll(childQuery, childQuery.OnlyTrashed()).All(ctx, tx)
+		combined, err := rows.UnionAll(rows.ModelRecord(childQuery), rows.ModelRecord(childQuery.OnlyTrashed())).All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if len(combined) != 2 {
 			return errors.New("set inputs did not retain independent deletion scopes")
 		}
-		page, err := childQuery.Paginate(ctx, tx, query.PageRequest{Number: 1, Size: 1})
+		page, err := childQuery.Paginate(ctx, tx, orm.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err
 		}
 		if page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != active.ID {
 			return errors.New("pagination count or row selection exposed a deleted model")
 		}
-		allPage, err := childQuery.WithTrashed().Paginate(ctx, tx, query.PageRequest{Number: 1, Size: 1})
+		allPage, err := childQuery.WithTrashed().Paginate(ctx, tx, orm.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err
 		}
 		if allPage.Total != 2 || len(allPage.Items) != 1 {
 			return errors.New("pagination discarded explicit visibility")
 		}
-		if _, err := q.Delete(ctx, tx, parent.ID); err != nil {
+		if _, err := orm.Delete(ctx, tx, q, softqueries.Members.Key(), parent.ID); err != nil {
 			return err
 		}
-		loadedChild, err := q.With(r.Parent).RequireFind(ctx, tx, active.ID)
+		loadedChild, err := q.With(r.Parent).Where(f.Key().Eq(active.ID)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -185,7 +187,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 		if !ancestorLoaded || ancestorValue.IsSet() {
 			return errors.New("singular relation exposed a deleted parent")
 		}
-		loadedChild, err = q.With(r.Parent.WithTrashed()).RequireFind(ctx, tx, active.ID)
+		loadedChild, err = q.With(r.Parent.WithTrashed()).Where(f.Key().Eq(active.ID)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -194,28 +196,29 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 		if !ancestorLoaded || !ancestorPresent || ancestorModel.ID != parent.ID {
 			return errors.New("singular relation lost explicit parent visibility")
 		}
-		child := query.As[childAlias](childQuery, "child")
-		ancestor := query.As[parentAlias](q, "ancestor")
-		c, p := softqueries.MemberFieldsAt(child.Scope()), softqueries.MemberFieldsAt(ancestor.Scope())
-		joined := query.LeftJoin(child, ancestor, query.On(c.ParentID, p.ID))
-		missing := softqueries.MemberNullableFieldsAt(query.NullableRightScope(joined, ancestor.Scope()))
-		selected := query.SelectRecord(joined, query.LeftScope(joined, child.Scope())).Where(missing.ID.IsNull())
-		rows, err := selected.All(ctx, tx)
+		child := rows.As[childAlias](childQuery, "child")
+		ancestor := rows.As[parentAlias](q, "ancestor")
+		childParent := expr.At(rows.Scope(child), f.ParentID)
+		parentKey := expr.At(rows.Scope(ancestor), f.Key())
+		joined := rows.LeftJoin(child, ancestor, rows.On(childParent, parentKey))
+		missing := expr.AtNullable(rows.NullableRightScope(joined, rows.Scope(ancestor)), f.Key())
+		selected := rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child))).Where(missing.IsNull())
+		items, err := selected.All(ctx, tx)
 		if err != nil {
 			return err
 		}
-		if len(rows) != 1 || rows[0].ID != active.ID {
+		if len(items) != 1 || items[0].ID != active.ID {
 			return errors.New("soft-delete alias filtering broke outer-join null preservation")
 		}
-		ancestor = query.As[parentAlias](q.WithTrashed(), "ancestor")
-		p = softqueries.MemberFieldsAt(ancestor.Scope())
-		joined = query.LeftJoin(child, ancestor, query.On(c.ParentID, p.ID))
-		missing = softqueries.MemberNullableFieldsAt(query.NullableRightScope(joined, ancestor.Scope()))
-		rows, err = query.SelectRecord(joined, query.LeftScope(joined, child.Scope())).Where(missing.ID.IsNull()).All(ctx, tx)
+		ancestor = rows.As[parentAlias](q.WithTrashed(), "ancestor")
+		parentKey = expr.At(rows.Scope(ancestor), f.Key())
+		joined = rows.LeftJoin(child, ancestor, rows.On(childParent, parentKey))
+		missing = expr.AtNullable(rows.NullableRightScope(joined, rows.Scope(ancestor)), f.Key())
+		items, err = rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child))).Where(missing.IsNull()).All(ctx, tx)
 		if err != nil {
 			return err
 		}
-		if len(rows) != 0 {
+		if len(items) != 0 {
 			return errors.New("explicit ancestor visibility failed to restore the join match")
 		}
 		return nil

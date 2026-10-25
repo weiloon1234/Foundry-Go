@@ -3,7 +3,8 @@ package invalid
 import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var invalid = reports.SelectBuyerTotals(models.QueryOrders(), reports.BuyerTotalsSelection[models.Order]{}).OrderBy(query.Count[models.User]().Desc())
+var invalid = rows.OrderBy(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows), expr.Count[models.User]().Desc())

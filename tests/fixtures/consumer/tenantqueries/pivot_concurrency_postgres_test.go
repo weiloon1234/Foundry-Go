@@ -8,6 +8,7 @@ import (
 
 	"foundry.test/consumer/tenantqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 // Two synchronizations of one source serialize on the source row: the second
@@ -19,17 +20,17 @@ func TestConcurrentPivotSynchronizationSerializesPerSource(t *testing.T) {
 	document := seedDocument(t, db, alpha, "shared", true)
 	tags := make([]tenantqueries.Tag, 0, 3)
 	for _, code := range []tenantqueries.TagCode{"a", "b", "c"} {
-		tag, err := tenantqueries.QueryTenantTags().Create(ctx, db, tenantqueries.TagDraft{}.SetCode(code).SetName(string(code)))
+		tag, err := tenantqueries.Tags.Insert(ctx, db, tenantqueries.Tags.Key().Set(code), tenantqueries.Tags.Name.Set(string(code)))
 		if err != nil {
 			t.Fatal(err)
 		}
 		tags = append(tags, tag)
 	}
-	link := tenantqueries.DocumentRelations().Tags
-	draft := tenantqueries.DocumentTagDraft{}.SetWeight(1)
+	link := tenantqueries.DocumentLinks
+	draft := []orm.Assignment[tenantqueries.DocumentTag]{tenantqueries.DocumentTags.Weight.Set(1)}
 	stored := func() []tenantqueries.TagCode {
 		t.Helper()
-		pivots, err := tenantqueries.QueryTenantDocumentTags().Where(tenantqueries.DocumentTagFields().DocumentID.Eq(document.ID)).All(ctx, db)
+		pivots, err := tenantqueries.DocumentTags.Query().Where(tenantqueries.DocumentTags.DocumentID.Eq(document.ID)).All(ctx, db)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,14 +70,14 @@ func TestConcurrentPivotSynchronizationSerializesPerSource(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := link.Sync(ctx, db, document, tags[:1], draft, nil); err != nil {
+	if _, err := orm.Sync(ctx, db, link, document, tags[:1], draft, nil); err != nil {
 		t.Fatal(err)
 	}
 	race(func(ctx context.Context, w database.Transactor) error {
-		_, err := link.Sync(ctx, w, document, tags[1:2], draft, nil)
+		_, err := orm.Sync(ctx, w, link, document, tags[1:2], draft, nil)
 		return err
 	}, func(ctx context.Context, w database.Transactor) error {
-		_, err := link.Sync(ctx, w, document, tags[2:3], draft, nil)
+		_, err := orm.Sync(ctx, w, link, document, tags[2:3], draft, nil)
 		return err
 	})
 	if got := stored(); !slices.Equal(got, []tenantqueries.TagCode{"c"}) {
@@ -84,10 +85,10 @@ func TestConcurrentPivotSynchronizationSerializesPerSource(t *testing.T) {
 	}
 	// Two toggles of one target cancel out instead of attaching it twice.
 	race(func(ctx context.Context, w database.Transactor) error {
-		_, err := link.Toggle(ctx, w, document, tags[:1], draft)
+		_, err := orm.Toggle(ctx, w, link, document, tags[:1], draft...)
 		return err
 	}, func(ctx context.Context, w database.Transactor) error {
-		_, err := link.Toggle(ctx, w, document, tags[:1], draft)
+		_, err := orm.Toggle(ctx, w, link, document, tags[:1], draft...)
 		return err
 	})
 	if got := stored(); !slices.Equal(got, []tenantqueries.TagCode{"c"}) {

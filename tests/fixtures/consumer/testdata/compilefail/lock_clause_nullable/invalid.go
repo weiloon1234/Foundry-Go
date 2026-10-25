@@ -2,13 +2,14 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type left struct{}
 type right struct{}
 
-var a = query.As[left](models.QueryUsers(), "a")
-var b = query.As[right](models.QueryOrders(), "b")
-var j = query.LeftJoin(a, b, query.On(models.UserFieldsAt(a.Scope()).ID, models.OrderFieldsAt(b.Scope()).BuyerID))
-var _ = query.UpdateLock[query.Left[query.Alias[left, models.User], query.Alias[right, models.Order]]](query.NullableRightScope(j, b.Scope()))
+var a = rows.As[left](models.Users.Query(), "a")
+var b = rows.As[right](models.Orders.Query(), "b")
+var j = rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(a), models.Users.ID), expr.At(rows.Scope(b), models.Orders.BuyerID)))
+var invalid = rows.UpdateLock[rows.Left[rows.Alias[left, models.User], rows.Alias[right, models.Order]]](rows.Target(rows.NullableRightScope(j, rows.Scope(b))))

@@ -13,7 +13,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
@@ -32,94 +31,56 @@ func observerAppWith(t *testing.T, useORM bool) (*database.DB, *observerqueries.
 	stats := &observerqueries.Stats{}
 	app := testkit.Start(t, foundry.New().Register(
 		foundation.Module{Name: "second", Requires: []foundation.ProviderID{"first"}, OnRegister: func(r *foundation.Registrar) error {
-			if useORM {
-				return orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Record]("second"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Record], error) {
-					stats, err := foundation.Resolve(s, statsKey)
-					if err != nil {
-						return nil, err
-					}
-					return func() orm.Hooks[observerqueries.Record] {
-						stats.Second.Add(1)
-						return observerqueries.ORMObserverHooks("second")
-					}, nil
-				})
-			}
-			return observerqueries.RegisterRecordObserver(r, pool, observerqueries.NewRecordObserver("second"), func(s foundation.Resolver) (func() observerqueries.RecordHooks, error) {
+
+			return orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Record]("second"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Record], error) {
 				stats, err := foundation.Resolve(s, statsKey)
 				if err != nil {
 					return nil, err
 				}
-				return func() observerqueries.RecordHooks {
+				return func() orm.Hooks[observerqueries.Record] {
 					stats.Second.Add(1)
-					return observerqueries.ObserverHooks("second")
+					return observerqueries.ORMObserverHooks("second")
 				}, nil
 			})
+
 		}},
 		postgres.Module("database", pool, pgtest.Config(t)),
 		foundation.Module{Name: "first", OnRegister: func(r *foundation.Registrar) error {
 			if err := foundation.Provide(r, statsKey, stats); err != nil {
 				return err
 			}
-			if useORM {
-				if err := orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Record]("first"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Record], error) {
-					stats, err := foundation.Resolve(s, statsKey)
-					if err != nil {
-						return nil, err
-					}
-					return func() orm.Hooks[observerqueries.Record] {
-						stats.First.Add(1)
-						return observerqueries.ORMObserverHooks("first")
-					}, nil
-				}); err != nil {
-					return err
-				}
-				if err := orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Plain]("plain"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Plain], error) {
-					stats, err := foundation.Resolve(s, statsKey)
-					if err != nil {
-						return nil, err
-					}
-					return func() orm.Hooks[observerqueries.Plain] {
-						stats.Plain.Add(1)
-						return orm.Hooks[observerqueries.Plain]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[observerqueries.Plain]) error {
-							return orm.WriteSet(draft, observerqueries.Plains.Name.Set("registered default"))
-						}}
-					}, nil
-				}); err != nil {
-					return err
-				}
-				if err := orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[observerqueries.Record]("record.read"), retrievalConstructor[orm.RetrievalHooks[observerqueries.Record]](statsKey)); err != nil {
-					return err
-				}
-				return orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[observerqueries.Effect]("effect.read"), retrievalConstructor[orm.RetrievalHooks[observerqueries.Effect]](statsKey))
-			}
-			if err := observerqueries.RegisterRecordObserver(r, pool, observerqueries.NewRecordObserver("first"), func(s foundation.Resolver) (func() observerqueries.RecordHooks, error) {
+
+			if err := orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Record]("first"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Record], error) {
 				stats, err := foundation.Resolve(s, statsKey)
 				if err != nil {
 					return nil, err
 				}
-				return func() observerqueries.RecordHooks { stats.First.Add(1); return observerqueries.ObserverHooks("first") }, nil
+				return func() orm.Hooks[observerqueries.Record] {
+					stats.First.Add(1)
+					return observerqueries.ORMObserverHooks("first")
+				}, nil
 			}); err != nil {
 				return err
 			}
-			if err := observerqueries.RegisterPlainObserver(r, pool, observerqueries.NewPlainObserver("plain"), func(s foundation.Resolver) (func() observerqueries.PlainHooks, error) {
+			if err := orm.RegisterObserver(r, pool, orm.NewObserver[observerqueries.Plain]("plain"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Plain], error) {
 				stats, err := foundation.Resolve(s, statsKey)
 				if err != nil {
 					return nil, err
 				}
-				return func() observerqueries.PlainHooks {
+				return func() orm.Hooks[observerqueries.Plain] {
 					stats.Plain.Add(1)
-					return observerqueries.PlainHooks{Creating: func(_ context.Context, _ *database.Tx, draft *observerqueries.PlainDraft) error {
-						*draft = draft.SetName("registered default")
-						return nil
+					return orm.Hooks[observerqueries.Plain]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[observerqueries.Plain]) error {
+						return orm.WriteSet(draft, observerqueries.Plains.Name.Set("registered default"))
 					}}
 				}, nil
 			}); err != nil {
 				return err
 			}
-			if err := observerqueries.RegisterRecordRetrievalObserver(r, pool, observerqueries.NewRecordRetrievalObserver("record.read"), retrievalConstructor[observerqueries.RecordRetrievalHooks](statsKey)); err != nil {
+			if err := orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[observerqueries.Record]("record.read"), retrievalConstructor[orm.RetrievalHooks[observerqueries.Record]](statsKey)); err != nil {
 				return err
 			}
-			return observerqueries.RegisterEffectRetrievalObserver(r, pool, observerqueries.NewEffectRetrievalObserver("effect.read"), retrievalConstructor[observerqueries.EffectRetrievalHooks](statsKey))
+			return orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[observerqueries.Effect]("effect.read"), retrievalConstructor[orm.RetrievalHooks[observerqueries.Effect]](statsKey))
+
 		}},
 	))
 	db, err := foundation.Resolve(app.Services(), pool)
@@ -185,19 +146,21 @@ func stages(names ...string) []string {
 func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 	db, stats, namespace := observerApp(t)
 	var create, update, remove observerqueries.Trace
-	q := observerqueries.QueryObservedRecords()
-	input := observerqueries.RecordDraft{}.SetName(" SAMPLE ")
+	var first observerqueries.Record
+	q := observerqueries.Records
+	input := []orm.Assignment[observerqueries.Record]{observerqueries.Records.Name.Set(" SAMPLE ")}
 	err := inSchema(t, wrapped{db}, namespace, func(tx *database.Tx) error {
-		if _, err := q.All(t.Context(), tx); err != nil {
+		if _, err := q.Query().All(t.Context(), tx); err != nil {
 			return err
 		}
 		if stats.First.Load() != 0 || stats.Second.Load() != 0 {
 			t.Fatal("read instantiated write observers")
 		}
-		item, err := q.Create(observerqueries.WithTrace(t.Context(), &create), wrapped{tx}, input)
+		item, err := q.Insert(observerqueries.WithTrace(t.Context(), &create), wrapped{tx}, input...)
 		if err != nil {
 			return err
 		}
+		first = item
 		want := strings.ToLower(strings.TrimSpace(" SAMPLE |"+strings.Join(stages("saving", "creating"), "|"))) + "!"
 		if item.Name != want || strings.Count(item.Name, "!") != 1 {
 			t.Fatalf("draft sharing or once-only mutator: %q", item.Name)
@@ -205,15 +168,19 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 		if !reflect.DeepEqual(create.Calls, stages("saving", "creating", "created", "saved")) {
 			t.Fatal("create stage order", create.Calls)
 		}
-		if len(create.Changes) != 6 {
+		if len(create.ORMChanges) != 6 {
 			t.Fatal("after callbacks skipped")
 		}
-		for _, changes := range create.Changes {
-			if !reflect.DeepEqual(changes, create.Changes[0]) || !changes.Fields().Name.Assigned() || !changes.Fields().Name.Changed() {
+		for _, changes := range create.ORMChanges {
+			field, err := orm.ChangeOf(changes, observerqueries.Records.Name)
+			if err != nil {
+				return err
+			}
+			if !reflect.DeepEqual(changes, create.ORMChanges[0]) || !field.Assigned() || !field.Changed() {
 				t.Fatal("observers received inconsistent change capture")
 			}
 		}
-		item, err = q.Update(observerqueries.WithTrace(t.Context(), &update), tx, item.ID, observerqueries.RecordDraft{})
+		item, err = q.Update(observerqueries.WithTrace(t.Context(), &update), tx, item.ID)
 		if err != nil {
 			return err
 		}
@@ -227,7 +194,7 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 			t.Fatal("delete stage order", remove.Calls)
 		}
 		var missing observerqueries.Trace
-		if _, err := q.Update(observerqueries.WithTrace(t.Context(), &missing), wrapped{tx}, item.ID, observerqueries.RecordDraft{}); !errors.Is(err, database.NotFound) || len(missing.Calls) != 0 || stats.First.Load() != 3 || stats.Second.Load() != 3 {
+		if _, err := q.Update(observerqueries.WithTrace(t.Context(), &missing), wrapped{tx}, item.ID); !errors.Is(err, database.NotFound) || len(missing.Calls) != 0 || stats.First.Load() != 3 || stats.Second.Load() != 3 {
 			t.Fatal("missing model instantiated observers", err)
 		}
 		return nil
@@ -246,32 +213,51 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 	if stats.Retrieval.Load() != 0 {
 		t.Fatal("normal writes or observer side effects constructed retrieval hooks")
 	}
-	if name, _ := input.Name().Get(); name != " SAMPLE " || input.ID().IsSet() {
-		t.Fatal("callback mutated input draft")
+	if err := inSchema(t, db, namespace, func(tx *database.Tx) error {
+		inspected := false
+		inspection := observerqueries.Trace{Inspect: func(w *orm.Write[observerqueries.Record]) error {
+			name, ok := orm.WriteGet(w, q.Name.Set).Get()
+			if !ok || name != " SAMPLE " || orm.WriteIsSet(w, q.Key().Set) {
+				return errors.New("observer changed original values or omission")
+			}
+			inspected = true
+			return nil
+		}}
+		again, err := observerqueries.Records.Insert(observerqueries.WithTrace(t.Context(), &inspection), tx, input...)
+		if err != nil {
+			return err
+		}
+		want := strings.ToLower(strings.TrimSpace(" SAMPLE |"+strings.Join(stages("saving", "creating"), "|"))) + "!"
+		if !inspected || again.Name != want || again.ID == first.ID {
+			t.Fatal("callback mutated the reusable input or assigned its generated identity")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestPostgresRegisteredObserversOnUnannotatedModelsAndBulkSkipping(t *testing.T) {
 	db, stats, namespace := observerApp(t)
-	q := observerqueries.QueryObservedRecords()
+	q := observerqueries.Records
 	err := db.Session(t.Context(), func(session *database.Session) error {
 		return inSchema(t, wrapped{session}, namespace, func(tx *database.Tx) error {
-			item, err := observerqueries.QueryObservedPlain().Create(t.Context(), wrapped{tx}, observerqueries.PlainDraft{})
+			item, err := observerqueries.Plains.Insert(t.Context(), wrapped{tx})
 			if err != nil {
 				return err
 			}
 			if item.Name != "registered default" || stats.Plain.Load() != 1 {
 				t.Fatal("unannotated model skipped registered observer")
 			}
-			batch, err := q.CreateMany(t.Context(), tx, []observerqueries.RecordDraft{observerqueries.RecordDraft{}.SetName(" BULK ")})
+			batch, err := q.InsertMany(t.Context(), tx, [][]orm.Assignment[observerqueries.Record]{{observerqueries.Records.Name.Set(" BULK ")}})
 			if err != nil {
 				return err
 			}
 			if batch[0].Name != "bulk!" {
 				t.Fatal("bulk skipped field mutator")
 			}
-			f := observerqueries.RecordFields()
-			if _, err := q.Upsert(t.Context(), wrapped{tx}, observerqueries.RecordDraft{}.SetID(batch[0].ID).SetName(" UPSERT "), query.OnConflict[observerqueries.Record](f.ID).DoNothing()); err != nil {
+			f := observerqueries.Records
+			if _, err := orm.Upsert(t.Context(), wrapped{tx}, q.Query(), orm.OnConflict(orm.ConflictKey(f.Key())).DoNothing(), observerqueries.Records.Key().Set(batch[0].ID), observerqueries.Records.Name.Set(" UPSERT ")); err != nil {
 				return err
 			}
 			if stats.First.Load() != 0 || stats.Second.Load() != 0 {
@@ -291,14 +277,14 @@ func TestPostgresObserverCancellationRollsBackAndStopsLaterStages(t *testing.T) 
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		trace := observerqueries.Trace{FailAt: "first.created", Mode: "cancel", Cancel: cancel}
-		_, err := observerqueries.QueryObservedRecords().Create(observerqueries.WithTrace(ctx, &trace), wrapped{tx}, observerqueries.RecordDraft{})
+		_, err := observerqueries.Records.Insert(observerqueries.WithTrace(ctx, &trace), wrapped{tx})
 		if !errors.Is(err, context.Canceled) || trace.Calls[len(trace.Calls)-1] != "first.created" {
 			t.Fatal("cancellation did not stop callbacks", err, trace.Calls)
 		}
-		if n, err := observerqueries.QueryObservedRecords().Count(t.Context(), tx); err != nil || n != 0 {
+		if n, err := observerqueries.Records.Query().Count(t.Context(), tx); err != nil || n != 0 {
 			t.Fatal("canceled model write persisted", n, err)
 		}
-		if n, err := observerqueries.QueryObservedEffects().Count(t.Context(), tx); err != nil || n != 0 {
+		if n, err := observerqueries.Effects.Query().Count(t.Context(), tx); err != nil || n != 0 {
 			t.Fatal("canceled observer effect persisted", n, err)
 		}
 		return nil
@@ -310,21 +296,21 @@ func TestPostgresObserverCancellationRollsBackAndStopsLaterStages(t *testing.T) 
 
 func TestPostgresObserverVetoAndSavepointRollback(t *testing.T) {
 	db, _, namespace := observerApp(t)
-	q, logs := observerqueries.QueryObservedRecords(), observerqueries.QueryObservedEffects()
+	q, logs := observerqueries.Records, observerqueries.Effects
 	err := inSchema(t, db, namespace, func(tx *database.Tx) error {
 		for _, stage := range []string{"first.saving", "first.creating", "first.created", "first.saved"} {
 			for _, mode := range []string{"error", "panic", "goexit"} {
 				trace := observerqueries.Trace{FailAt: stage, Mode: mode}
-				if _, err := q.Create(observerqueries.WithTrace(t.Context(), &trace), wrapped{tx}, observerqueries.RecordDraft{}); err == nil {
+				if _, err := q.Insert(observerqueries.WithTrace(t.Context(), &trace), wrapped{tx}); err == nil {
 					t.Fatal("observer failure accepted")
 				}
 				if trace.Calls[len(trace.Calls)-1] != stage {
 					t.Fatal("callbacks continued after veto", trace.Calls)
 				}
-				if n, err := logs.Count(t.Context(), tx); err != nil || n != 0 {
+				if n, err := logs.Query().Count(t.Context(), tx); err != nil || n != 0 {
 					t.Fatal("related observer writes escaped rollback", n, err)
 				}
-				if n, err := q.Count(t.Context(), tx); err != nil || n != 0 {
+				if n, err := q.Query().Count(t.Context(), tx); err != nil || n != 0 {
 					t.Fatal("model write escaped rollback", n, err)
 				}
 			}
@@ -337,7 +323,7 @@ func TestPostgresObserverVetoAndSavepointRollback(t *testing.T) {
 	var trace observerqueries.Trace
 	err = inSchema(t, db, namespace, func(tx *database.Tx) error {
 		return tx.Savepoint(t.Context(), func(child *database.Tx) error {
-			if _, err := q.Create(observerqueries.WithTrace(t.Context(), &trace), child, observerqueries.RecordDraft{}); err != nil {
+			if _, err := q.Insert(observerqueries.WithTrace(t.Context(), &trace), child); err != nil {
 				return err
 			}
 			return observerqueries.Veto
@@ -357,7 +343,7 @@ func TestPostgresObserversAfterCommitFailureKeepsLaterCallbacks(t *testing.T) {
 	db, _, namespace := observerApp(t)
 	trace := observerqueries.Trace{FailAt: "first.committed"}
 	err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-		_, err := observerqueries.QueryObservedRecords().Create(observerqueries.WithTrace(t.Context(), &trace), tx, observerqueries.RecordDraft{})
+		_, err := observerqueries.Records.Insert(observerqueries.WithTrace(t.Context(), &trace), tx)
 		return err
 	})
 	var outcome *database.Error
@@ -368,7 +354,7 @@ func TestPostgresObserversAfterCommitFailureKeepsLaterCallbacks(t *testing.T) {
 		t.Fatal("later after-commit observer was skipped", trace.Calls)
 	}
 	if err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-		n, err := observerqueries.QueryObservedRecords().Count(t.Context(), tx)
+		n, err := observerqueries.Records.Query().Count(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -388,7 +374,7 @@ func TestPostgresObserverFactoriesAreIndependentAcrossConcurrentWrites(t *testin
 		wg.Go(func() {
 			trace := observerqueries.Trace{}
 			err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-				_, err := observerqueries.QueryObservedRecords().Create(observerqueries.WithTrace(t.Context(), &trace), tx, observerqueries.RecordDraft{})
+				_, err := observerqueries.Records.Insert(observerqueries.WithTrace(t.Context(), &trace), tx)
 				return err
 			})
 			if err != nil {

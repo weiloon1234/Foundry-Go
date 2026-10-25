@@ -2,10 +2,11 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 func wrong() {
-	p, _ := query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().Nickname)).SimplePaginate(nil, nil, query.PageRequest{})
-	var _ query.SimplePage[string] = p
+	p, _ := rows.SimplePaginate(nil, nil, rows.SelectValue(models.Users.Query(), models.Users.Nickname), orm.PageRequest{})
+	var _ orm.SimplePage[string] = p
 }

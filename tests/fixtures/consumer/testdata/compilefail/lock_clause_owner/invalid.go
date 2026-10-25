@@ -2,8 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = query.SelectValue(models.QueryUsers(), query.Value(models.UserFields().Email)).
-	LockRows(query.KeyShareLock(models.QueryCountries().Scope()))
+var invalid = rows.LockRows(rows.ReadScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Email)))), rows.KeyShareLock(rows.Target(rows.ModelScope(models.Countries.Query()))))

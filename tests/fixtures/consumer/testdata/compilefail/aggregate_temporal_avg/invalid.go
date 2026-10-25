@@ -2,7 +2,7 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = foundryquery.Avg(models.UserFields().Birthday)
+var invalid = expr.Avg(models.Users.Birthday)

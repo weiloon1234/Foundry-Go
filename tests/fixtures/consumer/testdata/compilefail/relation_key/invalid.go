@@ -2,7 +2,7 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var invalid = query.BelongsTo(models.OrderFields().BuyerID, models.OrderFields().ID)
+var invalid = orm.BelongsToOf(models.Orders.Buyer, models.Orders.BuyerID, models.Orders.ID)

@@ -10,6 +10,8 @@ import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -19,6 +21,7 @@ type personAlias struct{}
 type purchaseAlias struct{}
 type resultAlias struct{}
 
+// TODO(stage9-lane-a): retain the ordinary result assertions until read-family streaming and clause adapters land.
 func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		people := query.As[personAlias](models.QueryUsers(), "person")
@@ -152,15 +155,7 @@ func TestPostgresDistinctOnSelectsOrderedCompleteRecords(t *testing.T) {
 		if n, err := models.QueryUsers().DistinctOn(u.Status.Group(), u.Level.Group()).OrderBy(u.Level.Asc()).Count(t.Context(), tx); err != nil || n != 1 {
 			t.Fatal("short prefix mismatch with PostgreSQL", err)
 		}
-		// Outer-owned keys remain correlated and cannot execute separately.
-		a := query.As[purchaseAlias](models.QueryOrders(), "purchase")
-		link := query.Correlate(models.QueryUsers(), a)
-		outer := models.UserFieldsAt(query.OuterScope(link, models.QueryUsers().Scope()))
-		inner := models.OrderFieldsAt(query.InnerScope(link, a.Scope()))
-		matching := query.SelectCorrelatedValue(link, query.Value(inner.ID)).Where(inner.BuyerID.EqColumn(outer.ID)).DistinctOn(outer.ID.Group()).OrderBy(outer.ID.Asc(), inner.TotalCents.Desc())
-		if rows, err := models.QueryUsers().Where(matching.Exists()).OrderBy(u.Email.Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, users[:2]) {
-			t.Fatal("correlated distinct key failed", err)
-		}
+
 		return nil
 	})
 }
@@ -186,4 +181,21 @@ func TestInvalidDistinctNeverExecutes(t *testing.T) {
 	if rows, err := models.QueryUsers().Distinct().All(ctx, queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled distinct reached executor", err)
 	}
+}
+
+func TestPostgresCorrelatedDistinctOn(t *testing.T) {
+	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
+		q := models.Users.Query()
+		a := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
+		link := rows.Correlate(rows.From(q), a)
+		outer := expr.At(rows.OuterScope(link, rows.ModelScope(q)), models.Users.ID)
+		inner := rows.InnerScope(link, rows.Scope(a))
+		matching := rows.SelectCorrelatedScalar(link, expr.Select(expr.At(inner, models.Orders.ID))).Where(expr.Equal(expr.At(inner, models.Orders.BuyerID), outer))
+		matching = rows.DistinctOnCorrelatedScalar(matching, expr.Group(outer)).OrderBy(outer.Asc(), expr.At(inner, models.Orders.TotalCents).Desc())
+		got, err := expr.Where(q, matching.Exists()).OrderBy(models.Users.Email.Asc()).All(t.Context(), tx)
+		if err != nil || !reflect.DeepEqual(got, users[:2]) {
+			t.Fatal("correlated distinct key failed", err)
+		}
+		return nil
+	})
 }

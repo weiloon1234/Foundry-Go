@@ -2,7 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = query.WindowFor(models.QueryUsers()).RangeBetween(query.Preceding(1), query.CurrentRow())
+var _ = expr.WindowFor(rows.ModelScope(models.Users.Query())).RangeBetween(expr.Preceding(1), expr.CurrentRow())

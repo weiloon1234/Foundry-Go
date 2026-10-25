@@ -448,6 +448,14 @@ assigned. These functions preserve input values without running mutators. Use th
 nullable getter for nullable fields. Getter/assignment errors abort the draft even
 if a callback ignores them. Draft pointers are valid only during before hooks.
 
+`orm.WriteUnset(write, Users.EmailRevision.Set)` removes the pending assignment in
+Saving/Creating/Updating. Getters then report omission, including after an explicit
+zero or SQL NULL. It does not assign a zero or NULL, invoke mutators, or undo a
+previously persisted value. Unsetting an omitted field is harmless. Later hooks can
+set it again; automatic defaults/timestamps still follow their ordinary conventions.
+The setter keeps the model and input types; foreign declarations and expired drafts
+fail validation. Caller-owned assignment slices remain reusable.
+
 After RETURNING has hydrated and closed its rows, `Created` or `Updated` precedes
 `Saved`. Deletion runs `Deleting` then `Deleted`; force deletion adds
 `ForceDeleting` before `Deleting` and `ForceDeleted` after `Deleted`. Restore runs
@@ -882,7 +890,12 @@ page := Files.Query().Where(orm.UUIDGreater(Files.Key(), after)).
 `UpdateEach(ctx, writer, query, limit, draft)` accepts a callback of type
 `func(context.Context, *database.Tx, M) ([]orm.Assignment[M], error)`.
 `DeleteEach(ctx, writer, query, limit)` performs normal physical or soft deletion.
-Both lock the complete candidate set in primary-key order, require a positive
+`RestoreEach(ctx, writer, query, soft, limit)` restores only trashed candidates.
+`ForceDeleteEach(ctx, writer, query, soft, limit)` physically deletes candidates,
+preserving the query’s active/trashed visibility. Both require the declaration’s
+`SoftDeletable[M]` token, such as `Users.Soft`; foreign or zero tokens fail before I/O.
+
+All four operations lock the complete candidate set in primary-key order, require a positive
 limit no greater than `MaxPerModelWriteRows`, and reject overflow and duplicate
 identities before any draft or lifecycle callback. Incoming lock policies are
 rejected; candidate selection always uses a waiting `FOR UPDATE`. Ordering, pagination,

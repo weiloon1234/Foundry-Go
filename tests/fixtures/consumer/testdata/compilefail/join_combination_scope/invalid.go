@@ -2,15 +2,16 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type first struct{}
 type second struct{}
 type third struct{}
 
-var a = query.As[first](models.QueryUsers(), "a")
-var b = query.As[second](models.QueryUsers(), "b")
-var c = query.As[third](models.QueryUsers(), "c")
-var af, bf, cf = models.UserFieldsAt(a.Scope()), models.UserFieldsAt(b.Scope()), models.UserFieldsAt(c.Scope())
-var invalid = query.OnAnd(query.On(af.ID, bf.ID), query.On(af.ID, cf.ID))
+var a = rows.As[first](models.Users.Query(), "a")
+var b = rows.As[second](models.Users.Query(), "b")
+var c = rows.As[third](models.Users.Query(), "c")
+var af, bf, cf = rows.Scope(a), rows.Scope(b), rows.Scope(c)
+var invalid = rows.OnAnd(rows.On(expr.At(af, models.Users.ID), expr.At(bf, models.Users.ID)), rows.On(expr.At(af, models.Users.ID), expr.At(cf, models.Users.ID)))

@@ -8,6 +8,7 @@ import (
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
@@ -15,11 +16,12 @@ import (
 // Run provides three users and three orders in a unique retained schema.
 func Run(t *testing.T, check func(*database.Tx, []models.User) error) {
 	t.Helper()
-	run(t, 3, func(i int, users []models.User, draft models.UserDraft) models.UserDraft {
+	run(t, 3, func(i int, users []models.User, assignments []orm.Assignment[models.User]) []orm.Assignment[models.User] {
+		assignments = append(assignments, models.Users.Status.Set(models.StatusActive))
 		if i == 1 {
-			draft = draft.SetIntroducerID(users[0].ID).SetNickname("Bee")
+			assignments = append(assignments, models.Users.IntroducerID.Set(users[0].ID), models.Users.Nickname.Set("Bee"))
 		}
-		return draft
+		return assignments
 	}, check)
 }
 
@@ -27,21 +29,23 @@ func Run(t *testing.T, check func(*database.Tx, []models.User) error) {
 // It shares schema creation and base seeding with Run, in an isolated schema.
 func RunJoins(t *testing.T, check func(*database.Tx, []models.User) error) {
 	t.Helper()
-	run(t, 4, func(i int, users []models.User, draft models.UserDraft) models.UserDraft {
+	run(t, 4, func(i int, users []models.User, assignments []orm.Assignment[models.User]) []orm.Assignment[models.User] {
 		if i == 1 {
-			draft = draft.SetStatus(models.StatusDisabled)
+			assignments = append(assignments, models.Users.Status.Set(models.StatusDisabled))
+		} else {
+			assignments = append(assignments, models.Users.Status.Set(models.StatusActive))
 		}
 		if i == 1 || i == 2 {
-			draft = draft.SetIntroducerID(users[0].ID)
+			assignments = append(assignments, models.Users.IntroducerID.Set(users[0].ID))
 		}
 		if i == 3 {
-			draft = draft.SetIntroducerID(users[1].ID)
+			assignments = append(assignments, models.Users.IntroducerID.Set(users[1].ID))
 		}
-		return draft
+		return assignments
 	}, check)
 }
 
-func run(t *testing.T, userCount int, customize func(int, []models.User, models.UserDraft) models.UserDraft, check func(*database.Tx, []models.User) error) {
+func run(t *testing.T, userCount int, customize func(int, []models.User, []orm.Assignment[models.User]) []orm.Assignment[models.User], check func(*database.Tx, []models.User) error) {
 	t.Helper()
 	db := pgtest.Open(t)
 	namespace := pgtest.Namespace(t, db)
@@ -57,16 +61,16 @@ func run(t *testing.T, userCount int, customize func(int, []models.User, models.
 		}
 		var users []models.User
 		for i, email := range []string{"a@example.test", "b@example.test", "c@example.test", "d@example.test"}[:userCount] {
-			draft := models.UserDraft{}.SetEmail(email).SetAge(20 + i).SetStatus(models.StatusActive).SetLevel(models.LevelBasic)
-			draft = customize(i, users, draft)
-			u, err := models.QueryUsers().Create(t.Context(), tx, draft)
+			assignments := []orm.Assignment[models.User]{models.Users.Email.Set(email), models.Users.Age.Set(20 + i), models.Users.Level.Set(models.LevelBasic)}
+			assignments = customize(i, users, assignments)
+			u, err := models.Users.Insert(t.Context(), tx, assignments...)
 			if err != nil {
 				return err
 			}
 			users = append(users, u)
 		}
 		for i, buyer := range []model.ID[models.User]{users[0].ID, users[0].ID, users[1].ID} {
-			if _, err := models.QueryOrders().Create(t.Context(), tx, models.OrderDraft{}.SetBuyerID(buyer).SetTotalCents(int64(i+1))); err != nil {
+			if _, err := models.Orders.Insert(t.Context(), tx, models.Orders.BuyerID.Set(buyer), models.Orders.TotalCents.Set(int64(i+1))); err != nil {
 				return err
 			}
 		}

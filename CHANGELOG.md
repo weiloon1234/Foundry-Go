@@ -8,6 +8,16 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Continue Stage 9 consumer migration with shared model/catalog/report declarations,
+  ORM query fixtures, lifecycle consumers and the query families recorded in the
+  blueprint. Generated callers and ownership manifests remain until their cleanup
+  barrier.
+- Add lifecycle.CountObservers for callback-free registration counts, WriteUnset
+  for typed omission inside live write hooks, and bounded RestoreEach/ForceDeleteEach
+  operations through the existing lifecycle and reconciliation owner.
+- Add scalar ordering/windows and correlated HAVING/DISTINCT/DISTINCT ON package
+  functions, preserving selected-source boundaries and typed scope ownership.
+
 - Complete Stage 7 with explicit application.WithTables registration, model-owned
   Tables lists, transactional ORM seeding and pagination consumer coverage.
   Declaration checks contain panic/Goexit per table; redacted binding, decoding,

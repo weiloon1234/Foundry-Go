@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -14,6 +15,7 @@ var Veto = errors.New("soft-delete fixture veto")
 type Trace struct {
 	Steps      []string
 	Changes    []MemberChanges
+	ORMChanges []orm.Changes[Member]
 	Operations []lifecycle.Operation
 	Committed  []lifecycle.Operation
 	VetoAt     string

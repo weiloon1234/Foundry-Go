@@ -7,6 +7,7 @@ import (
 	"foundry.test/consumer/softqueries"
 	foundry "github.com/weiloon1234/Foundry-Go"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/testkit"
@@ -18,8 +19,8 @@ func runSoft(t *testing.T, work func(*database.Tx, *testkit.Clock) error) {
 	source := testkit.NewClock(time.Date(2031, 2, 3, 4, 5, 6, 123456789, time.UTC))
 	pool := foundation.NewKey[*database.DB]("soft.pool")
 	observers := foundation.Module{Name: "observers", OnRegister: func(r *foundation.Registrar) error {
-		return softqueries.RegisterMemberObserver(r, pool, softqueries.NewMemberObserver("provider.member"), func(foundation.Resolver) (func() softqueries.MemberHooks, error) {
-			return func() softqueries.MemberHooks { return softqueries.Hooks("provider") }, nil
+		return orm.RegisterObserver(r, pool, orm.NewObserver[softqueries.Member]("provider.member"), func(foundation.Resolver) (func() orm.Hooks[softqueries.Member], error) {
+			return func() orm.Hooks[softqueries.Member] { return softqueries.ORMHooks("provider") }, nil
 		})
 	}}
 	app := testkit.Start(t, foundry.New(foundation.WithClock(source)).Register(postgres.Module("database", pool, pgtest.Config(t))).Register(observers))

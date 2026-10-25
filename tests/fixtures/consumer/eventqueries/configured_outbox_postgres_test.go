@@ -196,7 +196,7 @@ enabled = true
 		var id outbox.ID[eventqueries.RecordCreated]
 		rollbackErr := errors.New("outer rollback")
 		err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-			item, err := observerqueries.QueryObservedPlain().Create(t.Context(), tx, observerqueries.PlainDraft{}.SetName("published"))
+			item, err := observerqueries.Plains.Insert(t.Context(), tx, observerqueries.Plains.Name.Set("published"))
 			if err != nil {
 				return err
 			}

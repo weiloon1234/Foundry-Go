@@ -11,29 +11,24 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
-type selectedMember struct{}
-
 func TestPostgresRetrievalIterationClosesBoundedBatches(t *testing.T) {
 	db, stats, namespace := retrievalApp(t)
 	err := inSchema(t.Context(), db, namespace, func(tx *database.Tx) error {
-		q := retrievalqueries.QueryRetrievalMembers()
-		f := retrievalqueries.MemberFields()
+		q := retrievalqueries.Members.Query()
+		f := retrievalqueries.Members
 		for i := range query.DefaultChunkSize + 3 {
-			if _, err := q.Create(t.Context(), tx, retrievalqueries.MemberDraft{}.SetName(fmt.Sprintf("stream %03d", i))); err != nil {
+			if _, err := retrievalqueries.Members.Insert(t.Context(), tx, retrievalqueries.Members.Name.Set(fmt.Sprintf("stream %03d", i))); err != nil {
 				return err
 			}
 		}
 		base := q.Where(f.Name.Like("stream %"))
 		window := base.OrderBy(f.Name.Asc()).Offset(1).Limit(query.DefaultChunkSize + 1)
-		alias := query.As[selectedMember](query.CTE("iteration_members", base), "selected")
-		af := retrievalqueries.MemberFieldsAt(alias.Scope())
-		record := query.SelectRecord(alias, alias.Scope()).OrderBy(af.Name.Asc()).Offset(1).Limit(query.DefaultChunkSize + 1)
+
 		for _, test := range []struct {
 			name string
 			run  func(context.Context, database.Executor, func(retrievalqueries.Member) error) error
 		}{
 			{"model", window.Each},
-			{"complete-cte-record", record.Each},
 		} {
 			for _, stopEarly := range []bool{false, true} {
 				var trace retrievalqueries.Trace

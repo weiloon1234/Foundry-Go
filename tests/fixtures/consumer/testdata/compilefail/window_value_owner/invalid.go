@@ -2,7 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = query.Lag(query.Value(models.OrderFields().TotalCents), 1, query.WindowFor(models.QueryUsers()))
+var _ = expr.Lag(expr.Select(expr.Value(models.Orders.TotalCents)), 1, expr.WindowFor(rows.ModelScope(models.Users.Query())))

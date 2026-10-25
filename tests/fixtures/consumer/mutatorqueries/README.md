@@ -14,3 +14,8 @@ migrate without changing model, enum, key or response identities.
 The generated APIs and directives remain for downstream cutovers. The stored-change
 PostgreSQL test now uses ORM comparison and persisted field changes; remaining
 legacy operation tests remain executable until their package cutover.
+
+CRUD, reusable conflict literals, proposed values, stored change snapshots and
+reference/provenance assertions now exercise ORM. SQL calculations cannot bypass a
+Go mutator; explicit accessors still produce presentation values without altering
+stored identity. Generated declarations remain for the shared retirement barrier.

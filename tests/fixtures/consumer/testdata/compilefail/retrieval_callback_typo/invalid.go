@@ -1,5 +1,6 @@
 package invalid
 
+import "github.com/weiloon1234/Foundry-Go/database/orm"
 import "foundry.test/consumer/retrievalqueries"
 
-var _ = retrievalqueries.MemberRetrievalHooks{Retreived: nil}
+var _ = orm.RetrievalHooks[retrievalqueries.Member]{Retreived: nil}

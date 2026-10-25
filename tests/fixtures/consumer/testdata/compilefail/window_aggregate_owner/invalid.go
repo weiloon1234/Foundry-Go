@@ -2,7 +2,8 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = query.Count[models.User]().Over(query.WindowFor(models.QueryOrders()))
+var _ = expr.Over(expr.Count[models.User](), expr.WindowFor(rows.ModelScope(models.Orders.Query())))

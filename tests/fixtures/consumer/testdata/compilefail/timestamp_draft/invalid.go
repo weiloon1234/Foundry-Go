@@ -6,4 +6,4 @@ import (
 	"foundry.test/consumer/timequeries"
 )
 
-var _ = timequeries.MemberDraft{}.SetUpdatedAt(time.Time{})
+var _ = timequeries.Members.UpdatedAt.Set(time.Time{})

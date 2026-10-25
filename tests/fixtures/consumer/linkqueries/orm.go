@@ -143,8 +143,13 @@ var Archives = orm.Define("link_archives", func(b orm.Builder[Archive], m *Archi
 	table := orm.TableOf(b, &m.ID)
 	return ArchiveTable{table, orm.PrimaryOf(b, table.Key()), orm.ColumnOf(b, &m.MemberID), orm.TextOf(b, &m.Name), orm.NullableTextOf(b, &m.Alias), orm.InputTextOf[Archive, ArchiveTagInput](b, &m.Tag, nil), orm.NumberOf(b, &m.Counter), orm.NumberOf(b, &m.Amount), orm.JSONOf(b, &m.Payload), orm.CreatedAtOf(b, &m.CreatedAt), orm.UpdatedAtOf(b, &m.UpdatedAt)}
 }, orm.WithHooks(func() orm.Hooks[Archive] {
-	return orm.Hooks[Archive]{Creating: func(ctx context.Context, _ *database.Tx, _ *orm.Write[Archive]) error {
+	return orm.Hooks[Archive]{Creating: func(ctx context.Context, _ *database.Tx, draft *orm.Write[Archive]) error {
 		if trace := traceFrom(ctx); trace != nil {
+			if trace.InspectArchive != nil {
+				if err := trace.InspectArchive(draft); err != nil {
+					return err
+				}
+			}
 			trace.Steps = append(trace.Steps, "archive.creating")
 			return ErrVeto
 		}

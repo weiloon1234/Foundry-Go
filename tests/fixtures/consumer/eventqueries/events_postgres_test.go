@@ -58,7 +58,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 			return err
 		}
 		var err error
-		saved, err = observerqueries.QueryObservedPlain().Create(ctx, tx, observerqueries.PlainDraft{}.SetName("committed"))
+		saved, err = observerqueries.Plains.Insert(ctx, tx, observerqueries.Plains.Name.Set("committed"))
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 		if _, err := tx.Exec(ctx, path); err != nil {
 			return err
 		}
-		if _, err := observerqueries.QueryObservedPlain().Create(ctx, tx, observerqueries.PlainDraft{}.SetName("rolled back")); err != nil {
+		if _, err := observerqueries.Plains.Insert(ctx, tx, observerqueries.Plains.Name.Set("rolled back")); err != nil {
 			return err
 		}
 		return rollback
@@ -92,7 +92,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 		if _, err := tx.Exec(ctx, path); err != nil {
 			return err
 		}
-		item, err := observerqueries.QueryObservedPlain().Create(ctx, tx, observerqueries.PlainDraft{}.SetName("retained"))
+		item, err := observerqueries.Plains.Insert(ctx, tx, observerqueries.Plains.Name.Set("retained"))
 		retained = item.ID
 		return err
 	})
@@ -105,7 +105,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 		if _, err := tx.Exec(ctx, path); err != nil {
 			return err
 		}
-		record, err := observerqueries.QueryObservedPlain().RequireFind(ctx, tx, retained)
+		record, err := observerqueries.Plains.Require(ctx, tx, retained)
 		if err != nil {
 			return err
 		}

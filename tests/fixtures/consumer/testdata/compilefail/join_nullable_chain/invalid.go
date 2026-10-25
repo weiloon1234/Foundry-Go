@@ -2,19 +2,20 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type leftTag struct{}
 type rightTag struct{}
 type outsideTag struct{}
 
-var a = query.As[leftTag](models.QueryUsers(), "a")
-var b = query.As[rightTag](models.QueryUsers(), "b")
-var af, bf = models.UserFieldsAt(a.Scope()), models.UserFieldsAt(b.Scope())
-var j = query.LeftJoin(a, b, query.On(af.IntroducerID, bf.ID))
-var outside = query.As[outsideTag](models.QueryUsers(), "outside")
-var nullable = query.NullableRightScope(j, b.Scope())
-var r = models.UserNullableFieldsAt(nullable)
-var chain = query.LeftJoin(j, outside, query.On(r.ID, models.UserFieldsAt(outside.Scope()).ID))
-var invalid = query.LeftScope(chain, nullable)
+var a = rows.As[leftTag](models.Users.Query(), "a")
+var b = rows.As[rightTag](models.Users.Query(), "b")
+var af, bf = rows.Scope(a), rows.Scope(b)
+var j = rows.LeftJoin(a, b, rows.On(expr.At(af, models.Users.IntroducerID), expr.At(bf, models.Users.ID)))
+var outside = rows.As[outsideTag](models.Users.Query(), "outside")
+var nullable = rows.NullableRightScope(j, rows.Scope(b))
+var r = nullable
+var chain = rows.LeftJoin(j, outside, rows.On(expr.AtNullable(r, models.Users.ID), expr.At(rows.Scope(outside), models.Users.ID)))
+var invalid = rows.LeftScope(chain, nullable)

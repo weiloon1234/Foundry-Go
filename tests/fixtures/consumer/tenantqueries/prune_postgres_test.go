@@ -7,6 +7,7 @@ import (
 
 	"foundry.test/consumer/tenantqueries"
 	dbcommand "github.com/weiloon1234/Foundry-Go/database/command"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/prune"
 )
 
@@ -17,13 +18,13 @@ func TestPruningRemovesSelectedModelsInBoundedBatches(t *testing.T) {
 		seedDocument(t, db, alpha, "old-"+string(rune('a'+i)), true)
 	}
 	keep := seedDocument(t, db, alpha, "keep", true)
-	documents := tenantqueries.QueryTenantDocuments()
-	f := tenantqueries.DocumentFields()
+	documents := tenantqueries.Documents.Query()
+	f := tenantqueries.Documents
 	if _, err := documents.Where(f.Title.Ne("keep")).DeleteAll(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	registry, err := prune.New(
-		prune.Model("app.trashed_documents", documents.WithoutGlobalScopes().OnlyTrashed().Query, prune.Mass),
+		prune.ORMSoftModel("app.trashed_documents", orm.WithoutGlobalScopes(documents).OnlyTrashed(), tenantqueries.Documents.Soft, prune.Mass),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -40,18 +41,18 @@ func TestPruningRemovesSelectedModelsInBoundedBatches(t *testing.T) {
 	if err := command.Run(t.Context(), dbcommand.Resources{Prunables: registry, Database: db}, &output); err != nil || !strings.Contains(output.String(), "Removed 1 model(s).") {
 		t.Fatal("prune command", output.String(), err)
 	}
-	remaining, err := documents.WithoutGlobalScopes().WithTrashed().All(t.Context(), db)
+	remaining, err := orm.WithoutGlobalScopes(documents).WithTrashed().All(t.Context(), db)
 	if err != nil || len(remaining) != 1 || remaining[0].ID != keep.ID {
 		t.Fatal("prune removed the wrong documents", remaining, err)
 	}
 	// Lifecycle mode removes each pivot through its ordinary delete.
-	if _, err := tenantqueries.QueryTenantTags().Create(ctx, db, tenantqueries.TagDraft{}.SetCode("x").SetName("x")); err != nil {
+	if _, err := tenantqueries.Tags.Insert(ctx, db, tenantqueries.Tags.Key().Set("x"), tenantqueries.Tags.Name.Set("x")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tenantqueries.DocumentRelations().Tags.AttachMany(ctx, db, keep, []tenantqueries.Tag{{Code: "x"}}, tenantqueries.DocumentTagDraft{}.SetWeight(0)); err != nil {
+	if _, err := orm.AttachMany(ctx, db, tenantqueries.DocumentLinks, keep, []tenantqueries.Tag{{Code: "x"}}, tenantqueries.DocumentTags.Weight.Set(0)); err != nil {
 		t.Fatal(err)
 	}
-	links, err := prune.New(prune.Model("app.weightless_links", tenantqueries.QueryTenantDocumentTags().Where(tenantqueries.DocumentTagFields().Weight.Eq(0)).Query, prune.Lifecycle))
+	links, err := prune.New(prune.ORMModel("app.weightless_links", tenantqueries.DocumentTags.Query().Where(tenantqueries.DocumentTags.Weight.Eq(0)), prune.Lifecycle))
 	if err != nil {
 		t.Fatal(err)
 	}

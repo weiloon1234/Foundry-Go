@@ -2,7 +2,7 @@ package compilefail
 
 import (
 	"foundry.test/consumer/binarymodels"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ query.ScalarField[binarymodels.Record, []byte]
+var _ orm.KeyColumn[binarymodels.Record, []byte]

@@ -11,3 +11,9 @@ keeps `State.Captured` during coexistence. Assignment formatting is redacted.
 
 All five mutation-input compiler cases now exercise the ORM surface. Generated
 outputs and directives are retained until dependent cutovers and lead regeneration.
+
+Live before-write callbacks can call `orm.WriteUnset(write, Members.Note.Set)` to
+restore omission, independently of SQL NULL and an explicit zero input. The fixture
+keeps typed getter and formatting assertions inside that callback lifetime. Ordinary
+CRUD and conflicts now use ORM inputs; raw stored literals still cannot bypass a
+Go mutator through a SQL conflict expression.

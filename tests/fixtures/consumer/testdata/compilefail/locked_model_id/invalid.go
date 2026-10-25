@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var _, _ = models.QueryUsers().ForUpdate().NoWait().Find(nil, nil, model.ID[models.Order]{})
+var _, _ = models.Users.Query().ForUpdate().NoWait().Where(models.Users.ID.Eq(model.ID[models.Order]{})).First(nil, nil)

@@ -41,6 +41,11 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 	return orm.Hooks[Member]{
 		Saving: func(ctx context.Context, _ *database.Tx, _ value.Optional[Member], draft *orm.Write[Member]) error {
 			if state, _ := ctx.Value(stateKey{}).(*State); state != nil {
+				if state.Inspect != nil {
+					if err := state.Inspect(draft); err != nil {
+						return err
+					}
+				}
 				state.BeforeInput = orm.WriteGet(draft, fields.Email.Set)
 			}
 			return nil

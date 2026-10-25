@@ -2,10 +2,10 @@ package invalid
 
 import (
 	"foundry.test/consumer/temporalqueries"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
 func invalid() {
-	f := temporalqueries.SampleFields()
-	_ = query.Year(f.MaybeDate)
+	f := temporalqueries.Samples
+	_ = expr.Year(expr.Value(f.MaybeDate))
 }

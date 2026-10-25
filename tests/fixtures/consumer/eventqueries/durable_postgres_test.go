@@ -88,7 +88,7 @@ func TestModelAndTypedOutboxCommitAndRollBackTogether(t *testing.T) {
 	var saved observerqueries.Plain
 	if err := consumer.within(ctx, func(tx *database.Tx) error {
 		var err error
-		saved, err = observerqueries.QueryObservedPlain().Create(ctx, tx, observerqueries.PlainDraft{}.SetName("committed"))
+		saved, err = observerqueries.Plains.Insert(ctx, tx, observerqueries.Plains.Name.Set("committed"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -113,17 +113,17 @@ func TestModelAndTypedOutboxCommitAndRollBackTogether(t *testing.T) {
 		if payload.ID != saved.ID {
 			return errors.New("event lost the concrete persisted model key")
 		}
-		if _, err := eventqueries.QueryEventLinks().Create(t.Context(), tx, eventqueries.EventLinkDraft{}.SetID(1).SetMessageID(stored.ID())); err != nil {
+		if _, err := eventqueries.Links.Insert(t.Context(), tx, eventqueries.Links.Key().Set(1), eventqueries.Links.MessageID.Set(stored.ID())); err != nil {
 			return err
 		}
-		link, err := eventqueries.QueryEventLinks().Where(eventqueries.EventLinkFields().MessageID.Eq(ids[0])).RequireFirst(t.Context(), tx)
+		link, err := eventqueries.Links.Query().Where(eventqueries.Links.MessageID.Eq(ids[0])).Require(t.Context(), tx)
 		if err != nil {
 			return err
 		}
 		if link.MessageID != ids[0] {
 			return errors.New("generated model changed the payload-owned message key")
 		}
-		_, err = observerqueries.QueryObservedPlain().RequireFind(t.Context(), tx, payload.ID)
+		_, err = observerqueries.Plains.Require(t.Context(), tx, payload.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -131,7 +131,7 @@ func TestModelAndTypedOutboxCommitAndRollBackTogether(t *testing.T) {
 	rollback := errors.New("rollback business transaction")
 	var discarded model.ID[observerqueries.Plain]
 	if err := consumer.within(ctx, func(tx *database.Tx) error {
-		item, err := observerqueries.QueryObservedPlain().Create(ctx, tx, observerqueries.PlainDraft{}.SetName("discarded"))
+		item, err := observerqueries.Plains.Insert(ctx, tx, observerqueries.Plains.Name.Set("discarded"))
 		discarded = item.ID
 		if err != nil {
 			return err
@@ -149,7 +149,7 @@ func TestModelAndTypedOutboxCommitAndRollBackTogether(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		row, err := observerqueries.QueryObservedPlain().Find(t.Context(), tx, discarded)
+		row, err := observerqueries.Plains.Find(t.Context(), tx, discarded)
 		if err != nil {
 			return err
 		}
@@ -167,7 +167,7 @@ func TestFailureAfterEnqueueRollsBackTheModelAndMessage(t *testing.T) {
 	rejected := errors.New("later observer failure")
 	consumer.trace.Reject(rejected)
 	if err := consumer.within(t.Context(), func(tx *database.Tx) error {
-		_, err := observerqueries.QueryObservedPlain().Create(t.Context(), tx, observerqueries.PlainDraft{}.SetName("rejected"))
+		_, err := observerqueries.Plains.Insert(t.Context(), tx, observerqueries.Plains.Name.Set("rejected"))
 		return err
 	}); !errors.Is(err, rejected) {
 		t.Fatal("observer failure was lost", err)
@@ -181,7 +181,7 @@ func TestFailureAfterEnqueueRollsBackTheModelAndMessage(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		rows, err := observerqueries.QueryObservedPlain().Count(t.Context(), tx)
+		rows, err := observerqueries.Plains.Query().Count(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -197,7 +197,7 @@ func TestFailureAfterEnqueueRollsBackTheModelAndMessage(t *testing.T) {
 func TestOutboxStorageFailureRollsBackTheModelWrite(t *testing.T) {
 	consumer := prepareDurableConsumer(t, false)
 	if err := consumer.within(t.Context(), func(tx *database.Tx) error {
-		_, err := observerqueries.QueryObservedPlain().Create(t.Context(), tx, observerqueries.PlainDraft{}.SetName("missing outbox"))
+		_, err := observerqueries.Plains.Insert(t.Context(), tx, observerqueries.Plains.Name.Set("missing outbox"))
 		return err
 	}); err == nil {
 		t.Fatal("missing outbox table did not reject the model write")
@@ -206,7 +206,7 @@ func TestOutboxStorageFailureRollsBackTheModelWrite(t *testing.T) {
 		t.Fatal("failed enqueue returned a successful message identity")
 	}
 	if err := consumer.within(t.Context(), func(tx *database.Tx) error {
-		count, err := observerqueries.QueryObservedPlain().Count(t.Context(), tx)
+		count, err := observerqueries.Plains.Query().Count(t.Context(), tx)
 		if err != nil {
 			return err
 		}

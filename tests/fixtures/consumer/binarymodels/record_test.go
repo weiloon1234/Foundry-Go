@@ -1,37 +1,60 @@
-package binarymodels_test
+package binarymodels
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"testing"
 
-	"foundry.test/consumer/binarymodels"
+	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 func TestBinaryDraftAndSnapshotsOwnBuffers(t *testing.T) {
-	input := binarymodels.Input{1, 2}
+	input := Input{1, 2}
 	raw := []byte{3}
-	draft := binarymodels.Draft(1, input).SetRaw(raw).SetNote(input)
+	stop := errors.New("draft inspected")
+	called := false
+	var table RecordTable
+	table = declareRecords(orm.WithHooks(func() orm.Hooks[Record] {
+		return orm.Hooks[Record]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[Record]) error {
+			called = true
+			body, _ := orm.WriteGet(draft, table.Body.Set).Get()
+			storedRaw, _ := orm.WriteGet(draft, table.RawBytes.Set).Get()
+			note, _ := orm.WriteNullableGet(draft, table.Note.Set).Get()
+			nullable, _ := note.Get()
+			if body[0] != 1 || storedRaw[0] != 3 || nullable[0] != 1 {
+				return errors.New("draft retained caller storage")
+			}
+			body[0], storedRaw[0], nullable[0] = 8, 8, 8
+			body, _ = orm.WriteGet(draft, table.Body.Set).Get()
+			storedRaw, _ = orm.WriteGet(draft, table.RawBytes.Set).Get()
+			note, _ = orm.WriteNullableGet(draft, table.Note.Set).Get()
+			nullable, _ = note.Get()
+			if body[0] != 1 || storedRaw[0] != 3 || nullable[0] != 1 {
+				return errors.New("draft getter exposed owned storage")
+			}
+			return stop
+		}}
+	}))
+	draft := []orm.Assignment[Record]{table.Key().Set(1), table.Body.Set(input), table.RawBytes.Set(raw), table.Note.Set(input), table.Encoded.Set(input)}
 	input[0], raw[0] = 9, 9
-	body, _ := draft.Body().Get()
-	storedRaw, _ := draft.Raw().Get()
-	note, _ := draft.Note().Get()
-	nullable, _ := note.Get()
-	if body[0] != 1 || storedRaw[0] != 3 || nullable[0] != 1 {
-		t.Fatal("draft retained caller storage")
+	if _, err := table.Insert(t.Context(), draftPool(t), draft...); !errors.Is(err, stop) || !called {
+		t.Fatal("draft inspection did not run", err)
 	}
-	body[0], storedRaw[0], nullable[0] = 8, 8, 8
-	body, _ = draft.Body().Get()
-	storedRaw, _ = draft.Raw().Get()
-	note, _ = draft.Note().Get()
-	nullable, _ = note.Get()
-	if body[0] != 1 || storedRaw[0] != 3 || nullable[0] != 1 {
-		t.Fatal("draft getter exposed owned storage")
+	before := Record{ID: 1, Body: Payload{1}, Raw: []byte{}, Note: value.Of(Payload{2})}
+	after := Record{ID: 1, Body: Payload{3}, Raw: []byte{}, Note: value.Null[Payload]()}
+	change, err := BinaryChanges(before, after)
+	if err != nil {
+		t.Fatal(err)
 	}
-	before := binarymodels.Record{ID: 1, Body: binarymodels.Payload{1}, Raw: []byte{}, Note: value.Of(binarymodels.Payload{2})}
-	after := binarymodels.Record{ID: 1, Body: binarymodels.Payload{3}, Raw: []byte{}, Note: value.Null[binarymodels.Payload]()}
-	change, err := binarymodels.BinaryChanges(before, after)
-	if err != nil || !change.Fields().Body.Changed() || !change.Fields().Note.Changed() {
+	bodyChange, err := orm.ChangeOf(change, Records.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	noteChange, err := orm.NullableChangeOf(change, Records.Note)
+	if err != nil || !bodyChange.Changed() || !noteChange.Changed() {
 		t.Fatal("binary changes incorrect", err)
 	}
 	before.Body[0], after.Body[0] = 7, 7
@@ -46,9 +69,9 @@ func TestBinaryDraftAndSnapshotsOwnBuffers(t *testing.T) {
 	if b.Body[0] != 1 || a.Body[0] != 3 {
 		t.Fatal("model snapshot getter exposed owned storage")
 	}
-	field, _ := change.Fields().Body.Before().Get()
+	field, _ := bodyChange.Before().Get()
 	field[0] = 5
-	field, _ = change.Fields().Body.Before().Get()
+	field, _ = bodyChange.Before().Get()
 	if !bytes.Equal(field, []byte{1}) {
 		t.Fatal("field snapshot getter exposed owned storage")
 	}

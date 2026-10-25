@@ -42,7 +42,7 @@ func TestORMObserverDeclarationsAreSeparateFromLegacy(t *testing.T) {
 }
 
 func TestPostgresORMObserversComposeAndRollback(t *testing.T) {
-	db, stats, namespace := observerORMApp(t)
+	db, stats, namespace := observerApp(t)
 	var trace observerqueries.Trace
 	ctx := observerqueries.WithTrace(t.Context(), &trace)
 	err := inSchema(t, db, namespace, func(tx *database.Tx) error {

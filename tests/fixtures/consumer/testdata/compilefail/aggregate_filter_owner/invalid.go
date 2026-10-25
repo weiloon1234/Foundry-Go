@@ -2,7 +2,7 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	foundryquery "github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = foundryquery.Sum(models.OrderFields().TotalCents).Filter(models.UserFields().Age.Gt(18))
+var invalid = expr.Sum(models.Orders.TotalCents).Filter(expr.ModelPredicate(models.Users.Age.Gt(18)))

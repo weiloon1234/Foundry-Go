@@ -7,6 +7,7 @@ import (
 
 	"foundry.test/consumer/observerqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/outbox"
@@ -51,7 +52,7 @@ func DurableDomain() foundation.Module {
 		if err := foundation.Factory(r, Enqueued, func(foundation.Resolver) (*EnqueueTrace, error) { return &EnqueueTrace{}, nil }); err != nil {
 			return err
 		}
-		return observerqueries.RegisterPlainObserver(r, Pool, observerqueries.NewPlainObserver("record.outbox"), func(s foundation.Resolver) (func() observerqueries.PlainHooks, error) {
+		return orm.RegisterObserver(r, Pool, orm.NewObserver[observerqueries.Plain]("record.outbox"), func(s foundation.Resolver) (func() orm.Hooks[observerqueries.Plain], error) {
 			producer, err := foundation.Resolve(s, Durable)
 			if err != nil {
 				return nil, err
@@ -60,8 +61,8 @@ func DurableDomain() foundation.Module {
 			if err != nil {
 				return nil, err
 			}
-			return func() observerqueries.PlainHooks {
-				return observerqueries.PlainHooks{Created: func(ctx context.Context, tx *database.Tx, changes observerqueries.PlainChanges) error {
+			return func() orm.Hooks[observerqueries.Plain] {
+				return orm.Hooks[observerqueries.Plain]{Created: func(ctx context.Context, tx *database.Tx, changes orm.Changes[observerqueries.Plain]) error {
 					after, present := changes.After().Get()
 					if !present {
 						return errors.New("created observer has no stored snapshot")

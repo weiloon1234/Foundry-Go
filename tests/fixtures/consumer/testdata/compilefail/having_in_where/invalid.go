@@ -2,7 +2,7 @@ package invalid
 
 import (
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = models.QueryOrders().Where(query.Count[models.Order]().Gt(1))
+var invalid = expr.Where(models.Orders.Query(), expr.Count[models.Order]().Gt(1))

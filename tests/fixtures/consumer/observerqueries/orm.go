@@ -78,6 +78,13 @@ func observerHooksFor(name string, fields RecordTable) orm.Hooks[Record] {
 	}
 	return orm.Hooks[Record]{
 		Saving: func(ctx context.Context, tx *database.Tx, _ value.Optional[Record], draft *orm.Write[Record]) error {
+			if name == "local" {
+				if trace := traceOf(ctx); trace != nil && trace.Inspect != nil {
+					if err := trace.Inspect(draft); err != nil {
+						return err
+					}
+				}
+			}
 			if savingCalled {
 				return errors.New("observer factory reused across operations")
 			}

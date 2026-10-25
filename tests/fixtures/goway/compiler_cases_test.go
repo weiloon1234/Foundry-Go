@@ -17,6 +17,22 @@ func compilerCases() []compilerCase {
 		{"translation_locale_contract", "cannot use"},
 		{"auth_provider_key", "does not match inferred type"},
 
+		{"each_restore_owner", "does not match inferred type"},
+		{"each_force_owner", "does not match inferred type"},
+		{"each_force_token", "not enough arguments"},
+		{"each_restore_result", "cannot use"},
+		{"audit_field_value", "cannot use"},
+		{"audit_model_owner", "does not match inferred type"},
+		{"audit_history_id", "does not match inferred type"},
+
+		{"observer_counts_adapters", "cannot use"},
+		{"write_unset_owner", "does not match inferred type"},
+		{"scalar_clause_order_owner", "does not match"},
+		{"correlated_clause_having_owner", "does not match"},
+		{"correlated_clause_having_row", "does not match"},
+		{"correlated_clause_distinct_owner", "does not match"},
+		{"correlated_clause_distinct_selected", "does not match"},
+
 		{"datatable_cell_value", "cannot use"},
 		{"datatable_column_row", "cannot use"},
 		{"datatable_column_scope", "cannot use"},

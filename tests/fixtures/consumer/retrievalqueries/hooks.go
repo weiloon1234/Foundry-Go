@@ -27,19 +27,27 @@ func WithTrace(ctx context.Context, trace *Trace) context.Context {
 }
 
 func memberRetrieval() MemberRetrievalHooks {
+	return MemberRetrievalHooks{Retrieved: memberRetrieved(QueryRetrievalMembers().Count)}
+}
+
+func memberRetrieved(count func(context.Context, database.Executor) (int64, error)) func(context.Context, database.Executor, Member) error {
 	first := true
-	return MemberRetrievalHooks{Retrieved: func(ctx context.Context, executor database.Executor, member Member) error {
+	return func(ctx context.Context, executor database.Executor, member Member) error {
 		if trace, _ := ctx.Value(traceKey{}).(*Trace); trace != nil && first {
 			trace.LocalFactories++
 		}
 		first = false
-		return Observe(ctx, executor, "local", member.Name)
-	}}
+		return observe(ctx, executor, "local", member.Name, count)
+	}
 }
 
 // Observe performs scalar I/O on the caller's executor, without recursively
 // hydrating models. Trace state belongs to one sequential read operation.
 func Observe(ctx context.Context, executor database.Executor, label, stored string) error {
+	return observe(ctx, executor, label, stored, Members.Query().Count)
+}
+
+func observe(ctx context.Context, executor database.Executor, label, stored string, count func(context.Context, database.Executor) (int64, error)) error {
 	trace, _ := ctx.Value(traceKey{}).(*Trace)
 	if trace == nil {
 		return nil
@@ -47,7 +55,7 @@ func Observe(ctx context.Context, executor database.Executor, label, stored stri
 	trace.Calls = append(trace.Calls, label)
 	trace.Names = append(trace.Names, stored)
 	trace.Contexts = append(trace.Contexts, ctx)
-	if _, err := QueryRetrievalMembers().Count(ctx, executor); err != nil {
+	if _, err := count(ctx, executor); err != nil {
 		return err
 	}
 	if trace.FailAt != label {

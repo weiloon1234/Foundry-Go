@@ -13,17 +13,19 @@ import (
 var ErrVeto = errors.New("relation fixture veto")
 
 type Trace struct {
-	Steps        []string
-	Changes      []MembershipChanges
-	ORMChanges   []orm.Changes[Membership]
-	Committed    []lifecycle.Operation
-	Reads        int
-	VetoAt       string
-	VetoDeletion int
-	Deletions    int
-	CancelAt     string
-	Cancel       context.CancelFunc
-	OnPhase      func(context.Context, string) error
+	InspectArchive    func(*orm.Write[Archive]) error
+	InspectMembership func(*orm.Write[Membership]) error
+	Steps             []string
+	Changes           []MembershipChanges
+	ORMChanges        []orm.Changes[Membership]
+	Committed         []lifecycle.Operation
+	Reads             int
+	VetoAt            string
+	VetoDeletion      int
+	Deletions         int
+	CancelAt          string
+	Cancel            context.CancelFunc
+	OnPhase           func(context.Context, string) error
 }
 type traceKey struct{}
 

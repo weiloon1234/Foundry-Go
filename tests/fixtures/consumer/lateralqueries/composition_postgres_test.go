@@ -8,7 +8,8 @@ import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type matchedAlias struct{}
@@ -16,37 +17,36 @@ type matchInputAlias struct{}
 
 func TestPostgresLateralAggregateAndWindowReports(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, _ []models.User) error {
-		outer := query.As[usersAlias](models.QueryUsers(), "buyer")
-		c, scope := userOrders(outer, outer.Scope())
-		o := models.OrderFieldsAt(scope)
-		selected := reports.ProjectCorrelatedOrderSummary(c).
-			SelectTotal(query.Sum(o.TotalCents).Value()).SelectCount(query.CountField(o.ID).Value()).Query()
-		stats := query.AsLateral[statsAlias](selected, "stats")
-		joined := query.CrossJoinLateral(outer, stats)
-		u := models.UserFieldsAt(query.LeftScope(joined, outer.Scope()))
-		rows, err := query.SelectRecord(joined, query.RightScope(joined, stats.Scope())).OrderBy(u.Age.Asc()).All(t.Context(), tx)
-		if err != nil || len(rows) != 4 {
-			t.Fatal(rows, err)
+		outer := rows.As[usersAlias](models.Users.Query(), "buyer")
+		c, scope := userOrders(outer, rows.Scope(outer))
+		o := scope
+		selected := rows.ProjectCorrelated(c, reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Total, expr.SumAt(o, models.Orders.TotalCents).Value()), rows.MapSelected(reports.OrderSummaries.Count, expr.CountFieldAt(o, models.Orders.ID).Value()))
+		stats := rows.AsLateral[statsAlias](selected, "stats")
+		joined := rows.CrossJoinLateral(outer, stats)
+		u := rows.LeftScope(joined, rows.Scope(outer))
+		items, err := rows.SelectRecord(joined, rows.RightScope(joined, rows.LateralScope(stats))).OrderBy(expr.At(u, models.Users.Age).Asc()).All(t.Context(), tx)
+		if err != nil || len(items) != 4 {
+			t.Fatal(items, err)
 		}
 		for i, want := range []int64{2, 1, 0, 0} {
-			if rows[i].Count != want {
-				t.Fatal(rows)
+			if items[i].Count != want {
+				t.Fatal(items)
 			}
-			if total, present := rows[i].Total.Get(); (i < 2 && (!present || total.String() != "3")) || (i >= 2 && present) {
-				t.Fatal(rows)
+			if total, present := items[i].Total.Get(); (i < 2 && (!present || total.String() != "3")) || (i >= 2 && present) {
+				t.Fatal(items)
 			}
 		}
 		// HAVING can remove the otherwise present aggregate row for an empty input.
-		filtered := query.AsLateral[statsAlias](selected.Having(query.CountField(o.ID).Gt(0)), "nonempty")
-		filteredJoin := query.CrossJoinLateral(outer, filtered)
-		if n, err := query.SelectRecord(filteredJoin, query.RightScope(filteredJoin, filtered.Scope())).Count(t.Context(), tx); err != nil || n != 2 {
+		filtered := rows.AsLateral[statsAlias](rows.HavingCorrelatedRecord(selected, expr.CountFieldAt(o, models.Orders.ID).Gt(0)), "nonempty")
+		filteredJoin := rows.CrossJoinLateral(outer, filtered)
+		if n, err := rows.ReadRecord(rows.SelectRecord(filteredJoin, rows.RightScope(filteredJoin, rows.LateralScope(filtered)))).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal(n, err)
 		}
-		window := query.WindowFor(c).OrderBy(o.TotalCents.Desc(), o.ID.Asc())
-		ranked := lateralqueries.ProjectCorrelatedRankedOrder(c).SelectID(query.Value(o.ID)).SelectTotal(query.Value(o.TotalCents)).SelectRank(query.RowNumber(window)).Query().OrderBy(o.TotalCents.Desc()).Limit(2)
-		ranking := query.AsLateral[latestAlias](ranked, "ranked")
-		rankingJoin := query.CrossJoinLateral(outer, ranking)
-		ranks, err := query.SelectRecord(rankingJoin, query.RightScope(rankingJoin, ranking.Scope())).All(t.Context(), tx)
+		window := expr.WindowFor(scope).OrderBy(expr.At(o, models.Orders.TotalCents).Desc(), expr.At(o, models.Orders.ID).Asc())
+		ranked := rows.ProjectCorrelated(c, lateralqueries.RankedOrders, rows.MapSelected(lateralqueries.RankedOrders.ID, expr.Select(expr.At(o, models.Orders.ID))), rows.MapSelected(lateralqueries.RankedOrders.Total, expr.Select(expr.At(o, models.Orders.TotalCents))), rows.MapSelected(lateralqueries.RankedOrders.Rank, expr.RowNumber(window))).OrderBy(expr.At(o, models.Orders.TotalCents).Desc()).Limit(2)
+		ranking := rows.AsLateral[latestAlias](ranked, "ranked")
+		rankingJoin := rows.CrossJoinLateral(outer, ranking)
+		ranks, err := rows.SelectRecord(rankingJoin, rows.RightScope(rankingJoin, rows.LateralScope(ranking))).All(t.Context(), tx)
 		if err != nil || len(ranks) != 3 {
 			t.Fatal(ranks, err)
 		}
@@ -60,16 +60,16 @@ func TestPostgresLateralAggregateAndWindowReports(t *testing.T) {
 			}
 		}
 		// A CTE referenced solely inside the lateral input is discovered once.
-		definition := query.CTE("eligible_orders", models.QueryOrders().Where(models.OrderFields().TotalCents.Gt(1)))
-		eligible := query.As[ordersAlias](definition, "eligible")
-		cteCorrelation := query.Correlate(outer, eligible)
-		inside := query.InnerScope(cteCorrelation, eligible.Scope())
-		e := models.OrderFieldsAt(inside)
-		buyer := models.UserFieldsAt(query.OuterScope(cteCorrelation, outer.Scope()))
-		cteRecords := query.SelectCorrelatedRecord(cteCorrelation.Where(query.Equal(e.BuyerID, buyer.ID)), inside).Distinct().OrderBy(e.TotalCents.Desc()).Limit(1)
-		cteRight := query.AsLateral[latestAlias](cteRecords, "cte_latest")
-		cteJoin := query.CrossJoinLateral(outer, cteRight)
-		if n, err := query.SelectRecord(cteJoin, query.RightScope(cteJoin, cteRight.Scope())).Count(t.Context(), tx); err != nil || n != 2 {
+		definition := rows.CTE("eligible_orders", rows.ModelRecord(models.Orders.Query().Where(models.Orders.TotalCents.Gt(1))))
+		eligible := rows.AsRecord[ordersAlias](definition, "eligible")
+		cteCorrelation := rows.Correlate(outer, eligible)
+		inside := rows.InnerScope(cteCorrelation, rows.Scope(eligible))
+		e := inside
+		buyer := rows.OuterScope(cteCorrelation, rows.Scope(outer))
+		cteRecords := rows.DistinctCorrelatedRecord(rows.SelectCorrelatedRecord(cteCorrelation.Where(expr.Equal(expr.At(e, models.Orders.BuyerID), expr.At(buyer, models.Users.ID))), inside)).OrderBy(expr.At(e, models.Orders.TotalCents).Desc()).Limit(1)
+		cteRight := rows.AsLateral[latestAlias](cteRecords, "cte_latest")
+		cteJoin := rows.CrossJoinLateral(outer, cteRight)
+		if n, err := rows.ReadRecord(rows.SelectRecord(cteJoin, rows.RightScope(cteJoin, rows.LateralScope(cteRight)))).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal(n, err)
 		}
 		return nil
@@ -78,21 +78,21 @@ func TestPostgresLateralAggregateAndWindowReports(t *testing.T) {
 
 func TestPostgresLateralChainedNullableScopes(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, _ []models.User) error {
-		outer := query.As[usersAlias](models.QueryUsers(), "buyer")
-		c, scope := userOrders(outer, outer.Scope())
-		o := models.OrderFieldsAt(scope)
-		latest := query.AsLateral[latestAlias](query.SelectCorrelatedRecord(c, scope).OrderBy(o.TotalCents.Desc()).Limit(1), "latest")
-		first := query.LeftJoinLateral(outer, latest)
-		matches := query.As[matchInputAlias](models.QueryUsers(), "matched_user")
-		second := query.Correlate(first, matches)
-		previous := models.OrderNullableFieldsAt(query.OuterNullableScope(second, query.NullableRightScope(first, latest.Scope())))
-		matchScope := query.InnerScope(second, matches.Scope())
-		m := models.UserFieldsAt(matchScope)
-		matched := query.AsLateral[matchedAlias](query.SelectCorrelatedRecord(second.Where(query.Equal(query.NullableRow(m.ID), previous.BuyerID)), matchScope), "matched")
-		chain := query.LeftJoinLateral(first, matched)
-		retained := models.OrderNullableFieldsAt(query.LeftNullableScope(chain, query.NullableRightScope(first, latest.Scope())))
-		found := models.UserNullableFieldsAt(query.NullableRightScope(chain, matched.Scope()))
-		pairs, err := reports.ProjectUserPair(chain).SelectLeftID(query.Value(retained.BuyerID)).SelectRightID(query.Value(found.ID)).Query().All(t.Context(), tx)
+		outer := rows.As[usersAlias](models.Users.Query(), "buyer")
+		c, scope := userOrders(outer, rows.Scope(outer))
+		o := scope
+		latest := rows.AsLateral[latestAlias](rows.SelectCorrelatedRecord(c, scope).OrderBy(expr.At(o, models.Orders.TotalCents).Desc()).Limit(1), "latest")
+		first := rows.LeftJoinLateral(outer, latest)
+		matches := rows.As[matchInputAlias](models.Users.Query(), "matched_user")
+		second := rows.Correlate(first, matches)
+		previous := rows.OuterNullableScope(second, rows.NullableRightScope(first, rows.LateralScope(latest)))
+		matchScope := rows.InnerScope(second, rows.Scope(matches))
+		m := matchScope
+		matched := rows.AsLateral[matchedAlias](rows.SelectCorrelatedRecord(second.Where(expr.Equal(expr.NullableRow(expr.At(m, models.Users.ID)), expr.AtNullable(previous, models.Orders.BuyerID))), matchScope), "matched")
+		chain := rows.LeftJoinLateral(first, matched)
+		retained := rows.LeftNullableScope(chain, rows.NullableRightScope(first, rows.LateralScope(latest)))
+		found := rows.NullableRightScope(chain, rows.LateralScope(matched))
+		pairs, err := rows.Select(chain, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Select(expr.AtNullable(retained, models.Orders.BuyerID))), rows.MapSelected(reports.UserPairs.RightID, expr.Select(expr.AtNullable(found, models.Users.ID)))).All(t.Context(), tx)
 		if err != nil || len(pairs) != 4 {
 			t.Fatal(pairs, err)
 		}

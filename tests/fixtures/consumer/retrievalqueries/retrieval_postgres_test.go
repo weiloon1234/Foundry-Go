@@ -11,6 +11,7 @@ import (
 	"foundry.test/consumer/retrievalqueries"
 	foundry "github.com/weiloon1234/Foundry-Go"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -24,15 +25,15 @@ type factoryStats struct {
 	Pivot  atomic.Int64
 }
 
-func memberConstructor(key foundation.Key[*factoryStats], index int, label string) func(foundation.Resolver) (func() retrievalqueries.MemberRetrievalHooks, error) {
-	return func(resolver foundation.Resolver) (func() retrievalqueries.MemberRetrievalHooks, error) {
+func memberConstructor(key foundation.Key[*factoryStats], index int, label string) func(foundation.Resolver) (func() orm.RetrievalHooks[retrievalqueries.Member], error) {
+	return func(resolver foundation.Resolver) (func() orm.RetrievalHooks[retrievalqueries.Member], error) {
 		stats, err := foundation.Resolve(resolver, key)
 		if err != nil {
 			return nil, err
 		}
-		return func() retrievalqueries.MemberRetrievalHooks {
+		return func() orm.RetrievalHooks[retrievalqueries.Member] {
 			stats.Member[index].Add(1)
-			return retrievalqueries.MemberRetrievalHooks{Retrieved: func(ctx context.Context, executor database.Executor, member retrievalqueries.Member) error {
+			return orm.RetrievalHooks[retrievalqueries.Member]{Retrieved: func(ctx context.Context, executor database.Executor, member retrievalqueries.Member) error {
 				return retrievalqueries.Observe(ctx, executor, label, member.Name)
 			}}
 		}, nil
@@ -40,6 +41,11 @@ func memberConstructor(key foundation.Key[*factoryStats], index int, label strin
 }
 
 func retrievalApp(t *testing.T) (*database.DB, *factoryStats, string) {
+	t.Helper()
+	return retrievalApplication(t, false)
+}
+
+func retrievalApplication(t *testing.T, legacyMembers bool) (*database.DB, *factoryStats, string) {
 	t.Helper()
 	pool := foundation.NewKey[*database.DB]("retrieval.pool")
 	statsKey := foundation.NewKey[*factoryStats]("retrieval.stats")
@@ -49,38 +55,38 @@ func retrievalApp(t *testing.T) (*database.DB, *factoryStats, string) {
 	config.Pool.AcquireTimeout = 2 * time.Second
 	app := testkit.Start(t, foundry.New().Register(
 		foundation.Module{Name: "second", Requires: []foundation.ProviderID{"first"}, OnRegister: func(r *foundation.Registrar) error {
-			return retrievalqueries.RegisterMemberRetrievalObserver(r, pool, retrievalqueries.NewMemberRetrievalObserver("members.second"), memberConstructor(statsKey, 1, "second"))
+			return registerMemberRetrieval(r, pool, "members.second", memberConstructor(statsKey, 1, "second"), legacyMembers)
 		}},
 		postgres.Module("database", pool, config),
 		foundation.Module{Name: "first", OnRegister: func(r *foundation.Registrar) error {
 			if err := foundation.Provide(r, statsKey, stats); err != nil {
 				return err
 			}
-			if err := retrievalqueries.RegisterMemberRetrievalObserver(r, pool, retrievalqueries.NewMemberRetrievalObserver("members.first"), memberConstructor(statsKey, 0, "first")); err != nil {
+			if err := registerMemberRetrieval(r, pool, "members.first", memberConstructor(statsKey, 0, "first"), legacyMembers); err != nil {
 				return err
 			}
-			if err := retrievalqueries.RegisterGroupRetrievalObserver(r, pool, retrievalqueries.NewGroupRetrievalObserver("groups.read"), func(s foundation.Resolver) (func() retrievalqueries.GroupRetrievalHooks, error) {
+			if err := orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[retrievalqueries.Group]("groups.read"), func(s foundation.Resolver) (func() orm.RetrievalHooks[retrievalqueries.Group], error) {
 				stats, err := foundation.Resolve(s, statsKey)
 				if err != nil {
 					return nil, err
 				}
-				return func() retrievalqueries.GroupRetrievalHooks {
+				return func() orm.RetrievalHooks[retrievalqueries.Group] {
 					stats.Group.Add(1)
-					return retrievalqueries.GroupRetrievalHooks{Retrieved: func(ctx context.Context, executor database.Executor, group retrievalqueries.Group) error {
+					return orm.RetrievalHooks[retrievalqueries.Group]{Retrieved: func(ctx context.Context, executor database.Executor, group retrievalqueries.Group) error {
 						return retrievalqueries.Observe(ctx, executor, "group", group.Name)
 					}}
 				}, nil
 			}); err != nil {
 				return err
 			}
-			return retrievalqueries.RegisterMembershipRetrievalObserver(r, pool, retrievalqueries.NewMembershipRetrievalObserver("memberships.read"), func(s foundation.Resolver) (func() retrievalqueries.MembershipRetrievalHooks, error) {
+			return orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[retrievalqueries.Membership]("memberships.read"), func(s foundation.Resolver) (func() orm.RetrievalHooks[retrievalqueries.Membership], error) {
 				stats, err := foundation.Resolve(s, statsKey)
 				if err != nil {
 					return nil, err
 				}
-				return func() retrievalqueries.MembershipRetrievalHooks {
+				return func() orm.RetrievalHooks[retrievalqueries.Membership] {
 					stats.Pivot.Add(1)
-					return retrievalqueries.MembershipRetrievalHooks{Retrieved: func(ctx context.Context, executor database.Executor, membership retrievalqueries.Membership) error {
+					return orm.RetrievalHooks[retrievalqueries.Membership]{Retrieved: func(ctx context.Context, executor database.Executor, membership retrievalqueries.Membership) error {
 						code, _ := membership.GroupCode.Get()
 						return retrievalqueries.Observe(ctx, executor, "pivot", string(code))
 					}}
@@ -103,17 +109,17 @@ func retrievalApp(t *testing.T) (*database.DB, *factoryStats, string) {
 				return err
 			}
 		}
-		root, err := retrievalqueries.QueryRetrievalMembers().Create(t.Context(), tx, retrievalqueries.MemberDraft{}.SetName(" ROOT ").SetNickname("boss"))
+		root, err := retrievalqueries.Members.Insert(t.Context(), tx, retrievalqueries.Members.Name.Set(" ROOT "), retrievalqueries.Members.Nickname.Set("boss"))
 		if err != nil {
 			return err
 		}
-		if _, err := retrievalqueries.QueryRetrievalMembers().Create(t.Context(), tx, retrievalqueries.MemberDraft{}.SetName(" Child ").SetParentID(root.ID)); err != nil {
+		if _, err := retrievalqueries.Members.Insert(t.Context(), tx, retrievalqueries.Members.Name.Set(" Child "), retrievalqueries.Members.ParentID.Set(root.ID)); err != nil {
 			return err
 		}
-		if _, err := retrievalqueries.QueryRetrievalGroups().Create(t.Context(), tx, retrievalqueries.GroupDraft{}.SetCode("team").SetName("stored group")); err != nil {
+		if _, err := retrievalqueries.Groups.Insert(t.Context(), tx, retrievalqueries.Groups.Key().Set("team"), retrievalqueries.Groups.Name.Set("stored group")); err != nil {
 			return err
 		}
-		_, err = retrievalqueries.QueryRetrievalMemberships().Create(t.Context(), tx, retrievalqueries.MembershipDraft{}.SetMemberID(root.ID).SetGroupCode("team"))
+		_, err = retrievalqueries.Memberships.Insert(t.Context(), tx, retrievalqueries.Memberships.MemberID.Set(root.ID), retrievalqueries.Memberships.GroupCode.Set("team"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -149,7 +155,7 @@ func TestPostgresRetrievalOrderStoredValuesAndWrapperIO(t *testing.T) {
 	ctx := retrievalqueries.WithTrace(t.Context(), &trace)
 	err := inSchema(ctx, db, namespace, func(tx *database.Tx) error {
 		reader := &readWrapper{Executor: tx}
-		items, err := retrievalqueries.QueryRetrievalMembers().OrderBy(retrievalqueries.MemberFields().Name.Asc()).All(ctx, reader)
+		items, err := retrievalqueries.Members.Query().OrderBy(retrievalqueries.Members.Name.Asc()).All(ctx, reader)
 		if err != nil {
 			return err
 		}
@@ -182,8 +188,8 @@ func TestPostgresRetrievalDirectThroughAndExplicitLoad(t *testing.T) {
 	var trace retrievalqueries.Trace
 	ctx := retrievalqueries.WithTrace(t.Context(), &trace)
 	err := inSchema(ctx, db, namespace, func(tx *database.Tx) error {
-		q := retrievalqueries.QueryRetrievalMembers().Where(retrievalqueries.MemberFields().Name.Eq("root"))
-		relations := retrievalqueries.MemberRelations()
+		q := retrievalqueries.Members.Query().Where(retrievalqueries.Members.Name.Eq("root"))
+		relations := retrievalqueries.MemberLinks
 		items, err := q.With(relations.Children, relations.Groups).All(ctx, tx)
 		if err != nil {
 			return err
@@ -200,14 +206,14 @@ func TestPostgresRetrievalDirectThroughAndExplicitLoad(t *testing.T) {
 			return errors.New("nullable natural relation key changed")
 		}
 		before := len(trace.Calls)
-		if _, err := q.With(relations.Children, relations.Groups).LoadMissing(ctx, tx, items); err != nil {
+		if _, err := orm.LoadMissing(ctx, tx, items, relations.Children, relations.Groups); err != nil {
 			return err
 		}
 		if len(trace.Calls) != before {
 			return errors.New("LoadMissing refired loaded models")
 		}
 		trace.Calls = nil
-		if _, err := q.With(relations.Groups).Load(ctx, tx, items); err != nil {
+		if _, err := orm.Load(ctx, tx, items, relations.Groups); err != nil {
 			return err
 		}
 		if !reflect.DeepEqual(trace.Calls, []string{"group", "pivot"}) {
@@ -232,10 +238,10 @@ func TestPostgresRetrievalFailureRollsBackOwningWrite(t *testing.T) {
 			trace := retrievalqueries.Trace{FailAt: "first", Mode: mode, Cancel: cancel}
 			ctx = retrievalqueries.WithTrace(ctx, &trace)
 			err := inSchema(ctx, db, namespace, func(tx *database.Tx) error {
-				if _, err := retrievalqueries.QueryRetrievalMembers().Create(ctx, tx, retrievalqueries.MemberDraft{}.SetName("rollback candidate")); err != nil {
+				if _, err := retrievalqueries.Members.Insert(ctx, tx, retrievalqueries.Members.Name.Set("rollback candidate")); err != nil {
 					return err
 				}
-				items, err := retrievalqueries.QueryRetrievalMembers().Where(retrievalqueries.MemberFields().Name.Eq("rollback candidate")).All(ctx, tx)
+				items, err := retrievalqueries.Members.Query().Where(retrievalqueries.Members.Name.Eq("rollback candidate")).All(ctx, tx)
 				if items != nil {
 					return errors.New("failed retrieval published a partial collection")
 				}
@@ -252,7 +258,7 @@ func TestPostgresRetrievalFailureRollsBackOwningWrite(t *testing.T) {
 				t.Fatal("callback failure or stop order changed", trace.Calls, err)
 			}
 			if err := inSchema(t.Context(), db, namespace, func(tx *database.Tx) error {
-				n, err := retrievalqueries.QueryRetrievalMembers().Where(retrievalqueries.MemberFields().Name.Eq("rollback candidate")).Count(t.Context(), tx)
+				n, err := retrievalqueries.Members.Query().Where(retrievalqueries.Members.Name.Eq("rollback candidate")).Count(t.Context(), tx)
 				if err == nil && n != 0 {
 					return errors.New("read failure committed its owning write")
 				}
@@ -262,4 +268,21 @@ func TestPostgresRetrievalFailureRollsBackOwningWrite(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The retained complete-record streaming oracle needs the legacy member family
+// until rows exposes bounded complete-model iteration. Each app installs one family.
+func registerMemberRetrieval(r *foundation.Registrar, pool foundation.Key[*database.DB], name string, constructor func(foundation.Resolver) (func() orm.RetrievalHooks[retrievalqueries.Member], error), legacy bool) error {
+	if !legacy {
+		return orm.RegisterRetrievalObserver(r, pool, orm.NewRetrievalObserver[retrievalqueries.Member](name), constructor)
+	}
+	return retrievalqueries.RegisterMemberRetrievalObserver(r, pool, retrievalqueries.NewMemberRetrievalObserver(name), func(resolver foundation.Resolver) (func() retrievalqueries.MemberRetrievalHooks, error) {
+		factory, err := constructor(resolver)
+		if err != nil {
+			return nil, err
+		}
+		return func() retrievalqueries.MemberRetrievalHooks {
+			return retrievalqueries.MemberRetrievalHooks{Retrieved: factory().Retrieved}
+		}, nil
+	})
 }

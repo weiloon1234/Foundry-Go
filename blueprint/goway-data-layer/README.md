@@ -94,7 +94,10 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 8 D8 | Handwritten ORM model/extension scaffolds | Done pending the lead’s commit; existing flags, collision-safe names and DTO generation retained. |
 | 8 | Retire model generation and old query API; extend scaffold | In progress; Stage 8a and D8 delivered. Model/query emitter retirement remains Stage 8c. |
 | 9 wave 1 | B1 foundations, lane C reporting/interval/transaction consumers and D1 foundations | Done pending the lead’s commit; generated callers and parity oracles coexist. |
-| 9 | Migrate consumer fixtures and compiler catalogue | In progress; wave 1 integrated. Dependent consumer cutovers and generated-output cleanup remain. |
+| 9 B2/B3 | Lifecycle consumers, observer counts, typed unset and soft-model batches | Done pending the lead’s commit; bounded lifecycle writes and stored/input identities retained. |
+| 9 C A1 | Shared models/catalog/query fixtures and eleven dependent query packages | Done pending the lead’s commit; original result identities and generated parity oracles retained. |
+| 9 C clauses | Scalar windows and correlated HAVING/DISTINCT/DISTINCT ON; lateral consumers | Done pending the lead’s commit; remaining terminal/stream adapters stay with their owners. |
+| 9 | Migrate consumer fixtures and compiler catalogue | In progress; B1–B3, C wave 1/A1/source clauses and D1 integrated. Remaining dependent cutovers and generated-output cleanup stay open. |
 | 10 | Guides, examples and editor coverage | Planned |
 | 11 | Full acceptance and whole-app performance evidence | Planned |
 | 12 | Consumer application migration, separately authorized | Later |
@@ -531,17 +534,17 @@ intentionally accepts byte slices, while identity does not.
 
 | Disposition | Cases |
 | --- | ---: |
-| ported | 561 |
-| port | 21 |
+| ported | 570 |
+| port | 18 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 444 |
-| **Total** | **1026** |
+| **Total** | **1032** |
 
 | Area | Cases |
 | --- | ---: |
 | Authentication and security | 94 |
-| Bulk writes and conflict policies | 57 |
+| Bulk writes and conflict policies | 61 |
 | Cache, Redis and coordination | 61 |
 | Core reads, writes and codecs | 74 |
 | Events, jobs and messaging | 54 |
@@ -549,7 +552,7 @@ intentionally accepts byte slices, while identity does not.
 | Framework integrations | 81 |
 | HTTP, DTOs and transport contracts | 112 |
 | Joins and correlation | 101 |
-| Lifecycle, mutators and observers | 37 |
+| Lifecycle, mutators and observers | 39 |
 | Other framework services and contracts | 83 |
 | Relations and pivots | 25 |
 | Rows, CTEs and sets | 77 |
@@ -561,16 +564,16 @@ intentionally accepts byte slices, while identity does not.
 | 2a | 21 |
 | 3 | 60 |
 | 4 | 23 |
-| 5 | 37 |
+| 5 | 39 |
 | 6a | 70 |
 | 6b | 100 |
 | 6c | 73 |
 | 6d | 60 |
-| 6e | 57 |
+| 6e | 61 |
 | 7 | 81 |
 | — | 444 |
 
-561 old catalogue rows are covered by 553 distinct Go-way cases.
+570 old catalogue rows are covered by 562 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1677,3 +1680,58 @@ Current integration results and source hashes are recorded in the
 [D8 evidence](../../docs/evidence/goway-stage8-d8-scaffold.json) and
 [D1 evidence](../../docs/evidence/goway-stage9-d1.json).
 The Stage 6 whole-app measurement gate remains pending.
+
+
+## Integration batch 7b: lifecycle and query consumer cutovers
+
+B2/B3 advance observer, hook, timestamp, soft-delete, tenant, audit, binary,
+event, distinct-input, link, mutator and encrypted-vault consumers to ORM.
+`lifecycle.CountObservers[M]` returns write, retrieval and deletion-only counts
+without constructing callbacks or exposing private adapters. Tests retain
+registration inspection after row closure, with one adapter family per application.
+
+`orm.WriteUnset(write, Fields.Email.Set)` restores omission in a live before-write
+callback. Omission remains distinct from SQL NULL and a supplied zero. Validation
+and sticky errors use the existing draft owner; mutators, defaults and conventions
+retain their existing execution rules. `orm.RestoreEach` and `orm.ForceDeleteEach`
+require the declaration's soft-delete token and reuse bounded per-model writes,
+locked primary ordering, callbacks, savepoints and reconciliation candidates.
+Restore selects deleted rows; force deletion retains the query's visibility.
+
+C's A1 exports ten shared model tables, six relation sets, fourteen User aggregate
+slots, catalog products and ten report schemas without changing model, key, enum
+or DTO identities. The query fixture keeps its public setup functions and seeds
+through ORM. Eleven dependent packages now use those declarations: reports,
+chunkqueries, temporalqueries, windowqueries, projectionqueries, joinqueries and
+its inner/natural/outer packages, correlations/nullable, and lockqueries.
+
+Six rows package functions preserve composition: `OrderScalar`, `LimitScalar`,
+`OffsetScalar`, `HavingCorrelatedRecord`, `DistinctCorrelatedRecord` and
+`DistinctOnCorrelatedScalar`. They reuse the existing clause owners and retain
+codecs, errors, parent scopes and selected-source boundaries. Lateral consumers
+are migrated; comparison and distinct consumers have partial cutovers with
+old/new SQL assertions. No Query/Table methods or capability bridges are added.
+
+Stage 9 remains in progress. Complete-record streaming and the remaining
+compile/preflight/stream and clause adapters still have assigned owners. A1 and
+WriteUnset remove prerequisites for later upsert/recovery/D2 cutovers; integrating
+a foundation does not migrate those callers. Retained legacy streaming and creation
+adapter tests remain explicit oracles, and generated output/manifests remain until
+the lead's cleanup barrier. The Stage 6 whole-app measurement gate is still pending.
+
+The four new Go-way probes retain the lane measurements and 15% ceilings:
+
+| Probe | Measured functions | Ceiling |
+| --- | ---: | ---: |
+| observer_counts | 63 | 73 |
+| write_unset | 266 | 306 |
+| each_soft_writes | 1,567 | 1,803 |
+| source_clauses | 2,505 | 2,881 |
+
+Existing ceilings are unchanged. Integration commands and current source hashes
+are recorded in the [B2 evidence](../../docs/evidence/goway-stage9-b2.json),
+[B3 evidence](../../docs/evidence/goway-stage9-b3.json),
+[A1 evidence](../../docs/evidence/goway-stage9-lane-c-a1.json),
+[review-26 evidence](../../docs/evidence/goway-stage9-lane-c-review26.json) and
+[source-clause evidence](../../docs/evidence/goway-stage9-lane-c-source-clauses.json).
+Live PostgreSQL coverage remains for the lead's service gate.

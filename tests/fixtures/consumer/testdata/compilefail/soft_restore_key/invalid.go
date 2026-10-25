@@ -8,5 +8,5 @@ import (
 )
 
 func invalid(db *database.DB) {
-	_, _ = softqueries.QuerySoftMembers().Restore(context.Background(), db, model.ID[softqueries.Membership]{})
+	_, _ = softqueries.Members.Restore(context.Background(), db, model.ID[softqueries.Membership]{})
 }

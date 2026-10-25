@@ -8,29 +8,30 @@ import (
 	"foundry.test/consumer/linkqueries"
 	"foundry.test/consumer/mutatorqueries"
 	"github.com/weiloon1234/Foundry-Go/attribution"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-func TestGeneratedReferencesPreserveStoredKeysAndCaptureOnlyProvenance(t *testing.T) {
+func TestORMReferencesPreserveStoredKeysAndCaptureOnlyProvenance(t *testing.T) {
 	id, err := model.NewID[mutatorqueries.Member]()
 	if err != nil {
 		t.Fatal(err)
 	}
 	member := mutatorqueries.Member{ID: id, Email: "private-email@example.test"}
-	reference := member.FoundryReference()
+	reference := mutatorqueries.MemberIdentity.ReferenceOf(member)
 	var stored model.ID[mutatorqueries.Member] = reference.Key()
 	if stored != id {
 		t.Fatal("typed reference replaced stored ID")
 	}
-	identity, err := member.FoundryIdentity()
+	identity, err := reference.Identity()
 	if err != nil {
 		t.Fatal(err)
 	}
-	restored, err := (mutatorqueries.Member{}).FoundryReference().Parse(identity)
+	restored, err := mutatorqueries.MemberIdentity.Parse(identity)
 	if err != nil || restored.Key() != id {
-		t.Fatal("generated identity round trip failed", err)
+		t.Fatal("ORM identity round trip failed", err)
 	}
-	origin, err := (attribution.Origin{}).WithModel(member)
+	origin, err := (attribution.Origin{}).WithIdentity(identity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,11 +49,11 @@ func TestGeneratedReferencesPreserveStoredKeysAndCaptureOnlyProvenance(t *testin
 		t.Fatal("attribution copied unrelated model data", err)
 	}
 	group := linkqueries.Group{Code: " untouched "}
-	natural, err := group.FoundryIdentity()
+	natural, err := orm.IdentityOf(linkqueries.Groups.Table, linkqueries.Groups.Key()).ReferenceOf(group).Identity()
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := (linkqueries.Group{}).FoundryReference().Parse(natural)
+	decoded, err := orm.IdentityOf(linkqueries.Groups.Table, linkqueries.Groups.Key()).Parse(natural)
 	var code linkqueries.GroupCode = decoded.Key()
 	if err != nil || code != group.Code {
 		t.Fatal("natural key changed", err)

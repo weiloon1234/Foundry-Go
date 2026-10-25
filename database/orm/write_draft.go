@@ -2,6 +2,7 @@ package orm
 
 import (
 	"reflect"
+	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -103,25 +104,48 @@ func WriteIsSet[M, I any](write *Write[M], setter func(I) Assignment[M]) bool {
 	return ok
 }
 func draftAssignment[M, I any](write *Write[M], setter func(I) Assignment[M]) (querycore.AssignmentValue, bool) {
-	if write == nil || write.state == nil {
-		return querycore.AssignmentValue{}, false
-	}
-	if !write.state.open || setter == nil {
-		write.state.err = invalid("write getter is outside its callback")
-		return querycore.AssignmentValue{}, false
-	}
-	var zero I
-	column := setter(zero)
-	if column.err != nil || column.owner != write.state.table || column.adjust != nil {
-		write.state.err = invalid("draft getter requires a matching field setter")
+	column, err := draftField(write, setter)
+	if err != nil {
+		if write != nil && write.state != nil {
+			write.state.err = err
+		}
 		return querycore.AssignmentValue{}, false
 	}
 	for _, a := range write.state.assignments {
-		if a.Field == column.core.Field {
+		if a.Field == column {
 			return a.AssignmentValue, true
 		}
 	}
 	return querycore.AssignmentValue{}, false
+}
+
+func draftField[M, I any](write *Write[M], setter func(I) Assignment[M]) (querycore.FieldRef, error) {
+	if write == nil || write.state == nil || !write.state.open || setter == nil {
+		return querycore.FieldRef{}, invalid("write draft is outside its callback or has no field setter")
+	}
+	var zero I
+	column := setter(zero)
+	if column.err != nil || column.owner != write.state.table || column.adjust != nil {
+		return querycore.FieldRef{}, invalid("draft access requires a matching field setter")
+	}
+	return column.core.Field, nil
+}
+
+// WriteUnset removes a pending assignment; the field becomes omitted, not NULL or zero.
+// Unsetting an omitted field is a no-op. Later hooks may assign it again, and
+// conventions may supply an automatic value. Use only during a before-write callback.
+// Example: WriteUnset(write, Members.EmailRevision.Set).
+func WriteUnset[M, I any](write *Write[M], setter func(I) Assignment[M]) error {
+	field, err := draftField(write, setter)
+	if err != nil {
+		if write != nil && write.state != nil {
+			write.state.err = err
+		}
+		return err
+	}
+	d := write.state
+	d.assignments = slices.DeleteFunc(d.assignments, func(a querycore.MutationAssignment) bool { return a.Field == field })
+	return d.err
 }
 
 // WithHooks installs a factory invoked once per normal write, after row locking.

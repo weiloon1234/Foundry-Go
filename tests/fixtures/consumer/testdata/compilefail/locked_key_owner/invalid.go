@@ -1,5 +1,7 @@
 package invalid
 
-import "foundry.test/consumer/models"
+import (
+	"foundry.test/consumer/models"
+)
 
-var _, _ = models.QueryCountries().ForUpdate().SkipLocked().Where(models.CountryFields().Name.Eq("x")).Find(nil, nil, models.LocationCode("A"))
+var _, _ = models.Countries.Query().ForUpdate().SkipLocked().Where(models.Countries.Name.Eq("x")).Where(models.Countries.Code.Eq(models.LocationCode("A"))).First(nil, nil)

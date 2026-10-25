@@ -9,15 +9,16 @@ import (
 
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
 func TestPostgresLookupConcurrentAbsenceRetainsUniqueConflict(t *testing.T) {
-	db, _, namespace := linkDatabase(t)
+	db, _, namespace := linkORMDatabase(t)
 	var member linkqueries.Member
 	var group linkqueries.Group
 	if err := linkTransaction(t.Context(), db, namespace, func(tx *database.Tx) error {
 		var err error
-		member, group, err = endpoints(t, tx)
+		member, group, err = ormEndpoints(t, tx)
 		if err != nil {
 			return err
 		}
@@ -41,9 +42,9 @@ func TestPostgresLookupConcurrentAbsenceRetainsUniqueConflict(t *testing.T) {
 		unblock          func()
 	}
 	participants := make([]*participant, 2)
-	q := linkqueries.QueryLinkMemberships()
-	fields := linkqueries.MembershipFields()
-	selected := q.Where(fields.MemberID.Eq(member.ID), fields.GroupCode.Eq(group.Code))
+	q := linkqueries.Memberships
+	fields := linkqueries.Memberships
+	selected := q.Query().Where(fields.MemberID.Eq(member.ID), fields.GroupCode.Eq(group.Code))
 	for i := range participants {
 		p := &participant{entered: make(chan struct{}), release: make(chan struct{}), done: make(chan outcome, 1), trace: &linkqueries.Trace{}}
 		p.unblock = sync.OnceFunc(func() { close(p.release) })
@@ -70,7 +71,7 @@ func TestPostgresLookupConcurrentAbsenceRetainsUniqueConflict(t *testing.T) {
 			var output outcome
 			output.err = linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
 				var err error
-				output.model, err = selected.FirstOrCreate(linkqueries.WithTrace(ctx, p.trace), tx, linkqueries.MembershipDraft{}.SetMemberID(member.ID).SetGroupCode(group.Code).SetRole("admin"))
+				output.model, err = orm.FirstOrCreate(linkqueries.WithTrace(ctx, p.trace), tx, selected, linkqueries.Memberships.MemberID.Set(member.ID), linkqueries.Memberships.GroupCode.Set(group.Code), linkqueries.Memberships.Role.Set("admin"))
 				return err
 			})
 			p.done <- output
@@ -108,7 +109,7 @@ func TestPostgresLookupConcurrentAbsenceRetainsUniqueConflict(t *testing.T) {
 		t.Fatal("lookup retry or losing after-commit work changed concurrency semantics")
 	}
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		rows, err := q.All(ctx, tx)
+		rows, err := q.Query().All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -122,13 +123,13 @@ func TestPostgresLookupConcurrentAbsenceRetainsUniqueConflict(t *testing.T) {
 }
 
 func TestPostgresLookupLocksExistingModelBeforeDraftCallback(t *testing.T) {
-	db, _, namespace := linkDatabase(t)
-	q := linkqueries.QueryLinkMembers()
-	fields := linkqueries.MemberFields()
+	db, _, namespace := linkORMDatabase(t)
+	q := linkqueries.Members
+	fields := linkqueries.Members
 	var member linkqueries.Member
 	if err := linkTransaction(t.Context(), db, namespace, func(tx *database.Tx) error {
 		var err error
-		member, err = q.Create(t.Context(), tx, linkqueries.MemberDraft{}.SetName("original"))
+		member, err = q.Insert(t.Context(), tx, linkqueries.Members.Name.Set("original"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -144,14 +145,14 @@ func TestPostgresLookupLocksExistingModelBeforeDraftCallback(t *testing.T) {
 	go func() {
 		defer workers.Done()
 		done <- linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-			_, err := q.Where(fields.ID.Eq(member.ID)).UpdateOrCreate(ctx, tx, linkqueries.MemberDraft{}, func(ctx context.Context, _ *database.Tx, current linkqueries.Member) (linkqueries.MemberDraft, error) {
+			_, err := orm.UpdateOrCreate(ctx, tx, q.Query().Where(fields.Key().Eq(member.ID)), []orm.Assignment[linkqueries.Member]{}, func(ctx context.Context, _ *database.Tx, current linkqueries.Member) ([]orm.Assignment[linkqueries.Member], error) {
 				close(entered)
 				select {
 				case <-release:
 				case <-ctx.Done():
-					return linkqueries.MemberDraft{}, ctx.Err()
+					return []orm.Assignment[linkqueries.Member]{}, ctx.Err()
 				}
-				return linkqueries.MemberDraft{}.SetName(current.Name + "-updated"), nil
+				return []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set(current.Name + "-updated")}, nil
 			})
 			return err
 		})
@@ -164,7 +165,7 @@ func TestPostgresLookupLocksExistingModelBeforeDraftCallback(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 	err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		_, err := q.ForUpdate().NoWait().RequireFind(ctx, tx, member.ID)
+		_, err := q.Query().Where(q.Key().Eq(member.ID)).ForUpdate().NoWait().Require(ctx, tx)
 		return err
 	})
 	var locked *database.Error
@@ -181,7 +182,7 @@ func TestPostgresLookupLocksExistingModelBeforeDraftCallback(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		stored, err := q.RequireFind(ctx, tx, member.ID)
+		stored, err := q.Require(ctx, tx, member.ID)
 		if err != nil {
 			return err
 		}

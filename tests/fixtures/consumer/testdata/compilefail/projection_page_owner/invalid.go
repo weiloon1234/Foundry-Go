@@ -3,10 +3,11 @@ package invalid
 import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-func wrong(q query.ProjectionQuery[models.User, reports.UserSummary]) {
-	p, _ := q.Paginate(nil, nil, query.PageRequest{})
-	var _ query.Page[models.User] = p
+func wrong(q rows.Query[models.User, reports.UserSummary]) {
+	p, _ := rows.Paginate(nil, nil, q, orm.PageRequest{})
+	var _ orm.PageResult[models.User] = p
 }

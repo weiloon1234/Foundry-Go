@@ -6,7 +6,8 @@ import (
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
 type sponsorQueryAlias struct{}
@@ -17,17 +18,17 @@ func TestPostgresNullableCorrelations(t *testing.T) {
 }
 
 func checkNullableCorrelation(t *testing.T, tx *database.Tx) error {
-	users := query.As[buyerAlias](models.QueryUsers(), "outer_user")
-	sponsors := query.As[sponsorQueryAlias](models.QueryUsers(), "outer_sponsor")
-	u, s := models.UserFieldsAt(users.Scope()), models.UserFieldsAt(sponsors.Scope())
-	joined := query.LeftJoin(users, sponsors, query.On(u.IntroducerID, s.ID))
-	link := query.Correlate(joined, models.QueryOrders())
-	sponsorScope := query.NullableRightScope(joined, sponsors.Scope())
-	sponsor := models.UserNullableFieldsAt(query.OuterNullableScope(link, sponsorScope))
-	order := models.OrderFieldsAt(query.InnerScope(link, models.QueryOrders().Scope()))
-	count := query.SelectCorrelatedValue(link, query.CountField(order.ID).Value()).Where(order.BuyerID.EqColumn(sponsor.ID))
-	outerUser := models.UserFieldsAt(query.LeftScope(joined, users.Scope()))
-	values, err := query.SelectValue(joined, query.CorrelatedScalarQuery(count)).OrderBy(outerUser.Email.Asc()).All(t.Context(), tx)
+	users := rows.As[buyerAlias](models.Users.Query(), "outer_user")
+	sponsors := rows.As[sponsorQueryAlias](models.Users.Query(), "outer_sponsor")
+	u, s := rows.Scope(users), rows.Scope(sponsors)
+	joined := rows.LeftJoin(users, sponsors, rows.On(expr.At(u, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
+	link := rows.Correlate(joined, rows.From(models.Orders.Query()))
+	sponsorScope := rows.NullableRightScope(joined, rows.Scope(sponsors))
+	sponsor := rows.OuterNullableScope(link, sponsorScope)
+	order := rows.InnerScope(link, rows.ModelScope(models.Orders.Query()))
+	count := rows.SelectCorrelatedScalar(link, expr.CountFieldAt(order, models.Orders.ID).Value()).Where(expr.Equal(expr.NullableRow(expr.At(order, models.Orders.BuyerID)), expr.AtNullable(sponsor, models.Users.ID)))
+	outerUser := rows.LeftScope(joined, rows.Scope(users))
+	values, err := rows.ReadScalar(rows.SelectScalar(joined, rows.CorrelatedScalarQuery(count))).OrderBy(expr.At(outerUser, models.Users.Email).Asc()).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
@@ -41,13 +42,13 @@ func checkNullableCorrelation(t *testing.T, tx *database.Tx) error {
 	}
 	// A nullable record can also belong to the inner joined SELECT. Missing
 	// sponsors must remain NULL when selecting their email for each order.
-	innerJoin := query.Correlate(models.QueryOrders(), joined)
-	outerOrder := models.OrderFieldsAt(query.OuterScope(innerJoin, models.QueryOrders().Scope()))
-	innerUser := models.UserFieldsAt(query.InnerScope(innerJoin, query.LeftScope(joined, users.Scope())))
-	innerSponsor := models.UserNullableFieldsAt(query.InnerNullableScope(innerJoin, sponsorScope))
-	emails := query.SelectCorrelatedValue(innerJoin, query.Value(innerSponsor.Email)).Where(innerUser.ID.EqColumn(outerOrder.BuyerID))
-	selected, err := query.SelectValue(models.QueryOrders(), query.CorrelatedScalarNullableQuery(emails)).
-		OrderBy(models.OrderFields().TotalCents.Asc()).All(t.Context(), tx)
+	innerJoin := rows.Correlate(rows.From(models.Orders.Query()), joined)
+	outerOrder := rows.OuterScope(innerJoin, rows.ModelScope(models.Orders.Query()))
+	innerUser := rows.InnerScope(innerJoin, rows.LeftScope(joined, rows.Scope(users)))
+	innerSponsor := rows.InnerNullableScope(innerJoin, sponsorScope)
+	emails := rows.SelectCorrelatedScalar(innerJoin, expr.Select(expr.AtNullable(innerSponsor, models.Users.Email))).Where(expr.Equal(expr.At(innerUser, models.Users.ID), expr.At(outerOrder, models.Orders.BuyerID)))
+	selected, err := rows.ReadScalar(rows.SelectScalar(rows.From(models.Orders.Query()), rows.CorrelatedScalarNullableQuery(emails))).
+		OrderBy(expr.Value(models.Orders.TotalCents).Asc()).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}

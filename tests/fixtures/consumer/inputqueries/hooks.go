@@ -11,6 +11,7 @@ import (
 // State belongs to one fixture operation. Captured changes contain stored
 // snapshots; BeforeInput is test-only evidence of the typed before-hook draft.
 type State struct {
+	Inspect     func(*orm.Write[Member]) error
 	BeforeInput value.Optional[EmailInput]
 	Captured    []MemberChanges
 	ORMCaptured []orm.Changes[Member]

@@ -10,7 +10,7 @@ spec.loader.exec_module(catalogue)
 class CatalogueTests(unittest.TestCase):
     def test_complete_reviewed_catalogue_and_summary(self):
         rows = catalogue.validate()
-        self.assertEqual(len(rows), 1026)
+        self.assertEqual(len(rows), 1032)
         page = (catalogue.ROOT / "blueprint/goway-data-layer/README.md").read_text()
         self.assertIn(catalogue.summary(rows), page)
 

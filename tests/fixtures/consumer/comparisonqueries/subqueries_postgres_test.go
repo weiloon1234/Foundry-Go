@@ -8,6 +8,9 @@ import (
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
@@ -15,37 +18,37 @@ type thresholdAlias struct{}
 
 func TestPostgresScalarRowsAndComparisonDiscovery(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
-		q := models.QueryUsers()
-		f := models.UserFields()
-		middle := query.ScalarRowQuery(q, query.SelectValue(q, query.Value(f.Age)).OrderBy(f.Age.Asc()).Offset(1).Limit(1))
-		rows, err := q.Where(query.GreaterNullable(query.NullableRow(f.Age), middle)).All(t.Context(), tx)
-		if err != nil || len(rows) != 1 || rows[0].ID != users[2].ID {
-			t.Fatal(rows, err)
+		q := models.Users.Query()
+
+		middle := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(models.Users.Age))), expr.Value(models.Users.Age).Asc()), 1), 1))
+		items, err := expr.Where(q, expr.GreaterNullable(expr.NullableRow(expr.Value(models.Users.Age)), middle)).All(t.Context(), tx)
+		if err != nil || len(items) != 1 || items[0].ID != users[2].ID {
+			t.Fatal(items, err)
 		}
-		count := query.Count[models.User]()
-		total := query.ScalarRowQuery(q, query.SelectValue(q, count.Value()))
-		if n, err := q.Where(query.Equal(total, query.NullableRow(count.Param(3)))).Count(t.Context(), tx); err != nil || n != 3 {
+		count := expr.Count[models.User]()
+		total := rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q), count.Value()))
+		if n, err := expr.Where(q, expr.Equal(total, expr.NullableRow(count.Param(3)))).Count(t.Context(), tx); err != nil || n != 3 {
 			t.Fatal("inner aggregate leaked into outer row phase", n, err)
 		}
-		cte := query.As[thresholdAlias](query.CTE("adult_threshold", q.Where(f.Age.Gt(20))), "threshold")
-		cf := models.UserFieldsAt(cte.Scope())
-		threshold := query.ScalarRowQuery(q, query.SelectValue(cte, query.Value(cf.Age)).OrderBy(cf.Age.Asc()).Limit(1))
-		selected := q.Where(query.Equal(f.Age, query.Coalesce(threshold, query.Param(f.Age, -1))))
-		statement, err := selected.Compile()
+		cte := rows.AsRecord[thresholdAlias](rows.CTE("adult_threshold", rows.ModelRecord(q.Where(models.Users.Age.Gt(20)))), "threshold")
+		cf := rows.Scope(cte)
+		threshold := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OrderScalar(rows.SelectScalar(cte, expr.Select(expr.At(cf, models.Users.Age))), expr.At(cf, models.Users.Age).Asc()), 1))
+		selected := expr.Where(q, expr.Equal(expr.Value(models.Users.Age), expr.Coalesce(threshold, expr.Param(models.Users.Age, -1))))
+		statement, err := orm.Compile(selected)
 		if err != nil || !strings.HasPrefix(statement.SQL(), "WITH ") {
 			t.Fatal("RHS scalar CTE was not discovered", statement.SQL(), err)
 		}
-		rows, err = selected.All(t.Context(), tx)
-		if err != nil || len(rows) != 1 || rows[0].ID != users[1].ID {
-			t.Fatal(rows, err)
+		items, err = selected.All(t.Context(), tx)
+		if err != nil || len(items) != 1 || items[0].ID != users[1].ID {
+			t.Fatal(items, err)
 		}
-		empty := query.ScalarRowQuery(q, query.SelectValue(q.Limit(0), query.Value(f.Age)))
-		if n, err := q.Where(query.Equal(query.NullableRow(f.Age), empty)).Count(t.Context(), tx); err != nil || n != 0 {
+		empty := rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q.Limit(0)), expr.Select(expr.Value(models.Users.Age))))
+		if n, err := expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(models.Users.Age)), empty)).Count(t.Context(), tx); err != nil || n != 0 {
 			t.Fatal("empty scalar lost NULL", n, err)
 		}
 		// No implicit limit may hide invalid scalar cardinality.
 		err = tx.Savepoint(t.Context(), func(inner *database.Tx) error {
-			_, err := q.Where(query.Equal(query.NullableRow(f.Age), query.ScalarRowQuery(q, query.SelectValue(q, query.Value(f.Age))))).All(t.Context(), inner)
+			_, err := expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(models.Users.Age)), rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q), expr.Select(expr.Value(models.Users.Age)))))).All(t.Context(), inner)
 			return err
 		})
 		var dbError *database.Error
@@ -56,6 +59,7 @@ func TestPostgresScalarRowsAndComparisonDiscovery(t *testing.T) {
 	})
 }
 
+// TODO(stage9-lane-a): migrate this test after expression predicates can enter relation filters.
 func TestPostgresCorrelatedRowComparisonsAndRelationAliases(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {
 		q := models.QueryUsers()

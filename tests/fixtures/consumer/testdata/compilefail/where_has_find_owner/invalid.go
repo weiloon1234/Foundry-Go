@@ -3,8 +3,9 @@ package invalid
 import (
 	"context"
 	"foundry.test/consumer/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 var orderID model.ID[models.Order]
-var invalid, _ = models.QueryUsers().WhereHas(models.UserRelations().Orders).Find(context.Background(), nil, orderID)
+var invalid, _ = orm.Keyed(models.Users.Query().Where(orm.Has(models.UserLinks.Orders)), models.Users.Key()).Find(context.Background(), nil, orderID)

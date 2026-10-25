@@ -4,4 +4,4 @@ import (
 	"foundry.test/consumer/vault"
 )
 
-func bad() { _ = vault.EntryDraft{}.SetToken("plaintext") }
+func bad() { _ = vault.Entries.Token.Set("plaintext") }

@@ -1,5 +1,8 @@
 package invalid
 
-import "foundry.test/consumer/models"
+import (
+	"foundry.test/consumer/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+)
 
-var invalid = models.QueryUsers().WhereDoesntHave(models.OrderRelations().Buyer)
+var invalid = models.Users.Query().Where(orm.DoesntHave(models.OrderLinks.Buyer))

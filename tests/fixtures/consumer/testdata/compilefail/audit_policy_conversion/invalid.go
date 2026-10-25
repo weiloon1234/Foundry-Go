@@ -1,5 +1,8 @@
 package invalid
 
-import "foundry.test/consumer/observerqueries"
+import (
+	"foundry.test/consumer/observerqueries"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+)
 
-var _ = observerqueries.PlainAuditPolicy(observerqueries.RecordAuditPolicy{})
+var _ = orm.AuditPolicy[observerqueries.Plain](orm.AuditPolicy[observerqueries.Record]{})

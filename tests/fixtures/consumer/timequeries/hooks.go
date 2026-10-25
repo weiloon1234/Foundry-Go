@@ -2,6 +2,9 @@ package timequeries
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/temporal"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
@@ -11,10 +14,13 @@ import (
 // State is per-operation test instrumentation; model changes contain stored
 // snapshots while Before records the supplied draft before time conventions.
 type State struct {
-	Before    MemberDraft
-	Changes   []MemberChanges
-	Committed []lifecycle.Operation
-	VetoAfter bool
+	Before       MemberDraft
+	ORMCreatedAt value.Optional[time.Time]
+	ORMUpdatedAt value.Optional[temporal.DateTime]
+	ORMChanges   []orm.Changes[Member]
+	Changes      []MemberChanges
+	Committed    []lifecycle.Operation
+	VetoAfter    bool
 }
 
 type stateKey struct{}

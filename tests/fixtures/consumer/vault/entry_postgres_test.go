@@ -13,8 +13,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/encrypted"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
@@ -80,8 +80,8 @@ func TestEncryptedFieldsStoreBoundEnvelopesAndHydratePlaintext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entries := vault.QueryVaultEntries()
-	created, err := entries.Create(t.Context(), db, vault.EntryDraft{}.SetLabel("payments").SetToken(encrypted.NewText("sk_live_secret")).SetSettings(settings))
+	entries := vault.Entries
+	created, err := entries.Insert(t.Context(), db, vault.Entries.Label.Set("payments"), vault.Entries.Token.Set(encrypted.NewText("sk_live_secret")), vault.Entries.Settings.Set(settings))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestEncryptedFieldsStoreBoundEnvelopesAndHydratePlaintext(t *testing.T) {
 	if !strings.HasPrefix(token, "fg1:vault_2026:") || strings.Contains(token, "sk_live_secret") || rawSettings == nil || !strings.HasPrefix(*rawSettings, "fg1:vault_2026:") || strings.Contains(*rawSettings, `"region"`) {
 		t.Fatal("stored values are not encryption envelopes")
 	}
-	found, err := entries.RequireFind(t.Context(), db, created.ID)
+	found, err := entries.Require(t.Context(), db, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,14 +111,14 @@ func TestEncryptedFieldsStoreBoundEnvelopesAndHydratePlaintext(t *testing.T) {
 	}
 
 	// An update that does not assign the field leaves its envelope untouched.
-	renamed, err := entries.Update(t.Context(), db, created.ID, vault.EntryDraft{}.SetLabel("billing"))
+	renamed, err := entries.Update(t.Context(), db, created.ID, vault.Entries.Label.Set("billing"))
 	if err != nil || renamed.Token.Reveal() != "sk_live_secret" {
 		t.Fatal("update without the field changed it", err)
 	}
 	if after, _ := stored(t, db, created.ID.String()); after != token {
 		t.Fatal("unassigned encrypted field was rewritten")
 	}
-	rotated, err := entries.Update(t.Context(), db, created.ID, vault.EntryDraft{}.SetToken(encrypted.NewText("sk_live_rotated")).ClearSettings())
+	rotated, err := entries.Update(t.Context(), db, created.ID, vault.Entries.Token.Set(encrypted.NewText("sk_live_rotated")), vault.Entries.Settings.SetNull())
 	if err != nil || rotated.Token.Reveal() != "sk_live_rotated" || !rotated.Settings.IsNull() {
 		t.Fatal("encrypted update", err)
 	}
@@ -127,9 +127,9 @@ func TestEncryptedFieldsStoreBoundEnvelopesAndHydratePlaintext(t *testing.T) {
 	}
 
 	// Bulk inserts bind each row to its own primary key.
-	many, err := entries.CreateMany(t.Context(), db, []vault.EntryDraft{
-		vault.EntryDraft{}.SetLabel("a").SetToken(encrypted.NewText("token-a")).ClearSettings(),
-		vault.EntryDraft{}.SetLabel("b").SetToken(encrypted.NewText("token-b")).ClearSettings(),
+	many, err := entries.InsertMany(t.Context(), db, [][]orm.Assignment[vault.Entry]{
+		[]orm.Assignment[vault.Entry]{vault.Entries.Label.Set("a"), vault.Entries.Token.Set(encrypted.NewText("token-a")), vault.Entries.Settings.SetNull()},
+		[]orm.Assignment[vault.Entry]{vault.Entries.Label.Set("b"), vault.Entries.Token.Set(encrypted.NewText("token-b")), vault.Entries.Settings.SetNull()},
 	})
 	if err != nil || len(many) != 2 || many[0].Token.Reveal() == many[1].Token.Reveal() {
 		t.Fatal("bulk encrypted insert", err)
@@ -148,7 +148,7 @@ func TestEncryptedFieldsStoreBoundEnvelopesAndHydratePlaintext(t *testing.T) {
 	if _, err := entries.Find(t.Context(), plain, created.ID); !errors.Is(err, fault.Missing) {
 		t.Fatal("read without a key ring", err)
 	}
-	if _, err := entries.Create(t.Context(), plain, vault.EntryDraft{}.SetLabel("x").SetToken(encrypted.NewText("leak")).ClearSettings()); !errors.Is(err, fault.Missing) {
+	if _, err := entries.Insert(t.Context(), plain, vault.Entries.Label.Set("x"), vault.Entries.Token.Set(encrypted.NewText("leak")), vault.Entries.Settings.SetNull()); !errors.Is(err, fault.Missing) {
 		t.Fatal("write without a key ring", err)
 	}
 
@@ -158,10 +158,10 @@ func TestEncryptedFieldsStoreBoundEnvelopesAndHydratePlaintext(t *testing.T) {
 		t.Fatal(err)
 	}
 	next := pool(t, schema, database.WithEncryption(keyring(t, "vault_2027", second, first)))
-	if old, err := entries.RequireFind(t.Context(), next, created.ID); err != nil || old.Token.Reveal() != "sk_live_rotated" {
+	if old, err := entries.Require(t.Context(), next, created.ID); err != nil || old.Token.Reveal() != "sk_live_rotated" {
 		t.Fatal("retained key did not decrypt", err)
 	}
-	fresh, err := entries.Create(t.Context(), next, vault.EntryDraft{}.SetLabel("new").SetToken(encrypted.NewText("token-new")).ClearSettings())
+	fresh, err := entries.Insert(t.Context(), next, vault.Entries.Label.Set("new"), vault.Entries.Token.Set(encrypted.NewText("token-new")), vault.Entries.Settings.SetNull())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,12 +170,12 @@ func TestEncryptedFieldsStoreBoundEnvelopesAndHydratePlaintext(t *testing.T) {
 	}
 
 	// Upsert seals the inserted row; a conflict keeps the existing envelope.
-	upserted, err := entries.Upsert(t.Context(), next, vault.EntryDraft{}.SetID(fresh.ID).SetLabel("upserted").SetToken(encrypted.NewText("ignored")).ClearSettings(), query.OnConflict(vault.EntryFields().ID).DoUpdate(vault.EntryFields().Label.Incoming()))
+	upserted, err := orm.Upsert(t.Context(), next, entries.Query(), orm.OnConflict(orm.ConflictKey(vault.Entries.Key())).DoUpdate(orm.ConflictIncoming(vault.Entries.Label)), vault.Entries.Key().Set(fresh.ID), vault.Entries.Label.Set("upserted"), vault.Entries.Token.Set(encrypted.NewText("ignored")), vault.Entries.Settings.SetNull())
 	if value, present := upserted.Get(); err != nil || !present || value.Label != "upserted" || value.Token.Reveal() != "token-new" {
 		t.Fatal("upsert did not keep the existing encrypted value", err)
 	}
 	// Set-based writes cannot assign one envelope to many rows.
-	if _, err := entries.Where(vault.EntryFields().Label.Eq("a")).Query.PatchAll(t.Context(), next, query.Change(query.AssignEncrypted[vault.Entry]("vault_entries", "token", encrypted.TextCodec(), encrypted.NewText("bulk")))); !errors.Is(err, fault.Invalid) {
+	if _, err := entries.Query().Where(vault.Entries.Label.Eq("a")).UpdateAll(t.Context(), next, vault.Entries.Token.Set(encrypted.NewText("bulk"))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("set-based encrypted write accepted", err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"foundry.test/consumer/softqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/testkit"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -17,18 +18,18 @@ import (
 func TestPostgresSoftDeleteRestoreForceDeleteLifecycle(t *testing.T) {
 	trace := &softqueries.Trace{}
 	runSoft(t, func(tx *database.Tx, clock *testkit.Clock) error {
-		q := softqueries.QuerySoftMembers()
-		member, err := q.Create(t.Context(), tx, softqueries.MemberDraft{}.SetName(" member "))
+		q := softqueries.Members.Query()
+		member, err := softqueries.Members.Insert(t.Context(), tx, softqueries.Members.Name.Set(" member "))
 		if err != nil {
 			return err
 		}
-		kept, err := q.Create(t.Context(), tx, softqueries.MemberDraft{}.SetName("kept"))
+		kept, err := softqueries.Members.Insert(t.Context(), tx, softqueries.Members.Name.Set("kept"))
 		if err != nil {
 			return err
 		}
 		ctx := softqueries.WithTrace(t.Context(), trace)
 		clock.Advance(time.Hour)
-		deleted, err := q.Delete(ctx, tx, member.ID)
+		deleted, err := orm.Delete(ctx, tx, q, softqueries.Members.Key(), member.ID)
 		if err != nil {
 			return err
 		}
@@ -39,20 +40,20 @@ func TestPostgresSoftDeleteRestoreForceDeleteLifecycle(t *testing.T) {
 		if !reflect.DeepEqual(trace.Steps, []string{"local.deleting", "provider.deleting", "local.deleted", "provider.deleted"}) {
 			return errors.New("soft deletion ran the wrong callback stages")
 		}
-		if len(trace.Changes) != 2 || !trace.Changes[0].Before().IsSet() || !trace.Changes[0].After().IsSet() || !trace.Changes[0].Fields().DeletedAt.Assigned() || !trace.Changes[0].Fields().UpdatedAt.Changed() {
+		if len(trace.ORMChanges) != 2 || !trace.ORMChanges[0].Before().IsSet() || !trace.ORMChanges[0].After().IsSet() || !checkedChange(orm.NullableChangeOf(trace.ORMChanges[0], softqueries.Members.DeletedAt)).Assigned() || !checkedChange(orm.ChangeOf(trace.ORMChanges[0], softqueries.Members.UpdatedAt)).Changed() {
 			return errors.New("soft deletion did not capture stored field changes")
 		}
-		if current, err := q.Find(ctx, tx, member.ID); err != nil || current.IsSet() {
+		if current, err := q.Where(softqueries.Members.Key().Eq(member.ID)).First(ctx, tx); err != nil || current.IsSet() {
 			return errors.New("ordinary lookup exposed a deleted model")
 		}
-		locked, err := q.ForUpdate().OnlyTrashed().RequireFind(ctx, tx, member.ID)
+		locked, err := q.ForUpdate().OnlyTrashed().Where(softqueries.Members.Key().Eq(member.ID)).Require(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if locked.DeletedAt.IsNull() {
 			return errors.New("locked query lost deleted-model visibility")
 		}
-		if found, err := q.WithTrashed().RequireFind(ctx, tx, member.ID); err != nil || found.Name != member.Name {
+		if found, err := q.WithTrashed().Where(softqueries.Members.Key().Eq(member.ID)).Require(ctx, tx); err != nil || found.Name != member.Name {
 			return errors.New("WithTrashed lost the stored model")
 		}
 		if isDeleted, err := deleted.AccessDeletedAt(); err != nil || !isDeleted {
@@ -60,7 +61,7 @@ func TestPostgresSoftDeleteRestoreForceDeleteLifecycle(t *testing.T) {
 		}
 		beforeSteps := len(trace.Steps)
 		for _, candidate := range []softqueries.Member{member, kept} {
-			if _, err := q.OnlyTrashed().Delete(ctx, tx, candidate.ID); !errors.Is(err, database.NotFound) {
+			if _, err := orm.Delete(ctx, tx, q.OnlyTrashed(), softqueries.Members.Key(), candidate.ID); !errors.Is(err, database.NotFound) {
 				return errors.New("OnlyTrashed Delete changed a model's state")
 			}
 		}
@@ -69,7 +70,7 @@ func TestPostgresSoftDeleteRestoreForceDeleteLifecycle(t *testing.T) {
 		}
 		clock.Advance(time.Hour)
 		trace.Steps = nil
-		restored, err := q.Restore(ctx, tx, member.ID)
+		restored, err := softqueries.Members.Restore(ctx, tx, member.ID)
 		if err != nil {
 			return err
 		}
@@ -79,7 +80,7 @@ func TestPostgresSoftDeleteRestoreForceDeleteLifecycle(t *testing.T) {
 		if !reflect.DeepEqual(trace.Steps, []string{"local.restoring", "provider.restoring", "local.restored", "provider.restored"}) {
 			return errors.New("restore emitted ordinary saving/updating stages")
 		}
-		compared, err := softqueries.CompareMember(value.Set(restored), value.Set(restored), softqueries.MemberDraft{})
+		compared, err := orm.Compare(softqueries.Members.Table, value.Set(restored), value.Set(restored))
 		if err != nil {
 			return err
 		}
@@ -88,20 +89,20 @@ func TestPostgresSoftDeleteRestoreForceDeleteLifecycle(t *testing.T) {
 		}
 		clock.Advance(time.Hour)
 		trace.Steps = nil
-		removed, err := q.WithTrashed().ForceDelete(ctx, tx, member.ID)
+		removed, err := orm.ForceDelete(ctx, tx, q.WithTrashed(), softqueries.Members.Soft, softqueries.Members.Key(), member.ID)
 		if err != nil {
 			return err
 		}
-		if removed.UpdatedAt != restored.UpdatedAt || trace.Changes[len(trace.Changes)-1].After().IsSet() {
+		if removed.UpdatedAt != restored.UpdatedAt || trace.ORMChanges[len(trace.ORMChanges)-1].After().IsSet() {
 			return errors.New("force delete updated time or retained a stored after-model")
 		}
 		if !reflect.DeepEqual(trace.Steps, []string{"local.force-deleting", "provider.force-deleting", "local.deleting", "provider.deleting", "local.deleted", "provider.deleted", "local.force-deleted", "provider.force-deleted"}) {
 			return errors.New("force deletion callback order changed")
 		}
-		if current, err := q.WithTrashed().Find(ctx, tx, member.ID); err != nil || current.IsSet() {
+		if current, err := q.WithTrashed().Where(softqueries.Members.Key().Eq(member.ID)).First(ctx, tx); err != nil || current.IsSet() {
 			return errors.New("force deletion left a stored model")
 		}
-		if _, err := q.RequireFind(ctx, tx, kept.ID); err != nil {
+		if _, err := q.Where(softqueries.Members.Key().Eq(kept.ID)).Require(ctx, tx); err != nil {
 			return err
 		}
 		if len(trace.Committed) != 0 {
@@ -116,16 +117,16 @@ func TestPostgresSoftDeleteRestoreForceDeleteLifecycle(t *testing.T) {
 
 func TestPostgresSoftDeleteVetoAndRestoreConflictRollback(t *testing.T) {
 	runSoft(t, func(tx *database.Tx, clock *testkit.Clock) error {
-		q := softqueries.QuerySoftMembers()
-		member, err := q.Create(t.Context(), tx, softqueries.MemberDraft{}.SetName("same"))
+		q := softqueries.Members.Query()
+		member, err := softqueries.Members.Insert(t.Context(), tx, softqueries.Members.Name.Set("same"))
 		if err != nil {
 			return err
 		}
 		veto := &softqueries.Trace{VetoAt: "local.deleted"}
-		if _, err := q.Delete(softqueries.WithTrace(t.Context(), veto), tx, member.ID); !errors.Is(err, softqueries.Veto) {
+		if _, err := orm.Delete(softqueries.WithTrace(t.Context(), veto), tx, q, softqueries.Members.Key(), member.ID); !errors.Is(err, softqueries.Veto) {
 			return errors.New("post-delete callback did not veto persistence")
 		}
-		current, err := q.RequireFind(t.Context(), tx, member.ID)
+		current, err := q.Where(softqueries.Members.Key().Eq(member.ID)).Require(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -133,30 +134,30 @@ func TestPostgresSoftDeleteVetoAndRestoreConflictRollback(t *testing.T) {
 			return errors.New("veto failed to roll back soft deletion")
 		}
 		clock.Advance(time.Hour)
-		deleted, err := q.Delete(t.Context(), tx, member.ID)
+		deleted, err := orm.Delete(t.Context(), tx, q, softqueries.Members.Key(), member.ID)
 		if err != nil {
 			return err
 		}
-		other, err := q.Create(t.Context(), tx, softqueries.MemberDraft{}.SetName("same"))
+		other, err := softqueries.Members.Insert(t.Context(), tx, softqueries.Members.Name.Set("same"))
 		if err != nil {
 			return err
 		}
-		if _, err := q.Restore(t.Context(), tx, member.ID); !errors.Is(err, database.UniqueViolation) {
+		if _, err := softqueries.Members.Restore(t.Context(), tx, member.ID); !errors.Is(err, database.UniqueViolation) {
 			return errors.New("restore ignored a conflicting active unique value")
 		}
-		current, err = q.WithTrashed().RequireFind(t.Context(), tx, member.ID)
+		current, err = q.WithTrashed().Where(softqueries.Members.Key().Eq(member.ID)).Require(t.Context(), tx)
 		if err != nil {
 			return err
 		}
 		if current.DeletedAt != deleted.DeletedAt || current.UpdatedAt != deleted.UpdatedAt {
 			return errors.New("failed restore changed its model")
 		}
-		if _, err := q.RequireFind(t.Context(), tx, other.ID); err != nil {
+		if _, err := q.Where(softqueries.Members.Key().Eq(other.ID)).Require(t.Context(), tx); err != nil {
 			return err
 		}
 		rollback := errors.New("outer rollback")
 		if err := tx.Savepoint(t.Context(), func(child *database.Tx) error {
-			if _, err := q.WithTrashed().ForceDelete(t.Context(), child, member.ID); err != nil {
+			if _, err := orm.ForceDelete(t.Context(), child, q.WithTrashed(), softqueries.Members.Soft, softqueries.Members.Key(), member.ID); err != nil {
 				return err
 			}
 			return rollback
@@ -166,24 +167,24 @@ func TestPostgresSoftDeleteVetoAndRestoreConflictRollback(t *testing.T) {
 			}
 			return err
 		}
-		if _, err := q.WithTrashed().RequireFind(t.Context(), tx, member.ID); err != nil {
+		if _, err := q.WithTrashed().Where(softqueries.Members.Key().Eq(member.ID)).Require(t.Context(), tx); err != nil {
 			return err
 		}
 		// The unannotated natural-key model exercises the no-local-observer path and
 		// a wrapper whose supplied transaction owns its clock and observer metadata.
-		groups := softqueries.QuerySoftGroups()
-		group, err := groups.Create(t.Context(), tx, softqueries.GroupDraft{}.SetCode("team").SetName("team"))
+		groups := softqueries.Groups.Query()
+		group, err := softqueries.Groups.Insert(t.Context(), tx, softqueries.Groups.Key().Set("team"), softqueries.Groups.Name.Set("team"))
 		if err != nil {
 			return err
 		}
-		group, err = groups.Delete(t.Context(), wrappedTransactor{tx}, group.Code)
+		group, err = orm.Delete(t.Context(), wrappedTransactor{tx}, groups, softqueries.Groups.Key(), group.Code)
 		if err != nil {
 			return err
 		}
 		if group.DeletedAt.IsNull() {
 			return errors.New("wrapper skipped soft-delete conventions")
 		}
-		group, err = groups.Restore(t.Context(), wrappedTransactor{tx}, group.Code)
+		group, err = softqueries.Groups.Restore(t.Context(), wrappedTransactor{tx}, group.Code)
 		if err != nil {
 			return err
 		}
@@ -196,8 +197,8 @@ func TestPostgresSoftDeleteVetoAndRestoreConflictRollback(t *testing.T) {
 
 func TestPostgresSoftDeleteCancellationStopsLaterStages(t *testing.T) {
 	runSoft(t, func(tx *database.Tx, clock *testkit.Clock) error {
-		q := softqueries.QuerySoftMembers()
-		member, err := q.Create(t.Context(), tx, softqueries.MemberDraft{}.SetName("cancel"))
+		q := softqueries.Members.Query()
+		member, err := softqueries.Members.Insert(t.Context(), tx, softqueries.Members.Name.Set("cancel"))
 		if err != nil {
 			return err
 		}
@@ -205,7 +206,7 @@ func TestPostgresSoftDeleteCancellationStopsLaterStages(t *testing.T) {
 		for _, point := range []string{"local.deleting", "local.deleted"} {
 			ctx, cancel := context.WithCancel(t.Context())
 			trace := &softqueries.Trace{CancelAt: point, Cancel: cancel}
-			result, err := q.Delete(softqueries.WithTrace(ctx, trace), tx, member.ID)
+			result, err := orm.Delete(softqueries.WithTrace(ctx, trace), tx, q, softqueries.Members.Key(), member.ID)
 			cancel()
 			if !errors.Is(err, context.Canceled) || !reflect.DeepEqual(result, softqueries.Member{}) {
 				return errors.New("soft-delete cancellation did not discard its result")
@@ -217,7 +218,7 @@ func TestPostgresSoftDeleteCancellationStopsLaterStages(t *testing.T) {
 			if !reflect.DeepEqual(trace.Steps, expected) || len(trace.Committed) != 0 {
 				return errors.New("cancellation ran later callback stages or committed")
 			}
-			current, err := q.RequireFind(t.Context(), tx, member.ID)
+			current, err := q.Where(softqueries.Members.Key().Eq(member.ID)).Require(t.Context(), tx)
 			if err != nil {
 				return err
 			}
@@ -225,7 +226,14 @@ func TestPostgresSoftDeleteCancellationStopsLaterStages(t *testing.T) {
 				return errors.New("canceled deletion changed stored state")
 			}
 		}
-		_, err = q.Delete(t.Context(), tx, member.ID)
+		_, err = orm.Delete(t.Context(), tx, q, softqueries.Members.Key(), member.ID)
 		return err
 	})
+}
+
+func checkedChange[V any](field lifecycle.FieldChange[V], err error) lifecycle.FieldChange[V] {
+	if err != nil {
+		panic(err)
+	}
+	return field
 }
