@@ -7,7 +7,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -86,20 +85,20 @@ func inboxRecord[M any](row store.Inbox) (Record[M], error) {
 	return Record[M]{ID: model.IDFromBytes[NotificationOf[M]](row.ID.Bytes()), Name: Name(row.Name), Version: Version(row.Version), CreatedAt: row.CreatedAt, ReadAt: row.ReadAt, data: text}, err
 }
 
-func (i Inbox[M, K]) List(ctx context.Context, page query.PageRequest, unreadOnly bool) (query.Page[Record[M]], error) {
+func (i Inbox[M, K]) List(ctx context.Context, page orm.PageRequest, unreadOnly bool) (orm.PageResult[Record[M]], error) {
 	if err := page.Validate(); err != nil {
-		return query.Page[Record[M]]{}, err
+		return orm.PageResult[Record[M]]{}, err
 	}
 	ctx, release, err := i.manager.begin(ctx)
 	if err != nil {
-		return query.Page[Record[M]]{}, err
+		return orm.PageResult[Record[M]]{}, err
 	}
 	defer release()
 	subject, err := i.subject(ctx)
 	if err != nil {
-		return query.Page[Record[M]]{}, err
+		return orm.PageResult[Record[M]]{}, err
 	}
-	var result query.Page[Record[M]]
+	var result orm.PageResult[Record[M]]
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
 		q := i.rows(subject)
 		if unreadOnly {
@@ -109,7 +108,7 @@ func (i Inbox[M, K]) List(ctx context.Context, page query.PageRequest, unreadOnl
 		if err != nil {
 			return err
 		}
-		result = query.Page[Record[M]]{Number: page.Number, Size: page.Size, Total: page.Total, Pages: page.Pages, Items: make([]Record[M], 0, len(page.Items))}
+		result = orm.PageResult[Record[M]]{Number: page.Number, Size: page.Size, Total: page.Total, Pages: page.Pages, Items: make([]Record[M], 0, len(page.Items))}
 		for _, row := range page.Items {
 			item, err := inboxRecord[M](row)
 			if err != nil {
@@ -120,7 +119,7 @@ func (i Inbox[M, K]) List(ctx context.Context, page query.PageRequest, unreadOnl
 		return nil
 	})
 	if err != nil {
-		return query.Page[Record[M]]{}, err
+		return orm.PageResult[Record[M]]{}, err
 	}
 	return result, nil
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 func TestSharedQueryPlanningKeepsModelAndRequestScopesIsolated(t *testing.T) {
@@ -96,7 +97,10 @@ func TestTypedFacadesDoNotExposeInternalSQLState(t *testing.T) {
 	}
 }
 func TestPublicSQLDeclarationsKeepTheirNamedIdentity(t *testing.T) {
-	for _, typ := range []reflect.Type{reflect.TypeFor[Column](), reflect.TypeFor[GlobalScopeName](), reflect.TypeFor[RelationLimits](), reflect.TypeFor[Statement]()} {
+	if reflect.TypeFor[RelationLimits]() != reflect.TypeFor[querycore.RelationLimits]() {
+		t.Fatal("relation limits must alias their shared owner")
+	}
+	for _, typ := range []reflect.Type{reflect.TypeFor[Column](), reflect.TypeFor[GlobalScopeName](), reflect.TypeFor[Statement]()} {
 		if typ.PkgPath() != "github.com/weiloon1234/Foundry-Go/database/query" {
 			t.Errorf("public declaration moved identity: %v", typ)
 		}

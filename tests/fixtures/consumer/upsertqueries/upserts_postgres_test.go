@@ -11,7 +11,6 @@ import (
 	"foundry.test/consumer/upsertqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -261,7 +260,7 @@ func TestUpsertInvalidAndEmptyBatchesUseNoDatabase(t *testing.T) {
 	}
 	for _, run := range []func() error{
 		func() error {
-			_, err := q.InsertMany(t.Context(), writer, make([][]orm.Assignment[models.WriteRecord], query.MaxInsertRows+1))
+			_, err := q.InsertMany(t.Context(), writer, make([][]orm.Assignment[models.WriteRecord], orm.MaxInsertRows+1))
 			return err
 		},
 		func() error {

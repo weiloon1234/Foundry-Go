@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"testing"
 
 	"foundry.test/consumer/retrievalqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
 func TestPostgresRetrievalIterationClosesBoundedBatches(t *testing.T) {
@@ -16,13 +16,13 @@ func TestPostgresRetrievalIterationClosesBoundedBatches(t *testing.T) {
 	err := inSchema(t.Context(), db, namespace, func(tx *database.Tx) error {
 		q := retrievalqueries.Members.Query()
 		f := retrievalqueries.Members
-		for i := range query.DefaultChunkSize + 3 {
+		for i := range orm.DefaultChunkSize + 3 {
 			if _, err := retrievalqueries.Members.Insert(t.Context(), tx, retrievalqueries.Members.Name.Set(fmt.Sprintf("stream %03d", i))); err != nil {
 				return err
 			}
 		}
 		base := q.Where(f.Name.Like("stream %"))
-		window := base.OrderBy(f.Name.Asc()).Offset(1).Limit(query.DefaultChunkSize + 1)
+		window := base.OrderBy(f.Name.Asc()).Offset(1).Limit(orm.DefaultChunkSize + 1)
 
 		for _, test := range []struct {
 			name string
@@ -38,7 +38,7 @@ func TestPostgresRetrievalIterationClosesBoundedBatches(t *testing.T) {
 				stop := errors.New("consumer stopped iteration")
 				err := test.run(ctx, &readWrapper{Executor: tx}, func(member retrievalqueries.Member) error {
 					visits++
-					if visits == 1 && len(trace.Calls) != query.DefaultChunkSize*3 {
+					if visits == 1 && len(trace.Calls) != orm.DefaultChunkSize*3 {
 						return errors.New("retrieval did not finish exactly one bounded batch before yielding")
 					}
 					if member.Name != fmt.Sprintf("stream %03d", visits) {
@@ -52,9 +52,9 @@ func TestPostgresRetrievalIterationClosesBoundedBatches(t *testing.T) {
 					}
 					return nil
 				})
-				wantVisits, wantHydrated, wantFactories := query.DefaultChunkSize+1, query.DefaultChunkSize+1, 2
+				wantVisits, wantHydrated, wantFactories := orm.DefaultChunkSize+1, orm.DefaultChunkSize+1, 2
 				if stopEarly {
-					wantVisits, wantHydrated, wantFactories = 1, query.DefaultChunkSize, 1
+					wantVisits, wantHydrated, wantFactories = 1, orm.DefaultChunkSize, 1
 					if !errors.Is(err, stop) {
 						return fmt.Errorf("%s lost early stop: %w", test.name, err)
 					}

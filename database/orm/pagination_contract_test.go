@@ -6,13 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/parser"
-	"go/token"
 	"math"
-	"os"
-	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -102,33 +97,5 @@ func TestPaginationContractBytesAndRedaction(t *testing.T) {
 	var input *orm.CursorInputError
 	if err := (orm.CursorPage[int]{Size: 1, Items: []int{7}, Next: value.Set(orm.Cursor[int]{})}).Validate(); err == nil || errors.As(err, &input) {
 		t.Fatal("output metadata failure classified as input")
-	}
-}
-
-func TestRowsAndExpressionsDoNotImportLegacyEngine(t *testing.T) {
-	for _, dir := range []string{"rows", "expr"} {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
-				continue
-			}
-			path := filepath.Join(dir, entry.Name())
-			file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, imported := range file.Imports {
-				name, err := strconv.Unquote(imported.Path.Value)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if name == "github.com/weiloon1234/Foundry-Go/database/query" {
-					t.Errorf("%s imports the legacy engine", path)
-				}
-			}
-		}
 	}
 }

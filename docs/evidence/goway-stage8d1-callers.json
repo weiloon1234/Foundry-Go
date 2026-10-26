@@ -1,0 +1,1559 @@
+{
+  "base": "5d8d3fe3",
+  "callers": [
+    {
+      "path": "attachments/matching_legacy.go",
+      "symbols": [
+        "Predicate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "attachments/slot_legacy.go",
+      "symbols": [
+        "ExtensionSlot",
+        "FoundryExtensionSlot"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "database/legacy_adapter_error_test.go",
+      "symbols": [
+        "Assign",
+        "Change",
+        "Column",
+        "Define",
+        "Definition",
+        "ForModel",
+        "NewModelField",
+        "RetrievalHooks",
+        "WriteHooks"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "database/orm/adjustment_lifecycle_test.go",
+      "symbols": [
+        "Assign",
+        "Change",
+        "Column",
+        "Define",
+        "ForModel",
+        "GreaterOrEqual",
+        "NewExactField",
+        "NewModelField",
+        "Param",
+        "Subtract",
+        "WriteHooks"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "database/orm/extension_legacy.go",
+      "symbols": [
+        "ExtensionSlot",
+        "FoundryExtension",
+        "RelationLimits"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "database/orm/identity_legacy.go",
+      "symbols": [
+        "FoundryPredicate",
+        "Predicate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "database/orm/relation_contract_test.go",
+      "symbols": [
+        "DefaultRelationLimits",
+        "MorphName",
+        "Morphable",
+        "RelationLimits"
+      ],
+      "class": "A/S transition"
+    },
+    {
+      "path": "database/prune/legacy.go",
+      "symbols": [
+        "Query"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "database/query/pagination_metadata_test.go",
+      "symbols": [
+        "MaxPageSize",
+        "Page",
+        "PageRequest",
+        "SimplePage"
+      ],
+      "class": "A/S transition"
+    },
+    {
+      "path": "extensions/owner_legacy.go",
+      "symbols": [
+        "ModelIdentity",
+        "Predicate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "http/modelbinding/field.go",
+      "symbols": [
+        "KeyField",
+        "ModelQuerySource",
+        "Unique"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "http/modelbinding/nested.go",
+      "symbols": [
+        "KeyField",
+        "RelatedUnique",
+        "ScopedRelation"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "metadata/matching_legacy.go",
+      "symbols": [
+        "Predicate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "metadata/slot_legacy.go",
+      "symbols": [
+        "ExtensionSlot",
+        "FoundryExtensionSlot"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "testkit/factory/factory.go",
+      "symbols": [
+        "CreateDraft",
+        "ModelQuery",
+        "ModelQueryOf",
+        "Mutation",
+        "Query"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/arithmetic_compare_value/invalid.go",
+      "symbols": [
+        "Add"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/arithmetic_float_remainder/invalid.go",
+      "symbols": [
+        "FloatOf",
+        "Remainder"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/arithmetic_nullable_operand/invalid.go",
+      "symbols": [
+        "AddNullable",
+        "NullableRow"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/arithmetic_nullable_result/invalid.go",
+      "symbols": [
+        "AddNullable",
+        "Expression",
+        "NullableRow"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/arithmetic_owner/invalid.go",
+      "symbols": [
+        "Add",
+        "As"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/arithmetic_row_phase/invalid.go",
+      "symbols": [
+        "Add",
+        "Count"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/arithmetic_text/invalid.go",
+      "symbols": [
+        "Multiply"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/arithmetic_value/invalid.go",
+      "symbols": [
+        "Add"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/assignment_owner_conversion/invalid.go",
+      "symbols": [
+        "Assign",
+        "Assignment"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/case_aggregate_condition/invalid.go",
+      "symbols": [
+        "Count",
+        "When"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/case_aggregate_row_value/invalid.go",
+      "symbols": [
+        "Count",
+        "When"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/case_owner_conversion/invalid.go",
+      "symbols": [
+        "Case"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/case_result_nullable/invalid.go",
+      "symbols": [
+        "When"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/case_result_owner/invalid.go",
+      "symbols": [
+        "When"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/case_result_type/invalid.go",
+      "symbols": [
+        "When"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/case_selected_predicate/invalid.go",
+      "symbols": [
+        "Count",
+        "WhenValue"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/case_unfinished/invalid.go",
+      "symbols": [
+        "SelectValue",
+        "When"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/case_window_row_value/invalid.go",
+      "symbols": [
+        "RowNumber",
+        "When",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/coalesce_fallback_nullable/invalid.go",
+      "symbols": [
+        "Coalesce"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/coalesce_owner/invalid.go",
+      "symbols": [
+        "Coalesce"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/coalesce_value/invalid.go",
+      "symbols": [
+        "Coalesce"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/column_enum_range/invalid.go",
+      "symbols": null,
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/column_scope/invalid.go",
+      "symbols": null,
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/column_value/invalid.go",
+      "symbols": null,
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/computed_group_selected_list/invalid.go",
+      "symbols": [
+        "Param",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/computed_model_order_owner/invalid.go",
+      "symbols": [
+        "Add"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/computed_partition_owner/invalid.go",
+      "symbols": [
+        "Param",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_column_id/invalid.go",
+      "symbols": [
+        "Correlate",
+        "InnerScope",
+        "OuterScope"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_exists_owner/invalid.go",
+      "symbols": [
+        "Correlate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_inner_scope/invalid.go",
+      "symbols": [
+        "Correlate",
+        "InnerScope"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_input_selection/invalid.go",
+      "symbols": [
+        "Correlate",
+        "SelectCorrelatedValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_membership_owner/invalid.go",
+      "symbols": [
+        "Correlate",
+        "InnerScope",
+        "OuterScope",
+        "SelectCorrelatedValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_model_fields/invalid.go",
+      "symbols": [
+        "Correlate",
+        "InnerScope"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_nullable_fields/invalid.go",
+      "symbols": [
+        "As",
+        "Correlate",
+        "LeftJoin",
+        "NullableRightScope",
+        "On",
+        "OuterNullableScope"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_nullable_membership/invalid.go",
+      "symbols": [
+        "Correlate",
+        "InnerScope",
+        "Nullable",
+        "OuterScope",
+        "SelectCorrelatedValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_nullable_scope/invalid.go",
+      "symbols": [
+        "As",
+        "Correlate",
+        "LeftJoin",
+        "NullableRightScope",
+        "On",
+        "OuterScope"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_outer_scope/invalid.go",
+      "symbols": [
+        "Correlate",
+        "OuterScope"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_query_escape/invalid.go",
+      "symbols": [
+        "Correlate",
+        "InnerScope",
+        "OuterScope",
+        "SelectCorrelatedValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_scalar_nullability/invalid.go",
+      "symbols": [
+        "Correlate",
+        "CorrelatedScalarQuery",
+        "InnerScope",
+        "OuterScope",
+        "SelectCorrelatedValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_scalar_owner/invalid.go",
+      "symbols": [
+        "Correlate",
+        "CorrelatedScalarQuery",
+        "InnerScope",
+        "OuterScope",
+        "SelectCorrelatedValue",
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_scope_unlifted/invalid.go",
+      "symbols": [
+        "Correlate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_source_escape/invalid.go",
+      "symbols": [
+        "Correlate",
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/correlation_uncorrelated_membership/invalid.go",
+      "symbols": [
+        "Correlate",
+        "InnerScope",
+        "OuterScope",
+        "SelectCorrelatedValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/cross_join_nullable_scope/invalid.go",
+      "symbols": [
+        "As",
+        "CrossJoin",
+        "LeftJoin",
+        "LeftScope",
+        "NullableRightScope",
+        "On"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/cross_join_scope_conversion/invalid.go",
+      "symbols": [
+        "Alias",
+        "As",
+        "CrossJoin",
+        "InnerJoined"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/cte_membership_owner/invalid.go",
+      "symbols": [
+        "As",
+        "CTE",
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/cte_model_write/invalid.go",
+      "symbols": [
+        "CTE"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/cte_nullable_value/invalid.go",
+      "symbols": [
+        "As",
+        "CTE",
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/cte_record_conversion/invalid.go",
+      "symbols": [
+        "CTE",
+        "CommonTable"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/cte_record_fields/invalid.go",
+      "symbols": [
+        "As",
+        "CTE"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/decimal_conversion_float/invalid.go",
+      "symbols": [
+        "DecimalOf",
+        "FloatOf"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/derived_enum_operator/invalid.go",
+      "symbols": [
+        "As"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/derived_nullable_scope/invalid.go",
+      "symbols": [
+        "As",
+        "LeftJoin",
+        "NullableRightScope",
+        "On"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/derived_predicate_owner/invalid.go",
+      "symbols": [
+        "As",
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/derived_record_owner/invalid.go",
+      "symbols": [
+        "As"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/exists_scope/invalid.go",
+      "symbols": [
+        "ExistsQuery"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/geographic_owner/invalid.go",
+      "symbols": [
+        "As",
+        "GeographicPoint",
+        "SphericalDistance"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/json_nullable_input/invalid.go",
+      "symbols": [
+        "JSONContains"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/json_path_payload/invalid.go",
+      "symbols": [
+        "RowExpression"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/json_path_row_phase/invalid.go",
+      "symbols": [
+        "JSONRoot",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/json_projection_payload/invalid.go",
+      "symbols": [
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/json_selected_row/invalid.go",
+      "symbols": [
+        "JSONType",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/json_sum/invalid.go",
+      "symbols": [
+        "Sum"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/mutation_owner_conversion/invalid.go",
+      "symbols": [
+        "Assign",
+        "Change",
+        "Mutation"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/named_window_owner/invalid.go",
+      "symbols": [
+        "Count",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/parameter_id/invalid.go",
+      "symbols": [
+        "Param"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/parameter_nullable_field/invalid.go",
+      "symbols": [
+        "Param"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/parameter_owner/invalid.go",
+      "symbols": [
+        "Param"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/parameter_value/invalid.go",
+      "symbols": [
+        "Param"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/predicate_owner_conversion/invalid.go",
+      "symbols": [
+        "Predicate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/range_boundary_conversion/invalid.go",
+      "symbols": [
+        "NumericRange",
+        "RangeBoundary",
+        "Value",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/range_boundary_value/invalid.go",
+      "symbols": [
+        "Count",
+        "NumericRange",
+        "Value",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/range_distance_type/invalid.go",
+      "symbols": [
+        "NumericRange",
+        "Value",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/range_nullable_distance/invalid.go",
+      "symbols": [
+        "NullableNumericRange",
+        "Value",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/range_numeric_scope/invalid.go",
+      "symbols": [
+        "NumericRange",
+        "Value",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/range_numeric_text/invalid.go",
+      "symbols": [
+        "NumericRange",
+        "Value",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/range_ordinary_boundary/invalid.go",
+      "symbols": [
+        "NumericRange",
+        "Preceding",
+        "Value",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/range_temporal_distance/invalid.go",
+      "symbols": [
+        "NullableTemporalRange",
+        "Value",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/range_temporal_number/invalid.go",
+      "symbols": [
+        "TemporalRange",
+        "Value",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/record_selection_nullable/invalid.go",
+      "symbols": [
+        "As",
+        "LeftJoin",
+        "NullableRightScope",
+        "On",
+        "SelectRecord"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/record_selection_result/invalid.go",
+      "symbols": [
+        "SelectRecord"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/record_selection_scope/invalid.go",
+      "symbols": [
+        "SelectRecord"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/record_selection_unlifted/invalid.go",
+      "symbols": [
+        "As",
+        "InnerJoin",
+        "On",
+        "SelectRecord"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/record_selection_write/invalid.go",
+      "symbols": [
+        "SelectRecord"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/recursive_field_owner/invalid.go",
+      "symbols": [
+        "As",
+        "RecursiveSelf"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/recursive_self_conversion/invalid.go",
+      "symbols": [
+        "RecursiveSelf"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/recursive_self_execute/invalid.go",
+      "symbols": [
+        "RecursiveSelf"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/recursive_self_owner/invalid.go",
+      "symbols": [
+        "RecordQuerySource",
+        "RecursiveCTE",
+        "RecursiveSelf"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/recursive_self_write/invalid.go",
+      "symbols": [
+        "RecursiveSelf"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/recursive_step_record/invalid.go",
+      "symbols": [
+        "RecordQuerySource",
+        "RecursiveCTE",
+        "RecursiveSelf"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/result_cursor_fields_owner/invalid.go",
+      "symbols": [
+        "CursorFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/result_cursor_key_owner/invalid.go",
+      "symbols": [
+        "CursorFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/result_cursor_order_owner/invalid.go",
+      "symbols": [
+        "CursorFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/result_cursor_predicate_owner/invalid.go",
+      "symbols": [
+        "CursorFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/result_cursor_request_owner/invalid.go",
+      "symbols": [
+        "CursorFor",
+        "CursorRequest"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/result_cursor_source/invalid.go",
+      "symbols": [
+        "CursorFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/result_cursor_write/invalid.go",
+      "symbols": [
+        "CursorFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/scalar_field_owner_conversion/invalid.go",
+      "symbols": [
+        "ScalarField"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/scalar_nullability/invalid.go",
+      "symbols": [
+        "ScalarQuery",
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/scalar_nullable_input/invalid.go",
+      "symbols": [
+        "ScalarNullableQuery",
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/scalar_row_identity_type/invalid.go",
+      "symbols": [
+        "Equal",
+        "NullableRow",
+        "ScalarRowQuery",
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/scalar_row_owner/invalid.go",
+      "symbols": [
+        "GreaterNullable",
+        "NullableRow",
+        "ScalarRowQuery",
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/scoped_model_owner/invalid.go",
+      "symbols": [
+        "As",
+        "LeftJoin",
+        "On"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/selected_boolean_order/invalid.go",
+      "symbols": [
+        "Exists",
+        "OrderValue"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/selected_calculation_order/invalid.go",
+      "symbols": [
+        "AddValue",
+        "Count"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/selected_comparison_row/invalid.go",
+      "symbols": [
+        "Count",
+        "OrderValue"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/selected_key_conversion/invalid.go",
+      "symbols": [
+        "ProjectionKey",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/selected_key_row_list/invalid.go",
+      "symbols": [
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/selected_partition_owner/invalid.go",
+      "symbols": [
+        "Count",
+        "WindowFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/set_nullable_value/invalid.go",
+      "symbols": [
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/set_record_conversion/invalid.go",
+      "symbols": [
+        "SetQuery"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/set_record_scalar/invalid.go",
+      "symbols": [
+        "ScalarQuery"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/set_value_owner/invalid.go",
+      "symbols": [
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/subquery_filter_scope/invalid.go",
+      "symbols": [
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/subquery_id/invalid.go",
+      "symbols": [
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/subquery_nullable/invalid.go",
+      "symbols": [
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/subquery_selection_scope/invalid.go",
+      "symbols": [
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/subquery_value/invalid.go",
+      "symbols": [
+        "SelectValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/substring_text_position/invalid.go",
+      "symbols": [
+        "SubstringAt"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/text_numeric/invalid.go",
+      "symbols": [
+        "Lower"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/text_operand_owner/invalid.go",
+      "symbols": [
+        "As",
+        "Concat"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/text_pattern_value/invalid.go",
+      "symbols": [
+        "Lower"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/value_compare_like_number/invalid.go",
+      "symbols": [
+        "Like"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/value_compare_nullable/invalid.go",
+      "symbols": [
+        "Equal"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/value_compare_order_bool/invalid.go",
+      "symbols": [
+        "Exists",
+        "Less"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/value_compare_owner/invalid.go",
+      "symbols": [
+        "As",
+        "Equal"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/value_compare_selected_owner/invalid.go",
+      "symbols": [
+        "As",
+        "EqualValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/value_compare_selected_row/invalid.go",
+      "symbols": [
+        "Count",
+        "Equal"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/value_compare_selected_where/invalid.go",
+      "symbols": [
+        "EqualValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/value_compare_type/invalid.go",
+      "symbols": [
+        "Equal"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/consumer/testdata/compilefail/value_cursor_nullable/invalid.go",
+      "symbols": [
+        "CursorPage",
+        "CursorRequest",
+        "SelectValue",
+        "Value",
+        "ValueCursorFor"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_having_predicate_conversion/invalid.go",
+      "symbols": [
+        "HavingPredicate",
+        "Predicate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_insert_update_mapping_conversion/invalid.go",
+      "symbols": [
+        "InsertMapping",
+        "UpdateMapping"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_json_ordered_conversion/invalid.go",
+      "symbols": [
+        "JSONField",
+        "OrderedField"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_lookup_reader_conversion/invalid.go",
+      "symbols": [
+        "UniqueLookup",
+        "ValueLookup"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_nullable_json_conversion/invalid.go",
+      "symbols": [
+        "JSONField",
+        "NullableField"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_nullable_json_ordered_conversion/invalid.go",
+      "symbols": [
+        "NullableJSONField",
+        "NullableOrderedField"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_nullable_ordered_conversion/invalid.go",
+      "symbols": [
+        "NullableField",
+        "OrderedField"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_projection_key_conversion/invalid.go",
+      "symbols": [
+        "Group",
+        "ProjectionKey"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_source_mutation_conversion/invalid.go",
+      "symbols": [
+        "DeleteSource",
+        "UpdateSource"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_transaction_record_conversion/invalid.go",
+      "symbols": [
+        "SetQuery",
+        "TransactionOf"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_value_case_conversion/invalid.go",
+      "symbols": [
+        "Case",
+        "ValueCase"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/legacy_value_comparison_conversion/invalid.go",
+      "symbols": [
+        "RowExpression",
+        "ValueComparison"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/old_text_comparison_nullable_owner_conversion/invalid.go",
+      "symbols": [
+        "NewNullableTextField",
+        "NullableTextValueComparison",
+        "TextNullableValue",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/compilefail/old_text_comparison_owner_conversion/invalid.go",
+      "symbols": [
+        "NewTextField",
+        "TextValue",
+        "TextValueComparison",
+        "Value"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "tests/fixtures/goway/testdata/footprint/extension_matching_old/probe.go",
+      "symbols": [
+        "Predicate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "translations/matching_legacy.go",
+      "symbols": [
+        "Predicate"
+      ],
+      "class": "C"
+    },
+    {
+      "path": "translations/slot_legacy.go",
+      "symbols": [
+        "ExtensionSlot",
+        "FoundryExtensionSlot"
+      ],
+      "class": "C"
+    }
+  ],
+  "D": {
+    "note": "Private legacy implementation has package-local callers only; these engine source files remain for 8d3. No external caller can name a private declaration. Shared querycore/ormcore owners are retained.",
+    "engine_files": [
+      "database/query/aggregate.go",
+      "database/query/aggregate_condition.go",
+      "database/query/aggregate_filter.go",
+      "database/query/alias.go",
+      "database/query/ast.go",
+      "database/query/chunk.go",
+      "database/query/column_comparison.go",
+      "database/query/comparison.go",
+      "database/query/compile_conflict.go",
+      "database/query/compile_insert.go",
+      "database/query/compile_insert_select.go",
+      "database/query/compile_lock.go",
+      "database/query/compile_mutation.go",
+      "database/query/compile_source_write.go",
+      "database/query/compiler.go",
+      "database/query/computed_expression.go",
+      "database/query/conditional_expression.go",
+      "database/query/conflict.go",
+      "database/query/conflict_mutator.go",
+      "database/query/conflict_rows.go",
+      "database/query/conflict_target.go",
+      "database/query/core_metadata.go",
+      "database/query/correlated_record.go",
+      "database/query/correlated_value.go",
+      "database/query/correlation_binding.go",
+      "database/query/correlation_boundary.go",
+      "database/query/correlation_compiler.go",
+      "database/query/correlation_requalify.go",
+      "database/query/correlation_scope.go",
+      "database/query/cte.go",
+      "database/query/cte_compiler.go",
+      "database/query/cursor_boundary.go",
+      "database/query/cursor_pagination.go",
+      "database/query/cursor_token.go",
+      "database/query/cursor_validation.go",
+      "database/query/definition.go",
+      "database/query/distinct.go",
+      "database/query/distinct_compiler.go",
+      "database/query/doc.go",
+      "database/query/encrypted_fields.go",
+      "database/query/execute_autocommit.go",
+      "database/query/execute_insert.go",
+      "database/query/execute_mutation.go",
+      "database/query/execution.go",
+      "database/query/explain.go",
+      "database/query/explain_bridge.go",
+      "database/query/explain_decode.go",
+      "database/query/expression_comparison.go",
+      "database/query/expression_key.go",
+      "database/query/field.go",
+      "database/query/field_binary.go",
+      "database/query/field_capabilities.go",
+      "database/query/field_interval.go",
+      "database/query/field_json.go",
+      "database/query/field_metadata.go",
+      "database/query/field_mutator.go",
+      "database/query/field_numeric.go",
+      "database/query/geographic_expression.go",
+      "database/query/global_scope.go",
+      "database/query/having.go",
+      "database/query/insert_mapping.go",
+      "database/query/insert_select.go",
+      "database/query/interval_expression.go",
+      "database/query/interval_key.go",
+      "database/query/interval_operation.go",
+      "database/query/join.go",
+      "database/query/join_condition.go",
+      "database/query/join_core.go",
+      "database/query/join_scope.go",
+      "database/query/join_value_condition.go",
+      "database/query/joined_hydration.go",
+      "database/query/json_expression.go",
+      "database/query/json_operation.go",
+      "database/query/json_path.go",
+      "database/query/json_path_predicates.go",
+      "database/query/key_compiler.go",
+      "database/query/lateral_input.go",
+      "database/query/lateral_join.go",
+      "database/query/locked_model.go",
+      "database/query/locked_result.go",
+      "database/query/locking.go",
+      "database/query/lookup.go",
+      "database/query/membership_array.go",
+      "database/query/memo.go",
+      "database/query/model_conventions.go",
+      "database/query/model_hooks.go",
+      "database/query/model_identity.go",
+      "database/query/model_ref.go",
+      "database/query/model_timestamps.go",
+      "database/query/model_value_field.go",
+      "database/query/model_value_mapping.go",
+      "database/query/model_write_key.go",
+      "database/query/mutation.go",
+      "database/query/mutation_core.go",
+      "database/query/mutation_input.go",
+      "database/query/mutation_validation.go",
+      "database/query/mutation_values.go",
+      "database/query/numeric_expression.go",
+      "database/query/pagination.go",
+      "database/query/parameter_expression.go",
+      "database/query/predicate_extensions.go",
+      "database/query/projection.go",
+      "database/query/projection_core.go",
+      "database/query/projection_definition.go",
+      "database/query/projection_order.go",
+      "database/query/projection_reorder.go",
+      "database/query/prune_batch.go",
+      "database/query/query_core.go",
+      "database/query/read_lifecycle.go",
+      "database/query/read_lifecycle_chunks.go",
+      "database/query/read_result.go",
+      "database/query/read_routing.go",
+      "database/query/record_core.go",
+      "database/query/record_scope.go",
+      "database/query/record_source.go",
+      "database/query/recursive_cte.go",
+      "database/query/relation_aggregate.go",
+      "database/query/relation_aggregate_loading.go",
+      "database/query/relation_aggregate_source.go",
+      "database/query/relation_direct.go",
+      "database/query/relation_extension.go",
+      "database/query/relation_extension_bridge.go",
+      "database/query/relation_global_scope.go",
+      "database/query/relation_loading.go",
+      "database/query/relation_lookup.go",
+      "database/query/relation_morph.go",
+      "database/query/relation_of_many.go",
+      "database/query/relation_pivot_sync.go",
+      "database/query/relation_predicate.go",
+      "database/query/relation_soft_delete.go",
+      "database/query/relation_through.go",
+      "database/query/relation_through_hop.go",
+      "database/query/relation_through_loading.go",
+      "database/query/relation_through_select.go",
+      "database/query/relation_value.go",
+      "database/query/relation_write.go",
+      "database/query/relation_write_keys.go",
+      "database/query/result_cursor.go",
+      "database/query/result_pagination.go",
+      "database/query/row_expression.go",
+      "database/query/row_lock_clause.go",
+      "database/query/row_subquery.go",
+      "database/query/scalar_operation.go",
+      "database/query/schema_literal.go",
+      "database/query/scope_compile.go",
+      "database/query/select.go",
+      "database/query/select_names.go",
+      "database/query/select_record.go",
+      "database/query/select_walk.go",
+      "database/query/set.go",
+      "database/query/set_execution.go",
+      "database/query/set_operations.go",
+      "database/query/set_write.go",
+      "database/query/soft_delete_scope.go",
+      "database/query/soft_delete_write.go",
+      "database/query/source_write.go",
+      "database/query/source_write_execution.go",
+      "database/query/source_write_mapping.go",
+      "database/query/subquery.go",
+      "database/query/temporal_expression.go",
+      "database/query/temporal_extract.go",
+      "database/query/temporal_operation.go",
+      "database/query/temporal_units.go",
+      "database/query/text_capability.go",
+      "database/query/text_expression.go",
+      "database/query/text_insensitive.go",
+      "database/query/transaction_alias.go",
+      "database/query/transaction_correlated_lock.go",
+      "database/query/transaction_correlated_record.go",
+      "database/query/transaction_correlated_value.go",
+      "database/query/transaction_correlation.go",
+      "database/query/transaction_cte.go",
+      "database/query/transaction_join.go",
+      "database/query/transaction_join_scope.go",
+      "database/query/transaction_lateral.go",
+      "database/query/transaction_query.go",
+      "database/query/transaction_source.go",
+      "database/query/transaction_subquery.go",
+      "database/query/transaction_value.go",
+      "database/query/transaction_value_lock.go",
+      "database/query/unique_lookup.go",
+      "database/query/value_comparison.go",
+      "database/query/value_expression.go",
+      "database/query/value_index.go",
+      "database/query/value_query.go",
+      "database/query/value_set.go",
+      "database/query/value_set_execution.go",
+      "database/query/window.go",
+      "database/query/window_compiler.go",
+      "database/query/window_function.go",
+      "database/query/window_named.go",
+      "database/query/window_range.go",
+      "database/query/write_callback.go",
+      "database/query/write_each.go",
+      "database/query/write_lookup.go"
+    ]
+  }
+}

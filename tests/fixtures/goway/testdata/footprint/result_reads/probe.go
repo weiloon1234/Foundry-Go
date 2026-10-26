@@ -2,18 +2,18 @@ package result_reads
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
 type alias struct{}
 
-func Page(ctx context.Context, db database.Executor) (query.Page[int64], error) {
-	return rows.Read(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)).OrderBy(expr.Value(models.Orders.ID).Asc()).Paginate(ctx, db, query.PageRequest{Number: 1, Size: 10})
+func Page(ctx context.Context, db database.Executor) (orm.PageResult[int64], error) {
+	return rows.Read(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)).OrderBy(expr.Value(models.Orders.ID).Asc()).Paginate(ctx, db, orm.PageRequest{Number: 1, Size: 10})
 }
 func Lock(ctx context.Context, tx *database.Tx) ([]int64, error) {
 	a := rows.AsTransaction[alias](rows.TransactionOf(rows.ModelRecord(models.Orders.Query())), "orders_alias")

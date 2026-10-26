@@ -6,7 +6,6 @@ package officequeries
 import (
 	"time"
 
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -49,15 +48,15 @@ type Employee struct {
 }
 
 // MorphName declares the stored discriminator of regions in polymorphic relationships.
-func (Region) MorphName() query.MorphName { return "region" }
+func (Region) MorphName() model.MorphName { return "region" }
 
 // MorphName declares the stored discriminator of offices in polymorphic relationships.
-func (Office) MorphName() query.MorphName { return "office" }
+func (Office) MorphName() model.MorphName { return "office" }
 
 // Note belongs to either a region or an office.
 type Note struct {
 	ID          model.ID[Note]
-	SubjectType query.MorphName
+	SubjectType model.MorphName
 	SubjectID   string
 	Body        string
 	Region      relation.One[Region]
@@ -73,7 +72,7 @@ type Label struct {
 type Labeling struct {
 	ID            model.ID[Labeling]
 	LabelID       model.ID[Label]
-	LabelableType query.MorphName
+	LabelableType model.MorphName
 	LabelableID   string
 }
 

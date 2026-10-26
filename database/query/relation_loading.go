@@ -24,10 +24,14 @@ type Relation[M any] interface {
 // RelationLimits bounds key batches, fetched/attached related values and nesting.
 // MaxRows separately caps fetched rows and attached model/scalar values across all
 // branches, including expansion when explicit input parents repeat a key.
-type RelationLimits struct{ BatchSize, MaxRows, MaxDepth int }
+//
+// Deprecated: use orm.RelationLimits.
+type RelationLimits = querycore.RelationLimits
 
-func DefaultRelationLimits() RelationLimits { return RelationLimits(querycore.DefaultRelationLimits()) }
-func (l RelationLimits) validate() error    { return querycore.RelationLimits(l).Validate() }
+// DefaultRelationLimits returns the shared relation loading defaults.
+//
+// Deprecated: use orm.DefaultRelationLimits.
+func DefaultRelationLimits() RelationLimits { return querycore.DefaultRelationLimits() }
 
 type relationLoadState struct {
 	limits      RelationLimits
@@ -92,7 +96,7 @@ func (q Query[M]) validateAt(depth int, limits RelationLimits) error {
 	if err := q.validateCore(); err != nil {
 		return err
 	}
-	if err := limits.validate(); err != nil {
+	if err := limits.Validate(); err != nil {
 		return err
 	}
 	if len(q.relations) > MaxExpressionNodes {

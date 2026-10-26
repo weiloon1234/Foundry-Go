@@ -11,9 +11,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -33,7 +33,7 @@ type TimelineRequest struct {
 }
 
 func (r TimelineRequest) Validate() error {
-	if r.Size < 1 || r.Size > query.MaxPageSize {
+	if r.Size < 1 || r.Size > querycore.MaxPageSize {
 		return fault.New(fault.Invalid, "audit timeline size is outside its bounds")
 	}
 	if before, present := r.Before.Get(); present && before < 1 {

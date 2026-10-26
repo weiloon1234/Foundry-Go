@@ -1,7 +1,7 @@
 package jsonqueries
 
 import (
-	"github.com/weiloon1234/Foundry-Go/database/query"
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -51,7 +51,7 @@ type Policy struct {
 type Snapshot struct {
 	ID         int
 	Settings   value.JSON[Preferences]
-	Kind       query.JSONKind
-	BackupKind value.Nullable[query.JSONKind]
+	Kind       database.JSONKind
+	BackupKind value.Nullable[database.JSONKind]
 	Matches    value.Nullable[bool]
 }

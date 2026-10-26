@@ -590,7 +590,7 @@ orm.ModelIdentity
   Scope func(keys ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Validate func() error
 orm.Morphable
-  MorphName func() github.com/weiloon1234/Foundry-Go/database/query.MorphName
+  MorphName func() github.com/weiloon1234/Foundry-Go/model.MorphName
 orm.NullableColumn
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
@@ -1288,7 +1288,9 @@ orm.RelationLimits
   field BatchSize int
   field MaxDepth int
   field MaxRows int
+  Validate func() error
 *orm.RelationLimits
+  Validate func() error
 orm.RetrievalHooks
   field Retrieved func(context.Context, github.com/weiloon1234/Foundry-Go/database.Executor, M) error
 *orm.RetrievalHooks

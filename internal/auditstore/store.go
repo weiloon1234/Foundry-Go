@@ -7,7 +7,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -37,7 +36,7 @@ func CountBefore(ctx context.Context, executor database.Executor, area string, c
 // Page retains the ordinary query layer's count/snapshot and row-limit contract.
 // Rows are newest first by database insertion sequence, so writes made in one
 // transaction keep their actual order despite sharing a transaction timestamp.
-func Page(ctx context.Context, executor database.Executor, q orm.Query[Entry], request query.PageRequest) (query.Page[Entry], error) {
+func Page(ctx context.Context, executor database.Executor, q orm.Query[Entry], request orm.PageRequest) (orm.PageResult[Entry], error) {
 	f := Entries
 	return q.OrderBy(f.Sequence.Desc()).Paginate(ctx, executor, request)
 }

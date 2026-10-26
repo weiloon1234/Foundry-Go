@@ -2,9 +2,9 @@ package invalid
 
 import (
 	"foundry.test/goway/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
 type a struct{}
@@ -29,6 +29,6 @@ var schema = rows.Define(func(b rows.Builder[summary], r *summary) summaryFields
 
 func invalid() {
 	q := rows.Select(rows.From(models.Users.Query()), schema, rows.Map(schema.Name, expr.Value(models.Users.Email)))
-	p, _ := rows.Read(q).Paginate(nil, nil, query.PageRequest{})
-	var _ query.Page[models.User] = p
+	p, _ := rows.Read(q).Paginate(nil, nil, orm.PageRequest{})
+	var _ orm.PageResult[models.User] = p
 }

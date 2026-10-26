@@ -16,7 +16,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jobarchive"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
@@ -182,7 +181,7 @@ type Cursor struct{ token string }
 
 // ParseCursor restores a cursor printed by a previous listing.
 func ParseCursor(text string) (Cursor, error) {
-	if _, err := query.ParseCursor[jobarchive.Failure](text); err != nil {
+	if _, err := orm.ParseCursor[jobarchive.Failure](text); err != nil {
 		return Cursor{}, err
 	}
 	return Cursor{token: text}, nil
@@ -203,9 +202,9 @@ func (s *Store) List(ctx context.Context, options ListOptions) (Page, error) {
 	if s == nil || ctx == nil || options.Limit < 1 || options.Limit > MaxPage {
 		return Page{}, fault.New(fault.Invalid, "job archive listing requires 1 to 100 entries")
 	}
-	request := query.CursorRequest[jobarchive.Failure]{Size: options.Limit}
+	request := orm.CursorRequest[jobarchive.Failure]{Size: options.Limit}
 	if !options.After.IsZero() {
-		cursor, err := query.ParseCursor[jobarchive.Failure](options.After.token)
+		cursor, err := orm.ParseCursor[jobarchive.Failure](options.After.token)
 		if err != nil {
 			return Page{}, err
 		}

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -70,7 +69,7 @@ var Employees = orm.Define("office_employees", func(b orm.Builder[Employee], m *
 type NoteTable struct {
 	orm.Table[Note, model.ID[Note]]
 	ID          orm.Key[Note, model.ID[Note]]
-	SubjectType orm.Column[Note, query.MorphName]
+	SubjectType orm.Column[Note, model.MorphName]
 	SubjectID   orm.Text[Note, string]
 	Body        orm.Text[Note, string]
 	Region      orm.One[Note, Region]
@@ -100,7 +99,7 @@ type LabelingTable struct {
 	orm.Table[Labeling, model.ID[Labeling]]
 	ID            orm.Key[Labeling, model.ID[Labeling]]
 	LabelID       orm.Column[Labeling, model.ID[Label]]
-	LabelableType orm.Column[Labeling, query.MorphName]
+	LabelableType orm.Column[Labeling, model.MorphName]
 	LabelableID   orm.Text[Labeling, string]
 }
 

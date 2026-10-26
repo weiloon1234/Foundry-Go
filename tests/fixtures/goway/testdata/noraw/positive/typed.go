@@ -6,7 +6,6 @@ import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -26,7 +25,7 @@ func Typed(ctx context.Context, db *database.DB, id model.ID[models.User]) {
 	_, _ = q.DeleteAll(ctx, db)
 	_, _ = models.Orders.Query().With(models.OrderRelations.Buyer).All(ctx, db)
 	_, _ = orm.Load(ctx, db, users, models.UserRelations.Orders)
-	_, _ = orm.CursorPaginate(ctx, db, q, query.CursorRequest[models.User]{Size: 10})
+	_, _ = orm.CursorPaginate(ctx, db, q, orm.CursorRequest[models.User]{Size: 10})
 	_ = q.Chunk(ctx, db, 10, func([]models.User) error { return nil })
 	_ = db.Transaction(ctx, func(tx *database.Tx) error {
 		_, err := q.All(ctx, tx)

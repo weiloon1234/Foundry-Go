@@ -13,9 +13,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/audit"
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/clock"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -67,7 +67,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		result.area = value.Set(area)
 		return area.Validate()
 	})
-	flags.IntVar(&result.batch, "batch", DefaultBatch, fmt.Sprintf("rows removed per transaction (1-%d)", query.MaxPageSize))
+	flags.IntVar(&result.batch, "batch", DefaultBatch, fmt.Sprintf("rows removed per transaction (1-%d)", querycore.MaxPageSize))
 	format := flags.String("format", "text", "text or json")
 	flags.BoolVar(&result.apply, "apply", false, "remove the matching entries (default: count only)")
 	if err := cli.ParseFlags(flags, args[2:]); err != nil {
@@ -76,8 +76,8 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") {
 		return Command{}, cli.Usage(usage)
 	}
-	if result.batch < 1 || result.batch > query.MaxPageSize {
-		return Command{}, cli.Usage(fmt.Sprintf("--batch must be between 1 and %d", query.MaxPageSize))
+	if result.batch < 1 || result.batch > querycore.MaxPageSize {
+		return Command{}, cli.Usage(fmt.Sprintf("--batch must be between 1 and %d", querycore.MaxPageSize))
 	}
 	result.json = *format == "json"
 	return result, nil

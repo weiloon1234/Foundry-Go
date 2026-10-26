@@ -9,7 +9,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/audit/record"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -65,26 +64,26 @@ func (r *Recorder) RecordModel(ctx context.Context, tx *database.Tx, entry recor
 
 // ModelHistory reads one stored subject's lifecycle history in the selected
 // area, newest first by insertion sequence. It does not fetch the subject model
-// or require that it still exists. Page count and rows share query.Paginate's
+// or require that it still exists. Page count and rows share ORM pagination's
 // transaction/isolation contract; use ModelTimeline for keyset pages.
-func ModelHistory[M, K any](ctx context.Context, executor database.Executor, recorder *Recorder, subject model.Reference[M, K], request query.PageRequest) (query.Page[ModelRecord[M, K]], error) {
+func ModelHistory[M, K any](ctx context.Context, executor database.Executor, recorder *Recorder, subject model.Reference[M, K], request orm.PageRequest) (orm.PageResult[ModelRecord[M, K]], error) {
 	q, err := subjectHistory(ctx, recorder, subject)
 	if err != nil {
-		return query.Page[ModelRecord[M, K]]{}, err
+		return orm.PageResult[ModelRecord[M, K]]{}, err
 	}
 	f := auditstore.Entries
 	page, err := auditstore.Page(ctx, executor, q.Where(f.Operation.Ne(0)), request)
 	if err != nil {
-		return query.Page[ModelRecord[M, K]]{}, err
+		return orm.PageResult[ModelRecord[M, K]]{}, err
 	}
-	result := query.Page[ModelRecord[M, K]]{Number: page.Number, Size: page.Size, Total: page.Total, Pages: page.Pages, Items: make([]ModelRecord[M, K], 0, len(page.Items))}
+	result := orm.PageResult[ModelRecord[M, K]]{Number: page.Number, Size: page.Size, Total: page.Total, Pages: page.Pages, Items: make([]ModelRecord[M, K], 0, len(page.Items))}
 	for _, row := range page.Items {
 		if err := ctx.Err(); err != nil {
-			return query.Page[ModelRecord[M, K]]{}, err
+			return orm.PageResult[ModelRecord[M, K]]{}, err
 		}
 		item, err := restoreModel(subject, row)
 		if err != nil {
-			return query.Page[ModelRecord[M, K]]{}, err
+			return orm.PageResult[ModelRecord[M, K]]{}, err
 		}
 		result.Items = append(result.Items, item)
 	}

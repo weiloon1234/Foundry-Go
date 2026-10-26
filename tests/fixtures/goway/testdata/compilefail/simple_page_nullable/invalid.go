@@ -2,9 +2,9 @@ package invalid
 
 import (
 	"foundry.test/goway/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
 type a struct{}
@@ -18,6 +18,6 @@ var input = rows.As[a](models.Users.Query(), "u")
 var other = rows.As[b](models.Orders.Query(), "o")
 
 func invalid() {
-	p, _ := rows.Read(rows.SelectValue(models.Users.Query(), models.Users.Nickname)).SimplePaginate(nil, nil, query.PageRequest{})
-	var _ query.SimplePage[string] = p
+	p, _ := rows.Read(rows.SelectValue(models.Users.Query(), models.Users.Nickname)).SimplePaginate(nil, nil, orm.PageRequest{})
+	var _ orm.SimplePage[string] = p
 }

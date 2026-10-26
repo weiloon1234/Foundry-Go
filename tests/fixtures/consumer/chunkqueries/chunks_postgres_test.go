@@ -11,7 +11,6 @@ import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -85,7 +84,7 @@ func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 			t.Fatal("eager reads were not bounded per batch", e.reads)
 		}
 		// Each automatically uses complete batches when relations are requested.
-		for i := 0; i < query.DefaultChunkSize; i++ {
+		for i := 0; i < orm.DefaultChunkSize; i++ {
 			if _, err := models.Users.Insert(t.Context(), tx, models.Users.Email.Set("chunk@example.test"), models.Users.Age.Set(50+i), models.Users.Status.Set(models.StatusActive), models.Users.Level.Set(models.LevelBasic)); err != nil {
 				return err
 			}
@@ -102,7 +101,7 @@ func TestPostgresChunkWindowsAndEagerBudgets(t *testing.T) {
 		}); err != nil {
 			return err
 		}
-		if seen != query.DefaultChunkSize+3 || e.reads != 4 {
+		if seen != orm.DefaultChunkSize+3 || e.reads != 4 {
 			t.Fatal("Each did not use bounded batches", seen, e.reads)
 		}
 		return nil

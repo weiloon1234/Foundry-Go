@@ -3,8 +3,8 @@ package joined
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -32,7 +32,7 @@ type Pivot struct {
 	ID          int64
 	ParentID    value.Nullable[int64]
 	TargetID    value.Nullable[int64]
-	Kind        query.MorphName
+	Kind        model.MorphName
 	Role        string
 	DeletedAt   value.Nullable[temporal.DateTime]
 	Parent      relation.One[Parent]
@@ -41,8 +41,8 @@ type Pivot struct {
 	MorphTarget relation.One[Target]
 }
 
-func (Parent) MorphName() query.MorphName { return "parent" }
-func (Target) MorphName() query.MorphName { return "target" }
+func (Parent) MorphName() model.MorphName { return "parent" }
+func (Target) MorphName() model.MorphName { return "target" }
 
 type ParentFields struct {
 	orm.Table[Parent, int64]
@@ -82,7 +82,7 @@ type PivotFields struct {
 	ID          orm.Key[Pivot, int64]
 	ParentID    orm.NullableNumber[Pivot, int64]
 	TargetID    orm.NullableNumber[Pivot, int64]
-	Kind        orm.Column[Pivot, query.MorphName]
+	Kind        orm.Column[Pivot, model.MorphName]
 	Role        orm.Text[Pivot, string]
 	DeletedAt   orm.SoftDelete[Pivot, temporal.DateTime]
 	Parent      orm.One[Pivot, Parent]
@@ -95,7 +95,7 @@ type PivotFields struct {
 var Pivots = orm.Define("joined_pivots", func(b orm.Builder[Pivot], m *Pivot) PivotFields {
 	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
 	t := orm.TableOf(b, &m.ID)
-	return PivotFields{Table: t, ID: t.Key(), ParentID: orm.NullableNumberOf(b, &m.ParentID), TargetID: orm.NullableNumberOf(b, &m.TargetID), Kind: orm.ColumnOf(b, &m.Kind, orm.Codec(codec.String[query.MorphName]())), Role: orm.TextOf(b, &m.Role), DeletedAt: deleted, Soft: orm.SoftDeletes(deleted), Parent: orm.OneOf(b, &m.Parent), Target: orm.OneOf(b, &m.Target), MorphParent: orm.OneOf(b, &m.MorphParent), MorphTarget: orm.OneOf(b, &m.MorphTarget)}
+	return PivotFields{Table: t, ID: t.Key(), ParentID: orm.NullableNumberOf(b, &m.ParentID), TargetID: orm.NullableNumberOf(b, &m.TargetID), Kind: orm.ColumnOf(b, &m.Kind, orm.Codec(codec.String[model.MorphName]())), Role: orm.TextOf(b, &m.Role), DeletedAt: deleted, Soft: orm.SoftDeletes(deleted), Parent: orm.OneOf(b, &m.Parent), Target: orm.OneOf(b, &m.Target), MorphParent: orm.OneOf(b, &m.MorphParent), MorphTarget: orm.OneOf(b, &m.MorphTarget)}
 })
 
 var Peers = orm.ManyToManyOf(Parents.Peers, Parents.ID, Pivots.ParentID, Pivots.TargetID, Targets.ID)

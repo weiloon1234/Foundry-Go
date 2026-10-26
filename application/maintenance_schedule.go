@@ -14,10 +14,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/prune"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/jobs/archive"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/notifications"
@@ -217,7 +217,7 @@ func PruneModels(s Services, connection database.ConnectionName, declare func(no
 		return Pruning{}, err
 	}
 	source := s.clock
-	return Pruning{name: "models." + string(connection), kind: modelPruning, limit: query.MaxPerModelWriteRows, run: func(ctx context.Context, t MaintenanceTaskSettings) (int64, bool, error) {
+	return Pruning{name: "models." + string(connection), kind: modelPruning, limit: querycore.MaxPerModelWriteRows, run: func(ctx context.Context, t MaintenanceTaskSettings) (int64, bool, error) {
 		models, err := registry(source.Now())
 		if err != nil {
 			return 0, false, err
@@ -317,7 +317,7 @@ func frameworkMaintenanceTasks(s Settings, source clock.Clock) ([]maintenanceTas
 			}
 			return batches(store.Prune), nil
 		}),
-		add(f.Audit.Enabled && f.Audit.Config.RetentionDays > 0, "audit", m.Audit, query.MaxPageSize, false, func(s Services) (pruneRun, error) {
+		add(f.Audit.Enabled && f.Audit.Config.RetentionDays > 0, "audit", m.Audit, querycore.MaxPageSize, false, func(s Services) (pruneRun, error) {
 			scope, err := s.AuditScope()
 			if err != nil {
 				return nil, err
@@ -390,7 +390,7 @@ func maintenanceSchedules(s Settings, source clock.Clock) (Schedules, error) {
 	for _, kind := range []struct {
 		kind  pruningKind
 		limit int
-	}{{sessionPruning, session.MaxPageSize}, {tokenPruning, token.MaxPruneFamilies}, {modelPruning, query.MaxPerModelWriteRows}, {customPruning, math.MaxInt32}} {
+	}{{sessionPruning, session.MaxPageSize}, {tokenPruning, token.MaxPruneFamilies}, {modelPruning, querycore.MaxPerModelWriteRows}, {customPruning, math.MaxInt32}} {
 		if err := m.resolve(m.declared(kind.kind)).validate(kind.limit, false); err != nil {
 			return nil, err
 		}

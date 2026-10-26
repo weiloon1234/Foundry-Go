@@ -50,7 +50,7 @@ Target constants are fixed schema values rendered as escaped SQL literals after 
 
 ## Atomic batches and outcomes
 
-`InsertMany` and `UpsertMany` accept `[][]orm.Assignment[M]`. One call is bounded to 1,000 inputs and the compiler's parameter/cell limit. It is atomic; a failed row, malformed return, codec error or duplicate conflict target rolls back the batch. Empty batches still validate declarations and policies without executing SQL or mutators.
+`InsertMany` and `UpsertMany` accept `[][]orm.Assignment[M]`. One call is bounded by `orm.MaxInsertRows` and the statement-wide `orm.MaxParameters` parameter/cell limit; wide rows can require smaller batches. See the [consumer resource limits](../../database/orm/README.md#consumer-resource-limits). It is atomic; a failed row, malformed return, codec error or duplicate conflict target rolls back the batch. Empty batches still validate declarations and policies without executing SQL or mutators.
 
 Batches return only complete inserted/updated rows. Skipped rows are absent, and PostgreSQL return order is not an input mapping. Do not zip results to inputs. Use stable domain keys to associate results.
 

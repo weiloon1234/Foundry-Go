@@ -7,18 +7,17 @@ import (
 	"unsafe"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 // RelationLimits is the existing shared public limits type. MaxRows separately
 // bounds fetched rows and attached values across the whole tree.
 // Example: limits := orm.DefaultRelationLimits().
-type RelationLimits = query.RelationLimits
+type RelationLimits = querycore.RelationLimits
 
 // DefaultRelationLimits uses the shared defaults: batches 500, rows 10000, depth 8.
 // Example: limits := orm.DefaultRelationLimits().
-func DefaultRelationLimits() RelationLimits { return query.DefaultRelationLimits() }
+func DefaultRelationLimits() RelationLimits { return querycore.DefaultRelationLimits() }
 
 // WithRelationLimits returns a query with immutable tree-wide limits.
 // Example: q = orm.WithRelationLimits(q, orm.RelationLimits{BatchSize:100,MaxRows:5000,MaxDepth:4}).

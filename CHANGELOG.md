@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Complete Stage 8d1: move morph contracts to `model`, share relation limits through
+  `querycore`, and expose native ORM limits for bounded application batches. Native
+  dependencies retain only two explicit legacy bridges; engine removal follows in 8d3.
+
 - Document lone timestamps as developer-managed fields with `NoTimestamps` and
   a compiled migration example.
 

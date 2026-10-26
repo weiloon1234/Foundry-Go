@@ -851,7 +851,7 @@ Mapped updates require at most one source match per affected model and roll back
 on ambiguity. Literal-only updates and deletes tolerate repeated source keys.
 
 `Exec` returns an affected count. `Returning` accepts a limit from 1 through
-`query.MaxInsertRows` (1000), hydrates complete models, and rolls back on overflow,
+`orm.MaxInsertRows` (1000), hydrates complete models, and rolls back on overflow,
 decode failure or row-close failure. The limit bounds retained models, not SQL
 work or field sizes; it neither truncates the source nor promises result order.
 
@@ -1131,3 +1131,30 @@ and scope declarations.
 Bounded Explain execution and plan decoding also share querycore. The public
 `orm.Plan`/`PlanNode` and legacy aliases retain their methods and data contract;
 their defining Go package is now the internal shared owner.
+
+## Consumer resource limits
+
+Use the public constants in `orm` when bounding application requests or batches.
+They refer to the compiler's shared limits; `expr` and `rows` use the same limits
+and do not publish alternate spellings.
+
+| Constants | What applications can bound |
+| --- | --- |
+| `MaxInsertRows`, `MaxParameters` | Rows in an insert/upsert and parameters in the entire statement; wide rows can require smaller batches. |
+| `MaxPerModelWriteRows`, `MaxRelationWriteRows` | One atomic lifecycle batch or relation write. |
+| `MaxIdentityBatch` | Keys supplied to an identity observation or extension scope. |
+| `MaxChunkSize`, `DefaultChunkSize` | Explicit model chunks and the default closed batches for eager/observed iteration. |
+| `MaxPageSize` | Requested page size. |
+| `MaxCursorBytes`, `MaxCursorFields` | Encoded cursor size and ordered cursor-key fields. |
+| `MaxMembershipValues` | Values in a membership predicate. |
+| `MaxExpressionDepth`, `MaxExpressionNodes`, `MaxScalarSQLBytes` | Dynamic expression construction and computed scalar SQL size. |
+
+These are upper bounds, not a promise that every combination is valid. Query
+compilation still validates ownership, phases, ordering and the combined statement.
+Independent CTE scopes share statement-wide compilation budgets. Ordinary bind
+values count toward `MaxParameters`; they are not interpolated into SQL.
+
+The legacy `query` spellings remain only during the 8d1 transition and retire in
+8d3. Replace `query.MaxInsertRows` with `orm.MaxInsertRows`, and use the identical
+name under `orm` for each other constant listed above. Plan-decoder budgets and
+lifecycle callback recursion guards remain internal implementation bounds.

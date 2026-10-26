@@ -2,15 +2,15 @@ package orm
 
 import (
 	"errors"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 // MorphName is the existing persisted discriminator type. Example: func(Post) MorphName() orm.MorphName {return "post"}.
-type MorphName = query.MorphName
+type MorphName = model.MorphName
 
 // Morphable declares a concrete model's stable discriminator. Example: func(Post) MorphName() orm.MorphName {return "post"}.
-type Morphable = query.Morphable
+type Morphable = model.Morphable
 
 func relationMorphName[M Morphable]() (MorphName, error) {
 	var m M

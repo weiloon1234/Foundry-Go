@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -19,7 +19,7 @@ func (r *Recorder) PruneBefore(ctx context.Context, tx *database.Tx, cutoff temp
 	if err != nil {
 		return 0, err
 	}
-	if tx == nil || cutoff.IsZero() || limit < 1 || limit > query.MaxPageSize {
+	if tx == nil || cutoff.IsZero() || limit < 1 || limit > querycore.MaxPageSize {
 		return 0, fault.New(fault.Invalid, "audit pruning requires a transaction, cutoff and bounded row limit")
 	}
 	return auditstore.Prune(ctx, tx, string(area), cutoff, limit)
@@ -118,7 +118,7 @@ func (s *Scope) prune(ctx context.Context, batch int, step func(*database.Tx, *R
 	if s == nil || ctx == nil {
 		return 0, fault.New(fault.Invalid, "audit scope requires an initialized handle and context")
 	}
-	if batch < 1 || batch > query.MaxPageSize {
+	if batch < 1 || batch > querycore.MaxPageSize {
 		return 0, fault.New(fault.Invalid, "audit pruning requires a bounded batch size")
 	}
 	if _, err := s.recorder.area(ctx); err != nil {

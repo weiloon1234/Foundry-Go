@@ -1758,6 +1758,27 @@ func insertAdmin(ctx context.Context, tx *database.Tx, tenantID int64, username 
 
 Omitted fields are not passed to `Insert`, allowing database default values to apply. To explicitly write a SQL NULL on a nullable column, pass `column.SetNull()`.
 
+## Use native shared contracts and limits
+
+Page and cursor contracts live under `orm`: `PageRequest`, `PageResult[R]`,
+`SimplePage[R]`, `Cursor[R]`, `CursorRequest[R]`, `CursorPage[R]`,
+`CursorInputError` and `ParseCursor[R]`. The total-bearing page uses the name
+`PageResult`, while its JSON fields retain their existing names. Parsing retains
+the same bounds, token format and redacted errors.
+
+Use `model.MorphName` and `model.Morphable` for polymorphic model declarations,
+`orm.RelationLimits` / `orm.DefaultRelationLimits` for eager-loading budgets,
+and `database.JSONKind` for a DTO field describing a JSON value's kind.
+
+Application batching and query builders can use `orm.MaxInsertRows`,
+`MaxPerModelWriteRows`, `MaxRelationWriteRows`, `MaxIdentityBatch`, `MaxChunkSize`,
+`DefaultChunkSize`, `MaxPageSize`, `MaxCursorBytes`, `MaxCursorFields`,
+`MaxExpressionDepth`, `MaxExpressionNodes`, `MaxParameters`,
+`MaxMembershipValues` and `MaxScalarSQLBytes` (all in `orm`). These refer to the
+same compiler limits. See [consumer resource limits](../../database/orm/README.md#consumer-resource-limits)
+for each bound's scope. No application should import framework `internal` packages
+or maintain a copied constant to bound its inputs.
+
 ## Preserve the remaining behavior
 
 Numeric Increment/Decrement use positive finite magnitudes; AtMost bounds increments

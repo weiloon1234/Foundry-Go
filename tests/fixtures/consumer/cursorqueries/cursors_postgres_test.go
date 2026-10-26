@@ -14,7 +14,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -174,7 +173,7 @@ func TestPostgresCursorFailureDiscardsPage(t *testing.T) {
 		if page, err := q.Paginate(t.Context(), tx, orm.CursorRequest[reports.UserSummary]{Size: 1}); err == nil || !reflect.DeepEqual(page, orm.CursorPage[reports.UserSummary]{}) {
 			t.Fatal("invalid lookahead leaked page", err)
 		}
-		if _, err := tx.Exec(t.Context(), `UPDATE users SET status = 'active', email_address = $1 WHERE id = $2`, strings.Repeat("x", query.MaxCursorBytes+1), users[1].ID.String()); err != nil {
+		if _, err := tx.Exec(t.Context(), `UPDATE users SET status = 'active', email_address = $1 WHERE id = $2`, strings.Repeat("x", orm.MaxCursorBytes+1), users[1].ID.String()); err != nil {
 			return err
 		}
 		if page, err := c.OrderBy(rows.At(c.Scope(), reports.UserSummaries.Email).Desc()).UniqueBy(expr.Group(rows.At(c.Scope(), reports.UserSummaries.ID))).Paginate(t.Context(), tx, orm.CursorRequest[reports.UserSummary]{Size: 1}); !errors.Is(err, fault.Invalid) || !reflect.DeepEqual(page, orm.CursorPage[reports.UserSummary]{}) {

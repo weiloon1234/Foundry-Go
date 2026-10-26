@@ -11,12 +11,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 type Sequence uint64
 
 const MaxStates = 64
-const MaxCount = query.MaxPerModelWriteRows
+const MaxCount = querycore.MaxPerModelWriteRows
 
 // Model and query.CreateDraft are the existing generated integration contracts.
 // The draft must describe this exact model; another model's draft cannot bind.
