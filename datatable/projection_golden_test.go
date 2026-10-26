@@ -27,7 +27,7 @@ func TestDatatableCutoverProjectionGolden(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := rows.Compile(source.rows)
+			got, err := rows.CompileRead(rows.Read(source.rows))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -29,7 +29,7 @@ func (g newGolden) fixB(ctx context.Context, db *database.DB) {
 	fmt.Fprintln(&g.output, "load-duplicate-and-missing")
 	buyer := must(model.ParseID[models.User](buyerID))
 	missing := must(model.ParseID[models.User]("01890f47-1a00-7000-8000-000000000009"))
-	g.emitOrders(must(orm.Load(ctx, db, []models.Order{{BuyerID: buyer}, {BuyerID: buyer}, {BuyerID: missing}}, models.OrderRelations.Buyer)))
+	g.emitOrders(must(orm.LoadFrom(ctx, db, models.Orders.Query().With(models.OrderRelations.Buyer), []models.Order{{BuyerID: buyer}, {BuyerID: buyer}, {BuyerID: missing}})))
 	fmt.Fprintln(&g.output, "soft-target-relation")
 	reports := must(reporting.Orders.Query().With(reporting.OrderRelations.Member).All(ctx, db))
 	for _, o := range reports {

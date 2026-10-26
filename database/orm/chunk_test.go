@@ -254,3 +254,50 @@ func TestChunkReadFailuresDoNotDeliverPartialBatches(t *testing.T) {
 		})
 	}
 }
+
+func TestChunkKeyValidationAndEmptyCallbacks(t *testing.T) {
+	r := records()
+	var statements []string
+	db := testDB(t, testConnector{statements: &statements})
+	for _, q := range []Query[record]{r.Query().Offset(1), r.Query().OrderBy(r.Note.Asc()), r.Query().OrderBy(r.ID.Asc(), r.ID.Desc()), {}} {
+		if err := ChunkByKey(t.Context(), db, q, r.ID, 2, func([]record) error { return nil }); !errors.Is(err, fault.Invalid) {
+			t.Fatal("invalid key traversal", err)
+		}
+	}
+	missing := records()
+	missing.ID.key.core.get = nil
+	if err := ChunkByKey(t.Context(), db, missing.Query(), missing.ID, 2, func([]record) error { return nil }); !errors.Is(err, fault.Invalid) {
+		t.Fatal("missing getter", err)
+	}
+	q := r.Query().Limit(0)
+	if err := ChunkByKey(t.Context(), db, q, r.ID, 2, func([]record) error { t.Fatal("empty callback"); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := ChunkByKey(t.Context(), db, q, r.ID, 2, nil); !errors.Is(err, fault.Invalid) {
+		t.Fatal("nil batch callback", err)
+	}
+	if err := EachByKey(t.Context(), db, q, r.ID, 2, nil); !errors.Is(err, fault.Invalid) {
+		t.Fatal("nil row callback", err)
+	}
+	if err := q.EachChunked(nil, db, 2, func(record) error { return nil }); !errors.Is(err, fault.Invalid) {
+		t.Fatal("nil context", err)
+	}
+	if len(statements) != 0 {
+		t.Fatal("invalid chunk reached SQL")
+	}
+	stop := errors.New("stop")
+	if err := eachBatch(t.Context(), func(record) error { return stop })([]record{{}}); err != stop {
+		t.Fatal("callback identity changed")
+	}
+	p, err := newChunkPlan(r.Query().Limit(1).state, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.keys = []*columnCore{nil}
+	if more, err := p.advance(1, nil); err != nil || more || p.remaining != value.Set(0) {
+		t.Fatal("terminal batch read unused key", err)
+	}
+	if querycore.DefaultChunkSize < 1 || querycore.DefaultChunkSize > MaxChunkSize {
+		t.Fatal("default outside bounds")
+	}
+}

@@ -106,6 +106,10 @@ func (b *retrievalBatch) capture(base unsafe.Pointer, count int) {
 	b.base = unsafe.Add(base, uintptr(b.start)*b.table.typ.Size())
 	b.count = count - b.start
 }
+
+// Keep callback closure bodies in the shared owner instead of every model reader.
+//
+//go:noinline
 func readBatches(ex database.Executor, batches ...*retrievalBatch) *ormcore.ReadCallbacks {
 	return &ormcore.ReadCallbacks{
 		Needed: func(set lifecycle.Observers) bool {

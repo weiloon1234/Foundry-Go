@@ -30,7 +30,7 @@ func TestPredicatesHideLiteralsThroughPrivateWrappers(t *testing.T) {
 	}
 	for name, predicate := range map[string]orm.Predicate[predicateOwner]{
 		"equal": next, "membership": orm.IdentityOf(table, table.Key()).Scope(secret),
-		"junction": orm.And(next, orm.Or(next.Not(), table.Key().In(secret))), "zero": {},
+		"junction": orm.And(next, orm.Or(orm.Not(next), table.Key().In(secret))), "zero": {},
 	} {
 		for wrapper, input := range map[string]any{
 			"direct": predicate, "pointer": &predicate,

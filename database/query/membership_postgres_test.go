@@ -66,7 +66,7 @@ func TestPostgresMembershipBindsOneTypedArray(t *testing.T) {
 	scope := pgtest.Isolate(t)
 	db := scope.Open(t)
 	ctx := t.Context()
-	uid, err := model.NewID[memberRow]()
+	uid, err := model.NewIDAt[memberRow](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

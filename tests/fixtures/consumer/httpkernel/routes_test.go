@@ -25,7 +25,7 @@ var memberShow = foundryhttp.DefineRoute(
 // This fixture explicitly uses the raw payload adapter. Typed request/response
 // DTO discovery is the next HTTP slice; path identity is already compiler checked.
 func TestTypedNamedRoutesFromIndependentConsumer(t *testing.T) {
-	id, err := model.NewID[routeMember]()
+	id, err := model.NewIDAt[routeMember](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

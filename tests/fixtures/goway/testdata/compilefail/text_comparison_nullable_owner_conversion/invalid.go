@@ -6,7 +6,7 @@ import (
 )
 
 func invalid() {
-	users := expr.TextNullableValue(expr.Select(expr.Value(models.Users.Nickname)))
+	users := expr.TextNullableValue(expr.Row(expr.Value(models.Users.Nickname)).Value())
 	orders := expr.NullableTextValueComparison[models.Order, string](users)
 	_ = orders.Eq("x")
 }

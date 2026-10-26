@@ -1,7 +1,8 @@
 package factory
 
+import "math/rand/v2"
+
 import (
-	"math/rand/v2"
 	"strconv"
 	"strings"
 	"sync"

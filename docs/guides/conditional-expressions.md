@@ -3,7 +3,7 @@
 <!-- compiled-examples -->
 
 `database/orm/expr` preserves the input scope, value type and evaluation phase.
-Use `expr.Value(column)` for a row operand, `expr.Select(row)` or a computed
+Use `expr.Value(column)` for a row operand, `expr.Row(row).Value()` or a computed
 expression's `.Value()` for selection, and `rows.MapSelected` for a selected result.
 Aggregates and windows cannot become WHERE predicates.
 

@@ -85,6 +85,10 @@ func (policy sourcePolicy) sourceName(path string) bool {
 	if strings.HasPrefix(relative, "tests/oracle/testdata/stage8d/sources/") || strings.HasPrefix(relative, "tests/oracle/testdata/stage8d-matching/sources/") {
 		return strings.HasSuffix(relative, ".go.txt")
 	}
+	// Retired compiler inputs remain digest-checked evidence in the consumer.
+	if strings.HasPrefix(relative, "testdata/compilefail/") && name == "invalid.go.txt" {
+		return true
+	}
 	// Reviewed Go-way catalogue, snapshots and capability evidence, plus consumer
 	// fixtures. Keep allowances at exact paths rather than broadening extensions.
 	// The TOML is loaded by mailing/configured_test.go; SPA assets by portals.go.
@@ -95,6 +99,11 @@ func (policy sourcePolicy) sourceName(path string) bool {
 		"database/orm/testdata/joined-has.sql",
 		"database/orm/testdata/public-methods.txt",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
+		"docs/evidence/goway-stage8d3a-api-removals.tsv",
+		"docs/evidence/goway-stage8d3a-negative-ports.tsv",
+		"docs/evidence/goway-stage8d3a-surface-subtractions.tsv",
+		"testdata/footprint/extension_files_old/probe.go.txt",
+		"testdata/footprint/extension_matching_old/probe.go.txt",
 		"docs/evidence/goway-stage9-c-barrier-freeze.tsv",
 		"docs/evidence/goway-stage9-d-helper-references.tsv",
 		"mailing/testdata/mailers.toml",

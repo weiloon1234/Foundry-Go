@@ -63,7 +63,7 @@ func (b *Backend) Issue(ctx context.Context, address challenge.Address, identity
 				return err
 			}
 		}
-		id, err := model.NewID[challengestore.Entry]()
+		id, err := model.NewIDAt[challengestore.Entry](time.Now())
 		if err != nil {
 			return err
 		}

@@ -34,7 +34,7 @@ func TestPostgresTypedSets(t *testing.T) {
 
 func checkValueSets(t *testing.T, tx *database.Tx) error {
 	u := models.Users
-	ages := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Select(expr.Value(u.Age)))
+	ages := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(u.Age)).Value())
 	left := rowset.UnionAllValues(rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(u.Age.Lte(21)))), rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(u.Age.Eq(21)))))  // 20,21,21
 	right := rowset.UnionAllValues(rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(u.Age.Gte(21)))), rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(u.Age.Eq(22))))) // 21,22,22
 	for _, test := range []struct {
@@ -50,7 +50,7 @@ func checkValueSets(t *testing.T, tx *database.Tx) error {
 		{"except all", rowset.ExceptAllValues(left, right), []int{20, 21}},
 	} {
 		q := test.q.OrderBy(test.q.Value().Asc())
-		rows, err := q.All(t.Context(), tx)
+		rows, err := rowset.ReadValues(q).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func checkValueSets(t *testing.T, tx *database.Tx) error {
 	}
 	combined := rowset.UnionAllValues(left, right)
 	window := combined.OrderBy(combined.Value().Desc()).Offset(1).Limit(2)
-	if rows, err := window.All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []int{22, 21}) {
+	if rows, err := rowset.ReadValues(window).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []int{22, 21}) {
 		t.Error("combined window mismatch", rows, err)
 	}
 	if n, err := rowset.ReadValues(window).Count(t.Context(), tx); err != nil || n != 2 {
@@ -99,10 +99,10 @@ func checkValueSets(t *testing.T, tx *database.Tx) error {
 		t.Error("set existence ignored zero window", err)
 	}
 	inputWindows := rowset.UnionAllValues(rowset.Values(rowset.LimitScalar(rowset.OrderScalar(ages, expr.Value(u.Age).Desc()), 1)), rowset.Values(rowset.LimitScalar(rowset.OrderScalar(ages, expr.Value(u.Age).Asc()), 1)))
-	if rows, err := inputWindows.OrderBy(inputWindows.Value().Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []int{20, 22}) {
+	if rows, err := rowset.ReadValues(inputWindows.OrderBy(inputWindows.Value().Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []int{20, 22}) {
 		t.Error("input windows moved after union", rows, err)
 	}
-	nicknames := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Select(expr.Value(u.Nickname)))
+	nicknames := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(u.Nickname)).Value())
 	for _, test := range []struct {
 		q    rowset.ValueSetQuery[value.Nullable[string]]
 		want int64
@@ -136,14 +136,14 @@ func checkSetComposition(t *testing.T, tx *database.Tx, users []models.User) err
 	b := rowset.As[userAlias](models.Users.Query(), "original")
 	joined := rowset.InnerJoin(a, b, rowset.On(expr.At(rowset.Scope(a), models.Users.ID), expr.At(rowset.Scope(b), models.Users.ID)))
 	fields := rowset.LeftScope(joined, rowset.Scope(a))
-	ids := rowset.SelectScalar(joined, expr.Select(expr.At(fields, models.Users.ID)))
+	ids := rowset.SelectScalar(joined, expr.Row(expr.At(fields, models.Users.ID)).Value())
 	if n, err := rowset.ReadScalar(ids).Count(t.Context(), tx); err != nil || n != 2 {
 		t.Error("CTE/set join mismatch", err)
 	}
 	if n, err := models.Users.Query().Where(orm.Has(models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, rowset.InQuery(expr.Value(u.ID), ids))))).Count(t.Context(), tx); err != nil || n != 1 {
 		t.Error("relation filter lost nested set/CTE", err)
 	}
-	buyers := rowset.SelectScalar(rowset.From(models.Orders.Query()), expr.Select(expr.Value(o.BuyerID)))
+	buyers := rowset.SelectScalar(rowset.From(models.Orders.Query()), expr.Row(expr.Value(o.BuyerID)).Value())
 	filtered := rowset.UnionValues(rowset.Values(rowset.WhereScalar(buyers, expr.ModelPredicate(o.TotalCents.Lt(3)))), rowset.Values(rowset.WhereScalar(buyers, expr.ModelPredicate(o.TotalCents.Gte(3)))))
 	if changed, err := orm.Update(t.Context(), tx, expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(u.ID), rowset.SelectScalar(filtered, filtered.Value().Value()))), u.Key(), users[0].ID, u.Age.Set(30)); err != nil || changed.Age != 30 {
 		t.Error("set subquery failed to constrain typed update", err)
@@ -157,7 +157,7 @@ func checkSetComposition(t *testing.T, tx *database.Tx, users []models.User) err
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if rows, err := combined.All(ctx, queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, context.Canceled) {
+	if rows, err := rowset.ReadSet(combined).All(ctx, queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, context.Canceled) {
 		t.Error("canceled set reached executor", err)
 	}
 	// Deliberately corrupt isolated data to check all-or-error decoding.
@@ -165,14 +165,14 @@ func checkSetComposition(t *testing.T, tx *database.Tx, users []models.User) err
 		return err
 	}
 	fieldsAt := combined.Scope()
-	if rows, err := combined.OrderBy(expr.At(fieldsAt, models.Users.Email).Asc()).All(t.Context(), tx); rows != nil || !errors.Is(err, fault.Invalid) {
+	if rows, err := rowset.ReadSet(combined.OrderBy(expr.At(fieldsAt, models.Users.Email).Asc())).All(t.Context(), tx); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("set exposed partial malformed models", err)
 	}
 	return nil
 }
 
 func TestInvalidSetsNeverExecute(t *testing.T) {
-	ages := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Age)))
+	ages := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Age)).Value())
 	combined := rowset.UnionValues(rowset.Values(ages), rowset.Values(ages))
 	if rows, err := rowset.ReadScalar(rowset.SelectScalar(combined, (rowset.ValueSetQuery[int]{}).Value().Value())).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("zero set expression reached executor", err)
@@ -182,7 +182,7 @@ func TestInvalidSetsNeverExecute(t *testing.T) {
 		rowset.Union(rowset.ModelRecord(models.Users.Query()), rowset.ModelRecord(models.Users.Query().Where(models.Users.Status.Eq(models.Status("bad"))))),
 		rowset.Union(rowset.ModelRecord(models.Users.Query()), rowset.ModelRecord(models.Users.Query())).Limit(-1),
 	} {
-		if rows, err := q.All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
+		if rows, err := rowset.ReadSet(q).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 			t.Error("invalid set reached executor", err)
 		}
 	}
@@ -192,7 +192,7 @@ func checkRecordSets(t *testing.T, tx *database.Tx, users []models.User) error {
 	u := models.Users
 	combined := rowset.Union(rowset.ModelRecord(models.Users.Query().Where(u.Age.Lte(21))), rowset.ModelRecord(models.Users.Query().Where(u.Age.Gte(21))))
 	f := combined.Scope()
-	rows, err := combined.Where(expr.At(f, models.Users.Status).Eq(models.StatusActive)).OrderBy(expr.At(f, models.Users.Email).Asc()).All(t.Context(), tx)
+	rows, err := rowset.ReadSet(combined.Where(expr.At(f, models.Users.Status).Eq(models.StatusActive)).OrderBy(expr.At(f, models.Users.Email).Asc())).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}

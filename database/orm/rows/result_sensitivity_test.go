@@ -24,8 +24,8 @@ func TestResultCursorCompositionPreservesSensitivity(t *testing.T) {
 		return secretFields{orm.TableOf(b, &s.ID), orm.ColumnOf(b, &s.Name, orm.Codec(codec.String[string]().WithSensitiveValues()))}
 	})
 	m, schema := declareMembers(), declareRows()
-	public := Values(SelectScalar(From(m.Query()), expr.Select(expr.Value(m.Name))))
-	sensitive := Values(SelectScalar(From(table.Query()), expr.Select(expr.Value(table.Name))))
+	public := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Name)).Value()))
+	sensitive := Values(SelectScalar(From(table.Query()), expr.Row(expr.Value(table.Name)).Value()))
 	report := RecordOf(Select(From(table.Query()), schema, Map(schema.ID, expr.Value(table.Key())), Map(schema.Name, expr.Value(table.Name))))
 	ordinary := RecordOf(Select(From(m.Query()), schema, Map(schema.ID, expr.Value(m.ID)), Map(schema.Name, expr.Value(m.Name))))
 	for name, source := range map[string]RecordSource[record]{
@@ -46,10 +46,10 @@ func TestResultCursorCompositionPreservesSensitivity(t *testing.T) {
 				t.Fatal("public identity rejected", err)
 			}
 			a := AsRecord[left](source, "aliased_report")
-			selected := Values(SelectScalar(a, expr.Select(At(Scope(a), schema.Name))))
+			selected := Values(SelectScalar(a, expr.Row(At(Scope(a), schema.Name)).Value()))
 			state.sql = ""
 			v := ValueCursorFor(selected)
-			if _, err := v.UniqueBy(v.Key()).Paginate(t.Context(), db, orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+			if _, err := v.UniqueBy(expr.Group(v.Value())).Paginate(t.Context(), db, orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal("alias/scalar lost sensitivity", err, state.sql)
 			}
 		})
@@ -63,15 +63,15 @@ func TestResultCursorCompositionPreservesSensitivity(t *testing.T) {
 			state := &driverState{}
 			db := openTest(t, state)
 			c := ValueCursorFor(source)
-			if _, err := c.UniqueBy(c.Key()).Paginate(t.Context(), db, orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+			if _, err := c.UniqueBy(expr.Group(c.Value())).Paginate(t.Context(), db, orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal(err, state.sql)
 			}
 		})
 	}
 	combined := UnionAllValues(public, sensitive)
-	scalar := ValueCursorFor(Values(SelectScalar(combined, expr.Select(combined.Value()))))
+	scalar := ValueCursorFor(Values(SelectScalar(combined, expr.Row(combined.Value()).Value())))
 	state := &driverState{}
-	if _, err := scalar.UniqueBy(scalar.Key()).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+	if _, err := scalar.UniqueBy(expr.Group(scalar.Value())).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal("set/scalar lost sensitivity", err, state.sql)
 	}
 	// Reusing the ordinary declaration/source must not inherit another query's flags.
@@ -100,7 +100,7 @@ func TestResultCursorComputedProjectionSensitivity(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c := ValueCursorFor(Values(SelectScalar(source, selected)))
 			state := &driverState{}
-			if _, err := c.UniqueBy(c.Key()).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[int64]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+			if _, err := c.UniqueBy(expr.Group(c.Value())).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[int64]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal(err, state.sql)
 			}
 		})

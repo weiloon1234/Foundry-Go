@@ -379,7 +379,7 @@ func relations(ctx context.Context, db database.Executor, existing []models.Orde
 	if err != nil {
 		return err
 	}
-	_, err = orm.Load(ctx, db, existing, OrderBuyer)
+	_, err = orm.LoadFrom(ctx, db, models.Orders.Query().With(OrderBuyer), existing)
 	return err
 }
 ```
@@ -908,7 +908,7 @@ After:
 func cte(ctx context.Context, db database.Executor) error {
 	cte := rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(models.Orders.TotalCents.Gt(100))))
 	a := rows.AsRecord[orderSide](cte, "o")
-	_, err := rows.SelectRecord(a, rows.Scope(a)).All(ctx, db)
+	_, err := rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a))).All(ctx, db)
 	return err
 }
 ```
@@ -947,7 +947,7 @@ After:
 ```go
 func sets(ctx context.Context, db database.Executor) error {
 	a := models.Orders.Query().Where(models.Orders.TotalCents.Gt(100))
-	_, err := rows.Union(rows.ModelRecord(a), rows.ModelRecord(models.Orders.Query())).All(ctx, db)
+	_, err := rows.ReadSet(rows.Union(rows.ModelRecord(a), rows.ModelRecord(models.Orders.Query()))).All(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -1034,11 +1034,11 @@ func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A
 
 Pass an authorized, tenant-constrained native source and retain the existing Spec
 ID, DTO descriptor, columns, labels, filters and export capabilities. Column
-`SortBy` accepts `expr.Select(expr.Value(Members.Name))` or comparison `.Value()`
+`SortBy` accepts `expr.Row(expr.Value(Members.Name)).Value()` or comparison `.Value()`
 for enums (`expr.CompareRow(expr.Value(Members.State)).Value()`), while `Stable`
 takes the short `expr.Value(MemberModels.ID).Asc()` spelling. The complete
 [datatable fixture](../../tests/fixtures/consumer/reporting/members.go) uses
-`rows.Select`, `expr.Select`, `expr.TextRow`, nullable filters and typed related filters.
+`rows.Select`, `expr.Row(row).Value()`, `expr.TextRow`, nullable filters and typed related filters.
 Do not bypass actor resolution or reconciliation to adapt a
 source signature. Manifests, OpenAPI, TypeScript and filter/response bytes stay fixed.
 
@@ -1051,15 +1051,15 @@ ORM declaration. `RowEquality` and `RowNullable` are interfaces, not constructor
 
 | Before | After |
 | --- | --- |
-| `SortBy(query.Value(f.X))` | `SortBy(expr.Select(expr.Value(f.X)))`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
+| `SortBy(query.Value(f.X))` | `SortBy(expr.Row(expr.Value(f.X)).Value())`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
 | `datatable.Where(text, f.Username)` | `datatable.Where(text, expr.TextRow(f.Username))`. |
 | `datatable.NullableWhere(text, f.Email)` | `datatable.NullableWhere(text, expr.TextNullableRow(f.Email))`. |
 | Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.CompareRow(expr.Value(f.X)))`; use `CompareNullableRow` with `NullableWhere`. |
 | Ordered numeric `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.OrderRow(expr.Value(f.X)))`; use `OrderNullableRow` for nullable values. Choose by the column's declared capabilities, not its underlying Go type. |
 | `Stable: []query.ProjectionOrder[M]{f.ID.Asc()}` | `Stable: []expr.ProjectionOrder[M]{expr.Value(f.ID).Asc()}`. Use `f.Key()` when the declaration has no named ID carrier. |
 | `query.ProjectionQuery[M,R]`, `SelectXRow(source, XRowSelection[M]{...})` | `rows.Query[M,R]`, `rows.Select(rows.From(source), XRows, rows.Map(...))`. Use `MapSelected` for computed selected values. |
-| Joined `query.Value(joinedField)` sort | `expr.Select(expr.At(joinedScope, field))`. The Spec's first type parameter is the joined scope, not one model. |
-| Correlated `CorrelatedScalarRowQuery(...).Value()` sort | `expr.Select(rows.CorrelatedScalarRowQuery(...))`; use `CorrelatedScalarNullableRowQuery` when the inner value is already nullable. |
+| Joined `query.Value(joinedField)` sort | `expr.Row(expr.At(joinedScope, field)).Value()`. The Spec's first type parameter is the joined scope, not one model. |
+| Correlated `CorrelatedScalarRowQuery(...).Value()` sort | `expr.Row(rows.CorrelatedScalarRowQuery(...)).Value()`; use `CorrelatedScalarNullableRowQuery` when the inner value is already nullable. |
 | `datatable.Having` / `NullableHaving` | Keep these constructors; supply native aggregates such as `expr.Count[M]()` / `expr.Sum(f.Amount)`, which return group predicates. |
 | `datatable.Related(child, exists)` | Keep `Related`; its callback now maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, for example with `expr.Has`. |
 
@@ -1113,11 +1113,11 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.Select(expr.At(inner, countries.Countries.Name))).
+		return rows.SelectCorrelatedScalar(correlation, expr.Row(expr.At(inner, countries.Countries.Name)).Value()).
 			Where(expr.Equal(expr.At(inner, countries.Countries.ISO2), expr.At(outer, Admins.CountryCode))).
 			OrderBy(expr.At(inner, countries.Countries.ISO2).Asc()).Limit(1)
 	}
-	sortedCountry := expr.Select(rows.CorrelatedScalarRowQuery(correlateName()))
+	sortedCountry := expr.Row(rows.CorrelatedScalarRowQuery(correlateName())).Value()
 	statusFilter := datatable.NullableWhere(
 		foundryhttp.EnumQuery[countries.Status, *countries.Status](countries.EnabledStatus.EnumDescriptor()),
 		expr.CompareNullableRow(expr.AtNullable(country, countries.Countries.Status)))
@@ -1226,11 +1226,11 @@ func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
 	email := validation.DefineField("email", func(r AdminRow) value.Nullable[string] { return r.Email })
 	return []datatable.ColumnRegistration[Admin, AdminRow]{
 		datatable.DefineColumn[Admin](username, "admins.fields.username").
-			SortBy(expr.Select(expr.Value(Admins.Username))).
+			SortBy(expr.Row(expr.Value(Admins.Username)).Value()).
 			FilterBy(datatable.Where(text, expr.TextRow(Admins.Username))).
 			Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
 		datatable.DefineColumn[Admin](email, "admins.fields.email").
-			SortBy(expr.Select(expr.Value(Admins.Email))).
+			SortBy(expr.Row(expr.Value(Admins.Email)).Value()).
 			FilterBy(datatable.NullableWhere(text, expr.TextNullableRow(Admins.Email))).
 			Searchable().ExportAs(datatable.NullableCell(text)).Registration(),
 	}
@@ -1392,11 +1392,11 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.Select(expr.At(inner, countries.Countries.OfficialName))).
+		return rows.SelectCorrelatedScalar(correlation, expr.Row(expr.At(inner, countries.Countries.OfficialName)).Value()).
 			Where(expr.Equal(expr.At(inner, countries.Countries.ISO2), expr.At(outer, Admins.CountryCode))).
 			OrderBy(expr.At(inner, countries.Countries.ISO2).Asc()).Limit(1)
 	}
-	selected := expr.Select(rows.CorrelatedScalarNullableRowQuery(correlate()))
+	selected := expr.Row(rows.CorrelatedScalarNullableRowQuery(correlate())).Value()
 	filter := officialNameFilter[DirectoryScope]{exists: func(p orm.Predicate[countries.Country]) expr.Predicate[DirectoryScope] {
 		return correlate(p).Exists()
 	}}
@@ -1407,7 +1407,7 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 	text := foundryhttp.StringQuery[string]()
 	spec.Columns = []datatable.ColumnRegistration[DirectoryScope, DirectoryRow]{
 		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country").
-			SortBy(expr.Select(expr.At(country, countries.Countries.Name))).
+			SortBy(expr.Row(expr.At(country, countries.Countries.Name)).Value()).
 			FilterBy(datatable.Where(text, expr.TextRowAt(country, countries.Countries.Name))).Registration(),
 		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName").
 			SortBy(selected).FilterBy(datatable.NullableWhere(text, filter)).Registration(),

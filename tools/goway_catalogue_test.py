@@ -1,4 +1,5 @@
 import unittest
+import tempfile
 from pathlib import Path
 import importlib.util
 
@@ -8,6 +9,23 @@ spec.loader.exec_module(catalogue)
 
 
 class CatalogueTests(unittest.TestCase):
+    def test_archived_inputs_have_one_unambiguous_owner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            consumer = root / "tests/fixtures/consumer"
+            case = consumer / "testdata/compilefail/example"
+            case.mkdir(parents=True)
+            (consumer / "types_test.go").write_text('{"example", "cannot convert"}')
+            (case / "invalid.go.txt").write_text("package example")
+            self.assertEqual(catalogue.cases(root)["example"], ("package example", "cannot convert"))
+            (case / "invalid.go").write_text("package example")
+            with self.assertRaisesRegex(ValueError, "both active and archived"):
+                catalogue.cases(root)
+            (case / "invalid.go").unlink()
+            (case / "invalid.go.backup").write_text("package example")
+            with self.assertRaisesRegex(ValueError, "unsupported compiler evidence suffix"):
+                catalogue.cases(root)
+
     def test_complete_reviewed_catalogue_and_summary(self):
         rows = catalogue.validate()
         self.assertEqual(len(rows), 1032)

@@ -48,18 +48,11 @@ func (t Table[S, R, A]) Download(ctx context.Context, m *Manager, subject A, req
 	}), nil
 }
 
-// DownloadTimeout is the route deadline a table download should declare with
-// Route or Endpoint WithTimeout: ExportTimeout for generation plus the same
-// again for the transfer, at most foundryhttp.MaxRouteTimeout.
-func (c Config) DownloadTimeout() time.Duration {
-	return min(2*c.ExportTimeout, foundryhttp.MaxRouteTimeout)
-}
-
 // DownloadTimeout reports the download route deadline for this manager's
-// configuration. See Config.DownloadTimeout.
+// configuration, capped at the HTTP route maximum.
 func (m *Manager) DownloadTimeout() time.Duration {
 	if m == nil {
 		return 0
 	}
-	return m.config.DownloadTimeout()
+	return min(2*m.config.ExportTimeout, foundryhttp.MaxRouteTimeout)
 }

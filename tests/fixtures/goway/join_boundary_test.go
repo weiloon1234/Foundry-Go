@@ -58,7 +58,7 @@ func requireRejectedJoin[S any](t *testing.T, source rowset.Source[S]) {
 func TestJoinRejectsBorrowedMarkersAndPromotedAdapters(t *testing.T) {
 	q := models.Users.Query().Where(models.Users.Age.Gt(18)).Limit(1).Offset(1)
 	input := rowset.From(q)
-	scalar := rowset.SelectScalar(input, expr.Select(expr.Value(models.Users.Age)))
+	scalar := rowset.SelectScalar(input, expr.Row(expr.Value(models.Users.Age)).Value())
 	right := rowset.As[joinB](models.Users.Query(), "boundary_right")
 	on := rowset.OnEqual(expr.Value(models.Users.Age), expr.At(rowset.Scope(right), models.Users.Age))
 	for _, item := range []struct {

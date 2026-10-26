@@ -8,23 +8,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// JSONKind is the shared JSON shape identity; JSON null remains distinct from SQL NULL.
-type JSONKind = database.JSONKind
-
-const (
-	JSONObject  = database.JSONObject
-	JSONArray   = database.JSONArray
-	JSONString  = database.JSONString
-	JSONNumber  = database.JSONNumber
-	JSONBoolean = database.JSONBoolean
-	JSONNull    = database.JSONNull
-)
-
-func jsonKindCodec() codec.Codec[JSONKind] {
-	return codec.String[JSONKind]().Validated(JSONKind.Validate)
+func jsonKindCodec() codec.Codec[database.JSONKind] {
+	return codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)
 }
-func jsonKindColumn() ormcore.Column[JSONKind] { return columnCodec(jsonKindCodec()) }
-func nullableJSONKindColumn() ormcore.Column[value.Nullable[JSONKind]] {
+func jsonKindColumn() ormcore.Column[database.JSONKind] { return columnCodec(jsonKindCodec()) }
+func nullableJSONKindColumn() ormcore.Column[value.Nullable[database.JSONKind]] {
 	return columnCodec(codec.Nullable(jsonKindCodec()))
 }
 func jsonLengthColumn() ormcore.Column[value.Nullable[int64]] {
@@ -37,25 +25,25 @@ func nullableJSONBoolColumn() ormcore.Column[value.Nullable[bool]] {
 
 // JSONType evaluates JSON shape or safe array length in the row phase.
 // Example: expr.JSONType(Value(Documents.Settings)).
-func JSONType[S, P any](input RowValue[S, value.JSON[P]]) RowExpression[S, JSONKind] {
-	return RowExpression[S, JSONKind]{data: JSONTypeValue(rowInput(input).Value()).data}
+func JSONType[S, P any](input RowValue[S, value.JSON[P]]) RowExpression[S, database.JSONKind] {
+	return RowExpression[S, database.JSONKind]{data: JSONTypeValue(rowInput(input).Value()).data}
 }
 
 // JSONTypeValue preserves selected phase, including aggregates and windows.
-// Example: expr.JSONTypeValue(Select(Value(Documents.Settings))).
-func JSONTypeValue[S, P any](input Selected[S, value.JSON[P]]) Selected[S, JSONKind] {
+// Example: expr.JSONTypeValue(Row(Value(Documents.Settings)).Value()).
+func JSONTypeValue[S, P any](input Selected[S, value.JSON[P]]) Selected[S, database.JSONKind] {
 	return operationValue[S](querycore.JsonKindOperation, jsonKindColumn(), operationArg(input))
 }
 
 // JSONTypeNullable evaluates JSON shape or safe array length in the row phase; SQL NULL propagates.
 // Example: expr.JSONTypeNullable(Value(Documents.Backup)).
-func JSONTypeNullable[S, P any](input RowValue[S, value.Nullable[value.JSON[P]]]) RowExpression[S, value.Nullable[JSONKind]] {
-	return RowExpression[S, value.Nullable[JSONKind]]{data: JSONTypeNullableValue(rowInput(input).Value()).data}
+func JSONTypeNullable[S, P any](input RowValue[S, value.Nullable[value.JSON[P]]]) RowExpression[S, value.Nullable[database.JSONKind]] {
+	return RowExpression[S, value.Nullable[database.JSONKind]]{data: JSONTypeNullableValue(rowInput(input).Value()).data}
 }
 
 // JSONTypeNullableValue preserves selected phase, including aggregates and windows.
-// Example: expr.JSONTypeNullableValue(Select(Value(Documents.Backup))).
-func JSONTypeNullableValue[S, P any](input Selected[S, value.Nullable[value.JSON[P]]]) Selected[S, value.Nullable[JSONKind]] {
+// Example: expr.JSONTypeNullableValue(Row(Value(Documents.Backup)).Value()).
+func JSONTypeNullableValue[S, P any](input Selected[S, value.Nullable[value.JSON[P]]]) Selected[S, value.Nullable[database.JSONKind]] {
 	return operationValue[S](querycore.JsonKindOperation, nullableJSONKindColumn(), operationArg(input))
 }
 
@@ -66,7 +54,7 @@ func JSONContains[S, P any](left, right RowValue[S, value.JSON[P]]) RowExpressio
 }
 
 // JSONContainsValue preserves selected phase, including aggregates and windows.
-// Example: expr.JSONContainsValue(Select(Value(Documents.Settings)), Select(Value(Documents.Settings))).
+// Example: expr.JSONContainsValue(Row(Value(Documents.Settings)).Value(), Row(Value(Documents.Settings)).Value()).
 func JSONContainsValue[S, P any](left, right Selected[S, value.JSON[P]]) Selected[S, bool] {
 	return operationValue[S](querycore.JsonContainsOperation, jsonBoolColumn(), operationArg(left), operationArg(right))
 }
@@ -78,7 +66,7 @@ func JSONContainsNullable[S, P any](left, right RowValue[S, value.Nullable[value
 }
 
 // JSONContainsNullableValue preserves selected phase, including aggregates and windows.
-// Example: expr.JSONContainsNullableValue(Select(Value(Documents.Backup)), Select(Value(Documents.Backup))).
+// Example: expr.JSONContainsNullableValue(Row(Value(Documents.Backup)).Value(), Row(Value(Documents.Backup)).Value()).
 func JSONContainsNullableValue[S, P any](left, right Selected[S, value.Nullable[value.JSON[P]]]) Selected[S, value.Nullable[bool]] {
 	return operationValue[S](querycore.JsonContainsOperation, nullableJSONBoolColumn(), operationArg(left), operationArg(right))
 }
@@ -90,7 +78,7 @@ func JSONContainedBy[S, P any](left, right RowValue[S, value.JSON[P]]) RowExpres
 }
 
 // JSONContainedByValue preserves selected phase, including aggregates and windows.
-// Example: expr.JSONContainedByValue(Select(Value(Documents.Settings)), Select(Value(Documents.Settings))).
+// Example: expr.JSONContainedByValue(Row(Value(Documents.Settings)).Value(), Row(Value(Documents.Settings)).Value()).
 func JSONContainedByValue[S, P any](left, right Selected[S, value.JSON[P]]) Selected[S, bool] {
 	return operationValue[S](querycore.JsonContainedByOperation, jsonBoolColumn(), operationArg(left), operationArg(right))
 }
@@ -102,7 +90,7 @@ func JSONContainedByNullable[S, P any](left, right RowValue[S, value.Nullable[va
 }
 
 // JSONContainedByNullableValue preserves selected phase, including aggregates and windows.
-// Example: expr.JSONContainedByNullableValue(Select(Value(Documents.Backup)), Select(Value(Documents.Backup))).
+// Example: expr.JSONContainedByNullableValue(Row(Value(Documents.Backup)).Value(), Row(Value(Documents.Backup)).Value()).
 func JSONContainedByNullableValue[S, P any](left, right Selected[S, value.Nullable[value.JSON[P]]]) Selected[S, value.Nullable[bool]] {
 	return operationValue[S](querycore.JsonContainedByOperation, nullableJSONBoolColumn(), operationArg(left), operationArg(right))
 }
@@ -114,7 +102,7 @@ func JSONLength[S, P any](input RowValue[S, value.JSON[P]]) NullableOrderedRowEx
 }
 
 // JSONLengthValue preserves selected phase, including aggregates and windows.
-// Example: expr.JSONLengthValue(Select(Value(Documents.Settings))).
+// Example: expr.JSONLengthValue(Row(Value(Documents.Settings)).Value()).
 func JSONLengthValue[S, P any](input Selected[S, value.JSON[P]]) Selected[S, value.Nullable[int64]] {
 	return operationValue[S](querycore.JsonArrayLengthOperation, jsonLengthColumn(), operationArg(input))
 }
@@ -126,7 +114,7 @@ func JSONLengthNullable[S, P any](input RowValue[S, value.Nullable[value.JSON[P]
 }
 
 // JSONLengthNullableValue preserves selected phase, including aggregates and windows.
-// Example: expr.JSONLengthNullableValue(Select(Value(Documents.Backup))).
+// Example: expr.JSONLengthNullableValue(Row(Value(Documents.Backup)).Value()).
 func JSONLengthNullableValue[S, P any](input Selected[S, value.Nullable[value.JSON[P]]]) Selected[S, value.Nullable[int64]] {
 	return operationValue[S](querycore.JsonArrayLengthOperation, jsonLengthColumn(), operationArg(input))
 }

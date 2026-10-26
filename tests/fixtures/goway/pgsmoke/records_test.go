@@ -37,14 +37,14 @@ func TestStage6c1CompleteRecords(t *testing.T) {
 		return recordFields{b.Row(), rows.TextOf(b, &r.Name)}
 	})
 	a := rows.AsRecord[joinLeft](rows.ModelRecord(table.Query().OrderBy(table.Key().Asc()).Limit(1)), "item")
-	got, err := rows.SelectRecord(a, rows.Scope(a)).All(ctx, db)
+	got, err := rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a))).All(ctx, db)
 	must(t, err)
 	if len(got) != 1 || got[0].ID != 1 {
 		t.Fatal(got)
 	}
 	p := rows.Select(rows.From(table.Query().Where(table.Key().Eq(2))), schema, rows.Map(schema.Name, expr.Value(table.Name)))
 	derived := rows.AsRecord[joinRight](rows.RecordOf(p), "summary")
-	summaries, err := rows.SelectRecord(derived, rows.Scope(derived)).All(ctx, db)
+	summaries, err := rows.ReadRecord(rows.SelectRecord(derived, rows.Scope(derived))).All(ctx, db)
 	must(t, err)
 	if len(summaries) != 1 || summaries[0].Name != "second" {
 		t.Fatal(summaries)

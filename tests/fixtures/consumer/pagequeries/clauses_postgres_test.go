@@ -48,7 +48,7 @@ func TestPostgresPagesRetainRelationalSemantics(t *testing.T) {
 		if simple, err := rows.ReadSet(combined).SimplePaginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 2}); err != nil || !simple.HasMore {
 			t.Fatal("set simple page failed", err)
 		}
-		values := rows.OrderScalar(rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Nickname)))), expr.Value(models.Users.Nickname).Asc())
+		values := rows.OrderScalar(rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Nickname)).Value())), expr.Value(models.Users.Nickname).Asc())
 		vp, err := rows.ReadScalar(values).Paginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1})
 		if err != nil || vp.Total != 2 || len(vp.Items) != 1 || vp.Items[0] != value.Of("Bee") {
 			t.Fatal("distinct/nullable value page failed", err)

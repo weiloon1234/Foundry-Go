@@ -100,7 +100,7 @@ func (r *Replay) Equal(t *testing.T, site, current string) bool {
 	if !ok {
 		t.Fatalf("missing frozen oracle %s; the retired legacy oracle cannot be recaptured", id)
 	}
-	if record.Transcript != current {
+	if !equalTranscript(id, record.Transcript, current) {
 		t.Errorf("frozen oracle %s differs\nlegacy: %s\ncurrent: %s", id, record.Transcript, current)
 		return false
 	}

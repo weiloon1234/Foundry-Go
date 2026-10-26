@@ -9,7 +9,7 @@ columns do not need a separate summary-method family for each owner/value pair.
 | Purpose | Function |
 | --- | --- |
 | Row operand / bound parameter | `expr.Value(column)` / `expr.Param(column, value)` |
-| Select a row operand | `expr.Select(row)` |
+| Select a row operand | `expr.Row(row).Value()` |
 | Count non-NULL / distinct non-NULL | `expr.CountField(column)` / `expr.CountDistinctField(column)` |
 | Ordered extrema | `expr.Min(column)` / `expr.Max(column)` |
 | Exact summaries | `expr.Sum(column)` / `expr.Avg(column)` |

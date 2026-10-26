@@ -97,7 +97,7 @@ func TestScalarRangesAndRepresentationBoundaries(t *testing.T) {
 }
 
 func TestIDsDecimalsAndBufferOwnership(t *testing.T) {
-	id, err := model.NewID[owner]()
+	id, err := model.NewIDAt[owner](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

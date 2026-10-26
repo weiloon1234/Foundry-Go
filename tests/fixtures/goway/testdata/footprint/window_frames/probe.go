@@ -25,7 +25,7 @@ var schema = rows.Define(func(b rows.Builder[result], r *result) fields {
 
 func Run(ctx context.Context, db database.Executor) ([]result, error) {
 	v := expr.Value(models.Orders.TotalCents)
-	r := expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Orders.Query())), expr.Select(v))
+	r := expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Orders.Query())), expr.Row(v).Value())
 	w := r.Between(r.Preceding(10), r.CurrentRow()).Named("nearby")
-	return rows.Select(rows.FromModel(models.Orders.Query()), schema, rows.MapSelected(schema.Count, expr.Over(expr.Count[models.Order](), w)), rows.MapSelected(schema.Previous, expr.Lag(expr.Select(v), 1, w))).All(ctx, db)
+	return rows.Select(rows.FromModel(models.Orders.Query()), schema, rows.MapSelected(schema.Count, expr.Over(expr.Count[models.Order](), w)), rows.MapSelected(schema.Previous, expr.Lag(expr.Row(v).Value(), 1, w))).All(ctx, db)
 }

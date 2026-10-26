@@ -1,5 +1,7 @@
 package mutatorqueries_test
 
+import "time"
+
 import (
 	"testing"
 
@@ -13,7 +15,7 @@ func TestORMMutatorDeclarationPreservesStoredIdentityAndChanges(t *testing.T) {
 	if err := orm.Check(mutatorqueries.Members); err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[mutatorqueries.Member]()
+	id, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

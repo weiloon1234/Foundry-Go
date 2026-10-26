@@ -1,5 +1,7 @@
 package session
 
+import "time"
+
 import (
 	"context"
 
@@ -225,7 +227,7 @@ func (s *Sessions[M, K]) issueWith(ctx context.Context, proof auth.Proof[M, K], 
 			}
 			policy, impersonator = granted.lifetime, value.Set(granted.impersonator)
 		}
-		id, err := model.NewID[Record]()
+		id, err := model.NewIDAt[Record](time.Now())
 		if err != nil {
 			return err
 		}

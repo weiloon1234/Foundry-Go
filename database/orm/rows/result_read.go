@@ -70,7 +70,7 @@ func ReadValues[V any](q ValueSetQuery[V]) Result[Set[V], V] {
 }
 
 // SelectTransactionValue retains exact scalar codecs and the transaction requirement.
-// Example: rows.SelectTransactionValue(source,expr.Select(id)).All(ctx,tx).
+// Example: rows.SelectTransactionValue(source,expr.Row(id).Value()).All(ctx,tx).
 func SelectTransactionValue[S, V any](source TransactionSelectionSource[S], selected expr.Selected[S, V]) TransactionValue[S, V] {
 	q := SelectScalar(selectionAdapter[S]{source: transactionSelectionOf(source)}, selected)
 	r := Values(q).core

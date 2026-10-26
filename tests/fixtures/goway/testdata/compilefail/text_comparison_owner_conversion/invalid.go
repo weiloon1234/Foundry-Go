@@ -6,7 +6,7 @@ import (
 )
 
 func invalid() {
-	users := expr.TextValue(expr.Select(expr.Value(models.Users.Email)))
+	users := expr.TextValue(expr.Row(expr.Value(models.Users.Email)).Value())
 	orders := expr.TextValueComparison[models.Order, string](users)
 	_ = orders.Eq("x")
 }

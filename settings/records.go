@@ -320,7 +320,7 @@ func Groups(ctx context.Context, m *Manager) ([]Group, error) {
 		if len(names) == 0 {
 			return nil
 		}
-		return rows.Each(ctx, tx, store.SettingStates(m.listQuery(names, Filter{}).Limit(MaxKeys+1)), func(row store.SettingState) error {
+		return rows.EachRead(ctx, tx, rows.Read(store.SettingStates(m.listQuery(names, Filter{}).Limit(MaxKeys+1))), func(row store.SettingState) error {
 			if !identifier.Semantic(row.GroupName) {
 				return invalid()
 			}

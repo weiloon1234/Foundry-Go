@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
+	"reflect"
 )
 
 // Extension adapts a legacy slot loader to With, Load and LoadMissing.
@@ -18,5 +19,5 @@ func Extension[M, S any](slot Slot[M, S], source query.ExtensionSlot[M]) Extensi
 			return legacyLoad(ctx, ex, parents, query.RelationLimits(limits), remaining, attached, missing)
 		}
 	}
-	return extensionRelation(slot, name, table, kind, err, load)
+	return extensionRelation(slot.core, reflect.TypeFor[S](), name, table, kind, err, load)
 }

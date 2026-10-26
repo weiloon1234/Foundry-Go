@@ -89,7 +89,7 @@ func TestLoadManyCopiesParentsAndFillsDuplicateKeys(t *testing.T) {
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements, columns: personColumns, values: [][]driver.Value{{int64(2), int64(1), "a", nil}, {int64(3), int64(1), "b", nil}}})
 	parents := []relationPerson{{ID: 1}, {ID: 1}, {ID: 5}}
-	loaded, err := Load(t.Context(), db, parents, reports)
+	loaded, err := LoadFrom(t.Context(), db, p.Query().With(reports), parents)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestLoadManyCopiesParentsAndFillsDuplicateKeys(t *testing.T) {
 		t.Fatal("relation get leaked slice ownership")
 	}
 	statements = nil
-	empty, err := Load(t.Context(), db, []relationPerson{}, reports)
+	empty, err := LoadFrom(t.Context(), db, p.Query().With(reports), []relationPerson{})
 	if err != nil || len(empty) != 0 || len(statements) != 0 {
 		t.Fatal("empty parents", empty, err, statements)
 	}
@@ -130,7 +130,7 @@ func TestRelationKeyBatchingAndSharedBudgets(t *testing.T) {
 	var statements []string
 	var bindings [][]any
 	db := testDB(t, testConnector{statements: &statements, bindings: &bindings, columns: personColumns})
-	loaded, err := Load(t.Context(), db, parents, manager)
+	loaded, err := LoadFrom(t.Context(), db, p.Query().With(manager), parents)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestRelationKeyBatchingAndSharedBudgets(t *testing.T) {
 		parents[i].ManagerID = value.Of(int64(2))
 	}
 	db = testDB(t, testConnector{columns: personColumns, values: [][]driver.Value{{int64(2), nil, "m", nil}}})
-	loaded, err = Load(t.Context(), db, parents, manager)
+	loaded, err = LoadFrom(t.Context(), db, p.Query().With(manager), parents)
 	if loaded != nil || !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "attached") {
 		t.Fatal("attachment budget", loaded, err)
 	}
@@ -161,7 +161,7 @@ func TestRelationsRejectCardinalityAndUnexpectedKeys(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := testDB(t, testConnector{columns: personColumns, values: tc.rows})
-			result, err := Load(t.Context(), db, []relationPerson{{ManagerID: value.Of(int64(2))}}, manager)
+			result, err := LoadFrom(t.Context(), db, p.Query().With(manager), []relationPerson{{ManagerID: value.Of(int64(2))}})
 			if result != nil || !errors.Is(err, tc.want) {
 				t.Fatal(result, err)
 			}
@@ -220,7 +220,7 @@ func TestRelationTargetGlobalScopeUsesExecutionContext(t *testing.T) {
 	var statements []string
 	var bindings [][]any
 	db := testDB(t, testConnector{statements: &statements, bindings: &bindings, columns: personColumns})
-	_, err := Load(context.WithValue(t.Context(), "tenant", int64(7)), db, []relationPerson{{ManagerID: value.Of(int64(2))}}, rel)
+	_, err := LoadFrom(context.WithValue(t.Context(), "tenant", int64(7)), db, p.Query().With(rel), []relationPerson{{ManagerID: value.Of(int64(2))}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestRelationBudgetsAreSharedAcrossDescriptors(t *testing.T) {
 	db := testDB(t, testConnector{bindings: &bindings, respond: func(sql string) ([]string, [][]driver.Value) {
 		return personColumns, [][]driver.Value{{int64(1), int64(2), "one related row", nil}}
 	}})
-	result, err := Load(t.Context(), db, parents, manager, reports)
+	result, err := LoadFrom(t.Context(), db, p.Query().With(manager, reports), parents)
 	if result != nil || !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "attached") {
 		t.Fatal(result, err)
 	}
@@ -278,7 +278,7 @@ func TestLoadRejectsMixedDeclarationOwners(t *testing.T) {
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
 	for _, parents := range [][]relationPerson{nil, {{ID: 1}}} {
-		if _, err := Load(t.Context(), db, parents, manager, reports); !errors.Is(err, fault.Invalid) {
+		if _, err := LoadFrom(t.Context(), db, a.Query().With(manager, reports), parents); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}

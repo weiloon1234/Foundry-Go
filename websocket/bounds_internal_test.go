@@ -24,7 +24,7 @@ func TestSlowConsumerDisconnectsWithoutBlockingPublisher(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer h.Stop(context.Background())
-	id, err := model.NewID[Connection]()
+	id, err := model.NewIDAt[Connection](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestQueuedByteBudgetsDisconnectBeforeRetainingData(t *testing.T) {
 	}
 	defer h.Stop(context.Background())
 	connection := func() (*connectionState, context.Context) {
-		id, err := model.NewID[Connection]()
+		id, err := model.NewIDAt[Connection](time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -187,7 +187,7 @@ func TestHubBudgetEvictsLargestQueueHolder(t *testing.T) {
 		}
 	}()
 	connection := func() (*connectionState, context.Context) {
-		id, err := model.NewID[Connection]()
+		id, err := model.NewIDAt[Connection](time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -39,8 +39,8 @@ func TestStage6c3ResultCursorAndReadTerminals(t *testing.T) {
 	if page.Total != 3 || !reflect.DeepEqual(page.Items, []int64{1}) {
 		t.Fatal(page)
 	}
-	nullable := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.Nullable(expr.Select(expr.Value(table.Key()))))))
-	nullable = nullable.UniqueBy(nullable.Key())
+	nullable := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.Nullable(expr.Row(expr.Value(table.Key())).Value()))))
+	nullable = nullable.UniqueBy(expr.Group(nullable.Value()))
 	p, err := nullable.Paginate(ctx, db, orm.CursorRequest[value.Nullable[int64]]{Size: 2})
 	must(t, err)
 	if len(p.Items) != 2 || !p.Next.IsSet() {
@@ -48,7 +48,7 @@ func TestStage6c3ResultCursorAndReadTerminals(t *testing.T) {
 	}
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
 		a := rows.AsTransaction[joinLeft](rows.TransactionOf(rows.ModelRecord(table.Query())), "nodes")
-		q := rows.SelectTransactionValue(a, expr.Select(expr.At(rows.TransactionScope(a), table.Key())))
+		q := rows.SelectTransactionValue(a, expr.Row(expr.At(rows.TransactionScope(a), table.Key())).Value())
 		got, err := rows.ForUpdate(q).Of(rows.Target(rows.TransactionScope(a))).OrderBy(expr.At(rows.TransactionScope(a), table.Key()).Asc()).Limit(1).All(ctx, tx)
 		if err != nil {
 			return err

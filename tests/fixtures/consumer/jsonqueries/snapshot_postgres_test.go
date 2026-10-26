@@ -22,14 +22,14 @@ func checkSnapshotKind(t *testing.T, tx *database.Tx, original []jsonqueries.Doc
 		t.Fatal(rows, err)
 	}
 	for i, row := range rows {
-		if row.Settings != original[i].Settings || row.Kind != expr.JSONObject {
+		if row.Settings != original[i].Settings || row.Kind != database.JSONObject {
 			t.Fatal(row)
 		}
 		if i < 2 && (!row.BackupKind.IsNull() || !row.Matches.IsNull()) {
 			t.Fatal("SQL NULL lost", row)
 		}
 	}
-	if kind, ok := rows[2].BackupKind.Get(); !ok || kind != expr.JSONObject {
+	if kind, ok := rows[2].BackupKind.Get(); !ok || kind != database.JSONObject {
 		t.Fatal(rows[2])
 	}
 	if matched, ok := rows[2].Matches.Get(); !ok || !matched {

@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// CorrelatedScalar keeps one value bound to its enclosing scope. Example: rows.SelectCorrelatedScalar(c,expr.Select(childID)).
+// CorrelatedScalar keeps one value bound to its enclosing scope. Example: rows.SelectCorrelatedScalar(c,expr.Row(childID).Value()).
 type CorrelatedScalar[O, I, V any] struct {
 	_      [0]*O
 	_      [0]*I

@@ -1,5 +1,7 @@
 package pgsmoke_test
 
+import "github.com/weiloon1234/Foundry-Go/model"
+
 import (
 	"context"
 	"errors"
@@ -150,7 +152,7 @@ func TestStage5bAttachEndpointHookRollbackPostgres(t *testing.T) {
 			called, committed := false, false
 			p := orm.Define("joined_pivots", func(b orm.Builder[j.Pivot], m *j.Pivot) j.PivotFields {
 				table := orm.TableOf(b, &m.ID)
-				return j.PivotFields{Table: table, ID: table.Key(), ParentID: orm.NullableNumberOf(b, &m.ParentID), TargetID: orm.NullableNumberOf(b, &m.TargetID), Kind: orm.ColumnOf(b, &m.Kind, orm.Codec(codec.String[orm.MorphName]())), Role: orm.TextOf(b, &m.Role), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Target: orm.OneOf(b, &m.Target), MorphParent: orm.OneOf(b, &m.MorphParent), MorphTarget: orm.OneOf(b, &m.MorphTarget)}
+				return j.PivotFields{Table: table, ID: table.Key(), ParentID: orm.NullableNumberOf(b, &m.ParentID), TargetID: orm.NullableNumberOf(b, &m.TargetID), Kind: orm.ColumnOf(b, &m.Kind, orm.Codec(codec.String[model.MorphName]())), Role: orm.TextOf(b, &m.Role), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Target: orm.OneOf(b, &m.Target), MorphParent: orm.OneOf(b, &m.MorphParent), MorphTarget: orm.OneOf(b, &m.MorphTarget)}
 			}, orm.WithHooks(func() orm.Hooks[j.Pivot] {
 				return orm.Hooks[j.Pivot]{
 					Created: func(ctx context.Context, tx *database.Tx, _ orm.Changes[j.Pivot]) error {

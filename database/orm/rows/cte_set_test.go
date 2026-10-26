@@ -103,7 +103,7 @@ func TestRecordSetsPreserveWindowsAndDecoder(t *testing.T) {
 	for i, q := range []SetQuery[member]{Union(a, b), UnionAll(a, b), Intersect(a, b), IntersectAll(a, b), Except(a, b), ExceptAll(a, b)} {
 		q = q.Where(expr.At(q.Scope(), m.ID).Ne(0)).OrderBy(expr.At(q.Scope(), m.ID).Asc()).Limit(3).Offset(2)
 		state := &driverState{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "Ada", nil}}}
-		got, err := q.All(t.Context(), openTest(t, state))
+		got, err := ReadSet(q).All(t.Context(), openTest(t, state))
 		op := []string{" UNION ", " UNION ALL ", " INTERSECT ", " INTERSECT ALL ", " EXCEPT ", " EXCEPT ALL "}[i]
 		if err != nil || len(got) != 1 || got[0].Name != "Ada" || !strings.Contains(state.sql, op) || !strings.Contains(state.sql, `LIMIT $2`) || !strings.Contains(state.sql, `OFFSET $4`) {
 			t.Fatal(got, err, state.sql)
@@ -131,36 +131,36 @@ func TestRecordSetsPreserveWindowsAndDecoder(t *testing.T) {
 
 func TestScalarSetsKeepCodecAndNullability(t *testing.T) {
 	m := declareMembers()
-	a := Values(SelectScalar(From(m.Query()), expr.Select(expr.Value(m.ID))))
-	b := Values(SelectScalar(From(m.Query().Limit(1)), expr.Select(expr.Value(m.ID))))
+	a := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.ID)).Value()))
+	b := Values(SelectScalar(From(m.Query().Limit(1)), expr.Row(expr.Value(m.ID)).Value()))
 	for _, q := range []ValueSetQuery[int64]{UnionValues(a, b), UnionAllValues(a, b), IntersectValues(a, b), IntersectAllValues(a, b), ExceptValues(a, b), ExceptAllValues(a, b)} {
 		q = q.Where(q.Value().Ne(0)).OrderBy(q.Value().Asc()).Limit(2).Offset(1)
 		state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(4)}}}
-		got, err := q.All(t.Context(), openTest(t, state))
+		got, err := ReadValues(q).All(t.Context(), openTest(t, state))
 		if err != nil || !reflect.DeepEqual(got, []int64{4}) {
 			t.Fatal(got, err)
 		}
-		inner := SelectScalar(q, expr.Select(q.Value()))
+		inner := SelectScalar(q, expr.Row(q.Value()).Value())
 		alias := AsRecord[left](ModelRecord(m.Query()), "m")
 		selected := SelectRecord(alias, Scope(alias)).Where(InQuery(expr.At(Scope(alias), m.ID), inner))
 		if _, err := compileComposition(selected.core); err != nil {
 			t.Fatal(err)
 		}
 	}
-	n := Values(SelectScalar(From(m.Query()), expr.Select(expr.Value(m.Nickname))))
+	n := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Nickname)).Value()))
 	nullable := UnionAllValues(n, n)
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"Ada"}}}
-	got, err := nullable.All(t.Context(), openTest(t, state))
+	got, err := ReadValues(nullable).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].IsNull() {
 		t.Fatal(got, err)
 	}
 	// A scalar set also supplies a complete one-column record for a CTE.
 	c := AsRecord[left](CTE("values_cte", UnionValues(a, b)), "v")
-	if _, err := SelectRecord(c, Scope(c)).All(t.Context(), openTest(t, &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(3)}}})); err != nil {
+	if _, err := ReadRecord(SelectRecord(c, Scope(c))).All(t.Context(), openTest(t, &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(3)}}})); err != nil {
 		t.Fatal(err)
 	}
 	for _, bad := range []ValueSetQuery[int64]{UnionValues[int64](nil, b), UnionValues(ValueRecord[int64]{}, b), {}} {
-		if _, err := bad.All(t.Context(), openTest(t, &driverState{})); !errors.Is(err, fault.Invalid) {
+		if _, err := ReadValues(bad).All(t.Context(), openTest(t, &driverState{})); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
@@ -173,7 +173,7 @@ func TestCompositionRetainsBothDeferredChecks(t *testing.T) {
 	b.core.Source.Checks = append(b.core.Source.Checks, func() error { return sentinel })
 	combined := Union(a, b)
 	state := &driverState{}
-	if _, err := combined.All(t.Context(), openTest(t, state)); !errors.Is(err, sentinel) || state.sql != "" {
+	if _, err := ReadSet(combined).All(t.Context(), openTest(t, state)); !errors.Is(err, sentinel) || state.sql != "" {
 		t.Fatal(err, state.sql)
 	}
 	c := RecursiveCTE("tree", a, func(self RecursiveSelf[member]) RecordSource[member] {
@@ -183,7 +183,7 @@ func TestCompositionRetainsBothDeferredChecks(t *testing.T) {
 	})
 	alias := AsRecord[left](c, "tree_rows")
 	state = &driverState{}
-	if _, err := SelectRecord(alias, Scope(alias)).All(t.Context(), openTest(t, state)); !errors.Is(err, sentinel) || state.sql != "" {
+	if _, err := ReadRecord(SelectRecord(alias, Scope(alias))).All(t.Context(), openTest(t, state)); !errors.Is(err, sentinel) || state.sql != "" {
 		t.Fatal(err, state.sql)
 	}
 }

@@ -628,7 +628,7 @@ func TestPostgresDownloadRunsUnderItsRouteDeadlineAndReleasesOnCancel(t *testing
 		}
 	})
 	manager, table := reportManager(t, fixture, spec, func(c *Config) { c.MaxExports, c.MaxArtifacts = 1, 1 })
-	if manager.DownloadTimeout() != 2*manager.config.ExportTimeout || DefaultConfig().DownloadTimeout() != 20*time.Minute {
+	if manager.DownloadTimeout() != 2*manager.config.ExportTimeout || (&Manager{config: DefaultConfig()}).DownloadTimeout() != 20*time.Minute {
 		t.Fatal("download deadline is not derived from the export timeout")
 	}
 	actor := reportActor{Tenant: 7, Allowed: true}

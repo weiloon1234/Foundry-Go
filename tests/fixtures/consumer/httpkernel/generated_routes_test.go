@@ -1,5 +1,7 @@
 package httpkernel_test
 
+import "time"
+
 import (
 	stdhttp "net/http"
 	"net/http/httptest"
@@ -13,7 +15,7 @@ import (
 )
 
 func TestGeneratedPathsFromIndependentConsumer(t *testing.T) {
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

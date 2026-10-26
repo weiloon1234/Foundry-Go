@@ -408,7 +408,7 @@ func (s *Scheduler) tick(ctx context.Context, proof lease.Proof, now time.Time) 
 					handled = append(handled, cursorAdvance{i, last})
 				}
 			} else {
-				id, err := model.NewID[Execution]()
+				id, err := model.NewIDAt[Execution](time.Now())
 				if err != nil {
 					return skipped, handled, err
 				}

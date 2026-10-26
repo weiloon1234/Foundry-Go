@@ -54,9 +54,6 @@ func (q ValueCursorQuery[V]) Value() expr.RowExpression[CursorScope[V], V] {
 	return expr.FoundryRowExpression[CursorScope[V]](ormcore.Expression{Node: querycore.FieldRef{Table: ref.Table, Column: "value"}, Refs: []ormcore.Reference{ref}, Err: r.Source.Err}, q.column, sqlowner.Expressions())
 }
 
-// Key names the scalar identity. Example: c.UniqueBy(c.Key()).
-func (q ValueCursorQuery[V]) Key() expr.GroupKey[CursorScope[V]] { return expr.Group(q.Value()) }
-
 // Scope exposes completed output fields. Example: expr.At(c.Scope(),Users.ID).
 func (q CursorQuery[R]) Scope() expr.Scope[CursorScope[R], R] {
 	r := q.core.Record

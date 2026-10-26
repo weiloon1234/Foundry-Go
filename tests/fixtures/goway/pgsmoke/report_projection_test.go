@@ -27,7 +27,7 @@ func TestStage7ReportProjectionReads(t *testing.T) {
 			return err
 		}
 		q := rows.ReorderUnwindowed(rows.SelectValue(table.Query(), table.ParentID), expr.Value(table.Key()).Asc())
-		count, err := rows.Count(ctx, tx, q)
+		count, err := rows.Read(q).Count(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -49,7 +49,7 @@ func TestStage7ReportProjectionReads(t *testing.T) {
 			t.Fatal(simple)
 		}
 		grouped := rows.Having(rows.GroupBy(rows.SelectValue(table.Query(), table.ParentID), expr.Group(expr.Value(table.ParentID))), expr.Count[treeNode]().Gt(1))
-		count, err = rows.Count(ctx, tx, grouped)
+		count, err = rows.Read(grouped).Count(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -58,11 +58,11 @@ func TestStage7ReportProjectionReads(t *testing.T) {
 		}
 		stop := errors.New("stop export")
 		calls := 0
-		err = rows.Each(ctx, tx, q, func(int64) error { calls++; return stop })
+		err = rows.EachRead(ctx, tx, rows.Read(q), func(int64) error { calls++; return stop })
 		if !errors.Is(err, stop) || calls != 1 {
 			t.Fatal(calls, err)
 		}
-		_, err = rows.Count(ctx, tx, q) // Early stream close releases this transaction for another read.
+		_, err = rows.Read(q).Count(ctx, tx) // Early stream close releases this transaction for another read.
 		return err
 	}))
 }

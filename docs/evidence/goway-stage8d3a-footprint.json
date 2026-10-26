@@ -1,0 +1,192 @@
+{
+  "claim": "Go archive T/t function counts, not runtime timing or whole-program linked size. Same base/toolchain/settings; probe workload retained.",
+  "before": {
+    "base": "3d6f0379",
+    "command": [
+      "go",
+      "list",
+      "-export",
+      "-f",
+      "{{.ImportPath}} {{.Export}}",
+      "./testdata/footprint/q_with",
+      "./testdata/footprint/aggregate_families",
+      "./testdata/footprint/rows_each",
+      "./testdata/footprint/read_record",
+      "./testdata/footprint/read_set",
+      "./testdata/footprint/result_reads",
+      "./testdata/footprint/record_sets",
+      "./testdata/footprint/value_sets",
+      "./testdata/footprint/result_cursor",
+      "./testdata/footprint/json_paths",
+      "./testdata/footprint/extension_slots",
+      "./testdata/footprint/extension_matching_old",
+      "./testdata/footprint/extension_files_old"
+    ],
+    "working_directory": "/private/tmp/goway-8d3a-base/tests/fixtures/goway",
+    "settings": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r18",
+      "GOFLAGS": "-p=4",
+      "GOMAXPROCS": "4",
+      "GOWORK": "off"
+    },
+    "go": "go version go1.27.1 darwin/arm64",
+    "functions": {
+      "q_with": 1211,
+      "aggregate_families": 4365,
+      "rows_each": 899,
+      "read_record": 1002,
+      "read_set": 1050,
+      "result_reads": 1387,
+      "record_sets": 1294,
+      "value_sets": 2239,
+      "result_cursor": 2232,
+      "json_paths": 6168,
+      "extension_slots": 2104,
+      "extension_matching_old": 8452,
+      "extension_files_old": 7264
+    },
+    "sources": {
+      "tests/fixtures/goway/testdata/footprint/q_with/p.go": "bb50317813ffc678992ab5c3f86cd8103b8fbb9f5b8435dff415e0927a32d639",
+      "tests/fixtures/goway/testdata/footprint/aggregate_families/probe.go": "32d4a775dd2100744bd7b942bf3edeefb18e0c7c89e3cd35e3675ff34cbd6ad3",
+      "tests/fixtures/goway/testdata/footprint/rows_each/p.go": "d11c9c7cadc306b3173d8d047c60a3d7e0020490526f291f60d43fc0ad636803",
+      "tests/fixtures/goway/testdata/footprint/read_record/p.go": "3e9c598c13a62f87c70aefc384a8ef4173a3bf147023e349bc74ae5ea604f25b",
+      "tests/fixtures/goway/testdata/footprint/read_set/p.go": "e0bf465a4740438744c810348dc709ff145e1b2113a71075bb22ec252c7bfeac",
+      "tests/fixtures/goway/testdata/footprint/result_reads/probe.go": "61cd9c8f4275baf7a9e5bdab871cc4f6a104c35aafe2e2f8d4b34ce811e0aa07",
+      "tests/fixtures/goway/testdata/footprint/record_sets/probe.go": "e3315532301d380d3225cd5b930c9b840873e3673b122378b16835d783a2ee8e",
+      "tests/fixtures/goway/testdata/footprint/value_sets/probe.go": "e828cc1268974ba1caeb8e2164d162285426fda3aa6cdd1a259f33d515423d05",
+      "tests/fixtures/goway/testdata/footprint/result_cursor/probe.go": "39636d741da3d3f3872cb3396c399a6b73809da900f92d3a001dc9bbf00d0acb",
+      "tests/fixtures/goway/testdata/footprint/json_paths/probe.go": "dbfc2fa27874b292f29fdfbcfd67682902ac7e7b367aa98b773ef3eb847371a5",
+      "tests/fixtures/goway/testdata/footprint/extension_slots/probe.go": "3e0796c6bbed2dd4335a1b40f18948a55919ac117389a90d9bc623c46b960f76",
+      "tests/fixtures/goway/testdata/footprint/extension_matching_old/probe.go": "c5b30b9ed5970548004e0c59811320ff8597c2815f57dbaf1b6fae4a54246cab",
+      "tests/fixtures/goway/testdata/footprint/extension_files_old/probe.go": "e507829f9bf6a74f67700982b8a3315cd4b3e4cced0927caa635bb0ba58a663b"
+    }
+  },
+  "after": {
+    "base": "3d6f0379",
+    "command": [
+      "go",
+      "list",
+      "-export",
+      "-f",
+      "{{.ImportPath}} {{.Export}}",
+      "./testdata/footprint/q_with",
+      "./testdata/footprint/aggregate_families",
+      "./testdata/footprint/rows_each",
+      "./testdata/footprint/read_record",
+      "./testdata/footprint/read_set",
+      "./testdata/footprint/result_reads",
+      "./testdata/footprint/record_sets",
+      "./testdata/footprint/value_sets",
+      "./testdata/footprint/result_cursor",
+      "./testdata/footprint/json_paths",
+      "./testdata/footprint/extension_slots"
+    ],
+    "working_directory": "/Users/weiloon/Projects/rust-go/Foundry-Go-goway-laneA11/tests/fixtures/goway",
+    "settings": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r18",
+      "GOFLAGS": "-p=4",
+      "GOMAXPROCS": "4",
+      "GOWORK": "off"
+    },
+    "go": "go version go1.27.1 darwin/arm64",
+    "functions": {
+      "q_with": 1173,
+      "aggregate_families": 4339,
+      "rows_each": 990,
+      "read_record": 934,
+      "read_set": 982,
+      "result_reads": 1356,
+      "record_sets": 1455,
+      "value_sets": 2416,
+      "result_cursor": 2179,
+      "json_paths": 5680,
+      "extension_slots": 2436
+    },
+    "sources": {
+      "tests/fixtures/goway/testdata/footprint/q_with/p.go": "bb50317813ffc678992ab5c3f86cd8103b8fbb9f5b8435dff415e0927a32d639",
+      "tests/fixtures/goway/testdata/footprint/aggregate_families/probe.go": "32d4a775dd2100744bd7b942bf3edeefb18e0c7c89e3cd35e3675ff34cbd6ad3",
+      "tests/fixtures/goway/testdata/footprint/rows_each/p.go": "f8ecafdd47e9f184d106e0b1c585ab4ab1bfdd95beb16405d9e9e7f269cffde8",
+      "tests/fixtures/goway/testdata/footprint/read_record/p.go": "3e9c598c13a62f87c70aefc384a8ef4173a3bf147023e349bc74ae5ea604f25b",
+      "tests/fixtures/goway/testdata/footprint/read_set/p.go": "e0bf465a4740438744c810348dc709ff145e1b2113a71075bb22ec252c7bfeac",
+      "tests/fixtures/goway/testdata/footprint/result_reads/probe.go": "05d6d95ecc3c732f26383abe9f9b71dbd3fe0169d16d3f0b390ef82ee44e5eaf",
+      "tests/fixtures/goway/testdata/footprint/record_sets/probe.go": "a772d2f23e31626cae67644f59613fbd9e16245a5d9c049ad66b46fc9f26bf90",
+      "tests/fixtures/goway/testdata/footprint/value_sets/probe.go": "3d118dcba6e210b9d898fe0d30eba1d23fac3b5b0ac071d4c5ee56fc5acb8e00",
+      "tests/fixtures/goway/testdata/footprint/result_cursor/probe.go": "77010e5556a5d15f90fb1a616f044c3b16c4ef667ee06e84b6b71b7ec4bff956",
+      "tests/fixtures/goway/testdata/footprint/json_paths/probe.go": "dbfc2fa27874b292f29fdfbcfd67682902ac7e7b367aa98b773ef3eb847371a5",
+      "tests/fixtures/goway/testdata/footprint/extension_slots/probe.go": "e743a086ef66f75a4d5201f787994c275007a163ed87d9c268f2ad0ae1803ce9"
+    }
+  },
+  "probes": {
+    "q_with": {
+      "before": 1211,
+      "after": 1173,
+      "delta": -38,
+      "ceiling": 1211
+    },
+    "aggregate_families": {
+      "before": 4365,
+      "after": 4339,
+      "delta": -26,
+      "ceiling": 4369
+    },
+    "rows_each": {
+      "before": 899,
+      "after": 990,
+      "delta": 91,
+      "ceiling": 1034
+    },
+    "read_record": {
+      "before": 1002,
+      "after": 934,
+      "delta": -68,
+      "ceiling": 1153
+    },
+    "read_set": {
+      "before": 1050,
+      "after": 982,
+      "delta": -68,
+      "ceiling": 1208
+    },
+    "result_reads": {
+      "before": 1387,
+      "after": 1356,
+      "delta": -31,
+      "ceiling": 1554
+    },
+    "record_sets": {
+      "before": 1294,
+      "after": 1455,
+      "delta": 161,
+      "ceiling": 1482
+    },
+    "value_sets": {
+      "before": 2239,
+      "after": 2416,
+      "delta": 177,
+      "ceiling": 2565
+    },
+    "result_cursor": {
+      "before": 2232,
+      "after": 2179,
+      "delta": -53,
+      "ceiling": 2564
+    },
+    "json_paths": {
+      "before": 6168,
+      "after": 5680,
+      "delta": -488,
+      "ceiling": 7068
+    },
+    "extension_slots": {
+      "before": 2104,
+      "after": 2436,
+      "delta": 332,
+      "ceiling": 2478
+    }
+  },
+  "extension_ratio": {
+    "after": 2436,
+    "historical_frozen_baseline": 9749,
+    "requirement": "after * 4 < historical_frozen_baseline"
+  }
+}

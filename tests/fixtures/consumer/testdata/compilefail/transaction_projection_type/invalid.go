@@ -16,4 +16,4 @@ var selected = rows.SelectTransactionRecord(source, rows.TransactionScope(source
 var _ context.Context
 var _ *database.Tx
 
-var _ = rows.SelectTransaction(source, f.Summaries, rows.MapSelected(f.Summaries.ID, expr.Select(expr.At(rows.TransactionScope(source), f.Records.Name))))
+var _ = rows.SelectTransaction(source, f.Summaries, rows.MapSelected(f.Summaries.ID, expr.Row(expr.At(rows.TransactionScope(source), f.Records.Name)).Value()))

@@ -60,9 +60,6 @@ func Constant[S, V any](c codec.Codec[V], v V) RowExpression[S, V] {
 	return parameter[S](rowData[V]{column: columnCodec(c)}, v)
 }
 
-// Select promotes a row value to the selected phase. Example: expr.Select(expr.Value(Users.Age)).
-func Select[S, V any](v RowValue[S, V]) Selected[S, V] { return rowInput(v).Value() }
-
 // Value promotes a computed row value to the selected phase. Example: expr.Add(a,b).Value().
 func (e RowExpression[S, V]) Value() Selected[S, V] { return Selected[S, V]{data: e.data} }
 

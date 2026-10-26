@@ -55,12 +55,12 @@ func TestReportProjectionGolden(t *testing.T) {
 					}
 					switch operation {
 					case "compile":
-						s := must(rowset.Compile(q))
+						s := must(rowset.CompileRead(rowset.Read(q)))
 						fmt.Fprintln(&g.output, oracleSnapshot([]any{s.SQL(), s.Arguments()}))
 					case "count":
-						fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Count(t.Context(), db, q))}))
+						fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(q).Count(t.Context(), db))}))
 					case "each":
-						if err := rowset.Each(t.Context(), db, q, func(r reportAmount) error { fmt.Fprintln(&g.output, oracleSnapshot([]any{r})); return nil }); err != nil {
+						if err := rowset.EachRead(t.Context(), db, rowset.Read(q), func(r reportAmount) error { fmt.Fprintln(&g.output, oracleSnapshot([]any{r})); return nil }); err != nil {
 							t.Fatal(err)
 						}
 					case "page":
@@ -97,7 +97,7 @@ func TestReportFilterAdaptersGolden(t *testing.T) {
 	}
 
 	for _, p := range newPs {
-		statement := must(rowset.Compile(rowset.FromModel(models.Users.Query()).Where(p)))
+		statement := must(rowset.CompileRead(rowset.Read(rowset.FromModel(models.Users.Query()).Where(p))))
 		if !oracleEqual(t, "report_projection_golden/filters", oracleSnapshot([]any{statement.SQL(), statement.Arguments()})) {
 			t.Fatal("frozen predicate differs")
 		}

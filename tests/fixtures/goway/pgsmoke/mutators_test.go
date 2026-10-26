@@ -1,5 +1,7 @@
 package pgsmoke_test
 
+import "time"
+
 import (
 	"bytes"
 	"errors"
@@ -96,7 +98,7 @@ func TestDistinctInputPrimaryKey(t *testing.T) {
 	must(t, err)
 	q := m.KeyRecords
 	must(t, orm.Check(q))
-	id, err := model.NewID[m.KeyRecord]()
+	id, err := model.NewIDAt[m.KeyRecord](time.Now())
 	must(t, err)
 	got, err := q.Insert(ctx, db, q.ID.Set(m.FreshID{Value: id}))
 	must(t, err)

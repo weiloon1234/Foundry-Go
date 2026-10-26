@@ -16,6 +16,6 @@ func Read(ctx context.Context, db database.Executor) (orm.CursorPage[models.Orde
 	return c.UniqueBy(expr.Group(expr.At(c.Scope(), models.Orders.ID))).Paginate(ctx, db, orm.CursorRequest[models.Order]{Size: 10})
 }
 func Nullable(ctx context.Context, db database.Executor) (orm.CursorPage[value.Nullable[string]], error) {
-	c := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Nickname)))))
-	return c.UniqueBy(c.Key()).Paginate(ctx, db, orm.CursorRequest[value.Nullable[string]]{Size: 10})
+	c := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Nickname)).Value())))
+	return c.UniqueBy(expr.Group(c.Value())).Paginate(ctx, db, orm.CursorRequest[value.Nullable[string]]{Size: 10})
 }

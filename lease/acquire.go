@@ -1,9 +1,11 @@
 package lease
 
+import "math/rand/v2"
+
 import (
 	"context"
 	"errors"
-	"math/rand/v2"
+
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"

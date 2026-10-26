@@ -39,6 +39,6 @@ func CheckJoinedFields() error {
 	if _, err := rows.CompileRead(text); err != nil {
 		return err
 	}
-	_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(joined, expr.Select(expr.Coalesce(expr.AtNullable(nullable, Records.Payload), expr.At(fields, Records.Payload))))))
+	_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(joined, expr.Row(expr.Coalesce(expr.AtNullable(nullable, Records.Payload), expr.At(fields, Records.Payload))).Value())))
 	return err
 }

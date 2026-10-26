@@ -40,16 +40,18 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	nick := expr.JSONProperty(profile, jsonpaths.Nickname)
 	age := expr.JSONProperty(profile, jsonpaths.Age)
 	scores := expr.JSONProperty(profile, jsonpaths.Scores)
-	if k := readJSON(t, db, expr.JSONType(expr.Value(d.Settings)).Value(), codec.String[expr.JSONKind]().Validated(expr.JSONKind.Validate)); k != expr.JSONObject {
+	fragment, err := value.NewJSON([]int64{2})
+	must(t, err)
+	if k := readJSON(t, db, expr.JSONType(expr.Value(d.Settings)).Value(), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)); k != database.JSONObject {
 		t.Fatal(k)
 	}
-	if v := readJSON(t, db, expr.JSONTypeNullable(expr.Value(d.Backup)).Value(), codec.Nullable(codec.String[expr.JSONKind]())); !v.IsNull() {
+	if v := readJSON(t, db, expr.JSONTypeNullable(expr.Value(d.Backup)).Value(), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, theme.Kind().Value(), codec.Nullable(codec.String[expr.JSONKind]())); !v.IsNull() {
+	if v := readJSON(t, db, expr.JSONTypeNullable(theme.JSON()).Value(), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, nick.Kind().Value(), codec.Nullable(codec.String[expr.JSONKind]())); v != value.Of(expr.JSONNull) {
+	if v := readJSON(t, db, expr.JSONTypeNullable(nick.JSON()).Value(), codec.Nullable(codec.String[database.JSONKind]())); v != value.Of(database.JSONNull) {
 		t.Fatal(v)
 	}
 	if v := readJSON(t, db, nick.JSON().Value(), codec.Nullable(codec.JSON[*string]())); v.IsNull() {
@@ -75,7 +77,7 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	if v := readJSON(t, db, expr.JSONTextScalar(expr.JSONProperty(profile, jsonpaths.Quoted), codec.String[string]()).Value(), codec.Nullable(codec.String[string]())); v != value.Of("hello") {
 		t.Fatal(v)
 	}
-	for _, p := range []expr.Predicate[jsonpaths.Document]{theme.IsMissing(), nick.Exists(), nick.IsJSONNull(), scores.Contains([]int64{2})} {
+	for _, p := range []expr.Predicate[jsonpaths.Document]{theme.JSON().IsNull(), nick.JSON().IsNotNull(), expr.JSONTypeNullable(nick.JSON()).Eq(value.Of(database.JSONNull)), expr.JSONContainsNullable(scores.JSON(), scores.JSON().Param(value.Of(fragment))).Eq(value.Of(true))} {
 		n, err := expr.Where(d.Query(), p).Count(ctx, db)
 		must(t, err)
 		if n != 1 {

@@ -32,7 +32,7 @@ func (s *Scheduler) RunNow(ctx context.Context, id ID) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
-	execution, err := model.NewID[Execution]()
+	execution, err := model.NewIDAt[Execution](time.Now())
 	if err != nil {
 		return Record{}, err
 	}

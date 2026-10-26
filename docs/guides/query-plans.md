@@ -27,6 +27,6 @@ An `orm.Plan` owns bounded PostgreSQL plan data. `Root()` returns a typed tree s
 
 `JSON()` returns an owned copy of the full response, including PostgreSQL-specific fields. It and the tree can reveal filters or bound values. Expose them only through an authorized inspection path. Routine plan formatting prints a summary without those contents.
 
-Responses are bounded to 4 MiB, 4,096 nodes and 24 tree levels. Malformed, duplicate-key or inconsistent-mode responses fail. The [PostgreSQL contract tests](../../database/query/explain_postgres_test.go) cover bindings, side effects, savepoints, locks and deadlines.
+Responses are bounded to 4 MiB, 4,096 nodes and 24 tree levels. Malformed, duplicate-key or inconsistent-mode responses fail. The [PostgreSQL contract tests](../../database/orm/explain_postgres_test.go) cover bindings, side effects, savepoints, locks and deadlines.
 
 For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

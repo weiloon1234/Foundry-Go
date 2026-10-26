@@ -253,7 +253,7 @@ func assertFilteredThroughAggregates(t *testing.T, tx *database.Tx, users []mode
 	assertDecimalAggregate(t, rows[0].GroupPriority, "5")
 	// Conditional values must follow target/pivot qualification, including
 	// outer fields captured inside a correlated conditional predicate.
-	ownerMatch := expr.When(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(group, models.Groups.OwnerID)), expr.At(group, models.Groups.Code)).Else(expr.Select(expr.At(group, models.Groups.Code)).Param("missing"))
+	ownerMatch := expr.When(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(group, models.Groups.OwnerID)), expr.At(group, models.Groups.Code)).Else(expr.Row(expr.At(group, models.Groups.Code)).Value().Param("missing"))
 	conditionalOwners := link.Where(ownerMatch.Ne("missing")).Exists()
 	rows, err = orm.LoadFrom(t.Context(), tx, models.Users.Query().With(
 		a.GroupCount.Using(expr.Related(r.Groups, expr.Count[models.Group]().Filter(expr.When(expr.ModelPredicate(g.Code.Eq("a")), expr.Value(g.Code)).Else(expr.Param(g.Code, "other")).Eq("a")))),

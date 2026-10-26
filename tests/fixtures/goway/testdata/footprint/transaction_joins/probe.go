@@ -20,8 +20,8 @@ func Read(ctx context.Context, tx *database.Tx) ([]value.Nullable[int64], error)
 	on := rows.On(expr.At(ls, models.Orders.BuyerID), expr.At(rs, models.Orders.BuyerID))
 	j := rows.TransactionFullJoin(left, right, on)
 	x := expr.AtNullable(rows.NullableRightScope(j, rs), models.Orders.TotalCents)
-	scalar := rows.SelectTransactionValue(right, expr.Select(expr.At(rs, models.Orders.TotalCents))).Limit(1)
-	return rows.SelectTransactionValue(j, expr.Select(x)).Where(rows.TransactionExistsQuery(j, rows.TransactionScalarOf(scalar).ForShare())).All(ctx, tx)
+	scalar := rows.SelectTransactionValue(right, expr.Row(expr.At(rs, models.Orders.TotalCents)).Value()).Limit(1)
+	return rows.SelectTransactionValue(j, expr.Row(x).Value()).Where(rows.TransactionExistsQuery(j, rows.TransactionScalarOf(scalar).ForShare())).All(ctx, tx)
 }
 func Records(ctx context.Context, tx *database.Tx) ([]models.Order, error) {
 	left := rows.AsTransaction[a](rows.TransactionOf(rows.ModelRecord(models.Orders.Query())), "a")

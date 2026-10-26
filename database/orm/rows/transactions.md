@@ -24,9 +24,9 @@ record := rows.SelectTransactionCorrelatedRecord(c, inner).
     ForUpdate().Of(rows.Target(inner)).SkipLocked()
 latest := rows.AsTransactionLateral[latestTag](record, "latest")
 joined := rows.TransactionLeftJoinLateral(parents, latest)
-ids := rows.SelectTransactionValue(joined, expr.Select(
+ids := rows.SelectTransactionValue(joined, expr.Row(
     expr.AtNullable(rows.NullableRightScope(joined,
-        rows.TransactionLateralScope(latest)), Orders.ID)))
+        rows.TransactionLateralScope(latest)), Orders.ID)).Value())
 items, err := ids.All(ctx, tx)
 ```
 

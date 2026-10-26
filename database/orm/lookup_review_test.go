@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
 	"strings"
 	"testing"
 
@@ -201,5 +203,29 @@ func TestCreateOrFirstConflictProvenanceAndSavepoint(t *testing.T) {
 				t.Fatal("savepoint callbacks escaped", commits)
 			}
 		})
+	}
+}
+
+func TestLookupUpdateCallbackUsesSharedDepthLimit(t *testing.T) {
+	ctx := t.Context()
+	for range lifecore.MaxDepth {
+		var err error
+		ctx, err = lifecore.Context(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := eachFields(Hooks[eachRow]{})
+	var statements []string
+	db := testDB(t, testConnector{statements: &statements, columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "existing"}}})
+	calls := 0
+	_, err := UpdateOrCreate(ctx, db, f.Query(), nil, func(context.Context, *database.Tx, eachRow) ([]Assignment[eachRow], error) { calls++; return nil, nil })
+	if !errors.Is(err, fault.Invalid) || calls != 0 {
+		t.Fatal("lookup callback escaped lifecycle depth", err, calls)
+	}
+	for _, s := range statements {
+		if strings.HasPrefix(s, "UPDATE") || strings.HasPrefix(s, "INSERT") {
+			t.Fatal("depth failure executed mutation", s)
+		}
 	}
 }

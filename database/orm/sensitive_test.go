@@ -1,5 +1,7 @@
 package orm
 
+import "time"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -104,7 +106,7 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 		t.Fatal("wrong-column hydration accepted")
 	}
 	// Each row must use its own key; a later failure must discard earlier models.
-	other, err := model.NewID[secureRecord]()
+	other, err := model.NewIDAt[secureRecord](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

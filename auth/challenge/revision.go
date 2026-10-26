@@ -1,5 +1,7 @@
 package challenge
 
+import "time"
+
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -16,7 +18,9 @@ type RevisionOwner[M any] struct{ _ [0]*M }
 // never restore an earlier revision when restoring an earlier field value.
 type Revision[M any] = model.ID[RevisionOwner[M]]
 
-func NewRevision[M any]() (Revision[M], error) { return model.NewID[RevisionOwner[M]]() }
+func NewRevision[M any]() (Revision[M], error) {
+	return model.NewIDAt[RevisionOwner[M]](time.Now())
+}
 
 // BindRevision binds current values AND their persisted history generation.
 // A zero generation fails closed; consumers must initialize existing rows before

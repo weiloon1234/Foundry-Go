@@ -1,5 +1,7 @@
 package audit
 
+import "time"
+
 import (
 	"context"
 
@@ -28,7 +30,7 @@ type correlationContextKey struct{}
 
 // NewCorrelation generates a time-ordered UUIDv7 correlation identifier.
 func NewCorrelation() (Correlation, error) {
-	id, err := model.NewID[correlationIdentity]()
+	id, err := model.NewIDAt[correlationIdentity](time.Now())
 	if err != nil {
 		return "", err
 	}

@@ -34,7 +34,7 @@ func TestPostgresNamedWindowReuseAndFrames(t *testing.T) {
 		if total, err := rowset.ReadScalar(result).Count(t.Context(), tx); err != nil || total != 4 {
 			t.Fatal("named result count", total, err)
 		}
-		r := expr.NumericRange(base, expr.Select(expr.Value(f.ID)))
+		r := expr.NumericRange(base, expr.Row(expr.Value(f.ID)).Value())
 		frameCounts(t, tx, r.Between(r.Preceding(1), r.CurrentRow()).Named("ranged"), []int64{1, 2, 2, 2})
 		bucket := expr.When(expr.ModelPredicate(f.ID.Gt(2)), expr.Param(f.ID, 1)).Else(expr.Param(f.ID, 0))
 		grouped := expr.WindowFor(rowset.ModelScope(q)).PartitionByValues(expr.Count[framequeries.Sample]().Value().Key()).Named("equal_counts")
@@ -55,7 +55,7 @@ func TestPostgresNamedWindowScopesAndDependencies(t *testing.T) {
 		f := framequeries.Samples
 		eligible := rowset.AsRecord[eligibleSample](rowset.CTE("eligible_samples", rowset.ModelRecord(q.Where(f.ID.Gt(2)))), "eligible")
 		e := rowset.Scope(eligible)
-		bucket := expr.When(rowset.InQuery(expr.Value(f.ID), rowset.SelectScalar(eligible, expr.Select(expr.At(e, framequeries.Samples.ID)))), expr.Param(f.ID, 1)).Else(expr.Param(f.ID, 0))
+		bucket := expr.When(rowset.InQuery(expr.Value(f.ID), rowset.SelectScalar(eligible, expr.Row(expr.At(e, framequeries.Samples.ID)).Value())), expr.Param(f.ID, 1)).Else(expr.Param(f.ID, 0))
 		w := expr.WindowFor(rowset.ModelScope(q)).PartitionBy(expr.Group(bucket)).OrderBy(expr.Value(f.ID).Asc()).Named("buckets")
 		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), expr.RowNumber(w)), expr.Value(f.ID).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 2, 1, 2}) {
 			t.Fatal("CTE used only inside named definition", got, err)

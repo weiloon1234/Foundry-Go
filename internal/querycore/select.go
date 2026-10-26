@@ -110,6 +110,17 @@ type SelectNode struct {
 	Offset     int
 }
 
+// ModelOrder preserves plain-column identity for keyset and stable ordering.
+func ModelOrder(node OrderNode) QueryOrder {
+	order := QueryOrder{Descending: node.Descending, Nulls: node.Nulls}
+	if field, ok := node.Expression.(FieldRef); ok {
+		order.Field = field
+	} else {
+		order.Computed = &ComputedOrder{Expression: node.Expression}
+	}
+	return order
+}
+
 func OrderNodes(orders []QueryOrder) []OrderNode {
 	result := make([]OrderNode, len(orders))
 	for i, o := range orders {

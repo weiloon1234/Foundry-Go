@@ -68,11 +68,11 @@ array indexing. Declared `,string` properties are unquoted before inspection.
 | Operation | Meaning |
 | --- | --- |
 | `path.JSON()` | Nullable typed child snapshot; present JSON null requires a payload that can represent it |
-| `path.Kind()` | Nullable `expr.JSONKind`; present `expr.JSONNull` is distinct from SQL NULL |
-| `path.Exists()` | Includes present JSON null |
-| `path.IsMissing()` | Missing path or SQL-null ancestor |
-| `path.IsJSONNull()` | Present JSON null only |
-| `path.Length()` | Array element count; NULL for missing, SQL NULL, JSON null or non-array |
+| `expr.JSONTypeNullable(path.JSON())` | Nullable `database.JSONKind`; present `database.JSONNull` is distinct from SQL NULL |
+| `path.JSON().IsNotNull()` | Includes present JSON null |
+| `path.JSON().IsNull()` | Missing path or SQL-null ancestor |
+| `expr.JSONTypeNullable(path.JSON()).Eq(value.Of(database.JSONNull))` | Present JSON null only |
+| `expr.JSONLengthNullable(path.JSON())` | Array element count; NULL for missing, SQL NULL, JSON null or non-array |
 | Scalar extraction | Missing, SQL NULL and JSON null all become SQL NULL |
 
 Inspect the original nullable column to distinguish a SQL-null ancestor from a
@@ -84,14 +84,15 @@ use an explicit DTO representation if clients need that distinction.
 ## Whole documents and containment
 
 Columns accept exact-payload `Eq`, `Ne`, `In`, `Contains` and `ContainedBy` values.
-`expr.JSONType(expr.Value(column))` yields `expr.JSONKind`, and `expr.JSONLength`
-measures a whole array document. Kind constants are `JSONObject`, `JSONArray`,
+`expr.JSONType(expr.Value(column))` yields `database.JSONKind`, and `expr.JSONLength`
+measures a whole array document. Kind constants in `database` are `JSONObject`, `JSONArray`,
 `JSONString`, `JSONNumber`, `JSONBoolean` and `JSONNull`. Nullable and selected
 function families preserve phase and one nullable layer. `JSONKind` has one
 shared identity, including in retained report DTOs.
 
-`JSONContains`/`JSONContainedBy` compare typed document operands; `path.Contains`
-snapshots a fragment of that path's payload type. SQL containment ignores array
+`JSONContains`/`JSONContainedBy` compare typed document operands. Capture a child
+fragment with `value.NewJSON`, handle its error, and use
+`expr.JSONContainsNullable(path.JSON(), path.JSON().Param(value.Of(fragment))).Eq(value.Of(true))`. SQL containment ignores array
 order/duplicates, while whole-document equality preserves them. Optional payload
 fields support partial containment documents. No raw SQL is needed.
 

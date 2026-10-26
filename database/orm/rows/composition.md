@@ -67,10 +67,10 @@ For scalars, adapt `SelectScalar` using `Values`, then use the corresponding
 including model-owned identifiers and nullability:
 
 ```go
-ids := rows.Values(rows.SelectScalar(rows.From(Users.Query()), expr.Select(expr.Value(Users.ID))))
+ids := rows.Values(rows.SelectScalar(rows.From(Users.Query()), expr.Row(expr.Value(Users.ID)).Value()))
 combined := rows.UnionValues(ids, ids)
 values, err := combined.OrderBy(combined.Value().Asc()).All(ctx, db)
-inner := rows.SelectScalar(combined, expr.Select(combined.Value()))
+inner := rows.SelectScalar(combined, expr.Row(combined.Value()).Value())
 condition := rows.InQuery(expr.Value(Users.ID), inner)
 ```
 

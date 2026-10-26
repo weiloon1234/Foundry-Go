@@ -63,7 +63,7 @@ func TestUUIDv7LayoutOwnershipAndSerialization(t *testing.T) {
 }
 
 func TestIDRejectsMalformedInputAndUnsupportedGenerationTime(t *testing.T) {
-	original, err := model.NewID[user]()
+	original, err := model.NewIDAt[user](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

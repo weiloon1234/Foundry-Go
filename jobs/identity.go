@@ -1,5 +1,7 @@
 package jobs
 
+import "time"
+
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
@@ -27,7 +29,7 @@ func (q Queue) Validate() error {
 type ID[P any] = model.ID[ExecutionOf[P]]
 type ExecutionOf[P any] struct{ _ [0]*P }
 
-func NewID[P any]() (ID[P], error)              { return model.NewID[ExecutionOf[P]]() }
+func NewID[P any]() (ID[P], error)              { return model.NewIDAt[ExecutionOf[P]](time.Now()) }
 func ParseID[P any](text string) (ID[P], error) { return model.ParseID[ExecutionOf[P]](text) }
 
 // ExecutionID is the explicit heterogeneous adapter/inspection identity.

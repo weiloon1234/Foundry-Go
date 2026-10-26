@@ -116,7 +116,7 @@ func (s *Store) RecordFailure(ctx context.Context, failed jobs.FailedJob) error 
 	if err != nil {
 		return err
 	}
-	id, err := model.NewID[jobarchive.Failure]()
+	id, err := model.NewIDAt[jobarchive.Failure](time.Now())
 	if err != nil {
 		return err
 	}
@@ -299,7 +299,7 @@ func (s *Store) Prune(ctx context.Context, cutoff time.Time, limit int) (int, er
 	err = s.within(ctx, func(tx *database.Tx) error {
 		// One bounded DELETE ... WHERE id IN (SELECT id ... LIMIT n): no row
 		// (envelope included) is loaded to choose the batch.
-		oldest := rows.SelectScalar(rows.From(jobarchive.Failures.Query().Where(fields.FailedAt.Lt(before)).OrderBy(fields.FailedAt.Asc(), fields.ID.Asc()).Limit(limit)), expr.Select(expr.Value(fields.ID)))
+		oldest := rows.SelectScalar(rows.From(jobarchive.Failures.Query().Where(fields.FailedAt.Lt(before)).OrderBy(fields.FailedAt.Asc(), fields.ID.Asc()).Limit(limit)), expr.Row(expr.Value(fields.ID)).Value())
 		removed, err := expr.Where(jobarchive.Failures.Query(), rows.InQuery(expr.Value(fields.ID), oldest)).DeleteAll(ctx, tx)
 		deleted = int(removed)
 		return err

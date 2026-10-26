@@ -44,7 +44,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Peers.Where(j.Targets.Rank.Gt(0)).WherePivot(j.Pivots.Role.Eq("admin")).OrderByPivot(j.Pivots.Role.Desc()).OrderBy(j.Targets.Name.Asc()).With(j.TargetParent).WithPivot(j.PivotParent))
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers.Where(j.Targets.Rank.Gt(0)).WherePivot(j.Pivots.Role.Eq("admin")).OrderByPivot(j.Pivots.Role.Desc()).OrderBy(j.Targets.Name.Asc()).With(j.TargetParent).WithPivot(j.PivotParent)), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -66,7 +66,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.TargetsThrough)
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.TargetsThrough), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -88,7 +88,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.ChosenThrough)
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.ChosenThrough), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -113,7 +113,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Chosen.OfMany(j.Targets.Rank.Desc()))
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.OfMany(j.Targets.Rank.Desc())), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -135,7 +135,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Chosen.LatestOfMany())
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.LatestOfMany()), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -157,7 +157,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.Chosen.OldestOfMany())
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.OldestOfMany()), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -179,7 +179,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.ChosenThrough.LatestOfMany())
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.ChosenThrough.LatestOfMany()), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -204,7 +204,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.MorphChildren)
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.MorphChildren), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -226,7 +226,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.MorphChild)
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.MorphChild), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -248,7 +248,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.MorphPeers)
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.MorphPeers), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -273,13 +273,13 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 				db := g.open(ctx)
 
 				if inverse {
-					hydrated, err := orm.Load(ctx, db, []j.Target{{ID: 10}}, j.Inverse)
+					hydrated, err := orm.LoadFrom(ctx, db, j.Targets.Query().With(j.Inverse), []j.Target{{ID: 10}})
 					if err != nil {
 						t.Fatal(err)
 					}
 					g.showHydrated(hydrated)
 				} else {
-					hydrated, err := orm.Load(ctx, db, []j.Pivot{{ID: 100, ParentID: value.Of(int64(1)), Kind: "parent"}, {ID: 101, ParentID: value.Of(int64(10)), Kind: "target"}}, j.MorphParent, j.MorphTarget)
+					hydrated, err := orm.LoadFrom(ctx, db, j.Pivots.Query().With(j.MorphParent, j.MorphTarget), []j.Pivot{{ID: 100, ParentID: value.Of(int64(1)), Kind: "parent"}, {ID: 101, ParentID: value.Of(int64(10)), Kind: "target"}})
 					if err != nil {
 						t.Fatal(err)
 					}

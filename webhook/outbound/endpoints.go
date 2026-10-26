@@ -79,7 +79,7 @@ func (s *Service) CreateEndpoint(ctx context.Context, options EndpointOptions) (
 	if err != nil {
 		return EndpointID{}, secret.String{}, err
 	}
-	id, err := model.NewID[store.Endpoint]()
+	id, err := model.NewIDAt[store.Endpoint](time.Now())
 	if err != nil {
 		return EndpointID{}, secret.String{}, err
 	}
@@ -259,7 +259,7 @@ func (s *Service) addSecret(ctx context.Context, tx *database.Tx, endpoint model
 		return secret.String{}, err
 	}
 	signing := secret.New("whsec_" + base64.StdEncoding.EncodeToString(material))
-	id, err := model.NewID[store.Secret]()
+	id, err := model.NewIDAt[store.Secret](time.Now())
 	if err != nil {
 		return secret.String{}, err
 	}

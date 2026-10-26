@@ -1,12 +1,12 @@
 # Scoped expressions
 
 Use `expr.Value(column)` for a model scope and `expr.At(rows.Scope(alias), column)`
-for an alias. Existing `Expression[S,V,P]` distinguishes the present comparison
-value `V` from the projected value `P`, including `value.Nullable[V]`.
+for an alias. `Expression[S,V,P]` distinguishes the present comparison value `V` from the
+projected value `P`, including `value.Nullable[V]`.
 
 `RowValue[S,V]` accepts stored and computed row values. `Selected[S,V]` accepts
 selected results and cannot enter row predicates or row arithmetic. Promote row
-values with `expr.Select`, or use a computed value's `Value` method. Use
+values with `expr.Row(row).Value()`, or use a computed value's `Value` method. Use
 `rows.MapSelected` to select an aggregate or a computed result into a declared row
 field. `rows.Map` retains its existing column-expression signature.
 
@@ -233,7 +233,7 @@ w := expr.WindowFor(rows.ModelScope(Orders.Query())).
 q := rows.Select(rows.FromModel(Orders.Query()), ReportRows,
     rows.MapSelected(ReportRows.Rank, expr.RowNumber(w)),
     rows.MapSelected(ReportRows.Total, expr.Over(expr.Sum(Orders.TotalCents), w)),
-    rows.MapSelected(ReportRows.Previous, expr.Lag(expr.Select(amount), 1, w)),
+    rows.MapSelected(ReportRows.Previous, expr.Lag(expr.Row(amount).Value(), 1, w)),
 )
 ```
 
@@ -261,7 +261,7 @@ its order or adding a partition fails compilation. Derivation is immutable.
 `RowsBetween` and `GroupsBetween` accept current/unbounded positions and
 `Preceding(int64)`/`Following(int64)` offsets. `RangeBetween` accepts only
 current/unbounded positions. For value distances, build
-`r := expr.NumericRange(w, expr.Select(amount))` and then
+`r := expr.NumericRange(w, expr.Row(amount).Value())` and then
 `r.Between(r.Preceding(int64(10)), r.CurrentRow())`. Numeric distances retain the
 order value's exact type. `TemporalRange` takes `temporal.Interval` distances;
 nullable range constructors still require present distances. The range builder
@@ -278,7 +278,7 @@ this adds no manifest, OpenAPI or TypeScript schema source.
 
 ## Text, temporal, interval and geographic calculations
 
-Scalar functions use the same SQL compiler and codecs as `database/query`.
+Scalar functions use the same SQL compiler and codecs as the shared `internal/querycore` compiler.
 Pass `expr.Value(column)` (or `expr.At(scope, column)`) to row functions; promote
 with `.Value()` for `rows.MapSelected`. The `Value` suffixed variants accept
 selected values, including aggregates and windows. They never become WHERE

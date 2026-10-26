@@ -50,8 +50,8 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	if sum, ok := rows[0].Total.Get(); !ok || sum.String() != "3" || !rows[2].Total.IsNull() {
 		t.Error("correlated exact sums lost NULL or precision")
 	}
-	ids := rowset.SelectCorrelatedScalar(matched, expr.Select(expr.At(order, models.Orders.BuyerID)))
-	for _, predicate := range []expr.Predicate[models.User]{matched.Exists(), ids.Exists(), rowset.InCorrelatedQuery(expr.Value(u.ID), ids), rowset.InNullableCorrelatedQuery(expr.Value(u.ID), rowset.SelectCorrelatedScalar(matched, expr.Nullable(expr.Select(expr.At(order, models.Orders.BuyerID)))))} {
+	ids := rowset.SelectCorrelatedScalar(matched, expr.Row(expr.At(order, models.Orders.BuyerID)).Value())
+	for _, predicate := range []expr.Predicate[models.User]{matched.Exists(), ids.Exists(), rowset.InCorrelatedQuery(expr.Value(u.ID), ids), rowset.InNullableCorrelatedQuery(expr.Value(u.ID), rowset.SelectCorrelatedScalar(matched, expr.Nullable(expr.Row(expr.At(order, models.Orders.BuyerID)).Value())))} {
 		if n, err := expr.Where(models.Users.Query(), predicate).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Error("correlated EXISTS/IN mismatch", n, err)
 		}
@@ -107,7 +107,7 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	}
 	// A limited scalar is per outer row. A filtered/limited aliased source retains
 	// its global window before correlation, just as it does before a join.
-	chosen := rowset.CorrelatedScalarQuery(rowset.SelectCorrelatedScalar(matched, expr.Select(expr.At(order, models.Orders.ID))).OrderBy(expr.At(order, models.Orders.TotalCents).Desc()).Limit(1))
+	chosen := rowset.CorrelatedScalarQuery(rowset.SelectCorrelatedScalar(matched, expr.Row(expr.At(order, models.Orders.ID)).Value()).OrderBy(expr.At(order, models.Orders.TotalCents).Desc()).Limit(1))
 	if selected, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), chosen)).OrderBy(expr.Value(u.Email).Asc()).All(t.Context(), tx); err != nil || len(selected) != 3 || selected[0].IsNull() || !selected[2].IsNull() {
 		t.Error("correlated scalar window mismatch", err)
 	}

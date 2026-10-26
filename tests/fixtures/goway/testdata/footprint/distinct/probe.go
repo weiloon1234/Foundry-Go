@@ -12,5 +12,5 @@ func Query() rows.Query[models.Order, models.Order] {
 }
 func Values() rows.Query[models.Order, int64] {
 	q := rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)
-	return rows.DistinctOnValues(rows.Distinct(q), expr.Select(expr.Value(models.Orders.TotalCents)).Key())
+	return rows.DistinctOnValues(rows.Distinct(q), expr.Row(expr.Value(models.Orders.TotalCents)).Value().Key())
 }

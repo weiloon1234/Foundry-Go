@@ -49,7 +49,7 @@ func TestStage6b3CorrelationAndLateral(t *testing.T) {
 		t.Fatal("ON did not preserve parents", got)
 	}
 	count := rows.SelectCorrelatedScalar(c, expr.Count[rows.Correlation[rows.Alias[joinLeft, joinNode], rows.Alias[joinRight, joinNode]]]().Value())
-	ids := rows.SelectCorrelatedScalar(c, expr.Select(expr.At(inner, table.ParentID)))
+	ids := rows.SelectCorrelatedScalar(c, expr.Row(expr.At(inner, table.ParentID)).Value())
 	parentID := expr.At(rows.Scope(parent), table.Key())
 	countQuery := rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(parentID).Value()), rows.MapSelected(schema.RightID, rows.CorrelatedScalarQuery(count)), rows.Map(schema.Note, expr.At(rows.Scope(parent), table.Note))).OrderBy(parentID.Asc())
 	got, err = countQuery.All(ctx, db)
@@ -62,7 +62,7 @@ func TestStage6b3CorrelationAndLateral(t *testing.T) {
 	if len(got) != 1 || got[0].LeftID != value.Of(int64(1)) {
 		t.Fatal(got)
 	}
-	many := rows.SelectCorrelatedScalar(c, expr.Select(expr.At(inner, table.Key())))
+	many := rows.SelectCorrelatedScalar(c, expr.Row(expr.At(inner, table.Key())).Value())
 	_, err = rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(parentID).Value()), rows.MapSelected(schema.RightID, rows.CorrelatedScalarQuery(many)), rows.Map(schema.Note, expr.At(rows.Scope(parent), table.Note))).All(ctx, db)
 	var sqlstate interface{ SQLState() string }
 	if !errors.As(err, &sqlstate) || sqlstate.SQLState() != "21000" {

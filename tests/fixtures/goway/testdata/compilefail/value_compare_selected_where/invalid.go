@@ -7,4 +7,4 @@ import (
 
 var age = expr.Value(models.Users.Age)
 var email = expr.Value(models.Users.Email)
-var _ = expr.Where(models.Users.Query(), expr.EqualValue(expr.Select(age), expr.Select(age)))
+var _ = expr.Where(models.Users.Query(), expr.EqualValue(expr.Row(age).Value(), expr.Row(age).Value()))

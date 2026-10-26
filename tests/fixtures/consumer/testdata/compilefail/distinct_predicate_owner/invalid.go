@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.WhereScalar(rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Age)))), expr.Value(models.Orders.TotalCents).Eq(3))
+var _ = rows.WhereScalar(rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Age)).Value())), expr.Value(models.Orders.TotalCents).Eq(3))

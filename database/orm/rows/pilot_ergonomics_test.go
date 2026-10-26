@@ -28,7 +28,7 @@ func TestConstantCaseAndScopedRowParameterParity(t *testing.T) {
 	source := As[left](d.Query(), "a")
 	condition := expr.At(Scope(source), d.Exact).Eq(1)
 	scoped := expr.At(Scope(source), d.Exact)
-	before := expr.When(condition, expr.Select(scoped).Param(int64(2))).Else(expr.Select(scoped).Param(int64(0)))
+	before := expr.When(condition, expr.Row(scoped).Value().Param(int64(2))).Else(expr.Row(scoped).Value().Param(int64(0)))
 	after := expr.When(condition, expr.Constant[Alias[left, aggregateRecord]](codec.Signed[int64](), 2)).Else(expr.Row(scoped).Param(0))
 	a := expressionSQL(t, expressionQuery(source, before.Value(), codec.Signed[int64]()))
 	b := expressionSQL(t, expressionQuery(source, after.Value(), codec.Signed[int64]()))

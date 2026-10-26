@@ -28,6 +28,6 @@ func TestTransactionDeclarationSQLParity(t *testing.T) {
 	got, err := orm.CompileLocked(Records.Query().OrderBy(Records.ID.Asc()).Limit(1).ForUpdate().SkipLocked())
 	compare(got, err)
 	projected := rows.Select(rows.From(Records.Query()), Summaries, rows.Map(Summaries.ID, expr.Value(Records.ID)), rows.Map(Summaries.Name, expr.Value(Records.Name)))
-	got, err = rows.Compile(projected)
+	got, err = rows.CompileRead(rows.Read(projected))
 	compare(got, err)
 }

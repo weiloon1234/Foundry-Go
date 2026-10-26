@@ -39,7 +39,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 		}
 	}
 	hasOne := orm.HasOneOf(uf.Introducer, uf.ID, uf.IntroducerID)
-	loaded, err := orm.Load(ctx, db, []models.User{{ID: must(model.ParseID[models.User](buyerID))}}, hasOne)
+	loaded, err := orm.LoadFrom(ctx, db, models.Users.Query().With(hasOne), []models.User{{ID: must(model.ParseID[models.User](buyerID))}})
 	if err != nil || !loaded[0].Introducer.IsLoaded() {
 		t.Fatal(err)
 	}

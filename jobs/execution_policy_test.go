@@ -201,7 +201,7 @@ func TestMaxExceptionsAndRetryUntilEndRetries(t *testing.T) {
 func TestExtendedEnvelopeVersionIsSelectedOnlyForNewFields(t *testing.T) {
 	plain := jobs.Define[payload]("plain", 1, jobs.DefaultPolicy("default"))
 	pending, err := plain.Capture(t.Context(), payload{Labels: map[string]string{}}, jobs.Options[payload]{})
-	if err != nil || pending.Envelope().WireVersion() != jobs.LegacyEnvelope {
+	if err != nil || pending.Envelope().WireVersion() != jobs.EnvelopeV1 {
 		t.Fatal("plain envelope changed format", err)
 	}
 	policy := jobs.DefaultPolicy("default")

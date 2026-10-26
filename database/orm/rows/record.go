@@ -129,12 +129,6 @@ func (r RecordRead[S, R]) Offset(n int) RecordRead[S, R] {
 	return r
 }
 
-// All returns complete results after closing rows and dispatching model retrieval.
-// Example: result.All(ctx,db).
-func (r RecordRead[S, R]) All(ctx context.Context, ex database.Executor) ([]R, error) {
-	return readRecord[R](ctx, ex, r.core, false)
-}
-
 func recordOrders[S any](source ormcore.Source, os []expr.ProjectionOrder[S]) ormcore.Source {
 	values := make([]ormcore.Order, len(os))
 	for i, o := range os {

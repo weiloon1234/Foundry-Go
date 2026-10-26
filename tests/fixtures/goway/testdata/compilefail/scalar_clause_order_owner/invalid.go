@@ -6,5 +6,5 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var selected = rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Age)))
+var selected = rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Age)).Value())
 var invalid = rows.OrderScalar(selected, expr.Value(models.Orders.TotalCents).Asc())

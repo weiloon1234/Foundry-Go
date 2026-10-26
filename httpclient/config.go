@@ -2,11 +2,13 @@
 // net/http transports. Clients own operation lifetimes; custom transports are borrowed.
 package httpclient
 
+import "math/rand/v2"
+
 import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"math/rand/v2"
+
 	"net/http"
 	"slices"
 	"strconv"

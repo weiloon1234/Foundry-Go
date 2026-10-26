@@ -155,7 +155,7 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 		m.collections[collection.key] = collection
 	}
 	var err error
-	m.writer, err = model.NewID[store.Writer]()
+	m.writer, err = model.NewIDAt[store.Writer](time.Now())
 	if err != nil {
 		return nil, err
 	}

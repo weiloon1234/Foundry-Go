@@ -38,10 +38,10 @@ func TestStage6b2SubqueriesAndOnFilters(t *testing.T) {
 	})
 	source := rows.From(table.Query())
 	ids := expr.Value(table.Key())
-	missing := rows.SelectScalar(rows.From(table.Query().Where(table.Key().Eq(999))), expr.Select(ids))
-	nullable := rows.SelectScalar(rows.From(table.Query().Where(table.Key().Eq(2))), expr.Select(expr.Value(table.Note)))
+	missing := rows.SelectScalar(rows.From(table.Query().Where(table.Key().Eq(999))), expr.Row(ids).Value())
+	nullable := rows.SelectScalar(rows.From(table.Query().Where(table.Key().Eq(2))), expr.Row(expr.Value(table.Note)).Value())
 	project := rows.Select(source, fields, rows.Map(fields.ID, ids), rows.MapSelected(fields.Missing, rows.ScalarQuery(source, missing)), rows.MapSelected(fields.Note, rows.ScalarNullableQuery(source, nullable))).OrderBy(ids.Asc())
-	parentIDs := rows.SelectScalar(source, expr.Select(expr.Value(table.ParentID)))
+	parentIDs := rows.SelectScalar(source, expr.Row(expr.Value(table.ParentID)).Value())
 	got, err := project.Where(rows.InNullableQuery(ids, parentIDs)).All(ctx, db)
 	must(t, err)
 	if len(got) != 1 || got[0].ID != 1 || !got[0].Missing.IsNull() || !got[0].Note.IsNull() {
@@ -65,7 +65,7 @@ func TestStage6b2SubqueriesAndOnFilters(t *testing.T) {
 		t.Fatal("EXISTS lost LIMIT zero", got)
 	}
 	// PostgreSQL owns cardinality failure. The scalar API adds no LIMIT.
-	many := rows.SelectScalar(source, expr.Select(ids))
+	many := rows.SelectScalar(source, expr.Row(ids).Value())
 	bad := rows.Select(source, fields, rows.Map(fields.ID, ids), rows.MapSelected(fields.Missing, rows.ScalarQuery(source, many)), rows.MapSelected(fields.Note, rows.ScalarNullableQuery(source, nullable)))
 	got, err = bad.All(ctx, db)
 	if err == nil || got != nil {

@@ -122,7 +122,7 @@ func (m *Manager) PruneInbox(ctx context.Context, cutoff time.Time, readOnly boo
 		}
 		// One bounded DELETE ... WHERE id IN (SELECT id ... LIMIT n): no
 		// rendered inbox data is loaded to choose the batch.
-		oldest := rows.SelectScalar(rows.From(store.Inboxes.Query().Where(predicates...).OrderBy(f.CreatedAt.Asc(), f.ID.Asc()).Limit(limit)), expr.Select(expr.Value(f.ID)))
+		oldest := rows.SelectScalar(rows.From(store.Inboxes.Query().Where(predicates...).OrderBy(f.CreatedAt.Asc(), f.ID.Asc()).Limit(limit)), expr.Row(expr.Value(f.ID)).Value())
 		removed, err := expr.Where(store.Inboxes.Query(), rows.InQuery(expr.Value(f.ID), oldest)).DeleteAll(ctx, tx)
 		deleted = int(removed)
 		return err

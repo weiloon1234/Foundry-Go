@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.ProjectionKey[models.Order](expr.Select(expr.Value(models.Users.Age)).Key())
+var _ = expr.ProjectionKey[models.Order](expr.Row(expr.Value(models.Users.Age)).Value().Key())

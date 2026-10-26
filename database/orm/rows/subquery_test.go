@@ -18,8 +18,8 @@ func TestSubqueryHydrationAndPhaseBoundary(t *testing.T) {
 	m := declareMembers()
 	o := declareOrders()
 	outer := From(m.Query())
-	inner := SelectScalar(From(o.Query().Where(o.MemberID.Gt(4)).Limit(1)), expr.Select(expr.Value(o.ID)))
-	nullable := SelectScalar(From(m.Query().Where(m.ID.Eq(1))), expr.Select(expr.Value(m.Nickname)))
+	inner := SelectScalar(From(o.Query().Where(o.MemberID.Gt(4)).Limit(1)), expr.Row(expr.Value(o.ID)).Value())
+	nullable := SelectScalar(From(m.Query().Where(m.ID.Eq(1))), expr.Row(expr.Value(m.Nickname)).Value())
 	s := outerSchema()
 	q := Select(outer, s, MapSelected(s.ID, ScalarQuery(outer, inner)), MapSelected(s.Nickname, ScalarNullableQuery(outer, nullable))).Where(ExistsQuery(outer, inner), InQuery(expr.Value(m.ID), inner), expr.Not(InNullableQuery(expr.Value(m.Name), nullable)))
 	state := &driverState{columns: []string{"id", "nickname"}, rows: [][]driver.Value{{nil, nil}, {int64(9), "nick"}}}
@@ -45,14 +45,14 @@ func TestSubqueriesRetainErrorsAndOuterDeclarations(t *testing.T) {
 	m, other := declareMembers(), declareMembers()
 	outer := From(m.Query())
 	foreign := From(other.Query())
-	valid := SelectScalar(outer, expr.Select(expr.Value(m.ID)))
-	bad := SelectScalar(outer, expr.Select(expr.Value(other.ID)))
-	nullable := SelectScalar(outer, expr.Select(expr.Value(m.Nickname)))
+	valid := SelectScalar(outer, expr.Row(expr.Value(m.ID)).Value())
+	bad := SelectScalar(outer, expr.Row(expr.Value(other.ID)).Value())
+	nullable := SelectScalar(outer, expr.Row(expr.Value(m.Nickname)).Value())
 	s := outerSchema()
 	for _, q := range []Query[member, outerRecord]{
 		Select(outer, s, MapSelected(s.ID, ScalarQuery(outer, bad)), MapSelected(s.Nickname, ScalarNullableQuery(outer, nullable))),
 		Select(outer, s, MapSelected(s.ID, ScalarQuery(foreign, valid)), MapSelected(s.Nickname, ScalarNullableQuery(outer, nullable))),
-		Select(outer, s, MapSelected(s.ID, ScalarQuery(outer, valid)), MapSelected(s.Nickname, ScalarQuery(outer, SelectScalar(outer, expr.Select(expr.Value(m.Name)))))).Where(ExistsQuery(foreign, outer)),
+		Select(outer, s, MapSelected(s.ID, ScalarQuery(outer, valid)), MapSelected(s.Nickname, ScalarQuery(outer, SelectScalar(outer, expr.Row(expr.Value(m.Name)).Value())))).Where(ExistsQuery(foreign, outer)),
 	} {
 		state := &driverState{}
 		got, err := q.All(t.Context(), openTest(t, state))
@@ -77,7 +77,7 @@ func TestSubqueriesRetainErrorsAndOuterDeclarations(t *testing.T) {
 func TestScalarFiltersSnapshotAndSubqueryChecks(t *testing.T) {
 	m := declareMembers()
 	source := From(m.Query())
-	base := SelectScalar(source, expr.Select(expr.Value(m.ID)))
+	base := SelectScalar(source, expr.Row(expr.Value(m.ID)).Value())
 	a := WhereScalar(base, expr.Value(m.ID).Eq(1))
 	b := WhereScalar(base, expr.Value(m.ID).Eq(2))
 	if len(base.source.Node.Predicates) != 0 || len(a.source.Node.Predicates) != 1 || len(b.source.Node.Predicates) != 1 {
@@ -85,7 +85,7 @@ func TestScalarFiltersSnapshotAndSubqueryChecks(t *testing.T) {
 	}
 	checks := 0
 	source.source.Checks = []func() error{func() error { checks++; return ormcore.Invalid("deferred inner declaration") }}
-	bad := SelectScalar(source, expr.Select(expr.Value(m.ID)))
+	bad := SelectScalar(source, expr.Row(expr.Value(m.ID)).Value())
 	outer := From(m.Query())
 	schema := declareRows()
 	q := Select(outer, schema, Map(schema.ID, expr.Value(m.ID)), Map(schema.Name, expr.Value(m.Name))).Where(InQuery(expr.Value(m.ID), bad))
@@ -101,7 +101,7 @@ func TestScalarFiltersSnapshotAndSubqueryChecks(t *testing.T) {
 func TestSubqueryErrorsSurviveParametersAndDepthIsShared(t *testing.T) {
 	m, other := declareMembers(), declareMembers()
 	source := From(m.Query())
-	invalid := SelectScalar(source, expr.Select(expr.Value(other.ID)))
+	invalid := SelectScalar(source, expr.Row(expr.Value(other.ID)).Value())
 	zero := ScalarRowQuery(source, Scalar[member, int64]{}).Param(value.Null[int64]())
 	if expr.FoundryRowValue(zero, sqlowner.Expressions()).Err == nil {
 		t.Fatal("scalar parameter erased zero descriptor")
@@ -114,9 +114,9 @@ func TestSubqueryErrorsSurviveParametersAndDepthIsShared(t *testing.T) {
 	if expr.FoundryRowValue(p, sqlowner.Expressions()).Err == nil {
 		t.Fatal("scalar parameter erased invalid source")
 	}
-	inner := SelectScalar(source, expr.Select(expr.Value(m.ID)))
+	inner := SelectScalar(source, expr.Row(expr.Value(m.ID)).Value())
 	for i := 0; i < querycore.MaxExpressionDepth; i++ {
-		inner = WhereScalar(SelectScalar(source, expr.Select(expr.Value(m.ID))), InQuery(expr.Value(m.ID), inner))
+		inner = WhereScalar(SelectScalar(source, expr.Row(expr.Value(m.ID)).Value()), InQuery(expr.Value(m.ID), inner))
 	}
 	s := declareRows()
 	q := Select(source, s, Map(s.ID, expr.Value(m.ID)), Map(s.Name, expr.Value(m.Name))).Where(InQuery(expr.Value(m.ID), inner))

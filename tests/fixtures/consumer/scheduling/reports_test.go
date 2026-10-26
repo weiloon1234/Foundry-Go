@@ -1,5 +1,7 @@
 package scheduling_test
 
+import "github.com/weiloon1234/Foundry-Go"
+
 import (
 	"context"
 	"errors"
@@ -7,7 +9,7 @@ import (
 	"time"
 
 	"foundry.test/consumer/scheduling"
-	"github.com/weiloon1234/Foundry-Go"
+
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"

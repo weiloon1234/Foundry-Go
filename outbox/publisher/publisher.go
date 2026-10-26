@@ -5,11 +5,13 @@
 // deduplication retention must cover this recovery window.
 package publisher
 
+import "math/rand/v2"
+
 import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
+
 	"reflect"
 	"slices"
 	"sync"

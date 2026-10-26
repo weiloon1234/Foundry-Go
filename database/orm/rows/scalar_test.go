@@ -90,6 +90,6 @@ func TestScalarTextPredicatesAndComposition(t *testing.T) {
 	q := Having(group, expr.TextValue(name.Value()).Like("a%"))
 	expressionSQL(t, OrderBy(q, name.Value().Asc()))
 	// Selected phase retains windows while text/nullability conversions remain explicit.
-	e := expr.LowerNullableValue(expr.FirstValue(expr.Select(expr.Value(d.Name)), expr.WindowFor(ModelScope(d.Query()))))
+	e := expr.LowerNullableValue(expr.FirstValue(expr.Row(expr.Value(d.Name)).Value(), expr.WindowFor(ModelScope(d.Query()))))
 	expressionSQL(t, expressionQuery(source, e, codec.Nullable(codec.String[string]())))
 }

@@ -69,7 +69,7 @@ Locked queries require `LockedRecord` and the explicit
 outer := rows.From(Users.Query())
 inner := rows.SelectScalar(
     rows.From(Orders.Query().OrderBy(Orders.TotalCents.Desc()).Limit(1)),
-    expr.Select(expr.Value(Orders.TotalCents)),
+    expr.Row(expr.Value(Orders.TotalCents)).Value(),
 )
 amount := rows.ScalarQuery(outer, inner)
 // Map amount with rows.MapSelected to a value.Nullable[int64] row field.
@@ -180,11 +180,11 @@ Use package functions when a report retains a `rows.Query[S, R]`:
 
 ```go
 q := rows.ReorderUnwindowed(report, name.Asc(), id.Asc())
-if err := rows.Preflight(ctx, q); err != nil { return err }
-total, err := rows.Count(ctx, tx, q)
+if err := rows.PreflightRead(ctx, rows.Read(q)); err != nil { return err }
+total, err := rows.Read(q).Count(ctx, tx)
 page, err := rows.Paginate(ctx, tx, q, orm.Page(1, 20))
 more, err := rows.SimplePaginate(ctx, tx, q, orm.Page(1, 20))
-err = rows.Each(ctx, tx, rows.Limit(q, 10001), writeCSV)
+err = rows.EachRead(ctx, tx, rows.Read(rows.Limit(q, 10001)), writeCSV)
 ```
 
 `Compile(q)` returns an immutable `orm.Statement` for inspection. `Preflight`
@@ -232,7 +232,7 @@ when ordering by aggregates or windows; its leading orders must match the DISTIN
 ON keys. These functions preserve the enclosing scope and inner limit/offset.
 
 `DistinctOnValueSet` accepts selected keys in the combined `Set[V]` scope. For
-example, `rows.DistinctOnValueSet(values, expr.Select(values.Value()).Key())`
+example, `rows.DistinctOnValueSet(values, expr.Row(values.Value()).Value().Key())`
 retains the scalar codec, including nullability. Group keys cannot be substituted
 for selected keys, and keys from either input query cannot enter the combined
 scope. Both families reuse the ordinary rows clause and compiler validation.

@@ -35,7 +35,7 @@ func TestPostgresStandaloneParameterTypes(t *testing.T) {
 				return err
 			}
 		}
-		id, err := model.NewID[cursorRecord]()
+		id, err := model.NewIDAt[cursorRecord](time.Now())
 		if err != nil {
 			return err
 		}

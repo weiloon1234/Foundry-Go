@@ -38,7 +38,7 @@ func TestGeneratedEndpointOverHTTP(t *testing.T) {
 	}
 	server := httptest.NewServer(router)
 	defer server.Close()
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

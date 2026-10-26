@@ -21,7 +21,7 @@ func TestPostgresComputedJoinConditions(t *testing.T) {
 		q := models.Users.Query()
 		younger, older := rowset.As[youngerAlias](q, "younger"), rowset.As[olderAlias](q, "older")
 		y, o := rowset.Scope(younger), rowset.Scope(older)
-		adjacent := rowset.OnEqual(expr.Add(expr.At(y, models.Users.Age), expr.Select(expr.At(y, models.Users.Age)).Param(1)), expr.At(o, models.Users.Age))
+		adjacent := rowset.OnEqual(expr.Add(expr.At(y, models.Users.Age), expr.Row(expr.At(y, models.Users.Age)).Value().Param(1)), expr.At(o, models.Users.Age))
 		for _, test := range []struct {
 			on    rowset.JoinOn[rowset.Alias[youngerAlias, models.User], rowset.Alias[olderAlias, models.User]]
 			count int64
@@ -35,7 +35,7 @@ func TestPostgresComputedJoinConditions(t *testing.T) {
 		} {
 			joined := rowset.InnerJoin(younger, older, test.on)
 			left := rowset.LeftScope(joined, rowset.Scope(younger))
-			count, err := rowset.ReadScalar(rowset.SelectScalar(joined, expr.Select(expr.At(left, models.Users.ID)))).Count(t.Context(), tx)
+			count, err := rowset.ReadScalar(rowset.SelectScalar(joined, expr.Row(expr.At(left, models.Users.ID)).Value())).Count(t.Context(), tx)
 			if err != nil || count != test.count {
 				t.Fatal(count, test.count, err)
 			}
@@ -43,7 +43,7 @@ func TestPostgresComputedJoinConditions(t *testing.T) {
 		leftJoin := rowset.LeftJoin(younger, older, adjacent.WhereRight(expr.At(o, models.Users.Status).Eq(models.StatusActive)))
 		l, r := rowset.LeftScope(leftJoin, rowset.Scope(younger)), rowset.NullableRightScope(leftJoin, rowset.Scope(older))
 		pairs, err := rowset.Select(leftJoin, reports.UserPairs.Row,
-			rowset.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Select(expr.At(l, models.Users.ID)))),
+			rowset.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(l, models.Users.ID)).Value())),
 			rowset.Map(reports.UserPairs.RightID, expr.AtNullable(r, models.Users.ID)),
 		).OrderBy(expr.At(l, models.Users.Age).Asc()).All(t.Context(), tx)
 		if err != nil || len(pairs) != 4 {
@@ -59,7 +59,7 @@ func TestPostgresComputedJoinConditions(t *testing.T) {
 		extra := rowset.As[extraAlias](q.Where(models.Users.ID.Eq(users[0].ID)), "once")
 		crossed := rowset.CrossJoin(leftJoin, extra)
 		nullable := rowset.LeftNullableScope(crossed, rowset.NullableRightScope(leftJoin, rowset.Scope(older)))
-		ids, err := rowset.ReadScalar(rowset.SelectScalar(crossed, expr.Select(expr.AtNullable(nullable, models.Users.ID)))).All(t.Context(), tx)
+		ids, err := rowset.ReadScalar(rowset.SelectScalar(crossed, expr.Row(expr.AtNullable(nullable, models.Users.ID)).Value())).All(t.Context(), tx)
 		if err != nil || len(ids) != 4 {
 			t.Fatal(ids, err)
 		}
@@ -75,13 +75,13 @@ func TestPostgresComputedJoinConditions(t *testing.T) {
 		// Range conditions retain right/full outer-join cardinality.
 		rightJoin := rowset.RightJoin(younger, older, rowset.OnLess(expr.At(y, models.Users.Age), expr.At(o, models.Users.Age)))
 		right := rowset.RightScope(rightJoin, rowset.Scope(older))
-		n, err := rowset.ReadScalar(rowset.SelectScalar(rightJoin, expr.Select(expr.At(right, models.Users.ID)))).Count(t.Context(), tx)
+		n, err := rowset.ReadScalar(rowset.SelectScalar(rightJoin, expr.Row(expr.At(right, models.Users.ID)).Value())).Count(t.Context(), tx)
 		if err != nil || n != 7 {
 			t.Fatal("right range join", n, err)
 		}
 		full := rowset.FullJoin(younger, older, rowset.OnAnd(rowset.On(expr.At(y, models.Users.Level), expr.At(o, models.Users.Level)), rowset.OnLess(expr.At(y, models.Users.Age), expr.At(o, models.Users.Age))))
 		fullLeft := rowset.NullableLeftScope(full, rowset.Scope(younger))
-		n, err = rowset.ReadScalar(rowset.SelectScalar(full, expr.Select(expr.AtNullable(fullLeft, models.Users.ID)))).Count(t.Context(), tx)
+		n, err = rowset.ReadScalar(rowset.SelectScalar(full, expr.Row(expr.AtNullable(fullLeft, models.Users.ID)).Value())).Count(t.Context(), tx)
 		if err != nil || n != 8 {
 			t.Fatal("full range join", n, err)
 		}
@@ -90,7 +90,7 @@ func TestPostgresComputedJoinConditions(t *testing.T) {
 		err = tx.Savepoint(t.Context(), func(inner *database.Tx) error {
 			unsupported := rowset.FullJoin(younger, older, rowset.OnLess(expr.At(y, models.Users.Age), expr.At(o, models.Users.Age)))
 			field := rowset.NullableLeftScope(unsupported, rowset.Scope(younger))
-			_, err := rowset.ReadScalar(rowset.SelectScalar(unsupported, expr.Select(expr.AtNullable(field, models.Users.ID)))).All(t.Context(), inner)
+			_, err := rowset.ReadScalar(rowset.SelectScalar(unsupported, expr.Row(expr.AtNullable(field, models.Users.ID)).Value())).All(t.Context(), inner)
 			return err
 		})
 		var dbError *database.Error
@@ -110,11 +110,11 @@ func TestPostgresCartesianSourceBoundaries(t *testing.T) {
 		crossed := rowset.CrossJoin(left, right)
 		l, r := rowset.LeftScope(crossed, rowset.Scope(left)), rowset.RightScope(crossed, rowset.Scope(right))
 		records := rowset.SelectRecord(crossed, rowset.LeftScope(crossed, rowset.Scope(left)))
-		rows, err := records.OrderBy(expr.At(l, models.Users.Age).Asc()).All(t.Context(), tx)
+		rows, err := rowset.ReadRecord(records.OrderBy(expr.At(l, models.Users.Age).Asc())).All(t.Context(), tx)
 		if err != nil || len(rows) != 2 || rows[0].Age != 20 || rows[1].Age != 21 {
 			t.Fatal(rows, err)
 		}
-		filtered, err := records.Where(expr.Equal(expr.Add(expr.At(l, models.Users.Age), expr.Select(expr.At(l, models.Users.Age)).Param(1)), expr.At(r, models.Users.Age))).All(t.Context(), tx)
+		filtered, err := rowset.ReadRecord(records.Where(expr.Equal(expr.Add(expr.At(l, models.Users.Age), expr.Row(expr.At(l, models.Users.Age)).Value().Param(1)), expr.At(r, models.Users.Age)))).All(t.Context(), tx)
 		if err != nil || len(filtered) != 1 || filtered[0].Age != 20 {
 			t.Fatal(filtered, err)
 		}
@@ -123,7 +123,7 @@ func TestPostgresCartesianSourceBoundaries(t *testing.T) {
 		}
 		empty := rowset.CrossJoin(left, rowset.As[olderAlias](q.Limit(0), "empty"))
 		emptyLeft := rowset.LeftScope(empty, rowset.Scope(left))
-		n, err := rowset.ReadScalar(rowset.SelectScalar(empty, expr.Select(expr.At(emptyLeft, models.Users.ID)))).Count(t.Context(), tx)
+		n, err := rowset.ReadScalar(rowset.SelectScalar(empty, expr.Row(expr.At(emptyLeft, models.Users.ID)).Value())).Count(t.Context(), tx)
 		if err != nil || n != 0 {
 			t.Fatal("empty Cartesian side", n, err)
 		}

@@ -62,8 +62,8 @@ func TestStage6d1Windows(t *testing.T) {
 		return windowTable{table, table.Key(), orm.NumberOf(b, &r.Amount), orm.NullableNumberOf(b, &r.Missing), orm.TimeOf(b, &r.Day), orm.IntervalOf(b, &r.Period), orm.SoftDeleteOf(b, &r.DeletedAt)}
 	})
 	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Value(d.ID).Asc()).Named("ordered")
-	v := expr.Select(expr.Value(d.Amount))
-	n := expr.Select(expr.Value(d.Missing))
+	v := expr.Row(expr.Value(d.Amount)).Value()
+	n := expr.Row(expr.Value(d.Missing)).Value()
 	full := w.RowsBetween(expr.UnboundedPreceding(), expr.UnboundedFollowing())
 	numbers := readWindow(t, db, d, expr.RowNumber(w), codec.Signed[int64]())
 	if len(numbers) != 3 || numbers[0] != 1 || numbers[2] != 3 {
@@ -136,7 +136,7 @@ func TestStage6d1Windows(t *testing.T) {
 	if counts[0] != 2 || counts[2] != 1 {
 		t.Fatal(counts)
 	}
-	tr := expr.TemporalRange(expr.WindowFor(rows.ModelScope(d.Query())), expr.Select(expr.Value(d.Day)))
+	tr := expr.TemporalRange(expr.WindowFor(rows.ModelScope(d.Query())), expr.Row(expr.Value(d.Day)).Value())
 	counts = readWindow(t, db, d, expr.Over(expr.Count[windowRecord](), tr.Between(tr.Preceding(temporal.Days(1)), tr.CurrentRow())), codec.Signed[int64]())
 	if counts[1] != 2 || counts[2] != 1 {
 		t.Fatal(counts)

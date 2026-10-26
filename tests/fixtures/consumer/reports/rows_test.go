@@ -26,12 +26,12 @@ func TestRowsSQLParity(t *testing.T) {
 	report := rows.Select(rows.From(u.Query()), UserSummaries,
 		rows.Map(UserSummaries.ID, expr.Value(u.ID)), rows.Map(UserSummaries.Email, expr.Value(u.Email)), rows.Map(UserSummaries.Nickname, expr.Value(u.Nickname)), rows.Map(UserSummaries.Status, expr.Value(u.Status)))
 
-	got, err := rows.Compile(report)
+	got, err := rows.CompileRead(rows.Read(report))
 	check(got, err)
 	o := models.Orders
 	totals := rows.GroupBy(rows.Select(rows.From(o.Query()), BuyerTotalRows,
 		rows.Map(BuyerTotalRows.BuyerID, expr.Value(o.BuyerID)), rows.MapSelected(BuyerTotalRows.Total, expr.Sum(o.TotalCents).Value()), rows.MapSelected(BuyerTotalRows.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(BuyerTotalRows.Average, expr.Avg(o.TotalCents).Value())), expr.Group(expr.Value(o.BuyerID)))
 
-	got, err = rows.Compile(totals)
+	got, err = rows.CompileRead(rows.Read(totals))
 	check(got, err)
 }

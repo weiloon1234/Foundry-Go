@@ -2,12 +2,13 @@
 // parsing is independent of runtime ownership and always uses an explicit zone.
 package schedule
 
+import "github.com/robfig/cron/v3"
+
 import (
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/robfig/cron/v3"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )

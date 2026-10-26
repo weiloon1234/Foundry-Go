@@ -33,7 +33,7 @@ func TestFlexibleProfileRefreshesInBackgroundAndMemoizesRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[mutatorqueries.Member]()
+	id, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

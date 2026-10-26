@@ -57,12 +57,12 @@ func FoundryExtension[M, S any](slot Slot[M, S], source extensionslot.Slot[M], s
 		return ExtensionRelation[M]{plan: &relationPlan{err: invalid("invalid extension slot bridge")}}
 	}
 	name, table, kind, err := source.Metadata()
-	return extensionRelation(slot, name, table, kind, err, source.Load)
+	return extensionRelation(slot.core, reflect.TypeFor[S](), name, table, kind, err, source.Load)
 }
 
-func extensionRelation[M, S any](slot Slot[M, S], name, table string, kind reflect.Type, err error, load func(context.Context, database.Executor, []M, querycore.RelationLimits, *int, *int, bool) ([]M, error)) ExtensionRelation[M] {
-	p := &relationPlan{slot: slot.core, err: err, external: true}
-	if slot.core == nil || slot.core.owner == nil || slot.core.name != name || kind != reflect.TypeFor[S]() || slot.core.owner.model.Table != table || load == nil {
+func extensionRelation[M any](slot *slotCore, expected reflect.Type, name, table string, kind reflect.Type, err error, load func(context.Context, database.Executor, []M, querycore.RelationLimits, *int, *int, bool) ([]M, error)) ExtensionRelation[M] {
+	p := &relationPlan{slot: slot, err: err, external: true}
+	if slot == nil || slot.owner == nil || slot.name != name || kind != expected || slot.owner.model.Table != table || load == nil {
 		p.err = invalid("extension loader does not match its declared slot")
 		return ExtensionRelation[M]{plan: p}
 	}

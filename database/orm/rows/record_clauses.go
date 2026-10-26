@@ -21,16 +21,16 @@ func DistinctSet[R any](q SetQuery[R]) SetQuery[R] {
 // DistinctValues removes duplicate combined values with their original codec.
 // Example: rows.DistinctValues(rows.UnionAllValues(left, right)).
 func DistinctValues[V any](q ValueSetQuery[V]) ValueSetQuery[V] {
-	q.core.Source = DistinctScalar(SelectScalar(q, expr.Select(q.Value()))).source
+	q.core.Source = DistinctScalar(SelectScalar(q, expr.Row(q.Value()).Value())).source
 	q.core.Direct = false
 	return q
 }
 
 // DistinctOnValueSet selects one combined value per selected-key combination.
 // Keys and ordering belong to the combined output scope, not either input SELECT.
-// Example: rows.DistinctOnValueSet(values, expr.Select(values.Value()).Key()).
+// Example: rows.DistinctOnValueSet(values, expr.Row(values.Value()).Value().Key()).
 func DistinctOnValueSet[V any](q ValueSetQuery[V], keys ...expr.ProjectionKey[Set[V]]) ValueSetQuery[V] {
-	q.core.Source = DistinctOnScalarValues(SelectScalar(q, expr.Select(q.Value())), keys...).source
+	q.core.Source = DistinctOnScalarValues(SelectScalar(q, expr.Row(q.Value()).Value()), keys...).source
 	q.core.Direct = false
 	return q
 }

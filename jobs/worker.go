@@ -1,9 +1,11 @@
 package jobs
 
+import "math/rand/v2"
+
 import (
 	"context"
 	"log/slog"
-	"math/rand/v2"
+
 	"reflect"
 	"sync"
 	"sync/atomic"

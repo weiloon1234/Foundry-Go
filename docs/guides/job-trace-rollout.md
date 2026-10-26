@@ -6,7 +6,7 @@ records acceptance and verification evidence.
 
 Job payload `Version` and `EnvelopeVersion` are different types and concerns.
 The existing envelope has no `envelope_version` or `trace` fields;
-`WireVersion()` identifies it as `LegacyEnvelope`. Default capture/dispatch retains
+`WireVersion()` identifies it as `EnvelopeV1`. Default capture/dispatch retains
 that exact shape, even when the caller has a trace. Older strict decoders can
 continue consuming it.
 

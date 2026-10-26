@@ -1,8 +1,10 @@
 package lease
 
+import "math/rand/v2"
+
 import (
 	"context"
-	"math/rand/v2"
+
 	"strconv"
 	"time"
 

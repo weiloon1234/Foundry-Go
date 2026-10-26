@@ -1,5 +1,7 @@
 package orm
 
+import "time"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -111,7 +113,7 @@ func TestRawModelCloseFailure(t *testing.T) {
 func TestRawEncryptedModel(t *testing.T) {
 	r := secureRecords()
 	keys := sensitiveKeys(t)
-	id, err := model.NewID[secureRecord]()
+	id, err := model.NewIDAt[secureRecord](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

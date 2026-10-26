@@ -7,4 +7,4 @@ import (
 )
 
 var records = rows.ConflictRowsOf(models.Users.Query())
-var _ = rows.SelectScalar(records, expr.Select(expr.At(records.Proposed(), models.Users.Age)))
+var _ = rows.SelectScalar(records, expr.Row(expr.At(records.Proposed(), models.Users.Age)).Value())

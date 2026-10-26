@@ -1,5 +1,7 @@
 package websocket
 
+import "math/rand/v2"
+
 import (
 	"context"
 	"crypto/sha256"
@@ -7,7 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
-	"math/rand/v2"
+
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -128,7 +130,7 @@ func (h *Hub) configureCluster(backend ClusterBackend, config ClusterConfig) err
 	if err != nil {
 		return err
 	}
-	instance, err := model.NewID[Instance]()
+	instance, err := model.NewIDAt[Instance](time.Now())
 	if err != nil {
 		return err
 	}

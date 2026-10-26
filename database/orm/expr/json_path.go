@@ -37,35 +37,6 @@ func (p JSONPath[S, P]) JSON() RowExpression[S, value.Nullable[value.JSON[P]]] {
 	return RowExpression[S, value.Nullable[value.JSON[P]]]{data: p.data}
 }
 
-// Kind distinguishes a present JSONNull from a missing or SQL-null path. Example: path.Kind().Eq(value.Of(expr.JSONNull)).
-func (p JSONPath[S, P]) Kind() RowExpression[S, value.Nullable[JSONKind]] {
-	return JSONTypeNullable(p.JSON())
-}
-
-// Length is SQL NULL for non-arrays, JSON null, missing paths and SQL NULL. Example: scores.Length().Gt(0).
-func (p JSONPath[S, P]) Length() NullableOrderedRowExpression[S, int64] {
-	return JSONLengthNullable(p.JSON())
-}
-
-// Exists includes present JSON null. Example: Theme.Exists().
-func (p JSONPath[S, P]) Exists() Predicate[S] { return p.JSON().IsNotNull() }
-
-// IsMissing also matches a SQL-null ancestor. Example: Theme.IsMissing().
-func (p JSONPath[S, P]) IsMissing() Predicate[S] { return p.JSON().IsNull() }
-
-// IsJSONNull matches only a present JSON null. Example: Nickname.IsJSONNull().
-func (p JSONPath[S, P]) IsJSONNull() Predicate[S] { return p.Kind().Eq(value.Of(JSONNull)) }
-
-// Contains snapshots a typed payload fragment; missing paths never match. Example: scores.Contains([]int64{2}).
-func (p JSONPath[S, P]) Contains(fragment P) Predicate[S] {
-	document, err := value.NewJSON(fragment)
-	input := p.JSON().Param(value.Of(document))
-	if err != nil {
-		input.data.core.Err = errors.Join(input.data.core.Err, ormcore.Invalid("JSON fragment cannot be encoded"))
-	}
-	return JSONContainsNullable(p.JSON(), input).Eq(value.Of(true))
-}
-
 // JSONProperty applies a startup-validated field declaration. The json tag is a
 // SQL literal for expression-index parity; query-time map keys remain parameters.
 // Example: expr.JSONProperty(root, Theme).

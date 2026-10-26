@@ -17,5 +17,5 @@ func Run(ctx context.Context, ex database.Executor) ([]rows.Annotated[models.Use
 	if _, err := rows.CompileRead(annotated); err != nil {
 		return nil, err
 	}
-	return annotated.All(ctx, ex)
+	return rows.ReadRecord(annotated).All(ctx, ex)
 }

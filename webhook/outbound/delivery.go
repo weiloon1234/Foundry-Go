@@ -298,7 +298,7 @@ func subscribed(events []string, kind EventType) bool {
 	return false
 }
 func (q Queue) record(ctx context.Context, tx *database.Tx, endpoint model.ID[store.Endpoint], kind EventType, body string, now temporal.DateTime) (model.ID[store.Delivery], error) {
-	id, err := model.NewID[store.Delivery]()
+	id, err := model.NewIDAt[store.Delivery](time.Now())
 	if err != nil {
 		return id, err
 	}

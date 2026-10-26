@@ -33,7 +33,7 @@ func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	definition := rows.TransactionCTE("claimed", rows.LockedRecord(Records.Query().OrderBy(Records.ID.Asc()).Limit(1).ForUpdate().SkipLocked()))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
 	fields := recordAt(rows.TransactionScope(source))
-	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.Select(fields.ID)), rows.MapSelected(Summaries.Name, expr.Select(fields.Name))).All(ctx, tx)
+	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.Row(fields.ID).Value()), rows.MapSelected(Summaries.Name, expr.Row(fields.Name).Value())).All(ctx, tx)
 }
 
 func Joined(ctx context.Context, tx *database.Tx) ([]Summary, error) {
@@ -43,7 +43,7 @@ func Joined(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	a, b := recordAt(rows.TransactionScope(left)), recordAt(rows.TransactionScope(right))
 	joined := rows.TransactionInnerJoin(left, right, rows.OnEqual(a.ID, b.ID))
 	fields := recordAt(rows.LeftScope(joined, rows.TransactionScope(left)))
-	return rows.SelectTransaction(joined, Summaries, rows.MapSelected(Summaries.ID, expr.Select(fields.ID)), rows.MapSelected(Summaries.Name, expr.Select(fields.Name))).All(ctx, tx)
+	return rows.SelectTransaction(joined, Summaries, rows.MapSelected(Summaries.ID, expr.Row(fields.ID).Value()), rows.MapSelected(Summaries.Name, expr.Row(fields.Name).Value())).All(ctx, tx)
 }
 
 func CountClaimed(ctx context.Context, tx *database.Tx) (Totals, error) {

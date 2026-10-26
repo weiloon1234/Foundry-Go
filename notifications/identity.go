@@ -3,6 +3,8 @@
 // database pools, mailers, WebSocket publishers and the jobs/outbox system.
 package notifications
 
+import "time"
+
 import (
 	"crypto/sha256"
 	"encoding/hex"
@@ -27,7 +29,7 @@ type NotificationOf[M any] struct{ _ [0]*M }
 type NotificationID = model.ID[Notification]
 type Notification struct{}
 
-func NewID[M any]() (ID[M], error)              { return model.NewID[NotificationOf[M]]() }
+func NewID[M any]() (ID[M], error)              { return model.NewIDAt[NotificationOf[M]](time.Now()) }
 func ParseID[M any](text string) (ID[M], error) { return model.ParseID[NotificationOf[M]](text) }
 
 // DeliveryID is a stable external idempotency key, derived from notification and

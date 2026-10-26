@@ -12,7 +12,7 @@ These APIs extend the [window-function contracts](model-windows.md), using the s
 ```go
 q := framequeries.Samples.Query()
 f := framequeries.Samples
-r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.Select(expr.Value(f.ID)))
+r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.Row(expr.Value(f.ID)).Value())
 frameCounts(t, tx, r.Between(r.Preceding(1), r.CurrentRow()), []int64{1, 2, 2, 2})
 ```
 
@@ -30,7 +30,7 @@ Distances are encoded once, bound as parameters and explicitly cast using the co
 
 <!-- go-source: tests/fixtures/consumer/framequeries/ranges_postgres_test.go -->
 ```go
-r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.Select(expr.Value(f.At)))
+r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.Row(expr.Value(f.At)).Value())
 day, _ := temporal.Elapsed(24 * time.Hour)
 frameCounts(t, tx, r.Between(r.Preceding(temporal.Days(1)), r.CurrentRow()), []int64{1, 1, 2, 2})
 frameCounts(t, tx, r.Between(r.Preceding(day), r.CurrentRow()), []int64{1, 2, 2, 2})

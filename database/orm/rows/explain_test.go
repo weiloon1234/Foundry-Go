@@ -37,7 +37,7 @@ func TestExplainResultShapesAndCursor(t *testing.T) {
 			case "projection":
 				plan, err = Explain(ctx, db, Read(projection))
 			case "scalar":
-				plan, err = Explain(ctx, db, ReadScalar(SelectScalar(From(m.Query()), expr.Select(expr.Value(m.ID)))))
+				plan, err = Explain(ctx, db, ReadScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.ID)).Value())))
 			case "set":
 				plan, err = ExplainAnalyze(ctx, db, ReadSet(Union(ModelRecord(m.Query()), ModelRecord(m.Query()))))
 			case "cursor":
@@ -45,8 +45,8 @@ func TestExplainResultShapesAndCursor(t *testing.T) {
 				c = c.UniqueBy(expr.Group(expr.At(c.Scope(), m.ID)))
 				plan, err = ExplainCursor(ctx, db, c)
 			case "value_cursor":
-				c := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Select(expr.Value(m.ID)))))
-				plan, err = ExplainAnalyzeValueCursor(ctx, db, c.UniqueBy(c.Key()))
+				c := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.ID)).Value())))
+				plan, err = ExplainAnalyzeValueCursor(ctx, db, c.UniqueBy(expr.Group(c.Value())))
 			case "locked":
 				err = db.Transaction(ctx, func(tx *database.Tx) error {
 					plan, err = ExplainLocked(ctx, tx, ForUpdate(Read(projection)))
@@ -60,7 +60,7 @@ func TestExplainResultShapesAndCursor(t *testing.T) {
 			case "transaction_value":
 				err = db.Transaction(ctx, func(tx *database.Tx) error {
 					source := AsTransaction[left](LockedRecord(m.Query().ForUpdate()), "locked")
-					plan, err = ExplainTransactionValue(ctx, tx, SelectTransactionValue(source, expr.Select(expr.At(TransactionScope(source), m.ID))))
+					plan, err = ExplainTransactionValue(ctx, tx, SelectTransactionValue(source, expr.Row(expr.At(TransactionScope(source), m.ID)).Value()))
 					return err
 				})
 			}
@@ -103,9 +103,9 @@ func TestExplainCodecFailuresAreRedacted(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close(context.Background())
-	_, err = Explain(t.Context(), db, ReadScalar(SelectScalar(From(f.Query().Where(f.Name.Eq(cause.value))), expr.Select(expr.Value(f.Name)))))
+	_, err = Explain(t.Context(), db, ReadScalar(SelectScalar(From(f.Query().Where(f.Name.Eq(cause.value))), expr.Row(expr.Value(f.Name)).Value())))
 	var typed *privateExplainError
-	if !errors.Is(err, cause) || !errors.As(err, &typed) || typed != cause {
+	if !errors.Is(err, cause) || !errors.As(err, &typed) || typed != cause || state.sql != "" {
 		t.Fatal("lost codec error identity", err)
 	}
 	for _, s := range []string{err.Error(), fmt.Sprintf("%v", err), fmt.Sprintf("%+v", err), fmt.Sprintf("%#v", err)} {
@@ -118,3 +118,14 @@ func TestExplainCodecFailuresAreRedacted(t *testing.T) {
 type privateExplainError struct{ value string }
 
 func (e *privateExplainError) Error() string { return e.value }
+func TestExplainRejectsInvalidSourceBeforeDeclarationCallbacks(t *testing.T) {
+	m := declareMembers()
+	q := ReadScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.ID)).Value()))
+	called := 0
+	q.core.Source.Checks = []func() error{func() error { called++; return nil }}
+	q.core.Transaction = true
+	state := &driverState{}
+	if _, e := Explain(t.Context(), openTest(t, state), q); !errors.Is(e, fault.Invalid) || called != 0 || state.sql != "" {
+		t.Fatal("invalid plan reached declaration callback or SQL", e, called, state.sql)
+	}
+}

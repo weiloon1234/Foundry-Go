@@ -12,7 +12,7 @@ func TestCompileMemberReportExample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rows.Compile(source); err != nil {
+	if _, err := rows.CompileRead(rows.Read(source)); err != nil {
 		t.Fatal(err)
 	}
 }

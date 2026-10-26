@@ -1,7 +1,8 @@
 package s3
 
+import "github.com/aws/smithy-go"
+
 import (
-	"github.com/aws/smithy-go"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"

@@ -19,17 +19,19 @@ type aggregateModel struct {
 	ParentID int64
 	Children relation.Many[aggregateModel]
 	Count    relation.Value[int64]
+	Links    relation.Through[aggregateModel, aggregateModel]
 }
 type aggregateTable struct {
 	Table[aggregateModel, int64]
 	ParentID Number[aggregateModel, int64]
 	Children Many[aggregateModel, aggregateModel]
 	Count    Value[aggregateModel, int64]
+	Links    Through[aggregateModel, aggregateModel, aggregateModel]
 }
 
 func aggregateModels() aggregateTable {
 	return Define("aggregate_models", func(b Builder[aggregateModel], m *aggregateModel) aggregateTable {
-		return aggregateTable{TableOf(b, &m.ID), NumberOf(b, &m.ParentID), ManyOf(b, &m.Children), ValueOf(b, &m.Count)}
+		return aggregateTable{TableOf(b, &m.ID), NumberOf(b, &m.ParentID), ManyOf(b, &m.Children), ValueOf(b, &m.Count), ThroughOf(b, &m.Links)}
 	})
 }
 func aggregateCount(source AggregateSource[aggregateModel, aggregateModel], seal sqlowner.ExpressionSeal) AggregateRelation[aggregateModel, int64] {
@@ -75,7 +77,7 @@ func TestAggregateUsingKeepsSlotAndSnapshots(t *testing.T) {
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements, columns: []string{"key", "count"}, values: [][]driver.Value{{int64(1), int64(2)}}})
 	input := []aggregateModel{{ID: 1}}
-	out, err := Load(t.Context(), db, input, derived)
+	out, err := LoadFrom(t.Context(), db, a.Query().With(derived), input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +92,7 @@ func TestAggregateUsingKeepsSlotAndSnapshots(t *testing.T) {
 func TestAggregateSlotDeclarationErrors(t *testing.T) {
 	t.Run("duplicate", func(t *testing.T) {
 		bad := Define("aggregate_models", func(b Builder[aggregateModel], m *aggregateModel) aggregateTable {
-			a := aggregateTable{TableOf(b, &m.ID), NumberOf(b, &m.ParentID), ManyOf(b, &m.Children), ValueOf(b, &m.Count)}
+			a := aggregateTable{TableOf(b, &m.ID), NumberOf(b, &m.ParentID), ManyOf(b, &m.Children), ValueOf(b, &m.Count), ThroughOf(b, &m.Links)}
 			ValueOf(b, &m.Count)
 			return a
 		})
@@ -100,7 +102,7 @@ func TestAggregateSlotDeclarationErrors(t *testing.T) {
 	})
 	t.Run("foreign_pointer", func(t *testing.T) {
 		bad := Define("aggregate_models", func(b Builder[aggregateModel], m *aggregateModel) aggregateTable {
-			return aggregateTable{TableOf(b, &m.ID), NumberOf(b, &m.ParentID), ManyOf(b, &m.Children), ValueOf(b, &new(aggregateModel).Count)}
+			return aggregateTable{TableOf(b, &m.ID), NumberOf(b, &m.ParentID), ManyOf(b, &m.Children), ValueOf(b, &new(aggregateModel).Count), ThroughOf(b, &m.Links)}
 		})
 		if err := Check(bad); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
@@ -150,5 +152,41 @@ func TestAggregateSourceMetadataIdentity(t *testing.T) {
 		if err := Check(a.Count.Using(aggregateCount(bad, sqlowner.Expressions()))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("foreign source metadata accepted", err)
 		}
+	}
+}
+
+func TestAggregateValidationAndCapturedScopes(t *testing.T) {
+	a := aggregateModels()
+	r := ManyToManyOf(a.Links, a.Key(), a.ParentID, a.Key(), a.Key())
+	child := HasManyOf(a.Children, a.Key(), a.ParentID)
+	count := a.Count.Using(aggregateCount(r, sqlowner.Expressions()))
+	if err := validateQuery(a.Query().With(count).state); err != nil {
+		t.Fatal(err)
+	}
+	var missing *ThroughRelation[aggregateModel, aggregateModel, aggregateModel]
+	for _, bad := range []Query[aggregateModel]{
+		a.Query().With(count, count),
+		a.Query().With(a.Count.Using(aggregateCount(missing, sqlowner.Expressions()))),
+		a.Query().With(a.Count.Using(AggregateRelation[aggregateModel, int64]{})),
+		a.Query().With(a.Count.Using(aggregateCount(r.With(child), sqlowner.Expressions()))),
+		a.Query().With(a.Count.Using(aggregateCount(r.WithPivot(child), sqlowner.Expressions()))),
+	} {
+		if err := validateQuery(bad.state); !errors.Is(err, fault.Invalid) {
+			t.Fatal("invalid aggregate accepted", err)
+		}
+	}
+	derived := count.Using(aggregateCount(r.WherePivot(a.ParentID.Eq(1)), sqlowner.Expressions()))
+	if err := validateQuery(a.Query().With(derived).state); err != nil {
+		t.Fatal(err)
+	}
+	if count.plan.slot != derived.plan.slot || len(count.plan.aggregate.input.plan.join.pivot.ast.Predicates) != 0 {
+		t.Fatal("Using changed original slot or pivot scope")
+	}
+	cause := errors.New("construction failure")
+	invalid := count
+	invalid.plan = copyRelationPlan(count.plan)
+	invalid.plan.err = cause
+	if err := Check(count.Using(invalid)); !errors.Is(err, cause) {
+		t.Fatal("Using lost construction failure", err)
 	}
 }

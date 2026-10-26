@@ -229,7 +229,7 @@ func TestRefreshPreservesGrantAbsoluteExpiryAndBounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[Record]()
+	id, err := model.NewIDAt[Record](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -190,11 +190,11 @@ func TestRetrievalDispatchPreservesCompleteRecordSources(t *testing.T) {
 	for name, read := range map[string]func(context.Context, database.Executor) ([]retrievalFixtureRecord, error){
 		"model":         q.All,
 		"record":        rows.Read(rows.FromModel(q)).All,
-		"alias":         rows.SelectRecord(alias, rows.Scope(alias)).All,
-		"cte":           rows.SelectRecord(cte, rows.Scope(cte)).All,
-		"recursive-cte": rows.SelectRecord(recursiveAlias, rows.Scope(recursiveAlias)).All,
-		"set":           set.All,
-		"set-record":    rows.SelectRecord(set, set.Scope()).All,
+		"alias":         rows.ReadRecord(rows.SelectRecord(alias, rows.Scope(alias))).All,
+		"cte":           rows.ReadRecord(rows.SelectRecord(cte, rows.Scope(cte))).All,
+		"recursive-cte": rows.ReadRecord(rows.SelectRecord(recursiveAlias, rows.Scope(recursiveAlias))).All,
+		"set":           rows.ReadSet(set).All,
+		"set-record":    rows.ReadRecord(rows.SelectRecord(set, set.Scope())).All,
 		"cursor": func(ctx context.Context, executor database.Executor) ([]retrievalFixtureRecord, error) {
 			page, err := cursor.Paginate(ctx, executor, orm.CursorRequest[retrievalFixtureRecord]{Size: 1})
 			return page.Items, err
@@ -407,10 +407,10 @@ func TestRetrievalDispatchExcludesScalarsAndDeclaredDTOs(t *testing.T) {
 	}
 	// Set results already use their first input's decoder/record declaration.
 	// Lifecycle follows that same declaration, never the unexecuted SQL inputs.
-	if items, err := rows.Union(rows.ModelRecord(q), rows.RecordOf(projection)).All(t.Context(), db); err != nil || len(items) != 1 || factories != 1 {
+	if items, err := rows.ReadSet(rows.Union(rows.ModelRecord(q), rows.RecordOf(projection))).All(t.Context(), db); err != nil || len(items) != 1 || factories != 1 {
 		t.Fatal("model-declared set lost its result lifecycle", factories, err)
 	}
-	if items, err := rows.Union(rows.RecordOf(projection), rows.ModelRecord(q)).All(t.Context(), db); err != nil || len(items) != 1 || factories != 1 {
+	if items, err := rows.ReadSet(rows.Union(rows.RecordOf(projection), rows.ModelRecord(q))).All(t.Context(), db); err != nil || len(items) != 1 || factories != 1 {
 		t.Fatal("DTO-declared set acquired its SQL input's model lifecycle", factories, err)
 	}
 }

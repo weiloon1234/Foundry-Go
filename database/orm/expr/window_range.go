@@ -13,7 +13,7 @@ type rangeTemporal interface {
 	time.Time | temporal.Date | temporal.Time | temporal.DateTime | temporal.LocalDateTime
 }
 
-// RangeWindow fixes one order value and its typed distance. Example: expr.NumericRange(w,expr.Select(amount)).
+// RangeWindow fixes one order value and its typed distance. Example: expr.NumericRange(w,expr.Row(amount).Value()).
 type RangeWindow[S, D any] struct {
 	_      [0]*S
 	data   ormcore.RangeWindow
@@ -27,26 +27,26 @@ type RangeBoundary[S, D any] struct {
 	bound querycore.FrameBound
 }
 
-// NumericRange uses the order value's exact numeric type for distances. Example: expr.NumericRange(w,expr.Select(amount)).
+// NumericRange uses the order value's exact numeric type for distances. Example: expr.NumericRange(w,expr.Row(amount).Value()).
 func NumericRange[S any, V numericValue](w Window[S], input Selected[S, V]) RangeWindow[S, V] {
 	return RangeWindow[S, V]{data: ormcore.WindowRange(ownedWindow(w), input.data.core, input.data.column.Kind, false), encode: func(v V) querycore.RangeDistance {
 		return querycore.RangeDistance{Parameter: parameter[S](input.data, v).data.core.Node.(querycore.ParameterNode)}
 	}}
 }
 
-// NullableNumericRange orders nullable values using present distances. Example: expr.NullableNumericRange(w,expr.Select(optional)).
+// NullableNumericRange orders nullable values using present distances. Example: expr.NullableNumericRange(w,expr.Row(optional).Value()).
 func NullableNumericRange[S any, V numericValue](w Window[S], input Selected[S, value.Nullable[V]]) RangeWindow[S, V] {
 	return RangeWindow[S, V]{data: ormcore.WindowRange(ownedWindow(w), input.data.core, input.data.column.Kind, false), encode: func(v V) querycore.RangeDistance {
 		return querycore.RangeDistance{Parameter: parameter[S](input.data, value.Of(v)).data.core.Node.(querycore.ParameterNode)}
 	}}
 }
 
-// TemporalRange uses calendar/elapsed intervals for temporal distances. Example: expr.TemporalRange(w,expr.Select(created)).
+// TemporalRange uses calendar/elapsed intervals for temporal distances. Example: expr.TemporalRange(w,expr.Row(created).Value()).
 func TemporalRange[S any, V rangeTemporal](w Window[S], input Selected[S, V]) RangeWindow[S, temporal.Interval] {
 	return RangeWindow[S, temporal.Interval]{data: ormcore.WindowRange(ownedWindow(w), input.data.core, input.data.column.Kind, true), encode: intervalDistance}
 }
 
-// NullableTemporalRange keeps nullable ordering and present interval distances. Example: expr.NullableTemporalRange(w,expr.Select(birthday)).
+// NullableTemporalRange keeps nullable ordering and present interval distances. Example: expr.NullableTemporalRange(w,expr.Row(birthday).Value()).
 func NullableTemporalRange[S any, V rangeTemporal](w Window[S], input Selected[S, value.Nullable[V]]) RangeWindow[S, temporal.Interval] {
 	return RangeWindow[S, temporal.Interval]{data: ormcore.WindowRange(ownedWindow(w), input.data.core, input.data.column.Kind, true), encode: intervalDistance}
 }

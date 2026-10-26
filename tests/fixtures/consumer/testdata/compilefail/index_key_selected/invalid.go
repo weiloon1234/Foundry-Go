@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.OnConflictKeys[models.User](expr.Select(expr.Value(models.Users.Age)).Key())
+var _ = rows.OnConflictKeys[models.User](expr.Row(expr.Value(models.Users.Age)).Value().Key())

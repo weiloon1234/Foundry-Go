@@ -1,5 +1,7 @@
 package httpdto_test
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -13,7 +15,7 @@ import (
 )
 
 func TestGeneratedResponsesEncodeAsTypedRecordsListsAndNulls(t *testing.T) {
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

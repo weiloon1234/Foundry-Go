@@ -1,0 +1,15 @@
+[
+  "attachments/matching_legacy.go",
+  "attachments/slot_legacy.go",
+  "database/orm/extension_legacy.go",
+  "database/orm/identity_legacy.go",
+  "database/prune/legacy.go",
+  "extensions/owner_legacy.go",
+  "http/modelbinding/field.go",
+  "http/modelbinding/nested.go",
+  "metadata/matching_legacy.go",
+  "metadata/slot_legacy.go",
+  "testkit/factory/factory.go",
+  "translations/matching_legacy.go",
+  "translations/slot_legacy.go"
+]

@@ -83,8 +83,13 @@ def cases(root=ROOT):
     directory = root / "tests/fixtures/consumer"
     expected = dict(re.findall(r'\{"([a-z0-9_]+)", "([^"]+)"\}',
                                (directory / "types_test.go").read_text()))
-    sources = {p.parent.name: p.read_text() for p in
-               (directory / "testdata/compilefail").glob("*/invalid.go")}
+    sources = {}
+    for path in sorted((directory / "testdata/compilefail").glob("*/invalid.go*")):
+        if path.name not in {"invalid.go", "invalid.go.txt"}:
+            raise ValueError(f"{path}: unsupported compiler evidence suffix")
+        if path.parent.name in sources:
+            raise ValueError(f"{path.parent.name}: both active and archived compiler sources")
+        sources[path.parent.name] = path.read_text()
     if expected.keys() != sources.keys():
         raise ValueError("compiler source/diagnostic catalogue differs")
     return {name: (sources[name], diagnostic) for name, diagnostic in expected.items()}
@@ -118,7 +123,7 @@ def validate(root=ROOT):
     retired = json.loads(retirement_path.read_text())["cases"]
     by_name = {r["case"]: r for r in rows}
     for name, digest in retired.items():
-        path = root / "tests/fixtures/consumer/testdata/compilefail" / name / "invalid.go"
+        path = root / "tests/fixtures/consumer/testdata/compilefail" / name / "invalid.go.txt"
         if name not in by_name or by_name[name]["disposition"] != "ported" or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
             raise ValueError(f"{name}: retired input must be unchanged and have a ported counterpart")
     symbols = generated_symbols(root)

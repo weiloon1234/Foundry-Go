@@ -116,7 +116,7 @@ func TestDirectEagerTreesAndExistence(t *testing.T) {
 
 	queries = 0
 	parents[1].Children = relation.Many[eagerNode]{}
-	missing, err := orm.LoadMissing(ctx, db, parents, tree)
+	missing, err := orm.LoadMissingFrom(ctx, db, n.Query().With(tree), parents)
 	must(t, err)
 	if queries != 2 || parents[1].Children.IsLoaded() || !missing[2].Children.IsLoaded() || missing[2].Children.Len() != 0 {
 		t.Fatal("LoadMissing ownership/count/empty", queries)
@@ -132,7 +132,7 @@ func TestDirectEagerTreesAndExistence(t *testing.T) {
 		}
 	}
 	before := queries
-	_, err = orm.LoadMissing(ctx, db, missing, tree)
+	_, err = orm.LoadMissingFrom(ctx, db, n.Query().With(tree), missing)
 	must(t, err)
 	if queries != before {
 		t.Fatal("loaded-empty issued SQL")

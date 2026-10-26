@@ -1,5 +1,7 @@
 package consumer_test
 
+import "time"
+
 import (
 	"encoding/json"
 	"testing"
@@ -15,7 +17,7 @@ type ProfilePatch struct {
 }
 
 func TestPublicValuesPreserveOwnershipAndPatchMeaning(t *testing.T) {
-	id, err := model.NewID[User]()
+	id, err := model.NewIDAt[User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

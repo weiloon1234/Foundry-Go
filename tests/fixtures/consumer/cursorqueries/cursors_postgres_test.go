@@ -20,7 +20,7 @@ import (
 
 func summaries() rows.Query[models.User, reports.UserSummary] {
 	u, r := models.Users, reports.UserSummaries
-	return rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.Select(expr.Value(u.Key()))), rows.MapSelected(r.Email, expr.Select(expr.Value(u.Email))), rows.MapSelected(r.Nickname, expr.Select(expr.Value(u.Nickname))), rows.MapSelected(r.Status, expr.Select(expr.Value(u.Status))))
+	return rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.Row(expr.Value(u.Key())).Value()), rows.MapSelected(r.Email, expr.Row(expr.Value(u.Email)).Value()), rows.MapSelected(r.Nickname, expr.Row(expr.Value(u.Nickname)).Value()), rows.MapSelected(r.Status, expr.Row(expr.Value(u.Status)).Value()))
 }
 
 // Traverse both directions, including an empty page after the terminal row.

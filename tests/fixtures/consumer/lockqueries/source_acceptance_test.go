@@ -30,7 +30,7 @@ func TestUnlockedSourcesCanBeAliased(t *testing.T) {
 				rows.Map(reports.UserSummaries.Email, expr.At(scope, models.Users.Email)),
 				rows.Map(reports.UserSummaries.Nickname, expr.At(scope, models.Users.Nickname)),
 				rows.Map(reports.UserSummaries.Status, expr.At(scope, models.Users.Status)))
-			if _, err := rows.Compile(selected); err != nil {
+			if _, err := rows.CompileRead(rows.Read(selected)); err != nil {
 				t.Fatalf("ordinary alias rejected: %v", err)
 			}
 		})

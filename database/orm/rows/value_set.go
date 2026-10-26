@@ -1,7 +1,6 @@
 package rows
 
 import (
-	"context"
 	"database/sql/driver"
 	"errors"
 	"reflect"
@@ -21,7 +20,7 @@ type ValueSource[V any] interface {
 }
 
 // ValueRecord adapts one selected scalar without widening its type or granting record access.
-// Example: rows.Values(rows.SelectScalar(source,expr.Select(id))).
+// Example: rows.Values(rows.SelectScalar(source,expr.Row(id).Value())).
 type ValueRecord[V any] struct {
 	_           [0]*V
 	scalarInput [0]struct{}
@@ -36,7 +35,7 @@ func (q ValueRecord[V]) valueData(*V) (ormcore.RecordSource, ormcore.Column[V]) 
 type valueRecordDefinition struct{ record ormcore.Record }
 
 // Values adapts a typed scalar selection for value set operations.
-// Example: rows.Values(rows.SelectScalar(rows.From(Users.Query()),expr.Select(expr.Value(Users.ID)))).
+// Example: rows.Values(rows.SelectScalar(rows.From(Users.Query()),expr.Row(expr.Value(Users.ID)).Value())).
 func Values[S, V any](q Scalar[S, V]) ValueRecord[V] {
 	d := scalarRecord(q.column)
 	r := ormcore.RecordSource{Source: q.source, Record: d.record}
@@ -103,7 +102,7 @@ func combineValues[V any](a, b ValueSource[V], op querycore.SetOperator) ValueSe
 }
 
 // Value exposes the combined scalar with its original codec and nullability.
-// Example: expr.Select(values.Value()).
+// Example: expr.Row(values.Value()).Value().
 func (q ValueSetQuery[V]) Value() expr.RowExpression[Set[V], V] {
 	r := ormcore.SetRecord(q.core)
 	e := ormcore.Expression{Node: querycore.FieldRef{Table: querycore.SetAlias, Column: "value"}, Refs: []ormcore.Reference{{Table: querycore.SetAlias, Owner: r.Record.Owner}}, Err: r.Source.Err}
@@ -130,8 +129,3 @@ func (q ValueSetQuery[V]) Limit(n int) ValueSetQuery[V] {
 
 // Offset skips combined values. Example: combined.Offset(10).
 func (q ValueSetQuery[V]) Offset(n int) ValueSetQuery[V] { q.core.Source.Node.Offset = n; return q }
-
-// All returns values after complete collection and row closure. Example: combined.All(ctx,db).
-func (q ValueSetQuery[V]) All(ctx context.Context, ex database.Executor) ([]V, error) {
-	return readRecord[V](ctx, ex, ormcore.SetRecord(q.core), false)
-}

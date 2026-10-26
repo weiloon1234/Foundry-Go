@@ -185,7 +185,7 @@ func TestEnumRowSortAndShortStableSpelling(t *testing.T) {
 			if err != nil {
 				t.Fatalf("scoped failed: %v", err)
 			}
-			statement, err := rows.Compile(source.rows)
+			statement, err := rows.CompileRead(rows.Read(source.rows))
 			if err != nil {
 				t.Fatalf("compile failed: %v", err)
 			}

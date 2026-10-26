@@ -9,9 +9,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -20,74 +18,48 @@ type adjustmentRecord struct {
 	Balance int64
 }
 
-// Legacy adjustments are set writes, even when their predicates select one key.
-// Guard rejection and a missing key both produce an affected count of zero;
-// neither dispatches model callbacks. This is not a single-model adjustment API.
-func TestLegacyAdjustmentEmptySelectionContract(t *testing.T) {
+// Empty set writes report zero and dispatch no per-model callbacks. Single-model
+// adjustments retain their distinct NotFound/ErrBoundExceeded contract below.
+func TestSetUpdateEmptySelectionContract(t *testing.T) {
 	for _, mode := range []string{"plain", "hooks", "observers"} {
 		t.Run(mode, func(t *testing.T) {
+			calls := 0
+			factory := func() Hooks[adjustmentRecord] { calls++; return Hooks[adjustmentRecord]{} }
+			var options []Option
+			var declarations []lifecycle.Declaration
+			if mode == "hooks" {
+				options = append(options, WithHooks(factory))
+			}
+			if mode == "observers" {
+				d, err := NewObserver[adjustmentRecord]("adjustment").Declare(factory)
+				if err != nil {
+					t.Fatal(err)
+				}
+				declarations = append(declarations, d)
+			}
+			type fields struct {
+				Table[adjustmentRecord, int64]
+				Balance Number[adjustmentRecord, int64]
+			}
+			f := Define("adjustments", func(b Builder[adjustmentRecord], m *adjustmentRecord) fields {
+				return fields{TableOf(b, &m.ID), NumberOf(b, &m.Balance)}
+			}, options...)
+			var statements []string
+			zero := int64(0)
+			db := hookDB(t, testConnector{statements: &statements, affected: &zero, columns: []string{"id", "balance"}}, declarations...)
 			for _, key := range []int64{1, 2} {
-				calls := 0
-				factory := func() query.WriteHooks[adjustmentRecord] {
-					calls++
-					return query.WriteHooks[adjustmentRecord]{}
-				}
-				definition := query.Define("adjustments", "id", []query.Column{{Name: "id"}, {Name: "balance"}},
-					func(database.Row) (adjustmentRecord, error) {
-						t.Fatal("empty result hydrated a model")
-						return adjustmentRecord{}, nil
-					},
-					query.NewModelField("id", codec.Signed[int64](), func(r adjustmentRecord) int64 { return r.ID }),
-					query.NewModelField("balance", codec.Signed[int64](), func(r adjustmentRecord) int64 { return r.Balance }))
-				var declarations []lifecycle.Declaration
-				if mode == "hooks" {
-					definition = definition.WithWriteHooks(factory)
-				}
-				if mode == "observers" {
-					observer, err := lifecycle.NewObserver[adjustmentRecord, query.WriteHooks[adjustmentRecord]]("adjustment").Declare(factory)
-					if err != nil {
-						t.Fatal(err)
-					}
-					declarations = append(declarations, observer)
-					definition = definition.WithObserverHooks(func(context.Context, lifecycle.Observers) (query.WriteHooks[adjustmentRecord], error) {
-						return factory(), nil
-					}, false)
-				}
-				var statements []string
-				zero := int64(0)
-				db := hookDB(t, testConnector{statements: &statements, affected: &zero, columns: []string{"id", "balance"}}, declarations...)
-				id := query.NewExactField[adjustmentRecord, int64]("adjustments", "id", codec.Signed[int64]())
-				balance := query.NewExactField[adjustmentRecord, int64]("adjustments", "balance", codec.Signed[int64]())
-				// Key 1 represents an existing balance of 1, rejecting subtraction of 2.
-				// Key 2 is missing. Both predicates select no row in the driver response.
-				q := query.ForModel(definition).Where(id.Eq(key), query.GreaterOrEqual(query.Subtract(balance, query.Param(balance, int64(2))), query.Param(balance, int64(0))))
-				set := q
+				q := f.Query().Where(f.Key().Eq(key), f.Balance.Gte(2))
 				if mode != "plain" {
-					set = set.WithoutModelHooks()
+					q = WithoutModelHooks(q)
 				}
-				count, err := set.AdjustAll(t.Context(), db, balance.By(2), true, query.Change[adjustmentRecord]())
-				if err != nil || count != 0 {
-					t.Fatalf("key %d: count=%d, err=%v", key, count, err)
+				count, err := q.UpdateAll(t.Context(), db, f.Balance.Set(0))
+				if err != nil || count != 0 || calls != 0 {
+					t.Fatalf("empty set update: count=%d callbacks=%d err=%v", count, calls, err)
 				}
 				if len(statements) != 1 || !strings.HasPrefix(statements[0], "UPDATE ") || !strings.Contains(statements[0], " >= ") || strings.Contains(statements[0], "RETURNING") {
-					t.Fatalf("set adjustment changed its guarded SQL: %v", statements)
+					t.Fatalf("set update SQL: %v", statements)
 				}
 				statements = nil
-				// Ordinary per-model guarded patches use NotFound on both paths. The
-				// legacy API cannot assign a numeric adjustment through this terminal.
-				_, err = q.Patch(t.Context(), db, query.Change(query.Assign[adjustmentRecord]("adjustments", "balance", codec.Signed[int64](), int64(0))))
-				if !errors.Is(err, database.NotFound) {
-					t.Fatalf("guarded patch key %d: %v", key, err)
-				}
-				if len(statements) != 1 || !strings.Contains(statements[0], " >= ") {
-					t.Fatalf("guarded patch SQL: %v", statements)
-				}
-				if mode == "plain" && !strings.HasPrefix(statements[0], "UPDATE ") || mode != "plain" && !strings.HasPrefix(statements[0], "SELECT ") {
-					t.Fatalf("wrong lifecycle path: %s: %v", mode, statements)
-				}
-				if calls != 0 {
-					t.Fatal("empty selection invoked factories")
-				}
 			}
 		})
 	}

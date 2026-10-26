@@ -78,7 +78,7 @@ func (q TransactionScalar[S, V]) transactionSubquery() ormcore.Source {
 }
 
 // TransactionScalarOf retains codecs when adding locks to scalar subqueries.
-// Example: rows.TransactionScalarOf(rows.SelectTransactionValue(source,expr.Select(id))).ForShare().
+// Example: rows.TransactionScalarOf(rows.SelectTransactionValue(source,expr.Row(id).Value())).ForShare().
 func TransactionScalarOf[S TransactionScopeType, V any](q TransactionValue[S, V]) TransactionScalar[S, V] {
 	r, c := transactionValueSource(q)
 	return TransactionScalar[S, V]{core: r, column: c}

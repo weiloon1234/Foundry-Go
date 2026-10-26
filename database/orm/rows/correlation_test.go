@@ -33,7 +33,7 @@ func TestCorrelatedScalarMembershipAndExists(t *testing.T) {
 	child := expr.At(InnerScope(c, ModelScope(o.Query())), o.MemberID)
 	c = c.Where(expr.Equal(child, parent))
 	count := SelectCorrelatedScalar(c, expr.Count[Correlation[member, order]]().Value())
-	ids := SelectCorrelatedScalar(c, expr.Select(child))
+	ids := SelectCorrelatedScalar(c, expr.Row(child).Value())
 	schema := correlationCountSchema()
 	q := Select(outer, schema, MapSelected(schema.Count, CorrelatedScalarQuery(count))).Where(c.Exists(), count.Exists(), InCorrelatedQuery(expr.Value(m.ID), ids))
 	state := &driverState{columns: []string{"count"}, rows: [][]driver.Value{{int64(2)}, {nil}}}
@@ -123,7 +123,7 @@ func TestCorrelationNullableScopesAndDeferredChecks(t *testing.T) {
 	c := Correlate(j, From(o.Query()))
 	nullable := OuterNullableScope(c, NullableRightScope(j, Scope(b)))
 	v := expr.AtNullable(nullable, m.ID)
-	if expr.FoundrySelectedColumn(expr.Select(v), sqlowner.Expressions()).Nullable != true {
+	if expr.FoundrySelectedColumn(expr.Row(v).Value(), sqlowner.Expressions()).Nullable != true {
 		t.Fatal("outer nullability lost")
 	}
 	wrong := OuterNullableScope(c, NullableRightScope(j, Scope(As[right](declareMembers().Query(), "b"))))

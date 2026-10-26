@@ -2,6 +2,9 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"predicate_owner_conversion", "cannot convert"},
+		{"mutation_owner_conversion", "cannot convert"},
+		{"assignment_owner_conversion", "cannot convert"},
 		{"bool_row_phase", "cannot use"},
 		{"bool_row_value", "does not satisfy"},
 		{"constant_owner", "cannot use"},
@@ -150,18 +153,18 @@ func compilerCases() []compilerCase {
 		{"expr_selected_ordered_aggregate_conversion", "cannot convert"},
 		{"expr_value_comparison_ordered_aggregate_conversion", "cannot convert"},
 		{"expr_ordered_value_comparison_ordered_aggregate_conversion", "cannot convert"},
-		{"legacy_json_ordered_conversion", "cannot convert"},
-		{"legacy_nullable_json_ordered_conversion", "cannot convert"},
-		{"legacy_lookup_reader_conversion", "cannot convert"},
-		{"legacy_insert_update_mapping_conversion", "cannot convert"},
+		{"native_json_ordered_conversion", "cannot convert"},
+		{"native_nullable_json_ordered_conversion", "cannot convert"},
+		{"native_lookup_reader_conversion", "cannot convert"},
+		{"native_insert_update_mapping_conversion", "cannot convert"},
 
-		{"legacy_having_predicate_conversion", "cannot convert"},
-		{"legacy_value_comparison_conversion", "cannot convert"},
-		{"legacy_value_case_conversion", "cannot convert"},
-		{"legacy_projection_key_conversion", "cannot convert"},
-		{"legacy_nullable_ordered_conversion", "cannot convert"},
-		{"legacy_nullable_json_conversion", "cannot convert"},
-		{"legacy_source_mutation_conversion", "cannot convert"},
+		{"native_having_predicate_conversion", "cannot convert"},
+		{"native_value_comparison_conversion", "cannot convert"},
+		{"native_value_case_conversion", "cannot convert"},
+		{"native_projection_key_conversion", "cannot convert"},
+		{"native_nullable_ordered_conversion", "cannot convert"},
+		{"native_nullable_json_conversion", "cannot convert"},
+		{"native_source_mutation_conversion", "cannot convert"},
 		{"relation_one_many_conversion", "cannot convert"},
 		{"relation_value_one_conversion", "cannot convert"},
 		{"relation_value_many_conversion", "cannot convert"},
@@ -172,7 +175,7 @@ func compilerCases() []compilerCase {
 		{"relation_aggregate_relation_has_one_conversion", "cannot convert"},
 		{"relation_aggregate_relation_has_many_conversion", "cannot convert"},
 
-		{"legacy_transaction_record_conversion", "cannot convert"},
+		{"native_transaction_record_conversion", "cannot convert"},
 		{"locked_query_conversion", "cannot convert"},
 		{"lock_clause_nullable", "does not match"},
 		{"locked_nullable_target", "does not match"},
@@ -398,7 +401,7 @@ func compilerCases() []compilerCase {
 		{"uuid_compare_selected", "expr.RowValue["},
 
 		{"json_contains_payload", "as value.JSON["},
-		{"json_kind_boolean", "expr.JSONKind"},
+		{"json_kind_boolean", "database.JSONKind"},
 		{"json_nullable_input", "does not match"},
 		{"json_path_array_index", "as int32 value"},
 		{"json_path_map_key", "as int value"},
@@ -415,8 +418,6 @@ func compilerCases() []compilerCase {
 
 		{"text_comparison_owner_conversion", "cannot convert"},
 		{"text_comparison_nullable_owner_conversion", "cannot convert"},
-		{"old_text_comparison_owner_conversion", "cannot convert"},
-		{"old_text_comparison_nullable_owner_conversion", "cannot convert"},
 
 		{"geographic_owner", "does not match"},
 		{"interval_clock_instant", "does not satisfy"},

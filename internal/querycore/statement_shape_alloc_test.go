@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/internal/statementmeta"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 func TestStatementShapeRechecksExecutionScope(t *testing.T) {
@@ -102,6 +103,52 @@ func TestInactiveCompileAllocations(t *testing.T) {
 				t.Fatalf("mutation=%v ctx=%v: inactive %.0f, ordinary %.0f; statements equal=%v, shape=%q", mutation, ctx, inactive, ordinary, reflect.DeepEqual(got, expected), got.Shape)
 			}
 			t.Logf("mutation=%v ctx=%v: inactive=control=%.0f allocations", mutation, ctx, inactive)
+		}
+	}
+}
+
+func TestInactiveRelationBatchCompileAllocations(t *testing.T) {
+	model := ModelDefinition{Table: "records", Primary: "id", Columns: []Column{{Name: "id"}}}
+	q := QueryCore{Table: "records", Model: &model}
+	node := RelationThroughSelect(q, q, FieldRef{Table: "records", Column: "id"}, FieldRef{Table: "records", Column: "id"}, nil, RelationTargetAlias, RelationPivotAlias)
+	node.Limit = value.Set(10)
+	aggregate, err := RelationAggregateSelect(node, "records", RelationTargetAlias, FieldRef{Table: RelationPivotAlias, Column: "id"}, AggregateNode{Kind: CountAll}, false, FieldRef{}, []driver.Value{int64(1)}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, node := range []SelectNode{node, aggregate} {
+		for _, ctx := range []context.Context{nil, context.Background()} {
+			var got Statement
+			var err error
+			control := testing.AllocsPerRun(100, func() {
+				c := Compiler{ScopeContext: ctx, ScopeShapeOnly: ctx == nil}
+				var sql string
+				sql, err = c.CompileSelect(node)
+				got = Statement{SQLText: sql, Bindings: c.Arguments}
+				if err != nil {
+					panic(err)
+				}
+			})
+			want := got
+			inactive := testing.AllocsPerRun(100, func() {
+				got, err = CompileRead(node, ctx, false, nil, true)
+				if err != nil {
+					panic(err)
+				}
+			})
+			if inactive != control || got.Shape != "" || !reflect.DeepEqual(got, want) {
+				t.Fatalf("inactive=%v control=%v equal=%v", inactive, control, reflect.DeepEqual(got, want))
+			}
+		}
+		active := statementmeta.Enable(t.Context())
+		for _, ctx := range []context.Context{active, context.Background(), active, nil} {
+			s, err := CompileRead(node, ctx, false, nil, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (s.Shape != "") != (ctx != nil && statementmeta.Active(ctx)) {
+				t.Fatal("relation statement retained stale shape state")
+			}
 		}
 	}
 }

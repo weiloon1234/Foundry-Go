@@ -69,7 +69,7 @@ func TestSlotLoadingStatementsDoNotGrowWithParents(t *testing.T) {
 	}
 	empty := transaction(func(context.Context, *database.Tx) error { return nil })
 	missing := transaction(func(ctx context.Context, tx *database.Tx) error {
-		_, err := orm.LoadMissing(ctx, tx, loaded, x.Title.Relation(articles.Articles.Title), x.Summary.Relation(articles.Articles.Summary), x.SEO.Relation(articles.Articles.SEO))
+		_, err := orm.LoadMissingFrom(ctx, tx, articles.Articles.Query().With(x.Title.Relation(articles.Articles.Title), x.Summary.Relation(articles.Articles.Summary), x.SEO.Relation(articles.Articles.SEO)), loaded)
 		return err
 	})
 	if missing != empty {

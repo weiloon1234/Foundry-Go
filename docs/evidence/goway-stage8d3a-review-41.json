@@ -1,0 +1,477 @@
+{
+  "review": "last-41.md",
+  "base": "3d6f0379",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r18",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "FOUNDRY_TEST_POSTGRES_REQUIRED": "1"
+  },
+  "mutations": [
+    {
+      "name": "literal-escaping",
+      "gap": 1,
+      "command": "go test -count=1 ./database/orm/rows -run Test(CaseInsensitiveContains|PostgresCaseInsensitiveContains)",
+      "changes": [
+        {
+          "file": "internal/querycore/compiler.go",
+          "before": "escaped := LikeEscaper.Replace(text)",
+          "after": "escaped := text"
+        }
+      ],
+      "source_sha256": {
+        "internal/querycore/compiler.go": "5709f43fb1fb37fd2230f2c1ff1d02b0393102e7049e16bee81097f5cd632477"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 16.76,
+      "log": "/private/tmp/goway-8d3a-mutation-literal-escaping.log",
+      "log_sha256": "8d087f110e89a8660aa6100293f92955e09b39e4b34c2ed1ddb600d5e1dcef1c"
+    },
+    {
+      "name": "morph-name-validation",
+      "gap": 2,
+      "command": "go test -count=1 ./database/orm -run TestInvalidMorphDeclarationsFailAfterBinding",
+      "changes": [
+        {
+          "file": "internal/querycore/relation_join.go",
+          "before": "if !sqlname.Valid(name) {",
+          "after": "if false && !sqlname.Valid(name) {"
+        }
+      ],
+      "source_sha256": {
+        "internal/querycore/relation_join.go": "7ceef396de7c55eb9fba60a2271a1714cbfa2f786a160a2f304c780d0febacfa"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 28.74,
+      "log": "/private/tmp/goway-8d3a-mutation-morph-name-validation.log",
+      "log_sha256": "bde531a765e7fb488d6f5e073e38ab24ffaebc6b04c73f88e5cb66da8e0caf63"
+    },
+    {
+      "name": "morph-missing-discriminator",
+      "gap": 2,
+      "command": "go test -count=1 ./database/orm -run TestInvalidMorphDeclarationsFailAfterBinding",
+      "changes": [
+        {
+          "file": "database/orm/relation_morph.go",
+          "before": "p.err = errors.Join(p.err, invalid(\"morph type must belong to the related model\"))",
+          "after": "// removed missing related discriminator check"
+        },
+        {
+          "file": "database/orm/relation_morph.go",
+          "before": "r.plan.err = errors.Join(r.plan.err, invalid(\"morph type must belong to the source model\"))",
+          "after": "// removed missing source discriminator check"
+        },
+        {
+          "file": "database/orm/relation_morph.go",
+          "before": "p.err = errors.Join(p.err, invalid(\"morph type must belong to the pivot model\"))",
+          "after": "// removed missing pivot discriminator check"
+        }
+      ],
+      "source_sha256": {
+        "database/orm/relation_morph.go": "f3ae11dde569be6936757d859f64826ec559af1b8c7d837a00f78ffaec0f27b1"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 25.41,
+      "log": "/private/tmp/goway-8d3a-mutation-morph-missing-discriminator.log",
+      "log_sha256": "606b6fca3514ca48f1b5711a03b6e20a52bd834e560f56c7eb306b897b79a6ac"
+    },
+    {
+      "name": "pivot-opaque-storage",
+      "gap": 3,
+      "command": "go test -count=1 ./database/orm -run TestMorphPivotBindingsStayPrivate",
+      "changes": [
+        {
+          "file": "database/orm/relation_through.go",
+          "before": "type ThroughRelation[M, N, P any] struct {",
+          "after": "type ThroughRelation[M, N, P any] struct {\n retainedDiscriminator string"
+        },
+        {
+          "file": "database/orm/relation_morph.go",
+          "before": "r.plan = morphPivot(r.plan, kind, name, err)",
+          "after": "r.plan = morphPivot(r.plan, kind, name, err)\n r.retainedDiscriminator = string(name)"
+        }
+      ],
+      "source_sha256": {
+        "database/orm/relation_through.go": "b0aecd51b516c873726a9ebd0773f27c1732936aa6d05ede4fc8c6a5bfc1800b",
+        "database/orm/relation_morph.go": "f3ae11dde569be6936757d859f64826ec559af1b8c7d837a00f78ffaec0f27b1"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 26.75,
+      "log": "/private/tmp/goway-8d3a-mutation-pivot-opaque-storage.log",
+      "log_sha256": "ea8c61f82d5dfb54c9baf56380da04a94e2cfe251825417861354cc18b08f41c"
+    },
+    {
+      "name": "pivot-discriminator-default",
+      "gap": 3,
+      "command": "go test -count=1 ./database/orm -run TestMorphPivotSingleAndBulkDefaults",
+      "changes": [
+        {
+          "file": "database/orm/relation_morph.go",
+          "before": "relationPivotDefaults(p.join.defaults, c.core, string(name))",
+          "after": "relationPivotDefaults(p.join.defaults, c.core, \"wrong_discriminator\")"
+        }
+      ],
+      "source_sha256": {
+        "database/orm/relation_morph.go": "f3ae11dde569be6936757d859f64826ec559af1b8c7d837a00f78ffaec0f27b1"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 27.41,
+      "log": "/private/tmp/goway-8d3a-mutation-pivot-discriminator-default.log",
+      "log_sha256": "127d1236578b8d1054896a1c6458471e1d43b2a7fa895d69afd51e0dfc8d4440"
+    },
+    {
+      "name": "pivot-endpoint-default",
+      "gap": 3,
+      "command": "go test -count=1 ./database/orm -run TestMorphPivotSingleAndBulkDefaults",
+      "changes": [
+        {
+          "file": "database/orm/relation_pivot_mutation.go",
+          "before": "pivotColumn(table, r.join.first.Column), source.raw",
+          "after": "pivotColumn(table, r.join.first.Column), target.raw"
+        }
+      ],
+      "source_sha256": {
+        "database/orm/relation_pivot_mutation.go": "a873231267e5b9636ccc9042591782fa24da35fd8644960994d58b6604a0b702"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 26.51,
+      "log": "/private/tmp/goway-8d3a-mutation-pivot-endpoint-default.log",
+      "log_sha256": "ca25639439b9eae273da99777c6c53a2a39a8640d8238061b9415531c6bcb5e3"
+    },
+    {
+      "name": "grandparent-grouping",
+      "gap": 4,
+      "command": "go test -count=1 ./database/orm/rows -run TestNestedCorrelationRetainsGrandparentGrouping",
+      "changes": [
+        {
+          "file": "internal/querycore/correlation_compiler.go",
+          "before": "if grouping && !grouped[f] {",
+          "after": "if false && grouping && !grouped[f] {"
+        }
+      ],
+      "source_sha256": {
+        "internal/querycore/correlation_compiler.go": "41f97c16f2d4164d470dc00e14d54779b55e9264a91bcf07aacff9e3a07c1366"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 13.27,
+      "log": "/private/tmp/goway-8d3a-mutation-grandparent-grouping.log",
+      "log_sha256": "c30130843888c950a9245aba120b67c897622539c9182243fce2599bd04338e7"
+    },
+    {
+      "name": "distinct-expression-budget",
+      "gap": 5,
+      "command": "go test -count=1 ./internal/querycore -run TestDistinctOrderMatchingIsBounded",
+      "changes": [
+        {
+          "file": "internal/querycore/value_index.go",
+          "before": "x.Comparisons > MaxExpressionNodes || x.Arguments > MaxParameters",
+          "after": "x.Arguments > MaxParameters"
+        }
+      ],
+      "source_sha256": {
+        "internal/querycore/value_index.go": "fda6c6bcf61bc09f1ac391faea835a9fa0115faf6dffd02b5fe75dd7d46c7a9f"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 1.2,
+      "log": "/private/tmp/goway-8d3a-mutation-distinct-expression-budget.log",
+      "log_sha256": "ccf0c79d78f39109d1babbeab726f93642968687918ef1f46f4119e0eb0ec8f8"
+    },
+    {
+      "name": "distinct-binding-budget",
+      "gap": 5,
+      "command": "go test -count=1 ./internal/querycore -run TestDistinctOrderMatchingIsBounded",
+      "changes": [
+        {
+          "file": "internal/querycore/value_index.go",
+          "before": "x.Comparisons > MaxExpressionNodes || x.Arguments > MaxParameters",
+          "after": "x.Comparisons > MaxExpressionNodes"
+        }
+      ],
+      "source_sha256": {
+        "internal/querycore/value_index.go": "fda6c6bcf61bc09f1ac391faea835a9fa0115faf6dffd02b5fe75dd7d46c7a9f"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 1.46,
+      "log": "/private/tmp/goway-8d3a-mutation-distinct-binding-budget.log",
+      "log_sha256": "9ff2073bb11b64976178c2f8c096d7a8e9a36c3dfc9816ba32d0bac49b91d5d8"
+    },
+    {
+      "name": "source-zero-match",
+      "gap": 6,
+      "command": "go test -count=1 ./internal/ormcore -run TestSourceMatchDecoderRejectsAmbiguityAndPreservesScanErrors",
+      "changes": [
+        {
+          "file": "internal/ormcore/source_match.go",
+          "before": "if matches != 1 {",
+          "after": "if false && matches != 1 {"
+        }
+      ],
+      "source_sha256": {
+        "internal/ormcore/source_match.go": "b1e6e96ad1e93f90b7eab3af80de22366261a4d58ac63732cd68b3ac6eb62772"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 1.85,
+      "log": "/private/tmp/goway-8d3a-mutation-source-zero-match.log",
+      "log_sha256": "704f6964fe915afb713eed6dc77188ad337e453220efa7d18f9dd4393eab7e00"
+    },
+    {
+      "name": "source-scan-identity",
+      "gap": 6,
+      "command": "go test -count=1 ./internal/ormcore -run TestSourceMatchDecoderRejectsAmbiguityAndPreservesScanErrors",
+      "changes": [
+        {
+          "file": "internal/ormcore/source_match.go",
+          "before": "return err",
+          "after": "return Invalid(\"scan failed\")"
+        }
+      ],
+      "source_sha256": {
+        "internal/ormcore/source_match.go": "b1e6e96ad1e93f90b7eab3af80de22366261a4d58ac63732cd68b3ac6eb62772"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 1.89,
+      "log": "/private/tmp/goway-8d3a-mutation-source-scan-identity.log",
+      "log_sha256": "7776bf51887035a7c91ca0385f13d4ab89dd04a423f82645bab31b90a572d042"
+    },
+    {
+      "name": "source-cte-collision",
+      "gap": 6,
+      "command": "go test -count=1 ./internal/querycore -run TestSourceWriteCTEsAvoidPrivateNameCollisions",
+      "changes": [
+        {
+          "file": "internal/querycore/select_names.go",
+          "before": "for i := 2; n.Used[name]; i++ {",
+          "after": "for i := 2; false && n.Used[name]; i++ {"
+        }
+      ],
+      "source_sha256": {
+        "internal/querycore/select_names.go": "84a140c6a736f75f3451823cdc859a47734bba72786de4237f1e90daf38e1e2a"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 1.16,
+      "log": "/private/tmp/goway-8d3a-mutation-source-cte-collision.log",
+      "log_sha256": "7c55f6828bb86be31784cbe502a7f046f3982e1d588fcabb143faa8f52b407dc"
+    },
+    {
+      "name": "count-irrelevant-order",
+      "gap": 7,
+      "command": "go test -count=1 ./database/orm -run TestCountOmitsOrderingThatCannotChangeIt",
+      "changes": [
+        {
+          "file": "internal/querycore/compiler.go",
+          "before": "node.Orders = nil",
+          "after": "// retained irrelevant order"
+        }
+      ],
+      "source_sha256": {
+        "internal/querycore/compiler.go": "5709f43fb1fb37fd2230f2c1ff1d02b0393102e7049e16bee81097f5cd632477"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 27.81,
+      "log": "/private/tmp/goway-8d3a-mutation-count-irrelevant-order.log",
+      "log_sha256": "44a54d45b12f69b3e6151c2923fdc4c8535b6bcf6a2237b2806a92bc50ee6286"
+    },
+    {
+      "name": "count-window-order",
+      "gap": 7,
+      "command": "go test -count=1 ./database/orm -run TestCountOmitsOrderingThatCannotChangeIt",
+      "changes": [
+        {
+          "file": "internal/querycore/compiler.go",
+          "before": "!limited && node.Offset == 0 && node.Distinct.Kind != DistinctOn",
+          "after": "true || (!limited && node.Offset == 0 && node.Distinct.Kind != DistinctOn)"
+        }
+      ],
+      "source_sha256": {
+        "internal/querycore/compiler.go": "5709f43fb1fb37fd2230f2c1ff1d02b0393102e7049e16bee81097f5cd632477"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 28.0,
+      "log": "/private/tmp/goway-8d3a-mutation-count-window-order.log",
+      "log_sha256": "89d99d8610cd464886843d335b897b242a5e4fdc86f03de49b90801791b81086"
+    },
+    {
+      "name": "transaction-time-binding",
+      "gap": 7,
+      "command": "go test -count=1 ./database/orm/rows -run TestRelativeTimeWindowBindsStableValues",
+      "changes": [
+        {
+          "file": "database/orm/expr/temporal_expression.go",
+          "before": "result := operationValue[S](querycore.TransactionTimeOperation, columnCodec(codec.DateTime()))",
+          "after": "result := operationValue[S](querycore.TransactionTimeOperation, columnCodec(codec.DateTime()))\n result.data.core.Node = querycore.ParameterNode{Kind: codec.TypeDateTime, Value: querycore.RetainLiteral(time.Now().UTC())}"
+        }
+      ],
+      "source_sha256": {
+        "database/orm/expr/temporal_expression.go": "163959c34a39539b60ee66f761c258893eabf4e4da58bd85257bb5226e9ce558"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 13.98,
+      "log": "/private/tmp/goway-8d3a-mutation-transaction-time-binding.log",
+      "log_sha256": "39eac3b2e1bb44b6bfe65817c70a02cbc32055ca967fb314949f9a6f3d0edbf8"
+    },
+    {
+      "name": "materialized-inner-order",
+      "gap": 8,
+      "command": "go test -count=1 ./database/orm/rows -run TestReportReorderingPreservesMaterializedWinnerSelection",
+      "changes": [
+        {
+          "file": "internal/querycore/report.go",
+          "before": "node.Orders = nil",
+          "after": "node.Orders = nil\n if node.Source.Query != nil { inner := *node.Source.Query; inner.Orders = nil; node.Source.Query = &inner }"
+        }
+      ],
+      "source_sha256": {
+        "internal/querycore/report.go": "7043aca95fe79535e794f3ef6b13a3248a3edff147943c346b06c07538cfff21"
+      },
+      "exit_code": 1,
+      "assertion_failed": true,
+      "seconds": 15.38,
+      "log": "/private/tmp/goway-8d3a-mutation-materialized-inner-order.log",
+      "log_sha256": "7dfa258d80199c24cbee796f5a8acb549bc4c2477cfce0ed7a1493984a5b0fad"
+    }
+  ],
+  "restored_runtime_sources": true,
+  "mutation_note": "Each mutation was isolated, targeted assertion failure confirmed (compile failures excluded), then original bytes restored. Pivot opacity is tested by exposing the retained discriminator directly on the carrier; time stability by replacing transaction time with an application clock binding. One test-only OrderByScalar typo was corrected to OrderScalar before resuming remaining mutations.",
+  "commands": [
+    {
+      "command": "go build ./...",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "go vet ./...",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "make test",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-root-test.log",
+      "log_sha256": "909c37a3ed268fe5c1693ff0d9114918df57d747a9c054777f2e12ea8dd75841"
+    },
+    {
+      "command": "go test -race ./database/orm ./database/orm/expr ./database/orm/rows ./internal/querycore ./internal/ormcore",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-races.log",
+      "log_sha256": "57a806b600414477633c9c4320866bff6abae9d969ad1540f63459981d05755c"
+    },
+    {
+      "command": "make fixture-check",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-fixtures.log",
+      "log_sha256": "52ca7b8a3aead22ff5328b0c0814625a540dc23abf9ae4d53ad4ed8c58ade9a0"
+    },
+    {
+      "command": "python3 tools/goway_catalogue.py",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-catalogue.log",
+      "log_sha256": "c26391fbffb90935522f886fee4676266ca635d72bdb93e451c1061513584342"
+    },
+    {
+      "command": "cd tests/fixtures/goway && go test -count=1 -run ^TestFootprintBudgets$ -v .",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-footprint.log",
+      "log_sha256": "721fd294f4e8737a757d063e5e0d227b821341e2ad233e2cbbe39674cafec7d6"
+    },
+    {
+      "command": "make docs-check",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-docs.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "command": "make fmt-check",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "make docs-check (final report)",
+      "result": "pass",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review-docs-final.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    }
+  ],
+  "census": {
+    "entries": 551,
+    "stale": 0,
+    "fixture_sources_changed_in_correction": 0,
+    "frozen_records_changed": false
+  },
+  "source_sha256": {
+    "database/orm/count_order_transfer_test.go": "b4a79c3405a210e9cd6b414b89e3026abfbd5c43bd01e6ff09212f53fa7c8c3e",
+    "database/orm/expr/json_expression.go": "955bded9d907160cf7baa87cb55143f4387d3c5e556addfb46981b0f6b6a778b",
+    "database/orm/relation_morph_transfer_test.go": "2f47c5badaf25307eb94c083581cf26f0b623c8e69b8fcf843324643c0395b2d",
+    "database/orm/rows/correlation_grouping_transfer_test.go": "d3299f67e9b29615ecf9e5bd03a2c1b2f10338fe435cb30bccdb71f5595cb24f",
+    "database/orm/rows/materialized_winner_transfer_test.go": "3e23754c17150ce29ce0c0a9391fe0867af33ace4583da5b8b78a64c6788d7be",
+    "database/orm/rows/relative_time_transfer_test.go": "0d9886709b50294dc19acf4715447deab0efaa6ad5c5d1706ef581c00a0ca2aa",
+    "database/orm/rows/text_insensitive_transfer_test.go": "79a94acc3e396642bf913ecee001a4a59e1eecd73f0b602b6fa4e2e5f00b2d83",
+    "internal/ormcore/source_match_test.go": "0b9c25b49241d904e6d57e95d5d8c36c7e9d8e3e5c82daa3546cf30b161774d1",
+    "internal/querycore/distinct_budget_test.go": "e23bb18364635bbd930cc6dd7ef9369ea3bb526ff1fd7eb2e1f576ad55023863",
+    "internal/querycore/source_write_transfer_test.go": "1e5350a116d0d53d793c8f661471890212ae321c6f88b03ab2f5d29ea09f38de"
+  },
+  "footprint": {
+    "all_probes_passed": true,
+    "probe_count": 148,
+    "changed_ceilings": 0,
+    "new_probes": 0,
+    "rechecked_slice_counts": {
+      "q_with": 1173,
+      "aggregate_families": 4339,
+      "rows_each": 990,
+      "read_record": 934,
+      "read_set": 982,
+      "result_reads": 1356,
+      "record_sets": 1455,
+      "value_sets": 2416,
+      "result_cursor": 2179,
+      "json_paths": 5680,
+      "extension_slots": 2436
+    },
+    "delta_from_initial_slice": {
+      "q_with": 0,
+      "aggregate_families": 0,
+      "rows_each": 0,
+      "read_record": 0,
+      "read_set": 0,
+      "result_reads": 0,
+      "record_sets": 0,
+      "value_sets": 0,
+      "result_cursor": 0,
+      "json_paths": 0,
+      "extension_slots": 0
+    }
+  },
+  "transfer_ledger_sha256": "b813a7f8ff3190137da91c5d0bd5cd3e6b3b6960e5a29d7a3f44c4a87879c782",
+  "examples_updated": 8,
+  "runtime_changes": false,
+  "added_regressions": 12
+}

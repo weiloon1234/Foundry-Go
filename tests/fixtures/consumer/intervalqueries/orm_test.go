@@ -39,7 +39,7 @@ func TestIntervalDeclarationSQLParity(t *testing.T) {
 		rows.MapSelected(Summaries.Total, expr.SumInterval(Samples.Period).Value()),
 		rows.MapSelected(Summaries.Average, expr.AvgInterval(Samples.Period).Value()),
 		rows.MapSelected(Summaries.Count, expr.Count[Sample]().Value()))
-	got, err = rows.Compile(projection)
+	got, err = rows.CompileRead(rows.Read(projection))
 
 	compare(got, err)
 }

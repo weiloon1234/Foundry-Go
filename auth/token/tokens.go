@@ -1,5 +1,7 @@
 package token
 
+import "time"
+
 import (
 	"context"
 	"slices"
@@ -237,7 +239,7 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 			}
 			mode, policy = Challenge, t.lifetimes.Challenge
 		}
-		id, err := model.NewID[Record]()
+		id, err := model.NewIDAt[Record](time.Now())
 		if err != nil {
 			return err
 		}

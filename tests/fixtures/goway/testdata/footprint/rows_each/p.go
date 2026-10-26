@@ -9,5 +9,5 @@ import (
 )
 
 func Stream(ctx context.Context, db database.Executor, yield func(int64) error) error {
-	return rows.Each(ctx, db, rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents), yield)
+	return rows.EachRead(ctx, db, rows.Read(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)), yield)
 }

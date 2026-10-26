@@ -29,7 +29,7 @@ func TestPostgresCompleteRecordsFromJoins(t *testing.T) {
 		scope := rowset.LeftScope(joined, rowset.Scope(people))
 		fields := scope
 		builder := rowset.SelectRecord(joined, scope).OrderBy(expr.At(fields, models.Users.Email).Asc())
-		rows, err := builder.All(t.Context(), tx)
+		rows, err := rowset.ReadRecord(builder).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -56,7 +56,7 @@ func TestPostgresCompleteRecordsFromJoins(t *testing.T) {
 		left := rowset.LeftJoin(people, orders, rowset.On(expr.At(p, models.Users.ID), expr.At(o, models.Orders.BuyerID)))
 		leftScope := rowset.LeftScope(left, rowset.Scope(people))
 		leftFields := leftScope
-		leftRows, err := rowset.SelectRecord(left, leftScope).OrderBy(expr.At(leftFields, models.Users.Email).Asc()).All(t.Context(), tx)
+		leftRows, err := rowset.ReadRecord(rowset.SelectRecord(left, leftScope).OrderBy(expr.At(leftFields, models.Users.Email).Asc())).All(t.Context(), tx)
 		if err != nil || !reflect.DeepEqual(leftRows, []models.User{users[0], users[0], users[1], users[2]}) {
 			t.Fatal("preserved left model lost unmatched row", err)
 		}
@@ -68,7 +68,7 @@ func TestPostgresCompleteRecordsFromJoins(t *testing.T) {
 		// A complete joined result and a plain model query share the same record contract.
 		combined := rowset.Union(builder, rowset.ModelRecord(models.Users.Query()))
 		cf := combined.Scope()
-		if rows, err := combined.OrderBy(expr.At(cf, models.Users.Email).Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, users) {
+		if rows, err := rowset.ReadSet(combined.OrderBy(expr.At(cf, models.Users.Email).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, users) {
 			t.Error("joined model could not compose with typed set", err)
 		}
 		common := rowset.CTE("joined_people", builder)
@@ -86,7 +86,7 @@ func TestPostgresCompleteRecordsFromJoins(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		if rows, err := builder.All(ctx, queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, context.Canceled) {
+		if rows, err := rowset.ReadRecord(builder).All(ctx, queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, context.Canceled) {
 			t.Error("canceled record selection reached executor", err)
 		}
 		if err := checkProjectionRecord(t, tx, users); err != nil {
@@ -96,7 +96,7 @@ func TestPostgresCompleteRecordsFromJoins(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `UPDATE users SET status='invalid' WHERE id=$1`, users[1].ID.String()); err != nil {
 			return err
 		}
-		if rows, err := builder.All(t.Context(), tx); rows != nil || !errors.Is(err, fault.Invalid) {
+		if rows, err := rowset.ReadRecord(builder).All(t.Context(), tx); rows != nil || !errors.Is(err, fault.Invalid) {
 			t.Error("record selection returned partial models after codec failure", err)
 		}
 		return nil
@@ -144,7 +144,7 @@ func TestInvalidRecordSelectionNeverExecutes(t *testing.T) {
 		rowset.SelectRecord(rowset.From(q.With(models.UserLinks.Orders)), rowset.ModelScope(q)),
 		rowset.SelectRecord(rowset.From(q), rowset.ModelScope(q)).Where(expr.ModelPredicate(models.Users.Status.Eq(models.Status("invalid")))),
 	} {
-		if rows, err := selected.All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
+		if rows, err := rowset.ReadRecord(selected).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 			t.Error("invalid record selection reached executor", err)
 		}
 	}

@@ -124,7 +124,7 @@ func (f Field[M, K]) matchingKeys(ctx context.Context, m *Manager, locale i18n.L
 		fields := store.Translations
 		// The value hash index (000002_index_translation_values) serves the
 		// equality; only ownership/index columns are selected, never the text.
-		return rows.Each(ctx, tx, store.TranslationsIndex(store.Translations.Query().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.Field.Eq(string(f.Name())), fields.Locale.Eq(string(locale)), fields.Value.Eq(text)).OrderBy(fields.KeyColumn.Asc()).Limit(querycore.MaxIdentityBatch+1)), func(row store.TranslationIndex) error {
+		return rows.EachRead(ctx, tx, rows.Read(store.TranslationsIndex(store.Translations.Query().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.Field.Eq(string(f.Name())), fields.Locale.Eq(string(locale)), fields.Value.Eq(text)).OrderBy(fields.KeyColumn.Asc()).Limit(querycore.MaxIdentityBatch+1))), func(row store.TranslationIndex) error {
 			if len(keys) >= querycore.MaxIdentityBatch {
 				return fault.New(fault.Conflict, "translation matching scope exceeds its limit")
 			}

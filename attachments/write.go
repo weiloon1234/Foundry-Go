@@ -1,5 +1,7 @@
 package attachments
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -131,7 +133,7 @@ func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner m
 			}
 		}
 	}
-	id, err := model.NewID[store.File]()
+	id, err := model.NewIDAt[store.File](time.Now())
 	if err != nil {
 		return model.ID[store.File]{}, nil, err
 	}

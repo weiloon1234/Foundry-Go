@@ -108,7 +108,7 @@ func relations(ctx context.Context, db database.Executor, existing []models.Orde
 	if err != nil {
 		return err
 	}
-	_, err = orm.Load(ctx, db, existing, OrderBuyer)
+	_, err = orm.LoadFrom(ctx, db, models.Orders.Query().With(OrderBuyer), existing)
 	return err
 }
 

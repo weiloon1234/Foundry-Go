@@ -24,7 +24,7 @@ func Typed(ctx context.Context, db *database.DB, id model.ID[models.User]) {
 	_, _ = q.UpdateAll(ctx, db, models.Users.Age.Set(21))
 	_, _ = q.DeleteAll(ctx, db)
 	_, _ = models.Orders.Query().With(models.OrderRelations.Buyer).All(ctx, db)
-	_, _ = orm.Load(ctx, db, users, models.UserRelations.Orders)
+	_, _ = orm.LoadFrom(ctx, db, models.Users.Query().With(models.UserRelations.Orders), users)
 	_, _ = orm.CursorPaginate(ctx, db, q, orm.CursorRequest[models.User]{Size: 10})
 	_ = q.Chunk(ctx, db, 10, func([]models.User) error { return nil })
 	_ = db.Transaction(ctx, func(tx *database.Tx) error {

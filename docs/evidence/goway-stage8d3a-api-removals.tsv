@@ -1,0 +1,31 @@
+file	base_line	exact_declaration_removed
+database/orm/column.go	439	func (p Predicate[M]) Not() Predicate[M] { return Not(p) }
+database/orm/relation_tree.go	199	func Load[M any](ctx context.Context, ex database.Executor, parents []M, rels ...Relation[M]) ([]M, error) {
+database/orm/relation_tree.go	205	func LoadMissing[M any](ctx context.Context, ex database.Executor, parents []M, rels ...Relation[M]) ([]M, error) {
+database/orm/rows/read.go	15	func Compile[S, R any](q Query[S, R]) (orm.Statement, error) {
+database/orm/rows/read.go	23	func Preflight[S, R any](ctx context.Context, q Query[S, R]) error {
+database/orm/rows/read.go	32	func Count[S, R any](ctx context.Context, ex database.Executor, q Query[S, R]) (int64, error) {
+database/orm/rows/read.go	37	func Each[S, R any](ctx context.Context, ex database.Executor, q Query[S, R], yield func(R) error) error {
+database/orm/rows/record.go	134	func (r RecordRead[S, R]) All(ctx context.Context, ex database.Executor) ([]R, error) {
+database/orm/rows/set.go	61	func (q SetQuery[R]) All(ctx context.Context, ex database.Executor) ([]R, error) {
+database/orm/rows/value_set.go	135	func (q ValueSetQuery[V]) All(ctx context.Context, ex database.Executor) ([]V, error) {
+database/orm/rows/result_cursor.go	58	func (q ValueCursorQuery[V]) Key() expr.GroupKey[CursorScope[V]] { return expr.Group(q.Value()) }
+database/orm/expr/value.go	64	func Select[S, V any](v RowValue[S, V]) Selected[S, V] { return rowInput(v).Value() }
+database/orm/expr/json_path.go	41	func (p JSONPath[S, P]) Kind() RowExpression[S, value.Nullable[JSONKind]] {
+database/orm/expr/json_path.go	46	func (p JSONPath[S, P]) Length() NullableOrderedRowExpression[S, int64] {
+database/orm/expr/json_path.go	51	func (p JSONPath[S, P]) Exists() Predicate[S] { return p.JSON().IsNotNull() }
+database/orm/expr/json_path.go	54	func (p JSONPath[S, P]) IsMissing() Predicate[S] { return p.JSON().IsNull() }
+database/orm/expr/json_path.go	57	func (p JSONPath[S, P]) IsJSONNull() Predicate[S] { return p.Kind().Eq(value.Of(JSONNull)) }
+database/orm/expr/json_path.go	60	func (p JSONPath[S, P]) Contains(fragment P) Predicate[S] {
+database/orm/expr/json_expression.go	12	type JSONKind = database.JSONKind
+database/orm/expr/json_expression.go	15	JSONObject  = database.JSONObject
+database/orm/expr/json_expression.go	16	JSONArray   = database.JSONArray
+database/orm/expr/json_expression.go	17	JSONString  = database.JSONString
+database/orm/expr/json_expression.go	18	JSONNumber  = database.JSONNumber
+database/orm/expr/json_expression.go	19	JSONBoolean = database.JSONBoolean
+database/orm/expr/json_expression.go	20	JSONNull    = database.JSONNull
+database/orm/relation_morph.go	10	type MorphName = model.MorphName
+database/orm/relation_morph.go	13	type Morphable = model.Morphable
+datatable/http.go	54	func (c Config) DownloadTimeout() time.Duration {
+model/id.go	24	func NewID[M any]() (ID[M], error) { return NewIDAt[M](time.Now()) }
+jobs/envelope.go	61	LegacyEnvelope   EnvelopeVersion = 1

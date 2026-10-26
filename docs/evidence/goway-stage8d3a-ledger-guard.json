@@ -1,0 +1,29 @@
+{
+  "scope": "Final ledger guard correction",
+  "source": "tools/goway-retire/transfers_test.go",
+  "sha256": "1aeb30ccbe284795c8c35d74cf85e9d1a6501a92c95e165aeeaf6a2eaa51edca",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r19",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "checks": [
+    {
+      "command": "go test ./tools/goway-retire -count=1",
+      "exit_code": 0
+    },
+    {
+      "command": "make test 'test_packages=$(GO) test -timeout=$(TEST_TIMEOUT) ./tools/goway-retire'",
+      "exit_code": 0
+    },
+    {
+      "command": "make docs-check",
+      "exit_code": 0
+    },
+    {
+      "command": "make fmt-check",
+      "exit_code": 0
+    }
+  ]
+}

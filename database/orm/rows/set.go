@@ -1,10 +1,8 @@
 package rows
 
 import (
-	"context"
 	"reflect"
 
-	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -56,8 +54,3 @@ func (q SetQuery[R]) Limit(n int) SetQuery[R] { q.core.Source.Node.Limit = value
 
 // Offset skips combined rows. Example: combined.Offset(10).
 func (q SetQuery[R]) Offset(n int) SetQuery[R] { q.core.Source.Node.Offset = n; return q }
-
-// All collects complete results through the existing retrieval owner. Example: combined.All(ctx,db).
-func (q SetQuery[R]) All(ctx context.Context, ex database.Executor) ([]R, error) {
-	return readRecord[R](ctx, ex, ormcore.SetRecord(q.core), false)
-}

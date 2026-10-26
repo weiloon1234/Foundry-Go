@@ -59,19 +59,19 @@ func TestStage4dRelationAggregatePostgres(t *testing.T) {
 		}
 	}
 	statements = 0
-	_, err = orm.LoadMissing(ctx, db, parents, j.ParentAggregates.Count, j.ParentAggregates.Total)
+	_, err = orm.LoadMissingFrom(ctx, db, j.Parents.Query().With(j.ParentAggregates.Count, j.ParentAggregates.Total), parents)
 	must(t, err)
 	if statements != 0 {
 		t.Fatal("loaded zero/NULL queried again")
 	}
 	parents[1].Count = relation.Value[int64]{}
-	_, err = orm.LoadMissing(ctx, db, parents, j.ParentAggregates.Count)
+	_, err = orm.LoadMissingFrom(ctx, db, j.Parents.Query().With(j.ParentAggregates.Count), parents)
 	must(t, err)
 	if statements != 1 {
 		t.Fatal("partial LoadMissing", statements)
 	}
 	statements = 0
-	peers, err := orm.Load(ctx, db, parents, j.ParentAggregates.Peers, j.ParentAggregates.Pivots)
+	peers, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.ParentAggregates.Peers, j.ParentAggregates.Pivots), parents)
 	must(t, err)
 	if statements != 2 {
 		t.Fatal("target and pivot slots must remain separate", statements)
@@ -84,34 +84,34 @@ func TestStage4dRelationAggregatePostgres(t *testing.T) {
 		}
 	}
 	distinct := j.Parents.Count.Using(expr.Related(j.Peers, expr.CountDistinctField(j.Targets.ID)))
-	peers, err = orm.Load(ctx, db, parents, distinct)
+	peers, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(distinct), parents)
 	must(t, err)
 	if n, _ := peers[0].Count.Get(); n != 2 {
 		t.Fatal("distinct targets", n)
 	}
 	filtered := j.ParentAggregates.Count.Using(expr.Related(j.DirectTargets, expr.Count[j.Target]().Filter(expr.OrderRow(expr.Value(j.Targets.Rank)).Gt(8))))
-	peers, err = orm.Load(ctx, db, parents, filtered)
+	peers, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(filtered), parents)
 	must(t, err)
 	if n, _ := peers[0].Count.Get(); n != 1 {
 		t.Fatal("aggregate FILTER", n)
 	}
-	if _, err := orm.Load(ctx, db, parents, j.Parents.Count.Using(expr.Related(j.Chosen, expr.Count[j.Target]().Filter(expr.Value(j.Targets.Rank).Eq(-1))))); !errors.Is(err, database.TooManyRows) {
+	if _, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Parents.Count.Using(expr.Related(j.Chosen, expr.Count[j.Target]().Filter(expr.Value(j.Targets.Rank).Eq(-1))))), parents); !errors.Is(err, database.TooManyRows) {
 		t.Fatal("FILTER concealed singular cardinality", err)
 	}
 	statements = 0
-	peers, err = orm.Load(ctx, db, parents, j.Parents.Count.Using(expr.Related(j.MorphPeers, expr.Count[j.Target]())))
+	peers, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Parents.Count.Using(expr.Related(j.MorphPeers, expr.Count[j.Target]()))), parents)
 	must(t, err)
 	if n, _ := peers[0].Count.Get(); n != 2 || statements != 1 {
 		t.Fatal("morph pivot scope", n, statements)
 	}
-	peers, err = orm.Load(ctx, db, parents, j.Parents.Count.Using(expr.Related(j.TargetsThrough, expr.Count[j.Target]())))
+	peers, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Parents.Count.Using(expr.Related(j.TargetsThrough, expr.Count[j.Target]()))), parents)
 	must(t, err)
 	if n, _ := peers[0].Count.Get(); n != 3 {
 		t.Fatal("through paths", n)
 	}
 	nested := j.Targets.Count.Using(expr.Related(j.TargetParent, expr.Count[j.Parent]()))
 	statements = 0
-	peers, err = orm.Load(ctx, db, parents, j.DirectTargets.With(nested))
+	peers, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(j.DirectTargets.With(nested)), parents)
 	must(t, err)
 	if statements != 2 {
 		t.Fatal("nested aggregate batch", statements)
@@ -142,7 +142,7 @@ func TestStage4dRelationAggregatePostgres(t *testing.T) {
 	if !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	peers, err = orm.Load(ctx, db, parents, j.ParentAggregates.Count)
+	peers, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(j.ParentAggregates.Count), parents)
 	must(t, err)
 	if n, _ := peers[0].Count.Get(); n != 2 {
 		t.Fatal("rollback did not restore aggregate", n)

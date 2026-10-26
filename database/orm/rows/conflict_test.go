@@ -61,3 +61,29 @@ func TestConflictRejectsOtherDeclarationsBeforeTransaction(t *testing.T) {
 		t.Fatal(err, state.sql)
 	}
 }
+func TestSharedWritePlanningOwnsCapturedPoliciesDuringConcurrentCompilation(t *testing.T) {
+	m := declareMembers()
+	updates := []orm.ConflictUpdate[member]{orm.ConflictSet(m.Nickname, "captured")}
+	policy := ConflictTargetWhere(OnConflictKeys(expr.Group(expr.Lower(expr.Value(m.Name)))), expr.Value(m.Name).Ne("")).DoUpdate(updates...)
+	updates[0] = orm.ConflictNull(m.Nickname)
+	for i := range 12 {
+		t.Run(string(rune('a'+i)), func(t *testing.T) {
+			t.Parallel()
+			state := &driverState{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "inserted", "captured"}}}
+			db, e := database.Open(t.Context(), database.Adapter{Connector: conflictDriver{testDriver{state}}}, database.DefaultPoolConfig())
+			if e != nil {
+				t.Fatal(e)
+			}
+			t.Cleanup(func() { db.Close(context.Background()) })
+			_ = ConflictTargetWhere(policy.Where(m.Name.Eq("allowed")), expr.Value(m.Name).Ne("other")).DoUpdate(orm.ConflictIncoming(m.Nickname))
+			for range 2 {
+				if _, e := orm.Upsert(t.Context(), db, m.Query(), policy, m.ID.Set(1), m.Name.Set("inserted")); e != nil {
+					t.Fatal(e)
+				}
+				if !strings.Contains(state.sql, `WHERE ("name" <> E'')`) || strings.Contains(state.sql, "allowed") || len(state.arguments) != 3 || state.arguments[0].Value != int64(1) || state.arguments[1].Value != "inserted" || state.arguments[2].Value != "captured" {
+					t.Fatal("borrowed captured policy", state.sql, state.arguments)
+				}
+			}
+		})
+	}
+}

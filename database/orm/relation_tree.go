@@ -193,19 +193,6 @@ func loadPlansAt(ctx context.Context, ex database.Executor, base unsafe.Pointer,
 	return nil
 }
 
-// Load returns copies with loaded slots, without fetching parents. Errors discard
-// partial results. Supplied parent provenance and authorization belong to callers.
-// Example: loaded, err := orm.Load(ctx,db,orders,OrderRelations.Buyer).
-func Load[M any](ctx context.Context, ex database.Executor, parents []M, rels ...Relation[M]) ([]M, error) {
-	return loadExisting(ctx, ex, parents, false, rels)
-}
-
-// LoadMissing preserves already-loaded slots, including loaded-empty slots, and
-// performs no parent query. Example: orm.LoadMissing(ctx,db,orders,OrderRelations.Buyer).
-func LoadMissing[M any](ctx context.Context, ex database.Executor, parents []M, rels ...Relation[M]) ([]M, error) {
-	return loadExisting(ctx, ex, parents, true, rels)
-}
-
 // LoadFrom loads the query's relations onto copies of existing parents using its
 // relation limits. Parent filters and windows are validated but do not re-fetch
 // or filter supplied models. Errors publish no partial result.
@@ -229,20 +216,7 @@ func loadExistingQuery[M any](ctx context.Context, ex database.Executor, q query
 	if err := validateQuery(q); err != nil {
 		return nil, err
 	}
-	return loadExistingPlans(ctx, ex, parents, missing, q.relations)
-}
-
-func loadExisting[M any](ctx context.Context, ex database.Executor, parents []M, missing bool, rels []Relation[M]) ([]M, error) {
-	if err := executionContext(ctx, ex); err != nil {
-		return nil, err
-	}
-	q := withRelations(queryState{}, rels)
-	if err := validateRelations(q); err != nil {
-		return nil, err
-	}
-	return loadExistingPlans(ctx, ex, parents, missing, q.relations)
-}
-func loadExistingPlans[M any](ctx context.Context, ex database.Executor, parents []M, missing bool, plans []*relationPlan) ([]M, error) {
+	plans := q.relations
 	result := slices.Clone(parents)
 	limits := rootRelationLimits(plans)
 	budget := relationBudget{limits: limits, remaining: limits.MaxRows, attachments: limits.MaxRows}

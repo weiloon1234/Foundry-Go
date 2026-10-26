@@ -158,7 +158,7 @@ func TestPostgresAttachmentStorageInspectionPagesWithFixedCutoff(t *testing.T) {
 	f := openAttachments(t)
 	owned := addText(t, f, testSingle, member(t, 1), "owned")
 	// Simulate a storage object with no journal. It is reported, never deleted.
-	id, err := model.NewID[store.File]()
+	id, err := model.NewIDAt[store.File](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

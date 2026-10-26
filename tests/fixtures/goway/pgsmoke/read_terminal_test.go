@@ -54,7 +54,7 @@ func TestStage9ReadTerminalsReleaseSessions(t *testing.T) {
 		if err := rows.EachRead(ctx, s, q, func(treeNode) error { return stop }); !errors.Is(err, stop) {
 			t.Fatal(err)
 		}
-		scalar := rows.ReadScalar(rows.SelectScalar(a, expr.Select(expr.At(rows.Scope(a), table.Key()))))
+		scalar := rows.ReadScalar(rows.SelectScalar(a, expr.Row(expr.At(rows.Scope(a), table.Key())).Value()))
 		if err := rows.EachRead(ctx, s, scalar, func(int64) error { return stop }); !errors.Is(err, stop) {
 			t.Fatal(err)
 		}

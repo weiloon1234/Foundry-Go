@@ -148,14 +148,14 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 			return errors.New("DTO projection lost the default deletion scope")
 		}
 		visible := rows.AsRecord[childAlias](rows.CTE("soft_visible", rows.ModelRecord(childQuery)), "visible")
-		visibleRows, err := rows.SelectRecord(visible, rows.Scope(visible)).All(ctx, tx)
+		visibleRows, err := rows.ReadRecord(rows.SelectRecord(visible, rows.Scope(visible))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if len(visibleRows) != 1 || visibleRows[0].ID != active.ID {
 			return errors.New("CTE lost its model visibility")
 		}
-		combined, err := rows.UnionAll(rows.ModelRecord(childQuery), rows.ModelRecord(childQuery.OnlyTrashed())).All(ctx, tx)
+		combined, err := rows.ReadSet(rows.UnionAll(rows.ModelRecord(childQuery), rows.ModelRecord(childQuery.OnlyTrashed()))).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -203,7 +203,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 		joined := rows.LeftJoin(child, ancestor, rows.On(childParent, parentKey))
 		missing := expr.AtNullable(rows.NullableRightScope(joined, rows.Scope(ancestor)), f.Key())
 		selected := rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child))).Where(missing.IsNull())
-		items, err := selected.All(ctx, tx)
+		items, err := rows.ReadRecord(selected).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -214,7 +214,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 		parentKey = expr.At(rows.Scope(ancestor), f.Key())
 		joined = rows.LeftJoin(child, ancestor, rows.On(childParent, parentKey))
 		missing = expr.AtNullable(rows.NullableRightScope(joined, rows.Scope(ancestor)), f.Key())
-		items, err = rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child))).Where(missing.IsNull()).All(ctx, tx)
+		items, err = rows.ReadRecord(rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child))).Where(missing.IsNull())).All(ctx, tx)
 		if err != nil {
 			return err
 		}

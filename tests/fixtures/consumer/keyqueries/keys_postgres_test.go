@@ -65,7 +65,7 @@ func TestPostgresComputedPartitionsAndDistinct(t *testing.T) {
 			t.Fatal("computed DISTINCT ON precedence", got, err)
 		}
 		// Window outputs are evaluated before DISTINCT ON.
-		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.DistinctOnScalarValues(rowset.SelectScalar(rowset.From(base), expr.Select(expr.Value(u.Age))), rank.Key()), rank.Asc(), expr.Value(u.Age).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{20, 22}) {
+		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.DistinctOnScalarValues(rowset.SelectScalar(rowset.From(base), expr.Row(expr.Value(u.Age)).Value()), rank.Key()), rank.Asc(), expr.Value(u.Age).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{20, 22}) {
 			t.Fatal("window DISTINCT key", got, err)
 		}
 		count := expr.Count[models.User]()
@@ -76,8 +76,8 @@ func TestPostgresComputedPartitionsAndDistinct(t *testing.T) {
 		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.DistinctOnScalarValues(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(base), count.Value()), expr.Group(bucket)), count.Value().Key()), count.Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 2}) {
 			t.Fatal("aggregate DISTINCT key", got, err)
 		}
-		combined := rowset.UnionAllValues(rowset.Values(rowset.SelectScalar(rowset.From(base), expr.Select(expr.Value(u.Age)))), rowset.Values(rowset.SelectScalar(rowset.From(base), expr.Select(expr.Value(u.Age)))))
-		if got, err := rowset.DistinctOnValueSet(combined, combined.Value().Value().Key()).OrderBy(combined.Value().Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{20, 21, 22}) {
+		combined := rowset.UnionAllValues(rowset.Values(rowset.SelectScalar(rowset.From(base), expr.Row(expr.Value(u.Age)).Value())), rowset.Values(rowset.SelectScalar(rowset.From(base), expr.Row(expr.Value(u.Age)).Value())))
+		if got, err := rowset.ReadValues(rowset.DistinctOnValueSet(combined, combined.Value().Value().Key()).OrderBy(combined.Value().Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{20, 21, 22}) {
 			t.Fatal("combined value DISTINCT key", got, err)
 		}
 		return nil
@@ -94,7 +94,7 @@ func TestPostgresComputedKeyComposition(t *testing.T) {
 		u := models.Users
 		eligible := rowset.AsRecord[eligibleAlias](rowset.CTE("eligible", rowset.ModelRecord(base.Where(u.Age.Gt(20)))), "eligible_users")
 		f := rowset.Scope(eligible)
-		key := expr.When(rowset.InQuery(expr.Value(u.ID), rowset.SelectScalar(eligible, expr.Select(expr.At(f, models.Users.ID)))), expr.Param(u.Age, 1)).Else(expr.Param(u.Age, 0))
+		key := expr.When(rowset.InQuery(expr.Value(u.ID), rowset.SelectScalar(eligible, expr.Row(expr.At(f, models.Users.ID)).Value())), expr.Param(u.Age, 1)).Else(expr.Param(u.Age, 0))
 		// The only CTE reference appears inside the GROUP BY key.
 		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(base), expr.Count[models.User]().Value()), expr.Group(key)), expr.Count[models.User]().Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 2}) {
 			t.Fatal("group key dependency discovery", got, err)
@@ -103,7 +103,7 @@ func TestPostgresComputedKeyComposition(t *testing.T) {
 		link := rowset.Correlate(rowset.From(base), orders)
 		parent := rowset.OuterScope(link, rowset.ModelScope(base))
 		child := rowset.InnerScope(link, rowset.Scope(orders))
-		innerKey := expr.When(expr.OrderRow(expr.At(child, models.Orders.TotalCents)).Gt(1), expr.Select(expr.At(child, models.Orders.TotalCents)).Param(1)).Else(expr.Select(expr.At(child, models.Orders.TotalCents)).Param(0))
+		innerKey := expr.When(expr.OrderRow(expr.At(child, models.Orders.TotalCents)).Gt(1), expr.Row(expr.At(child, models.Orders.TotalCents)).Value().Param(1)).Else(expr.Row(expr.At(child, models.Orders.TotalCents)).Value().Param(0))
 		selected := rowset.OrderCorrelatedScalar(rowset.DistinctOnCorrelatedScalarValues(rowset.GroupByCorrelatedScalar(rowset.SelectCorrelatedScalar(link, innerKey.Value()).Where(expr.Equal(expr.At(child, models.Orders.BuyerID), expr.At(parent, models.Users.ID))), expr.Group(innerKey)), innerKey.Value().Key()), innerKey.Desc()).Limit(1)
 		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(base), rowset.CorrelatedScalarQuery(selected)), expr.Value(u.Age).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(1)), value.Of(int64(1)), value.Null[int64]()}) {
 			t.Fatal("correlated computed keys", got, err)
@@ -111,7 +111,7 @@ func TestPostgresComputedKeyComposition(t *testing.T) {
 		// Projected computed keys become ordinary fields for the next query scope.
 		grouped := rowset.AsRecord[groupedAlias](rowset.CTE("buckets", rowset.RecordOf(buckets())), "counts")
 		output := rowset.Scope(grouped)
-		if got, err := rowset.ReadScalar(rowset.WhereScalar(rowset.SelectScalar(grouped, expr.Select(rowset.At(output, keyqueries.BucketCounts.Count))), rowset.At(output, keyqueries.BucketCounts.Bucket).Eq(1))).RequireFirst(t.Context(), tx); err != nil || got != 2 {
+		if got, err := rowset.ReadScalar(rowset.WhereScalar(rowset.SelectScalar(grouped, expr.Row(rowset.At(output, keyqueries.BucketCounts.Count)).Value()), rowset.At(output, keyqueries.BucketCounts.Bucket).Eq(1))).RequireFirst(t.Context(), tx); err != nil || got != 2 {
 			t.Fatal("computed grouped output field", got, err)
 		}
 		return nil

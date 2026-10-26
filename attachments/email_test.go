@@ -1,5 +1,7 @@
 package attachments
 
+import "time"
+
 import (
 	"testing"
 
@@ -11,7 +13,7 @@ import (
 type mailOwner struct{}
 
 func TestReadyFilesAndSlotsExposePinnedEmailReferences(t *testing.T) {
-	id, err := model.NewID[FileOf[mailOwner]]()
+	id, err := model.NewIDAt[FileOf[mailOwner]](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

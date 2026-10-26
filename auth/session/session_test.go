@@ -77,7 +77,7 @@ func binding(t *testing.T, backend Backend, config Config) *Sessions[member, int
 func creation(t *testing.T) (Address, Creation) {
 	t.Helper()
 	p := proof(t)
-	id, err := model.NewID[Record]()
+	id, err := model.NewIDAt[Record](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

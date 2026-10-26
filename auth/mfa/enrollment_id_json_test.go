@@ -1,5 +1,7 @@
 package mfa
 
+import "time"
+
 import (
 	"encoding/json"
 	"testing"
@@ -12,7 +14,7 @@ type enrollmentJSONOwner struct{}
 type anotherEnrollmentJSONOwner struct{}
 
 func TestEnrollmentIDJSONPreservesOwnerAndRejectsInvalidInput(t *testing.T) {
-	raw, err := model.NewID[Record]()
+	raw, err := model.NewIDAt[Record](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

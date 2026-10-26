@@ -59,24 +59,24 @@ func TestJoinedRelationFamilies(t *testing.T) {
 		t.Fatal("shared target pivot contaminated")
 	}
 	statements = 0
-	filtered, err := orm.Load(ctx, db, []j.Parent{{ID: 1}}, j.Peers.Where(j.Targets.Name.Eq("ten")).WherePivot(j.Pivots.Role.Eq("c")))
+	filtered, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers.Where(j.Targets.Name.Eq("ten")).WherePivot(j.Pivots.Role.Eq("c"))), []j.Parent{{ID: 1}})
 	must(t, err)
 	if statements != 1 || filtered[0].Peers.Len() != 1 {
 		t.Fatal("constraints")
 	}
 	statements = 0
-	deleted, err := orm.Load(ctx, db, []j.Parent{{ID: 1}}, j.Peers.OnlyTrashedPivot())
+	deleted, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers.OnlyTrashedPivot()), []j.Parent{{ID: 1}})
 	must(t, err)
 	if statements != 1 || deleted[0].Peers.Len() != 1 {
 		t.Fatal("pivot-only trash scope")
 	}
 	statements = 0
-	through, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}}, j.TargetsThrough)
+	through, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.TargetsThrough), []j.Parent{{ID: 1}, {ID: 2}})
 	must(t, err)
 	if statements != 1 || through[0].Targets.Len() != 3 || through[1].Targets.Len() != 1 {
 		t.Fatal("through paths or batch count", statements)
 	}
-	if result, err := orm.Load(ctx, db, []j.Parent{{ID: 1}}, j.ChosenThrough); result != nil || !errors.Is(err, database.TooManyRows) {
+	if result, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.ChosenThrough), []j.Parent{{ID: 1}}); result != nil || !errors.Is(err, database.TooManyRows) {
 		t.Fatal("singular through cardinality", err)
 	}
 	for _, tc := range []struct {
@@ -84,7 +84,7 @@ func TestJoinedRelationFamilies(t *testing.T) {
 		id int64
 	}{{j.Chosen.LatestOfMany(), 11}, {j.Chosen.OldestOfMany(), 10}, {j.Chosen.OfMany(j.Targets.Rank.Desc()), 10}, {j.ChosenThrough.OfMany(j.Targets.Rank.Desc()), 10}} {
 		statements = 0
-		got, err := orm.Load(ctx, db, []j.Parent{{ID: 1}}, tc.r)
+		got, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(tc.r), []j.Parent{{ID: 1}})
 		must(t, err)
 		v, _ := got[0].Chosen.Get()
 		m, ok := v.Get()
@@ -93,19 +93,19 @@ func TestJoinedRelationFamilies(t *testing.T) {
 		}
 	}
 	statements = 0
-	morph, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}, {ID: 3}}, j.MorphChildren)
+	morph, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.MorphChildren), []j.Parent{{ID: 1}, {ID: 2}, {ID: 3}})
 	must(t, err)
 	if statements != 1 || morph[0].MorphChildren.Len() != 4 || morph[1].MorphChildren.Len() != 1 || morph[2].MorphChildren.Len() != 0 {
 		t.Fatal("morph source discriminator", statements, morph[0].MorphChildren.Len())
 	}
-	one, err := orm.Load(ctx, db, []j.Parent{{ID: 2}}, j.MorphChild)
+	one, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.MorphChild), []j.Parent{{ID: 2}})
 	must(t, err)
 	v, _ := one[0].MorphChild.Get()
 	if !v.IsSet() {
 		t.Fatal("morph-one")
 	}
 	statements = 0
-	inverse, err := orm.Load(ctx, db, []j.Pivot{{ID: 1, ParentID: value.Of(int64(1)), Kind: "parent"}, {ID: 2, ParentID: value.Of(int64(10)), Kind: "target"}, {ID: 3, ParentID: value.Of(int64(1)), Kind: "unknown"}}, j.MorphParent, j.MorphTarget)
+	inverse, err := orm.LoadFrom(ctx, db, j.Pivots.Query().With(j.MorphParent, j.MorphTarget), []j.Pivot{{ID: 1, ParentID: value.Of(int64(1)), Kind: "parent"}, {ID: 2, ParentID: value.Of(int64(10)), Kind: "target"}, {ID: 3, ParentID: value.Of(int64(1)), Kind: "unknown"}})
 	must(t, err)
 	if statements != 2 {
 		t.Fatal("morph group batches", statements)
@@ -121,17 +121,17 @@ func TestJoinedRelationFamilies(t *testing.T) {
 		t.Fatal("foreign discriminator")
 	}
 	statements = 0
-	_, err = orm.Load(ctx, db, []j.Pivot{{ID: 3, Kind: "unknown"}}, j.MorphParent, j.MorphTarget)
+	_, err = orm.LoadFrom(ctx, db, j.Pivots.Query().With(j.MorphParent, j.MorphTarget), []j.Pivot{{ID: 3, Kind: "unknown"}})
 	must(t, err)
 	if statements != 0 {
 		t.Fatal("empty morph issued SQL")
 	}
-	forward, err := orm.Load(ctx, db, []j.Parent{{ID: 1}}, j.MorphPeers)
+	forward, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.MorphPeers), []j.Parent{{ID: 1}})
 	must(t, err)
 	if forward[0].Peers.Len() != 2 {
 		t.Fatal("morph pivot filter")
 	}
-	back, err := orm.Load(ctx, db, []j.Target{{ID: 10}}, j.Inverse)
+	back, err := orm.LoadFrom(ctx, db, j.Targets.Query().With(j.Inverse), []j.Target{{ID: 10}})
 	must(t, err)
 	if back[0].Inverse.Len() != 3 {
 		t.Fatal("morphed-by-many")
@@ -152,7 +152,7 @@ func TestJoinedRelationFamilies(t *testing.T) {
 	_, err = db.Exec(ctx, `INSERT INTO joined_pivots VALUES (200,1,7,'parent','ambiguous',NULL)`)
 	must(t, err)
 	ambiguous := orm.ManyToManyOf(j.Parents.Peers, j.Parents.ID, j.Pivots.ParentID, j.Pivots.TargetID, j.Targets.Rank)
-	if result, err := orm.Load(ctx, db, []j.Parent{{ID: 1}}, ambiguous); result != nil || !errors.Is(err, database.TooManyRows) {
+	if result, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(ambiguous), []j.Parent{{ID: 1}}); result != nil || !errors.Is(err, database.TooManyRows) {
 		t.Fatal("pivot matched multiple targets", err)
 	}
 }

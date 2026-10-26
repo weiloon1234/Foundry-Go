@@ -1,5 +1,7 @@
 package httpvalidation_test
 
+import "time"
+
 import (
 	"context"
 	"encoding/json"
@@ -48,7 +50,7 @@ func TestAsyncRulesUseRequestLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,11 +126,11 @@ func (a *ownedAddresses) Exists(ctx context.Context, email string) (bool, error)
 }
 
 func TestSlotProvidesRouteKeyToOneDeclaredRule(t *testing.T) {
-	first, err := model.NewID[models.User]()
+	first, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := model.NewID[models.User]()
+	second, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -109,13 +109,13 @@ func TestPostgresConditionalCompositionAndFailures(t *testing.T) {
 		people := models.Users.Query()
 		common := rows.AsRecord[selectedAlias](rows.CTE("eligible", rows.ModelRecord(expr.Where(people, expr.ModelPredicate(u.Age.Gt(20))))), "selected")
 		f := rows.Scope(common)
-		label := expr.When(rows.InQuery(expr.Value(u.ID), rows.SelectScalar(common, expr.Select(expr.At(f, u.ID)))), expr.Param(u.Email, "yes")).Else(expr.Param(u.Email, "no"))
+		label := expr.When(rows.InQuery(expr.Value(u.ID), rows.SelectScalar(common, expr.Row(expr.At(f, u.ID)).Value())), expr.Param(u.Email, "yes")).Else(expr.Param(u.Email, "no"))
 		if got, err := rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(people), label.Value()), expr.Value(u.Email).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []string{"no", "yes", "yes"}) {
 			t.Fatal("conditional CTE discovery", got, err)
 		}
 		// A selected scalar owns its grouping and discovers dependencies even
 		// when the only reference to its CTE is inside a conditional value.
-		chosen := rows.LimitScalar(rows.OrderScalar(rows.SelectScalar(common, expr.Select(expr.At(f, u.Age))), expr.At(f, u.Age).Desc()), 1)
+		chosen := rows.LimitScalar(rows.OrderScalar(rows.SelectScalar(common, expr.Row(expr.At(f, u.Age)).Value()), expr.At(f, u.Age).Desc()), 1)
 		age := expr.CoalesceValue(rows.ScalarQuery(rows.From(people), chosen), expr.Param(u.Age, -1).Value())
 		if got, err := rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(people), age), expr.Value(u.Email).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{22, 22, 22}) {
 			t.Fatal("conditional scalar/CTE composition", got, err)
@@ -130,10 +130,10 @@ func TestPostgresConditionalCompositionAndFailures(t *testing.T) {
 			t.Fatal("conditional correlation", got, err)
 		}
 		display := expr.Coalesce(expr.Value(u.Nickname), expr.Value(u.Email))
-		projection := rows.Select(rows.From(people), reports.UserSummaries, rows.MapSelected(reports.UserSummaries.ID, expr.Select(expr.Value(u.ID))), rows.MapSelected(reports.UserSummaries.Email, display.Value()), rows.MapSelected(reports.UserSummaries.Nickname, expr.Select(expr.Value(u.Nickname))), rows.MapSelected(reports.UserSummaries.Status, expr.Select(expr.Value(u.Status))))
+		projection := rows.Select(rows.From(people), reports.UserSummaries, rows.MapSelected(reports.UserSummaries.ID, expr.Row(expr.Value(u.ID)).Value()), rows.MapSelected(reports.UserSummaries.Email, display.Value()), rows.MapSelected(reports.UserSummaries.Nickname, expr.Row(expr.Value(u.Nickname)).Value()), rows.MapSelected(reports.UserSummaries.Status, expr.Row(expr.Value(u.Status)).Value()))
 		alias := rows.AsRecord[selectedAlias](rows.RecordOf(projection), "displayed")
 		fields := rows.At(rows.Scope(alias), reports.UserSummaries.Email)
-		if got, err := rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(alias, expr.Select(fields)), fields.Eq("Bee"))).RequireFirst(t.Context(), tx); err != nil || got != "Bee" {
+		if got, err := rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(alias, expr.Row(fields).Value()), fields.Eq("Bee"))).RequireFirst(t.Context(), tx); err != nil || got != "Bee" {
 			t.Fatal("typed projected conditional output", got, err)
 		}
 		r := models.UserLinks

@@ -236,7 +236,7 @@ func (m *Manager) attempt(ctx context.Context, envelope store.Envelope, identity
 		}
 		return m.completeDatabase(ctx, envelope, row)
 	}
-	claim, err := model.NewID[store.Delivery]()
+	claim, err := model.NewIDAt[store.Delivery](time.Now())
 	if err != nil {
 		return err
 	}

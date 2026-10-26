@@ -1,11 +1,13 @@
 package database
 
+import "math/rand/v2"
+
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
-	"math/rand/v2"
+
 	"strings"
 	"time"
 

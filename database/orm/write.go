@@ -125,7 +125,7 @@ func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment
 	if kind == querycore.RestoreModel {
 		p.query.ast.SoftDeleteScope = querycore.TrashedRecords
 	}
-	if (kind == querycore.RestoreModel || kind == querycore.ForceDeleteModel) && !q.ast.HasSoftDeletes() {
+	if (kind == querycore.SoftDeleteModel || kind == querycore.RestoreModel || kind == querycore.ForceDeleteModel) && !q.ast.HasSoftDeletes() {
 		return writePlan{}, invalid("operation requires soft deletes")
 	}
 	// Relation templates validate shape before selecting concrete pivot identities.
@@ -180,7 +180,7 @@ func (p writePlan) conventionsFor(ctx context.Context, source clock.Clock, prese
 	if p.kind == querycore.InsertModel && generateKey {
 		for _, c := range p.query.table.columns {
 			if c.metadata.Name == p.query.table.model.Primary && !c.metadata.DatabaseDefault && c.uuid && (c.mutator.Input == nil || c.mutator.Input == c.field.Type) && !p.present(c.metadata.Name) {
-				id, err := model.NewID[struct{}]()
+				id, err := model.NewIDAt[struct{}](time.Now())
 				if err != nil {
 					return p, err
 				}
@@ -349,8 +349,14 @@ func writeAll[M any](ctx context.Context, writer database.Transactor, q querySta
 	if err != nil {
 		return 0, err
 	}
+	return executeWriteAll(ctx, writer, p)
+}
+
+// Set-based execution has no model-valued output. Keep observer and outcome
+// handling in this owner instead of instantiating it for every model.
+func executeWriteAll(ctx context.Context, writer database.Transactor, p writePlan) (int64, error) {
 	set, known := ownerObservers(writer)
-	if !q.ast.SkipModelHooks && (q.table.hooks != nil || !known || observed[M](set, p.kind)) {
+	if !p.query.ast.SkipModelHooks && (p.query.table.hooks != nil || !known || p.query.table.observed(set, p.kind)) {
 		return 0, invalid("set-based writes skip per-model hooks and observers; acknowledge with WithoutModelHooks")
 	}
 	var count int64

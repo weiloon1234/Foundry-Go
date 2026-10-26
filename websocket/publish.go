@@ -1,5 +1,7 @@
 package websocket
 
+import "time"
+
 import (
 	"context"
 
@@ -100,7 +102,7 @@ func publishAttempt[C, R, S, P any](ctx context.Context, source PublisherSource,
 		if err != nil {
 			return err
 		}
-		id, err = model.NewID[Publication]()
+		id, err = model.NewIDAt[Publication](time.Now())
 		if err != nil {
 			return err
 		}

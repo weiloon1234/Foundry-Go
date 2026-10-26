@@ -22,7 +22,7 @@ func TestORMExtensionDeclaration(t *testing.T) {
 	for _, slot := range e.ArticleExtensions.All() {
 		g := &goldenCapture{}
 		db := readDB(t, g)
-		if _, err := orm.Load(t.Context(), db, []e.Article{{ID: 1}}, slot); !errors.Is(err, fault.Missing) {
+		if _, err := orm.LoadFrom(t.Context(), db, e.Articles.Query().With(slot), []e.Article{{ID: 1}}); !errors.Is(err, fault.Missing) {
 			t.Fatal("unbound runtime", err)
 		}
 		if g.statements != 0 {

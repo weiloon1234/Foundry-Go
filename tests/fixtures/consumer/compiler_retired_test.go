@@ -30,7 +30,7 @@ func activeCompilerCases(t *testing.T) []compilerCase {
 			active = append(active, c)
 			continue
 		}
-		source, err := os.ReadFile(filepath.Join("testdata/compilefail", c.name, "invalid.go"))
+		source, err := os.ReadFile(filepath.Join("testdata/compilefail", c.name, "invalid.go.txt"))
 		if err != nil {
 			t.Fatal(err)
 		}

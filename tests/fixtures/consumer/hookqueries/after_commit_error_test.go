@@ -1,5 +1,7 @@
 package hookqueries_test
 
+import "time"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -57,7 +59,7 @@ func TestORMAfterCommitNeverFormatsLocalOrObserverErrors(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				id, err := model.NewID[hookqueries.Member]()
+				id, err := model.NewIDAt[hookqueries.Member](time.Now())
 				if err != nil {
 					t.Fatal(err)
 				}

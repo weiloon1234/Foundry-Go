@@ -9,5 +9,5 @@ import (
 )
 
 func Load(ctx context.Context, db database.Executor, runtime slots.Runtime, parents []e.Article) ([]e.Article, error) {
-	return orm.LoadMissing(ctx, db, parents, e.ArticleExtensions.From(runtime).All()...)
+	return orm.LoadMissingFrom(ctx, db, e.Articles.Query().With(e.ArticleExtensions.From(runtime).All()...), parents)
 }

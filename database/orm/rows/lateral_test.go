@@ -3,6 +3,7 @@ package rows
 import (
 	"database/sql/driver"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -46,6 +47,9 @@ func TestLateralModelNullabilityAndWindows(t *testing.T) {
 			t.Fatal(state.sql)
 		}
 	}
+	if !reflect.DeepEqual(state.arguments, []driver.NamedValue{{Ordinal: 1, Value: int64(1)}}) {
+		t.Fatal("lateral binding order", state.arguments)
+	}
 	_ = record.Offset(3)
 	if record.core.Correlation.Source.Node.Offset != 0 {
 		t.Fatal("window mutated original")
@@ -73,7 +77,7 @@ func TestLateralProjectionFieldsAndOwnership(t *testing.T) {
 	field := AtNullable(NullableRightScope(j, LateralScope(latest)), totals.Count)
 	schema := correlationCountSchema()
 	state := &driverState{columns: []string{"count"}, rows: [][]driver.Value{{nil}, {int64(2)}}}
-	got, err := Select(j, schema, MapSelected(schema.Count, expr.Select(field))).All(t.Context(), openTest(t, state))
+	got, err := Select(j, schema, MapSelected(schema.Count, expr.Row(field).Value())).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].Count.IsNull() {
 		t.Fatal(got, err)
 	}
@@ -104,7 +108,7 @@ func TestLateralSharedCompilerRejectsMissingForwardAndUnsupportedJoins(t *testin
 	j := LeftJoinLateral(a, lat)
 	schema := declareRows()
 	valid := Select(j, schema, Map(schema.ID, expr.At(LeftScope(j, Scope(a)), m.ID)), Map(schema.Name, expr.At(LeftScope(j, Scope(a)), m.Name)))
-	for _, kind := range []string{"right", "full", "missing", "self", "forward", "not_derived"} {
+	for _, kind := range []string{"right", "full", "missing", "self", "forward", "not_derived", "cross_on"} {
 		t.Run(kind, func(t *testing.T) {
 			q := valid
 			q.source.Node.Joins = append([]querycore.JoinNode(nil), valid.source.Node.Joins...)
@@ -121,6 +125,9 @@ func TestLateralSharedCompilerRejectsMissingForwardAndUnsupportedJoins(t *testin
 			case "forward":
 				join.Lateral = &querycore.ScopeRequirement{Sources: map[string][]querycore.Column{"future": join.Source.Columns}}
 				q.source.Node.Joins = append(q.source.Node.Joins, querycore.JoinNode{Kind: querycore.CrossJoin, Source: querycore.TableSource{Table: "members", Alias: "future", Columns: join.Source.Columns}})
+			case "cross_on":
+				join.Kind = querycore.CrossJoin
+				join.On = querycore.BinaryComparison{Left: querycore.FieldRef{Table: "a", Column: "id"}, Right: querycore.FieldRef{Table: "a", Column: "id"}, Operator: querycore.Equal}
 			case "not_derived":
 				join.Source.Query = nil
 			}
@@ -129,5 +136,20 @@ func TestLateralSharedCompilerRejectsMissingForwardAndUnsupportedJoins(t *testin
 				t.Fatal(err, state.sql)
 			}
 		})
+	}
+}
+
+func TestLateralInvalidJoinPredicate(t *testing.T) {
+	m := declareMembers()
+	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
+	c := Correlate(a, b)
+	latest := AsLateral[latestTag](SelectCorrelatedRecord(c, InnerScope(c, Scope(b))), "latest")
+	wrong := LeftJoinLateral(As[left](m.Query(), "different"), latest)
+	if _, e := CompileRead(ReadRecord(SelectRecord(wrong, LeftScope(wrong, Scope(a))))); !errors.Is(e, fault.Invalid) {
+		t.Fatal("wrong outer scope", e)
+	}
+	bad := LeftJoinLateral(a, latest, JoinOn[Alias[left, member], Alias[latestTag, member]]{})
+	if _, e := CompileRead(ReadRecord(SelectRecord(bad, LeftScope(bad, Scope(a))))); !errors.Is(e, fault.Invalid) {
+		t.Fatal("zero ON", e)
 	}
 }

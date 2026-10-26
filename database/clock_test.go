@@ -1,11 +1,12 @@
 package database_test
 
+import "github.com/weiloon1234/Foundry-Go"
+
 import (
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/weiloon1234/Foundry-Go"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"

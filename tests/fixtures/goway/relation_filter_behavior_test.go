@@ -45,7 +45,7 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 				t.Fatal("expected malformed relation", err)
 			}
 			p := expr.RelationFilter(invalidRelation, expr.TextRow(j.Parents.Name).Contains("one"))
-			if _, err := rowset.Compile(rowset.FromModel(j.Parents.Query().Where(p))); !errors.Is(err, fault.Invalid) {
+			if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Parents.Query().Where(p)))); !errors.Is(err, fault.Invalid) {
 				t.Fatal("target query lost construction error", err)
 			}
 			validRelation := j.TargetParent.Where(p)
@@ -65,11 +65,11 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 				"Has":        orm.Has(invalidRelation),
 				"DoesntHave": orm.DoesntHave(invalidRelation),
 			} {
-				if _, err := rowset.Compile(rowset.FromModel(j.Targets.Query().Where(predicate))); !errors.Is(err, fault.Invalid) {
+				if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query().Where(predicate)))); !errors.Is(err, fault.Invalid) {
 					t.Fatal(name+" lost construction error", err)
 				}
 			}
-			if _, err := rowset.Compile(rowset.FromModel(j.Targets.Query()).Where(expr.Has(invalidRelation, expr.TextRow(j.Parents.Name).Contains("one")))); !errors.Is(err, fault.Invalid) {
+			if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query()).Where(expr.Has(invalidRelation, expr.TextRow(j.Parents.Name).Contains("one"))))); !errors.Is(err, fault.Invalid) {
 				t.Fatal("expr.Has lost construction error", err)
 			}
 			if g.statements != 0 {
@@ -80,13 +80,13 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 
 	fake := borrowedFilterTarget{Relation: j.Peers}
 	rejected := expr.RelationFilter(fake, expr.TextRow(j.Parents.Name).Contains("x"))
-	if _, err := rowset.Compile(rowset.FromModel(j.Parents.Query().Where(rejected))); !errors.Is(err, fault.Invalid) {
+	if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Parents.Query().Where(rejected)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("borrowed target accepted", err)
 	}
 	var nilRelation *orm.ThroughRelation[j.Parent, j.Target, j.Pivot]
 	for _, r := range []orm.ExistenceRelation[j.Parent, j.Target]{nil, nilRelation, orm.HasMany[j.Parent, j.Target]{}} {
 		p := expr.RelationFilter(r, expr.TextRow(j.Targets.Name).Contains("x"))
-		if _, err := rowset.Compile(rowset.FromModel(j.Targets.Query().Where(p))); !errors.Is(err, fault.Invalid) {
+		if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query().Where(p)))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("nil/zero relation accepted", err)
 		}
 	}

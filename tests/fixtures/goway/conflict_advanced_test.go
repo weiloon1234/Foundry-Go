@@ -31,7 +31,7 @@ func TestAdvancedConflictInvalidPoliciesSendNoSQL(t *testing.T) {
 	records := r.ConflictRowsOf(f.Query())
 	foreign := r.ConflictRowsOf(other.Query())
 	valid := orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(orm.ConflictIncoming(f.Name))
-	inner := r.SelectScalar(r.From(f.Query()), expr.Select(expr.Value(f.Amount)))
+	inner := r.SelectScalar(r.From(f.Query()), expr.Row(expr.Value(f.Amount)).Value())
 	computed := expr.Group(expr.Add(expr.Value(f.Amount), expr.Value(f.Amount)))
 	for name, p := range map[string]orm.Conflict[n.WriteRecord]{
 		"foreign target":           r.OnConflictKeys(expr.Group(expr.Value(other.Name))).DoNothing(),
@@ -120,7 +120,7 @@ func TestAdvancedConflictSubqueryScopesFailClosed(t *testing.T) {
 	dest := advancedScopedDeclaration("conflict_dest", false)
 	source := advancedScopedDeclaration("conflict_source", true)
 	records := r.ConflictRowsOf(dest.Query())
-	scalar := r.SelectScalar(r.From(source.Query().Limit(1)), expr.Select(expr.Value(source.Amount)))
+	scalar := r.SelectScalar(r.From(source.Query().Limit(1)), expr.Row(expr.Value(source.Amount)).Value())
 	policy := orm.OnConflict(orm.ConflictKey(dest.Key())).DoUpdate(r.SetConflictValue(dest.Note, r.ConflictScalarRowQuery(records, scalar)))
 	capture := &goldenCapture{scriptedColumns: []string{"id", "tenant", "amount", "note"}, scriptedBatches: [][][]driver.Value{{{int64(1), int64(9), int64(3), int64(7)}}}}
 	db, err := database.Prepare(database.Adapter{Connector: connector{capture}}, database.DefaultPoolConfig())

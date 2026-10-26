@@ -11,13 +11,13 @@ import (
 
 func Read(ctx context.Context, ex database.Executor, yield func(int64) error) error {
 	q := rows.ReorderUnwindowed(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents), expr.Value(models.Orders.ID).Asc())
-	if _, err := rows.Compile(q); err != nil {
+	if _, err := rows.CompileRead(rows.Read(q)); err != nil {
 		return err
 	}
-	if err := rows.Preflight(ctx, q); err != nil {
+	if err := rows.PreflightRead(ctx, rows.Read(q)); err != nil {
 		return err
 	}
-	if _, err := rows.Count(ctx, ex, q); err != nil {
+	if _, err := rows.Read(q).Count(ctx, ex); err != nil {
 		return err
 	}
 	if _, err := rows.Paginate(ctx, ex, q, orm.Page(1, 20)); err != nil {
@@ -26,5 +26,5 @@ func Read(ctx context.Context, ex database.Executor, yield func(int64) error) er
 	if _, err := rows.SimplePaginate(ctx, ex, q, orm.Page(1, 20)); err != nil {
 		return err
 	}
-	return rows.Each(ctx, ex, q, yield)
+	return rows.EachRead(ctx, ex, rows.Read(q), yield)
 }

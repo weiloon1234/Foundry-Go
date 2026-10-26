@@ -1,5 +1,7 @@
 package background_test
 
+import "time"
+
 import (
 	"context"
 	"foundry.test/consumer/background"
@@ -29,7 +31,7 @@ func TestCapturedWelcomeHasStableTypedIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	userID, err := model.NewID[models.User]()
+	userID, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

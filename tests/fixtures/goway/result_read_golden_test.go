@@ -70,12 +70,12 @@ func runResultNew(g *goldenCapture, kind string) {
 		printNewCursor(g, p)
 		return
 	}
-	selected := rowset.SelectScalar(rowset.From(base.OrderBy(models.Orders.TotalCents.Asc())), expr.Select(expr.Value(models.Orders.TotalCents)))
+	selected := rowset.SelectScalar(rowset.From(base.OrderBy(models.Orders.TotalCents.Asc())), expr.Row(expr.Value(models.Orders.TotalCents)).Value())
 	q := rowset.ReadScalar(selected)
 	switch kind {
 	case "cursor_value":
 		c := rowset.ValueCursorFor(rowset.Values(selected))
-		p := must(c.UniqueBy(c.Key()).Paginate(ctx, db, orm.CursorRequest[int64]{Size: 1}))
+		p := must(c.UniqueBy(expr.Group(c.Value())).Paginate(ctx, db, orm.CursorRequest[int64]{Size: 1}))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{p.Items, p.Next.IsSet(), p.Previous.IsSet()}))
 	case "page":
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.Paginate(ctx, db, orm.PageRequest{Number: 1, Size: 1}))}))
@@ -97,7 +97,7 @@ func runResultNew(g *goldenCapture, kind string) {
 	default:
 		check(db.Transaction(ctx, func(tx *database.Tx) error {
 			a := rowset.AsTransaction[joinA](rowset.TransactionOf(rowset.ModelRecord(base)), "selected")
-			v := rowset.SelectTransactionValue(a, expr.Select(expr.At(rowset.TransactionScope(a), models.Orders.TotalCents)))
+			v := rowset.SelectTransactionValue(a, expr.Row(expr.At(rowset.TransactionScope(a), models.Orders.TotalCents)).Value())
 			if kind == "transaction_value_lock" {
 				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.ForShare(v).All(ctx, tx))}))
 			} else {

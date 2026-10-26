@@ -21,11 +21,11 @@ func TestPostgresJSONPredicatesAndProjections(t *testing.T) {
 			count     int64
 		}{
 			{expr.ModelPredicate(f.Settings.Eq(filter)), 2}, {expr.JSONContains(expr.Value(f.Settings), expr.Param(f.Settings, filter)).Eq(true), 2},
-			{expr.JSONContainedBy(expr.Value(f.Settings), expr.Param(f.Settings, filter)).Eq(true), 3}, {expr.JSONType(expr.Value(f.Settings)).Eq(expr.JSONObject), 3},
+			{expr.JSONContainedBy(expr.Value(f.Settings), expr.Param(f.Settings, filter)).Eq(true), 3}, {expr.JSONType(expr.Value(f.Settings)).Eq(database.JSONObject), 3},
 			{expr.JSONContains(expr.Value(f.Tags), expr.Param(f.Tags, document(t, []string{"go"}))).Eq(true), 2},
 			{expr.ModelPredicate(f.Tags.Eq(document(t, []string{"db", "go"}))), 1},
 			{expr.ModelPredicate(f.Backup.IsNull()), 2}, {expr.JSONContainsNullable(expr.Value(f.Backup), expr.NullableRow(expr.Param(f.Settings, filter))).Eq(value.Of(true)), 1},
-			{expr.JSONContainedByNullable(expr.Value(f.Backup), expr.NullableRow(expr.Param(f.Settings, filter))).Eq(value.Of(true)), 1}, {expr.JSONRoot(expr.Value(f.State)).IsJSONNull(), 2},
+			{expr.JSONContainedByNullable(expr.Value(f.Backup), expr.NullableRow(expr.Param(f.Settings, filter))).Eq(value.Of(true)), 1}, {expr.JSONTypeNullable(expr.JSONRoot(expr.Value(f.State)).JSON()).Eq(value.Of(database.JSONNull)), 2},
 		} {
 			count, err := expr.Where(q, test.predicate).Count(t.Context(), tx)
 			if err != nil || count != test.count {
@@ -35,8 +35,8 @@ func TestPostgresJSONPredicatesAndProjections(t *testing.T) {
 		if err := checkSnapshotKind(t, tx, original); err != nil {
 			return err
 		}
-		grouped := rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), expr.JSONType(expr.Value(f.Settings)).Value()), expr.Group(expr.Value(f.Settings))), expr.CompareValue(expr.JSONContainsValue(expr.Select(expr.Value(f.Settings)), expr.Param(f.Settings, filter).Value())).Eq(true))
-		if kinds, err := rowset.ReadScalar(grouped).All(t.Context(), tx); err != nil || len(kinds) != 1 || kinds[0] != expr.JSONObject {
+		grouped := rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), expr.JSONType(expr.Value(f.Settings)).Value()), expr.Group(expr.Value(f.Settings))), expr.CompareValue(expr.JSONContainsValue(expr.Row(expr.Value(f.Settings)).Value(), expr.Param(f.Settings, filter).Value())).Eq(true))
+		if kinds, err := rowset.ReadScalar(grouped).All(t.Context(), tx); err != nil || len(kinds) != 1 || kinds[0] != database.JSONObject {
 			t.Fatal(kinds, err)
 		}
 		return nil

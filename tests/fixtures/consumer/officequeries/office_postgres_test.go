@@ -122,7 +122,7 @@ func TestRelationshipsThroughAnIntermediate(t *testing.T) {
 	// With beta soft-deleted, alpha's latest hire is the north region's.
 	assertLatestHires(t, f, "cid", "eve")
 	count := expr.RelatedValue(officequeries.RegionLinks.Employees, expr.Count[officequeries.Employee]())
-	counted, err := rows.WithValue(expr.OrderBy(officequeries.Regions.Query(), count.Desc()), count).All(ctx, f.db)
+	counted, err := rows.ReadRecord(rows.WithValue(expr.OrderBy(officequeries.Regions.Query(), count.Desc()), count)).All(ctx, f.db)
 	if err != nil || len(counted) != 2 || counted[0].Model.ID != f.north.ID || counted[0].Value != 3 || counted[1].Value != 1 {
 		t.Fatal("related value through the intermediate", counted, err)
 	}
@@ -172,7 +172,7 @@ func TestOneOfManyAndAdHocAggregates(t *testing.T) {
 	}
 	headcount := expr.RelatedValue(r.Colleagues, expr.Count[officequeries.Employee]())
 	payroll := expr.RelatedValue(r.Colleagues, expr.Sum(e.Salary))
-	ranked, err := rows.WithValue(expr.OrderBy(officequeries.Offices.Query(), headcount.Desc(), expr.Value(officequeries.Offices.Name).Asc()), payroll).All(ctx, f.db)
+	ranked, err := rows.ReadRecord(rows.WithValue(expr.OrderBy(officequeries.Offices.Query(), headcount.Desc(), expr.Value(officequeries.Offices.Name).Asc()), payroll)).All(ctx, f.db)
 	if err != nil || len(ranked) != 3 || ranked[0].Model.ID != f.alpha.ID {
 		t.Fatal("ordering by relation count", ranked, err)
 	}

@@ -259,7 +259,7 @@ func familyDraft(r token.Record, scope, subject string) ([]orm.Assignment[tokens
 	return draft, nil
 }
 func entryDraft(r token.Record, scope string) ([]orm.Assignment[tokenstore.Entry], error) {
-	id, err := model.NewID[tokenstore.Entry]()
+	id, err := model.NewIDAt[tokenstore.Entry](time.Now())
 	if err != nil {
 		return nil, err
 	}

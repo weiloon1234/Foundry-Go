@@ -290,7 +290,7 @@ func TestPostgresLockTypedJoinTargetsAndValues(t *testing.T) {
 	}
 	finish()
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
-		values := rows.ReadScalar(rows.SelectScalar(rows.From(models.Countries.Query().OrderBy(models.Countries.Code.Asc())), expr.Select(expr.Value(models.Countries.Code))))
+		values := rows.ReadScalar(rows.SelectScalar(rows.From(models.Countries.Query().OrderBy(models.Countries.Code.Asc())), expr.Row(expr.Value(models.Countries.Code)).Value()))
 		codes, err := rows.ForKeyShare(values).All(ctx, tx)
 		if err != nil {
 			return err
@@ -357,7 +357,7 @@ func TestPostgresLockDerivedSourcesCTEPredicatesAndReadOnlyFailure(t *testing.T)
 	if err := inLockTransaction(ctx, db, path, func(tx *database.Tx) error {
 		definition := rows.CTE("eligible", rows.ModelRecord(models.Countries.Query().Where(f.Code.Eq(models.CountryCode("A")))))
 		source := rows.AsRecord[countryAlias](definition, "eligible_rows")
-		codes := rows.SelectScalar(source, expr.Select(expr.At(rows.Scope(source), models.Countries.Code)))
+		codes := rows.SelectScalar(source, expr.Row(expr.At(rows.Scope(source), models.Countries.Code)).Value())
 		row, err := expr.Where(models.Countries.Query(), rows.InQuery(expr.Value(f.Code), codes)).ForUpdate().Require(ctx, tx)
 		if err != nil {
 			return err

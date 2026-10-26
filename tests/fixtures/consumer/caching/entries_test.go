@@ -28,11 +28,11 @@ func TestTypedEntryOperationsKeepGetterSnapshotsAndModelKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := model.NewID[mutatorqueries.Member]()
+	first, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := model.NewID[mutatorqueries.Member]()
+	second, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

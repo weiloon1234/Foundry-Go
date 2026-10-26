@@ -4,7 +4,7 @@ These values are ordinary Go types visible to the compiler and gopls. The [exter
 
 ## Model identity
 
-Declare `ID model.ID[User]` on a `User` model. `model.NewID[User]()` generates an identity; `NewIDAt[User](clock.Now())` takes explicit time for deterministic timestamp behavior. IDs remain comparable and usable as map keys even when the model contains slices or maps. An order ID cannot be passed as a user ID or converted directly between those instantiated ID types.
+Declare `ID model.ID[User]` on a `User` model. `model.NewIDAt[User](clock.Now())` generates an identity using explicit time for deterministic timestamp behavior. IDs remain comparable and usable as map keys even when the model contains slices or maps. An order ID cannot be passed as a user ID or converted directly between those instantiated ID types.
 
 New identities use UUIDv7: millisecond timestamp plus cryptographic random bits. Ordering within a millisecond, after clock rollback, and between hosts is not promised. The representation follows [RFC 9562 section 5.7](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7); randomness comes from [Go crypto/rand](https://pkg.go.dev/crypto/rand#Read).
 

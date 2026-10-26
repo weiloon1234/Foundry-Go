@@ -1,5 +1,7 @@
 package rediscommands_test
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -37,7 +39,7 @@ func TestConsumerTypedPipelineAndScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[mutatorqueries.Member]()
+	id, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +73,7 @@ func TestConsumerRawAssemblyDoesNotConnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[mutatorqueries.Member]()
+	id, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

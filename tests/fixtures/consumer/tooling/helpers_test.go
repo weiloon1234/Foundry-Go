@@ -27,7 +27,7 @@ func TestLocalCapabilitiesUseConcreteConsumerContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	queue := jobstest.New(t, source, declaration)
-	user, err := model.NewID[models.User]()
+	user, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestLocalCapabilitiesUseConcreteConsumerContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	bus := eventstest.Start(t, event)
-	id, err := model.NewID[observerqueries.Plain]()
+	id, err := model.NewIDAt[observerqueries.Plain](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

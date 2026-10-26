@@ -21,7 +21,7 @@ func TestComputedRelationOrderSQLMatchesOldAPI(t *testing.T) {
 				if mode == "direct" {
 					r := j.TargetParent
 					r = r.OrderBy(expr.RelationOrder(r, expr.Lower(expr.Value(j.Parents.Name)).Asc()))
-					if _, err := orm.Load(ctx, db, []j.Target{{ID: 10, ParentID: 1}}, r); err != nil {
+					if _, err := orm.LoadFrom(ctx, db, j.Targets.Query().With(r), []j.Target{{ID: 10, ParentID: 1}}); err != nil {
 						t.Fatal(err)
 					}
 				} else {
@@ -36,7 +36,7 @@ func TestComputedRelationOrderSQLMatchesOldAPI(t *testing.T) {
 					case "mixed":
 						r = r.OrderByPivot(pivot).OrderBy(target)
 					}
-					if _, err := orm.Load(ctx, db, []j.Parent{{ID: 1}}, r); err != nil {
+					if _, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(r), []j.Parent{{ID: 1}}); err != nil {
 						t.Fatal(err)
 					}
 				}

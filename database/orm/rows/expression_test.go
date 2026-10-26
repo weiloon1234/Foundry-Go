@@ -47,7 +47,7 @@ func TestExpressionParametersAndNullableProjection(t *testing.T) {
 	a := As[left](m.Query(), "m")
 	n := expr.At(Scope(a), m.Nickname)
 	s := expressionSchema(codec.Nullable(codec.String[string]()))
-	q := Select(a, s, MapSelected(s.Value, expr.Select(n)))
+	q := Select(a, s, MapSelected(s.Value, expr.Row(n).Value()))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"Ada"}}}
 	got, err := q.All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].Value.IsNull() {
@@ -217,9 +217,9 @@ func TestParamPreservesInvalidScopedExemplar(t *testing.T) {
 	foreign := expr.At(Scope(source), other.MemberID)
 	for name, selected := range map[string]expr.Selected[Alias[right, order], int64]{
 		"row":      expr.Add(foreign, foreign).Param(1).Value(),
-		"selected": expr.Select(foreign).Param(1).Value(),
+		"selected": expr.Row(foreign).Value().Param(1).Value(),
 		"ordered":  expr.OrderRow(foreign).Param(1).Value(),
-		"chained":  expr.Select(foreign).Param(1).Param(2).Value(),
+		"chained":  expr.Row(foreign).Value().Param(1).Param(2).Value(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			state := &driverState{}

@@ -29,7 +29,7 @@ func TestReportEachStreamsAndOwnsClosure(t *testing.T) {
 			}
 			db := openTest(t, state)
 			calls := 0
-			err := Each(ctx, db, projection(), func(r record) error {
+			err := EachRead(ctx, db, Read(projection()), func(r record) error {
 				calls++
 				if r != (record{9, "Ada"}) {
 					t.Fatal(r)
@@ -68,14 +68,14 @@ func TestReportPreflightRejectsBeforeIO(t *testing.T) {
 	db := openTest(t, state)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := Preflight(ctx, ordered); !errors.Is(err, context.Canceled) {
+	if err := PreflightRead(ctx, Read(ordered)); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	for _, q := range []Query[member, int64]{ReorderUnwindowed(base), ReorderUnwindowed(Limit(base, 1), id.Asc()), ReorderUnwindowed(Offset(base, 1), id.Asc()), ReorderUnwindowed(DistinctOn(base, expr.Group(id)), id.Asc()), {}} {
-		if _, err := Compile(q); !errors.Is(err, fault.Invalid) {
+		if _, err := CompileRead(Read(q)); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
-		if _, err := Count(t.Context(), db, q); !errors.Is(err, fault.Invalid) {
+		if _, err := Read(q).Count(t.Context(), db); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
@@ -87,21 +87,21 @@ func TestReportPreflightRejectsBeforeIO(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := Each(t.Context(), db, ordered, nil); !errors.Is(err, fault.Invalid) {
+	if err := EachRead(t.Context(), db, Read(ordered), nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	if state.sql != "" {
 		t.Fatal("invalid report performed I/O")
 	}
-	before, err := Compile(ordered)
+	before, err := CompileRead(Read(ordered))
 	if err != nil {
 		t.Fatal(err)
 	}
-	after, err := Compile(ReorderUnwindowed(ordered, id.Desc()))
+	after, err := CompileRead(Read(ReorderUnwindowed(ordered, id.Desc())))
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, _ := Compile(ordered)
+	again, _ := CompileRead(Read(ordered))
 	if before.SQL() != again.SQL() || !strings.HasSuffix(after.SQL(), "DESC") {
 		t.Fatal("reorder mutated source")
 	}
@@ -119,7 +119,7 @@ func TestReportSimplePageAndCount(t *testing.T) {
 		t.Fatal(state.sql)
 	}
 	countState := &driverState{columns: []string{"count"}, rows: [][]driver.Value{{int64(2)}}}
-	n, err := Count(t.Context(), openTest(t, countState), Distinct(q))
+	n, err := Read(Distinct(q)).Count(t.Context(), openTest(t, countState))
 	if err != nil || n != 2 || !strings.HasPrefix(countState.sql, "SELECT COUNT(*) FROM (SELECT DISTINCT") || strings.Contains(countState.sql, "ORDER BY") {
 		t.Fatal(n, err, countState.sql)
 	}
@@ -146,7 +146,7 @@ func TestProjectionBridgeCapabilitiesFailClosed(t *testing.T) {
 
 	own, foreign := declareMembers(), declareMembers()
 	for _, p := range []expr.Predicate[member]{expr.ModelPredicate(foreign.ID.Eq(1)), expr.ModelPredicate(orm.Predicate[member]{})} {
-		if _, err := Compile(SelectValue(own.Query(), own.ID).Where(p)); !errors.Is(err, fault.Invalid) {
+		if _, err := CompileRead(Read(SelectValue(own.Query(), own.ID).Where(p))); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
@@ -170,18 +170,18 @@ func TestReportScopeContextIsFreshAtPreflightAndExecution(t *testing.T) {
 	bound := context.WithValue(t.Context(), reportTenantKey{}, int64(1))
 	current := context.WithValue(t.Context(), reportTenantKey{}, int64(2))
 	q := SelectValue(orm.WithScopeContext(m.Query(), bound), m.ID)
-	s, err := Compile(q)
+	s, err := CompileRead(Read(q))
 	if err != nil || s.Arguments()[0] != int64(1) {
 		t.Fatal(s, err)
 	}
-	if err := Preflight(current, q); err != nil {
+	if err := PreflightRead(current, Read(q)); err != nil {
 		t.Fatal(err)
 	}
-	if err := Preflight(t.Context(), q); err == nil {
+	if err := PreflightRead(t.Context(), Read(q)); err == nil {
 		t.Fatal("execution inherited the stale bound context")
 	}
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(2)}}}
-	if err := Each(current, openTest(t, state), q, func(int64) error { return nil }); err != nil {
+	if err := EachRead(current, openTest(t, state), Read(q), func(int64) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if len(state.arguments) != 1 || state.arguments[0].Value != int64(2) {

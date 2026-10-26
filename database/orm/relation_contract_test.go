@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -15,18 +14,18 @@ import (
 
 func TestRelationContractsShareOneOwner(t *testing.T) {
 	for _, tc := range []struct {
-		native, legacy, owner reflect.Type
-		path                  string
+		native, owner reflect.Type
+		path          string
 	}{
-		{reflect.TypeFor[orm.MorphName](), reflect.TypeFor[query.MorphName](), reflect.TypeFor[model.MorphName](), "github.com/weiloon1234/Foundry-Go/model"},
-		{reflect.TypeFor[orm.Morphable](), reflect.TypeFor[query.Morphable](), reflect.TypeFor[model.Morphable](), "github.com/weiloon1234/Foundry-Go/model"},
-		{reflect.TypeFor[orm.RelationLimits](), reflect.TypeFor[query.RelationLimits](), reflect.TypeFor[querycore.RelationLimits](), "github.com/weiloon1234/Foundry-Go/internal/querycore"},
+		{reflect.TypeFor[model.MorphName](), reflect.TypeFor[model.MorphName](), "github.com/weiloon1234/Foundry-Go/model"},
+		{reflect.TypeFor[model.Morphable](), reflect.TypeFor[model.Morphable](), "github.com/weiloon1234/Foundry-Go/model"},
+		{reflect.TypeFor[orm.RelationLimits](), reflect.TypeFor[querycore.RelationLimits](), "github.com/weiloon1234/Foundry-Go/internal/querycore"},
 	} {
-		if tc.native != tc.owner || tc.legacy != tc.owner || tc.owner.PkgPath() != tc.path {
+		if tc.native != tc.owner || tc.owner.PkgPath() != tc.path {
 			t.Fatalf("relation contract has multiple owners: %v", tc)
 		}
 	}
-	if orm.DefaultRelationLimits() != querycore.DefaultRelationLimits() || query.DefaultRelationLimits() != querycore.DefaultRelationLimits() {
+	if orm.DefaultRelationLimits() != querycore.DefaultRelationLimits() {
 		t.Fatal("relation defaults diverged")
 	}
 	for _, limits := range []orm.RelationLimits{

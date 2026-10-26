@@ -589,8 +589,6 @@ orm.ModelIdentity
   RetainedKeys func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, keys []K) ([]K, error)
   Scope func(keys ...K) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
   Validate func() error
-orm.Morphable
-  MorphName func() github.com/weiloon1234/Foundry-Go/model.MorphName
 orm.NullableColumn
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
@@ -1199,9 +1197,7 @@ orm.PlanNode
   field TotalCost float64
 *orm.PlanNode
 orm.Predicate
-  Not func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
 *orm.Predicate
-  Not func() github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
 orm.Primary
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm.Order[M]
@@ -1760,7 +1756,6 @@ orm.EachByKey func[M any, K comparable](ctx context.Context, ex github.com/weilo
 orm.HasOneOf func[M, N any, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
 orm.Has func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
 orm.DoesntHave func[M, N any](r github.com/weiloon1234/Foundry-Go/database/orm.ExistenceRelation[M, N], ps ...github.com/weiloon1234/Foundry-Go/database/orm.Predicate[N]) github.com/weiloon1234/Foundry-Go/database/orm.Predicate[M]
-orm.LoadMissing func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, parents []M, rels ...github.com/weiloon1234/Foundry-Go/database/orm.Relation[M]) ([]M, error)
 orm.LoadFrom func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], parents []M) ([]M, error)
 orm.LoadMissingFrom func[M any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], parents []M) ([]M, error)
 orm.DefaultRelationLimits func() github.com/weiloon1234/Foundry-Go/database/orm.RelationLimits
@@ -1769,11 +1764,11 @@ orm.ThroughOf func[M, N, P any](b github.com/weiloon1234/Foundry-Go/database/orm
 orm.ManyToManyOf func[M, N, P any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], pivotLocal github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, A], pivotForeign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
 orm.HasManyThroughOf func[M, I, N any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Many[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], first github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[I, A], second github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[I, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
 orm.HasOneThroughOf func[M, I, N any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], first github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[I, A], second github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[I, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
-orm.MorphManyOf func[M github.com/weiloon1234/Foundry-Go/database/orm.Morphable, N any, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Many[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], id github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, github.com/weiloon1234/Foundry-Go/database/orm.MorphName]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
-orm.MorphOneOf func[M github.com/weiloon1234/Foundry-Go/database/orm.Morphable, N any, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], id github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, github.com/weiloon1234/Foundry-Go/database/orm.MorphName]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
-orm.MorphToOf func[M any, N github.com/weiloon1234/Foundry-Go/database/orm.Morphable, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], id github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, github.com/weiloon1234/Foundry-Go/database/orm.MorphName], key github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
-orm.MorphToManyOf func[M github.com/weiloon1234/Foundry-Go/database/orm.Morphable, N, P any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], pivotLocal github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, A], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, github.com/weiloon1234/Foundry-Go/database/orm.MorphName], pivotForeign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
-orm.MorphedByManyOf func[M any, N github.com/weiloon1234/Foundry-Go/database/orm.Morphable, P any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], pivotLocal github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, A], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, github.com/weiloon1234/Foundry-Go/database/orm.MorphName], pivotForeign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+orm.MorphManyOf func[M github.com/weiloon1234/Foundry-Go/model.Morphable, N any, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Many[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], id github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, github.com/weiloon1234/Foundry-Go/model.MorphName]) github.com/weiloon1234/Foundry-Go/database/orm.HasMany[M, N]
+orm.MorphOneOf func[M github.com/weiloon1234/Foundry-Go/model.Morphable, N any, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], id github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, github.com/weiloon1234/Foundry-Go/model.MorphName]) github.com/weiloon1234/Foundry-Go/database/orm.HasOne[M, N]
+orm.MorphToOf func[M any, N github.com/weiloon1234/Foundry-Go/model.Morphable, K comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.One[M, N], id github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, K], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, github.com/weiloon1234/Foundry-Go/model.MorphName], key github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, K]) github.com/weiloon1234/Foundry-Go/database/orm.BelongsTo[M, N]
+orm.MorphToManyOf func[M github.com/weiloon1234/Foundry-Go/model.Morphable, N, P any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], pivotLocal github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, A], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, github.com/weiloon1234/Foundry-Go/model.MorphName], pivotForeign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
+orm.MorphedByManyOf func[M any, N github.com/weiloon1234/Foundry-Go/model.Morphable, P any, A, B comparable](slot github.com/weiloon1234/Foundry-Go/database/orm.Through[M, N, P], local github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[M, A], pivotLocal github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, A], kind github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, github.com/weiloon1234/Foundry-Go/model.MorphName], pivotForeign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[P, B], foreign github.com/weiloon1234/Foundry-Go/database/orm.KeyColumn[N, B]) github.com/weiloon1234/Foundry-Go/database/orm.ThroughRelation[M, N, P]
 orm.Mutate func[V any](fn func(V) (V, error)) github.com/weiloon1234/Foundry-Go/database/orm.ColumnOption[V]
 orm.InputKeyOf func[M, I any, K comparable](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], key github.com/weiloon1234/Foundry-Go/database/orm.Key[M, K], transform func(I) (K, error)) github.com/weiloon1234/Foundry-Go/database/orm.InputKey[M, I, K]
 orm.InputColumnOf func[M, I, V any](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *V, transform func(I) (V, error), opts ...github.com/weiloon1234/Foundry-Go/database/orm.ColumnOption[V]) github.com/weiloon1234/Foundry-Go/database/orm.InputColumn[M, I, V]
@@ -2032,13 +2027,11 @@ rows.ReadSource
 rows.Record
 *rows.Record
 rows.RecordRead
-  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
   Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
   Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
 *rows.RecordRead
-  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
   Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
   Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.RecordRead[S, R]
@@ -2096,14 +2089,12 @@ rows.SelectionSource
 rows.Set
 *rows.Set
 rows.SetQuery
-  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
   Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.SetQuery[R]
   Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.SetQuery[R]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[R]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.SetQuery[R]
   Scope func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[R], R]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[R]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.SetQuery[R]
 *rows.SetQuery
-  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]R, error)
   Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.SetQuery[R]
   Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.SetQuery[R]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[R]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.SetQuery[R]
@@ -2316,7 +2307,6 @@ rows.TransactionValueInput
 rows.TransactionValueSource
   transactionValue func(*V) (github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource, github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V])
 rows.ValueCursorQuery
-  Key func() github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
   Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, r github.com/weiloon1234/Foundry-Go/database/orm.CursorRequest[V]) (github.com/weiloon1234/Foundry-Go/database/orm.CursorPage[V], error)
   Scope func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V], V]
@@ -2324,7 +2314,6 @@ rows.ValueCursorQuery
   Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V], V]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
 *rows.ValueCursorQuery
-  Key func() github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueCursorQuery[V]
   Paginate func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, r github.com/weiloon1234/Foundry-Go/database/orm.CursorRequest[V]) (github.com/weiloon1234/Foundry-Go/database/orm.CursorPage[V], error)
   Scope func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[github.com/weiloon1234/Foundry-Go/database/orm/rows.CursorScope[V], V]
@@ -2334,14 +2323,12 @@ rows.ValueCursorQuery
 rows.ValueRecord
 *rows.ValueRecord
 rows.ValueSetQuery
-  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]V, error)
   Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
   Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
   Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[V], V]
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
 *rows.ValueSetQuery
-  All func(ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor) ([]V, error)
   Limit func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
   Offset func(n int) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
   OrderBy func(os ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
@@ -2529,10 +2516,6 @@ rows.ExplainTransaction func[R any](ctx context.Context, tx *github.com/weiloon1
 rows.ExplainAnalyzeTransaction func[R any](ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx, q github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionRecordSource[R]) (github.com/weiloon1234/Foundry-Go/database/orm.Plan, error)
 rows.ExplainTransactionValue func[S, V any](ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx, q github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]) (github.com/weiloon1234/Foundry-Go/database/orm.Plan, error)
 rows.ExplainAnalyzeTransactionValue func[S, V any](ctx context.Context, tx *github.com/weiloon1234/Foundry-Go/database.Tx, q github.com/weiloon1234/Foundry-Go/database/orm/rows.TransactionValue[S, V]) (github.com/weiloon1234/Foundry-Go/database/orm.Plan, error)
-rows.Compile func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]) (github.com/weiloon1234/Foundry-Go/database/orm.Statement, error)
-rows.Preflight func[S, R any](ctx context.Context, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]) error
-rows.Count func[S, R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]) (int64, error)
-rows.Each func[S, R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], yield func(R) error) error
 rows.Paginate func[S, R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], request github.com/weiloon1234/Foundry-Go/database/orm.PageRequest) (github.com/weiloon1234/Foundry-Go/database/orm.PageResult[R], error)
 rows.SimplePaginate func[S, R any](ctx context.Context, ex github.com/weiloon1234/Foundry-Go/database.Executor, q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], request github.com/weiloon1234/Foundry-Go/database/orm.PageRequest) (github.com/weiloon1234/Foundry-Go/database/orm.SimplePage[R], error)
 rows.ReorderUnwindowed func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], orders ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionOrder[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
@@ -2629,21 +2612,9 @@ expr.JSONFixedArray
 *expr.JSONFixedArray
   Validate func() error
 expr.JSONPath
-  Contains func(fragment P) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
-  Exists func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
-  IsJSONNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
-  IsMissing func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   JSON func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]
-  Kind func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]]
-  Length func() github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
 *expr.JSONPath
-  Contains func(fragment P) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
-  Exists func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
-  IsJSONNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
-  IsMissing func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   JSON func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]
-  Kind func() github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]]
-  Length func() github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, int64]
 expr.NullableOrderedAggregate
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.SelectedOrder[S]
@@ -3224,7 +3195,6 @@ expr.Remainder func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr
 expr.RemainderNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]
 expr.RemainderNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
 expr.RemainderValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
-expr.Select func[S, V any](v github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
 expr.Subtract func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.OrderedRowExpression[S, V]
 expr.SubtractNullable func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedRowExpression[S, V]
 expr.SubtractNullableValue func[S any, V github.com/weiloon1234/Foundry-Go/database/orm/expr.numericValue](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
@@ -3560,10 +3530,10 @@ expr.JSONOptional func[S, P any](path github.com/weiloon1234/Foundry-Go/database
 expr.JSONNullable func[S, P any](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, github.com/weiloon1234/Foundry-Go/value.Nullable[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P]
 expr.JSONPointer func[S, P any](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, *P]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P]
 expr.JSONDocument func[S, P any](path github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONPath[S, P]
-expr.JSONType func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]
-expr.JSONTypeValue func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]
-expr.JSONTypeNullable func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]]
-expr.JSONTypeNullableValue func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database/orm/expr.JSONKind]]
+expr.JSONType func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/database.JSONKind]
+expr.JSONTypeValue func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/database.JSONKind]
+expr.JSONTypeNullable func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database.JSONKind]]
+expr.JSONTypeNullableValue func[S, P any](input github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/database.JSONKind]]
 expr.JSONContains func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, bool]
 expr.JSONContainsValue func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.JSON[P]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, bool]
 expr.JSONContainsNullable func[S, P any](left github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]], right github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/value.JSON[P]]]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, github.com/weiloon1234/Foundry-Go/value.Nullable[bool]]

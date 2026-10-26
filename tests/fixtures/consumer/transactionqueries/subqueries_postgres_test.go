@@ -14,9 +14,9 @@ func TestPostgresTransactionMembershipAndExists(t *testing.T) {
 	outer := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "outer_records")
 	inner := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "inner_records")
 	a, b := recordAt(rows.TransactionScope(outer)), recordAt(rows.TransactionScope(inner))
-	values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Select(b.ID)).Where(b.ID.Eq(2))).ForUpdate()
+	values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Row(b.ID).Value()).Where(b.ID.Eq(2))).ForUpdate()
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(rows.TransactionInQuery(expr.Add(a.ID, expr.Select(a.ID).Param(1)), values)).All(ctx, tx)
+		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(rows.TransactionInQuery(expr.Add(a.ID, expr.Row(a.ID).Value().Param(1)), values)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -60,7 +60,7 @@ func TestPostgresTransactionScalarCardinalityAndNulls(t *testing.T) {
 			if mode == "many" {
 				predicate = expr.OrderRow(fields.ID).Gt(1)
 			}
-			values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Select(fields.ID)).Where(predicate)).ForUpdate()
+			values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Row(fields.ID).Value()).Where(predicate)).ForUpdate()
 			scalar := rows.TransactionScalarQuery(outer, values)
 			if mode == "nullable" {
 				nullable := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.NullFor(fields.ID).Value()).Where(predicate)).ForUpdate()
@@ -124,7 +124,7 @@ func TestPostgresTransactionNullableMembershipAndScalarRow(t *testing.T) {
 		}
 	}
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Select(b.ID)).Where(b.ID.Eq(2))).ForUpdate()
+		values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Row(b.ID).Value()).Where(b.ID.Eq(2))).ForUpdate()
 		scalar := rows.TransactionScalarRowQuery(outer, values)
 		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(expr.Equal(expr.NullableRow(a.ID), scalar)).All(ctx, tx)
 		if err != nil {

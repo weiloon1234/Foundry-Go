@@ -87,7 +87,7 @@ func (w *Worker) recordFailure(ctx context.Context, key Key, failed FailedJob) {
 // its payload, remaining policy and attribution. It is the explicit operator path for archived failures; the
 // name/version must be registered with this dispatcher.
 func (d *Dispatcher) Redispatch(ctx context.Context, envelope Envelope) (ExecutionID, error) {
-	id, err := model.NewID[Execution]()
+	id, err := model.NewIDAt[Execution](time.Now())
 	if err != nil {
 		return ExecutionID{}, err
 	}

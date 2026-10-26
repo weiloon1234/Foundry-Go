@@ -94,7 +94,7 @@ func TestFactorKeyRotationReencryptsStoredFactors(t *testing.T) {
 		}
 		for i := range owners {
 			owners[i] = fmt.Sprintf("%064x", i+1)
-			generation, err := model.NewID[mfastore.Factor]()
+			generation, err := model.NewIDAt[mfastore.Factor](time.Now())
 			if err != nil {
 				return err
 			}
@@ -199,7 +199,7 @@ func TestFactorKeyRotationReencryptsStoredFactors(t *testing.T) {
 		t.Fatal(len(stale), err)
 	}
 	changed := stale[0]
-	changed.Generation, _ = model.NewID[mfa.Record]()
+	changed.Generation, _ = model.NewIDAt[mfa.Record](time.Now())
 	if replaced, err := backend.ReplaceCiphertext(t.Context(), changed, stale[0].Ciphertext); err != nil || replaced {
 		t.Fatal("replacement ignored the factor generation", replaced, err)
 	}

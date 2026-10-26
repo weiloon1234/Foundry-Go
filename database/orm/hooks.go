@@ -216,6 +216,10 @@ func afterStages(operation lifecycle.Operation) []afterStage {
 	}
 	return nil
 }
+
+// Keep the lifecycle closure bodies compiled once in their non-generic owner.
+//
+//go:noinline
 func modelCallbacks(table *tableCore, candidate unsafe.Pointer) *writeCallbacks {
 	var before unsafe.Pointer
 	var hooks []hookSet

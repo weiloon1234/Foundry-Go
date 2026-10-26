@@ -59,11 +59,11 @@ func TestWebSocketKernelUsesTypedConsumerAndNativeMiddleware(t *testing.T) {
 		t.Fatal(err)
 	}
 	peer := client.Connect(t, "ws://"+address+"/ws", http.Header{"Origin": []string{"http://" + address}}, config.MaxFrameBytes)
-	order, err := model.NewID[models.Order]()
+	order, err := model.NewIDAt[models.Order](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	buyer, err := model.NewID[models.User]()
+	buyer, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

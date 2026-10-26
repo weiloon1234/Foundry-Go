@@ -1,5 +1,7 @@
 package websocket
 
+import "time"
+
 import (
 	"context"
 	stdhttp "net/http"
@@ -97,7 +99,7 @@ func (h *Hub) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			return
 		}
 	}
-	id, err := model.NewID[Connection]()
+	id, err := model.NewIDAt[Connection](time.Now())
 	if err != nil {
 		rejectUpgrade(w, r, foundryhttp.Unavailable)
 		return

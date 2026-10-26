@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -46,9 +47,9 @@ func testTransactionMarkerMembership[M TransactionScopeType](t *testing.T, outer
 	m := declareMembers()
 	a := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "a")
 	b := AsTransaction[right](TransactionOf(ModelRecord(m.Query())), "b")
-	id := expr.Select(expr.At(TransactionScope(a), m.ID))
+	id := expr.Row(expr.At(TransactionScope(a), m.ID)).Value()
 	on := On(expr.At(TransactionScope(a), m.ID), expr.At(TransactionScope(b), m.ID))
-	ordinary := expr.Select(expr.Value(m.ID))
+	ordinary := expr.Row(expr.Value(m.ID)).Value()
 	inputs := map[string]transactionMembershipInputs{
 		"selected":   {SelectTransactionValue(a, id), SelectTransactionValue(a, expr.Nullable(id))},
 		"lifted":     {TransactionValueOf(Values(SelectScalar(From(m.Query()), ordinary))), TransactionValueOf(Values(SelectScalar(From(m.Query()), expr.Nullable(ordinary))))},
@@ -93,12 +94,37 @@ func testTransactionMarkerMembership[M TransactionScopeType](t *testing.T, outer
 
 func TestTransactionRecordIsStampedAtConstruction(t *testing.T) {
 	m := declareMembers()
-	original := ModelRecord(m.Query())
+	original := UnionAll(ModelRecord(m.Query()), ModelRecord(m.Query()))
 	lifted := TransactionOf(original)
-	if !lifted.core.Source.Node.Source.RequiresTransaction {
-		t.Fatal("transaction record has an unrestricted stored source")
+	escaped := SetQuery[member]{core: lifted.core}
+	// Inspect the stored source without the adapter's executor-kind check.
+	escaped.core.Transaction = false
+	a := AsRecord[left](escaped, "escaped")
+	cte := AsRecord[left](CTE("escaped_cte", escaped), "escaped")
+	cursor := CursorFor(escaped)
+	cursor = cursor.UniqueBy(expr.Group(expr.At(cursor.Scope(), m.ID)))
+	for name, compile := range map[string]func() error{
+		"set":   func() error { _, err := CompileRead(ReadSet(escaped)); return err },
+		"alias": func() error { _, err := CompileRead(SelectRecord(a, Scope(a))); return err },
+		"cte":   func() error { _, err := CompileRead(SelectRecord(cte, Scope(cte))); return err },
+		"cursor": func() error {
+			_, err := ormcore.PlanResultCursor(t.Context(), cursor.core, 1, "", false, false)
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := compile(); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "transaction-scoped") {
+				t.Fatal("stored transaction requirement escaped", err)
+			}
+		})
 	}
-	if original.core.Source.Node.Source.RequiresTransaction {
-		t.Fatal("transaction lift mutated ordinary record")
+	state := &driverState{}
+	if got, err := ReadSet(escaped).All(t.Context(), openTest(t, state)); got != nil || !errors.Is(err, fault.Invalid) || state.sql != "" {
+		t.Fatal("escaped record reached pool", got, err, state.sql)
 	}
+	if _, err := CompileRead(ReadSet(original)); err != nil {
+		t.Fatal("lifting mutated original", err)
+	}
+	valid := AsTransaction[left](lifted, "valid")
+	compileTransaction(t, SelectTransactionRecord(valid, TransactionScope(valid)).core.Source)
 }

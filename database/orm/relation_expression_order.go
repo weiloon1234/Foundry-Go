@@ -44,6 +44,6 @@ func FoundryRelationPivotOrder[M, N, P any](r ThroughRelation[M, N, P], o ormcor
 func relationExpressionOrder[N any](owner *tableCore, o ormcore.Order) Order[N] {
 	source := ormcore.Source{Scope: reflect.TypeFor[N](), Owners: map[string]any{owner.model.Table: owner}}
 	err := errors.Join(o.Err, declarationCoreError(owner), ormcore.CheckReferenceSet(source, o.Refs, o.ReferenceFree))
-	order := querycore.QueryOrder{Computed: &querycore.ComputedOrder{Expression: o.Node.Expression}, Descending: o.Node.Descending, Nulls: o.Node.Nulls}
+	order := querycore.ModelOrder(o.Node)
 	return Order[N]{owner: owner, core: order, err: err}
 }

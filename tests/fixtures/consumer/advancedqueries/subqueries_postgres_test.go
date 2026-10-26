@@ -42,7 +42,7 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 	// Grouping, HAVING and a selected window remain inside the derived source.
 	source := rowset.AsRecord[totalsAlias](rowset.RecordOf(rowset.Limit(rowset.OrderBy(rowset.Having(totals, expr.Count[models.Order]().Gte(2)), expr.Count[models.Order]().Desc()), 1)), "totals")
 	fields := rowset.Scope(source)
-	values := rowset.WhereScalar(rowset.SelectScalar(source, expr.Select(rowset.At(fields, reports.BuyerTotalRows.Total))), expr.OrderNullableRow(rowset.At(fields, reports.BuyerTotalRows.Total)).Gt(decimal.FromInt64(2)))
+	values := rowset.WhereScalar(rowset.SelectScalar(source, expr.Row(rowset.At(fields, reports.BuyerTotalRows.Total)).Value()), expr.OrderNullableRow(rowset.At(fields, reports.BuyerTotalRows.Total)).Gt(decimal.FromInt64(2)))
 	amounts, err := rowset.ReadScalar(values).All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -61,8 +61,8 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 	report := rowset.Select(joined, reports.UserOrderStatsRows.Row,
 		rowset.Map(reports.UserOrderStatsRows.ID, expr.At(buyer, models.Users.ID)),
 		rowset.Map(reports.UserOrderStatsRows.Email, expr.At(buyer, models.Users.Email)),
-		rowset.MapSelected(reports.UserOrderStatsRows.Total, expr.Select(rowset.AtNullableValue(stats, reports.BuyerTotalRows.Total))),
-		rowset.MapSelected(reports.UserOrderStatsRows.Orders, expr.Select(rowset.AtNullable(stats, reports.BuyerTotalRows.Orders))),
+		rowset.MapSelected(reports.UserOrderStatsRows.Total, expr.Row(rowset.AtNullableValue(stats, reports.BuyerTotalRows.Total)).Value()),
+		rowset.MapSelected(reports.UserOrderStatsRows.Orders, expr.Row(rowset.AtNullable(stats, reports.BuyerTotalRows.Orders)).Value()),
 	).OrderBy(expr.At(buyer, models.Users.Email).Asc())
 	rows, err := report.All(t.Context(), tx)
 	if err != nil {
@@ -82,7 +82,7 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 	df := rowset.Scope(derived)
 	again := rowset.InnerJoin(u, derived, rowset.OnEqual(expr.At(rowset.Scope(u), models.Users.ID), rowset.At(df, reports.UserOrderStatsRows.ID)))
 	joinedFields := rowset.RightScope(again, rowset.Scope(derived))
-	if emails, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(again, expr.Select(rowset.At(joinedFields, reports.UserOrderStatsRows.Email))), rowset.At(joinedFields, reports.UserOrderStatsRows.Email).Asc())).All(t.Context(), tx); err != nil || len(emails) != 3 || emails[0] != users[0].Email {
+	if emails, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(again, expr.Row(rowset.At(joinedFields, reports.UserOrderStatsRows.Email)).Value()), rowset.At(joinedFields, reports.UserOrderStatsRows.Email).Asc())).All(t.Context(), tx); err != nil || len(emails) != 3 || emails[0] != users[0].Email {
 		t.Error("declared joined result could not be joined again", err)
 	}
 	// Derived enum fields retain enum operators and decoders, including output aliases.
@@ -95,7 +95,7 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 	)
 	names := rowset.AsRecord[reportAlias](rowset.RecordOf(summary), "summary")
 	nf := rowset.Scope(names)
-	if emails, err := rowset.ReadScalar(rowset.OrderScalar(rowset.WhereScalar(rowset.SelectScalar(names, expr.Select(rowset.At(nf, reports.UserSummaries.Email))), rowset.At(nf, reports.UserSummaries.Status).Eq(models.StatusActive)), rowset.At(nf, reports.UserSummaries.Email).Asc())).All(t.Context(), tx); err != nil || len(emails) != 3 {
+	if emails, err := rowset.ReadScalar(rowset.OrderScalar(rowset.WhereScalar(rowset.SelectScalar(names, expr.Row(rowset.At(nf, reports.UserSummaries.Email)).Value()), rowset.At(nf, reports.UserSummaries.Status).Eq(models.StatusActive)), rowset.At(nf, reports.UserSummaries.Email).Asc())).All(t.Context(), tx); err != nil || len(emails) != 3 {
 		t.Error("derived enum or renamed column failed", err)
 	}
 	return nil
@@ -103,7 +103,7 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 
 func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) error {
 	u, o := models.Users, models.Orders
-	buyers := rowset.WhereScalar(rowset.SelectScalar(rowset.From(models.Orders.Query()), expr.Select(expr.Value(o.BuyerID))), expr.ModelPredicate(o.TotalCents.Gte(2)))
+	buyers := rowset.WhereScalar(rowset.SelectScalar(rowset.From(models.Orders.Query()), expr.Row(expr.Value(o.BuyerID)).Value()), expr.ModelPredicate(o.TotalCents.Gte(2)))
 	matched, err := expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(u.ID), buyers)).OrderBy(u.Email.Asc()).All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -112,7 +112,7 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 		t.Error("typed membership results changed")
 	}
 	// SQL NULL remains unknown under NOT IN; explicitly remove it when desired.
-	introducers := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Select(expr.Value(u.IntroducerID)))
+	introducers := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(u.IntroducerID)).Value())
 	for _, test := range []struct {
 		predicate expr.Predicate[models.User]
 		want      int64
@@ -139,7 +139,7 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 		t.Error("EXISTS lost HAVING", err)
 	}
 	last := rowset.LimitScalar(rowset.OrderScalar(buyers, expr.Value(o.TotalCents).Desc()), 1)
-	nicknames := rowset.SelectScalar(rowset.From(models.Users.Query().Where(u.ID.Eq(users[1].ID))), expr.Select(expr.Value(u.Nickname)))
+	nicknames := rowset.SelectScalar(rowset.From(models.Users.Query().Where(u.ID.Eq(users[1].ID))), expr.Row(expr.Value(u.Nickname)).Value())
 	report := rowset.Select(rowset.From(models.Users.Query()), reports.ScalarReports.Row,
 		rowset.Map(reports.ScalarReports.ID, expr.Value(u.ID)),
 		rowset.MapSelected(reports.ScalarReports.BuyerID, rowset.ScalarQuery(rowset.From(models.Users.Query()), last)),
@@ -164,19 +164,19 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 			t.Error("scalar aggregate zero became NULL")
 		}
 	}
-	emptyEmails := rowset.LimitScalar(rowset.SelectScalar(rowset.From(models.Users.Query().Where(u.ID.Eq(users[0].ID))), expr.Select(expr.Value(u.Email))), 0)
+	emptyEmails := rowset.LimitScalar(rowset.SelectScalar(rowset.From(models.Users.Query().Where(u.ID.Eq(users[0].ID))), expr.Row(expr.Value(u.Email)).Value()), 0)
 	result, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.ScalarQuery(rowset.From(models.Users.Query()), emptyEmails))).All(t.Context(), tx)
 	if err != nil || len(result) != 3 || !result[0].IsNull() {
 		t.Error("empty scalar did not become NULL", err)
 	}
-	nullNickname := rowset.SelectScalar(rowset.From(models.Users.Query().Where(u.ID.Eq(users[0].ID))), expr.Select(expr.Value(u.Nickname)))
+	nullNickname := rowset.SelectScalar(rowset.From(models.Users.Query().Where(u.ID.Eq(users[0].ID))), expr.Row(expr.Value(u.Nickname)).Value())
 	for _, nullableInput := range []rowset.Scalar[models.User, value.Nullable[string]]{nullNickname, rowset.LimitScalar(nicknames, 0)} {
 		result, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.ScalarNullableQuery(rowset.From(models.Users.Query()), nullableInput))).All(t.Context(), tx)
 		if err != nil || len(result) != 3 || !result[0].IsNull() {
 			t.Error("nullable scalar did not preserve NULL/empty input", err)
 		}
 	}
-	input := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Select(expr.Value(u.ID)))
+	input := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(u.ID)).Value())
 	err = tx.Savepoint(t.Context(), func(child *database.Tx) error {
 		rows, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.ScalarQuery(rowset.From(models.Users.Query()), input))).All(t.Context(), child)
 		var detail *database.Error
@@ -201,7 +201,7 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 	if _, err := tx.Exec(t.Context(), `UPDATE users SET status='invalid' WHERE email_address=$1`, users[2].Email); err != nil {
 		return err
 	}
-	statuses := rowset.SelectScalar(rowset.From(models.Users.Query().OrderBy(u.Email.Asc())), expr.Select(expr.Value(u.Status)))
+	statuses := rowset.SelectScalar(rowset.From(models.Users.Query().OrderBy(u.Email.Asc())), expr.Row(expr.Value(u.Status)).Value())
 	if values, err := rowset.ReadScalar(statuses).All(t.Context(), tx); values != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("malformed value exposed partial results", err)
 	}
@@ -211,7 +211,7 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 	if n, err := rowset.ReadScalar(buyers).Count(t.Context(), tx); err != nil || n != 2 {
 		t.Error("subquery failure left rows or transaction unusable", err)
 	}
-	s, err := rowset.Compile(report)
+	s, err := rowset.CompileRead(rowset.Read(report))
 	if err != nil || strings.Count(s.SQL(), "SELECT") != 4 {
 		t.Error("scalar report did not use one nested SQL statement", err)
 	}

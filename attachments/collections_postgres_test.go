@@ -54,7 +54,7 @@ func TestPostgresAttachmentCollectionsIdentityAndOrdering(t *testing.T) {
 	}
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		q := extensiontest.MemberQuery().Where(singlePredicate)
-		matched, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		matched, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(extensiontest.MemberIDField())).Value())).All(ctx, tx)
 		if err != nil || len(matched) != 1 || matched[0] != 1 {
 			t.Fatal("single collection matching scope", matched, err)
 		}
@@ -118,7 +118,7 @@ func TestPostgresAttachmentCollectionsIdentityAndOrdering(t *testing.T) {
 	}
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		q := extensiontest.MemberQuery().Where(multiplePredicate)
-		matched, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		matched, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(extensiontest.MemberIDField())).Value())).All(ctx, tx)
 		if err != nil || len(matched) != 0 {
 			t.Fatal("cleared collection matching scope", matched, err)
 		}
@@ -212,7 +212,7 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		q := extensiontest.MemberQuery().Where(predicate)
 		var err error
-		keys, err = rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		keys, err = rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(extensiontest.MemberIDField())).Value())).All(ctx, tx)
 		return err
 	})
 	if err != nil || len(keys) != 1 || keys[0] != 1 {
@@ -224,7 +224,7 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	}
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		q := extensiontest.MemberQuery().Where(frPredicate)
-		frKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		frKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(extensiontest.MemberIDField())).Value())).All(ctx, tx)
 		if err != nil || len(frKeys) != 2 || frKeys[0] != 1 || frKeys[1] != 2 {
 			t.Fatal("multiple owner matching scope", frKeys, err)
 		}
@@ -239,7 +239,7 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	}
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		q := extensiontest.MemberQuery().Where(msPredicate)
-		msKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		msKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(extensiontest.MemberIDField())).Value())).All(ctx, tx)
 		if err != nil || len(msKeys) != 0 {
 			t.Fatal("empty locale matching scope", msKeys, err)
 		}
@@ -259,7 +259,7 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	}
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		q := extensiontest.MemberQuery().Where(predicate)
-		deletedKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		deletedKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(extensiontest.MemberIDField())).Value())).All(ctx, tx)
 		if err != nil || len(deletedKeys) != 0 {
 			t.Fatal("soft-deleted owner matched query scope", deletedKeys, err)
 		}
@@ -280,7 +280,7 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	}
 	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		q := extensiontest.MemberQuery().Where(predicate)
-		restoredKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		restoredKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(extensiontest.MemberIDField())).Value())).All(ctx, tx)
 		if err != nil || len(restoredKeys) != 1 || restoredKeys[0] != 1 {
 			t.Fatal("restored owner query scope", restoredKeys, err)
 		}

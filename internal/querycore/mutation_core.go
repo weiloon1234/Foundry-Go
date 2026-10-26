@@ -81,10 +81,7 @@ func (q QueryCore) ValidateAdjustment(a *Adjustment, c *Compiler, assigned map[s
 	return nil
 }
 
-func (q QueryCore) AdjustSet(a *Adjustment, c *Compiler, assigned map[string]MutationAssignment) (string, error) {
-	if err := q.ValidateAdjustment(a, c, assigned); err != nil {
-		return "", err
-	}
+func (q QueryCore) adjustmentValue(a *Adjustment, c *Compiler) (string, error) {
 	column := c.Columns[a.Field.Column]
 	bound, err := a.Bind()
 	if err != nil {
@@ -101,7 +98,7 @@ func (q QueryCore) AdjustSet(a *Adjustment, c *Compiler, assigned map[string]Mut
 	if a.Subtract {
 		op = " - "
 	}
-	return Quoted(column.Name) + " = " + Quoted(column.Name) + op + parameter, nil
+	return Quoted(column.Name) + op + parameter, nil
 }
 
 func (q QueryCore) CompileMutation(c Compiler, node SelectNode, kind MutationKind, assignments []MutationAssignment, assigned map[string]MutationAssignment, adjust *Adjustment, countOnly bool) (Statement, error) {
@@ -110,27 +107,33 @@ func (q QueryCore) CompileMutation(c Compiler, node SelectNode, kind MutationKin
 	if err != nil {
 		return Statement{}, err
 	}
-	sets := make([]string, 0, len(assigned))
-	for _, assignment := range assignments {
-		column := c.Columns[assignment.Field.Column]
-		parameter, err := c.AssignmentParameter(column.Name, assignment.Bind)
-		if err != nil {
-			return Statement{}, err
-		}
-		sets = append(sets, Quoted(column.Name)+" = "+parameter)
-	}
+	count := len(assigned)
 	if adjust != nil {
-		set, err := q.AdjustSet(adjust, &c, assigned)
-		if err != nil {
+		if err := q.ValidateAdjustment(adjust, &c, assigned); err != nil {
 			return Statement{}, err
 		}
-		sets = append(sets, set)
+		count++
+	}
+	sets, err := compileUpdateSet(q.Model.Columns, count, func(column Column) (string, bool, error) {
+		if adjust != nil && adjust.Field.Column == column.Name {
+			expression, err := q.adjustmentValue(adjust, &c)
+			return expression, true, err
+		}
+		assignment, present := assigned[column.Name]
+		if !present {
+			return "", false, nil
+		}
+		expression, err := c.AssignmentParameter(column.Name, assignment.Bind)
+		return expression, true, err
+	})
+	if err != nil {
+		return Statement{}, err
 	}
 	var sql strings.Builder
 	sql.WriteString(prefix)
 	switch kind.SqlKind() {
 	case UpdateModel:
-		sql.WriteString("UPDATE " + QuotedTable(q.Table) + " SET " + strings.Join(sets, ", "))
+		sql.WriteString("UPDATE " + QuotedTable(q.Table) + " SET " + sets)
 	case DeleteModel:
 		sql.WriteString("DELETE FROM " + QuotedTable(q.Table))
 	default:
@@ -184,7 +187,7 @@ func (q QueryCore) CompileInsert(c Compiler, rows []map[string]MutationAssignmen
 	conflictSQL := ""
 	if conflict != nil {
 		c.Sources[ConflictProposedTable] = c.Columns
-		conflictSQL, err = conflict.Compile(&c, q.Table, alias, q.ScopePredicates())
+		conflictSQL, err = conflict.Compile(&c, q.Table, alias, q.Model.Columns, q.ScopePredicates())
 		if err != nil {
 			return Statement{}, err
 		}

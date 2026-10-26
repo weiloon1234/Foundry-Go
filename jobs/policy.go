@@ -1,7 +1,8 @@
 package jobs
 
+import "math/rand/v2"
+
 import (
-	"math/rand/v2"
 	"slices"
 	"time"
 

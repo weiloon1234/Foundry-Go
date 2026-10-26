@@ -206,7 +206,7 @@ func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 	s := seed(t)
 	fields := articles.Articles
 	s.read(t, func(ctx context.Context, tx *database.Tx) error {
-		loaded, err := orm.Load(ctx, tx, []articles.Article{s.full, s.full}, s.x.Title.Relation(articles.Articles.Title))
+		loaded, err := orm.LoadFrom(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)), []articles.Article{s.full, s.full})
 		if err != nil {
 			return err
 		}
@@ -215,7 +215,7 @@ func TestSlotsLoadThroughEveryRelationPath(t *testing.T) {
 		}
 		// LoadMissing's zero-statement case is measured with a statement
 		// observer in TestSlotLoadingStatementsDoNotGrowWithParents.
-		missing, err := orm.LoadMissing(ctx, tx, loaded, s.x.Title.Relation(articles.Articles.Title))
+		missing, err := orm.LoadMissingFrom(ctx, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)), loaded)
 		if err != nil {
 			return err
 		}
@@ -320,7 +320,7 @@ func TestSlotLoadingBoundaries(t *testing.T) {
 		}
 		cancelled, cancel := context.WithCancel(ctx)
 		cancel()
-		if _, err := orm.Load(cancelled, tx, []articles.Article{s.full}, s.x.Title.Relation(articles.Articles.Title)); !errors.Is(err, context.Canceled) {
+		if _, err := orm.LoadFrom(cancelled, tx, articles.Articles.Query().With(s.x.Title.Relation(articles.Articles.Title)), []articles.Article{s.full}); !errors.Is(err, context.Canceled) {
 			t.Fatal("a cancelled slot load ran", err)
 		}
 		return nil

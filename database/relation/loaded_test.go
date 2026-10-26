@@ -1,6 +1,7 @@
 package relation_test
 
 import (
+	"github.com/weiloon1234/Foundry-Go/decimal"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/relation"
@@ -93,5 +94,20 @@ func TestCollectionsIterateWithoutCopying(t *testing.T) {
 		if links.Len() != 1 || link.Pivot.ID != 2 {
 			t.Fatal("link iteration lost pivot data")
 		}
+	}
+}
+
+func TestAggregateLoadedNullIsDistinctFromNotLoaded(t *testing.T) {
+	var slot relation.Value[value.Nullable[decimal.Decimal]]
+	if _, loaded := slot.Get(); loaded || slot.IsLoaded() {
+		t.Fatal("zero aggregate is loaded")
+	}
+	slot = relation.Computed(value.Null[decimal.Decimal]())
+	if v, loaded := slot.Get(); !loaded || !v.IsNull() {
+		t.Fatal("computed SQL NULL lost loaded state")
+	}
+	count := relation.Computed(int64(0))
+	if v, loaded := count.Get(); !loaded || v != 0 {
+		t.Fatal("zero count is not loaded")
 	}
 }

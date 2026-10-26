@@ -103,7 +103,7 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		link := rows.Correlate(roles, lookup)
 		outer := rows.OuterScope(link, roles.Stored())
 		inner := rows.InnerScope(link, rows.Scope(lookup))
-		selected := rows.SelectCorrelatedScalar(link, expr.Select(expr.At(inner, f.Amount))).Where(expr.Greater(expr.At(inner, f.Amount), expr.At(outer, f.Amount))).Limit(1)
+		selected := rows.SelectCorrelatedScalar(link, expr.Row(expr.At(inner, f.Amount)).Value()).Where(expr.Greater(expr.At(inner, f.Amount), expr.At(outer, f.Amount))).Limit(1)
 		policy := orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(rows.SetConflictValue(f.Amount, expr.Coalesce(rows.CorrelatedScalarRowQuery(selected), expr.At(proposed, f.Amount))))
 		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, models.WriteRecords.Name.Set("counter"))
 		if err != nil {
@@ -126,7 +126,7 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		// A scalar with multiple results must preserve the database error and roll back.
 		allLink := rows.Correlate(roles, rows.From(q.Query()))
 		allFields := rows.InnerScope(allLink, rows.ModelScope(q.Query()))
-		multiple := rows.SelectCorrelatedScalar(allLink, expr.Select(expr.At(allFields, f.Amount)))
+		multiple := rows.SelectCorrelatedScalar(allLink, expr.Row(expr.At(allFields, f.Amount)).Value())
 		invalid := orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(rows.SetConflictValue(f.Amount, expr.Coalesce(rows.CorrelatedScalarRowQuery(multiple), expr.At(proposed, f.Amount))))
 		_, err = orm.Upsert(t.Context(), tx, q.Query(), invalid, models.WriteRecords.Name.Set("counter"))
 		var dbErr *database.Error
@@ -141,8 +141,8 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		if !present || kept.Amount.String() != "2.5" {
 			t.Fatal("failed calculation persisted")
 		}
-		independent := rows.ConflictScalarRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(f.Name.Eq("reference"))), expr.Select(expr.Value(f.Amount))))
-		nullable := rows.ConflictScalarNullableRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(f.Name.Eq("reference"))), expr.Select(expr.Value(f.Note))))
+		independent := rows.ConflictScalarRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(f.Name.Eq("reference"))), expr.Row(expr.Value(f.Amount)).Value()))
+		nullable := rows.ConflictScalarNullableRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(f.Name.Eq("reference"))), expr.Row(expr.Value(f.Note)).Value()))
 		result, err = orm.Upsert(t.Context(), tx, q.Query(),
 			orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(rows.SetConflictValue(f.Amount, expr.Coalesce(independent, expr.At(proposed, f.Amount))), rows.SetConflictValue(f.Note, nullable)), models.WriteRecords.Name.Set("counter"))
 		if err != nil {

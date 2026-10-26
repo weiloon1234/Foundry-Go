@@ -1,5 +1,7 @@
 package jsonqueries_test
 
+import "github.com/weiloon1234/Foundry-Go/database"
+
 import (
 	"encoding/json"
 	"foundry.test/consumer/jsonqueries"
@@ -30,7 +32,7 @@ func TestSnapshotJSONKindIdentityAndSQLParity(t *testing.T) {
 		t.Fatal("recorded SQL parity changed")
 	}
 
-	after := jsonqueries.Snapshot{ID: 1, Settings: filter, Kind: expr.JSONObject, BackupKind: value.Of(expr.JSONNull), Matches: value.Of(true)}
+	after := jsonqueries.Snapshot{ID: 1, Settings: filter, Kind: database.JSONObject, BackupKind: value.Of(database.JSONNull), Matches: value.Of(true)}
 
 	newBytes, err := json.Marshal(after)
 	if err != nil {

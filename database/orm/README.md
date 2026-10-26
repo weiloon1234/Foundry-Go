@@ -1,9 +1,8 @@
 # Declare and query a table
 
-This API is in progress on the `goway-data-layer` branch. It currently covers
-typed declarations, common reads and writes, numeric adjustments, direct eager
-relations, inner joins and row projections. The existing `database/query` API
-remains available and unchanged; later stages complete the new API.
+Handwritten declarations bind concrete models and keys to the shared SQL runtime.
+Use this package for model reads, writes, lifecycle callbacks and relations;
+`orm/expr` and `orm/rows` provide expressions, joins and typed result selections.
 
 Keep the model and its table declaration together. The table's second type
 parameter is the primary key type, including named natural keys.
@@ -132,7 +131,7 @@ var OrderRelations = struct { Buyer orm.BelongsTo[Order, User] }{
     Buyer: orm.BelongsToOf(Orders.Buyer, Orders.BuyerID, Users.ID),
 }
 orders, err := Orders.Query().With(OrderRelations.Buyer).All(ctx, db)
-loaded, err := orm.Load(ctx, db, orders, OrderRelations.Buyer)
+loaded, err := orm.LoadFrom(ctx, db, Orders.Query().With(OrderRelations.Buyer), orders)
 ```
 
 `OneOf` and `ManyOf` bind `relation.One` and `relation.Many` fields. Nullable
@@ -532,7 +531,7 @@ count := UserAggregates.OrdersCount.Using(expr.Related(
     UserRelations.Orders.Where(Orders.TotalCents.Gt(minimum)),
     expr.Count[Order](),
 ))
-users, err = orm.LoadMissing(ctx, db, users, count)
+users, err = orm.LoadMissingFrom(ctx, db, Users.Query().With(count), users)
 ```
 
 Keep dependencies flowing from tables to relation namespaces to aggregate
@@ -1084,7 +1083,7 @@ columns also have no numeric adjustment capability. A guarded per-key update
 returning no row reports `ErrBoundExceeded` (including missing keys).
 
 
-Projection callbacks use `rows.Each(ctx, db, report, consume)`. They receive one
+Projection callbacks use `rows.EachRead(ctx, db, rows.Read(report), consume)`. They receive one
 fully decoded value at a time while rows remain open. Callback errors stop further
 decoding and close the result; values already consumed remain consumed if a later
 decode or close fails. Use `report.All` when the caller needs an all-or-error slice.

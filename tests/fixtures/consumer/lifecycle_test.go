@@ -1,5 +1,7 @@
 package consumer_test
 
+import "github.com/weiloon1234/Foundry-Go"
+
 import (
 	"context"
 	"errors"
@@ -9,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/weiloon1234/Foundry-Go"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/testkit"

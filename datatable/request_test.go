@@ -95,7 +95,7 @@ func TestRequestAllowlistBoundsAndStableOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	statement, err := rows.Compile(source.rows)
+	statement, err := rows.CompileRead(rows.Read(source.rows))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestRequestAllowlistBoundsAndStableOrdering(t *testing.T) {
 	if !reflect.DeepEqual(statement.Arguments(), []any{int64(7), "%Alpha !%!_!!%"}) {
 		t.Fatal("client strings changed SQL binding", statement.Arguments())
 	}
-	counted, err := rows.Compile(source.count)
+	counted, err := rows.CompileRead(rows.Read(source.count))
 	if err != nil || strings.Contains(counted.SQL(), "ORDER BY") || !strings.Contains(counted.SQL(), `ILIKE $2 ESCAPE '!'`) || !reflect.DeepEqual(counted.Arguments(), statement.Arguments()) {
 		t.Fatal("count query kept the table ordering or lost its filters", counted.SQL(), err)
 	}
@@ -152,7 +152,7 @@ func TestLikeRequiresExplicitOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if statement, err := rows.Compile(source.rows); err != nil || !strings.Contains(statement.SQL(), " LIKE $2") || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), "A%"}) {
+	if statement, err := rows.CompileRead(rows.Read(source.rows)); err != nil || !strings.Contains(statement.SQL(), " LIKE $2") || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), "A%"}) {
 		t.Fatal("explicit like lost its pattern", err)
 	}
 }
@@ -169,7 +169,7 @@ func TestNegatedFiltersIncludeRowsWithNullOperands(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		statement, err := rows.Compile(source.count)
+		statement, err := rows.CompileRead(rows.Read(source.count))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -254,7 +254,7 @@ func TestFilterGroupsPreserveWhereAndHavingPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	statement, err := rows.Compile(source.rows)
+	statement, err := rows.CompileRead(rows.Read(source.rows))
 	if err != nil || !strings.Contains(statement.SQL(), " OR ") || !strings.Contains(statement.SQL(), " AND ") || !reflect.DeepEqual(statement.Arguments(), []any{int64(7), int64(1), int64(3), int64(8)}) {
 		t.Fatal("OR did not keep BETWEEN endpoints together", statement.SQL(), err)
 	}

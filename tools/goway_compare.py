@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import math
 import os
+import os
 from pathlib import Path
 import platform
 import re
@@ -19,7 +20,7 @@ import sys
 import goway_synthetic as synthetic
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXED_ENV = {'GOCACHE': '/private/tmp/foundry-goway-codex-gocache-r14',
+FIXED_ENV = {'GOCACHE': os.environ.get('GOCACHE', '/private/tmp/foundry-goway-codex-gocache-r18'),
              'GOMAXPROCS': '4', 'GOFLAGS': '-p=4', 'GOWORK': 'off',
              'GOENV': 'off', 'GOTOOLCHAIN': 'local',
              'GOGC': '100', 'GOMEMLIMIT': 'off', 'GODEBUG': ''}

@@ -61,7 +61,7 @@ func TestJSONFailuresBeforeExecution(t *testing.T) {
 	for _, predicate := range []expr.Predicate[jsonqueries.Document]{
 		expr.JSONContains(expr.Value(f.Settings), expr.Param(f.Settings, value.JSON[jsonqueries.Preferences]{})).Eq(true),
 		expr.JSONContainsNullable(expr.Value(f.Backup), expr.NullableRow(expr.Param(f.Settings, value.JSON[jsonqueries.Preferences]{}))).Eq(value.Of(true)),
-		expr.JSONType(expr.Value(f.Settings)).Eq(expr.JSONKind("typo")),
+		expr.JSONType(expr.Value(f.Settings)).Eq(database.JSONKind("typo")),
 	} {
 		if _, err := expr.Where(q.Limit(0), predicate).All(t.Context(), queryfixture.NoQueries(t)); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)

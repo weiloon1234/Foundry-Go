@@ -1,0 +1,188 @@
+{
+  "base": "3d6f0379",
+  "status": "complete; approved four-comparison replay correction and all requested affected checks pass",
+  "compile_owner": "internal/querycore/compile_update_set.go:8",
+  "implementation": "One declaration-order traversal emits SET expressions before binding values. Reuses validated assignment maps; conflict targets are found in their bounded validated slice. No caller slice is reordered. Source updates retain their existing order. Adjustments share the renderer.",
+  "coverage": [
+    "keyed update",
+    "scoped keyed update",
+    "UpdateAll",
+    "UpdateEach",
+    "Upsert",
+    "UpsertMany",
+    "source values",
+    "source mappings",
+    "UpdatePivot",
+    "managed timestamps",
+    "numeric adjustment",
+    "stored plus proposed conflict expressions",
+    "duplicate validation",
+    "caller input reuse"
+  ],
+  "benchmark": {
+    "toolchain": "go1.27.1 darwin/arm64",
+    "cpu": "Apple M4 Max",
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r18",
+      "GOMAXPROCS": "4",
+      "GOFLAGS": "-p=4",
+      "GOWORK": "off"
+    },
+    "method": "No existing update benchmark was found. Added BenchmarkUpdateCompile using the existing BenchmarkInsertCompile pattern; built baseline binary before runtime edits and candidate binary after. Five alternating binary runs from database/orm with -test.run ^$ -test.bench ^BenchmarkUpdateCompile$ -test.benchmem -test.count=1. Includes planning, validation, binding and SQL construction, checks errors, SQL and binding count; excludes database I/O. Initial wrong-directory exploratory run was discarded.",
+    "interpretation": "64 allocations and 5257 bytes/op on every run for both versions. Timing is inconclusive under variable host load, with no end-to-end speed claim.",
+    "before": {
+      "samples": [
+        {
+          "ns_per_op": 3999,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        },
+        {
+          "ns_per_op": 2631,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        },
+        {
+          "ns_per_op": 4696,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        },
+        {
+          "ns_per_op": 2730,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        },
+        {
+          "ns_per_op": 2547,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        }
+      ],
+      "median_ns_per_op": 2730
+    },
+    "after": {
+      "samples": [
+        {
+          "ns_per_op": 2561,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        },
+        {
+          "ns_per_op": 2759,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        },
+        {
+          "ns_per_op": 2679,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        },
+        {
+          "ns_per_op": 3466,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        },
+        {
+          "ns_per_op": 2519,
+          "bytes_per_op": 5257,
+          "allocs_per_op": 64
+        }
+      ],
+      "median_ns_per_op": 2679
+    }
+  },
+  "checks": {
+    "go build ./...": "pass",
+    "go vet ./...": "pass",
+    "make test": "failed only in database/query/TestConflictMutatorsNormalizeLiteralAssignmentsOnce. Continued the 196 unexecuted packages separately with the Makefile six-package batching and same external-input fingerprint; all passed. The corrected query package passes its full race run; the lead requested only affected reruns after approval.",
+    "go test -count=1 ./tests/oracle/...": "pass after approved four-ID replay normalization; includes frozen corpus and exact-default negatives",
+    "go test -race ./database/... ./internal/querycore/...": "all packages pass except the same database/query conflict-binding expectation; database/orm/... is included in database/... (no root orm directory); corrected query package and all touched packages pass the approved affected race rerun.",
+    "PostgreSQL targeted update-order scenarios": "pass with FOUNDRY_TEST_POSTGRES_REQUIRED=1",
+    "make fixture-check": "pass after approved replay correction, with FOUNDRY_TEST_POSTGRES_REQUIRED=1; includes plugin/consumer vet and tests, all frozen replay, compiler cases, footprint ceilings and PostgreSQL pgsmoke",
+    "catalogue": "pass: 587 ported, 445 unaffected",
+    "footprint": "pass in completed make fixture-check; existing ceilings unchanged",
+    "make generate-check": "pass",
+    "make docs-check": "pass after approved correction",
+    "make fmt-check": "pass",
+    "go vet ./database/orm": "pass after the final relation-order regression was added",
+    "go test -race ./database/orm/... ./database/query/... ./internal/querycore/... ./tests/oracle/...": "pass with FOUNDRY_TEST_POSTGRES_REQUIRED=1 after approved replay and unit-expectation correction",
+    "gofmt and git diff --check": "pass; changed Go files formatted"
+  },
+  "legacy_expectation_conflicts": [
+    {
+      "test": "database/query/TestConflictMutatorsNormalizeLiteralAssignmentsOnce",
+      "difference": "Expected conflict literal bindings constant!, after; canonical declaration order is after, constant!. Mutator values and callback ordering are retained."
+    },
+    {
+      "test": "goway/TestAdvancedConflictOldAndNewAgree",
+      "site": "conflict_advanced_golden/1",
+      "difference": "Two statements recorded amount then note; declaration order is note then amount."
+    },
+    {
+      "test": "goway/TestAuditOldAndNewAgree",
+      "difference": "Two statements recorded deleted_at then updated_at; declaration order is updated_at then deleted_at."
+    },
+    {
+      "test": "goway/TestLifecycleOldAndNewAgree",
+      "difference": "Two statements recorded deleted_at then updated_at; declaration order is updated_at then deleted_at."
+    },
+    {
+      "test": "goway/TestStoreEachLifecycleGolden",
+      "difference": "Two statements recorded deleted_at then updated_at; declaration order is updated_at then deleted_at."
+    }
+  ],
+  "goldens": "Frozen records, receipt and provenance unchanged. The sole explicit four-ID exception registry in tests/oracle/update_order.go permits SET-pair permutations with aligned bindings on both sides; all other observations and IDs remain byte-exact. One legacy unit binding expectation now uses declaration order, with its callback-order assertion unchanged. New PostgreSQL tests are ordinary behavior tests with no legacy pairing; only their reviewed census entry was added.",
+  "source_sha256": {
+    "database/orm/column_benchmark_test.go": "707ad535de0a17e2e5b67e3a0599ebae5e82a35220b58136d925d2ff28d7645c",
+    "database/orm/update_order_test.go": "5ef853912bb102c68271a46690961ae6c115006980e90d809abd779c68c41234",
+    "internal/querycore/compile_update_set.go": "a87e02b82dd3184a34d0d7ded4187d5b150e29ee9e10869749e55b78d623f678",
+    "internal/querycore/mutation_core.go": "3c0408cb6aff96c918c9b5d35731d4814ed3123ced31f3777ca31b9d52d19cc1",
+    "internal/querycore/compile_conflict.go": "ce7d11d8e1dfd5ae3281e1a2fa104e17865275fa5f1d0795f3346ff201c7482d",
+    "internal/querycore/compile_source_write.go": "cc3fcf3bb96894a03bcdebae69429db3f1f5ff9e7dc489e1ad4a4b7295b19af4",
+    "tests/fixtures/goway/pgsmoke/update_order_test.go": "40559e80b717a225a0b993b915ff0215c7941c988ca004efc29f2c9d05426613",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "b878e4ef28d21585e693153a3bbceb6921995c192daaf9556a8a009185ab6952",
+    "CHANGELOG.md": "37c2e3fd7b6b47cc463a49130cd5f786899dfd2962c0a8ba774c37c554301f34",
+    "tests/oracle/update_order.go": "97ff29929da64865ff2450cc0e6a0fa4272dda362d4a1714091846f019ac3db7",
+    "tests/oracle/update_order_test.go": "8972fe6860f80f72a9c555a84d37c62545003babd0f210708e97939b6109dba5",
+    "tests/oracle/replay.go": "00e438c5d971d32efd1c3dfe2d6c84eed0030cac8f435ef57d9924339a1933c9",
+    "database/query/conflict_mutator_test.go": "c7e0190cb5010c3e6928afe38e6e34164bd272853b7e9ec4c82f95c4e7211278"
+  },
+  "logs": {
+    "build": "/private/tmp/goway-update-build.log",
+    "vet": "/private/tmp/goway-update-vet.log",
+    "root_initial": "/private/tmp/goway-update-root-test.log",
+    "root_remaining": "/private/tmp/goway-update-root-remainder.log",
+    "race": "/private/tmp/goway-update-race.log",
+    "root_oracle": "/private/tmp/goway-update-oracle.log",
+    "fixtures_initial": "/private/tmp/goway-update-fixtures.log",
+    "fixtures_remaining": "/private/tmp/goway-update-fixture-remainder.log",
+    "generation": "/private/tmp/goway-update-generate.log",
+    "docs": "/private/tmp/goway-update-docs.log",
+    "format": "/private/tmp/goway-update-fmt.log",
+    "root_oracle_approved": "/private/tmp/goway-update-oracle-approved.log",
+    "race_approved": "/private/tmp/goway-update-race-approved.log",
+    "fixtures_approved": "/private/tmp/goway-update-fixtures-approved.log",
+    "docs_approved": "/private/tmp/goway-update-docs-approved.log"
+  },
+  "replay_normalization": {
+    "registry": "tests/oracle/update_order.go:updateOrderComparisons",
+    "authorization": "Lead approved exactly four frozen comparisons, plus the one legacy unit expectation and changelog clarification.",
+    "limits": "Normalizes only UPDATE/ON CONFLICT UPDATE SET assignment permutations in canonical SQL snapshots for the declared table. Model declaration order comes from frozen complete projections. JSON envelope bytes, values, all SQL outside SET, non-SQL observations, statement order and other statements remain exact. Unsupported SQL, duplicate columns and parameters shared outside SET fail closed. Frozen bytes are not rewritten.",
+    "negative_coverage": [
+      "WHERE, RETURNING, locks and table changes",
+      "missing, extra and duplicate SET columns",
+      "SET and WHERE binding changes and misaligned bindings",
+      "changed expressions and expression-internal parameter permutations",
+      "whitespace and snapshot envelope differences",
+      "statement order, other statements and transcript newline differences",
+      "quoted delimiter and placeholder text",
+      "unsupported comments and multiple statements",
+      "every non-allowlisted record and suffixed IDs remain exact"
+    ]
+  },
+  "integration": {
+    "batch": 16,
+    "base": "3d6f0379",
+    "note": "Source hashes refreshed after union integration and canonical SET-order expectation updates; lane command results remain historical. Current acceptance is recorded in goway-batch16-integration.json."
+  }
+}

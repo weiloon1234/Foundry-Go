@@ -229,10 +229,10 @@ func TestAggregateScopedFamiliesAndOwnership(t *testing.T) {
 		}
 	}
 	// Every clause retains scope/declaration checks, including reference-free keys.
-	q := expressionQuery(a, expr.Select(own), codec.Signed[int64]())
+	q := expressionQuery(a, expr.Row(own).Value(), codec.Signed[int64]())
 	for _, invalid := range []Query[Alias[left, aggregateRecord], expressionRow[int64]]{
 		GroupBy(q, expr.Group(foreign)), Having(q, expr.Grouped(foreign.Eq(1))),
-		OrderBy(q, expr.Select(foreign).Asc()), DistinctOn(q, expr.Group(foreign)), DistinctOnValues(q, expr.Select(foreign).Key()),
+		OrderBy(q, expr.Row(foreign).Value().Asc()), DistinctOn(q, expr.Group(foreign)), DistinctOnValues(q, expr.Row(foreign).Value().Key()),
 		GroupBy(q, expr.GroupKey[Alias[left, aggregateRecord]]{}), Having(q, expr.HavingPredicate[Alias[left, aggregateRecord]]{}),
 		DistinctOnValues(q, expr.ProjectionKey[Alias[left, aggregateRecord]]{}), OrderBy(q, expr.SelectedOrder[Alias[left, aggregateRecord]]{}),
 	} {
@@ -273,9 +273,9 @@ func TestDistinctReadOnlyModelsAndGroupingRules(t *testing.T) {
 	expressionSQL(t, OrderBy(DistinctOnValues(selected, count.Value().Key()), count.Desc()))
 	// Shared PostgreSQL validation rejects incomplete grouping and ON/order conflicts.
 	for _, invalid := range []Query[order, expressionRow[int64]]{
-		GroupBy(expressionQuery(original, expr.Select(expr.Value(o.ID)), codec.Signed[int64]()), expr.Group(key)),
-		Having(expressionQuery(original, expr.Select(key), codec.Signed[int64]()), count.Gt(1)),
-		OrderBy(DistinctOn(expressionQuery(original, expr.Select(key), codec.Signed[int64]()), expr.Group(key)), expr.Value(o.ID).Asc()),
+		GroupBy(expressionQuery(original, expr.Row(expr.Value(o.ID)).Value(), codec.Signed[int64]()), expr.Group(key)),
+		Having(expressionQuery(original, expr.Row(key).Value(), codec.Signed[int64]()), count.Gt(1)),
+		OrderBy(DistinctOn(expressionQuery(original, expr.Row(key).Value(), codec.Signed[int64]()), expr.Group(key)), expr.Value(o.ID).Asc()),
 		DistinctOn(selected),
 	} {
 		state := &driverState{}
@@ -283,5 +283,68 @@ func TestDistinctReadOnlyModelsAndGroupingRules(t *testing.T) {
 		if !errors.Is(err, fault.Invalid) || out != nil || state.sql != "" {
 			t.Fatal("invalid grouped/distinct query accepted", out, err, state.sql)
 		}
+	}
+}
+
+func TestAggregateResultRepresentations(t *testing.T) {
+	d := declareAggregateRecords()
+	source := From(d.Query())
+	avg := ReadScalar(SelectScalar(source, expr.Avg(d.Exact).Value()))
+	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{"1.5000000000000000"}}}
+	got, err := avg.RequireFirst(t.Context(), openTest(t, state))
+	v, ok := got.Get()
+	if err != nil || !ok || v.String() != "1.5" {
+		t.Fatal("integer average precision", got, err)
+	}
+	sum := ReadScalar(SelectScalar(source, expr.Sum(d.Exact).Value()))
+	state = &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}}}
+	null, err := sum.RequireFirst(t.Context(), openTest(t, state))
+	if err != nil || !null.IsNull() {
+		t.Fatal(null, err)
+	}
+	state = &driverState{columns: []string{"value"}, rows: [][]driver.Value{{float64(1.5)}}}
+	if _, err := sum.RequireFirst(t.Context(), openTest(t, state)); err == nil {
+		t.Fatal("approximate result accepted by exact aggregate")
+	}
+	type row struct {
+		ID     int64
+		Amount float32
+	}
+	type table struct {
+		orm.Table[row, int64]
+		Amount orm.Number[row, float32]
+	}
+	f := orm.Define("floats", func(b orm.Builder[row], r *row) table {
+		return table{orm.TableOf(b, &r.ID), orm.NumberOf(b, &r.Amount)}
+	})
+	floating := ReadScalar(SelectScalar(From(f.Query()), expr.AvgFloat(f.Amount).Value()))
+	state = &driverState{columns: []string{"value"}, rows: [][]driver.Value{{float64(1.5)}}}
+	result, err := floating.RequireFirst(t.Context(), openTest(t, state))
+	n, present := result.Get()
+	if err != nil || !present || n != 1.5 {
+		t.Fatal("float32 average must decode float64", result, err)
+	}
+}
+
+func TestHavingCapturesMembershipAndDerivations(t *testing.T) {
+	d := declareAggregateRecords()
+	source := From(d.Query())
+	count := expr.Count[aggregateRecord]()
+	id := expr.Value(d.Exact)
+	values := []int64{1, 2}
+	q := GroupByScalar(SelectScalar(source, count.Value()), expr.Group(id))
+	q = HavingScalar(q, expr.HavingAnd(count.Gt(2), expr.Grouped(expr.OrderRow(id).In(values...)).Not()))
+	values[0] = 999
+	statement, err := CompileRead(ReadScalar(q))
+	if err != nil || !reflect.DeepEqual(statement.Arguments(), []any{int64(2), "{1,2}"}) {
+		t.Fatal(statement, err)
+	}
+	derived := HavingScalar(q, count.Lt(10))
+	if _, err := CompileRead(ReadScalar(derived)); err != nil {
+		t.Fatal(err)
+	}
+	again, err := CompileRead(ReadScalar(q))
+	if err != nil || again.SQL() != statement.SQL() || !reflect.DeepEqual(again.Arguments(), statement.Arguments()) {
+		t.Fatal("HAVING derivation mutated source", again, err)
 	}
 }

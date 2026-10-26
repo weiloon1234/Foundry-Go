@@ -51,7 +51,7 @@ func TestProductionCompositionUsesConcreteOperatorAndSharedRuntime(t *testing.T)
 	if ready, err := status.Readiness(t.Context()); err != nil || !ready.Ready || !status.Liveness().Live {
 		t.Fatal("consumer lifecycle was not ready", err)
 	}
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

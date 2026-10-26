@@ -32,7 +32,7 @@ func websocketAuthority(t *testing.T) (*Client, *WebSocketBackend, ws.ClusterKey
 }
 func websocketID[T any](t *testing.T) model.ID[T] {
 	t.Helper()
-	id, err := model.NewID[T]()
+	id, err := model.NewIDAt[T](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

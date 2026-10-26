@@ -1,5 +1,9 @@
 package goway_test
 
+import "github.com/weiloon1234/Foundry-Go/value"
+
+import "github.com/weiloon1234/Foundry-Go/database"
+
 import (
 	"database/sql/driver"
 	"fmt"
@@ -50,22 +54,22 @@ func TestStage6d3JSONGolden(t *testing.T) {
 
 	nt := expr.Value(jsonpaths.Documents.Tags)
 	t.Run("JSONType/object", func(t *testing.T) {
-		jsonGolden(t, expr.JSONType(n).Value(), codec.String[expr.JSONKind]().Validated(expr.JSONKind.Validate), "object", nil)
+		jsonGolden(t, expr.JSONType(n).Value(), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate), "object", nil)
 	})
 	t.Run("JSONTypeValue/object", func(t *testing.T) {
-		jsonGolden(t, expr.JSONTypeValue(expr.Select(n)), codec.String[expr.JSONKind]().Validated(expr.JSONKind.Validate), "object", nil)
+		jsonGolden(t, expr.JSONTypeValue(expr.Row(n).Value()), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate), "object", nil)
 	})
 	t.Run("JSONTypeNullable/object", func(t *testing.T) {
-		jsonGolden(t, expr.JSONTypeNullable(nb).Value(), codec.Nullable(codec.String[expr.JSONKind]().Validated(expr.JSONKind.Validate)), "object", nil)
+		jsonGolden(t, expr.JSONTypeNullable(nb).Value(), codec.Nullable(codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)), "object", nil)
 	})
 	t.Run("JSONTypeNullable/nil", func(t *testing.T) {
-		jsonGolden(t, expr.JSONTypeNullable(nb).Value(), codec.Nullable(codec.String[expr.JSONKind]().Validated(expr.JSONKind.Validate)), nil, nil)
+		jsonGolden(t, expr.JSONTypeNullable(nb).Value(), codec.Nullable(codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)), nil, nil)
 	})
 	t.Run("JSONTypeNullableValue/object", func(t *testing.T) {
-		jsonGolden(t, expr.JSONTypeNullableValue(expr.Select(nb)), codec.Nullable(codec.String[expr.JSONKind]().Validated(expr.JSONKind.Validate)), "object", nil)
+		jsonGolden(t, expr.JSONTypeNullableValue(expr.Row(nb).Value()), codec.Nullable(codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)), "object", nil)
 	})
 	t.Run("JSONTypeNullableValue/nil", func(t *testing.T) {
-		jsonGolden(t, expr.JSONTypeNullableValue(expr.Select(nb)), codec.Nullable(codec.String[expr.JSONKind]().Validated(expr.JSONKind.Validate)), nil, nil)
+		jsonGolden(t, expr.JSONTypeNullableValue(expr.Row(nb).Value()), codec.Nullable(codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)), nil, nil)
 	})
 	t.Run("JSONLength/int64(2)", func(t *testing.T) {
 		jsonGolden(t, expr.JSONLength(nt).Value(), codec.Nullable(codec.Signed[int64]()), int64(2), nil)
@@ -74,10 +78,10 @@ func TestStage6d3JSONGolden(t *testing.T) {
 		jsonGolden(t, expr.JSONLength(nt).Value(), codec.Nullable(codec.Signed[int64]()), nil, nil)
 	})
 	t.Run("JSONLengthValue/int64(2)", func(t *testing.T) {
-		jsonGolden(t, expr.JSONLengthValue(expr.Select(nt)), codec.Nullable(codec.Signed[int64]()), int64(2), nil)
+		jsonGolden(t, expr.JSONLengthValue(expr.Row(nt).Value()), codec.Nullable(codec.Signed[int64]()), int64(2), nil)
 	})
 	t.Run("JSONLengthValue/nil", func(t *testing.T) {
-		jsonGolden(t, expr.JSONLengthValue(expr.Select(nt)), codec.Nullable(codec.Signed[int64]()), nil, nil)
+		jsonGolden(t, expr.JSONLengthValue(expr.Row(nt).Value()), codec.Nullable(codec.Signed[int64]()), nil, nil)
 	})
 	t.Run("JSONLengthNullable/int64(2)", func(t *testing.T) {
 		jsonGolden(t, expr.JSONLengthNullable(nb).Value(), codec.Nullable(codec.Signed[int64]()), int64(2), nil)
@@ -86,16 +90,16 @@ func TestStage6d3JSONGolden(t *testing.T) {
 		jsonGolden(t, expr.JSONLengthNullable(nb).Value(), codec.Nullable(codec.Signed[int64]()), nil, nil)
 	})
 	t.Run("JSONLengthNullableValue/int64(2)", func(t *testing.T) {
-		jsonGolden(t, expr.JSONLengthNullableValue(expr.Select(nb)), codec.Nullable(codec.Signed[int64]()), int64(2), nil)
+		jsonGolden(t, expr.JSONLengthNullableValue(expr.Row(nb).Value()), codec.Nullable(codec.Signed[int64]()), int64(2), nil)
 	})
 	t.Run("JSONLengthNullableValue/nil", func(t *testing.T) {
-		jsonGolden(t, expr.JSONLengthNullableValue(expr.Select(nb)), codec.Nullable(codec.Signed[int64]()), nil, nil)
+		jsonGolden(t, expr.JSONLengthNullableValue(expr.Row(nb).Value()), codec.Nullable(codec.Signed[int64]()), nil, nil)
 	})
 	t.Run("JSONContains/true", func(t *testing.T) {
 		jsonGolden(t, expr.JSONContains(n, n).Value(), codec.Bool[bool](), true, nil)
 	})
 	t.Run("JSONContainsValue/true", func(t *testing.T) {
-		jsonGolden(t, expr.JSONContainsValue(expr.Select(n), expr.Select(n)), codec.Bool[bool](), true, nil)
+		jsonGolden(t, expr.JSONContainsValue(expr.Row(n).Value(), expr.Row(n).Value()), codec.Bool[bool](), true, nil)
 	})
 	t.Run("JSONContainsNullable/true", func(t *testing.T) {
 		jsonGolden(t, expr.JSONContainsNullable(nb, nb).Value(), codec.Nullable(codec.Bool[bool]()), true, nil)
@@ -104,16 +108,16 @@ func TestStage6d3JSONGolden(t *testing.T) {
 		jsonGolden(t, expr.JSONContainsNullable(nb, nb).Value(), codec.Nullable(codec.Bool[bool]()), nil, nil)
 	})
 	t.Run("JSONContainsNullableValue/true", func(t *testing.T) {
-		jsonGolden(t, expr.JSONContainsNullableValue(expr.Select(nb), expr.Select(nb)), codec.Nullable(codec.Bool[bool]()), true, nil)
+		jsonGolden(t, expr.JSONContainsNullableValue(expr.Row(nb).Value(), expr.Row(nb).Value()), codec.Nullable(codec.Bool[bool]()), true, nil)
 	})
 	t.Run("JSONContainsNullableValue/nil", func(t *testing.T) {
-		jsonGolden(t, expr.JSONContainsNullableValue(expr.Select(nb), expr.Select(nb)), codec.Nullable(codec.Bool[bool]()), nil, nil)
+		jsonGolden(t, expr.JSONContainsNullableValue(expr.Row(nb).Value(), expr.Row(nb).Value()), codec.Nullable(codec.Bool[bool]()), nil, nil)
 	})
 	t.Run("JSONContainedBy/false", func(t *testing.T) {
 		jsonGolden(t, expr.JSONContainedBy(n, n).Value(), codec.Bool[bool](), false, nil)
 	})
 	t.Run("JSONContainedByValue/false", func(t *testing.T) {
-		jsonGolden(t, expr.JSONContainedByValue(expr.Select(n), expr.Select(n)), codec.Bool[bool](), false, nil)
+		jsonGolden(t, expr.JSONContainedByValue(expr.Row(n).Value(), expr.Row(n).Value()), codec.Bool[bool](), false, nil)
 	})
 	t.Run("JSONContainedByNullable/false", func(t *testing.T) {
 		jsonGolden(t, expr.JSONContainedByNullable(nb, nb).Value(), codec.Nullable(codec.Bool[bool]()), false, nil)
@@ -122,10 +126,10 @@ func TestStage6d3JSONGolden(t *testing.T) {
 		jsonGolden(t, expr.JSONContainedByNullable(nb, nb).Value(), codec.Nullable(codec.Bool[bool]()), nil, nil)
 	})
 	t.Run("JSONContainedByNullableValue/false", func(t *testing.T) {
-		jsonGolden(t, expr.JSONContainedByNullableValue(expr.Select(nb), expr.Select(nb)), codec.Nullable(codec.Bool[bool]()), false, nil)
+		jsonGolden(t, expr.JSONContainedByNullableValue(expr.Row(nb).Value(), expr.Row(nb).Value()), codec.Nullable(codec.Bool[bool]()), false, nil)
 	})
 	t.Run("JSONContainedByNullableValue/nil", func(t *testing.T) {
-		jsonGolden(t, expr.JSONContainedByNullableValue(expr.Select(nb), expr.Select(nb)), codec.Nullable(codec.Bool[bool]()), nil, nil)
+		jsonGolden(t, expr.JSONContainedByNullableValue(expr.Row(nb).Value(), expr.Row(nb).Value()), codec.Nullable(codec.Bool[bool]()), nil, nil)
 	})
 
 	nroot := expr.JSONRoot(n)
@@ -148,10 +152,10 @@ func TestStage6d3JSONGolden(t *testing.T) {
 	jsonGolden(t, expr.JSONTextScalar(expr.JSONMapKey(nkeys, 2), codec.String[string]()).Value(), codec.Nullable(codec.String[string]()), "two", nil)
 	jsonGolden(t, expr.JSONTextScalar(expr.JSONMapKey(nlabels, "runtime'key"), codec.String[string]()).Value(), codec.Nullable(codec.String[string]()), "label", nil)
 	jsonGolden(t, expr.JSONOrderedScalar(expr.JSONIndex(nscores, -1), codec.Signed[int64]()).Value(), codec.Nullable(codec.Signed[int64]()), int64(3), nil)
-	jsonGolden(t, nscores.Length().Value(), codec.Nullable(codec.Signed[int64]()), int64(3), nil)
+	jsonGolden(t, expr.JSONLengthNullable(nscores.JSON()).Value(), codec.Nullable(codec.Signed[int64]()), int64(3), nil)
 
-	npred := []expr.Predicate[jsonpaths.Document]{ntheme.Exists(), ntheme.IsMissing(), ntheme.IsJSONNull(), nscores.Contains([]int64{2})}
-	jsonGolden(t, ntheme.Kind().Value(), codec.Nullable(codec.String[expr.JSONKind]().Validated(expr.JSONKind.Validate)), "null", npred)
+	npred := []expr.Predicate[jsonpaths.Document]{ntheme.JSON().IsNotNull(), ntheme.JSON().IsNull(), expr.JSONTypeNullable(ntheme.JSON()).Eq(value.Of(database.JSONNull)), expr.JSONContainsNullable(nscores.JSON(), nscores.JSON().Param(value.Of(must(value.NewJSON([]int64{2}))))).Eq(value.Of(true))}
+	jsonGolden(t, expr.JSONTypeNullable(ntheme.JSON()).Value(), codec.Nullable(codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)), "null", npred)
 	for _, sample := range []driver.Value{nil, "null", "\"hello\""} {
 		nnick := expr.JSONProperty(np, jsonpaths.Nickname)
 		jsonGolden(t, nnick.JSON().Value(), codec.Nullable(codec.JSON[*string]()), sample, nil)

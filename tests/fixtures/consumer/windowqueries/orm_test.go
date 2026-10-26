@@ -9,7 +9,7 @@ import (
 )
 
 func TestWindowReportSQLParity(t *testing.T) {
-	got, err := rows.Compile(ranking())
+	got, err := rows.CompileRead(rows.Read(ranking()))
 	if err != nil {
 		t.Fatal(err)
 	}

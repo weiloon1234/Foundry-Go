@@ -23,11 +23,11 @@ import (
 )
 
 func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
-	userID, err := model.NewID[models.User]()
+	userID, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	orderID, err := model.NewID[models.Order]()
+	orderID, err := model.NewIDAt[models.Order](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 	if response := send(location+"&extra=1", "fixture-token"); response.Code != 403 || resources.Load() != before {
 		t.Fatal("invalid signature reached model query")
 	}
-	other, err := model.NewID[models.User]()
+	other, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

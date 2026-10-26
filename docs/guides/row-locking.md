@@ -4,17 +4,17 @@ Use a locked read when domain work must inspect a row and then change it while e
 
 ```go
 err := db.Transaction(ctx, func(tx *database.Tx) error {
-    user, err := models.QueryUsers().ForUpdate().RequireFind(ctx, tx, userID)
+    user, err := models.Users.Query().Where(models.Users.ID.Eq(userID)).ForUpdate().Require(ctx, tx)
     if err != nil {
         return err
     }
-    _, err = models.QueryUsers().Update(ctx, tx, user.ID,
-        models.UserDraft{}.SetAge(user.Age + 1))
+    _, err = models.Users.Update(ctx, tx, user.ID,
+        models.Users.Age.Set(user.Age + 1))
     return err
 })
 ```
 
-Generated `Find` and `RequireFind` retain the model's exact primary-key type, including natural keys. `First` returns `value.Optional[Model]`, `RequireFirst` returns a model or `database.NotFound`, and `All` returns `[]Model`. Model `First` defaults to primary-key order, honors filters/offsets, and preserves a zero limit. Declared projections and single-value selections also support locking, retaining their exact result types.
+Table `Find` and `Require` retain the model's exact primary-key type, including natural keys. `First` returns `value.Optional[Model]`, `Require` returns a model or `database.NotFound`, and `All` returns `[]Model`. Model `First` defaults to primary-key order, honors filters/offsets, and preserves a zero limit. Declared projections and single-value selections also support locking, retaining their exact result types.
 
 ## Strength and waiting
 
@@ -26,9 +26,9 @@ Generated `Find` and `RequireFind` retain the model's exact primary-key type, in
 Waiting is the default. `NoWait()` returns the PostgreSQL lock error when a row cannot be locked immediately. `SkipLocked()` omits conflicting rows, which is useful for competing queue consumers. `Wait()` restores normal waiting; the last waiting modifier wins. These policies affect row locks, not every table lock required by PostgreSQL. Use a bounded context for the entire transaction and shorter operation contexts where appropriate.
 
 ```go
-claimed, err := models.QueryUsers().
-    Where(models.UserFields().Status.Eq(models.StatusActive)).
-    OrderBy(models.UserFields().ID.Asc()).Limit(20).
+claimed, err := models.Users.Query().
+    Where(models.Users.Status.Eq(models.StatusActive)).
+    OrderBy(models.Users.ID.Asc()).Limit(20).
     ForUpdate().SkipLocked().All(ctx, tx)
 ```
 
@@ -36,42 +36,38 @@ An empty `SkipLocked` result does not prove that no eligible rows exist. Locks p
 
 ## Typed joins and projections
 
-Locking a join normally locks contributing rows from all eligible input tables. Use `Of` with preserved source scopes to select which tables to lock. The nullable side of an outer join cannot be row-locked; its nullable scope does not implement `query.LockTarget`. An unqualified lock on such a join is rejected before execution.
+Locking a join normally locks contributing rows from all eligible input tables. Use `Of` with preserved source scopes to select which tables to lock. The nullable side of an outer join cannot be row-locked; its nullable scope cannot produce a `rows.LockTarget`. An unqualified lock on such a join is rejected before execution.
 
 ```go
 type userAlias struct{}
 type orderAlias struct{}
-users := query.As[userAlias](models.QueryUsers(), "u")
-orders := query.As[orderAlias](models.QueryOrders(), "o")
-joined := query.LeftJoin(users, orders,
-    query.On(models.UserFieldsAt(users.Scope()).ID,
-        models.OrderFieldsAt(orders.Scope()).BuyerID))
-userScope := query.LeftScope(joined, users.Scope())
-
-lockedUsers, err := query.SelectRecord(joined, userScope).
-    ForUpdate().Of(userScope).All(ctx, tx)
+users := rows.As[userAlias](models.Users.Query(), "u")
+orders := rows.As[orderAlias](models.Orders.Query(), "o")
+joined := rows.LeftJoin(users, orders,
+    rows.On(expr.At(rows.Scope(users), models.Users.ID),
+        expr.At(rows.Scope(orders), models.Orders.BuyerID)))
+userScope := rows.LeftScope(joined, rows.Scope(users))
+lockedUsers, err := rows.ForUpdate(rows.ReadRecord(rows.SelectRecord(joined, userScope))).
+    Of(rows.Target(userScope)).All(ctx, tx)
 ```
 
 `Of` replaces its previous target list. Targets must be nonempty, unique and present in the query's input scope. Self-joins use typed aliases and their remapped join scopes. Complete record selection does not deduplicate repeated join rows.
 
-Ordinary derived sources propagate a lock to their underlying tables. Aggregate, grouped, distinct, window and set-operation results cannot be lock targets. Predicate and scalar subqueries are independent reads. Outer locking does not propagate into a CTE; explicit `Of` of a CTE and queries with no lockable underlying table are rejected. Locked builders cannot be converted into unrestricted sources, count queries, paginated queries or mutations. Use [transaction-required composition](transaction-query-composition.md) to retain a locked record inside a CTE, derived table, join or generated projection. Its terminals still require the caller's transaction.
+Ordinary derived sources propagate a lock to their underlying tables. Aggregate, grouped, distinct, window and set-operation results cannot be lock targets. Predicate and scalar subqueries are independent reads. Outer locking does not propagate into a CTE; explicit `Of` of a CTE and queries with no lockable underlying table are rejected. Locked builders cannot be converted into unrestricted sources, count queries, paginated queries or mutations. Use [transaction-required composition](transaction-query-composition.md) to retain a locked record inside a CTE, derived table, join or declared projection. Its terminals still require the caller's transaction.
 
 ## Different policies for joined tables
 
 Use `LockRows` on a complete record, projection or single-value selection to declare each table's lock policy. Both scopes must belong to the same query and be non-nullable:
 
 ```go
-joined := query.InnerJoin(users, orders,
-    query.On(models.UserFieldsAt(users.Scope()).ID,
-        models.OrderFieldsAt(orders.Scope()).BuyerID))
-userScope := query.LeftScope(joined, users.Scope())
-orderScope := query.RightScope(joined, orders.Scope())
-
-locked := query.SelectRecord(joined, userScope).LockRows(
-    query.UpdateLock(userScope).SkipLocked(),
-    query.KeyShareLock(orderScope).NoWait(),
-)
-items, err := locked.All(ctx, tx)
+joined := rows.InnerJoin(users, orders,
+    rows.On(expr.At(rows.Scope(users), models.Users.ID),
+        expr.At(rows.Scope(orders), models.Orders.BuyerID)))
+userScope := rows.LeftScope(joined, rows.Scope(users))
+orderScope := rows.RightScope(joined, rows.Scope(orders))
+locked := rows.LockRows(rows.ReadRecord(rows.SelectRecord(joined, userScope)),
+    rows.UpdateLock(rows.Target(userScope)).NoWait(),
+    rows.ShareLock(rows.Target(orderScope)).SkipLocked())
 ```
 
 `UpdateLock`, `NoKeyUpdateLock`, `ShareLock` and `KeyShareLock` accept one or more preserved input scopes. Each returns an immutable `RowLock[Scope]` descriptor with `NoWait`, `SkipLocked` and `Wait` modifiers. A modifier on the resulting locked query changes every clause; the original query stays unchanged. `Of` replaces targets only when the query has a single clause. For multiple clauses, supply each target list in its descriptor.

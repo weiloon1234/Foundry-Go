@@ -17,7 +17,7 @@ var parent = rows.AsTransaction[a](rows.TransactionOf(rows.ModelRecord(f.Records
 var child = rows.AsTransaction[b](rows.TransactionOf(rows.ModelRecord(f.Records.Query())), "child")
 var correlation = rows.TransactionCorrelate(parent, child)
 var fields = rows.TransactionInnerScope(correlation, rows.TransactionScope(child))
-var selected = rows.SelectTransactionCorrelatedScalar(correlation, expr.Select(expr.At(fields, f.Records.ID))).ForUpdate()
+var selected = rows.SelectTransactionCorrelatedScalar(correlation, expr.Row(expr.At(fields, f.Records.ID)).Value()).ForUpdate()
 var record = rows.SelectTransactionCorrelatedRecord(correlation, rows.TransactionInnerScope(correlation, rows.TransactionScope(child))).ForShare()
 var lateral = rows.AsTransactionLateral[result](record, "lateral_record")
 var _ context.Context

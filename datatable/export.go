@@ -279,7 +279,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 		defer writer.Abort()
 		cells := make([]exportCell, len(columns))
 		err = m.read(ctx, func(tx *database.Tx) error {
-			return rows.Each(ctx, tx, rows.Limit(source.rows, m.config.MaxExportRows+1), func(row R) error {
+			return rows.EachRead(ctx, tx, rows.Read(rows.Limit(source.rows, m.config.MaxExportRows+1)), func(row R) error {
 				if err := ctx.Err(); err != nil {
 					return err
 				}

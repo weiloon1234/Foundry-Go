@@ -435,9 +435,6 @@ func (o Order[M]) NullsFirst() Order[M] { o.core.Nulls = querycore.NullsFirst; r
 // NullsLast places NULL after concrete values.
 func (o Order[M]) NullsLast() Order[M] { o.core.Nulls = querycore.NullsLast; return o }
 
-// Not negates this condition without changing its owner.
-func (p Predicate[M]) Not() Predicate[M] { return Not(p) }
-
 func between[M, V any](c columnData[V], a, b V) Predicate[M] {
 	return And(comparison[M](c, querycore.GreaterOrEqual, []V{a}), comparison[M](c, querycore.LessOrEqual, []V{b}))
 }

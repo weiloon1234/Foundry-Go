@@ -43,9 +43,9 @@ func orderSpec() datatable.Spec[OrderScope, OrderRow, Authority] {
 		ID: "reports.orders", Row: OrderRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[OrderScope, OrderRow]{
 			datatable.DefineColumn[OrderScope](wire.ID, OrderIDLabel).ExportAs(datatable.ScalarCell(foundryhttp.ModelIDQuery[Order]())).Registration(),
-			datatable.DefineColumn[OrderScope](wire.MemberName, MemberNameLabel).SortBy(expr.Select(expr.At(member, MemberModels.Name))).FilterBy(datatable.Where(text, expr.TextRowAt(member, MemberModels.Name))).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
+			datatable.DefineColumn[OrderScope](wire.MemberName, MemberNameLabel).SortBy(expr.Row(expr.At(member, MemberModels.Name)).Value()).FilterBy(datatable.Where(text, expr.TextRowAt(member, MemberModels.Name))).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
 			datatable.DefineColumn[OrderScope](wire.Label, OrderLabel).FilterBy(datatable.Where(text, expr.TextRowAt(order, OrderModels.Label))).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
-			datatable.DefineColumn[OrderScope](wire.Amount, AmountLabel).SortBy(expr.Select(expr.At(order, OrderModels.Amount))).FilterBy(datatable.Where(amount, expr.OrderRow(expr.At(order, OrderModels.Amount)))).ExportAs(datatable.ScalarCell(amount)).Registration(),
+			datatable.DefineColumn[OrderScope](wire.Amount, AmountLabel).SortBy(expr.Row(expr.At(order, OrderModels.Amount)).Value()).FilterBy(datatable.Where(amount, expr.OrderRow(expr.At(order, OrderModels.Amount)))).ExportAs(datatable.ScalarCell(amount)).Registration(),
 		},
 		DefaultSort: []datatable.Sort{{Column: wire.MemberName.Name(), Direction: datatable.Ascending}},
 		Stable:      []expr.ProjectionOrder[OrderScope]{expr.At(order, OrderModels.ID).Asc()}, Authorize: authorize,

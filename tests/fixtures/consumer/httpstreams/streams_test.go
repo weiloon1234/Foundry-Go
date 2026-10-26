@@ -1,5 +1,7 @@
 package httpstreams
 
+import "time"
+
 import (
 	"context"
 	"io"
@@ -32,7 +34,7 @@ func (r reportReader) Close() error { r.closed.Add(1); return nil }
 func TestTypedStreamConsumer(t *testing.T) {
 	for _, method := range []string{"GET", "HEAD"} {
 		t.Run(method, func(t *testing.T) {
-			id, err := model.NewID[models.User]()
+			id, err := model.NewIDAt[models.User](time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}

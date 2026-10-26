@@ -37,7 +37,7 @@ func TestTypedSecurityHeadersOverHTTPAndTLS(t *testing.T) {
 	defer plain.Close()
 	secure := httptest.NewTLSServer(handler)
 	defer secure.Close()
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,5 +30,5 @@ var Reports = rows.Define(func(b rows.Builder[Report], r *Report) columns { retu
 
 func Compile() (orm.Statement, error) {
 	flag := expr.When(expr.Value(Models.Enabled).Eq(true), expr.Constant[Model](codec.Bool[bool](), true)).Else(expr.Row(expr.Value(Models.Enabled)).Param(false))
-	return rows.Compile(rows.Select(rows.From(Models.Query()), Reports.Row, rows.MapSelected(Reports.Enabled, flag.Value())))
+	return rows.CompileRead(rows.Read(rows.Select(rows.From(Models.Query()), Reports.Row, rows.MapSelected(Reports.Enabled, flag.Value()))))
 }

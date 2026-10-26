@@ -21,7 +21,7 @@ func TestEachStreamsUntilCallbackFailure(t *testing.T) {
 	closeFailure := errors.New("close failure")
 	state := &streamState{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(9), "Ada"}, {"invalid integer", "not decoded"}}, closeErr: closeFailure}
 	var got []streamRecord
-	err := rows.Each(t.Context(), openStreamDB(t, state), streamProjection(), func(row streamRecord) error {
+	err := rows.EachRead(t.Context(), openStreamDB(t, state), rows.Read(streamProjection()), func(row streamRecord) error {
 		if state.closed.Load() {
 			t.Error("callback must run while rows are open")
 		}
@@ -40,7 +40,7 @@ func TestEachStreamsUntilCallbackFailure(t *testing.T) {
 func TestEachDecodeFailureClosesRows(t *testing.T) {
 	state := &streamState{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(9), "Ada"}, {"invalid integer", "Bad"}}}
 	yielded := 0
-	err := rows.Each(t.Context(), openStreamDB(t, state), streamProjection(), func(streamRecord) error { yielded++; return nil })
+	err := rows.EachRead(t.Context(), openStreamDB(t, state), rows.Read(streamProjection()), func(streamRecord) error { yielded++; return nil })
 	if err == nil || yielded != 1 || !state.closed.Load() || state.queries != 1 {
 		t.Fatalf("yielded=%d closed=%v statements=%d err=%v", yielded, state.closed.Load(), state.queries, err)
 	}
@@ -48,7 +48,7 @@ func TestEachDecodeFailureClosesRows(t *testing.T) {
 
 func TestEachRejectsNilCallbackBeforeSQL(t *testing.T) {
 	state := &streamState{}
-	if err := rows.Each(t.Context(), openStreamDB(t, state), streamProjection(), nil); !errors.Is(err, fault.Invalid) || state.queries != 0 {
+	if err := rows.EachRead(t.Context(), openStreamDB(t, state), rows.Read(streamProjection()), nil); !errors.Is(err, fault.Invalid) || state.queries != 0 {
 		t.Fatalf("statements=%d err=%v", state.queries, err)
 	}
 }
@@ -71,7 +71,7 @@ func TestEachRetainsPredicatesAndUsesExecutingScopeContext(t *testing.T) {
 	q := rows.SelectValue(orm.WithScopeContext(table.Query().Where(table.Name.Eq("Ada")), bound), table.Key())
 	state := &streamState{columns: []string{"value"}, values: [][]driver.Value{{int64(2)}}}
 	var got int64
-	err := rows.Each(executing, openStreamDB(t, state), q, func(id int64) error { got = id; return nil })
+	err := rows.EachRead(executing, openStreamDB(t, state), rows.Read(q), func(id int64) error { got = id; return nil })
 	if err != nil || got != 2 || !state.closed.Load() || state.queries != 1 {
 		t.Fatalf("got=%d closed=%v statements=%d err=%v", got, state.closed.Load(), state.queries, err)
 	}
@@ -94,7 +94,7 @@ func TestEachCancellationAndPanicCloseRows(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		yielded := 0
-		err := rows.Each(ctx, openStreamDB(t, state), streamProjection(), func(streamRecord) error { yielded++; cancel(); return nil })
+		err := rows.EachRead(ctx, openStreamDB(t, state), rows.Read(streamProjection()), func(streamRecord) error { yielded++; cancel(); return nil })
 		if !errors.Is(err, context.Canceled) || yielded != 1 || !state.closed.Load() || state.queries != 1 {
 			t.Fatalf("yielded=%d closed=%v statements=%d err=%v", yielded, state.closed.Load(), state.queries, err)
 		}
@@ -102,7 +102,7 @@ func TestEachCancellationAndPanicCloseRows(t *testing.T) {
 	for _, mode := range []string{"panic", "goexit"} {
 		t.Run(mode, func(t *testing.T) {
 			state := &streamState{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(9), "Ada"}}}
-			err := rows.Each(t.Context(), openStreamDB(t, state), streamProjection(), func(streamRecord) error {
+			err := rows.EachRead(t.Context(), openStreamDB(t, state), rows.Read(streamProjection()), func(streamRecord) error {
 				if mode == "panic" {
 					panic("private callback payload")
 				}

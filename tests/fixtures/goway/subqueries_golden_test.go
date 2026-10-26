@@ -47,11 +47,11 @@ func runSubqueryNew(g *goldenCapture) {
 	defer db.Close(ctx)
 	u, o := models.Users, models.Orders
 	outer := rowset.From(u.Query().Where(u.Age.Gt(18)))
-	amount := rowset.SelectScalar(rowset.From(o.Query().Where(o.TotalCents.Gt(5)).OrderBy(o.TotalCents.Desc()).Limit(1)), expr.Select(expr.Value(o.TotalCents)))
+	amount := rowset.SelectScalar(rowset.From(o.Query().Where(o.TotalCents.Gt(5)).OrderBy(o.TotalCents.Desc()).Limit(1)), expr.Row(expr.Value(o.TotalCents)).Value())
 	count := rowset.SelectScalar(rowset.From(o.Query()), expr.Count[models.Order]().Value())
-	name := rowset.SelectScalar(rowset.From(u.Query().Where(u.Age.Lt(90)).Limit(1)), expr.Select(expr.Value(u.Nickname)))
-	ids := rowset.WhereScalar(rowset.SelectScalar(rowset.From(u.Query()), expr.Select(expr.Value(u.ID))), expr.OrderRow(expr.Value(u.Age)).Gt(20))
-	age := rowset.SelectScalar(rowset.From(u.Query().Where(u.Age.Lt(99)).Limit(1)), expr.Select(expr.Value(u.Age)))
+	name := rowset.SelectScalar(rowset.From(u.Query().Where(u.Age.Lt(90)).Limit(1)), expr.Row(expr.Value(u.Nickname)).Value())
+	ids := rowset.WhereScalar(rowset.SelectScalar(rowset.From(u.Query()), expr.Row(expr.Value(u.ID)).Value()), expr.OrderRow(expr.Value(u.Age)).Gt(20))
+	age := rowset.SelectScalar(rowset.From(u.Query().Where(u.Age.Lt(99)).Limit(1)), expr.Row(expr.Value(u.Age)).Value())
 	countZero := rowset.SelectScalar(rowset.From(o.Query().Limit(0)), expr.Count[models.Order]().Value())
 	exists := rowset.As[joinC](o.Query().Where(o.TotalCents.Gt(3)), "exists_orders")
 	s := subqueryRows

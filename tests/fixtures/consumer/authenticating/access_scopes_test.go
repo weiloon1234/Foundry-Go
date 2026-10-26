@@ -1,5 +1,7 @@
 package authenticating_test
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -16,7 +18,7 @@ import (
 )
 
 func TestConsumerAccessScopesKeepGeneratedModelAndResourcePolicy(t *testing.T) {
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +56,7 @@ func TestConsumerAccessScopesKeepGeneratedModelAndResourcePolicy(t *testing.T) {
 	if err != nil || subject.ID != id {
 		t.Fatal(subject, err)
 	}
-	other, err := model.NewID[models.User]()
+	other, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

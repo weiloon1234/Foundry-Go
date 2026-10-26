@@ -20,7 +20,7 @@ func TestReadTerminalsScalarAndDTOStreams(t *testing.T) {
 	table := orm.Define("members", func(b orm.Builder[streamRecord], m *streamRecord) streamTable {
 		return streamTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
 	})
-	scalar := rows.SelectScalar(rows.From(table.Query()), expr.Select(expr.Value(table.Name)))
+	scalar := rows.SelectScalar(rows.From(table.Query()), expr.Row(expr.Value(table.Name)).Value())
 	values := rows.Values(scalar)
 	cte := rows.AsRecord[readAlias](rows.CTE("names", rows.ModelRecord(table.Query())), "n")
 	for _, kind := range []string{"scalar", "values", "cte"} {
@@ -66,7 +66,7 @@ func TestReadTerminalsScalarAndDTOStreams(t *testing.T) {
 				case "values":
 					err = rows.EachRead(ctx, db, rows.ReadValues(rows.UnionAllValues(values, values)), yield)
 				case "cte":
-					err = rows.EachRead(ctx, db, rows.ReadScalar(rows.SelectScalar(cte, expr.Select(expr.At(rows.Scope(cte), table.Name)))), yield)
+					err = rows.EachRead(ctx, db, rows.ReadScalar(rows.SelectScalar(cte, expr.Row(expr.At(rows.Scope(cte), table.Name)).Value())), yield)
 				}
 				switch mode {
 				case "stop", "close":
@@ -188,7 +188,7 @@ func TestReadPreflightAndIterationUseExecutingContext(t *testing.T) {
 	}))
 	bound := context.WithValue(t.Context(), tenantKey{}, int64(1))
 	executing := context.WithValue(t.Context(), tenantKey{}, int64(2))
-	q := rows.ReadScalar(rows.SelectScalar(rows.From(orm.WithScopeContext(table.Query(), bound)), expr.Select(expr.Value(table.Key()))))
+	q := rows.ReadScalar(rows.SelectScalar(rows.From(orm.WithScopeContext(table.Query(), bound)), expr.Row(expr.Value(table.Key())).Value()))
 	if err := rows.PreflightRead(t.Context(), q); err == nil {
 		t.Fatal("preflight used bound context")
 	}

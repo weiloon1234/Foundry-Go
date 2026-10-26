@@ -1,0 +1,44 @@
+{
+  "base": "3d6f0379",
+  "command": [
+    "go",
+    "list",
+    "-export",
+    "-f",
+    "{{.ImportPath}} {{.Export}}",
+    "./testdata/footprint/q_with",
+    "./testdata/footprint/aggregate_families",
+    "./testdata/footprint/rows_each",
+    "./testdata/footprint/read_record",
+    "./testdata/footprint/read_set",
+    "./testdata/footprint/result_reads",
+    "./testdata/footprint/record_sets",
+    "./testdata/footprint/value_sets",
+    "./testdata/footprint/result_cursor",
+    "./testdata/footprint/json_paths",
+    "./testdata/footprint/extension_matching_old",
+    "./testdata/footprint/extension_files_old"
+  ],
+  "working_directory": "/private/tmp/goway-8d3a-base/tests/fixtures/goway",
+  "settings": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r18",
+    "GOFLAGS": "-p=4",
+    "GOMAXPROCS": "4",
+    "GOWORK": "off"
+  },
+  "go": "go version go1.27.1 darwin/arm64",
+  "probes": {
+    "extension_matching_old": {
+      "functions": 8452,
+      "baseline": 8432,
+      "ceiling": 9697,
+      "source_sha256": "c5b30b9ed5970548004e0c59811320ff8597c2815f57dbaf1b6fae4a54246cab"
+    },
+    "extension_files_old": {
+      "functions": 7264,
+      "baseline": 7244,
+      "ceiling": 8331,
+      "source_sha256": "e507829f9bf6a74f67700982b8a3315cd4b3e4cced0927caa635bb0ba58a663b"
+    }
+  }
+}

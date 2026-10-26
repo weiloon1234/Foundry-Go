@@ -14,30 +14,16 @@ SQL assembly. Projection mapping, complete-record selection, join assembly and
 cursor statement hashing also share implementation across model/result types. The PostgreSQL compiler
 and existing AST remain the sole SQL owner.
 
-## Consumer compatibility
+## Consumer API
 
-Core extraction preserves query filtering, ordering, execution and mutation
-signatures. Field capability reduction deliberately changes optional stored-field
-computations so unused expression/aggregate families do not enter every field's
-method set. Follow [typed field computations](typed-field-computations.md):
+Use `database/orm` declarations, `orm/expr` computations and `orm/rows` result
+builders. See [typed field computations](typed-field-computations.md) and the
+[ORM migration guide](orm-migration.md). Queries snapshot captured slices;
+request scopes remain lazy, isolated and context-owned.
 
-| Previous stored-field call | Replacement |
-| --- | --- |
-| `f.Value()` | `query.Value(f)` |
-| `f.Param(v)` | `query.Param(f, v)` |
-| `f.Count()` / `f.CountDistinct()` | `query.CountField(f)` / `query.CountDistinctField(f)` |
-| `f.Min()` / `f.Max()` | `query.Min(f)` / `query.Max(f)` |
-| `f.Sum()` / `f.Avg()` | `query.Sum(f)` / `query.Avg(f)` |
-
-Computed expressions and aggregates retain their `Value`/`Param` methods. Query
-execution `Count(ctx, db)` and row-count construction `query.Count[Model]()` are
-unchanged. Update handwritten query calls with the framework pin; generated field
-declarations and ownership manifests retain their format and types. No database
-migration is required. Both new and existing owner/value/NULL/phase restrictions
-must pass the invalid-type consumer gate.
-
-Queries still own captured declaration/order/mapping slices. Scope callbacks stay
-lazy and isolated, and execution resolves scopes from its own request context.
+The historical measurements below describe earlier engine reductions. Removed
+API names and source paths identify those measured revisions; they are not
+current consumer examples or compatibility promises.
 
 ## Model and endpoint edges
 
@@ -49,7 +35,7 @@ signed or idempotent endpoint transitions, any package that merely inspects a mo
 field (such as `Order.TotalCents`) or registers a simple endpoint compiles the entire
 transitive generic closure into its own package archive (`.a`).
 
-### Framework design rules
+### Historical framework design
 
 Foundry-Go eliminates these closure edges across generated models and HTTP endpoints:
 

@@ -34,7 +34,7 @@ func TestCorrelatedSelectedKeySQLParity(t *testing.T) {
 	total, buyer := expr.At(child, models.Orders.TotalCents), expr.At(child, models.Orders.BuyerID)
 
 	c = c.Where(expr.Equal(buyer, parent))
-	bucket := expr.When(expr.OrderRow(total).Gt(1), expr.Select(total).Param(1)).Else(expr.Select(total).Param(0))
+	bucket := expr.When(expr.OrderRow(total).Gt(1), expr.Row(total).Value().Param(1)).Else(expr.Row(total).Value().Param(0))
 
 	count := expr.Count[rows.Correlation[models.User, rows.Alias[purchaseAlias, models.Order]]]()
 	rank := expr.RowNumber(expr.WindowFor(child).OrderBy(total.Asc()))
@@ -43,7 +43,7 @@ func TestCorrelatedSelectedKeySQLParity(t *testing.T) {
 		name    string
 		current rows.CorrelatedScalar[models.User, rows.Alias[purchaseAlias, models.Order], int64]
 	}{
-		{"computed_row", rows.OrderCorrelatedScalar(rows.DistinctOnCorrelatedScalarValues(rows.GroupByCorrelatedScalar(rows.SelectCorrelatedScalar(c, expr.Select(bucket)), expr.Group(bucket)), expr.Select(bucket).Key()), bucket.Desc())},
+		{"computed_row", rows.OrderCorrelatedScalar(rows.DistinctOnCorrelatedScalarValues(rows.GroupByCorrelatedScalar(rows.SelectCorrelatedScalar(c, expr.Row(bucket).Value()), expr.Group(bucket)), expr.Row(bucket).Value().Key()), bucket.Desc())},
 		{"aggregate", rows.OrderCorrelatedScalar(rows.DistinctOnCorrelatedScalarValues(rows.GroupByCorrelatedScalar(rows.SelectCorrelatedScalar(c, count.Value()), expr.Group(bucket)), count.Value().Key()), count.Desc())},
 		{"window", rows.OrderCorrelatedScalar(rows.DistinctOnCorrelatedScalarValues(rows.SelectCorrelatedScalar(c, rank), rank.Key()), rank.Desc())},
 	} {
@@ -60,10 +60,10 @@ func TestCorrelatedSelectedKeySQLParity(t *testing.T) {
 
 func TestValueSetSelectedKeySQLParity(t *testing.T) {
 	q := models.Users.Query()
-	scalar := rows.Values(rows.SelectScalar(rows.From(q.Where(models.Users.Age.Gt(18))), expr.Select(expr.Value(models.Users.Nickname))))
+	scalar := rows.Values(rows.SelectScalar(rows.From(q.Where(models.Users.Age.Gt(18))), expr.Row(expr.Value(models.Users.Nickname)).Value()))
 	set := rows.UnionAllValues(scalar, scalar)
 
-	key := expr.Select(set.Value())
+	key := expr.Row(set.Value()).Value()
 	rank := expr.RowNumber(expr.Window[rows.Set[value.Nullable[string]]]{}.OrderBy(set.Value().Asc()))
 
 	for _, tc := range []struct {
@@ -92,17 +92,17 @@ func TestPostgresORMComputedKeyClauses(t *testing.T) {
 		parent := expr.At(rows.OuterScope(c, rows.ModelScope(q)), models.Users.ID)
 		scope := rows.InnerScope(c, rows.Scope(a))
 		total, buyer := expr.At(scope, models.Orders.TotalCents), expr.At(scope, models.Orders.BuyerID)
-		bucket := expr.When(expr.OrderRow(total).Gt(1), expr.Select(total).Param(1)).Else(expr.Select(total).Param(0))
-		selected := rows.SelectCorrelatedScalar(c.Where(expr.Equal(buyer, parent)), expr.Select(bucket))
-		selected = rows.OrderCorrelatedScalar(rows.DistinctOnCorrelatedScalarValues(rows.GroupByCorrelatedScalar(selected, expr.Group(bucket)), expr.Select(bucket).Key()), bucket.Desc()).Limit(1)
+		bucket := expr.When(expr.OrderRow(total).Gt(1), expr.Row(total).Value().Param(1)).Else(expr.Row(total).Value().Param(0))
+		selected := rows.SelectCorrelatedScalar(c.Where(expr.Equal(buyer, parent)), expr.Row(bucket).Value())
+		selected = rows.OrderCorrelatedScalar(rows.DistinctOnCorrelatedScalarValues(rows.GroupByCorrelatedScalar(selected, expr.Group(bucket)), expr.Row(bucket).Value().Key()), bucket.Desc()).Limit(1)
 		outer := rows.OrderScalar(rows.SelectScalar(rows.From(q), rows.CorrelatedScalarQuery(selected)), expr.Value(models.Users.Age).Asc())
 		if got, err := rows.ReadScalar(outer).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(1)), value.Of(int64(1)), value.Null[int64]()}) {
 			t.Fatal("correlated computed keys", got, err)
 		}
-		scalar := rows.Values(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(models.Users.Age))))
+		scalar := rows.Values(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(models.Users.Age)).Value()))
 		set := rows.UnionAllValues(scalar, scalar)
-		selectedSet := rows.DistinctOnValueSet(set, expr.Select(set.Value()).Key()).OrderBy(set.Value().Asc())
-		if got, err := selectedSet.All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{20, 21, 22}) {
+		selectedSet := rows.DistinctOnValueSet(set, expr.Row(set.Value()).Value().Key()).OrderBy(set.Value().Asc())
+		if got, err := rows.ReadValues(selectedSet).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{20, 21, 22}) {
 			t.Fatal("combined selected keys", got, err)
 		}
 		return nil

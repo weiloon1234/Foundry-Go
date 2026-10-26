@@ -1,5 +1,7 @@
 package httpdto_test
 
+import "time"
+
 import (
 	"context"
 	"encoding/json"
@@ -43,7 +45,7 @@ func TestGeneratedRequestUsesConcretePatchStates(t *testing.T) {
 }
 
 func TestGeneratedResponseRetainsItsModelIDOwner(t *testing.T) {
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

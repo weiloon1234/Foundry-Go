@@ -69,7 +69,7 @@ func TestResultLocksUseSharedCompilerAndPreservedTargets(t *testing.T) {
 		t.Fatal(err)
 	}
 	txsource := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "txm")
-	scalar := SelectTransactionValue(txsource, expr.Select(expr.At(TransactionScope(txsource), m.ID)))
+	scalar := SelectTransactionValue(txsource, expr.Row(expr.At(TransactionScope(txsource), m.ID)).Value())
 	locked := ForKeyShare(scalar).Of(Target(TransactionScope(txsource)))
 	if s, err := ormcore.CompileRecord(t.Context(), locked.core); err != nil || !strings.Contains(s.SQLText, "FOR KEY SHARE") {
 		t.Fatal(s.SQLText, err)

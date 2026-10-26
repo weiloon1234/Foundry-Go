@@ -24,7 +24,7 @@ func TestPostgresLateralAggregateAndWindowReports(t *testing.T) {
 		stats := rows.AsLateral[statsAlias](selected, "stats")
 		joined := rows.CrossJoinLateral(outer, stats)
 		u := rows.LeftScope(joined, rows.Scope(outer))
-		items, err := rows.SelectRecord(joined, rows.RightScope(joined, rows.LateralScope(stats))).OrderBy(expr.At(u, models.Users.Age).Asc()).All(t.Context(), tx)
+		items, err := rows.ReadRecord(rows.SelectRecord(joined, rows.RightScope(joined, rows.LateralScope(stats))).OrderBy(expr.At(u, models.Users.Age).Asc())).All(t.Context(), tx)
 		if err != nil || len(items) != 4 {
 			t.Fatal(items, err)
 		}
@@ -43,10 +43,10 @@ func TestPostgresLateralAggregateAndWindowReports(t *testing.T) {
 			t.Fatal(n, err)
 		}
 		window := expr.WindowFor(scope).OrderBy(expr.At(o, models.Orders.TotalCents).Desc(), expr.At(o, models.Orders.ID).Asc())
-		ranked := rows.ProjectCorrelated(c, lateralqueries.RankedOrders, rows.MapSelected(lateralqueries.RankedOrders.ID, expr.Select(expr.At(o, models.Orders.ID))), rows.MapSelected(lateralqueries.RankedOrders.Total, expr.Select(expr.At(o, models.Orders.TotalCents))), rows.MapSelected(lateralqueries.RankedOrders.Rank, expr.RowNumber(window))).OrderBy(expr.At(o, models.Orders.TotalCents).Desc()).Limit(2)
+		ranked := rows.ProjectCorrelated(c, lateralqueries.RankedOrders, rows.MapSelected(lateralqueries.RankedOrders.ID, expr.Row(expr.At(o, models.Orders.ID)).Value()), rows.MapSelected(lateralqueries.RankedOrders.Total, expr.Row(expr.At(o, models.Orders.TotalCents)).Value()), rows.MapSelected(lateralqueries.RankedOrders.Rank, expr.RowNumber(window))).OrderBy(expr.At(o, models.Orders.TotalCents).Desc()).Limit(2)
 		ranking := rows.AsLateral[latestAlias](ranked, "ranked")
 		rankingJoin := rows.CrossJoinLateral(outer, ranking)
-		ranks, err := rows.SelectRecord(rankingJoin, rows.RightScope(rankingJoin, rows.LateralScope(ranking))).All(t.Context(), tx)
+		ranks, err := rows.ReadRecord(rows.SelectRecord(rankingJoin, rows.RightScope(rankingJoin, rows.LateralScope(ranking)))).All(t.Context(), tx)
 		if err != nil || len(ranks) != 3 {
 			t.Fatal(ranks, err)
 		}
@@ -92,7 +92,7 @@ func TestPostgresLateralChainedNullableScopes(t *testing.T) {
 		chain := rows.LeftJoinLateral(first, matched)
 		retained := rows.LeftNullableScope(chain, rows.NullableRightScope(first, rows.LateralScope(latest)))
 		found := rows.NullableRightScope(chain, rows.LateralScope(matched))
-		pairs, err := rows.Select(chain, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Select(expr.AtNullable(retained, models.Orders.BuyerID))), rows.MapSelected(reports.UserPairs.RightID, expr.Select(expr.AtNullable(found, models.Users.ID)))).All(t.Context(), tx)
+		pairs, err := rows.Select(chain, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Row(expr.AtNullable(retained, models.Orders.BuyerID)).Value()), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(found, models.Users.ID)).Value())).All(t.Context(), tx)
 		if err != nil || len(pairs) != 4 {
 			t.Fatal(pairs, err)
 		}

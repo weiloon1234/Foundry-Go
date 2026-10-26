@@ -43,11 +43,11 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	window := expr.Window[predicateOwner]{}.PartitionBy(expr.Group(param)).OrderBy(param.Asc())
 	agg := expr.Count[predicateOwner]().Filter(projected)
 
-	direct, err := rows.Compile(report)
+	direct, err := rows.CompileRead(rows.Read(report))
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapted, err := rows.Compile(rows.SelectValue(table.Query(), table.Key()).Where(projected))
+	adapted, err := rows.CompileRead(rows.Read(rows.SelectValue(table.Query(), table.Key()).Where(projected)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	assertRetentionRedacted(t, "expr/case", expr.When(projected, param), secret)
 	assertRetentionRedacted(t, "expr/selected-case", expr.WhenValue(expr.Grouped(projected), param.Value()), secret)
 	assertRetentionRedacted(t, "expr/window", window, secret)
-	assertRetentionRedacted(t, "expr/window-fallback", expr.LagOr(expr.Select(value), 1, secret, expr.Window[predicateOwner]{}), secret)
+	assertRetentionRedacted(t, "expr/window-fallback", expr.LagOr(expr.Row(value).Value(), 1, secret, expr.Window[predicateOwner]{}), secret)
 	assertRetentionRedacted(t, "expr/raw-argument", expr.Raw[predicateOwner, string]("?", secret), secret)
 	assertRetentionRedacted(t, "expr/raw-sql", expr.Raw[predicateOwner, string]("'"+secret+"'"), secret)
 	assertRetentionRedacted(t, "rows/input", source, secret)

@@ -81,7 +81,7 @@ func TestPostgresRetrievalCompositionAndProjectionBoundaries(t *testing.T) {
 				return err
 			}},
 			{"joined-parent", 1, func(ctx context.Context) error {
-				members, err := selected.All(ctx, tx)
+				members, err := rows.ReadRecord(selected).All(ctx, tx)
 				if err == nil && (len(members) != 1 || members[0].Name != "root") {
 					return errors.New("self-join selected the wrong model role")
 				}
@@ -92,10 +92,10 @@ func TestPostgresRetrievalCompositionAndProjectionBoundaries(t *testing.T) {
 				return err
 			}},
 			{"cte", 2, func(ctx context.Context) error {
-				_, err := rows.SelectRecord(common, rows.Scope(common)).All(ctx, tx)
+				_, err := rows.ReadRecord(rows.SelectRecord(common, rows.Scope(common))).All(ctx, tx)
 				return err
 			}},
-			{"union", 2, func(ctx context.Context) error { _, err := set.All(ctx, tx); return err }},
+			{"union", 2, func(ctx context.Context) error { _, err := rows.ReadSet(set).All(ctx, tx); return err }},
 			{"locked-model", 1, func(ctx context.Context) error { _, err := locked.All(ctx, tx); return err }},
 			{"locked-cte", 1, func(ctx context.Context) error {
 				_, err := rows.SelectTransactionRecord(lockedCTE, rows.TransactionScope(lockedCTE)).All(ctx, tx)

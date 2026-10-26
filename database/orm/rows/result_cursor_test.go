@@ -47,8 +47,8 @@ func TestResultCursorWindowAndBidirectionalNavigation(t *testing.T) {
 
 func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 	m := declareMembers()
-	c := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Select(expr.Value(m.Nickname)))))
-	c = c.UniqueBy(c.Key())
+	c := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Nickname)).Value())))
+	c = c.UniqueBy(expr.Group(c.Value()))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"nick"}}}
 	db := openTest(t, state)
 	page, err := c.Paginate(t.Context(), db, orm.CursorRequest[value.Nullable[string]]{Size: 1})
@@ -66,7 +66,7 @@ func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 	base := CursorFor(ModelRecord(m.Query()))
 	id := expr.At(base.Scope(), m.ID)
 	foreign := CursorFor(ModelRecord(declareMembers().Query()))
-	cases := []CursorQuery[member]{base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc(), id.Desc()), base.UniqueBy(expr.Group(expr.At(foreign.Scope(), m.ID))), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc().NullsLast()), {}, base.UniqueBy(expr.Group(id)).OrderBy(expr.AddValue(expr.Select(id), expr.Select(id)).Asc())}
+	cases := []CursorQuery[member]{base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc(), id.Desc()), base.UniqueBy(expr.Group(expr.At(foreign.Scope(), m.ID))), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc().NullsLast()), {}, base.UniqueBy(expr.Group(id)).OrderBy(expr.AddValue(expr.Row(id).Value(), expr.Row(id).Value()).Asc())}
 	for i, bad := range cases {
 		if _, err := bad.Paginate(t.Context(), db, orm.CursorRequest[member]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 			t.Fatal(i, err, state.sql)
@@ -95,9 +95,9 @@ func TestResultCursorFailureDiscardsPageAndRejectsSensitiveKeys(t *testing.T) {
 	table := orm.Define("secrets", func(b orm.Builder[secret], s *secret) secretFields {
 		return secretFields{orm.TableOf(b, &s.ID), orm.ColumnOf(b, &s.Name, orm.Codec(codec.String[string]().WithSensitiveValues()))}
 	})
-	scalar := ValueCursorFor(Values(SelectScalar(From(table.Query()), expr.Select(expr.Value(table.Name)))))
+	scalar := ValueCursorFor(Values(SelectScalar(From(table.Query()), expr.Row(expr.Value(table.Name)).Value())))
 	state := &driverState{}
-	if _, err := scalar.UniqueBy(scalar.Key()).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
+	if _, err := scalar.UniqueBy(expr.Group(scalar.Value())).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal(err, state.sql)
 	}
 }

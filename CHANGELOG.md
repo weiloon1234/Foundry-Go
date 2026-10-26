@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Complete Stage 8d3a caller closure and transfer 262 legacy test entry points to
+  native/shared owners with an audited ledger guard. Remove the 30 approved
+  compatibility APIs and rename `jobs.LegacyEnvelope` to `EnvelopeV1` without changing
+  v1 decoding. Preserve native cursor eligibility for expression-column ordering
+  and reject soft-delete plans without soft-delete metadata. The engine and bridges
+  remain until 8d3b.
+
+- Render native and shared UPDATE SET lists in model declaration order for canonical
+  SQL text across equivalent updates, keeping bindings aligned. The four legacy frozen
+  comparisons that recorded assignment order replay with SET-order normalization;
+  their frozen bytes and provenance remain unchanged.
+
 - Complete Stage 8d1: move morph contracts to `model`, share relation limits through
   `querycore`, and expose native ORM limits for bounded application batches. Native
   dependencies retain only two explicit legacy bridges; engine removal follows in 8d3.

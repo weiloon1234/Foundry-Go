@@ -68,7 +68,7 @@ func TestRelationBatchDecodingRedactsInORM(t *testing.T) {
 		fields := orm.Define("records", func(b orm.Builder[row], m *row) table {
 			return table{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.ParentID), orm.ColumnOf(b, &m.Name, orm.Codec(c)), orm.ManyOf(b, &m.Children)}
 		})
-		result, err := orm.Load(t.Context(), db, parents, orm.HasManyOf(fields.Children, fields.Key(), fields.ParentID))
+		result, err := orm.LoadFrom(t.Context(), db, fields.Query().With(orm.HasManyOf(fields.Children, fields.Key(), fields.ParentID)), parents)
 		assertSQLCause(t, err, private)
 		if len(result) != 0 || parents[0].Children.IsLoaded() || state.rowsClosed.Load() != 1 {
 			t.Fatal("failed relation batch published partial models or leaked rows")

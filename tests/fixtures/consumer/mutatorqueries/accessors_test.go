@@ -1,5 +1,7 @@
 package mutatorqueries_test
 
+import "time"
+
 import (
 	"encoding/json"
 	"errors"
@@ -36,7 +38,7 @@ func responseForMember(member mutatorqueries.Member) (memberResponse, error) {
 }
 
 func TestTypedModelAccessorsPreserveStoredFields(t *testing.T) {
-	id, err := model.NewID[mutatorqueries.Member]()
+	id, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

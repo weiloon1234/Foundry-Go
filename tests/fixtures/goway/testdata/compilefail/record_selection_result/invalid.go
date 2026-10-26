@@ -28,6 +28,6 @@ var txScope = rows.TransactionScope(txSource)
 var selected = rows.SelectTransactionRecord(txSource, txScope)
 
 func invalid() {
-	got, _ := rows.SelectRecord(input, rows.ModelScope(models.Users.Query())).All(nil, nil)
+	got, _ := rows.ReadRecord(rows.SelectRecord(input, rows.ModelScope(models.Users.Query()))).All(nil, nil)
 	var _ []models.Order = got
 }

@@ -57,12 +57,12 @@ Unknown executor wrappers cannot suppress model callbacks.
 
 Scalars, declared DTOs and models whose concrete owner proves callbacks absent
 stream one decoded row at a time. Cancellation, panic and Goexit close the rows;
-iteration waits for a running callback to exit. Existing projection inspection
-and `rows.Each(ctx, executor, query, yield)` retain their signatures; see
+iteration waits for a running callback to exit. Use `rows.CompileRead(rows.Read(query))` for projection inspection and
+`rows.EachRead(ctx, executor, rows.Read(query), yield)` for streaming; see
 [report reads](README.md#report-reads). Transaction-only sources are rejected by
 these ordinary terminals before I/O.
 
-`SelectTransactionValue(source, expr.Select(field))` keeps the scalar type and
+`SelectTransactionValue(source, expr.Row(field).Value())` keeps the scalar type and
 requires `*database.Tx` for every terminal. `TransactionRead` and
 `TransactionValue` expose `First`, `RequireFirst`, `Count` and `Exists` in addition
 to `All`. There is no conversion to ordinary result sources.
@@ -85,19 +85,17 @@ results expose `All`, `First` and `RequireFirst`, require a transaction, and
 provide no count, pagination, mutation or ordinary-source conversion. They can
 enter `TransactionCTE`, retaining the lock inside its definition.
 
-Transaction joins and their nullable record selection rule remain the deferred
-6b4 integration. Result cursors accept ordinary sources only.
+Transaction joins retain their transaction requirement and nullable record
+selection rules. Result cursors accept ordinary sources only.
 
 Cursor keys retain per-output sensitivity through projections, computed values,
 scalar subqueries, aliases, CTEs and set operations. Either set operand can make
 an output sensitive, even when the left input supplies the decoder. Mapping a
 sensitive expression to an ordinary row field does not make it safe for a cursor
 token. Sensitive ordering and identity fields are rejected before SQL execution;
-an unrelated public output can still be used as the identity. The old
-`database/query` result cursor adapters use the same provenance check.
+an unrelated public output can still be used as the identity.
 
 Sensitivity is captured when typed fields and aggregate operands enter the SQL
 expression tree, before arithmetic or conditional operators select a result
-codec. This also protects legacy fields declared with a sensitive codec when
-`query.Define` omits its optional model getters. Ordinary and relation sources
+codec. Ordinary and relation sources
 share the model's sensitivity metadata, including through and pivot inputs.

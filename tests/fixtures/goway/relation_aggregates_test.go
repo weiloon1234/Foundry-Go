@@ -135,19 +135,19 @@ func TestRelationAggregateStatementContract(t *testing.T) {
 				}
 			}
 			before := g.statements
-			if _, err := orm.LoadMissing(t.Context(), db, parents, j.ParentAggregates.Count, j.ParentAggregates.Total); err != nil {
+			if _, err := orm.LoadMissingFrom(t.Context(), db, j.Parents.Query().With(j.ParentAggregates.Count, j.ParentAggregates.Total), parents); err != nil {
 				t.Fatal(err, g.output.String())
 			}
 			if g.statements != before {
 				t.Fatal("loaded zero/NULL queried again")
 			}
 			parents[0].Count = relation.Value[int64]{}
-			loaded, err := orm.LoadMissing(t.Context(), db, parents, j.ParentAggregates.Count, j.ParentAggregates.Total)
+			loaded, err := orm.LoadMissingFrom(t.Context(), db, j.Parents.Query().With(j.ParentAggregates.Count, j.ParentAggregates.Total), parents)
 			if err != nil || g.statements != before+1 || !loaded[0].Count.IsLoaded() || parents[0].Count.IsLoaded() {
 				t.Fatal("partial missing/caller ownership", err)
 			}
 			before = g.statements
-			_, err = orm.Load(t.Context(), db, parents, j.ParentAggregates.Count, j.ParentAggregates.Total)
+			_, err = orm.LoadFrom(t.Context(), db, j.Parents.Query().With(j.ParentAggregates.Count, j.ParentAggregates.Total), parents)
 			if err != nil || g.statements != before+2 {
 				t.Fatal("explicit refresh", err, g.statements-before)
 			}
@@ -171,7 +171,7 @@ func TestRelationAggregateNestedAndSharedKeys(t *testing.T) {
 		}
 		return cols, rows
 	}
-	parents, err := orm.Load(t.Context(), db, []j.Parent{{ID: 1}, {ID: 2}}, j.DirectTargets.With(childCount))
+	parents, err := orm.LoadFrom(t.Context(), db, j.Parents.Query().With(j.DirectTargets.With(childCount)), []j.Parent{{ID: 1}, {ID: 2}})
 	if err != nil || g.statements != 2 {
 		t.Fatal("nested batching", err, g.statements)
 	}
@@ -185,7 +185,7 @@ func TestRelationAggregateNestedAndSharedKeys(t *testing.T) {
 	}
 	g.statements = 0
 	g.reply = aggregateReply
-	loaded, err := orm.Load(t.Context(), db, []j.Parent{{ID: 1}, {ID: 1}, {ID: 3}}, j.ParentAggregates.Peers, j.ParentAggregates.Pivots)
+	loaded, err := orm.LoadFrom(t.Context(), db, j.Parents.Query().With(j.ParentAggregates.Peers, j.ParentAggregates.Pivots), []j.Parent{{ID: 1}, {ID: 1}, {ID: 3}})
 	if err != nil || g.statements != 2 {
 		t.Fatal("pivot per-slot count", err, g.statements)
 	}
@@ -197,12 +197,12 @@ func TestRelationAggregateNestedAndSharedKeys(t *testing.T) {
 		}
 	}
 	g.statements = 0
-	_, err = orm.Load(t.Context(), db, []j.Parent{}, j.ParentAggregates.Count)
+	_, err = orm.LoadFrom(t.Context(), db, j.Parents.Query().With(j.ParentAggregates.Count), []j.Parent{})
 	if err != nil || g.statements != 0 {
 		t.Fatal("empty parents", err)
 	}
 	nullCount := j.Pivots.Count.Using(expr.Related(j.PivotParent, expr.Count[j.Parent]()))
-	loadedPivot, err := orm.Load(t.Context(), db, []j.Pivot{{ParentID: value.Null[int64]()}}, nullCount)
+	loadedPivot, err := orm.LoadFrom(t.Context(), db, j.Pivots.Query().With(nullCount), []j.Pivot{{ParentID: value.Null[int64]()}})
 	if err != nil || g.statements != 0 {
 		t.Fatal("NULL key", err)
 	}
@@ -224,12 +224,12 @@ func TestRelationAggregateValidationBeforeSQL(t *testing.T) {
 		j.Parents.Count.Using(expr.Related(j.DirectTargets, expr.OrderedAggregate[j.Target, int64]{})),
 	}
 	for i, r := range bad {
-		if out, err := orm.Load(t.Context(), db, []j.Parent{{ID: 1}}, r); out != nil || !errors.Is(err, fault.Invalid) {
+		if out, err := orm.LoadFrom(t.Context(), db, j.Parents.Query().With(r), []j.Parent{{ID: 1}}); out != nil || !errors.Is(err, fault.Invalid) {
 			t.Fatalf("case %d: %v", i, err)
 		}
 	}
 	morph := j.Pivots.Count.Using(expr.Related(j.MorphParent, expr.Count[j.Parent]()))
-	if _, err := orm.Load(t.Context(), db, []j.Pivot{{ParentID: value.Of(int64(1)), Kind: "parent"}}, morph); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.LoadFrom(t.Context(), db, j.Pivots.Query().With(morph), []j.Pivot{{ParentID: value.Of(int64(1)), Kind: "parent"}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("MorphTo", err)
 	}
 	if _, err := j.Parents.Query().With(j.ParentAggregates.Count, j.ParentAggregates.Count).All(t.Context(), db); !errors.Is(err, fault.Invalid) {
@@ -259,7 +259,7 @@ func TestRelationAggregateFailuresDiscardResults(t *testing.T) {
 			}}
 			db := aggregateDB(t, g)
 			input := []j.Parent{{ID: 1}}
-			out, err := orm.Load(t.Context(), db, input, tc.rel)
+			out, err := orm.LoadFrom(t.Context(), db, j.Parents.Query().With(tc.rel), input)
 			if out != nil || err == nil || tc.cause != nil && !errors.Is(err, tc.cause) || input[0].Count.IsLoaded() {
 				t.Fatal("failure publication", err)
 			}
@@ -280,7 +280,7 @@ func TestRelationAggregateFailuresDiscardResults(t *testing.T) {
 		db := aggregateDB(t, g)
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		if out, err := orm.Load(ctx, db, []j.Parent{{ID: 1}}, j.ParentAggregates.Count); out != nil || !errors.Is(err, context.Canceled) || g.statements != 0 {
+		if out, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.ParentAggregates.Count), []j.Parent{{ID: 1}}); out != nil || !errors.Is(err, context.Canceled) || g.statements != 0 {
 			t.Fatal("cancellation", err)
 		}
 	})

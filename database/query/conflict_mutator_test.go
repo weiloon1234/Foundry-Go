@@ -45,7 +45,9 @@ func TestConflictMutatorsNormalizeLiteralAssignmentsOnce(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(statement.Arguments(), []any{"first", "second", "constant!", "after"}) {
+		// SET rendering is shared through querycore; the legacy engine is retired in 8d3b.
+		// Bindings now follow declaration order on both frontends.
+		if !reflect.DeepEqual(statement.Arguments(), []any{"first", "second", "after", "constant!"}) {
 			t.Fatalf("conflict literal bypassed transformation: %v", statement.Arguments())
 		}
 		if !reflect.DeepEqual(calls, []string{"name: FIRST ", "name: SECOND ", "name: AFTER ", "note:constant"}) {

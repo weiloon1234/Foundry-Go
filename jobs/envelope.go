@@ -49,7 +49,7 @@ func (e Envelope) Origin() attribution.Origin { return e.wire.Origin }
 func (e Envelope) Encrypted() bool { return e.wire.Encrypted }
 
 // EnvelopeVersion identifies the transport format independently of a job's
-// payload Version. LegacyEnvelope omits new fields for older strict readers.
+// payload Version. EnvelopeV1 omits new fields for older strict readers.
 // ExtendedEnvelope (3) is selected automatically when an envelope uses a field
 // older readers reject: Policy.MaxExceptions, Policy.RetryUntil,
 // Unique.UntilProcessing or payload encryption. Its trace is optional. Envelopes
@@ -58,7 +58,7 @@ func (e Envelope) Encrypted() bool { return e.wire.Encrypted }
 type EnvelopeVersion uint8
 
 const (
-	LegacyEnvelope   EnvelopeVersion = 1
+	EnvelopeV1       EnvelopeVersion = 1
 	TracedEnvelope   EnvelopeVersion = 2
 	ExtendedEnvelope EnvelopeVersion = 3
 )
@@ -70,7 +70,7 @@ func (w envelopeWire) extended() bool {
 
 func (e Envelope) WireVersion() EnvelopeVersion {
 	if e.wire.EnvelopeVersion == 0 {
-		return LegacyEnvelope
+		return EnvelopeV1
 	}
 	return e.wire.EnvelopeVersion
 }

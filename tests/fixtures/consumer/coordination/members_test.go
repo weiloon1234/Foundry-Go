@@ -1,5 +1,7 @@
 package coordination_test
 
+import "time"
+
 import (
 	"context"
 	"testing"
@@ -35,7 +37,7 @@ func TestTypedMemberWorkUsesFrameworkOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[mutatorqueries.Member]()
+	id, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

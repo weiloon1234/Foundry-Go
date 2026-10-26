@@ -61,7 +61,7 @@ func readTerminalParity[S, V any](t *testing.T,
 func TestStage9ReadScalarCompileParity(t *testing.T) {
 	n := expr.Value(scalars.Records.Name)
 	t.Run("conditional", func(t *testing.T) {
-		compileReadParity(t, expr.Select(expr.When(n.Eq("Ada"), expr.Param(scalars.Records.Name, "yes")).Else(expr.Param(scalars.Records.Name, "no"))), "yes")
+		compileReadParity(t, expr.Row(expr.When(n.Eq("Ada"), expr.Param(scalars.Records.Name, "yes")).Else(expr.Param(scalars.Records.Name, "no"))).Value(), "yes")
 	})
 	t.Run("text", func(t *testing.T) { compileReadParity(t, expr.Lower(n).Value(), "ada") })
 
@@ -81,7 +81,7 @@ func TestStage9ReadScalarCompileParity(t *testing.T) {
 
 	nb := expr.When(n.Eq("Ada"), expr.Param(scalars.Records.Name, "yes")).Else(expr.Param(scalars.Records.Name, "no"))
 	t.Run("computed_key", func(t *testing.T) {
-		compileReadParity(t, expr.RowNumber(expr.WindowFor(rowset.ModelScope(scalars.Records.Query())).PartitionByValues(expr.Select(nb).Key()).OrderBy(n.Asc())), int64(1))
+		compileReadParity(t, expr.RowNumber(expr.WindowFor(rowset.ModelScope(scalars.Records.Query())).PartitionByValues(expr.Row(nb).Value().Key()).OrderBy(n.Asc())), int64(1))
 	})
 }
 
@@ -89,9 +89,9 @@ func TestStage9ReadCTEScalarAndValueSetParity(t *testing.T) {
 	newCTE := rowset.AsRecord[expressionSide](rowset.CTE("eligible", rowset.ModelRecord(scalars.Records.Query().Limit(9))), "r")
 	newName := expr.At(rowset.Scope(newCTE), scalars.Records.Name)
 
-	newScalar := rowset.ReadScalar(rowset.SelectScalar(newCTE, expr.Select(newName))).OrderBy(newName.Asc()).Limit(3).Offset(1)
+	newScalar := rowset.ReadScalar(rowset.SelectScalar(newCTE, expr.Row(newName).Value())).OrderBy(newName.Asc()).Limit(3).Offset(1)
 	t.Run("cte", func(t *testing.T) { readTerminalParity(t, newScalar, "Ada") })
-	values := rowset.Values(rowset.SelectScalar(newCTE, expr.Select(newName)))
+	values := rowset.Values(rowset.SelectScalar(newCTE, expr.Row(newName).Value()))
 	newValues := rowset.UnionAllValues(values, values)
 	// The set retains one shared CTE, then applies its completed output window.
 

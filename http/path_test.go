@@ -1,5 +1,7 @@
 package http
 
+import "time"
+
 import (
 	"errors"
 	stdhttp "net/http"
@@ -22,7 +24,7 @@ func textRoute(pattern string) Route[textPath] {
 }
 
 func TestTypedPathModelIdentityRoundTrip(t *testing.T) {
-	id, err := model.NewID[routeUser]()
+	id, err := model.NewIDAt[routeUser](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

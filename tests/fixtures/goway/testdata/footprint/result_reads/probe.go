@@ -17,6 +17,6 @@ func Page(ctx context.Context, db database.Executor) (orm.PageResult[int64], err
 }
 func Lock(ctx context.Context, tx *database.Tx) ([]int64, error) {
 	a := rows.AsTransaction[alias](rows.TransactionOf(rows.ModelRecord(models.Orders.Query())), "orders_alias")
-	q := rows.SelectTransactionValue(a, expr.Select(expr.At(rows.TransactionScope(a), models.Orders.TotalCents)))
+	q := rows.SelectTransactionValue(a, expr.Row(expr.At(rows.TransactionScope(a), models.Orders.TotalCents)).Value())
 	return rows.ForUpdate(q).Of(rows.Target(rows.TransactionScope(a))).SkipLocked().Limit(10).All(ctx, tx)
 }

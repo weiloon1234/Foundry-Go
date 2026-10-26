@@ -24,7 +24,7 @@ func bind[T any](t *testing.T, c codec.Codec[T], v T) any {
 
 func TestPostgresTypedCodecRoundTrips(t *testing.T) {
 	db := pgtest.Open(t)
-	id, err := model.NewID[owner]()
+	id, err := model.NewIDAt[owner](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

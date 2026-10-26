@@ -91,7 +91,7 @@ func TestStage6a3AggregatesGroupsAndDistinct(t *testing.T) {
 		bucket := expr.At(scope, table.Bucket)
 		required := expr.OrderRow(expr.At(scope, table.Required))
 		count := expr.Count[rows.Alias[aggregateSide, aggregateSample]]()
-		bucketValue := expr.Select(bucket)
+		bucketValue := expr.Row(bucket).Value()
 		if !grouped {
 			bucketValue = expr.OrderRow(bucket).Param(0).Value()
 		}

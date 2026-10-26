@@ -1,5 +1,7 @@
 package postgres
 
+import "github.com/jackc/pgx/v5"
+
 import (
 	"context"
 	"crypto/tls"
@@ -8,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"

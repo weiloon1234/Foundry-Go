@@ -23,7 +23,7 @@ func TestStatementRetentionRedaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projected, err := rows.Compile(rows.SelectValue(scoped, table.Key()))
+	projected, err := rows.CompileRead(rows.Read(rows.SelectValue(scoped, table.Key())))
 	if err != nil {
 		t.Fatal(err)
 	}

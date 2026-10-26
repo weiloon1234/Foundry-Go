@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.GroupKey[models.User](expr.Select(expr.Value(models.Users.Age)).Key())
+var _ = expr.GroupKey[models.User](expr.Row(expr.Value(models.Users.Age)).Value().Key())

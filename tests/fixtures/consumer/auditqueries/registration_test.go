@@ -1,12 +1,14 @@
 package auditqueries_test
 
+import "github.com/weiloon1234/Foundry-Go"
+
 import (
 	"context"
 	"errors"
 	"testing"
 
 	"foundry.test/consumer/auditqueries"
-	"github.com/weiloon1234/Foundry-Go"
+
 	"github.com/weiloon1234/Foundry-Go/audit"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"

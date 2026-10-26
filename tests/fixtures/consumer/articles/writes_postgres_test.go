@@ -223,7 +223,7 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 	}
 
 	// A model created in the transaction owns files prepared for its chosen key.
-	id, err := model.NewID[articles.Article]()
+	id, err := model.NewIDAt[articles.Article](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 
 	// An owner the transaction cannot see fails publication; Discard reclaims
 	// the upload at once, and a published one is kept.
-	missing, err := model.NewID[articles.Article]()
+	missing, err := model.NewIDAt[articles.Article](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

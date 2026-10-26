@@ -1,5 +1,7 @@
 package postgres
 
+import "github.com/jackc/pgx/v5"
+
 import (
 	"crypto/tls"
 	"errors"
@@ -9,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"

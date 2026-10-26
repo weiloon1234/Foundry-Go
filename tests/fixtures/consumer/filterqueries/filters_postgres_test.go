@@ -136,7 +136,7 @@ func TestPostgresFilteredCTEsAndCorrelations(t *testing.T) {
 		base, o := models.Orders.Query(), models.Orders
 		common := rowset.AsRecord[orderAlias](rowset.CTE("eligible", rowset.ModelRecord(base.Where(o.TotalCents.Gt(1)))), "eligible_source")
 		f := rowset.Scope(common)
-		eligible := rowset.InQuery(expr.Value(o.ID), rowset.SelectScalar(common, expr.Select(expr.At(f, models.Orders.ID))))
+		eligible := rowset.InQuery(expr.Value(o.ID), rowset.SelectScalar(common, expr.Row(expr.At(f, models.Orders.ID)).Value()))
 		if count, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(base), expr.Count[models.Order]().Filter(eligible).Value())).RequireFirst(t.Context(), tx); err != nil || count != 2 {
 			t.Fatal("CTE dependency only in FILTER", count, err)
 		}

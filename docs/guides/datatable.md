@@ -58,7 +58,7 @@ use `orm.PrimaryOf` and `orm.SoftDeleteOf` to retain declaration roles; the
 [row schemas](../../tests/fixtures/consumer/reporting/rows.go) retain exact DTO
 field types. Existing generated DTO descriptors continue to own wire metadata.
 
-Use `expr.Select(expr.Value(Users.Name))` in `SortBy`, an enum or comparison row
+Use `expr.Row(expr.Value(Users.Name)).Value()` in `SortBy`, an enum or comparison row
 adapter's `.Value()` (such as `expr.CompareRow(expr.Value(Users.State)).Value()`),
 or a computed/aggregate expression's `.Value()`. `Stable` is `[]expr.ProjectionOrder[S]`,
 accepting the short `expr.Value(table.Key()).Asc()` spelling for a unique final key.
@@ -293,7 +293,7 @@ HTTP file response owns the artifact, ranges and cleanup. Its own file-response
 limits still apply. Generation and transfer run under the request's single
 deadline, so declare the download route with
 `.WithTimeout(manager.DownloadTimeout())` instead of inheriting the kernel's
-`RequestTimeout`. `Config.DownloadTimeout()` is twice `ExportTimeout` (20 minutes
+`RequestTimeout`. `Manager.DownloadTimeout()` is twice `ExportTimeout` (20 minutes
 by default, at most `http.MaxRouteTimeout`); generation is additionally bounded
 by `ExportTimeout`. When the request ends through its deadline, a client
 disconnect or shutdown, generation stops and promptly releases its export slot,

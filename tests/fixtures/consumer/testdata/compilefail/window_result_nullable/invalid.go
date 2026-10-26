@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.MapSelected(windowqueries.Rankings.Number, expr.Lag(expr.Select(expr.Value(models.Orders.TotalCents)), 1, expr.WindowFor(rows.ModelScope(models.Orders.Query()))))
+var _ = rows.MapSelected(windowqueries.Rankings.Number, expr.Lag(expr.Row(expr.Value(models.Orders.TotalCents)).Value(), 1, expr.WindowFor(rows.ModelScope(models.Orders.Query()))))

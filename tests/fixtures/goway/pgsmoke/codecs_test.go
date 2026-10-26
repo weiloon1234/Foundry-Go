@@ -86,7 +86,7 @@ func TestColumnKinds(t *testing.T) {
 	local, err := temporal.ParseLocalDateTime("2026-10-23T12:34:56.123")
 	must(t, err)
 	roundTripKind(t, db, "local", "timestamp", local, codec.LocalDateTime())
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	must(t, err)
 	roundTripKind(t, db, "id", "uuid", id, codec.ID[models.User]())
 	roundTripKind(t, db, "enum", "text", models.StatusActive, codec.String[models.Status]().Validated(models.Status.Validate))

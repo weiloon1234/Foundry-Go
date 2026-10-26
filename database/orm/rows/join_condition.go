@@ -9,7 +9,7 @@ import (
 )
 
 func compareJoinValues[L, R, V any](left expr.RowValue[L, V], right expr.RowValue[R, V], op querycore.Operator) JoinOn[L, R] {
-	return JoinOn[L, R]{core: ormcore.JoinComparison(expr.FoundryRowValue(left, sqlowner.Expressions()), expr.FoundryRowValue(right, sqlowner.Expressions()), op, expr.FoundrySelectedColumn(expr.Select(left), sqlowner.Expressions()).Text && expr.FoundrySelectedColumn(expr.Select(right), sqlowner.Expressions()).Text)}
+	return JoinOn[L, R]{core: ormcore.JoinComparison(expr.FoundryRowValue(left, sqlowner.Expressions()), expr.FoundryRowValue(right, sqlowner.Expressions()), op, expr.FoundrySelectedColumn(expr.Row(left).Value(), sqlowner.Expressions()).Text && expr.FoundrySelectedColumn(expr.Row(right).Value(), sqlowner.Expressions()).Text)}
 }
 
 // OnEqual compares same-typed row values across distinct join sides. Example: rows.OnEqual(left,right).

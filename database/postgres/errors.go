@@ -1,11 +1,12 @@
 package postgres
 
+import "github.com/jackc/pgx/v5"
+
 import (
 	"io"
 	"net"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"

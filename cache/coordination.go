@@ -1,8 +1,10 @@
 package cache
 
+import "math/rand/v2"
+
 import (
 	"context"
-	"math/rand/v2"
+
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"

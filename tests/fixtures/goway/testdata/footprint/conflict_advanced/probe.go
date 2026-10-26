@@ -21,7 +21,7 @@ func Write(ctx context.Context, db database.Transactor) (value.Optional[m.WriteR
 	alias := r.As[lookup](f.Query(), "lookup")
 	c := r.Correlate(records, alias)
 	inner := expr.At(r.InnerScope(c, r.Scope(alias)), f.Note)
-	scalar := r.SelectCorrelatedScalar(c, expr.Select(inner)).Limit(1)
+	scalar := r.SelectCorrelatedScalar(c, expr.Row(inner).Value()).Limit(1)
 	policy = policy.DoUpdate(r.SetConflictValue(f.Note, r.CorrelatedScalarNullableRowQuery(scalar)))
 	policy = r.ConflictWhereRows(policy, expr.Greater(proposed, stored), scalar.Exists())
 	return orm.Upsert(ctx, db, f.Query(), policy, f.Name.Set("input"))

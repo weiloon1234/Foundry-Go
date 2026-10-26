@@ -77,7 +77,7 @@ func TestAdvancedConflictIndexDefaultsCorrelationAndTenancy(t *testing.T) {
 	c := r.Correlate(records, lookup)
 	outer := expr.At(r.OuterScope(c, records.Stored()), f.Count)
 	inner := expr.At(r.InnerScope(c, r.Scope(lookup)), f.Count)
-	selected := r.SelectCorrelatedScalar(c, expr.Select(inner)).Where(expr.Greater(inner, outer)).Limit(1)
+	selected := r.SelectCorrelatedScalar(c, expr.Row(inner).Value()).Where(expr.Greater(inner, outer)).Limit(1)
 	scalarPolicy := orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(r.SetConflictValue(f.Note, r.CorrelatedScalarRowQuery(selected)))
 	item, err = orm.Upsert(ctx, db, f.Query(), scalarPolicy, f.Key().Set(1), f.Tenant.Set(1))
 	must(t, err)

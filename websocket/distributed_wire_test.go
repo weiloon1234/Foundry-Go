@@ -11,7 +11,7 @@ import (
 )
 
 func TestPublicationWireBoundsAndStrictFields(t *testing.T) {
-	id, err := model.NewID[Publication]()
+	id, err := model.NewIDAt[Publication](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestPendingBuffersAndHistoryAreBoundedAndReleased(t *testing.T) {
 	defer h.mu.Unlock()
 	c.reservePendingLocked(sub)
 	for i := 0; i < 4; i++ {
-		id, err := model.NewID[Publication]()
+		id, err := model.NewIDAt[Publication](time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}

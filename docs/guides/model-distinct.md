@@ -24,7 +24,7 @@ scope := rows.LeftScope(joined, rows.Scope(people))
 fields := scope
 base := rows.SelectRecord(joined, scope).OrderBy(expr.At(fields, models.Users.Email).Asc())
 unique := rows.DistinctRecord(base)
-items, err := unique.All(t.Context(), tx)
+items, err := rows.ReadRecord(unique).All(t.Context(), tx)
 ```
 
 The linked package declares `personAlias` and `purchaseAlias`. Distinctness covers

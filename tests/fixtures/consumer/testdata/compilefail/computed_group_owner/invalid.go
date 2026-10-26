@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.GroupByScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Age))), expr.Group(expr.Param(models.Orders.TotalCents, 1)))
+var _ = rows.GroupByScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Age)).Value()), expr.Group(expr.Param(models.Orders.TotalCents, 1)))

@@ -1,5 +1,7 @@
 package notifying_test
 
+import "time"
+
 import (
 	"context"
 	"testing"
@@ -36,7 +38,7 @@ func TestPublicNotificationConsumer(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,7 @@ func TestPublicNotificationConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	orderID, err := model.NewID[models.Order]()
+	orderID, err := model.NewIDAt[models.Order](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

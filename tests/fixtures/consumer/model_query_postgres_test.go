@@ -1,5 +1,7 @@
 package consumer_test
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -19,15 +21,15 @@ import (
 func TestPostgresGeneratedModelReads(t *testing.T) {
 	db := pgtest.Open(t)
 	namespace := pgtest.Namespace(t, db)
-	firstID, err := model.NewID[models.User]()
+	firstID, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondID, err := model.NewID[models.User]()
+	secondID, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	entryID, err := model.NewID[models.LedgerEntry]()
+	entryID, err := model.NewIDAt[models.LedgerEntry](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

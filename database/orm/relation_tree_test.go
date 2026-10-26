@@ -187,7 +187,7 @@ func TestLoadMissingSkipsLoadedEmptyAndSharedNullableKeys(t *testing.T) {
 		{ID: 4},
 		{ID: 5, ManagerID: value.Of(int64(10))},
 	}
-	result, err := LoadMissing(t.Context(), db, parents, manager.With(HasManyOf(p.Reports, p.ID, p.ManagerID)))
+	result, err := LoadMissingFrom(t.Context(), db, p.Query().With(manager.With(HasManyOf(p.Reports, p.ID, p.ManagerID))), parents)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,10 +214,10 @@ func TestLoadMissingSkipsLoadedEmptyAndSharedNullableKeys(t *testing.T) {
 		t.Fatal("input ownership or nullable key")
 	}
 	before := o.calls
-	if _, err = LoadMissing(t.Context(), db, result, manager); err != nil || o.calls != before {
+	if _, err = LoadMissingFrom(t.Context(), db, p.Query().With(manager), result); err != nil || o.calls != before {
 		t.Fatal("loaded slots queried again", err, o.calls)
 	}
-	refreshed, err := Load(t.Context(), db, parents, manager)
+	refreshed, err := LoadFrom(t.Context(), db, p.Query().With(manager), parents)
 	if err != nil || o.calls != before+1 {
 		t.Fatal("Load did not batch refresh", err)
 	}
@@ -225,7 +225,7 @@ func TestLoadMissingSkipsLoadedEmptyAndSharedNullableKeys(t *testing.T) {
 	if !item.IsSet() {
 		t.Fatal("Load did not refresh loaded-empty")
 	}
-	if _, err = Load(t.Context(), db, []relationPerson{{ID: 1}, {ID: 2}}, manager); err != nil || o.calls != before+1 {
+	if _, err = LoadFrom(t.Context(), db, p.Query().With(manager), []relationPerson{{ID: 1}, {ID: 2}}); err != nil || o.calls != before+1 {
 		t.Fatal("empty key set sent SQL", err)
 	}
 }
@@ -237,7 +237,7 @@ func TestHasOneCardinalityAndNoParentStatement(t *testing.T) {
 		o := treeOracle()
 		db := testDB(t, o.connector())
 		input := []relationPerson{{ID: id}}
-		rows, err := Load(t.Context(), db, input, r)
+		rows, err := LoadFrom(t.Context(), db, p.Query().With(r), input)
 		if o.calls != 1 || input[0].Manager.IsLoaded() {
 			t.Fatal("parent read or mutation")
 		}
@@ -313,7 +313,7 @@ func TestRelationTreeSharedBudgetNoPartialParents(t *testing.T) {
 	db := testDB(t, o.connector())
 	input := []relationPerson{{ID: 1, Reports: relation.Collection([]relationPerson{{ID: 99}})}}
 	single := HasOneOf(p.Manager, p.ID, p.ManagerID)
-	if result, err := Load(t.Context(), db, input, r, single); result != nil || !errors.Is(err, database.TooManyRows) {
+	if result, err := LoadFrom(t.Context(), db, p.Query().With(r, single), input); result != nil || !errors.Is(err, database.TooManyRows) {
 		t.Fatal(result, err)
 	}
 	children, _ := input[0].Reports.Get()

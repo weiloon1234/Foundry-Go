@@ -45,7 +45,7 @@ func TestRelatedValueHydratesModelsAndReleasesSession(t *testing.T) {
 	sum := expr.RelatedValue(rel, expr.Sum(table.Amount))
 	q := expr.OrderBy(expr.Where(table.Query().With(rel), expr.OrderRow(count).Gte(1)), count.Desc())
 	must(t, db.Session(ctx, func(session *database.Session) error {
-		got, err := rows.WithValue(q, sum).All(ctx, session)
+		got, err := rows.ReadRecord(rows.WithValue(q, sum)).All(ctx, session)
 		if err != nil {
 			return err
 		}
@@ -60,14 +60,14 @@ func TestRelatedValueHydratesModelsAndReleasesSession(t *testing.T) {
 		if !loaded || len(children) != 2 || calls != 3 || factories != 2 {
 			t.Fatal(children, loaded, calls, factories)
 		}
-		empty, err := rows.WithValue(table.Query().Where(table.Key().Eq(3)), sum).All(ctx, session)
+		empty, err := rows.ReadRecord(rows.WithValue(table.Query().Where(table.Key().Eq(3)), sum)).All(ctx, session)
 		if err != nil {
 			return err
 		}
 		if len(empty) != 1 || !empty[0].Value.IsNull() {
 			t.Fatal(empty)
 		}
-		zero, err := rows.WithValue(table.Query().Where(table.Key().Eq(3)), count).All(ctx, session)
+		zero, err := rows.ReadRecord(rows.WithValue(table.Query().Where(table.Key().Eq(3)), count)).All(ctx, session)
 		if err != nil {
 			return err
 		}

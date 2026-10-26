@@ -1,5 +1,7 @@
 package goway_test
 
+import "github.com/weiloon1234/Foundry-Go/model"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -76,7 +78,7 @@ func TestJoinedBatchTreeCountsAndPivotOwnership(t *testing.T) {
 	dbassert.AssertStatementShapes(t, scope)
 	ctx, scope = d.Begin(t.Context())
 	before := g.statements
-	loaded, err := orm.Load(ctx, db, []j.Parent{{ID: 1}, {ID: 2}, {ID: 3}}, r)
+	loaded, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(r), []j.Parent{{ID: 1}, {ID: 2}, {ID: 3}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +97,7 @@ func TestJoinedBatchTreeCountsAndPivotOwnership(t *testing.T) {
 		}
 	}
 	before = g.statements
-	_, err = orm.LoadMissing(ctx, db, loaded, r)
+	_, err = orm.LoadMissingFrom(ctx, db, j.Parents.Query().With(r), loaded)
 	if err != nil || g.statements != before {
 		t.Fatal("loaded-empty reloaded", err)
 	}
@@ -137,7 +139,7 @@ func TestJoinedFailuresPublishNoPartialParents(t *testing.T) {
 				r = r.OrderByPivot(j.Pivots.Role.Asc(), j.Pivots.Role.Desc())
 			}
 			if mode == "of_many_empty" {
-				_, err := orm.Load(ctx, db, []j.Parent{{ID: 1}}, j.Chosen.OfMany())
+				_, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.OfMany()), []j.Parent{{ID: 1}})
 				if !errors.Is(err, fault.Invalid) || g.statements != 0 {
 					t.Fatal(err, g.statements)
 				}
@@ -154,7 +156,7 @@ func TestJoinedFailuresPublishNoPartialParents(t *testing.T) {
 				}
 				result, err = orm.WithRelationLimits(j.Parents.Query().With(r), limits).All(ctx, db)
 			} else {
-				result, err = orm.Load(ctx, db, []j.Parent{{ID: 1}}, r)
+				result, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(r), []j.Parent{{ID: 1}})
 			}
 			if result != nil || err == nil || want != nil && !errors.Is(err, want) {
 				t.Fatal("partial or wrong error", result, err)
@@ -175,7 +177,7 @@ func TestMorphEligibilityHasNoEmptyBatchSQL(t *testing.T) {
 	ctx := t.Context()
 	db := g.open(ctx)
 	t.Cleanup(func() { _ = db.Close(context.Background()) })
-	rows, err := orm.Load(ctx, db, []j.Pivot{{ID: 1, ParentID: value.Of(int64(1)), Kind: "other"}, {ID: 2, Kind: "parent"}}, j.MorphParent, j.MorphTarget)
+	rows, err := orm.LoadFrom(ctx, db, j.Pivots.Query().With(j.MorphParent, j.MorphTarget), []j.Pivot{{ID: 1, ParentID: value.Of(int64(1)), Kind: "other"}, {ID: 2, Kind: "parent"}})
 	if err != nil || g.statements != 0 {
 		t.Fatal(err, g.statements)
 	}
@@ -193,7 +195,7 @@ type invalidJoinedMorph struct {
 	Children relation.Many[j.Pivot]
 }
 
-func (invalidJoinedMorph) MorphName() orm.MorphName { return "invalid name" }
+func (invalidJoinedMorph) MorphName() model.MorphName { return "invalid name" }
 func TestInvalidMorphDiscriminatorFailsBeforeSQL(t *testing.T) {
 	type fields struct {
 		orm.Table[invalidJoinedMorph, int64]
@@ -233,7 +235,7 @@ func TestJoinedLockedTransactionAndEmptySets(t *testing.T) {
 		t.Fatal("locked transaction/count", err, g.statements, closed)
 	}
 	before := g.statements
-	result, err := orm.Load(ctx, db, []j.Parent{}, j.Peers, j.TargetsThrough, j.MorphChildren)
+	result, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers, j.TargetsThrough, j.MorphChildren), []j.Parent{})
 	if err != nil || len(result) != 0 || g.statements != before {
 		t.Fatal("empty sets sent joined SQL", err)
 	}

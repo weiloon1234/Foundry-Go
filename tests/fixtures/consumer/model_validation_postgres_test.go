@@ -1,5 +1,7 @@
 package consumer_test
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -37,15 +39,15 @@ func (e *readOnlyValidationExecutor) Query(ctx context.Context, sql string, args
 func TestPostgresTypedModelValidation(t *testing.T) {
 	db := pgtest.Open(t)
 	namespace := pgtest.Namespace(t, db)
-	first, err := model.NewID[models.User]()
+	first, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := model.NewID[models.User]()
+	second, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err := model.NewID[models.LedgerEntry]()
+	entry, err := model.NewIDAt[models.LedgerEntry](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +218,7 @@ func TestPostgresCheckTimeScopesAndElementLookups(t *testing.T) {
 	namespace := pgtest.Namespace(t, db)
 	var users [3]model.ID[models.User]
 	for i := range users {
-		id, err := model.NewID[models.User]()
+		id, err := model.NewIDAt[models.User](time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}

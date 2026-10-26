@@ -24,7 +24,7 @@ func Scalar() orm.Query[models.User] {
 	q := models.Users.Query()
 	alias := rows.AsRecord[a](rows.CTE("eligible", rows.ModelRecord(q)), "eligible")
 	age := expr.At(rows.Scope(alias), models.Users.Age)
-	selected := rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(alias, expr.Select(age)), age.Asc()), 1), 1)
+	selected := rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(alias, expr.Row(age).Value()), age.Asc()), 1), 1)
 	return expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(models.Users.Age)), rows.ScalarRowQuery(rows.From(q), selected)))
 }
 func Correlated() orm.Query[models.User] {
@@ -33,7 +33,7 @@ func Correlated() orm.Query[models.User] {
 	c := rows.Correlate(outer, inner)
 	scope := rows.InnerScope(c, rows.Scope(inner))
 	age := expr.At(scope, models.Users.Age)
-	scalar := rows.DistinctOnCorrelatedScalar(rows.SelectCorrelatedScalar(c, expr.Select(age)), expr.Group(age)).OrderBy(age.Asc())
+	scalar := rows.DistinctOnCorrelatedScalar(rows.SelectCorrelatedScalar(c, expr.Row(age).Value()), expr.Group(age)).OrderBy(age.Asc())
 	return expr.Where(q, rows.ExistsQuery(rows.From(q), rows.SelectScalar(outer, rows.CorrelatedScalarQuery(scalar))))
 }
 func Record() orm.Query[models.User] {

@@ -101,7 +101,7 @@ func window(ctx context.Context, db database.Executor) error {
 func cte(ctx context.Context, db database.Executor) error {
 	cte := rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(models.Orders.TotalCents.Gt(100))))
 	a := rows.AsRecord[orderSide](cte, "o")
-	_, err := rows.SelectRecord(a, rows.Scope(a)).All(ctx, db)
+	_, err := rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a))).All(ctx, db)
 	return err
 }
 
@@ -110,7 +110,7 @@ func cte(ctx context.Context, db database.Executor) error {
 // migration:sets-after
 func sets(ctx context.Context, db database.Executor) error {
 	a := models.Orders.Query().Where(models.Orders.TotalCents.Gt(100))
-	_, err := rows.Union(rows.ModelRecord(a), rows.ModelRecord(models.Orders.Query())).All(ctx, db)
+	_, err := rows.ReadSet(rows.Union(rows.ModelRecord(a), rows.ModelRecord(models.Orders.Query()))).All(ctx, db)
 	if err != nil {
 		return err
 	}

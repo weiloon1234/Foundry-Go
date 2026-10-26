@@ -57,7 +57,7 @@ func TestNullableScopeBridgesRejectZeroCapability(t *testing.T) {
 
 func TestSubqueryBridgesRejectZeroCapabilities(t *testing.T) {
 	m := declareMembers()
-	v := expr.Select(expr.Value(m.ID))
+	v := expr.Row(expr.Value(m.ID)).Value()
 	row := expr.Value(m.ID)
 	core := expr.FoundrySelected(v, sqlowner.Expressions())
 	column := expr.FoundrySelectedColumn(v, sqlowner.Expressions())

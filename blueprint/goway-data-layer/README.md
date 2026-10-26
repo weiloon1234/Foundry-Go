@@ -584,7 +584,7 @@ intentionally accepts byte slices, while identity does not.
 | 7 | 80 |
 | — | 445 |
 
-587 old catalogue rows are covered by 579 distinct Go-way cases.
+587 old catalogue rows are covered by 582 distinct Go-way cases.
 
 ## Emitter audit
 
@@ -1946,7 +1946,7 @@ results and source hashes are recorded in the integrated
 ## Integration batch 7g: catalogue completion and cleanup barrier
 
 Stage 7 is complete. The Stage 9 catalogue now covers all 1,032 cases: 587 ported
-rows map to 579 distinct Go-way negatives, and 445 rows are unaffected. No row is
+rows map to 582 distinct Go-way negatives, and 445 rows are unaffected. No row is
 pending or obsolete. Existing footprint ceilings and runtime method sets stay unchanged.
 
 The barrier removes 63 generated Go files, independent model/projection directives

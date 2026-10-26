@@ -1,10 +1,12 @@
 package filelock
 
+import "math/rand/v2"
+
 import (
 	"context"
 	"errors"
 	"io/fs"
-	"math/rand/v2"
+
 	"os"
 	"time"
 

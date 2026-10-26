@@ -116,7 +116,7 @@ func TestTransactionCorrelationAndLateralLocks(t *testing.T) {
 	if v := TransactionCrossJoinLateral(wrong, lat); !errors.Is(v.state.source.Err, fault.Invalid) {
 		t.Fatal("foreign lateral parent")
 	}
-	scalar := SelectTransactionCorrelatedScalar(c, expr.Select(y)).Limit(1).ForShare().NoWait()
+	scalar := SelectTransactionCorrelatedScalar(c, expr.Row(y).Value()).Limit(1).ForShare().NoWait()
 	out := SelectTransactionValue(a, TransactionCorrelatedScalarQuery(scalar)).Where(scalar.Exists(), TransactionInCorrelatedQuery(expr.At(TransactionScope(a), m.ID), scalar))
 	sql = compileTransaction(t, out.core.Source)
 	if !strings.Contains(sql, `FOR SHARE NOWAIT`) || !strings.Contains(sql, `EXISTS(SELECT`) {
@@ -142,7 +142,7 @@ func TestTransactionSubqueriesUseCallerTransaction(t *testing.T) {
 	a := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "a")
 	b := AsTransaction[right](TransactionOf(ModelRecord(m.Query())), "b")
 	id := expr.At(TransactionScope(a), m.ID)
-	selected := SelectTransactionValue(b, expr.Select(expr.At(TransactionScope(b), m.ID))).Limit(1)
+	selected := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), m.ID)).Value()).Limit(1)
 	scalar := TransactionScalarOf(selected).ForShare().SkipLocked()
 	q := SelectTransactionValue(a, TransactionScalarQuery(a, scalar)).Where(TransactionInQuery(id, scalar), TransactionExistsQuery(a, scalar))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {int64(7)}}}
@@ -164,7 +164,7 @@ func TestTransactionSubqueriesUseCallerTransaction(t *testing.T) {
 	if got, err := q.All(t.Context(), nil); !errors.Is(err, fault.Invalid) || got != nil {
 		t.Fatal(got, err)
 	}
-	nullable := SelectTransactionValue(b, expr.Select(expr.At(TransactionScope(b), m.Nickname)))
+	nullable := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), m.Nickname)).Value())
 	compileTransaction(t, SelectTransactionValue(a, TransactionScalarNullableQuery(a, nullable)).core.Source)
 	_ = TransactionScalarNullableRowQuery(a, nullable)
 	_ = TransactionScalarRowQuery(a, selected)

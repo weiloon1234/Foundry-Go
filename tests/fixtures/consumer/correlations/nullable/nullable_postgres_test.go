@@ -46,7 +46,7 @@ func checkNullableCorrelation(t *testing.T, tx *database.Tx) error {
 	outerOrder := rows.OuterScope(innerJoin, rows.ModelScope(models.Orders.Query()))
 	innerUser := rows.InnerScope(innerJoin, rows.LeftScope(joined, rows.Scope(users)))
 	innerSponsor := rows.InnerNullableScope(innerJoin, sponsorScope)
-	emails := rows.SelectCorrelatedScalar(innerJoin, expr.Select(expr.AtNullable(innerSponsor, models.Users.Email))).Where(expr.Equal(expr.At(innerUser, models.Users.ID), expr.At(outerOrder, models.Orders.BuyerID)))
+	emails := rows.SelectCorrelatedScalar(innerJoin, expr.Row(expr.AtNullable(innerSponsor, models.Users.Email)).Value()).Where(expr.Equal(expr.At(innerUser, models.Users.ID), expr.At(outerOrder, models.Orders.BuyerID)))
 	selected, err := rows.ReadScalar(rows.SelectScalar(rows.From(models.Orders.Query()), rows.CorrelatedScalarNullableQuery(emails))).
 		OrderBy(expr.Value(models.Orders.TotalCents).Asc()).All(t.Context(), tx)
 	if err != nil {

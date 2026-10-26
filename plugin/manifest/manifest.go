@@ -2,12 +2,13 @@
 // assembly or concrete features. Use package plugin when implementing a plugin.
 package manifest
 
+import "github.com/Masterminds/semver/v3"
+
 import (
 	"slices"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"

@@ -1,5 +1,7 @@
 package jobs
 
+import "time"
+
 import (
 	"bytes"
 	"context"
@@ -62,7 +64,7 @@ type WorkflowReceipt struct {
 func NewChain(steps ...Step) (Workflow, error) { return newWorkflow(ChainKind, steps) }
 func NewBatch(steps ...Step) (Workflow, error) { return newWorkflow(BatchKind, steps) }
 func newWorkflow(kind WorkflowKind, steps []Step) (Workflow, error) {
-	id, err := model.NewID[WorkflowExecution]()
+	id, err := model.NewIDAt[WorkflowExecution](time.Now())
 	if err != nil {
 		return Workflow{}, err
 	}

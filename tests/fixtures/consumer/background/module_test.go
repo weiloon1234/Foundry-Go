@@ -1,5 +1,7 @@
 package background_test
 
+import "github.com/weiloon1234/Foundry-Go"
+
 import (
 	"context"
 	"errors"
@@ -8,7 +10,7 @@ import (
 
 	"foundry.test/consumer/background"
 	"foundry.test/consumer/models"
-	"github.com/weiloon1234/Foundry-Go"
+
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/jobs/memory"
@@ -37,7 +39,7 @@ func TestWorkerKernelRunsConsumerHandlerWithTypedService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

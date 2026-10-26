@@ -1,5 +1,7 @@
 package goway_test
 
+import "time"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -169,7 +171,7 @@ func TestSensitiveStreamingFailureParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	good := store.rows["sensitive_vaults"][inserted.ID.String()]
-	other, err := model.NewID[newmodels.Vault]()
+	other, err := model.NewIDAt[newmodels.Vault](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

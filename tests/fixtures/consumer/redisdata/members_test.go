@@ -1,5 +1,7 @@
 package redisdata_test
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -52,11 +54,11 @@ func TestDataConsumerRetainsGettersAndModelOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[mutatorqueries.Member]()
+	id, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	group, err := model.NewID[models.Group]()
+	group, err := model.NewIDAt[models.Group](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +101,7 @@ func TestDataConsumerAssemblyDoesNotConnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[mutatorqueries.Member]()
+	id, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

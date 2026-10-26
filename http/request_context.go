@@ -1,5 +1,7 @@
 package http
 
+import "time"
+
 import (
 	"context"
 	stdhttp "net/http"
@@ -23,7 +25,7 @@ type requestIdentity struct{}
 // inherits an application-level subject or trusts forwarding headers. Guards
 // may later enrich this same immutable origin with a concrete authenticated model.
 func prepareRequest(r *stdhttp.Request) (*stdhttp.Request, error) {
-	id, err := model.NewID[requestIdentity]()
+	id, err := model.NewIDAt[requestIdentity](time.Now())
 	if err != nil {
 		return r, InternalError.WithCause(err)
 	}

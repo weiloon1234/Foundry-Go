@@ -1,4 +1,5 @@
 import importlib.util
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -18,7 +19,9 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(compare.FIXED_ENV['GOFLAGS'], '-p=4')
         self.assertEqual(compare.FIXED_ENV['GOWORK'], 'off')
         self.assertEqual(compare.FIXED_ENV['GOMAXPROCS'], '4')
-        self.assertTrue(compare.FIXED_ENV['GOCACHE'].endswith('-r14'))
+        self.assertTrue(Path(compare.FIXED_ENV['GOCACHE']).is_absolute())
+        if 'GOCACHE' in os.environ:
+            self.assertEqual(compare.FIXED_ENV['GOCACHE'], os.environ['GOCACHE'])
 
     def test_stage6_plan_selects_exact_baseline_and_no_database(self):
         with tempfile.TemporaryDirectory() as name:

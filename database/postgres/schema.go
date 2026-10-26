@@ -1,12 +1,15 @@
 package postgres
 
+import "github.com/jackc/pgx/v5"
+
+import "math/rand/v2"
+
 import (
 	"context"
 	"database/sql/driver"
-	"math/rand/v2"
+
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )

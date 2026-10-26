@@ -119,7 +119,7 @@ identity. Stored predicates include recipient/guard/provider/model scope and the
 canonical stored key. Equal keys belonging to other models or guards do not
 collide. Parsing or retyping an ID cannot grant access.
 
-`List(ctx, query.PageRequest, unreadOnly)` returns bounded pages of `Record[M]`.
+`List(ctx, orm.PageRequest, unreadOnly)` returns bounded pages of `Record[M]`.
 Decode a record through its database channel and build the application's declared
 HTTP response DTO; records do not implicitly serialize their private payload.
 `MarkRead`/`MarkUnread` return false for both absent and foreign IDs. Repeating

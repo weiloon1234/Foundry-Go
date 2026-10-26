@@ -1,5 +1,7 @@
 package command_test
 
+import "time"
+
 import (
 	"bytes"
 	"context"
@@ -88,7 +90,7 @@ func TestMFAReencryptRunsBatchesAndReportsFailures(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		generation, _ := model.NewID[mfa.Record]()
+		generation, _ := model.NewIDAt[mfa.Record](time.Now())
 		owner := fmt.Sprintf("%064x", i+1)
 		binding, _ := encryption.NewContext("auth.mfa.totp.v1", secret.New(owner+":"+generation.String()))
 		ciphertext, err := ring.Encrypt(t.Context(), binding, secret.New("JBSWY3DPEHPK3PXP"))

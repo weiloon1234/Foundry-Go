@@ -29,7 +29,7 @@ func relationAggregateGolden[V any](t *testing.T, after orm.AggregateRelation[j.
 		db := g.open(t.Context())
 		var result relation.Value[V]
 
-		parents, err := orm.Load(t.Context(), db, []j.Parent{{ID: 1}}, after)
+		parents, err := orm.LoadFrom(t.Context(), db, j.Parents.Query().With(after), []j.Parent{{ID: 1}})
 		if err != nil {
 			t.Fatal(err)
 		}

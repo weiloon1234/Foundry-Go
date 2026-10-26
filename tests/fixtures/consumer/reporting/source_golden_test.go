@@ -26,7 +26,7 @@ func TestReportSourceGolden(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := rows.Compile(source)
+		got, err := rows.CompileRead(rows.Read(source))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -37,7 +37,7 @@ func TestReportSourceGolden(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := rows.Compile(source)
+		got, err := rows.CompileRead(rows.Read(source))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,7 +48,7 @@ func TestReportSourceGolden(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := rows.Compile(source)
+		got, err := rows.CompileRead(rows.Read(source))
 		if err != nil {
 			t.Fatal(err)
 		}

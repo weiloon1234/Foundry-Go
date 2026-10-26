@@ -38,7 +38,7 @@ func TestStage6c2CTEsRecursionAndSets(t *testing.T) {
 	}
 	for _, c := range []rows.CommonTable[treeNode]{rows.RecursiveCTE("tree", anchor, step), rows.RecursiveAllCTE("tree", anchor, step)} {
 		a := rows.AsRecord[joinLeft](c, "result")
-		got, err := rows.SelectRecord(a, rows.Scope(a)).OrderBy(expr.At(rows.Scope(a), table.Key()).Asc()).All(ctx, db)
+		got, err := rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a)).OrderBy(expr.At(rows.Scope(a), table.Key()).Asc())).All(ctx, db)
 		must(t, err)
 		if !reflect.DeepEqual(got, []treeNode{{1, 0}, {2, 1}, {3, 1}}) {
 			t.Fatal(got)
@@ -48,7 +48,7 @@ func TestStage6c2CTEsRecursionAndSets(t *testing.T) {
 	sets := []rows.SetQuery[treeNode]{rows.Union(left, right), rows.UnionAll(left, right), rows.Intersect(left, right), rows.IntersectAll(left, right), rows.Except(left, right), rows.ExceptAll(left, right)}
 	wants := [][]int64{{1, 2, 3}, {1, 2, 2, 3}, {2}, {2}, {1}, {1}}
 	for i, q := range sets {
-		got, err := q.OrderBy(expr.At(q.Scope(), table.Key()).Asc()).All(ctx, db)
+		got, err := rows.ReadSet(q.OrderBy(expr.At(q.Scope(), table.Key()).Asc())).All(ctx, db)
 		must(t, err)
 		var ids []int64
 		for _, r := range got {
@@ -58,9 +58,9 @@ func TestStage6c2CTEsRecursionAndSets(t *testing.T) {
 			t.Fatal(i, ids)
 		}
 	}
-	vals := rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.Select(expr.Value(table.ParentID))))
+	vals := rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.Row(expr.Value(table.ParentID)).Value()))
 	combined := rows.UnionValues(vals, vals)
-	got, err := combined.OrderBy(combined.Value().Asc()).All(ctx, db)
+	got, err := rows.ReadValues(combined.OrderBy(combined.Value().Asc())).All(ctx, db)
 	must(t, err)
 	if !reflect.DeepEqual(got, []int64{0, 1}) {
 		t.Fatal(got)

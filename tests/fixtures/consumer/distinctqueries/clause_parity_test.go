@@ -45,7 +45,7 @@ func TestScalarGroupingDistinctSQLParity(t *testing.T) {
 func TestScalarDistinctOnUnselectedKeySQLParity(t *testing.T) {
 	q := models.Orders.Query()
 	o := models.Orders
-	selected := rows.OrderScalar(rows.DistinctOnScalar(rows.SelectScalar(rows.From(q.Where(o.TotalCents.Gt(0))), expr.Select(expr.Value(o.TotalCents))), expr.Group(expr.Value(o.BuyerID))), expr.Value(o.BuyerID).Asc(), expr.Value(o.TotalCents).Desc())
+	selected := rows.OrderScalar(rows.DistinctOnScalar(rows.SelectScalar(rows.From(q.Where(o.TotalCents.Gt(0))), expr.Row(expr.Value(o.TotalCents)).Value()), expr.Group(expr.Value(o.BuyerID))), expr.Value(o.BuyerID).Asc(), expr.Value(o.TotalCents).Desc())
 	got, err := orm.Compile(expr.Where(q, rows.InQuery(expr.Value(o.TotalCents), selected)))
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestRecordAndSetDistinctSQLParity(t *testing.T) {
 
 func TestValueSetDistinctSQLParity(t *testing.T) {
 	q := models.Users.Query()
-	source := rows.DistinctScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(models.Users.Nickname))))
+	source := rows.DistinctScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(models.Users.Nickname)).Value()))
 	combined := rows.DistinctValues(rows.UnionAllValues(rows.Values(source), rows.Values(source)))
 	combined = combined.OrderBy(combined.Value().Asc()).Offset(1).Limit(2)
 	got, err := orm.Compile(expr.Where(q, rows.ExistsQuery(rows.From(q), combined)))

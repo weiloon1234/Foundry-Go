@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Orders.Query())), expr.Select(expr.Value(models.Users.Age)))
+var _ = expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Orders.Query())), expr.Row(expr.Value(models.Users.Age)).Value())

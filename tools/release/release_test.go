@@ -235,6 +235,9 @@ func TestGoWaySourceInventory(t *testing.T) {
 		"database/orm/rows/transactions.md",
 		"database/orm/transaction_phase_test.go",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
+		"docs/evidence/goway-stage8d3a-api-removals.tsv",
+		"docs/evidence/goway-stage8d3a-negative-ports.tsv",
+		"docs/evidence/goway-stage8d3a-surface-subtractions.tsv",
 		"docs/evidence/goway-stage9-c-barrier-freeze.tsv",
 		"docs/evidence/goway-stage9-d-helper-references.tsv",
 		"tools/goway_compare.py",
@@ -423,6 +426,20 @@ func TestReviewedConsumerAssets(t *testing.T) {
 	for _, name := range []string{"credentials.toml", "other.svg", "unreviewed.js", "notes.txt"} {
 		if policy.sourceName(name) {
 			t.Errorf("asset allowance leaked to %s", name)
+		}
+	}
+}
+
+func TestRetiredFixtureEvidencePolicy(t *testing.T) {
+	_, policy := sourceFixture(t)
+	for _, path := range []string{"testdata/compilefail/query_id/invalid.go.txt", "testdata/footprint/extension_files_old/probe.go.txt", "testdata/footprint/extension_matching_old/probe.go.txt"} {
+		if !policy.sourceName(path) {
+			t.Errorf("retired evidence excluded: %s", path)
+		}
+	}
+	for _, path := range []string{"private.go.txt", "testdata/compilefail/query_id/private.txt", "testdata/footprint/other/probe.go.txt"} {
+		if policy.sourceName(path) {
+			t.Errorf("unreviewed text included: %s", path)
 		}
 	}
 }

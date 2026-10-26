@@ -12,4 +12,4 @@ var email = expr.Value(models.Users.Email)
 type otherSide struct{}
 
 var other = rows.As[otherSide](models.Users.Query(), "other")
-var _ = expr.EqualValue(expr.Select(age), expr.Select(expr.At(rows.Scope(other), models.Users.Age)))
+var _ = expr.EqualValue(expr.Row(age).Value(), expr.Row(expr.At(rows.Scope(other), models.Users.Age)).Value())

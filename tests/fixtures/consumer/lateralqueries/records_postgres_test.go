@@ -41,7 +41,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		joined := rows.LeftJoinLateral(outer, latest)
 		u := rows.LeftScope(joined, rows.Scope(outer))
 		r := rows.NullableRightScope(joined, rows.LateralScope(latest))
-		results := rows.Select(joined, lateralqueries.UserOrders, rows.MapSelected(lateralqueries.UserOrders.UserID, expr.Select(expr.At(u, models.Users.ID))), rows.MapSelected(lateralqueries.UserOrders.OrderID, expr.Select(expr.AtNullable(r, models.Orders.ID))), rows.MapSelected(lateralqueries.UserOrders.Total, expr.Select(expr.AtNullable(r, models.Orders.TotalCents)))).OrderBy(expr.At(u, models.Users.Age).Asc())
+		results := rows.Select(joined, lateralqueries.UserOrders, rows.MapSelected(lateralqueries.UserOrders.UserID, expr.Row(expr.At(u, models.Users.ID)).Value()), rows.MapSelected(lateralqueries.UserOrders.OrderID, expr.Row(expr.AtNullable(r, models.Orders.ID)).Value()), rows.MapSelected(lateralqueries.UserOrders.Total, expr.Row(expr.AtNullable(r, models.Orders.TotalCents)).Value())).OrderBy(expr.At(u, models.Users.Age).Asc())
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		items, err := results.All(t.Context(), counter)
 		if err != nil || len(items) != 4 || counter.Queries.Load() != 1 {
@@ -58,7 +58,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		}
 		// The full right record keeps its declared decoder and model-specific ID.
 		crossed := rows.CrossJoinLateral(outer, latest)
-		complete, err := rows.SelectRecord(crossed, rows.RightScope(crossed, rows.LateralScope(latest))).All(t.Context(), tx)
+		complete, err := rows.ReadRecord(rows.SelectRecord(crossed, rows.RightScope(crossed, rows.LateralScope(latest)))).All(t.Context(), tx)
 		if err != nil || len(complete) != 2 {
 			t.Fatal(complete, err)
 		}
@@ -75,7 +75,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		// A per-parent offset is not a single offset over the completed join.
 		second := rows.AsLateral[latestAlias](record.Limit(1).Offset(1), "second")
 		secondJoin := rows.CrossJoinLateral(outer, second)
-		secondRows, err := rows.SelectRecord(secondJoin, rows.RightScope(secondJoin, rows.LateralScope(second))).All(t.Context(), tx)
+		secondRows, err := rows.ReadRecord(rows.SelectRecord(secondJoin, rows.RightScope(secondJoin, rows.LateralScope(second)))).All(t.Context(), tx)
 		if err != nil || len(secondRows) != 1 || secondRows[0].TotalCents != 1 {
 			t.Fatal(secondRows, err)
 		}
@@ -83,7 +83,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		on := rows.On(expr.At(uf, models.Users.ID), expr.At(of, models.Orders.BuyerID)).WhereRight(expr.OrderRow(expr.At(of, models.Orders.TotalCents)).Gt(2))
 		filteredJoin := rows.LeftJoinLateral(outer, latest, on)
 		filtered := rows.NullableRightScope(filteredJoin, rows.LateralScope(latest))
-		values, err := rows.ReadScalar(rows.SelectScalar(filteredJoin, expr.Select(expr.AtNullable(filtered, models.Orders.ID)))).All(t.Context(), tx)
+		values, err := rows.ReadScalar(rows.SelectScalar(filteredJoin, expr.Row(expr.AtNullable(filtered, models.Orders.ID)).Value())).All(t.Context(), tx)
 		if err != nil || len(values) != 4 {
 			t.Fatal(values, err)
 		}
@@ -96,7 +96,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		if nonNull != 1 {
 			t.Fatal(values)
 		}
-		if count, err := rows.Count(t.Context(), tx, results.Where(expr.OrderNullableRow(expr.AtNullable(r, models.Orders.TotalCents)).Gt(2))); err != nil || count != 1 {
+		if count, err := rows.Read(results.Where(expr.OrderNullableRow(expr.AtNullable(r, models.Orders.TotalCents)).Gt(2))).Count(t.Context(), tx); err != nil || count != 1 {
 			t.Fatal(count, err)
 		}
 		// Existing result pagination, CTE/set composition and transaction locks retain the join.
@@ -129,7 +129,7 @@ func TestLateralInvalidContractsBeforeIO(t *testing.T) {
 		{},
 	} {
 		j := rows.LeftJoinLateral(outer, source)
-		_, err := rows.SelectRecord(j, rows.LeftScope(j, rows.Scope(outer))).Limit(0).All(t.Context(), queryfixture.NoQueries(t))
+		_, err := rows.ReadRecord(rows.SelectRecord(j, rows.LeftScope(j, rows.Scope(outer))).Limit(0)).All(t.Context(), queryfixture.NoQueries(t))
 		if !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
@@ -138,7 +138,7 @@ func TestLateralInvalidContractsBeforeIO(t *testing.T) {
 	j := rows.CrossJoinLateral(outer, latest)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := rows.SelectRecord(j, rows.RightScope(j, rows.LateralScope(latest))).All(ctx, queryfixture.NoQueries(t)); !errors.Is(err, context.Canceled) {
+	if _, err := rows.ReadRecord(rows.SelectRecord(j, rows.RightScope(j, rows.LateralScope(latest)))).All(ctx, queryfixture.NoQueries(t)); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 }

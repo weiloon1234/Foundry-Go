@@ -1,5 +1,7 @@
 package redisdata_test
 
+import "time"
+
 import (
 	"context"
 	"testing"
@@ -57,11 +59,11 @@ func TestRankingsKeepModelOwnedMembersAndCounters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	group, err := model.NewID[models.Group]()
+	group, err := model.NewIDAt[models.Group](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	member, err := model.NewID[mutatorqueries.Member]()
+	member, err := model.NewIDAt[mutatorqueries.Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

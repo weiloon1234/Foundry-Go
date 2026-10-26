@@ -86,7 +86,7 @@ func TestAnnotatedHydrationAndRetrieval(t *testing.T) {
 					t.Fatal(err, calls, factories)
 				}
 			} else {
-				got, err := q.All(ctx, db)
+				got, err := rows.ReadRecord(q).All(ctx, db)
 				switch mode {
 				case "success":
 					if err != nil || len(got) != 1 || got[0].Model.Name != "Ada" || got[0].Value != 3 || calls != 1 || factories != 1 {
@@ -145,7 +145,7 @@ func TestAnnotatedEagerLoadsAfterRetrieval(t *testing.T) {
 			}
 			rel := orm.HasManyOf(table.Children, table.Key(), table.ParentID)
 			q := rows.WithValue(table.Query().With(rel), expr.RelatedValue(rel, expr.Count[annotatedModel]()))
-			got, err := q.All(t.Context(), openStreamDB(t, state))
+			got, err := rows.ReadRecord(q).All(t.Context(), openStreamDB(t, state))
 			if err != nil || len(got) != 1 || got[0].Value != 1 {
 				t.Fatal(got, err)
 			}
@@ -174,7 +174,7 @@ func TestAnnotatedRejectsDifferentDeclarationAndFailedRelation(t *testing.T) {
 			t.Fatal(err)
 		}
 		state := &streamState{}
-		if got, err := q.All(t.Context(), openStreamDB(t, state)); !errors.Is(err, fault.Invalid) || got != nil || state.queries != 0 {
+		if got, err := rows.ReadRecord(q).All(t.Context(), openStreamDB(t, state)); !errors.Is(err, fault.Invalid) || got != nil || state.queries != 0 {
 			t.Fatal(got, err, state.queries)
 		}
 	}

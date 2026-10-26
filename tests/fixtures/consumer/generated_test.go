@@ -1,5 +1,7 @@
 package consumer_test
 
+import "time"
+
 import (
 	"database/sql"
 	"database/sql/driver"
@@ -53,7 +55,7 @@ func TestGeneratedEnumPersistenceAndDescriptor(t *testing.T) {
 }
 
 func TestHandwrittenModelsAndAssignments(t *testing.T) {
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

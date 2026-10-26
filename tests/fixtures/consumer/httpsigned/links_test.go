@@ -61,7 +61,7 @@ func TestTemporaryTypedLinksOverNativeHTTP(t *testing.T) {
 	server.Start()
 	client := server.Client()
 	client.Timeout = 3 * time.Second
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

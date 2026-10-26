@@ -90,7 +90,7 @@ func TestBrowserRefreshCookieRotatesRevokesOnReplayAndClearsOnLogout(t *testing.
 	}); err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

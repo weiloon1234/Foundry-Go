@@ -187,7 +187,7 @@ func TestStage6a3InferredZeroCapabilitiesFailClosed(t *testing.T) {
 		t.Fatal("aggregate bridge exposed metadata/codec", metadata.Err, column.Err)
 	}
 	group := openBridge(expr.FoundryGroup[models.User], expr.Group(expr.Value(models.Users.Age)))
-	key := openBridge(expr.FoundryKey[models.User], expr.Select(expr.Value(models.Users.Age)).Key())
+	key := openBridge(expr.FoundryKey[models.User], expr.Row(expr.Value(models.Users.Age)).Value().Key())
 	having := openBridge(expr.FoundryHaving[models.User], expr.Count[models.User]().Gt(0))
 	var order expr.ProjectionOrder[models.User] = expr.Count[models.User]().Desc()
 	ordering := openBridge(expr.FoundryProjectionOrder[models.User], order)

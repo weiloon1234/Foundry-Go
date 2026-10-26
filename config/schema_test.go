@@ -227,7 +227,7 @@ func TestConfigurationCopiesModelOwnedIDsWithoutSharingOpaqueReferences(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[owner]()
+	id, err := model.NewIDAt[owner](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

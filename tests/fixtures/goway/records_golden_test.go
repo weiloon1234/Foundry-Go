@@ -45,16 +45,16 @@ func runRecordNew(g *goldenCapture, kind string) {
 		q = q.Where(models.Orders.TotalCents.Gt(10)).OrderBy(models.Orders.TotalCents.Desc()).Limit(3).Offset(1)
 	}
 	if kind == "projection" {
-		projected := rowset.Offset(rowset.Limit(rowset.Select(rowset.From(q), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(expr.Value(models.Orders.TotalCents))))).OrderBy(expr.Value(models.Orders.TotalCents).Desc()), 3), 1)
+		projected := rowset.Offset(rowset.Limit(rowset.Select(rowset.From(q), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.Value(models.Orders.TotalCents)).Value()))).OrderBy(expr.Value(models.Orders.TotalCents).Desc()), 3), 1)
 		a := rowset.AsRecord[joinA](rowset.RecordOf(projected), "r")
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectRecord(a, rowset.Scope(a)).Limit(2).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.ReadRecord(rowset.SelectRecord(a, rowset.Scope(a)).Limit(2)).All(ctx, db))}))
 		return
 	}
 	if kind == "transaction_model" || kind == "transaction_projection" {
 		check(db.Transaction(ctx, func(tx *database.Tx) error {
 			a := rowset.AsTransaction[joinA](rowset.LockedRecord(q.Where(models.Orders.TotalCents.Gt(10)).ForUpdate().SkipLocked()), "r")
 			if kind == "transaction_projection" {
-				selected := rowset.SelectTransaction(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(expr.At(rowset.TransactionScope(a), models.Orders.TotalCents)))))
+				selected := rowset.SelectTransaction(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.At(rowset.TransactionScope(a), models.Orders.TotalCents)).Value())))
 				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(selected.Limit(2).All(ctx, tx))}))
 			} else {
 				got := must(rowset.SelectTransactionRecord(a, rowset.TransactionScope(a)).Limit(2).All(ctx, tx))
@@ -67,7 +67,7 @@ func runRecordNew(g *goldenCapture, kind string) {
 		return
 	}
 	a := rowset.AsRecord[joinA](rowset.ModelRecord(q), "r")
-	got := must(rowset.SelectRecord(a, rowset.Scope(a)).All(ctx, db))
+	got := must(rowset.ReadRecord(rowset.SelectRecord(a, rowset.Scope(a))).All(ctx, db))
 	for _, v := range got {
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{v.ID, v.BuyerID, v.TotalCents}))
 	}

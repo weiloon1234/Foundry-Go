@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.DistinctOn(rows.FromModel(models.Users.Query()), expr.Select(expr.Value(models.Users.Age)).Key())
+var _ = rows.DistinctOn(rows.FromModel(models.Users.Query()), expr.Row(expr.Value(models.Users.Age)).Value().Key())

@@ -1,5 +1,7 @@
 package attachments
 
+import "time"
+
 import (
 	"context"
 	"crypto/sha256"
@@ -329,7 +331,7 @@ func (m *Manager) produceVariant(ctx context.Context, original store.File, varia
 	}
 	var digest storage.SHA256
 	copy(digest[:], hash.Sum(nil))
-	id, err := model.NewID[store.Variant]()
+	id, err := model.NewIDAt[store.Variant](time.Now())
 	if err != nil {
 		return err
 	}

@@ -1,5 +1,7 @@
 package orm
 
+import "time"
+
 import (
 	"database/sql/driver"
 	"errors"
@@ -19,11 +21,11 @@ import (
 func TestEncryptedOpenFailurePublication(t *testing.T) {
 	r := secureRecords()
 	keys := sensitiveKeys(t)
-	id, err := model.NewID[secureRecord]()
+	id, err := model.NewIDAt[secureRecord](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := model.NewID[secureRecord]()
+	other, err := model.NewIDAt[secureRecord](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +166,7 @@ func TestEncryptedEagerOpenFailureDoesNotPublishParents(t *testing.T) {
 	if err := Check(p, r, rel); err != nil {
 		t.Fatal(err)
 	}
-	id, err := model.NewID[secureRecord]()
+	id, err := model.NewIDAt[secureRecord](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +215,7 @@ func TestEncryptedSoftWriteReturningFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	keys := sensitiveKeys(t)
-	id, err := model.NewID[secureSoftRecord]()
+	id, err := model.NewIDAt[secureSoftRecord](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

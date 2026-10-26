@@ -17,8 +17,8 @@ func Record(ctx context.Context) (orm.Statement, error) {
 	return rows.CompileCursor(q)
 }
 func Scalar(ctx context.Context) (orm.Statement, error) {
-	q := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Nickname)))))
-	q = q.UniqueBy(q.Key())
+	q := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Nickname)).Value())))
+	q = q.UniqueBy(expr.Group(q.Value()))
 	if err := rows.PreflightValueCursor(ctx, q); err != nil {
 		return orm.Statement{}, err
 	}

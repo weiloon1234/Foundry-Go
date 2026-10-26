@@ -1,5 +1,7 @@
 package nestedbindings_test
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -100,7 +102,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		if _, err := n.ProjectRecords.Insert(ctx, tx, n.ProjectRecords.TeamID.Set(f.teams[0].ID), n.ProjectRecords.Slug.Set("disabled"), n.ProjectRecords.Enabled.Set(false)); err != nil {
 			return err
 		}
-		missing, err := model.NewID[n.Team]()
+		missing, err := model.NewIDAt[n.Team](time.Now())
 		if err != nil {
 			return err
 		}

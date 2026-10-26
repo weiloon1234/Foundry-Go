@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var _ = expr.UUIDGreater(expr.Select(expr.Value(models.Orders.ID)), model.ID[models.Order]{})
+var _ = expr.UUIDGreater(expr.Row(expr.Value(models.Orders.ID)).Value(), model.ID[models.Order]{})

@@ -27,8 +27,8 @@ func TestCursorCompileSQLParity(t *testing.T) {
 		t.Fatal("recorded SQL parity changed")
 	}
 
-	values := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query().Limit(5)), expr.Select(expr.Value(models.Users.Nickname)))))
-	valueCursor := values.OrderBy(values.Value().Desc()).UniqueBy(values.Key())
+	values := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query().Limit(5)), expr.Row(expr.Value(models.Users.Nickname)).Value())))
+	valueCursor := values.OrderBy(values.Value().Desc()).UniqueBy(expr.Group(values.Value()))
 	scalar, err := rows.CompileValueCursor(valueCursor)
 	if err != nil {
 		t.Fatal(err)

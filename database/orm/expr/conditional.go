@@ -11,7 +11,7 @@ import (
 // Coalesce removes nullability with a required fallback of the same owner/type.
 // Example: expr.Coalesce(expr.Value(Users.Nickname),expr.Value(Users.Name)).
 func Coalesce[S, V any](first RowValue[S, value.Nullable[V]], fallback RowValue[S, V]) RowExpression[S, V] {
-	return RowExpression[S, V]{data: CoalesceValue(Select(first), Select(fallback)).data}
+	return RowExpression[S, V]{data: CoalesceValue(Row(first).Value(), Row(fallback).Value()).data}
 }
 
 // CoalesceValue composes selected values with a required fallback.
@@ -58,7 +58,7 @@ func CoalesceNullableValue[S, V any](first Selected[S, value.Nullable[V]], rest 
 // NullIf adds one nullable layer to matching required row values.
 // Example: expr.NullIf(expr.Value(Users.Name),expr.Param(Users.Name,"")).
 func NullIf[S, V any](first, second RowValue[S, V]) RowExpression[S, value.Nullable[V]] {
-	return RowExpression[S, value.Nullable[V]]{data: NullIfValue(Select(first), Select(second)).data}
+	return RowExpression[S, value.Nullable[V]]{data: NullIfValue(Row(first).Value(), Row(second).Value()).data}
 }
 
 // NullIfValue adds one nullable layer to matching required selected values.
@@ -71,7 +71,7 @@ func NullIfValue[S, V any](first, second Selected[S, V]) Selected[S, value.Nulla
 // NullIfNullable compares nullable row values while retaining one nullable layer.
 // Example: expr.NullIfNullable(expr.Value(Users.Nickname),expr.NullFor(expr.Value(Users.Name))).
 func NullIfNullable[S, V any](first, second RowValue[S, value.Nullable[V]]) RowExpression[S, value.Nullable[V]] {
-	return RowExpression[S, value.Nullable[V]]{data: NullIfNullableValue(Select(first), Select(second)).data}
+	return RowExpression[S, value.Nullable[V]]{data: NullIfNullableValue(Row(first).Value(), Row(second).Value()).data}
 }
 
 // NullIfNullableValue compares selected nullable values without nesting wrappers.

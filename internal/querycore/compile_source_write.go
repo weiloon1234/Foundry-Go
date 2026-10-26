@@ -86,24 +86,23 @@ func (q QueryCore) CompileSourceWrite(c Compiler, destination, source SelectNode
 		sourceColumns[column.Name] = column
 	}
 	c.Sources[sourceName] = sourceColumns
-	sets := make([]string, 0, len(mapped)+len(values))
-	for _, column := range q.Model.Columns {
-		var expression string
+	sets, err := compileUpdateSet(q.Model.Columns, len(mapped)+len(values), func(column Column) (string, bool, error) {
 		if _, ok := mapped[column.Name]; ok {
-			expression = Qualified(FieldRef{Table: sourceName, Column: column.Name})
-		} else if assignment, ok := values[column.Name]; ok {
-			expression, err = c.AssignmentParameter(column.Name, assignment.Bind)
-			if err != nil {
-				return Statement{}, err
-			}
-		} else {
-			continue
+			return Qualified(FieldRef{Table: sourceName, Column: column.Name}), true, nil
 		}
-		sets = append(sets, Quoted(column.Name)+" = "+expression)
+		assignment, present := values[column.Name]
+		if !present {
+			return "", false, nil
+		}
+		expression, err := c.AssignmentParameter(column.Name, assignment.Bind)
+		return expression, true, err
+	})
+	if err != nil {
+		return Statement{}, err
 	}
 	var body strings.Builder
 	if kind.SqlKind() == UpdateModel {
-		body.WriteString("UPDATE " + QuotedTable(q.Table) + " SET " + strings.Join(sets, ", ") + " FROM " + from)
+		body.WriteString("UPDATE " + QuotedTable(q.Table) + " SET " + sets + " FROM " + from)
 	} else {
 		body.WriteString("DELETE FROM " + QuotedTable(q.Table) + " USING " + from)
 	}

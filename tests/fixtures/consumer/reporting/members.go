@@ -31,11 +31,11 @@ func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
 	return datatable.Spec[Member, MemberRow, Authority]{
 		ID: "reports.members", Row: MemberRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[Member, MemberRow]{
-			datatable.DefineColumn[Member](wire.ID, MemberIDLabel).SortBy(expr.Select(expr.Value(fields.ID))).ExportAs(datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]())).Registration(),
+			datatable.DefineColumn[Member](wire.ID, MemberIDLabel).SortBy(expr.Row(expr.Value(fields.ID)).Value()).ExportAs(datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]())).Registration(),
 			datatable.DefineColumn[Member](wire.Name, MemberNameLabel).SortBy(name.Value()).FilterBy(datatable.Where(text, name)).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
-			datatable.DefineColumn[Member](wire.Nickname, NicknameLabel).SortBy(expr.Select(expr.Value(fields.Nickname))).FilterBy(datatable.NullableWhere(text, expr.TextNullableRow(fields.Nickname))).ExportAs(datatable.NullableCell(text)).Registration(),
+			datatable.DefineColumn[Member](wire.Nickname, NicknameLabel).SortBy(expr.Row(expr.Value(fields.Nickname)).Value()).FilterBy(datatable.NullableWhere(text, expr.TextNullableRow(fields.Nickname))).ExportAs(datatable.NullableCell(text)).Registration(),
 			datatable.DefineColumn[Member](wire.State, StateLabel).FilterBy(datatable.Where(state, expr.CompareRow(expr.Value(fields.State)))).ExportAs(datatable.ScalarCell(state)).Registration(),
-			datatable.DefineColumn[Member](wire.Balance, BalanceLabel).SortBy(expr.Select(expr.Value(fields.Balance))).FilterBy(datatable.Where(amount, expr.OrderRow(expr.Value(fields.Balance)))).ExportAs(datatable.ScalarCell(amount)).Registration(),
+			datatable.DefineColumn[Member](wire.Balance, BalanceLabel).SortBy(expr.Row(expr.Value(fields.Balance)).Value()).FilterBy(datatable.Where(amount, expr.OrderRow(expr.Value(fields.Balance)))).ExportAs(datatable.ScalarCell(amount)).Registration(),
 		},
 		Filters: []datatable.FilterRegistration[Member]{
 			datatable.DefineFilter("orderLabel", OrderLabel, datatable.Related(datatable.Where(text, expr.TextRow(OrderModels.Label)), func(predicate expr.Predicate[Order]) expr.Predicate[Member] {

@@ -50,5 +50,5 @@ func Projected() rows.Query[rows.Left[rows.Alias[parentTag, models.User], rows.A
 	latest := rows.AsLateral[latestTag](record, "totals")
 	joined := rows.LeftJoinLateral(parent, latest)
 	count := rows.AtNullable(rows.NullableRightScope(joined, rows.LateralScope(latest)), totals.Count)
-	return rows.Select(joined, schema, rows.MapSelected(schema.Amount, expr.Select(count)))
+	return rows.Select(joined, schema, rows.MapSelected(schema.Amount, expr.Row(count).Value()))
 }

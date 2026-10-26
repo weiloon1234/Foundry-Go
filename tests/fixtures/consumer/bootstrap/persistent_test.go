@@ -125,11 +125,11 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	memberID, err := model.NewID[Member]()
+	memberID, err := model.NewIDAt[Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	operatorID, err := model.NewID[Operator]()
+	operatorID, err := model.NewIDAt[Operator](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

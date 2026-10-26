@@ -20,9 +20,6 @@ type ID[M any] struct {
 	value [16]byte
 }
 
-// NewID generates a UUIDv7 using the current system time.
-func NewID[M any]() (ID[M], error) { return NewIDAt[M](time.Now()) }
-
 // NewIDAt generates a UUIDv7 from an explicit clock reading and 74 random bits,
 // following RFC 9562 section 5.7. Ordering within a millisecond, across clock
 // rollback, or across hosts is not guaranteed. IDs are not authentication secrets.

@@ -53,7 +53,7 @@ func (p Conflict) ValidateShape(q QueryCore, c *Compiler, validateMutator func(C
 // global scope predicates: DO UPDATE never changes a conflicting row outside
 // them, so a tenant cannot overwrite another tenant's row through a globally
 // unique key.
-func (p Conflict) Compile(c *Compiler, table, alias string, scopes []Expression) (string, error) {
+func (p Conflict) Compile(c *Compiler, table, alias string, columns []Column, scopes []Expression) (string, error) {
 	var sql strings.Builder
 	sql.WriteString(" ON CONFLICT")
 	target, err := p.targetSQL(c, table)
@@ -64,16 +64,20 @@ func (p Conflict) Compile(c *Compiler, table, alias string, scopes []Expression)
 	if p.Action == ConflictNothing {
 		return sql.String() + " DO NOTHING", nil
 	}
-	sets := make([]string, len(p.Updates))
 	rename := correlationRenamer{from: ConflictStoredTable, to: alias}
-	for i, u := range p.Updates {
-		v, err := u.compileValue(c, &rename)
-		if err != nil {
-			return "", err
+	sets, err := compileUpdateSet(columns, len(p.Updates), func(column Column) (string, bool, error) {
+		for _, update := range p.Updates {
+			if update.Field.Column == column.Name {
+				expression, err := update.compileValue(c, &rename)
+				return expression, true, err
+			}
 		}
-		sets[i] = Quoted(u.Field.Column) + " = " + v
+		return "", false, nil
+	})
+	if err != nil {
+		return "", err
 	}
-	sql.WriteString(" DO UPDATE SET " + strings.Join(sets, ", "))
+	sql.WriteString(" DO UPDATE SET " + sets)
 	conditions := make([]Expression, len(p.Condition), len(p.Condition)+len(p.RowCondition))
 	for i, predicate := range p.Condition {
 		conditions[i] = Requalify(predicate, alias)

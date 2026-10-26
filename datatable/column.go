@@ -105,7 +105,7 @@ func DefineColumn[S, R, V any](field validation.Field[R, V], label i18n.MessageK
 }
 
 // SortBy binds a selected value of the same scope and DTO field type.
-// Example: column.SortBy(expr.Select(expr.Value(Users.Name))).
+// Example: column.SortBy(expr.Row(expr.Value(Users.Name)).Value()).
 func (c Column[S, R, V]) SortBy(expression expr.Selected[S, V]) Column[S, R, V] {
 	c.declaration.order = func(direction Direction) expr.ProjectionOrder[S] {
 		if direction == Descending {

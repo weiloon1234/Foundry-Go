@@ -77,7 +77,7 @@ func TestConfiguredWorkerLogsAndCommandsRetrySelectedConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := model.NewID[models.User]()
+	user, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

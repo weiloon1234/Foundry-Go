@@ -201,14 +201,14 @@ func TestPostgresRetrievalDirectThroughAndExplicitLoad(t *testing.T) {
 			return errors.New("nullable natural relation key changed")
 		}
 		before := len(trace.Calls)
-		if _, err := orm.LoadMissing(ctx, tx, items, relations.Children, relations.Groups); err != nil {
+		if _, err := orm.LoadMissingFrom(ctx, tx, retrievalqueries.Members.Query().With(relations.Children, relations.Groups), items); err != nil {
 			return err
 		}
 		if len(trace.Calls) != before {
 			return errors.New("LoadMissing refired loaded models")
 		}
 		trace.Calls = nil
-		if _, err := orm.Load(ctx, tx, items, relations.Groups); err != nil {
+		if _, err := orm.LoadFrom(ctx, tx, retrievalqueries.Members.Query().With(relations.Groups), items); err != nil {
 			return err
 		}
 		if !reflect.DeepEqual(trace.Calls, []string{"group", "pivot"}) {

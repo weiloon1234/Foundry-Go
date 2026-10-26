@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/datatable"
 )
 
-var invalid = datatable.DefineColumn[reporting.Order](reporting.MemberRowValidationFields().Name, reporting.MemberNameLabel).SortBy(expr.Select(expr.Value(reporting.MemberModels.Name)))
+var invalid = datatable.DefineColumn[reporting.Order](reporting.MemberRowValidationFields().Name, reporting.MemberNameLabel).SortBy(expr.Row(expr.Value(reporting.MemberModels.Name)).Value())

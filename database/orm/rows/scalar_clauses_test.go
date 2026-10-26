@@ -15,7 +15,7 @@ func TestScalarClausesPreserveSourceAndRejectForeignOrders(t *testing.T) {
 	m := declareMembers()
 	a := AsRecord[left](CTE("eligible", ModelRecord(m.Query())), "chosen")
 	field := expr.At(Scope(a), m.ID)
-	base := SelectScalar(a, expr.Select(field))
+	base := SelectScalar(a, expr.Row(field).Value())
 	selected := LimitScalar(OffsetScalar(OrderScalar(base, field.Desc()), 2), 1)
 	if base.source.Node.Limit.IsSet() || base.source.Node.Offset != 0 || len(base.source.Node.Orders) != 0 {
 		t.Fatal("scalar clauses mutated their input")
@@ -46,7 +46,7 @@ func TestCorrelatedClausesKeepCapabilitiesAndErrors(t *testing.T) {
 	c := Correlate(a, b)
 	parent := expr.At(OuterScope(c, Scope(a)), m.ID)
 	child := expr.At(InnerScope(c, Scope(b)), m.ID)
-	scalar := SelectCorrelatedScalar(c.Where(expr.Less(child, parent)), expr.Select(child))
+	scalar := SelectCorrelatedScalar(c.Where(expr.Less(child, parent)), expr.Row(child).Value())
 	distinct := DistinctOnCorrelatedScalar(scalar, expr.Group(parent)).OrderBy(parent.Asc(), child.Desc())
 	if scalar.core.Source.Node.Distinct.Kind != 0 {
 		t.Fatal("distinct changed the input")

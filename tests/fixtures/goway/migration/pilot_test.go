@@ -72,11 +72,11 @@ func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
 	email := validation.DefineField("email", func(r AdminRow) value.Nullable[string] { return r.Email })
 	return []datatable.ColumnRegistration[Admin, AdminRow]{
 		datatable.DefineColumn[Admin](username, "admins.fields.username").
-			SortBy(expr.Select(expr.Value(Admins.Username))).
+			SortBy(expr.Row(expr.Value(Admins.Username)).Value()).
 			FilterBy(datatable.Where(text, expr.TextRow(Admins.Username))).
 			Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
 		datatable.DefineColumn[Admin](email, "admins.fields.email").
-			SortBy(expr.Select(expr.Value(Admins.Email))).
+			SortBy(expr.Row(expr.Value(Admins.Email)).Value()).
 			FilterBy(datatable.NullableWhere(text, expr.TextNullableRow(Admins.Email))).
 			Searchable().ExportAs(datatable.NullableCell(text)).Registration(),
 	}
@@ -152,11 +152,11 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.Select(expr.At(inner, countries.Countries.Name))).
+		return rows.SelectCorrelatedScalar(correlation, expr.Row(expr.At(inner, countries.Countries.Name)).Value()).
 			Where(expr.Equal(expr.At(inner, countries.Countries.ISO2), expr.At(outer, Admins.CountryCode))).
 			OrderBy(expr.At(inner, countries.Countries.ISO2).Asc()).Limit(1)
 	}
-	sortedCountry := expr.Select(rows.CorrelatedScalarRowQuery(correlateName()))
+	sortedCountry := expr.Row(rows.CorrelatedScalarRowQuery(correlateName())).Value()
 	statusFilter := datatable.NullableWhere(
 		foundryhttp.EnumQuery[countries.Status, *countries.Status](countries.EnabledStatus.EnumDescriptor()),
 		expr.CompareNullableRow(expr.AtNullable(country, countries.Countries.Status)))
@@ -272,11 +272,11 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.Select(expr.At(inner, countries.Countries.OfficialName))).
+		return rows.SelectCorrelatedScalar(correlation, expr.Row(expr.At(inner, countries.Countries.OfficialName)).Value()).
 			Where(expr.Equal(expr.At(inner, countries.Countries.ISO2), expr.At(outer, Admins.CountryCode))).
 			OrderBy(expr.At(inner, countries.Countries.ISO2).Asc()).Limit(1)
 	}
-	selected := expr.Select(rows.CorrelatedScalarNullableRowQuery(correlate()))
+	selected := expr.Row(rows.CorrelatedScalarNullableRowQuery(correlate())).Value()
 	filter := officialNameFilter[DirectoryScope]{exists: func(p orm.Predicate[countries.Country]) expr.Predicate[DirectoryScope] {
 		return correlate(p).Exists()
 	}}
@@ -287,7 +287,7 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 	text := foundryhttp.StringQuery[string]()
 	spec.Columns = []datatable.ColumnRegistration[DirectoryScope, DirectoryRow]{
 		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country").
-			SortBy(expr.Select(expr.At(country, countries.Countries.Name))).
+			SortBy(expr.Row(expr.At(country, countries.Countries.Name)).Value()).
 			FilterBy(datatable.Where(text, expr.TextRowAt(country, countries.Countries.Name))).Registration(),
 		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName").
 			SortBy(selected).FilterBy(datatable.NullableWhere(text, filter)).Registration(),
@@ -396,7 +396,7 @@ func TestPilotDeclarationsAndSources(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, archived := range []bool{false, true} {
-		statement, err := rows.Compile(adminSource(17, archived))
+		statement, err := rows.CompileRead(rows.Read(adminSource(17, archived)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -413,7 +413,7 @@ func TestPilotDeclarationsAndSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	statement, err := rows.Compile(q)
+	statement, err := rows.CompileRead(rows.Read(q))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,7 +427,7 @@ func TestPilotDeclarationsAndSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	astatement, err := rows.Compile(aq)
+	astatement, err := rows.CompileRead(rows.Read(aq))
 	if err != nil {
 		t.Fatal(err)
 	}

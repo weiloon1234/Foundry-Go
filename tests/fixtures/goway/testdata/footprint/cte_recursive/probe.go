@@ -16,7 +16,7 @@ func Read(ctx context.Context, db *database.DB) ([]models.Order, error) {
 		return rows.SelectRecord(a, rows.Scope(a)).Where(expr.At(rows.Scope(a), models.Orders.TotalCents).Eq(0))
 	})
 	a := rows.AsRecord[tag](rows.CTE("dependent", c).Materialized(), "r")
-	return rows.SelectRecord(a, rows.Scope(a)).Limit(5).All(ctx, db)
+	return rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a)).Limit(5)).All(ctx, db)
 }
 func Locked(ctx context.Context, tx *database.Tx) ([]models.Order, error) {
 	c := rows.TransactionCTE("claimed", rows.LockedRecord(models.Orders.Query().ForUpdate().SkipLocked()))

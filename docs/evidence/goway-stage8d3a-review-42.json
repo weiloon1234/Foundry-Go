@@ -1,0 +1,1548 @@
+{
+  "base": "3d6f0379",
+  "review": "last-42.md",
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r19",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off",
+    "FOUNDRY_TEST_POSTGRES_REQUIRED": "1"
+  },
+  "audit": {
+    "rows_changed": 97,
+    "legacy_entry_points": 262,
+    "assertion_transfers": 260,
+    "decision_7_retired_mechanisms": 2,
+    "fixture_census_entries": 551,
+    "fixture_census_mismatches": 0
+  },
+  "mutation_proofs": [
+    {
+      "name": "filter-only-cte",
+      "file": "internal/querycore/relation_aggregate.go",
+      "before": "node.Selections = []SelectItem{{Expression: group}",
+      "after": "measure.Filter = nil\n\tnode.Selections = []SelectItem{{Expression: group}",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestAggregateFilterRelationQualificationAndCTEDiscovery$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-filter-only-cte.log",
+      "log_sha256": "4c89e6a84c98a56dde9cf5d112d5b137161f639e4fb06b9aa134d552227f595d",
+      "source_sha256": "eda47f5f07df96c5cd08e4931d6ee55e8749728fd3acc18323c9a9ae36e361a3",
+      "seconds": 2.17
+    },
+    {
+      "name": "filter-owner",
+      "file": "internal/querycore/relation_aggregate.go",
+      "before": "if err := measure.ValidateFilter(field, &nodes); err != nil {",
+      "after": "if err := measure.ValidateFilter(field, &nodes); false && err != nil {",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestAggregateFilterRelationQualificationAndCTEDiscovery$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-filter-owner.log",
+      "log_sha256": "1f2b225e872e10b1b3628b976d44c2124d4a4bbabee9af17c6f03dd74a11052f",
+      "source_sha256": "eda47f5f07df96c5cd08e4931d6ee55e8749728fd3acc18323c9a9ae36e361a3",
+      "seconds": 1.16
+    },
+    {
+      "name": "aggregate-cardinality",
+      "file": "internal/querycore/relation_aggregate.go",
+      "before": "if singular || unique != (FieldRef{}) {",
+      "after": "if false && (singular || unique != (FieldRef{})) {",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestAggregateFilterRelationQualificationAndCTEDiscovery$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-aggregate-cardinality.log",
+      "log_sha256": "69a600a718eb35790f96c5a0bf4669e8933cbee339af582854b00458a67c2b7f",
+      "source_sha256": "eda47f5f07df96c5cd08e4931d6ee55e8749728fd3acc18323c9a9ae36e361a3",
+      "seconds": 1.33
+    },
+    {
+      "name": "aggregate-requalification",
+      "file": "internal/querycore/requalify.go",
+      "before": "a.Field.Table = alias",
+      "after": "a.Field.Table = a.Field.Table",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestAggregateFilterRelationQualificationAndCTEDiscovery$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-aggregate-requalification.log",
+      "log_sha256": "541cb48b1fd5b988ab855ff30f4bc0d96fd7837ba5ddba9ab73393a644df723c",
+      "source_sha256": "b5c1bb2b4784f90ca3bd5e27e27a852733ac942554b23199d98a5a2ea70d4551",
+      "seconds": 1.17
+    },
+    {
+      "name": "aggregate-immutability",
+      "file": "internal/querycore/requalify.go",
+      "before": "predicates := make([]Expression, len(a.Filter.Predicates))",
+      "after": "predicates := a.Filter.Predicates",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestAggregateFilterRelationQualificationAndCTEDiscovery$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-aggregate-immutability.log",
+      "log_sha256": "2b2e5754a2eaba291e4c336d28657c5d8d2f4e66bcfa944efb411d0618eb983b",
+      "source_sha256": "b5c1bb2b4784f90ca3bd5e27e27a852733ac942554b23199d98a5a2ea70d4551",
+      "seconds": 1.14
+    },
+    {
+      "name": "aggregate-bindings",
+      "file": "internal/querycore/relation_aggregate.go",
+      "before": "node.Limit = value.Set(limit)",
+      "after": "node.Limit = value.Set(limit+1)",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestAggregateFilterRelationQualificationAndCTEDiscovery$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-aggregate-bindings.log",
+      "log_sha256": "52803d64a9d95275dbf64df8a7b4331f41940892ec862ee4ab609b64b857a9f7",
+      "source_sha256": "eda47f5f07df96c5cd08e4931d6ee55e8749728fd3acc18323c9a9ae36e361a3",
+      "seconds": 1.16
+    },
+    {
+      "name": "empty-invalid-operand",
+      "file": "internal/querycore/compiler.go",
+      "before": "argumentStart := len(c.Arguments)",
+      "after": "if e.Operator == In && len(ComparisonValues(e.Values)) == 0 { return \"FALSE\", nil }\n\targumentStart := len(c.Arguments)",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestEmptyMembershipValidatesDiscardedOperand$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-empty-invalid-operand.log",
+      "log_sha256": "6508a55c7d13f34297d1a40e51dbee923bb3874e562348e70ca1b21d3de064fd",
+      "source_sha256": "5709f43fb1fb37fd2230f2c1ff1d02b0393102e7049e16bee81097f5cd632477",
+      "seconds": 1.99
+    },
+    {
+      "name": "empty-discard-bindings",
+      "file": "internal/querycore/compiler.go",
+      "before": "c.DiscardArguments(argumentStart)",
+      "after": "_ = argumentStart",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestEmptyMembershipDiscardsComputedBindings$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-empty-discard-bindings.log",
+      "log_sha256": "65dc401098baf3d47cb5ecede85db2943a16293556c9b6b2c4c0397791d48213",
+      "source_sha256": "5709f43fb1fb37fd2230f2c1ff1d02b0393102e7049e16bee81097f5cd632477",
+      "seconds": 1.15
+    },
+    {
+      "name": "canonical-placeholder",
+      "file": "internal/querycore/value_index.go",
+      "before": "probe.Arguments = nil",
+      "after": "// do not reset existing bindings",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestCanonicalValuePlanningIsIsolated$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-canonical-placeholder.log",
+      "log_sha256": "0fe78091d7adf9af21aec5ecf129d7037728feb0ea0b808bcf55a7ae50844a0e",
+      "source_sha256": "fda6c6bcf61bc09f1ac391faea835a9fa0115faf6dffd02b5fe75dd7d46c7a9f",
+      "seconds": 1.14
+    },
+    {
+      "name": "canonical-isolation",
+      "file": "internal/querycore/value_index.go",
+      "before": "probe := *c",
+      "after": "probe := c",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestCanonicalValuePlanningIsIsolated$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-canonical-isolation.log",
+      "log_sha256": "d3f5e0c18a890c9b2221c9c146b099802b0a65a073c9e2f467201b2950cbc415",
+      "source_sha256": "fda6c6bcf61bc09f1ac391faea835a9fa0115faf6dffd02b5fe75dd7d46c7a9f",
+      "seconds": 1.11
+    },
+    {
+      "name": "page-hidden-lookahead",
+      "file": "database/orm/rows/result_read.go",
+      "before": "clear(items[request.Size:])",
+      "after": "// hidden reference left intact",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestPageFailuresAndLookaheadOwnership$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-page-hidden-lookahead.log",
+      "log_sha256": "da21e285a6ed00f04243e2528cd16d078b7e9c923dba5656523daf4636d0de65",
+      "source_sha256": "810f600d3d41e146873e54dead30b421e96ac9fe2121bea07560e8e343a0c084",
+      "seconds": 17.5
+    },
+    {
+      "name": "page-overflow-count",
+      "file": "internal/querycore/page_contract.go",
+      "before": "pages++",
+      "after": "pages += 0",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestPageFailuresAndLookaheadOwnership$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-page-overflow-count.log",
+      "log_sha256": "64e449905166bb1b485ecad510726ece414b683974a620fd492fa47499e64809",
+      "source_sha256": "1f6a6405315ae81d434b2746dacf5127d76cd2d23daec369b67ef3b1cd287414",
+      "seconds": 19.39
+    },
+    {
+      "name": "page-window-offset",
+      "file": "internal/querycore/report.go",
+      "before": "node.Offset = offset",
+      "after": "node.Offset = offset+1",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestResultPageValidationAndImmutableWindows$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-page-window-offset.log",
+      "log_sha256": "ea2720bf56ad617cbebc7f8971ced238f710d192b3bc57a684fce3b4e4cfbb7d",
+      "source_sha256": "7043aca95fe79535e794f3ef6b13a3248a3edff147943c346b06c07538cfff21",
+      "seconds": 18.62
+    },
+    {
+      "name": "nullable-lock-target",
+      "file": "internal/querycore/compile_lock.go",
+      "before": "if nullable[i] {",
+      "after": "if false && nullable[i] {",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestLockClausesRejectNullableTargets$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-nullable-lock-target.log",
+      "log_sha256": "3a150721652a5073f330d2f479ace6f3c771a0d2edeb53f4a37ed7ba1be3e7e1",
+      "source_sha256": "50916f434d817d4f363b3f9a52aba1eda0a2fcd3b5140dd1c248672856ccb648",
+      "seconds": 2.17
+    },
+    {
+      "name": "lock-combined-work",
+      "file": "internal/querycore/compile_lock.go",
+      "before": "if work > MaxExpressionNodes-c.LockWork {",
+      "after": "if false && work > MaxExpressionNodes-c.LockWork {",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestTransactionLockValidationSharesStatementBudget$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-lock-combined-work.log",
+      "log_sha256": "460f221c8c2bed2e1919f30e79b108bad2bf636c63be5470a6e6cb8d8a35537f",
+      "source_sha256": "50916f434d817d4f363b3f9a52aba1eda0a2fcd3b5140dd1c248672856ccb648",
+      "seconds": 1.17
+    },
+    {
+      "name": "lock-hidden-window",
+      "file": "internal/querycore/compile_lock.go",
+      "before": "walk.Window = func(WindowNode) {",
+      "after": "walk.Window = func(WindowNode) { return;",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestLockClausesRejectWindowsInsideCalculations$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-lock-hidden-window.log",
+      "log_sha256": "1ebada44101e09496e736e70ba6bcfb40aa760463ef3b3837ab61925c4aa911f",
+      "source_sha256": "50916f434d817d4f363b3f9a52aba1eda0a2fcd3b5140dd1c248672856ccb648",
+      "seconds": 18.23
+    },
+    {
+      "name": "lock-distinct-source",
+      "file": "internal/querycore/compile_lock.go",
+      "before": "if node.Distinct.Kind != NoDistinct || len(node.GroupBy) != 0 || len(node.Having) != 0 {",
+      "after": "if false && (node.Distinct.Kind != NoDistinct || len(node.GroupBy) != 0 || len(node.Having) != 0) {",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestLockedProjectionScopesAndDerivedSourceValidation$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-lock-distinct-source.log",
+      "log_sha256": "bc48a6a94b2e8ce0d636032f0a5ed5e9c1f056380364d4676a308d66e81a1643",
+      "source_sha256": "50916f434d817d4f363b3f9a52aba1eda0a2fcd3b5140dd1c248672856ccb648",
+      "seconds": 17.39
+    },
+    {
+      "name": "computed-cursor-sensitive",
+      "file": "internal/querycore/result_cursor.go",
+      "before": "if fields[j].Sensitive || sensitive[o.Field.Column] {",
+      "after": "if false && (fields[j].Sensitive || sensitive[o.Field.Column]) {",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestComputedCursorSensitivityWithoutModelFields$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-computed-cursor-sensitive.log",
+      "log_sha256": "23aaa965f8015365d5ba50ec321899fd25b8134c4df3cea5106f63614738719f",
+      "source_sha256": "60fa291b3af222310a0c3b3b47fef8cd3086eb648708fa5b649e824d38d53161",
+      "seconds": 18.23
+    },
+    {
+      "name": "related-cursor-sensitive",
+      "file": "internal/querycore/result_cursor.go",
+      "before": "if fields[j].Sensitive || sensitive[o.Field.Column] {",
+      "after": "if false && (fields[j].Sensitive || sensitive[o.Field.Column]) {",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestRelatedAggregateConditionalCursorSensitivity$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-related-cursor-sensitive.log",
+      "log_sha256": "1b8a8a5336f394e32243641f95194c975543e3e05951f2a27a759f3d65c46261",
+      "source_sha256": "60fa291b3af222310a0c3b3b47fef8cd3086eb648708fa5b649e824d38d53161",
+      "seconds": 18.36
+    },
+    {
+      "name": "transaction-source-stamp",
+      "file": "database/orm/rows/transaction_record.go",
+      "before": "r.Source.Node.Source.RequiresTransaction = true",
+      "after": "r.Source.Node.Source.RequiresTransaction = false",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestTransactionRecordIsStampedAtConstruction$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-transaction-source-stamp.log",
+      "log_sha256": "cdb20c6863588cdf395aec648188a0c5e739576dd02822514f5873d4e4d27e96",
+      "source_sha256": "a22b5e295b30056953b5dc4637b3eb57ee5e84f41edcc25d0c47f766098791ba",
+      "seconds": 15.98
+    },
+    {
+      "name": "extension-overflow",
+      "file": "internal/querycore/relation_loading.go",
+      "before": "if count > *remaining {",
+      "after": "if false && count > *remaining {",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestExtensionSlotLoadsInRelationBatchesWithinTheBudget$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-extension-overflow.log",
+      "log_sha256": "3b71465c0c28985db806be9da9971d03d9419d816847e1efbe397e41451e5681",
+      "source_sha256": "6f93029fe41dac140f27aff58faf6073a40f3b1fcb26e95e4aa0ea560d1ae793",
+      "seconds": 28.89
+    },
+    {
+      "name": "extension-loaded-skip",
+      "file": "internal/extensionslot/slot.go",
+      "before": "if missing && binding.Loaded(binding.Get(parent)) {",
+      "after": "if false && missing && binding.Loaded(binding.Get(parent)) {",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestExtensionSlotLoadsInRelationBatchesWithinTheBudget$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-extension-loaded-skip.log",
+      "log_sha256": "58d60ffd7029c6bdb483b928241ad33ddae2710c3e092ce33213955964852770",
+      "source_sha256": "94f103c7a0e165b5dbf6662efd1ff9719c4eb10f42ee1c7772b1da732f015c27",
+      "seconds": 26.64
+    },
+    {
+      "name": "membership-tuple-fastpath",
+      "file": "internal/querycore/cursor_predicate.go",
+      "before": "if rowKeyset(orders, keys, nullable) {",
+      "after": "if false && rowKeyset(orders, keys, nullable) {",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestKeysetPredicateUsesRowComparisonOnlyForNotNullKeys$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-membership-tuple-fastpath.log",
+      "log_sha256": "e5b79af56d26f424c2aa325c7a1cf2fe14ade5db3626e920129ca6e4f6b40f17",
+      "source_sha256": "bf76b350778a98bd23b3a5647b7608c3e5ca8698200c0c07cfc69557d0905cf6",
+      "seconds": 1.18
+    },
+    {
+      "name": "parameter-executor-snapshot",
+      "file": "internal/querycore/compiler.go",
+      "before": "value = slices.Clone(data)",
+      "after": "_ = slices.Clone(data); value = data",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestParameterCaptureAndCodecTypes$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-parameter-executor-snapshot.log",
+      "log_sha256": "7dbcc54757189fbeab0ac25387bd0d3c8ab532ddaa4eccf92803e878b4778202",
+      "source_sha256": "5709f43fb1fb37fd2230f2c1ff1d02b0393102e7049e16bee81097f5cd632477",
+      "seconds": 18.76
+    },
+    {
+      "name": "conflict-computed-mutator",
+      "file": "internal/querycore/conflict_mutator.go",
+      "before": "if field.Apply == nil {",
+      "after": "if true || field.Apply == nil {",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestConflictMutatorsRejectComputedBypassBeforeUserCode$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-conflict-computed-mutator.log",
+      "log_sha256": "f3700a358bc9478cc5c91dc829f5c54eadfbc718e705e8959c97d2bde8a15eb6",
+      "source_sha256": "ac0a71c7eb5fe6b0fa1544804da7753194e9b5ffecfc789ebb09617e1ac78a6d",
+      "seconds": 1.19
+    },
+    {
+      "name": "hook-nesting",
+      "file": "internal/lifecore/context.go",
+      "before": "if depth >= MaxDepth {",
+      "after": "if false && depth >= MaxDepth {",
+      "command": "go test -vet=off -count=1 ./internal/lifecore -run ^TestModelHookNestingBoundPreservesContext$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-hook-nesting.log",
+      "log_sha256": "32552446ad83a7486c3c229dd1541382e80b168c63ced55ff3c3ca98a7ec1d76",
+      "source_sha256": "b286190d24dd0879e54562df5b78d4bd8da9a55bfaad589b14d74b26390e0599",
+      "seconds": 0.53
+    },
+    {
+      "name": "one-of-many-winner",
+      "file": "database/orm/relation_join_plan.go",
+      "before": "q.ast.DistinctOnKey = &key",
+      "after": "_ = key; q.ast.DistinctOnKey = nil",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestOneOfManyLoadsFirstRowPerKey$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-one-of-many-winner.log",
+      "log_sha256": "c76a5759c4aba09196473f8acb02be251cdf9ecc2a2ba734ff3bb22b3c39c68b",
+      "source_sha256": "b323e9e48b8d71d5bd8be9ea4b8b2ef044638fc0bd7ae44e07a3091b9237542a",
+      "seconds": 30.31
+    },
+    {
+      "name": "one-of-many-latest",
+      "file": "database/orm/relation_join_plan.go",
+      "before": "Descending: p.choice == 2",
+      "after": "Descending: false",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestOneOfManyLoadsFirstRowPerKey$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-one-of-many-latest.log",
+      "log_sha256": "4f81d9eacb0d4fecb1866f5b50add49e4e898d74db8117cee0eb86b463e95d34",
+      "source_sha256": "b323e9e48b8d71d5bd8be9ea4b8b2ef044638fc0bd7ae44e07a3091b9237542a",
+      "seconds": 32.25
+    },
+    {
+      "name": "relation-plan-immutability",
+      "file": "database/orm/relation_scope.go",
+      "before": "return &copy",
+      "after": "_ = copy; return p",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestThroughAliasedScopesAndStableOrder$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-relation-plan-immutability.log",
+      "log_sha256": "00661fb7f9f6baf46087375d2a3e9c7750bb5db5e8b7c31985031381775d41fa",
+      "source_sha256": "74eeb523a0191334de8c1f77897ba6ef007636f4e47547cfb211c96e0c5d5459",
+      "seconds": 28.77
+    },
+    {
+      "name": "joined-row-partition",
+      "file": "internal/ormcore/relation_row.go",
+      "before": "all[r.Start+i] = destination",
+      "after": "all[i] = destination",
+      "command": "go test -vet=off -count=1 ./internal/ormcore -run ^TestRelationRowPartitionsAndValidation$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-joined-row-partition.log",
+      "log_sha256": "a1272783847c90be13c5dc68b58713980930c3c116f0d9f5aaac0969f497ce53",
+      "source_sha256": "d33f510da919a391faae0e95a0b1162b8522db6971985dd500a400813e488ec9",
+      "seconds": 1.61
+    },
+    {
+      "name": "joined-pivot-scan",
+      "file": "database/orm/relation_through_loading.go",
+      "before": "if err := hydrate(p.join.pivot.table, ormcore.RelationRow{Row: row, Start: n, Count: pc, Total: n + pc}, unsafe.Pointer(&pivot)); err != nil {",
+      "after": "if err := error(nil); err != nil {",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestJoinedHydrationPublishesOnlyCompleteTuple$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-joined-pivot-scan.log",
+      "log_sha256": "b87609a97423b01db1e63f57c08e441b4a8964a0704e84cfccae4ba661227023",
+      "source_sha256": "f0f70d76b464e1b31e5f913e1625caf8c6580d312e5c2b732a67dabea7e35bf4",
+      "seconds": 29.89
+    },
+    {
+      "name": "mutator-input-ownership",
+      "file": "internal/querycore/field_mutator.go",
+      "before": "result := slices.Clone(assignments)",
+      "after": "result := assignments; _ = slices.Clone(assignments)",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestMutationInputTransformsBeforeBindingAndRemainsReusable$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-mutator-input-ownership.log",
+      "log_sha256": "fe0fa97a7759f431480557c2db9215029e7631cedf86613e79752ab4109f0ed2",
+      "source_sha256": "d005be36a787df6a973d522c15ba6407c182aa487c57fead56b69b101e12b403",
+      "seconds": 32.77
+    },
+    {
+      "name": "timestamp-batch-sample",
+      "file": "database/orm/write.go",
+      "before": "source = fixedNow{source.Now()}",
+      "after": "// sample per row",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestModelTimestampsBulkAndConflictUseNormalizedProposedValue$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-timestamp-batch-sample.log",
+      "log_sha256": "00aecc2c671e17a408a34149c5c19f6b98a1f464ed13e5a38ccf9d20848a2d19",
+      "source_sha256": "f554c57e5458985b63d4445dc63dd10e32c2949070f4e6975b49af5c58b66d68",
+      "seconds": 27.66
+    },
+    {
+      "name": "timestamp-microseconds",
+      "file": "database/orm/write.go",
+      "before": "source.Now().UTC().Truncate(time.Microsecond)",
+      "after": "source.Now().UTC().Truncate(time.Nanosecond)",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestModelTimestampsUseOneSampleAndPreserveInputs$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-timestamp-microseconds.log",
+      "log_sha256": "8e3fb0ba111652f3ab40c40c87da2acfe8f438d73809e73f548a0084ceea3bf6",
+      "source_sha256": "f554c57e5458985b63d4445dc63dd10e32c2949070f4e6975b49af5c58b66d68",
+      "seconds": 27.71
+    },
+    {
+      "name": "timestamp-explicit-creation",
+      "file": "database/orm/write.go",
+      "before": "p.kind == querycore.InsertModel && !present(ts.Created)",
+      "after": "p.kind == querycore.InsertModel",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestModelTimestampsPreserveExplicitCreationAndSkipPhysicalDelete$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-timestamp-explicit-creation.log",
+      "log_sha256": "ea8a0b75cf41779f51caa75b795a2288c943631bf8d5101a51b42494a782770a",
+      "source_sha256": "f554c57e5458985b63d4445dc63dd10e32c2949070f4e6975b49af5c58b66d68",
+      "seconds": 29.14
+    },
+    {
+      "name": "soft-delete-unsupported",
+      "file": "database/orm/write.go",
+      "before": "kind == querycore.SoftDeleteModel || kind == querycore.RestoreModel",
+      "after": "kind == querycore.RestoreModel",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestSoftDeleteRestoreWithoutTimestampsDoesNotReadClock$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-soft-delete-unsupported.log",
+      "log_sha256": "07f1f6eb21d3582c090ee93ad796b1477a369b8d0679ec58625eb75f4ae73e46",
+      "source_sha256": "f554c57e5458985b63d4445dc63dd10e32c2949070f4e6975b49af5c58b66d68",
+      "seconds": 28.84
+    },
+    {
+      "name": "soft-delete-explicit-filter",
+      "file": "internal/querycore/soft_delete_scope.go",
+      "before": "append(slices.Clone(q.Predicates), scopes...)",
+      "after": "append(slices.Clone([]Expression{}), scopes...)",
+      "command": "go test -vet=off -count=1 ./database/orm -run ^TestSoftDeleteScopesPreserveExplicitFilters$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-soft-delete-explicit-filter.log",
+      "log_sha256": "0d100713269771c39b03426a62ac68714c73b9c2f63879ed69f384689bb83d0b",
+      "source_sha256": "1c0ebf9521b9b22dff3b1aa68324df0e003b9e575c06068a4abec1a41fd8a24d",
+      "seconds": 33.68
+    },
+    {
+      "name": "conflict-condition-cte",
+      "file": "internal/querycore/conflict_expressions.go",
+      "before": "append(slices.Clone(p.Condition), p.RowCondition...)",
+      "after": "slices.Clone(p.RowCondition)",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestConflictFilterAndAssignmentDiscoverCTEs$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-conflict-condition-cte.log",
+      "log_sha256": "ec375df63cd7b9021c9b108c79a0934b4da07c97f53e235169da4ebf154d55a3",
+      "source_sha256": "85774b13904cd0e7c666c0c948226934e786000180c259adfaf2455e46d7d541",
+      "seconds": 1.77
+    },
+    {
+      "name": "conflict-assignment-cte",
+      "file": "internal/querycore/conflict_expressions.go",
+      "before": "node.Selections = append(node.Selections, SelectItem{Expression: u.Value})",
+      "after": "// omit assignment dependencies",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestConflictFilterAndAssignmentDiscoverCTEs$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-conflict-assignment-cte.log",
+      "log_sha256": "085b2f4d5a99aaa09ffe2ea65fe6f0e52166c1eb1dfc3d340fddc820507e4041",
+      "source_sha256": "85774b13904cd0e7c666c0c948226934e786000180c259adfaf2455e46d7d541",
+      "seconds": 0.92
+    },
+    {
+      "name": "window-nth-positive",
+      "file": "internal/querycore/window_compiler.go",
+      "before": "if OffsetValue(n.N) <= 0 {",
+      "after": "if false && OffsetValue(n.N) <= 0 {",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestWindowPrivateValidationAndBudgets$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-window-nth-positive.log",
+      "log_sha256": "39df48f5889a52db24af1f72720873ee39d5fce7a4b5e1ec4b6a298253ae3bf2",
+      "source_sha256": "77f96d742e5d2d1637f5e483887937874b1f50d6c3fab35469ff9ca7b0171f90",
+      "seconds": 0.92
+    },
+    {
+      "name": "plain-order-column-identity",
+      "file": "internal/querycore/select.go",
+      "before": "if field, ok := node.Expression.(FieldRef); ok {",
+      "after": "if field, ok := node.Expression.(FieldRef); false && ok {",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestScalarOrderPaginationAndAliasPreservation$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-plain-order-column-identity.log",
+      "log_sha256": "579ff23b2fd73d804331dd367b57ef4285eceea7f5941ab1327b36130d6d3e76",
+      "source_sha256": "fe9c03dc1e3f7c573c0ae60a49ca3e999c3571d4072687ab7f0da354afb30a49",
+      "seconds": 21.23
+    },
+    {
+      "name": "conflict-index-hidden-source",
+      "file": "internal/querycore/compile_conflict_target.go",
+      "before": "walk.Err = fault.New(fault.Invalid, \"conflict index targets cannot contain subqueries\")",
+      "after": "// permit hidden SELECT",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestConflictRowsAndIndexesRejectInvalidExpressions$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-conflict-index-hidden-source.log",
+      "log_sha256": "c995980fc7afe135ddde3371a6b53b9699c67a82ce795bc6d467f09d47711bb4",
+      "source_sha256": "82aece90828ccb770f3d0aa69b417996a6e606fd92665b56569ac93e6df5443c",
+      "seconds": 1.31
+    },
+    {
+      "name": "temporal-result-validation",
+      "file": "internal/querycore/temporal_operation.go",
+      "before": "if !valid || n.Result != result {",
+      "after": "if false && (!valid || n.Result != result) {",
+      "command": "go test -vet=off -count=1 ./database/orm/rows -run ^TestTemporalOperationsValidateBeforeZeroLimit$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-temporal-result-validation.log",
+      "log_sha256": "a66541d59d04a0307a88b07e52371cf78806fdb41008e01eb5f03b490b410c33",
+      "source_sha256": "51d61eefc656ccec8934db0afaa7511aa68f964c28f19f85ea6930d42c2f1834",
+      "seconds": 19.95
+    },
+    {
+      "name": "window-correlated-partition",
+      "file": "internal/querycore/correlation_requalify.go",
+      "before": "w.Partitions[i] = r.value(v, depth+1)",
+      "after": "w.Partitions[i] = v",
+      "command": "go test -vet=off -count=1 ./internal/querycore -run ^TestWindowSubqueriesAndCorrelationKeepSelectLevels$",
+      "exit_code": 1,
+      "assertion_failed": true,
+      "log": "/private/tmp/goway-review42-mutation-window-correlated-partition.log",
+      "log_sha256": "c2ed9e0dfaad4ba33e66d901e8a441427825fd4785784c8ad018d9f5f92a2572",
+      "source_sha256": "849fab2b54f271209d17f2a7274d1a61cee698d93162f1f9f50ba4098fc2a4bd",
+      "seconds": 2.09
+    }
+  ],
+  "mutation_note": "44 focused fault-injection runs failed at the named assertions; production bytes were restored after every run, then formatted. Earlier r18 proofs are retained; the rotation did not rerun them. Failed exploratory mutations that hit redundant validation or a different expression variant were not credited.",
+  "acceptance_status": "pass",
+  "frozen_evidence": "unchanged",
+  "surface_change_this_review": "none",
+  "runtime_corrections": [
+    "Preserve plain-column identity in model and relation expression orders via querycore.ModelOrder.",
+    "Reject explicit SoftDeleteModel planning for models without soft-delete metadata."
+  ],
+  "source_hashes": {
+    "database/orm/binary_transfer_test.go": "c9f3535a61c5d39fad1ffac0d39a8cdb9e95db28049d0d575504947cc3452cd1",
+    "database/orm/chunk_test.go": "eefc497da9b9d2a558cd0cb89e380e36cf0e0cf2e24dc72e09bacaac18ab3586",
+    "database/orm/column_benchmark_test.go": "1d76b986f1cac9e3662f5fdedbb4b2905b71de0206c6a19cf56f9d6152eee953",
+    "database/orm/compile_context_transfer_test.go": "0fc0d9108b60ae525d4eecc4afe757d007856047920bd765ac2b6a6c694008f1",
+    "database/orm/compiler_transfer_test.go": "b81479d29507a32ece1d118b57209027bfcc998846a81f3dfc6f8af12815c6b2",
+    "database/orm/conflict_test.go": "e2f1d35ab102d3456f1e4996a208eb52b487926eb2ebfb4efa0397d916670e2a",
+    "database/orm/count_order_transfer_test.go": "b4a79c3405a210e9cd6b414b89e3026abfbd5c43bd01e6ff09212f53fa7c8c3e",
+    "database/orm/cursor_bench_test.go": "e949c50f98023ccfadb9325a3b10ae0fb38139e839f177b34209b5de3b60e4f5",
+    "database/orm/cursor_output_test.go": "8b21c40f6a648f4d587eb5b10eae8e93696f1ba5e13a7988768a3312c0575e7d",
+    "database/orm/cursor_transfer_bounds_test.go": "81773a8a5c342d21c98e18f510e0bf1d23fd35342e70e387b80a7230d9ea9584",
+    "database/orm/declaration_memo_transfer_test.go": "fcf948d58338102de13bcca29a55b2129fe9e2a434bd08c776bc98eb029953e0",
+    "database/orm/each_preflight_transfer_test.go": "b90a99022a98a2d3b9fe647d550ae393d78542395ad4208a2bbb3435d40384cd",
+    "database/orm/explain_postgres_test.go": "d3f11ef6670b8110d93922348ad95d155016dca4ed21db6d66b9139a5a6a6553",
+    "database/orm/explain_test.go": "ae67ed91d5002e49382ff58dd838e5affcece0096e3e9f423775b4b5a1ece27f",
+    "database/orm/extension_transfer_test.go": "c7ffa2906ab5322ea8357443ed220258aa7435f1bd1643b79400e2b0ab8a1fe5",
+    "database/orm/field_method_set_test.go": "4c5e92c3c3714371adf318b36b255dc629a3b926d1bafd8dc7a42743beb2f779",
+    "database/orm/global_scope_test.go": "ddae7cca89b0eb05c5a4097e695a4c5b03601f5ffc2486ca77a816bea5099617",
+    "database/orm/hook_transfer_test.go": "01c5f42aa44555f77221f89a7381f27a34b0c772976c2d8de6f9343110a99578",
+    "database/orm/hooks_test.go": "9958da673bd289bacf2f25960578d3f273c9f625e888977e77a786c4948e6192",
+    "database/orm/identity_transfer_test.go": "7ed6b3ad95e0dab7496a64fb9e55426cb8352c47415a023f264e62b389ac6507",
+    "database/orm/insert_transfer_test.go": "65803f35bd47cdbbb89838bea2252fae624881147e7c5ec6c6a3900a7fde2078",
+    "database/orm/integration_adapters_test.go": "35119192aaf8644175ea0676b1f4c28ffb66f3591d3bfd4abaabab96d51080e7",
+    "database/orm/lock_transfer_test.go": "e1a9dfcdb7460e762cad126e1cce8d81e34e43614940254517116b3d1c520dea",
+    "database/orm/lookup_metadata_transfer_test.go": "9aa9f9f76040879adcc73343ff3f38e48ecdffeefdf9014bfbbf0eda5eecbcf5",
+    "database/orm/lookup_review_test.go": "2aa25590d5d297a56fd3cbd7f18718c2df8549131cb28b924f158e3a3b72c358",
+    "database/orm/metadata_bench_test.go": "72679dd3fe114c9c684cabc9ff7c719f4fd1766f041d1cb3c137dbe2a66ab8d3",
+    "database/orm/mutator_transfer_test.go": "2c7a1af389c27e7cfc2b2ccea8719e67795bb3425b8f47dc75b30b03b92ba34e",
+    "database/orm/outcome_graph_test.go": "32421e78ede2257933cc6e9ae95f46c2a5e48cc9f43787a40f9699368d4ebae7",
+    "database/orm/pagination_metadata_test.go": "da0bff03a604ef35aa696a4fa328815986bf4bc587db5acc0c6ee26e47a82968",
+    "database/orm/pagination_transfer_test.go": "1058d3d3738650bd6d476f575f1aee75822562ca9d5eeea4777990336afb6244",
+    "database/orm/predicate_extensions_test.go": "88804ecb4b51d3a4b43d98047f18d18bf4232dec460c191ebba849b323f236e8",
+    "database/orm/query_core_transfer_test.go": "df0f649b3dd8233567bfe4ffc671f9b57626a49e12d4f6026904570bf2e6c123",
+    "database/orm/relation_aggregate_test.go": "2dfab9fc0b3d4dc204a611bec1d9d90025544ff9d138d37bfccc4cd0f8175a79",
+    "database/orm/relation_expression_order.go": "04f6dd5e9a1ff2f1d66f99975d8367fd390b6f50d761985ec682236e1233524e",
+    "database/orm/relation_morph_transfer_test.go": "2f47c5badaf25307eb94c083581cf26f0b623c8e69b8fcf843324643c0395b2d",
+    "database/orm/relation_transfer_test.go": "65ec1fad6085379dae43467a0d0debadf1c163af2ea1942a8ae25668baf97de7",
+    "database/orm/review_test.go": "e8d7167e6bc5096355d07cb6945294d72a5126735e03f9e525ad68840b34c05f",
+    "database/orm/rows/aggregate_filter_transfer_test.go": "89a285fd93d663c87f019702a188d04a21555b601d5ac1c4012889e81d6573f9",
+    "database/orm/rows/aggregate_test.go": "92a2732b1c12a969790ca223c9c21b6088ec0f9085b42a4ce336aae9b1c80075",
+    "database/orm/rows/binding_error_transfer_test.go": "34dc2872787a07f00d4995fee33904e5e8df98debee917fe649986240bfb6625",
+    "database/orm/rows/comparison_transfer_test.go": "c9ec845ffb80b5e2e59c927cb230f33fb9a5efa99352e9b49b35d59fc4746c6a",
+    "database/orm/rows/composition_sensitivity_transfer_test.go": "bec084159ccd389c862426cdcb3c287f7e64eca38b8fa62f79bf49ca507200bc",
+    "database/orm/rows/computed_key_transfer_test.go": "476b34572f546d2cc3f284276911b944e0a08b5b551b34aa1bfbbb7f2f6c14fe",
+    "database/orm/rows/conditional_test.go": "c58f1e5665af5558da5c21a0c42063173cc6c8e7f1468c01f0c5b74f806c7dcc",
+    "database/orm/rows/conflict_test.go": "85a705a6dc1dc5d6ec05a8bfc08153873d8800fc865abb30e51e2a5f186c3cb0",
+    "database/orm/rows/correlation_grouping_transfer_test.go": "d3299f67e9b29615ecf9e5bd03a2c1b2f10338fe435cb30bccdb71f5595cb24f",
+    "database/orm/rows/correlation_test.go": "c03c3e44c87fe83ff39902c22f232abd5ca3d2323cd1183c0e702804677584d3",
+    "database/orm/rows/correlation_transfer_test.go": "ae790ea7f28dd511e23a7d9857b1b0c9dc07761324044a6124db70cb64a8247e",
+    "database/orm/rows/cte_transfer_test.go": "59136b5282ab677bc345463e882b2655065491f0abece0a630749a5dfbf68e9e",
+    "database/orm/rows/cursor_fingerprint_test.go": "73839ae41b20adb8817c55e62df552285a41ad70ad7bdfa552c1d21cf5070de1",
+    "database/orm/rows/distinct_transfer_test.go": "3351d01dea06d7e7a60d87006ba94ca1283b02e54cb985f213309ddacd98f55e",
+    "database/orm/rows/explain_test.go": "0fd8e47788b2dd32ad404f5b1641e9fa03eb574a28a1e4d55a4919aaf63c7676",
+    "database/orm/rows/field_capability_test.go": "c5769cba4aff82749f7e36c487d2b28ca75aa0943110c27fbb3e7ec4d121827c",
+    "database/orm/rows/geographic_transfer_test.go": "cd5e5c0bf538cd672812c83b64a0f751b4c4aee7fc069c76b23e21a9d49e9acc",
+    "database/orm/rows/interval_operation_test.go": "afb42c3c3f68dbce095c9d9c1b8bd6fc79aa9e445a2e0ba1dd8981be3023efde",
+    "database/orm/rows/join_transfer_test.go": "21cac5ffcdf3e0968a7881ee41a2f0e4a45a6ef917bcf59063286b1fdc0cd053",
+    "database/orm/rows/json_test.go": "b16e20ee7063a6d97ba37a0fd291e3cb2cee2931caaf067ebaf37eac4e06958d",
+    "database/orm/rows/lateral_test.go": "55ab2d1be6f35898b5932912b2899a72589acdb79aea55bbd51a9454f42defed",
+    "database/orm/rows/lock_clauses_transfer_test.go": "80e368e306eeb59b9c76d62ac53b11e866bad3e49e6ccbc3577f01815bff5abb",
+    "database/orm/rows/materialized_winner_transfer_test.go": "9aca65c936d6caac86db6da46915d2776d80db9d5b46cbb534b659b3218c2d80",
+    "database/orm/rows/membership_postgres_transfer_test.go": "6ca4f5bbcad85bda97bf001a355abf481874cc54f17b175a36594d5947f5616c",
+    "database/orm/rows/model_selections_transfer_test.go": "9d6c284538cbfa0ea5830a380553a0fee04a71218e239e81b3b1165ce9329790",
+    "database/orm/rows/pagination_transfer_test.go": "c9439ff01fffc2e18af92d05eb5bdb214b18c20b8b0d087a6d8f5a564ca4ec6c",
+    "database/orm/rows/parameter_postgres_transfer_test.go": "3d6a9a5a8403ae9a6259453c484819148ef6cecd73f271a590006cc29550ea77",
+    "database/orm/rows/record_selection_transfer_test.go": "b0c823f828709a4caa982ee22d4c306399baec0595a7267ba6fae8ae037f019a",
+    "database/orm/rows/record_source_transfer_test.go": "22fa6753d382f98ca693b1f5699f1f3d34d266d0c296ad367d97e8543d09d7aa",
+    "database/orm/rows/recursive_transfer_test.go": "9cfc3e05ca10448b24ced77a7974cf831f3fa440711579f152f049ef9d9d4021",
+    "database/orm/rows/relative_time_transfer_test.go": "0d9886709b50294dc19acf4715447deab0efaa6ad5c5d1706ef581c00a0ca2aa",
+    "database/orm/rows/result_cursor_transfer_test.go": "8e5cd49cdbc8af1e3b7f1e343d631df727f5dd6c84e2fe2e57362f927bd8e8d4",
+    "database/orm/rows/result_sensitivity_test.go": "00211df53ca741e2971eaf4c4de457c90c010d94832c90a4fe74d3c5ef5346c3",
+    "database/orm/rows/scalar_transfer_test.go": "7168b5b59441f9b6085b3742ab194c6839782e8ef60a644cf277178ef27b586f",
+    "database/orm/rows/set_transfer_test.go": "886d33f1fa3fc1cda6ddfc879ed664f4b27a3932345fca1a94d9aa9f3369bb3e",
+    "database/orm/rows/soft_delete_transfer_test.go": "d37928a761aaf01877e4528be8866915f4afed9ddca9d7f1857c9b9c74c21524",
+    "database/orm/rows/subquery_test.go": "c62ae7676a784e78c1a234c64f242e076d3bf3da781682ac4b24ffe50f2c7ca3",
+    "database/orm/rows/subquery_transfer_test.go": "bf69bebbb749c398bdb0c049361c3de57a0995bd593fac6296b1bfcbc452910d",
+    "database/orm/rows/temporal_transfer_test.go": "ce06068fd9fcba91aa776d6b275819f31c61ea24be31403a8f913fc33bc700fe",
+    "database/orm/rows/text_insensitive_transfer_test.go": "79a94acc3e396642bf913ecee001a4a59e1eecd73f0b602b6fa4e2e5f00b2d83",
+    "database/orm/rows/transaction_composition_test.go": "7aeb85cc1b95def924895d4b0f3a32946319d4d7dd18b30f91bbf7db129a2bc8",
+    "database/orm/rows/transaction_requirement_test.go": "c35434e8e434036adec9cd77cc889b597eff991e48b2acd00e41151e1be2b4e8",
+    "database/orm/rows/transaction_transfer_test.go": "cc8cd73dea60bbe82d549eea1b3b659bec56ddf259aa257a20ab1d704256fc96",
+    "database/orm/rows/window_named_transfer_test.go": "1bd303fedccd19cb9adaa99999628f252e53acfdec86ea14ada9488fe51a7c67",
+    "database/orm/rows/window_range_test.go": "eac316ea20e8f091a2c78b1fe87840d82e22c69916629ab6640cf149dec3ba01",
+    "database/orm/rows/window_test.go": "777c017433d555686ba0bbc65916b14dbad3632fb460643818262219a9535e75",
+    "database/orm/scope_transfer_test.go": "bb94cd299cc9051f1315d0d9ea96ceff70e1e143adf214f268a75e13c6654c30",
+    "database/orm/set_write_transfer_test.go": "1914bc68194d3d003ef11464a1a113200c575304b78d8f5eeda941c5431eaa66",
+    "database/orm/soft_delete_transfer_test.go": "4d7246492b38cbe56904aeebf5dda39796b10860c107e2428084f3b7efd274a1",
+    "database/orm/source.go": "a1bb8651f2a6ecd3c097df548c3bce05225683aaccc779d40f5a7275f0025222",
+    "database/orm/source_conventions_transfer_test.go": "d83f3486df7e13aeaefc5ef2c0f6e77604258537d5ac5dcd2b928fab1673234b",
+    "database/orm/source_transfer_test.go": "8de1bc44b1b29d787a8e1f518a55a0635f44474435168f8e1e5ce7e69effc2d3",
+    "database/orm/statement_retention_test.go": "f2f2115557fdf81661e150828d4c722aed53a7c6921c14ec660320093366c1b0",
+    "database/orm/terminal_write_test.go": "c928e2589f6950ea3f3c5e29370ec6db6197dc1c77406b62e05f4fcd7d3a643d",
+    "database/orm/timestamp_transfer_test.go": "d76382ac9c498da1565a6b7b3addf5b6a46f7891b28ac6a52dd1444e9197321a",
+    "database/orm/write.go": "f554c57e5458985b63d4445dc63dd10e32c2949070f4e6975b49af5c58b66d68",
+    "database/orm/write_each_test.go": "ec716d3f888c4c4a7264a8488458cc5b5cd3872da89554fd31eabbac588063a5",
+    "database/relation/loaded_test.go": "e33c909baad051cca47f0f7019f64f098874a625fddaf3df088ddf5338883702",
+    "docs/evidence/goway-stage8d3a-transfers.json": "0c6fecef917eb1c665ad0e88b4f5aa2be365b5e2440f7b1cd70ff0a8cffb46f1",
+    "internal/lifecore/context_test.go": "245018fcd3d3809c4ccaa759fd6f4a3958fafb5807cba51ed470b3db9f19a3e6",
+    "internal/ormcore/relation_row_transfer_test.go": "93596d22275391909bba565186d2d053ac7eb5c6174d7889244a8f09c85d3533",
+    "internal/ormcore/source_match_test.go": "0b9c25b49241d904e6d57e95d5d8c36c7e9d8e3e5c82daa3546cf30b161774d1",
+    "internal/querycore/conflict_mutator_transfer_test.go": "d1e4068177bcb52b024d2aac48e1ea64b5c561043d145df89157fde2991601ce",
+    "internal/querycore/conflict_transfer_test.go": "8d23ec948842eeb4a32835ed4fdef6d059f73bbbf039e2706221c90a83777581",
+    "internal/querycore/cursor_boundary_transfer_test.go": "cfdd27f517d9445726161bb50cdd1c824478c1740837bbfe8393e2fa0767b976",
+    "internal/querycore/cursor_token_test.go": "3df1abaa85a292e7c1e8302ca033b7e72ae64b7ee3e31945ec792839a596b1e7",
+    "internal/querycore/distinct_budget_test.go": "e23bb18364635bbd930cc6dd7ef9369ea3bb526ff1fd7eb2e1f576ad55023863",
+    "internal/querycore/empty_membership_transfer_test.go": "8a70f765e6fb81bb3cfc6f987089ecbbd050f697c7cc2c0482d6dfafdd2fc3e5",
+    "internal/querycore/explain_decode_test.go": "42cb2e1b35cb7a077efa62b30ced0de11d0d72b0e93e1fe2c65bea9b09d38510",
+    "internal/querycore/having_transfer_test.go": "57dac6bd7a9fd5fbcd4b0a6dae13828f6bcf81ca4232aa9b2cf7992e6c621ef1",
+    "internal/querycore/interval_key_test.go": "f0319bfb1cd9a0c6647dab52975f2c0dacb765d291f64e92b1a0527c17af8982",
+    "internal/querycore/json_validation_transfer_test.go": "58a21e93345e2a440a8c4fe789ecd5eeabc21a482442e244fbc07f49383f350d",
+    "internal/querycore/keyset_transfer_test.go": "80c8a03d836061ae28e849bf42d318990e547730366820d8fa6da81da8332d80",
+    "internal/querycore/lateral_requalification_transfer_test.go": "6245276c0a673e665c80e05a0f1cbb98d6bb563f38a6f2bb7be16d3b2638f9a9",
+    "internal/querycore/lock_transfer_test.go": "ce992bfc152f91c4839731eee9a8c32f29ca9b843118375f715f68825011f00e",
+    "internal/querycore/lock_work_transfer_test.go": "57a6fdac4e62d5f5a1b53ec58ba326bdc14bddc3e0fbc94e6614cf29e747fdc0",
+    "internal/querycore/mutation_transfer_test.go": "48e7ba77a8ff893cd55db7b799158b13247c313392ddd6403b79b7b42aaa34b8",
+    "internal/querycore/relation_aggregate_filter_test.go": "ae81139683d479a95469ea919a8af736448fb17b2aa74b4b9956849118303590",
+    "internal/querycore/schema_literal_postgres_test.go": "8e54931b4ce0acdd836533dd246239d39417f5096da9584ff8b3c886476c1981",
+    "internal/querycore/schema_literal_test.go": "cb4b0270084945620af597714a14fc4e3b034a053293a9d250f7606a331f826b",
+    "internal/querycore/select.go": "42fcb760081cd0c34a448f3933f5d7a516e096710cf4ffb62bb9deb104a43c54",
+    "internal/querycore/source_write_transfer_test.go": "1e5350a116d0d53d793c8f661471890212ae321c6f88b03ab2f5d29ea09f38de",
+    "internal/querycore/statement_shape_alloc_test.go": "29aed536ea4b8b5f5b4bbd32a9d0c7789d4ca97e30511ec523fb42691a31271f",
+    "internal/querycore/structural_bounds_test.go": "0b9a93e33bba960f2079f419fdf9fdf18fe44cd0dc77aa036adb2051bb3fff6e",
+    "internal/querycore/subquery_budget_transfer_test.go": "78fdf86ef3e316cde93b9191e9102e120b8177c84fb80c9de200e263dffdf7f0",
+    "internal/querycore/value_plan_isolation_test.go": "9050efe418a1728499fc918ae034a3aa5f5eb84130fba3401c70050f4a511017",
+    "internal/querycore/window_transfer_test.go": "a910c5ca9012c8f196c7c1d0b3ac0fa29a090bda28019c2a756abcba305b5b46",
+    "tests/fixtures/consumer/expressionqueries/expressions_postgres_test.go": "a60967bee93fc9b0e02fdbaced64de0bbef7bb29f31aa136db3331dfdc3f1a10",
+    "tests/fixtures/consumer/keyqueries/keys_postgres_test.go": "ff3076a8fec83ab0ee44c483d7a660868f8dfdb0e8d260d701eee8d20736cb81",
+    "tests/fixtures/goway/pgsmoke/terminal_writes_test.go": "d524cd5340ebf242bf4770716f9a791563d0ac77e285c0a4bd7bb46501bc8ba0",
+    "tools/goway-retire/transfers_test.go": "7fb1ae0c5bff72f502b83722bc9334473952ccd90478214e9870d1fc46c47186"
+  },
+  "audit_guard": {
+    "command": "go test ./tools/goway-retire -count=1",
+    "exit_code": 0
+  },
+  "benchmark_note": "The one-iteration run validates all three transferred workloads; its timings are not performance evidence.",
+  "commands": [
+    {
+      "command": "go build ./...",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "go vet ./...",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "go test ./database/orm -run ^$ -bench ^BenchmarkSharedWritePlanning$ -benchtime=1x",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-workload.log",
+      "log_sha256": "618026bf53fb5ab998bd9f09108618a36e5d3c163ce1138da54511f3401154b4"
+    },
+    {
+      "command": "make test",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-root-test.log",
+      "log_sha256": "15a3c4aaea69a86567ca3484718d82a5af6b0a55ec3ad70331d473c7f6a379bd"
+    },
+    {
+      "command": "go test -race ./database/orm ./database/orm/expr ./database/orm/rows ./internal/querycore ./internal/ormcore ./internal/lifecore ./tools/goway-retire",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-races.log",
+      "log_sha256": "27b5e72e3277993a8d7328cf1f8ffc09ed10a3fa2a80053e29e9082e223eab44"
+    },
+    {
+      "command": "make fixture-check",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-fixtures.log",
+      "log_sha256": "fc91b445d73bd380d23808a425628487758d38bb2268822b19b3f88edc96bf42"
+    },
+    {
+      "command": "python3 tools/goway_catalogue.py",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-catalogue.log",
+      "log_sha256": "c26391fbffb90935522f886fee4676266ca635d72bdb93e451c1061513584342"
+    },
+    {
+      "command": "cd tests/fixtures/goway && go test -count=1 -run ^TestFootprintBudgets$ -v .",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-footprint.log",
+      "log_sha256": "370a5906efd5ee1dd8b5b4f47dd95cc346bfee5879047cd048205cc7e562bfb3"
+    },
+    {
+      "command": "make docs-check",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-docs.log",
+      "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+    },
+    {
+      "command": "make fmt-check",
+      "exit_code": 0,
+      "log": "/private/tmp/goway-8d3a-review42-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "footprint": {
+    "aggregate_families": {
+      "functions": 4339,
+      "historical_baseline": 3799,
+      "unchanged_ceiling": 4369
+    },
+    "aggregate_group": {
+      "functions": 2502,
+      "historical_baseline": 2426,
+      "unchanged_ceiling": 2790
+    },
+    "aggregate_slot_declaration": {
+      "functions": 1101,
+      "historical_baseline": 1112,
+      "unchanged_ceiling": 1279
+    },
+    "aggregate_slot_direct": {
+      "functions": 1454,
+      "historical_baseline": 1490,
+      "unchanged_ceiling": 1714
+    },
+    "aggregate_slot_nested": {
+      "functions": 2000,
+      "historical_baseline": 2048,
+      "unchanged_ceiling": 2356
+    },
+    "aggregate_slot_pivot": {
+      "functions": 2037,
+      "historical_baseline": 2095,
+      "unchanged_ceiling": 2410
+    },
+    "audit": {
+      "functions": 1306,
+      "historical_baseline": 1313,
+      "unchanged_ceiling": 1510
+    },
+    "column_encrypted_json": {
+      "functions": 1295,
+      "historical_baseline": 1217,
+      "unchanged_ceiling": 1400
+    },
+    "column_encrypted_text": {
+      "functions": 1205,
+      "historical_baseline": 1127,
+      "unchanged_ceiling": 1297
+    },
+    "column_enum": {
+      "functions": 1318,
+      "historical_baseline": 1232,
+      "unchanged_ceiling": 1417
+    },
+    "column_interval": {
+      "functions": 1267,
+      "historical_baseline": 1178,
+      "unchanged_ceiling": 1355
+    },
+    "column_json": {
+      "functions": 1365,
+      "historical_baseline": 1280,
+      "unchanged_ceiling": 1472
+    },
+    "column_nullable_encrypted_json": {
+      "functions": 1536,
+      "historical_baseline": 1449,
+      "unchanged_ceiling": 1667
+    },
+    "column_nullable_encrypted_text": {
+      "functions": 1446,
+      "historical_baseline": 1359,
+      "unchanged_ceiling": 1563
+    },
+    "column_nullable_interval": {
+      "functions": 1504,
+      "historical_baseline": 1406,
+      "unchanged_ceiling": 1617
+    },
+    "column_nullable_json": {
+      "functions": 1616,
+      "historical_baseline": 1522,
+      "unchanged_ceiling": 1751
+    },
+    "column_nullable_password": {
+      "functions": 1509,
+      "historical_baseline": 1417,
+      "unchanged_ceiling": 1630
+    },
+    "column_nullable_text": {
+      "functions": 1558,
+      "historical_baseline": 1456,
+      "unchanged_ceiling": 1675
+    },
+    "column_number": {
+      "functions": 1241,
+      "historical_baseline": 1172,
+      "unchanged_ceiling": 1348
+    },
+    "column_password": {
+      "functions": 1273,
+      "historical_baseline": 1190,
+      "unchanged_ceiling": 1369
+    },
+    "column_time": {
+      "functions": 1283,
+      "historical_baseline": 1194,
+      "unchanged_ceiling": 1374
+    },
+    "conditional_row": {
+      "functions": 1774,
+      "historical_baseline": 1681,
+      "unchanged_ceiling": 1934
+    },
+    "conditional_selected": {
+      "functions": 1618,
+      "historical_baseline": 1511,
+      "unchanged_ceiling": 1738
+    },
+    "conflict": {
+      "functions": 937,
+      "historical_baseline": 944,
+      "unchanged_ceiling": 1086
+    },
+    "conflict_advanced": {
+      "functions": 1776,
+      "historical_baseline": 1817,
+      "unchanged_ceiling": 2090
+    },
+    "correlation": {
+      "functions": 2941,
+      "historical_baseline": 2752,
+      "unchanged_ceiling": 3165
+    },
+    "cte_recursive": {
+      "functions": 1146,
+      "historical_baseline": 1076,
+      "unchanged_ceiling": 1238
+    },
+    "cursor": {
+      "functions": 1155,
+      "historical_baseline": 1127,
+      "unchanged_ceiling": 1297
+    },
+    "cursor_terminal": {
+      "functions": 1760,
+      "historical_baseline": 1793,
+      "unchanged_ceiling": 2062
+    },
+    "datatable_projection": {
+      "functions": 2980,
+      "historical_baseline": 2951,
+      "unchanged_ceiling": 3394
+    },
+    "derived_aggregates": {
+      "functions": 2777,
+      "historical_baseline": 2807,
+      "unchanged_ceiling": 3229
+    },
+    "distinct": {
+      "functions": 1143,
+      "historical_baseline": 1135,
+      "unchanged_ceiling": 1306
+    },
+    "each_soft_writes": {
+      "functions": 1535,
+      "historical_baseline": 1567,
+      "unchanged_ceiling": 1803
+    },
+    "each_writes": {
+      "functions": 841,
+      "historical_baseline": 888,
+      "unchanged_ceiling": 1022
+    },
+    "expr_arithmetic": {
+      "functions": 1225,
+      "historical_baseline": 1162,
+      "unchanged_ceiling": 1337
+    },
+    "expr_selected": {
+      "functions": 1667,
+      "historical_baseline": 1551,
+      "unchanged_ceiling": 1784
+    },
+    "extension_declaration": {
+      "functions": 11396,
+      "historical_baseline": 30434,
+      "unchanged_ceiling": 35000
+    },
+    "extension_files": {
+      "functions": 1493,
+      "historical_baseline": 1474,
+      "unchanged_ceiling": 1696
+    },
+    "extension_handles": {
+      "functions": 1475,
+      "historical_baseline": 1481,
+      "unchanged_ceiling": 1704
+    },
+    "extension_matching": {
+      "functions": 8481,
+      "historical_baseline": 8438,
+      "unchanged_ceiling": 9704
+    },
+    "extension_slots": {
+      "functions": 2436,
+      "historical_baseline": 2154,
+      "unchanged_ceiling": 2478
+    },
+    "framework_application_control": {
+      "functions": 3308,
+      "historical_baseline": 5524,
+      "unchanged_ceiling": 6353
+    },
+    "framework_attachmentstore": {
+      "functions": 4751,
+      "historical_baseline": 4729,
+      "unchanged_ceiling": 5439
+    },
+    "framework_auditstore": {
+      "functions": 4727,
+      "historical_baseline": 4753,
+      "unchanged_ceiling": 5466
+    },
+    "framework_challengestore": {
+      "functions": 2519,
+      "historical_baseline": 2558,
+      "unchanged_ceiling": 2942
+    },
+    "framework_countries": {
+      "functions": 4150,
+      "historical_baseline": 4122,
+      "unchanged_ceiling": 4741
+    },
+    "framework_extensionstore": {
+      "functions": 5584,
+      "historical_baseline": 5407,
+      "unchanged_ceiling": 6219
+    },
+    "framework_idempotencystore": {
+      "functions": 2227,
+      "historical_baseline": 2249,
+      "unchanged_ceiling": 2587
+    },
+    "framework_jobarchive": {
+      "functions": 2254,
+      "historical_baseline": 2280,
+      "unchanged_ceiling": 2622
+    },
+    "framework_mfastore": {
+      "functions": 2921,
+      "historical_baseline": 2947,
+      "unchanged_ceiling": 3390
+    },
+    "framework_notificationstore": {
+      "functions": 5109,
+      "historical_baseline": 5119,
+      "unchanged_ceiling": 5887
+    },
+    "framework_outbox": {
+      "functions": 2890,
+      "historical_baseline": 2896,
+      "unchanged_ceiling": 3331
+    },
+    "framework_pagination": {
+      "functions": 5274,
+      "historical_baseline": 5286,
+      "unchanged_ceiling": 6079
+    },
+    "framework_registration": {
+      "functions": 3969,
+      "historical_baseline": 7559,
+      "unchanged_ceiling": 8693
+    },
+    "framework_registration_option": {
+      "functions": 1001,
+      "historical_baseline": 1012,
+      "unchanged_ceiling": 1164
+    },
+    "framework_seeder": {
+      "functions": 826,
+      "historical_baseline": 867,
+      "unchanged_ceiling": 998
+    },
+    "framework_sessionstore": {
+      "functions": 4125,
+      "historical_baseline": 4166,
+      "unchanged_ceiling": 4791
+    },
+    "framework_tokenstore": {
+      "functions": 5259,
+      "historical_baseline": 5315,
+      "unchanged_ceiling": 6113
+    },
+    "framework_webhookstore": {
+      "functions": 4713,
+      "historical_baseline": 4705,
+      "unchanged_ceiling": 5411
+    },
+    "global_scopes": {
+      "functions": 1334,
+      "historical_baseline": 1374,
+      "unchanged_ceiling": 1581
+    },
+    "has": {
+      "functions": 1384,
+      "historical_baseline": 1302,
+      "unchanged_ceiling": 1498
+    },
+    "has_one": {
+      "functions": 1375,
+      "historical_baseline": 1281,
+      "unchanged_ceiling": 1474
+    },
+    "input_column_kinds": {
+      "functions": 5253,
+      "historical_baseline": 5088,
+      "unchanged_ceiling": 5852
+    },
+    "input_key": {
+      "functions": 1021,
+      "historical_baseline": 982,
+      "unchanged_ceiling": 1130
+    },
+    "json_functions": {
+      "functions": 2708,
+      "historical_baseline": 2736,
+      "unchanged_ceiling": 3147
+    },
+    "json_paths": {
+      "functions": 5680,
+      "historical_baseline": 6146,
+      "unchanged_ceiling": 7068
+    },
+    "key_chunk": {
+      "functions": 831,
+      "historical_baseline": 812,
+      "unchanged_ceiling": 934
+    },
+    "key_clauses": {
+      "functions": 2618,
+      "historical_baseline": 2674,
+      "unchanged_ceiling": 3076
+    },
+    "lateral": {
+      "functions": 2999,
+      "historical_baseline": 2852,
+      "unchanged_ceiling": 3280
+    },
+    "lifecycle_changes": {
+      "functions": 1062,
+      "historical_baseline": 1050,
+      "unchanged_ceiling": 1208
+    },
+    "lifecycle_write": {
+      "functions": 942,
+      "historical_baseline": 930,
+      "unchanged_ceiling": 1070
+    },
+    "load_query": {
+      "functions": 1226,
+      "historical_baseline": 1265,
+      "unchanged_ceiling": 1455
+    },
+    "model_type": {
+      "functions": 299,
+      "historical_baseline": 299,
+      "unchanged_ceiling": 344
+    },
+    "models": {
+      "functions": 6762,
+      "historical_baseline": 6147,
+      "unchanged_ceiling": 7070
+    },
+    "models_1": {
+      "functions": 1725,
+      "historical_baseline": 1619,
+      "unchanged_ceiling": 1862
+    },
+    "models_3": {
+      "functions": 2575,
+      "historical_baseline": 2435,
+      "unchanged_ceiling": 2801
+    },
+    "morph": {
+      "functions": 1114,
+      "historical_baseline": 1088,
+      "unchanged_ceiling": 1252
+    },
+    "mutator_explicit": {
+      "functions": 1685,
+      "historical_baseline": 1605,
+      "unchanged_ceiling": 1846
+    },
+    "mutators": {
+      "functions": 824,
+      "historical_baseline": 801,
+      "unchanged_ceiling": 922
+    },
+    "nested_with": {
+      "functions": 1375,
+      "historical_baseline": 1281,
+      "unchanged_ceiling": 1474
+    },
+    "nullable_join_chain": {
+      "functions": 1823,
+      "historical_baseline": 1695,
+      "unchanged_ceiling": 1950
+    },
+    "observer_counts": {
+      "functions": 63,
+      "historical_baseline": 63,
+      "unchanged_ceiling": 73
+    },
+    "on_comparisons": {
+      "functions": 1562,
+      "historical_baseline": 1454,
+      "unchanged_ceiling": 1673
+    },
+    "onequery": {
+      "functions": 823,
+      "historical_baseline": 803,
+      "unchanged_ceiling": 924
+    },
+    "orm_binding": {
+      "functions": 1076,
+      "historical_baseline": 1089,
+      "unchanged_ceiling": 1253
+    },
+    "orm_factory": {
+      "functions": 1068,
+      "historical_baseline": 1093,
+      "unchanged_ceiling": 1257
+    },
+    "outbox_publisher": {
+      "functions": 1293,
+      "historical_baseline": 1324,
+      "unchanged_ceiling": 1523
+    },
+    "outer_join": {
+      "functions": 1758,
+      "historical_baseline": 1668,
+      "unchanged_ceiling": 1919
+    },
+    "pilot_expressions": {
+      "functions": 1744,
+      "historical_baseline": 1767,
+      "unchanged_ceiling": 2033
+    },
+    "pivot": {
+      "functions": 1031,
+      "historical_baseline": 1005,
+      "unchanged_ceiling": 1156
+    },
+    "prune_registry": {
+      "functions": 905,
+      "historical_baseline": 933,
+      "unchanged_ceiling": 1073
+    },
+    "q_join": {
+      "functions": 1716,
+      "historical_baseline": 1598,
+      "unchanged_ceiling": 1838
+    },
+    "q_select": {
+      "functions": 864,
+      "historical_baseline": 836,
+      "unchanged_ceiling": 962
+    },
+    "q_with": {
+      "functions": 1173,
+      "historical_baseline": 1053,
+      "unchanged_ceiling": 1211
+    },
+    "raw": {
+      "functions": 1065,
+      "historical_baseline": 1045,
+      "unchanged_ceiling": 1202
+    },
+    "raw_fragments": {
+      "functions": 1349,
+      "historical_baseline": 1331,
+      "unchanged_ceiling": 1531
+    },
+    "read_record": {
+      "functions": 934,
+      "historical_baseline": 1002,
+      "unchanged_ceiling": 1153
+    },
+    "read_scalar": {
+      "functions": 1102,
+      "historical_baseline": 1165,
+      "unchanged_ceiling": 1340
+    },
+    "read_set": {
+      "functions": 982,
+      "historical_baseline": 1050,
+      "unchanged_ceiling": 1208
+    },
+    "record_distinct_on": {
+      "functions": 2018,
+      "historical_baseline": 2072,
+      "unchanged_ceiling": 2383
+    },
+    "record_sets": {
+      "functions": 1455,
+      "historical_baseline": 1288,
+      "unchanged_ceiling": 1482
+    },
+    "records": {
+      "functions": 1430,
+      "historical_baseline": 1313,
+      "unchanged_ceiling": 1510
+    },
+    "related_value": {
+      "functions": 1801,
+      "historical_baseline": 1757,
+      "unchanged_ceiling": 2021
+    },
+    "relation_expression_order": {
+      "functions": 4125,
+      "historical_baseline": 4232,
+      "unchanged_ceiling": 4867
+    },
+    "relation_filter": {
+      "functions": 1781,
+      "historical_baseline": 1831,
+      "unchanged_ceiling": 2106
+    },
+    "relation_with": {
+      "functions": 2005,
+      "historical_baseline": 1847,
+      "unchanged_ceiling": 2125
+    },
+    "relation_write_attach": {
+      "functions": 1074,
+      "historical_baseline": 1110,
+      "unchanged_ceiling": 1277
+    },
+    "relation_write_declaration": {
+      "functions": 361,
+      "historical_baseline": 361,
+      "unchanged_ceiling": 416
+    },
+    "relation_write_sync": {
+      "functions": 1088,
+      "historical_baseline": 1124,
+      "unchanged_ceiling": 1293
+    },
+    "report_filters": {
+      "functions": 2135,
+      "historical_baseline": 2095,
+      "unchanged_ceiling": 2410
+    },
+    "report_pipeline": {
+      "functions": 2069,
+      "historical_baseline": 1905,
+      "unchanged_ceiling": 2191
+    },
+    "report_reads": {
+      "functions": 1040,
+      "historical_baseline": 1063,
+      "unchanged_ceiling": 1223
+    },
+    "result_clauses": {
+      "functions": 2140,
+      "historical_baseline": 2188,
+      "unchanged_ceiling": 2517
+    },
+    "result_cursor": {
+      "functions": 2179,
+      "historical_baseline": 2229,
+      "unchanged_ceiling": 2564
+    },
+    "result_reads": {
+      "functions": 1356,
+      "historical_baseline": 1351,
+      "unchanged_ceiling": 1554
+    },
+    "retrieval_read": {
+      "functions": 800,
+      "historical_baseline": 826,
+      "unchanged_ceiling": 950
+    },
+    "role_input_same": {
+      "functions": 1332,
+      "historical_baseline": 1360,
+      "unchanged_ceiling": 1564
+    },
+    "role_lookup_input": {
+      "functions": 1186,
+      "historical_baseline": 1226,
+      "unchanged_ceiling": 1410
+    },
+    "role_primary_number": {
+      "functions": 1157,
+      "historical_baseline": 1195,
+      "unchanged_ceiling": 1375
+    },
+    "role_primary_text": {
+      "functions": 1190,
+      "historical_baseline": 1216,
+      "unchanged_ceiling": 1399
+    },
+    "role_soft_read": {
+      "functions": 1522,
+      "historical_baseline": 1548,
+      "unchanged_ceiling": 1781
+    },
+    "role_soft_write": {
+      "functions": 589,
+      "historical_baseline": 620,
+      "unchanged_ceiling": 713
+    },
+    "role_source": {
+      "functions": 874,
+      "historical_baseline": 905,
+      "unchanged_ceiling": 1041
+    },
+    "role_time_read": {
+      "functions": 1368,
+      "historical_baseline": 1394,
+      "unchanged_ceiling": 1604
+    },
+    "rows_each": {
+      "functions": 990,
+      "historical_baseline": 899,
+      "unchanged_ceiling": 1034
+    },
+    "scalar_temporal": {
+      "functions": 2598,
+      "historical_baseline": 2625,
+      "unchanged_ceiling": 3019
+    },
+    "scalar_text": {
+      "functions": 2284,
+      "historical_baseline": 2312,
+      "unchanged_ceiling": 2659
+    },
+    "scoped_write": {
+      "functions": 1080,
+      "historical_baseline": 1111,
+      "unchanged_ceiling": 1278
+    },
+    "sensitive_models": {
+      "functions": 2780,
+      "historical_baseline": 2606,
+      "unchanged_ceiling": 2997
+    },
+    "source_clauses": {
+      "functions": 2474,
+      "historical_baseline": 2505,
+      "unchanged_ceiling": 2881
+    },
+    "source_write": {
+      "functions": 1270,
+      "historical_baseline": 1311,
+      "unchanged_ceiling": 1508
+    },
+    "subqueries": {
+      "functions": 3011,
+      "historical_baseline": 2837,
+      "unchanged_ceiling": 3263
+    },
+    "table_ref": {
+      "functions": 823,
+      "historical_baseline": 803,
+      "unchanged_ceiling": 924
+    },
+    "terminal_adjustment": {
+      "functions": 1331,
+      "historical_baseline": 1382,
+      "unchanged_ceiling": 1590
+    },
+    "terminal_create_or_first": {
+      "functions": 842,
+      "historical_baseline": 880,
+      "unchanged_ceiling": 1012
+    },
+    "terminal_explain": {
+      "functions": 1291,
+      "historical_baseline": 1318,
+      "unchanged_ceiling": 1516
+    },
+    "terminal_lookup": {
+      "functions": 855,
+      "historical_baseline": 893,
+      "unchanged_ceiling": 1027
+    },
+    "terminal_prune": {
+      "functions": 902,
+      "historical_baseline": 930,
+      "unchanged_ceiling": 1070
+    },
+    "through": {
+      "functions": 950,
+      "historical_baseline": 928,
+      "unchanged_ceiling": 1068
+    },
+    "transaction_correlation": {
+      "functions": 2855,
+      "historical_baseline": 2908,
+      "unchanged_ceiling": 3345
+    },
+    "transaction_joins": {
+      "functions": 1806,
+      "historical_baseline": 1835,
+      "unchanged_ceiling": 2111
+    },
+    "transaction_records": {
+      "functions": 1375,
+      "historical_baseline": 1296,
+      "unchanged_ceiling": 1491
+    },
+    "uuid_seeks": {
+      "functions": 992,
+      "historical_baseline": 1023,
+      "unchanged_ceiling": 1177
+    },
+    "validation_database": {
+      "functions": 1410,
+      "historical_baseline": 1441,
+      "unchanged_ceiling": 1658
+    },
+    "value_sets": {
+      "functions": 2416,
+      "historical_baseline": 2230,
+      "unchanged_ceiling": 2565
+    },
+    "window_frames": {
+      "functions": 1738,
+      "historical_baseline": 1767,
+      "unchanged_ceiling": 2033
+    },
+    "window_rank": {
+      "functions": 1315,
+      "historical_baseline": 1345,
+      "unchanged_ceiling": 1547
+    },
+    "write_unset": {
+      "functions": 261,
+      "historical_baseline": 266,
+      "unchanged_ceiling": 306
+    }
+  },
+  "source_fingerprints_rechecked_after_acceptance": true,
+  "footprint_note": "All 11 counts reported in review 41 remain identical; every measured probe remains within its existing ceiling. Archive-symbol counts are not runtime-performance measurements.",
+  "final_report_docs_check": {
+    "command": "make docs-check",
+    "exit_code": 0,
+    "log": "/private/tmp/goway-8d3a-review42-final-docs.log",
+    "log_sha256": "945cf39cc04d5e4d2764a58d7495427a99b0a8c7e542101110360facceeeba06"
+  }
+}

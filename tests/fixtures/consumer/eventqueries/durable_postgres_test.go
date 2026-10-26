@@ -1,5 +1,7 @@
 package eventqueries_test
 
+import "github.com/weiloon1234/Foundry-Go"
+
 import (
 	"context"
 	"errors"
@@ -7,7 +9,7 @@ import (
 
 	"foundry.test/consumer/eventqueries"
 	"foundry.test/consumer/observerqueries"
-	"github.com/weiloon1234/Foundry-Go"
+
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"

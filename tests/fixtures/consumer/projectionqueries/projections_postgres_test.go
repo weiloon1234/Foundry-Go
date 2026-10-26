@@ -1,5 +1,7 @@
 package projectionqueries_test
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -28,11 +30,11 @@ func userSummarySelection() []rows.Mapping[models.User, reports.UserSummary] {
 func TestPostgresDeclaredProjections(t *testing.T) {
 	db := pgtest.Open(t)
 	namespace := pgtest.Namespace(t, db)
-	first, err := model.NewID[models.User]()
+	first, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := model.NewID[models.User]()
+	second, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +64,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		base := models.Users.Query().OrderBy(models.Users.Email.Asc())
 		report := rows.Select(rows.From(base), reports.UserSummaries, userSummarySelection()...)
-		statement, err := rows.Compile(report)
+		statement, err := rows.CompileRead(rows.Read(report))
 		if err != nil {
 			return err
 		}
@@ -80,7 +82,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			t.Error("projection lost model-owned IDs, nullable values or imported enum codec")
 		}
 		widened := userSummarySelection()
-		widened[2] = rows.MapSelected(reports.UserSummaries.Nickname, expr.Select(expr.NullableRow(expr.Value(models.Users.Email))))
+		widened[2] = rows.MapSelected(reports.UserSummaries.Nickname, expr.Row(expr.NullableRow(expr.Value(models.Users.Email))).Value())
 		promoted, err := rows.Read(rows.Select(rows.From(base), reports.UserSummaries, widened...)).RequireFirst(t.Context(), counter)
 		if err != nil {
 			return err
@@ -88,10 +90,10 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if nickname, ok := promoted.Nickname.Get(); !ok || nickname != promoted.Email {
 			t.Error("explicit nullable promotion changed the SQL value")
 		}
-		if n, err := rows.Count(t.Context(), counter, report); err != nil || n != 2 {
+		if n, err := rows.Read(report).Count(t.Context(), counter); err != nil || n != 2 {
 			t.Error("projection count incorrect", err)
 		}
-		if n, err := rows.Count(t.Context(), counter, rows.Offset(rows.Limit(report, 1), 1)); err != nil || n != 1 {
+		if n, err := rows.Read(rows.Offset(rows.Limit(report, 1), 1)).Count(t.Context(), counter); err != nil || n != 1 {
 			t.Error("projection count ignored selected window", err)
 		}
 		if exists, err := rows.Read(rows.Limit(report, 0)).Exists(t.Context(), counter); err != nil || exists {
@@ -116,10 +118,10 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		}
 		stop := errors.New("stop stream")
 		seen := 0
-		if err := rows.Each(t.Context(), counter, report, func(reports.UserSummary) error { seen++; return stop }); !errors.Is(err, stop) || seen != 1 {
+		if err := rows.EachRead(t.Context(), counter, rows.Read(report), func(reports.UserSummary) error { seen++; return stop }); !errors.Is(err, stop) || seen != 1 {
 			t.Error("projection did not stop and close its stream")
 		}
-		if _, err := rows.Count(t.Context(), counter, report); err != nil {
+		if _, err := rows.Read(report).Count(t.Context(), counter); err != nil {
 			return err
 		}
 		fields := models.Orders
@@ -145,10 +147,10 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 				t.Error("grouped report attached wrong buyer")
 			}
 		}
-		if n, err := rows.Count(t.Context(), counter, totals); err != nil || n != 2 {
+		if n, err := rows.Read(totals).Count(t.Context(), counter); err != nil || n != 2 {
 			t.Error("grouped projection count counted input items", err)
 		}
-		if n, err := rows.Count(t.Context(), counter, totals.Where(expr.ModelPredicate(fields.BuyerID.Eq(first)))); err != nil || n != 1 {
+		if n, err := rows.Read(totals.Where(expr.ModelPredicate(fields.BuyerID.Eq(first)))).Count(t.Context(), counter); err != nil || n != 1 {
 			t.Error("grouped projection lost typed input filters", err)
 		}
 		ranked := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows, selection...), expr.Group(expr.Value(fields.BuyerID))), expr.Sum(fields.TotalCents).Desc(), expr.Value(fields.BuyerID).Asc())
@@ -167,7 +169,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if len(qualifiedRows) != 1 || qualifiedRows[0].BuyerID != first {
 			t.Error("HAVING did not filter grouped totals")
 		}
-		if n, err := rows.Count(t.Context(), counter, qualified); err != nil || n != 1 {
+		if n, err := rows.Read(qualified).Count(t.Context(), counter); err != nil || n != 1 {
 			t.Error("Count ignored HAVING", err)
 		}
 		if exists, err := rows.Read(rows.Offset(qualified, 1)).Exists(t.Context(), counter); err != nil || exists {
@@ -189,7 +191,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 				t.Error("WHERE did not filter aggregate inputs")
 			}
 		}
-		if n, err := rows.Count(t.Context(), counter, rows.Having(ranked, expr.Count[models.Order]().In())); err != nil || n != 0 {
+		if n, err := rows.Read(rows.Having(ranked, expr.Count[models.Order]().In())).Count(t.Context(), counter); err != nil || n != 0 {
 			t.Error("empty aggregate membership matched groups", err)
 		}
 		scalar := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Total, expr.Sum(fields.TotalCents).Value()), rows.MapSelected(reports.OrderSummaries.Count, expr.Count[models.Order]().Value()))
@@ -208,7 +210,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if !summary.Total.IsNull() || summary.Count != 0 {
 			t.Error("empty scalar aggregate projection lost its single NULL/zero result")
 		}
-		if n, err := rows.Count(t.Context(), counter, scalar.Where(expr.ModelPredicate(fields.TotalCents.Lt(0)))); err != nil || n != 1 {
+		if n, err := rows.Read(scalar.Where(expr.ModelPredicate(fields.TotalCents.Lt(0)))).Count(t.Context(), counter); err != nil || n != 1 {
 			t.Error("scalar aggregate result count confused with input count", err)
 		}
 		emptyScalar := scalar.Where(expr.ModelPredicate(fields.TotalCents.Lt(0)))
@@ -221,7 +223,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			{expr.Sum(fields.TotalCents).Gt(decimal.FromInt64(0)).Not(), 0},
 			{expr.Count[models.Order]().Eq(0), 1}, {expr.Exists[models.Order]().Eq(false), 1},
 		} {
-			if n, err := rows.Count(t.Context(), counter, rows.Having(emptyScalar, check.condition)); err != nil || n != check.count {
+			if n, err := rows.Read(rows.Having(emptyScalar, check.condition)).Count(t.Context(), counter); err != nil || n != check.count {
 				t.Error("scalar HAVING changed SQL NULL or empty-group semantics", err)
 			}
 		}
@@ -246,7 +248,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if items, err := report.All(t.Context(), counter); err == nil || items != nil {
 			t.Error("bad projected enum published partial result")
 		}
-		if _, err := rows.Count(t.Context(), counter, report); err != nil {
+		if _, err := rows.Read(report).Count(t.Context(), counter); err != nil {
 			return err
 		}
 		return nil

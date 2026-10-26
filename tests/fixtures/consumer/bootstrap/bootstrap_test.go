@@ -43,11 +43,11 @@ func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
 	disk.Local.Root = root
 	settings.App.Services.Storage.Disks = infrastructure.Disks{"default": disk}
 	var err error
-	settings.MemberID, err = model.NewID[Member]()
+	settings.MemberID, err = model.NewIDAt[Member](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	settings.OperatorID, err = model.NewID[Operator]()
+	settings.OperatorID, err = model.NewIDAt[Operator](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

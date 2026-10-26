@@ -29,12 +29,12 @@ func nullableOrderedRow[S any, V orderedScalar](v Selected[S, value.Nullable[V]]
 
 // OrderRow exposes ordered comparisons on a row value. Example: expr.OrderRow(expr.Value(Users.Age)).Gt(18).
 func OrderRow[S any, V orderedScalar](v RowValue[S, V]) OrderedRowExpression[S, V] {
-	return orderedRow(Select(v))
+	return orderedRow(Row(v).Value())
 }
 
 // OrderNullableRow exposes present-value comparisons. Example: expr.OrderNullableRow(expr.Value(Users.Birthday)).IsNull().
 func OrderNullableRow[S any, V orderedScalar](v RowValue[S, value.Nullable[V]]) NullableOrderedRowExpression[S, V] {
-	return nullableOrderedRow(Select(v))
+	return nullableOrderedRow(Row(v).Value())
 }
 
 // Eq compares row values before grouping. Example: expression.Eq(value).

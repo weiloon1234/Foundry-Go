@@ -397,7 +397,7 @@ func TestRetainedConnectionsSurviveGapsAndPresenceIsResynchronized(t *testing.T)
 	time.Sleep(100 * time.Millisecond)
 	// A remote member joined while this instance was not listening: only the
 	// resynchronization after the gap can reveal it.
-	remote, err := model.NewID[ws.Connection]()
+	remote, err := model.NewIDAt[ws.Connection](time.Now())
 	must(t, err)
 	scope := ws.Scope{Channel: channel.ID(), Room: "1", HasRoom: true}
 	f.mu.Lock()
@@ -507,7 +507,7 @@ func TestExclusionsNeverReachOlderInstancesAndUnknownEnvelopesAreDropped(t *test
 	}
 	// A connection of another instance can be excluded only once the fleet
 	// is known to understand the envelope field.
-	elsewhere, err := model.NewID[ws.Connection]()
+	elsewhere, err := model.NewIDAt[ws.Connection](time.Now())
 	must(t, err)
 	if _, err := ws.Publish(t.Context(), s.hub, channel, int64(1), out, Payload{"x"}, ws.ExceptConnection(elsewhere)); !ws.NotPublished(err) || !errors.Is(err, fault.Invalid) {
 		t.Fatal("remote exclusion was published without the fleet setting", err)

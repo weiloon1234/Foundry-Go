@@ -74,12 +74,12 @@ func TestPostgresSelectedValueComparisons(t *testing.T) {
 				t.Fatal(rows, err)
 			}
 		}
-		email := expr.LowerValue(expr.Select(expr.Value(f.Email)))
+		email := expr.LowerValue(expr.Row(expr.Value(f.Email)).Value())
 		rows, err := rowset.ReadScalar(rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), email), expr.Group(expr.Value(f.Email))), expr.LikeValue(email, expr.Param(f.Email, "a%").Value()))).All(t.Context(), tx)
 		if err != nil || !reflect.DeepEqual(rows, []string{"a@example.test"}) {
 			t.Fatal(rows, err)
 		}
-		nickname := expr.LowerNullableValue(expr.Select(expr.Value(f.Nickname)))
+		nickname := expr.LowerNullableValue(expr.Row(expr.Value(f.Nickname)).Value())
 		nullable, err := rowset.ReadScalar(rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), nickname), expr.Group(expr.Value(f.Nickname))), expr.LikeNullableValue(nickname, expr.Nullable(expr.Param(f.Email, "b%").Value())))).All(t.Context(), tx)
 		if err != nil || len(nullable) != 1 {
 			t.Fatal(nullable, err)
@@ -110,7 +110,7 @@ func TestComparisonFailuresBeforeExecution(t *testing.T) {
 		expr.Equal[models.User, int](nil, expr.Value(f.Age)),
 		expr.Equal(expr.Value(f.Email), expr.Param(f.Email, "\x00")),
 		expr.Equal(expr.NullableRow(expr.Value(f.Age)), rowset.ScalarRowQuery(rowset.From(q), rowset.Scalar[models.User, int]{})),
-		rowset.ScalarRowQuery(rowset.From(q), rowset.SelectScalar(rowset.From(q), expr.Select(expr.Value(f.Nickname)))).IsNull(),
+		rowset.ScalarRowQuery(rowset.From(q), rowset.SelectScalar(rowset.From(q), expr.Row(expr.Value(f.Nickname)).Value())).IsNull(),
 		expr.Equal(outerOnly, expr.NullableRow(expr.Count[models.User]().Param(1))),
 	} {
 		if _, err := expr.Where(q.Limit(0), condition).All(t.Context(), queryfixture.NoQueries(t)); !errors.Is(err, fault.Invalid) {

@@ -52,7 +52,7 @@ func TestReportTextNestedEmbedding(t *testing.T) {
 	input := forged{Enum: models.Users.Status}
 	// Keep the exact reviewed call, including explicit type arguments and Gt.
 	p := expr.TextRow[models.User, models.Status](input).Gt(models.StatusActive)
-	_, err := rowset.Compile(rowset.FromModel(models.Users.Query()).Where(p))
+	_, err := rowset.CompileRead(rowset.Read(rowset.FromModel(models.Users.Query()).Where(p)))
 	assertReportTextRejected(t, err)
 	for name, column := range map[string]orm.TextExpressionColumn[models.User, models.Status, models.Status]{"value": input, "pointer": &input} {
 		t.Run(name, func(t *testing.T) {
@@ -72,11 +72,14 @@ func TestReportTextNestedEmbedding(t *testing.T) {
 				"or":             expr.Or(text.Eq(models.StatusActive), expr.ModelPredicate(models.Users.Age.Gt(1))),
 			}
 			for name, p := range checks {
-				t.Run(name, func(t *testing.T) { _, err := rowset.Compile(q.Where(p)); assertReportTextRejected(t, err) })
+				t.Run(name, func(t *testing.T) {
+					_, err := rowset.CompileRead(rowset.Read(q.Where(p)))
+					assertReportTextRejected(t, err)
+				})
 			}
-			_, err := rowset.Compile(rowset.GroupBy(q, expr.Group(text)))
+			_, err := rowset.CompileRead(rowset.Read(rowset.GroupBy(q, expr.Group(text))))
 			assertReportTextRejected(t, err)
-			_, err = rowset.Compile(rowset.DistinctOnValues(q, text.Value().Key()))
+			_, err = rowset.CompileRead(rowset.Read(rowset.DistinctOnValues(q, text.Value().Key())))
 			assertReportTextRejected(t, err)
 		})
 	}
@@ -105,11 +108,14 @@ func TestReportNullableTextNestedEmbedding(t *testing.T) {
 				"or":             expr.Or(text.Eq(models.StatusActive), expr.ModelPredicate(f.State.IsNull())),
 			}
 			for name, p := range checks {
-				t.Run(name, func(t *testing.T) { _, err := rowset.Compile(q.Where(p)); assertReportTextRejected(t, err) })
+				t.Run(name, func(t *testing.T) {
+					_, err := rowset.CompileRead(rowset.Read(q.Where(p)))
+					assertReportTextRejected(t, err)
+				})
 			}
-			_, err := rowset.Compile(rowset.GroupBy(q, expr.Group(text)))
+			_, err := rowset.CompileRead(rowset.Read(rowset.GroupBy(q, expr.Group(text))))
 			assertReportTextRejected(t, err)
-			_, err = rowset.Compile(rowset.DistinctOnValues(q, text.Value().Key()))
+			_, err = rowset.CompileRead(rowset.Read(rowset.DistinctOnValues(q, text.Value().Key())))
 			assertReportTextRejected(t, err)
 		})
 	}
@@ -156,11 +162,14 @@ func assertReportTextOperationsRejected[M any](t *testing.T, source orm.Query[M]
 		"like": text.Like(v), "ilike": text.ILike(v), "contains": text.Contains(v), "icontains": text.IContains(v),
 		"starts": text.StartsWith(v), "ends": text.EndsWith(v), "istarts": text.IStartsWith(v), "iends": text.IEndsWith(v),
 	} {
-		t.Run(name, func(t *testing.T) { _, err := rowset.Compile(q.Where(p)); assertReportTextRejected(t, err) })
+		t.Run(name, func(t *testing.T) {
+			_, err := rowset.CompileRead(rowset.Read(q.Where(p)))
+			assertReportTextRejected(t, err)
+		})
 	}
 	for name, order := range map[string]expr.Order[M]{"asc": text.Asc(), "desc": text.Desc(), "nulls_first": text.Asc().NullsFirst(), "nulls_last": text.Desc().NullsLast()} {
 		t.Run(name, func(t *testing.T) {
-			_, err := rowset.Compile(rowset.OrderBy(q, order))
+			_, err := rowset.CompileRead(rowset.Read(rowset.OrderBy(q, order)))
 			assertReportTextRejected(t, err)
 		})
 	}
@@ -168,10 +177,10 @@ func assertReportTextOperationsRejected[M any](t *testing.T, source orm.Query[M]
 	db := capture.open(t.Context())
 	defer db.Close(t.Context())
 	bad := q.Where(text.Gt(v))
-	_, err := rowset.Count(t.Context(), db, bad)
+	_, err := rowset.Read(bad).Count(t.Context(), db)
 	assertReportTextRejected(t, err)
 	called := false
-	err = rowset.Each(t.Context(), db, bad, func(M) error { called = true; return nil })
+	err = rowset.EachRead(t.Context(), db, rowset.Read(bad), func(M) error { called = true; return nil })
 	assertReportTextRejected(t, err)
 	if capture.statements != 0 || called {
 		t.Fatal("invalid adapter reached SQL or yield callback")
@@ -180,11 +189,11 @@ func assertReportTextOperationsRejected[M any](t *testing.T, source orm.Query[M]
 
 func TestReportTextSupportedFamilies(t *testing.T) {
 	ordinary := rowset.FromModel(models.Users.Query()).Where(expr.TextRow(models.Users.Email).Gt("ada@example.test"), expr.TextNullableRow(models.Users.Nickname).Contains("Ada"))
-	if _, err := rowset.Compile(ordinary); err != nil {
+	if _, err := rowset.CompileRead(rowset.Read(ordinary)); err != nil {
 		t.Fatal(err)
 	}
 	input := rowset.FromModel(mutators.Members.Query()).Where(expr.TextRow(mutators.Members.Email).Gt("ada@example.test"), expr.TextNullableRow(mutators.Members.Note).Contains("Ada"))
-	if _, err := rowset.Compile(input); err != nil {
+	if _, err := rowset.CompileRead(rowset.Read(input)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -203,14 +212,14 @@ func TestReportRelationNestedTargetMarker(t *testing.T) {
 	r := reportForgedRelation{Relation: models.UserRelations.Orders}
 	q := rowset.FromModel(models.Users.Query())
 	for _, ps := range [][]expr.Predicate[models.User]{nil, {expr.ModelPredicate(orm.WhereRaw[models.User]("TRUE"))}} {
-		_, err := rowset.Compile(q.Where(expr.Has[models.User, models.User](r, ps...)))
+		_, err := rowset.CompileRead(rowset.Read(q.Where(expr.Has[models.User, models.User](r, ps...))))
 		if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "relation model types do not match bound metadata") {
 			t.Fatalf("promoted relation target accepted: %v", err)
 		}
 	}
 	// Embedding does not itself invalidate a relation when its own plan agrees.
 	r.Relation = models.UserRelations.Introducer
-	if _, err := rowset.Compile(q.Where(expr.Has[models.User, models.User](r))); err != nil {
+	if _, err := rowset.CompileRead(rowset.Read(q.Where(expr.Has[models.User, models.User](r)))); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -232,7 +241,7 @@ func TestReportModelPredicateNestedRelationTargetMarker(t *testing.T) {
 					"Has":        orm.Has[models.User, models.User](relation, ps...),
 					"DoesntHave": orm.DoesntHave[models.User, models.User](relation, ps...),
 				} {
-					_, err := rowset.Compile(q.Where(expr.ModelPredicate(predicate)))
+					_, err := rowset.CompileRead(rowset.Read(q.Where(expr.ModelPredicate(predicate))))
 					if matching {
 						if err != nil {
 							t.Fatalf("matching %s (%s): %v", operation, name, err)

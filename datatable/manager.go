@@ -334,7 +334,7 @@ func (t Table[S, R, A]) Query(ctx context.Context, m *Manager, subject A, reques
 			return err
 		}
 		err = m.read(ctx, func(tx *database.Tx) error {
-			total, err := rows.Count(ctx, tx, source.count)
+			total, err := rows.Read(source.count).Count(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -422,7 +422,7 @@ func (t Table[S, R, A]) Count(ctx context.Context, m *Manager, subject A, reques
 		}
 		return m.read(ctx, func(tx *database.Tx) error {
 			var err error
-			result, err = rows.Count(ctx, tx, source.count)
+			result, err = rows.Read(source.count).Count(ctx, tx)
 			return err
 		})
 	})

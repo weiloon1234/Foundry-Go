@@ -7,4 +7,4 @@ import (
 )
 
 var field rows.Field[struct{ N int64 }, int64]
-var _ = rows.MapSelected(field, expr.Lag(expr.Select(expr.Value(models.Orders.TotalCents)), 1, expr.WindowFor(rows.ModelScope(models.Orders.Query()))))
+var _ = rows.MapSelected(field, expr.Lag(expr.Row(expr.Value(models.Orders.TotalCents)).Value(), 1, expr.WindowFor(rows.ModelScope(models.Orders.Query()))))

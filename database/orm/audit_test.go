@@ -1,5 +1,7 @@
 package orm
 
+import "time"
+
 import (
 	"database/sql/driver"
 	"errors"
@@ -284,7 +286,7 @@ func TestAuditKeepsPersistedPrimaryCodec(t *testing.T) {
 
 func TestAuditNullableEncryptionDoesNotBindUnsealedValues(t *testing.T) {
 	table := secureRecords()
-	id, err := model.NewID[secureRecord]()
+	id, err := model.NewIDAt[secureRecord](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

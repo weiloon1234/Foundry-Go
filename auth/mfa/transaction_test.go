@@ -76,7 +76,7 @@ func (b *protocolBackend) Within(ctx context.Context, address Address, identity 
 			*b.seen = record.Clone()
 		}
 		if b.mode == "different-record" {
-			record.ID, _ = model.NewID[Record]()
+			record.ID, _ = model.NewIDAt[Record](time.Now())
 		}
 		return value.Set(record), nil
 	}

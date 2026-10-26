@@ -27,7 +27,7 @@ type legacyEnvelopeReader struct {
 	Payload     json.RawMessage    `json:"payload"`
 }
 
-func decodeLegacyEnvelope(data []byte) error {
+func decodeEnvelopeV1(data []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	var envelope legacyEnvelopeReader
@@ -56,7 +56,7 @@ func TestJobTraceRequiresExplicitVersionedWorkersFirstRollout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decodeLegacyEnvelope(legacyBytes) != nil || strings.Contains(string(legacyBytes), "envelope_version") || strings.Contains(string(legacyBytes), "trace") {
+	if decodeEnvelopeV1(legacyBytes) != nil || strings.Contains(string(legacyBytes), "envelope_version") || strings.Contains(string(legacyBytes), "trace") {
 		t.Fatal("default producer broke older strict readers")
 	}
 	traced, err := definition.Capture(ctx, payload{Labels: map[string]string{}}, jobs.Options[payload]{PropagateTrace: true})
@@ -67,7 +67,7 @@ func TestJobTraceRequiresExplicitVersionedWorkersFirstRollout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decodeLegacyEnvelope(tracedBytes) == nil {
+	if decodeEnvelopeV1(tracedBytes) == nil {
 		t.Fatal("legacy reader incorrectly claimed traced-format compatibility")
 	}
 	for _, data := range [][]byte{legacyBytes, tracedBytes} {

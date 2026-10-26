@@ -23,7 +23,7 @@ func Correlated() orm.Query[models.User] {
 
 func Combined() orm.Query[models.User] {
 	q := models.Users.Query()
-	scalar := rows.Values(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(models.Users.Nickname))))
+	scalar := rows.Values(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(models.Users.Nickname)).Value()))
 	set := rows.UnionAllValues(scalar, scalar)
 	rank := expr.RowNumber(expr.Window[rows.Set[value.Nullable[string]]]{}.OrderBy(set.Value().Asc()))
 	selected := rows.DistinctOnValueSet(set, rank.Key()).OrderBy(rank.Asc()).Limit(2)

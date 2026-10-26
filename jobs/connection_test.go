@@ -1,5 +1,7 @@
 package jobs_test
 
+import "time"
+
 import (
 	"context"
 	"errors"
@@ -85,7 +87,7 @@ func TestBoundConnectionQueueIdentityIsolationAndSchedule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	occurrence, err := model.NewID[schedule.Occurrence]()
+	occurrence, err := model.NewIDAt[schedule.Occurrence](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

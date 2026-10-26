@@ -56,9 +56,9 @@ func TestExtensionAdapterBatchAndMissingParity(t *testing.T) {
 			var result []extensionModel
 			var err error
 			if missing {
-				result, err = LoadMissing(t.Context(), db, parents, p)
+				result, err = LoadMissingFrom(t.Context(), db, fields.Query().With(p), parents)
 			} else {
-				result, err = Load(t.Context(), db, parents, p)
+				result, err = LoadFrom(t.Context(), db, fields.Query().With(p), parents)
 			}
 			if parents[0].External.Loaded {
 				t.Fatal("caller mutated")

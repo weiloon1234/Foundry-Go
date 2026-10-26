@@ -74,7 +74,7 @@ func TestPostgresIntervalWritesAndDecodeFailure(t *testing.T) {
 		if rows, err := q.OrderBy(f.ID.Asc()).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("bad later row published partial models", rows, err)
 		}
-		if rows, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(f.ID.Asc())), expr.Select(expr.Value(f.Period)))).All(t.Context(), tx); err == nil || rows != nil {
+		if rows, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(f.ID.Asc())), expr.Row(expr.Value(f.Period)).Value())).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("bad later row published partial values", rows, err)
 		}
 		return nil

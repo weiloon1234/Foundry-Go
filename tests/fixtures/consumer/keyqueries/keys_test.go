@@ -30,11 +30,11 @@ func TestComputedKeyContracts(t *testing.T) {
 	if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(base), expr.RowNumber(window)))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rowset.Compile(rowset.OrderBy(rowset.DistinctOnValues(rowset.FromModel(base), selected.Key()), bucket.Asc(), expr.Value(u.Age).Asc())); err != nil {
+	if _, err := rowset.CompileRead(rowset.Read(rowset.OrderBy(rowset.DistinctOnValues(rowset.FromModel(base), selected.Key()), bucket.Asc(), expr.Value(u.Age).Asc()))); err != nil {
 		t.Fatal(err)
 	}
 	for _, invalid := range []rowset.Scalar[models.User, int]{
-		rowset.GroupByScalar(rowset.SelectScalar(rowset.From(base), expr.Select(expr.Value(u.Age))), expr.Group(bucket)),
+		rowset.GroupByScalar(rowset.SelectScalar(rowset.From(base), expr.Row(expr.Value(u.Age)).Value()), expr.Group(bucket)),
 		rowset.GroupByScalar(rowset.SelectScalar(rowset.From(base), bucket.Value()), expr.Group(bucket), expr.Group(bucket)),
 		rowset.OrderScalar(rowset.DistinctOnScalar(rowset.SelectScalar(rowset.From(base), bucket.Value()), expr.Group(bucket)), expr.Value(u.Age).Asc()),
 		rowset.DistinctOnScalarValues(rowset.SelectScalar(rowset.From(base), bucket.Value())),

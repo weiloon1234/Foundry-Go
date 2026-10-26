@@ -75,6 +75,7 @@ import (
  "net/http"
  "net/http/httptest"
  "testing"
+ "time"
  foundryhttp "github.com/weiloon1234/Foundry-Go/http"
  "github.com/weiloon1234/Foundry-Go/model"
  "github.com/weiloon1234/Foundry-Go/decimal"
@@ -85,7 +86,7 @@ func TestGeneratedRoute(t *testing.T) {
  if len(metadata)!=7{t.Fatal("fresh path metadata missing")}
  for _,parameter:=range metadata {if parameter.Scalar==nil{t.Fatal("fresh path scalar missing",parameter.Name)}}
  if metadata[4].Scalar.Syntax!=foundryhttp.EnumURLSyntax || len(metadata[4].Scalar.Value.Cases)!=1{t.Fatal("fresh enum metadata missing")}
- id,err:=model.NewID[Member]();if err!=nil{t.Fatal(err)}
+ id,err:=model.NewIDAt[Member](time.Now());if err!=nil{t.Fatal(err)}
  date,err:=temporal.ParseDate("2026-09-14");if err!=nil{t.Fatal(err)}
  amount,err:=decimal.Parse("12345678901234567890.123456789");if err!=nil{t.Fatal(err)}
  input:=MemberPath{Member:id,Code:"a/b",Revision:17,Active:true,State:Active,Date:date,Amount:amount}

@@ -1,0 +1,15 @@
+old	new	reason
+legacy_having_predicate_conversion	native_having_predicate_conversion	expr.HavingPredicate[scope] cannot acquire expr.Predicate[scope]
+legacy_insert_update_mapping_conversion	native_insert_update_mapping_conversion	orm.InsertMapping[scope, scope] cannot acquire orm.UpdateMapping[scope, scope]
+legacy_json_ordered_conversion	native_json_ordered_conversion	orm.JSON[scope, int64] cannot acquire orm.Number[scope, int64]
+legacy_lookup_reader_conversion	native_lookup_reader_conversion	orm.ValueLookup[scope, int64] cannot acquire orm.KeyLookup[scope, int64]
+legacy_nullable_json_conversion	native_nullable_json_conversion	orm.NullableJSON[scope, int64] cannot acquire orm.JSON[scope, int64]
+legacy_nullable_json_ordered_conversion	native_nullable_json_ordered_conversion	orm.NullableJSON[scope, int64] cannot acquire orm.NullableNumber[scope, int64]
+legacy_nullable_ordered_conversion	native_nullable_ordered_conversion	orm.NullableColumn[scope, int64] cannot acquire orm.Number[scope, int64]
+legacy_projection_key_conversion	native_projection_key_conversion	expr.ProjectionKey[scope] cannot acquire expr.GroupKey[scope]
+legacy_source_mutation_conversion	native_source_mutation_conversion	orm.UpdateSource[scope, scope] cannot acquire orm.DeleteSource[scope, scope]
+legacy_value_case_conversion	native_value_case_conversion	expr.ValueCase[scope, int64] cannot acquire expr.Case[scope, int64]
+legacy_value_comparison_conversion	native_value_comparison_conversion	expr.ValueComparison[scope, int64] cannot acquire expr.RowExpression[scope, int64]
+legacy_transaction_record_conversion	native_transaction_record_conversion	Transaction requirement cannot be removed by conversion.
+old_text_comparison_owner_conversion	text_comparison_owner_conversion	Existing exact native owner-conversion case remains executable.
+old_text_comparison_nullable_owner_conversion	text_comparison_nullable_owner_conversion	Existing exact native owner-conversion case remains executable.

@@ -89,7 +89,7 @@ func FoundryOrderBy[M any](q Query[M], o ormcore.Order, seal sqlowner.QuerySeal)
 
 	source := ormcore.Source{Scope: reflect.TypeFor[M](), Owners: map[string]any{q.state.ast.Table: q.state.table}}
 	err := errors.Join(o.Err, ormcore.CheckReferenceSet(source, o.Refs, o.ReferenceFree))
-	order := querycore.QueryOrder{Computed: &querycore.ComputedOrder{Expression: o.Node.Expression}, Descending: o.Node.Descending, Nulls: o.Node.Nulls}
+	order := querycore.ModelOrder(o.Node)
 	return q.OrderBy(Order[M]{owner: q.state.table, core: order, err: err})
 }
 

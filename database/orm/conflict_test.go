@@ -254,3 +254,59 @@ func TestConflictCaptureFamilies(t *testing.T) {
 		}
 	}
 }
+
+func TestConflictMutatorsNormalizeLiteralAssignmentsOnce(t *testing.T) {
+	var calls []string
+	transform := func(name string) func(string) (string, error) {
+		return func(s string) (string, error) {
+			calls = append(calls, name+":"+s)
+			return strings.ToLower(strings.TrimSpace(s)), nil
+		}
+	}
+	d := transformFields(transform("first"), transform("last"), transform("maybe"))
+	policy := OnConflict(ConflictKey(d.Key())).DoUpdate(ConflictSet(d.Last, " LAST "), ConflictSet(d.First, " FIRST "))
+	input := [][]Assignment[transformRow]{{d.Key().Set(1), d.First.Set(" A "), d.Last.Set(" B ")}, {d.Key().Set(2), d.First.Set(" C "), d.Last.Set(" D ")}}
+	var args [][]any
+	db := testDB(t, testConnector{bindings: &args, columns: []string{"id", "first", "maybe", "last"}, values: [][]driver.Value{{int64(1), "first", nil, "last"}}})
+	for range 2 {
+		calls = nil
+		if _, e := UpsertMany(t.Context(), db, d.Query(), policy, input); e != nil {
+			t.Fatal(e)
+		}
+		if !reflect.DeepEqual(calls, []string{"first: A ", "last: B ", "first: C ", "last: D ", "first: FIRST ", "last: LAST "}) {
+			t.Fatal("declaration-order policy mutation", calls)
+		}
+	}
+	if !reflect.DeepEqual(args[0], []any{int64(1), "a", "b", int64(2), "c", "d", "first", "last"}) || !reflect.DeepEqual(args[0], args[1]) {
+		t.Fatal("reusable policy inputs", args)
+	}
+	for _, u := range []ConflictUpdate[transformRow]{ConflictNull(d.Maybe), ConflictIncoming(d.Maybe)} {
+		calls = nil
+		if _, e := UpsertMany(t.Context(), db, d.Query(), policy.DoUpdate(u), input); e != nil || len(calls) != 4 {
+			t.Fatal("NULL/incoming invoked mutator", calls, e)
+		}
+	}
+}
+func TestConflictMutatorsPreserveErrorsAndPrivateInputs(t *testing.T) {
+	stop := errors.New("reject conflict value")
+	d := transformFields(func(s string) (string, error) {
+		if s == "private-input" {
+			return "", stop
+		}
+		return s, nil
+	}, func(s string) (string, error) { return s, nil }, func(s string) (string, error) { return s, nil })
+	update := ConflictSet(d.First, "private-input")
+	policy := OnConflict(ConflictKey(d.Key())).DoUpdate(update)
+	var sql []string
+	db := testDB(t, testConnector{statements: &sql})
+	if _, e := Upsert(t.Context(), db, d.Query(), policy, d.Key().Set(1), d.First.Set("input"), d.Last.Set("input")); !errors.Is(e, stop) || len(sql) != 0 {
+		t.Fatal("policy-only failure lost identity or reached SQL", e, sql)
+	}
+	for _, v := range []any{update, policy} {
+		for _, format := range []string{"%v", "%#v"} {
+			if strings.Contains(fmt.Sprintf(format, v), "private-input") {
+				t.Fatal("policy diagnostic disclosed input")
+			}
+		}
+	}
+}

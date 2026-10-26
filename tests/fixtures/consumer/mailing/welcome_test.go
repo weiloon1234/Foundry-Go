@@ -1,12 +1,14 @@
 package mailing_test
 
+import "github.com/weiloon1234/Foundry-Go"
+
 import (
 	"context"
 	"strings"
 	"testing"
 
 	"foundry.test/consumer/mailing"
-	"github.com/weiloon1234/Foundry-Go"
+
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/email/memory"
 	"github.com/weiloon1234/Foundry-Go/foundation"

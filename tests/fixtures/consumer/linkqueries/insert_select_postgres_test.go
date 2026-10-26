@@ -135,7 +135,7 @@ func TestPostgresInsertSelectBoundsVetoAndOuterRollback(t *testing.T) {
 						return errors.New("literal setter veto was bypassed")
 					}
 				case "unique_violation":
-					id, err := model.NewID[linkqueries.Archive]()
+					id, err := model.NewIDAt[linkqueries.Archive](time.Now())
 					if err != nil {
 						return err
 					}

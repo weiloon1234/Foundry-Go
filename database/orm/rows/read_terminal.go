@@ -68,11 +68,11 @@ func eachRead[R any](ctx context.Context, ex database.Executor, r ormcore.Record
 		source := r.Source
 		source.Checks = ormcore.AppendChecks(source.Checks, r.Record.Checks...)
 		// Reuse the DTO stream owner for row closure and isolated delivery.
-		return Each(ctx, ex, Query[R, R]{source: source, decode: func(row database.Row) (R, error) {
+		return streamRows(ctx, ex, source, func(row database.Row) (R, error) {
 			var item R
 			err := r.Record.Scan(row, unsafe.Pointer(&item))
 			return item, err
-		}}, yield)
+		}, yield)
 	}
 	index := -1
 	for i, column := range r.Record.Columns {

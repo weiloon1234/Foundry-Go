@@ -61,7 +61,7 @@ func runConditionalNew(g *goldenCapture) {
 	age := expr.OrderRow(expr.At(rowset.Scope(a), models.Users.Age))
 	email := expr.At(rowset.Scope(a), models.Users.Email)
 	nickname := expr.At(rowset.Scope(a), models.Users.Nickname)
-	fallback := expr.Select(email).Param("")
+	fallback := expr.Row(email).Value().Param("")
 	choice := expr.When(age.Gt(18), expr.Coalesce(nickname, email)).When(age.Gt(10), fallback).Else(email)
 	nullable := expr.When(age.Gt(0), choice).ElseNull()
 	s := conditionalRows

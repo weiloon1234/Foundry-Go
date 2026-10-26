@@ -19,7 +19,7 @@ func TestPostgresScalarRowsAndComparisonDiscovery(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		q := models.Users.Query()
 
-		middle := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(models.Users.Age))), expr.Value(models.Users.Age).Asc()), 1), 1))
+		middle := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(models.Users.Age)).Value()), expr.Value(models.Users.Age).Asc()), 1), 1))
 		items, err := expr.Where(q, expr.GreaterNullable(expr.NullableRow(expr.Value(models.Users.Age)), middle)).All(t.Context(), tx)
 		if err != nil || len(items) != 1 || items[0].ID != users[2].ID {
 			t.Fatal(items, err)
@@ -31,7 +31,7 @@ func TestPostgresScalarRowsAndComparisonDiscovery(t *testing.T) {
 		}
 		cte := rows.AsRecord[thresholdAlias](rows.CTE("adult_threshold", rows.ModelRecord(q.Where(models.Users.Age.Gt(20)))), "threshold")
 		cf := rows.Scope(cte)
-		threshold := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OrderScalar(rows.SelectScalar(cte, expr.Select(expr.At(cf, models.Users.Age))), expr.At(cf, models.Users.Age).Asc()), 1))
+		threshold := rows.ScalarRowQuery(rows.From(q), rows.LimitScalar(rows.OrderScalar(rows.SelectScalar(cte, expr.Row(expr.At(cf, models.Users.Age)).Value()), expr.At(cf, models.Users.Age).Asc()), 1))
 		selected := expr.Where(q, expr.Equal(expr.Value(models.Users.Age), expr.Coalesce(threshold, expr.Param(models.Users.Age, -1))))
 		statement, err := orm.Compile(selected)
 		if err != nil || !strings.HasPrefix(statement.SQL(), "WITH ") {
@@ -41,13 +41,13 @@ func TestPostgresScalarRowsAndComparisonDiscovery(t *testing.T) {
 		if err != nil || len(items) != 1 || items[0].ID != users[1].ID {
 			t.Fatal(items, err)
 		}
-		empty := rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q.Limit(0)), expr.Select(expr.Value(models.Users.Age))))
+		empty := rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q.Limit(0)), expr.Row(expr.Value(models.Users.Age)).Value()))
 		if n, err := expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(models.Users.Age)), empty)).Count(t.Context(), tx); err != nil || n != 0 {
 			t.Fatal("empty scalar lost NULL", n, err)
 		}
 		// No implicit limit may hide invalid scalar cardinality.
 		err = tx.Savepoint(t.Context(), func(inner *database.Tx) error {
-			_, err := expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(models.Users.Age)), rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q), expr.Select(expr.Value(models.Users.Age)))))).All(t.Context(), inner)
+			_, err := expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(models.Users.Age)), rows.ScalarRowQuery(rows.From(q), rows.SelectScalar(rows.From(q), expr.Row(expr.Value(models.Users.Age)).Value())))).All(t.Context(), inner)
 			return err
 		})
 		var dbError *database.Error

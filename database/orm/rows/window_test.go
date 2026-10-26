@@ -20,11 +20,12 @@ func TestWindowsBindingsNamesAndImmutability(t *testing.T) {
 	source := FromModel(d.Query())
 	v := expr.Value(d.Exact)
 	w := expr.WindowFor(ModelScope(d.Query())).PartitionBy(expr.Group(v)).OrderBy(v.Desc()).RowsBetween(expr.Preceding(2), expr.CurrentRow()).ExcludeTies()
-	previous := expr.LagOr(expr.Select(v), 1, int64(99), w)
+	previous := expr.LagOr(expr.Row(v).Value(), 1, int64(99), w)
 	q := OrderBy(Distinct(expressionQuery(source, previous, codec.Signed[int64]()).Where(v.Ne(7))), previous.Asc())
+	q = Limit(q, 4)
 	s := expressionSQL(t, q)
-	want := `SELECT DISTINCT LAG("aggregate_records"."exact", $1, $2) OVER (PARTITION BY "aggregate_records"."exact" ORDER BY "aggregate_records"."exact" DESC ROWS BETWEEN $3 PRECEDING AND CURRENT ROW EXCLUDE TIES) AS "value" FROM "aggregate_records" WHERE ("aggregate_records"."exact" <> $4) ORDER BY 1 ASC`
-	if s.SQLText != want || !reflect.DeepEqual(s.Bindings, []any{int64(1), int64(99), int64(2), int64(7)}) {
+	want := `SELECT DISTINCT LAG("aggregate_records"."exact", $1, $2) OVER (PARTITION BY "aggregate_records"."exact" ORDER BY "aggregate_records"."exact" DESC ROWS BETWEEN $3 PRECEDING AND CURRENT ROW EXCLUDE TIES) AS "value" FROM "aggregate_records" WHERE ("aggregate_records"."exact" <> $4) ORDER BY 1 ASC LIMIT $5`
+	if s.SQLText != want || !reflect.DeepEqual(s.Bindings, []any{int64(1), int64(99), int64(2), int64(7), int64(4)}) {
 		t.Fatal(s.SQLText, s.Bindings)
 	}
 	_ = w.PartitionBy(expr.Group(expr.Value(d.Name))).RowsBetween(expr.CurrentRow(), expr.Following(1)).ExcludeNone().OrderBy(v.Asc())
@@ -50,8 +51,8 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 	v := expr.Value(d.Exact)
 	base := expr.WindowFor(ModelScope(d.Query()))
 	w := base.OrderBy(v.Asc())
-	r := expr.NumericRange(base, expr.Select(v))
-	fr := expr.NumericRange(base, expr.Select(expr.Value(d.Approx)))
+	r := expr.NumericRange(base, expr.Row(v).Value())
+	fr := expr.NumericRange(base, expr.Row(expr.Value(d.Approx)).Value())
 	invalid := map[string]expr.Window[aggregateRecord]{
 		"missing scope":              expr.WindowFor(expr.Scope[aggregateRecord, aggregateRecord]{}),
 		"foreign declaration":        expr.WindowFor(ModelScope(other.Query())),
@@ -64,6 +65,8 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 		"zero boundary":              w.RowsBetween(expr.FramePosition{}, expr.CurrentRow()),
 		"negative offset":            w.RowsBetween(expr.Preceding(-1), expr.CurrentRow()),
 		"backwards boundary":         w.RowsBetween(expr.CurrentRow(), expr.Preceding(1)),
+		"invalid end":                w.RowsBetween(expr.UnboundedPreceding(), expr.UnboundedPreceding()),
+		"oversized order":            w.OrderBy(make([]expr.ProjectionOrder[aggregateRecord], querycore.MaxExpressionNodes+1)...),
 		"invalid start":              w.RowsBetween(expr.UnboundedFollowing(), expr.CurrentRow()),
 		"groups need order":          base.GroupsBetween(expr.CurrentRow(), expr.CurrentRow()),
 		"nested order":               w.OrderBy(expr.RowNumber(base).Asc()),
@@ -75,7 +78,7 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 		"negative range":             r.Between(r.Preceding(-1), r.CurrentRow()),
 		"nonfinite range":            fr.Between(fr.Preceding(math.Inf(1)), fr.CurrentRow()),
 		"extra range order":          r.Between(r.CurrentRow(), r.Following(2)).OrderBy(v.Asc()),
-		"preexisting range order":    expr.NumericRange(w, expr.Select(v)).Between(r.CurrentRow(), r.CurrentRow()),
+		"preexisting range order":    expr.NumericRange(w, expr.Row(v).Value()).Between(r.CurrentRow(), r.CurrentRow()),
 		"zero range":                 (expr.RangeWindow[aggregateRecord, int64]{}).Between(r.CurrentRow(), r.CurrentRow()),
 	}
 	for name, window := range invalid {
@@ -116,8 +119,8 @@ func TestWindowsResultFamiliesAndHydration(t *testing.T) {
 	d := declareAggregateRecords()
 	source := FromModel(d.Query())
 	w := expr.WindowFor(ModelScope(d.Query())).OrderBy(expr.Value(d.Exact).Asc())
-	v := expr.Select(expr.Value(d.Exact))
-	n := expr.Select(expr.Value(d.MaybeExact))
+	v := expr.Row(expr.Value(d.Exact)).Value()
+	n := expr.Row(expr.Value(d.MaybeExact)).Value()
 	for name, e := range map[string]expr.Selected[aggregateRecord, value.Nullable[int64]]{
 		"lag": expr.Lag(v, 1, w), "lead": expr.Lead(v, -1, w), "first": expr.FirstValue(v, w), "last": expr.LastValue(v, w), "nth": expr.NthValue(v, 2, w),
 		"lag nullable": expr.LagNullable(n, 1, w), "lead nullable": expr.LeadNullable(n, 1, w), "first nullable": expr.FirstNullableValue(n, w), "last nullable": expr.LastNullableValue(n, w), "nth nullable": expr.NthNullableValue(n, 2, w),

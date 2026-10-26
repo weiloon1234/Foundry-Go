@@ -145,7 +145,7 @@ func TestPostgresSlotLinksMatchCollectionLinks(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	loaded, err := orm.Load(t.Context(), f.DB, []ownerModel{owner}, gallery.Relation(fields.Gallery))
+	loaded, err := orm.LoadFrom(t.Context(), f.DB, fields.Query().With(gallery.Relation(fields.Gallery)), []ownerModel{owner})
 	if err != nil {
 		t.Fatal(err)
 	}

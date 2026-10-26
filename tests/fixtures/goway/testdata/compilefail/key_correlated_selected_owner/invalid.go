@@ -9,6 +9,6 @@ import (
 var c = rows.Correlate(rows.From(models.Users.Query()), rows.From(models.Orders.Query()))
 var scope = rows.InnerScope(c, rows.ModelScope(models.Orders.Query()))
 var child = expr.At(scope, models.Orders.TotalCents)
-var scalar = rows.SelectCorrelatedScalar(c, expr.Select(child))
+var scalar = rows.SelectCorrelatedScalar(c, expr.Row(child).Value())
 
-var invalid = rows.DistinctOnCorrelatedScalarValues(scalar, expr.Select(expr.Value(models.Orders.TotalCents)).Key())
+var invalid = rows.DistinctOnCorrelatedScalarValues(scalar, expr.Row(expr.Value(models.Orders.TotalCents)).Value().Key())

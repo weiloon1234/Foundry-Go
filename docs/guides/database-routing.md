@@ -34,8 +34,8 @@ Without a configured replica, reads use the primary pool. A configured replica
 failure returns an error; it never silently falls back.
 
 ```go
-recent, err := models.QueryUsers().Limit(10).All(ctx, db)
-consistent, err := models.QueryUsers().Limit(10).All(ctx, db.Primary())
+recent, err := models.Users.Query().Limit(10).All(ctx, db)
+consistent, err := models.Users.Query().Limit(10).All(ctx, db.Primary())
 ```
 
 Replica reads do not promise immediate visibility of a primary commit. Keep

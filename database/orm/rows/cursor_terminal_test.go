@@ -38,7 +38,7 @@ func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	foreign := declareMembers()
 	for _, bad := range []CursorQuery[member]{
 		{}, base, base.UniqueBy(expr.Group(id), expr.Group(id)),
-		base.UniqueBy(expr.Group(expr.Select(id).Param(1))),
+		base.UniqueBy(expr.Group(expr.Row(id).Value().Param(1))),
 		base.UniqueBy(expr.Group(expr.At(base.Scope(), foreign.ID))),
 		valid.OrderBy(expr.Negate(id).Asc()),
 		valid.OrderBy(id.Asc().NullsLast()),
@@ -54,8 +54,8 @@ func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	if err != nil || again.SQL() != s.SQL() {
 		t.Fatal("validation mutated cursor", err)
 	}
-	scalar := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Select(expr.Value(m.Nickname)))))
-	scalar = scalar.UniqueBy(scalar.Key())
+	scalar := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Nickname)).Value())))
+	scalar = scalar.UniqueBy(expr.Group(scalar.Value()))
 	if _, err := CompileValueCursor(scalar); err != nil {
 		t.Fatal(err)
 	}

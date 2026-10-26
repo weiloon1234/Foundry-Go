@@ -1,5 +1,7 @@
 package consumer_test
 
+import "time"
+
 import (
 	"foundry.test/consumer/catalog"
 	"foundry.test/consumer/catalog/status"
@@ -10,7 +12,7 @@ import (
 )
 
 func TestHandwrittenConsumerPackageGraph(t *testing.T) {
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +40,7 @@ func TestHandwrittenConsumerPackageGraph(t *testing.T) {
 
 // The importing package needs no generated model output to construct a typed key assignment.
 func TestCrossPackageBusinessAssignmentHelper(t *testing.T) {
-	id, err := model.NewID[models.User]()
+	id, err := model.NewIDAt[models.User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

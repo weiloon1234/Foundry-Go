@@ -100,7 +100,7 @@ func TestPostgresIntervalSelectedAndNullable(t *testing.T) {
 			t.Fatal(empty, err)
 		}
 		window := expr.WindowFor(rows.ModelScope(q))
-		shifted := expr.ShiftDateNullableValue(expr.Nullable(expr.Select(expr.Value(f.Date))), expr.Over(expr.AvgInterval(f.Period).Filter(expr.ModelPredicate(orm.NumberKey(f.ID).Lt(4))), window))
+		shifted := expr.ShiftDateNullableValue(expr.Nullable(expr.Row(expr.Value(f.Date)).Value()), expr.Over(expr.AvgInterval(f.Period).Filter(expr.ModelPredicate(orm.NumberKey(f.ID).Lt(4))), window))
 		if got := intervalOne(t, tx, shifted); got != value.Of(mustLocal(t, "2024-03-01T00:00:00")) {
 			t.Fatal(got)
 		}

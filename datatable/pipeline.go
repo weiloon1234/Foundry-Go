@@ -148,7 +148,7 @@ func (d *tableDefinition[S, R, A]) scoped(ctx context.Context, subject A, action
 	result := scopedSource[S, R]{rows: rows.ReorderUnwindowed(filtered, p.orders...), count: filtered}
 	// Compiling the ordered result also rejects windowed/DISTINCT ON sources
 	// before the unordered count can run.
-	if err := rows.Preflight(ctx, result.rows); err != nil {
+	if err := rows.PreflightRead(ctx, rows.Read(result.rows)); err != nil {
 		return scopedSource[S, R]{}, err
 	}
 	if err := ctx.Err(); err != nil {

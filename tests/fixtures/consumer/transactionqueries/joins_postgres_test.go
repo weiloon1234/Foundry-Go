@@ -25,17 +25,17 @@ func TestPostgresTransactionOuterAndCrossJoins(t *testing.T) {
 					joined := rows.TransactionLeftJoin(left, right, on)
 					a := recordAt(rows.LeftScope(joined, rows.TransactionScope(left)))
 					b := nullableRecordAt(rows.NullableRightScope(joined, rows.TransactionScope(right)))
-					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.NullableRow(a.ID).Value()), rows.MapSelected(Pairs.Right, expr.Select(b.ID))).All(ctx, tx)
+					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.NullableRow(a.ID).Value()), rows.MapSelected(Pairs.Right, expr.Row(b.ID).Value())).All(ctx, tx)
 				case "right":
 					joined := rows.TransactionRightJoin(left, right, on)
 					a := nullableRecordAt(rows.NullableLeftScope(joined, rows.TransactionScope(left)))
 					b := recordAt(rows.RightScope(joined, rows.TransactionScope(right)))
-					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.Select(a.ID)), rows.MapSelected(Pairs.Right, expr.NullableRow(b.ID).Value())).All(ctx, tx)
+					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.Row(a.ID).Value()), rows.MapSelected(Pairs.Right, expr.NullableRow(b.ID).Value())).All(ctx, tx)
 				case "full":
 					joined := rows.TransactionFullJoin(left, right, on)
 					a := nullableRecordAt(rows.NullableLeftScope(joined, rows.TransactionScope(left)))
 					b := nullableRecordAt(rows.NullableRightScope(joined, rows.TransactionScope(right)))
-					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.Select(a.ID)), rows.MapSelected(Pairs.Right, expr.Select(b.ID))).All(ctx, tx)
+					pairs, err = rows.SelectTransaction(joined, Pairs, rows.MapSelected(Pairs.Left, expr.Row(a.ID).Value()), rows.MapSelected(Pairs.Right, expr.Row(b.ID).Value())).All(ctx, tx)
 				case "cross":
 					joined := rows.TransactionCrossJoin(left, right)
 					a := recordAt(rows.LeftScope(joined, rows.TransactionScope(left)))

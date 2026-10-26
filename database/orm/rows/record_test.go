@@ -23,7 +23,7 @@ func TestCompleteRecordAliasesAndWindows(t *testing.T) {
 	a := AsRecord[left](RecordOf(q), "report")
 	selected := SelectRecord(a, Scope(a)).Where(At(Scope(a), schema.ID).Ne(0)).Limit(1)
 	state := &driverState{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(3), "Ada"}}}
-	got, err := selected.All(t.Context(), openTest(t, state))
+	got, err := ReadRecord(selected).All(t.Context(), openTest(t, state))
 	if err != nil || !reflect.DeepEqual(got, []record{{3, "Ada"}}) {
 		t.Fatal(got, err)
 	}
@@ -47,20 +47,20 @@ func TestSelectRecordPreservedModelAndForeignDeclaration(t *testing.T) {
 	j := LeftJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), o.MemberID)))
 	good := SelectRecord(j, LeftScope(j, Scope(a)))
 	state := &driverState{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "Ada", nil}}}
-	if got, err := good.All(t.Context(), openTest(t, state)); err != nil || len(got) != 1 || got[0].Name != "Ada" {
+	if got, err := ReadRecord(good).All(t.Context(), openTest(t, state)); err != nil || len(got) != 1 || got[0].Name != "Ada" {
 		t.Fatal(got, err)
 	}
 	foreign := As[left](declareMembers().Query(), "a")
 	bad := SelectRecord(j, LeftScope(j, Scope(foreign)))
 	state = &driverState{}
-	if got, err := bad.All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
+	if got, err := ReadRecord(bad).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 		t.Fatal(got, err, state.sql)
 	}
 	// Even a forged preserved scope must not bypass the shared nullable-side check.
 	data := expr.FoundryNullableScopeData(NullableRightScope(j, Scope(b)), sqlowner.Expressions())
 	forged := expr.FoundryScope[Left[Alias[left, member], Alias[right, order]], order](data, sqlowner.Expressions())
 	state = &driverState{}
-	if _, err := SelectRecord(j, forged).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
+	if _, err := ReadRecord(SelectRecord(j, forged)).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal(err, state.sql)
 	}
 }
@@ -71,7 +71,7 @@ func TestRecordRejectsIncompleteScalarAndWrongRuntimeType(t *testing.T) {
 	for _, r := range records {
 		a := AsRecord[left](r, "bad")
 		state := &driverState{}
-		if _, err := SelectRecord(a, Scope(a)).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
+		if _, err := ReadRecord(SelectRecord(a, Scope(a))).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
 			t.Fatal(err, state.sql)
 		}
 	}
@@ -117,7 +117,7 @@ func TestRecordModelLifecycleAndFailureOwnership(t *testing.T) {
 				}}
 			}))
 			a := AsRecord[left](ModelRecord(m.Query()), "a")
-			got, err := SelectRecord(a, Scope(a)).All(t.Context(), openTest(t, state))
+			got, err := ReadRecord(SelectRecord(a, Scope(a))).All(t.Context(), openTest(t, state))
 			if bad == "" {
 				if err != nil || len(got) != 1 || calls != 1 || factories != 1 {
 					t.Fatal(got, err, calls, factories)

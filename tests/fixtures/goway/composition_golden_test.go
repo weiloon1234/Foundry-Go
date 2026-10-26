@@ -47,7 +47,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 	a := models.Orders.Query().Where(models.Orders.TotalCents.Gt(10)).OrderBy(models.Orders.TotalCents.Desc()).Limit(2).Offset(1)
 	b := models.Orders.Query().Where(models.Orders.TotalCents.Gt(20))
 	if strings.HasPrefix(kind, "value_") {
-		x, y := rowset.Values(rowset.SelectScalar(rowset.From(a), expr.Select(expr.Value(models.Orders.TotalCents)))), rowset.Values(rowset.SelectScalar(rowset.From(b), expr.Select(expr.Value(models.Orders.TotalCents))))
+		x, y := rowset.Values(rowset.SelectScalar(rowset.From(a), expr.Row(expr.Value(models.Orders.TotalCents)).Value())), rowset.Values(rowset.SelectScalar(rowset.From(b), expr.Row(expr.Value(models.Orders.TotalCents)).Value()))
 		var q rowset.ValueSetQuery[int64]
 		switch kind {
 		case "value_Union":
@@ -63,7 +63,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 		case "value_ExceptAll":
 			q = rowset.ExceptAllValues(x, y)
 		}
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.OrderBy(q.Value().Asc()).Limit(3).Offset(2).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.ReadValues(q.OrderBy(q.Value().Asc()).Limit(3).Offset(2)).All(ctx, db))}))
 		return
 	}
 	if strings.HasPrefix(kind, "set_") {
@@ -83,7 +83,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 		case "set_ExceptAll":
 			q = rowset.ExceptAll(x, y)
 		}
-		got := must(q.Where(expr.At(q.Scope(), models.Orders.TotalCents).Ne(0)).OrderBy(expr.At(q.Scope(), models.Orders.TotalCents).Asc()).Limit(3).Offset(2).All(ctx, db))
+		got := must(rowset.ReadSet(q.Where(expr.At(q.Scope(), models.Orders.TotalCents).Ne(0)).OrderBy(expr.At(q.Scope(), models.Orders.TotalCents).Asc()).Limit(3).Offset(2)).All(ctx, db))
 		for _, r := range got {
 			fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
 		}
@@ -101,9 +101,9 @@ func runCompositionNew(g *goldenCapture, kind string) {
 		return
 	}
 	if kind == "projection" {
-		p := rowset.Select(rowset.From(a), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(expr.Value(models.Orders.TotalCents)))))
+		p := rowset.Select(rowset.From(a), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.Value(models.Orders.TotalCents)).Value())))
 		alias := rowset.AsRecord[joinA](rowset.CTE("summary", rowset.RecordOf(p)), "r")
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectRecord(alias, rowset.Scope(alias)).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.ReadRecord(rowset.SelectRecord(alias, rowset.Scope(alias))).All(ctx, db))}))
 		return
 	}
 	c := rowset.CTE("eligible", rowset.ModelRecord(a))
@@ -124,7 +124,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 		}
 	}
 	alias := rowset.AsRecord[joinA](c, "r")
-	for _, r := range must(rowset.SelectRecord(alias, rowset.Scope(alias)).All(ctx, db)) {
+	for _, r := range must(rowset.ReadRecord(rowset.SelectRecord(alias, rowset.Scope(alias))).All(ctx, db)) {
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
 	}
 }

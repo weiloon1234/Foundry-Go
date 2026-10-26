@@ -13,6 +13,6 @@ var parentScope = rows.OuterScope(link, rows.ModelScope(models.Users.Query()))
 var childScope = rows.InnerScope(link, rows.ModelScope(models.Orders.Query()))
 var parentID = expr.At(parentScope, models.Users.ID)
 var buyerID = expr.At(childScope, models.Orders.BuyerID)
-var selected = rows.SelectCorrelatedScalar(link.Where(expr.Equal(buyerID, parentID)), expr.Select(buyerID))
+var selected = rows.SelectCorrelatedScalar(link.Where(expr.Equal(buyerID, parentID)), expr.Row(buyerID).Value())
 
 var _ = rows.SelectScalar(child, rows.CorrelatedScalarQuery(selected))

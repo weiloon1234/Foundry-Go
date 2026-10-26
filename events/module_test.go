@@ -1,12 +1,13 @@
 package events_test
 
+import "github.com/weiloon1234/Foundry-Go"
+
 import (
 	"context"
 	"errors"
 	"sync/atomic"
 	"testing"
 
-	"github.com/weiloon1234/Foundry-Go"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"

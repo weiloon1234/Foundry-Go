@@ -36,7 +36,7 @@ func readUsers(t *testing.T, tx database.Executor, definition rowset.CommonTable
 	t.Helper()
 	source := rowset.AsRecord[resultAlias](definition, "result")
 	fields := rowset.Scope(source)
-	rows, err := rowset.SelectRecord(source, rowset.Scope(source)).OrderBy(expr.At(fields, models.Users.Email).Asc()).All(t.Context(), tx)
+	rows, err := rowset.ReadRecord(rowset.SelectRecord(source, rowset.Scope(source)).OrderBy(expr.At(fields, models.Users.Email).Asc())).All(t.Context(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func checkRecursiveComposition(t *testing.T, tx *database.Tx, tree rowset.Common
 	if strings.Count(s.SQL(), `"descendants" ("id"`) != 1 {
 		t.Fatal("shared recursive CTE was emitted more than once")
 	}
-	ids := rowset.SelectScalar(combined, expr.Select(expr.At(fields, models.Users.ID)))
+	ids := rowset.SelectScalar(combined, expr.Row(expr.At(fields, models.Users.ID)).Value())
 	if n, err := models.Users.Query().Where(orm.Has(models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, rowset.InQuery(expr.Value(models.Users.ID), ids))))).Count(ctx, tx); err != nil || n != 2 {
 		t.Fatal("relationship predicate lost recursive CTE dependency", err)
 	}
@@ -198,7 +198,7 @@ func checkRecursiveProjection(t *testing.T, tx *database.Tx, anchor orm.Query[mo
 	})
 	a := rowset.AsRecord[resultAlias](tree, "result")
 	f := rowset.Scope(a)
-	rows, err := rowset.SelectRecord(a, rowset.Scope(a)).OrderBy(rowset.At(f, reports.UserSummaries.Email).Asc()).All(t.Context(), tx)
+	rows, err := rowset.ReadRecord(rowset.SelectRecord(a, rowset.Scope(a)).OrderBy(rowset.At(f, reports.UserSummaries.Email).Asc())).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
@@ -239,7 +239,7 @@ func TestPostgresNaturalKeyRecursionAndCancellation(t *testing.T) {
 		})
 		a := rowset.AsRecord[resultAlias](tree, "result")
 		fields := rowset.Scope(a)
-		codes, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(a, expr.Select(expr.At(fields, recursivequeries.Nodes.Code))), expr.At(fields, recursivequeries.Nodes.Code).Asc())).All(t.Context(), session)
+		codes, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(a, expr.Row(expr.At(fields, recursivequeries.Nodes.Code)).Value()), expr.At(fields, recursivequeries.Nodes.Code).Asc())).All(t.Context(), session)
 		if err != nil || !reflect.DeepEqual(codes, []recursivequeries.NodeCode{"child", "leaf", "root"}) {
 			t.Fatal("recursive natural-key hierarchy failed", codes, err)
 		}
@@ -290,7 +290,7 @@ func TestRecursiveSelfCannotEscapeToExecutor(t *testing.T) {
 		return descendants(self)
 	})
 	a := rowset.AsRecord[resultAlias](escaped, "escaped")
-	if rows, err := rowset.SelectRecord(a, rowset.Scope(a)).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
+	if rows, err := rowset.ReadRecord(rowset.SelectRecord(a, rowset.Scope(a))).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Fatal("escaped self reached executor", err)
 	}
 }

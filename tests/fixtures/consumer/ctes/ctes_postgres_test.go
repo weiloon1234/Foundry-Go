@@ -41,7 +41,7 @@ func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 	a, b := rowset.Scope(first), rowset.Scope(second)
 	joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, models.Users.ID), expr.At(b, models.Users.ID)))
 	fields := rowset.LeftScope(joined, rowset.Scope(first))
-	names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.Select(expr.At(fields, models.Users.Email))), expr.At(fields, models.Users.Email).Asc())
+	names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.Row(expr.At(fields, models.Users.Email)).Value()), expr.At(fields, models.Users.Email).Asc())
 	s, err := rowset.CompileRead(rowset.ReadScalar(names))
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
 	dependent := rowset.CTE("dependent_users", eligible)
 	d := rowset.AsRecord[eligibleAlias](dependent, "dependent")
 	df := rowset.Scope(d)
-	statuses := rowset.WhereScalar(rowset.SelectScalar(d, expr.Select(expr.At(df, models.Users.Status))), expr.At(df, models.Users.Status).Eq(models.StatusActive))
+	statuses := rowset.WhereScalar(rowset.SelectScalar(d, expr.Row(expr.At(df, models.Users.Status)).Value()), expr.At(df, models.Users.Status).Eq(models.StatusActive))
 	if n, err := rowset.ReadScalar(statuses).Count(t.Context(), tx); err != nil || n != 2 {
 		t.Error("dependent CTE lost enum codec or input", err)
 	}
@@ -93,7 +93,7 @@ func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) erro
 	definition := rowset.CTE("buyer_totals", rowset.RecordOf(totals)).NotMaterialized()
 	source := rowset.AsRecord[totalsAlias](definition, "totals")
 	f := rowset.Scope(source)
-	buyers := rowset.WhereScalar(rowset.SelectScalar(source, expr.Select(rowset.At(f, reports.BuyerTotalRows.BuyerID))), expr.OrderNullableRow(rowset.At(f, reports.BuyerTotalRows.Total)).Gt(decimal.FromInt64(2)))
+	buyers := rowset.WhereScalar(rowset.SelectScalar(source, expr.Row(rowset.At(f, reports.BuyerTotalRows.BuyerID)).Value()), expr.OrderNullableRow(rowset.At(f, reports.BuyerTotalRows.Total)).Gt(decimal.FromInt64(2)))
 	selected, err := expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(models.Users.ID), buyers)).All(t.Context(), tx)
 	if err != nil {
 		return err
@@ -109,8 +109,8 @@ func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) erro
 	report := rowset.Select(joined, reports.UserOrderStatsRows.Row,
 		rowset.Map(reports.UserOrderStatsRows.ID, expr.At(user, models.Users.ID)),
 		rowset.Map(reports.UserOrderStatsRows.Email, expr.At(user, models.Users.Email)),
-		rowset.MapSelected(reports.UserOrderStatsRows.Total, expr.Select(rowset.AtNullableValue(stats, reports.BuyerTotalRows.Total))),
-		rowset.MapSelected(reports.UserOrderStatsRows.Orders, expr.Select(rowset.AtNullable(stats, reports.BuyerTotalRows.Orders))),
+		rowset.MapSelected(reports.UserOrderStatsRows.Total, expr.Row(rowset.AtNullableValue(stats, reports.BuyerTotalRows.Total)).Value()),
+		rowset.MapSelected(reports.UserOrderStatsRows.Orders, expr.Row(rowset.AtNullable(stats, reports.BuyerTotalRows.Orders)).Value()),
 	).OrderBy(expr.At(user, models.Users.Email).Asc())
 	rows, err := report.All(t.Context(), tx)
 	if err != nil {
@@ -131,7 +131,7 @@ func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) erro
 	// Hoisted definitions may contain their own explicit row correlations.
 	filtered := rowset.CTE("buyers_with_orders", rowset.ModelRecord(models.Users.Query().Where(orm.Has(models.UserLinks.Orders.Where(o.TotalCents.Gt(2))))))
 	a := rowset.AsRecord[otherAlias](filtered, "filtered")
-	if ids, err := rowset.ReadScalar(rowset.SelectScalar(a, expr.Select(expr.At(rowset.Scope(a), models.Users.ID)))).All(t.Context(), tx); err != nil || len(ids) != 1 || ids[0] != users[1].ID {
+	if ids, err := rowset.ReadScalar(rowset.SelectScalar(a, expr.Row(expr.At(rowset.Scope(a), models.Users.ID)).Value())).All(t.Context(), tx); err != nil || len(ids) != 1 || ids[0] != users[1].ID {
 		t.Error("CTE lost its internal relationship correlation", err)
 	}
 	return nil
@@ -142,8 +142,9 @@ func checkCTEModelFilters(t *testing.T, tx *database.Tx, users []models.User) er
 	eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(u.Age.Gte(21))))
 	a := rowset.AsRecord[eligibleAlias](eligible, "eligible")
 	f := rowset.Scope(a)
-	ids := rowset.SelectScalar(a, expr.Select(expr.At(f, models.Users.ID)))
+	ids := rowset.SelectScalar(a, expr.Row(expr.At(f, models.Users.ID)).Value())
 	// CTE references can live in an explicitly correlated inner expr.
+
 	correlation := rowset.Correlate(rowset.From(models.Orders.Query()), a)
 	inner := rowset.InnerScope(correlation, rowset.Scope(a))
 	outer := rowset.OuterScope(correlation, rowset.ModelScope(models.Orders.Query()))
@@ -209,7 +210,7 @@ func TestInvalidCTEsNeverExecute(t *testing.T) {
 		rowset.CTE("bad", rowset.ModelRecord(models.Users.Query().Where(models.Users.Status.Eq(models.Status("invalid"))))),
 	} {
 		source := rowset.AsRecord[eligibleAlias](definition, "eligible")
-		ids := rowset.SelectScalar(source, expr.Select(expr.At(rowset.Scope(source), models.Users.ID)))
+		ids := rowset.SelectScalar(source, expr.Row(expr.At(rowset.Scope(source), models.Users.ID)).Value())
 		if rows, err := rowset.ReadScalar(ids).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 			t.Error("invalid CTE reached executor", err)
 		}
@@ -218,7 +219,7 @@ func TestInvalidCTEsNeverExecute(t *testing.T) {
 	second := rowset.CTE("same_name", rowset.ModelRecord(models.Users.Query().Where(models.Users.Age.Gt(18))))
 	a, b := rowset.AsRecord[eligibleAlias](first, "a"), rowset.AsRecord[otherAlias](second, "b")
 	joined := rowset.InnerJoin(a, b, rowset.On(expr.At(rowset.Scope(a), models.Users.ID), expr.At(rowset.Scope(b), models.Users.ID)))
-	ids := rowset.SelectScalar(joined, expr.Select(expr.At(rowset.LeftScope(joined, rowset.Scope(a)), models.Users.ID)))
+	ids := rowset.SelectScalar(joined, expr.Row(expr.At(rowset.LeftScope(joined, rowset.Scope(a)), models.Users.ID)).Value())
 	if rows, err := rowset.ReadScalar(ids).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("conflicting CTE definitions reached executor", err)
 	}

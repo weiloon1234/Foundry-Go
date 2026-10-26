@@ -13,7 +13,7 @@ func checkDerivedSetAggregation(t *testing.T, tx *database.Tx) error {
 	reportsQuery := derivedReports()
 	r := reports.BuyerTotalRows
 	total := rows.At(reportsQuery.Scope(), r.Total)
-	results, err := reportsQuery.Where(expr.OrderNullableRow(total).Gte(decimal.FromInt64(20))).OrderBy(total.Asc()).All(t.Context(), tx)
+	results, err := rows.ReadSet(reportsQuery.Where(expr.OrderNullableRow(total).Gte(decimal.FromInt64(20))).OrderBy(total.Asc())).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}

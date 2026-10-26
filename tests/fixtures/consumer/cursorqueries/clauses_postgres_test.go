@@ -78,12 +78,12 @@ func TestPostgresGroupedAndJoinedCursors(t *testing.T) {
 }
 func TestPostgresScalarCursorNullEndpointsAndWindows(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, _ []models.User) error {
-		values := rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Select(expr.Value(models.Users.Nickname))))
+		values := rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Nickname)).Value()))
 		for _, source := range []rows.ValueSource[value.Nullable[string]]{rows.Values(values), rows.UnionValues(rows.Values(values), rows.Values(values))} {
 			c := rows.ValueCursorFor(source)
-			checkTraversal(t, tx, c.OrderBy(c.Value().Asc()).UniqueBy(c.Key()), []value.Nullable[string]{value.Of("Bee"), {}})
-			checkTraversal(t, tx, c.OrderBy(c.Value().Desc()).UniqueBy(c.Key()), []value.Nullable[string]{{}, value.Of("Bee")})
-			q := c.UniqueBy(c.Key())
+			checkTraversal(t, tx, c.OrderBy(c.Value().Asc()).UniqueBy(expr.Group(c.Value())), []value.Nullable[string]{value.Of("Bee"), {}})
+			checkTraversal(t, tx, c.OrderBy(c.Value().Desc()).UniqueBy(expr.Group(c.Value())), []value.Nullable[string]{{}, value.Of("Bee")})
+			q := c.UniqueBy(expr.Group(c.Value()))
 			first, err := q.Paginate(t.Context(), tx, orm.CursorRequest[value.Nullable[string]]{Size: 1})
 			if err != nil {
 				return err
@@ -105,7 +105,7 @@ func TestPostgresScalarCursorNullEndpointsAndWindows(t *testing.T) {
 		window := expr.WindowFor(rows.ModelScope(models.Users.Query())).OrderBy(expr.Value(models.Users.Email).Asc())
 		numbers := rows.SelectScalar(rows.From(models.Users.Query()), expr.RowNumber(window))
 		c := rows.ValueCursorFor(rows.Values(numbers))
-		checkTraversal(t, tx, c.UniqueBy(c.Key()), []int64{1, 2, 3})
+		checkTraversal(t, tx, c.UniqueBy(expr.Group(c.Value())), []int64{1, 2, 3})
 		return nil
 	})
 }

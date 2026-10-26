@@ -53,7 +53,7 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 		buyer := expr.At(rowset.InnerScope(c, rowset.ModelScope(o)), models.Orders.BuyerID)
 		c = c.Where(expr.Equal(buyer, uid))
 		count := rowset.SelectCorrelatedScalar(c, expr.Count[rowset.Correlation[models.User, models.Order]]().Value())
-		ids := rowset.SelectCorrelatedScalar(c, expr.Select(buyer))
+		ids := rowset.SelectCorrelatedScalar(c, expr.Row(buyer).Value())
 		q := rowset.Select(outer, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarQuery(count))).Where(c.Exists(), rowset.InCorrelatedQuery(expr.Value(models.Users.ID), ids))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
 		return
@@ -80,11 +80,11 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 	case "cross":
 		j := rowset.CrossJoinLateral(a, latest)
 		v := expr.At(rowset.RightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(v)))).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(v).Value()))).All(ctx, db))}))
 	case "inner":
 		j := rowset.InnerJoinLateral(a, latest)
 		v := expr.At(rowset.RightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Select(v)))).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(v).Value()))).All(ctx, db))}))
 	case "left":
 		j := rowset.LeftJoinLateral(a, latest)
 		v := expr.AtNullable(rowset.NullableRightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
