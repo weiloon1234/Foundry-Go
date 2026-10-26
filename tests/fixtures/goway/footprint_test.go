@@ -32,6 +32,7 @@ const footprintFailureAdvice = "a generic method, field or codec helper has expa
 // Go 1.27.1 darwin/arm64: T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
 var footprintBudgets = map[string]footprintBudget{
+	"pilot_expressions":         {"./testdata/footprint/pilot_expressions", 1767},
 	"load_query":                {"./testdata/footprint/load_query", 1265},
 	"related_value":             {"./testdata/footprint/related_value", 1757},
 	"relation_expression_order": {"./testdata/footprint/relation_expression_order", 4232},

@@ -73,3 +73,12 @@ See [computed keys](computed-query-keys.md), [arithmetic and text](scalar-calcul
 and [typed JSON paths](json-models.md) for composition.
 
 For declaration and API migration, see the [ORM migration guide](orm-migration.md).
+
+## Parameters without an exemplar
+
+`expr.Constant[S](codec, value)` snapshots and binds a value with an explicit codec
+and scope; it never interpolates SQL. `expr.Row(expr.At(scope, column)).Param(v)`
+uses the scoped expression's projection type, including its nullable wrapper.
+`Row` cannot demote selected or aggregate values into row predicates. The original
+column-based `expr.Param(column, v)` continues to use its comparison input type.
+See the compiled [CASE and scoped parameter examples](orm-migration.md#pilot-expressions-and-row-declarations).

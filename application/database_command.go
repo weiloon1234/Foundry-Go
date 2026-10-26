@@ -73,6 +73,9 @@ func (a *App) RunDatabaseCommand(ctx context.Context, invocation dbcommand.Comma
 	// The pool shares the application key ring, so seeders and prunables can
 	// write and hydrate encrypted model fields as they do in the running app.
 	var options []database.Option
+	if a.queryObserver != nil {
+		options = append(options, database.WithQueryObserver(a.queryObserver))
+	}
 	if a.encryption != nil {
 		options = append(options, database.WithEncryption(a.encryption))
 	}

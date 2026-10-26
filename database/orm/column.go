@@ -245,6 +245,12 @@ func ColumnOf[M, V any](b Builder[M], ptr *V, opts ...ColumnOption[V]) Column[M,
 	return Column[M, V]{column: bindModel[M](b.state, ptr, selectedCodec(opts), false, opts...)}
 }
 
+// BoolOf binds a Boolean field, including defined Boolean types.
+// Example: BoolOf(b, &u.Enabled).
+func BoolOf[M any, V ~bool](b Builder[M], ptr *V, opts ...ColumnOption[V]) Column[M, V] {
+	return Column[M, V]{column: bindModel[M](b.state, ptr, optionCodec(codec.Bool[V](), opts), false, opts...)}
+}
+
 // NumberOf selects a numeric codec at startup. Example: NumberOf(b,&o.TotalCents).
 func NumberOf[M any, V NumberValue](b Builder[M], ptr *V, opts ...ColumnOption[V]) Number[M, V] {
 	return Number[M, V]{number: bindModel[M](b.state, ptr, optionCodec(ormcore.NumberCodec[V](), opts), false, opts...)}

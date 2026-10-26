@@ -1386,7 +1386,7 @@
       "sha256": "8af03f60e4a065ca96de7e91dd7254bcf2eb5123ccc86b82548cc0d720549422"
     },
     "goway/compiler_cases_test.go": {
-      "sha256": "540821243a0a6934e902adca7c7a2f735686c29302c6fb5234e991c06283573a"
+      "sha256": "a6452beb1277ae02435d90ab87393540757a0db9a580b26aa97c1fcff5820c04"
     },
     "goway/compiler_command_other_test.go": {
       "sha256": "e0c52efc5f2cd673de96e17aa09e66d83585776f57bdc17148e19f2363a3f81a"
@@ -1452,7 +1452,7 @@
       ]
     },
     "goway/footprint_test.go": {
-      "sha256": "a50a99f15e0a74b016ce949dbe85034620445babea758d0f46acdbd94645338f"
+      "sha256": "0030846f47b34658abdd1841eb7270d3748ffdbbe25f9d4072fe269518be6484"
     },
     "goway/golden_driver_test.go": {
       "sha256": "0cfc6d9e86f6ffe9d12184c09ca342d1671e1fb2cdcd98a6f15d12e9215ef182"
@@ -1554,11 +1554,17 @@
     "goway/migration/oracle_test.go": {
       "sha256": "458911da9de8df0b0cdabe8e6da909691bba596efbd74f3ae442947156fee609"
     },
+    "goway/migration/pilot2_test.go": {
+      "sha256": "47f5460a3664c3f7991348b743ef406074144ef9a9fee68293b65cf39821be23"
+    },
     "goway/migration/pilot_test.go": {
       "sha256": "2a3aebff5f8820e8d1ce3935932efeb251e52a5d9ae508921cba734b4bdfa133"
     },
     "goway/migration/sql_test.go": {
       "sha256": "cfa11d83d63e33a05639d62aa09e6a88ede3bd21a37bbdfbb33e3c691f3e66eb"
+    },
+    "goway/migration/timestamps_test.go": {
+      "sha256": "971b83238d0ed5379a2b15e7d993884d5c0f56eccbe5a49e3b2ceb58345ca749"
     },
     "goway/models/identity/models_test.go": {
       "sha256": "b9884a6ab1e0056d30562fdd27b0ff94fb28c5d1bbc28e7cc56d37ea0635819e"

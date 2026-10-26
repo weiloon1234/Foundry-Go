@@ -1645,6 +1645,7 @@ orm.WriteError
   Error func() string
   GoString func() string
   Unwrap func() error
+orm.BoolOf func[M any, V ~bool](b github.com/weiloon1234/Foundry-Go/database/orm.Builder[M], ptr *V, opts ...github.com/weiloon1234/Foundry-Go/database/orm.ColumnOption[V]) github.com/weiloon1234/Foundry-Go/database/orm.Column[M, V]
 orm.FoundryModel func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.MetadataSeal) (github.com/weiloon1234/Foundry-Go/internal/ormcore.Source, func(github.com/weiloon1234/Foundry-Go/database.Row) (M, error))
 orm.FoundryOrderBy func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], o github.com/weiloon1234/Foundry-Go/internal/ormcore.Order, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
 orm.FoundryWhere func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M], p github.com/weiloon1234/Foundry-Go/internal/ormcore.Predicate, seal github.com/weiloon1234/Foundry-Go/internal/sqlowner.QuerySeal) github.com/weiloon1234/Foundry-Go/database/orm.Query[M]
@@ -2346,6 +2347,7 @@ rows.ValueSetQuery
   Where func(ps ...github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[github.com/weiloon1234/Foundry-Go/database/orm/rows.Set[V]]) github.com/weiloon1234/Foundry-Go/database/orm/rows.ValueSetQuery[V]
 rows.ValueSource
   valueData func(*V) (github.com/weiloon1234/Foundry-Go/internal/ormcore.RecordSource, github.com/weiloon1234/Foundry-Go/internal/ormcore.Column[V])
+rows.BoolOf func[R any, V ~bool](b github.com/weiloon1234/Foundry-Go/database/orm/rows.Builder[R], ptr *V) github.com/weiloon1234/Foundry-Go/database/orm/rows.Field[R, V]
 rows.FromModel func[M any](q github.com/weiloon1234/Foundry-Go/database/orm.Query[M]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[M, M]
 rows.GroupBy func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.GroupKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
 rows.Having func[S, R any](q github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R], predicates ...github.com/weiloon1234/Foundry-Go/database/orm/expr.HavingPredicate[S]) github.com/weiloon1234/Foundry-Go/database/orm/rows.Query[S, R]
@@ -3100,6 +3102,8 @@ expr.Window
   PartitionByValues func(keys ...github.com/weiloon1234/Foundry-Go/database/orm/expr.ProjectionKey[S]) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
   RangeBetween func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.FramePosition, end github.com/weiloon1234/Foundry-Go/database/orm/expr.FramePosition) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
   RowsBetween func(start github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary, end github.com/weiloon1234/Foundry-Go/database/orm/expr.FrameBoundary) github.com/weiloon1234/Foundry-Go/database/orm/expr.Window[S]
+expr.Constant func[S, V any](c github.com/weiloon1234/Foundry-Go/database/codec.Codec[V], v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
+expr.Row func[S, V any](v github.com/weiloon1234/Foundry-Go/database/orm/expr.RowValue[S, V]) github.com/weiloon1234/Foundry-Go/database/orm/expr.RowExpression[S, V]
 expr.Related func[M, N, V any](source github.com/weiloon1234/Foundry-Go/database/orm.AggregateSource[M, N], computation github.com/weiloon1234/Foundry-Go/database/orm/expr.AggregateExpression[N, V]) github.com/weiloon1234/Foundry-Go/database/orm.AggregateRelation[M, V]
 expr.Sum func[S any, V interface{github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[S, V, P]](column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]
 expr.SumAt func[S, M any, V interface{github.com/weiloon1234/Foundry-Go/database/orm/expr.exactNumber}, P any, C github.com/weiloon1234/Foundry-Go/database/orm/expr.orderedColumn[M, V, P]](scope github.com/weiloon1234/Foundry-Go/database/orm/expr.Scope[S, M], column C) github.com/weiloon1234/Foundry-Go/database/orm/expr.NullableOrderedAggregate[S, github.com/weiloon1234/Foundry-Go/decimal.Decimal]

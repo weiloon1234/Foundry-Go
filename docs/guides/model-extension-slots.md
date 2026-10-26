@@ -323,3 +323,12 @@ references)` reads the same field registered by `ArticleSlots.Title`.
 The handles retain only shared callback state; the descriptor's larger API is
 instantiated only by callers that request it. Zero handles return invalid zero
 descriptors. Ordinary slot reads and writes continue to use the handle directly.
+
+### Migrating a stored collection name
+
+An old attachment slot's `foundry:"name=public-media"` tag becomes the explicit
+`"public-media"` argument to `attachments.ManyOf` or `attachments.OneOf`. Remove
+the tag: native `orm.SlotOf` binds a Go field, not a persisted column. Keep the
+owner identity and `StorageModel` unchanged as well as the collection name. A
+Go-field rename changes its binding, not that stored identity. See the compiled
+[migration example](orm-migration.md#preserve-an-attachment-slots-stored-name).

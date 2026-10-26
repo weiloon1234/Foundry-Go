@@ -227,3 +227,11 @@ features acquire no resources, but still contribute to Go compilation. Keep usin
 narrow feature imports and the advanced builder when that build-size tradeoff
 matters. These samples do not establish an SLA; power/background load was not
 controlled. [C05 packaged-consumer and runtime results](developer-resource-measurements.md#consumer-startup-c05-native-results) now provide the final evidence.
+
+### Observing framework database statements
+
+Pass `application.WithQueryObserver(observer)` alongside other `application.New`
+options. It applies to all configured named primary/read pools and database-command
+pools, with no process-global observer. Nil and duplicate observers fail before
+startup. Keep the callback fast and thread-safe; it borrows the database observer's
+existing panic isolation and argument redaction. See [database query observation](database-runtime.md#application-query-observation).

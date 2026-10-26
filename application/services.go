@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/clock"
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -80,6 +81,7 @@ func Resolve[T any](s Services, key foundation.Key[T]) (T, error) {
 // App retains the existing lifecycle and kernel contract. Each Build constructs
 // independent resources. HTTPReady reports the actual bound listener address.
 type App struct {
+	queryObserver database.QueryObserver
 	*foundation.App
 	resources  Services
 	server     *http.Server

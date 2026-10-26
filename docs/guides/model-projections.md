@@ -123,3 +123,11 @@ See [pagination](model-pagination.md), [derived records](model-subqueries.md),
 [joins](model-joins.md) and [transaction-required composition](transaction-query-composition.md).
 
 For declaration and API migration, see the [ORM migration guide](orm-migration.md).
+
+### Boolean fields and framework enums
+
+Use `rows.BoolOf(b, &r.Enabled)` for built-in or named Boolean fields. Use
+`rows.EnumOf(b, &r.Status)` when Status is `countries.Status`: it already exports
+`EnumDescriptor()` and `StatusCodec()`. The enum constructor retains enum validation
+and aggregate restrictions; a custom string field is not equivalent metadata.
+See the compiled [row declaration](orm-migration.md#pilot-expressions-and-row-declarations).

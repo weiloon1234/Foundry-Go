@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Document lone timestamps as developer-managed fields with `NoTimestamps` and
+  a compiled migration example.
+
+- Add codec-based `expr.Constant`, row-phase `expr.Row` and thin ORM/row
+  `BoolOf` constructors, retaining typed scope, projection and codec boundaries.
+- Add `application.WithQueryObserver` (and its infrastructure option) for all
+  configured named primary/read pools, preserving isolated callbacks and argument
+  redaction. Clarify native JSON startup validation, framework enums in rows and
+  attachment stored-name migration.
+
 - Go-way branch guardrails: compiler-case mapping, emitter/contract audit, separate
   release consumer and deterministic old/new synthetic application measurement tool.
 

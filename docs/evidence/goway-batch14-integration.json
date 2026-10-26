@@ -1,0 +1,179 @@
+{
+  "batch": 14,
+  "base": "5d8d3fe3",
+  "status": "passed; staged for lead review, no commit",
+  "conflicts": {
+    "docs/guides/orm-migration.md": "Retained Stage 8c historical-before/compiled-after guidance and all new pilot examples.",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "Retained all entries and classifications; recomputed changed fixture test digests."
+  },
+  "environment": {
+    "GOCACHE": "/private/tmp/foundry-goway-codex-gocache-r17",
+    "GOMAXPROCS": "4",
+    "GOFLAGS": "-p=4",
+    "GOWORK": "off"
+  },
+  "counts": {
+    "catalogue": 1032,
+    "pending": 0,
+    "compiler_cases": 899,
+    "footprint_probes": 150,
+    "census_sources": 551
+  },
+  "census_refreshed": [
+    "goway/compiler_cases_test.go",
+    "goway/footprint_test.go",
+    "goway/migration/pilot2_test.go",
+    "goway/migration/timestamps_test.go"
+  ],
+  "census_review": "All four are native-only/non-paired; prior paired and backend classifications retained. Only the files map sorted, inner key order preserved.",
+  "checks": {
+    "build": {
+      "exit_code": 0
+    },
+    "catalogue": {
+      "exit_code": 0
+    },
+    "vet": {
+      "exit_code": 0
+    },
+    "root-test": {
+      "exit_code": 0
+    },
+    "fixture-check": {
+      "exit_code": 0
+    },
+    "generate-check": {
+      "exit_code": 0
+    },
+    "release-tools-check": {
+      "exit_code": 0
+    },
+    "docs-check": {
+      "exit_code": 0
+    },
+    "agent-smoke": {
+      "exit_code": 0
+    },
+    "fmt-check": {
+      "exit_code": 0
+    },
+    "diff-check": {
+      "exit_code": 0
+    },
+    "footprint": {
+      "exit_code": 0,
+      "coverage": "Both fixture roots via make fixture-check; 150 Go-way probes including pilot_expressions, existing ceilings unchanged."
+    }
+  },
+  "source_sha256": {
+    "CHANGELOG.md": "7843aa017d8b72b95f03c4b1b7cde8a40f48acde55cdd4286ebf0ed92a68af0c",
+    "application/builder.go": "f5fdb8ae7527b36ead166172fa5ae56def80764efb5478b522294126b9ccc6bc",
+    "application/database_command.go": "723e5be287a6e3a79eda7ee4d7ca2efb944354a64ae047688b0b39fce229bfb6",
+    "application/options.go": "6bd80fa8901924b0019217696678f1e82cda3ed080e00d88401593540abc4949",
+    "application/query_observer_test.go": "f49acdde29fe39c5830c7837491908d873c6a48d105667a5bb85196f69c9db56",
+    "application/services.go": "7f7ac5cad9943952300a6cbeecb1779e777acfaa361f42f8c57e33ad80dac700",
+    "database/orm/bool_test.go": "6eede600fdd7d12829b1147a0b73bcc5faef7c736f74e146294d6613b4b97407",
+    "database/orm/column.go": "6f6eee86f2aa247e952fe911d12f452fb6eb4be92736904a21e5104cac4a5020",
+    "database/orm/expr/value.go": "fa33685587d1fb2753288b596d7741c219514ac2f2ee8ab82a889ee5293d1db1",
+    "database/orm/expr/value_test.go": "5909ea7c5a09ac7f9630dbede6378f9ad18a1c373147535137cfab37c9cca6f9",
+    "database/orm/method_surface_test.go": "41347c1ab1b88e225295516c10264acc2742ce002799459dcaa89e699c5db94c",
+    "database/orm/rows/constructors.go": "9640e36c1a210ff401e587f7e59b6fbb6ee37226a98241029e3ec410d73e0294",
+    "database/orm/rows/pilot_ergonomics_test.go": "262cedbb8171dca716715b71ed10b82e4d8d07092ba95d06fd971b1cbebcd720",
+    "database/orm/testdata/public-methods.txt": "71e9c164409f61518c2fef07bbaff05e4bfef8a8fc8bfd27121c0d7de79eb8a8",
+    "docs/evidence/goway-pilot2-ergonomics-proposal.md": "0a43e28b239fdc00173de18a658d19afa33f3ad33a2fd9668d378489dfe06ad0",
+    "docs/evidence/goway-pilot2-ergonomics.json": "4d3cc67814b6f8261b4730f10f2c226e5408faaacf18665c8999a5deebcd81ef",
+    "docs/guides/application-bootstrap.md": "1605c0d4feae288d158d6c1b6fedb71351858335133bf9c828764e7784761a40",
+    "docs/guides/conditional-expressions.md": "e3b8d7e014fb611def68de3ec1027429d9678370572a9ad8679b4809f545165a",
+    "docs/guides/database-runtime.md": "3cc89a4a780287bf3e2348135181471c0814d8ae941e9102ea8f3bce94c3ad14",
+    "docs/guides/json-models.md": "6b627221e79489edd8380618277a19c8e0fe58a5978e66ceed30714f8fa96136",
+    "docs/guides/model-declarations.md": "b996d44b5eff29cd7973cc6e58dc6de437e87a9570f8ac11da8664a4fb19795a",
+    "docs/guides/model-extension-slots.md": "25abc54e5d6daa653ce6efe50b5a2a44920b96d91d248e4ddf5e15bf33beeed6",
+    "docs/guides/model-projections.md": "11acfa92a9f22cded2b442e4bbcf78b8a3bcc018052112e0231841f09afb94d2",
+    "docs/guides/model-timestamps.md": "7ff05c84249dabff2177e3878393eed83e0f8878a4ad55877217240fcf1fb9e8",
+    "docs/guides/orm-migration.md": "2695f187f6acc81e0417df38f8a373fca0e699df3071edb768c033db381d5a46",
+    "infrastructure/providers.go": "5711163a9255c16dac35f08b2eab0a9184c3d03e58485f803e916b3e361a3e67",
+    "infrastructure/settings.go": "c6b95c4486d5de46f985d14e5ed72c71144c25c5daaabfaf45ffd58373821624",
+    "tests/fixtures/goway/compiler_cases_test.go": "a6452beb1277ae02435d90ab87393540757a0db9a580b26aa97c1fcff5820c04",
+    "tests/fixtures/goway/footprint_test.go": "0030846f47b34658abdd1841eb7270d3748ffdbbe25f9d4072fe269518be6484",
+    "tests/fixtures/goway/migration/pilot2_test.go": "47f5460a3664c3f7991348b743ef406074144ef9a9fee68293b65cf39821be23",
+    "tests/fixtures/goway/migration/timestamps_test.go": "971b83238d0ed5379a2b15e7d993884d5c0f56eccbe5a49e3b2ceb58345ca749",
+    "tests/fixtures/goway/testdata/compilefail/bool_model_owner/invalid.go": "5becb87d0c68bd1e6f378ac48b03c71eb3423fb98b8bfce6f81f44532b06f966",
+    "tests/fixtures/goway/testdata/compilefail/bool_projection/invalid.go": "6c3556fd162984e58e0d8fe488542b54aecaec84655f0aacf538a7a3fc8ba68d",
+    "tests/fixtures/goway/testdata/compilefail/bool_row_owner/invalid.go": "9fb4ab8b2ffee1994a054f08423d832bf84bf408df1e87f96add98c89e29e394",
+    "tests/fixtures/goway/testdata/compilefail/bool_row_phase/invalid.go": "513644751748fea35c020423221a1cf04d1b636b64d34c707ed24db2935fc8b5",
+    "tests/fixtures/goway/testdata/compilefail/bool_row_value/invalid.go": "adc60aae9cab47a88131298598ffbfcd839f5fa571faae5b12e4d063703f873c",
+    "tests/fixtures/goway/testdata/compilefail/bool_value/invalid.go": "9582248e964be408eaa6e06345c5e3baa5a152792ba60fdedaf1711d5e709bfb",
+    "tests/fixtures/goway/testdata/compilefail/constant_codec_value/invalid.go": "7f751bb3494ed8b4c85716d9f905a90abce18ecb23cba31c440bad020aede181",
+    "tests/fixtures/goway/testdata/compilefail/constant_owner/invalid.go": "0835d5b1e7fc465da7318563e8340b1f310319840d7177229cda0fa832f5a7fe",
+    "tests/fixtures/goway/testdata/compilefail/constant_projection/invalid.go": "bd5ff254f4b407eea4f3c3c54c6efbcbc76f589e47fead44607260be02c26cf7",
+    "tests/fixtures/goway/testdata/compilefail/constant_selected_phase/invalid.go": "4b8536595204313750d164035af48bfd9ac68875ec0974ac4d1db65142ea0360",
+    "tests/fixtures/goway/testdata/compilefail/row_owner/invalid.go": "d2354f12c84524f95137468a0eb6fca564d00d0edeaec79116fb4fe1c3bd0cc0",
+    "tests/fixtures/goway/testdata/compilefail/row_projection/invalid.go": "17742ca70ffb89dff47523c94286f31f7ae54b121a7d791ece033f275b47fd39",
+    "tests/fixtures/goway/testdata/compilefail/row_selected_phase/invalid.go": "d3c7b47857110580e861fec5e799bc1dc9bb0a0e62ee0314f7f3bf2d258e7e9d",
+    "tests/fixtures/goway/testdata/footprint/pilot_expressions/probe.go": "07ae7f356e4ce23125d8a9b4176a4584c9a56807bf9ee7102348026afb387cb4",
+    "tests/fixtures/goway/testdata/oracles/comparisons.json": "6591d8931ed225467e55cd563b573ee1a7ea78b31c18b186ce4d76068c9d0d9b"
+  },
+  "commands": {
+    "build": "go build ./...",
+    "vet": "go vet ./...",
+    "root-test": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 make test",
+    "fixture-check": "FOUNDRY_TEST_POSTGRES_REQUIRED=1 make fixture-check",
+    "generate-check": "make generate-check",
+    "catalogue": "python3 tools/goway_catalogue.py",
+    "footprint": "Included in fixture-check (both fixture roots, non-race)",
+    "release-tools-check": "make release-tools-check",
+    "docs-check": "make docs-check",
+    "agent-smoke": "FOUNDRY_TEST_GOPLS=/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls make agent-smoke",
+    "fmt-check": "make fmt-check"
+  },
+  "integration_corrections": [
+    "Removed two stale local links to retired discover_timestamps.go; retained the historical lone-timestamp behavior in past tense. Docs-check failed before this correction and was rerun; already-passing runtime checks were not repeated."
+  ],
+  "check_history": [
+    {
+      "check": "build",
+      "exit_code": 0
+    },
+    {
+      "check": "catalogue",
+      "exit_code": 0
+    },
+    {
+      "check": "vet",
+      "exit_code": 0
+    },
+    {
+      "check": "root-test",
+      "exit_code": 0
+    },
+    {
+      "check": "fixture-check",
+      "exit_code": 0
+    },
+    {
+      "check": "generate-check",
+      "exit_code": 0
+    },
+    {
+      "check": "release-tools-check",
+      "exit_code": 0
+    },
+    {
+      "check": "docs-check",
+      "exit_code": 2
+    },
+    {
+      "check": "docs-check",
+      "exit_code": 0
+    },
+    {
+      "check": "agent-smoke",
+      "exit_code": 0
+    },
+    {
+      "check": "fmt-check",
+      "exit_code": 0
+    }
+  ],
+  "logs": ".cache/goway-batch14 (local, untracked)"
+}

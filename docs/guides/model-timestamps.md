@@ -15,6 +15,8 @@ The [member table](../../tests/fixtures/goway/models/hooks/models.go) used here 
 
 Both roles must form a valid pair. A conventional lone field remains ordinary unless an explicit role requires the pair. Binding a managed field through `TimeOf` fails declaration validation with the required carrier. For application-managed fields, use ordinary declarations and `orm.NoTimestamps()`. The opt-out conflicts with explicit managed roles. Role constructors do not accept a Go mutator; put business transformations in hooks or ordinary input fields.
 
+A lone `CreatedAt` or `UpdatedAt` was never clock-managed by the retired legacy generator; migrate it with `orm.NoTimestamps()`, `orm.TimeOf` and the existing explicit `Set` calls, as shown in the [migration guide](orm-migration.md).
+
 ## Clock and precision
 
 Database modules inherit `foundation.WithClock`, including `testkit.Clock`. Direct pool construction defaults to `clock.System`; `database.WithClock` supplies an override. Sessions and savepoints preserve their pool's clock, while the actual transaction owner supplies the write clock.

@@ -50,6 +50,16 @@ func rowInput[S, V any](v RowValue[S, V]) RowExpression[S, V] {
 	return RowExpression[S, V]{data: v.rowValue(nil)}
 }
 
+// Row adapts a row-phase value without changing its scope or projection type.
+// Example: expr.Row(expr.At(scope, Users.Age)).Param(18).
+func Row[S, V any](v RowValue[S, V]) RowExpression[S, V] { return rowInput(v) }
+
+// Constant snapshots a bound value using its explicit codec, without an exemplar column.
+// Example: expr.Constant[User](codec.Bool[bool](), true).
+func Constant[S, V any](c codec.Codec[V], v V) RowExpression[S, V] {
+	return parameter[S](rowData[V]{column: columnCodec(c)}, v)
+}
+
 // Select promotes a row value to the selected phase. Example: expr.Select(expr.Value(Users.Age)).
 func Select[S, V any](v RowValue[S, V]) Selected[S, V] { return rowInput(v).Value() }
 

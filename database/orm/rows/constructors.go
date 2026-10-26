@@ -30,6 +30,12 @@ func IDOf[R, M any](b Builder[R], ptr *model.ID[M]) Field[R, model.ID[M]] {
 	return bindField(b, ptr, codec.ID[M]())
 }
 
+// BoolOf binds a Boolean row field, including defined Boolean types.
+// Example: rows.BoolOf(b, &r.Enabled).
+func BoolOf[R any, V ~bool](b Builder[R], ptr *V) Field[R, V] {
+	return bindField(b, ptr, codec.Bool[V]())
+}
+
 // TextOf binds a string or defined string type. Example: rows.TextOf(b,&r.Label).
 func TextOf[R any, V ~string](b Builder[R], ptr *V) Field[R, V] {
 	return bindField(b, ptr, codec.String[V]())

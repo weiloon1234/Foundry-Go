@@ -77,3 +77,8 @@ func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 Ordinary source reads, joins, projections and aggregates retain the stored field capabilities. These roles restrict assignment paths without changing the database schema or serialized contracts.
 
 For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).
+
+`orm.BoolOf(b, &m.Enabled)` declares a Boolean column without a new carrier family;
+named Boolean types retain their exact type. Optional codec settings follow
+`ColumnOf`. Mutated fields still require Input carriers. See the compiled
+[Boolean row and expression examples](orm-migration.md#pilot-expressions-and-row-declarations).

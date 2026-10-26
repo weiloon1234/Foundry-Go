@@ -59,6 +59,7 @@ type options struct {
 	redisStores       []RedisStore
 	encryption        *encryption.Keyring
 	statementDetector *database.StatementDetector
+	queryObserver     database.QueryObserver
 }
 type Option func(*options) error
 
@@ -401,6 +402,22 @@ func WithStatementDetector(detector *database.StatementDetector) Option {
 			return fault.New(fault.Invalid, "statement detector already configured")
 		}
 		o.statementDetector = detector
+		return nil
+	}
+}
+
+// WithQueryObserver installs one borrowed observer on all configured database pools.
+// Nil or repeated observers are invalid, as with database.WithQueryObserver.
+// Example: infrastructure.Configure(settings, infrastructure.WithQueryObserver(observer)).
+func WithQueryObserver(observer database.QueryObserver) Option {
+	return func(o *options) error {
+		if observer == nil {
+			return fault.New(fault.Invalid, "database query observer cannot be nil")
+		}
+		if o.queryObserver != nil {
+			return fault.New(fault.Invalid, "database query observer is already configured")
+		}
+		o.queryObserver = observer
 		return nil
 	}
 }

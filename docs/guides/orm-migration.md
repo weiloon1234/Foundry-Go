@@ -92,6 +92,37 @@ Choose carriers by their role as well as their stored value type:
 | A field with any mutator, even identical input/storage types | Use the matching `Input*` or `NullableInput*` carrier. Ordinary columns with a mutator fail startup. The setter takes input; comparisons and ordering take stored values. |
 | Other persisted fields | Use `TextOf`, `NumberOf`, `IDOf`, `EnumOf`, `TimeOf`, `JSONOf`, `BytesOf`, password/encrypted constructors and nullable variants. Keep `foundry:"column=..."`, `default=database` and omission tags. |
 
+For a model with only `CreatedAt` (`created_at`) or only `UpdatedAt`
+(`updated_at`), keep the timestamp application-managed. The retired legacy generator's
+`discoverTimestamps` left timestamp roles unassigned when either field was absent;
+explicit `timestamps=true` instead rejected the missing pair. Declare `orm.NoTimestamps()`
+and an ordinary `orm.TimeOf` column, and retain each call site's explicit `Set`.
+Do not replace that column with `CreatedAtOf` or `UpdatedAtOf`, which require a pair.
+
+After, for a lone creation field (use the same pattern for a lone update field):
+
+<!-- orm-example: lone-timestamp-after -->
+```go
+type DeveloperEvent struct {
+	ID        int64
+	CreatedAt time.Time
+}
+
+type DeveloperEventTable struct {
+	orm.Table[DeveloperEvent, int64]
+	CreatedAt orm.Time[DeveloperEvent, time.Time]
+}
+
+var DeveloperEvents = orm.Define("developer_events", func(b orm.Builder[DeveloperEvent], e *DeveloperEvent) DeveloperEventTable {
+	return DeveloperEventTable{orm.TableOf(b, &e.ID), orm.TimeOf(b, &e.CreatedAt)}
+}, orm.NoTimestamps())
+
+func insertDeveloperEvent(ctx context.Context, tx *database.Tx, createdAt time.Time) error {
+	_, err := DeveloperEvents.Insert(ctx, tx, DeveloperEvents.CreatedAt.Set(createdAt))
+	return err
+}
+```
+
 `NumberKey` and `TextKey` preserve key roles. They do not make a primary key an
 ordinary writable numeric/text field or grant numeric adjustment operations.
 `MapInsert` rejects input fields and managed UpdatedAt; CreatedAt is eligible.
@@ -1745,3 +1776,87 @@ syntax changes, startup validation and the remaining publication prerequisites.
 
 The before snippets above are historical, documentation-only examples. The after
 snippets remain compiled by the migration fixture after model generation retirement.
+
+## Pilot expressions and row declarations
+
+Use `expr.Constant[S](codec, value)` for a bound row-phase value without borrowing
+an unrelated column. It snapshots through the codec and binds a parameter; it does
+not interpolate SQL. `expr.Row` adapts an existing row-phase expression, retaining
+its scope and projection type. For nullable columns that type is nullable, even
+when the column's comparison input is non-null. Selected/aggregate values cannot
+be demoted with `Row`; keep column-based `expr.Param` for comparison-typed inputs.
+
+<!-- orm-example: pilot2-row-constant -->
+```go
+func enabledAdmins() rows.Scalar[Admin, bool] {
+	enabled := expr.When(expr.Value(Admins.Username).Eq("active"),
+		expr.Constant[Admin](codec.Bool[bool](), true)).Else(expr.Constant[Admin](codec.Bool[bool](), false))
+	return rows.SelectScalar(rows.From(Admins.Query()), enabled.Value())
+}
+func scopedUsername() {
+	type adminScope struct{}
+	source := rows.As[adminScope](Admins.Query(), "admin")
+	parameter := expr.Row(expr.At(rows.Scope(source), Admins.Username)).Param("Ada")
+	_ = parameter
+}
+```
+
+`rows.BoolOf` and `orm.BoolOf` select Boolean codecs for built-in and named bools.
+They reuse ordinary field/column carriers; mutated model fields still need Input
+carriers. Framework enums already expose enum descriptors: use `rows.EnumOf` for
+`countries.Status`, preserving its validation and enum capability restrictions.
+
+<!-- orm-example: pilot2-boolean-enum -->
+```go
+type CountryFlag struct {
+	Status  countries.Status
+	Enabled bool
+}
+type CountryFlagColumns struct {
+	rows.Row[CountryFlag]
+	Status  rows.Field[CountryFlag, countries.Status]
+	Enabled rows.Field[CountryFlag, bool]
+}
+
+var CountryFlags = rows.Define(func(b rows.Builder[CountryFlag], r *CountryFlag) CountryFlagColumns {
+	return CountryFlagColumns{b.Row(), rows.EnumOf(b, &r.Status), rows.BoolOf(b, &r.Enabled)}
+})
+```
+
+## Validate JSON property declarations at startup
+
+`expr.JSONFieldOf` resolves and checks its selector at construction. Call `Validate`
+to surface that stored error before executing queries. Go checks payload/result
+types and field existence; startup checks also reject foreign pointers, ignored or
+ambiguous JSON fields and opaque custom encodings. `orm.Check` does not register or
+validate standalone JSON bindings. Validate every binding in your startup owner.
+
+<!-- orm-example: pilot2-json-startup -->
+```go
+func validateJSONDeclarations() error {
+	// JSONFieldOf already resolved the selector; surface its stored error at startup.
+	// orm.Check validates tables, not standalone JSON field bindings.
+	return Theme.Validate()
+}
+```
+
+## Preserve an attachment slot's stored name
+
+Replace a legacy slot tag such as `foundry:"name=public-media"` with the explicit
+collection-name argument to `attachments.ManyOf` or `attachments.OneOf`. Native
+slots have no persistence tags. `orm.SlotOf` binds the Go field; `extensions.BindSlot`
+retains owner/key/value typing. Keep the collection name, extension owner identity
+and `StorageModel` unchanged when renaming the Go field. The example binds Gallery
+to the existing public-media collection; no stored-data migration is needed.
+
+<!-- orm-example: pilot2-slot-name -->
+```go
+// The Go slot is Gallery; the persisted collection remains "public-media".
+// Bind the field with orm.SlotOf in the model declaration, without a foundry tag.
+var PublicMedia = attachments.ManyOf(ext.Owner, "public-media",
+	attachments.Policy{Disk: storage.DefineDisk("local"), Accepted: []storage.MediaType{"image/png"}},
+	extensions.BindSlot(ext.Articles.Key(), ext.Articles.Gallery))
+```
+
+See [extension slots](model-extension-slots.md), [JSON models](json-models.md) and
+[projection declarations](model-projections.md) for the owning contracts.

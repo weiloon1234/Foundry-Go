@@ -120,3 +120,11 @@ Containment uses `@>` and can use an appropriate JSONB GIN index. Inspect actual
 SQL and [plans](query-plans.md) before choosing an index.
 
 For declaration and API migration, see the [ORM migration guide](orm-migration.md).
+
+### Startup validation
+
+`JSONFieldOf` resolves the selector when declared, retaining any validation error.
+Call each binding's `Validate()` before executor access; `orm.Check` only checks
+table declarations, not unattached JSON fields. Go checks the payload and result
+types, while startup validation checks pointer ownership, JSON tags and custom
+encoding constraints. See the compiled [startup example](orm-migration.md#validate-json-property-declarations-at-startup).

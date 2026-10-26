@@ -2,6 +2,20 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"bool_row_phase", "cannot use"},
+		{"bool_row_value", "does not satisfy"},
+		{"constant_owner", "cannot use"},
+		{"constant_codec_value", "cannot use"},
+		{"constant_projection", "cannot use"},
+		{"constant_selected_phase", "cannot use"},
+		{"row_selected_phase", "does not match"},
+		{"row_owner", "cannot use"},
+		{"row_projection", "cannot use"},
+		{"bool_model_owner", "cannot use"},
+		{"bool_row_owner", "cannot use"},
+		{"bool_projection", "cannot use"},
+		{"bool_value", "does not satisfy"},
+
 		{"auth_bound_resource_model", "cannot use"},
 		{"auth_bound_subject_model", "cannot use"},
 		{"auth_optional_bound_subject", "cannot use"},

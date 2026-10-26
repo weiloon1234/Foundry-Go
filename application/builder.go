@@ -209,6 +209,9 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 		return nil, err
 	}
 	infrastructureOptions := append(slices.Clone(configured.infrastructure), infrastructure.WithClock(configured.clock), infrastructure.WithLogger(logger))
+	if configured.queryObserver != nil {
+		infrastructureOptions = append(infrastructureOptions, infrastructure.WithQueryObserver(configured.queryObserver))
+	}
 	if keys != nil {
 		infrastructureOptions = append(infrastructureOptions, infrastructure.WithDatabaseEncryption(keys))
 	}
@@ -275,7 +278,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &App{App: app, resources: resources, migrations: migrations, databases: s.Services.Database, encryption: keys, models: models}
+	result := &App{App: app, resources: resources, migrations: migrations, databases: s.Services.Database, encryption: keys, queryObserver: configured.queryObserver, models: models}
 	if s.HTTP.Enabled {
 		result.server, err = foundation.Resolve(app.Services(), HTTPKey)
 	}

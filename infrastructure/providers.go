@@ -43,6 +43,9 @@ func (p *Plan) assemble() {
 		p.providers = append(p.providers, foundation.Module{Name: CredentialProvider(name), OnRegister: func(r *foundation.Registrar) error { return foundation.Provide(r, key, provider) }})
 	}
 	var databaseOptions []database.Option
+	if p.options.queryObserver != nil {
+		databaseOptions = append(databaseOptions, database.WithQueryObserver(p.options.queryObserver))
+	}
 	if p.options.statementDetector != nil {
 		databaseOptions = append(databaseOptions, database.WithStatementDetector(p.options.statementDetector))
 	}

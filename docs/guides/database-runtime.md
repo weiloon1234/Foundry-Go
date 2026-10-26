@@ -176,3 +176,18 @@ the shape or call-site cap marks the report incomplete: tests fail and developme
 middleware logs one incomplete-observation warning per request, alongside threshold
 violations. Malformed SQL remains countable through its fingerprint and cannot
 expose literal or identifier-form values through reports, warnings or assertions.
+
+## Application query observation
+
+Pass `application.WithQueryObserver(observer)` to `application.New` to observe
+statements on every framework-configured named database, including primary and
+read endpoints, and the short-lived primary pool used by `RunDatabaseCommand`.
+Direct infrastructure assembly offers `infrastructure.WithQueryObserver`.
+A nil or repeated observer is rejected before startup. Each application retains
+its own borrowed callback; callbacks are not global or composed implicitly.
+
+The existing `database.QueryObserver` contract applies: callbacks run synchronously,
+must be fast, must not query the database or retain the context, and their panics
+are contained. Events expose SQL text and structural metadata, never bound
+arguments. Raw SQL literals remain part of SQL text; use parameters for private
+values. Statements using transactions and sessions retain their pool observer.

@@ -3,6 +3,7 @@ package application
 import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
@@ -14,6 +15,7 @@ import (
 
 type options struct {
 	clock          clock.Clock
+	queryObserver  database.QueryObserver
 	logger         *slog.Logger
 	recorder       *observability.Recorder
 	reporters      []observability.Reporter
@@ -79,6 +81,23 @@ func WithCredentials(name credentials.Name, p credentials.Provider) Option {
 func WithMailDriver(name infrastructure.MailDriver, driver email.Driver) Option {
 	return func(o *options) error {
 		o.infrastructure = append(o.infrastructure, infrastructure.WithMailDriver(name, driver))
+		return nil
+	}
+}
+
+// WithQueryObserver installs a borrowed observer on every framework-built database
+// pool, including named primary/read pools and RunDatabaseCommand pools. It follows database.QueryObserver's
+// synchronous callback, isolation and argument-redaction contract.
+// Example: application.New(settings, application.WithQueryObserver(observer)).
+func WithQueryObserver(observer database.QueryObserver) Option {
+	return func(o *options) error {
+		if observer == nil {
+			return fault.New(fault.Invalid, "database query observer cannot be nil")
+		}
+		if o.queryObserver != nil {
+			return fault.New(fault.Invalid, "database query observer is already configured")
+		}
+		o.queryObserver = observer
 		return nil
 	}
 }
