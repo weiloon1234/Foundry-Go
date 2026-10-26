@@ -33,7 +33,6 @@ type PolicyKey struct {
 	Region  string `json:"region"`
 }
 
-//foundry:model table=json_documents primary=ID
 type Document struct {
 	ID       int
 	Settings value.JSON[Preferences]
@@ -44,18 +43,11 @@ type Document struct {
 	Policy   relation.One[Policy]
 }
 
-//foundry:model table=json_policies primary=ID
 type Policy struct {
 	ID   value.JSON[PolicyKey]
 	Name string
 }
 
-func defineDocumentRelations() DocumentRelationSet {
-	f, p := DocumentFields(), PolicyFields()
-	return DocumentRelationSet{Policy: query.BelongsTo(f.PolicyID, p.ID)}
-}
-
-//foundry:projection
 type Snapshot struct {
 	ID         int
 	Settings   value.JSON[Preferences]

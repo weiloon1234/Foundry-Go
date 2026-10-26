@@ -11,9 +11,9 @@ var matchingOracle = oracle.NewReplayAt("goway", "../../oracle/testdata/stage8d-
 var frozenOracle = oracle.NewReplay("goway")
 
 func TestMain(m *testing.M) { os.Exit(matchingOracle.Finish(frozenOracle.Main(m))) }
-func oracleEqual(t *testing.T, site, legacy, current string) bool {
+func oracleEqual(t *testing.T, site, current string) bool {
 	t.Helper()
-	return frozenOracle.Equal(t, site, legacy, current)
+	return frozenOracle.Equal(t, site, current)
 }
 func TestFrozenOracleIntegrity(t *testing.T) {
 	b, err := oracle.Load(oracleReadDirectory())
@@ -43,7 +43,7 @@ func TestFrozenOracleIntegrity(t *testing.T) {
 		}
 	}
 	if len(b.Records) == 0 {
-		t.Log("oracle freeze is pending; live legacy comparison remains enabled")
+		t.Fatal("published frozen oracle is required")
 	}
 }
 

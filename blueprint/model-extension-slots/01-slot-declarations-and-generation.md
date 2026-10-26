@@ -8,12 +8,12 @@ Prerequisites: accepted milestones 06, 07, 18 and 20. Status belongs to the
 Relation and aggregate slots already use this shape. Discovery recognizes
 `relation.One`/`Many`/`Through`/`Value` fields by package path and type name in
 [model discovery](../../internal/generate/discover.go). The
-[relation](../../internal/generate/emit_model_relations.go) and
-[aggregate](../../internal/generate/emit_model_aggregates.go) emitters then bind
+`internal/generate/emit_model_relations.go` (retired in Stage 8c) and
+`internal/generate/emit_model_aggregates.go` (retired in Stage 8c) emitters then bind
 the handwritten `define<Model>Relations`/`define<Model>Aggregates` result through a `query.Memo`.
-[Global scopes](../../internal/generate/discover_model_scopes.go) show how a
+`internal/generate/discover_model_scopes.go` (retired in Stage 8c) show how a
 handwritten `define...` function is validated with a source diagnostic.
-[Generated auditing](../../internal/generate/emit_model_audit.go) shows a
+`internal/generate/emit_model_audit.go` (retired in Stage 8c) shows a
 generated declaration that the application registers through typed observers.
 
 Extension declarations today are package variables built with

@@ -46,11 +46,7 @@ func inventory(dir string, selected []string) (map[string]bool, []string, error)
 			if !ok || (name.Name != "oracleEqual" && name.Name != "oracleMatch") {
 				return true
 			}
-			wantArgs := 4
-			if name.Name == "oracleMatch" {
-				wantArgs = 3
-			}
-			if len(call.Args) != wantArgs {
+			if len(call.Args) != 3 {
 				problem = fmt.Errorf("invalid oracle assertion in %s", file)
 				return false
 			}

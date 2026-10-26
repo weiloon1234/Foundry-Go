@@ -9,13 +9,13 @@ import (
 	"testing"
 
 	"foundry.test/goway/models"
-	old "foundry.test/goway/oldmodels"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 )
 
-// Every Go block is copied from a region of a compiled example. This checks the
-// text as well as its presence, so prose edits cannot silently fork the examples.
+// The guide includes exact regions of the compiled after examples. Every Go block
+// needs a region ID; missing, duplicate and stale snippets fail this test.
 func TestGuideSnippets(t *testing.T) {
 	root, regions := compiledRegions(t, "migration")
 	used := checkGuideSnippets(t, filepath.Join(root, "docs/guides/orm-migration.md"), regions)
@@ -94,6 +94,9 @@ func checkGuideSnippets(t *testing.T, path string, regions map[string]string) ma
 	used := map[string]bool{}
 	for _, block := range blocks {
 		name := block[1]
+		if strings.HasSuffix(name, "-before") {
+			continue
+		} // Retired API examples are documentation only.
 		source, exists := regions[name]
 		if !exists || used[name] {
 			t.Fatalf("missing or duplicate compiled example %s", name)
@@ -110,21 +113,15 @@ func TestDeclarationsAndReadSQL(t *testing.T) {
 	if err := orm.Check(Users.Table, Archives.Table, models.Users.Table, models.Orders.Table); err != nil {
 		t.Fatal(err)
 	}
-	before, err := old.QueryOrders().Where(old.OrderFields().TotalCents.Gt(100)).Compile()
-	if err != nil {
-		t.Fatal(err)
-	}
 	after, err := orm.Compile(models.Orders.Query().Where(models.Orders.TotalCents.Gt(100)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !oracleEqual(t, "goway/migration/guide_test/1", oracle.Snapshot([]any{before.SQL(), before.Arguments()}), oracle.Snapshot([]any{after.SQL(), after.Arguments()})) {
-		t.Fatal("migration example changed SQL or bound values")
+	if !oracleEqual(t, "goway/migration/guide_test/1", oracle.Snapshot([]any{after.SQL(), after.Arguments()})) {
+		t.Fatal("frozen legacy comparison differs")
 	}
+
 	if err := Theme.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := legacyObserver(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := observer(); err != nil {

@@ -9,13 +9,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:model table=records primary=ID
 type Record struct {
 	ID   int64
 	Name string
 }
 
-//foundry:projection
 type Summary struct {
 	ID   int64
 	Name string

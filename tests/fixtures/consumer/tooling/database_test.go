@@ -5,11 +5,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/tests/oracle"
-	"reflect"
 	"strings"
 	"testing"
 
-	"foundry.test/consumer/models"
 	"foundry.test/consumer/tooling"
 	"github.com/weiloon1234/Foundry-Go/database"
 )
@@ -79,25 +77,20 @@ func TestFactoryRecipeBindsSequencedNames(t *testing.T) {
 func TestUserPlanAndRoutingSQLParity(t *testing.T) {
 	db, recorded := recordingDatabase(t)
 	for _, pair := range []struct {
-		name         string
-		old, current func() error
+		name    string
+		current func() error
 	}{
-		{"explain", func() error { _, err := models.QueryUsers().Limit(10).Explain(t.Context(), db); return err }, func() error { _, err := tooling.UserPlan(t.Context(), db); return err }},
-		{"read", func() error { _, err := models.QueryUsers().Limit(10).All(t.Context(), db); return err }, func() error { _, err := tooling.ReadUsers(t.Context(), db); return err }},
-		{"primary", func() error { _, err := models.QueryUsers().Limit(10).All(t.Context(), db.Primary()); return err }, func() error { _, err := tooling.ReadPrimaryUsers(t.Context(), db); return err }},
+		{"explain", func() error { _, err := tooling.UserPlan(t.Context(), db); return err }},
+		{"read", func() error { _, err := tooling.ReadUsers(t.Context(), db); return err }},
+		{"primary", func() error { _, err := tooling.ReadPrimaryUsers(t.Context(), db); return err }},
 	} {
 		t.Run(pair.name, func(t *testing.T) {
-			oldErr := pair.old()
-			if !errors.Is(oldErr, recorded.cause) {
-				t.Fatal(oldErr)
-			}
-			sql, args := recorded.statement, recorded.arguments
 			currentErr := pair.current()
 			if !errors.Is(currentErr, recorded.cause) {
 				t.Fatal(currentErr)
 			}
-			if sql != recorded.statement || !reflect.DeepEqual(args, recorded.arguments) || !oracleEqual(t, "consumer/tooling/database_test/1", oracle.Snapshot([]any{sql, args, errors.Is(oldErr, recorded.cause)}), oracle.Snapshot([]any{recorded.statement, recorded.arguments, errors.Is(currentErr, recorded.cause)})) {
-				t.Fatal("old/new SQL or bindings differ", sql, recorded.statement)
+			if !oracleEqual(t, "consumer/tooling/database_test/1", oracle.Snapshot([]any{recorded.statement, recorded.arguments, errors.Is(currentErr, recorded.cause)})) {
+				t.Fatal("frozen SQL or bindings differ")
 			}
 		})
 	}

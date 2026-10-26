@@ -48,7 +48,7 @@ func TestORMDeclarationsAndReadParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if statement.SQL() != old.SQL || !bytes.Equal(args, old.Args) || !oracleEqual(t, "consumer/linkqueries/orm_test/1", oracle.Snapshot([]any{old.SQL, old.Args}), oracle.Snapshot([]any{statement.SQL(), json.RawMessage(args)})) {
+	if statement.SQL() != old.SQL || !bytes.Equal(args, old.Args) || !oracleEqual(t, "consumer/linkqueries/orm_test/1", oracle.Snapshot([]any{statement.SQL(), json.RawMessage(args)})) {
 		t.Fatalf("read SQL or bindings changed: old=%s new=%s", old.SQL, statement.SQL())
 	}
 	for _, relation := range []orm.Relation[linkqueries.Member]{linkqueries.MemberLinks.Groups, linkqueries.MemberLinks.NamedGroups, linkqueries.MemberLinks.AliasGroups, linkqueries.MemberLinks.Friends} {

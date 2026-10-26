@@ -7,7 +7,6 @@ import (
 
 type RecordKey int64
 
-//foundry:model table=write_records primary=Code
 type WriteRecord struct {
 	Code    RecordKey `foundry:"default=database"`
 	Name    string

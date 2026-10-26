@@ -8,7 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:model table=temporal_samples primary=ID
 type Sample struct {
 	ID         int
 	Millis     int64
@@ -23,7 +22,6 @@ type Sample struct {
 	MaybeClock value.Nullable[temporal.Time]
 }
 
-//foundry:projection
 type CalendarSummary struct {
 	Year   int64
 	Rows   int64

@@ -22,11 +22,11 @@ const (
  Disabled Status = "disabled"
 )
 
-//foundry:model table=users primary=Key
+//foundry:dto
 type User struct { Key int; Name string; State Status }
 
-func (u User) Draft() UserDraft { return UserDraft{}.SetName(u.Name) }
-var initial = UserDraft{}.SetName("initial")
+func (u User) Validate() error { return UserJSON().Validate() }
+var initial = UserJSON()
 `
 
 func fixture(t *testing.T, source string) string {
@@ -143,12 +143,12 @@ func TestFreshGenerationStaleCheckAndRegeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := generatedSnapshot(t, dir)
-	if !strings.Contains(second["user_foundry.gen.go"], "SetAge") {
+	if !strings.Contains(second["user_foundry.gen.go"], `Name: "Age"`) {
 		t.Fatal("new field not generated")
 	}
 	// Full-overlay validation must reject broken business methods, even though
 	// declaration-only analysis deliberately ignores their generated references.
-	write(t, dir, "models.go", strings.Replace(updated, "SetName(u.Name)", "SetMissing(u.Name)", 1))
+	write(t, dir, "models.go", strings.Replace(updated, "UserJSON().Validate()", "UserJSON().Missing()", 1))
 	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "overlay") {
 		t.Fatalf("invalid handwritten method accepted: %v", err)
 	}
@@ -177,12 +177,13 @@ const (
 )
 const AliasActive = Active + 1
 const Size = unsafe.Sizeof(initial)
-type DraftAlias = UserDraft
+type DraftAlias = UserValidationFieldSet
 var initial = DraftAlias{}
 var driver = "domain variable with the same name as an emitted import"
 var enum = "another emitted import name"
-//foundry:model table=users primary=Key
-type User struct {Key int; State State; Computed DraftAlias `+"`foundry:\"-\"`"+`}
+//foundry:dto
+type User struct {Key int; State State}
+type Unrelated struct {Computed DraftAlias}
 `)
 	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
 		t.Fatal(err)
@@ -202,20 +203,9 @@ type User struct {Key int; State State; Computed DraftAlias `+"`foundry:\"-\"`"+
 
 func TestInvalidDeclarationsDoNotWrite(t *testing.T) {
 	for _, test := range []struct{ name, source, want string }{
-		{"missing table", "//foundry:model\ntype User struct {ID int}", "valid table"},
-		{"unknown option", "//foundry:model table=users primry=ID\ntype User struct {ID int}", "unsupported model option"},
-		{"missing primary", "//foundry:model table=users\ntype User struct {Name string}", "missing primary"},
-		{"untyped primary", "//foundry:model table=users\ntype User struct {ID int}", "default primary"},
-		{"duplicate column", "//foundry:model table=users primary=ID\ntype User struct {ID int; Other int `foundry:\"column=id\"`}", "duplicate column"},
-		{"unsupported field", "//foundry:model table=users primary=ID\ntype User struct {ID int; Values []string}", "unsupported persisted field"},
-		{"unknown field option", "//foundry:model table=users primary=ID\ntype User struct {ID int `foundry:\"colum=id\"`}", "unsupported foundry field tag"},
-		{"invalid default", "//foundry:model table=users primary=ID\ntype User struct {ID int `foundry:\"default=now()\"`}", "unsupported foundry field tag"},
-		{"malformed tag", "//foundry:model table=users primary=ID\ntype User struct {ID int `foundry:\"column=id`}", "malformed quoted struct tag"},
-		{"duplicate table", "//foundry:model table=users primary=ID\ntype User struct {ID int}\n//foundry:model table=users primary=ID\ntype Other struct {ID int}", "duplicate model table"},
 		{"enum duplicate", "//foundry:enum\ntype Status string\nconst(A Status=\"same\";B Status=\"same\")", "duplicate serialized values"},
 		{"enum invalid utf8", "//foundry:enum\ntype Status string\nconst A Status=\"\\xff\"", "valid UTF-8"},
 		{"enum pointer integer", "//foundry:enum\ntype Status uintptr\nconst A Status=1", "string or integer underlying type"},
-		{"model alias", "//foundry:model table=users primary=ID\ntype User = struct {ID int}", "defined type"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			dir := fixture(t, "package sample\n"+test.source+"\n")
@@ -226,33 +216,6 @@ func TestInvalidDeclarationsDoNotWrite(t *testing.T) {
 				t.Fatal("invalid declaration wrote files")
 			}
 		})
-	}
-}
-
-func TestImportedEnumRetainsScalarOperatorsAndPackageName(t *testing.T) {
-	dir := fixture(t, `package sample
-import kind "foundry.test/generator/value-kinds"
-//foundry:model table=users primary=Key
-type User struct{Key int; State kind.Status}
-`)
-	values := filepath.Join(dir, "value-kinds")
-	if err := os.Mkdir(values, 0755); err != nil {
-		t.Fatal(err)
-	}
-	write(t, values, "values.go", "package kinds\n//foundry:enum\ntype Status string\nconst Active Status=\"active\"\n")
-	if _, err := Generate(t.Context(), Options{Dir: values}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
-		t.Fatal(err)
-	}
-	output := generatedSnapshot(t, dir)["user_foundry.gen.go"]
-	if !strings.Contains(output, "ScalarField[FoundryScope, kinds.Status]") || !strings.Contains(output, "type UserFieldSet = UserScopedFieldSet[User]") {
-		t.Fatal("imported enum lost its owner, package name, or operator restriction")
-	}
-	write(t, dir, "invalid.go", "package sample\nvar invalid = UserFields().State.Like(\"a%\")\n")
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "Like undefined") {
-		t.Fatalf("imported enum accepted text operator: %v", err)
 	}
 }
 
@@ -321,28 +284,6 @@ func TestGenerationOwnershipAndEmptyPackages(t *testing.T) {
 			t.Fatalf("unsafe manifest accepted: %v", err)
 		}
 	})
-}
-
-func TestFieldAliasesAndModelIDOwnership(t *testing.T) {
-	source := `package sample
-import("github.com/weiloon1234/Foundry-Go/model";"github.com/weiloon1234/Foundry-Go/value")
-type Email = string
-type UserID = model.ID[User]
-//foundry:model table=users
-type User struct{ ID UserID; Email Email; Parent value.Nullable[UserID] }
-`
-	dir := fixture(t, source)
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
-		t.Fatal(err)
-	}
-	output := generatedSnapshot(t, dir)["user_foundry.gen.go"]
-	if !strings.Contains(output, "SetEmail(v Email)") || !strings.Contains(output, "SetParent(v UserID)") {
-		t.Fatal("field aliases were erased")
-	}
-	write(t, dir, "models.go", strings.Replace(source, "type UserID = model.ID[User]", "type Other struct{}\ntype UserID = model.ID[Other]", 1))
-	if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), "must belong to this model") {
-		t.Fatalf("cross-model primary ID accepted: %v", err)
-	}
 }
 
 func TestPublicationRollsBackFailuresAndCancellation(t *testing.T) {

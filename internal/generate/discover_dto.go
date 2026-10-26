@@ -20,7 +20,6 @@ type dtoDeclaration struct {
 	name      string
 	typ       *types.Named
 	position  token.Position
-	projected bool
 	fieldHelp []fieldHelp
 	message   *messageOptions
 	// role is dtoResponseRole for DTOs that are never decoded from requests.
@@ -94,8 +93,8 @@ func dtoTypeID(typ types.Type) contract.TypeID {
 	return contract.TypeID(gotype.Identity(text, false))
 }
 
-func resolveDTOSchema(p *packageInput, declaration *dtoDeclaration, models map[*types.Named]bool) error {
-	if err := resolveJSONGraph(p, &declaration.dtoGraph, declaration.typ, declaration.typ.Obj().Pos(), models, false); err != nil {
+func resolveDTOSchema(p *packageInput, declaration *dtoDeclaration) error {
+	if err := resolveJSONGraph(p, &declaration.dtoGraph, declaration.typ, declaration.typ.Obj().Pos(), false); err != nil {
 		return err
 	}
 	if declaration.role != dtoResponseRole {
@@ -106,10 +105,20 @@ func resolveDTOSchema(p *packageInput, declaration *dtoDeclaration, models map[*
 	return nil
 }
 
+// Persistence-model diagnostics shared by discovery, which rejects types with a
+// model identity method, and the run-wide recognized-model check.
+const (
+	persistenceFieldDiagnostic     = "persistence models cannot become DTO fields; map stored or getter values into an explicit response struct"
+	persistenceEmbeddingDiagnostic = "persistence models cannot be embedded into DTOs; declare response fields explicitly"
+	persistenceMapKeyDiagnostic    = "persistence models cannot become DTO map keys; use a typed model ID"
+)
+
 // resolveJSONGraph owns all JSON shape discovery. Only a complete DTO root is
 // required to retain native struct fields; explicit JSON part values may use
 // their existing typed JSONContract, including a declared scalar or collection.
-func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, position token.Pos, models map[*types.Named]bool, allowRootCodec bool) error {
+// Recognized persistence models are rejected once the whole run is checked;
+// see rejectPersistenceGraph.
+func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, position token.Pos, allowRootCodec bool) error {
 	seen := make(map[contract.TypeID]*dtoNode)
 	add := func(typ types.Type, position token.Pos) (contract.TypeID, error) {
 		typ = canonicalDTOInstantiation(types.Unalias(typ))
@@ -160,8 +169,8 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 			continue
 		}
 		if named, ok := typ.(*types.Named); ok {
-			if models[named] || hasDTOModelIdentity(named) {
-				return fail("persistence models cannot become DTO fields; map stored or getter values into an explicit response struct")
+			if hasDTOModelIdentity(named) {
+				return fail(persistenceFieldDiagnostic)
 			}
 			if isNamed(named, framework+"/value", "Optional") || isNamed(named, framework+"/value", "Nullable") {
 				inner := named.TypeArgs().At(0)
@@ -226,12 +235,12 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 				return fail("unsupported DTO scalar")
 			}
 		case *types.Struct:
-			embeddedModel, err := dtoEmbedsModel(typ, models)
+			embeddedModel, err := dtoEmbedsModel(typ, hasDTOModelIdentity)
 			if err != nil {
 				return fail(err.Error())
 			}
 			if embeddedModel {
-				return fail("persistence models cannot be embedded into DTOs; declare response fields explicitly")
+				return fail(persistenceEmbeddingDiagnostic)
 			}
 			node.wire.Kind = contract.ObjectKind
 			for fieldIndex := 0; fieldIndex < shape.NumFields(); fieldIndex++ {
@@ -321,8 +330,10 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 			}
 			node.wire.Kind, node.wire.Element = contract.ArrayKind, id
 		case *types.Map:
-			key, err := resolveDTOMapKey(p, shape.Key(), node.position, models)
+			key, err := resolveDTOMapKey(p, shape.Key(), node.position)
 			if err != nil {
+				// Keep the rejected key for persistence-failure refinement.
+				node.key = &dtoMapKey{typ: types.Unalias(shape.Key())}
 				return err
 			}
 			node.key = &key
@@ -347,10 +358,9 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 	return validateUnionGraph(graph)
 }
 
-// Check embedded declarations before jsonshape promotes their fields. On a
-// fresh checkout a same-package model's generated identity method does not
-// exist yet, and flattening first would hide the model behind scalar fields.
-func dtoEmbedsModel(root types.Type, models map[*types.Named]bool) (bool, error) {
+// Check embedded declarations before jsonshape promotes their fields, since
+// flattening first would hide the model behind scalar fields.
+func dtoEmbedsModel(root types.Type, model func(*types.Named) bool) (bool, error) {
 	queue := []types.Type{root}
 	seen := make(map[types.Type]bool)
 	for i := 0; i < len(queue); i++ {
@@ -362,7 +372,7 @@ func dtoEmbedsModel(root types.Type, models map[*types.Named]bool) (bool, error)
 			continue
 		}
 		seen[typ] = true
-		if named, ok := typ.(*types.Named); ok && (models[named] || hasDTOModelIdentity(named)) {
+		if named, ok := typ.(*types.Named); ok && model(named) {
 			return true, nil
 		}
 		structure, ok := typ.Underlying().(*types.Struct)
@@ -381,8 +391,8 @@ func dtoEmbedsModel(root types.Type, models map[*types.Named]bool) (bool, error)
 	return false, nil
 }
 
-func hasDTOModelIdentity(typ types.Type) bool {
-	methods := types.NewMethodSet(types.NewPointer(typ))
+func hasDTOModelIdentity(named *types.Named) bool {
+	methods := types.NewMethodSet(types.NewPointer(named))
 	method := methods.Lookup(nil, "FoundryIdentity")
 	if method == nil {
 		return false

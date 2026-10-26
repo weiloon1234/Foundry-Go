@@ -51,43 +51,6 @@ func (t *Trace) record(event Event) error {
 	return nil
 }
 
-func assignmentHooks() AssignmentHooks { return Hooks("local") }
-
-// Hooks records every lifecycle step for the owner (local or provider).
-func Hooks(owner string) AssignmentHooks {
-	record := assignmentEvents(owner)
-	current := func(name string) func(context.Context, *database.Tx, Assignment) error {
-		return func(ctx context.Context, _ *database.Tx, stored Assignment) error {
-			return record(ctx, name, value.Set(stored), value.Optional[Assignment]{})
-		}
-	}
-	changed := func(name string) func(context.Context, *database.Tx, AssignmentChanges) error {
-		return func(ctx context.Context, _ *database.Tx, changes AssignmentChanges) error {
-			return record(ctx, name, changes.Before(), changes.After())
-		}
-	}
-	return AssignmentHooks{
-		Creating: func(ctx context.Context, _ *database.Tx, _ *AssignmentDraft) error {
-			return record(ctx, "creating", value.Optional[Assignment]{}, value.Optional[Assignment]{})
-		},
-		Updating: func(ctx context.Context, _ *database.Tx, stored Assignment, _ *AssignmentDraft) error {
-			return record(ctx, "updating", value.Set(stored), value.Optional[Assignment]{})
-		},
-		Deleting: current("deleting"),
-		Created: func(ctx context.Context, tx *database.Tx, changes AssignmentChanges) error {
-			if err := changed("created")(ctx, tx, changes); err != nil {
-				return err
-			}
-			return assignmentCreated(ctx, tx, owner)
-		},
-		Updated: changed("updated"),
-		Deleted: changed("deleted"),
-		AfterCommit: func(ctx context.Context, operation lifecycle.Operation, _ AssignmentChanges) error {
-			return assignmentCommitted(ctx, owner, operation)
-		},
-	}
-}
-
 func assignmentEvents(owner string) func(context.Context, string, value.Optional[Assignment], value.Optional[Assignment]) error {
 	return func(ctx context.Context, name string, before, after value.Optional[Assignment]) error {
 		trace, _ := ctx.Value(traceKey{}).(*Trace)

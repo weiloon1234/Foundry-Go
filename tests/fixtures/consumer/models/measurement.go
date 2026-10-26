@@ -6,7 +6,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:model table=measurements
 type Measurement struct {
 	ID     model.ID[Measurement]
 	UserID model.ID[User]

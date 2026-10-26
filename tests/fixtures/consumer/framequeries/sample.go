@@ -9,7 +9,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:model table=frame_samples primary=ID
 type Sample struct {
 	ID     int
 	Band   int16

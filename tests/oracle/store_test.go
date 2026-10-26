@@ -25,16 +25,16 @@ func pending(t *testing.T) string {
 func TestPublicationRequiresExplicitRefreeze(t *testing.T) {
 	dir := pending(t)
 	b := sample()
-	if err := Publish(dir, b, true); err == nil {
+	if err := publishFixture(dir, b, true); err == nil {
 		t.Fatal("refreeze accepted pending evidence")
 	}
-	if err := Publish(dir, b, false); err != nil {
+	if err := publishFixture(dir, b, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := Publish(dir, b, false); err == nil {
+	if err := publishFixture(dir, b, false); err == nil {
 		t.Fatal("implicit overwrite accepted")
 	}
-	if err := Publish(dir, b, true); err != nil {
+	if err := publishFixture(dir, b, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Load(dir); err != nil {
@@ -46,7 +46,7 @@ func TestGuardRejectsChangedMissingOrUnprovenancedRecords(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			dir := pending(t)
 			b := sample()
-			if err := Publish(dir, b, false); err != nil {
+			if err := publishFixture(dir, b, false); err != nil {
 				t.Fatal(err)
 			}
 			path := filepath.Join(dir, "records.json")
@@ -100,7 +100,7 @@ func TestCountSymbols(t *testing.T) {
 func TestReplacementCanAddAndRemoveSitesAfterReplay(t *testing.T) {
 	published := pending(t)
 	before := sample()
-	if err := Publish(published, before, false); err != nil {
+	if err := publishFixture(published, before, false); err != nil {
 		t.Fatal(err)
 	}
 	stage := pending(t)
@@ -109,7 +109,7 @@ func TestReplacementCanAddAndRemoveSitesAfterReplay(t *testing.T) {
 	delete(replacement.Records, "p/TestGolden/site/0")
 	record.Site = "added"
 	replacement.Records["p/TestNew/added/0"] = record
-	if err := Publish(stage, replacement, false); err != nil {
+	if err := publishFixture(stage, replacement, false); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := Load(stage)
@@ -126,7 +126,7 @@ func TestReplacementCanAddAndRemoveSitesAfterReplay(t *testing.T) {
 	if missing, err := Unconsumed(loaded, "p", map[string]bool{"p/TestNew/added/0": true}, selection); err != nil || len(missing) != 0 {
 		t.Fatal(missing, err)
 	}
-	if err := Publish(published, loaded, true); err != nil {
+	if err := publishFixture(published, loaded, true); err != nil {
 		t.Fatal(err)
 	}
 	final, err := Load(published)

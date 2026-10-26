@@ -127,9 +127,9 @@ func TestInvalidDTODeclarationsDoNotPublish(t *testing.T) {
 		"unknown json option":         "//foundry:dto\ntype Input struct{ Name string `json:\"name,guess\"` }",
 		"custom codec":                "type Code string\nfunc(Code)MarshalJSON()([]byte,error){return nil,nil}\n//foundry:dto\ntype Input struct{ Code Code }",
 		"quoted enum":                 "//foundry:enum\ntype State string\nconst Active State=\"active\"\n//foundry:dto\ntype Input struct{ State State `json:\"state,string\"` }",
-		"nested model":                "//foundry:model table=accounts primary=Key\ntype Account struct{ Key int; Password string }\n//foundry:dto\ntype Input struct{ Account Account }",
-		"embedded model":              "//foundry:model table=accounts primary=Key\ntype Account struct{ Key int; Password string }\n//foundry:dto\ntype Input struct{ Account }",
-		"transitively embedded model": "//foundry:model table=accounts primary=Key\ntype Account struct{ Key int; Password string }\ntype Wrapper struct{ *Account }\n//foundry:dto\ntype Input struct{ Wrapper }",
+		"nested model":                "import orm \"github.com/weiloon1234/Foundry-Go/database/orm\"\nvar table orm.Table[Account, int]\ntype Account struct{ Key int; Password string }\n//foundry:dto\ntype Input struct{ Account Account }",
+		"embedded model":              "import orm \"github.com/weiloon1234/Foundry-Go/database/orm\"\nvar table orm.Table[Account, int]\ntype Account struct{ Key int; Password string }\n//foundry:dto\ntype Input struct{ Account }",
+		"transitively embedded model": "import orm \"github.com/weiloon1234/Foundry-Go/database/orm\"\nvar table orm.Table[Account, int]\ntype Account struct{ Key int; Password string }\ntype Wrapper struct{ *Account }\n//foundry:dto\ntype Input struct{ Wrapper }",
 		"symbol collision":            "//foundry:dto\ntype Input struct{}\nfunc InputJSON(){}",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -177,10 +177,11 @@ type Input struct{ State domain.State }
 		t.Fatal(err)
 	}
 	write(t, dir, "domain/types.go", `package domain
+import "github.com/weiloon1234/Foundry-Go/database/orm"
+var Accounts orm.Table[Account,int]
 //foundry:enum
 type State uint8
 const Active State=1
-//foundry:model table=accounts primary=Key
 type Account struct{ Key int; Password string }
 `)
 	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {

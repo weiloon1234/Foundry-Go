@@ -4,7 +4,7 @@ func emitPath(p *packageInput, declaration pathDeclaration) ([]byte, error) {
 	e := newEmitter(p)
 	http := e.useNamed(framework+"/http", "foundryhttp")
 	// Allocate import aliases before a local selector name, using the same
-	// allocator that protects generated model code from consumer type shadowing.
+	// allocator that protects generated contract code from consumer type shadowing.
 	for _, field := range declaration.fields {
 		_ = e.typeName(field.typ)
 		if field.owner != nil {

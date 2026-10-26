@@ -35,7 +35,7 @@ type compilerOutcome struct {
 
 func TestInvalidPublicContractsFailCompilation(t *testing.T) {
 	testkit.TrackExternalInputs(t)
-	checkCompilerCases(t, compilerCases(), runCompilerBatches)
+	checkCompilerCases(t, activeCompilerCases(t), runCompilerBatches)
 }
 
 func checkCompilerCases(t *testing.T, cases []compilerCase, run func(context.Context, []compilerCase) map[string]compilerOutcome) {

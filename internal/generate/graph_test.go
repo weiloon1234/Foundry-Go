@@ -18,7 +18,7 @@ func graphFixture(t *testing.T) string {
 	t.Helper()
 	dir := fixture(t, `package sample
 import "foundry.test/generator/domain"
-func Draft() domain.UserDraft {return domain.UserDraft{}.SetState(domain.DefaultState())}
+func Validate() error {return domain.UserJSON().Validate()}
 `)
 	for _, sub := range []string{"domain", "state"} {
 		if err := os.Mkdir(filepath.Join(dir, sub), 0755); err != nil {
@@ -32,10 +32,10 @@ const(Active State="active";Disabled State="disabled")
 `)
 	write(t, filepath.Join(dir, "domain"), "user.go", `package domain
 import "foundry.test/generator/state"
-//foundry:model table=users primary=Key
+//foundry:dto
 type User struct{Key int; State state.State}
 func DefaultState() state.State{return state.Active}
-func(u User)Draft()UserDraft{return UserDraft{}.SetKey(u.Key).SetState(u.State)}
+func(u User)Validate()error{return UserJSON().Validate()}
 `)
 	return dir
 }
@@ -195,9 +195,10 @@ func TestFreshGraphGenerationAndDependentValidation(t *testing.T) {
 		t.Fatalf("outputs = %+v", result)
 	}
 	first := graphSnapshot(t, dir)
-	if !strings.Contains(first["domain/user_foundry.gen.go"], "ScalarField[FoundryScope, state.State]") || !strings.Contains(first["domain/user_foundry.gen.go"], "type UserFieldSet = UserScopedFieldSet[User]") {
-		t.Fatal("imported generated enum lost scalar operations")
+	if !strings.Contains(first["domain/user_foundry.gen.go"], "state.State") || !strings.Contains(first["domain/user_foundry.gen.go"], "EnumDescriptor") {
+		t.Fatal("imported generated enum lost its DTO contract")
 	}
+
 	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, Recursive: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +208,7 @@ func TestFreshGraphGenerationAndDependentValidation(t *testing.T) {
 	if !reflect.DeepEqual(first, graphSnapshot(t, dir)) {
 		t.Fatal("repeat graph generation changed files")
 	}
-	write(t, dir, "models.go", "package sample\nimport \"foundry.test/generator/domain\"\nvar broken = domain.UserDraft{}.SetMissing(1)\n")
+	write(t, dir, "models.go", "package sample\nimport \"foundry.test/generator/domain\"\nvar broken = domain.UserJSON().Missing()\n")
 	write(t, filepath.Join(dir, "state"), "state.go", "package state\n//foundry:enum\ntype State string\nconst Active State=\"changed\"\n")
 	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true}); err == nil || !strings.Contains(err.Error(), "overlay") {
 		t.Fatalf("dependent validation = %v", err)
@@ -217,7 +218,7 @@ func TestFreshGraphGenerationAndDependentValidation(t *testing.T) {
 	}
 }
 
-func TestGraphCyclesAndDuplicateTables(t *testing.T) {
+func TestGraphCyclesRejectPublication(t *testing.T) {
 	cycle := graphFixture(t)
 	write(t, filepath.Join(cycle, "state"), "cycle.go", "package state\nimport \"foundry.test/generator/domain\"\nvar User domain.User\n")
 	if _, err := Generate(t.Context(), Options{Dir: cycle, Recursive: true}); err == nil || !strings.Contains(err.Error(), "cycle") {
@@ -225,14 +226,6 @@ func TestGraphCyclesAndDuplicateTables(t *testing.T) {
 	}
 	if len(graphSnapshot(t, cycle)) != 0 {
 		t.Fatal("cyclic graph published output")
-	}
-	dir := graphFixture(t)
-	write(t, filepath.Join(dir, "state"), "duplicate.go", "package state\n//foundry:model table=users primary=Key\ntype Other struct{Key int}\n")
-	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true}); err == nil || !strings.Contains(err.Error(), "duplicate model table") {
-		t.Fatalf("duplicate table = %v", err)
-	}
-	if len(graphSnapshot(t, dir)) != 0 {
-		t.Fatal("duplicate table published output")
 	}
 }
 

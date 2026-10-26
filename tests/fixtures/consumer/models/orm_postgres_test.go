@@ -2,7 +2,7 @@ package models_test
 
 import (
 	"github.com/weiloon1234/Foundry-Go/tests/oracle"
-	"reflect"
+
 	"testing"
 
 	"foundry.test/consumer/internal/queryfixture"
@@ -16,12 +16,8 @@ func TestPostgresSharedDeclarationRelationParity(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		links, values := models.UserRelations(), models.UserAggregates()
-		want, err := models.QueryUsers().With(links.Introducer, links.Referrals, links.Orders, values.OrderCount, values.OrderTotal, values.OrderAverage, values.OrderMinimum, values.OrderMaximum).OrderBy(models.UserFields().Email.Asc()).All(t.Context(), tx)
-		if err != nil {
-			return err
-		}
-		if !reflect.DeepEqual(got, want) || !oracleEqual(t, "consumer/models/postgres/hydration", oracle.ModelSnapshot(want), oracle.ModelSnapshot(got)) {
+
+		if !oracleEqual(t, "consumer/models/postgres/hydration", oracle.ModelSnapshot(got)) {
 			t.Fatal("shared declarations changed relation slots or aggregate values")
 		}
 		return nil

@@ -5,11 +5,11 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"foundry.test/goway/models"
-	old "foundry.test/goway/oldmodels"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+
 	"strings"
 	"testing"
 )
@@ -17,8 +17,8 @@ import (
 func TestStage6c2CompositionGolden(t *testing.T) {
 	for _, kind := range []string{"set_Union", "set_UnionAll", "set_Intersect", "set_IntersectAll", "set_Except", "set_ExceptAll", "value_Union", "value_UnionAll", "value_Intersect", "value_IntersectAll", "value_Except", "value_ExceptAll", "cte", "materialized", "dependency", "recursive", "recursive_all", "transaction", "projection"} {
 		t.Run(kind, func(t *testing.T) {
-			before, after := &goldenCapture{}, &goldenCapture{}
-			for _, g := range []*goldenCapture{before, after} {
+			after := &goldenCapture{}
+			for _, g := range []*goldenCapture{after} {
 				switch {
 				case strings.HasPrefix(kind, "value_"):
 					g.scriptedColumns = []string{"value"}
@@ -31,101 +31,15 @@ func TestStage6c2CompositionGolden(t *testing.T) {
 					g.scriptedBatches = [][][]driver.Value{{{orderID, buyerID, int64(500)}}}
 				}
 			}
-			runCompositionOld(before, kind)
+
 			runCompositionNew(after, kind)
-			if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "composition_golden/1", before.output.String(), after.output.String()) {
-				t.Fatalf("composition parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
+			if after.statements != 1 || !oracleEqual(t, "composition_golden/1", after.output.String()) {
+				t.Fatal("frozen legacy comparison differs")
 			}
 		})
 	}
 }
-func runCompositionOld(g *goldenCapture, kind string) {
-	ctx := context.Background()
-	db := g.open(ctx)
-	defer db.Close(ctx)
-	a := old.QueryOrders().Where(old.OrderFields().TotalCents.Gt(10)).OrderBy(old.OrderFields().TotalCents.Desc()).Limit(2).Offset(1)
-	b := old.QueryOrders().Where(old.OrderFields().TotalCents.Gt(20))
-	if strings.HasPrefix(kind, "value_") {
-		x, y := query.SelectValue(a, query.Value(old.OrderFields().TotalCents)), query.SelectValue(b, query.Value(old.OrderFields().TotalCents))
-		var q query.ValueSetQuery[int64]
-		switch kind {
-		case "value_Union":
-			q = x.Union(y)
-		case "value_UnionAll":
-			q = x.UnionAll(y)
-		case "value_Intersect":
-			q = x.Intersect(y)
-		case "value_IntersectAll":
-			q = x.IntersectAll(y)
-		case "value_Except":
-			q = x.Except(y)
-		case "value_ExceptAll":
-			q = x.ExceptAll(y)
-		}
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.OrderBy(q.Value().Asc()).Limit(3).Offset(2).All(ctx, db))}))
-		return
-	}
-	if strings.HasPrefix(kind, "set_") {
-		var q query.SetQuery[old.Order]
-		switch kind {
-		case "set_Union":
-			q = query.Union(a, b)
-		case "set_UnionAll":
-			q = query.UnionAll(a, b)
-		case "set_Intersect":
-			q = query.Intersect(a, b)
-		case "set_IntersectAll":
-			q = query.IntersectAll(a, b)
-		case "set_Except":
-			q = query.Except(a, b)
-		case "set_ExceptAll":
-			q = query.ExceptAll(a, b)
-		}
-		got := must(q.Where(old.OrderFieldsAt(q.Scope()).TotalCents.Ne(0)).OrderBy(old.OrderFieldsAt(q.Scope()).TotalCents.Asc()).Limit(3).Offset(2).All(ctx, db))
-		for _, r := range got {
-			fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
-		}
-		return
-	}
-	if kind == "transaction" {
-		check(db.Transaction(ctx, func(tx *database.Tx) error {
-			c := query.TransactionCTE("claimed", a.ForUpdate().SkipLocked()).Materialized()
-			alias := query.AsTransaction[joinA](c, "r")
-			for _, r := range must(query.SelectTransactionRecord(alias, alias.Scope()).All(ctx, tx)) {
-				fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
-			}
-			return nil
-		}))
-		return
-	}
-	if kind == "projection" {
-		p := oldCorrelationProjection(a, query.Nullable(query.Value(old.OrderFields().TotalCents)))
-		alias := query.As[joinA](query.CTE("summary", p), "r")
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(query.SelectRecord(alias, alias.Scope()).All(ctx, db))}))
-		return
-	}
-	c := query.CTE("eligible", a)
-	switch kind {
-	case "materialized":
-		c = c.Materialized()
-	case "dependency":
-		c = query.CTE("dependent", c.NotMaterialized())
-	case "recursive", "recursive_all":
-		step := func(self query.RecursiveSelf[old.Order]) query.RecordQuerySource[old.Order] {
-			p := query.As[joinB](self, "parent")
-			return query.SelectRecord(p, p.Scope()).Where(old.OrderFieldsAt(p.Scope()).TotalCents.Eq(0))
-		}
-		if kind == "recursive" {
-			c = query.RecursiveCTE("eligible", a, step)
-		} else {
-			c = query.RecursiveAllCTE("eligible", a, step)
-		}
-	}
-	alias := query.As[joinA](c, "r")
-	for _, r := range must(query.SelectRecord(alias, alias.Scope()).All(ctx, db)) {
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
-	}
-}
+
 func runCompositionNew(g *goldenCapture, kind string) {
 	ctx := context.Background()
 	db := g.open(ctx)

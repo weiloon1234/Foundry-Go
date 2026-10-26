@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -101,7 +102,6 @@ var footprintBudgets = map[string]footprintBudget{
 	"extension_handles":      {"./testdata/footprint/extension_handles", 1481},
 	"extension_declaration":  {"foundry.test/goway/models/extensions", 30434},
 	"extension_slots":        {"./testdata/footprint/extension_slots", 2154},
-	"extension_slots_old":    {"./testdata/footprint/extension_slots_old", 30493},
 	"orm_factory":            {"./testdata/footprint/orm_factory", 1093},
 	"orm_binding":            {"./testdata/footprint/orm_binding", 1089},
 
@@ -301,6 +301,22 @@ func TestFootprintBudgets(t *testing.T) {
 			}
 		})
 	}
+	// The retired generated workload is compared with its provenance-checked freeze.
+	bundle, err := oracle.Load(oracle.Directory())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, exists := bundle.Records["footprint/./testdata/footprint/extension_slots_old"]
+	if !exists || record.Kind != "footprint" {
+		t.Fatal("missing historical extension footprint")
+	}
+	var baseline struct {
+		Functions int `json:"functions"`
+	}
+	if err := json.Unmarshal([]byte(record.Transcript), &baseline); err != nil || baseline.Functions <= 0 {
+		t.Fatal("invalid historical extension footprint", err)
+	}
+	functions["extension_slots_old"] = baseline.Functions
 	// Identical four-slot LoadMissing workloads: importer cost must remain well
 	// below the generated descriptor graph, not merely below its old ceiling.
 	t.Run("extension_namespace_reduction", func(t *testing.T) {

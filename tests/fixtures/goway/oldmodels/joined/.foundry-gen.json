@@ -1,8 +1,0 @@
-{
-  "version": 1,
-  "files": {
-    "parent_foundry.gen.go": "036ffb9a7ff6a86fd5e39be12e9d248b5d441f0e73bb55a6494008920e2bf78c",
-    "pivot_foundry.gen.go": "8c3658943542405ea30e7a7949960d80ea6e101bb770988abd67e921176e1730",
-    "target_foundry.gen.go": "76288352e993dac88bfd3257edd21f207ade074f76d4d4f2d6070b6c09430370"
-  }
-}

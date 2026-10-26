@@ -76,21 +76,9 @@ func (r *Replay) load() {
 		r.bundle, r.err = Load(dir)
 	})
 }
-func (r *Replay) Equal(t *testing.T, site, legacy, current string) bool {
-	t.Helper()
-	return r.compare(t, site, &legacy, current)
-}
 
-// Match replays an existing legacy observation. It cannot publish current output.
-func (r *Replay) Match(t *testing.T, site, current string) bool {
+func (r *Replay) Equal(t *testing.T, site, current string) bool {
 	t.Helper()
-	return r.compare(t, site, nil, current)
-}
-func (r *Replay) compare(t *testing.T, site string, legacy *string, current string) bool {
-	t.Helper()
-	if legacy == nil && os.Getenv("FOUNDRY_ORACLE_STAGE") != "" {
-		t.Fatal("replay-only assertion cannot capture a legacy observation")
-	}
 	testkit.TrackExternalInputs(t)
 	r.load()
 	if r.err != nil {
@@ -105,47 +93,12 @@ func (r *Replay) compare(t *testing.T, site string, legacy *string, current stri
 		t.Cleanup(func() { r.Lock(); delete(r.counts, key); r.Unlock() })
 	}
 	id := fmt.Sprintf("%s/%d", key, n)
-	if legacy != nil && *legacy != current {
-		return false
-	}
-	if dir := os.Getenv("FOUNDRY_ORACLE_STAGE"); dir != "" {
-		var p Provenance
-		if err := ReadJSON(filepath.Join(dir, "provenance.json"), &p); err != nil {
-			t.Fatal(err)
-		}
-		// Each package has its own working directory and actual command.
-		p.WorkingDirectory, _ = os.Getwd()
-		item := Observation{id, Record{Package: r.prefix, Site: site, Kind: "golden", Transcript: *legacy, Provenance: p}}
-		data, err := JSON(item)
-		if err != nil {
-			t.Fatal(err)
-		}
-		f, err := os.OpenFile(filepath.Join(dir, Digest([]byte(id))+".record.json"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = f.Write(data)
-		closeErr := f.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if closeErr != nil {
-			t.Fatal(closeErr)
-		}
-		return true
-	}
-	if len(r.bundle.Records) == 0 {
-		if legacy == nil {
-			t.Fatal("replay-only assertion requires frozen evidence")
-		}
-		return true
-	}
 	r.Lock()
 	r.consumed[id] = true
 	r.Unlock()
 	record, ok := r.bundle.Records[id]
 	if !ok {
-		t.Fatalf("missing frozen oracle %s; explicit refreeze required", id)
+		t.Fatalf("missing frozen oracle %s; the retired legacy oracle cannot be recaptured", id)
 	}
 	if record.Transcript != current {
 		t.Errorf("frozen oracle %s differs\nlegacy: %s\ncurrent: %s", id, record.Transcript, current)
@@ -154,9 +107,10 @@ func (r *Replay) compare(t *testing.T, site string, legacy *string, current stri
 	return true
 }
 
-type Observation struct {
-	ID     string `json:"id"`
-	Record Record `json:"record"`
+// Match replays an existing legacy observation.
+func (r *Replay) Match(t *testing.T, site, current string) bool {
+	t.Helper()
+	return r.Equal(t, site, current)
 }
 
 // Unconsumed checks every frozen occurrence selected by the test flags, including

@@ -121,7 +121,7 @@ func TestGraphListsValidImportsWithMissingGeneratedTypes(t *testing.T) {
 			t.Fatal("valid import has no compiled export data", err)
 		}
 	}
-	// The handwritten Draft method and initializer refer to UserDraft before
+	// The handwritten method and initializer refer to UserJSON before
 	// it exists on disk; the complete generated overlay resolves both.
 	if _, err := g.prepare(t.Context()); err != nil {
 		t.Fatal("missing generated types prevented graph preparation", err)

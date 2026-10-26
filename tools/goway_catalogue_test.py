@@ -14,6 +14,19 @@ class CatalogueTests(unittest.TestCase):
         page = (catalogue.ROOT / "blueprint/goway-data-layer/README.md").read_text()
         self.assertIn(catalogue.summary(rows), page)
 
+    def test_retired_hook_exports_still_classify_without_generated_files(self):
+        symbols = catalogue.generated_symbols()
+        row = {"case": "retired_hook", "area": "Other framework services and contracts",
+               "stage": "—", "disposition": "unaffected"}
+        source = 'import m "foundry.test/consumer/pivothooks"\nvar _ m.AssignmentHooks'
+        with self.assertRaisesRegex(ValueError, "generated data-layer"):
+            catalogue.validate_classification(row, source, symbols)
+
+    def test_standalone_import_recognizes_historical_exports(self):
+        source = 'import "foundry.test/consumer/models"\nvar _ = (models.UserChanges{}).Fields().Scratch'
+        self.assertIn("models.UserChanges", catalogue.generated_references(
+            source, catalogue.generated_symbols()))
+
     def test_unaffected_rejects_generated_data_layer_shapes(self):
         row = {"case": "example", "area": "Authentication and security",
                "stage": "—", "disposition": "unaffected"}

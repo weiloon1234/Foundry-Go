@@ -19,7 +19,7 @@ func TestFieldDocumentationForcedTermination(t *testing.T) {
 	}
 	for _, after := range []int{1, 3} {
 		t.Run(strconv.Itoa(after), func(t *testing.T) {
-			dir := fixture(t, "package sample\n//foundry:model table=users primary=Key\ntype User struct{Key int;Email string}\nfunc(u User)AccessEmail()(string,error){return u.Email,nil}\n")
+			dir := fixture(t, "package sample\n//foundry:dto\ntype User struct{Key int;\n// Foundry field behavior (generated): Historical accessor.\nEmail string}\nfunc(u User)AccessEmail()(string,error){return u.Email,nil}\n")
 			before := snapshotFile(t, dir, "models.go")
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
@@ -67,7 +67,7 @@ func TestFieldDocumentationForcedTermination(t *testing.T) {
 }
 
 func TestFieldDocumentationRejectsConcurrentSourceEdit(t *testing.T) {
-	dir := fixture(t, "package sample\n//foundry:model table=users primary=Key\ntype User struct{Key int;Email string}\nfunc(u User)AccessEmail()(string,error){return u.Email,nil}\n")
+	dir := fixture(t, "package sample\n//foundry:dto\ntype User struct{Key int;\n// Foundry field behavior (generated): Historical accessor.\nEmail string}\nfunc(u User)AccessEmail()(string,error){return u.Email,nil}\n")
 	g, err := listGraph(t.Context(), dir, false)
 	if err != nil {
 		t.Fatal(err)

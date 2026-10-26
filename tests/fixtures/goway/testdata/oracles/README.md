@@ -1,142 +1,43 @@
 # Frozen legacy oracles
 
-This directory is **frozen** by the integrated-tree capture at `54508185`.
-Live old/new comparisons remain enabled alongside frozen replay. Ordinary tests
-never write expectations; `state.json` is the publication receipt.
+The 909 observations published at commit `54508185` are historical evidence from
+real legacy execution, including PostgreSQL hydration and aggregate results.
+`records.json` (including its source hashes), `comparisons.json` and `state.json` retain the
+original provenance and publication receipt. Do not regenerate them from ORM output.
 
-From the repository root, the lead can run these without a Makefile change:
+Stage 8c removes the generated legacy declarations and recorder. Current API tests
+replay the same SQL, bindings, hydration, callback and cursor observations through
+`tests/oracle`. The integrity guard rejects changed observations or missing
+provenance. Restoring a capture command requires the approved historical checkout
+and a separate lead decision; this checkout has no recording path.
 
-```sh
-cd tests/fixtures/goway
-GOCACHE=/private/tmp/foundry-goway-codex-gocache-r14 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --check
-# Lead-only PostgreSQL capture/replay, using the existing private test configuration:
-GOCACHE=/private/tmp/foundry-goway-codex-gocache-r14 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --check --postgres
-# Only at the integrated-tree freeze barrier:
-GOCACHE=/private/tmp/foundry-goway-codex-gocache-r14 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --freeze --postgres
-# An intentional later replacement requires this distinct command:
-GOCACHE=/private/tmp/foundry-goway-codex-gocache-r14 GOMAXPROCS=4 GOFLAGS=-p=4 GOWORK=off go run ./cmd/freeze-oracles --refreeze --postgres
-```
+Snapshots preserve kinds, string boundaries, nil/empty states, pointer presence,
+field names and scalar internals. Model identities and pointer addresses are
+normalized; cursor wire tokens retain their recorded identities. Existing
+normalization of randomized sensitive values remains unchanged.
 
-`--check` runs real golden paths and measurements into temporary storage, checks
-coverage and provenance, replays the staged frozen records in a fresh test process,
-then removes that temporary storage. It does not freeze.
-`--freeze` accepts only pending state; `--refreeze` accepts only valid frozen state.
-Both publish only after all live comparisons and measurements pass. A lock excludes
-concurrent recorders. Do not edit sources during recording: a before/after source
-hash check rejects a changing tree. The default temporary check excludes PostgreSQL
-comparisons explicitly. Publication requires `--postgres`, which enables required
-PostgreSQL mode: a missing backend fails rather than skipping observations. No
-generator runs are involved.
+Replay determines expected records independently from what a test emits. Normal
+`-run` and `-skip` flags select tests and subtests, and all selected occurrences are
+required, including tests that emit zero observations. PostgreSQL entry points in
+the reviewed census are required only when `FOUNDRY_TEST_POSTGRES_URL` is nonempty
+or `FOUNDRY_TEST_POSTGRES_REQUIRED=1`. Disabled backend tests are deselected; ordinary
+tests remain strict. `-list` only inspects tests.
 
-`records.json` contains observations keyed by test/subtest, stable assertion site
-and occurrence. Transcripts preserve the existing golden formatting of SQL,
-typed binding values, hydrated results, cursor tokens and callback traces. Compile
-cases have no hydrated rows; write/count paths record the evidence their existing
-workload produces. Relation hydration adds public loaded-slot values and states.
-Existing fixture normalization of generated UUIDs, encrypted envelopes and password
-binding shapes stays in force; no production credentials or plaintext secrets are
-recorded. The PostgreSQL comparison uses fixed fixture seed IDs in a fresh isolated
-schema so repeated real legacy reads have stable identities; no returned model or
-aggregate expectation is synthesized. PostgreSQL capture stays with the lead.
+The fixture TestMain owns replay completeness. Use the Makefile's shared source
+fingerprint or `go test -count=1` for direct fixture runs, because the consumer reads
+records in its sibling goway module. Checkout and packaged consumer layouts use
+the same directory lookup. `FOUNDRY_ORACLE_READ` overrides the observation directory,
+not the reviewed backend census.
 
-Each observation carries commit, actual command, Go toolchain/platform and a digest
-of the shared source-hash manifest. That manifest hashes the actual checkout's Go
-sources, module files and ownership manifests, including uncommitted sources.
-The commit alone does not assert a clean checkout. Footprints record actual archive
-T/t symbols, defined symbols and bytes: every oldmodels package, oldreporting,
-extension_slots_old and consumer model_type/model_isolated/model_draft. The symbol
-parser is shared with the ordinary footprint gate. Counts are historical evidence,
-not new ceilings, timing benchmarks or measurements on another platform.
+The import guard parses every Go import, including escaped paths and build-tagged
+files. Its sole exception is `oldmodels/cursor_identity.go`, a handwritten ORM
+model at the original package path and type name. Only `reads_golden_test.go`
+imports that fixture; the cursor transport and statement tests share its typed
+alias. Keeping this identity proves a real consumer migration preserves existing
+cursor tokens. No generated code or legacy query declarations remain in that
+package. Recording-file and migration-before exceptions are retired. Migration
+"before" snippets are documentation-only; "after" snippets stay compiled.
+Legacy compile-fail programs are immutable text-only catalogue inputs and are
+excluded from compilation by their source-hash retirement registry. Legacy
+footprint numbers are frozen measurements, not new performance claims or ceilings.
 
-`state.json` is the publication receipt: its digest covers records and provenance.
-The integrity test rejects changed/missing records, missing provenance, unsupported
-state, or unreceipted data in pending state. The explicit command owns the receipt;
-this is a review/integrity guard, not authentication against a person deliberately
-rewriting both evidence and receipt. Publication replaces data then receipt; an
-interruption between them fails closed and needs review, never automatic acceptance.
-
-After publication, new-API results compare to the frozen legacy observations as well
-as the live legacy results. Until retirement the latter still run. At 8c deletion,
-remove only legacy execution and feed the same current transcript and stable ID
-into the frozen comparator; do not regenerate expectations from the ORM side.
-Some tests intentionally share the old concrete model type: port those declarations
-and normalize any owner-qualified representation explicitly during that separate
-retirement, preserving cursor wire identity. The integrity protocol does not delete
-oldmodels, oldreporting, generated files, tests or historical evidence.
-
-After retirement, re-freezing requires the approved legacy source checkout. Missing
-legacy packages fail the command; it never substitutes ORM output as the oracle.
-
-Review hardening: `tests/oracle` is the shared owner used by both fixture modules.
-`comparisons.json` is the reviewed source census, independent of site discovery.
-It covers all test sources in goway and consumer (excluding compilefail/testdata),
-and names the paired legacy/new test entry points. Sources with no paired entries
-are ordinary behavior, integration, compiler or harness tests, not excluded golden
-comparisons. Before a freeze, review source changes and update this census; capture
-fails if its hashes or paired entry points differ. Cross-file assertion helpers are
-followed. The census is a capture-time retirement checklist, not a requirement to
-keep deleted legacy source after the freeze.
-
-Snapshot nodes preserve kind, field names, nil/empty, pointer presence, strings
-(including invalid UTF-8) and sequence boundaries. Model type identities and
-pointer addresses are normalized. Model-only field filtering stops at model
-boundaries. Scalar internals (including typed IDs, decimals and timestamps) remain
-lossless; loaded relations re-enter the model boundary for their models and pivots. Sensitive randomized values retain the existing
-fixture's type/shape and input-equality observations, not ciphertext or fresh hashes.
-
-Every package's TestMain enforces all its golden IDs on unfiltered replay. The
-recorder explicitly requests full replay for its reviewed test selection. Normal
-`-run` and `-skip` selections determine expected records from the frozen inventory,
-independently of consumed observations. Selected parent bodies and every occurrence
-in selected subtests are required, even when they emit zero observations. Excluded
-siblings and skipped descendants are not required; `-list` is inspection only.
-Package identity is explicit so the root goway package cannot consume integrations'
-records. Replay completeness follows enabled backends through the reviewed census: offline
-runs omit only declared PostgreSQL entry points; all ordinary observations remain
-required. `FOUNDRY_ORACLE_REPLAY=full make fixture-check` replays the enabled bundle
-without recapturing or publishing records. Helper subprocesses with a deliberate
-`-test.run` selection clear full-replay mode and enforce their own selection; the
-parent still enforces complete replay. Footprints are
-remeasured by the recorder, not ordinary fixture test processes.
-
-Capture (including `--refreeze`) reads a fresh pending state in a temporary directory.
-It never checks the published inventory during capture. The new bundle is validated,
-then replayed in fresh test processes, then published only on explicit freeze/refreeze.
-`--check` additionally requires the published observations to match if a freeze exists.
-
-The command enforces GOFLAGS=-p=4, GOWORK=off, GOENV=off and GOTOOLCHAIN=local;
-nonempty alternative GOFLAGS or workspace paths are rejected. Compiler flags,
-overlays and modfile overrides are thereby disabled. Architecture/tool overrides
-are removed from subprocess environments; the host target is fixed. Each record
-contains effective go-env build settings, empty gcflags, actual working directory,
-command, toolchain and source manifest. Footprints in the consumer module record
-that module's directory and go.mod, not the recorder's directory.
-
-Default replay lookup supports the checkout layout and the release tool’s sibling
-`consumers/full`, `consumers/ordinary` and `consumers/goway` layout. An explicit
-FOUNDRY_ORACLE_READ still selects the temporary capture/replay directory.
-
-Consumer replay reads a sibling module, so use make (which supplies the shared
-source fingerprint) or `go test -count=1` for direct replay, including filtered runs.
-The shared assertion calls `testkit.TrackExternalInputs`; the recorder always uses
-`-count=1`. This prevents cached consumer results from hiding changed oracle inputs.
-
-The recorder also audits actual Go imports across the checkout. Dependencies on
-oldmodels/oldreporting are restricted to their own declarations, reviewed paired
-comparison files, the three oldGolden adapter helpers, and registered legacy
-footprint probes. A recording file cannot also contain unrecorded tests, benchmarks,
-fuzz targets, examples or init hooks. Ordinary assertions live in separate files
-without generated-model imports, including the dual-runtime mutator redaction test.
-Every Go import is parsed and unquoted, including escaped paths; descriptor
-package-name strings do not count as imports.
-PostgreSQL behavioral tests use ORM declarations; the mutator legacy hydration
-comparison lives in `pgsmoke/oracle_legacy_test.go` and requires `--postgres`.
-
-The sole non-recording exception class is **migration-before examples**, limited to
-`migration/guide_test.go`, `migration/examples_test.go` and `migration/sql_test.go`.
-These compile the guide's before snippets deliberately. Stage 8c makes before blocks
-documentation-only and leaves after blocks compiled, then removes this exception.
-The guard regression rejects other files in the same directory and matching file
-names elsewhere. Relation-expression ordering's direct, target, pivot and mixed
-modes use the shared frozen comparator; ordinary rejection assertions are separate
-in `relation_order_behavior_test.go`.

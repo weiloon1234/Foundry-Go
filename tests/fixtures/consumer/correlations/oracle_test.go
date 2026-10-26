@@ -9,7 +9,7 @@ import (
 var frozenOracle = oracle.NewReplay("consumer/correlations")
 
 func TestMain(m *testing.M) { os.Exit(frozenOracle.Main(m)) }
-func oracleEqual(t *testing.T, site, legacy, current string) bool {
+func oracleEqual(t *testing.T, site, current string) bool {
 	t.Helper()
-	return frozenOracle.Equal(t, site, legacy, current)
+	return frozenOracle.Equal(t, site, current)
 }

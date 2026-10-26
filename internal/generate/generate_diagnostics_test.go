@@ -97,7 +97,7 @@ func TestGeneratedHeaderOmitsLineAndDiagnosticsUseModulePaths(t *testing.T) {
 	if err := os.Mkdir(nested, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, nested, "user.go", "package domain\n//foundry:model table=accounts\ntype Account struct{Name string}\n")
+	write(t, nested, "user.go", "package domain\n//foundry:dto guessed=true\ntype Account struct{Name string}\n")
 	if _, err := Generate(t.Context(), Options{Dir: nested}); err == nil || !strings.Contains(err.Error(), "domain/user.go:3:") {
 		t.Fatalf("diagnostic lacked its module-relative path: %v", err)
 	}
@@ -141,9 +141,9 @@ func TestCheckListsStaleFilesAndReasons(t *testing.T) {
 
 func TestGeneratedSymbolsRejectHandwrittenCollisions(t *testing.T) {
 	for name, test := range map[string]struct{ source, want string }{
-		"function": {"func UserFields() {}\n", "models.go:15:6: UserFields is declared by handwritten code"},
-		"variable": {"var UserDraftAlias, UserFieldsAt = 1, 2\n", "models.go:15:21: UserFieldsAt is declared by handwritten code"},
-		"method":   {"func (Status) IsValid() bool { return true }\n", "models.go:15:15: Status.IsValid is declared by handwritten code"},
+		"function": {"func UserJSON() {}\n", "UserJSON is declared by handwritten code"},
+		"variable": {"var Other, UserValidationFields = 1, 2\n", "UserValidationFields is declared by handwritten code"},
+		"method":   {"func (Status) IsValid() bool { return true }\n", "Status.IsValid is declared by handwritten code"},
 		"dto":      {"//foundry:dto\ntype Reply struct{Name string}\nfunc ReplyValidationFields() {}\n", "ReplyValidationFields is declared by handwritten code"},
 	} {
 		t.Run(name, func(t *testing.T) {

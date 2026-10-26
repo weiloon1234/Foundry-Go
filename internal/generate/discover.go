@@ -10,47 +10,8 @@ import (
 	"unicode"
 
 	"github.com/weiloon1234/Foundry-Go/internal/modelmeta"
-	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
-type model struct {
-	name, table, query string
-	hooks              string
-	retrieval          string
-	timestamps         [2]string
-	softDelete         string
-	typ                *types.Named
-	fields             []field
-	relations          []relationField
-	aggregates         []aggregateField
-	extensions         []extensionSlot
-	extensionOwner     string
-	extensionPolicy    bool
-	position           token.Position
-}
-type relationField struct {
-	name, kind string
-	target     types.Type
-	pivot      types.Type
-}
-type aggregateField struct {
-	name string
-	typ  types.Type
-}
-type field struct {
-	name, column, kind      string
-	typ, base               types.Type
-	nullable, primary, enum bool
-	databaseDefault         bool
-	input                   types.Type // Non-nil only when mutation input differs from stored base.
-	mutator                 string
-	accessor                string
-	timestamp               string
-	softDelete              bool
-	position                token.Position
-	help                    fieldHelp
-	jsonPaths               []*jsonPathNode
-}
 type enum struct {
 	name   string
 	labels string
@@ -67,15 +28,14 @@ type enumValue struct {
 	position      token.Position
 }
 type metadata struct {
-	models      []model
-	enums       []enum
-	projections []projection
-	paths       []pathDeclaration
-	multipart   []multipartDeclaration
-	queries     []queryDeclaration
-	dtos        []dtoDeclaration
-	configs     []configDeclaration
-	unions      []unionDeclaration
+	enums []enum
+
+	paths     []pathDeclaration
+	multipart []multipartDeclaration
+	queries   []queryDeclaration
+	dtos      []dtoDeclaration
+	configs   []configDeclaration
+	unions    []unionDeclaration
 }
 
 func discover(p *packageInput) (metadata, error) {
@@ -154,26 +114,6 @@ func discover(p *packageInput) (metadata, error) {
 						return result, err
 					}
 					result.paths = append(result.paths, declaration)
-				case "projection":
-					projection, err := discoverProjection(p, typeSpec, named, args)
-					if err != nil {
-						return result, err
-					}
-					result.projections = append(result.projections, projection)
-					if projection.dto {
-						declaration, err := discoverDTO(p, typeSpec, named, nil)
-						if err != nil {
-							return result, err
-						}
-						declaration.projected = true
-						result.dtos = append(result.dtos, declaration)
-					}
-				case "model":
-					m, err := discoverModel(p, typeSpec, named, args)
-					if err != nil {
-						return result, err
-					}
-					result.models = append(result.models, m)
 				case "enum":
 					e, err := discoverEnum(p, typeSpec, named, args)
 					if err != nil {
@@ -217,63 +157,7 @@ func discover(p *packageInput) (metadata, error) {
 		declaration := &result.unions[i]
 		p.unionTypes[declaration.typ] = declaration
 	}
-	names, tables, owners := make(map[string]bool), make(map[string]bool), make(map[string]bool)
-	for i := range result.models {
-		m := &result.models[i]
-		if tables[m.table] {
-			return result, fmt.Errorf("%s: duplicate model table %s", m.position, m.table)
-		}
-		tables[m.table] = true
-		if len(m.extensions) > 0 {
-			if owners[m.extensionOwner] {
-				return result, fmt.Errorf("%s: duplicate extension owner %s; declare a distinct extension_owner", m.position, m.extensionOwner)
-			}
-			owners[m.extensionOwner] = true
-		}
-		markEnumFields(m.fields, enums)
-		if err := p.resolveJSONFieldPaths(m.name, m.fields); err != nil {
-			return result, err
-		}
-		symbols := []string{m.name + "FieldSet", m.name + "Fields", m.name + "ScopedFieldSet", m.name + "NullableFieldSet", m.name + "FieldsAt", m.name + "NullableFieldsAt", m.name + "Draft", m.name + "UpdateFromBuilder", "Update" + m.name + "From", m.name + "DeleteUsingBuilder", "Delete" + m.name + "Using", m.name + "InsertFromBuilder", "Insert" + m.name + "From", m.name + "Query", m.name + "LockedQuery", m.name + "FieldChanges", m.name + "Changes", m.name + "Hooks", m.name + "Observer", "New" + m.name + "Observer", "Register" + m.name + "Observer", m.name + "RetrievalHooks", m.name + "RetrievalObserver", "New" + m.name + "RetrievalObserver", "Register" + m.name + "RetrievalObserver", "Compare" + m.name, "foundry" + m.name + "Snapshot", m.query}
-		symbols = append(symbols, m.name+"AuditPolicy", m.name+"AuditFieldSet", m.name+"AuditFields", m.name+"Auditing")
-		if len(m.extensions) > 0 {
-			symbols = append(symbols, m.name+"ExtensionSet", m.name+"ExtensionSlots", m.name+"Extensions", m.name+"ExtensionOwner", m.name+"ExtensionDeclaration")
-			if !names[extensionsFunction] {
-				symbols = append(symbols, extensionsFunction)
-			}
-		}
-		for _, f := range m.fields {
-			if f.input != nil {
-				if !f.nullable {
-					symbols = append(symbols, inputFieldName(m.name, f))
-				}
-				f.nullable = true
-				symbols = append(symbols, inputFieldName(m.name, f))
-			}
-		}
-		if m.softDelete != "" {
-			symbols = append(symbols, "ForceDelete"+m.name+"Using")
-		}
-		for _, symbol := range symbols {
-			if names[symbol] {
-				return result, fmt.Errorf("%s: duplicate generated symbol %s", m.position, symbol)
-			}
-			names[symbol] = true
-		}
-	}
-	for i := range result.projections {
-		projection := &result.projections[i]
-		markEnumFields(projection.fields, enums)
-		if err := p.resolveJSONFieldPaths(projection.name, projection.fields); err != nil {
-			return result, err
-		}
-		for _, symbol := range projectionSymbols(projection.name) {
-			if names[symbol] {
-				return result, fmt.Errorf("%s: duplicate generated symbol %s", projection.position, symbol)
-			}
-			names[symbol] = true
-		}
-	}
+	names := make(map[string]bool)
 	for i := range result.paths {
 		declaration := &result.paths[i]
 		if err := resolvePathCodecs(p, declaration); err != nil {
@@ -307,13 +191,9 @@ func discover(p *packageInput) (metadata, error) {
 			names[symbol] = true
 		}
 	}
-	models := make(map[*types.Named]bool)
-	for _, m := range result.models {
-		models[m.typ] = true
-	}
 	for i := range result.unions {
 		declaration := &result.unions[i]
-		if err := resolveJSONGraph(p, &declaration.dtoGraph, declaration.typ, declaration.typ.Obj().Pos(), models, true); err != nil {
+		if err := resolveJSONGraph(p, &declaration.dtoGraph, declaration.typ, declaration.typ.Obj().Pos(), true); err != nil {
 			return result, err
 		}
 		for _, symbol := range unionSymbols(*declaration) {
@@ -325,7 +205,7 @@ func discover(p *packageInput) (metadata, error) {
 	}
 	for i := range result.multipart {
 		declaration := &result.multipart[i]
-		if err := resolveMultipartFields(p, declaration, models); err != nil {
+		if err := resolveMultipartFields(p, declaration); err != nil {
 			return result, err
 		}
 		var err error
@@ -343,7 +223,7 @@ func discover(p *packageInput) (metadata, error) {
 	}
 	for i := range result.dtos {
 		declaration := &result.dtos[i]
-		if err := resolveDTOSchema(p, declaration, models); err != nil {
+		if err := resolveDTOSchema(p, declaration); err != nil {
 			return result, err
 		}
 		suffixes := []string{"JSON"}
@@ -364,9 +244,7 @@ func discover(p *packageInput) (metadata, error) {
 			names[symbol] = true
 		}
 	}
-	if err := inferMetadataContracts(p, result.models, result.dtos); err != nil {
-		return result, err
-	}
+
 	for i := range result.configs {
 		declaration := &result.configs[i]
 		if err := resolveConfig(p, declaration); err != nil {
@@ -385,19 +263,8 @@ func discover(p *packageInput) (metadata, error) {
 	sort.Slice(result.dtos, func(i, j int) bool { return result.dtos[i].name < result.dtos[j].name })
 	sort.Slice(result.paths, func(i, j int) bool { return result.paths[i].name < result.paths[j].name })
 	sort.Slice(result.queries, func(i, j int) bool { return result.queries[i].name < result.queries[j].name })
-	sort.Slice(result.models, func(i, j int) bool { return result.models[i].name < result.models[j].name })
 	sort.Slice(result.enums, func(i, j int) bool { return result.enums[i].name < result.enums[j].name })
-	sort.Slice(result.projections, func(i, j int) bool { return result.projections[i].name < result.projections[j].name })
 	return result, nil
-}
-
-func markEnumFields(fields []field, enums map[*types.Named]bool) {
-	for i := range fields {
-		if named, ok := types.Unalias(fields[i].base).(*types.Named); ok && (enums[named] || hasEnumDescriptor(named)) {
-			fields[i].kind = "Scalar"
-			fields[i].enum = true
-		}
-	}
 }
 
 // Imported enum metadata is an ordinary typed method, so consumers and gopls
@@ -439,7 +306,10 @@ func directive(group *ast.CommentGroup) (string, map[string]string, error) {
 			return "", nil, fmt.Errorf("missing Foundry directive kind")
 		}
 		kind = words[0]
-		if kind != "model" && kind != "enum" && kind != "projection" && kind != "path" && kind != "dto" && kind != "query" && kind != "form" && kind != "multipart" && kind != "message" && kind != "config" && kind != "union" {
+		if kind == "model" || kind == "projection" {
+			return "", nil, fmt.Errorf("foundry:%s generation is retired; use handwritten orm.Define or rows.Define declarations", kind)
+		}
+		if kind != "enum" && kind != "path" && kind != "dto" && kind != "query" && kind != "form" && kind != "multipart" && kind != "message" && kind != "config" && kind != "union" {
 			return "", nil, fmt.Errorf("unsupported Foundry declaration directive")
 		}
 		for _, word := range words[1:] {
@@ -456,243 +326,6 @@ func directive(group *ast.CommentGroup) (string, map[string]string, error) {
 	return kind, args, nil
 }
 
-func discoverModel(p *packageInput, spec *ast.TypeSpec, named *types.Named, args map[string]string) (model, error) {
-	m := model{name: spec.Name.Name, typ: named, position: p.fset.Position(spec.Pos())}
-	for key := range args {
-		if key != "table" && key != "primary" && key != "hooks" && key != "retrieval" && key != "timestamps" && key != "soft_deletes" && key != "extension_owner" {
-			return m, p.diagnostic(spec.Pos(), "unsupported model option "+key)
-		}
-	}
-	m.hooks = args["hooks"]
-	m.retrieval = args["retrieval"]
-	if err := discoverHooks(p, m); err != nil {
-		return m, err
-	}
-	m.table = args["table"]
-	parts := strings.Split(m.table, ".")
-	if !sqlname.Table(m.table) {
-		return m, p.diagnostic(spec.Pos(), "model requires a valid table name")
-	}
-	m.query = "Query" + exportedName(parts[len(parts)-1])
-	primary := args["primary"]
-	if primary == "" {
-		primary = "ID"
-	}
-	structure, ok := named.Underlying().(*types.Struct)
-	if !ok {
-		return m, p.diagnostic(spec.Pos(), "model must be a struct")
-	}
-	columns := make(map[string]bool)
-	foundPrimary := false
-	for i := 0; i < structure.NumFields(); i++ {
-		v := structure.Field(i)
-		tag, err := fieldTag(structure.Tag(i))
-		if err != nil {
-			return m, p.diagnostic(v.Pos(), err.Error())
-		}
-		if tag["-"] != "" {
-			continue
-		}
-		if !v.Exported() || v.Embedded() {
-			return m, p.diagnostic(v.Pos(), "persisted fields must be exported, non-embedded fields; use foundry:\"-\" to skip")
-		}
-		if slot, ok, err := discoverExtensionSlot(p, v, tag, named); err != nil {
-			return m, err
-		} else if ok {
-			m.extensions = append(m.extensions, slot)
-			continue
-		}
-		if wrapper, ok := types.Unalias(v.Type()).(*types.Named); ok && isNamed(wrapper, framework+"/database/relation", "Value") {
-			if len(tag) != 0 {
-				return m, p.diagnostic(v.Pos(), "aggregate slots cannot declare persistence column/default tags")
-			}
-			m.aggregates = append(m.aggregates, aggregateField{name: v.Name(), typ: wrapper.TypeArgs().At(0)})
-			continue
-		}
-		if wrapper, ok := types.Unalias(v.Type()).(*types.Named); ok && (isNamed(wrapper, framework+"/database/relation", "One") || isNamed(wrapper, framework+"/database/relation", "Many") || isNamed(wrapper, framework+"/database/relation", "Through")) {
-			if len(tag) != 0 {
-				return m, p.diagnostic(v.Pos(), "relation fields cannot declare persistence column/default tags")
-			}
-			for typ := range wrapper.TypeArgs().Len() {
-				if named, ok := types.Unalias(wrapper.TypeArgs().At(typ)).(*types.Named); !ok || named.TypeParams().Len() != 0 {
-					return m, p.diagnostic(v.Pos(), "relation target and pivot must be concrete named models")
-				}
-			}
-			r := relationField{name: v.Name(), kind: wrapper.Obj().Name(), target: wrapper.TypeArgs().At(0)}
-			if wrapper.TypeArgs().Len() == 2 {
-				r.pivot = wrapper.TypeArgs().At(1)
-			}
-			m.relations = append(m.relations, r)
-			continue
-		}
-		if tag["name"] != "" {
-			return m, p.diagnostic(v.Pos(), "foundry:\"name=...\" applies only to extension slot fields; use column=name for a persisted field")
-		}
-		f, err := discoverValueField(p, named, v, tag)
-		if err != nil {
-			return m, err
-		}
-		f.primary = v.Name() == primary
-		if columns[f.column] {
-			return m, p.diagnostic(v.Pos(), "duplicate column "+f.column)
-		}
-		columns[f.column] = true
-		if f.primary {
-			if !types.Comparable(f.base) {
-				return m, p.diagnostic(v.Pos(), "primary key must be a comparable value; binary fields cannot be model identity keys")
-			}
-			if passwordHash(f.base) {
-				return m, p.diagnostic(v.Pos(), "password hashes cannot be model identity keys")
-			}
-			if f.kind == "Encrypted" {
-				return m, p.diagnostic(v.Pos(), "encrypted fields cannot be model identity keys")
-			}
-			foundPrimary = true
-			if f.nullable {
-				return m, p.diagnostic(v.Pos(), "primary key cannot be nullable")
-			}
-			if id, ok := types.Unalias(f.base).(*types.Named); ok && isNamed(id, framework+"/model", "ID") && !types.Identical(id.TypeArgs().At(0), named) {
-				return m, p.diagnostic(v.Pos(), "primary model.ID must belong to this model")
-			}
-			if args["primary"] == "" {
-				id, ok := types.Unalias(f.base).(*types.Named)
-				if !ok || !isNamed(id, framework+"/model", "ID") || !types.Identical(id.TypeArgs().At(0), named) {
-					return m, p.diagnostic(v.Pos(), "default primary ID must use model.ID owned by this model; declare primary=Field for a natural key")
-				}
-			}
-		}
-		m.fields = append(m.fields, f)
-	}
-	if !foundPrimary {
-		return m, p.diagnostic(spec.Pos(), "model is missing primary field "+primary)
-	}
-	if err := checkDeprecatedModelMethods(p, m); err != nil {
-		return m, err
-	}
-	if len(m.relations) > 0 {
-		fnName := modelDeclarationFunction(m.name, kindRelations)
-		if pos, found := p.definedAt[fnName]; found {
-			if !validDeclarationFunction(p, fnName, m.name+"RelationSet") {
-				return m, p.diagnostic(pos, "function "+fnName+" requires signature func "+fnName+"() "+m.name+"RelationSet")
-			}
-		}
-	}
-	if len(m.aggregates) > 0 {
-		fnName := modelDeclarationFunction(m.name, kindAggregates)
-		if pos, found := p.definedAt[fnName]; found {
-			if !validDeclarationFunction(p, fnName, m.name+"AggregateSet") {
-				return m, p.diagnostic(pos, "function "+fnName+" requires signature func "+fnName+"() "+m.name+"AggregateSet")
-			}
-		}
-	}
-	if err := discoverFieldMethods(p, &m); err != nil {
-		return m, err
-	}
-	if err := checkEncryptedFields(p, m); err != nil {
-		return m, err
-	}
-	if err := discoverGlobalScopeSource(p, m); err != nil {
-		return m, err
-	}
-	if err := discoverTimestamps(p, &m, args["timestamps"]); err != nil {
-		return m, err
-	}
-	if err := discoverSoftDeletes(p, &m, args["soft_deletes"]); err != nil {
-		return m, err
-	}
-	if err := finishExtensions(p, spec, &m, args["extension_owner"]); err != nil {
-		return m, err
-	}
-	return m, nil
-}
-
-func discoverValueField(p *packageInput, owner *types.Named, v *types.Var, tag map[string]string) (field, error) {
-	f := field{name: v.Name(), column: tag["column"], typ: v.Type(), base: v.Type(), databaseDefault: tag["default"] == "database", position: p.fset.Position(v.Pos())}
-	if f.column == "" {
-		f.column = snake(v.Name())
-	}
-	if !sqlname.Valid(f.column) {
-		return f, p.diagnostic(v.Pos(), "invalid column name")
-	}
-	if wrapped, ok := types.Unalias(f.base).(*types.Named); ok && isNamed(wrapped, framework+"/value", "Nullable") {
-		f.nullable = true
-		f.base = wrapped.TypeArgs().At(0)
-	}
-	kind, err := fieldKind(f.base)
-	if err != nil {
-		return f, p.diagnostic(v.Pos(), err.Error())
-	}
-	f.kind = kind
-	reader := p.sourceDocumentation()
-	source, err := reader.structure(owner)
-	if err != nil {
-		return f, err
-	}
-	f.help, err = reader.help(source, v.Name())
-	return f, err
-}
-
-func passwordHash(typ types.Type) bool {
-	named, ok := types.Unalias(typ).(*types.Named)
-	return ok && isNamed(named, framework+"/auth/password", "Hash")
-}
-
-// encryptedField reports a database/encrypted field type: Text or JSON[T].
-func encryptedField(typ types.Type) bool {
-	named, ok := types.Unalias(typ).(*types.Named)
-	return ok && (isNamed(named, framework+"/database/encrypted", "Text") || isNamed(named, framework+"/database/encrypted", "JSON"))
-}
-
-func fieldKind(typ types.Type) (string, error) {
-	if binaryType(typ) {
-		return "Binary", nil
-	}
-	if passwordHash(typ) {
-		return "Scalar", nil
-	}
-	if encryptedField(typ) {
-		return "Encrypted", nil
-	}
-	base := types.Unalias(typ)
-	if named, ok := base.(*types.Named); ok {
-		if isNamed(named, framework+"/value", "JSON") {
-			return "JSON", nil
-		}
-		if isNamed(named, framework+"/model", "ID") {
-			return "Scalar", nil
-		}
-		if isNamed(named, framework+"/decimal", "Decimal") {
-			return "Exact", nil
-		}
-		if isNamed(named, framework+"/temporal", "Interval") {
-			return "Interval", nil
-		}
-		if named.Obj().Pkg() != nil && ((named.Obj().Pkg().Path() == framework+"/temporal" && map[string]bool{"Date": true, "Time": true, "DateTime": true, "LocalDateTime": true}[named.Obj().Name()]) || isNamed(named, "time", "Time")) {
-			return "Ordered", nil
-		}
-	}
-	if scalar, ok := base.Underlying().(*types.Basic); ok {
-		switch scalar.Kind() {
-		case types.String:
-			return "Text", nil
-		case types.Bool:
-			return "Scalar", nil
-		case types.Int, types.Int8, types.Int16, types.Int32, types.Int64, types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64:
-			return "Exact", nil
-		case types.Float32, types.Float64:
-			return "Float", nil
-		}
-	}
-	return "", fmt.Errorf("unsupported persisted field type; use a supported scalar, []byte, model.ID, decimal.Decimal, temporal value, password.Hash, value.JSON, encrypted.Text, encrypted.JSON, or value.Nullable of one")
-}
-
-// A named byte slice is supported; a slice of a distinct named octet is not
-// assignable to ~[]byte and must be rejected before emitting codec references.
-func binaryType(typ types.Type) bool {
-	slice, ok := types.Unalias(typ).Underlying().(*types.Slice)
-	return ok && types.Identical(types.Unalias(slice.Elem()), types.Typ[types.Uint8])
-}
-
 func isNamed(named *types.Named, path, name string) bool {
 	return named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == path && named.Obj().Name() == name
 }
@@ -703,33 +336,6 @@ func (p *packageInput) diagnostic(pos token.Pos, message string) error {
 // diagnosticAt reports at an already-resolved field position.
 func (p *packageInput) diagnosticAt(position token.Position, message string) error {
 	return fmt.Errorf("%s: %s", position, message)
-}
-
-func fieldTag(tag string) (map[string]string, error) {
-	result := make(map[string]string)
-	tags, err := parseTags(tag)
-	if err != nil {
-		return nil, err
-	}
-	text, ok := tags["foundry"]
-	if !ok {
-		return result, nil
-	}
-	if text == "-" {
-		result["-"] = "true"
-		return result, nil
-	}
-	for _, part := range strings.Split(text, ",") {
-		key, value, ok := strings.Cut(part, "=")
-		if !ok || value == "" || (key != "column" && key != "default" && key != "name") || (key == "default" && value != "database") {
-			return nil, fmt.Errorf("unsupported foundry field tag; expected column=name, default=database, name=stored_name for an extension slot, or -")
-		}
-		if _, exists := result[key]; exists {
-			return nil, fmt.Errorf("duplicate foundry field tag option")
-		}
-		result[key] = value
-	}
-	return result, nil
 }
 
 // Reject malformed/duplicate tags instead of letting reflect.StructTag.Lookup
@@ -753,26 +359,3 @@ func exportedName(name string) string {
 // checkEncryptedFields keeps encrypted values bound to a key known before the
 // insert, and leaves their plaintext untransformed: a mutator would run on an
 // envelope boundary the framework owns.
-func checkEncryptedFields(p *packageInput, m model) error {
-	var primary field
-	encrypted := false
-	for _, f := range m.fields {
-		if f.primary {
-			primary = f
-		}
-		if f.kind != "Encrypted" {
-			continue
-		}
-		encrypted = true
-		if f.mutator != "" || f.input != nil {
-			return p.diagnosticAt(f.position, "encrypted fields cannot declare mutators; transform the plaintext before assigning it")
-		}
-		if f.databaseDefault {
-			return p.diagnosticAt(f.position, "encrypted fields cannot use database defaults; the framework must encrypt every stored value")
-		}
-	}
-	if encrypted && primary.databaseDefault {
-		return p.diagnosticAt(primary.position, "encrypted fields require an application-assigned primary key, not a database default")
-	}
-	return nil
-}

@@ -42,7 +42,7 @@ func TestORMFoundationParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(before, after) || !oracleEqual(t, "consumer/articles/tables_test/2", oracle.Snapshot(before), oracle.Snapshot(after)) {
+	if !bytes.Equal(before, after) || !oracleEqual(t, "consumer/articles/tables_test/2", oracle.Snapshot(after)) {
 		t.Fatal("persisted reference changed")
 	}
 	parsed, err := articles.ArticleIdentity.Parse(oldIdentity)
@@ -54,7 +54,7 @@ func TestORMFoundationParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if oldStatement.SQL != nextStatement.SQL() || !reflect.DeepEqual(oldStatement.Arguments, nextStatement.Arguments()) || !oracleEqual(t, "consumer/articles/tables_test/1", oracle.Snapshot([]any{oldStatement.SQL, oldStatement.Arguments}), oracle.Snapshot([]any{nextStatement.SQL(), nextStatement.Arguments()})) {
+	if oldStatement.SQL != nextStatement.SQL() || !reflect.DeepEqual(oldStatement.Arguments, nextStatement.Arguments()) || !oracleEqual(t, "consumer/articles/tables_test/1", oracle.Snapshot([]any{nextStatement.SQL(), nextStatement.Arguments()})) {
 		t.Fatal("stored field read changed", oldStatement.SQL, nextStatement.SQL())
 	}
 }
@@ -65,7 +65,7 @@ func TestORMExtensionFoundationParity(t *testing.T) {
 	if err := next.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if baseline.Description != fmt.Sprintf("%#v", next.Describe()) || !oracleEqual(t, "consumer/articles/tables_test/3", oracle.Snapshot(baseline.Description), oracle.Snapshot(fmt.Sprintf("%#v", next.Describe()))) {
+	if baseline.Description != fmt.Sprintf("%#v", next.Describe()) || !oracleEqual(t, "consumer/articles/tables_test/3", oracle.Snapshot(fmt.Sprintf("%#v", next.Describe()))) {
 		t.Fatal("extension owner or slot manifest changed")
 	}
 	id, err := model.ParseID[articles.Article]("018f0000-0000-7000-8000-000000000001")
@@ -74,7 +74,7 @@ func TestORMExtensionFoundationParity(t *testing.T) {
 	}
 	prior := *baseline.Subject
 	current, err := articles.ArticleOwner.Subject(articles.ArticleIdentity.Reference(id))
-	if err != nil || !reflect.DeepEqual(prior, current) || !oracleEqual(t, "consumer/articles/tables_test/4", oracle.Snapshot(prior), oracle.Snapshot(current)) {
+	if err != nil || !reflect.DeepEqual(prior, current) || !oracleEqual(t, "consumer/articles/tables_test/4", oracle.Snapshot(current)) {
 		t.Fatal("extension storage identity changed", err)
 	}
 	for _, relation := range articles.ArticleSlots.All() {

@@ -19,9 +19,9 @@ type Options struct {
 	Dir       string
 	Check     bool
 	Recursive bool
-	// FieldDocumentation opts into managed "Foundry field behavior" notes in
-	// handwritten model files. By default generation never edits handwritten
-	// files, and existing notes are left exactly as they are.
+	// FieldDocumentation removes obsolete managed "Foundry field behavior"
+	// notes from handwritten model files. Without this option, generation leaves
+	// handwritten files and existing notes unchanged.
 	FieldDocumentation bool
 	// Framework identifies the framework release rendering output, normally the
 	// running tool's build. A known version that differs from the consumer's

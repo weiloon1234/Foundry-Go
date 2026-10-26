@@ -8,7 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:projection
 type RankingRow struct {
 	ID         model.ID[models.Order]
 	BuyerID    model.ID[models.User]

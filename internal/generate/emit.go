@@ -125,25 +125,7 @@ func emit(p *packageInput, metadata metadata) (map[string][]byte, map[string]tok
 			return nil, nil, err
 		}
 	}
-	for _, m := range metadata.models {
-		position = m.position
-		data, err := emitModel(p, m)
-		if err := add(m.name, data, err); err != nil {
-			return nil, nil, err
-		}
-	}
-	for _, m := range metadata.models {
-		if len(m.extensions) == 0 {
-			continue
-		}
-		// One package-level listing, owned by the first slot-owning model.
-		position = m.position
-		data, err := emitPackageExtensions(p, metadata.models)
-		if err := add(extensionsFunction, data, err); err != nil {
-			return nil, nil, err
-		}
-		break
-	}
+
 	for _, enum := range metadata.enums {
 		position = enum.position
 		data, err := emitEnum(p, enum)
@@ -151,20 +133,7 @@ func emit(p *packageInput, metadata metadata) (map[string][]byte, map[string]tok
 			return nil, nil, err
 		}
 	}
-	for _, projection := range metadata.projections {
-		position = projection.position
-		var dto *dtoDeclaration
-		for i := range metadata.dtos {
-			if metadata.dtos[i].projected && metadata.dtos[i].name == projection.name {
-				dto = &metadata.dtos[i]
-				break
-			}
-		}
-		data, err := emitProjection(p, projection, dto)
-		if err := add(projection.name, data, err); err != nil {
-			return nil, nil, err
-		}
-	}
+
 	for _, declaration := range metadata.paths {
 		position = declaration.position
 		data, err := emitPath(p, declaration)
@@ -187,9 +156,7 @@ func emit(p *packageInput, metadata metadata) (map[string][]byte, map[string]tok
 		}
 	}
 	for _, declaration := range metadata.dtos {
-		if declaration.projected {
-			continue
-		}
+
 		position = declaration.position
 		data, err := emitDTO(p, declaration)
 		if err := add(declaration.name, data, err); err != nil {
@@ -197,66 +164,6 @@ func emit(p *packageInput, metadata metadata) (map[string][]byte, map[string]tok
 		}
 	}
 	return outputs, origins, nil
-}
-
-func emitModel(p *packageInput, m model) ([]byte, error) {
-	e := newEmitter(p)
-	value := e.use(framework + "/value")
-	e.emitModelFields(m)
-	e.emitModelQuery(m)
-	draftVar, inputVar := e.localName("d"), e.localName("v")
-	e.line("// %sDraft tracks explicitly selected mutation fields, preserving omitted, zero and null states.", m.name)
-	e.line("type %sDraft struct {", m.name)
-	for _, f := range m.fields {
-		e.line("field%s %s.Optional[%s]", f.name, value, e.fieldInputType(f, true))
-	}
-	e.line("}")
-	for _, f := range m.fields {
-		e.line("// %s returns the typed mutation state for %s.", f.name, f.column)
-		e.emitFieldHelp(f.help)
-		e.emitFieldBehavior(m.name, m.table, f)
-		e.line("func(%s %sDraft)%s()%s.Optional[%s]{return %s}", draftVar, m.name, f.name, value, e.fieldInputType(f, true), e.cloneDraftInput(f, draftVar+".field"+f.name, true))
-		e.line("// Set%s returns a new draft with %s explicitly set.", f.name, f.column)
-		e.emitFieldHelp(f.help)
-		e.emitFieldBehavior(m.name, m.table, f)
-		assignment := e.cloneDraftInput(f, inputVar, false)
-		if f.nullable {
-			assignment = value + ".Of(" + assignment + ")"
-		}
-		e.line("func(%s %sDraft)Set%s(%s %s)%sDraft{%s.field%s=%s.Set(%s);return %s}", draftVar, m.name, f.name, inputVar, e.fieldInputType(f, false), m.name, draftVar, f.name, value, assignment, draftVar)
-		e.line("// Unset%s omits %s without requesting a zero or null write.", f.name, f.column)
-		e.emitFieldHelp(f.help)
-		e.line("func(%s %sDraft)Unset%s()%sDraft{%s.field%s=%s.Optional[%s]{};return %s}", draftVar, m.name, f.name, m.name, draftVar, f.name, value, e.fieldInputType(f, true), draftVar)
-		if f.nullable {
-			e.line("// Clear%s explicitly sets %s to null.", f.name, f.column)
-			e.emitFieldHelp(f.help)
-			e.line("func(%s %sDraft)Clear%s()%sDraft{%s.field%s=%s.Set(%s.Null[%s]());return %s}", draftVar, m.name, f.name, m.name, draftVar, f.name, value, value, e.fieldInputType(f, false), draftVar)
-		}
-	}
-	e.line("// IsEmpty reports whether no fields have been selected for mutation.")
-	var checks []string
-	for _, f := range m.fields {
-		checks = append(checks, "!"+draftVar+".field"+f.name+".IsSet()")
-	}
-	e.line("func(%s %sDraft)IsEmpty()bool{return %s}", draftVar, m.name, strings.Join(checks, "&&"))
-	formatter := e.use("fmt")
-	state := e.localName("state")
-	e.line("// Format omits pending draft values, including sensitive mutation inputs, from routine diagnostics.")
-	e.line("func(%sDraft)Format(%s %s.State,_ rune){_,_=%s.Write([]byte(%q))}", m.name, state, formatter, state, m.name+" draft")
-	e.emitModelChanges(m)
-	e.emitModelHooks(m)
-	e.emitModelRetrievalHooks(m)
-	e.emitModelAudit(m)
-	return e.finish(m.position.Filename)
-}
-func fieldClass(f field) string {
-	if f.nullable {
-		if f.kind == "Scalar" {
-			return "NullableField"
-		}
-		return "Nullable" + f.kind + "Field"
-	}
-	return f.kind + "Field"
 }
 
 func emitEnum(p *packageInput, enum enum) ([]byte, error) {
@@ -310,7 +217,7 @@ func emitEnum(p *packageInput, enum enum) ([]byte, error) {
 	e.line("func(v *%s)UnmarshalJSON(data []byte)error{var raw *%s;if err:=%s.Unmarshal(data,&raw);err!=nil{return %s.Wrap(%s.Invalid,%q,err)};if raw==nil{return %s.New(%s.Invalid,%q)};parsed:=%s(*raw);if err:=parsed.Validate();err!=nil{return err};*v=parsed;return nil}", enum.name, base, json, fault, fault, "invalid "+enum.name+" representation", fault, fault, "enum cannot decode null", enum.name)
 	codec := e.use(framework + "/database/codec")
 	e.line("// %sCodec applies the generated membership rule at both SQL boundaries.", enum.name)
-	e.line("func %sCodec()%s.Codec[%s]{return %s}", enum.name, codec, enum.name, e.fieldCodec(field{base: enum.typ, enum: true}, false))
+	e.line("func %sCodec()%s.Codec[%s]{return %s}", enum.name, codec, enum.name, e.enumCodec(enum))
 	e.line("// Value implements database/sql/driver.Valuer through the shared typed codec.")
 	e.line("func(v %s)Value()(%s.Value,error){return %sCodec().Bind(v)}", enum.name, driver, enum.name)
 	e.line("// Scan changes the receiver only after successful decoding. SQL NULL is rejected.")

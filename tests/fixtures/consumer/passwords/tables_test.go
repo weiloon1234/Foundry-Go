@@ -39,7 +39,7 @@ func TestORMFoundationParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(before, after) || !oracleEqual(t, "consumer/passwords/tables_test/2", oracle.Snapshot(before), oracle.Snapshot(after)) {
+	if !bytes.Equal(before, after) || !oracleEqual(t, "consumer/passwords/tables_test/2", oracle.Snapshot(after)) {
 		t.Fatal("persisted reference changed")
 	}
 	parsed, err := passwords.AccountIdentity.Parse(oldIdentity)
@@ -51,7 +51,7 @@ func TestORMFoundationParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if oldStatement.SQL != nextStatement.SQL() || !reflect.DeepEqual(oldStatement.Arguments, nextStatement.Arguments()) || !oracleEqual(t, "consumer/passwords/tables_test/1", oracle.Snapshot([]any{oldStatement.SQL, oldStatement.Arguments}), oracle.Snapshot([]any{nextStatement.SQL(), nextStatement.Arguments()})) {
+	if oldStatement.SQL != nextStatement.SQL() || !reflect.DeepEqual(oldStatement.Arguments, nextStatement.Arguments()) || !oracleEqual(t, "consumer/passwords/tables_test/1", oracle.Snapshot([]any{nextStatement.SQL(), nextStatement.Arguments()})) {
 		t.Fatal("stored field read changed", oldStatement.SQL, nextStatement.SQL())
 	}
 }

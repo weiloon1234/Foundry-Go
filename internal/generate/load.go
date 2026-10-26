@@ -27,8 +27,10 @@ type listedPackage struct {
 	GoFiles, CgoFiles             []string
 	IgnoredGoFiles                []string
 	Imports, Match                []string
-	Module                        *listedModule
-	Error                         *struct{ Err string }
+	// Deps lists every transitive dependency.
+	Deps   []string
+	Module *listedModule
+	Error  *struct{ Err string }
 }
 type source struct {
 	name   string
@@ -44,17 +46,21 @@ type packageInput struct {
 	defined  map[string]bool
 	// definedAt and methods locate handwritten declarations that generated
 	// symbols must not redeclare.
-	definedAt           map[string]token.Pos
-	methods             map[string]map[string]token.Pos
-	goNames             []string
-	fset                *token.FileSet
-	importer            types.Importer
-	types               *types.Package
-	checked             *types.Package
-	enumTypes           map[*types.Named]bool
-	unionTypes          map[*types.Named]*unionDeclaration
-	documentation       *sourceDocumentation
-	documentationInputs []documentationInput
+	definedAt map[string]token.Pos
+	methods   map[string]map[string]token.Pos
+	goNames   []string
+	fset      *token.FileSet
+	importer  types.Importer
+	types     *types.Package
+	checked   *types.Package
+	// persistenceDependent reports that the package's imports reach
+	// database/orm; persistence retains its complete check for recognition.
+	persistenceDependent bool
+	persistence          *persistenceSource
+	enumTypes            map[*types.Named]bool
+	unionTypes           map[*types.Named]*unionDeclaration
+	documentation        *sourceDocumentation
+	documentationInputs  []documentationInput
 }
 
 // A selected package can lack compiled exports on a fresh checkout. Analyze its
@@ -99,6 +105,7 @@ func (g *packageGraph) loadPackage(path string) (*packageInput, error) {
 		declared = declared || mayDeclare(g.overlay[path])
 		input.files = append(input.files, source{name, g.overlay[path], full})
 	}
+	input.persistenceDependent = g.importsPersistence(input.files)
 	if !declared {
 		// Without directives there is nothing to discover. The complete overlay
 		// check still validates the package and supplies it to dependents.
@@ -127,6 +134,8 @@ func (p *packageInput) displayName(name string) string {
 
 // check parses generated outputs once, rejects collisions with handwritten
 // declarations at their source positions, then type-checks the full overlay.
+// A package that can reach database/orm keeps that complete check's types for
+// run-wide persistence-model recognition.
 func (p *packageInput) check(outputs map[string][]byte, origins map[string]token.Position) error {
 	files := make([]*ast.File, 0, len(p.files)+len(outputs))
 	for _, file := range p.files {
@@ -146,17 +155,24 @@ func (p *packageInput) check(outputs map[string][]byte, origins map[string]token
 		return err
 	}
 	config := types.Config{Importer: p.importer}
-	checked, err := config.Check(p.path, p.fset, files, nil)
+	var info *types.Info
+	if p.persistenceDependent {
+		info = persistenceInfo()
+	}
+	checked, err := config.Check(p.path, p.fset, files, info)
 	if err != nil {
 		return fmt.Errorf("check generated package overlay: %w", err)
 	}
 	p.checked = checked
+	if info != nil {
+		p.persistence = collectPersistenceSource(checked, info)
+	}
 	return nil
 }
 
 // mayDeclare is the byte-level prefilter for Foundry directives. It accepts
 // every line-comment form directive parsing accepts, including whitespace after
-// the slashes (`// foundry:model`), so a file with a declaration is never
+// the slashes (`// foundry:dto`), so a file with a declaration is never
 // skipped. False positives, such as the text inside a string, only cost a parse.
 func mayDeclare(data []byte) bool {
 	marker := []byte("foundry:")

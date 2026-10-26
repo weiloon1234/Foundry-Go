@@ -9,7 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// ORMHooks uses the same trace and veto owner as the retained legacy callbacks.
+// ORMHooks uses the same trace and veto owner as model writes and provider observers.
 func ORMHooks(owner string) orm.Hooks[Assignment] {
 	record := assignmentEvents(owner)
 	changed := func(name string) func(context.Context, *database.Tx, orm.Changes[Assignment]) error {

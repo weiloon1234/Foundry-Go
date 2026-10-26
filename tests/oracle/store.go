@@ -117,8 +117,7 @@ func Load(dir string) (Bundle, error) {
 	return b, Validate(b)
 }
 
-// Publish is called only by the explicit recorder command, after every child
-// test and coverage check succeeds. A torn publication fails closed on Load.
+// Publish publishes a reviewed legacy capture bundle.
 func Publish(dir string, b Bundle, refreeze bool) error {
 	current, err := Load(dir)
 	if err != nil {

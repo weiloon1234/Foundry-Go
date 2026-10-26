@@ -5,12 +5,10 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"foundry.test/goway/models"
-	old "foundry.test/goway/oldmodels"
-	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+
 	"github.com/weiloon1234/Foundry-Go/value"
 	"testing"
 )
@@ -31,93 +29,20 @@ var joinRows = rowset.Define(func(b rowset.Builder[joinResult], r *joinResult) j
 func TestStage6b1JoinGolden(t *testing.T) {
 	for _, kind := range []string{"Inner", "Left", "Right", "Full", "Cross", "Chain"} {
 		t.Run(kind, func(t *testing.T) {
-			before, after := &goldenCapture{}, &goldenCapture{}
-			for _, g := range []*goldenCapture{before, after} {
+			after := &goldenCapture{}
+			for _, g := range []*goldenCapture{after} {
 				g.scriptedColumns = []string{"left_email", "right_email", "nickname"}
 				g.scriptedBatches = [][][]driver.Value{{{nil, nil, nil}, {"left", "right", "nick"}}}
 			}
-			runJoinOld(before, kind)
+
 			runJoinNew(after, kind)
-			if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "joins_golden/1", before.output.String(), after.output.String()) {
-				t.Fatalf("join parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
+			if after.statements != 1 || !oracleEqual(t, "joins_golden/1", after.output.String()) {
+				t.Fatal("frozen legacy comparison differs")
 			}
 		})
 	}
 }
-func oldJoinSchema() (query.ProjectionDefinition[joinResult], query.ProjectionField[joinResult, value.Nullable[string]], query.ProjectionField[joinResult, value.Nullable[string]], query.ProjectionField[joinResult, value.Nullable[string]]) {
-	l := query.NewProjectionField[joinResult, value.Nullable[string]]("left_email")
-	r := query.NewProjectionField[joinResult, value.Nullable[string]]("right_email")
-	n := query.NewProjectionField[joinResult, value.Nullable[string]]("nickname")
-	schema := query.DefineProjection([]query.ProjectionColumn[joinResult]{l.Column(), r.Column(), n.Column()}, func(row database.Row) (joinResult, error) {
-		var result joinResult
-		c := codec.Nullable(codec.String[string]())
-		err := row.Scan(c.Scan(&result.LeftEmail), c.Scan(&result.RightEmail), c.Scan(&result.Nickname))
-		return result, err
-	})
-	return schema, l, r, n
-}
-func runJoinOld(g *goldenCapture, kind string) {
-	ctx := context.Background()
-	db := g.open(ctx)
-	defer db.Close(ctx)
-	a := query.As[joinA](old.QueryUsers().Where(old.UserFields().Age.Gt(10)).OrderBy(old.UserFields().Age.Desc()).Limit(5), "a")
-	b := query.As[joinB](old.QueryUsers().Where(old.UserFields().Email.Ne("hidden")), "b")
-	af, bf := old.UserFieldsAt(a.Scope()), old.UserFieldsAt(b.Scope())
-	on := query.On(af.IntroducerID, bf.ID)
-	schema, l, r, n := oldJoinSchema()
-	switch kind {
-	case "Inner":
-		j := query.InnerJoin(a, b, on)
-		ls := query.LeftScope(j, a.Scope())
-		rs := query.RightScope(j, b.Scope())
-		lf := old.UserFieldsAt(ls)
-		rf := old.UserFieldsAt(rs)
-		got := must(query.Project(j, schema, query.Map(l, query.NullableRow(lf.Email).Value()), query.Map(r, query.NullableRow(rf.Email).Value()), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
-	case "Left":
-		j := query.LeftJoin(a, b, on)
-		ls := query.LeftScope(j, a.Scope())
-		rs := query.NullableRightScope(j, b.Scope())
-		lf := old.UserFieldsAt(ls)
-		rf := old.UserNullableFieldsAt(rs)
-		got := must(query.Project(j, schema, query.Map(l, query.NullableRow(lf.Email).Value()), query.Map(r, query.Value(rf.Email)), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
-	case "Right":
-		j := query.RightJoin(a, b, on)
-		ls := query.NullableLeftScope(j, a.Scope())
-		rs := query.RightScope(j, b.Scope())
-		lf := old.UserNullableFieldsAt(ls)
-		rf := old.UserFieldsAt(rs)
-		got := must(query.Project(j, schema, query.Map(l, query.Value(lf.Email)), query.Map(r, query.NullableRow(rf.Email).Value()), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
-	case "Full":
-		j := query.FullJoin(a, b, on)
-		ls := query.NullableLeftScope(j, a.Scope())
-		rs := query.NullableRightScope(j, b.Scope())
-		lf := old.UserNullableFieldsAt(ls)
-		rf := old.UserNullableFieldsAt(rs)
-		got := must(query.Project(j, schema, query.Map(l, query.Value(lf.Email)), query.Map(r, query.Value(rf.Email)), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
-	case "Cross":
-		j := query.CrossJoin(a, b)
-		ls := query.LeftScope(j, a.Scope())
-		rs := query.RightScope(j, b.Scope())
-		lf := old.UserFieldsAt(ls)
-		rf := old.UserFieldsAt(rs)
-		got := must(query.Project(j, schema, query.Map(l, query.NullableRow(lf.Email).Value()), query.Map(r, query.NullableRow(rf.Email).Value()), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
-	case "Chain":
-		base := query.LeftJoin(a, b, on)
-		c := query.As[joinC](old.QueryUsers(), "c")
-		j := query.CrossJoin(base, c)
-		ls := query.LeftScope(j, query.LeftScope(base, a.Scope()))
-		rs := query.LeftNullableScope(j, query.NullableRightScope(base, b.Scope()))
-		lf := old.UserFieldsAt(ls)
-		rf := old.UserNullableFieldsAt(rs)
-		got := must(query.Project(j, schema, query.Map(l, query.NullableRow(lf.Email).Value()), query.Map(r, query.Value(rf.Email)), query.Map(n, query.Value(rf.Nickname))).OrderBy(lf.Email.Asc()).All(ctx, db))
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
-	}
-}
+
 func runJoinNew(g *goldenCapture, kind string) {
 	ctx := context.Background()
 	db := g.open(ctx)

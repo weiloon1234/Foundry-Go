@@ -16,7 +16,7 @@ type dtoMapKey struct {
 	format contract.Format
 }
 
-func resolveDTOMapKey(p *packageInput, typ types.Type, pos token.Pos, models map[*types.Named]bool) (dtoMapKey, error) {
+func resolveDTOMapKey(p *packageInput, typ types.Type, pos token.Pos) (dtoMapKey, error) {
 	typ = types.Unalias(typ)
 	fail := func(message string) (dtoMapKey, error) { return dtoMapKey{}, p.diagnostic(pos, message) }
 	key := dtoMapKey{typ: typ}
@@ -28,8 +28,8 @@ func resolveDTOMapKey(p *packageInput, typ types.Type, pos token.Pos, models map
 		return fail("DTO map keys require concrete value identities")
 	}
 	if named, ok := typ.(*types.Named); ok {
-		if models[named] || hasDTOModelIdentity(named) {
-			return fail("persistence models cannot become DTO map keys; use a typed model ID")
+		if hasDTOModelIdentity(named) {
+			return fail(persistenceMapKeyDiagnostic)
 		}
 		if explicit, diagnostic := customDTOKeyContract(named); diagnostic != "" {
 			return fail(diagnostic)

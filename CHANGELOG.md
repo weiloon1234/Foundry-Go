@@ -8,6 +8,10 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Complete Stage 8c: model generation retired, persistence models recognized
+  natively and rejected deterministically after generation; the legacy engine is
+  retained until 8d3.
+
 - Add pilot migration-guide entries and recipes covering locked finds by key,
   handwritten model reference and identity, datatable isolated test schemas,
   per-package generation, and optional insert assignments.

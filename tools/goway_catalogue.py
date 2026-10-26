@@ -1,6 +1,8 @@
 """Validate the reviewed Go-way compiler catalogue against its source cases."""
 
 import csv
+import hashlib
+import json
 from collections import Counter
 from pathlib import Path
 import re
@@ -40,22 +42,10 @@ def code_only(source):
 
 
 def generated_symbols(root=ROOT):
-    """Index actual model/projection declarations, not similarly named DTO APIs."""
-    symbols = {}
-    directories = [root / "tests/fixtures/consumer", root / "countries"]
-    for directory in directories:
-        for path in directory.rglob("*_foundry.gen.go"):
-            source = path.read_text()
-            if "FoundryModel" not in source and "ProjectionDefinition[" not in source:
-                continue
-            # Receiver methods are handled by the explicit boundary checks below.
-            module_root = root / "tests/fixtures/consumer" if path.is_relative_to(root / "tests/fixtures/consumer") else root
-            module = re.search(r'^module (\S+)', (module_root / 'go.mod').read_text(), re.M)[1]
-            package = module + '/' + path.parent.relative_to(module_root).as_posix()
-            exports = symbols.setdefault(package, set())
-            exports.update(re.findall(r'^func ([A-Z]\w*)[\[(]', source, re.M))
-            exports.update(re.findall(r'^type ([A-Z]\w*)\b', source, re.M))
-    return symbols
+    """Historical exports captured before retirement, alongside immutable cases."""
+    path = root / "tests/fixtures/consumer/testdata/compilefail/retired.json"
+    return {package: set(names) for package, names in
+            json.loads(path.read_text())["generated_symbols"].items()}
 
 
 def generated_references(source, symbols):
@@ -68,7 +58,8 @@ def generated_references(source, symbols):
         if not name.endswith(("ValidationFields", "ConfigFields")):
             references.add(name)
     for alias, path in re.findall(r'(?:\b([A-Za-z_]\w*)\s+)?"([^"\n]+)"', source):
-        qualifier = alias or path.rsplit('/', 1)[-1]
+        # A standalone import keyword is not a package alias.
+        qualifier = (alias if alias != "import" else "") or path.rsplit('/', 1)[-1]
         selected = set(re.findall(r'\b' + re.escape(qualifier) + r'\s*\.\s*([A-Za-z_]\w*)', code))
         references.update(qualifier + '.' + symbol for symbol in selected & symbols.get(path, set()))
         if path == "github.com/weiloon1234/Foundry-Go/countries" or re.search(r'/internal/\w*store$', path):
@@ -123,6 +114,13 @@ def validate(root=ROOT):
     if len(set(names)) != len(names) or set(names) != source.keys():
         raise ValueError("mapping must cover each compiler case exactly once")
     new = {p.parent.name for p in (root / "tests/fixtures/goway/testdata/compilefail").glob("*/invalid.go")}
+    retirement_path = root / "tests/fixtures/consumer/testdata/compilefail/retired.json"
+    retired = json.loads(retirement_path.read_text())["cases"]
+    by_name = {r["case"]: r for r in rows}
+    for name, digest in retired.items():
+        path = root / "tests/fixtures/consumer/testdata/compilefail" / name / "invalid.go"
+        if name not in by_name or by_name[name]["disposition"] != "ported" or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise ValueError(f"{name}: retired input must be unchanged and have a ported counterpart")
     symbols = generated_symbols(root)
     for row in rows:
         name, disposition = row["case"], row["disposition"]

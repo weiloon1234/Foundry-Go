@@ -1,10 +1,4 @@
 {
   "version": 1,
-  "files": {
-    "label_foundry.gen.go": "4d8d41c8fbbe7a3989a42e5ec7394eccfacf08f73f91abdac8d3ce87aba63228",
-    "link_foundry.gen.go": "d611ffcd7de2987f57d8307f6d61e93c38e2a9e70b98f571242d437095b7044e",
-    "plan_foundry.gen.go": "c8c9c259eb7a804844b692fc846f42eafe65c2ad72c59831b4bb969d450976a1",
-    "sample_foundry.gen.go": "37c6c7d23ba721e30562967c766969c217566adf99c4c565ef6ea5e0c327b359",
-    "summary_foundry.gen.go": "47edfc156b3f3dab7ef014ed623dbad901827befa5460117833be652529c547f"
-  }
+  "files": {}
 }

@@ -42,8 +42,8 @@ func TestReplayOnlyFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	for mode, diagnostic := range map[string]string{
-		"pending": "replay-only assertion requires frozen evidence",
-		"capture": "replay-only assertion cannot capture a legacy observation",
+		"pending": "the retired legacy oracle cannot be recaptured",
+		"capture": "the retired legacy oracle cannot be recaptured",
 		"changed": "current output differs",
 		"missing": "missing frozen oracle",
 	} {

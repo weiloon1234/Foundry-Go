@@ -131,11 +131,97 @@ this schema and passed focused and full repository acceptance.
 
 ## Explicit response fields
 
-Persistence models are not inferred as public DTOs. Direct model fields and
-direct/transitive model embedding are rejected, including before generated model
-methods exist on a fresh checkout. Map stored values or explicit getters into a
-response struct that declares the fields to expose. The model's generated field
-notices remain the guide for choosing a stored field versus its getter.
+Persistence models are not inferred as public DTOs. Direct model fields,
+direct/transitive model embedding, and model types used as DTO map keys are
+rejected on a fresh checkout and on regeneration alike. Map stored values or
+explicit getters into a response struct that declares the fields to expose.
+
+### Persistence model recognition and boundaries
+
+A persistence model is a named type that appears as the model type argument of
+an `orm.Table`, `orm.Builder`, `orm.Define` or `orm.TableOf` instantiation. These
+are the declaration surface: `Define` is the only way to declare a table, and
+its callback receives the `Builder` that every column and relation constructor
+requires. Other `database/orm` generics, such as `Query` or `Predicate`, are not
+treated as proof because raw fragments accept any type argument.
+
+Recognition runs once per generation run, after every package's generated
+overlay has passed its complete type check and before any output is published:
+
+1. Every package in the run that imports `database/orm`, directly or
+   transitively, contributes the types and generic instantiations recorded by
+   its complete check. That includes function bodies, method bodies, package
+   initializers, struct fields, signatures and type-parameter constraints, so
+   `var H = Holder[Account]{}`, `func init() { _ = Holder[Account]{} }`, a
+   non-erasing wrapper such as `func Table[M any](string) orm.Table[M, int]`,
+   a generic alias of `orm.Table` and a named table field beside an embedded
+   handle are all recognized.
+2. Dependencies loaded from compiled export data, outside the run, that import
+   `database/orm` contribute their package-level declarations: variable,
+   function and method signatures, type definitions and constants.
+3. One structural walk covers pointers, slices, arrays, maps, channels, struct
+   fields, interfaces, signatures, constraints, unions and aliases. A generic
+   instance is walked with its substituted fields and methods, so a handle
+   written with a type parameter is recognized where the generic is
+   instantiated. A generic model is recognized for every instantiation.
+4. A generic function, type, alias or method is a wrapper when any mention of
+   one of its type parameters is the model argument of a persistence generic
+   or of another wrapper, in a body, signature, field or constraint,
+   regardless of control flow. Its instances need not expose a handle.
+   Examples are `func Register[M any]() { orm.Define[M](...) }` and a method
+   `func (h Holder[M]) Init()` that declares a table for `M`. Every explicit or
+   inferred instantiation of a wrapper in the run records the type argument at
+   that parameter's position as a model. `Register[Account]()` and
+   `Holder[Account]{}` both recognize `Account`; other type parameters are not
+   marked. Wrappers of wrappers, including across packages of the run, are
+   resolved to a fixpoint.
+
+Every DTO, union and JSON multipart graph is then checked against the run's
+complete model set. The result does not depend on which packages finished
+first: a model declared by a sibling package, for example `tables` calling
+`orm.Define[models.Account]` while `http` imports only `models`, is rejected in
+every full run.
+
+When discovery has already failed for a DTO package, for example on a struct
+map key or on a model field whose type DTOs cannot encode, the reported
+diagnostic names the persistence model when that package or its imports
+declare the model. The original diagnostic follows it as
+`(discovery also failed: …)`. A model declared only by an unrelated sibling
+package keeps the original discovery diagnostic; the declaration still fails.
+
+**Recognition limits:**
+- **Scope of a run:** a `--dir` run recognizes models declared in the packages
+  it loads, which are its selected packages and their import closure. A model
+  declared only in a package outside that closure, such as a sibling `tables`
+  package of a non-recursive run, is not visible to it. The full `make generate`
+  and `make generate-check` runs over each generation root are the
+  authoritative gate CI enforces.
+- **Export-data initializers and bodies:** compiled export data has no
+  initializer expressions or function bodies. A table that a package outside
+  the run declares only inside a function, inside a generic wrapper, or behind
+  an interface type such as `any` does not expose its model. Declare such
+  tables with an explicit `orm.Table[M, K]` type, or include the package in
+  the run.
+- **Unexported export-data declarations:** export data omits a package's
+  unexported package-level declarations unless its exported API or inlinable
+  bodies reference them. An unexported table variable in a package outside the
+  run is therefore not seen.
+- **Named models only:** a model type argument that is not a named type, such
+  as `orm.Table[*Account, int]` or an anonymous struct, fails generation with a
+  positioned diagnostic. A wrapper instantiated with a non-named composite
+  argument, such as `Register[*Account]()` or `Register[[]Account]()`, fails
+  the same way. A wrapper instantiated with a basic or interface argument, such
+  as `int` or `any`, records nothing. Function-local model types are not
+  tracked because no DTO declaration can name them.
+- **Wrappers outside the run:** wrapper resolution covers only packages in the
+  run. A framework or export-data generic that calls `orm.Define[M]` only in
+  its body is invisible unless its signature or members expose
+  `orm.Table[M, K]` or `orm.Builder[M]`.
+- **Fail-closed traversal:** every standard `go/types` type kind is handled
+  explicitly. Any other kind fails generation with the position, package and
+  object being inspected, rather than being skipped.
+- **Custom codecs:** a type with an explicit JSON contract owns its wire shape,
+  so its Go fields are not inspected for models.
 
 Go's compiler retains descriptor owners, decoded result types, model-ID owners,
 enum values and Optional/Nullable types. Runtime input validation complements

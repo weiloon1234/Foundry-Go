@@ -41,13 +41,16 @@ type packageGraph struct {
 	fset                  *token.FileSet
 	// framework is the Foundry-Go module selected by the consumer's build list.
 	framework *listedModule
-	// fieldDocumentation opts into managed notes in handwritten model files.
+	// fieldDocumentation opts into cleanup of historical managed field notes.
 	fieldDocumentation bool
 	// overlay adds proposed handwritten files, by absolute path, to their
 	// package for a validation-only generation that publishes nothing.
 	overlay map[string][]byte
 	// exports locates compiled export data by import path.
 	exports map[string]string
+	// persistenceDependents holds listed import paths whose transitive
+	// dependencies include database/orm.
+	persistenceDependents map[string]bool
 
 	compiledMu sync.Mutex
 	compiled   types.Importer
@@ -92,15 +95,18 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 	if err != nil {
 		return nil, err
 	}
-	g := &packageGraph{root: tree.root, scope: tree.scope, recursive: recursive, packages: make(map[string]listedPackage), documentationPackages: make(map[string]listedPackage), snapshot: tree.dirs, moduleFiles: moduleFiles, fset: token.NewFileSet(), checked: make(map[string]*types.Package)}
+	g := &packageGraph{root: tree.root, scope: tree.scope, recursive: recursive, packages: make(map[string]listedPackage), documentationPackages: make(map[string]listedPackage), snapshot: tree.dirs, moduleFiles: moduleFiles, fset: token.NewFileSet(), checked: make(map[string]*types.Package), persistenceDependents: make(map[string]bool)}
 	pattern := "."
 	if recursive {
 		pattern = "./..."
 	}
 	arguments := append([]string{"list"}, g.scope.listFlags()...)
-	arguments = append(arguments, "-e", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,IgnoredGoFiles,Imports,Match,Error", "--", pattern)
+	arguments = append(arguments, "-e", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,IgnoredGoFiles,Imports,Deps,Match,Error", "--", pattern)
 	var listed []listedPackage
-	if err := g.goList(ctx, arguments, func(pkg listedPackage) { listed = append(listed, pkg) }); err != nil {
+	if err := g.goList(ctx, arguments, func(pkg listedPackage) {
+		g.recordPersistenceDependent(pkg)
+		listed = append(listed, pkg)
+	}); err != nil {
 		return nil, err
 	}
 	for _, pkg := range listed {
@@ -155,7 +161,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 		}
 	}
 	arguments = append([]string{"list"}, g.scope.listFlags()...)
-	arguments = append(arguments, "-e", "-deps", "-export", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,Export,Module", "--")
+	arguments = append(arguments, "-e", "-deps", "-export", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,Deps,Export,Module", "--")
 	arguments = append(arguments, targets...)
 	exports := make(map[string]string)
 	if err := g.goList(ctx, arguments, func(pkg listedPackage) {
@@ -165,6 +171,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 		if pkg.Export != "" {
 			exports[pkg.ImportPath] = pkg.Export
 		}
+		g.recordPersistenceDependent(pkg)
 		if pkg.ImportPath == framework+"/value" && pkg.Module != nil {
 			module := *pkg.Module
 			g.framework = &module
@@ -177,7 +184,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 	// package without the binding package generated declarations import.
 	slotsPath := framework + "/extensions/slots"
 	if _, listed := exports[slotsPath]; !listed && (exports[framework+"/translations"] != "" || exports[framework+"/attachments"] != "" || exports[framework+"/metadata"] != "") {
-		arguments = append(append([]string{"list"}, g.scope.listFlags()...), "-e", "-deps", "-export", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,Export,Module", "--", slotsPath)
+		arguments = append(append([]string{"list"}, g.scope.listFlags()...), "-e", "-deps", "-export", "-json=Dir,ImportPath,Name,GoFiles,CgoFiles,Deps,Export,Module", "--", slotsPath)
 		if err := g.goList(ctx, arguments, func(pkg listedPackage) {
 			if _, selected := g.packages[pkg.ImportPath]; !selected {
 				g.documentationPackages[pkg.ImportPath] = pkg
@@ -185,6 +192,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 			if pkg.Export != "" {
 				exports[pkg.ImportPath] = pkg.Export
 			}
+			g.recordPersistenceDependent(pkg)
 		}); err != nil {
 			return nil, err
 		}
@@ -238,6 +246,14 @@ func checkImportOption(path string) error {
 	return nil
 }
 
+// recordPersistenceDependent marks a listed package that can reach
+// database/orm. Others cannot name a table handle, so recognition skips them.
+func (g *packageGraph) recordPersistenceDependent(pkg listedPackage) {
+	if slices.Contains(pkg.Deps, ormPackage) {
+		g.persistenceDependents[pkg.ImportPath] = true
+	}
+}
+
 func (g *packageGraph) exportImporter() types.Importer {
 	return importer.ForCompiler(g.fset, "gc", func(path string) (io.ReadCloser, error) {
 		file, ok := g.exports[path]
@@ -252,7 +268,7 @@ func (g *packageGraph) exportImporter() types.Importer {
 // export data that adds proposed handwritten files, by absolute path, for a
 // validation-only generation. It has its own importer and type-check results.
 func (g *packageGraph) withOverlay(files map[string][]byte) *packageGraph {
-	clone := &packageGraph{root: g.root, scope: g.scope, recursive: g.recursive, packages: g.packages, documentationPackages: g.documentationPackages, order: g.order, snapshot: g.snapshot, moduleFiles: g.moduleFiles, fset: g.fset, framework: g.framework, fieldDocumentation: g.fieldDocumentation, overlay: files, exports: g.exports, checked: make(map[string]*types.Package)}
+	clone := &packageGraph{root: g.root, scope: g.scope, recursive: g.recursive, packages: g.packages, documentationPackages: g.documentationPackages, order: g.order, snapshot: g.snapshot, moduleFiles: g.moduleFiles, fset: g.fset, framework: g.framework, fieldDocumentation: g.fieldDocumentation, overlay: files, exports: g.exports, persistenceDependents: g.persistenceDependents, checked: make(map[string]*types.Package)}
 	clone.compiled = clone.exportImporter()
 	return clone
 }
@@ -618,7 +634,6 @@ func (g *packageGraph) prepare(ctx context.Context) ([]packageWrite, error) {
 	}
 	group.Wait()
 	var writes []packageWrite
-	tables := make(map[string]string)
 	messageKeys := make(map[string]string)
 	for i, path := range g.order {
 		result := results[i]
@@ -629,14 +644,7 @@ func (g *packageGraph) prepare(ctx context.Context) ([]packageWrite, error) {
 			if errors.Is(result.err, errDependencyFailed) {
 				continue
 			}
-			return nil, result.err
-		}
-		for _, m := range result.metadata.models {
-			owner := path + "." + m.name
-			if previous, exists := tables[m.table]; exists {
-				return nil, fmt.Errorf("%s: duplicate model table %s in %s and %s", m.position, m.table, previous, owner)
-			}
-			tables[m.table] = owner
+			return nil, g.refineDiscoveryFailure(results, index, result.err)
 		}
 		for _, declaration := range result.metadata.dtos {
 			if declaration.message == nil {
@@ -653,6 +661,11 @@ func (g *packageGraph) prepare(ctx context.Context) ([]packageWrite, error) {
 	if len(writes) != len(g.order) {
 		return nil, fmt.Errorf("generation dependency failed without a reported cause")
 	}
+	// Every package's complete check is final, so the run-wide model set and
+	// its diagnostics no longer depend on worker completion order.
+	if err := g.rejectPersistenceModels(results); err != nil {
+		return nil, err
+	}
 	return writes, nil
 }
 
@@ -666,7 +679,7 @@ func (g *packageGraph) preparePackage(ctx context.Context, path string, result *
 	}
 	metadata, err := discover(p)
 	if err != nil {
-		return err
+		return &discoveryFailure{input: p, metadata: metadata, err: err}
 	}
 	var notes map[string][]byte
 	if g.fieldDocumentation {

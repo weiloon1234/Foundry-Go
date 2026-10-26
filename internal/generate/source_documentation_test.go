@@ -140,10 +140,10 @@ func generatedHelp(t *testing.T, data string) map[string]string {
 	return result
 }
 
-func TestGeneratedOriginalModelHelpFollowsEveryFieldUse(t *testing.T) {
+func TestGeneratedOriginalDTOHelpFollowsEveryFieldUse(t *testing.T) {
 	input := `package sample
 import "github.com/weiloon1234/Foundry-Go/value"
-//foundry:model table=users primary=Key
+//foundry:dto
 type User struct {
  Key int
  // Email reaches the member.
@@ -160,12 +160,12 @@ func (User) MutateEmail(v string)(string,error) { return v,nil }
 	}
 	first := generatedSnapshot(t, dir)
 	docs := generatedHelp(t, first["user_foundry.gen.go"])
-	for _, symbol := range []string{"UserScopedFieldSet.Email", "UserNullableFieldSet.Email", "UserDraft.Email", "UserDraft.SetEmail", "UserDraft.UnsetEmail", "UserFieldChanges.Email"} {
+	for _, symbol := range []string{"UserValidationFieldSet.Email"} {
 		if !strings.Contains(docs[symbol], "Email reaches the member.\n\nDelivery address.") {
 			t.Fatalf("%s lost original help: %q", symbol, docs[symbol])
 		}
 	}
-	for _, symbol := range []string{"UserScopedFieldSet.Alternate", "UserNullableFieldSet.Alternate", "UserDraft.Alternate", "UserDraft.SetAlternate", "UserDraft.UnsetAlternate", "UserDraft.ClearAlternate"} {
+	for _, symbol := range []string{"UserValidationFieldSet.Alternate"} {
 		if !strings.Contains(docs[symbol], "Alternate reaches the backup recipient.") {
 			t.Fatalf("%s lost nullable field help: %q", symbol, docs[symbol])
 		}
@@ -199,10 +199,10 @@ func (User) MutateEmail(v string)(string,error) { return v,nil }
 		}
 		docs := generatedHelp(t, next)
 		if replacement == "" {
-			if strings.Contains(docs["UserDraft.SetEmail"], "reaches the member") || strings.Contains(docs["UserDraft.SetEmail"], "delivery address") {
+			if strings.Contains(docs["UserValidationFieldSet.Email"], "reaches the member") || strings.Contains(docs["UserValidationFieldSet.Email"], "delivery address") {
 				t.Fatal("removed source help survived generation")
 			}
-		} else if !strings.Contains(docs["UserDraft.SetEmail"], replacement) {
+		} else if !strings.Contains(docs["UserValidationFieldSet.Email"], replacement) {
 			t.Fatal("edited source help did not reach draft")
 		}
 		if report, err := Generate(t.Context(), Options{Dir: dir}); err != nil || len(report.Written) != 0 {
@@ -399,11 +399,10 @@ type Settings struct {
 	}
 }
 
-func TestOriginalHelpReachesProjectionJSONAndValidationFields(t *testing.T) {
+func TestOriginalHelpReachesDTOAndValidationFields(t *testing.T) {
 	dir := fixture(t, `package sample
 import (
  "github.com/weiloon1234/Foundry-Go/value"
- "github.com/weiloon1234/Foundry-Go/translations"
 )
 type Embedded struct {
  // Promoted message title.
@@ -460,33 +459,33 @@ type GenericCopy GenericRows[struct {
  // Generic copied item text.
  Text string
 }]
-//foundry:model table=articles primary=Key
+//foundry:dto
 type Article struct {
  Key int
  // Translated headline.
- Headline translations.Text
- Payload value.JSON[Payload]
- PointerTop value.JSON[PointerAlias]
- OptionalTop value.JSON[OptionalAlias]
- Rows value.JSON[Rows]
- Entries value.JSON[Entries]
- Fixed value.JSON[Fixed]
- Copied value.JSON[RowsCopy]
- Aliased value.JSON[RowsAlias]
- AnonymousAlias value.JSON[AnonymousAlias]
- Generic value.JSON[GenericCopy]
- GenericAlias value.JSON[GenericAlias[struct {
+ Headline string
+ Payload Payload
+ PointerTop PointerAlias
+ OptionalTop OptionalAlias
+ Rows Rows
+ Entries Entries
+ Fixed Fixed
+ Copied RowsCopy
+ Aliased RowsAlias
+ AnonymousAlias AnonymousAlias
+ Generic GenericCopy
+ GenericAlias GenericAlias[struct {
   // Generic aliased item text.
   Text string
- }]]
- Generated value.JSON[GeneratedJSON]
- GeneratedAlias value.JSON[GeneratedAlias]
- Inline value.JSON[struct {
+ }]
+ Generated GeneratedJSON
+ GeneratedAlias GeneratedAlias
+ Inline struct {
   // Inline JSON theme.
   Theme string
- }]
+ }
 }
-//foundry:projection dto=true
+//foundry:dto
 type Row struct {
  // Selected heading.
  Heading string
@@ -537,31 +536,8 @@ type GeneratedAlias = []Payload
 	}
 	output := generatedSnapshot(t, dir)
 	for file, expected := range map[string]map[string]string{
-		"article_foundry.gen.go": {
-			"ArticleExtensionSet.Headline":                      "Translated headline.",
-			"ArticleExtensionSlots.Headline":                    "Translated headline.",
-			"Article_PayloadJSONProperties.Theme":               "Preferred display theme.",
-			"Article_PointerTopJSONProperties.Text":             "Pointer alias text.",
-			"Article_OptionalTopJSONProperties.Text":            "Optional alias text.",
-			"Article_Payload_PtrJSONProperties.Text":            "Pointer alias text.",
-			"Article_Payload_OptionalJSONProperties.Text":       "Optional alias text.",
-			"Article_Payload_ChildJSONProperties.Text":          "Nested aliased display text.",
-			"Article_GenericAlias_ElementJSONProperties.Text":   "Generic aliased item text.",
-			"Article_PayloadJSONProperties.Title":               "Promoted message title.",
-			"Article_InlineJSONProperties.Theme":                "Inline JSON theme.",
-			"Article_Rows_ElementJSONProperties.Text":           "Slice item text.",
-			"Article_Entries_EntryJSONProperties.Text":          "Map item text.",
-			"Article_Fixed_ElementJSONProperties.Text":          "Array item text.",
-			"Article_Copied_ElementJSONProperties.Text":         "Slice item text.",
-			"Article_Aliased_ElementJSONProperties.Text":        "Slice item text.",
-			"Article_AnonymousAlias_ElementJSONProperties.Text": "Aliased anonymous item text.",
-			"Article_Generic_ElementJSONProperties.Text":        "Generic copied item text.",
-		},
+		"article_foundry.gen.go": {"ArticleValidationFieldSet.Headline": "Translated headline."},
 		"row_foundry.gen.go": {
-			"RowFieldSet.Heading":           "Selected heading.",
-			"RowSelection.Heading":          "Selected heading.",
-			"RowScopedFieldSet.Heading":     "Selected heading.",
-			"RowNullableFieldSet.Heading":   "Selected heading.",
 			"RowValidationFieldSet.Heading": "Selected heading.",
 		},
 		"request_foundry.gen.go": {
@@ -577,26 +553,7 @@ type GeneratedAlias = []Payload
 				t.Fatalf("%s: %s missing %q: %q", file, symbol, want, docs[symbol])
 			}
 		}
-		if file == "row_foundry.gen.go" {
-			builders := 0
-			for symbol, help := range docs {
-				if strings.HasSuffix(symbol, ".SelectHeading") {
-					builders++
-					if !strings.Contains(help, "Selected heading.") {
-						t.Fatalf("%s lost projection builder help", symbol)
-					}
-				}
-			}
-			if builders == 0 {
-				t.Fatal("no projection builder documentation inspected")
-			}
-		}
-	}
-	docs := generatedHelp(t, output["article_foundry.gen.go"])
-	for _, symbol := range []string{"Article_Payload_GeneratedPointerJSONProperties.Text", "Article_Payload_GeneratedOptionalJSONProperties.Text", "Article_Payload_HiddenJSONProperties.Text", "Article_GeneratedJSONProperties.Child", "Article_Generated_ChildJSONProperties.Theme", "Article_Generated_AnonymousJSONProperties.Text", "Article_Generated_Entries_EntryJSONProperties.Text", "Article_Generated_Rows_ElementJSONProperties.Text", "Article_GeneratedAlias_ElementJSONProperties.Theme"} {
-		if help, exists := docs[symbol]; !exists || help != "" {
-			t.Fatalf("generated payload field %s missing or recycled help: %q", symbol, help)
-		}
+
 	}
 	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
@@ -753,19 +710,18 @@ func TestJSONHelpTracksPromotedGeneratedOrigin(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := fixture(t, `package sample
-import "github.com/weiloon1234/Foundry-Go/value"
 type HandwrittenChild struct {
  // Original child display text.
  Text string
 }
 type Payload struct {
  GeneratedEmbedded
+ // Original child display text.
  Visible HandwrittenChild
 }
-//foundry:model table=records primary=ID
+//foundry:dto
 type Record struct {
- ID int
- Data value.JSON[Payload]
+ Payload
 }
 `)
 			write(t, dir, "generated_payload.go", "// Code generated by a test tool; DO NOT EDIT.\npackage sample\ntype GeneratedEmbedded struct { Child "+child+" }\n")
@@ -773,10 +729,10 @@ type Record struct {
 				t.Fatal(err)
 			}
 			docs := generatedHelp(t, generatedSnapshot(t, dir)["record_foundry.gen.go"])
-			if help, ok := docs["Record_Data_ChildJSONProperties.Text"]; !ok || help != "" {
+			if help, ok := docs["RecordValidationFieldSet.Child"]; !ok || strings.Contains(help, "Original child display text.") {
 				t.Fatalf("promoted generated child is missing or copied original help: %q", help)
 			}
-			if !strings.Contains(docs["Record_Data_VisibleJSONProperties.Text"], "Original child display text.") {
+			if !strings.Contains(docs["RecordValidationFieldSet.Visible"], "Original child display text.") {
 				t.Fatal("generated sibling suppressed handwritten child help")
 			}
 		})

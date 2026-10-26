@@ -8,7 +8,6 @@ import (
 
 type Label string
 
-//foundry:model table=calculation_samples primary=ID
 type Sample struct {
 	ID       int
 	Quantity int16
@@ -19,7 +18,6 @@ type Sample struct {
 	Tax      value.Nullable[decimal.Decimal]
 }
 
-//foundry:projection
 type Calculation struct {
 	ID            int
 	Caption       string

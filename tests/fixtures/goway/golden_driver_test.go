@@ -61,7 +61,6 @@ type goldenCapture struct {
 	scriptedColumns []string
 	scriptedBatches [][][]driver.Value
 }
-type oldGolden struct{ *goldenCapture }
 type newGolden struct{ *goldenCapture }
 type orderSide struct{}
 type memberSide struct{}

@@ -7,12 +7,10 @@ import (
 	"testing"
 
 	"foundry.test/goway/models"
-	old "foundry.test/goway/oldmodels"
-	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/codec"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -45,59 +43,35 @@ var aggregateBuyerRows = rowset.Define(func(b rowset.Builder[aggregateBuyerResul
 })
 
 func TestStage6a3AggregateGolden(t *testing.T) {
-	before, after := &goldenCapture{}, &goldenCapture{}
-	for _, c := range []*goldenCapture{before, after} {
+	after := &goldenCapture{}
+	for _, c := range []*goldenCapture{after} {
 		c.scriptedColumns = []string{"buyer", "count", "distinct", "total", "average", "min", "max"}
 		c.scriptedBatches = [][][]driver.Value{{{buyerID, int64(2), int64(2), "1000", "500", int64(400), int64(600)}}}
 	}
-	runAggregateOld(before)
+
 	runAggregateNew(after)
-	if before.statements != 1 || after.statements != 1 || !oracleEqual(t, "aggregate_golden/1", before.output.String(), after.output.String()) {
-		t.Fatalf("aggregate parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
+	if after.statements != 1 || !oracleEqual(t, "aggregate_golden/1", after.output.String()) {
+		t.Fatal("frozen legacy comparison differs")
 	}
+
 	// Complete-model DISTINCT and DISTINCT ON keep their result read-only.
-	before, after = &goldenCapture{}, &goldenCapture{}
+	after = &goldenCapture{}
 	ctx := t.Context()
-	oldDB, newDB := before.open(ctx), after.open(ctx)
-	defer oldDB.Close(ctx)
+	newDB := after.open(ctx)
+
 	defer newDB.Close(ctx)
-	oldF := old.OrderFields()
-	oldQ := old.QueryOrders().DistinctOn(oldF.BuyerID.Group()).OrderBy(oldF.BuyerID.Asc(), oldF.TotalCents.Desc())
+
 	newBuyer, newAmount := expr.Value(models.Orders.BuyerID), expr.Value(models.Orders.TotalCents)
 	newQ := rowset.DistinctOn(rowset.FromModel(models.Orders.Query()), expr.Group(newBuyer)).OrderBy(newBuyer.Asc(), newAmount.Desc())
-	fmt.Fprintln(&before.output, oracleSnapshot([]any{must(oldQ.All(ctx, oldDB))}))
+
 	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(newQ.All(ctx, newDB))}))
-	fmt.Fprintln(&before.output, oracleSnapshot([]any{must(old.QueryOrders().Distinct().All(ctx, oldDB))}))
+
 	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(rowset.Distinct(rowset.FromModel(models.Orders.Query())).All(ctx, newDB))}))
-	if !oracleEqual(t, "aggregate_golden/2", before.output.String(), after.output.String()) {
-		t.Fatalf("distinct parity:\n%s", goldenDiff(before.output.String(), after.output.String()))
+	if !oracleEqual(t, "aggregate_golden/2", after.output.String()) {
+		t.Fatal("frozen legacy comparison differs")
 	}
 }
-func runAggregateOld(g *goldenCapture) {
-	ctx := context.Background()
-	db := g.open(ctx)
-	defer db.Close(ctx)
-	a := query.As[expressionSide](old.QueryOrders(), "o")
-	f := old.OrderFieldsAt(a.Scope())
-	count := query.Count[query.Alias[expressionSide, old.Order]]().Filter(f.TotalCents.Gt(0))
-	total := query.Sum(f.TotalCents).Filter(f.TotalCents.Gt(100))
-	buyer := query.NewProjectionField[aggregateGoldenResult, model.ID[old.User]]("buyer")
-	countField := query.NewProjectionField[aggregateGoldenResult, int64]("count")
-	distinct := query.NewProjectionField[aggregateGoldenResult, int64]("distinct")
-	sum := query.NewProjectionField[aggregateGoldenResult, value.Nullable[decimal.Decimal]]("total")
-	average := query.NewProjectionField[aggregateGoldenResult, value.Nullable[decimal.Decimal]]("average")
-	min := query.NewProjectionField[aggregateGoldenResult, value.Nullable[int64]]("min")
-	max := query.NewProjectionField[aggregateGoldenResult, value.Nullable[int64]]("max")
-	schema := query.DefineProjection([]query.ProjectionColumn[aggregateGoldenResult]{buyer.Column(), countField.Column(), distinct.Column(), sum.Column(), average.Column(), min.Column(), max.Column()}, func(row database.Row) (aggregateGoldenResult, error) {
-		var r aggregateGoldenResult
-		var id model.ID[old.User]
-		err := row.Scan(codec.ID[old.User]().Scan(&id), codec.Signed[int64]().Scan(&r.Count), codec.Signed[int64]().Scan(&r.Distinct), codec.Nullable(codec.Decimal()).Scan(&r.Total), codec.Nullable(codec.Decimal()).Scan(&r.Average), codec.Nullable(codec.Signed[int64]()).Scan(&r.Min), codec.Nullable(codec.Signed[int64]()).Scan(&r.Max))
-		r.Buyer = id.String()
-		return r, err
-	})
-	q := query.Project(a, schema, query.Map(buyer, query.Value(f.BuyerID)), query.Map(countField, count.Value()), query.Map(distinct, query.CountDistinctField(f.TotalCents).Value()), query.Map(sum, total.Value()), query.Map(average, query.Avg(f.TotalCents).Value()), query.Map(min, query.Min(f.TotalCents).Value()), query.Map(max, query.Max(f.TotalCents).Value())).GroupBy(f.BuyerID.Group()).Having(query.HavingAnd(count.Gt(0), query.HavingOr(total.IsNull(), total.Gt(decimal.FromInt64(1))))).OrderBy(count.Desc(), f.BuyerID.Asc())
-	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
-}
+
 func runAggregateNew(g *goldenCapture) {
 	ctx := context.Background()
 	db := g.open(ctx)

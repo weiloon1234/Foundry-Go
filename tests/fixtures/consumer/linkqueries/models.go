@@ -2,8 +2,6 @@
 package linkqueries
 
 import (
-	"context"
-	"github.com/weiloon1234/Foundry-Go/database"
 	"strings"
 	"time"
 
@@ -26,11 +24,9 @@ type Member struct {
 
 type GroupCode string
 
-//foundry:model table=link_groups primary=Code retrieval=groupReads
 type Group struct {
-	Code GroupCode
-	Name string
-	// Foundry field behavior (generated): Managed soft-delete timestamp: Delete sets this stored field and Restore clears it. Ordinary queries exclude deleted models; WithTrashed and OnlyTrashed select visibility explicitly. Assigning this field directly through a draft uses ordinary create/update hooks rather than deletion/restoration events.
+	Code      GroupCode
+	Name      string
 	DeletedAt value.Nullable[temporal.DateTime]
 }
 
@@ -64,8 +60,4 @@ type Friendship struct {
 	ID     model.ID[Friendship]
 	FromID model.ID[Member]
 	ToID   model.ID[Member]
-}
-
-func groupReads() GroupRetrievalHooks {
-	return GroupRetrievalHooks{Retrieved: func(ctx context.Context, _ database.Executor, _ Group) error { recordRead(ctx); return nil }}
 }

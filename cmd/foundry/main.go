@@ -72,7 +72,7 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	check := flags.Bool("check", false, "fail on stale output without rewriting files")
 	recursive := flags.Bool("recursive", false, "generate all Go packages below --dir, in dependency order")
 	recover := flags.Bool("recover", false, "recover an interrupted publication in this package")
-	fieldDocs := flags.Bool("field-docs", false, "also maintain managed field behavior notes in handwritten model files")
+	fieldDocs := flags.Bool("field-docs", false, "remove obsolete managed field behavior notes from handwritten model files")
 	if err := cli.ParseFlags(flags, args); err != nil {
 		return err
 	}

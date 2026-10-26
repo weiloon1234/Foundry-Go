@@ -9,16 +9,13 @@ import (
 // Both workloads use public terminals and the same driver responses. The transcript
 // includes SQL, bindings, every persisted value and explicitly loaded relation slots.
 func TestOldAndNewDataLayersAgree(t *testing.T) {
-	old, current := &goldenCapture{}, &goldenCapture{}
-	oldGolden{old}.run()
+	current := &goldenCapture{}
 	newGolden{current}.run()
-	for name, capture := range map[string]*goldenCapture{"old": old, "new": current} {
-		if capture.statements != 56 {
-			t.Fatalf("%s executed %d statements, want all 56", name, capture.statements)
-		}
+	if current.statements != 56 {
+		t.Fatalf("executed %d statements, want all 56", current.statements)
 	}
-	if !oracleEqual(t, "golden/1", old.output.String(), current.output.String()) {
-		t.Fatalf("old/new SQL, bindings or hydrated values differ:\n%s", goldenDiff(old.output.String(), current.output.String()))
+	if !oracleEqual(t, "golden/1", current.output.String()) {
+		t.Fatal("frozen legacy SQL, bindings or hydration differs")
 	}
 }
 

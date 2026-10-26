@@ -201,7 +201,7 @@ func TestInvalidMultipartDeclarationsDoNotPublish(t *testing.T) {
 		"optional-files":         "import h \"github.com/weiloon1234/Foundry-Go/http\"\nimport \"github.com/weiloon1234/Foundry-Go/value\"\n//foundry:multipart\ntype Form struct{Value value.Optional[[]h.UploadedFile]}",
 		"optional-repeated-json": "import \"github.com/weiloon1234/Foundry-Go/value\"\n//foundry:multipart\ntype Form struct{Value value.Optional[[]string] `form:\"value,json,repeat\"`}",
 		"nested-optional-json":   "import \"github.com/weiloon1234/Foundry-Go/value\"\n//foundry:multipart\ntype Form struct{Value value.Optional[value.Optional[string]] `form:\"value,json\"`}",
-		"json-model":             "//foundry:model table=users primary=ID\ntype User struct{ID int;Password string}\n//foundry:multipart\ntype Form struct{Value User `form:\"value,json\"`}",
+		"json-model":             "import orm \"github.com/weiloon1234/Foundry-Go/database/orm\"\nvar table orm.Table[User, int]\ntype User struct{ID int;Password string}\n//foundry:multipart\ntype Form struct{Value User `form:\"value,json\"`}",
 		"descriptor-collision":   "//foundry:multipart\ntype Form struct{}\nfunc FormDescriptor(){}",
 		"validation-collision":   "//foundry:multipart\ntype Form struct{}\nfunc FormValidationFields(){}",
 	} {

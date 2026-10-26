@@ -8,7 +8,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-//foundry:projection
 type UserSummary struct {
 	ID model.ID[models.User]
 	// Email is the buyer contact address selected for this report.
@@ -17,7 +16,6 @@ type UserSummary struct {
 	Status   models.Status
 }
 
-//foundry:projection
 type BuyerTotals struct {
 	BuyerID model.ID[models.User]
 	Total   value.Nullable[decimal.Decimal]
@@ -25,7 +23,6 @@ type BuyerTotals struct {
 	Average value.Nullable[decimal.Decimal]
 }
 
-//foundry:projection
 type OrderSummary struct {
 	Total value.Nullable[decimal.Decimal]
 	Count int64

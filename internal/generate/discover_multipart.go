@@ -46,7 +46,7 @@ func discoverMultipart(p *packageInput, spec *ast.TypeSpec, named *types.Named, 
 	return declaration, nil
 }
 
-func resolveMultipartFields(p *packageInput, declaration *multipartDeclaration, models map[*types.Named]bool) error {
+func resolveMultipartFields(p *packageInput, declaration *multipartDeclaration) error {
 	for i := range declaration.fields {
 		field := &declaration.fields[i]
 		element := field.typ
@@ -70,7 +70,7 @@ func resolveMultipartFields(p *packageInput, declaration *multipartDeclaration, 
 				return p.diagnostic(field.position, "nested Optional cannot describe one multipart JSON value")
 			}
 			field.element = element
-			if err := resolveJSONGraph(p, &field.graph, element, field.position, models, true); err != nil {
+			if err := resolveJSONGraph(p, &field.graph, element, field.position, true); err != nil {
 				return err
 			}
 			continue

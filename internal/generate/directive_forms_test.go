@@ -7,14 +7,14 @@ import (
 
 func TestDirectivePrefilterAcceptsEveryParsedCommentForm(t *testing.T) {
 	for text, want := range map[string]bool{
-		"//foundry:model":            true,
-		"// foundry:model":           true,
+		"//foundry:dto":              true,
+		"// foundry:dto":             true,
 		"//\t foundry:enum":          true,
 		"// foundry:dto":             true,
 		"code // note\n// foundry:x": true,
-		"x := \"foundry:model\"":     false,
-		"//\nfoundry:model":          false,
-		"/* foundry:model */":        false,
+		"x := \"foundry:dto\"":       false,
+		"//\nfoundry:dto":            false,
+		"/* foundry:dto */":          false,
 		"package sample":             false,
 	} {
 		if got := mayDeclare([]byte(text)); got != want {

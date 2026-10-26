@@ -14,25 +14,28 @@ type State string
 
 const Active State = "active"
 
-//foundry:model table=mutator_members
 type Member struct {
-	// Foundry field behavior (generated): Member.ID retains stored mutator_members.id. Custom getter: [Member.AccessID]; choose the stored field or getter result explicitly when mapping a DTO.
 	// ID is the database identity. Stored reads keep the key; call AccessID explicitly for presentation.
+	// Custom getter [Member.AccessID] is explicit; persistence uses the stored identity.
 	ID model.ID[Member]
-	// Foundry field behavior (generated): Member.Email retains stored mutator_members.email_address. Custom getter: [Member.AccessEmail]; choose the stored field or getter result explicitly when mapping a DTO.
-	// Foundry field behavior (generated): Member.Email retains stored mutator_members.email_address. Custom setter: [Member.MutateEmail] transforms assigned values during persistence through [MemberDraft.SetEmail]. Direct field assignment and draft construction do not invoke it.
+	// Delivery address. Email retains the stored email_address value.
 	// Email is the delivery address stored in email_address. Call AccessEmail explicitly for display.
 	// MutateEmail runs during persistence through Members.Email.Set; assigning this field does not invoke it.
-	Email string `foundry:"column=email_address"` // Delivery address.
-	// Foundry field behavior (generated): Member.Nickname retains stored mutator_members.nickname. Custom getter: [Member.AccessNickname]; choose the stored field or getter result explicitly when mapping a DTO.
-	// Foundry field behavior (generated): Member.Nickname retains stored mutator_members.nickname. Custom setter: [Member.MutateNickname] transforms assigned values during persistence through [MemberDraft.SetNickname]. Direct field assignment and draft construction do not invoke it.
-	// Foundry field behavior (generated): The write mutator skips omitted values and explicit SQL NULL; an assigned scalar zero value still invokes it.
+	// Custom getter [Member.AccessEmail] is explicit when mapping a DTO.
+	// Custom setter [Member.MutateEmail] transforms supplied values during persistence.
+	// Direct field assignment and input construction do not invoke it.
+	Email string `foundry:"column=email_address"`
+	// Nickname retains the stored nullable value. Custom getter [Member.AccessNickname]
+	// is explicit when mapping a DTO. Custom setter [Member.MutateNickname] runs during
+	// persistence, skipping omitted values and SQL NULL; a supplied scalar zero invokes it.
 	Nickname value.Nullable[string]
-	// Foundry field behavior (generated): Member.Attempts retains stored mutator_members.attempts. Custom setter: [Member.MutateAttempts] transforms assigned values during persistence through [MemberDraft.SetAttempts]. Direct field assignment and draft construction do not invoke it.
 	// Attempts stores the persisted count. MutateAttempts runs during persistence through Members.Attempts.Set.
 	// Direct assignment does not run the mutator.
+	// Attempts retains the stored count. Custom setter [Member.MutateAttempts] runs
+	// during persistence. Direct field assignment and input construction do not invoke it.
 	Attempts int `foundry:"default=database"`
-	// Foundry field behavior (generated): Member.State retains stored mutator_members.state. Custom setter: [Member.MutateState] transforms assigned values during persistence through [MemberDraft.SetState]. Direct field assignment and draft construction do not invoke it.
+	// State retains the stored enum. Custom setter [Member.MutateState] runs during
+	// persistence. Direct field assignment and input construction do not invoke it.
 	State State `foundry:"default=database"`
 }
 

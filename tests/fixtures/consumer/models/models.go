@@ -27,7 +27,6 @@ const (
 
 type CountryCode string
 
-//foundry:model table=users
 type User struct {
 	ID                 model.ID[User]
 	Email              string `foundry:"column=email_address"`
@@ -61,7 +60,6 @@ type User struct {
 	Scratch            []string `foundry:"-"`
 }
 
-//foundry:model table=orders
 type Order struct {
 	ID         model.ID[Order]
 	BuyerID    model.ID[User]
@@ -69,7 +67,6 @@ type Order struct {
 	Buyer      relation.One[User]
 }
 
-//foundry:model table=countries primary=Code
 type Country struct {
 	Code      CountryCode
 	Name      string

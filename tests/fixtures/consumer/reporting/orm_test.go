@@ -18,28 +18,20 @@ func TestOperatorORMIdentityAndLookupParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := (Operator{ID: id}).FoundryReference().Identity()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(got, want) || !oracleEqual(t, "consumer/reporting/identity", oracle.Snapshot(want), oracle.Snapshot(got)) {
+	if !oracleEqual(t, "consumer/reporting/identity", oracle.Snapshot(got)) {
 		t.Fatal("operator identity changed")
 	}
-	restored, err := OperatorIdentity.Parse(want)
+	restored, err := OperatorIdentity.Parse(got)
 	if err != nil {
 		t.Fatal(err)
 	}
 	roundtrip, err := restored.Identity()
-	if err != nil || !reflect.DeepEqual(roundtrip, want) || !oracleEqual(t, "consumer/reporting/identity_roundtrip", oracle.Snapshot(want), oracle.Snapshot(roundtrip)) {
+	if err != nil || !reflect.DeepEqual(roundtrip, got) || !oracleEqual(t, "consumer/reporting/identity_roundtrip", oracle.Snapshot(roundtrip)) {
 		t.Fatal("operator identity roundtrip changed", err)
 	}
 	statement, err := orm.Compile(OperatorModels.Query().Where(OperatorModels.Key().Eq(id)).Limit(1))
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacy, err := QueryReportOperators().Where(OperatorFields().ID.Eq(id)).Limit(1).Compile()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertReportStatement(t, statement, legacy)
+	assertReportStatement(t, statement)
 }

@@ -2,13 +2,12 @@ package temporalqueries
 
 import (
 	"github.com/weiloon1234/Foundry-Go/tests/oracle"
-	"reflect"
+
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
 func TestTemporalDeclarationSQLParity(t *testing.T) {
@@ -16,11 +15,8 @@ func TestTemporalDeclarationSQLParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacy, err := QueryTemporalSamples().Where(query.Year(SampleFields().Date).Eq(2024)).Compile()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if legacy.SQL() != got.SQL() || !reflect.DeepEqual(legacy.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/temporalqueries/orm_test/1", oracle.Snapshot([]any{legacy.SQL(), legacy.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
+
+	if !oracleEqual(t, "consumer/temporalqueries/orm_test/1", oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 		t.Fatal("temporal row predicate SQL changed")
 	}
 	year := expr.Year(expr.Value(Samples.Date))
@@ -29,13 +25,8 @@ func TestTemporalDeclarationSQLParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := SampleFields()
-	oldYear := query.Year(f.Date)
-	legacy, err = ProjectCalendarSummary(QueryTemporalSamples()).SelectYear(oldYear.Value()).SelectRows(query.Count[Sample]().Value()).SelectLatest(query.Max(f.Date).Value()).Query().GroupBy(oldYear.Group()).OrderBy(oldYear.Asc()).Compile()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if legacy.SQL() != got.SQL() || !reflect.DeepEqual(legacy.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/temporalqueries/orm_test/2", oracle.Snapshot([]any{legacy.SQL(), legacy.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
+
+	if !oracleEqual(t, "consumer/temporalqueries/orm_test/2", oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 		t.Fatal("temporal grouped projection SQL changed")
 	}
 }

@@ -52,7 +52,7 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		flags.StringVar(&options.Disk, "disk", "", "storage disk ID of the attachment slots")
 	}
 	if options.Kind == generate.ModelScaffold || options.Kind == generate.EndpointScaffold || options.Kind == generate.NotificationScaffold {
-		flags.BoolVar(&options.FieldDocumentation, "field-docs", false, "maintain managed field behavior notes in the generation this scaffold runs, as foundry generate --field-docs does")
+		flags.BoolVar(&options.FieldDocumentation, "field-docs", false, "remove obsolete managed field behavior notes during scaffold generation, as foundry generate --field-docs does")
 	}
 	if options.Kind == generate.JobScaffold {
 		flags.StringVar(&options.Queue, "queue", "default", "typed job routing queue")

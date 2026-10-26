@@ -2,7 +2,6 @@
 package reporting
 
 import (
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -18,7 +17,6 @@ const (
 	Disabled State = "disabled"
 )
 
-//foundry:model table=report_operators
 type Operator struct {
 	ID        model.ID[Operator]
 	TenantID  int64
@@ -27,37 +25,25 @@ type Operator struct {
 	CanExport bool
 }
 
-//foundry:model table=report_members
 type Member struct {
-	ID       model.ID[Member]
-	TenantID int64
-	Name     string
-	Nickname value.Nullable[string]
-	State    State
-	Balance  decimal.Decimal
-	// Foundry field behavior (generated): Managed soft-delete timestamp: Delete sets this stored field and Restore clears it. Ordinary queries exclude deleted models; WithTrashed and OnlyTrashed select visibility explicitly. Assigning this field directly through a draft uses ordinary create/update hooks rather than deletion/restoration events.
+	ID        model.ID[Member]
+	TenantID  int64
+	Name      string
+	Nickname  value.Nullable[string]
+	State     State
+	Balance   decimal.Decimal
 	DeletedAt value.Nullable[temporal.DateTime]
 	Orders    relation.Many[Order]
 }
 
-//foundry:model table=report_orders
 type Order struct {
-	ID       model.ID[Order]
-	TenantID int64
-	MemberID model.ID[Member]
-	Label    string
-	Amount   decimal.Decimal
-	// Foundry field behavior (generated): Managed soft-delete timestamp: Delete sets this stored field and Restore clears it. Ordinary queries exclude deleted models; WithTrashed and OnlyTrashed select visibility explicitly. Assigning this field directly through a draft uses ordinary create/update hooks rather than deletion/restoration events.
+	ID        model.ID[Order]
+	TenantID  int64
+	MemberID  model.ID[Member]
+	Label     string
+	Amount    decimal.Decimal
 	DeletedAt value.Nullable[temporal.DateTime]
 	Member    relation.One[Member]
-}
-
-func defineMemberRelations() MemberRelationSet {
-	return MemberRelationSet{Orders: query.HasMany(MemberFields().ID, OrderFields().MemberID)}
-}
-
-func defineOrderRelations() OrderRelationSet {
-	return OrderRelationSet{Member: query.BelongsTo(OrderFields().MemberID, MemberFields().ID)}
 }
 
 // Ordinary DTO declarations own JSON and validation; rows.go owns SQL mappings.

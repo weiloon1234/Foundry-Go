@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	j "foundry.test/goway/models/joined"
-	old "foundry.test/goway/oldmodels/joined"
+
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"strings"
 	"testing"
@@ -32,103 +32,65 @@ func pivotWriteReply(s string, _ []driver.NamedValue) ([]string, [][]driver.Valu
 func TestRelationWriteGoldens(t *testing.T) {
 	for _, mode := range []string{"single_attach", "attach", "sync", "keep", "toggle", "detach_many", "detach_all", "update"} {
 		t.Run(mode, func(t *testing.T) {
-			captures := []*goldenCapture{{reply: pivotWriteReply}, {reply: pivotWriteReply}}
-			for side, g := range captures {
+			captures := []*goldenCapture{{reply: pivotWriteReply}}
+			for _, g := range captures {
 				db := g.open(t.Context())
 				var err error
-				if side == 0 {
-					r := old.ParentRelations().Peers.Where(old.TargetFields().Rank.Gt(0)).WherePivot(old.PivotFields().Kind.Eq("parent"))
-					draft := old.PivotDraft{}.SetID(100).SetKind("parent").SetRole("member")
-					update := old.PivotDraft{}.SetRole("new")
-					switch mode {
-					case "single_attach":
-						out, e := r.Attach(t.Context(), db, old.Parent{ID: 1}, old.Target{ID: 10}, draft)
-						err = e
-						g.show(out)
-					case "attach":
-						out, e := r.AttachMany(t.Context(), db, old.Parent{ID: 1}, []old.Target{{ID: 10}}, draft)
-						err = e
-						g.show(out)
-					case "sync":
-						out, e := r.Sync(t.Context(), db, old.Parent{ID: 1}, []old.Target{{ID: 10}}, draft, update)
-						err = e
-						g.show(out.Updated)
-					case "keep":
-						out, e := r.SyncWithoutDetaching(t.Context(), db, old.Parent{ID: 1}, []old.Target{{ID: 10}}, draft, update)
-						err = e
-						g.show(out.Updated)
-					case "toggle":
-						out, e := r.Toggle(t.Context(), db, old.Parent{ID: 1}, []old.Target{{ID: 10}}, draft)
-						err = e
-						g.show(out.Detached)
-					case "detach_many":
-						out, e := r.DetachMany(t.Context(), db, old.Parent{ID: 1}, []old.Target{{ID: 10}})
-						err = e
-						g.show(out)
-					case "detach_all":
-						out, e := r.DetachAll(t.Context(), db, old.Parent{ID: 1})
-						err = e
-						g.show(out)
-					case "update":
-						out, e := r.UpdateExistingPivot(t.Context(), db, old.Parent{ID: 1}, old.Target{ID: 10}, update)
-						err = e
-						g.show(out)
-					}
-				} else {
-					r := j.Peers.Where(j.Targets.Rank.Gt(0)).WherePivot(j.Pivots.Kind.Eq("parent"))
-					create := []orm.Assignment[j.Pivot]{j.Pivots.ID.Set(100), j.Pivots.Kind.Set("parent"), j.Pivots.Role.Set("member")}
-					update := []orm.Assignment[j.Pivot]{j.Pivots.Role.Set("new")}
-					switch mode {
-					case "single_attach":
-						out, e := orm.Attach(t.Context(), db, r, j.Parent{ID: 1}, j.Target{ID: 10}, create...)
-						err = e
-						g.show(out)
-					case "attach":
-						out, e := orm.AttachMany(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}}, create...)
-						err = e
-						g.show(out)
-					case "sync":
-						out, e := orm.Sync(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}}, create, update)
-						err = e
-						g.show(out.Updated)
-					case "keep":
-						out, e := orm.SyncWithoutDetaching(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}}, create, update)
-						err = e
-						g.show(out.Updated)
-					case "toggle":
-						out, e := orm.Toggle(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}}, create...)
-						err = e
-						g.show(out.Detached)
-					case "detach_many":
-						out, e := orm.DetachMany(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}})
-						err = e
-						g.show(out)
-					case "detach_all":
-						out, e := orm.DetachAll(t.Context(), db, r, j.Parent{ID: 1})
-						err = e
-						g.show(out)
-					case "update":
-						out, e := orm.UpdatePivot(t.Context(), db, r, j.Parent{ID: 1}, j.Target{ID: 10}, update...)
-						err = e
-						g.show(out)
-					}
+
+				r := j.Peers.Where(j.Targets.Rank.Gt(0)).WherePivot(j.Pivots.Kind.Eq("parent"))
+				create := []orm.Assignment[j.Pivot]{j.Pivots.ID.Set(100), j.Pivots.Kind.Set("parent"), j.Pivots.Role.Set("member")}
+				update := []orm.Assignment[j.Pivot]{j.Pivots.Role.Set("new")}
+				switch mode {
+				case "single_attach":
+					out, e := orm.Attach(t.Context(), db, r, j.Parent{ID: 1}, j.Target{ID: 10}, create...)
+					err = e
+					g.show(out)
+				case "attach":
+					out, e := orm.AttachMany(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}}, create...)
+					err = e
+					g.show(out)
+				case "sync":
+					out, e := orm.Sync(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}}, create, update)
+					err = e
+					g.show(out.Updated)
+				case "keep":
+					out, e := orm.SyncWithoutDetaching(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}}, create, update)
+					err = e
+					g.show(out.Updated)
+				case "toggle":
+					out, e := orm.Toggle(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}}, create...)
+					err = e
+					g.show(out.Detached)
+				case "detach_many":
+					out, e := orm.DetachMany(t.Context(), db, r, j.Parent{ID: 1}, []j.Target{{ID: 10}})
+					err = e
+					g.show(out)
+				case "detach_all":
+					out, e := orm.DetachAll(t.Context(), db, r, j.Parent{ID: 1})
+					err = e
+					g.show(out)
+				case "update":
+					out, e := orm.UpdatePivot(t.Context(), db, r, j.Parent{ID: 1}, j.Target{ID: 10}, update...)
+					err = e
+					g.show(out)
 				}
+
 				if err != nil {
-					t.Fatal(side, err, g.output.String())
+					t.Fatal(err, g.output.String())
 				}
 				want := 4
 				if mode == "detach_all" {
 					want = 3
 				}
 				if g.statements != want {
-					t.Fatal("statements", side, g.statements, want)
+					t.Fatal("statements", g.statements, want)
 				}
 				if err = db.Close(context.Background()); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if !oracleEqual(t, "relation_writes/1", captures[0].output.String(), captures[1].output.String()) {
-				t.Fatal(goldenDiff(captures[0].output.String(), captures[1].output.String()))
+			if !oracleEqual(t, "relation_writes/1", captures[0].output.String()) {
+				t.Fatal("frozen legacy comparison differs")
 			}
 		})
 	}

@@ -1,7 +1,6 @@
 package models
 
 import (
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -9,7 +8,6 @@ import (
 
 type GroupCode string
 
-//foundry:model table=groups primary=Code
 type Group struct {
 	Code    GroupCode
 	Name    string
@@ -17,11 +15,6 @@ type Group struct {
 	Owner   relation.One[User]
 }
 
-func defineGroupRelations() GroupRelationSet {
-	return GroupRelationSet{Owner: query.BelongsTo(GroupFields().OwnerID, UserFields().ID)}
-}
-
-//foundry:model table=memberships primary=ID
 type Membership struct {
 	ID        string
 	UserID    model.ID[User]
@@ -33,11 +26,6 @@ type Membership struct {
 	Inviter   relation.One[User]
 }
 
-func defineMembershipRelations() MembershipRelationSet {
-	return MembershipRelationSet{Inviter: query.BelongsTo(MembershipFields().InviterID, UserFields().ID)}
-}
-
-//foundry:model table=friendships
 type Friendship struct {
 	ID     model.ID[Friendship]
 	FromID model.ID[User]

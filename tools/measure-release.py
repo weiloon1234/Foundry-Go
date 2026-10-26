@@ -199,9 +199,9 @@ def profile(runner, name, consumer, go, foundry, gopls, base_env, rounds):
     # First request gets an empty gopls disk cache; later requests reuse it.
     editor_env = dict(build_env, GOPLSCACHE=str(runner.output / (name + "-gopls-cache")))
     file, prefix, symbol = {
-        "ordinary": ("productionprofile/queries.go", "RecordDraft{}.", "SetName"),
+        "ordinary": ("productionprofile/queries.go", "f.Name.", "Set"),
         "configured": ("configuredprofile/routes.go", "services.", "Cache"),
-        "full": ("catalog/product.go", "models.UserDraft{}.", "SetID"),
+        "full": ("productionprofile/queries.go", "f.Name.", "Set"),
     }[name]
     text = (consumer / file).read_text()
     for round_number in range(rounds):

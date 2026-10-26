@@ -9,34 +9,31 @@ in the original plan.
 Migrate a shared model package before its callers. Register its tables, port its
 queries and tests, then remove the old model directive and generated helpers at a
 coordinated generation barrier. Keep DTO, enum, configuration and client generation.
-Do not edit generated files or ownership manifests by hand. The branch temporarily
-retains both APIs for migration and parity tests; that coexistence is not the target
-application design.
+Do not edit generated files or ownership manifests by hand. Model and projection
+generation is retired; legacy query runtime retirement is a separate step.
 
 ## Use the compiled examples
 
-Every Go block below is copied verbatim from the
+The after blocks are copied verbatim from the
 [compiled example package](../../tests/fixtures/goway/migration/examples_test.go) or its
 [SQL examples](../../tests/fixtures/goway/migration/sql_test.go) or the
 [pilot boundary examples](../../tests/fixtures/goway/migration/pilot_test.go).
-[The guide test](../../tests/fixtures/goway/migration/guide_test.go) checks every block
-against its source. The input examples also import `mutators`, `oldmutators` and their shared
-`coremodels` input/storage types. The functions that accept an executor compile without opening
-connections. Declaration validation and a read SQL/binding comparison run locally.
+[The guide test](../../tests/fixtures/goway/migration/guide_test.go) checks those blocks
+against their source. Before blocks are historical documentation and are no longer
+compiled. Functions that accept an executor compile without opening connections.
+Declaration validation and frozen SQL/binding comparisons run locally.
 Run `go test ./migration` from `tests/fixtures/goway`.
 
-Imports in the examples use `old` for the generated `oldmodels` fixture and `models`
-for its native replacement. `oldhooks`/`hooks` and `oldreads`/`reads` are corresponding
-lifecycle and tenancy fixtures. `reports` is an existing fixture that currently
-contains both generated projection helpers and native row declarations over the same
-DTO. `Users` without a package qualifier is the standalone declaration below.
-Copy the corresponding imports and concrete model types from the linked source.
+Historical snippets use `old`, `oldhooks`, `oldreads` and `oldmutators` for retired
+generated fixtures. Compiled examples use `models`, `hooks`, `reads`, `mutators` and
+shared `coremodels` input/storage types. `reports` contains native row declarations;
+`Users` without a package qualifier is the standalone declaration below. Copy the
+current imports and concrete model types from the linked source.
 
 ## Declare models and lifecycle roles
 
 Old declarations use `//foundry:model table=...` and generated `XFields()`/`XDraft`.
-For example, [the legacy lifecycle model](../../tests/fixtures/goway/oldmodels/hooks/models.go)
-uses `hooks=LocalHooks`. The ordinary struct and its domain methods survive migration.
+Historical lifecycle declarations used `hooks=LocalHooks`. The ordinary struct and its domain methods survive migration.
 The old field namespace is obtained like this:
 
 <!-- orm-example: roles-before -->
@@ -783,7 +780,7 @@ After:
 <!-- orm-example: projection-after -->
 ```go
 func report() rows.Query[reports.Member, reports.MemberRow] {
-	f, r := reports.MemberModels, reports.MemberRows
+	f, r := reports.Members, reports.MemberRows
 	return rows.Select(rows.From(f.Query()), r,
 		rows.Map(r.ID, expr.Value(f.ID)), rows.Map(r.Name, expr.Value(f.Name)),
 		rows.Map(r.Nickname, expr.Value(f.Nickname)), rows.Map(r.State, expr.Value(f.State)),
@@ -794,7 +791,7 @@ func report() rows.Query[reports.Member, reports.MemberRow] {
 Declare each concrete row with `rows.Define`, embed `rows.Row[R]` from `b.Row()`, and
 bind fields with rows constructors. `rows.Map` matches the exact projected type;
 `MapSelected` accepts a selected expression. The existing
-[row declaration fixture](../../tests/fixtures/goway/oldreporting/rows.go) shows the
+[row declaration fixture](../../tests/fixtures/goway/reporting/members.go) shows the
 complete MemberRows schema used above. All fields must be mapped exactly once.
 
 A SQL row is not implicitly an API response. Replace `//foundry:projection dto=true`
@@ -802,7 +799,9 @@ with a handwritten rows declaration plus retained `//foundry:dto` generation at 
 serial barrier. Preserve the DTO name, JSON tags, validation rules and descriptors;
 DTO/client generation still runs. Plain internal projections need no DTO annotation.
 Do not expose persistence models as response DTOs or change contract bytes to make
-migration easier.
+migration easier. Persistence models are recognized from `orm.Table` and `orm.Builder`
+signatures across containers, methods, interfaces, generic type arguments, and direct
+`orm.Define` calls; avoid erasing table handles behind `any` or untyped wrappers.
 
 ### Aggregates, windows and CTEs
 
@@ -988,16 +987,16 @@ After:
 
 <!-- orm-example: datatable-after -->
 ```go
-func tableSource(spec datatable.Spec[reports.Member, reports.MemberRow, reports.Authority], tenant func(context.Context, reports.Authority) (int64, error)) datatable.Spec[reports.Member, reports.MemberRow, reports.Authority] {
+func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[reports.Member, reports.MemberRow, A] {
 	// Keep the existing Spec authorization; tenant resolves the trusted actor scope.
-	spec.Source = func(ctx context.Context, actor reports.Authority) (rows.Query[reports.Member, reports.MemberRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.Query[reports.Member, reports.MemberRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
 			return rows.Query[reports.Member, reports.MemberRow]{}, err
 		}
-		return report().Where(expr.Value(reports.MemberModels.TenantID).Eq(id)), nil
+		return report().Where(expr.Value(reports.Members.TenantID).Eq(id)), nil
 	}
-	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Value(reports.MemberModels.ID).Asc()}
+	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Value(reports.Members.ID).Asc()}
 	return spec
 }
 ```
@@ -1007,10 +1006,9 @@ ID, DTO descriptor, columns, labels, filters and export capabilities. Column
 `SortBy` accepts `expr.Select(expr.Value(Members.Name))` or comparison `.Value()`
 for enums (`expr.CompareRow(expr.Value(Members.State)).Value()`), while `Stable`
 takes the short `expr.Value(MemberModels.ID).Asc()` spelling. The complete
-[datatable fixture](../../tests/fixtures/goway/oldreporting/members.go) uses
+[datatable fixture](../../tests/fixtures/consumer/reporting/members.go) uses
 `rows.Select`, `expr.Select`, `expr.TextRow`, nullable filters and typed related filters.
-The fixture's historical package name does not mean its datatable Spec still uses
-the old query engine. Do not bypass actor resolution or reconciliation to adapt a
+Do not bypass actor resolution or reconciliation to adapt a
 source signature. Manifests, OpenAPI, TypeScript and filter/response bytes stay fixed.
 
 ### Port the application boundaries from the pilot
@@ -1744,3 +1742,6 @@ raw APIs remain explicit escape hatches. Preserve the project's no-raw policy.
 
 The [breaking-change notes](../evidence/goway-breaking-changes.md) distinguish shipped
 syntax changes, startup validation and the remaining publication prerequisites.
+
+The before snippets above are historical, documentation-only examples. The after
+snippets remain compiled by the migration fixture after model generation retirement.

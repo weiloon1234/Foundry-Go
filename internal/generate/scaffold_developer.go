@@ -17,7 +17,7 @@ func (o ScaffoldOptions) hasSlots() bool {
 // modelSlotImports validates the slot field names and disk of a model scaffold
 // and returns the packages its file imports.
 func modelSlotImports(options ScaffoldOptions) ([]string, error) {
-	imports := []string{framework + "/model", framework + "/database/orm"}
+	imports := []string{framework + "/model", ormPackage}
 	seen := map[string]bool{"ID": true}
 	for _, kind := range []struct {
 		names []string

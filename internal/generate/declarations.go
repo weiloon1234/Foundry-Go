@@ -3,7 +3,6 @@ package generate
 import (
 	"go/ast"
 	"go/token"
-	"strconv"
 )
 
 // A declaration unit preserves a whole const group (and therefore iota), while
@@ -16,7 +15,7 @@ type declarationUnit struct {
 	alias       bool
 }
 
-// declarationFiles type-checks model, enum, projection, path, query and DTO declarations and the symbols
+// declarationFiles type-checks enum, path, query and DTO declarations and the symbols
 // needed to understand them. Everything else is checked in the complete overlay;
 // unrelated DTO aliases, functions and constants may reference generated types.
 func (p *packageInput) declarationFiles() ([]*ast.File, error) {
@@ -25,7 +24,6 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 	index := make(map[string]int)
 	enumNames := make(map[string]bool)
 	declarationMethods := make(map[string][]int)
-	modelFieldMethods := make(map[string][]int)
 	p.defined = make(map[string]bool)
 	p.definedAt = make(map[string]token.Pos)
 	p.methods = make(map[string]map[string]token.Pos)
@@ -43,19 +41,19 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 			case *ast.FuncDecl:
 				if decl.Recv == nil {
 					copy := *decl
-					copy.Body = nil
+					if decl.Type.TypeParams != nil && decl.Type.TypeParams.NumFields() > 0 {
+						copy.Body = &ast.BlockStmt{}
+					} else {
+						copy.Body = nil
+					}
 					add(declarationUnit{file: fileIndex, decl: &copy, names: []string{decl.Name.Name}, refs: references(decl.Type)})
-				} else if (declarationMethod(decl.Name.Name) || fieldMethodPrefix(decl.Name.Name) != "") && len(decl.Recv.List) == 1 {
-					// Codec, contract and field-method discovery need signatures on a fresh
+				} else if declarationMethod(decl.Name.Name) && len(decl.Recv.List) == 1 {
+					// Codec and contract discovery need signatures on a fresh
 					// checkout. Bodies may reference generated declarations.
 					owner := receiverTypeName(decl.Recv.List[0].Type)
 					copy := *decl
 					copy.Body = nil
-					if declarationMethod(decl.Name.Name) {
-						declarationMethods[owner] = append(declarationMethods[owner], len(units))
-					} else {
-						modelFieldMethods[owner] = append(modelFieldMethods[owner], len(units))
-					}
+					declarationMethods[owner] = append(declarationMethods[owner], len(units))
 					add(declarationUnit{file: fileIndex, decl: &copy, refs: references(decl.Type)})
 				}
 			case *ast.GenDecl:
@@ -102,13 +100,6 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 							enumNames[spec.Name.Name] = true
 						}
 						typeCopy := *spec
-						if kind == "model" {
-							typ, err := p.persistedDeclaration(spec.Type)
-							if err != nil {
-								return nil, err
-							}
-							typeCopy.Type = typ
-						}
 						copy.Specs = []ast.Spec{&typeCopy}
 						unit.refs = references(typeCopy.Type)
 						if spec.TypeParams != nil {
@@ -162,22 +153,6 @@ func (p *packageInput) declarationFiles() ([]*ast.File, error) {
 		for _, name := range units[queue[next]].names {
 			for _, i := range declarationMethods[name] {
 				if !selected[i] {
-					selected[i] = true
-					queue = append(queue, i)
-				}
-			}
-			// Field-method prefixes are reserved only on declared models. A
-			// scalar/helper's unrelated method can still mention a generated
-			// draft and belongs in the complete overlay, not this first pass.
-			if units[queue[next]].annotation == "model" {
-				for _, i := range modelFieldMethods[name] {
-					if !selected[i] {
-						selected[i] = true
-						queue = append(queue, i)
-					}
-				}
-				fnName := modelDeclarationFunction(name, kindGlobalScopes)
-				if i, ok := index[fnName]; ok && !selected[i] {
 					selected[i] = true
 					queue = append(queue, i)
 				}
@@ -274,34 +249,6 @@ func receiverTypeName(expr ast.Expr) string {
 		return receiverTypeName(expr.X)
 	}
 	return ""
-}
-
-func (p *packageInput) persistedDeclaration(expr ast.Expr) (ast.Expr, error) {
-	structure, ok := expr.(*ast.StructType)
-	if !ok {
-		return expr, nil
-	}
-	copy := *structure
-	fields := *structure.Fields
-	fields.List = nil
-	copy.Fields = &fields
-	for _, field := range structure.Fields.List {
-		if field.Tag != nil {
-			text, err := strconv.Unquote(field.Tag.Value)
-			if err != nil {
-				return nil, p.diagnostic(field.Pos(), "invalid struct tag literal")
-			}
-			tag, err := fieldTag(text)
-			if err != nil {
-				return nil, p.diagnostic(field.Pos(), err.Error())
-			}
-			if tag["-"] != "" {
-				continue
-			}
-		}
-		fields.List = append(fields.List, field)
-	}
-	return &copy, nil
 }
 
 func valueReferences(spec *ast.ValueSpec) []string {

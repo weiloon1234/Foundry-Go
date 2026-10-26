@@ -1,8 +1,4 @@
 {
   "version": 1,
-  "files": {
-    "buyer_totals_foundry.gen.go": "d8a7b28c9ad21545d2b383785e9323eec3357a5c650f0f78b8bc2bf7172d8c9e",
-    "order_summary_foundry.gen.go": "38d924a96ff325f152dce4a3993107bac441b46af2b8f1e1d595c9faaf4df3a2",
-    "user_summary_foundry.gen.go": "b4086964652ccccff4362d08eaaa1362d07861120b150d509f3d1c0b6ddb3259"
-  }
+  "files": {}
 }

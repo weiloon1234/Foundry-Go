@@ -5,28 +5,18 @@ import (
 	"foundry.test/goway/models"
 	hooks "foundry.test/goway/models/hooks"
 	"foundry.test/goway/models/jsonpaths"
-	old "foundry.test/goway/oldmodels"
-	oldhooks "foundry.test/goway/oldmodels/hooks"
-	reports "foundry.test/goway/oldreporting"
+
+	reports "foundry.test/goway/reporting"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
+
 	"github.com/weiloon1234/Foundry-Go/datatable"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// migration:conflict-before
-func legacyUpsert(ctx context.Context, tx *database.Tx) error {
-	f := old.UserFields()
-	policy := query.OnConflict(f.Email).DoUpdate(f.Age.Incoming())
-	_, err := old.QueryUsers().Upsert(ctx, tx, old.UserDraft{}.SetEmail("ada@example.test").SetAge(30), policy)
-	return err
-}
-
-// migration:end
 // migration:conflict-after
 func upsert(ctx context.Context, tx *database.Tx) error {
 	f := models.Users
@@ -37,16 +27,6 @@ func upsert(ctx context.Context, tx *database.Tx) error {
 
 // migration:end
 
-// migration:excluded-before
-func legacyExcluded() query.Conflict[old.User] {
-	q := old.QueryUsers()
-	r := q.ConflictRows()
-	stored, proposed := old.UserFieldsAt(r.Stored()), old.UserFieldsAt(r.Proposed())
-	return query.OnConflict(old.UserFields().Email).DoUpdate(
-		query.SetConflictValue(old.UserFields().Age, query.Add(stored.Age, proposed.Age)))
-}
-
-// migration:end
 // migration:excluded-after
 func excluded() orm.Conflict[models.User] {
 	r := rows.ConflictRowsOf(models.Users.Query())
@@ -58,17 +38,6 @@ func excluded() orm.Conflict[models.User] {
 
 // migration:end
 
-// migration:source-insert-before
-func legacyInsertSelect(ctx context.Context, tx *database.Tx) error {
-	f := oldhooks.MemberFields()
-	plan := oldhooks.InsertMemberFrom(oldhooks.QueryHookMembers()).
-		SelectID(query.Value(f.ID)).SelectBody(query.Value(f.Body)).SelectCreatedAt(query.Value(f.CreatedAt)).
-		Values(oldhooks.MemberDraft{}.SetName("copy"))
-	_, err := plan.Exec(ctx, tx)
-	return err
-}
-
-// migration:end
 // migration:source-insert-after
 func insertSelect(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
@@ -81,15 +50,6 @@ func insertSelect(ctx context.Context, tx *database.Tx) error {
 
 // migration:end
 
-// migration:source-update-before
-func legacyUpdateFrom(ctx context.Context, tx *database.Tx) error {
-	f, q := oldhooks.MemberFields(), oldhooks.QueryHookMembers()
-	_, err := oldhooks.UpdateMemberFrom(q, q).MatchID(query.Value(f.ID)).
-		SelectBody(query.Value(f.Body)).Values(oldhooks.MemberDraft{}.SetName("updated")).Exec(ctx, tx)
-	return err
-}
-
-// migration:end
 // migration:source-update-after
 func updateFrom(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
@@ -101,14 +61,6 @@ func updateFrom(ctx context.Context, tx *database.Tx) error {
 
 // migration:end
 
-// migration:source-delete-before
-func legacyDeleteUsing(ctx context.Context, tx *database.Tx) error {
-	q := oldhooks.QueryHookMembers().WithTrashed()
-	_, err := oldhooks.ForceDeleteMemberUsing(q, q).MatchID(query.Value(oldhooks.MemberFields().ID)).Exec(ctx, tx)
-	return err
-}
-
-// migration:end
 // migration:source-delete-after
 func deleteUsing(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
@@ -120,16 +72,6 @@ func deleteUsing(ctx context.Context, tx *database.Tx) error {
 
 // migration:end
 
-// migration:aggregate-before
-func legacyAggregate(ctx context.Context, db database.Executor) error {
-	count := query.Count[old.Order]()
-	q := query.SelectValue(old.QueryOrders(), count.Value()).
-		GroupBy(old.OrderFields().BuyerID.Group()).Having(count.Gt(1))
-	_, err := q.All(ctx, db)
-	return err
-}
-
-// migration:end
 // migration:aggregate-after
 func aggregate(ctx context.Context, db database.Executor) error {
 	count := expr.Count[models.Order]()
@@ -143,16 +85,6 @@ func aggregate(ctx context.Context, db database.Executor) error {
 
 type orderSide struct{}
 
-// migration:window-before
-func legacyWindow(ctx context.Context, db database.Executor) error {
-	a := query.As[orderSide](old.QueryOrders(), "o")
-	f := old.OrderFieldsAt(a.Scope())
-	window := query.WindowFor(a).PartitionBy(f.BuyerID.Group()).OrderBy(f.TotalCents.Desc())
-	_, err := query.SelectValue(a, query.RowNumber(window)).All(ctx, db)
-	return err
-}
-
-// migration:end
 // migration:window-after
 func window(ctx context.Context, db database.Executor) error {
 	a := rows.As[orderSide](models.Orders.Query(), "o")
@@ -165,15 +97,6 @@ func window(ctx context.Context, db database.Executor) error {
 
 // migration:end
 
-// migration:cte-before
-func legacyCTE(ctx context.Context, db database.Executor) error {
-	cte := query.CTE("eligible", old.QueryOrders().Where(old.OrderFields().TotalCents.Gt(100)))
-	a := query.As[orderSide](cte, "o")
-	_, err := query.SelectRecord(a, a.Scope()).All(ctx, db)
-	return err
-}
-
-// migration:end
 // migration:cte-after
 func cte(ctx context.Context, db database.Executor) error {
 	cte := rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(models.Orders.TotalCents.Gt(100))))
@@ -184,18 +107,6 @@ func cte(ctx context.Context, db database.Executor) error {
 
 // migration:end
 
-// migration:sets-before
-func legacySets(ctx context.Context, db database.Executor) error {
-	a := old.QueryOrders().Where(old.OrderFields().TotalCents.Gt(100))
-	_, err := query.Union(a, old.QueryOrders()).All(ctx, db)
-	if err != nil {
-		return err
-	}
-	_, err = old.QueryOrders().Distinct().All(ctx, db)
-	return err
-}
-
-// migration:end
 // migration:sets-after
 func sets(ctx context.Context, db database.Executor) error {
 	a := models.Orders.Query().Where(models.Orders.TotalCents.Gt(100))
@@ -209,14 +120,6 @@ func sets(ctx context.Context, db database.Executor) error {
 
 // migration:end
 
-// migration:json-before
-func legacyJSON() query.NullableTextRowExpression[jsonpaths.Document, string] {
-	field := query.NewJSONField[jsonpaths.Document, value.JSON[jsonpaths.Preferences]]("json_documents", "settings", codec.JSON[jsonpaths.Preferences]())
-	theme := query.NewJSONProperty[jsonpaths.Document, jsonpaths.Preferences, string](query.JSONRoot(field), "theme", false)
-	return query.JSONTextScalar(theme, codec.String[string]())
-}
-
-// migration:end
 // migration:json-after
 var Theme = expr.JSONFieldOf(func(p *jsonpaths.Preferences) *value.Optional[string] { return &p.Theme })
 
@@ -228,18 +131,9 @@ func jsonTheme() expr.NullableTextRowExpression[jsonpaths.Document, string] {
 
 // migration:end
 
-// migration:projection-before
-func legacyReport() query.ProjectionQuery[reports.Member, reports.MemberRow] {
-	f := reports.MemberFields()
-	return reports.ProjectMemberRow(reports.QueryReportMembers()).
-		SelectID(query.Value(f.ID)).SelectName(query.Value(f.Name)).SelectNickname(query.Value(f.Nickname)).
-		SelectState(query.Value(f.State)).SelectBalance(query.Value(f.Balance)).Query()
-}
-
-// migration:end
 // migration:projection-after
 func report() rows.Query[reports.Member, reports.MemberRow] {
-	f, r := reports.MemberModels, reports.MemberRows
+	f, r := reports.Members, reports.MemberRows
 	return rows.Select(rows.From(f.Query()), r,
 		rows.Map(r.ID, expr.Value(f.ID)), rows.Map(r.Name, expr.Value(f.Name)),
 		rows.Map(r.Nickname, expr.Value(f.Nickname)), rows.Map(r.State, expr.Value(f.State)),
@@ -248,27 +142,17 @@ func report() rows.Query[reports.Member, reports.MemberRow] {
 
 // migration:end
 
-// migration:datatable-before
-func legacyTableSource(ctx context.Context, actor reports.Authority, tenant func(context.Context, reports.Authority) (int64, error)) (query.ProjectionQuery[reports.Member, reports.MemberRow], error) {
-	id, err := tenant(ctx, actor)
-	if err != nil {
-		return query.ProjectionQuery[reports.Member, reports.MemberRow]{}, err
-	}
-	return legacyReport().Where(reports.MemberFields().TenantID.Eq(id)), nil
-}
-
-// migration:end
 // migration:datatable-after
-func tableSource(spec datatable.Spec[reports.Member, reports.MemberRow, reports.Authority], tenant func(context.Context, reports.Authority) (int64, error)) datatable.Spec[reports.Member, reports.MemberRow, reports.Authority] {
+func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[reports.Member, reports.MemberRow, A] {
 	// Keep the existing Spec authorization; tenant resolves the trusted actor scope.
-	spec.Source = func(ctx context.Context, actor reports.Authority) (rows.Query[reports.Member, reports.MemberRow], error) {
+	spec.Source = func(ctx context.Context, actor A) (rows.Query[reports.Member, reports.MemberRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
 			return rows.Query[reports.Member, reports.MemberRow]{}, err
 		}
-		return report().Where(expr.Value(reports.MemberModels.TenantID).Eq(id)), nil
+		return report().Where(expr.Value(reports.Members.TenantID).Eq(id)), nil
 	}
-	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Value(reports.MemberModels.ID).Asc()}
+	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Value(reports.Members.ID).Asc()}
 	return spec
 }
 

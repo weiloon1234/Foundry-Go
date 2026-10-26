@@ -2,14 +2,13 @@ package comparisonqueries_test
 
 import (
 	"github.com/weiloon1234/Foundry-Go/tests/oracle"
-	"reflect"
+
 	"testing"
 
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 )
 
 func TestAliasedScalarWindowSQLParity(t *testing.T) {
@@ -21,15 +20,8 @@ func TestAliasedScalarWindowSQLParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldQ := models.QueryUsers()
-	oldA := query.As[thresholdAlias](query.CTE("adult_threshold", oldQ.Where(models.UserFields().Age.Gt(20))), "threshold")
-	oldAge := models.UserFieldsAt(oldA.Scope()).Age
-	oldSelected := query.SelectValue(oldA, query.Value(oldAge)).OrderBy(oldAge.Asc()).Offset(1).Limit(1)
-	want, err := oldQ.Where(query.Equal(query.NullableRow(models.UserFields().Age), query.ScalarRowQuery(oldQ, oldSelected))).Compile()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want.SQL() != got.SQL() || !reflect.DeepEqual(want.Arguments(), got.Arguments()) || !oracleEqual(t, "consumer/comparisonqueries/scalar_clause_parity_test/1", oracle.Snapshot([]any{want.SQL(), want.Arguments()}), oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
-		t.Fatalf("scalar boundary changed\nnew: %s\nold: %s", got.SQL(), want.SQL())
+
+	if !oracleEqual(t, "consumer/comparisonqueries/scalar_clause_parity_test/1", oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
+		t.Fatal("frozen legacy comparison differs")
 	}
 }

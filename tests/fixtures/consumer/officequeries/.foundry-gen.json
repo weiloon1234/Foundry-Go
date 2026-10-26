@@ -1,12 +1,4 @@
 {
   "version": 1,
-  "files": {
-    "desk_foundry.gen.go": "0387f648fa1f695fca8ddd29477b4257bd59b4afbc237c6c14cda2bacf0028a9",
-    "employee_foundry.gen.go": "a1477e8de87d35344608d3182e3fe194e4a16df86b5323f5dcb00e1b6eee53d7",
-    "label_foundry.gen.go": "4e9f023e0e36daf3528c03c994b620e0a9eb10f479fe283472fc87d29780fb2b",
-    "labeling_foundry.gen.go": "b7d807c1e11fa4bb158f839c23af661a064edcc36e38e7e3c2c4615a46db87bf",
-    "note_foundry.gen.go": "81c65722db86b307b4fb2628064fb907a9203dce06434aec3ac38573e9f8c924",
-    "office_foundry.gen.go": "07d7d9aaa49a8cf38490116b02bbf2c72b8b486aa1e86390e998c360a50cdd54",
-    "region_foundry.gen.go": "1f11a262c55233cf75040b4670a10e9c46bf43c6136ed15b356122abad121972"
-  }
+  "files": {}
 }
