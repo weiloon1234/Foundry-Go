@@ -2724,12 +2724,14 @@ expr.NullableRowComparison
   IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
 *expr.NullableRowComparison
   Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   IsNotNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   IsNull func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, github.com/weiloon1234/Foundry-Go/value.Nullable[V]]
 expr.NullableScope
 *expr.NullableScope
 expr.NullableTextRowExpression
@@ -2924,10 +2926,12 @@ expr.RowComparison
   Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
 *expr.RowComparison
   Eq func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   In func(vs ...V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
   Ne func(v V) github.com/weiloon1234/Foundry-Go/database/orm/expr.Predicate[S]
+  Value func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Selected[S, V]
 expr.RowExpression
   Asc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]
   Desc func() github.com/weiloon1234/Foundry-Go/database/orm/expr.Order[S]

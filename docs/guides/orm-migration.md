@@ -17,7 +17,8 @@ application design.
 
 Every Go block below is copied verbatim from the
 [compiled example package](../../tests/fixtures/goway/migration/examples_test.go) or its
-[SQL examples](../../tests/fixtures/goway/migration/sql_test.go).
+[SQL examples](../../tests/fixtures/goway/migration/sql_test.go) or the
+[pilot boundary examples](../../tests/fixtures/goway/migration/pilot_test.go).
 [The guide test](../../tests/fixtures/goway/migration/guide_test.go) checks every block
 against its source. The input examples also import `mutators`, `oldmutators` and their shared
 `coremodels` input/storage types. The functions that accept an executor compile without opening
@@ -362,11 +363,10 @@ use the declared relation (`orm.Has`, `DoesntHave`, and the typed aggregate help
 `LoadMissing` preserves already loaded slots. Relations keep target/pivot scopes,
 soft-delete visibility, bounded batches and all-or-error attachment.
 
-`LoadFrom`/`LoadMissingFrom` are an accepted Lane A addition but **are not present in
-this checkout**. Their accepted signature takes `(ctx, executor, query, parents)`;
-the query supplies its `With` tree and relation limits. Do not replace that behavior
-with plain `Load` if the caller needs query-specific limits. This section and its
-compiled example require the lead's integration before Stage 10 publication.
+`LoadFrom`/`LoadMissingFrom` take `(ctx, executor, query, parents)`; the query
+supplies its `With` tree and relation limits. Do not replace that behavior with
+plain `Load` if the caller needs query-specific limits. The supplied parent slice
+still owns its authorization provenance; these helpers do not refetch it.
 
 ## Move lifecycle factories and observers
 
@@ -1003,12 +1003,493 @@ func tableSource(spec datatable.Spec[reports.Member, reports.MemberRow, reports.
 ```
 
 Pass an authorized, tenant-constrained native source and retain the existing Spec
-ID, DTO descriptor, columns, labels, filters and export capabilities. The complete
+ID, DTO descriptor, columns, labels, filters and export capabilities. Column
+`SortBy` accepts `expr.Select(expr.Value(Members.Name))` or comparison `.Value()`
+for enums (`expr.CompareRow(expr.Value(Members.State)).Value()`), while `Stable`
+takes the short `expr.Value(MemberModels.ID).Asc()` spelling. The complete
 [datatable fixture](../../tests/fixtures/goway/oldreporting/members.go) uses
 `rows.Select`, `expr.Select`, `expr.TextRow`, nullable filters and typed related filters.
 The fixture's historical package name does not mean its datatable Spec still uses
 the old query engine. Do not bypass actor resolution or reconciliation to adapt a
 source signature. Manifests, OpenAPI, TypeScript and filter/response bytes stay fixed.
+
+### Port the application boundaries from the pilot
+
+The [datatable guide](datatable.md) describes request operators, authorization and
+exports. Use this table when replacing a generated field namespace `f` with an
+ORM declaration. `RowEquality` and `RowNullable` are interfaces, not constructors;
+`datatable.Where` and `NullableWhere` still construct the filters.
+
+| Before | After |
+| --- | --- |
+| `SortBy(query.Value(f.X))` | `SortBy(expr.Select(expr.Value(f.X)))`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
+| `datatable.Where(text, f.Username)` | `datatable.Where(text, expr.TextRow(f.Username))`. |
+| `datatable.NullableWhere(text, f.Email)` | `datatable.NullableWhere(text, expr.TextNullableRow(f.Email))`. |
+| Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.CompareRow(expr.Value(f.X)))`; use `CompareNullableRow` with `NullableWhere`. |
+| Ordered numeric `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.OrderRow(expr.Value(f.X)))`; use `OrderNullableRow` for nullable values. Choose by the column's declared capabilities, not its underlying Go type. |
+| `Stable: []query.ProjectionOrder[M]{f.ID.Asc()}` | `Stable: []expr.ProjectionOrder[M]{expr.Value(f.ID).Asc()}`. Use `f.Key()` when the declaration has no named ID carrier. |
+| `query.ProjectionQuery[M,R]`, `SelectXRow(source, XRowSelection[M]{...})` | `rows.Query[M,R]`, `rows.Select(rows.From(source), XRows, rows.Map(...))`. Use `MapSelected` for computed selected values. |
+| Joined `query.Value(joinedField)` sort | `expr.Select(expr.At(joinedScope, field))`. The Spec's first type parameter is the joined scope, not one model. |
+| Correlated `CorrelatedScalarRowQuery(...).Value()` sort | `expr.Select(rows.CorrelatedScalarRowQuery(...))`; use `CorrelatedScalarNullableRowQuery` when the inner value is already nullable. |
+| `datatable.Having` / `NullableHaving` | Keep these constructors; supply native aggregates such as `expr.Count[M]()` / `expr.Sum(f.Amount)`, which return group predicates. |
+| `datatable.Related(child, exists)` | Keep `Related`; its callback now maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, for example with `expr.Has`. |
+
+Text adapters retain text operators. Equality adapters preserve enum restrictions.
+Keep each column's existing operator allowlist and `.Restrict(...)` calls. LIKE is
+still an explicit `.AllowLike()` opt-in; `Contains` and `IContains` treat input as
+literal text. Nullable negation includes NULL rows. Mixed WHERE/HAVING AND is
+supported, but an OR or NOT spanning both phases is rejected before I/O.
+
+For nullable enums, nullable numbers, non-nullable correlated subquery sorts and
+outer joins, compose the adapters as shown below:
+
+<!-- orm-example: pilot-left-join-adapters -->
+```go
+type auditAdminSide struct{}
+type auditCountrySide struct{}
+type AuditScope = rows.Left[rows.Alias[auditAdminSide, Admin], rows.Alias[auditCountrySide, countries.Country]]
+type AuditRow struct {
+	ID       int64                            `json:"id"`
+	Country  value.Nullable[string]           `json:"country"`
+	Status   value.Nullable[countries.Status] `json:"status"`
+	Latitude value.Nullable[float64]          `json:"latitude"`
+}
+type AuditColumns struct {
+	rows.Row[AuditRow]
+	ID       rows.Field[AuditRow, int64]
+	Country  rows.Field[AuditRow, value.Nullable[string]]
+	Status   rows.Field[AuditRow, value.Nullable[countries.Status]]
+	Latitude rows.Field[AuditRow, value.Nullable[float64]]
+}
+
+var AuditRows = rows.Define(func(b rows.Builder[AuditRow], r *AuditRow) AuditColumns {
+	return AuditColumns{
+		b.Row(),
+		rows.NumberOf(b, &r.ID),
+		rows.NullableTextOf(b, &r.Country),
+		rows.NullableEnumOf(b, &r.Status),
+		rows.NullableNumberOf(b, &r.Latitude),
+	}
+})
+
+func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[AuditScope, AuditRow, A] {
+	a := rows.As[auditAdminSide](Admins.Query(), "a")
+	c := rows.As[auditCountrySide](countries.Countries.Query(), "c")
+	as, cs := rows.Scope(a), rows.Scope(c)
+	joined := rows.LeftJoin(a, c, rows.On(expr.At(as, Admins.CountryCode), expr.At(cs, countries.Countries.ISO2)))
+	admin := rows.LeftScope(joined, as)
+	country := rows.NullableRightScope(joined, cs)
+	correlateName := func() rows.CorrelatedScalar[AuditScope, countries.Country, string] {
+		q := countries.Countries.Query()
+		correlation := rows.Correlate(joined, rows.From(q))
+		outer := rows.OuterScope(correlation, admin)
+		inner := rows.InnerScope(correlation, rows.ModelScope(q))
+		return rows.SelectCorrelatedScalar(correlation, expr.Select(expr.At(inner, countries.Countries.Name))).
+			Where(expr.Equal(expr.At(inner, countries.Countries.ISO2), expr.At(outer, Admins.CountryCode))).
+			OrderBy(expr.At(inner, countries.Countries.ISO2).Asc()).Limit(1)
+	}
+	sortedCountry := expr.Select(rows.CorrelatedScalarRowQuery(correlateName()))
+	statusFilter := datatable.NullableWhere(
+		foundryhttp.EnumQuery[countries.Status, *countries.Status](countries.EnabledStatus.EnumDescriptor()),
+		expr.CompareNullableRow(expr.AtNullable(country, countries.Countries.Status)))
+	latitudeFilter := datatable.NullableWhere(
+		foundryhttp.FloatQuery[float64](),
+		expr.OrderNullableRow(expr.AtNullableValue(country, countries.Countries.Latitude)))
+	base := rows.Select(joined, AuditRows,
+		rows.Map(AuditRows.ID, expr.At(admin, Admins.Key())),
+		rows.MapSelected(AuditRows.Country, sortedCountry),
+		rows.Map(AuditRows.Status, expr.AtNullable(country, countries.Countries.Status)),
+		rows.Map(AuditRows.Latitude, expr.AtNullableValue(country, countries.Countries.Latitude)))
+	spec.Columns = []datatable.ColumnRegistration[AuditScope, AuditRow]{
+		datatable.DefineColumn[AuditScope](validation.DefineField("country", func(r AuditRow) value.Nullable[string] { return r.Country }), "audit.country").
+			SortBy(sortedCountry).Registration(),
+		datatable.DefineColumn[AuditScope](validation.DefineField("status", func(r AuditRow) value.Nullable[countries.Status] { return r.Status }), "audit.status").
+			FilterBy(statusFilter).Registration(),
+		datatable.DefineColumn[AuditScope](validation.DefineField("latitude", func(r AuditRow) value.Nullable[float64] { return r.Latitude }), "audit.latitude").
+			FilterBy(latitudeFilter).Registration(),
+	}
+	spec.Stable = []expr.ProjectionOrder[AuditScope]{expr.At(admin, Admins.Key()).Asc()}
+	spec.Source = func(ctx context.Context, actor A) (rows.Query[AuditScope, AuditRow], error) {
+		id, err := tenant(ctx, actor)
+		if err != nil {
+			return rows.Query[AuditScope, AuditRow]{}, err
+		}
+		return base.Where(expr.At(admin, Admins.TenantID).Eq(id)), nil
+	}
+	return spec
+}
+```
+
+### Replace the projection declaration and Source callback
+
+Before, documentation only:
+
+```text
+//foundry:projection dto=true
+type AdminRow struct { /* existing DTO fields and tags */ }
+Source: func(ctx context.Context, actor AdminAuthority) (query.ProjectionQuery[models.Admin, AdminRow], error) {
+    source := models.QueryAdmins()
+    if archived { source = source.OnlyTrashed() }
+    return SelectAdminRow(source, AdminRowSelection[models.Admin]{
+        ID: query.Value(f.ID), Username: query.Value(f.Username), Email: query.Value(f.Email),
+    }), nil
+},
+```
+
+Keep `AdminRow` at its original package path. Retain public DTO generation with
+`//foundry:dto` in place of the projection directive, including its original JSON
+names, validation declarations and response descriptor. Add the separate handwritten
+rows schema. Regenerate retained DTO output through the Makefile; do not edit it.
+The standalone example below uses explicit validation fields for its columns. An
+application can keep its existing generated DTO validation fields instead.
+
+<!-- orm-example: pilot-declarations -->
+```go
+type Admin struct {
+	ID          int64
+	TenantID    int64
+	Username    string
+	Email       value.Nullable[string]
+	CountryCode countries.Code
+	DeletedAt   value.Nullable[time.Time]
+}
+type AdminTable struct {
+	orm.Table[Admin, int64]
+	TenantID    orm.Number[Admin, int64]
+	Username    orm.Text[Admin, string]
+	Email       orm.NullableText[Admin, string]
+	CountryCode orm.Column[Admin, countries.Code]
+	DeletedAt   orm.SoftDelete[Admin, time.Time]
+}
+
+var Admins = orm.Define("admins", func(b orm.Builder[Admin], a *Admin) AdminTable {
+	return AdminTable{orm.TableOf(b, &a.ID), orm.NumberOf(b, &a.TenantID),
+		orm.TextOf(b, &a.Username), orm.NullableTextOf(b, &a.Email),
+		orm.ColumnOf(b, &a.CountryCode), orm.SoftDeleteOf(b, &a.DeletedAt)}
+})
+
+// Keep this DTO's original package, name, field types and JSON tags.
+type AdminRow struct {
+	ID       int64                  `json:"id"`
+	Username string                 `json:"username"`
+	Email    value.Nullable[string] `json:"email"`
+}
+type AdminRowColumns struct {
+	rows.Row[AdminRow]
+	ID       rows.Field[AdminRow, int64]
+	Username rows.Field[AdminRow, string]
+	Email    rows.Field[AdminRow, value.Nullable[string]]
+}
+
+var AdminRows = rows.Define(func(b rows.Builder[AdminRow], r *AdminRow) AdminRowColumns {
+	return AdminRowColumns{b.Row(), rows.NumberOf(b, &r.ID), rows.TextOf(b, &r.Username), rows.NullableTextOf(b, &r.Email)}
+})
+```
+
+The column registrations now use selected expressions for sorts and row adapters
+for filters. Keep the application's other registrations, labels and export codecs.
+
+<!-- orm-example: pilot-columns -->
+```go
+func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
+	text := foundryhttp.StringQuery[string]()
+	username := validation.DefineField("username", func(r AdminRow) string { return r.Username })
+	email := validation.DefineField("email", func(r AdminRow) value.Nullable[string] { return r.Email })
+	return []datatable.ColumnRegistration[Admin, AdminRow]{
+		datatable.DefineColumn[Admin](username, "admins.fields.username").
+			SortBy(expr.Select(expr.Value(Admins.Username))).
+			FilterBy(datatable.Where(text, expr.TextRow(Admins.Username))).
+			Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
+		datatable.DefineColumn[Admin](email, "admins.fields.email").
+			SortBy(expr.Select(expr.Value(Admins.Email))).
+			FilterBy(datatable.NullableWhere(text, expr.TextNullableRow(Admins.Email))).
+			Searchable().ExportAs(datatable.NullableCell(text)).Registration(),
+	}
+}
+```
+
+Apply mandatory tenant and visibility scopes before selecting the row. `OnlyTrashed`
+and `WithTrashed` remain model-query operations and survive `rows.From` and
+`rows.Select`. The callback below receives an existing Spec so its authorization
+and DTO descriptor remain caller-owned. The tenant resolver must use trusted actor
+context. A UI filter must not replace that resolver.
+
+<!-- orm-example: pilot-source -->
+```go
+func adminSource(tenantID int64, archived bool) rows.Query[Admin, AdminRow] {
+	source := Admins.Query().Where(Admins.TenantID.Eq(tenantID))
+	if archived {
+		source = source.OnlyTrashed()
+	}
+	return rows.Select(rows.From(source), AdminRows,
+		rows.Map(AdminRows.ID, expr.Value(Admins.Key())),
+		rows.Map(AdminRows.Username, expr.Value(Admins.Username)),
+		rows.Map(AdminRows.Email, expr.Value(Admins.Email)))
+}
+
+func adminTable[A any](spec datatable.Spec[Admin, AdminRow, A], tenant func(context.Context, A) (int64, error), archived bool) datatable.Spec[Admin, AdminRow, A] {
+	// Retain the caller's Row descriptor, Authorize, ID, labels and export policy.
+	spec.Columns = adminColumns()
+	spec.Stable = []expr.ProjectionOrder[Admin]{expr.Value(Admins.Key()).Asc()}
+	spec.Source = func(ctx context.Context, actor A) (rows.Query[Admin, AdminRow], error) {
+		id, err := tenant(ctx, actor)
+		if err != nil {
+			return rows.Query[Admin, AdminRow]{}, err
+		}
+		return adminSource(id, archived), nil
+	}
+	return spec
+}
+```
+
+Do not paginate or collect Source results yourself. The datatable owns pagination,
+report ordering and streaming export execution. Stable orders must uniquely identify
+the result; a joined or grouped result may need more than its parent ID.
+
+### Keep group and relation filters in their phases
+
+`Count` returns a required `int64`. Exact numeric `Sum` returns nullable
+`decimal.Decimal`, including for integer input. Pass the present-value decimal
+codec to `NullableHaving`, which supplies null operations. Keep the source's
+GROUP BY and aggregate mappings; these filter constructors do not add grouping.
+The [aggregate example above](#aggregates-windows-and-ctes) shows selected mappings.
+
+<!-- orm-example: pilot-filter-families -->
+```go
+func orderGroupFilters() (datatable.FilterSource[models.Order, int64], datatable.FilterSource[models.Order, value.Nullable[decimal.Decimal]]) {
+	count := expr.Count[models.Order]()
+	total := expr.Sum(models.Orders.TotalCents)
+	return datatable.Having(foundryhttp.IntegerQuery[int64](), count),
+		datatable.NullableHaving(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), total)
+}
+
+func relatedOrderFilter() datatable.FilterSource[models.User, int64] {
+	return datatable.Related(
+		datatable.Where(foundryhttp.IntegerQuery[int64](), expr.OrderRow(expr.Value(models.Orders.TotalCents))),
+		func(p expr.Predicate[models.Order]) expr.Predicate[models.User] {
+			return expr.Has(models.UserRelations.Orders, p)
+		})
+}
+
+func statusFilter() datatable.FilterSource[models.User, models.Status] {
+	return datatable.Where(foundryhttp.EnumQuery[models.Status, *models.Status](models.StatusActive.EnumDescriptor()),
+		expr.CompareRow(expr.Value(models.Users.Status)))
+}
+```
+
+`Related` accepts only a child WHERE filter, not HAVING. The declared relation keeps
+its owner and target scopes. Its negation is NOT EXISTS. A custom callback must
+return a predicate in the enclosing source scope; it cannot return an unrelated
+model's predicate or turn a group predicate into a row predicate.
+
+### Bind joined sorts and correlated filters to their source
+
+This worked example joins administrators to their country and selects an optional
+official name with a correlated scalar query. It uses the existing countries table
+rather than a generated field namespace. Keep any additional authorization scopes
+from your application on each joined source.
+
+<!-- orm-example: pilot-joined-schema -->
+```go
+type adminSide struct{}
+type countrySide struct{}
+type DirectoryScope = rows.Inner[rows.Alias[adminSide, Admin], rows.Alias[countrySide, countries.Country]]
+type DirectoryRow struct {
+	ID           int64                  `json:"id"`
+	Country      string                 `json:"country"`
+	OfficialName value.Nullable[string] `json:"officialName"`
+}
+type DirectoryColumns struct {
+	rows.Row[DirectoryRow]
+	ID           rows.Field[DirectoryRow, int64]
+	Country      rows.Field[DirectoryRow, string]
+	OfficialName rows.Field[DirectoryRow, value.Nullable[string]]
+}
+
+var DirectoryRows = rows.Define(func(b rows.Builder[DirectoryRow], r *DirectoryRow) DirectoryColumns {
+	return DirectoryColumns{b.Row(), rows.NumberOf(b, &r.ID), rows.TextOf(b, &r.Country), rows.NullableTextOf(b, &r.OfficialName)}
+})
+```
+
+A custom nullable adapter implements `Eq`, `Ne`, `In`, `IsNull` and `IsNotNull`,
+returning `expr.Predicate[S]`. Optional methods add operators; this adapter also
+supports `IContains`. Here a missing country or a NULL official name counts as null.
+Each comparison uses EXISTS over the matching country. The unique country key
+ensures the filtered value and the sorted scalar refer to the same row.
+
+<!-- orm-example: pilot-custom-filter -->
+```go
+type officialNameFilter[S any] struct {
+	exists func(orm.Predicate[countries.Country]) expr.Predicate[S]
+}
+
+func (f officialNameFilter[S]) Eq(v string) expr.Predicate[S] {
+	return f.exists(countries.Countries.OfficialName.Eq(v))
+}
+func (f officialNameFilter[S]) Ne(v string) expr.Predicate[S] {
+	return f.exists(countries.Countries.OfficialName.Ne(v))
+}
+func (f officialNameFilter[S]) In(v ...string) expr.Predicate[S] {
+	return f.exists(countries.Countries.OfficialName.In(v...))
+}
+func (f officialNameFilter[S]) IContains(v string) expr.Predicate[S] {
+	return f.exists(countries.Countries.OfficialName.IContains(v))
+}
+func (f officialNameFilter[S]) IsNull() expr.Predicate[S] {
+	return expr.Not(f.IsNotNull())
+}
+func (f officialNameFilter[S]) IsNotNull() expr.Predicate[S] {
+	return f.exists(countries.Countries.OfficialName.IsNotNull())
+}
+```
+
+`As` creates the SQL aliases. An aliased `Admins.Query()` keeps its soft-delete
+visibility, and `.OnlyTrashed()`/`.WithTrashed()` applies before `rows.As`. Lift
+fields with `LeftScope`/`RightScope` after the join, then with `OuterScope`/`InnerScope`
+inside the correlation. Keep its ORDER BY and LIMIT inside the scalar subquery.
+Selecting an already nullable value uses the nullable scalar adapter, so the
+output has one nullable layer.
+
+<!-- orm-example: pilot-joined-source -->
+```go
+func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A], tenant func(context.Context, A) (int64, error)) datatable.Spec[DirectoryScope, DirectoryRow, A] {
+	a := rows.As[adminSide](Admins.Query(), "a")
+	c := rows.As[countrySide](countries.Countries.Query(), "c")
+	as, cs := rows.Scope(a), rows.Scope(c)
+	joined := rows.InnerJoin(a, c, rows.On(expr.At(as, Admins.CountryCode), expr.At(cs, countries.Countries.ISO2)))
+	admin, country := rows.LeftScope(joined, as), rows.RightScope(joined, cs)
+	correlate := func(ps ...orm.Predicate[countries.Country]) rows.CorrelatedScalar[DirectoryScope, countries.Country, value.Nullable[string]] {
+		q := countries.Countries.Query().Where(ps...)
+		correlation := rows.Correlate(joined, rows.From(q))
+		outer := rows.OuterScope(correlation, admin)
+		inner := rows.InnerScope(correlation, rows.ModelScope(q))
+		return rows.SelectCorrelatedScalar(correlation, expr.Select(expr.At(inner, countries.Countries.OfficialName))).
+			Where(expr.Equal(expr.At(inner, countries.Countries.ISO2), expr.At(outer, Admins.CountryCode))).
+			OrderBy(expr.At(inner, countries.Countries.ISO2).Asc()).Limit(1)
+	}
+	selected := expr.Select(rows.CorrelatedScalarNullableRowQuery(correlate()))
+	filter := officialNameFilter[DirectoryScope]{exists: func(p orm.Predicate[countries.Country]) expr.Predicate[DirectoryScope] {
+		return correlate(p).Exists()
+	}}
+	base := rows.Select(joined, DirectoryRows,
+		rows.Map(DirectoryRows.ID, expr.At(admin, Admins.Key())),
+		rows.Map(DirectoryRows.Country, expr.At(country, countries.Countries.Name)),
+		rows.MapSelected(DirectoryRows.OfficialName, selected))
+	text := foundryhttp.StringQuery[string]()
+	spec.Columns = []datatable.ColumnRegistration[DirectoryScope, DirectoryRow]{
+		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country").
+			SortBy(expr.Select(expr.At(country, countries.Countries.Name))).
+			FilterBy(datatable.Where(text, expr.TextRowAt(country, countries.Countries.Name))).Registration(),
+		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName").
+			SortBy(selected).FilterBy(datatable.NullableWhere(text, filter)).Registration(),
+	}
+	spec.Stable = []expr.ProjectionOrder[DirectoryScope]{expr.At(admin, Admins.Key()).Asc()}
+	spec.Source = func(ctx context.Context, actor A) (rows.Query[DirectoryScope, DirectoryRow], error) {
+		id, err := tenant(ctx, actor)
+		if err != nil {
+			return rows.Query[DirectoryScope, DirectoryRow]{}, err
+		}
+		return base.Where(expr.At(admin, Admins.TenantID).Eq(id)), nil
+	}
+	return spec
+}
+```
+
+For a LEFT JOIN, replace the right preserved scope with
+`rows.NullableRightScope(joined, rightScope)` and read it with `expr.AtNullable` for
+required fields or `expr.AtNullableValue` for already nullable fields. Change the
+DTO and Spec scope accordingly; do not cast the INNER scope or keep a required DTO
+field for an optional joined value. See [joins](model-joins.md) for the compiled
+outer-join examples. The worked INNER JOIN excludes administrators without a
+matching country; its official name can still be SQL NULL.
+
+### Replace Foundry Countries factories and drafts
+
+See [Countries](countries.md) for seeding, reference-data ownership and bounds.
+The concrete `countries.Country`, `countries.Code` and `countries.Status` identities
+remain unchanged. Import aliases such as `reference` do not change the mapping.
+
+| Before | After |
+| --- | --- |
+| `reference.QueryFoundryCountries()` | `reference.Countries.Query()`. |
+| `reference.CountryFields()` | `reference.Countries`. |
+| `QueryFoundryCountries().Find(ctx, db, code)` | `Countries.Find(ctx, db, code)`. |
+| `CountryDraft{}.SetStatus(status).SetConversionRate(rate)` | Separate assignments `Countries.Status.Set(status)`, `Countries.ConversionRate.Set(rate)`. |
+| `QueryFoundryCountries().Update(ctx, tx, code, draft)` | `Countries.Update(ctx, tx, code, assignments...)`. |
+
+<!-- orm-example: pilot-countries -->
+```go
+func countryRead(ctx context.Context, db *database.DB, code countries.Code) (value.Optional[countries.Country], error) {
+	country, err := countries.Countries.Find(ctx, db, code)
+	if err != nil || !country.IsSet() {
+		return country, err
+	}
+	f := countries.Countries
+	_, err = f.Query().Where(f.Status.Eq(countries.EnabledStatus)).
+		OrderBy(f.Name.Asc(), f.ISO2.Asc()).Limit(countries.MaxCountries).All(ctx, db.Primary())
+	return country, err
+}
+
+func countryWrite(ctx context.Context, tx *database.Tx, code countries.Code, rate decimal.Decimal) error {
+	f := countries.Countries
+	_, err := f.Query().Where(f.ISO2.Eq(code)).ForUpdate().First(ctx, tx)
+	if err != nil {
+		return err
+	}
+	_, err = f.Update(ctx, tx, code, f.Status.Set(countries.EnabledStatus), f.ConversionRate.Set(rate))
+	return err
+}
+```
+
+Keep the caller-owned transaction for the locking read and update. `Find` and
+`First` retain their optional-result contract (`value.Optional`); inspect or
+return the found result if application behavior depends on absence. `Update`
+reports a missing row rather than inserting it. An omitted conversion-rate
+assignment leaves it unchanged; `SetNull()` explicitly clears it. The filtered
+list retains the primary executor, stable name/code ordering and `MaxCountries`
+bound from the old call.
+
+### Port the generic validation lookup boundary
+
+Before, documentation only:
+
+```text
+func UniqueUsername[M any](executor database.Executor, source query.ModelQuerySource[M], column query.KeyField[M, string]) validation.Rule[string]
+// caller: UniqueUsername(tx, models.QueryAdmins().WithTrashed(), models.AdminFields().Username)
+```
+
+The native source is `orm.Query[M]`; the field parameter is
+`orm.KeyColumn[M,string]`. `KeyColumn` admits a declared lookup-capable field such
+as `Admins.Username`, not just the table's primary key. The result of `Lookup`
+continues to implement `validation.Lookup[string]`, so keep an application's
+canonicalizing lookup wrapper around it when one existed before. This helper
+accepts the application's existing username rule explicitly:
+
+<!-- orm-example: pilot-lookup -->
+```go
+type canonical struct {
+	validation.Lookup[string]
+}
+
+func (c canonical) Exists(ctx context.Context, v string) (bool, error) {
+	return c.Lookup.Exists(ctx, strings.ToLower(v))
+}
+
+func UniqueUsername[M any](executor database.Executor, source orm.Query[M], column orm.KeyColumn[M, string], username validation.Rule[string]) validation.Rule[string] {
+	return validation.Bail(username, validation.Unique(canonical{validationdb.Lookup(executor, source, column)}))
+}
+
+func adminUsernameRule(tx *database.Tx, username validation.Rule[string]) validation.Rule[string] {
+	return UniqueUsername(tx, Admins.Query().WithTrashed(), Admins.Username, username)
+}
+```
+
+`WithTrashed()` includes soft-deleted values while retaining other source scopes.
+Use it when the database unique constraint includes those rows. A lookup source
+must remain unpaginated and have no ordering or eager loading. Validation is an
+advisory read; it does not reserve the username or replace a database constraint.
+For update exclusions and per-request scopes, see
+[database validation](validation.md#advisory-database-rules).
 
 ## Preserve pagination and cursor contracts
 
@@ -1172,6 +1653,81 @@ This contract is accepted on main but **is not integrated into this checkout**:
 `database/postgres.Config` here still has no RegisterTypes field. Its compiling
 example remains blocked until main's H1 reaches the branch. The migration does not
 make ORM declarations automatically register arbitrary PostgreSQL types.
+
+## Pilot recipes
+
+These recipes address idioms identified during the pilot migration.
+
+### Locked find by key
+
+The legacy `ForUpdate().RequireFind(ctx, tx, key)` is replaced by `Where` with a typed key predicate and `Require`:
+
+<!-- orm-example: pilot-recipe-locked-find -->
+```go
+func requireAdminForUpdate(ctx context.Context, tx *database.Tx, id int64) (Admin, error) {
+	return Admins.Query().Where(Admins.Key().Eq(id)).ForUpdate().Require(ctx, tx)
+}
+```
+
+Locks are available only on `LockedQuery` inside an active transaction (`*database.Tx`). Use `Require` to return `database.NotFound` on absence, or `First` when absence is handled with `value.Optional[M]`.
+
+### Model reference and identity
+
+When defining handwritten models in place of generated ones, attach the `FoundryReference` and `FoundryIdentity` method pair using `orm.IdentityOf` and `ReferenceOf`:
+
+<!-- orm-example: pilot-recipe-model-identity -->
+```go
+var adminIdentity = orm.IdentityOf(Admins.Table, Admins.Key())
+
+func (a Admin) FoundryReference() model.Reference[Admin, int64] {
+	return adminIdentity.ReferenceOf(a)
+}
+
+func (a Admin) FoundryIdentity() (model.Identity, error) {
+	return a.FoundryReference().Identity()
+}
+```
+
+This declaration-level binding is required by `audit.RecordFor`, `audit.ModelHistory`, authentication providers (`auth.DefineProvider`), and authorization proofs.
+
+### Datatable in isolated tests
+
+Datatables execute `SET LOCAL search_path TO "<Schema>", pg_temp` on each request, overriding the connection's search path. When running isolated tests with `testkit/postgres.Isolate`, set `config.Schema = scope.Schema()`:
+
+<!-- orm-example: pilot-recipe-datatable-test -->
+```go
+func isolatedDatatableConfig(scope *postgres.Scope) datatable.Config {
+	config := datatable.DefaultConfig()
+	config.Schema = scope.Schema()
+	return config
+}
+```
+
+Leaving `config.Schema` at its default (`"public"`) causes queries against an isolated schema to fail with PostgreSQL error `42P01` (`relation does not exist`).
+
+### Generation is per package
+
+The contract generator (`go tool foundry generate`) type-checks the complete package overlay. Any parse or type error in any file in that package—including unmigrated sibling files—fails the generator run. Convert a package's generated-model consumers atomically so all files in the package type-check together.
+
+### Optional fields on insert
+
+Construct an assignment slice and conditionally append optional values rather than chaining draft setters:
+
+<!-- orm-example: pilot-recipe-optional-insert -->
+```go
+func insertAdmin(ctx context.Context, tx *database.Tx, tenantID int64, username string, email value.Optional[string]) (Admin, error) {
+	assignments := []orm.Assignment[Admin]{
+		Admins.TenantID.Set(tenantID),
+		Admins.Username.Set(username),
+	}
+	if v, ok := email.Get(); ok {
+		assignments = append(assignments, Admins.Email.Set(v))
+	}
+	return Admins.Insert(ctx, tx, assignments...)
+}
+```
+
+Omitted fields are not passed to `Insert`, allowing database default values to apply. To explicitly write a SQL NULL on a nullable column, pass `column.SetNull()`.
 
 ## Preserve the remaining behavior
 

@@ -42,6 +42,9 @@ func CompareRow[S, V any](e Expression[S, V, V]) RowComparison[S, V] {
 	return RowComparison[S, V]{data: rowData[V]{core: e.core, column: e.column}}
 }
 
+// Value selects the computed value. Example: expression.Value().
+func (e RowComparison[S, V]) Value() Selected[S, V] { return Selected[S, V]{data: e.data} }
+
 // Eq compares a present value. Example: comparison.Eq(Active).
 func (e RowComparison[S, V]) Eq(v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.Equal, v)}
@@ -63,11 +66,20 @@ type NullableRowComparison[S, V any] struct {
 	nullableComparisonPhase [0]struct{}
 	_                       [0]*S
 	data                    rowData[V]
+	projected               rowData[value.Nullable[V]]
 }
 
 // CompareNullableRow preserves nullable equality without granting enum ordering or text operations. Example: expr.CompareNullableRow(expr.Value(Users.OptionalState)).IsNull().
 func CompareNullableRow[S, V any](e Expression[S, V, value.Nullable[V]]) NullableRowComparison[S, V] {
-	return NullableRowComparison[S, V]{data: rowData[V]{core: e.core, column: e.column}}
+	return NullableRowComparison[S, V]{
+		data:      rowData[V]{core: e.core, column: e.column},
+		projected: e.rowValue(nil),
+	}
+}
+
+// Value selects the computed value. Example: expression.Value().
+func (e NullableRowComparison[S, V]) Value() Selected[S, value.Nullable[V]] {
+	return Selected[S, value.Nullable[V]]{data: e.projected}
 }
 
 // Eq compares a present value. Example: comparison.Eq(Active).

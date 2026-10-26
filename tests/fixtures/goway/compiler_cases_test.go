@@ -104,6 +104,7 @@ func compilerCases() []compilerCase {
 		{"datatable_column_row", "cannot use"},
 		{"datatable_column_scope", "cannot use"},
 		{"datatable_column_value", "cannot use"},
+		{"datatable_enum_sort_scope", "cannot use"},
 		{"datatable_export_format", "cannot use"},
 		{"datatable_filter_nullability", "cannot use"},
 		{"datatable_filter_value", "cannot use"},
@@ -776,6 +777,9 @@ func compilerCases() []compilerCase {
 		{"selected_comparison_row", "expr.Predicate[models.User]"},
 		{"selected_distinct_owner", "expr.ProjectionKey[models.User]"},
 		{"selected_group_phase", "expr.GroupKey[models.User]"},
+		{"enum_selected_model", "expr.ProjectionKey[models.Order]"},
+		{"enum_selected_group_phase", "expr.GroupKey[models.User]"},
+		{"enum_selected_phase", "cannot convert"},
 		{"selected_key_conversion", "cannot convert"},
 		{"selected_key_row_list", "expr.GroupKey[models.User]"},
 

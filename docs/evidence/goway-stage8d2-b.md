@@ -20,6 +20,7 @@ error identity, cancellation and ownership assertions remain executable.
 | `database/routing_test.go` — five tests | Native `routedQuery`; low-level raw-driver, startup, replica failure, health and shutdown assertions stay independent of query frontend changes. |
 | `application/maintenance_schedule_test.go` — `TestMaintenanceSchedulePrunesConfiguredFrameworkStores` | Handwritten `maintenanceFailures` and `prune.ORMModel`. All scheduled-store persisted-count and retention assertions remain. |
 | `testkit/factory/factory_test.go` — five existing tests, plus composition callers | Removes generated model/draft interfaces. The shared-core tests keep their inspectable domain draft and convert it to native assignments at the existing prepare seam. Adds `TestORMFactoryBuildFailureDoesNotStartBatch` through public `Define`, covering returned error, panic and Goexit without partial models or database work. |
+| `attachments/collections_postgres_test.go` — `TestPostgresAttachmentLocalizedBatchAndTypedScopes`, `TestPostgresAttachmentCollectionsIdentityAndOrdering` | `attachments.Matching`, `extensiontest.MemberQuery`, `rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField()))))`. Retains exact matched keys, typed collection scope across single, multiple and empty matches, unregistered and unbound rejection, soft-delete visibility and unchanged loaded snapshots. |
 
 Native hook-free `Table.InsertMany` on an exact pool uses autocommit; legacy
 `InsertMany` opened a transaction. The existing batch rollback/lost-commit cases
@@ -40,17 +41,14 @@ registry; it needs no source change.
 - That file also retains `retrievalFixtureDefinition` for lane C's pending
   `database/record_iteration_test.go` legacy capture. Lane C owns removing that
   dependency after capturing the comparison.
-- `attachments/collections_postgres_test.go` remains unchanged: its `Matching` and
-  scalar query depend on lane D's legacy `extensiontest.Members`, `MemberQuery`
-  and `MemberIDField`. A native owner must land first; this slice does not copy
-  lane D's declaration. Its identity, ordering, localized empty/missing, typed
-  scope and replacement assertions remain intact. The adjacent, unassigned
-  `attachments/slot_postgres_test.go:129` also still calls legacy `With(...).Load`
-  through the same owner fixture.
+- `attachments/collections_postgres_test.go` is fully ported to native ORM declarations
+  and operations (`attachments.Matching`, `extensiontest.MemberQuery`, `rows.ReadScalar`).
+  The adjacent `attachments/slot_postgres_test.go` was likewise ported by lane D.
 - Public legacy callers deliberately remain for 8d3: `database/prune/legacy.go`
   (`Model`), `testkit/factory/factory.go` (`New`), and attachment matching/slot
-  bridges. Application maintenance production references only limit aliases;
-  lane C owns that spelling migration in 8d1.
+  bridges (`attachments/matching_legacy.go`, `attachments/slot_legacy.go`). Application
+  maintenance production references only limit aliases; lane C owns that spelling
+  migration in 8d1.
 
 ## Frozen evidence and footprint
 

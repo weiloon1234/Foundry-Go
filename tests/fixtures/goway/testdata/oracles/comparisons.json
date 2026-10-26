@@ -1389,7 +1389,7 @@
       "sha256": "8af03f60e4a065ca96de7e91dd7254bcf2eb5123ccc86b82548cc0d720549422"
     },
     "goway/compiler_cases_test.go": {
-      "sha256": "4b5ecb7e9c011c00bfb513eff1e60154ddee73d241520b7518b3d1809915f31e"
+      "sha256": "540821243a0a6934e902adca7c7a2f735686c29302c6fb5234e991c06283573a"
     },
     "goway/compiler_command_other_test.go": {
       "sha256": "e0c52efc5f2cd673de96e17aa09e66d83585776f57bdc17148e19f2363a3f81a"
@@ -1565,6 +1565,9 @@
     },
     "goway/migration/oracle_test.go": {
       "sha256": "19e71fc691ed74166190d64de08b817aa4787835474a2e00e959aa711cedfec6"
+    },
+    "goway/migration/pilot_test.go": {
+      "sha256": "2a3aebff5f8820e8d1ce3935932efeb251e52a5d9ae508921cba734b4bdfa133"
     },
     "goway/migration/sql_test.go": {
       "sha256": "be4629fa807166255cade4c610df96cf3096a93bf2f43fd0df559ecb196db803"

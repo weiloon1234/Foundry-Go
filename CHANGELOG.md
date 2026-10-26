@@ -8,6 +8,13 @@
 
 ### Go-way data layer (branch, in progress)
 
+- Add pilot migration-guide entries and recipes covering locked finds by key,
+  handwritten model reference and identity, datatable isolated test schemas,
+  per-package generation, and optional insert assignments.
+- Add `RowComparison.Value` and nullable comparison values for datatable enum
+  sorts.
+- Support and document the short `Stable` spelling `expr.Value(Model.ID).Asc()` on
+  datatable specifications.
 - Complete Stage 8d2 behavior-test ports for database writes/reads, maintenance,
   factories, extension ownership/matching/slots, decoding and pagination. Native
   tests replay 53 captured legacy observations and retain existing frozen IDs,

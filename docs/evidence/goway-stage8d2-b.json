@@ -83,12 +83,14 @@
   "remaining": [
     "Legacy error-returning write-observer and retrieval adapter tests in database/legacy_adapter_error_test.go; native factories return hooks only. Retained pending lead 8d3 disposition.",
     "retrievalFixtureDefinition in that file also supports lane C record_iteration legacy capture.",
-    "attachments/collections_postgres_test.go unchanged pending lane D native extensiontest owner/table/key exports.",
     "Public legacy prune.Model, factory.New and attachments matching/slot bridges intentionally remain until 8d3.",
-    "Application maintenance production query references are limit aliases, assigned to lane C for 8d1.",
-    "attachments/slot_postgres_test.go:129 still exercises MemberQuery().With(...).Load; outside the assigned collection test, dependent on extensiontest/native slot migration."
+    "Application maintenance production query references are limit aliases, assigned to lane C for 8d1."
   ],
   "source_hashes": {
+    "attachments/collections_postgres_test.go": {
+      "before_sha256": "4ea2fb4ab407836fa3ff1f1fd515744fe70a98b155c850373f5c54eef262804c",
+      "after_sha256": "cf302f167f9277b74864cb712963677bba411e8f8592482513dadea17541f19f"
+    },
     "application/maintenance_schedule_test.go": {
       "before_sha256": "bebb7616681d8d3f16d394d16661a8ec17ad1451b1cbe813782a1d819075bb2c",
       "after_sha256": "afbb3bbfd9227d848f8393f98b19321f4280a481a22ddcfd7ba51d5bf93f742d"

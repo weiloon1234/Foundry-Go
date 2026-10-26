@@ -58,10 +58,11 @@ use `orm.PrimaryOf` and `orm.SoftDeleteOf` to retain declaration roles; the
 [row schemas](../../tests/fixtures/consumer/reporting/rows.go) retain exact DTO
 field types. Existing generated DTO descriptors continue to own wire metadata.
 
-Use `expr.Select(expr.Value(Users.Name))` in `SortBy`, or a computed/aggregate
-expression's `.Value()`. `Stable` is `[]expr.ProjectionOrder[S]`, including a
-unique final key. Filters take `expr.Predicate[S]` for WHERE and
-`expr.HavingPredicate[S]` for HAVING:
+Use `expr.Select(expr.Value(Users.Name))` in `SortBy`, an enum or comparison row
+adapter's `.Value()` (such as `expr.CompareRow(expr.Value(Users.State)).Value()`),
+or a computed/aggregate expression's `.Value()`. `Stable` is `[]expr.ProjectionOrder[S]`,
+accepting the short `expr.Value(table.Key()).Asc()` spelling for a unique final key.
+Filters take `expr.Predicate[S]` for WHERE and `expr.HavingPredicate[S]` for HAVING:
 
 | Operand | Filter adapter |
 | --- | --- |
@@ -69,8 +70,8 @@ unique final key. Filters take `expr.Predicate[S]` for WHERE and
 | Nullable text | `expr.TextNullableRow(Users.Nickname)` |
 | Required number | `expr.OrderRow(expr.Value(Users.Age))` |
 | Nullable number | `expr.OrderNullableRow(expr.Value(Users.Score))` |
-| Enum or equality-only field | `expr.CompareRow(expr.Value(Users.State))` |
-| Nullable enum | `expr.CompareNullableRow(expr.Value(Users.State))` |
+| Enum or equality-only field | `expr.CompareRow(expr.Value(Users.State))` (sort via `.Value()`) |
+| Nullable enum | `expr.CompareNullableRow(expr.Value(Users.State))` (sort via `.Value()`) |
 | Joined text | `expr.TextRowAt(memberScope, Members.Name)` |
 | Aggregate | `expr.Count[User]()` or `expr.Sum(Orders.Amount)` |
 

@@ -45,6 +45,24 @@ func TestPostgresAttachmentCollectionsIdentityAndOrdering(t *testing.T) {
 	if _, err := impostor.List(t.Context(), f.manager, owner); err == nil {
 		t.Fatal("nominal registration bypass")
 	}
+	if _, err := Matching(t.Context(), f.manager, impostor); !errors.Is(err, fault.Invalid) {
+		t.Fatal("unregistered collection matching accepted", err)
+	}
+	singlePredicate, err := Matching(t.Context(), f.manager, testSingle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+		q := extensiontest.MemberQuery().Where(singlePredicate)
+		matched, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		if err != nil || len(matched) != 1 || matched[0] != 1 {
+			t.Fatal("single collection matching scope", matched, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := New(Dependencies{Store: f.Store, Disks: f.registry}, DefaultConfig(), testSingle.Registration(), testSingle.Registration()); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("duplicate collection accepted", err)
 	}
@@ -93,6 +111,21 @@ func TestPostgresAttachmentCollectionsIdentityAndOrdering(t *testing.T) {
 	}
 	if files, err := testMultiple.List(t.Context(), f.manager, owner); err != nil || len(files) != 0 {
 		t.Fatal("collection not empty", err)
+	}
+	multiplePredicate, err := Matching(t.Context(), f.manager, testMultiple)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+		q := extensiontest.MemberQuery().Where(multiplePredicate)
+		matched, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		if err != nil || len(matched) != 0 {
+			t.Fatal("cleared collection matching scope", matched, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if result, err := testSingle.Add(t.Context(), f.manager, member(t, 99), uploadText("missing")); !errors.Is(err, database.NotFound) || result.Publication != Unpublished {
 		t.Fatal("missing owner accepted", err)
@@ -168,6 +201,9 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	if _, err := testLocalized.ForLocale("en").LoadLocalized(t.Context(), f.manager, []model.Reference[extensiontest.Member, int64]{owner}); err == nil {
 		t.Fatal("bound collection accepted as all-locale descriptor")
 	}
+	if _, err := Matching(t.Context(), f.manager, testLocalized); !errors.Is(err, fault.Invalid) {
+		t.Fatal("unbound localized collection accepted by matching", err)
+	}
 	predicate, err := Matching(t.Context(), f.manager, testLocalized.ForLocale("en"))
 	if err != nil {
 		t.Fatal(err)
@@ -182,6 +218,36 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	if err != nil || len(keys) != 1 || keys[0] != 1 {
 		t.Fatal("typed collection scope", err)
 	}
+	frPredicate, err := Matching(t.Context(), f.manager, testLocalized.ForLocale("fr"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+		q := extensiontest.MemberQuery().Where(frPredicate)
+		frKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		if err != nil || len(frKeys) != 2 || frKeys[0] != 1 || frKeys[1] != 2 {
+			t.Fatal("multiple owner matching scope", frKeys, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msPredicate, err := Matching(t.Context(), f.manager, testLocalized.ForLocale("ms"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+		q := extensiontest.MemberQuery().Where(msPredicate)
+		msKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		if err != nil || len(msKeys) != 0 {
+			t.Fatal("empty locale matching scope", msKeys, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := f.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE extension_members SET deleted_at=now() WHERE id=1`)
 		return err
@@ -191,6 +257,17 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 	if _, err := testLocalized.ForLocale("en").List(t.Context(), f.manager, owner); !errors.Is(err, database.NotFound) {
 		t.Fatal("soft-deleted owner visible", err)
 	}
+	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+		q := extensiontest.MemberQuery().Where(predicate)
+		deletedKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		if err != nil || len(deletedKeys) != 0 {
+			t.Fatal("soft-deleted owner matched query scope", deletedKeys, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	// A previously loaded snapshot remains explicit; fresh reads recheck visibility.
 	if _, err := batch.Get(owner); err != nil {
 		t.Fatal("snapshot unexpectedly mutated", err)
@@ -199,6 +276,17 @@ func TestPostgresAttachmentLocalizedBatchAndTypedScopes(t *testing.T) {
 		_, err := tx.Exec(ctx, `UPDATE extension_members SET deleted_at=NULL WHERE id=1`)
 		return err
 	}); err != nil {
+		t.Fatal(err)
+	}
+	err = f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+		q := extensiontest.MemberQuery().Where(predicate)
+		restoredKeys, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Select(expr.Value(extensiontest.MemberIDField())))).All(ctx, tx)
+		if err != nil || len(restoredKeys) != 1 || restoredKeys[0] != 1 {
+			t.Fatal("restored owner query scope", restoredKeys, err)
+		}
+		return nil
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	assertBody(t, f, testLocalized.ForLocale("en"), owner, english, "English")
