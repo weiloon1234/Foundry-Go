@@ -146,7 +146,7 @@ func loadGraph(ctx context.Context, dir string, recursive bool, tree *generation
 		}
 	}
 	targets := sortedNames(external)
-	targets = append(targets, framework+"/database/query", framework+"/database/codec", framework+"/database/lifecycle", framework+"/audit/record", framework+"/http", framework+"/contract", framework+"/value", framework+"/enum", framework+"/i18n/message", framework+"/config", "database/sql/driver", "sync")
+	targets = append(targets, framework+"/database/codec", framework+"/database/lifecycle", framework+"/audit/record", framework+"/http", framework+"/contract", framework+"/value", framework+"/enum", framework+"/i18n/message", framework+"/config", "database/sql/driver", "sync")
 	// Generated extension slot declarations import the binding package. Slot
 	// field types require one of its extension packages, so other consumers do
 	// not compile attachment and imaging export data for generation.

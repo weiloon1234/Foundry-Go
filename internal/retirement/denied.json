@@ -1,0 +1,121 @@
+{
+  "attachments": [
+    "AddFiles",
+    "Collection.Matching",
+    "DefineMany",
+    "DefineOne",
+    "ManySlot",
+    "ManySlot.Add",
+    "ManySlot.AddFile",
+    "ManySlot.AddIn",
+    "ManySlot.Format",
+    "ManySlot.From",
+    "ManySlot.PublicURLs",
+    "ManySlot.Reorder",
+    "OneSlot",
+    "OneSlot.Format",
+    "OneSlot.From",
+    "OneSlot.PublicURL"
+  ],
+  "database/orm": [
+    "Extension",
+    "LegacyIdentityScope",
+    "Predicate.Not",
+    "Load",
+    "LoadMissing",
+    "MorphName",
+    "Morphable",
+    "Mutate"
+  ],
+  "database/prune": [
+    "Model"
+  ],
+  "extensions": [
+    "DefineOwner",
+    "DefineOwnerWith",
+    "Owner.QueryScope"
+  ],
+  "http/modelbinding": [
+    "ByField",
+    "Through",
+    "ThroughSelected"
+  ],
+  "metadata": [
+    "DefineValue",
+    "Key.Matching",
+    "ValueSlot",
+    "ValueSlot.Describe",
+    "ValueSlot.Forget",
+    "ValueSlot.ForgetIn",
+    "ValueSlot.Format",
+    "ValueSlot.From",
+    "ValueSlot.Key",
+    "ValueSlot.Name",
+    "ValueSlot.Registration",
+    "ValueSlot.Save",
+    "ValueSlot.SaveIn",
+    "ValueSlot.Validate"
+  ],
+  "testkit/factory": [
+    "Model",
+    "New"
+  ],
+  "translations": [
+    "DefineText",
+    "Field.Matching",
+    "TextSlot",
+    "TextSlot.Clear",
+    "TextSlot.ClearIn",
+    "TextSlot.Describe",
+    "TextSlot.Field",
+    "TextSlot.Forget",
+    "TextSlot.ForgetIn",
+    "TextSlot.Format",
+    "TextSlot.From",
+    "TextSlot.MergeRule",
+    "TextSlot.Name",
+    "TextSlot.Options",
+    "TextSlot.Registration",
+    "TextSlot.Rule",
+    "TextSlot.Save",
+    "TextSlot.SaveIn",
+    "TextSlot.Sync",
+    "TextSlot.SyncIn",
+    "TextSlot.Validate"
+  ],
+  "database/orm/rows": [
+    "Count",
+    "Compile",
+    "Preflight",
+    "Each",
+    "RecordRead.All",
+    "SetQuery.All",
+    "ValueSetQuery.All",
+    "ValueCursorQuery.Key"
+  ],
+  "database/orm/expr": [
+    "Select",
+    "JSONKind",
+    "JSONObject",
+    "JSONArray",
+    "JSONString",
+    "JSONNumber",
+    "JSONBoolean",
+    "JSONNull",
+    "JSONPath.Kind",
+    "JSONPath.Length",
+    "JSONPath.Exists",
+    "JSONPath.IsMissing",
+    "JSONPath.IsJSONNull",
+    "JSONPath.Contains"
+  ],
+  "datatable": [
+    "Config.DownloadTimeout"
+  ],
+  "model": [
+    "NewID"
+  ],
+  "jobs": [
+    "LegacyEnvelope"
+  ]
+}

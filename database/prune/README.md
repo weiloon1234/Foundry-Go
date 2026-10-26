@@ -22,7 +22,5 @@ token from the exact table declaration. A failed batch contributes no confirmed
 removals; earlier committed batches remain in `Result.Counts`. Unknown transaction
 outcomes remain errors and are never retried automatically.
 
-The generated-query `Model` adapter remains available for compatibility. New
-registrations use the ORM functions above; the registry and its bounds do not
-depend on the legacy query engine. Legacy `Model` is isolated in `legacy.go` until
-its public entry point can be retired in a coordinated change.
+Registrations use the ORM functions above; the registry and its bounds share the
+native query owners. The generated-query adapter has been removed.

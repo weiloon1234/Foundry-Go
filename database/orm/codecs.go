@@ -18,9 +18,7 @@ import (
 
 // ColumnOption supplies a typed custom codec. Example: ColumnOf(b, &o.Code, Codec(custom)).
 type ColumnOption[V any] struct {
-	get     func() codec.Codec[V]
-	mutate  func(V) (V, error)
-	mutator bool
+	get func() codec.Codec[V]
 }
 
 // Codec selects an explicit codec for a custom value. Example: Codec(codec.String[Code]()).
@@ -55,7 +53,7 @@ func optionCodec[V any](fallback codec.Codec[V], opts []ColumnOption[V]) codec.C
 			}
 			fallback = opt.get()
 			selected = true
-		} else if !opt.mutator {
+		} else {
 			return codec.Codec[V]{}
 		}
 	}
@@ -83,10 +81,8 @@ func NullableIDOf[M, T any](b Builder[M], ptr *value.Nullable[model.ID[T]]) Null
 // Key selection happens once. Exact model IDs retain the original codec's
 // closures; named scalars use the same scalar codecs as ordinary columns.
 func keyCodec[M any, K comparable](opts []ColumnOption[K]) (codec.Codec[K], func() error) {
-	for _, opt := range opts {
-		if !opt.mutator {
-			return selectedCodec(opts), nil
-		}
+	if len(opts) != 0 {
+		return selectedCodec(opts), nil
 	}
 	if c, ok := any(codec.ID[M]()).(codec.Codec[K]); ok {
 		return c, nil
@@ -156,7 +152,7 @@ func keyCodec[M any, K comparable](opts []ColumnOption[K]) (codec.Codec[K], func
 // FoundryCodec supplies an explicit codec option to the row declaration package.
 // Example: FoundryCodec(option, sqlowner.Metadata()).
 func FoundryCodec[V any](option ColumnOption[V], seal sqlowner.MetadataSeal) codec.Codec[V] {
-	if !seal.Valid() || option.mutator {
+	if !seal.Valid() {
 		return codec.Codec[V]{}
 	}
 	return selectedCodec([]ColumnOption[V]{option})

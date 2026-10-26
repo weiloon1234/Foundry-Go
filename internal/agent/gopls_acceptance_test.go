@@ -323,7 +323,8 @@ func consumerEditorProbes() []consumerEditorProbe {
 
 		{"attachment-typed-replace", "profiles/profile.go", "Avatar.", "Replace", []string{"Replace", "Add", "Find", "Load"}, []string{"Reference", "Upload", "Result", "error"}, "/attachments/write.go"},
 		{"attachment-localized-batch", "profiles/profile.go", "Localized.", "LoadLocalized", []string{"LoadLocalized", "ForLocale", "Resolve"}, []string{"Reference", "LocalizedBatch", "error"}, "/attachments/localized.go"},
-		{"metadata-typed-value", "profiles/profile.go", "PreferencesKey.", "Set", []string{"Set", "Get", "Load", "Matching"}, []string{"Reference", "Preferences", "error"}, "/metadata/values.go"},
+		{"metadata-typed-value", "profiles/profile.go", "PreferencesKey.", "Set", []string{"Set", "Get", "Load"}, []string{"Reference", "Preferences", "error"}, "/metadata/values.go"},
+		{"metadata-typed-matching", "profiles/profile_test.go", "metadata.", "Matching", []string{"Matching", "Define"}, []string{"context.Context", "Key[", "Predicate[", "error"}, "/metadata/matching.go"},
 		{"translation-typed-locale", "profiles/profile.go", "Label.", "Set", []string{"Set", "Get", "Resolve", "Load"}, []string{"Reference", "LocaleID", "string", "error"}, "/translations/write.go"},
 		{"settings-transactional-default", "profiles/profile.go", "PageSize.", "EnsureIn", []string{"EnsureIn", "Ensure", "GetOr"}, []string{"uint32", "database.Tx", "savepoint", "Parent rollback"}, "/settings/values.go"},
 		{"geographic-spherical-distance", "scalarqueries/geographic_test.go", "expr.", "SphericalDistance", []string{"SphericalDistance", "NewGeographicPoint"}, []string{"GeographicPoint", "OrderedRowExpression["}, "/database/orm/expr/geographic_expression.go"},

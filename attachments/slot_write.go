@@ -174,16 +174,6 @@ func (s manySlot[M, K]) Reorder(ctx context.Context, owner M, order []ID[M]) ([]
 	return s.collection.Reorder(ctx, m, s.binding.Reference(owner), order)
 }
 
-// AddFiles appends files to owner's collection in order and stops at the
-// first failure. It returns the result of every attempted file, including the
-// failed one, and never claims all-or-nothing publication: files before a
-// failure stay published.
-func AddFiles[F FileSource, M any, K comparable](ctx context.Context, slot ManySlot[M, K], owner M, files []F) ([]Result[M, K], error) {
-	return addFiles(ctx, files, func(count int) error { return checkAddFiles(slot.slotDefinition, count) }, func(ctx context.Context, file FileSource) (Result[M, K], error) {
-		return slot.AddFile(ctx, owner, file)
-	})
-}
-
 func checkAddFiles[M any, K comparable](slot slotDefinition[M, K, Many[M]], count int) error {
 	if _, err := slot.bound(); err != nil {
 		return err

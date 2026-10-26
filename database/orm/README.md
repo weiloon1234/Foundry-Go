@@ -224,7 +224,7 @@ Stage 3.1c adds cursor pagination and primary-key chunking as package functions:
 page, err := orm.CursorPaginate(ctx, db,
     models.Users.Query().OrderBy(models.Users.Nickname.Asc()), request.Page)
 // request is pagination.CursorRequest[Path, Filters, models.User].
-// Map the returned query.CursorPage with pagination.MapCursorPage.
+// Map the returned orm.CursorPage with pagination.MapCursorPage.
 err = orm.ChunkByKey(ctx, db, models.Orders.Query(), models.Orders.ID, 500,
     func(batch []models.Order) error { return process(batch) })
 err = orm.EachByKey(ctx, db, models.Orders.Query(), models.Orders.ID, 500, processOrder)
@@ -999,11 +999,10 @@ the existing 404 behavior. Binding does not acquire authorization or locks.
 hooks work with that concrete draft type. Batch creation uses `orm.InsertEach`,
 which invokes every row's lifecycle in one bounded transaction, with one enclosing
 savepoint for a caller-owned transaction. Unknown outcomes remain failures with
-reconciliation candidates; no automatic retry occurs. Generated-model factory
-and binding adapters remain available during the staged migration.
+reconciliation candidates; no automatic retry occurs. Factories and binding adapters use handwritten declarations.
 
 Pagination adapters consume `orm.PageResult`, `orm.SimplePage`, `orm.CursorRequest`
-and `orm.CursorPage`. These and the legacy `query` names alias one set of shared SQL pagination
+and `orm.CursorPage`. These expose the shared SQL pagination
 contracts in `internal/querycore`. Validation, field shapes, cursor bytes and
 redacted formatting are unchanged; the reflected defining package is now the
 shared owner. Applications continue using the public aliases. HTTP pagination
@@ -1020,7 +1019,7 @@ ordinary, detailed and Go-syntax formatting.
 
 ## Diagnostic redaction
 
-ORM and legacy query handles redact retained predicate literals, bound data values,
+ORM query handles redact retained predicate literals, bound data values,
 assignment inputs, numeric guard bounds, cursor tokens, plan contents and fixed
 pivot bindings from `fmt` formatting and interpolating errors such as
 `fmt.Errorf("query: %+v", q)`. This includes `%v`, `%+v` and `%#v` through private
@@ -1061,8 +1060,7 @@ order and preserves filters and visibility. With `mass=false`, every model runs
 its deletion lifecycle. `mass=true` explicitly acknowledges one DELETE without
 per-model hooks, observers or audit. Each batch is atomic. `prune.ORMModel` and
 `prune.ORMSoftModel` register these operations with the [bounded prune registry](../prune/README.md).
-The registry uses `orm.MaxPerModelWriteRows`; generated-query `prune.Model`
-remains a compatibility adapter during retirement.
+The registry uses `orm.MaxPerModelWriteRows`.
 
 `Explain` returns a bounded typed PostgreSQL `Plan` without running the SELECT;
 `ExplainAnalyze` explicitly executes it. Neither hydrates models, dispatches
@@ -1120,15 +1118,12 @@ state. Loading keeps per-slot parent batches, loaded-empty values, separate fetc
 and attached budgets, and the caller's executor. Failed fetches do not attach an
 incomplete batch tree.
 
-`FoundryExtension` and the legacy query adapter require a validated query-family
-capability. They accept concrete framework slot state; capabilities are never
-passed to slot accessors or application callbacks. Legacy generated slot and owner
-entry points remain available during consumer migration. Their predicate conversion
-happens only at those compatibility entry points; ORM owners retain ORM identity
-and scope declarations.
+`FoundryExtension` requires a validated query-family capability and accepts
+concrete framework slot state. Capabilities never reach slot accessors or
+application callbacks. Owners retain concrete ORM identity and scope declarations.
 
 Bounded Explain execution and plan decoding also share querycore. The public
-`orm.Plan`/`PlanNode` and legacy aliases retain their methods and data contract;
+`orm.Plan`/`PlanNode` retain their methods and data contract;
 their defining Go package is now the internal shared owner.
 
 ## Consumer resource limits
@@ -1153,7 +1148,5 @@ compilation still validates ownership, phases, ordering and the combined stateme
 Independent CTE scopes share statement-wide compilation budgets. Ordinary bind
 values count toward `MaxParameters`; they are not interpolated into SQL.
 
-The legacy `query` spellings remain only during the 8d1 transition and retire in
-8d3. Replace `query.MaxInsertRows` with `orm.MaxInsertRows`, and use the identical
-name under `orm` for each other constant listed above. Plan-decoder budgets and
-lifecycle callback recursion guards remain internal implementation bounds.
+Plan-decoder budgets and lifecycle callback recursion guards remain internal
+implementation bounds.

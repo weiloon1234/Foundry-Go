@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal"
 )
 
-var _ = orm.Load[j.Parent]
+var _ = orm.LoadFrom[j.Parent]
 var _ = expr.Count[j.Parent]
 var _ decimal.Decimal
 var invalid = expr.Related(orm.Pivot(j.Peers), expr.CountDistinctField(j.Targets.ID))

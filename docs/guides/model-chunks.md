@@ -54,7 +54,7 @@ sequentially; panics propagate after row cleanup.
 
 ## Projections and other read families
 
-`rows.Each` streams DTO projections one row at a time. `rows.EachRead` covers scalar,
+`rows.EachRead` streams DTO projections, scalar,
 record and set read handles. Complete models that may run retrieval behavior use
 bounded closed batches; DTO/scalar results stream directly. Ordering and windows
 remain in their original SELECT. See [read terminals](model-projections.md#execution-and-failures).

@@ -51,15 +51,6 @@ func (w *surfaceWalker) walk(typ types.Type, path string) {
 		generic := t.TypeParams().Len() > 0 || t.TypeArgs().Len() > 0
 		if pkg := obj.Pkg(); pkg != nil && generic {
 			heavy := pkg.Path() == "github.com/weiloon1234/Foundry-Go/database/codec" && obj.Name() == "Codec"
-			if pkg.Path() == "github.com/weiloon1234/Foundry-Go/database/query" {
-				// Transport DTOs remain recursively checked below; query builders
-				// and their engine state remain forbidden regardless of method count.
-				switch obj.Name() {
-				case "Page", "SimplePage", "Cursor", "CursorRequest", "CursorPage":
-				default:
-					heavy = true
-				}
-			}
 			if heavy && !w.layerOnly {
 				w.violations = append(w.violations, path+" reaches "+t.String())
 				return

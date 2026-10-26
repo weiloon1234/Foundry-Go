@@ -131,7 +131,7 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 		return err
 	}
 	// One set-based INSERT ... ON CONFLICT for every assignment
-	// (MaxAssignments is below query.MaxInsertRows).
+	// (MaxAssignments is below orm.MaxInsertRows).
 	drafts := make([][]orm.Assignment[store.Translation], len(assignments))
 	for i, a := range assignments {
 		drafts[i] = []orm.Assignment[store.Translation]{store.Translations.KeyColumn.Set(keys[i]), store.Translations.Owner.Set(string(owner.Name())), store.Translations.Scope.Set(subject.Scope), store.Translations.SubjectKey.Set(subject.Key), store.Translations.Identity.Set(subject.Identity), store.Translations.Field.Set(string(a.field.Name())), store.Translations.Locale.Set(string(a.locale)), store.Translations.Value.Set(a.text), store.Translations.CreatedAt.Set(now), store.Translations.UpdatedAt.Set(now)}

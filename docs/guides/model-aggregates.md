@@ -18,7 +18,7 @@ result type. A missing computation remains invalid when selected.
 The [UserValues declaration](../../tests/fixtures/consumer/models/orm_relations.go)
 includes counts, exact and floating summaries, extrema and pivot measures. Select
 slots with `Users.Query().With(UserValues.OrderCount, UserValues.OrderTotal)`;
-`orm.Load` refreshes slots and `orm.LoadMissing` leaves loaded values intact.
+`orm.LoadFrom` refreshes slots and `orm.LoadMissingFrom` leaves loaded values intact.
 
 ## Loading and result types
 

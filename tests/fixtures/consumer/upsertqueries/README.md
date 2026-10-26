@@ -10,8 +10,7 @@ named conflict targets, partial/expression indexes, trigger-modified proposed
 values, scalar and correlated calculations, batch rollback and concurrent identity
 assertions. Reusing the caller's assignments with `orm.Compare` checks that UUID
 synthesis leaves the caller's key omitted. Invalid and empty batches assert that
-no transaction opens; the retained `query.MaxInsertRows` compatibility constant
-supplies the shared insert bound without using the legacy query engine.
+no transaction opens; `orm.MaxInsertRows` supplies the shared insert bound.
 
 PostgreSQL tests remain opt-in through the existing fixture helper. The model
 generation directive is removed; scenarios and compiler negatives use the ORM.

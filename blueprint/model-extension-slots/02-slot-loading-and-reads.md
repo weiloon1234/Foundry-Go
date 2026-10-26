@@ -7,10 +7,10 @@ Prerequisites: E01. Status belongs to the
 
 `query.With` accepts `query.Relation[M]`, which is sealed: its methods are
 unexported and its loader receives only a `database.Executor`
-([relation loading](../../database/query/relation_loading.go)). Aggregates already
+(relation loading (historical path: `../../database/query/relation_loading.go`)). Aggregates already
 use a relation whose fetch function is supplied by a constructor and whose slot
 getter/setter is bound by generated code
-([aggregate relation](../../database/query/relation_aggregate.go)). The extension
+(aggregate relation (historical path: `../../database/query/relation_aggregate.go`)). The extension
 managers already batch-load one declaration for up to 1000 owners inside one
 read snapshot ([translations](../../translations/read.go),
 [attachments](../../attachments/read.go), [metadata](../../metadata/values.go)).

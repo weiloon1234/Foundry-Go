@@ -97,7 +97,7 @@ grouping. [Filtered aggregates](model-aggregate-filters.md) retain these rules.
 
 | Input | Read adapter | Compile / context preflight / streaming |
 | --- | --- | --- |
-| `rows.Query[S,R]` | `rows.Read(q)` | `rows.Compile`, `rows.Preflight`, `rows.Each` |
+| `rows.Query[S,R]` | `rows.Read(q)` | `rows.CompileRead`, `rows.PreflightRead`, `rows.EachRead` |
 | `rows.Scalar[S,V]` | `rows.ReadScalar(q)` | `rows.CompileRead`, `rows.PreflightRead`, `rows.EachRead` |
 | Complete record selection | `rows.ReadRecord(q)` | Same `*Read` functions |
 | Record / value set | `rows.ReadSet(q)` / `rows.ReadValues(q)` | Same `*Read` functions |
@@ -105,7 +105,7 @@ grouping. [Filtered aggregates](model-aggregate-filters.md) retain these rules.
 Read handles expose `All`, `First`, `RequireFirst`, `Count` and `Exists`. `First`
 returns `value.Optional[R]`; `RequireFirst` reports `database.NotFound`. Count
 observes grouping, HAVING, DISTINCT and the selected window. `Limit(0)` stays empty.
-`rows.Count` is the direct projection count function.
+Use `rows.Read(q).Count` for projection counts.
 
 Collected results are discarded on decode failure. Streams close on callback
 error, cancellation and decode failure; earlier callback effects remain the

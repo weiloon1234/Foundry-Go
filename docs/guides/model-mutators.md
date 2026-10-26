@@ -11,7 +11,7 @@ func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
 }
 ```
 
-The [mutator declaration](../../tests/fixtures/goway/models/mutators/models.go) binds input, codec and accessor types. A nil transform argument to `Input*Of` selects the matching `Mutate<Field>` method. Supply a typed `func(Input) (Stored, error)` instead when the transform is explicit. Do not also declare a named mutator. The retained legacy `orm.Mutate` option is rejected on ordinary columns; use the input constructor's transform argument.
+The [mutator declaration](../../tests/fixtures/goway/models/mutators/models.go) binds input, codec and accessor types. A nil transform argument to `Input*Of` selects the matching `Mutate<Field>` method. Supply a typed `func(Input) (Stored, error)` instead when the transform is explicit. Do not also declare a named mutator. Ordinary columns do not accept transforms; use the input constructor's transform argument.
 
 ## Declaration validation
 

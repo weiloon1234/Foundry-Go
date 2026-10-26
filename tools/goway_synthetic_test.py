@@ -79,13 +79,20 @@ class SyntheticTests(unittest.TestCase):
             with patch.object(synthetic, 'run') as run:
                 synthetic.generate(target, repo, synthetic.schema(2, 1, 1, 1))
             generate = [c.args[0] for c in run.call_args_list if 'generate' in c.args[0]]
-            self.assertEqual(len(generate), 2)
-            self.assertEqual(generate[0][-1], target / 'old')
-            self.assertEqual(generate[1][-1], target / 'new')
-            self.assertIn('go 1.2.3', (target / 'old/go.mod').read_text())
-            self.assertEqual((target / 'new/go.mod').read_text(), (target / 'old/go.mod').read_text())
+            self.assertEqual(len(generate), 1)
+            self.assertEqual(generate[0][-1], target / 'new')
+            self.assertIn('go 1.2.3', (target / 'new/go.mod').read_text())
+            self.assertFalse((target / 'old').exists())
             with self.assertRaises(FileExistsError):
                 synthetic.generate(target, repo, synthetic.schema(2, 1))
+
+    def test_historical_generation_requires_separate_checkout(self):
+        with tempfile.TemporaryDirectory() as name:
+            repo = Path(name)
+            for old in (None, repo):
+                with self.assertRaisesRegex(ValueError, 'explicit, separate'):
+                    synthetic.generate(repo / 'unused', repo, synthetic.schema(2, 1), old_repo=old, styles=('old',))
+            self.assertFalse((repo / 'unused').exists())
 
     def test_current_roles_and_separate_legacy_generator(self):
         source = synthetic.model_source(0, 2, 'new')
@@ -104,7 +111,7 @@ class SyntheticTests(unittest.TestCase):
                 (fixture / 'go.mod').write_text('module fixture\ngo 1.2.3\nreplace framework => ../../..\n')
                 (fixture / 'go.sum').write_text('')
             with patch.object(synthetic, 'run') as run:
-                synthetic.generate(root / 'app', repos['new'], synthetic.schema(2, 1, 1, 1), old_repo=repos['old'])
+                synthetic.generate(root / 'app', repos['new'], synthetic.schema(2, 1, 1, 1), old_repo=repos['old'], styles=('old', 'new'))
             calls = [c for c in run.call_args_list if 'generate' in c.args[0]]
             self.assertEqual([c.args[1] for c in calls], [repos['old'], repos['new']])
             for style, repo in repos.items():

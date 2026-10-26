@@ -77,17 +77,6 @@ func inputAssignment[M, I any](core *columnCore, capture func(I) querycore.Assig
 	}
 	return Assignment[M]{owner: core.owner, core: querycore.MutationAssignment{Field: querycore.FieldRef{Table: core.owner.model.Table, Column: core.metadata.Name}, AssignmentValue: capture(v)}}
 }
-func checkInputOptions[V any](d *declaration, c *columnCore, opts []ColumnOption[V]) {
-	if d == nil || d.sealed {
-		return
-	}
-	for _, opt := range opts {
-		if opt.mutator {
-			d.fail(c.field.Name, "Input constructors accept their typed transform argument, not a stored-value Mutate option")
-		}
-	}
-}
-
 func checkInputType(d *declaration, c *columnCore, t reflect.Type) {
 	if d != nil && !d.sealed && !modelmeta.ValidMutatorInput(t) {
 		d.fail(c.field.Name, "mutator input must be concrete and non-null")

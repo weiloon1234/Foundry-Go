@@ -3,7 +3,7 @@
 
 Generation is outside the repository. Measurements refuse reused caches and run
 in a declared order, retaining inputs, command logs and compiler resource records.
-Legacy generation uses a separate checkout; new apps require only enum generation.
+Historical generation requires an explicit separate checkout; the default creates native apps.
 """
 
 import argparse
@@ -257,9 +257,11 @@ def fingerprint(directory):
     return result
 
 
-def generate(target, repo, spec, go='go', old_repo=None, styles=('old', 'new')):
+def generate(target, repo, spec, go='go', old_repo=None, styles=('new',)):
     if Path(target).is_symlink():
         raise ValueError("application target must not be a symbolic link")
+    if 'old' in styles and (old_repo is None or Path(old_repo).resolve() == Path(repo).resolve()):
+        raise ValueError('historical generation requires an explicit, separate --old-repo checkout')
     repos = {'old': Path(old_repo or repo).resolve(), 'new': Path(repo).resolve()}
     target = outside(target, repo)
     for style in styles:
@@ -268,7 +270,7 @@ def generate(target, repo, spec, go='go', old_repo=None, styles=('old', 'new')):
     env, logs = environment(), target / '.logs'
     for style in styles:
         source_repo = repos[style]
-        # Main predates the goway fixture; use its own consumer dependency graph.
+        # Historical revisions may predate the goway fixture; use their dependency graph.
         fixture = source_repo / 'tests/fixtures/goway'
         if not (fixture / 'go.mod').exists():
             fixture = source_repo / 'tests/fixtures/consumer'
@@ -289,7 +291,7 @@ def generate(target, repo, spec, go='go', old_repo=None, styles=('old', 'new')):
         (directory / 'go.mod').write_text(mod)
         (directory / 'go.sum').write_bytes((fixture / 'go.sum').read_bytes())
         run(['gofmt', '-w', *sorted(directory.rglob('*.go'))], source_repo, env, logs, style + '-format')
-        # Legacy models/projections stay in main. New apps generate enums only.
+        # Historical declarations use their checkout; native apps generate enums only.
         run([go, 'run', './cmd/foundry', 'generate', '--recursive', '--dir', directory], source_repo, env, logs, style + '-generate')
     write_json(target / 'synthetic.json', {'format': 2, 'repo': str(repo), 'spec': spec,
                'repos': {s: str(repos[s]) for s in styles},
@@ -476,8 +478,8 @@ def main():
     create.add_argument('--reports', type=int, default=5)
     create.add_argument('--seed', type=int, default=1)
     create.add_argument('--go', default='go')
-    create.add_argument('--old-repo', type=Path, help='main checkout with legacy model/projection generator')
-    create.add_argument('--style', choices=('both', 'old', 'new'), default='both')
+    create.add_argument('--old-repo', type=Path, help='historical checkout with the retired model/projection generator')
+    create.add_argument('--style', choices=('both', 'old', 'new'), default='new')
     bench = commands.add_parser('measure')
     bench.add_argument('target', type=Path)
     bench.add_argument('--cache', type=Path, required=True)

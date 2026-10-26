@@ -38,7 +38,7 @@ against a warmed side or discard inconvenient samples.
 
 [The benchmark fixture](../../tests/fixtures/consumer/orm_benchmark_test.go) already
 uses `models.Users.Query()`, typed columns and `orm.Compile` in this base. Main's
-own fixture uses its generated model query, fields and `query.Statement`. Keep
+own fixture uses its generated model query, fields and the historical statement carrier. Keep
 those fixtures in their respective trees: copying the branch fixture onto main
 would change or break the baseline. Neither the branch runner nor its fixture
 needs legacy model generation.
@@ -121,8 +121,8 @@ program's `evidence/wholeapp-70-seed1` baseline. Manifest format 2 adds separate
 report retains its existing fields and adds test time; new sources use current
 typed roles. Old manifests remain readable. Keep the historical report intact.
 
-Legacy synthetic models/projections still require main's generator. Pass
-`--old-repo`; never run that generation against the retiring branch generator.
+Historical synthetic models/projections require their historical checkout's generator.
+Pass `--style both --old-repo` explicitly; default generation is native only.
 New sources have handwritten ORM/rows declarations and generate only the retained
 enum. The seed fixes the same model graph, CRUD/read/loading handler operations
 and join reports on both sides. Each generated model also has a SQL compilation
@@ -130,14 +130,14 @@ test. No synthetic test connects to a database.
 
 ```sh
 python3 tools/goway_synthetic.py generate /private/tmp/goway-70-trial1 \
-  --repo "$BRANCH_TREE" --old-repo "$MAIN_TREE" \
+  --repo "$BRANCH_TREE" --style both --old-repo "$MAIN_TREE" \
   --models 70 --handlers 40 --reports 5 --seed 1
 python3 tools/goway_synthetic.py measure /private/tmp/goway-70-trial1 \
   --cache /private/tmp/goway-70-trial1-cold-cache --order old,new
 ```
 
-These cold caches are task-owned measurement artifacts, separate from r14; the
-tool refuses reused caches and never deletes one. Generation uses r14 and stays
+These cold caches are task-owned measurement artifacts, separate from the shared build cache; the
+tool refuses reused caches and never deletes one. Generation uses the current shared build cache and stays
 outside timing. For repeated build comparisons use fresh source/output/cache
 directories, the same seed and sizes, and alternate `--order old,new` with
 `--order new,old`. Retain at least five measurements per side before judging

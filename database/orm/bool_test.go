@@ -58,8 +58,9 @@ func TestBoolOfPreservesCodecAndFalse(t *testing.T) {
 	if _, err := Compile(custom.Query().Where(custom.Enabled.Eq(false))); !errors.Is(err, rejected) {
 		t.Fatal("custom Boolean codec was ignored", err)
 	}
-	mutated := Define("mutated_boolean_models", func(b Builder[booleanModel], m *booleanModel) booleanFields {
-		return booleanFields{TableOf(b, &m.ID), BoolOf(b, &m.Enabled, Mutate(func(v booleanFlag) (booleanFlag, error) { return v, nil }))}
+	mutated := Define("mutated_boolean_models", func(b Builder[mutatedBooleanModel], m *mutatedBooleanModel) Table[mutatedBooleanModel, int64] {
+		BoolOf(b, &m.Enabled)
+		return TableOf(b, &m.ID)
 	})
 	if err := Check(mutated); err == nil {
 		t.Fatal("ordinary bool carrier accepted mutator")
@@ -71,3 +72,7 @@ func TestBoolOfPreservesCodecAndFalse(t *testing.T) {
 		t.Fatal("duplicate codecs accepted")
 	}
 }
+
+type mutatedBooleanModel booleanModel
+
+func (mutatedBooleanModel) MutateEnabled(v booleanFlag) (booleanFlag, error) { return v, nil }

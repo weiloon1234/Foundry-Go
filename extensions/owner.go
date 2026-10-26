@@ -30,8 +30,7 @@ type declarationID struct{ nonzero byte }
 type Owner[M any, K comparable] struct{ definition *ownerDefinition[M, K] }
 type ownerDefinition[M any, K comparable] struct {
 	name     OwnerName
-	source   identitySource[M, K]
-	ormScope func(...K) orm.Predicate[M]
+	source   orm.ModelIdentity[M, K]
 	storage  string
 	previous []string
 	id       *declarationID
@@ -40,7 +39,7 @@ type ownerDefinition[M any, K comparable] struct {
 // OwnerOptions declares the owner's persisted identity. StorageModel is the
 // model name recorded in the owner scope, so every stored extension row,
 // registration key and attachment object path depends on the declared owner
-// identity rather than the current table name. Empty uses the generated table
+// identity rather than the current table name. Empty uses the declared table
 // name, which is the historical, compatible scope. Declare the previous table
 // name here before renaming an owner table; stored identities attributed to it
 // are then accepted and decoded through the current key codec.
@@ -229,7 +228,7 @@ func (o Owner[M, K]) Lock(ctx context.Context, tx *database.Tx, registry *Regist
 }
 
 // Active performs one primary-key-only query for a bounded batch and returns
-// the subject keys of owners still visible under the generated soft-delete
+// the subject keys of owners still visible under the declared soft-delete
 // policy, as RetainedSubjects does for maintenance. The keys are opaque
 // Subject.Key values, not application IDs; match a reference with SubjectKey.
 func (o Owner[M, K]) Active(ctx context.Context, executor database.Executor, registry *Registry, references []model.Reference[M, K]) (map[string]bool, error) {

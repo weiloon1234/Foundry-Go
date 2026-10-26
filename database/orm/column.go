@@ -118,7 +118,6 @@ func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, o
 		return capture(c, v), nil
 	}
 	core.storedAssignment = core.automatic
-	configureMutatorOptions(d, core, opts)
 	return columnWithCodec(core, c)
 }
 func columnWithCodec[V any](core *columnCore, c codec.Codec[V]) columnData[V] {
@@ -309,7 +308,6 @@ func bindNullable[V any](d *declaration, ptr *value.Nullable[V], c codec.Codec[V
 		field.core.mutator = querycore.NewNullableFieldMutator(field.core.metadata.Name, c, mutate)
 		return nil
 	}
-	configureMutatorOptions(d, field.core, opts)
 	base := columnWithCodec(field.core, c)
 	field.core.nullablePolicy = nullableFieldPolicy[V]{policy: field.policy, decode: field.decode}
 	base.assign = func(v V) querycore.AssignmentValue { return capture(nullable, value.Of(v)) }

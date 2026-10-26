@@ -33,7 +33,7 @@ Read the closest discovery/emitter/tests and the corresponding runtime descripto
 - Remove obsolete managed model notes through source-edit publication, preserving
   handwritten comments and recovery for pre-upgrade journals. Follow the
   [fixture evidence rules](../../tests/fixtures/AGENTS.md) for frozen legacy outputs.
-  Legacy-runtime retirement is separate from generator retirement.
+  Persistence uses handwritten ORM declarations; transport generation remains independent.
 
 ## Cross-layer acceptance
 

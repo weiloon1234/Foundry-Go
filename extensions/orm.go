@@ -1,41 +1,25 @@
 package extensions
 
 import (
-	"context"
 	"slices"
 
-	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
-	"github.com/weiloon1234/Foundry-Go/model"
 )
-
-// identitySource is private: only the concrete framework declarations accepted
-// by DefineOwnerWith and DefineORMOwner can install these callbacks.
-type identitySource[M any, K comparable] interface {
-	Validate() error
-	ModelName() string
-	Reference(K) model.Reference[M, K]
-	Parse(model.Identity) (model.Reference[M, K], error)
-	KeyToken(K) (string, error)
-	ActiveKeys(context.Context, database.Executor, []K) ([]K, error)
-	RetainedKeys(context.Context, database.Executor, []K) ([]K, error)
-	LockActive(context.Context, *database.Tx, K) (bool, error)
-}
 
 // DefineORMOwner binds a declaration's identity to the existing extension stores.
 // Pin StorageModel before renaming a table. Example: extensions.DefineORMOwner("articles",orm.IdentityOf(Articles.Table,Articles.Key()),extensions.OwnerOptions{StorageModel:"articles"}).
 func DefineORMOwner[M any, K comparable](name OwnerName, source orm.ModelIdentity[M, K], options OwnerOptions) Owner[M, K] {
-	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, ormScope: source.Scope, storage: options.StorageModel, previous: slices.Clone(options.PreviousModels), id: &declarationID{}}}
+	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, storage: options.StorageModel, previous: slices.Clone(options.PreviousModels), id: &declarationID{}}}
 }
 
 // Scope returns an ORM predicate from the owner's concrete primary keys.
 // Example: Articles.Query().Where(extensions.Scope(owner,ids...)).
 func Scope[M any, K comparable](owner Owner[M, K], keys ...K) orm.Predicate[M] {
-	if owner.definition == nil || owner.definition.ormScope == nil {
+	if owner.definition == nil {
 		return orm.Predicate[M]{}
 	}
-	return owner.definition.ormScope(keys...)
+	return owner.definition.source.Scope(keys...)
 }
 
 // BindSlot connects a validated declaration offset and primary key to an extension.
@@ -49,11 +33,10 @@ func BindSlot[M any, K comparable, S any](key orm.Key[M, K], slot orm.Slot[M, S]
 }
 
 // ORMIdentity returns the exact identity retained by a declaration-based owner.
-// Legacy owners return a zero identity, which fails validation. Example: extensions.ORMIdentity(owner).ReferenceOf(article).
+// Example: extensions.ORMIdentity(owner).ReferenceOf(article).
 func ORMIdentity[M any, K comparable](owner Owner[M, K]) orm.ModelIdentity[M, K] {
 	if owner.definition == nil {
 		return orm.ModelIdentity[M, K]{}
 	}
-	identity, _ := owner.definition.source.(orm.ModelIdentity[M, K])
-	return identity
+	return owner.definition.source
 }

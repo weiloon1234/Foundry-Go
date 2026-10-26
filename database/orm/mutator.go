@@ -7,36 +7,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 )
 
-// Mutate describes a legacy stored-value transform option. Ordinary columns reject
-// it at startup; use the typed transform argument of an Input*Of constructor.
-// Example: TextOf(b, &m.Email, Mutate(normalizeEmail)) is rejected by Check.
-func Mutate[V any](fn func(V) (V, error)) ColumnOption[V] {
-	return ColumnOption[V]{mutate: fn, mutator: true}
-}
-
-func configureMutatorOptions[V any](d *declaration, c *columnCore, opts []ColumnOption[V]) {
-	if d == nil || d.sealed {
-		return
-	}
-	for _, opt := range opts {
-		if !opt.mutator {
-			continue
-		}
-		if c.explicitMutator {
-			d.fail(c.field.Name, "multiple explicit mutators")
-			continue
-		}
-		c.explicitMutator = true
-		checkInputType(d, c, reflect.TypeFor[V]())
-		if opt.mutate == nil {
-			d.fail(c.field.Name, "mutator must not be nil")
-			continue
-		}
-		if err := c.bindMutator(opt.mutate); err != nil {
-			d.fail(c.field.Name, err.Error())
-		}
-	}
-}
 func configureFieldMethods(d *declaration) {
 	fields := make(map[string]reflect.Type, len(d.core.columns))
 	columns := make(map[string]*columnCore, len(d.core.columns))

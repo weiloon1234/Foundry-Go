@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/weiloon1234/Foundry-Go/internal/retirement"
 )
 
 var (
@@ -52,6 +54,21 @@ func checkRepository(root string) error {
 			return nil
 		}
 		if strings.HasSuffix(path, ".md") {
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			relative = filepath.ToSlash(relative)
+			active := currentGuide(root, path) || entry.Name() == "AGENTS.md" || entry.Name() == "README.md" && !strings.HasPrefix(relative, "blueprint/") && !strings.HasPrefix(relative, "docs/evidence/") && !strings.Contains(relative, "/testdata/")
+			if active {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				if err := retirement.CheckDocument(relative, data); err != nil {
+					failures = append(failures, err)
+				}
+			}
 			if err := checkDocument(path, currentGuide(root, path), completed); err != nil {
 				failures = append(failures, err)
 			}

@@ -365,12 +365,12 @@ change the payload type. All path predicates retain the original query owner.
 | Operation | Missing path or SQL-null ancestor | Present JSON null |
 | --- | --- | --- |
 | `JSON()` | SQL NULL | Present JSON value, if its payload permits null |
-| `Kind()` | SQL NULL | `expr.JSONNull` |
-| `Exists()` | false | true |
-| `IsMissing()` | true | false |
-| `IsJSONNull()` | does not match | true |
+| `expr.JSONTypeNullable(path.JSON())` | SQL NULL | `database.JSONNull` |
+| `path.JSON().IsNotNull()` | false | true |
+| `path.JSON().IsNull()` | true | false |
+| `expr.JSONTypeNullable(path.JSON()).Eq(value.Of(database.JSONNull))` | does not match | true |
 | scalar extraction | SQL NULL | SQL NULL |
-| `Length()` | SQL NULL | SQL NULL |
+| `expr.JSONLengthNullable(path.JSON())` | SQL NULL | SQL NULL |
 
 `Length` is also SQL NULL for every non-array kind. `Contains` accepts a typed
 payload fragment and does not match a missing path. Whole-document calculations

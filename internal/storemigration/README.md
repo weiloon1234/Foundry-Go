@@ -26,9 +26,8 @@ database owned. Public field handles document these distinctions. Generated mode
 and projection outputs are retired through `make generate`, retaining each package's
 ownership manifest. Enum and transport generation remains separate.
 
-The streaming setting-state and translation-index consumers use `rows.Each`, a
-package function over the ordinary projection reader. Callback failures stop before
+The streaming setting-state and translation-index consumers use `rows.EachRead`, a
+package function over a `rows.Read` projection handle. Callback failures stop before
 decoding later rows. Regression sources cover row closure, decode failure, nil
 callbacks, cancellation, scoped execution and panic/Goexit containment; no Query
-or Table methods are added. Lane C owns the shared `rows.Each` implementation;
-this lane's self-contained `each.go` is removed at integration.
+or Table methods are added. The shared ORM iteration owner handles all read families.

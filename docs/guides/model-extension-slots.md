@@ -128,9 +128,9 @@ func articles(ctx context.Context, db database.Executor, runtime slots.Runtime) 
 }
 ```
 
-A bound handle's `Relation` participates in `With`, nested relations, `orm.Load`
-and `orm.LoadMissing`. Use `orm.LoadFrom` or `orm.LoadMissingFrom` when the source
-query carries custom relation limits. `Count` and `Exists` do not load slots.
+A bound handle's `Relation` participates in `With`, nested relations, `orm.LoadFrom`
+and `orm.LoadMissingFrom`. Both loading functions honor the source query's relation
+limits. `Count` and `Exists` do not load slots.
 Repeated slots fail validation; unbound handles fail before parent SQL.
 
 Each slot uses the manager's batch queries per parent batch: an active-owner check

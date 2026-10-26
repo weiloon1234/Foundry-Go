@@ -85,7 +85,7 @@ their equality-only filter operators; LIKE still requires `AllowLike()`.
 Request and response fields, operator lists and DTO identities are retained.
 WHERE/HAVING mixing still rejects OR and NOT; nullable negation still includes
 SQL NULL. Pagination and export retain their limits and read-only repeatable-read
-transactions. Exports call `rows.Each` with the bounded lookahead limit and never
+transactions. Exports call `rows.EachRead` with the bounded lookahead limit and never
 collect all rows in memory.
 
 ## Authorization and server scope

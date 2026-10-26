@@ -2,8 +2,6 @@ package modelbinding
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -39,31 +37,4 @@ func Then[P, A, B any](parent Resolver[P, A], child func(context.Context, P, A) 
 		}
 		return value.Set(Models[A, B]{Parent: a, Child: selected}), nil
 	}}
-}
-
-// Through adds one uniquely keyed child through the loaded parent's declared
-// direct relationship. Missing/out-of-scope children are 404. A malformed path
-// or failed request authorization is rejected by the transport before lookup.
-func Through[P, A, B any, K comparable](executor database.Executor, parent Resolver[P, A], relation query.ScopedRelation[A, B], field query.KeyField[B, K], key func(P) K) Resolver[P, Models[A, B]] {
-	return ThroughSelected(executor, parent, func(a A) A { return a }, relation, field, key)
-}
-
-// ThroughSelected adds a deeper child while preserving the complete earlier
-// bundle. selectParent chooses the concrete parent for this relationship, e.g.
-// func(previous Models[Team,Project])Project{return previous.Child}.
-func ThroughSelected[P, A, M, B any, K comparable](executor database.Executor, parent Resolver[P, A], selectParent func(A) M, relation query.ScopedRelation[M, B], field query.KeyField[B, K], key func(P) K) Resolver[P, Models[A, B]] {
-	if nilValue(executor) || selectParent == nil || key == nil {
-		return Resolver[P, Models[A, B]]{err: fault.New(fault.Invalid, "nested binding requires an executor and typed selectors")}
-	}
-	lookup := query.RelatedUnique(relation, field)
-	result := Then(parent, func(ctx context.Context, path P, previous A) (value.Optional[B], error) {
-		return lookup.Find(ctx, executor, selectParent(previous), key(path))
-	})
-	result.check = func() error {
-		if err := parent.Validate(); err != nil {
-			return err
-		}
-		return lookup.Validate()
-	}
-	return result
 }

@@ -1,4 +1,4 @@
-// Package factory builds typed ORM or generated drafts and persists them through the
+// Package factory builds typed ORM drafts and persists them through the
 // ordinary model lifecycle. It never resets data or substitutes raw inserts.
 package factory
 
@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/query"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -19,9 +18,6 @@ type Sequence uint64
 const MaxStates = 64
 const MaxCount = querycore.MaxPerModelWriteRows
 
-// Model and query.CreateDraft are the existing generated integration contracts.
-// The draft must describe this exact model; another model's draft cannot bind.
-type Model[M any] = query.ModelQuery[M]
 type Build[D any] func(context.Context, Sequence) (D, error)
 type State[D any] func(context.Context, D) (D, error)
 
@@ -42,7 +38,7 @@ func (s *sequence) next() (Sequence, error) {
 
 // Factory owns a sequence and immutable state callbacks. Derived states share
 // their parent's sequence, preventing accidental reuse across variants. Each
-// Define or New call has independent state. Callbacks must themselves support concurrent
+// Define call has independent state. Callbacks must themselves support concurrent
 // calls when the factory is shared; each invocation returns its own draft.
 type Factory[M, D any] struct {
 	prepare  func([]D, bool) (func(context.Context, database.Transactor) ([]M, error), error)
@@ -50,47 +46,6 @@ type Factory[M, D any] struct {
 	states   []State[D]
 	after    []AfterCreate[M]
 	sequence *sequence
-}
-
-// New retains the generated-model constructor during migration. Prefer Define for ORM declarations.
-// Example: factory.New[User](buildGeneratedDraft).
-func New[M Model[M], D query.CreateDraft[M]](build Build[D]) (*Factory[M, D], error) {
-	if build == nil {
-		return nil, fault.New(fault.Invalid, "factory requires a typed draft builder")
-	}
-	var definition query.Query[M]
-	err := callback.Isolated("prepare factory model", func() error {
-		definition = query.ModelQueryOf[M]()
-		_, err := definition.Compile()
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	prepare := func(drafts []D, single bool) (func(context.Context, database.Transactor) ([]M, error), error) {
-		mutations := make([]query.Mutation[M], len(drafts))
-		for i, draft := range drafts {
-			err := callback.Isolated("prepare factory mutation", func() error {
-				var err error
-				mutations[i], err = draft.FoundryCreateMutation(query.Mutation[M]{})
-				return err
-			})
-			if err != nil {
-				return nil, err
-			}
-		}
-		return func(ctx context.Context, writer database.Transactor) ([]M, error) {
-			if single {
-				created, err := definition.Insert(ctx, writer, mutations[0])
-				if err != nil {
-					return nil, err
-				}
-				return []M{created}, nil
-			}
-			return definition.InsertEach(ctx, writer, mutations)
-		}, nil
-	}
-	return &Factory[M, D]{prepare: prepare, build: build, sequence: &sequence{}}, nil
 }
 
 func (f *Factory[M, D]) valid() error {

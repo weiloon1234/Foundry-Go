@@ -10,7 +10,7 @@ Migrate a shared model package before its callers. Register its tables, port its
 queries and tests, then remove the old model directive and generated helpers at a
 coordinated generation barrier. Keep DTO, enum, configuration and client generation.
 Do not edit generated files or ownership manifests by hand. Model and projection
-generation is retired; legacy query runtime retirement is a separate step.
+generation and the former query runtime are retired.
 
 ## Use the compiled examples
 
@@ -132,8 +132,8 @@ roles by embedding or converting a column.
 Keep `Mutate<Field>` and `Access<Field>` methods as ordinary Go methods. Pass `nil`
 as the input constructor's transform to discover a named mutator at startup, as above.
 Use the constructor's typed transform for explicit bindings, including same-type
-transformations. The legacy `orm.Mutate(fn)` option is rejected on ordinary columns;
-Input constructors take their transform argument instead. Do not configure both
+transformations. Ordinary columns do not accept transforms; input constructors own
+the typed transform argument. Do not configure both
 an explicit and a discovered mutator. Startup rejects orphan or invalid Mutate/Access
 methods. Accessors are explicit calls, not automatic projection or JSON presentation.
 
@@ -959,7 +959,7 @@ func sets(ctx context.Context, db database.Executor) error {
 `rows.FromModel` is the complete-model read adapter for ordinary row clauses.
 Set operations preserve complete record types. Use the corresponding value/result
 adapters for scalar or projected rows; read-only composition does not acquire writes.
-`rows.EachRead` streams bounded complete-record batches; `rows.Each` iterates decoded
+`rows.EachRead` streams bounded complete-record batches and decoded
 DTO rows. Retain the existing callback/row-closure guarantees when switching families.
 
 ### Typed JSON paths
@@ -1051,14 +1051,14 @@ ORM declaration. `RowEquality` and `RowNullable` are interfaces, not constructor
 
 | Before | After |
 | --- | --- |
-| `SortBy(query.Value(f.X))` | `SortBy(expr.Row(expr.Value(f.X)).Value())`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
+| Generated field sorting | `SortBy(expr.Row(expr.Value(f.X)).Value())`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
 | `datatable.Where(text, f.Username)` | `datatable.Where(text, expr.TextRow(f.Username))`. |
 | `datatable.NullableWhere(text, f.Email)` | `datatable.NullableWhere(text, expr.TextNullableRow(f.Email))`. |
 | Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.CompareRow(expr.Value(f.X)))`; use `CompareNullableRow` with `NullableWhere`. |
 | Ordered numeric `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.OrderRow(expr.Value(f.X)))`; use `OrderNullableRow` for nullable values. Choose by the column's declared capabilities, not its underlying Go type. |
-| `Stable: []query.ProjectionOrder[M]{f.ID.Asc()}` | `Stable: []expr.ProjectionOrder[M]{expr.Value(f.ID).Asc()}`. Use `f.Key()` when the declaration has no named ID carrier. |
-| `query.ProjectionQuery[M,R]`, `SelectXRow(source, XRowSelection[M]{...})` | `rows.Query[M,R]`, `rows.Select(rows.From(source), XRows, rows.Map(...))`. Use `MapSelected` for computed selected values. |
-| Joined `query.Value(joinedField)` sort | `expr.Row(expr.At(joinedScope, field)).Value()`. The Spec's first type parameter is the joined scope, not one model. |
+| Generated stable order | `Stable: []expr.ProjectionOrder[M]{expr.Value(f.ID).Asc()}`. Use `f.Key()` when the declaration has no named ID carrier. |
+| Generated projection and selection | `rows.Query[M,R]`, `rows.Select(rows.From(source), XRows, rows.Map(...))`. Use `MapSelected` for computed selected values. |
+| Generated joined-field sort | `expr.Row(expr.At(joinedScope, field)).Value()`. The Spec's first type parameter is the joined scope, not one model. |
 | Correlated `CorrelatedScalarRowQuery(...).Value()` sort | `expr.Row(rows.CorrelatedScalarRowQuery(...)).Value()`; use `CorrelatedScalarNullableRowQuery` when the inner value is already nullable. |
 | `datatable.Having` / `NullableHaving` | Keep these constructors; supply native aggregates such as `expr.Count[M]()` / `expr.Sum(f.Amount)`, which return group predicates. |
 | `datatable.Related(child, exists)` | Keep `Related`; its callback now maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, for example with `expr.Has`. |
@@ -1153,6 +1153,7 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 
 Before, documentation only:
 
+<!-- orm-example: projection-source-before -->
 ```text
 //foundry:projection dto=true
 type AdminRow struct { /* existing DTO fields and tags */ }
@@ -1482,6 +1483,8 @@ bound from the old call.
 
 Before, documentation only:
 
+<!-- orm-example: projection-source-before -->
+<!-- orm-example: validation-signature-before -->
 ```text
 func UniqueUsername[M any](executor database.Executor, source query.ModelQuerySource[M], column query.KeyField[M, string]) validation.Rule[string]
 // caller: UniqueUsername(tx, models.QueryAdmins().WithTrashed(), models.AdminFields().Username)

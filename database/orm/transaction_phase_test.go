@@ -58,13 +58,7 @@ var allowedPhaseConversions = map[string]string{
 	"expr.Aggregate <-> expr.OrderedAggregate":                                 "Both already carry AggregateExpression; ordered operations require the same ordered value type.",
 	"expr.DateUnit <-> expr.LocalResolution":                                   "Scalar enum values grant no query capability; destination operations validate their domain.",
 	"expr.DateUnit <-> expr.TimestampUnit":                                     "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"expr.DateUnit <-> query.DateUnit":                                         "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"expr.DateUnit <-> query.LocalResolution":                                  "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"expr.DateUnit <-> query.TimestampUnit":                                    "Scalar enum values grant no query capability; destination operations validate their domain.",
 	"expr.LocalResolution <-> expr.TimestampUnit":                              "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"expr.LocalResolution <-> query.DateUnit":                                  "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"expr.LocalResolution <-> query.LocalResolution":                           "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"expr.LocalResolution <-> query.TimestampUnit":                             "Scalar enum values grant no query capability; destination operations validate their domain.",
 	"expr.NullableOrderedRowExpression <-> expr.NullableTextRowExpression":     "These are row values; equivalent ordered/text predicates already exist as row package functions, retaining nullability.",
 	"expr.NullableOrderedRowExpression <-> expr.OrderedRowExpression":          "A nullable wrapper cannot satisfy the other ordered/string constraint; no valid conversion exists.",
 	"expr.NullableOrderedRowExpression <-> expr.RowExpression":                 "These are row values; equivalent ordered/text predicates already exist as row package functions, retaining nullability.",
@@ -90,42 +84,14 @@ var allowedPhaseConversions = map[string]string{
 	"expr.Selected <-> expr.TextValueComparison":                               "Selected comparisons already exist via CompareValue, OrderValue or TextValue and nullable variants; no aggregate/row capability.",
 	"expr.Selected <-> expr.ValueComparison":                                   "Selected comparisons already exist via CompareValue, OrderValue or TextValue and nullable variants; no aggregate/row capability.",
 	"expr.TextValueComparison <-> expr.ValueComparison":                        "Selected comparisons already exist via CompareValue, OrderValue or TextValue and nullable variants; no aggregate/row capability.",
-	"expr.TimestampUnit <-> query.DateUnit":                                    "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"expr.TimestampUnit <-> query.LocalResolution":                             "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"expr.TimestampUnit <-> query.TimestampUnit":                               "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"orm.PivotChanges <-> query.PivotChanges":                                  "Plain attached/detached/updated result slices grant no read or write operation.",
-	"orm.RetrievalHooks <-> query.RetrievalHooks":                              "The same publicly constructible retrieved callback configuration grants no executor or phase.",
-	"query.BinaryField <-> query.ScalarField":                                  "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.CursorScope <-> query.Set":                                          "Inert scope tags cannot construct sources or change the named scope of an existing expression.",
-	"query.DateUnit <-> query.LocalResolution":                                 "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"query.DateUnit <-> query.TimestampUnit":                                   "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"query.ExactField <-> query.FloatField":                                    "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.ExactField <-> query.IntervalField":                                 "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.ExactField <-> query.TextField":                                     "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.FloatField <-> query.IntervalField":                                 "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.FloatField <-> query.TextField":                                     "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.GlobalScopeName <-> query.JSONKind":                                 "Scalar names grant no query capability and retain destination name/codec validation.",
-	"query.GlobalScopeName <-> query.MorphName":                                "Scalar names grant no query capability and retain destination name/codec validation.",
-	"query.IntervalField <-> query.TextField":                                  "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.JSONKind <-> query.MorphName":                                       "Scalar names grant no query capability and retain destination name/codec validation.",
-	"query.JSONPath <-> query.RowExpression":                                   "JSONNullableRoot and JSON already adapt the same nullable JSON row value in both directions.",
-	"query.LocalResolution <-> query.TimestampUnit":                            "Scalar enum values grant no query capability; destination operations validate their domain.",
-	"query.NullableExactField <-> query.NullableFloatField":                    "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.NullableExactField <-> query.NullableIntervalField":                 "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.NullableExactField <-> query.NullableTextField":                     "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.NullableFloatField <-> query.NullableIntervalField":                 "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.NullableFloatField <-> query.NullableTextField":                     "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.NullableIntervalField <-> query.NullableTextField":                  "Disjoint value constraints prohibit a valid conversion; the sweep conservatively erases constraints.",
-	"query.NullableOrderedRowExpression <-> query.OrderedRowExpression":        "A nullable wrapper cannot satisfy the other ordered/string constraint; no valid conversion exists.",
-	"query.NullableOrderedValueComparison <-> query.OrderedValueComparison":    "A nullable wrapper cannot satisfy the other ordered/string constraint; no valid conversion exists.",
 	"rows.Alias <-> rows.Inner":                                                "Inert scope tags cannot construct sources or change the named scope of an existing expression.",
 	"rows.TransactionJoinSource <-> rows.TransactionSelectionSource":           "Equivalent sealed interfaces; validated source metadata still owns join eligibility and transaction requirements.",
 }
 
 func TestExportedTypesPreventPhaseConversions(t *testing.T) {
-	imp, _ := surfaceImporter(t, token.NewFileSet(), ".", ".", "./expr", "./rows", "../query")
+	imp, _ := surfaceImporter(t, token.NewFileSet(), ".", ".", "./expr", "./rows")
 	var pkgs []*types.Package
-	for _, path := range []string{"database/orm", "database/orm/expr", "database/orm/rows", "database/query"} {
+	for _, path := range []string{"database/orm", "database/orm/expr", "database/orm/rows"} {
 		pkg, err := imp.Import("github.com/weiloon1234/Foundry-Go/" + path)
 		if err != nil {
 			t.Fatal(err)

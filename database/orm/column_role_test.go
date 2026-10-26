@@ -34,11 +34,6 @@ func TestRoleDeclarationDiagnostics(t *testing.T) {
 			TimeOf(b, &m.UpdatedAt)
 			TextOf(b, &m.Name)
 		}},
-		{"mutator", "Name", "orm.InputTextOf", func(b Builder[row], m *row) {
-			CreatedAtOf(b, &m.CreatedAt)
-			UpdatedAtOf(b, &m.UpdatedAt)
-			TextOf(b, &m.Name, Mutate(func(s string) (string, error) { return s, nil }))
-		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			f := Define("role_errors", func(b Builder[row], m *row) Table[row, int64] { test.declare(b, m); return TableOf(b, &m.ID) })
@@ -158,6 +153,24 @@ func TestOrdinaryDistinctMutatorNamesInputCarrier(t *testing.T) {
 		return TableOf(b, &m.ID)
 	})
 	err := Check(fields)
+	if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "Name") || !strings.Contains(err.Error(), "orm.InputTextOf") {
+		t.Fatal(err)
+	}
+}
+
+type ordinaryMutatedRow struct {
+	ID   int64
+	Name string
+}
+
+func (ordinaryMutatedRow) MutateName(s string) (string, error) { return s, nil }
+
+func TestOrdinaryColumnRejectsNamedMutator(t *testing.T) {
+	table := Define("ordinary_mutated_rows", func(b Builder[ordinaryMutatedRow], m *ordinaryMutatedRow) Table[ordinaryMutatedRow, int64] {
+		TextOf(b, &m.Name)
+		return TableOf(b, &m.ID)
+	})
+	err := Check(table)
 	if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "Name") || !strings.Contains(err.Error(), "orm.InputTextOf") {
 		t.Fatal(err)
 	}

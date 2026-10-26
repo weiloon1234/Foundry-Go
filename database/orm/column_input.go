@@ -23,7 +23,6 @@ func InputColumnOf[M, I any, V any](b Builder[M], ptr *V, transform func(I) (V, 
 	c := selectedCodec(opts)
 	stored, input := bindInput(b.state, ptr, c, transform)
 	bindNamedMutator[M, I, V](stored.core)
-	checkInputOptions(b.state, stored.core, opts)
 	return InputColumn[M, I, V]{inputColumnStorage: stored, input: input}
 }
 
@@ -85,7 +84,6 @@ func NullableInputColumnOf[M, I any, V any](b Builder[M], ptr *value.Nullable[V]
 	c := selectedCodec(opts)
 	stored, input := bindNullableInput(b.state, ptr, c, transform)
 	bindNamedMutator[M, I, V](stored.base.core)
-	checkInputOptions(b.state, stored.base.core, opts)
 	return NullableInputColumn[M, I, V]{nullableInputColumnStorage: stored, input: input}
 }
 
@@ -171,7 +169,6 @@ func InputTextOf[M, I any, V ~string](b Builder[M], ptr *V, transform func(I) (V
 	c := codec.String[V]()
 	stored, input := bindInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, V](stored.core)
-	checkInputOptions(b.state, stored.core, opts)
 	return InputText[M, I, V]{inputTextStorage: stored, input: input}
 }
 
@@ -311,7 +308,6 @@ func NullableInputTextOf[M, I any, V ~string](b Builder[M], ptr *value.Nullable[
 	c := codec.String[V]()
 	stored, input := bindNullableInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, V](stored.base.core)
-	checkInputOptions(b.state, stored.base.core, opts)
 	return NullableInputText[M, I, V]{nullableInputTextStorage: stored, input: input}
 }
 
@@ -477,7 +473,6 @@ func InputNumberOf[M, I any, V NumberValue](b Builder[M], ptr *V, transform func
 	c := ormcore.NumberCodec[V]()
 	stored, input := bindInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, V](stored.core)
-	checkInputOptions(b.state, stored.core, opts)
 	return InputNumber[M, I, V]{inputNumberStorage: stored, input: input}
 }
 
@@ -569,7 +564,6 @@ func NullableInputNumberOf[M, I any, V NumberValue](b Builder[M], ptr *value.Nul
 	c := ormcore.NumberCodec[V]()
 	stored, input := bindNullableInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, V](stored.base.core)
-	checkInputOptions(b.state, stored.base.core, opts)
 	return NullableInputNumber[M, I, V]{nullableInputNumberStorage: stored, input: input}
 }
 
@@ -685,7 +679,6 @@ func InputTimeOf[M, I any, V TimeValue](b Builder[M], ptr *V, transform func(I) 
 	c := ormcore.TimeCodec[V]()
 	stored, input := bindInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, V](stored.core)
-	checkInputOptions(b.state, stored.core, opts)
 	return InputTime[M, I, V]{inputTimeStorage: stored, input: input}
 }
 
@@ -775,7 +768,6 @@ func NullableInputTimeOf[M, I any, V TimeValue](b Builder[M], ptr *value.Nullabl
 	c := ormcore.TimeCodec[V]()
 	stored, input := bindNullableInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, V](stored.base.core)
-	checkInputOptions(b.state, stored.base.core, opts)
 	return NullableInputTime[M, I, V]{nullableInputTimeStorage: stored, input: input}
 }
 
@@ -899,7 +891,6 @@ func InputEnumOf[M, I any, E interface {
 	bindNamedMutator[M, I, E](stored.core)
 	stored.core.check = check
 	checkEnumOptions(b.state, stored.core, opts)
-	checkInputOptions(b.state, stored.core, opts)
 	return InputEnum[M, I, E]{inputEnumStorage: stored, input: input}
 }
 
@@ -969,7 +960,6 @@ func NullableInputEnumOf[M, I any, E interface {
 	bindNamedMutator[M, I, E](stored.base.core)
 	stored.base.core.check = check
 	checkEnumOptions(b.state, stored.base.core, opts)
-	checkInputOptions(b.state, stored.base.core, opts)
 	return NullableInputEnum[M, I, E]{nullableInputEnumStorage: stored, input: input}
 }
 
@@ -1055,7 +1045,6 @@ func InputJSONOf[M, I any, T any](b Builder[M], ptr *value.JSON[T], transform fu
 	c := codec.JSON[T]()
 	stored, input := bindInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, value.JSON[T]](stored.core)
-	checkInputOptions(b.state, stored.core, opts)
 	return InputJSON[M, I, T]{inputJSONStorage: stored, input: input}
 }
 
@@ -1133,7 +1122,6 @@ func NullableInputJSONOf[M, I any, T any](b Builder[M], ptr *value.Nullable[valu
 	c := codec.JSON[T]()
 	stored, input := bindNullableInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, value.JSON[T]](stored.base.core)
-	checkInputOptions(b.state, stored.base.core, opts)
 	return NullableInputJSON[M, I, T]{nullableInputJSONStorage: stored, input: input}
 }
 
@@ -1237,7 +1225,6 @@ func InputIntervalOf[M, I any](b Builder[M], ptr *temporal.Interval, transform f
 	c := codec.Interval()
 	stored, input := bindInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, temporal.Interval](stored.core)
-	checkInputOptions(b.state, stored.core, opts)
 	return InputInterval[M, I]{inputIntervalStorage: stored, input: input}
 }
 
@@ -1331,7 +1318,6 @@ func NullableInputIntervalOf[M, I any](b Builder[M], ptr *value.Nullable[tempora
 	c := codec.Interval()
 	stored, input := bindNullableInput(b.state, ptr, optionCodec(c, opts), transform)
 	bindNamedMutator[M, I, temporal.Interval](stored.base.core)
-	checkInputOptions(b.state, stored.base.core, opts)
 	return NullableInputInterval[M, I]{nullableInputIntervalStorage: stored, input: input}
 }
 
