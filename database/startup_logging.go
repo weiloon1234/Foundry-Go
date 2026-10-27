@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // WithStartupLog supplies diagnostics for direct Open/Prepare callers. Modules
@@ -16,7 +17,7 @@ import (
 func WithStartupLog(logger *slog.Logger) Option {
 	return func(settings *poolSettings) error {
 		if logger == nil || settings.startupLogger != nil {
-			return fault.New(fault.Invalid, "database startup logging requires one non-nil logger")
+			return safeerror.NewFault(fault.Invalid, "database startup logging requires one non-nil logger")
 		}
 		settings.startupLogger = logger
 		return nil
@@ -35,8 +36,8 @@ func startupLog(ctx context.Context, logger *slog.Logger, level slog.Level, mess
 			slog.String("role", string(role)), slog.Int("attempt", attempt),
 			slog.Duration("elapsed", time.Since(started)), slog.Duration("retry_delay", wait),
 		}
-		if classified, ok := err.(*Error); ok && classified != nil {
-			attributes = append(attributes, slog.String("code", string(classified.Code())), slog.String("sqlstate", classified.SQLState()))
+		if classified, ok := safeerror.UnwrapOwned(err).(*Error); ok && classified != nil {
+			attributes = append(attributes, slog.String("code", diagnosticCode(classified.Code())), slog.String("sqlstate", diagnosticState(classified.SQLState())))
 		}
 		logger.LogAttrs(context.WithoutCancel(ctx), level, message, attributes...)
 		return nil

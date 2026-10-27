@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/lockout"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -46,7 +47,7 @@ func New[M model.Identifiable, K any](store *Store, provider auth.Provider[M, K]
 		}
 	}
 	if binding.Lock == nil || binding.Enabled == nil || binding.SetEnabled == nil || binding.AccountLabel == nil || binding.CanDisable == nil || binding.Invalidate == nil {
-		return nil, fault.New(fault.Invalid, "MFA requires stored model state, mutation, policy and invalidation callbacks")
+		return nil, safeerror.NewFault(fault.Invalid, "MFA requires stored model state, mutation, policy and invalidation callbacks")
 	}
 	address := Address{Namespace: store.config.Namespace, Provider: provider.Name(), Model: provider.ModelName()}
 	if err := address.Validate(); err != nil {
@@ -65,7 +66,7 @@ func (f *Factors[M, K]) HasEnrolledFactor(_ context.Context, subject M) (bool, e
 }
 func (f *Factors[M, K]) Validate() error {
 	if f == nil {
-		return fault.New(fault.Invalid, "MFA factors are not configured")
+		return safeerror.NewFault(fault.Invalid, "MFA factors are not configured")
 	}
 	return f.store.Validate()
 }
@@ -83,7 +84,7 @@ func (f *Factors[M, K]) setEnabled(ctx context.Context, tx *database.Tx, current
 		return *new(M), err
 	}
 	if before != after || f.model.Enabled(updated) != enabled {
-		return *new(M), fault.New(fault.Invalid, "MFA mutation changed identity or returned inconsistent state")
+		return *new(M), safeerror.NewFault(fault.Invalid, "MFA mutation changed identity or returned inconsistent state")
 	}
 	if err := f.model.Invalidate(ctx, tx, updated); err != nil {
 		return *new(M), err

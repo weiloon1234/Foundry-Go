@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -33,13 +34,13 @@ type Config struct {
 func DefaultConfig() Config { return Config{Schema: "public", Clock: clock.System{}} }
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || c.Clock == nil {
-		return fault.New(fault.Invalid, "session PostgreSQL adapter requires a schema and clock")
+		return safeerror.NewFault(fault.Invalid, "session PostgreSQL adapter requires a schema and clock")
 	}
 	v := reflect.ValueOf(c.Clock)
 	switch v.Kind() {
 	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
 		if v.IsNil() {
-			return fault.New(fault.Invalid, "session PostgreSQL clock is nil")
+			return safeerror.NewFault(fault.Invalid, "session PostgreSQL clock is nil")
 		}
 	}
 	return nil
@@ -52,7 +53,7 @@ type Backend struct {
 
 func New(db *database.DB, config Config) (*Backend, error) {
 	if db == nil {
-		return nil, fault.New(fault.Invalid, "session PostgreSQL adapter requires a database pool")
+		return nil, safeerror.NewFault(fault.Invalid, "session PostgreSQL adapter requires a database pool")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -64,7 +65,7 @@ var _ session.Backend = (*Backend)(nil)
 
 func (b *Backend) within(ctx context.Context, fn func(*database.Tx) error) error {
 	if b == nil || b.db == nil || ctx == nil {
-		return fault.New(fault.Invalid, "session PostgreSQL operation requires a backend and context")
+		return safeerror.NewFault(fault.Invalid, "session PostgreSQL operation requires a backend and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -85,7 +86,7 @@ func (b *Backend) now() (time.Time, error) {
 		return time.Time{}, err
 	}
 	if instant.IsZero() {
-		return time.Time{}, fault.New(fault.Invalid, "session clock returned zero time")
+		return time.Time{}, safeerror.NewFault(fault.Invalid, "session clock returned zero time")
 	}
 	return now, nil
 }
@@ -142,7 +143,7 @@ func lockSubjectKey(ctx context.Context, tx *database.Tx, address session.Addres
 		return sessionstore.Subject{}, false, err
 	}
 	if key != expected || subject.Scope != scope {
-		return sessionstore.Subject{}, false, fault.New(fault.Invalid, "stored session subject scope is inconsistent")
+		return sessionstore.Subject{}, false, safeerror.NewFault(fault.Invalid, "stored session subject scope is inconsistent")
 	}
 	return subject, true, nil
 }
@@ -152,7 +153,7 @@ func record(address session.Address, subject sessionstore.Subject, row sessionst
 		return session.Record{}, err
 	}
 	if row.Scope != scope || row.SubjectKey != subject.Key || subject.Scope != scope {
-		return session.Record{}, fault.New(fault.Invalid, "stored session address does not match subject")
+		return session.Record{}, safeerror.NewFault(fault.Invalid, "stored session address does not match subject")
 	}
 	identity, err := subject.Identity.Decode()
 	if err != nil {
@@ -163,7 +164,7 @@ func record(address session.Address, subject sessionstore.Subject, row sessionst
 		return session.Record{}, err
 	}
 	if subject.Key != expected {
-		return session.Record{}, fault.New(fault.Invalid, "stored session subject does not match its identity")
+		return session.Record{}, safeerror.NewFault(fault.Invalid, "stored session subject does not match its identity")
 	}
 	hash, err := session.ParseDigest(row.SecretHash)
 	if err != nil {
@@ -172,7 +173,7 @@ func record(address session.Address, subject sessionstore.Subject, row sessionst
 	var device auth.Device
 	if text, present := row.ClientIP.Get(); present {
 		if device.ClientIP, err = netip.ParseAddr(text); err != nil {
-			return session.Record{}, fault.New(fault.Invalid, "stored session client address is invalid")
+			return session.Record{}, safeerror.NewFault(fault.Invalid, "stored session client address is invalid")
 		}
 	}
 	device.UserAgent, _ = row.UserAgent.Get()

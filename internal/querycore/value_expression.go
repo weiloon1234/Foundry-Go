@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type ValueExpression interface{ ValueNode() }
@@ -59,7 +60,7 @@ func (c *Compiler) RenderSelectedExpression(e ValueExpression, grouped map[Field
 	case ParameterNode, ConditionalNode, CaseNode, OperationNode:
 		return c.ComputedSQL(e, grouped, grouping)
 	default:
-		return "", fault.New(fault.Invalid, "invalid selected expression")
+		return "", safeerror.NewFault(fault.Invalid, "invalid selected expression")
 	}
 }
 
@@ -68,12 +69,12 @@ func (c *Compiler) ValidateSelectedExpression(e ValueExpression, grouped map[Fie
 	c.ValueDepth++
 	defer func() { c.ValueDepth-- }()
 	if c.ValueDepth > MaxExpressionDepth {
-		return fault.New(fault.Invalid, "selected value exceeds its depth bound")
+		return safeerror.NewFault(fault.Invalid, "selected value exceeds its depth bound")
 	}
 	if _, field := e.(FieldRef); !field || c.ValueDepth > 1 {
 		c.ExpressionNodes++
 		if c.ExpressionNodes > MaxExpressionNodes {
-			return fault.New(fault.Invalid, "selected value exceeds its resource bound")
+			return safeerror.NewFault(fault.Invalid, "selected value exceeds its resource bound")
 		}
 	}
 	if _, field := e.(FieldRef); grouping && !field {
@@ -98,12 +99,12 @@ func (c *Compiler) ValidateSelectedExpression(e ValueExpression, grouped map[Fie
 		}
 		outer := c.Outer != nil && c.Outer.Sources[e.Table] != nil
 		if grouping && !outer && !grouped[e] {
-			return fault.New(fault.Invalid, "selected column is not grouped")
+			return safeerror.NewFault(fault.Invalid, "selected column is not grouped")
 		}
 		return nil
 	case AggregateNode:
 		if c.DirectSelf {
-			return fault.New(fault.Invalid, "aggregate functions are not allowed at a recursive self-reference SELECT level")
+			return safeerror.NewFault(fault.Invalid, "aggregate functions are not allowed at a recursive self-reference SELECT level")
 		}
 		if err := e.Validate(c.AggregateField); err != nil {
 			return err
@@ -114,7 +115,7 @@ func (c *Compiler) ValidateSelectedExpression(e ValueExpression, grouped map[Fie
 	case WindowNode:
 		return c.ValidateWindow(e, grouped, grouping)
 	default:
-		return fault.New(fault.Invalid, "invalid selected expression")
+		return safeerror.NewFault(fault.Invalid, "invalid selected expression")
 	}
 }
 

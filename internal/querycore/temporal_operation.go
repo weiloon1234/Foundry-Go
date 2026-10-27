@@ -3,6 +3,7 @@ package querycore
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func TemporalOperationSpec(op ScalarOperation) (OperationSpec, bool) {
@@ -165,7 +166,7 @@ func (n OperationNode) ValidateTemporal() error {
 		}
 	}
 	if !valid || n.Result != result {
-		return fault.New(fault.Invalid, "temporal operation has incompatible inputs or result")
+		return safeerror.NewFault(fault.Invalid, "temporal operation has incompatible inputs or result")
 	}
 	return nil
 }

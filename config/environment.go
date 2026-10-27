@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const fileSuffix = "_FILE"
@@ -20,11 +21,11 @@ func environmentValue(lookup Lookup, env string) (string, string, bool, error) {
 	path, indirect := lookup(env + fileSuffix)
 	switch {
 	case direct && indirect:
-		return "", "", false, fault.New(fault.Invalid, "both "+env+" and "+env+fileSuffix+" are set")
+		return "", "", false, safeerror.NewFault(fault.Invalid, "both "+env+" and "+env+fileSuffix+" are set")
 	case indirect:
 		value, err := readValueFile(path)
 		if err != nil {
-			return "", "", false, fault.Wrap(fault.Invalid, "cannot read "+env+fileSuffix, err)
+			return "", "", false, safeerror.WrapFault(fault.Invalid, "cannot read "+env+fileSuffix, err)
 		}
 		return value, "environment-file:" + env, true, nil
 	default:
@@ -36,7 +37,7 @@ func environmentValue(lookup Lookup, env string) (string, string, bool, error) {
 // removes exactly one trailing newline.
 func readValueFile(path string) (string, error) {
 	if path == "" || strings.ContainsRune(path, 0) {
-		return "", fault.New(fault.Invalid, "configuration file path is empty or invalid")
+		return "", safeerror.NewFault(fault.Invalid, "configuration file path is empty or invalid")
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -48,14 +49,14 @@ func readValueFile(path string) (string, error) {
 		return "", err
 	}
 	if !info.Mode().IsRegular() {
-		return "", fault.New(fault.Invalid, "configuration value file must be a regular file")
+		return "", safeerror.NewFault(fault.Invalid, "configuration value file must be a regular file")
 	}
 	data, err := io.ReadAll(io.LimitReader(file, MaxTableBytes+1))
 	if err != nil {
 		return "", err
 	}
 	if len(data) > MaxTableBytes {
-		return "", fault.New(fault.Invalid, "configuration value file exceeds its byte limit")
+		return "", safeerror.NewFault(fault.Invalid, "configuration value file exceeds its byte limit")
 	}
 	text := string(data)
 	if trimmed, ok := strings.CutSuffix(text, "\n"); ok {
@@ -85,23 +86,23 @@ func mergeEntryOverrides(environ []string, table, base string, mergeable bool) (
 		name, fromFile := strings.CutSuffix(env, fileSuffix)
 		segments := strings.Split(strings.TrimPrefix(name, prefix), "__")
 		if len(segments) < 2 {
-			return "", false, fault.New(fault.Invalid, "named configuration override "+env+" requires an entry and field")
+			return "", false, safeerror.NewFault(fault.Invalid, "named configuration override "+env+" requires an entry and field")
 		}
 		for i, segment := range segments {
 			if segment == "" || strings.IndexFunc(segment, func(c rune) bool { return !(c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_') }) >= 0 || i == 0 && (strings.HasPrefix(segment, "_") || strings.HasSuffix(segment, "_")) {
-				return "", false, fault.New(fault.Invalid, "invalid named configuration override "+env)
+				return "", false, safeerror.NewFault(fault.Invalid, "invalid named configuration override "+env)
 			}
 			segments[i] = strings.ToLower(segment)
 		}
 		if fromFile {
 			text, err := readValueFile(value)
 			if err != nil {
-				return "", false, fault.Wrap(fault.Invalid, "cannot read "+env, err)
+				return "", false, safeerror.WrapFault(fault.Invalid, "cannot read "+env, err)
 			}
 			value = text
 		}
 		if direct[name] {
-			return "", false, fault.New(fault.Invalid, "both "+name+" and "+name+fileSuffix+" are set")
+			return "", false, safeerror.NewFault(fault.Invalid, "both "+name+" and "+name+fileSuffix+" are set")
 		}
 		direct[name] = true
 		overrides = append(overrides, entryOverride{env: env, entry: segments[0], path: segments[1:], value: value})
@@ -111,7 +112,7 @@ func mergeEntryOverrides(environ []string, table, base string, mergeable bool) (
 	}
 	if base == "" {
 		if !mergeable {
-			return "", false, fault.New(fault.Invalid, "per-entry overrides for "+table+" require the collection from a file or "+table)
+			return "", false, safeerror.NewFault(fault.Invalid, "per-entry overrides for "+table+" require the collection from a file or "+table)
 		}
 		base = "{}"
 	}
@@ -119,14 +120,14 @@ func mergeEntryOverrides(environ []string, table, base string, mergeable bool) (
 	decoder.UseNumber()
 	decoded, err := readObjectValue(decoder, 0)
 	if err != nil {
-		return "", false, fault.New(fault.Invalid, "named configuration "+table+" is not an object")
+		return "", false, safeerror.NewFault(fault.Invalid, "named configuration "+table+" is not an object")
 	}
 	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return "", false, fault.New(fault.Invalid, "named configuration "+table+" requires one object")
+		return "", false, safeerror.NewFault(fault.Invalid, "named configuration "+table+" requires one object")
 	}
 	root, ok := decoded.(map[string]any)
 	if !ok {
-		return "", false, fault.New(fault.Invalid, "named configuration "+table+" is not an object")
+		return "", false, safeerror.NewFault(fault.Invalid, "named configuration "+table+" is not an object")
 	}
 	sort.Slice(overrides, func(i, j int) bool { return overrides[i].env < overrides[j].env })
 	for _, override := range overrides {
@@ -139,7 +140,7 @@ func mergeEntryOverrides(environ []string, table, base string, mergeable bool) (
 			}
 			next, ok := child.(map[string]any)
 			if !ok {
-				return "", false, fault.New(fault.Invalid, "named configuration override "+override.env+" conflicts with a value")
+				return "", false, safeerror.NewFault(fault.Invalid, "named configuration override "+override.env+" conflicts with a value")
 			}
 			node = next
 		}

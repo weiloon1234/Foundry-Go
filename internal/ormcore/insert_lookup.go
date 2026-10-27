@@ -2,7 +2,8 @@ package ormcore
 
 import (
 	"context"
-	"errors"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
@@ -41,12 +42,12 @@ type insertRows struct {
 
 func (r insertRows) Err() error {
 	err := r.Rows.Err()
-	r.failure.cause = errors.Join(r.failure.cause, err)
+	r.failure.cause = safeerror.Join("operation failed", r.failure.cause, err)
 	return err
 }
 func (r insertRows) Close() error {
 	err := r.Rows.Close()
-	r.failure.cause = errors.Join(r.failure.cause, err)
+	r.failure.cause = safeerror.Join("operation failed", r.failure.cause, err)
 	return err
 }
 

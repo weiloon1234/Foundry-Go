@@ -6,6 +6,64 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Application-error containment (H1)
+
+Generated contracts and stored formats are unchanged. PostgreSQL configuration
+adds the explicit `Config.RegisterTypes` hook and `TypeRegistry` described below.
+Returned extension errors retain `errors.Is` and `errors.As` identity; routine
+formatting now shows framework operation text instead of application error text.
+Adapter classifiers may receive safely wrapped driver errors; use identity/type
+inspection rather than requiring the original error at the graph root.
+SQL and JSON conversion failures remain opaque inside native libraries and regain
+their causes at the framework boundary. Previously discarded JSON causes remain
+diagnostic-only for HTTP classification, preserving existing response bytes and
+explicit outer classifications.
+
+JSON conversion and HTTP error classification now contain `runtime.Goexit`, as
+well as panic, and wait for the callback's actual exit. They return a safe failure
+instead of ending the caller's goroutine. Custom methods must still terminate:
+containment does not abandon an active callback or release its resources early.
+
+The implementation adds internal conversion adapters and tests without changing
+dependencies. Native SQL/JSON libraries inspect and format callback errors before
+returning control to Foundry, so those boundaries require protected conversion.
+
+Custom PostgreSQL type registration now belongs in
+`Config.RegisterTypes func(context.Context, *postgres.TypeRegistry) error`.
+The hook runs once per physical connection during setup. Its registry exposes
+`LoadType(context.Context, string) (*pgtype.Type, error)`,
+`RegisterType(*pgtype.Type) error`, and
+`RegisterDefaultPgType(any, string) error`. These contained methods are valid only
+while the hook runs. Foundry retains connection-owned descriptor graphs and
+shared aliases. `LoadType` resolves the requested type under the original search
+path, scopes native discovery to `pg_catalog, pg_temp`, then restores the path.
+This is explicit connection-setup SQL, not an application query-observer event;
+discovery or restoration failures prevent connection admission. See the [PostgreSQL guide](guides/postgresql.md#custom-postgresql-types)
+for a qualified-name example.
+
+This public addition replaces type-map mutation inside custom query rewriters.
+Move native `RegisterType` and `RegisterDefaultPgType` calls into the hook.
+Before and after custom rewriting, Foundry checks a synthetic cached encoding
+plan through pgx's public API. Cache invalidation rejects the rewritten statement
+with a safe error naming `postgres.Config.RegisterTypes`, closes the connection,
+and does not automatically retry the operation. Native registration invalidates
+the cache even when the caller reuses the same descriptor pointer, so such calls
+inside a rewriter are also rejected. Rewriters that change SQL or arguments, or
+execute unrelated SQL without changing registrations, remain supported.
+
+There is no per-rewrite catalog query. The registration contract avoids a pgx
+fork or reflection into its private registry. Existing applications without
+custom type registration need no configuration change; generated contracts and
+stored values do not change.
+
+Application callbacks own calls they explicitly make inside their bodies,
+including direct calls to native JSON functions. Foundry protects the callbacks
+it dispatches and its own nested value helpers; containment cannot change an
+application callback's implementation. Native caller-installed `WithMarshalers`
+functions also retain their native precedence and callback ownership. Native
+JSON entry points can return partial bytes alongside a contained error; callers
+must reject that result whenever the error is non-nil.
+
 ## Client presentation metadata — manifest 6
 
 Manifest version 6 adds bounded presentation metadata to public properties and
@@ -76,6 +134,31 @@ identifies the plugin API contract independently of Go's SDK version or an
 application payload version. Change it deliberately when that compatibility
 surface changes and verify base/dependent/consumer resolution together. It is
 not inferred from a synthetic packaging candidate version.
+
+## Validated framework capabilities (B31)
+
+The framework-only `FoundryObservers`, `FoundryAutocommitQuery`,
+`FoundryStatementUnknown`, `FoundryCollection` and `FoundryLinked` bridges now
+use distinct validated internal seal types. Inferred zero seals fail closed;
+`FoundryDiagnostic` also rejects a zero seal. These exported bridge signatures
+are a documented security correction to the public Go surface, even though
+ordinary application calls never need their internal arguments. Do not infer or
+retain bridge tokens; use the ordinary database, relation and diagnostic APIs.
+
+Observer lookup trusts concrete framework owners only, including pointer and
+value forms of `PrimaryExecutor` and the internal enclosing transaction. Custom
+wrappers, including wrappers embedding a pool, cannot prove observer absence: per-model
+writes use their supplied transaction, and set-based writes require the existing
+`WithoutModelHooks()` acknowledgement when absence is unknown. Adapter no-op
+markers carry no capability and are never invoked; concrete package ownership
+remains required. Application diagnostic methods are likewise never issued a
+capability. Framework relation loaders now copy input slices before publication;
+model fields retain ordinary Go value-copy semantics.
+
+Normal caller signatures, generated declarations, persisted data and transport
+formats are unchanged. Keep generator/runtime pins aligned; no generated-output
+or database migration is introduced. The asset navigation hook (B30) is opt-in
+and additive; see [assets and SPA routing](guides/http-assets.md).
 
 ## Persisted and transport formats
 

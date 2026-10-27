@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -55,10 +56,10 @@ func (s Stream) WithMediaType(media MediaType) Stream { s.media = value.Set(medi
 // Validate checks metadata without opening or consuming the stream.
 func (s Stream) Validate() error {
 	if s.source == nil {
-		return fault.New(fault.Invalid, "stream requires a source")
+		return safeerror.NewFault(fault.Invalid, "stream requires a source")
 	}
 	return s.filePresentation.validate()
 }
 func (Stream) MarshalJSON() ([]byte, error) {
-	return nil, fault.New(fault.Invalid, "stream requires a file response contract")
+	return nil, safeerror.NewFault(fault.Invalid, "stream requires a file response contract")
 }

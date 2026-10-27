@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MapPage converts complete source rows into explicitly chosen DTO values while
@@ -36,7 +37,7 @@ func MapSimplePage[From, To any](ctx context.Context, page orm.SimplePage[From],
 
 func mapItems[From, To any](ctx context.Context, source []From, mapper func(From) (To, error)) ([]To, error) {
 	if ctx == nil || mapper == nil {
-		return nil, fault.New(fault.Invalid, "page mapping requires a context and mapper")
+		return nil, safeerror.NewFault(fault.Invalid, "page mapping requires a context and mapper")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

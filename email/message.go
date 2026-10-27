@@ -2,6 +2,7 @@ package email
 
 import (
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"log/slog"
 	"maps"
 	"net/textproto"
@@ -33,7 +34,7 @@ type Attachment struct {
 func (a Attachment) Validate() error {
 	for _, err := range []error{a.Disk.Validate(), a.Key.Validate(), a.Version.Validate(), a.IfMatch.Validate()} {
 		if err != nil {
-			return Construction
+			return emaildiag.Failure(Construction)
 		}
 	}
 	return a.validateMetadata()
@@ -42,17 +43,17 @@ func (a Attachment) Validate() error {
 // validateMetadata checks the fields shared with in-memory attachments.
 func (a Attachment) validateMetadata() error {
 	if a.ContentType.Validate() != nil {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	if a.Filename == "" || len(a.Filename) > 200 || !headerText(a.Filename) || strings.ContainsAny(a.Filename, "/\\") || a.Filename == "." || a.Filename == ".." {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	if len(a.ContentID) > 128 {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	for _, c := range a.ContentID {
 		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune("._-@", c)) {
-			return Construction
+			return emaildiag.Failure(Construction)
 		}
 	}
 	return nil
@@ -87,7 +88,7 @@ type DataAttachment struct {
 func NewDataAttachment(filename string, contentType storage.MediaType, data []byte) (DataAttachment, error) {
 	result := DataAttachment{metadata: Attachment{Filename: filename, ContentType: contentType}, data: slices.Clone(data)}
 	if len(data) == 0 || len(data) > MaxDataAttachmentBytes || result.metadata.validateMetadata() != nil {
-		return DataAttachment{}, Construction
+		return DataAttachment{}, emaildiag.Failure(Construction)
 	}
 	return result, nil
 }
@@ -96,7 +97,7 @@ func NewDataAttachment(filename string, contentType storage.MediaType, data []by
 func (a DataAttachment) WithContentID(id string) (DataAttachment, error) {
 	a.metadata.ContentID = id
 	if id == "" || a.metadata.validateMetadata() != nil {
-		return DataAttachment{}, Construction
+		return DataAttachment{}, emaildiag.Failure(Construction)
 	}
 	return a, nil
 }
@@ -167,20 +168,20 @@ func (Message) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("email messag
 
 // MarshalJSON rejects accidental queuing of runtime messages. Queue a declared
 // DTO containing template data and Attachment references through JobHandler.
-func (Message) MarshalJSON() ([]byte, error) { return nil, Construction }
+func (Message) MarshalJSON() ([]byte, error) { return nil, emaildiag.Failure(Construction) }
 func (m Message) Validate() error {
 	if m.from.Validate() != nil || len(m.to) == 0 || m.RecipientCount() > MaxRecipients || len(m.replyTo) > MaxRecipients || len(m.subject) > 2000 || !headerText(m.subject) || m.text == "" && m.html == "" || !utf8.ValidString(m.text) || !utf8.ValidString(m.html) {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	for _, group := range [][]Address{m.to, m.cc, m.bcc, m.replyTo} {
 		for _, a := range group {
 			if a.Validate() != nil {
-				return Construction
+				return emaildiag.Failure(Construction)
 			}
 		}
 	}
 	if len(m.attachments)+len(m.data) > MaxAttachments || len(m.headers) > MaxHeaders || m.locale != "" && m.locale.Validate() != nil {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	ids := make(map[string]bool)
 	contentID := func(id string) bool {
@@ -195,17 +196,17 @@ func (m Message) Validate() error {
 	}
 	for _, a := range m.attachments {
 		if a.Validate() != nil || !contentID(a.ContentID) {
-			return Construction
+			return emaildiag.Failure(Construction)
 		}
 	}
 	for _, a := range m.data {
 		if len(a.data) == 0 || a.metadata.validateMetadata() != nil || !contentID(a.metadata.ContentID) {
-			return Construction
+			return emaildiag.Failure(Construction)
 		}
 	}
 	for k, v := range m.headers {
 		if !validHeader(k, v) {
-			return Construction
+			return emaildiag.Failure(Construction)
 		}
 	}
 	return nil

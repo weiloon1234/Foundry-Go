@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ErrorDeclaration is an immutable application failure with explicit public
@@ -31,10 +32,10 @@ func (d ErrorDeclaration) Validate() error {
 	if !identifier.Semantic(string(info.Code)) || info.Status < 400 || info.Status > 599 ||
 		len(info.Message) > maxErrorMessageBytes || strings.TrimSpace(info.Message) == "" ||
 		!utf8.ValidString(info.Message) || strings.ContainsRune(info.Message, 0) {
-		return fault.New(fault.Invalid, "HTTP error requires a semantic code, error status and bounded public message")
+		return safeerror.NewFault(fault.Invalid, "HTTP error requires a semantic code, error status and bounded public message")
 	}
 	if _, reserved := info.Code.definition(); reserved {
-		return fault.New(fault.Conflict, "built-in HTTP error codes cannot be redeclared")
+		return safeerror.NewFault(fault.Conflict, "built-in HTTP error codes cannot be redeclared")
 	}
 	return nil
 }
@@ -111,7 +112,7 @@ func (e Endpoint[P, Q, B, R]) errorDefinitions() ([]ErrorDefinition, error) {
 			return nil, err
 		}
 		if seen[definition.Code] {
-			return nil, fault.New(fault.Duplicate, "endpoint error code is already declared")
+			return nil, safeerror.NewFault(fault.Duplicate, "endpoint error code is already declared")
 		}
 		seen[definition.Code] = true
 		definitions = append(definitions, definition)

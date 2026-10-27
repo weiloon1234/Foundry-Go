@@ -88,7 +88,7 @@ func pivotIdentities(table *tableCore, rows []unsafe.Pointer) ([]pivotWriteKey, 
 			return nil, err
 		}
 		if seen[k.identity] {
-			return nil, database.NewError("pivot primary key", database.TooManyRows)
+			return nil, querycore.DatabaseFailure("pivot primary key", database.TooManyRows)
 		}
 		seen[k.identity] = true
 		keys[i] = k

@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/httpclient"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -82,7 +83,7 @@ const maxScopes = 32
 // (local development and tests).
 func (p Provider) Validate() error {
 	if !identifier.Semantic(string(p.Name)) || p.Credentials.ClientID == "" || len(p.Credentials.ClientID) > 512 || strings.ContainsFunc(p.Credentials.ClientID, controlOrSpace) || len(p.Credentials.ClientSecret.Reveal()) > 4096 {
-		return fault.New(fault.Invalid, "OAuth provider requires a name and client ID")
+		return safeerror.NewFault(fault.Invalid, "OAuth provider requires a name and client ID")
 	}
 	redirect, err := endpoint(p.Credentials.RedirectURL)
 	if err != nil {
@@ -90,18 +91,18 @@ func (p Provider) Validate() error {
 	}
 	for _, reserved := range []string{"code", "state", "error"} {
 		if redirect.Query().Has(reserved) {
-			return fault.New(fault.Invalid, "OAuth redirect URL must not carry OAuth callback parameters")
+			return safeerror.NewFault(fault.Invalid, "OAuth redirect URL must not carry OAuth callback parameters")
 		}
 	}
 	required := []string{p.AuthorizationURL, p.TokenURL}
 	switch p.Source {
 	case OpenIDConnect:
 		if len(p.Issuers) == 0 || len(p.Issuers) > 8 || !slices.Contains(p.Scopes, "openid") {
-			return fault.New(fault.Invalid, "OpenID Connect providers require issuers and the openid scope")
+			return safeerror.NewFault(fault.Invalid, "OpenID Connect providers require issuers and the openid scope")
 		}
 		for _, issuer := range p.Issuers {
 			if issuer == "" || len(issuer) > 512 || strings.ContainsFunc(issuer, controlOrSpace) {
-				return fault.New(fault.Invalid, "invalid OpenID Connect issuer")
+				return safeerror.NewFault(fault.Invalid, "invalid OpenID Connect issuer")
 			}
 		}
 		required = append(required, p.JWKSURL)
@@ -111,7 +112,7 @@ func (p Provider) Validate() error {
 			required = append(required, p.EmailsURL)
 		}
 	default:
-		return fault.New(fault.Invalid, "OAuth provider requires a profile source")
+		return safeerror.NewFault(fault.Invalid, "OAuth provider requires a profile source")
 	}
 	for _, address := range required {
 		if _, err := endpoint(address); err != nil {
@@ -119,11 +120,11 @@ func (p Provider) Validate() error {
 		}
 	}
 	if len(p.Scopes) > maxScopes {
-		return fault.New(fault.Invalid, "too many OAuth scopes")
+		return safeerror.NewFault(fault.Invalid, "too many OAuth scopes")
 	}
 	for _, scope := range p.Scopes {
 		if scope == "" || len(scope) > 256 || strings.ContainsFunc(scope, controlOrSpace) {
-			return fault.New(fault.Invalid, "invalid OAuth scope")
+			return safeerror.NewFault(fault.Invalid, "invalid OAuth scope")
 		}
 	}
 	return nil
@@ -139,7 +140,7 @@ func (p Provider) snapshot() Provider {
 // endpoint accepts an absolute HTTPS URL, or HTTP for a loopback host, with no
 // user information or fragment.
 func endpoint(text string) (*url.URL, error) {
-	invalid := fault.New(fault.Invalid, "OAuth endpoints must be absolute HTTPS URLs")
+	invalid := safeerror.NewFault(fault.Invalid, "OAuth endpoints must be absolute HTTPS URLs")
 	if text == "" || len(text) > 2048 || strings.ContainsFunc(text, controlOrSpace) {
 		return nil, invalid
 	}

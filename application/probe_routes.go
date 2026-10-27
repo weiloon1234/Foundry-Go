@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/health"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const ProbeProvider foundation.ProviderID = "foundry.application.probes"
@@ -51,14 +52,14 @@ func (s ProbeSettings) validate() error {
 	paths := s.paths()
 	for _, path := range paths {
 		if canonical, err := http.StaticPath(path).URL(http.NoPath{}); err != nil || canonical != path {
-			return fault.New(fault.Invalid, "probe paths must be canonical static paths")
+			return safeerror.NewFault(fault.Invalid, "probe paths must be canonical static paths")
 		}
 	}
 	if len(paths) == 2 && paths[0] == paths[1] {
-		return fault.New(fault.Duplicate, "liveness and readiness probes need distinct paths")
+		return safeerror.NewFault(fault.Duplicate, "liveness and readiness probes need distinct paths")
 	}
 	if s.Readiness && (s.ReadinessCache < 100*time.Millisecond || s.ReadinessCache > time.Minute) {
-		return fault.New(fault.Invalid, "public readiness cache must be from 100ms to one minute")
+		return safeerror.NewFault(fault.Invalid, "public readiness cache must be from 100ms to one minute")
 	}
 	return nil
 }

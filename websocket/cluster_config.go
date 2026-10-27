@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 )
@@ -40,7 +41,7 @@ func (c ClusterConfig) Validate() error {
 		return err
 	}
 	if c.MaxConnections < 1 || c.MaxConnections > 1<<20 || c.MaxConnectionsPerSubject < 1 || c.MaxConnectionsPerSubject > c.MaxConnections || c.ConnectionTTL < 100*time.Millisecond || c.ConnectionTTL > 5*time.Minute || c.ConnectionTTL%time.Millisecond != 0 || c.OperationTimeout < time.Millisecond || c.OperationTimeout > c.ConnectionTTL/2 {
-		return fault.New(fault.Invalid, "invalid WebSocket distributed bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket distributed bounds")
 	}
 	return c.Buffer.Validate()
 }

@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"errors"
 	stdhttp "net/http"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/authtransport"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -32,9 +32,9 @@ func DefineRefreshCookie(name CookieName, csrf CSRFConfig) RefreshCookie {
 	cookie := DefineCookie(name, SecretCookie(), CookieOptions{Path: "/", Secure: true, HTTPOnly: true, SameSite: stdhttp.SameSiteStrictMode})
 	policy, err := compileCSRF(csrf)
 	if !strings.HasPrefix(string(name), "__Host-") {
-		err = errors.Join(err, fault.New(fault.Invalid, "refresh cookie requires a __Host- name"))
+		err = safeerror.Join("operation failed", err, safeerror.NewFault(fault.Invalid, "refresh cookie requires a __Host- name"))
 	}
-	return RefreshCookie{cookie: cookie, csrf: policy, err: errors.Join(err, cookie.Validate())}
+	return RefreshCookie{cookie: cookie, csrf: policy, err: safeerror.Join("operation failed", err, cookie.Validate())}
 }
 
 func (c RefreshCookie) Name() CookieName { return c.cookie.Name() }
@@ -43,7 +43,7 @@ func (c RefreshCookie) Validate() error {
 		return c.err
 	}
 	if c.csrf.native == nil {
-		return fault.New(fault.Invalid, "refresh cookie is not defined")
+		return safeerror.NewFault(fault.Invalid, "refresh cookie is not defined")
 	}
 	return nil
 }
@@ -78,7 +78,7 @@ type RefreshCookieInfo struct {
 
 func (i RefreshCookieInfo) Validate() error {
 	if err := i.Name.Validate(); err != nil || !strings.HasPrefix(string(i.Name), "__Host-") || !i.Reads && !i.Sets && !i.Clears || i.Sets && i.Clears || i.Reads && !i.Sets && !i.Clears || i.Optional && (!i.Reads || !i.Clears) {
-		return fault.New(fault.Invalid, "invalid refresh cookie metadata")
+		return safeerror.NewFault(fault.Invalid, "invalid refresh cookie metadata")
 	}
 	return nil
 }
@@ -91,7 +91,9 @@ func (i RefreshCookieInfo) Validate() error {
 // cookie's origin protection, which also prevents login CSRF. Personal and
 // MFA-pending credentials set no cookie. The clock must agree with the backend.
 func TokenCookieResponse[M, K any](cookie RefreshCookie, status int, source clock.Clock) Response[token.Issued[M, K]] {
-	response := credentialResponse(status, authtransport.AccessTokenResponseJSON(), func() error { return errors.Join(cookie.Validate(), credentialClockValid(source)) },
+	response := credentialResponse(status, authtransport.AccessTokenResponseJSON(), func() error {
+		return safeerror.Join("operation failed", cookie.Validate(), credentialClockValid(source))
+	},
 		func(_ context.Context, issued token.Issued[M, K]) (authtransport.AccessTokenResponse, error) {
 			payload, err := tokenPayload(issued, source)
 			if err != nil {
@@ -112,7 +114,7 @@ func TokenCookieResponse[M, K any](cookie RefreshCookie, status int, source cloc
 		info := issued.Info()
 		deadline, present := info.RefreshExpiresAt().Get()
 		if !present {
-			return "", fault.New(fault.Invalid, "renewable token has no refresh deadline")
+			return "", safeerror.NewFault(fault.Invalid, "renewable token has no refresh deadline")
 		}
 		if info.ExpiresAt().UTC().Before(deadline.UTC()) {
 			deadline = info.ExpiresAt()
@@ -120,7 +122,7 @@ func TokenCookieResponse[M, K any](cookie RefreshCookie, status int, source cloc
 		// Whole seconds rounded down: the cookie never outlives the credential.
 		maxAge := deadline.UTC().Sub(now.UTC()).Truncate(time.Second)
 		if maxAge < time.Second {
-			return "", fault.New(fault.Invalid, "issued refresh credential is missing or expired")
+			return "", safeerror.NewFault(fault.Invalid, "issued refresh credential is missing or expired")
 		}
 		return cookie.set(refresh, maxAge)
 	}
@@ -141,7 +143,7 @@ func RefreshTokenCookie(cookie RefreshCookie) Body[RefreshTokenRequest] {
 		}
 		raw, present := value.Get()
 		if !present {
-			return RefreshTokenRequest{}, auth.Unauthenticated
+			return RefreshTokenRequest{}, auth.Unauthenticated.WithCause(nil)
 		}
 		credential, err := authtransport.NewRefreshCredential(raw)
 		if err != nil {
@@ -198,7 +200,7 @@ func RefreshTokenCookieLogout(cookie RefreshCookie) Body[RefreshCookieLogoutRequ
 // cookie's request protections.
 func ClearRefreshCookie[R any](cookie RefreshCookie, response Response[R]) Response[R] {
 	if response.refreshCookie != nil {
-		response.refreshCookieErr = fault.New(fault.Invalid, "response already uses a refresh cookie")
+		response.refreshCookieErr = safeerror.NewFault(fault.Invalid, "response already uses a refresh cookie")
 		return response
 	}
 	response.refreshCookie, response.refreshCookieClears = &cookie, true
@@ -247,13 +249,13 @@ func (e Endpoint[P, Q, B, R]) validateRefreshCookie() error {
 		return nil
 	}
 	if e.body.refreshCookie != nil && e.response.refreshCookie != nil && e.body.refreshCookie.Name() != e.response.refreshCookie.Name() {
-		return fault.New(fault.Invalid, "endpoint uses two refresh cookies")
+		return safeerror.NewFault(fault.Invalid, "endpoint uses two refresh cookies")
 	}
 	if e.route.Method() != POST || e.idempotency != nil {
-		return fault.New(fault.Invalid, "refresh cookie endpoints require POST without idempotent replay")
+		return safeerror.NewFault(fault.Invalid, "refresh cookie endpoints require POST without idempotent replay")
 	}
 	if e.body.refreshLogout && !e.response.refreshCookieClears {
-		return fault.New(fault.Invalid, "a refresh-cookie logout must clear the cookie")
+		return safeerror.NewFault(fault.Invalid, "a refresh-cookie logout must clear the cookie")
 	}
 	return e.refreshCookieInfo().Validate()
 }

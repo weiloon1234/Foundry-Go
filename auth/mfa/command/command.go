@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 
 	"github.com/weiloon1234/Foundry-Go/auth/mfa"
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const DefaultBatch = 128
@@ -28,7 +30,7 @@ const usage = "mfa reencrypt [--batch 128] [--max-batches 10000] [--format text|
 
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
-		return Command{}, fault.New(fault.Invalid, "MFA commands require help output")
+		return Command{}, safeerror.NewFault(fault.Invalid, "MFA commands require help output")
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(help, usage+"\n"); err != nil {
@@ -37,7 +39,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, flag.ErrHelp
 	}
 	if len(args) < 2 || args[0] != "mfa" || args[1] != "reencrypt" {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result := Command{parsed: true}
 	flags := flag.NewFlagSet("mfa reencrypt", flag.ContinueOnError)
@@ -49,13 +51,13 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, err
 	}
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	if result.batch < 1 || result.batch > mfa.MaxRotationBatch {
-		return Command{}, cli.Usage(fmt.Sprintf("--batch must be between 1 and %d", mfa.MaxRotationBatch))
+		return Command{}, clidiag.Usage(fmt.Sprintf("--batch must be between 1 and %d", mfa.MaxRotationBatch))
 	}
 	if result.maxBatches < 1 {
-		return Command{}, cli.Usage("--max-batches must be positive")
+		return Command{}, clidiag.Usage("--max-batches must be positive")
 	}
 	result.json = *format == "json"
 	return result, nil
@@ -65,7 +67,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 // constructor resolves the configured MFA store after boot; parsing does no I/O.
 func Declaration(construct func(foundation.Resolver) (*mfa.Store, error)) (cli.Declaration, error) {
 	if construct == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "MFA commands require a store constructor")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "MFA commands require a store constructor")
 	}
 	definition := cli.Define("mfa", "Re-encrypt stored MFA factors under the active encryption key", func(args []string, help io.Writer) (Command, error) {
 		if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -98,7 +100,7 @@ type report struct {
 // factor material.
 func (c Command) Run(ctx context.Context, store *mfa.Store, output io.Writer) error {
 	if ctx == nil || store == nil || output == nil || !c.parsed {
-		return fault.New(fault.Invalid, "uninitialized MFA command; use Parse")
+		return safeerror.NewFault(fault.Invalid, "uninitialized MFA command; use Parse")
 	}
 	var total report
 	cursor := mfa.RotationCursor{}
@@ -128,7 +130,7 @@ func (c Command) Run(ctx context.Context, store *mfa.Store, output io.Writer) er
 		return runErr
 	}
 	if total.Failed > 0 {
-		return fault.New(fault.Invalid, "some MFA factors use an encryption key that is no longer retained")
+		return safeerror.NewFault(fault.Invalid, "some MFA factors use an encryption key that is no longer retained")
 	}
 	return writeErr
 }

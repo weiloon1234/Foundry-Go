@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -144,11 +145,11 @@ func Authorize[D authorizationDeclaration](declaration D) AuthorizationDeclarati
 func Authorization(id foundation.ProviderID, declarations ...AuthorizationDeclaration) foundation.Provider {
 	return foundation.Module{Name: id, Requires: []foundation.ProviderID{AuthorizationProvider}, OnRegister: func(r *foundation.Registrar) error {
 		if len(declarations) == 0 {
-			return fault.New(fault.Invalid, "application authorization requires declarations")
+			return safeerror.NewFault(fault.Invalid, "application authorization requires declarations")
 		}
 		for _, declaration := range declarations {
 			if declaration.register == nil {
-				return fault.New(fault.Invalid, "invalid application authorization declaration")
+				return safeerror.NewFault(fault.Invalid, "invalid application authorization declaration")
 			}
 			if err := declaration.register(r); err != nil {
 				return err
@@ -186,7 +187,7 @@ func NewBrowserGuard[M model.Identifiable, K any](s Services, name auth.GuardNam
 	}
 	policy, ok := s.features.Auth.Browser.Guards[name]
 	if !ok {
-		return result, fault.New(fault.Missing, "browser guard policy is not configured")
+		return result, safeerror.NewFault(fault.Missing, "browser guard policy is not configured")
 	}
 	store, err := s.Sessions()
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -24,11 +25,11 @@ func New(namespace keyspace.Namespace, name, logical string) (Address, error) {
 		return Address{}, err
 	}
 	if !keyspace.ValidName(name) || len(logical) == 0 || len(logical) > keyspace.MaxKeyBytes || !utf8.ValidString(logical) {
-		return Address{}, fault.New(fault.Invalid, "invalid family or logical key")
+		return Address{}, safeerror.NewFault(fault.Invalid, "invalid family or logical key")
 	}
 	for _, r := range logical {
 		if unicode.IsControl(r) {
-			return Address{}, fault.New(fault.Invalid, "keys cannot contain control characters")
+			return Address{}, safeerror.NewFault(fault.Invalid, "keys cannot contain control characters")
 		}
 	}
 	return Address{Namespace: keyspace.Namespace{Application: strings.Clone(namespace.Application), Environment: strings.Clone(namespace.Environment)}, Name: strings.Clone(name), Hash: sha256.Sum256([]byte(logical)), valid: true}, nil
@@ -41,13 +42,13 @@ func FromHash(namespace keyspace.Namespace, name string, hash [sha256.Size]byte)
 		return Address{}, err
 	}
 	if !keyspace.ValidName(name) {
-		return Address{}, fault.New(fault.Invalid, "invalid family name")
+		return Address{}, safeerror.NewFault(fault.Invalid, "invalid family name")
 	}
 	return Address{Namespace: keyspace.Namespace{Application: strings.Clone(namespace.Application), Environment: strings.Clone(namespace.Environment)}, Name: strings.Clone(name), Hash: hash, valid: true}, nil
 }
 func (a Address) Validate() error {
 	if !a.valid {
-		return fault.New(fault.Invalid, "key is not initialized")
+		return safeerror.NewFault(fault.Invalid, "key is not initialized")
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Set preserves resource/member types and canonical JSON membership identity.
@@ -55,7 +56,7 @@ func (s Set[K, V]) Members(ctx context.Context, key K) ([]V, error) {
 			return err
 		}
 		if len(texts) > l.Entries {
-			return fault.New(fault.Invalid, "Redis set exceeds its cardinality bound")
+			return safeerror.NewFault(fault.Invalid, "Redis set exceeds its cardinality bound")
 		}
 		result = make([]V, 0, len(texts))
 		remaining := l.ReplyBytes
@@ -64,7 +65,7 @@ func (s Set[K, V]) Members(ctx context.Context, key K) ([]V, error) {
 				return err
 			}
 			if len(text) > remaining || i > 0 && text <= texts[i-1] {
-				return fault.New(fault.Invalid, "Redis set reply exceeds its bound or is not canonical")
+				return safeerror.NewFault(fault.Invalid, "Redis set reply exceeds its bound or is not canonical")
 			}
 			remaining -= len(text)
 			item, err := decode[V](text, l)

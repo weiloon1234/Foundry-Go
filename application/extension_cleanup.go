@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 )
 
@@ -87,7 +88,7 @@ func registerExtensionCleanup(builder *foundation.Builder, s FeatureSettings, po
 				return err
 			}
 			if got != want {
-				return fault.New(fault.Invalid, "database connection "+string(pool)+" does not reach the outbox database that features.extension_cleanup uses")
+				return safeerror.NewFault(fault.Invalid, "database connection "+string(pool)+" does not reach the outbox database that features.extension_cleanup uses")
 			}
 		}
 		return nil

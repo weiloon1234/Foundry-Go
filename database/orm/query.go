@@ -3,7 +3,7 @@ package orm
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"reflect"
 	"slices"
@@ -115,7 +115,7 @@ func tableError(t *tableCore) error {
 	return t.err
 }
 func validateQuery(q queryState) error {
-	return errors.Join(tableError(q.table), q.err, q.ast.Validate(), validateRelations(q))
+	return safeerror.Join("operation failed", tableError(q.table), q.err, q.ast.Validate(), validateRelations(q))
 }
 
 // Where appends AND predicates. Example: Orders.Query().Where(Orders.TotalCents.Gt(0)).
@@ -124,10 +124,10 @@ func where[M any](q queryState, ps []Predicate[M]) queryState {
 	q.ast.Predicates = slices.Clone(q.ast.Predicates)
 	for _, p := range ps {
 		if p.err != nil {
-			q.err = errors.Join(q.err, p.err)
+			q.err = safeerror.Join("operation failed", q.err, p.err)
 		}
 		if !predicateOwnerMatches(p.owner, p.rawScope, q.table) {
-			q.err = errors.Join(q.err, invalid("predicate belongs to a different table declaration"))
+			q.err = safeerror.Join("operation failed", q.err, invalid("predicate belongs to a different table declaration"))
 		}
 		q.ast.Predicates = append(q.ast.Predicates, querycore.PredicateNode(p.expression))
 	}
@@ -142,9 +142,9 @@ func (q Query[M]) OrderBy(os ...Order[M]) Query[M] {
 func orderBy[M any](q queryState, os []Order[M]) queryState {
 	q.ast.Orders = slices.Clone(q.ast.Orders)
 	for _, o := range os {
-		q.err = errors.Join(q.err, o.err)
+		q.err = safeerror.Join("operation failed", q.err, o.err)
 		if o.owner == nil || o.owner != q.table {
-			q.err = errors.Join(q.err, invalid("order belongs to a different table declaration"))
+			q.err = safeerror.Join("operation failed", q.err, invalid("order belongs to a different table declaration"))
 		}
 		q.ast.Orders = append(q.ast.Orders, o.core)
 	}
@@ -260,7 +260,7 @@ func require[M any](ctx context.Context, ex database.Executor, q queryState) (M,
 	if q.lock != 0 {
 		operation = "locked model"
 	}
-	return *new(M), database.NewError(operation, database.NotFound)
+	return *new(M), querycore.DatabaseFailure(operation, database.NotFound)
 }
 func all[M any](ctx context.Context, ex database.Executor, q queryState) ([]M, error) {
 	items, err := allRows[M](ctx, ex, q)

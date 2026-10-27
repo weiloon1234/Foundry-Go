@@ -1,12 +1,12 @@
 package expr
 
 import (
-	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -40,20 +40,20 @@ func FoundryAggregate[S, V any](a AggregateExpression[S, V], seal sqlowner.Expre
 	}
 	data := a.aggregateValue(nil)
 	if _, ok := data.core.Node.(querycore.AggregateNode); !ok {
-		data.core.Err = errors.Join(data.core.Err, ormcore.Invalid("uninitialized aggregate"))
+		data.core.Err = safeerror.Join("operation failed", data.core.Err, ormcore.Invalid("uninitialized aggregate"))
 	}
 	return data.core, data.column
 }
 
 func aggregateField[S, V, R any](input ormcore.Column[V], kind querycore.AggregateKind, cast querycore.AggregateCast, result ormcore.Column[R]) rowData[R] {
 	core := ormcore.Aggregate(ormcore.Expression{Sensitive: input.Sensitive, Node: input.Field, Refs: []ormcore.Reference{input.Reference}, Err: input.Err}, kind, cast)
-	core.Err = errors.Join(core.Err, result.Err)
+	core.Err = safeerror.Join("operation failed", core.Err, result.Err)
 	return rowData[R]{core: core, column: result}
 }
 func scopedAggregateColumn[S, M, V, P any](scope Scope[S, M], column orm.ExpressionColumn[M, V, P]) ormcore.Column[V] {
 	e := At(scope, column)
 	c := e.column
-	c.Err = errors.Join(c.Err, e.core.Err)
+	c.Err = safeerror.Join("operation failed", c.Err, e.core.Err)
 	c.Reference.Scope = reflect.TypeFor[S]()
 	return c
 }
@@ -256,7 +256,7 @@ func (a NullableOrderedAggregate[S, V]) Desc() SelectedOrder[S] {
 func filterAggregate[S any](input ormcore.Expression, predicates []Predicate[S]) ormcore.Expression {
 	if len(predicates) > 0 {
 		if err := querycore.ValidateAggregateFilterCount(len(predicates)); err != nil {
-			input.Err = errors.Join(input.Err, err)
+			input.Err = safeerror.Join("operation failed", input.Err, err)
 			return input
 		}
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	pluginmanifest "github.com/weiloon1234/Foundry-Go/plugin/manifest"
 )
 
@@ -58,11 +59,11 @@ func (b *Builder) RegisterPlugin(plugins ...Plugin) *Builder {
 			break
 		}
 		if b.built {
-			b.err = fault.New(fault.Closed, "builder has already been built")
+			b.err = safeerror.NewFault(fault.Closed, "builder has already been built")
 			break
 		}
 		if nilValue(extension) {
-			b.err = fault.New(fault.Invalid, "nil plugin")
+			b.err = safeerror.NewFault(fault.Invalid, "nil plugin")
 			break
 		}
 		var manifest pluginmanifest.Manifest
@@ -91,7 +92,7 @@ func validatePlugins(entries []providerEntry) error {
 			if namespace, err := p.manifest.Namespace(); err == nil {
 				for _, previous := range namespaces {
 					if namespace == previous.name || strings.HasPrefix(namespace, previous.name+".") || strings.HasPrefix(previous.name, namespace+".") {
-						return fault.New(fault.Duplicate, fmt.Sprintf("plugin configuration namespace belongs to both %s and %s", previous.owner, p.manifest.ID))
+						return safeerror.NewFault(fault.Duplicate, fmt.Sprintf("plugin configuration namespace belongs to both %s and %s", previous.owner, p.manifest.ID))
 					}
 				}
 				namespaces = append(namespaces, namespaceOwner{namespace, p.manifest.ID})
@@ -99,7 +100,7 @@ func validatePlugins(entries []providerEntry) error {
 		}
 	}
 	if len(installed) > 1024 {
-		return fault.New(fault.Invalid, "plugin registration capacity exceeded")
+		return safeerror.NewFault(fault.Invalid, "plugin registration capacity exceeded")
 	}
 	for _, entry := range entries {
 		p, ok := entry.provider.(pluginProvider)
@@ -111,19 +112,19 @@ func validatePlugins(entries []providerEntry) error {
 			return err
 		}
 		if !compatible {
-			return fault.New(fault.Conflict, "plugin "+string(p.manifest.ID)+" is incompatible with framework "+string(pluginmanifest.FrameworkVersion))
+			return safeerror.NewFault(fault.Conflict, "plugin "+string(p.manifest.ID)+" is incompatible with framework "+string(pluginmanifest.FrameworkVersion))
 		}
 		for _, dependency := range p.manifest.Dependencies {
 			other, exists := installed[dependency.ID]
 			if !exists {
-				return fault.New(fault.Missing, fmt.Sprintf("plugin %s requires missing plugin %s", p.manifest.ID, dependency.ID))
+				return safeerror.NewFault(fault.Missing, fmt.Sprintf("plugin %s requires missing plugin %s", p.manifest.ID, dependency.ID))
 			}
 			compatible, err := dependency.Version.Accepts(other.Version)
 			if err != nil {
 				return err
 			}
 			if !compatible {
-				return fault.New(fault.Conflict, fmt.Sprintf("plugin %s requires %s %s; installed version is %s", p.manifest.ID, dependency.ID, dependency.Version, other.Version))
+				return safeerror.NewFault(fault.Conflict, fmt.Sprintf("plugin %s requires %s %s; installed version is %s", p.manifest.ID, dependency.ID, dependency.Version, other.Version))
 			}
 		}
 	}

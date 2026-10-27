@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type compiledSchema struct {
@@ -22,7 +23,9 @@ type compiledSchema struct {
 	variants    map[TypeID]map[string]TypeID
 }
 
-func invalidSchema() error { return fault.New(fault.Invalid, "invalid JSON contract declaration") }
+func invalidSchema() error {
+	return safeerror.NewFault(fault.Invalid, "invalid JSON contract declaration")
+}
 
 func declarationText(text string) bool {
 	return text != "" && utf8.ValidString(text) && !strings.ContainsFunc(text, func(r rune) bool { return r < ' ' || r == 127 })
@@ -89,7 +92,7 @@ func compileSchemaGraph(input Schema, metadataOnly, shared bool) (*compiledSchem
 				return err
 			})
 			if err != nil {
-				return nil, fault.Wrap(fault.Invalid, "invalid JSON enum contract", err)
+				return nil, safeerror.WrapFault(fault.Invalid, "invalid JSON enum contract", err)
 			}
 			typ.Cases, typ.enumCases = cases, nil
 		}
@@ -264,7 +267,7 @@ func compileSchemaGraph(input Schema, metadataOnly, shared bool) (*compiledSchem
 		for _, property := range typ.Properties {
 			if err := property.Presentation.ValidateType(result.types[aliasTargets[property.Type]]); err != nil {
 				// Name the public declaration; generation cannot check custom codecs.
-				return nil, fault.New(fault.Invalid, fmt.Sprintf("client presentation on %s.%s contradicts its codec", typ.ID, property.Name))
+				return nil, safeerror.NewFault(fault.Invalid, fmt.Sprintf("client presentation on %s.%s contradicts its codec", typ.ID, property.Name))
 			}
 		}
 	}

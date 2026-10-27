@@ -3,6 +3,7 @@ package http
 import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // URLType supplies the source identity for an already-described scalar codec.
@@ -14,11 +15,11 @@ import (
 func URLType[V any](id contract.TypeID, codec PathCodec[V]) PathCodec[V] {
 	invalid := func(err error) PathCodec[V] { return describedURLCodec[V]{err: err} }
 	if !validPathCodec(codec) {
-		return invalid(fault.New(fault.Invalid, "URL type requires a described codec"))
+		return invalid(safeerror.NewFault(fault.Invalid, "URL type requires a described codec"))
 	}
 	source, ok := codec.(urlScalarDescriber)
 	if !ok {
-		return invalid(fault.New(fault.Invalid, "URL type requires explicit scalar metadata"))
+		return invalid(safeerror.NewFault(fault.Invalid, "URL type requires explicit scalar metadata"))
 	}
 	info, err := source.urlScalar()
 	if err != nil {

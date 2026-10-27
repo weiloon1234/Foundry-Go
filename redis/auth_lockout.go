@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/lockout"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/ratewindow"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 //go:embed auth_lockout.lua
@@ -124,15 +125,17 @@ func (c *Client) lockoutCommand(ctx context.Context, key lockout.Key, policy loc
 	if len(parts) == 1 {
 		switch status {
 		case -1:
-			return nil, fault.New(fault.Invalid, "stored Redis lockout metadata is corrupt")
+			return nil, safeerror.NewFault(fault.Invalid, "stored Redis lockout metadata is corrupt")
 		case -2:
-			return nil, fault.New(fault.Conflict, "live Redis lockout policy differs")
+			return nil, safeerror.NewFault(fault.Conflict, "live Redis lockout policy differs")
 		case -3:
-			return nil, fault.New(fault.Conflict, "Redis lockout clock moved backward or exceeds bounds")
+			return nil, safeerror.NewFault(fault.Conflict, "Redis lockout clock moved backward or exceeds bounds")
 		case -4:
-			return nil, fault.New(fault.Conflict, "lockout revision capacity reached")
+			return nil, safeerror.NewFault(fault.Conflict, "lockout revision capacity reached")
 		}
 	}
 	return parts, nil
 }
-func invalidLockoutReply() error { return fault.New(fault.Internal, "invalid Redis lockout reply") }
+func invalidLockoutReply() error {
+	return safeerror.NewFault(fault.Internal, "invalid Redis lockout reply")
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -74,7 +75,7 @@ func UniqueIgnoring[M any, V, K comparable](executor database.Executor, source o
 	Ne(K) orm.Predicate[M]
 }, current validation.Slot[K]) validation.Rule[V] {
 	if isNil(key) {
-		return validation.Requires(current, validation.Unique(newLookup(lookupState[M, V]{err: fault.New(fault.Invalid, "database validation requires a key field")})))
+		return validation.Requires(current, validation.Unique(newLookup(lookupState[M, V]{err: safeerror.NewFault(fault.Invalid, "database validation requires a key field")})))
 	}
 	if err := orm.Lookup(source, key).Validate(); err != nil {
 		return validation.Requires(current, validation.Unique(newLookup(lookupState[M, V]{err: err})))
@@ -124,7 +125,7 @@ func Lookup[M any, V comparable](executor database.Executor, source orm.Query[M]
 // Example: databasevalidation.Scoped(db, tenantUsers, Users.Email).
 func Scoped[M any, V comparable](executor database.Executor, scope func(context.Context) (orm.Query[M], error), field orm.KeyColumn[M, V]) ModelLookup[M, V] {
 	if scope == nil || isNil(field) {
-		return newLookup(lookupState[M, V]{err: fault.New(fault.Invalid, "database validation requires a scope and field")})
+		return newLookup(lookupState[M, V]{err: safeerror.NewFault(fault.Invalid, "database validation requires a scope and field")})
 	}
 	return newLookup(lookupState[M, V]{executor: executor, scoped: func(ctx context.Context) (orm.ValueLookup[M, V], error) {
 		source, err := scope(ctx)
@@ -139,13 +140,13 @@ func Scoped[M any, V comparable](executor database.Executor, scope func(context.
 // Validate checks the declaration without I/O. Example: lookup.Validate().
 func (l ModelLookup[M, V]) Validate() error {
 	if l.core == nil {
-		return fault.New(fault.Invalid, "database validation requires an executor")
+		return safeerror.NewFault(fault.Invalid, "database validation requires an executor")
 	}
 	if l.core.err != nil {
 		return l.core.err
 	}
 	if isNil(l.core.executor) {
-		return fault.New(fault.Invalid, "database validation requires an executor")
+		return safeerror.NewFault(fault.Invalid, "database validation requires an executor")
 	}
 	if l.core.scoped != nil {
 		return nil

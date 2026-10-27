@@ -10,6 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
@@ -57,7 +58,7 @@ type Backend struct {
 
 func New(maxEntries int) (*Backend, error) {
 	if maxEntries <= 0 {
-		return nil, fault.New(fault.Invalid, "memory lease capacity must be positive")
+		return nil, safeerror.NewFault(fault.Invalid, "memory lease capacity must be positive")
 	}
 	return &Backend{limit: maxEntries, entries: make(map[lease.Key]*entry)}, nil
 }
@@ -90,7 +91,7 @@ func (b *Backend) LeaseTransfer(ctx context.Context, key lease.Key, from, to lea
 // LeaseForceRelease administratively removes key regardless of its owner.
 func (b *Backend) LeaseForceRelease(ctx context.Context, key lease.Key) (bool, error) {
 	if ctx == nil {
-		return false, fault.New(fault.Invalid, "lease requires a context")
+		return false, safeerror.NewFault(fault.Invalid, "lease requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -99,12 +100,12 @@ func (b *Backend) LeaseForceRelease(ctx context.Context, key lease.Key) (bool, e
 		return false, err
 	}
 	if b == nil || b.entries == nil {
-		return false, fault.New(fault.Invalid, "memory lease backend is not initialized")
+		return false, safeerror.NewFault(fault.Invalid, "memory lease backend is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return false, fault.New(fault.Closed, "memory lease backend is closed")
+		return false, safeerror.NewFault(fault.Closed, "memory lease backend is closed")
 	}
 	item := b.live(key, time.Now())
 	if item == nil {
@@ -142,7 +143,7 @@ func (b *Backend) applyWith(ctx context.Context, key lease.Key, owner lease.Owne
 		return false, err
 	}
 	if b == nil || b.entries == nil {
-		return false, fault.New(fault.Invalid, "memory lease backend is not initialized")
+		return false, safeerror.NewFault(fault.Invalid, "memory lease backend is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -150,7 +151,7 @@ func (b *Backend) applyWith(ctx context.Context, key lease.Key, owner lease.Owne
 		return false, err
 	}
 	if b.closed {
-		return false, fault.New(fault.Closed, "memory lease backend is closed")
+		return false, safeerror.NewFault(fault.Closed, "memory lease backend is closed")
 	}
 	now := time.Now()
 	previous := b.live(key, now)
@@ -162,7 +163,7 @@ func (b *Backend) applyWith(ctx context.Context, key lease.Key, owner lease.Owne
 			b.reclaim(now)
 		}
 		if len(b.entries) >= b.limit {
-			return false, fault.New(fault.Conflict, "memory lease capacity reached")
+			return false, safeerror.NewFault(fault.Conflict, "memory lease capacity reached")
 		}
 		item := &entry{key: key, owner: owner, until: now.Add(ttl)}
 		b.entries[key] = item
@@ -188,7 +189,7 @@ func (b *Backend) applyWith(ctx context.Context, key lease.Key, owner lease.Owne
 // callbacks and cleanup finish while the backend is still available.
 func (b *Backend) Close() error {
 	if b == nil || b.entries == nil {
-		return fault.New(fault.Invalid, "memory lease backend is not initialized")
+		return safeerror.NewFault(fault.Invalid, "memory lease backend is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()

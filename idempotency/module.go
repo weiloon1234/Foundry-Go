@@ -2,9 +2,10 @@ package idempotency
 
 import (
 	"context"
-	"errors"
-	"github.com/weiloon1234/Foundry-Go/foundation"
 	"slices"
+
+	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module owns admission and drains active operations before its borrowed database
@@ -34,9 +35,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Store], requires []f
 		if err := r.OnShutdown("idempotency", func(ctx context.Context) error {
 			err := store.Close(ctx)
 			<-store.Done()
-			return errors.Join(err, store.Close(context.Background()))
+			return safeerror.Join("operation failed", err, store.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, store.Close(ctx))
+			return safeerror.Join("operation failed", err, store.Close(ctx))
 		}
 		return store.start(ctx, r.Logger())
 	}}

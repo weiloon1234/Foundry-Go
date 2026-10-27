@@ -2,7 +2,6 @@ package foundation
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"slices"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
@@ -103,7 +103,7 @@ func (a *App) PendingTasks() []string {
 // Concurrent callers wait for the same startup result using their own deadline.
 func (a *App) Start(ctx context.Context) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "nil start context")
+		return safeerror.NewFault(fault.Invalid, "nil start context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -122,7 +122,7 @@ func (a *App) Start(ctx context.Context) error {
 		context.AfterFunc(a.runtime.ctx, func() { a.beginShutdown(stopFailed) })
 		if timeout := a.settings.startupTimeout; timeout > 0 {
 			runtime := a.runtime
-			expired := fault.New(fault.Timeout, "application startup exceeded its deadline")
+			expired := safeerror.NewFault(fault.Timeout, "application startup exceeded its deadline")
 			timer := time.AfterFunc(timeout, func() {
 				a.mu.Lock()
 				starting := a.state == Starting
@@ -138,7 +138,7 @@ func (a *App) Start(ctx context.Context) error {
 		}
 	case Stopping, Stopped:
 		a.mu.Unlock()
-		return fault.New(fault.Closed, "application is stopping or stopped")
+		return safeerror.NewFault(fault.Closed, "application is stopping or stopped")
 	}
 	a.mu.Unlock()
 	select {
@@ -153,7 +153,7 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 func (a *App) boot() {
-	var err error = fault.New(fault.Panicked, "provider boot exited without returning")
+	var err error = safeerror.NewFault(fault.Panicked, "provider boot exited without returning")
 	defer func() { a.completeBoot(err) }()
 	err = a.bootProviders()
 }
@@ -234,10 +234,10 @@ func (a *App) Run(ctx context.Context, kind KernelKind) error {
 // one-shot and must run alone. Kinds must be distinct and registered.
 func (a *App) RunKernels(ctx context.Context, kinds ...KernelKind) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "nil run context")
+		return safeerror.NewFault(fault.Invalid, "nil run context")
 	}
 	if len(kinds) == 0 {
-		return fault.New(fault.Invalid, "run requires at least one kernel")
+		return safeerror.NewFault(fault.Invalid, "run requires at least one kernel")
 	}
 	a.mu.Lock()
 	definitions := make([]kernelDefinition, len(kinds))
@@ -245,28 +245,28 @@ func (a *App) RunKernels(ctx context.Context, kinds ...KernelKind) error {
 		definition, exists := a.kernels[kind]
 		if !exists {
 			a.mu.Unlock()
-			return fault.New(fault.Missing, "kernel "+string(kind)+" is not registered")
+			return safeerror.NewFault(fault.Missing, "kernel "+string(kind)+" is not registered")
 		}
 		if slices.Index(kinds, kind) != i {
 			a.mu.Unlock()
-			return fault.New(fault.Duplicate, "kernel "+string(kind)+" is selected more than once")
+			return safeerror.NewFault(fault.Duplicate, "kernel "+string(kind)+" is selected more than once")
 		}
 		if kind == CLI && len(kinds) > 1 {
 			a.mu.Unlock()
-			return fault.New(fault.Invalid, "the CLI kernel must run alone")
+			return safeerror.NewFault(fault.Invalid, "the CLI kernel must run alone")
 		}
 		definitions[i] = definition
 	}
 	if a.runClaimed {
 		a.mu.Unlock()
-		return fault.New(fault.Conflict, "application kernel has already been selected")
+		return safeerror.NewFault(fault.Conflict, "application kernel has already been selected")
 	}
 	a.runClaimed = true
 	a.selected = slices.Clone(kinds)
 	a.mu.Unlock()
 	if err := a.Start(ctx); err != nil {
 		// Start reported the boot failure; shutdown reports only cleanup.
-		return errors.Join(err, a.awaitStop(stopRequested))
+		return safeerror.Join("operation failed", err, a.awaitStop(stopRequested))
 	}
 	a.mu.Lock()
 	runtime := a.runtime
@@ -322,7 +322,7 @@ collect:
 			break collect
 		}
 	}
-	return errors.Join(append(failures, stopErr)...)
+	return safeerror.Join("operation failed", append(failures, stopErr)...)
 }
 
 func (r *runtimeState) runKernel(lifetime, caller context.Context, kind KernelKind, definition kernelDefinition) error {
@@ -340,7 +340,7 @@ func (r *runtimeState) runKernel(lifetime, caller context.Context, kind KernelKi
 			var err error
 			kernel, err = definition.factory(&Runtime{r, definition.owner})
 			if err == nil && nilValue(kernel) {
-				return fault.New(fault.Invalid, "kernel factory returned nil")
+				return safeerror.NewFault(fault.Invalid, "kernel factory returned nil")
 			}
 			return err
 		})
@@ -378,7 +378,7 @@ func (a *App) awaitStop(reason stopReason) error {
 		select {
 		case <-a.done:
 		case <-timer.C:
-			return fault.Wrap(fault.Timeout, "application shutdown is still pending", context.DeadlineExceeded)
+			return safeerror.WrapFault(fault.Timeout, "application shutdown is still pending", context.DeadlineExceeded)
 		}
 	}
 	a.mu.Lock()
@@ -396,7 +396,7 @@ func stopMargin(budget time.Duration) time.Duration { return min(time.Second, bu
 // The configured stop delay applies to the first request on a running app.
 func (a *App) Shutdown(ctx context.Context) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "nil shutdown context")
+		return safeerror.NewFault(fault.Invalid, "nil shutdown context")
 	}
 	a.beginShutdown(stopRequested)
 	select {
@@ -408,7 +408,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 	case <-a.done:
 		return a.shutdownResult()
 	case <-ctx.Done():
-		return fault.Wrap(fault.Timeout, "application shutdown is still pending", ctx.Err())
+		return safeerror.WrapFault(fault.Timeout, "application shutdown is still pending", ctx.Err())
 	}
 }
 
@@ -424,7 +424,7 @@ func (a *App) beginShutdown(reason stopReason) {
 		a.mu.Lock()
 		if a.state == Prepared {
 			a.state = Stopped
-			a.startErr = fault.New(fault.Closed, "application was stopped before startup")
+			a.startErr = safeerror.NewFault(fault.Closed, "application was stopped before startup")
 			close(a.startDone)
 			if recorder := a.settings.observability; recorder != nil {
 				a.state = Stopping
@@ -492,7 +492,7 @@ func (a *App) stop(delay time.Duration) {
 		}
 		timedOut := err == nil && ctx.Err() != nil
 		if timedOut {
-			err = fault.Wrap(fault.Timeout, "cleanup exceeded its deadline: "+resource.name, ctx.Err())
+			err = safeerror.WrapFault(fault.Timeout, "cleanup exceeded its deadline: "+resource.name, ctx.Err())
 		}
 		cancel()
 		if err != nil {
@@ -504,7 +504,7 @@ func (a *App) stop(delay time.Duration) {
 			failures = append(failures, err)
 		}
 	}
-	result := errors.Join(failures...)
+	result := safeerror.Join("operation failed", failures...)
 	a.mu.Lock()
 	bootErr := a.bootErr
 	elapsed := time.Since(a.stopStarted)
@@ -513,7 +513,7 @@ func (a *App) stop(delay time.Duration) {
 	// Inspect callback errors outside the application mutex.
 	shutdownErr := result
 	if bootErr != nil && !cancellationOnly(bootErr) {
-		shutdownErr = errors.Join(bootErr, result)
+		shutdownErr = safeerror.Join("operation failed", bootErr, result)
 	}
 	// Log before releasing waiters: a process that exits as soon as Run or
 	// Shutdown returns must not lose its final lifecycle record.

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/mfa"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -33,7 +34,7 @@ func (MFAChallengeCredential) LogValue() slog.Value         { return slog.String
 func (MFAChallengeCredential) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 func (v *MFAChallengeCredential) UnmarshalJSON(data []byte) error {
 	if v == nil {
-		return fault.New(fault.Invalid, "MFA challenge destination is missing")
+		return safeerror.NewFault(fault.Invalid, "MFA challenge destination is missing")
 	}
 	*v = MFAChallengeCredential{}
 	candidate, err := parseTokenCredential(data)

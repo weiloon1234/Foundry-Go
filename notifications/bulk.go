@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlscope"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -50,7 +51,7 @@ func (b Binding[M, K, P]) EnqueueManyWithIDs(ctx context.Context, manager *Manag
 		batch = 100
 	}
 	if manager == nil || producer == nil || len(recipients) == 0 || len(recipients) > MaxBulkRecipients || batch < 1 || batch > MaxBulkBatch || ids != nil && len(ids) != len(recipients) {
-		return BulkResult[M]{}, fault.New(fault.Invalid, "bulk notification requires a manager, producer, 1 to 10000 recipients, one ID per recipient when supplied and a valid batch size")
+		return BulkResult[M]{}, safeerror.NewFault(fault.Invalid, "bulk notification requires a manager, producer, 1 to 10000 recipients, one ID per recipient when supplied and a valid batch size")
 	}
 	pending := make([]PendingNotification[M, P], len(recipients))
 	for i, recipient := range recipients {

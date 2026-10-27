@@ -90,7 +90,7 @@ func loadAggregate(ctx context.Context, ex database.Executor, p *relationPlan, b
 				return err
 			}
 			if a.input.plan.singular && count > 1 || joined && count != distinct {
-				return database.NewError("aggregate relation cardinality", database.TooManyRows)
+				return querycore.DatabaseFailure("aggregate relation cardinality", database.TooManyRows)
 			}
 			raw, err := readKey()
 			if err != nil {

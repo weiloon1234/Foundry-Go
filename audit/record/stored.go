@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
@@ -23,10 +24,10 @@ type FoundryStoredField struct {
 // Example: FoundryCapture(builder, field, Automatic, sqlowner.Metadata()).
 func FoundryCapture[M, K any](builder *Builder[M, K], field FoundryStoredField, disclosure Disclosure, seal sqlowner.MetadataSeal) error {
 	if !seal.Valid() {
-		return fault.New(fault.Invalid, "invalid audit metadata capability")
+		return safeerror.NewFault(fault.Invalid, "invalid audit metadata capability")
 	}
 	if builder == nil || builder.seen == nil {
-		return fault.New(fault.Invalid, "audit builder is not initialized")
+		return safeerror.NewFault(fault.Invalid, "audit builder is not initialized")
 	}
 	if err := disclosure.Validate(); err != nil {
 		return builder.fail(err)

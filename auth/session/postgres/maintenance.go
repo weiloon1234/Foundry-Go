@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -16,7 +17,7 @@ func (b *Backend) RevokeID(ctx context.Context, address session.Address, identit
 		return false, err
 	}
 	if id.IsZero() {
-		return false, fault.New(fault.Invalid, "session revocation requires an identifier")
+		return false, safeerror.NewFault(fault.Invalid, "session revocation requires an identifier")
 	}
 	removed := false
 	err := b.within(ctx, func(tx *database.Tx) error {
@@ -56,10 +57,10 @@ func (b *Backend) List(ctx context.Context, address session.Address, identity mo
 		return nil, err
 	}
 	if limit < 1 || limit > session.MaxPageSize {
-		return nil, fault.New(fault.Invalid, "invalid session listing limit")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid session listing limit")
 	}
 	if b == nil || b.db == nil || ctx == nil {
-		return nil, fault.New(fault.Invalid, "session PostgreSQL operation requires a backend and context")
+		return nil, safeerror.NewFault(fault.Invalid, "session PostgreSQL operation requires a backend and context")
 	}
 	scope, err := address.Key()
 	if err != nil {
@@ -81,7 +82,7 @@ func (b *Backend) List(ctx context.Context, address session.Address, identity mo
 		}
 		if current.Live(now) && row.actorLive(now) {
 			if len(result) >= limit {
-				return nil, fault.New(fault.Invalid, "live session listing exceeds requested limit")
+				return nil, safeerror.NewFault(fault.Invalid, "live session listing exceeds requested limit")
 			}
 			result = append(result, current)
 		}
@@ -99,10 +100,10 @@ func (b *Backend) Prune(ctx context.Context, address session.Address, limit int)
 		return 0, err
 	}
 	if limit < 1 || limit > session.MaxPageSize {
-		return 0, fault.New(fault.Invalid, "invalid session prune limit")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid session prune limit")
 	}
 	if b == nil || b.db == nil || ctx == nil {
-		return 0, fault.New(fault.Invalid, "session PostgreSQL operation requires a backend and context")
+		return 0, safeerror.NewFault(fault.Invalid, "session PostgreSQL operation requires a backend and context")
 	}
 	now, err := b.now()
 	if err != nil {
@@ -117,7 +118,7 @@ func (b *Backend) Prune(ctx context.Context, address session.Address, limit int)
 		return 0, err
 	}
 	if result.RowsAffected < 0 {
-		return 0, fault.New(fault.Invalid, "session prune returned an invalid count")
+		return 0, safeerror.NewFault(fault.Invalid, "session prune returned an invalid count")
 	}
 	return uint64(result.RowsAffected), nil
 }

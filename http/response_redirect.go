@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // maxRedirectBytes bounds a redirect location.
@@ -63,14 +64,14 @@ func (r Redirect) Location() (string, error) {
 		return "", r.err
 	}
 	if r.location == "" {
-		return "", fault.New(fault.Invalid, "redirect target is not defined")
+		return "", safeerror.NewFault(fault.Invalid, "redirect target is not defined")
 	}
 	return r.location, nil
 }
 
 // MarshalJSON rejects implicit serialization; a redirect has no body contract.
 func (Redirect) MarshalJSON() ([]byte, error) {
-	return nil, fault.New(fault.Invalid, "redirect requires a redirect response contract")
+	return nil, safeerror.NewFault(fault.Invalid, "redirect requires a redirect response contract")
 }
 
 func redirectStatus(status int) bool {
@@ -83,16 +84,16 @@ func redirectStatus(status int) bool {
 
 func validateRedirectLocation(location string) error {
 	if location == "" || len(location) > maxRedirectBytes || location[0] != '/' || len(location) > 1 && (location[1] == '/' || location[1] == '\\') {
-		return fault.New(fault.Invalid, "redirect location must be a relative path on this origin")
+		return safeerror.NewFault(fault.Invalid, "redirect location must be a relative path on this origin")
 	}
 	for i := range len(location) {
 		if c := location[i]; c <= ' ' || c >= 0x7f || c == '\\' {
-			return fault.New(fault.Invalid, "redirect location must be printable ASCII without spaces or backslashes")
+			return safeerror.NewFault(fault.Invalid, "redirect location must be printable ASCII without spaces or backslashes")
 		}
 	}
 	parsed, err := url.Parse(location)
 	if err != nil || parsed.Scheme != "" || parsed.Host != "" || parsed.User != nil || parsed.Opaque != "" {
-		return fault.New(fault.Invalid, "redirect location must be a relative path on this origin")
+		return safeerror.NewFault(fault.Invalid, "redirect location must be a relative path on this origin")
 	}
 	return nil
 }

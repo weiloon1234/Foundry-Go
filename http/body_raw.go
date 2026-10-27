@@ -2,7 +2,7 @@ package http
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	"mime"
 	stdhttp "net/http"
@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -25,7 +26,7 @@ type RawBodyLimits struct {
 
 func (l RawBodyLimits) Validate() error {
 	if l.Bytes <= 0 || l.Bytes > MaxRouteBodyBytes {
-		return fault.New(fault.Invalid, "raw request body limit must be positive and at most MaxRouteBodyBytes")
+		return safeerror.NewFault(fault.Invalid, "raw request body limit must be positive and at most MaxRouteBodyBytes")
 	}
 	return nil
 }
@@ -68,7 +69,7 @@ type rawBodyDescriptor[B any] struct {
 // Read reads the request body. It fails once the handler has returned.
 func (b RawBody) Read(data []byte) (int, error) {
 	if b.reader == nil {
-		return 0, fault.New(fault.Invalid, "raw request body is not open")
+		return 0, safeerror.NewFault(fault.Invalid, "raw request body is not open")
 	}
 	return b.reader.Read(data)
 }
@@ -81,7 +82,7 @@ func (b RawBody) Length() value.Optional[int64] { return b.length }
 
 // MarshalJSON rejects implicit serialization; a raw body is not a JSON value.
 func (RawBody) MarshalJSON() ([]byte, error) {
-	return nil, fault.New(fault.Invalid, "raw request body is not a JSON value")
+	return nil, safeerror.NewFault(fault.Invalid, "raw request body is not a JSON value")
 }
 
 type rawBodyReader struct {
@@ -92,7 +93,7 @@ type rawBodyReader struct {
 
 func (r *rawBodyReader) Read(data []byte) (int, error) {
 	if r.closed.Load() {
-		return 0, fault.New(fault.Closed, "raw request body was read after its handler returned")
+		return 0, safeerror.NewFault(fault.Closed, "raw request body was read after its handler returned")
 	}
 	n, err := r.body.Read(data)
 	if err == nil || err == io.EOF {
@@ -106,8 +107,12 @@ func (r *rawBodyReader) close() error { r.closed.Store(true); return nil }
 // rawBodyError classifies a native read failure for the handler's caller.
 func rawBodyError(ctx context.Context, err error) error {
 	var tooLarge *stdhttp.MaxBytesError
+	matched, failed := callback.ErrorAsResult(err, &tooLarge)
+	if failed != nil {
+		return InternalError.WithCause(failed)
+	}
 	switch {
-	case errors.As(err, &tooLarge):
+	case matched:
 		return PayloadTooLarge.WithCause(err)
 	case ctx.Err() != nil:
 		return RequestTimeout.WithCause(err)
@@ -122,12 +127,12 @@ func openRawBody(w stdhttp.ResponseWriter, r *stdhttp.Request, declared []MediaT
 	}
 	if r.ContentLength > limits.Bytes {
 		rejectUnreadBody(w, r)
-		return RawBody{}, nil, PayloadTooLarge
+		return RawBody{}, nil, PayloadTooLarge.WithCause(nil)
 	}
 	media, ok := rawRequestMedia(r.Header, declared)
 	if !ok {
 		rejectUnreadBody(w, r)
-		return RawBody{}, nil, UnsupportedMediaType
+		return RawBody{}, nil, UnsupportedMediaType.WithCause(nil)
 	}
 	var length value.Optional[int64]
 	if r.ContentLength >= 0 {
@@ -162,7 +167,7 @@ func rawRequestMedia(header stdhttp.Header, declared []MediaType) (MediaType, bo
 
 func validateRawMedia(media []MediaType) error {
 	if len(media) == 0 || len(media) > maxRawMediaTypes {
-		return fault.New(fault.Invalid, "raw request body requires one to sixteen media types")
+		return safeerror.NewFault(fault.Invalid, "raw request body requires one to sixteen media types")
 	}
 	seen := make(map[string]bool, len(media))
 	for _, candidate := range media {
@@ -171,7 +176,7 @@ func validateRawMedia(media []MediaType) error {
 		}
 		base, _, _ := mime.ParseMediaType(string(candidate))
 		if seen[base] {
-			return fault.New(fault.Duplicate, "raw request body media types repeat")
+			return safeerror.NewFault(fault.Duplicate, "raw request body media types repeat")
 		}
 		seen[base] = true
 	}

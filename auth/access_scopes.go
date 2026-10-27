@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -28,7 +29,7 @@ func DefineAccessScope[M any](name AccessScopeName) AccessScope[M] {
 func (s AccessScope[M]) Name() AccessScopeName { return s.name }
 func (s AccessScope[M]) Validate() error {
 	if !identifier.Semantic(string(s.name)) {
-		return fault.New(fault.Invalid, "access scope requires a semantic name without wildcards")
+		return safeerror.NewFault(fault.Invalid, "access scope requires a semantic name without wildcards")
 	}
 	return nil
 }
@@ -44,7 +45,7 @@ type AccessScopes[M any] struct {
 
 func NewAccessScopes[M any](scopes ...AccessScope[M]) (AccessScopes[M], error) {
 	if len(scopes) > MaxAccessScopes {
-		return AccessScopes[M]{}, fault.New(fault.Invalid, "access scope capacity exceeded")
+		return AccessScopes[M]{}, safeerror.NewFault(fault.Invalid, "access scope capacity exceeded")
 	}
 	names := make([]AccessScopeName, len(scopes))
 	for i, scope := range scopes {
@@ -56,7 +57,7 @@ func NewAccessScopes[M any](scopes ...AccessScope[M]) (AccessScopes[M], error) {
 	slices.Sort(names)
 	for i := 1; i < len(names); i++ {
 		if names[i] == names[i-1] {
-			return AccessScopes[M]{}, fault.New(fault.Duplicate, "access scope is repeated")
+			return AccessScopes[M]{}, safeerror.NewFault(fault.Duplicate, "access scope is repeated")
 		}
 	}
 	return AccessScopes[M]{grant: &accessGrant{names: names}}, nil
@@ -129,7 +130,7 @@ func (p Proof[M, K]) AccessScopes() (AccessScopes[M], bool) {
 // This does not replace a current model/resource policy decision.
 func (g Guard[M]) RequireScopes(ctx context.Context, required AccessScopes[M]) (M, error) {
 	if required.Len() == 0 {
-		return *new(M), fault.New(fault.Invalid, "scope requirement cannot be empty")
+		return *new(M), safeerror.NewFault(fault.Invalid, "scope requirement cannot be empty")
 	}
 	resolved, err := g.resolve(ctx)
 	if err != nil {
@@ -137,10 +138,10 @@ func (g Guard[M]) RequireScopes(ctx context.Context, required AccessScopes[M]) (
 	}
 	subject, present := resolved.subject.Get()
 	if !present {
-		return *new(M), Unauthenticated
+		return *new(M), Unauthenticated.WithCause(nil)
 	}
 	if resolved.grants == nil || !(AccessScopes[M]{grant: resolved.grants}).ContainsAll(required) {
-		return *new(M), Forbidden
+		return *new(M), Forbidden.WithCause(nil)
 	}
 	return subject, nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxRollbackSteps bounds one explicit rollback.
@@ -78,18 +79,18 @@ func (p *Postgres) Rollback(ctx context.Context, steps int) (result RollbackResu
 // order, descending) and validates that every one can be reversed alone.
 func (p *Postgres) rollbackSelection(report Report, history []Applied, steps int) ([]Applied, error) {
 	if steps < 1 || steps > MaxRollbackSteps {
-		return nil, fault.New(fault.Invalid, fmt.Sprintf("rollback steps must be between 1 and %d", MaxRollbackSteps))
+		return nil, safeerror.NewFault(fault.Invalid, fmt.Sprintf("rollback steps must be between 1 and %d", MaxRollbackSteps))
 	}
 	if err := report.Check(); err != nil {
 		return nil, err
 	}
 	for _, status := range report.Statuses {
 		if status.State == Incomplete || status.Progress != nil {
-			return nil, fault.New(fault.Conflict, "migration "+keyLabel(status.Key)+" is incomplete; reconcile it before rolling back")
+			return nil, safeerror.NewFault(fault.Conflict, "migration "+keyLabel(status.Key)+" is incomplete; reconcile it before rolling back")
 		}
 	}
 	if steps > len(history) {
-		return nil, fault.New(fault.Invalid, fmt.Sprintf("rollback of %d step(s) exceeds the %d applied migration(s)", steps, len(history)))
+		return nil, safeerror.NewFault(fault.Invalid, fmt.Sprintf("rollback of %d step(s) exceeds the %d applied migration(s)", steps, len(history)))
 	}
 	ordered := slices.Clone(history)
 	slices.SortStableFunc(ordered, func(a, b Applied) int {
@@ -104,13 +105,13 @@ func (p *Postgres) rollbackSelection(report Report, history []Applied, steps int
 		chosen[applied.Key] = true
 		item := p.registry.ordered[p.registry.byKey[applied.Key]]
 		if len(item.down) == 0 {
-			return nil, fault.New(fault.Invalid, "migration "+keyLabel(applied.Key)+" declares no Down SQL and cannot be rolled back")
+			return nil, safeerror.NewFault(fault.Invalid, "migration "+keyLabel(applied.Key)+" declares no Down SQL and cannot be rolled back")
 		}
 	}
 	for _, applied := range ordered[steps:] {
 		for _, required := range p.registry.ordered[p.registry.byKey[applied.Key]].entry.Requires {
 			if chosen[required] {
-				return nil, fault.New(fault.Conflict, "migration "+keyLabel(applied.Key)+" depends on "+keyLabel(required)+", which the rollback would reverse")
+				return nil, safeerror.NewFault(fault.Conflict, "migration "+keyLabel(applied.Key)+" depends on "+keyLabel(required)+", which the rollback would reverse")
 			}
 		}
 	}
@@ -130,7 +131,7 @@ func (p *Postgres) reverse(ctx context.Context, session *database.Session, item 
 			return err
 		}
 		if removed.RowsAffected != 1 {
-			return fault.New(fault.Conflict, "migration history changed during rollback")
+			return safeerror.NewFault(fault.Conflict, "migration history changed during rollback")
 		}
 		return nil
 	})

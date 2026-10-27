@@ -1,7 +1,7 @@
 package rows
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -50,25 +50,25 @@ func Select[S, R any](source SelectionSource[S], schema Schema[R], mappings ...M
 	q.decode = decode
 	q.recordOwner = core
 	if core == nil {
-		q.source.Err = errors.Join(q.source.Err, ormcore.Invalid("uninitialized row declaration"))
+		q.source.Err = safeerror.Join("operation failed", q.source.Err, ormcore.Invalid("uninitialized row declaration"))
 		return q
 	}
-	q.source.Err = errors.Join(q.source.Err, core.err)
+	q.source.Err = safeerror.Join("operation failed", q.source.Err, core.err)
 	if core.err == nil {
 		q.source.Checks = ormcore.AppendChecks(q.source.Checks, core.check)
 	}
 	lowered := make([]querycore.ProjectionMapping, len(mappings))
 	for i, m := range mappings {
 		if m.field == nil || m.field.owner != core {
-			q.source.Err = errors.Join(q.source.Err, ormcore.Invalid("projection field belongs to a different row declaration"))
+			q.source.Err = safeerror.Join("operation failed", q.source.Err, ormcore.Invalid("projection field belongs to a different row declaration"))
 			continue
 		}
-		q.source.Err = errors.Join(q.source.Err, m.expression.Err, ormcore.CheckReferenceSet(q.source, m.expression.Refs, m.expression.ReferenceFree))
+		q.source.Err = safeerror.Join("operation failed", q.source.Err, m.expression.Err, ormcore.CheckReferenceSet(q.source, m.expression.Refs, m.expression.ReferenceFree))
 		lowered[i] = querycore.ProjectionMapping{Column: m.field.column, Expression: m.expression.Node, Sensitive: m.expression.Sensitive}
 	}
 	node, err := querycore.SelectProjection(q.source.Node, core.columns, lowered)
 	q.source.Node = node
-	q.source.Err = errors.Join(q.source.Err, err)
+	q.source.Err = safeerror.Join("operation failed", q.source.Err, err)
 	return q
 }
 
@@ -76,7 +76,7 @@ func Select[S, R any](source SelectionSource[S], schema Schema[R], mappings ...M
 func SelectValue[M, V, P any](source orm.Query[M], column orm.ExpressionColumn[M, V, P]) Query[M, P] {
 	s := orm.FoundrySource(source, sqlowner.Metadata())
 	_, c := orm.FoundryColumn(column, sqlowner.Metadata())
-	s.Err = errors.Join(s.Err, c.Err, ormcore.CheckReferences(s, []ormcore.Reference{c.Reference}))
+	s.Err = safeerror.Join("operation failed", s.Err, c.Err, ormcore.CheckReferences(s, []ormcore.Reference{c.Reference}))
 	s.Node.Selections = []querycore.SelectItem{{Expression: c.Field, Alias: "value", Sensitive: c.Sensitive}}
 	return Query[M, P]{source: s, decode: func(row database.Row) (P, error) {
 		var result P

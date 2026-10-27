@@ -2,8 +2,9 @@ package rows
 
 import (
 	"database/sql/driver"
-	"errors"
+
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"sort"
 	"strings"
@@ -106,7 +107,7 @@ func Check(schemas ...CheckedSchema) error {
 			errs = append(errs, s.rowError())
 		}
 	}
-	return errors.Join(errs...)
+	return safeerror.Join("operation failed", errs...)
 }
 
 // Define binds and seals a complete row shape. Example: rows.Define(func(b rows.Builder[OrderRow],r *OrderRow) Fields {...}).
@@ -185,7 +186,7 @@ func bindField[R, V any](b Builder[R], ptr *V, c codec.Codec[V]) Field[R, V] {
 	}
 	field := d.typ.Field(index)
 	if ormcore.EncryptedType(field.Type) {
-		d.errors = append(d.errors, fmt.Errorf("row %s: encrypted values cannot be opened by projections; use a table with EncryptedTextOf/EncryptedJSONOf", field.Name))
+		d.errors = append(d.errors, safeerror.New(fmt.Sprintf("row %s: encrypted values cannot be opened by projections; use a table with EncryptedTextOf/EncryptedJSONOf", field.Name)))
 	}
 	f.offset = field.Offset
 	name := modelmeta.Snake(field.Name)
@@ -197,14 +198,14 @@ func bindField[R, V any](b Builder[R], ptr *V, c codec.Codec[V]) Field[R, V] {
 		if strings.HasPrefix(tag, "column=") && sqlname.Valid(strings.TrimPrefix(tag, "column=")) {
 			name = strings.TrimPrefix(tag, "column=")
 		} else {
-			d.errors = append(d.errors, fmt.Errorf("row %s: use foundry:\"column=name\" or leave the field undeclared with foundry:\"-\"", field.Name))
+			d.errors = append(d.errors, safeerror.New(fmt.Sprintf("row %s: use foundry:\"column=name\" or leave the field undeclared with foundry:\"-\"", field.Name)))
 		}
 	}
 	if d.fields[index] != nil {
-		d.errors = append(d.errors, fmt.Errorf("row %s: field is already declared", field.Name))
+		d.errors = append(d.errors, safeerror.New(fmt.Sprintf("row %s: field is already declared", field.Name)))
 	}
 	if err := c.Validate(); err != nil {
-		d.errors = append(d.errors, fmt.Errorf("row %s: invalid codec; use a kind constructor or FieldOf with orm.Codec(...): %w", field.Name, err))
+		d.errors = append(d.errors, safeerror.Prefix(fmt.Sprintf("row %s: invalid codec; use a kind constructor or FieldOf with orm.Codec(...)", field.Name), err))
 	}
 	switch c.ParameterType() {
 	case codec.TypeInteger, codec.TypeFloat, codec.TypeDecimal, codec.TypeText,
@@ -247,9 +248,9 @@ func seal(d *declaration) {
 				continue
 			}
 			if !f.IsExported() || f.Anonymous {
-				d.errors = append(d.errors, fmt.Errorf("row %s: fields must be exported, non-embedded; use foundry:\"-\" to skip", f.Name))
+				d.errors = append(d.errors, safeerror.New(fmt.Sprintf("row %s: fields must be exported, non-embedded; use foundry:\"-\" to skip", f.Name)))
 			} else {
-				d.errors = append(d.errors, fmt.Errorf("row %s: field is undeclared", f.Name))
+				d.errors = append(d.errors, safeerror.New(fmt.Sprintf("row %s: field is undeclared", f.Name)))
 			}
 		}
 	}
@@ -263,7 +264,7 @@ func seal(d *declaration) {
 		d.core.columns = append(d.core.columns, d.fields[i].column)
 	}
 	d.errors = append(d.errors, querycore.ValidateProjectionColumns(d.core.columns, true))
-	d.core.err = rowDeclarationError(errors.Join(d.errors...))
+	d.core.err = rowDeclarationError(safeerror.Join("operation failed", d.errors...))
 	core := d.core
 	core.check = sync.OnceValue(func() error {
 		errs := []error{core.err}
@@ -272,7 +273,7 @@ func seal(d *declaration) {
 				errs = append(errs, f.check())
 			}
 		}
-		return rowDeclarationError(errors.Join(errs...))
+		return rowDeclarationError(safeerror.Join("operation failed", errs...))
 	})
 	d.template = nil
 }
@@ -281,7 +282,7 @@ func rowDeclarationError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return errors.Join(fault.New(fault.Invalid, "invalid row declaration"), err)
+	return safeerror.Join("operation failed", safeerror.NewFault(fault.Invalid, "invalid row declaration"), err)
 }
 func rowError(core *rowCore) error {
 	if core.check != nil {

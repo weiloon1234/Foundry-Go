@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Option configures application-owned database runtime dependencies separately
@@ -34,7 +35,7 @@ type poolSettings struct {
 func WithClock(source clock.Clock) Option {
 	return func(settings *poolSettings) error {
 		if source == nil {
-			return fault.New(fault.Invalid, "database clock cannot be nil")
+			return safeerror.NewFault(fault.Invalid, "database clock cannot be nil")
 		}
 		settings.clock, settings.clockSet = source, true
 		return nil
@@ -45,7 +46,7 @@ func configurePool(options []Option) (poolSettings, error) {
 	settings := poolSettings{clock: clock.System{}}
 	for _, option := range options {
 		if option == nil {
-			return poolSettings{}, fault.New(fault.Invalid, "database option cannot be nil")
+			return poolSettings{}, safeerror.NewFault(fault.Invalid, "database option cannot be nil")
 		}
 		if err := option(&settings); err != nil {
 			return poolSettings{}, err
@@ -60,10 +61,10 @@ func (db *DB) bindRuntimeClock(source clock.Clock) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if db.closing || db.startAttempted || db.clockBound {
-		return fault.New(fault.Closed, "database clock binding is frozen")
+		return safeerror.NewFault(fault.Closed, "database clock binding is frozen")
 	}
 	if source == nil {
-		return fault.New(fault.Invalid, "application clock cannot be nil")
+		return safeerror.NewFault(fault.Invalid, "application clock cannot be nil")
 	}
 	if !db.clockExplicit {
 		db.timeSource = source

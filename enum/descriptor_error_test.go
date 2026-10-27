@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/enum"
-	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 type privateWireError struct{}
@@ -46,7 +45,7 @@ func TestDescriptorRedactsWireErrorsAndPreservesCauses(t *testing.T) {
 	for _, err := range []error{validateErr, definitionErr, lateErr} {
 		var private *privateWireError
 		var marshaler *json.MarshalerError
-		if !errors.Is(err, wireSentinel) || !errors.Is(err, fault.Invalid) || !errors.As(err, &private) || private != wireSentinel || !errors.As(err, &marshaler) {
+		if !errors.Is(err, wireSentinel) || !errors.As(err, &private) || private != wireSentinel || !errors.As(err, &marshaler) {
 			t.Fatal("enum validation lost the original marshaler error")
 		}
 		for _, diagnostic := range []string{err.Error(), fmt.Sprintf("%v %+v %#v", err, err, err), fmt.Errorf("descriptor failed: %w", err).Error()} {

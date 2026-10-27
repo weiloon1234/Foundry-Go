@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -49,10 +50,10 @@ func (c Change) Next() value.Optional[Record] {
 }
 func (c Change) Validate(address Address, subject model.Identity) error {
 	if c.kind != 1 && c.kind != 2 {
-		return fault.New(fault.Invalid, "MFA mutation must select replacement or removal")
+		return safeerror.NewFault(fault.Invalid, "MFA mutation must select replacement or removal")
 	}
 	if until, present := c.until.Get(); present && !validInstant(until) {
-		return fault.New(fault.Invalid, "invalid MFA mutation deadline")
+		return safeerror.NewFault(fault.Invalid, "invalid MFA mutation deadline")
 	}
 	if c.kind == 1 {
 		return c.record.Validate(address, subject)

@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const assetParameter = "asset"
@@ -20,9 +21,10 @@ type assetRoutePath struct{ Value AssetPath }
 // AssetMount declares one named GET/HEAD subtree. Register contributes it to
 // NewRouter; URL encodes an AssetPath through the same prefix declaration.
 type AssetMount struct {
-	assets *Assets
-	route  Route[assetRoutePath]
-	prefix string
+	assets             *Assets
+	route              Route[assetRoutePath]
+	prefix             string
+	navigationFallback stdhttp.Handler
 }
 
 func (a *Assets) Mount(id RouteID, prefix string) AssetMount {
@@ -38,7 +40,7 @@ func assetPrefix(prefix string) (string, error) {
 		return "", nil
 	}
 	if !strings.HasPrefix(prefix, "/") || strings.HasSuffix(prefix, "/") {
-		return "", fault.New(fault.Invalid, "asset prefix requires an absolute path without a trailing slash")
+		return "", safeerror.NewFault(fault.Invalid, "asset prefix requires an absolute path without a trailing slash")
 	}
 	if _, err := StaticPath(prefix).validate(); err != nil {
 		return "", err
@@ -47,12 +49,20 @@ func assetPrefix(prefix string) (string, error) {
 }
 func (m AssetMount) Validate() error {
 	if m.assets == nil || m.assets.done == nil {
-		return fault.New(fault.Invalid, "asset mount requires constructed assets")
+		return safeerror.NewFault(fault.Invalid, "asset mount requires constructed assets")
 	}
 	return m.route.Validate()
 }
 func (m AssetMount) WithMiddleware(middleware ...Middleware) AssetMount {
 	m.route = m.route.WithMiddleware(middleware...)
+	return m
+}
+
+// WithNavigationFallback returns a mount that delegates missing HTML navigations
+// to handler inside its middleware. A nil handler disables the fallback. Routes
+// and covering SPAs retain precedence; the handler owns its response headers.
+func (m AssetMount) WithNavigationFallback(handler stdhttp.Handler) AssetMount {
+	m.navigationFallback = handler
 	return m
 }
 func (m AssetMount) URL(name AssetPath) (string, error) {
@@ -103,8 +113,15 @@ func (m AssetMount) Register() RouteRegistration {
 		if err != nil {
 			// An equal SPA extends this mount: it answers the mount's misses
 			// inside the mount's middleware. Hits never look it up.
-			if spa := mountSPA(r, m.prefix); spa != nil && len(spa.prefix) == len(m.prefix) && isMissingAsset(err) && spa.serve(w, r) {
-				return
+			if isMissingAsset(err) {
+				if spa := mountSPA(r, m.prefix); spa != nil {
+					if spa.serve(w, r) {
+						return
+					}
+				} else if name := r.PathValue(assetParameter); m.navigationFallback != nil && m.assets.config.allowed(strings.TrimSuffix(name, "/")) && IsHTMLNavigation(r, name) {
+					m.navigationFallback.ServeHTTP(w, r)
+					return
+				}
 			}
 			writeRoutingError(w, r, err)
 			return
@@ -125,7 +142,7 @@ func (a *Assets) selectAsset(ctx context.Context, raw string, directoryURL bool)
 		return assetSelection{}, BadRequest.WithCause(err)
 	}
 	if !a.config.allowed(name) {
-		return assetSelection{}, NotFound
+		return assetSelection{}, NotFound.WithCause(nil)
 	}
 	lookup := name
 	if lookup == "" {
@@ -138,7 +155,7 @@ func (a *Assets) selectAsset(ctx context.Context, raw string, directoryURL bool)
 	selected := assetSelection{name: name}
 	if info.mode.IsDir() {
 		if a.config.Index == "" {
-			return selected, NotFound
+			return selected, NotFound.WithCause(nil)
 		}
 		selected.name = path.Join(name, string(a.config.Index))
 		index, err := a.stat(ctx, selected.name)
@@ -146,14 +163,14 @@ func (a *Assets) selectAsset(ctx context.Context, raw string, directoryURL bool)
 			return selected, err
 		}
 		if !index.mode.IsRegular() {
-			return selected, NotFound
+			return selected, NotFound.WithCause(nil)
 		}
 		if !directoryURL {
 			selected.redirect = 1
 		}
 	} else {
 		if !info.mode.IsRegular() {
-			return selected, NotFound
+			return selected, NotFound.WithCause(nil)
 		}
 		if directoryURL {
 			selected.redirect = -1

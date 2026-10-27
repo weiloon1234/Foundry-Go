@@ -1,9 +1,9 @@
 package orm
 
 import (
-	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"reflect"
 	"unsafe"
@@ -49,13 +49,13 @@ func ManyToManyOf[M, N, P any, A, B comparable](slot Through[M, N, P], local Key
 	a, pa, pb, b := relationColumn(local), relationColumn(pivotLocal), relationColumn(pivotForeign), relationColumn(foreign)
 	p := newRelationCore(slot.core, a.core, b.core, reflect.TypeFor[M](), reflect.TypeFor[N]())
 	if pa.core == nil || pb.core == nil || pa.core.owner == nil || pa.core.owner != pb.core.owner {
-		p.err = errors.Join(p.err, invalid("pivot keys must belong to one bound model"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("pivot keys must belong to one bound model"))
 	} else {
 		if slot.core == nil || slot.core.pivot != reflect.TypeFor[P]() || pa.core.owner.typ != reflect.TypeFor[P]() {
-			p.err = errors.Join(p.err, invalid("pivot slot/model mismatch"))
+			p.err = safeerror.Join("operation failed", p.err, invalid("pivot slot/model mismatch"))
 		}
 		p.join = &relationJoin{pivot: newQuery(pa.core.owner), first: querycore.FieldRef{Table: pa.core.owner.model.Table, Column: pa.core.metadata.Name}, second: querycore.FieldRef{Table: pb.core.owner.model.Table, Column: pb.core.metadata.Name}}
-		p.err = errors.Join(p.err, declarationCoreError(pa.core.owner))
+		p.err = safeerror.Join("operation failed", p.err, declarationCoreError(pa.core.owner))
 	}
 	if p.err == nil {
 		p.loaded = func(base unsafe.Pointer) bool {

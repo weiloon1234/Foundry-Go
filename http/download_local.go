@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // LocalDownload opens a regular file relative to an application-owned os.Root.
@@ -15,11 +16,11 @@ import (
 // The root confines symlink resolution; a valid-looking path alone does not.
 func LocalDownload(root *os.Root, path string) Download {
 	if root == nil || !fs.ValidPath(path) || path == "." {
-		return Download{err: fault.New(fault.Invalid, "local download requires a root and relative file path")}
+		return Download{err: safeerror.NewFault(fault.Invalid, "local download requires a root and relative file path")}
 	}
 	return DownloadFrom(func(ctx context.Context) (DownloadContent, error) {
 		if ctx == nil {
-			return DownloadContent{}, fault.New(fault.Invalid, "local download requires a context")
+			return DownloadContent{}, safeerror.NewFault(fault.Invalid, "local download requires a context")
 		}
 		if err := ctx.Err(); err != nil {
 			return DownloadContent{}, err
@@ -31,7 +32,7 @@ func LocalDownload(root *os.Root, path string) Download {
 			return DownloadContent{}, localDownloadError(err)
 		}
 		if !before.Mode().IsRegular() {
-			return DownloadContent{}, fault.New(fault.Invalid, "local download requires a regular file")
+			return DownloadContent{}, safeerror.NewFault(fault.Invalid, "local download requires a regular file")
 		}
 		file, err := root.OpenFile(path, downloadOpenFlags, 0)
 		if err != nil {
@@ -45,7 +46,7 @@ func LocalDownload(root *os.Root, path string) Download {
 			return content, err
 		}
 		if !info.Mode().IsRegular() {
-			return content, fault.New(fault.Invalid, "local download requires a regular file")
+			return content, safeerror.NewFault(fault.Invalid, "local download requires a regular file")
 		}
 		content.Name, content.Modified = info.Name(), info.ModTime()
 		content.MediaType = MediaType("application/octet-stream")

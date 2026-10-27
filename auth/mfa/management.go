@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -27,7 +28,7 @@ func (f *Factors[M, K]) Disable(ctx context.Context, password auth.PasswordResul
 			return Change{}, err
 		}
 		if !allowed {
-			return Change{}, auth.Forbidden
+			return Change{}, auth.Forbidden.WithCause(nil)
 		}
 		if _, err := f.verify(op, record, response, now); err != nil {
 			return Change{}, err
@@ -122,14 +123,14 @@ func (f *Factors[M, K]) Prune(ctx context.Context, limit int) (uint64, error) {
 		return 0, err
 	}
 	if limit < 1 || limit > MaxPrune {
-		return 0, fault.New(fault.Invalid, "invalid MFA prune limit")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid MFA prune limit")
 	}
 	var removed uint64
 	err := f.store.gate.Execute(ctx, func(op context.Context) error {
 		var err error
 		removed, err = f.store.backend.Prune(op, f.address, limit)
 		if err == nil && removed > uint64(limit) {
-			return fault.New(fault.Invalid, "MFA prune exceeded its limit")
+			return safeerror.NewFault(fault.Invalid, "MFA prune exceeded its limit")
 		}
 		return err
 	})

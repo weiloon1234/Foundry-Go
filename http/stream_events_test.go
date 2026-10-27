@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraphtest"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"strings"
@@ -287,3 +288,51 @@ func TestEventStreamResponseFailures(t *testing.T) {
 		})
 	}
 }
+
+func TestCanceledTypedEventsContainProducerErrorInspection(t *testing.T) {
+	for _, mode := range []string{"cycle", "panic", "goexit"} {
+		t.Run(mode, func(t *testing.T) {
+			cause := &errorgraphtest.Error{Mode: mode}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			router, err := NewRouter(eventsEndpoint().Handle(func(context.Context, Input[NoPath, NoQuery, NoBody]) (Events[StreamEventPayload], error) {
+				return EventsFrom(func(context.Context, *EventSink[StreamEventPayload]) error {
+					t.Error("failed initial flush started producer")
+					return nil
+				}), nil
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			returned := make(chan bool, 1)
+			go func() {
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						returned <- recovered == stdhttp.ErrAbortHandler
+					}
+				}()
+				router.ServeHTTP(&cancelingEventWriter{ResponseRecorder: httptest.NewRecorder(), cancel: cancel, cause: cause}, httptest.NewRequest("GET", "/events", nil).WithContext(ctx))
+				returned <- false
+			}()
+			select {
+			case aborted := <-returned:
+				if !aborted {
+					t.Fatal("producer failure became normal cancellation")
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("producer inspection terminated or stranded caller")
+			}
+			if cause.Formatted.Load() != 0 || cause.Visits.Load() == 0 && mode == "cycle" || cause.Visits.Load() > 512 {
+				t.Fatal("typed event inspection was not bounded", cause.Visits.Load())
+			}
+		})
+	}
+}
+
+type cancelingEventWriter struct {
+	*httptest.ResponseRecorder
+	cancel context.CancelFunc
+	cause  error
+}
+
+func (w *cancelingEventWriter) FlushError() error { w.cancel(); return w.cause }

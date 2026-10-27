@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -73,7 +74,7 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 			return err
 		}
 		if !active[subject] {
-			return database.NotFound
+			return safeerror.Owned(string(database.NotFound), database.NotFound)
 		}
 		rows, err := extensionrow.For(owner, []model.Reference[M, K]{reference})
 		if err != nil {
@@ -126,7 +127,7 @@ func (k Key[M, K, V]) matchingKeys(ctx context.Context, m *Manager, input V) ([]
 			return err
 		}
 		if len(rows) > querycore.MaxIdentityBatch {
-			return fault.New(fault.Conflict, "metadata matching scope exceeds its limit")
+			return safeerror.NewFault(fault.Conflict, "metadata matching scope exceeds its limit")
 		}
 		for _, row := range rows {
 			identity, err := maintenanceIdentity(m.store.Registry(), k.definition.owner.Name(), k.definition.owner.Scope(), row)
@@ -221,7 +222,7 @@ func cleanupSubject(ctx context.Context, tx *database.Tx, m *Manager, owner exte
 			return err
 		}
 		if retained[subject.Key] {
-			return fault.New(fault.Conflict, "metadata cleanup requires a deleted owner")
+			return safeerror.NewFault(fault.Conflict, "metadata cleanup requires a deleted owner")
 		}
 		_, err = deleteSubject(ctx, child, subject)
 		return err

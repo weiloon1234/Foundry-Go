@@ -50,7 +50,7 @@
       "sha256": "37ccf775cbcf9b69c9d7a5ba97cbd512c1df225d65c0d96c1934f01e8fbd99b4"
     },
     "consumer/articles/writes_postgres_test.go": {
-      "sha256": "1fd05de736d2917639a51b6850f6c2914463719a904382a2d5e1d20b345686b4"
+      "sha256": "f9922a76be342f2a221c4da07328f957fb9afab94559e1c045e3a72faa018619"
     },
     "consumer/assignment_inputs_test.go": {
       "sha256": "a6b332e9cf85abd4cfee5210b772c88d07b4e975ee9ef2d017608536a672f25c"
@@ -353,7 +353,7 @@
       "sha256": "67d13a05093fbf43114bbc7a8fe07223178a3653629e520fbceaf49b64cd7e8d"
     },
     "consumer/hookqueries/after_commit_error_test.go": {
-      "sha256": "cdc88fd776aa34747844da890aa8eb93f33400faea89a4797e2f8732b87d2716"
+      "sha256": "0b63f2cee4db50bd6fd0f7afc87722c8cf73172acd017865af959626c385b8d7"
     },
     "consumer/hookqueries/hooks_postgres_test.go": {
       "sha256": "8175ef7d8cefd8ceca42c33bfaf7b37476165a1ee88dac5d5baab8eb01f74b74"
@@ -362,7 +362,7 @@
       "sha256": "851f572cb3395d7c5c0b635638dd95a3cdfe1e72d2507c04685336ed6401ddd7"
     },
     "consumer/httpassets/assets_test.go": {
-      "sha256": "70f219ed6efa9ab4d52f089bc1d136bbdff5d1148c0bb870590d4128d11946d4"
+      "sha256": "d555638cca59cceb5d425ae2d350e44104fa74d0b6382cbbf4f03735d3acb424"
     },
     "consumer/httpcompression/compression_test.go": {
       "sha256": "394ef8ae9340030ecd522bd9d15f87d08a861bbee826210033082564988ee44d"

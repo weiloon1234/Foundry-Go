@@ -3,11 +3,13 @@ package querycore
 import (
 	"context"
 	"database/sql/driver"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -32,9 +34,14 @@ func NewCapturedFieldMutator[I, V any](column string, capture func(V) Assignment
 	return FieldMutator{Column: column, Input: reflect.TypeFor[I](), Output: reflect.TypeFor[V](), Apply: func(a AssignmentValue) (AssignmentValue, error) {
 		input, ok := a.InputValue().(I)
 		if !ok {
-			return AssignmentValue{}, fault.New(fault.Invalid, "mutation value does not match its declared field type")
+			return AssignmentValue{}, safeerror.NewFault(fault.Invalid, "mutation value does not match its declared field type")
 		}
-		output, err := mutate(input)
+		var output V
+		err := callback.Isolated("mutate model field", func() error {
+			var err error
+			output, err = mutate(input)
+			return err
+		})
 		if err != nil {
 			return AssignmentValue{}, lifecore.Failure("mutate model field "+column+" failed", err)
 		}
@@ -72,7 +79,7 @@ func CaptureInput[I any](input I, clone func(I) I) AssignmentValue {
 		input = clone(input)
 	}
 	a := AssignmentValue{Value: RetainInput(input), Bind: func() (driver.Value, error) {
-		return nil, fault.New(fault.Invalid, "mutation input must be transformed before SQL binding")
+		return nil, safeerror.NewFault(fault.Invalid, "mutation input must be transformed before SQL binding")
 	}}
 	if clone != nil {
 		a.CopyValue = func() any { return clone(input) }
@@ -91,7 +98,7 @@ func MutateAssignments(ctx context.Context, assignments []MutationAssignment, fi
 	}
 	for _, f := range fields {
 		if i, set := indices[f.Column]; set && reflect.TypeOf(StoredInput(result[i].Value)) != f.Input {
-			return nil, fault.New(fault.Invalid, "mutation value does not match its declared field type")
+			return nil, safeerror.NewFault(fault.Invalid, "mutation value does not match its declared field type")
 		}
 	}
 	for _, f := range fields {

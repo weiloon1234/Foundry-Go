@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // RouteID is the stable semantic identity used by inspection and client contracts.
@@ -90,7 +91,7 @@ func (r Route[P]) validateIdentity() error {
 		return r.err
 	}
 	if !identifier.Semantic(string(r.spec.ID)) || !r.spec.Method.valid() || (r.spec.Access != Public && r.spec.Access != Guarded) {
-		return fault.New(fault.Invalid, "route requires a semantic ID, supported method and explicit access declaration")
+		return safeerror.NewFault(fault.Invalid, "route requires a semantic ID, supported method and explicit access declaration")
 	}
 	return nil
 }
@@ -128,10 +129,10 @@ func (r Route[P]) handle(handler RawHandler[P], raw bool) RouteRegistration {
 		return RouteRegistration{err: err}
 	}
 	if handler == nil {
-		return RouteRegistration{err: fault.New(fault.Invalid, "route requires a handler")}
+		return RouteRegistration{err: safeerror.NewFault(fault.Invalid, "route requires a handler")}
 	}
 	if r.spec.Access == Guarded && (r.authentication == nil || r.authentication.Optional) {
-		return RouteRegistration{err: fault.New(fault.Invalid, "guarded route requires a typed authentication adapter")}
+		return RouteRegistration{err: safeerror.NewFault(fault.Invalid, "guarded route requires a typed authentication adapter")}
 	}
 	info := r.info(segments, raw)
 	return RouteRegistration{contract: r.contributionContract(), info: info, middlewares: slices.Clone(r.middlewares), pattern: string(r.spec.Method) + " " + nativePath(segments), handler: stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, request *stdhttp.Request) {

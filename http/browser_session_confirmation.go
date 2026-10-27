@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PasswordConfirmationMiddlewareID identifies RequirePasswordConfirmation.
@@ -22,10 +23,10 @@ func (b *BrowserSessions[M, K]) RequirePasswordConfirmation(within time.Duration
 			return nil, err
 		}
 		if within <= 0 {
-			return nil, fault.New(fault.Invalid, "password confirmation window must be positive")
+			return nil, safeerror.NewFault(fault.Invalid, "password confirmation window must be positive")
 		}
 		if next == nil {
-			return nil, fault.New(fault.Invalid, "password confirmation requires a next handler")
+			return nil, safeerror.NewFault(fault.Invalid, "password confirmation requires a next handler")
 		}
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			if err := b.sessions.RequireConfirmed(r.Context(), within); err != nil {

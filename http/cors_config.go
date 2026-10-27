@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // CORSConfig declares browser response sharing. The zero value permits no
@@ -74,20 +75,20 @@ func compileCORS(c CORSConfig) (corsPolicy, error) {
 		return corsPolicy{}, err
 	}
 	if len(c.Paths) > maxCORSPaths {
-		return corsPolicy{}, fault.New(fault.Invalid, "CORS path policies exceed their declaration bound")
+		return corsPolicy{}, safeerror.NewFault(fault.Invalid, "CORS path policies exceed their declaration bound")
 	}
 	seen := make(map[string]bool, len(c.Paths))
 	for _, declared := range c.Paths {
 		prefix := declared.Prefix
 		if prefix == "" || prefix[0] != '/' || len(prefix) > 1024 || prefix != "/" && strings.HasSuffix(prefix, "/") || path.Clean(prefix) != prefix || strings.ContainsAny(prefix, "?#*{}\\") {
-			return corsPolicy{}, fault.New(fault.Invalid, "CORS path prefix must be a clean absolute path without a trailing slash, query or pattern")
+			return corsPolicy{}, safeerror.NewFault(fault.Invalid, "CORS path prefix must be a clean absolute path without a trailing slash, query or pattern")
 		}
 		if seen[prefix] {
-			return corsPolicy{}, fault.New(fault.Duplicate, "CORS path prefix is repeated")
+			return corsPolicy{}, safeerror.NewFault(fault.Duplicate, "CORS path prefix is repeated")
 		}
 		seen[prefix] = true
 		if len(declared.Policy.Paths) != 0 {
-			return corsPolicy{}, fault.New(fault.Invalid, "CORS path policies cannot declare nested paths")
+			return corsPolicy{}, safeerror.NewFault(fault.Invalid, "CORS path policies cannot declare nested paths")
 		}
 		compiled, err := compileCORSPolicy(declared.Policy)
 		if err != nil {
@@ -112,13 +113,13 @@ func (p corsPolicy) forPath(requestPath string) corsPolicy {
 
 func compileCORSPolicy(c CORSConfig) (corsPolicy, error) {
 	if len(c.Origins) > maxCORSItems || len(c.OriginPatterns) > maxCORSItems || len(c.Methods) > maxCORSItems || len(c.Headers) > maxCORSItems || len(c.ExposeHeaders) > maxCORSItems {
-		return corsPolicy{}, fault.New(fault.Invalid, "CORS declaration exceeds its item bound")
+		return corsPolicy{}, safeerror.NewFault(fault.Invalid, "CORS declaration exceeds its item bound")
 	}
 	if c.AnyOrigin && (len(c.Origins) != 0 || len(c.OriginPatterns) != 0 || c.Credentials) || c.AnyMethod && len(c.Methods) != 0 || c.AnyHeaders && len(c.Headers) != 0 {
-		return corsPolicy{}, fault.New(fault.Invalid, "CORS wildcard configuration conflicts with an explicit list or credentials")
+		return corsPolicy{}, safeerror.NewFault(fault.Invalid, "CORS wildcard configuration conflicts with an explicit list or credentials")
 	}
 	if c.MaxAge < 0 || c.MaxAge > 24*time.Hour || c.MaxAge%time.Second != 0 {
-		return corsPolicy{}, fault.New(fault.Invalid, "CORS max age must be whole seconds from zero through 24 hours")
+		return corsPolicy{}, safeerror.NewFault(fault.Invalid, "CORS max age must be whole seconds from zero through 24 hours")
 	}
 	policy := corsPolicy{origins: make(map[Origin]bool), methods: make(map[Method]bool), anyOrigin: c.AnyOrigin, anyMethod: c.AnyMethod, anyHeaders: c.AnyHeaders, credentials: c.Credentials, maxAge: c.MaxAge}
 	for _, item := range c.Origins {
@@ -127,7 +128,7 @@ func compileCORSPolicy(c CORSConfig) (corsPolicy, error) {
 			return corsPolicy{}, err
 		}
 		if policy.origins[origin] {
-			return corsPolicy{}, fault.New(fault.Duplicate, "CORS origin is repeated")
+			return corsPolicy{}, safeerror.NewFault(fault.Duplicate, "CORS origin is repeated")
 		}
 		policy.origins[origin] = true
 	}
@@ -138,17 +139,17 @@ func compileCORSPolicy(c CORSConfig) (corsPolicy, error) {
 			return corsPolicy{}, err
 		}
 		if patterns[matcher] {
-			return corsPolicy{}, fault.New(fault.Duplicate, "CORS origin pattern is repeated")
+			return corsPolicy{}, safeerror.NewFault(fault.Duplicate, "CORS origin pattern is repeated")
 		}
 		patterns[matcher] = true
 		policy.patterns = append(policy.patterns, matcher)
 	}
 	for _, method := range c.Methods {
 		if !method.valid() {
-			return corsPolicy{}, fault.New(fault.Invalid, "CORS method is not a supported framework HTTP method")
+			return corsPolicy{}, safeerror.NewFault(fault.Invalid, "CORS method is not a supported framework HTTP method")
 		}
 		if policy.methods[method] {
-			return corsPolicy{}, fault.New(fault.Duplicate, "CORS method is repeated")
+			return corsPolicy{}, safeerror.NewFault(fault.Duplicate, "CORS method is repeated")
 		}
 		policy.methods[method] = true
 	}
@@ -172,15 +173,15 @@ func corsHeaderDeclarations(names []HeaderName) (map[string]bool, []string, erro
 	for _, name := range names {
 		value, err := name.Canonical()
 		if err != nil || name == "*" {
-			return nil, nil, fault.New(fault.Invalid, "CORS headers require explicit valid field names; use AnyHeaders for request-header reflection")
+			return nil, nil, safeerror.NewFault(fault.Invalid, "CORS headers require explicit valid field names; use AnyHeaders for request-header reflection")
 		}
 		key := strings.ToLower(string(value))
 		if seen[key] {
-			return nil, nil, fault.New(fault.Duplicate, "CORS header is repeated")
+			return nil, nil, safeerror.NewFault(fault.Duplicate, "CORS header is repeated")
 		}
 		size += len(value) + 2
 		if size > maxCORSHeaderBytes {
-			return nil, nil, fault.New(fault.Invalid, "CORS header declaration exceeds its byte bound")
+			return nil, nil, safeerror.NewFault(fault.Invalid, "CORS header declaration exceeds its byte bound")
 		}
 		seen[key] = true
 		canonical = append(canonical, string(value))

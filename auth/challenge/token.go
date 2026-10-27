@@ -45,7 +45,7 @@ func ParseDigest(text string) (Digest, error) {
 func HashSecret(raw secret.String) (Digest, error) {
 	hash, err := credential.Hash(raw)
 	if err != nil {
-		return Digest{}, auth.Unauthenticated
+		return Digest{}, auth.Unauthenticated.WithCause(nil)
 	}
 	return Digest{hash: hash}, nil
 }

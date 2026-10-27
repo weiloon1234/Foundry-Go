@@ -2,12 +2,11 @@ package mfa
 
 import (
 	"context"
-	"errors"
-
-	"github.com/weiloon1234/Foundry-Go/auth/lockout"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/auth/lockout"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -54,12 +53,12 @@ func (f *Factors[M, K]) verify(ctx context.Context, record Record, response Resp
 	})
 	if err != nil {
 		if errorgraph.Has[*lockout.Rejection](err) {
-			return Record{}, errors.Join(err, f.rejected(ctx, reference))
+			return Record{}, safeerror.Join("operation failed", err, f.rejected(ctx, reference))
 		}
 		return Record{}, err
 	}
 	if !matched {
-		return Record{}, errors.Join(auth.Unauthenticated, f.rejected(ctx, reference))
+		return Record{}, safeerror.Join("operation failed", auth.Unauthenticated.WithCause(nil), f.rejected(ctx, reference))
 	}
 	return next, nil
 }
@@ -67,7 +66,7 @@ func (f *Factors[M, K]) active(current M, stored value.Optional[Record], now tem
 	record, present := stored.Get()
 	confirmed, enabled := record.ConfirmedAt.Get()
 	if !present || !enabled || !f.model.Enabled(current) || now.UTC().Before(confirmed.UTC()) {
-		return Record{}, auth.Unauthenticated
+		return Record{}, auth.Unauthenticated.WithCause(nil)
 	}
 	return record, nil
 }

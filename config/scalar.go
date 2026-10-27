@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ScalarValue preserves named Go scalar types at the configuration boundary.
@@ -27,7 +28,7 @@ func Scalar[T any, V ScalarValue](name string, field func(*T) *V) Key[T, V] {
 		key.check = func(value V) error {
 			number := reflect.ValueOf(value).Float()
 			if math.IsNaN(number) || math.IsInf(number, 0) {
-				return fault.New(fault.Invalid, "configuration number must be finite")
+				return safeerror.NewFault(fault.Invalid, "configuration number must be finite")
 			}
 			return nil
 		}
@@ -58,7 +59,7 @@ func parseScalar[V ScalarValue](raw string) (V, error) {
 		var parsed float64
 		parsed, err = strconv.ParseFloat(raw, value.Type().Bits())
 		if err == nil && (math.IsNaN(parsed) || math.IsInf(parsed, 0)) {
-			err = fault.New(fault.Invalid, "configuration number must be finite")
+			err = safeerror.NewFault(fault.Invalid, "configuration number must be finite")
 		}
 		value.SetFloat(parsed)
 	}
@@ -90,7 +91,7 @@ func Enum[T any, V enum.Scalar](name string, field func(*T) *V, descriptor enum.
 	key.declarationErr = descriptor.Validate()
 	key.check = func(value V) error {
 		if !descriptor.Contains(value) {
-			return fault.New(fault.Invalid, "configuration enum value is not declared")
+			return safeerror.NewFault(fault.Invalid, "configuration enum value is not declared")
 		}
 		return nil
 	}

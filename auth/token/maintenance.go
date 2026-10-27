@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
@@ -45,7 +46,7 @@ func (t *Tokens[M, K]) RevokeID(ctx context.Context, reference model.Reference[M
 		return false, err
 	}
 	if id.IsZero() {
-		return false, fault.New(fault.Invalid, "token revocation requires an identifier")
+		return false, safeerror.NewFault(fault.Invalid, "token revocation requires an identifier")
 	}
 	var removed bool
 	err := t.store.execute(ctx, func(op context.Context) error {
@@ -97,13 +98,13 @@ func (t *Tokens[M, K]) List(ctx context.Context, reference model.Reference[M, K]
 			return err
 		}
 		if len(records) > MaxTokens {
-			return fault.New(fault.Invalid, "token backend exceeded result limit")
+			return safeerror.NewFault(fault.Invalid, "token backend exceeded result limit")
 		}
 		result = make([]Info[M, K], len(records))
 		seen := make(map[model.ID[Record]]bool, len(records))
 		for i, record := range records {
 			if record.Subject != identity || seen[record.ID] {
-				return fault.New(fault.Invalid, "token backend returned foreign or duplicate metadata")
+				return safeerror.NewFault(fault.Invalid, "token backend returned foreign or duplicate metadata")
 			}
 			seen[record.ID] = true
 			result[i], err = t.info(record)
@@ -126,14 +127,14 @@ func (t *Tokens[M, K]) Prune(ctx context.Context, limit int) (uint64, error) {
 		return 0, err
 	}
 	if limit < 1 || limit > MaxPruneFamilies {
-		return 0, fault.New(fault.Invalid, "invalid token prune family limit")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid token prune family limit")
 	}
 	var count uint64
 	err := t.store.execute(ctx, func(op context.Context) error {
 		var err error
 		count, err = t.store.backend.Prune(op, t.address, limit)
 		if err == nil && count > uint64(limit) {
-			return fault.New(fault.Invalid, "token backend exceeded prune limit")
+			return safeerror.NewFault(fault.Invalid, "token backend exceeded prune limit")
 		}
 		// Expired handshake tickets are pruned alongside, within the same bound,
 		// only while tickets are enabled: a deployment with them disabled keeps
@@ -170,7 +171,7 @@ func (t *Tokens[M, K]) Touch(ctx context.Context, access secret.String) (bool, e
 			return nil
 		}
 		if !record.AccessHash.Equal(hash) {
-			return fault.New(fault.Invalid, "token backend touched a different credential")
+			return safeerror.NewFault(fault.Invalid, "token backend touched a different credential")
 		}
 		if _, err := t.info(record); err != nil {
 			return err

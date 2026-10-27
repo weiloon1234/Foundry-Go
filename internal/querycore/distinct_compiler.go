@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (c *Compiler) DistinctSQL(s SelectNode, grouped map[FieldRef]bool, grouping bool) (string, error) {
@@ -12,7 +13,7 @@ func (c *Compiler) DistinctSQL(s SelectNode, grouped map[FieldRef]bool, grouping
 	switch d.Kind {
 	case NoDistinct, DistinctRows:
 		if len(d.Keys) != 0 {
-			return "", fault.New(fault.Invalid, "unexpected DISTINCT keys")
+			return "", safeerror.NewFault(fault.Invalid, "unexpected DISTINCT keys")
 		}
 		if d.Kind == DistinctRows {
 			return "DISTINCT ", nil
@@ -20,10 +21,10 @@ func (c *Compiler) DistinctSQL(s SelectNode, grouped map[FieldRef]bool, grouping
 		return "", nil
 	case DistinctOn:
 		if len(d.Keys) == 0 || len(d.Keys) > MaxExpressionNodes {
-			return "", fault.New(fault.Invalid, "DISTINCT ON requires bounded, nonempty keys")
+			return "", safeerror.NewFault(fault.Invalid, "DISTINCT ON requires bounded, nonempty keys")
 		}
 	default:
-		return "", fault.New(fault.Invalid, "invalid DISTINCT mode")
+		return "", safeerror.NewFault(fault.Invalid, "invalid DISTINCT mode")
 	}
 	keys := make(map[*CompiledKey]bool, len(d.Keys))
 	entries := make([]*CompiledKey, len(d.Keys))
@@ -36,7 +37,7 @@ func (c *Compiler) DistinctSQL(s SelectNode, grouped map[FieldRef]bool, grouping
 			return "", err
 		}
 		if keys[key] {
-			return "", fault.New(fault.Invalid, "repeated DISTINCT ON key")
+			return "", safeerror.NewFault(fault.Invalid, "repeated DISTINCT ON key")
 		}
 		keys[key], entries[i] = true, key
 	}
@@ -62,7 +63,7 @@ func (c *Compiler) DistinctSQL(s SelectNode, grouped map[FieldRef]bool, grouping
 		} else if remaining != 0 {
 			// A repeated key is still part of the prefix.
 			if _, found := keys[key]; !found {
-				return "", fault.New(fault.Invalid, "DISTINCT ON keys must precede other ORDER BY expressions")
+				return "", safeerror.NewFault(fault.Invalid, "DISTINCT ON keys must precede other ORDER BY expressions")
 			}
 		}
 	}
@@ -97,5 +98,5 @@ func (d *DistinctOrder) Compile(c *Compiler, order OrderNode, grouped map[FieldR
 	if found {
 		return strconv.Itoa(d.Ordinals[i]), nil
 	}
-	return "", fault.New(fault.Invalid, "DISTINCT ordering must match a selected expression and its bindings")
+	return "", safeerror.NewFault(fault.Invalid, "DISTINCT ordering must match a selected expression and its bindings")
 }

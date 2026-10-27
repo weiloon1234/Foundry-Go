@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -37,7 +38,7 @@ const MaxDeliveryPage = 100
 // ErrDeliveryAnchorMoved reports that the after delivery no longer exists or
 // left the listed state, so the page position is lost. Restart the listing
 // from the beginning (a zero after) instead of silently repeating rows.
-var ErrDeliveryAnchorMoved = fault.New(fault.Conflict, "delivery page anchor no longer exists in this state; restart the listing")
+var ErrDeliveryAnchorMoved = safeerror.Sentinel(fault.Conflict, "delivery page anchor no longer exists in this state; restart the listing")
 
 // Deliveries lists up to limit deliveries in state, oldest update first. Pass
 // the last returned ID as after to continue; resolving rows between pages can
@@ -122,7 +123,7 @@ func (m *Manager) ResolveDelivery(ctx context.Context, id DeliveryID, expected S
 			return nil
 		}
 		if target == Prepared && row.Kind == "database" {
-			return fault.New(fault.Invalid, "database notification deliveries are never running or uncertain")
+			return safeerror.NewFault(fault.Invalid, "database notification deliveries are never running or uncertain")
 		}
 		now, err := m.now()
 		if err != nil {

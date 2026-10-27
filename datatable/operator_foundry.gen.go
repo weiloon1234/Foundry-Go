@@ -9,6 +9,7 @@ import (
 	codec "github.com/weiloon1234/Foundry-Go/database/codec"
 	enum "github.com/weiloon1234/Foundry-Go/enum"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
+	foundrydiagnostic "github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	sync "sync"
 )
 
@@ -54,7 +55,7 @@ func (v Operator) IsValid() bool {
 // Validate reports invalid values without formatting the input.
 func (v Operator) Validate() error {
 	if !v.IsValid() {
-		return foundryfault.New(foundryfault.Invalid, "invalid Operator value")
+		return foundrydiagnostic.NewFault(foundryfault.Invalid, "invalid Operator value")
 	}
 	return nil
 }
@@ -90,10 +91,10 @@ func (v Operator) MarshalJSON() ([]byte, error) {
 func (v *Operator) UnmarshalJSON(data []byte) error {
 	var raw *string
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return foundryfault.Wrap(foundryfault.Invalid, "invalid Operator representation", err)
+		return foundrydiagnostic.WrapFault(foundryfault.Invalid, "invalid Operator representation", err)
 	}
 	if raw == nil {
-		return foundryfault.New(foundryfault.Invalid, "enum cannot decode null")
+		return foundrydiagnostic.NewFault(foundryfault.Invalid, "enum cannot decode null")
 	}
 	parsed := Operator(*raw)
 	if err := parsed.Validate(); err != nil {

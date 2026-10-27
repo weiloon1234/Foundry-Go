@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // maxReadableBytes bounds a readable name. A longer name is truncated and
@@ -61,7 +62,7 @@ func Schemas(types []contract.Type, reserved func(string) bool) (map[contract.Ty
 	for _, id := range pending {
 		name := Symbol(string(id))
 		if !available(name) {
-			return nil, fault.New(fault.Conflict, "generated schema names collide")
+			return nil, safeerror.NewFault(fault.Conflict, "generated schema names collide")
 		}
 		used[name], result[id] = id, name
 	}

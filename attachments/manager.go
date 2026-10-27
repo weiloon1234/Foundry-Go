@@ -107,7 +107,7 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 			return nil, err
 		}
 		if _, ok := m.collections[collection.key]; ok {
-			return nil, fault.New(fault.Duplicate, "attachment collection already registered")
+			return nil, attachmentFailure(fault.Duplicate, "attachment collection already registered")
 		}
 		disk, err := collection.policy.Disk.Resolve(dependencies.Disks)
 		if err != nil {
@@ -115,7 +115,7 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 		}
 		capabilities := disk.Capabilities()
 		if !capabilities.ConditionalCreate || !capabilities.ConditionalRead || !capabilities.ConditionalDelete {
-			return nil, storage.Failure(storage.Unsupported, storage.PutOperation, storage.Unchanged, nil)
+			return nil, storageFailure(storage.Unsupported, storage.PutOperation, storage.Unchanged, nil)
 		}
 		if err := capabilities.ValidatePut(storage.PutOptions{Size: value.Set(collection.policy.MaxStoredBytes), Condition: storage.IfAbsent()}); err != nil {
 			return nil, err

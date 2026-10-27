@@ -3,6 +3,7 @@ package modelmeta
 
 import (
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"strconv"
 	"strings"
 	"unicode"
@@ -18,33 +19,33 @@ func ParseTags(text string) (map[string]string, error) {
 		}
 		colon := strings.IndexByte(text, ':')
 		if colon < 1 {
-			return nil, fmt.Errorf("malformed struct tag")
+			return nil, safeerror.New(fmt.Sprintf("malformed struct tag"))
 		}
 		key := text[:colon]
 		for _, r := range key {
 			if r <= ' ' || r == '"' || r == 127 {
-				return nil, fmt.Errorf("malformed struct tag key")
+				return nil, safeerror.New(fmt.Sprintf("malformed struct tag key"))
 			}
 		}
 		remaining := text[colon+1:]
 		if len(remaining) == 0 || remaining[0] != '"' {
-			return nil, fmt.Errorf("struct tag values must be quoted")
+			return nil, safeerror.New(fmt.Sprintf("struct tag values must be quoted"))
 		}
 		quoted, err := strconv.QuotedPrefix(remaining)
 		if err != nil {
-			return nil, fmt.Errorf("malformed quoted struct tag")
+			return nil, safeerror.New(fmt.Sprintf("malformed quoted struct tag"))
 		}
 		value, err := strconv.Unquote(quoted)
 		if err != nil {
-			return nil, fmt.Errorf("invalid struct tag value")
+			return nil, safeerror.New(fmt.Sprintf("invalid struct tag value"))
 		}
 		if _, exists := tags[key]; exists {
-			return nil, fmt.Errorf("duplicate struct tag namespace %s", key)
+			return nil, safeerror.New(fmt.Sprintf("duplicate struct tag namespace %s", key))
 		}
 		tags[key] = value
 		text = remaining[len(quoted):]
 		if text != "" && text[0] != ' ' {
-			return nil, fmt.Errorf("struct tags must be separated by spaces")
+			return nil, safeerror.New(fmt.Sprintf("struct tags must be separated by spaces"))
 		}
 	}
 	return tags, nil

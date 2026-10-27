@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const (
@@ -32,7 +33,7 @@ type Store interface {
 // operator first saves shared state. Draining gates ignore the record.
 func Refresh(ctx context.Context, gate *Gate, store Store) error {
 	if ctx == nil || gate == nil || store == nil {
-		return fault.New(fault.Invalid, "maintenance refresh requires a context, gate and store")
+		return safeerror.NewFault(fault.Invalid, "maintenance refresh requires a context, gate and store")
 	}
 	state, found, err := store.Load(ctx)
 	if err != nil {
@@ -51,7 +52,7 @@ func Refresh(ctx context.Context, gate *Gate, store Store) error {
 // issuing process observes the same record as polling instances.
 func Publish(ctx context.Context, gate *Gate, store Store, state State) error {
 	if ctx == nil || gate == nil || store == nil {
-		return fault.New(fault.Invalid, "maintenance publication requires a context, gate and store")
+		return safeerror.NewFault(fault.Invalid, "maintenance publication requires a context, gate and store")
 	}
 	if err := state.Validate(); err != nil {
 		return err
@@ -68,10 +69,10 @@ func Publish(ctx context.Context, gate *Gate, store Store, state State) error {
 // without logging every poll. Transient failures never stop the application.
 func Watch(ctx context.Context, gate *Gate, store Store, interval time.Duration, report func(error)) error {
 	if ctx == nil || gate == nil || store == nil {
-		return fault.New(fault.Invalid, "maintenance watch requires a context, gate and store")
+		return safeerror.NewFault(fault.Invalid, "maintenance watch requires a context, gate and store")
 	}
 	if interval < MinPollInterval || interval > MaxPollInterval {
-		return fault.New(fault.Invalid, "maintenance poll interval is out of range")
+		return safeerror.NewFault(fault.Invalid, "maintenance poll interval is out of range")
 	}
 	timer := time.NewTimer(interval)
 	defer timer.Stop()

@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -42,7 +43,7 @@ func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provide
 	var configured options
 	for _, option := range opts {
 		if option == nil {
-			return nil, fault.New(fault.Invalid, "nil token option")
+			return nil, safeerror.NewFault(fault.Invalid, "nil token option")
 		}
 		if err := option(&configured); err != nil {
 			return nil, err
@@ -67,7 +68,7 @@ func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provide
 }
 func (t *Tokens[M, K]) Validate() error {
 	if t == nil {
-		return fault.New(fault.Invalid, "token binding is missing")
+		return safeerror.NewFault(fault.Invalid, "token binding is missing")
 	}
 	if err := t.store.validate(); err != nil {
 		return err
@@ -119,13 +120,13 @@ func (t *Tokens[M, K]) verify(ctx context.Context, raw secret.String) (value.Opt
 		}
 		record, present := found.Get()
 		if !present {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		if !record.AccessHash.Equal(hash) {
-			return fault.New(fault.Invalid, "token backend returned a different access credential")
+			return safeerror.NewFault(fault.Invalid, "token backend returned a different access credential")
 		}
 		if record.SupersededAt.IsSet() && t.store.config.AccessGrace == 0 {
-			return fault.New(fault.Invalid, "token backend accepted a superseded generation without grace")
+			return safeerror.NewFault(fault.Invalid, "token backend accepted a superseded generation without grace")
 		}
 		info, err := t.info(record)
 		if err != nil {
@@ -194,10 +195,10 @@ func (t *Tokens[M, K]) WithObserver(observer auth.Observer) (*Tokens[M, K], erro
 		return nil, err
 	}
 	if observer == nil {
-		return nil, fault.New(fault.Invalid, "token observer is nil")
+		return nil, safeerror.NewFault(fault.Invalid, "token observer is nil")
 	}
 	if t.observer != nil {
-		return nil, fault.New(fault.Duplicate, "token observer already configured")
+		return nil, safeerror.NewFault(fault.Duplicate, "token observer already configured")
 	}
 	next := *t
 	next.observer = observer
@@ -209,7 +210,7 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 		return Issued[M, K]{}, err
 	}
 	if deadline.IsSet() && !proof.HasIssuanceCheck() {
-		return Issued[M, K]{}, fault.New(fault.Invalid, "MFA creation deadline requires a transactional proof check")
+		return Issued[M, K]{}, safeerror.NewFault(fault.Invalid, "MFA creation deadline requires a transactional proof check")
 	}
 
 	var result Issued[M, K]
@@ -224,10 +225,10 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 			return err
 		}
 		if !t.allowed.ContainsAll(options.Scopes) {
-			return auth.Forbidden
+			return auth.Forbidden.WithCause(nil)
 		}
 		if previous, scoped := proof.AccessScopes(); scoped && !previous.ContainsAll(options.Scopes) {
-			return auth.Forbidden
+			return auth.Forbidden.WithCause(nil)
 		}
 		mode, policy := Personal, t.lifetimes.Personal
 		if options.Refresh {
@@ -235,7 +236,7 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 		}
 		if proof.Assurance() == auth.PendingMFA {
 			if options.Refresh || options.Scopes.Len() != 0 {
-				return fault.New(fault.Invalid, "MFA challenge cannot refresh or grant ordinary scopes")
+				return safeerror.NewFault(fault.Invalid, "MFA challenge cannot refresh or grant ordinary scopes")
 			}
 			mode, policy = Challenge, t.lifetimes.Challenge
 		}
@@ -269,13 +270,13 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 		if proof.HasIssuanceCheck() {
 			backend, ok := t.store.backend.(CheckedBackend)
 			if !ok {
-				return fault.New(fault.Invalid, "credential backend cannot enforce issuance checks")
+				return safeerror.NewFault(fault.Invalid, "credential backend cannot enforce issuance checks")
 			}
 			record, err = credential.CheckCreation(op, proof.CheckIssuance, func(check func(context.Context, *database.Tx) error) (Record, error) {
 				if until, present := deadline.Get(); present {
 					completing, ok := t.store.backend.(CompletionBackend)
 					if !ok {
-						return Record{}, fault.New(fault.Invalid, "credential backend cannot complete MFA")
+						return Record{}, safeerror.NewFault(fault.Invalid, "credential backend cannot complete MFA")
 					}
 					return completing.CreateBefore(op, t.address, request, until, check)
 				}
@@ -290,7 +291,7 @@ func (t *Tokens[M, K]) issue(ctx context.Context, proof auth.Proof[M, K], option
 		expectedRefresh, hasRefresh := refreshHash.Get()
 		actualRefresh, actualHasRefresh := record.RefreshHash.Get()
 		if record.ID != id || record.Subject != request.Subject || record.Name != request.Name || !slices.Equal(record.Scopes, options.Scopes.Names()) || record.Mode != request.Mode || record.Assurance != request.Assurance || record.Lifetime != request.Lifetime || record.RotationLimit != request.RotationLimit || record.Device != request.Device || record.Generation != 0 || !record.AccessHash.Equal(accessHash) || hasRefresh != actualHasRefresh || (hasRefresh && !actualRefresh.Equal(expectedRefresh)) {
-			return fault.New(fault.Invalid, "token backend changed issued credential metadata")
+			return safeerror.NewFault(fault.Invalid, "token backend changed issued credential metadata")
 		}
 		info, err := t.info(record)
 		if err != nil {
@@ -333,11 +334,11 @@ func (t *Tokens[M, K]) Refresh(ctx context.Context, raw secret.String) (Issued[M
 		}
 		record, present := found.Get()
 		if !present {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		actualRefresh, present := record.RefreshHash.Get()
 		if record.Mode != Renewable || record.Assurance != auth.Authenticated || record.Generation == 0 || !record.AccessHash.Equal(accessHash) || !present || !actualRefresh.Equal(refreshHash) {
-			return fault.New(fault.Invalid, "token backend returned invalid refreshed metadata")
+			return safeerror.NewFault(fault.Invalid, "token backend returned invalid refreshed metadata")
 		}
 		info, err := t.info(record)
 		if err != nil {

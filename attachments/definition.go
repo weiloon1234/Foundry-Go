@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -253,5 +254,10 @@ func (c Collection[M, K]) localeName(ctx context.Context, m *Manager) (string, e
 	return string(locale), nil
 }
 func invalid() error {
-	return fault.New(fault.Invalid, "invalid attachment collection, operation or data")
+	return attachmentFailure(fault.Invalid, "invalid attachment collection, operation or data")
+}
+
+// attachmentFailure snapshots diagnostics before the fault becomes inspectable.
+func attachmentFailure(code fault.Code, message string) error {
+	return safeerror.NewFault(code, message)
 }

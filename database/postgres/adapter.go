@@ -1,10 +1,9 @@
 package postgres
 
-import "github.com/jackc/pgx/v5"
-
 import (
 	"context"
 	"crypto/tls"
+	pgx "github.com/jackc/pgx/v5"
 	"net"
 	"os"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // New constructs an application-owned adapter without connecting. Credential and
@@ -24,7 +24,7 @@ func New(config Config) (database.Adapter, error) {
 	if err != nil {
 		return database.Adapter{}, err
 	}
-	return database.Adapter{Connector: stdlib.GetConnector(*parsed, connectionOptions(config.Schema, config.Pool.MaxLifetime)...), Classify: classify}, nil
+	return database.Adapter{Connector: protectedConnector{source: stdlib.GetConnector(*parsed, connectionOptions(config.Schema, config.Pool.MaxLifetime)...), registerTypes: config.RegisterTypes}, Classify: classify}, nil
 }
 
 func Open(ctx context.Context, config Config, options ...database.Option) (*database.DB, error) {
@@ -47,7 +47,7 @@ func connectionConfig(config Config) (*pgx.ConnConfig, error) {
 		return nil, err
 	}
 	if os.Getenv("PGSERVICE") != "" {
-		return nil, fault.New(fault.Invalid, "ambient PGSERVICE is unsupported; use explicit Foundry PostgreSQL configuration")
+		return nil, safeerror.NewFault(fault.Invalid, "ambient PGSERVICE is unsupported; use explicit Foundry PostgreSQL configuration")
 	}
 	// pgx requires a configuration produced by ParseConfig. This credential-free
 	// template masks every environment setting that can affect parsing. TLS and
@@ -56,7 +56,7 @@ func connectionConfig(config Config) (*pgx.ConnConfig, error) {
 	const template = "host=127.0.0.1 port=5432 user=foundry database=foundry password=unused passfile='' servicefile='' sslmode=disable sslrootcert='' sslcert='' sslkey='' sslpassword='' sslsni=1 sslnegotiation=postgres connect_timeout=0 target_session_attrs=any min_protocol_version=3.0 max_protocol_version=3.0 channel_binding=prefer require_auth=''"
 	parsed, err := pgx.ParseConfig(template)
 	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "cannot construct explicit PostgreSQL driver configuration", err)
+		return nil, safeerror.WrapFault(fault.Invalid, "cannot construct explicit PostgreSQL driver configuration", err)
 	}
 	config = config.snapshot()
 	parsed.Host, parsed.Port = config.Host, config.Port

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ParseInterval accepts String's canonical representation, ISO 8601 designator
@@ -38,7 +39,9 @@ func ParseInterval(text string) (Interval, error) {
 	return NewInterval(int32(months), int32(days), time.Duration(micros)*time.Microsecond)
 }
 
-func invalidIntervalText() error { return fault.New(fault.Invalid, "invalid or out-of-range interval") }
+func invalidIntervalText() error {
+	return safeerror.NewFault(fault.Invalid, "invalid or out-of-range interval")
+}
 
 type intervalParts struct{ months, days, micros big.Int }
 type intervalUnit struct {

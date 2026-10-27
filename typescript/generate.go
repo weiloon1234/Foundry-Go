@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/openapi"
 )
 
@@ -36,19 +37,19 @@ var prefixPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,63}$`)
 // uses the same recovery journal as foundry generate.
 func Generate(ctx context.Context, source *manifest.Manifest, options Options) (Report, error) {
 	if ctx == nil {
-		return Report{}, fault.New(fault.Invalid, "client generation requires a context")
+		return Report{}, safeerror.NewFault(fault.Invalid, "client generation requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return Report{}, err
 	}
 	if options.Dir == "" {
-		return Report{}, fault.New(fault.Invalid, "client generation requires an output directory")
+		return Report{}, safeerror.NewFault(fault.Invalid, "client generation requires an output directory")
 	}
 	if options.Prefix == "" {
 		options.Prefix = "contracts"
 	}
 	if !prefixPattern.MatchString(options.Prefix) {
-		return Report{}, fault.New(fault.Invalid, "invalid client artifact prefix")
+		return Report{}, safeerror.NewFault(fault.Invalid, "invalid client artifact prefix")
 	}
 	surfaces, err := validateSurfaces(options.Surfaces)
 	if err != nil {

@@ -1,16 +1,18 @@
 package application
 
 import (
+	"time"
+
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/schedule"
 	"github.com/weiloon1234/Foundry-Go/websocket"
-	"time"
 )
 
 type WorkerSettings struct {
@@ -44,10 +46,10 @@ func prepareJobArchive(s Settings) (JobArchiveSettings, error) {
 		a.Schema = "public"
 	}
 	if _, ok := s.Services.Database.Connections[a.Database]; !ok {
-		return a, fault.New(fault.Missing, "job archive database connection is not configured")
+		return a, safeerror.NewFault(fault.Missing, "job archive database connection is not configured")
 	}
 	if !sqlname.Valid(a.Schema) {
-		return a, fault.New(fault.Invalid, "job archive requires a valid PostgreSQL schema")
+		return a, safeerror.NewFault(fault.Invalid, "job archive requires a valid PostgreSQL schema")
 	}
 	return a, nil
 }

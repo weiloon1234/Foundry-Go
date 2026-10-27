@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/encrypted"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 )
 
@@ -28,7 +29,7 @@ func SealAssignments(ctx context.Context, keys *encryption.Keyring, table string
 		return assignments, nil
 	}
 	if keys == nil {
-		return nil, fault.New(fault.Missing, "database has no encryption key ring for encrypted model fields")
+		return nil, safeerror.NewFault(fault.Missing, "database has no encryption key ring for encrypted model fields")
 	}
 	row, err := key()
 	if err != nil {
@@ -60,7 +61,7 @@ func AssignedKey(primary string, assignments []MutationAssignment) func() (drive
 				return assignment.Bind()
 			}
 		}
-		return nil, fault.New(fault.Invalid, "encrypted fields require an assigned primary key")
+		return nil, safeerror.NewFault(fault.Invalid, "encrypted fields require an assigned primary key")
 	}
 }
 
@@ -71,7 +72,7 @@ func PredicateKey(predicates []Expression, primary string) func() (driver.Value,
 		var present bool
 		if err := PrimaryEqualities(predicates, primary, func(value driver.Value) error {
 			if present && !SameKey(value, found) {
-				return fault.New(fault.Invalid, "encrypted fields require one primary key per write")
+				return safeerror.NewFault(fault.Invalid, "encrypted fields require one primary key per write")
 			}
 			found, present = value, true
 			return nil
@@ -79,7 +80,7 @@ func PredicateKey(predicates []Expression, primary string) func() (driver.Value,
 			return nil, err
 		}
 		if !present {
-			return nil, fault.New(fault.Invalid, "encrypted fields require a primary-key write")
+			return nil, safeerror.NewFault(fault.Invalid, "encrypted fields require a primary-key write")
 		}
 		return found, nil
 	}
@@ -106,7 +107,7 @@ func PrimaryEqualities(predicates []Expression, primary string, visit func(drive
 				continue
 			}
 			if len(ComparisonValues(predicate.Values)) != 1 || predicate.Bind == nil {
-				return fault.New(fault.Invalid, "encrypted fields require one primary key per write")
+				return safeerror.NewFault(fault.Invalid, "encrypted fields require one primary key per write")
 			}
 			bound, err := predicate.Bind(ComparisonValues(predicate.Values)[0])
 			if err != nil {
@@ -147,5 +148,5 @@ func OpenScope(row database.Row, table, column string, key func() (driver.Value,
 }
 
 func SetEncryptedError() error {
-	return fault.New(fault.Invalid, "set-based writes cannot assign encrypted fields")
+	return safeerror.NewFault(fault.Invalid, "set-based writes cannot assign encrypted fields")
 }

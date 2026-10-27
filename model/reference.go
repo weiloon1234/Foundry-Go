@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -51,10 +52,10 @@ func (r Reference[M, K]) Validate() error { return r.validate() }
 
 func (r Reference[M, K]) validate() error {
 	if !sqlname.Table(r.name) || r.codec == nil || reflect.TypeFor[K]().Kind() == reflect.Interface {
-		return fault.New(fault.Invalid, "model reference requires a model name and concrete key codec")
+		return safeerror.NewFault(fault.Invalid, "model reference requires a model name and concrete key codec")
 	}
 	if metadata, ok := r.codec.(interface{ SensitiveValues() bool }); ok && metadata.SensitiveValues() {
-		return fault.New(fault.Invalid, "sensitive values cannot be model identity keys")
+		return safeerror.NewFault(fault.Invalid, "sensitive values cannot be model identity keys")
 	}
 	return nil
 }
@@ -76,7 +77,7 @@ func (r Reference[M, K]) Identity() (Identity, error) {
 		return err
 	})
 	if err != nil {
-		return Identity{}, fault.Wrap(fault.Invalid, "model identity capture failed", err)
+		return Identity{}, safeerror.WrapFailure(fault.Invalid, "model identity capture failed", err)
 	}
 	return result, nil
 }
@@ -93,7 +94,7 @@ func (r Reference[M, K]) Parse(identity Identity) (Reference[M, K], error) {
 		return Reference[M, K]{}, err
 	}
 	if r.name != identity.name {
-		return Reference[M, K]{}, fault.New(fault.Invalid, "serialized identity does not match the expected model")
+		return Reference[M, K]{}, safeerror.NewFault(fault.Invalid, "serialized identity does not match the expected model")
 	}
 	var key K
 	err := callback.Isolated("decode model identity", func() error {
@@ -116,12 +117,12 @@ func (r Reference[M, K]) Parse(identity Identity) (Reference[M, K], error) {
 			return err
 		}
 		if restored != identity {
-			return fault.New(fault.Invalid, "identity key does not match its persistence codec")
+			return safeerror.NewFault(fault.Invalid, "identity key does not match its persistence codec")
 		}
 		return nil
 	})
 	if err != nil {
-		return Reference[M, K]{}, fault.Wrap(fault.Invalid, "model identity decode failed", err)
+		return Reference[M, K]{}, safeerror.WrapFailure(fault.Invalid, "model identity decode failed", err)
 	}
 	return NewReference[M](r.name, key, r.codec), nil
 }
@@ -185,7 +186,9 @@ func (i Identity) Validate() error {
 	return nil
 }
 
-func invalidIdentity() error { return fault.New(fault.Invalid, "invalid serialized model identity") }
+func invalidIdentity() error {
+	return safeerror.NewFault(fault.Invalid, "invalid serialized model identity")
+}
 
 func identityFromDriver(name string, bound driver.Value) (Identity, error) {
 	bound = sqlvalue.NormalizeNull(bound)
@@ -257,7 +260,7 @@ func (i Identity) MarshalJSON() ([]byte, error) {
 }
 func (i *Identity) UnmarshalJSON(data []byte) error {
 	if i == nil {
-		return fault.New(fault.Invalid, "nil model identity destination")
+		return safeerror.NewFault(fault.Invalid, "nil model identity destination")
 	}
 	if len(data) > MaxIdentityKeyBytes+2*sqlname.MaxBytes+128 {
 		return invalidIdentity()

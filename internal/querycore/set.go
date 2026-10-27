@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // SetAlias is the output scope shared by record and scalar set adapters.
@@ -27,7 +28,7 @@ type SetNode struct {
 
 func (c *Compiler) SetSQL(s SetNode, columns []Column) (string, error) {
 	if s.Operator > ExceptAllSet || len(columns) == 0 || len(columns) != len(s.Left.Selections) || len(columns) != len(s.Right.Selections) {
-		return "", fault.New(fault.Invalid, "invalid set operator or output layout")
+		return "", safeerror.NewFault(fault.Invalid, "invalid set operator or output layout")
 	}
 	// Explicit output aliases make model columns and declared projection columns
 	// interchangeable only after the typed record boundary has matched layouts.

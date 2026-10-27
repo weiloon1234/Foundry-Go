@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/faultwrap"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // freshness is the Flexible marker a fill must find and publish with its value.
@@ -63,10 +64,10 @@ func (c Cache[K, V]) markFresh(ctx context.Context, settings rememberSettings) {
 // memoized by WithMemo.
 func (c Cache[K, V]) Flexible(ctx context.Context, key K, fresh, stale time.Duration, loader func(context.Context) (V, error), options ...RememberOption) (V, error) {
 	if loader == nil {
-		return *new(V), fault.New(fault.Invalid, "cache Flexible requires a loader")
+		return *new(V), safeerror.NewFault(fault.Invalid, "cache Flexible requires a loader")
 	}
 	if fresh <= 0 || stale <= 0 || fresh > math.MaxInt64-stale {
-		return *new(V), fault.New(fault.Invalid, "cache Flexible durations must be positive and bounded")
+		return *new(V), safeerror.NewFault(fault.Invalid, "cache Flexible durations must be positive and bounded")
 	}
 	if err := c.valid(ctx); err != nil {
 		return *new(V), err
@@ -75,7 +76,7 @@ func (c Cache[K, V]) Flexible(ctx context.Context, key K, fresh, stale time.Dura
 	settings := rememberSettings{loadTimeout: c.store.config.LoadTimeout}
 	for _, option := range options {
 		if option == nil {
-			return *new(V), fault.New(fault.Invalid, "cache Flexible option is nil")
+			return *new(V), safeerror.NewFault(fault.Invalid, "cache Flexible option is nil")
 		}
 		if err := option(&settings); err != nil {
 			return *new(V), err

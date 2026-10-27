@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -60,7 +61,7 @@ const maxSignedURLIgnoredParameters = 32
 
 func (p signedURLPolicy) withIgnored(names []string) (signedURLPolicy, error) {
 	if len(p.ignored)+len(names) > maxSignedURLIgnoredParameters {
-		return p, fault.New(fault.Invalid, "signed URL ignored parameters exceed their bound")
+		return p, safeerror.NewFault(fault.Invalid, "signed URL ignored parameters exceed their bound")
 	}
 	owned := make(map[string]bool, len(p.ignored)+len(names))
 	for name := range p.ignored {
@@ -68,7 +69,7 @@ func (p signedURLPolicy) withIgnored(names []string) (signedURLPolicy, error) {
 	}
 	for _, name := range names {
 		if !httpquery.ValidName(name) || name == signedURLExpires || name == signedURLSignature || owned[name] {
-			return p, fault.New(fault.Invalid, "signed URL ignored parameters must be distinct valid names other than the signing parameters")
+			return p, safeerror.NewFault(fault.Invalid, "signed URL ignored parameters must be distinct valid names other than the signing parameters")
 		}
 		owned[name] = true
 	}
@@ -91,7 +92,7 @@ func (s URLSigner) Validate() error {
 		return err
 	}
 	if nilCookieValue(s.clock) {
-		return fault.New(fault.Invalid, "URL signer requires an application clock")
+		return safeerror.NewFault(fault.Invalid, "URL signer requires an application clock")
 	}
 	return nil
 }
@@ -114,7 +115,7 @@ func (s URLSigner) prepare(ctx context.Context) error {
 		return err
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "URL signing requires a context")
+		return safeerror.NewFault(fault.Invalid, "URL signing requires a context")
 	}
 	return ctx.Err()
 }
@@ -134,7 +135,7 @@ func (s URLSigner) sealForm(ctx context.Context, spec RouteSpec, pattern string,
 		return "", err
 	}
 	if form.permanent && !s.policy.permanent {
-		return "", fault.New(fault.Invalid, "permanent signed URLs require an explicit route opt-in")
+		return "", safeerror.NewFault(fault.Invalid, "permanent signed URLs require an explicit route opt-in")
 	}
 	base := relative
 	if form.relative {
@@ -149,7 +150,7 @@ func (s URLSigner) sealForm(ctx context.Context, spec RouteSpec, pattern string,
 		base = absolute
 	}
 	if len(base) > MaxSignedURLBytes {
-		return "", fault.New(fault.Invalid, "signed URL exceeds its byte bound")
+		return "", safeerror.NewFault(fault.Invalid, "signed URL exceeds its byte bound")
 	}
 	_, raw, _ := strings.Cut(relative, "?")
 	values, err := signedQuery(ctx, raw)
@@ -157,20 +158,20 @@ func (s URLSigner) sealForm(ctx context.Context, spec RouteSpec, pattern string,
 		return "", err
 	}
 	if _, ok := values[signedURLExpires]; ok {
-		return "", fault.New(fault.Invalid, "signed URL reserves its expiry parameter")
+		return "", safeerror.NewFault(fault.Invalid, "signed URL reserves its expiry parameter")
 	}
 	if _, ok := values[signedURLSignature]; ok {
-		return "", fault.New(fault.Invalid, "signed URL reserves its signature parameter")
+		return "", safeerror.NewFault(fault.Invalid, "signed URL reserves its signature parameter")
 	}
 	for name := range values {
 		if s.policy.ignored[name] {
-			return "", fault.New(fault.Invalid, "signed URL query uses a parameter its route ignores during verification")
+			return "", safeerror.NewFault(fault.Invalid, "signed URL query uses a parameter its route ignores during verification")
 		}
 	}
 	// Generated queries never end with an empty slot. Reject rather than silently
 	// changing the exact spelling that will be authenticated.
 	if strings.HasSuffix(relative, "?") || strings.HasSuffix(raw, "&") {
-		return "", fault.New(fault.Invalid, "signed URL has an empty trailing query slot")
+		return "", safeerror.NewFault(fault.Invalid, "signed URL has an empty trailing query slot")
 	}
 	separator := "?"
 	if raw != "" {
@@ -187,7 +188,7 @@ func (s URLSigner) sealForm(ctx context.Context, spec RouteSpec, pattern string,
 		}
 		expires = expires.UTC()
 		if expires.Year() < 1970 || expires.Year() > 9999 || expires.Unix() <= now.Unix() {
-			return "", fault.New(fault.Invalid, "signed URL expiry must be a future second within the supported range")
+			return "", safeerror.NewFault(fault.Invalid, "signed URL expiry must be a future second within the supported range")
 		}
 		content += separator + signedURLExpires + "=" + strconv.FormatInt(expires.Unix(), 10)
 		separator = "&"
@@ -199,7 +200,7 @@ func (s URLSigner) sealForm(ctx context.Context, spec RouteSpec, pattern string,
 	envelope := version + "." + string(s.keys.active) + "." + s.keys.sign(signedURLPurpose(spec, pattern, form), content)
 	result := content + separator + signedURLSignature + "=" + envelope
 	if len(result) > MaxSignedURLBytes {
-		return "", fault.New(fault.Invalid, "signed URL exceeds its byte bound")
+		return "", safeerror.NewFault(fault.Invalid, "signed URL exceeds its byte bound")
 	}
 	// Include reserved slots in the same bound used by verification.
 	_, signedRaw, _ := strings.Cut(result, "?")
@@ -217,11 +218,11 @@ func (s URLSigner) open(ctx context.Context, spec RouteSpec, pattern string, ori
 		return "", err
 	}
 	if len(relative) > MaxSignedURLBytes {
-		return "", ErrInvalidSignedURL
+		return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 	}
 	path, raw, found := strings.Cut(relative, "?")
 	if !found {
-		return "", ErrInvalidSignedURL
+		return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 	}
 	if len(s.policy.ignored) != 0 {
 		raw = withoutIgnoredParameters(raw, s.policy.ignored)
@@ -229,23 +230,23 @@ func (s URLSigner) open(ctx context.Context, spec RouteSpec, pattern string, ori
 	}
 	absolute, err := AbsoluteURL(origin, relative)
 	if err != nil || len(absolute) > MaxSignedURLBytes {
-		return "", ErrInvalidSignedURL
+		return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 	}
 	values, err := signedQuery(ctx, raw)
 	if err != nil {
 		if canceled := ctx.Err(); canceled != nil {
 			return "", canceled
 		}
-		return "", ErrInvalidSignedURL
+		return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 	}
 	expiring := len(values[signedURLExpires]) == 1
 	if len(values[signedURLSignature]) != 1 || len(values[signedURLExpires]) > 1 || !expiring && !s.policy.permanent {
-		return "", ErrInvalidSignedURL
+		return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 	}
 	signature := values[signedURLSignature][0]
 	envelope := strings.Split(signature, ".")
 	if len(envelope) != 3 || envelope[0] != signedURLVersion && envelope[0] != signedURLRelativeVersion || !validSigningKeyID(SigningKeyID(envelope[1])) {
-		return "", ErrInvalidSignedURL
+		return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 	}
 	form := signedURLForm{relative: envelope[0] == signedURLRelativeVersion, permanent: !expiring}
 	var expires int64
@@ -254,7 +255,7 @@ func (s URLSigner) open(ctx context.Context, spec RouteSpec, pattern string, ori
 		expiresText := values[signedURLExpires][0]
 		expires, err = strconv.ParseInt(expiresText, 10, 64)
 		if err != nil || expires <= 0 || strconv.FormatInt(expires, 10) != expiresText || time.Unix(expires, 0).UTC().Year() > 9999 {
-			return "", ErrInvalidSignedURL
+			return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 		}
 		tail = signedURLExpires + "=" + expiresText + "&" + tail
 	}
@@ -266,10 +267,10 @@ func (s URLSigner) open(ctx context.Context, spec RouteSpec, pattern string, ori
 	case strings.HasSuffix(raw, "&"+tail):
 		applicationQuery = strings.TrimSuffix(raw, "&"+tail)
 		if applicationQuery == "" || strings.HasSuffix(applicationQuery, "&") {
-			return "", ErrInvalidSignedURL
+			return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 		}
 	default:
-		return "", ErrInvalidSignedURL
+		return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 	}
 	base := absolute
 	if form.relative {
@@ -279,7 +280,7 @@ func (s URLSigner) open(ctx context.Context, spec RouteSpec, pattern string, ori
 	content := strings.TrimSuffix(base, signedURLSignature+"="+signature)
 	content = content[:len(content)-1]
 	if !s.keys.verify(SigningKeyID(envelope[1]), signedURLPurpose(spec, pattern, form), content, envelope[2]) {
-		return "", ErrInvalidSignedURL
+		return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 	}
 	if !expiring {
 		if err := ctx.Err(); err != nil {
@@ -295,7 +296,7 @@ func (s URLSigner) open(ctx context.Context, spec RouteSpec, pattern string, ori
 		return "", err
 	}
 	if now.Unix() >= expires {
-		return "", ErrInvalidSignedURL
+		return "", safeerror.Owned(string(ErrInvalidSignedURL), ErrInvalidSignedURL)
 	}
 	return applicationQuery, nil
 }

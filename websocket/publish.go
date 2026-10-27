@@ -7,7 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -39,17 +39,22 @@ func Broadcast[C, R, S, P any](ctx context.Context, source PublisherSource, chan
 // live publication, fan-out or replay history was attempted (validation, local
 // admission, a closing hub or payload encoding), so retrying cannot produce a
 // duplicate. Other errors may follow partial distributed publication.
-func NotPublished(err error) bool { return errorgraph.Has[*notPublished](err) }
+func NotPublished(err error) bool { var failure *notPublished; return callback.ErrorAs(err, &failure) }
 
 type notPublished struct{ cause error }
 
-func (e *notPublished) Error() string { return e.cause.Error() }
+func (e *notPublished) Error() string {
+	if message, ok := safeerror.OwnedMessage(e.cause); ok {
+		return message
+	}
+	return "websocket publication failed"
+}
 func (e *notPublished) Unwrap() error { return e.cause }
 
 func publish[C, R, S, P any](ctx context.Context, source PublisherSource, channel Channel[C, R, S], event Outgoing[C, P], payload P, target Target[R], options []PublishOption) (MessageID, error) {
 	id, attempted, err := publishAttempt(ctx, source, channel, event, payload, target, options)
 	if err != nil && !attempted {
-		return MessageID{}, &notPublished{err}
+		return MessageID{}, safeerror.Retain(err, &notPublished{err})
 	}
 	return id, err
 }
@@ -60,12 +65,12 @@ func publishAttempt[C, R, S, P any](ctx context.Context, source PublisherSource,
 	var settings publishOptions
 	for _, option := range options {
 		if option == nil {
-			return MessageID{}, false, fault.New(fault.Invalid, "nil WebSocket publish option")
+			return MessageID{}, false, safeerror.NewFault(fault.Invalid, "nil WebSocket publish option")
 		}
 		option(&settings)
 	}
 	if ctx == nil {
-		return MessageID{}, false, fault.New(fault.Invalid, "WebSocket publication requires a context")
+		return MessageID{}, false, safeerror.NewFault(fault.Invalid, "WebSocket publication requires a context")
 	}
 	hub, err := publicationHub(source)
 	if err != nil {
@@ -76,7 +81,7 @@ func publishAttempt[C, R, S, P any](ctx context.Context, source PublisherSource,
 	}
 	d := event.definition
 	if d == nil || event.encode == nil || d.channel != channel.token || hub.registry.channels[channel.id].events[d.id] != d || d.direction != ServerToClient {
-		return MessageID{}, false, fault.New(fault.Invalid, "outgoing event declaration is not registered on this channel")
+		return MessageID{}, false, safeerror.NewFault(fault.Invalid, "outgoing event declaration is not registered on this channel")
 	}
 	ctx, finish, err := hub.operation(ctx)
 	if err != nil {
@@ -121,7 +126,7 @@ func publishAttempt[C, R, S, P any](ctx context.Context, source PublisherSource,
 			return err
 		}
 		if hub.closing {
-			return Stopping
+			return codeFailure(Stopping)
 		}
 		if err := hub.retainLocked(response, frame); err != nil {
 			return err

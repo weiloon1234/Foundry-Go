@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const CompressionMiddlewareID MiddlewareID = "foundry.compression"
@@ -42,7 +43,7 @@ func Compression(config CompressionConfig) Middleware {
 			defer response.release()
 			next.ServeHTTP(responseCapabilities(response), r)
 			if err := response.finish(); err != nil {
-				logRouteFailure(r, "HTTP compression could not finish", fault.Wrap(fault.Internal, "response transfer failed", err))
+				logRouteFailure(r, "HTTP compression could not finish", safeerror.WrapFailure(fault.Internal, "response transfer failed", err))
 				panic(stdhttp.ErrAbortHandler)
 			}
 		}), nil

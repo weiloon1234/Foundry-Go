@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // LabelKey uses the same case list as enum membership and client metadata.
@@ -21,7 +22,7 @@ func (d Descriptor[E]) LabelKey(value E) (i18n.MessageKey, error) {
 			break
 		}
 	}
-	return "", fault.New(fault.Missing, "enum value has no declared localization label")
+	return "", safeerror.NewFault(fault.Missing, "enum value has no declared localization label")
 }
 func (d Descriptor[E]) Label(ctx context.Context, catalog *i18n.Catalog, locale i18n.LocaleID, value E) (string, error) {
 	key, err := d.LabelKey(value)

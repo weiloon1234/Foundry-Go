@@ -2,6 +2,7 @@ package lockout
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -56,7 +57,7 @@ func (d Declaration[K]) Policy() Policy {
 }
 func (d Declaration[K]) Validate() error {
 	if d.definition == nil || !keyspace.ValidName(string(d.Name())) {
-		return fault.New(fault.Invalid, "invalid lockout declaration")
+		return safeerror.NewFault(fault.Invalid, "invalid lockout declaration")
 	}
 	if err := d.definition.codec.Validate(); err != nil {
 		return err
@@ -71,17 +72,17 @@ func (d Declaration[K]) Bind(store *Store) (Throttle[K], error) {
 		return Throttle[K]{}, err
 	}
 	if store == nil || store.gate == nil {
-		return Throttle[K]{}, fault.New(fault.Invalid, "lockout binding requires a store")
+		return Throttle[K]{}, safeerror.NewFault(fault.Invalid, "lockout binding requires a store")
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	id, exists := store.declarations[d.Name()]
 	if exists && id != &d.definition.id {
-		return Throttle[K]{}, fault.New(fault.Duplicate, "lockout family has a different declaration")
+		return Throttle[K]{}, safeerror.NewFault(fault.Duplicate, "lockout family has a different declaration")
 	}
 	if !exists {
 		if len(store.declarations) >= store.config.MaxDeclarations {
-			return Throttle[K]{}, fault.New(fault.Invalid, "lockout declaration capacity reached")
+			return Throttle[K]{}, safeerror.NewFault(fault.Invalid, "lockout declaration capacity reached")
 		}
 		store.declarations[d.Name()] = &d.definition.id
 	}

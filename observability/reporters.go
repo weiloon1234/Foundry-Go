@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Run owns reporter workers once. Parent cancellation seals admission and drains
@@ -16,12 +17,12 @@ import (
 // callbacks. Run returns only after reporter work actually exits.
 func (r *Recorder) Run(ctx context.Context) error {
 	if r == nil || r.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "reporters require a recorder and context")
+		return safeerror.NewFault(fault.Invalid, "reporters require a recorder and context")
 	}
 	r.life.Lock()
 	if r.running || r.closing() {
 		r.life.Unlock()
-		return fault.New(fault.Closed, "reporter runtime already started or closed")
+		return safeerror.NewFault(fault.Closed, "reporter runtime already started or closed")
 	}
 	if err := ctx.Err(); err != nil {
 		r.life.Unlock()
@@ -157,7 +158,7 @@ func (r *Recorder) Close(ctx context.Context) error {
 		return nil
 	}
 	if r.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "observation close requires a context and initialized recorder")
+		return safeerror.NewFault(fault.Invalid, "observation close requires a context and initialized recorder")
 	}
 	r.seal()
 	select {
@@ -179,7 +180,7 @@ func (r *Recorder) Done() <-chan struct{} { return r.done }
 // It reports runtime startup, not application or dependency readiness.
 func (r *Recorder) Ready(ctx context.Context) error {
 	if r == nil || r.ready == nil || ctx == nil {
-		return fault.New(fault.Invalid, "reporter readiness requires a recorder and context")
+		return safeerror.NewFault(fault.Invalid, "reporter readiness requires a recorder and context")
 	}
 	select {
 	case <-r.ready:
@@ -189,7 +190,7 @@ func (r *Recorder) Ready(ctx context.Context) error {
 	r.life.Lock()
 	defer r.life.Unlock()
 	if !r.running || r.closing() {
-		return fault.New(fault.Closed, "reporter runtime is closed")
+		return safeerror.NewFault(fault.Closed, "reporter runtime is closed")
 	}
 	return nil
 }

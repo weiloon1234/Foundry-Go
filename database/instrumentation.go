@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"errors"
 	"hash/fnv"
 	"log/slog"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/statementmeta"
 )
 
@@ -45,10 +45,10 @@ type QueryObserver func(context.Context, QueryEvent)
 func WithQueryObserver(observer QueryObserver) Option {
 	return func(settings *poolSettings) error {
 		if observer == nil {
-			return fault.New(fault.Invalid, "database query observer cannot be nil")
+			return safeerror.NewFault(fault.Invalid, "database query observer cannot be nil")
 		}
 		if settings.queryObserver != nil {
-			return fault.New(fault.Invalid, "database query observer is already configured")
+			return safeerror.NewFault(fault.Invalid, "database query observer is already configured")
 		}
 		settings.queryObserver = observer
 		return nil
@@ -62,7 +62,7 @@ func WithQueryObserver(observer QueryObserver) Option {
 func WithSlowQueryLog(logger *slog.Logger, threshold time.Duration) Option {
 	return func(settings *poolSettings) error {
 		if logger == nil || threshold <= 0 {
-			return fault.New(fault.Invalid, "slow query logging requires a logger and a positive threshold")
+			return safeerror.NewFault(fault.Invalid, "slow query logging requires a logger and a positive threshold")
 		}
 		settings.slowLogger, settings.slowThreshold = logger, threshold
 		return nil
@@ -76,7 +76,7 @@ func WithSlowQueryLog(logger *slog.Logger, threshold time.Duration) Option {
 func WithSlowQueryThreshold(threshold time.Duration) Option {
 	return func(settings *poolSettings) error {
 		if threshold <= 0 {
-			return fault.New(fault.Invalid, "slow query threshold must be positive")
+			return safeerror.NewFault(fault.Invalid, "slow query threshold must be positive")
 		}
 		settings.slowThreshold = threshold
 		return nil
@@ -104,7 +104,7 @@ func (db *DB) bindRuntimeLogger(logger *slog.Logger) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if db.closing || db.startAttempted {
-		return fault.New(fault.Closed, "database logger binding is frozen")
+		return safeerror.NewFault(fault.Closed, "database logger binding is frozen")
 	}
 	if db.instrument != nil && db.instrument.threshold > 0 && db.instrument.logger == nil {
 		db.instrument.logger = logger
@@ -117,7 +117,7 @@ func (db *DB) bindRuntimeLogger(logger *slog.Logger) error {
 
 func (i *instrumentation) validate() error {
 	if i != nil && i.threshold > 0 && i.logger == nil {
-		return fault.New(fault.Invalid, "slow query threshold requires a logger; use WithSlowQueryLog outside a database Module")
+		return safeerror.NewFault(fault.Invalid, "slow query threshold requires a logger; use WithSlowQueryLog outside a database Module")
 	}
 	return nil
 }
@@ -169,7 +169,7 @@ func (p statementProbe) finish(ctx context.Context, operation, statement string,
 	}
 	event := QueryEvent{Role: p.role, Operation: operation, Statement: statement, Duration: time.Since(started), PoolWait: p.wait, Rows: rows}
 	var classified *Error
-	if errors.As(err, &classified) && classified != nil {
+	if callback.ErrorAs(err, &classified) && classified != nil {
 		event.Code, event.SQLState = classified.Code(), classified.SQLState()
 	} else if err != nil {
 		event.Code = QueryFailed
@@ -178,7 +178,7 @@ func (p statementProbe) finish(ctx context.Context, operation, statement string,
 		p.hooks.detector.observe(ctx, event, p.site)
 	}
 	if p.hooks.observer != nil {
-		if failed := callback.Invoke("database query observer", func() error { p.hooks.observer(ctx, event); return nil }); failed != nil && p.hooks.logger != nil {
+		if failed := callback.Isolated("database query observer", func() error { p.hooks.observer(ctx, event); return nil }); failed != nil && p.hooks.logger != nil {
 			p.hooks.logger.LogAttrs(context.WithoutCancel(ctx), slog.LevelError, "database query observer failed", slog.Any("diagnostic", errordiag.Describe(failed)))
 		}
 	}
@@ -188,7 +188,7 @@ func (p statementProbe) finish(ctx context.Context, operation, statement string,
 		p.hooks.logger.LogAttrs(context.WithoutCancel(ctx), slog.LevelWarn, "slow database statement",
 			slog.String("role", string(event.Role)), slog.String("operation", operation),
 			slog.Duration("duration", event.Duration), slog.Duration("pool_wait", event.PoolWait),
-			slog.Int64("rows", rows), slog.String("code", string(event.Code)), slog.String("sqlstate", event.SQLState),
+			slog.Int64("rows", rows), slog.String("code", diagnosticCode(event.Code)), slog.String("sqlstate", diagnosticState(event.SQLState)),
 			slog.String("statement_fingerprint", strconv.FormatUint(fingerprint.Sum64(), 16)))
 	}
 }

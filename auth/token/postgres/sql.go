@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -57,7 +58,7 @@ func instant(t time.Time) (temporal.DateTime, error) { return temporal.NewDateTi
 
 func unsigned32(v int64) (uint32, error) {
 	if v < 0 || v > int64(token.MaxRotations) {
-		return 0, fault.New(fault.Invalid, "stored token counter is out of range")
+		return 0, safeerror.NewFault(fault.Invalid, "stored token counter is out of range")
 	}
 	return uint32(v), nil
 }
@@ -96,7 +97,7 @@ func scanToken(row database.Row) (storedToken, error) {
 		return storedToken{}, err
 	}
 	if mode < 0 || mode > 255 || assurance < 0 || assurance > 255 {
-		return storedToken{}, fault.New(fault.Invalid, "stored token mode or assurance is invalid")
+		return storedToken{}, safeerror.NewFault(fault.Invalid, "stored token mode or assurance is invalid")
 	}
 	f.Mode, f.Assurance = uint8(mode), uint8(assurance)
 	for _, pair := range []struct {
@@ -144,7 +145,7 @@ func (b *Backend) readTokens(ctx context.Context, executor database.Executor, li
 	var rows []storedToken
 	err := database.ForEach(ctx, executor, b.selectTokens()+" "+where, arguments, scanToken, func(row storedToken) error {
 		if len(rows) >= limit {
-			return fault.New(fault.Invalid, "stored token rows exceed their bound")
+			return safeerror.NewFault(fault.Invalid, "stored token rows exceed their bound")
 		}
 		rows = append(rows, row)
 		return nil

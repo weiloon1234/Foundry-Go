@@ -1,6 +1,9 @@
 package token
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+)
 
 // Option configures one token binding at construction.
 type Option func(*options) error
@@ -23,7 +26,7 @@ type Lifetimes struct{ Personal, Renewable, Challenge Lifetime }
 func WithLifetimes(lifetimes Lifetimes) Option {
 	return func(o *options) error {
 		if o.lifetimesSet {
-			return fault.New(fault.Duplicate, "token lifetimes are repeated")
+			return safeerror.NewFault(fault.Duplicate, "token lifetimes are repeated")
 		}
 		o.lifetimes, o.lifetimesSet = lifetimes, true
 		return nil
@@ -44,7 +47,7 @@ func (l Lifetimes) within(c Config) (Lifetimes, error) {
 		return Lifetimes{}, err
 	}
 	if c.AccessGrace > result.Renewable.Access {
-		return Lifetimes{}, fault.New(fault.Invalid, "token access grace exceeds the guard's renewable access lifetime")
+		return Lifetimes{}, safeerror.NewFault(fault.Invalid, "token access grace exceeds the guard's renewable access lifetime")
 	}
 	return result, nil
 }
@@ -57,7 +60,7 @@ func narrow(mode Mode, guard, ceiling Lifetime) (Lifetime, error) {
 		return Lifetime{}, err
 	}
 	if guard.Access > ceiling.Access || guard.RefreshIdle > ceiling.RefreshIdle || guard.Absolute > ceiling.Absolute {
-		return Lifetime{}, fault.New(fault.Invalid, "guard token lifetime exceeds the store's")
+		return Lifetime{}, safeerror.NewFault(fault.Invalid, "guard token lifetime exceeds the store's")
 	}
 	return guard, nil
 }

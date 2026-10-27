@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/extensions"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/internal/extensiontest"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -56,14 +58,33 @@ func TestPostgresAttachmentLifecycleJoinsOwnerTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertBody(t, f, testSingle, owner, file, "retain until commit")
-	err = f.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		if err := Cleanup(ctx, tx, f.manager, extensiontest.Members, owner, lifecycle.Delete, nil); err == nil {
-			t.Error("active owner cleanup accepted")
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
+	for _, cleanup := range []struct {
+		name string
+		run  func(context.Context, *database.Tx) error
+	}{
+		{"typed", func(ctx context.Context, tx *database.Tx) error {
+			return Cleanup(ctx, tx, f.manager, extensiontest.Members, owner, lifecycle.Delete, nil)
+		}},
+		{"identity", func(ctx context.Context, tx *database.Tx) error {
+			identity, err := owner.Identity()
+			if err != nil {
+				return err
+			}
+			return CleanupIdentity(ctx, tx, f.manager, extensiontest.Members.Name(), identity, nil)
+		}},
+	} {
+		t.Run(cleanup.name, func(t *testing.T) {
+			var inner error
+			err := f.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+				inner = cleanup.run(ctx, tx)
+				return inner
+			})
+			var failure *fault.Error
+			const message = "attachment cleanup requires a deleted owner"
+			if inner == nil || !errors.Is(err, inner) || !errors.Is(err, fault.Conflict) || !errors.As(err, &failure) || failure.Message() != message || !strings.Contains(err.Error(), "conflict: "+message) {
+				t.Fatal("active owner cleanup lost its diagnostic or identity", err)
+			}
+		})
 	}
 	err = f.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		if _, err := tx.Exec(ctx, `DELETE FROM extension_members WHERE id=1`); err != nil {

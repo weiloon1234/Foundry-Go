@@ -1,7 +1,7 @@
 package orm
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -43,7 +43,7 @@ func FoundryRelationPivotOrder[M, N, P any](r ThroughRelation[M, N, P], o ormcor
 
 func relationExpressionOrder[N any](owner *tableCore, o ormcore.Order) Order[N] {
 	source := ormcore.Source{Scope: reflect.TypeFor[N](), Owners: map[string]any{owner.model.Table: owner}}
-	err := errors.Join(o.Err, declarationCoreError(owner), ormcore.CheckReferenceSet(source, o.Refs, o.ReferenceFree))
+	err := safeerror.Join("operation failed", o.Err, declarationCoreError(owner), ormcore.CheckReferenceSet(source, o.Refs, o.ReferenceFree))
 	order := querycore.ModelOrder(o.Node)
 	return Order[N]{owner: owner, core: order, err: err}
 }

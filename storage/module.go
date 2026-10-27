@@ -2,10 +2,10 @@ package storage
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module builds one disk per application. requires names providers owning its
@@ -31,9 +31,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Disk], declaration D
 		if err := r.OnShutdown("storage", func(ctx context.Context) error {
 			err := disk.Close(ctx)
 			<-disk.Done()
-			return errors.Join(err, disk.Close(context.Background()))
+			return safeerror.Join("operation failed", err, disk.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, disk.Close(ctx))
+			return safeerror.Join("operation failed", err, disk.Close(ctx))
 		}
 		return nil
 	}}

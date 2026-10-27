@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"database/sql/driver"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -46,7 +47,9 @@ func NewRawFragment(sql string, arguments []any) RawFragment {
 	}
 	return r
 }
-func rawInvalid(message string) error { return fault.New(fault.Invalid, "raw fragment: "+message) }
+func rawInvalid(message string) error {
+	return safeerror.NewFault(fault.Invalid, "raw fragment: "+message)
+}
 func (r RawFragment) Validate() error {
 	if r.state == nil {
 		return rawInvalid("uninitialized fragment")

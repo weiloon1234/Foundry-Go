@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func parameter(name string, input any) Parameter {
@@ -18,7 +20,7 @@ func parameter(name string, input any) Parameter {
 
 func textValue(s *execution, input string) bool {
 	if len(input) > s.limits.ValueBytes {
-		s.err = &LimitError{}
+		s.err = safeerror.Owned("validation resource bound exceeded", &LimitError{})
 		return false
 	}
 	return utf8.ValidString(input)

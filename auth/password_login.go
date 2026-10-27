@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 
 	"github.com/weiloon1234/Foundry-Go/auth/lockout"
 	"github.com/weiloon1234/Foundry-Go/auth/password"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -57,7 +57,7 @@ func (l *PasswordLogin[M, K, I]) WithConfirmationLockout(throttle lockout.Thrott
 		return nil, err
 	}
 	if l.confirm != nil {
-		return nil, fault.New(fault.Duplicate, "password confirmation already has lockout protection")
+		return nil, safeerror.NewFault(fault.Duplicate, "password confirmation already has lockout protection")
 	}
 	result := *l
 	result.confirm = &throttle
@@ -91,10 +91,10 @@ func (l *PasswordLogin[M, K, I]) WithSecondFactor(factors EnrolledFactors[M]) (*
 		return nil, err
 	}
 	if credential.IsNil(factors) {
-		return nil, fault.New(fault.Invalid, "password login second factor is missing")
+		return nil, safeerror.NewFault(fault.Invalid, "password login second factor is missing")
 	}
 	if l.factors != nil {
-		return nil, fault.New(fault.Duplicate, "password login already has second-factor enrollment")
+		return nil, safeerror.NewFault(fault.Duplicate, "password login already has second-factor enrollment")
 	}
 	result := *l
 	result.factors = factors
@@ -109,10 +109,10 @@ func (l *PasswordLogin[M, K, I]) WithObserver(observer Observer) (*PasswordLogin
 		return nil, err
 	}
 	if observer == nil {
-		return nil, fault.New(fault.Invalid, "password login observer is nil")
+		return nil, safeerror.NewFault(fault.Invalid, "password login observer is nil")
 	}
 	if l.observer != nil {
-		return nil, fault.New(fault.Duplicate, "password login observer already configured")
+		return nil, safeerror.NewFault(fault.Duplicate, "password login observer already configured")
 	}
 	result := *l
 	result.observer = observer
@@ -145,7 +145,7 @@ func NewPasswordLogin[M model.Identifiable, K, I any](provider Provider[M, K], h
 }
 func (l *PasswordLogin[M, K, I]) Validate() error {
 	if l == nil || l.gate == nil {
-		return fault.New(fault.Invalid, "password login is not configured")
+		return safeerror.NewFault(fault.Invalid, "password login is not configured")
 	}
 	return nil
 }
@@ -184,12 +184,13 @@ func (l *PasswordLogin[M, K, I]) report(ctx context.Context, err error, matched 
 	if !matched.IsZero() {
 		event.Subject = value.Set(matched)
 	}
-	if rejection, found, complete := errorgraph.As[*lockout.Rejection](err); complete && found {
+	var rejection *lockout.Rejection
+	if callback.ErrorAs(err, &rejection) {
 		if !rejection.Triggered() {
 			return
 		}
 		event.Kind = EventLockout
-	} else if !errorgraph.Is(err, Unauthenticated) {
+	} else if !callback.ErrorIs(err, Unauthenticated) {
 		return
 	}
 	Notify(ctx, l.observer, event)
@@ -208,7 +209,7 @@ func (l *PasswordLogin[M, K, I]) Confirm(ctx context.Context, subject M, plain p
 			return false, nil
 		}
 		matched, err := l.hasher.Check(op, plain, l.model.Hash(subject))
-		if errors.Is(err, fault.Invalid) {
+		if callback.ErrorIs(err, fault.Invalid) {
 			return false, nil
 		}
 		return matched, err
@@ -229,7 +230,7 @@ func (l *PasswordLogin[M, K, I]) Confirm(ctx context.Context, subject M, plain p
 			return err
 		}
 		if !matched {
-			return Unauthenticated
+			return Unauthenticated.WithCause(nil)
 		}
 		return op.Err()
 	})
@@ -239,12 +240,12 @@ func (l *PasswordLogin[M, K, I]) rejectWithWork(ctx context.Context, plain passw
 	if err := l.hasher.DummyCheck(ctx, plain); err != nil {
 		return err
 	}
-	return Unauthenticated
+	return Unauthenticated.WithCause(nil)
 }
 
 func (l *PasswordLogin[M, K, I]) authenticate(ctx context.Context, key I, plain password.Plaintext, matched *model.Identity) (PasswordResult[M, K], error) {
 	if err := plain.Validate(); err != nil {
-		return PasswordResult[M, K]{}, Unauthenticated
+		return PasswordResult[M, K]{}, Unauthenticated.WithCause(nil)
 	}
 	fail := func(err error) (PasswordResult[M, K], error) { return PasswordResult[M, K]{}, err }
 	found, err := l.model.Lookup(ctx, key)
@@ -265,14 +266,14 @@ func (l *PasswordLogin[M, K, I]) authenticate(ctx context.Context, key I, plain 
 	*matched = identity
 	stored := l.model.Hash(subject)
 	verified, err := l.hasher.Check(ctx, plain, stored)
-	if errors.Is(err, fault.Invalid) {
+	if callback.ErrorIs(err, fault.Invalid) {
 		return fail(l.rejectWithWork(ctx, plain))
 	}
 	if err != nil {
 		return fail(err)
 	}
 	if !verified {
-		return fail(Unauthenticated)
+		return fail(Unauthenticated.WithCause(nil))
 	}
 	reference, err := l.provider.Parse(identity)
 	if err != nil {

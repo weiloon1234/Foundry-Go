@@ -8,19 +8,21 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-// Wrap returns a fault.Error with message whose code is the first framework
+// Wrap retains a fault.Error whose code is the first framework
 // code found in err's bounded graph, so Overloaded, Invalid, Timeout, Closed,
 // Conflict and Panicked causes keep their classification through feature
 // boundaries. An unclassified deadline becomes Timeout; anything else, or an
 // inspection that cannot complete, remains Internal. The cause stays available
-// through errors.Is/errors.As and is never formatted. A nil err returns nil.
+// through errors.Is/errors.As and is never formatted. Marked diagnostics retain
+// their immutable text. A nil err returns nil.
 func Wrap(message string, err error) error {
 	if err == nil {
 		return nil
 	}
-	return fault.Wrap(Code(err), message, err)
+	return safeerror.Retain(err, safeerror.WrapFault(Code(err), message, err))
 }
 
 // Code classifies err within errorgraph's bounds. Custom Unwrap/Is methods run

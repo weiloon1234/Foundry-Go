@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type ErrorKind string
@@ -53,9 +54,12 @@ func (e *Error) Is(target error) bool {
 	}
 	return false
 }
-func invalid() error { return fault.New(fault.Invalid, "invalid outbound HTTP declaration or request") }
+func invalid() error {
+	return safeerror.NewFault(fault.Invalid, "invalid outbound HTTP declaration or request")
+}
 func failure(kind ErrorKind, name Name, method string, attempt, status int, cause error) error {
-	return &Error{kind: kind, name: name, method: method, attempt: attempt, status: status, cause: cause}
+	failure := &Error{kind: kind, name: name, method: method, attempt: attempt, status: status, cause: cause}
+	return safeerror.Owned(failure.Error(), failure)
 }
 func canceled(ctx context.Context, err error) error {
 	if ctx.Err() != nil {

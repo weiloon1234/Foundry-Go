@@ -22,6 +22,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/contractname"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
@@ -106,7 +107,7 @@ func Render(source *manifest.Manifest) ([]byte, error) {
 		return nil, err
 	}
 	if r.out.Len() > maxOutputBytes {
-		return nil, fault.New(fault.Invalid, "TypeScript output exceeds its publication byte budget")
+		return nil, safeerror.NewFault(fault.Invalid, "TypeScript output exceeds its publication byte budget")
 	}
 	return r.out.Bytes(), nil
 }
@@ -124,11 +125,11 @@ func newNaming(document manifest.Document) (naming, error) {
 	}
 	for _, typ := range document.Types {
 		if length, set := typ.Length.Get(); set && int64(length) > 9007199254740991 {
-			return naming{}, fault.New(fault.Invalid, "TypeScript array length exceeds its exact index range")
+			return naming{}, safeerror.NewFault(fault.Invalid, "TypeScript array length exceeds its exact index range")
 		}
 	}
 	if localeKey() == "" {
-		return naming{}, fault.New(fault.Internal, "TypeScript locale key declaration is unavailable")
+		return naming{}, safeerror.NewFault(fault.Internal, "TypeScript locale key declaration is unavailable")
 	}
 	received, receivedEnums := receivedNames(document, names, reserved)
 	return naming{names: names, received: received, receivedEnums: receivedEnums}, nil
@@ -171,7 +172,7 @@ func (r *renderer) body(source *manifest.Manifest) error {
 	}
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, data); err != nil {
-		return fault.Wrap(fault.Internal, "manifest JSON is not compactable", err)
+		return safeerror.WrapFault(fault.Internal, "manifest JSON is not compactable", err)
 	}
 	literal, _ := json.Marshal(compact.String())
 	fmt.Fprintf(&r.out, "\nexport const manifestJSON = %s;\nlet runtimeDocumentCache: %s | undefined;\nfunction runtimeDocument(): RuntimeDocument { return runtimeDocumentCache ??= loadRuntimeDocument(); }\nlet contractsCache: %s | undefined;\nfunction contracts(): WireCodec { return contractsCache ??= new WireCodec(runtimeDocument().types); }\n\n", literal, r.ref("RuntimeDocument"), r.ref("WireCodec"))

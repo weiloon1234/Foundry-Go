@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
@@ -58,7 +59,7 @@ func nilValue(value any) bool {
 }
 func (c Config) Validate() error {
 	if !identifier.Semantic(string(c.Group)) || nilValue(c.Clock) || c.Concurrency < 1 || c.Concurrency > 4096 || c.MaxHistory < 1 || c.MaxHistory > 65536 || c.MaxPerTick < 1 || c.MaxPerTick > 4096 || c.PollInterval <= 0 || c.PollInterval > time.Minute || c.Grace < 0 || c.Grace > 24*time.Hour || c.CapacityWait < 0 || c.CapacityWait > time.Hour || c.DrainTimeout < 0 || c.DrainTimeout > time.Hour {
-		return fault.New(fault.Invalid, "invalid scheduler configuration")
+		return safeerror.NewFault(fault.Invalid, "invalid scheduler configuration")
 	}
 	return lease.ValidateDuration(c.LeadershipTTL)
 }
@@ -67,7 +68,7 @@ func (c Config) Validate() error {
 // application's shutdown timeout, leaving time to release leadership.
 func (c Config) ValidateShutdown(timeout time.Duration) error {
 	if timeout <= 0 || c.DrainTimeout >= timeout {
-		return fault.New(fault.Invalid, "scheduler drain timeout must be shorter than the application shutdown timeout")
+		return safeerror.NewFault(fault.Invalid, "scheduler drain timeout must be shorter than the application shutdown timeout")
 	}
 	return nil
 }

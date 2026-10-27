@@ -2,9 +2,11 @@ package http
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type AuthenticatedIdempotentEndpoint[P, Q, B, M, R any] struct {
@@ -36,7 +38,7 @@ func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) WithHeaders(fn func(cont
 }
 func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Handle(scope func(context.Context, M, Input[P, Q, B]) (idempotency.Scope, error), handler func(context.Context, *database.Tx, M, Input[P, Q, B]) (R, error)) RouteRegistration {
 	if scope == nil || handler == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated idempotency requires scope and transaction callbacks"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated idempotency requires scope and transaction callbacks"))
 	}
 	return e.Prepare(func(ctx context.Context, actor M, in Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error) {
 		identity, err := scope(ctx, actor, in)
@@ -56,7 +58,7 @@ func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Prepare(prepare func(con
 		return InvalidRouteRegistration(err)
 	}
 	if prepare == nil {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated idempotency preparation is missing"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated idempotency preparation is missing"))
 	}
 	return e.endpoint.Prepare(func(ctx context.Context, in Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error) {
 		actor, err := e.source.guard.Require(ctx)

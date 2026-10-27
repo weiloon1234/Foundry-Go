@@ -13,8 +13,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
 
-// Seal can only be named inside this module, so Owned is implementable only by
-// framework adapters.
+// Seal is a method-set marker, not a capability: FoundryAdapter is a pure no-op
+// and is never invoked. Generic inference can implement Owned outside this
+// module; Is therefore also checks the concrete type's defining package.
 type Seal struct{ _ struct{} }
 
 // Owned marks a framework adapter. The method has no behavior.
@@ -35,7 +36,17 @@ func Is(adapter any) bool {
 	if _, ok := adapter.(Owned); !ok {
 		return false
 	}
-	concrete := reflect.TypeOf(adapter)
+	return IsFrameworkType(adapter)
+}
+
+// IsFrameworkType reports whether a concrete type is defined by the framework.
+// It does not trust promoted methods or execute application code. Callers must
+// separately establish the required method contract.
+func IsFrameworkType(value any) bool {
+	concrete := reflect.TypeOf(value)
+	if concrete == nil {
+		return false
+	}
 	if concrete.Kind() == reflect.Pointer {
 		concrete = concrete.Elem()
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -59,7 +60,7 @@ func Check(root string) error {
 		relative = filepath.ToSlash(relative)
 		// Reserve the removed path itself, including a symlink to a package.
 		if relative == retiredPath || strings.HasSuffix(relative, "/"+retiredPath) {
-			failures = append(failures, fmt.Errorf("%s: retired directory path", relative))
+			failures = append(failures, safeerror.New(fmt.Sprintf("%s: retired directory path", relative)))
 		}
 		if d.IsDir() {
 			return nil
@@ -68,7 +69,7 @@ func Check(root string) error {
 			return nil
 		}
 		if strings.HasSuffix(path, "_legacy.go") {
-			failures = append(failures, fmt.Errorf("%s: retired filename", relative))
+			failures = append(failures, safeerror.New(fmt.Sprintf("%s: retired filename", relative)))
 		}
 		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
@@ -90,7 +91,7 @@ func Check(root string) error {
 				dotOwners = append(dotOwners, imports[alias])
 			}
 			if imported == framework+retiredPath || strings.HasPrefix(imported, framework+retiredPath+"/") {
-				failures = append(failures, fmt.Errorf("%s: retired import", relative))
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s: retired import", relative)))
 			}
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
@@ -98,7 +99,7 @@ func Check(root string) error {
 				for _, owner := range dotOwners {
 					for _, name := range denied[owner] {
 						if name == id.Name {
-							failures = append(failures, fmt.Errorf("%s: dot-import reference to retired %s.%s", relative, owner, name))
+							failures = append(failures, safeerror.New(fmt.Sprintf("%s: dot-import reference to retired %s.%s", relative, owner, name)))
 						}
 					}
 				}
@@ -107,13 +108,13 @@ func Check(root string) error {
 				if qualifier, ok := selected.X.(*ast.Ident); ok {
 					for _, name := range denied[imports[qualifier.Name]] {
 						if selected.Sel.Name == name {
-							failures = append(failures, fmt.Errorf("%s: reference to retired %s.%s", relative, qualifier.Name, name))
+							failures = append(failures, safeerror.New(fmt.Sprintf("%s: reference to retired %s.%s", relative, qualifier.Name, name)))
 						}
 					}
 				}
 			}
 			if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "Legacy") {
-				failures = append(failures, fmt.Errorf("%s: retired identifier %s", relative, id.Name))
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s: retired identifier %s", relative, id.Name)))
 			}
 			return true
 		})
@@ -143,7 +144,7 @@ func Check(root string) error {
 			failures = append(failures, checkExposures(fset, packages, denied))
 		}
 	}
-	return errors.Join(failures...)
+	return safeerror.Join("operation failed", failures...)
 }
 
 // Resolve the nearest module, including fixture modules and nested source trees.
@@ -174,17 +175,17 @@ func packageLocation(root, dir string) (string, string, error) {
 					return module, current, nil
 				}
 			}
-			return "", "", fmt.Errorf("%s: missing module path", current)
+			return "", "", safeerror.New(fmt.Sprintf("%s: missing module path", current))
 		}
 		if !errors.Is(err, os.ErrNotExist) {
 			return "", "", err
 		}
 		if current == root {
-			return "", "", fmt.Errorf("%s: source has no module", dir)
+			return "", "", safeerror.New(fmt.Sprintf("%s: source has no module", dir))
 		}
 		parent := filepath.Dir(current)
 		if parent == current {
-			return "", "", fmt.Errorf("%s: source outside root", dir)
+			return "", "", safeerror.New(fmt.Sprintf("%s: source outside root", dir))
 		}
 		current = parent
 	}

@@ -1,9 +1,8 @@
 package websocket
 
-import "math/rand/v2"
-
 import (
 	"context"
+	rand "math/rand/v2"
 
 	"time"
 
@@ -150,7 +149,7 @@ func (c *connectionState) refreshAuthorization() bool {
 				return err
 			}
 			if actual != subscription.subjectID {
-				return Unauthenticated
+				return codeFailure(Unauthenticated)
 			}
 			results = append(results, refreshed{subscription, access.retained()})
 		}

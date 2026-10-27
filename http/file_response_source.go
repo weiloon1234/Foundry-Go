@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // The body belongs to the source until return. Once transferred, retain it even
@@ -37,7 +38,7 @@ func openFileSource[T any](ctx context.Context, operation string, source func(co
 		return content, prepared, Unavailable.WithCause(err)
 	}
 	if prepared.reader == nil {
-		return content, prepared, InternalError.WithCause(fault.New(fault.Internal, "file source returned no body"))
+		return content, prepared, InternalError.WithCause(safeerror.NewFault(fault.Internal, "file source returned no body"))
 	}
 	return content, prepared, nil
 }

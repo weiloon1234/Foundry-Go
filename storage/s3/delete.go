@@ -19,7 +19,7 @@ func (b *Backend) DeleteBatch(ctx context.Context, keys []storage.ObjectKey) ([]
 		return nil, err
 	}
 	if len(keys) == 0 || len(keys) > storage.MaxBatchDelete {
-		return nil, storage.Failure(storage.Invalid, storage.DeleteOperation, storage.Unchanged, nil)
+		return nil, newFailure(storage.Invalid, storage.DeleteOperation, storage.Unchanged, nil)
 	}
 	full := make([]string, len(keys))
 	for i, key := range keys {
@@ -44,7 +44,7 @@ func (b *Backend) DeleteBatch(ctx context.Context, keys []storage.ObjectKey) ([]
 		return nil, failure(storage.DeleteOperation, storage.Unknown, err)
 	}
 	if output == nil {
-		return nil, storage.Failure(storage.IntegrityFailed, storage.DeleteOperation, storage.Unknown, nil)
+		return nil, newFailure(storage.IntegrityFailed, storage.DeleteOperation, storage.Unknown, nil)
 	}
 	index := make(map[string]int, len(keys))
 	for i, key := range full {
@@ -69,11 +69,11 @@ func (b *Backend) DeleteBatch(ctx context.Context, keys []storage.ObjectKey) ([]
 		case "NoSuchKey":
 			continue
 		}
-		results[i] = storage.Failure(code, storage.DeleteOperation, outcome, nil)
+		results[i] = newFailure(code, storage.DeleteOperation, outcome, nil)
 	}
 	for i, ok := range reported {
 		if !ok {
-			results[i] = storage.Failure(storage.IntegrityFailed, storage.DeleteOperation, storage.Unknown, nil)
+			results[i] = newFailure(storage.IntegrityFailed, storage.DeleteOperation, storage.Unknown, nil)
 		}
 	}
 	return results, nil

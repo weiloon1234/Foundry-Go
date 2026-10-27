@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -55,7 +56,7 @@ func DefineGuard[M model.Identifiable, K any](name GuardName, provider Provider[
 			result, err = strategy.bound(ctx, bound)
 		default:
 			// Only a strategy's own binder creates its bound credentials.
-			err = Unauthenticated
+			err = Unauthenticated.WithCause(nil)
 		}
 		if err != nil {
 			return guardResult[M]{}, err
@@ -65,16 +66,16 @@ func DefineGuard[M model.Identifiable, K any](name GuardName, provider Provider[
 		}
 		proof, present := result.Get()
 		if !present {
-			return guardResult[M]{}, Unauthenticated
+			return guardResult[M]{}, Unauthenticated.WithCause(nil)
 		}
 		if !proof.assurance.valid() {
-			return guardResult[M]{}, fault.New(fault.Invalid, "strategy returned an invalid authentication proof")
+			return guardResult[M]{}, safeerror.NewFault(fault.Invalid, "strategy returned an invalid authentication proof")
 		}
 		if proof.assurance == PendingMFA {
 			if _, err := provider.Parse(proof.identity); err != nil {
 				return guardResult[M]{}, Unauthenticated.WithCause(err)
 			}
-			return guardResult[M]{}, MFARequired
+			return guardResult[M]{}, MFARequired.WithCause(nil)
 		}
 		subject, err := provider.resolve(ctx, proof.identity)
 		if err != nil {
@@ -86,7 +87,7 @@ func DefineGuard[M model.Identifiable, K any](name GuardName, provider Provider[
 }
 func (g Guard[M]) Validate() error {
 	if g.definition == nil || !identifier.Semantic(string(g.definition.name)) {
-		return fault.New(fault.Invalid, "authentication guard requires a semantic name")
+		return safeerror.NewFault(fault.Invalid, "authentication guard requires a semantic name")
 	}
 	return g.definition.validate()
 }
@@ -136,7 +137,7 @@ func (g Guard[M]) resolve(ctx context.Context) (guardResult[M], error) {
 	}
 	typed, ok := result.(guardResult[M])
 	if !ok {
-		return guardResult[M]{}, fault.New(fault.Internal, "invalid authentication scope result")
+		return guardResult[M]{}, safeerror.NewFault(fault.Internal, "invalid authentication scope result")
 	}
 	return typed, nil
 }
@@ -151,7 +152,7 @@ func (g Guard[M]) Require(ctx context.Context) (M, error) {
 	}
 	subject, present := found.Get()
 	if !present {
-		return *new(M), Unauthenticated
+		return *new(M), Unauthenticated.WithCause(nil)
 	}
 	return subject, nil
 }
@@ -166,7 +167,7 @@ func (g Guard[M]) ValidateIn(registry *Registry) error {
 		return err
 	}
 	if !registry.guards[g.definition.id] {
-		return fault.New(fault.Missing, "authentication guard is not registered")
+		return safeerror.NewFault(fault.Missing, "authentication guard is not registered")
 	}
 	return nil
 }

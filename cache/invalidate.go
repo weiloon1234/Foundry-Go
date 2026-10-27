@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/faultwrap"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Invalidate logically invalidates every typed cache entry in this namespace,
@@ -58,7 +59,7 @@ func (s *Store) flusher() (FlushBackend, bool) {
 
 func (s *Store) flush(ctx context.Context, backend FlushBackend) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "cache invalidation requires a context")
+		return safeerror.NewFault(fault.Invalid, "cache invalidation requires a context")
 	}
 	if err := s.active(); err != nil {
 		return err
@@ -84,7 +85,7 @@ func (s *Store) invalidate(ctx context.Context, resolve func() ([]EntryKey, erro
 		return err
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "cache invalidation requires a context")
+		return safeerror.NewFault(fault.Invalid, "cache invalidation requires a context")
 	}
 	if err := s.active(); err != nil {
 		return err

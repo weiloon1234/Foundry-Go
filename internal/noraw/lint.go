@@ -4,6 +4,7 @@ package noraw
 import (
 	"context"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -35,7 +36,7 @@ func Check(ctx context.Context, dir string, patterns []string) ([]Diagnostic, er
 	if _, ok := graph.exports["context"]; ok {
 		p, err := graph.importer.Import("context")
 		if err != nil {
-			return nil, fmt.Errorf("no-raw: cannot load context type information")
+			return nil, safeerror.New(fmt.Sprintf("no-raw: cannot load context type information"))
 		}
 		contextType = p.Scope().Lookup("Context").Type()
 	}

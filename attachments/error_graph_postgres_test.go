@@ -2,6 +2,11 @@ package attachments
 
 import (
 	"context"
+	"database/sql/driver"
+	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraphtest"
+	"github.com/weiloon1234/Foundry-Go/internal/extensiontest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -74,5 +79,104 @@ func TestPostgresAttachmentCyclicCleanupFailureKeepsPublishedReplacementAndRetry
 	case <-f.manager.Done():
 	default:
 		t.Fatal("cleanup failure retained manager ownership")
+	}
+}
+
+func TestPostgresPreparedAttachmentDoesNotTreatHostileDatabaseErrorAsMissing(t *testing.T) {
+	var armed atomic.Pointer[errorgraphtest.Error]
+	var calls atomic.Int32
+	f := openAttachmentsWithConnector(t, func(base driver.Connector) driver.Connector {
+		return extensiontest.InterceptQueries(base, func(statement string) error {
+			if cause := armed.Load(); cause != nil && strings.Contains(statement, "extension_members") && strings.Contains(statement, "FOR UPDATE") {
+				calls.Add(1)
+				return cause
+			}
+			return nil
+		})
+	})
+	for _, mode := range []string{"cycle", "panic", "goexit"} {
+		cause := &errorgraphtest.Error{Mode: mode}
+		calls.Store(0)
+		armed.Store(cause)
+		prepared, err := testSingle.Prepare(t.Context(), f.manager, member(t, 1), uploadText("candidate"))
+		armed.Store(nil)
+		if err == nil || !errors.Is(err, cause) || prepared.IsZero() || calls.Load() != 1 || cause.Formatted.Load() != 0 || cause.Visits.Load() > 2048 {
+			t.Fatal("attachment database failure became missing or escaped containment", calls.Load(), cause.Visits.Load())
+		}
+		// Prepare keeps a reconciliation identity even when staging fails. It
+		// does not prove the upload exists or succeeded.
+		if _, err := f.manager.Inspect(t.Context(), prepared.Operation()); !errors.Is(err, database.NotFound) {
+			t.Fatal("failed owner lock recorded an upload")
+		}
+	}
+}
+
+func TestPostgresAttachmentPublicationContainsHostileDatabaseMatching(t *testing.T) {
+	var armed atomic.Pointer[errorgraphtest.Error]
+	var calls atomic.Int32
+	f := openAttachmentsWithConnector(t, func(base driver.Connector) driver.Connector {
+		return extensiontest.InterceptQueries(base, func(statement string) error {
+			if cause := armed.Load(); cause != nil && strings.Contains(statement, "foundry_attachments") && strings.Contains(statement, "FOR UPDATE") {
+				calls.Add(1)
+				return cause
+			}
+			return nil
+		})
+	})
+	owner := member(t, 1)
+	for _, mode := range []string{"cycle", "panic", "goexit"} {
+		prepared, err := testSingle.Prepare(t.Context(), f.manager, owner, uploadText("candidate"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cause := &errorgraphtest.Error{Mode: mode}
+		calls.Store(0)
+		var result Result[extensiontest.Member, int64]
+		err = f.DB.Transaction(t.Context(), func(tx *database.Tx) error {
+			armed.Store(cause)
+			defer armed.Store(nil)
+			var err error
+			result, err = testSingle.AddIn(t.Context(), tx, f.manager, owner, prepared)
+			return err
+		})
+		if err == nil || !errors.Is(err, cause) || result.Publication != Unpublished || result.Attachment.IsSet() || calls.Load() != 1 || cause.Formatted.Load() != 0 || cause.Visits.Load() > 2048 {
+			t.Fatal("publication driver failure became invisibility or escaped containment")
+		}
+		if State(journal(t, f, prepared.Operation()).State) != Stored {
+			t.Fatal("failed publication changed stored upload")
+		}
+	}
+}
+
+func TestPostgresAttachmentVariantContainsHostileDatabaseMatching(t *testing.T) {
+	for _, mode := range []string{"cycle", "panic", "goexit"} {
+		t.Run(mode, func(t *testing.T) {
+			cause := &errorgraphtest.Error{Mode: mode}
+			var armed atomic.Pointer[errorgraphtest.Error]
+			var calls atomic.Int32
+			policy := testPhotos.definition.policy
+			policy.Variants = []Variant{testThumbnail}
+			collection := Define(extensiontest.Members, "hostile_variants", policy, Hook[extensiontest.Member, int64]{AfterStored: func(context.Context, *database.Tx, Attachment[extensiontest.Member, int64]) error {
+				armed.Store(cause)
+				return nil
+			}})
+			f := openAttachmentsWithConnector(t, func(base driver.Connector) driver.Connector {
+				return extensiontest.InterceptQueries(base, func(statement string) error {
+					if cause := armed.Load(); cause != nil && strings.Contains(statement, "foundry_attachments") && strings.Contains(statement, "FOR UPDATE") {
+						calls.Add(1)
+						return cause
+					}
+					return nil
+				})
+			}, collection.Registration())
+			result, err := collection.Add(t.Context(), f.manager, member(t, 1), pngUpload(t, 8, 8))
+			armed.Store(nil)
+			if err == nil || !errors.Is(err, cause) || result.Publication != Published || !result.Attachment.IsSet() || !result.PendingVariants || calls.Load() != 1 || cause.Formatted.Load() != 0 || cause.Visits.Load() > 2048 {
+				t.Fatal("variant failure became superseded/success or escaped containment", calls.Load(), cause.Visits.Load())
+			}
+			if len(variantRows(t, f, result.Operation)) != 0 || State(journal(t, f, result.Operation).State) != Ready {
+				t.Fatal("failed variant changed published original")
+			}
+		})
 	}
 }

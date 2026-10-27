@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Lookup is one typed batch-read result. Found distinguishes a miss from a
@@ -27,7 +28,7 @@ func (c Cache[K, V]) GetMany(ctx context.Context, keys ...K) ([]Lookup[V], error
 	results := make([]Lookup[V], len(keys))
 	err := c.operation(ctx, func(ctx context.Context) error {
 		if len(keys) > c.store.config.MaxBatchEntries {
-			return fault.New(fault.Invalid, "cache batch exceeds configured key limit")
+			return safeerror.NewFault(fault.Invalid, "cache batch exceeds configured key limit")
 		}
 		if len(keys) == 0 {
 			return nil
@@ -184,7 +185,7 @@ func (c Cache[K, V]) readSnapshotBatch(ctx context.Context, snapshot accessSnaps
 				return nil, readErr
 			}
 			if len(read) != len(sorted) {
-				return nil, fault.New(fault.Invalid, "cache backend returned an invalid batch")
+				return nil, safeerror.NewFault(fault.Invalid, "cache backend returned an invalid batch")
 			}
 			values = make([]BatchValue, len(batch))
 			for i, index := range order {
@@ -203,7 +204,7 @@ func (c Cache[K, V]) readSnapshotBatch(ctx context.Context, snapshot accessSnaps
 		return nil, err
 	}
 	if len(values) != len(bases) {
-		return nil, fault.New(fault.Invalid, "cache backend returned an invalid batch")
+		return nil, safeerror.NewFault(fault.Invalid, "cache backend returned an invalid batch")
 	}
 	return values, ctx.Err()
 }

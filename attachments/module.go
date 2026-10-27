@@ -2,7 +2,6 @@ package attachments
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -33,9 +32,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Manager], requires [
 		if err := r.OnShutdown("attachments", func(ctx context.Context) error {
 			err := m.Close(ctx)
 			<-m.Done()
-			return errors.Join(err, m.Close(context.Background()))
+			return joinFailures(err, m.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, m.Close(ctx))
+			return joinFailures(err, m.Close(ctx))
 		}
 		return nil
 	}}

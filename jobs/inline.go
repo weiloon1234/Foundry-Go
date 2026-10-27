@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
@@ -88,10 +89,10 @@ func (d *Dispatcher) runInline(ctx context.Context, key Key) {
 // once due. It returns the number of attempts processed.
 func (d *Dispatcher) RunPending(ctx context.Context, queue Queue) (int, error) {
 	if d == nil || ctx == nil {
-		return 0, fault.New(fault.Invalid, "inline execution requires a dispatcher and context")
+		return 0, safeerror.NewFault(fault.Invalid, "inline execution requires a dispatcher and context")
 	}
 	if !d.inline() {
-		return 0, fault.New(fault.Invalid, "job backend does not execute inline")
+		return 0, safeerror.NewFault(fault.Invalid, "job backend does not execute inline")
 	}
 	key, err := NewKey(d.config.Namespace, queue)
 	if err != nil {

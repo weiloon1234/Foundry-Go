@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Session is an advanced, callback-scoped connection capability for operations
@@ -30,7 +31,7 @@ type Session struct {
 // with unfinished work is canceled and discarded instead of returned to the pool.
 func (db *DB) Session(ctx context.Context, fn func(*Session) error) (err error) {
 	if fn == nil {
-		return fault.New(fault.Invalid, "database session needs a callback")
+		return safeerror.NewFault(fault.Invalid, "database session needs a callback")
 	}
 	conn, release, err := db.acquire(ctx)
 	if err != nil {
@@ -38,14 +39,14 @@ func (db *DB) Session(ctx context.Context, fn func(*Session) error) (err error) 
 	}
 	defer func() {
 		if releaseErr := release(); releaseErr != nil {
-			err = errors.Join(err, releaseErr)
+			err = safeerror.Join("operation failed", err, releaseErr)
 		}
 	}()
 	lifetime, cancel := context.WithCancel(ctx)
 	defer cancel()
 	session := &Session{owner: db, raw: conn, scope: &operationScope{ctx: lifetime, cancel: cancel}, classify: db.classify, observers: db.Observers(), timeSource: db.Clock()}
 	err = invokeScope("database session", func() error { return fn(session) })
-	err = errors.Join(err, session.scope.finish())
+	err = safeerror.Join("operation failed", err, session.scope.finish())
 	if err == nil {
 		err = db.classify.wrap("session", lifetime.Err())
 	}
@@ -53,7 +54,7 @@ func (db *DB) Session(ctx context.Context, fn func(*Session) error) (err error) 
 		session.Discard()
 	}
 	if session.discard.Load() {
-		err = errors.Join(err, db.classify.wrap("discard session", discardConnection(conn)))
+		err = safeerror.Join("operation failed", err, db.classify.wrap("discard session", discardConnection(conn)))
 	}
 	// A session has no transaction outcome to attach. Callback failures, such as
 	// migration checksum drift, keep their own identity and message; database

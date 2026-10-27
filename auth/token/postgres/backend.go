@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -29,7 +30,7 @@ type Config struct {
 func DefaultConfig() Config { return Config{Schema: "public", Clock: clock.System{}} }
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || credential.IsNil(c.Clock) {
-		return fault.New(fault.Invalid, "token PostgreSQL adapter requires a schema and clock")
+		return safeerror.NewFault(fault.Invalid, "token PostgreSQL adapter requires a schema and clock")
 	}
 	return nil
 }
@@ -45,7 +46,7 @@ type Backend struct {
 
 func New(db *database.DB, config Config) (*Backend, error) {
 	if db == nil {
-		return nil, fault.New(fault.Invalid, "token PostgreSQL adapter requires a database pool")
+		return nil, safeerror.NewFault(fault.Invalid, "token PostgreSQL adapter requires a database pool")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -57,7 +58,7 @@ var _ token.Backend = (*Backend)(nil)
 
 func (b *Backend) within(ctx context.Context, fn func(*database.Tx) error) error {
 	if b == nil || b.db == nil || ctx == nil {
-		return fault.New(fault.Invalid, "token PostgreSQL operation requires a backend and context")
+		return safeerror.NewFault(fault.Invalid, "token PostgreSQL operation requires a backend and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -78,7 +79,7 @@ func (b *Backend) now() (time.Time, error) {
 		return time.Time{}, err
 	}
 	if instant.IsZero() {
-		return time.Time{}, fault.New(fault.Invalid, "token clock returned zero time")
+		return time.Time{}, safeerror.NewFault(fault.Invalid, "token clock returned zero time")
 	}
 	return now, nil
 }
@@ -103,7 +104,7 @@ func validateCredential(address token.Address, hash token.Digest) error {
 		return err
 	}
 	if hash.IsZero() {
-		return fault.New(fault.Invalid, "token credential hash is empty")
+		return safeerror.NewFault(fault.Invalid, "token credential hash is empty")
 	}
 	return nil
 }
@@ -159,7 +160,7 @@ func subjectByKey(ctx context.Context, tx *database.Tx, address token.Address, k
 		return tokenstore.Subject{}, false, err
 	}
 	if subject.Key != expected || subject.Key != key || subject.Scope != scope {
-		return tokenstore.Subject{}, false, fault.New(fault.Invalid, "stored token subject is inconsistent")
+		return tokenstore.Subject{}, false, safeerror.NewFault(fault.Invalid, "stored token subject is inconsistent")
 	}
 	return subject, true, nil
 }
@@ -169,7 +170,7 @@ func record(address token.Address, subject tokenstore.Subject, family tokenstore
 		return token.Record{}, err
 	}
 	if subject.Scope != scope || family.Scope != scope || entry.Scope != scope || family.SubjectKey != subject.Key || entry.FamilyID != family.ID || entry.Generation > family.Generation || family.Generation > family.RotationLimit {
-		return token.Record{}, fault.New(fault.Invalid, "stored token generation does not match its family")
+		return token.Record{}, safeerror.NewFault(fault.Invalid, "stored token generation does not match its family")
 	}
 	identity, err := subject.Identity.Decode()
 	if err != nil {
@@ -180,7 +181,7 @@ func record(address token.Address, subject tokenstore.Subject, family tokenstore
 		return token.Record{}, err
 	}
 	if key != subject.Key {
-		return token.Record{}, fault.New(fault.Invalid, "stored token subject does not match identity")
+		return token.Record{}, safeerror.NewFault(fault.Invalid, "stored token subject does not match identity")
 	}
 	names, err := family.Scopes.Decode()
 	if err != nil {
@@ -205,7 +206,7 @@ func record(address token.Address, subject tokenstore.Subject, family tokenstore
 	var device auth.Device
 	if text, present := family.ClientIP.Get(); present {
 		if device.ClientIP, err = netip.ParseAddr(text); err != nil {
-			return token.Record{}, fault.New(fault.Invalid, "stored token client address is invalid")
+			return token.Record{}, safeerror.NewFault(fault.Invalid, "stored token client address is invalid")
 		}
 	}
 	device.UserAgent, _ = family.UserAgent.Get()
@@ -219,7 +220,7 @@ func currentRecord(ctx context.Context, tx *database.Tx, address token.Address, 
 	}
 	row, present := found.Get()
 	if !present {
-		return token.Record{}, fault.New(fault.Invalid, "stored token family has no current generation")
+		return token.Record{}, safeerror.NewFault(fault.Invalid, "stored token family has no current generation")
 	}
 	return record(address, subject, family, row)
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/password"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -24,10 +25,10 @@ func (l *PasswordLogin[M, K, I]) WithLockout(throttle lockout.Throttle[I]) (*Pas
 		return nil, err
 	}
 	if _, clientAware := throttle.Limits(); !clientAware {
-		return nil, fault.New(fault.Invalid, "password lockout requires client-aware lockout.DefineLogin limits")
+		return nil, safeerror.NewFault(fault.Invalid, "password lockout requires client-aware lockout.DefineLogin limits")
 	}
 	if l.protection != nil {
-		return nil, fault.New(fault.Duplicate, "password login already has lockout protection")
+		return nil, safeerror.NewFault(fault.Duplicate, "password login already has lockout protection")
 	}
 	result := *l
 	result.protection = &throttle
@@ -55,7 +56,7 @@ func (l *PasswordLogin[M, K, I]) authenticateProtected(ctx context.Context, key 
 		return PasswordResult[M, K]{}, err
 	}
 	if !ok {
-		return PasswordResult[M, K]{}, Unauthenticated
+		return PasswordResult[M, K]{}, Unauthenticated.WithCause(nil)
 	}
 	return result, nil
 }

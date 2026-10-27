@@ -2,7 +2,7 @@ package expr
 
 import (
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -81,10 +81,10 @@ func (e Selected[S, V]) Param(v V) RowExpression[S, V] {
 
 func parameter[S, V any](exemplar rowData[V], v V) RowExpression[S, V] {
 	c := exemplar.column
-	err := errors.Join(exemplar.core.Err, c.Err)
+	err := safeerror.Join("operation failed", exemplar.core.Err, c.Err)
 	var node querycore.ParameterNode
 	if c.Bind == nil || c.Clone == nil {
-		err = errors.Join(err, ormcore.Invalid("uninitialized parameter codec"))
+		err = safeerror.Join("operation failed", err, ormcore.Invalid("uninitialized parameter codec"))
 	} else if err == nil {
 		bound, bindErr := c.Bind(c.Clone(v))
 		node.Value, node.Err = querycore.RetainLiteral(bound), bindErr
@@ -92,7 +92,7 @@ func parameter[S, V any](exemplar rowData[V], v V) RowExpression[S, V] {
 	node.Kind = c.Kind
 	node.Sensitive = c.Sensitive
 	refs, referenceErr := ormcore.MergeReferences(exemplar.core.Refs, []ormcore.Reference{{Scope: reflect.TypeFor[S]()}})
-	node.Err = errors.Join(err, node.Err, referenceErr)
+	node.Err = safeerror.Join("operation failed", err, node.Err, referenceErr)
 	return RowExpression[S, V]{data: rowData[V]{core: ormcore.Expression{Node: node, Refs: refs, ReferenceFree: true, Err: node.Err}, column: c}}
 }
 
@@ -136,7 +136,7 @@ func nullableData[V any](e rowData[V]) rowData[value.Nullable[V]] {
 		return value.Of(c.Clone(x))
 	}
 	if value.IsNullableType[V]() {
-		e.core.Err = errors.Join(e.core.Err, ormcore.Invalid("value is already nullable"))
+		e.core.Err = safeerror.Join("operation failed", e.core.Err, ormcore.Invalid("value is already nullable"))
 		out.Err = e.core.Err
 	}
 	return rowData[value.Nullable[V]]{core: e.core, column: out}

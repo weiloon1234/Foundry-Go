@@ -1,8 +1,10 @@
 package cache
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TTL explicitly selects finite expiry or persistence. Its zero value is invalid.
@@ -18,7 +20,7 @@ func (t TTL) Validate() error {
 	if t.forever && t.duration == 0 || !t.forever && t.duration > 0 {
 		return nil
 	}
-	return fault.New(fault.Invalid, "cache TTL must be positive or explicitly persistent")
+	return safeerror.NewFault(fault.Invalid, "cache TTL must be positive or explicitly persistent")
 }
 func (t TTL) IsForever() bool         { return t.forever }
 func (t TTL) Duration() time.Duration { return t.duration }

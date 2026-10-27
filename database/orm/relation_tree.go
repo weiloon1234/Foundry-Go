@@ -2,7 +2,7 @@ package orm
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 	"unsafe"
 
@@ -88,13 +88,13 @@ func validateRelationMetadata(p *relationPlan, owner *tableCore) error {
 	if p.external {
 		return tableError(p.slot.owner)
 	}
-	if err := errors.Join(tableError(p.slot.owner), tableError(p.target), p.query.err); err != nil {
+	if err := safeerror.Join("operation failed", tableError(p.slot.owner), tableError(p.target), p.query.err); err != nil {
 		return err
 	}
 	if p.query.ast.Limit.IsSet() || p.query.ast.Offset != 0 {
 		return invalid("relation scopes cannot use global limits or offsets")
 	}
-	if err := errors.Join(p.query.ast.ValidateSoftDeleteScope(), p.query.ast.ValidateScopeOptions(), p.target.model.ValidateGlobalScopes()); err != nil {
+	if err := safeerror.Join("operation failed", p.query.ast.ValidateSoftDeleteScope(), p.query.ast.ValidateScopeOptions(), p.target.model.ValidateGlobalScopes()); err != nil {
 		return err
 	}
 	return validateJoinedMetadata(p)

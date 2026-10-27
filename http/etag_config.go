@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ETagConfig bounds automatic response hashing. Captures larger than MaxBytes
@@ -28,7 +29,7 @@ func DefaultETagConfig() ETagConfig {
 
 func (c ETagConfig) Validate() error {
 	if c.MaxBytes < 1 || c.MaxBytes > 64<<20 || c.MaxConcurrent < 1 || c.MaxConcurrent > 1024 || c.AdmissionWait < 0 || c.AdmissionWait > admission.DefaultWait {
-		return fault.New(fault.Invalid, "automatic ETag capture bounds are invalid")
+		return safeerror.NewFault(fault.Invalid, "automatic ETag capture bounds are invalid")
 	}
 	return nil
 }

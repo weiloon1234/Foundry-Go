@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const PrometheusContentType = "text/plain; version=0.0.4; charset=utf-8"
@@ -60,22 +61,22 @@ type namedCollector struct {
 // may be registered and registration closes when the recorder closes.
 func (r *Recorder) RegisterCollector(name Name, collector Collector) error {
 	if r == nil || r.done == nil {
-		return fault.New(fault.Invalid, "metric collection requires an initialized recorder")
+		return safeerror.NewFault(fault.Invalid, "metric collection requires an initialized recorder")
 	}
 	if collector == nil || len(name) > 128 || !identifier.Semantic(string(name)) {
-		return fault.New(fault.Invalid, "metric collector requires a declared name and callback")
+		return safeerror.NewFault(fault.Invalid, "metric collector requires a declared name and callback")
 	}
 	r.collectorsMu.Lock()
 	defer r.collectorsMu.Unlock()
 	if r.closing() {
-		return fault.New(fault.Closed, "metric collector registration is closed")
+		return safeerror.NewFault(fault.Closed, "metric collector registration is closed")
 	}
 	if len(r.collectors) >= MaxCollectors {
-		return fault.New(fault.Invalid, "metric collector count exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "metric collector count exceeds its bound")
 	}
 	for _, existing := range r.collectors {
 		if existing.name == name {
-			return fault.New(fault.Duplicate, "metric collector is already registered")
+			return safeerror.NewFault(fault.Duplicate, "metric collector is already registered")
 		}
 	}
 	r.collectors = append(r.collectors, namedCollector{name: name, collect: collector})

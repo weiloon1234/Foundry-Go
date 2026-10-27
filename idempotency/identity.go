@@ -45,10 +45,10 @@ type Key struct{ text string }
 
 func ParseKey(text string) (Key, error) {
 	if len(text) < MinKeyBytes || len(text) > MaxKeyBytes {
-		return Key{}, BadKey
+		return Key{}, failure(BadKey, nil)
 	}
 	if !keyPattern.MatchString(text) {
-		return Key{}, BadKey
+		return Key{}, failure(BadKey, nil)
 	}
 	return Key{text}, nil
 }

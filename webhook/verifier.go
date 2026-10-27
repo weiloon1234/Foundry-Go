@@ -4,6 +4,8 @@
 package webhook
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 	"bytes"
 	"context"
 	"crypto/ed25519"
@@ -13,7 +15,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
+
 	"fmt"
 	"hash"
 	"io"
@@ -51,8 +53,8 @@ const (
 )
 
 var (
-	InvalidSignature = errors.New("webhook signature or freshness is invalid")
-	BodyTooLarge     = errors.New("webhook body exceeds its configured limit")
+	InvalidSignature = safeerror.New("webhook signature or freshness is invalid")
+	BodyTooLarge     = safeerror.New("webhook body exceeds its configured limit")
 )
 
 type Config struct {
@@ -68,7 +70,7 @@ func DefaultConfig(provider Provider, protocol Protocol) Config {
 	return Config{Provider: provider, Protocol: protocol, MaxBodyBytes: 1 << 20, Tolerance: 5 * time.Minute}
 }
 func (c Config) Validate() error {
-	invalid := fault.New(fault.Invalid, "invalid webhook verification configuration")
+	invalid := safeerror.NewFault(fault.Invalid, "invalid webhook verification configuration")
 	if !identifier.Semantic(string(c.Provider)) || c.Protocol != Standard && c.Protocol != Stripe && c.Protocol != HMAC || c.MaxBodyBytes < 1 || c.MaxBodyBytes > 16<<20 || c.Tolerance < time.Second || c.Tolerance > time.Hour {
 		return invalid
 	}
@@ -118,7 +120,7 @@ type HMACScheme struct {
 }
 
 func (h HMACScheme) validate() error {
-	invalid := fault.New(fault.Invalid, "invalid webhook HMAC scheme")
+	invalid := safeerror.NewFault(fault.Invalid, "invalid webhook HMAC scheme")
 	if !headerName(h.SignatureHeader) || h.TimestampHeader != "" && !headerName(h.TimestampHeader) || h.DeliveryHeader != "" && !headerName(h.DeliveryHeader) {
 		return invalid
 	}
@@ -202,41 +204,41 @@ func New[A any](config Config, account A, keys []secret.String, source clock.Clo
 		return nil, err
 	}
 	if source == nil || len(keys) == 0 || len(keys) > 8 {
-		return nil, fault.New(fault.Invalid, "webhook verifier requires a clock and bounded keyring")
+		return nil, safeerror.NewFault(fault.Invalid, "webhook verifier requires a clock and bounded keyring")
 	}
 	v := &Verifier[A]{config: config, account: account, clock: source}
 	for _, key := range keys {
 		text := key.Reveal()
 		if len(text) > 512 {
-			return nil, fault.New(fault.Invalid, "invalid webhook verification key")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid webhook verification key")
 		}
 		item := verificationKey{scheme: "v1"}
 		if config.Protocol == HMAC {
 			if len(text) < 16 {
-				return nil, fault.New(fault.Invalid, "invalid webhook HMAC secret")
+				return nil, safeerror.NewFault(fault.Invalid, "invalid webhook HMAC secret")
 			}
 			item.material = []byte(text)
 		} else if config.Protocol == Stripe {
 			if !strings.HasPrefix(text, "whsec_") || len(text) < 22 {
-				return nil, fault.New(fault.Invalid, "invalid Stripe endpoint key")
+				return nil, safeerror.NewFault(fault.Invalid, "invalid Stripe endpoint key")
 			}
 			item.material = []byte(text)
 		} else {
 			prefix, encoded, ok := strings.Cut(text, "_")
 			if !ok || prefix != "whsec" && prefix != "whpk" {
-				return nil, fault.New(fault.Invalid, "invalid Standard Webhooks key")
+				return nil, safeerror.NewFault(fault.Invalid, "invalid Standard Webhooks key")
 			}
 			material, err := base64.StdEncoding.Strict().DecodeString(encoded)
 			if err != nil {
-				return nil, fault.New(fault.Invalid, "invalid Standard Webhooks key")
+				return nil, safeerror.NewFault(fault.Invalid, "invalid Standard Webhooks key")
 			}
 			if prefix == "whpk" {
 				if len(material) != ed25519.PublicKeySize {
-					return nil, fault.New(fault.Invalid, "invalid webhook public key")
+					return nil, safeerror.NewFault(fault.Invalid, "invalid webhook public key")
 				}
 				item.scheme = "v1a"
 			} else if len(material) < 24 || len(material) > 64 {
-				return nil, fault.New(fault.Invalid, "invalid webhook symmetric key")
+				return nil, safeerror.NewFault(fault.Invalid, "invalid webhook symmetric key")
 			}
 			item.material = material
 		}
@@ -246,7 +248,7 @@ func New[A any](config Config, account A, keys []secret.String, source clock.Clo
 }
 func (v *Verifier[A]) Validate() error {
 	if v == nil || len(v.keys) == 0 || v.clock == nil {
-		return fault.New(fault.Invalid, "webhook verifier is not configured")
+		return safeerror.NewFault(fault.Invalid, "webhook verifier is not configured")
 	}
 	return v.config.Validate()
 }
@@ -291,7 +293,7 @@ type deliveryContextKey[A any] struct{ verifier *Verifier[A] }
 
 func (v *Verifier[A]) WithDelivery(ctx context.Context, d Delivery[A]) (context.Context, error) {
 	if ctx == nil || d.verifier != v || v == nil || d.id == "" {
-		return ctx, fault.New(fault.Invalid, "webhook delivery belongs to another verifier")
+		return ctx, safeerror.NewFault(fault.Invalid, "webhook delivery belongs to another verifier")
 	}
 	return context.WithValue(ctx, deliveryContextKey[A]{v}, d), nil
 }
@@ -323,7 +325,7 @@ func (v *Verifier[A]) VerifyRequest(r *http.Request) (Delivery[A], error) {
 	data, err := io.ReadAll(io.LimitReader(original, v.config.MaxBodyBytes+1))
 	closed := original.Close()
 	if err != nil || closed != nil {
-		return Delivery[A]{}, fault.New(fault.Invalid, "webhook body could not be read")
+		return Delivery[A]{}, safeerror.NewFault(fault.Invalid, "webhook body could not be read")
 	}
 	if int64(len(data)) > v.config.MaxBodyBytes {
 		return Delivery[A]{}, BodyTooLarge

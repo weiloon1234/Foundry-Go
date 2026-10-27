@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 )
 
@@ -35,7 +36,7 @@ type publicProbeOptions struct{ cache time.Duration }
 func ReadinessCache(ttl time.Duration) PublicProbeOption {
 	return func(o *publicProbeOptions) error {
 		if ttl < 100*time.Millisecond || ttl > time.Minute {
-			return fault.New(fault.Invalid, "public readiness cache must be from 100ms to one minute")
+			return safeerror.NewFault(fault.Invalid, "public readiness cache must be from 100ms to one minute")
 		}
 		o.cache = ttl
 		return nil
@@ -52,15 +53,15 @@ func ReadinessCache(ttl time.Duration) PublicProbeOption {
 // Public probes never use the diagnostics operation slots.
 func PublicProbe(runtime *Runtime, id foundryhttp.RouteID, path string, endpoint Endpoint, options ...PublicProbeOption) foundryhttp.RouteRegistration {
 	if runtime == nil || runtime.slots == nil {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "public probe requires an initialized runtime"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "public probe requires an initialized runtime"))
 	}
 	if !probeEndpoint[endpoint] {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "public probes serve only liveness or readiness"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "public probes serve only liveness or readiness"))
 	}
 	settings := publicProbeOptions{cache: DefaultReadinessCache}
 	for _, option := range options {
 		if option == nil {
-			return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "nil public probe option"))
+			return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "nil public probe option"))
 		}
 		if err := option(&settings); err != nil {
 			return foundryhttp.InvalidRouteRegistration(err)

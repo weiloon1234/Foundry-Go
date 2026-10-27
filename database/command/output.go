@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/prune"
 	"github.com/weiloon1234/Foundry-Go/database/seed"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Text is buffered before publication so formatting cannot lose a writer error.
@@ -58,7 +59,7 @@ func (c Command) writeMigrations(output io.Writer, result migrate.RunResult) err
 	var text strings.Builder
 	migrationsText(&text, result)
 	if err := c.write(output, result, &text); err != nil {
-		return fault.Wrap(fault.Internal, fmt.Sprintf("cannot write migration result (%d confirmed commits); inspect history before retrying", len(result.Applied)), err)
+		return safeerror.WrapFault(fault.Internal, fmt.Sprintf("cannot write migration result (%d confirmed commits); inspect history before retrying", len(result.Applied)), err)
 	}
 	return nil
 }
@@ -83,7 +84,7 @@ func (c Command) writeSeedResult(output io.Writer, result seed.Result) error {
 	}
 	fmt.Fprintf(&text, "Confirmed %d seeder(s).\n", len(result.Committed))
 	if err := c.write(output, result, &text); err != nil {
-		return fault.Wrap(fault.Internal, fmt.Sprintf("cannot write seeder result (%d confirmed commits); inspect data before retrying", len(result.Committed)), err)
+		return safeerror.WrapFault(fault.Internal, fmt.Sprintf("cannot write seeder result (%d confirmed commits); inspect data before retrying", len(result.Committed)), err)
 	}
 	return nil
 }
@@ -117,7 +118,7 @@ func (c Command) writeRollback(output io.Writer, result migrate.RollbackResult) 
 	var text strings.Builder
 	rollbackText(&text, result)
 	if err := c.write(output, result, &text); err != nil {
-		return fault.Wrap(fault.Internal, fmt.Sprintf("cannot write rollback result (%d confirmed reversals); inspect history before retrying", len(result.RolledBack)), err)
+		return safeerror.WrapFault(fault.Internal, fmt.Sprintf("cannot write rollback result (%d confirmed reversals); inspect history before retrying", len(result.RolledBack)), err)
 	}
 	return nil
 }
@@ -148,7 +149,7 @@ func (c Command) writePruneResult(output io.Writer, result prune.Result) error {
 	}
 	fmt.Fprintf(&text, "Removed %d model(s).\n", total)
 	if err := c.write(output, result, &text); err != nil {
-		return fault.Wrap(fault.Internal, fmt.Sprintf("cannot write prune result (%d committed removals)", total), err)
+		return safeerror.WrapFault(fault.Internal, fmt.Sprintf("cannot write prune result (%d committed removals)", total), err)
 	}
 	return nil
 }
@@ -196,7 +197,7 @@ func (c Command) writeTargetRuns(output io.Writer, database string, runs []targe
 		Database string      `json:"database,omitempty"`
 		Targets  []targetRun `json:"targets"`
 	}{database, runs}, &text); err != nil {
-		return fault.Wrap(fault.Internal, fmt.Sprintf("cannot write migration result (%d confirmed commits); inspect history before retrying", confirmed), err)
+		return safeerror.WrapFault(fault.Internal, fmt.Sprintf("cannot write migration result (%d confirmed commits); inspect history before retrying", confirmed), err)
 	}
 	return nil
 }
@@ -221,7 +222,7 @@ func (c Command) writeTargetRollback(output io.Writer, database, schema string, 
 		Schema   string `json:"schema"`
 		migrate.RollbackResult
 	}{database, schema, result}, &text); err != nil {
-		return fault.Wrap(fault.Internal, fmt.Sprintf("cannot write rollback result (%d confirmed reversals); inspect history before retrying", len(result.RolledBack)), err)
+		return safeerror.WrapFault(fault.Internal, fmt.Sprintf("cannot write rollback result (%d confirmed reversals); inspect history before retrying", len(result.RolledBack)), err)
 	}
 	return nil
 }

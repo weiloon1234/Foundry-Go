@@ -7,8 +7,9 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"net"
 	stdsmtp "net/smtp"
 	"net/textproto"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/email"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -90,13 +92,13 @@ func New(config Config) (*Driver, error) {
 	host, port, err := net.SplitHostPort(config.Address)
 	number, numberErr := strconv.Atoi(port)
 	if err != nil || host == "" || strings.ContainsAny(host, "\r\n\x00") || numberErr != nil || number < 1 || number > 65535 || config.Timeout <= 0 || config.Timeout > 10*time.Minute {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	if config.Security != STARTTLS && config.Security != TLS && config.Security != PlainLoopback {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	if (config.Username == "") != config.Password.IsZero() || len(config.Username) > 512 || len(config.Password.Reveal()) > 8192 || strings.ContainsAny(config.Username+config.Password.Reveal(), "\r\n\x00") {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	switch config.Auth {
 	case "":
@@ -105,13 +107,13 @@ func New(config Config) (*Driver, error) {
 		}
 	case AuthPlain, AuthLogin, AuthXOAuth2:
 		if config.Username == "" {
-			return nil, email.Construction
+			return nil, emaildiag.Failure(email.Construction)
 		}
 	default:
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	if config.LocalName != "" && !validLocalName(config.LocalName) || config.MaxIdle < 0 || config.MaxIdle > 64 || config.IdleTimeout < 0 || config.IdleTimeout > time.Hour {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	if config.IdleTimeout == 0 {
 		config.IdleTimeout = 30 * time.Second
@@ -120,7 +122,7 @@ func New(config Config) (*Driver, error) {
 	if config.TLSConfig != nil {
 		tlsConfig = config.TLSConfig.Clone()
 		if tlsConfig.InsecureSkipVerify || tlsConfig.MinVersion != 0 && tlsConfig.MinVersion < tls.VersionTLS12 {
-			return nil, email.Construction
+			return nil, emaildiag.Failure(email.Construction)
 		}
 		if tlsConfig.ServerName == "" {
 			tlsConfig.ServerName = host
@@ -132,7 +134,7 @@ func New(config Config) (*Driver, error) {
 	if config.Security == PlainLoopback {
 		ip := net.ParseIP(host)
 		if !(host == "localhost" || ip != nil && ip.IsLoopback()) || config.Username != "" {
-			return nil, email.Construction
+			return nil, emaildiag.Failure(email.Construction)
 		}
 	}
 	localName := config.LocalName
@@ -175,10 +177,10 @@ func (d *Driver) Close() {
 
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || ctx == nil || out.Validate() != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	if ctx.Err() != nil {
-		return email.Receipt{}, email.Transient
+		return email.Receipt{}, emaildiag.Failure(email.Transient)
 	}
 	ctx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
@@ -187,7 +189,7 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 		return email.Receipt{}, err
 	}
 	receipt, reusable, err := d.deliver(ctx, session, out)
-	if reused && errors.Is(err, errStale) {
+	if reused && callback.ErrorIs(err, errStale) {
 		// The pooled session failed on its first command without a server
 		// reply; nothing was submitted, so one retry on a fresh session is safe.
 		session.close()
@@ -201,13 +203,13 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	} else {
 		session.close()
 	}
-	if errors.Is(err, errStale) {
-		err = email.Transient
+	if callback.ErrorIs(err, errStale) {
+		err = emaildiag.Failure(email.Transient)
 	}
 	return receipt, err
 }
 
-var errStale = errors.New("pooled SMTP session is unusable")
+var errStale = safeerror.New("pooled SMTP session is unusable")
 
 // deliver runs one transaction. reusable reports that the session remains in
 // a clean state after acceptance and can return to the pool.
@@ -224,7 +226,7 @@ func (d *Driver) deliver(ctx context.Context, session *connection, out email.Out
 	if deadline, ok := ctx.Deadline(); ok {
 		if session.raw.SetDeadline(deadline) != nil {
 			interrupted()
-			return email.Receipt{}, false, email.Transient
+			return email.Receipt{}, false, emaildiag.Failure(email.Transient)
 		}
 	}
 	client := session.client
@@ -248,15 +250,15 @@ func (d *Driver) deliver(ctx context.Context, session *connection, out email.Out
 	}
 	if _, err := data.Write(out.MIME()); err != nil {
 		interrupted()
-		return email.Receipt{}, false, email.Ambiguous
+		return email.Receipt{}, false, emaildiag.Failure(email.Ambiguous)
 	}
 	if err := data.Close(); err != nil {
 		interrupted()
 		var status *textproto.Error
-		if errors.As(err, &status) {
+		if callback.ErrorAs(err, &status) {
 			return email.Receipt{}, false, beforeData(err)
 		}
-		return email.Receipt{}, false, email.Ambiguous
+		return email.Receipt{}, false, emaildiag.Failure(email.Ambiguous)
 	}
 	// The DATA reply acknowledged acceptance. A later reset/close failure must
 	// not turn that into a retry and send the same message again.
@@ -269,7 +271,7 @@ func (d *Driver) deliver(ctx context.Context, session *connection, out email.Out
 // staleOr marks a MAIL failure without a server reply as a stale session.
 func staleOr(err error) error {
 	var status *textproto.Error
-	if errors.As(err, &status) {
+	if callback.ErrorAs(err, &status) {
 		return beforeData(err)
 	}
 	return errStale
@@ -321,7 +323,7 @@ func (d *Driver) release(session *connection) {
 func (d *Driver) dial(ctx context.Context) (*connection, error) {
 	raw, err := (&net.Dialer{Timeout: d.timeout}).DialContext(ctx, "tcp", d.address)
 	if err != nil {
-		return nil, email.Transient
+		return nil, emaildiag.Failure(email.Transient)
 	}
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { defer close(closed); _ = raw.Close() })
@@ -334,7 +336,7 @@ func (d *Driver) dial(ctx context.Context) (*connection, error) {
 	}
 	if deadline, ok := ctx.Deadline(); ok {
 		if raw.SetDeadline(deadline) != nil {
-			return fail(email.Transient)
+			return fail(emaildiag.Failure(email.Transient))
 		}
 	}
 	var wire net.Conn = raw
@@ -359,7 +361,7 @@ func (d *Driver) dial(ctx context.Context) (*connection, error) {
 	}
 	if d.security == STARTTLS {
 		if ok, _ := client.Extension("STARTTLS"); !ok {
-			return failSession(email.Permanent)
+			return failSession(emaildiag.Failure(email.Permanent))
 		}
 		if err := client.StartTLS(d.tls.Clone()); err != nil {
 			return failSession(tlsFailure(err))
@@ -370,7 +372,7 @@ func (d *Driver) dial(ctx context.Context) (*connection, error) {
 		// AUTH extension) cannot accept this configuration; do not retry.
 		ok, mechanisms := client.Extension("AUTH")
 		if !ok || !slices.ContainsFunc(strings.Fields(mechanisms), func(m string) bool { return strings.EqualFold(m, string(d.auth)) }) {
-			return failSession(email.Permanent)
+			return failSession(emaildiag.Failure(email.Permanent))
 		}
 		if err := client.Auth(d.authenticator()); err != nil {
 			return failSession(authFailure(err))
@@ -379,7 +381,7 @@ func (d *Driver) dial(ctx context.Context) (*connection, error) {
 	if !stop() {
 		<-closed
 		_ = client.Close()
-		return nil, email.Transient
+		return nil, emaildiag.Failure(email.Transient)
 	}
 	return session, nil
 }
@@ -408,7 +410,7 @@ func (d *Driver) authenticator() stdsmtp.Auth {
 }
 
 // errUnencrypted refuses to send credentials over an unencrypted session.
-var errUnencrypted = errors.New("SMTP authentication requires TLS")
+var errUnencrypted = safeerror.New("SMTP authentication requires TLS")
 
 type loginAuth struct {
 	username string
@@ -431,7 +433,7 @@ func (a loginAuth) Next(challenge []byte, more bool) ([]byte, error) {
 	case "password:", "password":
 		return []byte(a.password.Reveal()), nil
 	}
-	return nil, errors.New("unexpected SMTP LOGIN challenge")
+	return nil, safeerror.New("unexpected SMTP LOGIN challenge")
 }
 
 type xoauth2 struct {
@@ -458,8 +460,8 @@ func (xoauth2) Next(_ []byte, more bool) ([]byte, error) {
 // authFailure treats credential rejection (535) and unsupported mechanisms as
 // permanent configuration errors; temporary 4xx failures remain transient.
 func authFailure(err error) error {
-	if errors.Is(err, errUnencrypted) {
-		return email.Permanent
+	if callback.ErrorIs(err, errUnencrypted) {
+		return emaildiag.Failure(email.Permanent)
 	}
 	return beforeData(err)
 }
@@ -469,17 +471,17 @@ func authFailure(err error) error {
 // rejection; 4xx replies and transport failures are temporary non-acceptance.
 func beforeData(err error) error {
 	var status *textproto.Error
-	if errors.As(err, &status) && status.Code >= 500 && status.Code < 600 {
-		return email.Permanent
+	if callback.ErrorAs(err, &status) && status.Code >= 500 && status.Code < 600 {
+		return emaildiag.Failure(email.Permanent)
 	}
-	return email.Transient
+	return emaildiag.Failure(email.Transient)
 }
 func tlsFailure(err error) error {
 	var certificate x509.CertificateInvalidError
 	var hostname x509.HostnameError
 	var authority x509.UnknownAuthorityError
-	if errors.As(err, &certificate) || errors.As(err, &hostname) || errors.As(err, &authority) {
-		return email.Permanent
+	if callback.ErrorAs(err, &certificate) || callback.ErrorAs(err, &hostname) || callback.ErrorAs(err, &authority) {
+		return emaildiag.Failure(email.Permanent)
 	}
 	return beforeData(err)
 }

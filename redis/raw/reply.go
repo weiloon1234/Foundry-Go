@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type replyKind uint8
@@ -45,7 +46,7 @@ func (r Reply) Array() ([]Reply, error) {
 	return append(make([]Reply, 0, len(r.array)), r.array...), nil
 }
 func replyError() error {
-	return fault.New(fault.Invalid, "Redis reply does not match its declared result")
+	return safeerror.NewFault(fault.Invalid, "Redis reply does not match its declared result")
 }
 
 type replyBudget struct {
@@ -59,7 +60,7 @@ func (b *replyBudget) enter(depth int, text string) error {
 		return err
 	}
 	if depth > b.limits.Depth || b.nodes >= b.limits.Nodes || len(text) > b.limits.Bytes-b.bytes {
-		return fault.New(fault.Invalid, "Redis reply exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "Redis reply exceeds its bound")
 	}
 	b.nodes++
 	b.bytes += len(text)
@@ -67,7 +68,7 @@ func (b *replyBudget) enter(depth int, text string) error {
 }
 func newBudget(ctx context.Context, l ReplyLimits) (replyBudget, error) {
 	if ctx == nil {
-		return replyBudget{}, fault.New(fault.Invalid, "Redis reply capture requires a context")
+		return replyBudget{}, safeerror.NewFault(fault.Invalid, "Redis reply capture requires a context")
 	}
 	if err := l.Validate(); err != nil {
 		return replyBudget{}, err
@@ -108,7 +109,7 @@ func (b *replyBudget) capture(input any, depth int) (Reply, error) {
 		return Reply{kind: textKind, text: strings.Clone(v)}, nil
 	case []any:
 		if len(v) > b.limits.Nodes-b.nodes {
-			return Reply{}, fault.New(fault.Invalid, "Redis reply exceeds its node bound")
+			return Reply{}, safeerror.NewFault(fault.Invalid, "Redis reply exceeds its node bound")
 		}
 		result := Reply{kind: arrayKind, array: make([]Reply, len(v))}
 		for i, x := range v {
@@ -120,7 +121,7 @@ func (b *replyBudget) capture(input any, depth int) (Reply, error) {
 		}
 		return result, nil
 	case error:
-		return Reply{}, fault.Wrap(fault.Internal, "Redis command returned an error", v)
+		return Reply{}, safeerror.WrapFault(fault.Internal, "Redis command returned an error", v)
 	default:
 		return Reply{}, replyError()
 	}

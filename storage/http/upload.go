@@ -4,9 +4,10 @@ package http
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -24,10 +25,10 @@ func StoreUpload(ctx context.Context, disk *storage.Disk, key storage.ObjectKey,
 		return storage.StoredObject{}, err
 	}
 	if file.IsZero() {
-		return storage.StoredObject{}, storage.Failure(storage.Invalid, storage.PutOperation, storage.Unchanged, nil)
+		return storage.StoredObject{}, uploadFailure(storage.Invalid, storage.PutOperation, storage.Unchanged, nil)
 	}
 	if size, supplied := options.Size.Get(); supplied && size != file.Size() {
-		return storage.StoredObject{}, storage.Failure(storage.Invalid, storage.PutOperation, storage.Unchanged, nil)
+		return storage.StoredObject{}, uploadFailure(storage.Invalid, storage.PutOperation, storage.Unchanged, nil)
 	}
 	options.Size = value.Set(file.Size())
 	if options.ContentType == "" {
@@ -35,7 +36,7 @@ func StoreUpload(ctx context.Context, disk *storage.Disk, key storage.ObjectKey,
 	}
 	body, err := file.Open(ctx)
 	if err != nil {
-		return storage.StoredObject{}, storage.Failure(storage.Unavailable, storage.PutOperation, storage.Unchanged, err)
+		return storage.StoredObject{}, uploadFailure(storage.Unavailable, storage.PutOperation, storage.Unchanged, err)
 	}
 	result, err := disk.Put(ctx, key, body, options)
 	cleanup := body.Close()
@@ -44,17 +45,25 @@ func StoreUpload(ctx context.Context, disk *storage.Disk, key storage.ObjectKey,
 		var prior *storage.Error
 		if err != nil {
 			state = storage.Unknown
-			if errors.As(err, &prior) {
+			if callback.ErrorAs(err, &prior) {
 				state, code = prior.Outcome(), prior.Code()
 			}
 		}
-		combined := storage.Failure(code, storage.PutOperation, state, errors.Join(err, cleanup))
+		combined := storage.Failure(code, storage.PutOperation, state, safeerror.Join("operation failed", err, cleanup))
 		if prior != nil {
 			if id, ok := prior.Cleanup().Get(); ok {
 				combined = combined.WithCleanup(id)
 			}
 		}
-		return storage.StoredObject{}, combined
+		if prior != nil {
+			return storage.StoredObject{}, safeerror.Retain(err, combined)
+		}
+		return storage.StoredObject{}, safeerror.Owned(combined.Error(), combined)
 	}
 	return result, err
+}
+
+func uploadFailure(code storage.Code, operation storage.Operation, outcome storage.Outcome, cause error) error {
+	failure := storage.Failure(code, operation, outcome, cause)
+	return safeerror.Owned(failure.Error(), failure)
 }

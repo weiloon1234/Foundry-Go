@@ -1,8 +1,8 @@
 package retirement
 
 import (
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/ast"
 	"go/token"
 	"strings"
@@ -51,7 +51,7 @@ func checkMemberDeclarations(fset *token.FileSet, sources map[string]*sourcePack
 				}
 			}
 			reject := func(pos token.Pos) {
-				failures = append(failures, fmt.Errorf("%s: retired public selector %s.%s (declaration independent of build selection)", fset.Position(pos), source.owner, selector))
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s: retired public selector %s.%s (declaration independent of build selection)", fset.Position(pos), source.owner, selector)))
 			}
 			for _, file := range source.files {
 				for _, decl := range file.Decls {
@@ -95,7 +95,7 @@ func checkMemberDeclarations(fset *token.FileSet, sources map[string]*sourcePack
 			}
 		}
 	}
-	return errors.Join(failures...)
+	return safeerror.Join("operation failed", failures...)
 }
 
 func localTypeName(expr ast.Expr) string {

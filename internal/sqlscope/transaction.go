@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -15,7 +16,7 @@ import (
 // must use child for every operation and propagate any error. Nothing commits.
 func InSchema(ctx context.Context, tx *database.Tx, db *database.DB, schema string, fn func(*database.Tx) error) error {
 	if ctx == nil || tx == nil || !tx.BelongsTo(db) || !sqlname.Valid(schema) || fn == nil {
-		return fault.New(fault.Invalid, "operation requires its database transaction and schema")
+		return safeerror.NewFault(fault.Invalid, "operation requires its database transaction and schema")
 	}
 	return tx.Savepoint(ctx, func(child *database.Tx) error {
 		var previous string
@@ -24,7 +25,7 @@ func InSchema(ctx context.Context, tx *database.Tx, db *database.DB, schema stri
 			return err
 		}
 		if len(previous) > 8192 {
-			return fault.New(fault.Invalid, "transaction search path exceeds infrastructure boundary")
+			return safeerror.NewFault(fault.Invalid, "transaction search path exceeds infrastructure boundary")
 		}
 		if _, err := child.Exec(ctx, `SET LOCAL search_path TO "`+schema+`", pg_temp`); err != nil {
 			return err

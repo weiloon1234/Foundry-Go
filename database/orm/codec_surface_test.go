@@ -120,10 +120,10 @@ func codecBodyViolations(files []*ast.File, info *types.Info, bodies map[string]
 					return true
 				}
 				path, name := target.Pkg().Path(), target.Name()
-				// New can encode an inline representation adapter too. Only the two
-				// audited pointer shells may create a generic codec in these packages.
+				// New can encode an inline representation adapter too. Only the audited
+				// model-ID pointer shell may create a generic codec in these packages.
 				adapter := path == codecPath && (name == "Adapt" || name == "New")
-				shell := object.Pkg().Path() == ormcorePath && (object.Name() == "primitiveCodec" || object.Name() == "ScalarCodec")
+				shell := object.Pkg().Path() == ormcorePath && object.Name() == "ScalarCodec"
 				if adapter && !(name == "New" && shell) || strings.Contains(strings.ToLower(name), "reinterpretcodec") {
 					bad = append(bad, body.name+": generic representation adapter")
 				}

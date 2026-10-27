@@ -97,7 +97,7 @@ func throughLoader[M, N, P any, A, B comparable](local columnData[A], pivotLocal
 				return invalid("pivot primary key has no canonical database representation")
 			}
 			if seenPivots[identity] {
-				return database.NewError("pivot matched more than one target", database.TooManyRows)
+				return querycore.DatabaseFailure("pivot matched more than one target", database.TooManyRows)
 			}
 			seenPivots[identity] = true
 			owners[i] = owner

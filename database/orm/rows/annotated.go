@@ -3,7 +3,7 @@ package rows
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 	"unsafe"
@@ -47,7 +47,7 @@ func WithValue[M, V any](q orm.Query[M], computed expr.RowValue[M, V]) RecordRea
 	d.record = ormcore.Record{
 		Type: reflect.TypeFor[Annotated[M, V]](), Owner: d, Primary: parent.Primary,
 		Columns: append(slices.Clone(parent.Columns), querycore.Column{Name: querycore.AnnotatedValueAlias, Nullable: column.Nullable}),
-		Err:     errors.Join(parent.Err, scalar.Err), Checks: ormcore.AppendChecks(parent.Checks, scalar.Checks...),
+		Err:     safeerror.Join("operation failed", parent.Err, scalar.Err), Checks: ormcore.AppendChecks(parent.Checks, scalar.Checks...),
 		Scan: func(row database.Row, p unsafe.Pointer) error {
 			if parent.Scan == nil {
 				return ormcore.Invalid("annotated read requires a model decoder")
@@ -89,7 +89,7 @@ func WithValue[M, V any](q orm.Query[M], computed expr.RowValue[M, V]) RecordRea
 			}}
 		},
 	}
-	r.Source.Err = errors.Join(r.Source.Err, expression.Err, ormcore.CheckReferenceSet(r.Source, expression.Refs, expression.ReferenceFree))
+	r.Source.Err = safeerror.Join("operation failed", r.Source.Err, expression.Err, ormcore.CheckReferenceSet(r.Source, expression.Refs, expression.ReferenceFree))
 	r.Source.Node.Selections = append(slices.Clone(r.Source.Node.Selections), querycore.SelectItem{Expression: expression.Node, Alias: querycore.AnnotatedValueAlias, Sensitive: column.Sensitive})
 	r.Record = d.record
 	return RecordRead[M, Annotated[M, V]]{core: r}

@@ -8,12 +8,13 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"errors"
+	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
@@ -77,8 +78,9 @@ const (
 )
 
 // Detail is the safe, structured classification produced by a driver adapter.
-// Schema, Table, Constraint and SQLState are metadata, never query text, arguments or detail
-// messages. CommitRejected is true only when the server confirms no commit.
+// Schema, Table, Constraint and SQLState are metadata, never query text,
+// arguments or detail messages. CommitRejected is true only when the server
+// confirms no commit.
 // StatementRejected is true only when the adapter confirms a failed statement
 // outside an explicit transaction did not commit: it was never sent, or the
 // server rejected it before its implicit transaction could complete. Adapters
@@ -96,10 +98,11 @@ type Detail struct {
 // Error retains the driver cause while formatting only operation and code.
 // Unwrapped causes may contain SQL, values or credentials; do not log them.
 type Error struct {
-	operation string
-	detail    Detail
-	outcome   Outcome
-	cause     error
+	diagnostic []fault.Attribute
+	operation  string
+	detail     Detail
+	outcome    Outcome
+	cause      error
 	// notSent follows database/sql's ErrBadConn contract: the operation was
 	// not performed and may be retried on another connection.
 	notSent bool
@@ -121,22 +124,12 @@ func (e *Error) Table() string    { return e.detail.Table }
 func (e *Error) Outcome() Outcome { return e.outcome }
 
 // FoundryDiagnostic contributes the safe classification to redacted failure
-// diagnostics: operation, code, SQLSTATE, constraint and outcome only.
-func (e *Error) FoundryDiagnostic(errordiag.Seal) []fault.Attribute {
-	if e == nil {
+// diagnostics. Adapter metadata and public operation text remain private.
+func (e *Error) FoundryDiagnostic(seal errordiag.Seal) []fault.Attribute {
+	if !seal.Valid() || e == nil {
 		return nil
 	}
-	attributes := []fault.Attribute{{Key: "database_operation", Value: e.operation}, {Key: "database_code", Value: string(e.detail.Code)}}
-	if e.detail.SQLState != "" {
-		attributes = append(attributes, fault.Attribute{Key: "sqlstate", Value: e.detail.SQLState})
-	}
-	if e.detail.Constraint != "" {
-		attributes = append(attributes, fault.Attribute{Key: "constraint", Value: e.detail.Constraint})
-	}
-	if e.outcome != "" && e.outcome != Unspecified {
-		attributes = append(attributes, fault.Attribute{Key: "database_outcome", Value: string(e.outcome)})
-	}
-	return attributes
+	return slices.Clone(e.diagnostic)
 }
 
 type classifier func(error) Detail
@@ -147,15 +140,16 @@ func (classify classifier) wrap(operation string, err error) error {
 	}
 	// Error traversal is extension code too, including returned callback errors.
 	// Keep the pool/transaction owner until inspection actually exits.
+	revealed := safeerror.Reveal("database operation failed", err)
 	var result *Error
 	failed := callback.Isolated("classify database failure", func() error {
-		result = classify.inspect(operation, err)
+		result = classify.inspect(operation, revealed)
 		return nil
 	})
 	if failed != nil {
-		return &Error{operation: operation, detail: Detail{Code: QueryFailed}, outcome: Unspecified, cause: failed}
+		return presentFailure(&Error{operation: operation, detail: Detail{Code: QueryFailed}, outcome: Unspecified, cause: safeerror.Join("operation failed", revealed, failed)})
 	}
-	return result
+	return presentFailure(result)
 }
 
 // invokeScope runs a scope callback in an owned goroutine. An ordinary returned
@@ -165,12 +159,12 @@ func invokeScope(operation string, fn func() error) error {
 	var returned error
 	isolated := callback.Isolated(operation, func() error {
 		returned = fn()
-		return returned
+		return nil
 	})
-	if isolated != nil && returned != nil {
-		return returned
+	if isolated != nil {
+		return isolated
 	}
-	return isolated
+	return returned
 }
 
 // scope classifies a callback scope's combined failure. Failures containing a
@@ -198,7 +192,7 @@ func (classify classifier) scope(operation string, err error) (*Error, error) {
 		return nil
 	})
 	if failed != nil {
-		return &Error{operation: operation, detail: Detail{Code: QueryFailed}, outcome: Unspecified, cause: failed}, nil
+		return &Error{operation: operation, detail: Detail{Code: QueryFailed}, outcome: Unspecified, cause: safeerror.Join("operation failed", err, failed)}, nil
 	}
 	if application {
 		return nil, err
@@ -210,7 +204,7 @@ func (classify classifier) scope(operation string, err error) (*Error, error) {
 func (classify classifier) scoped(operation string, err error) error {
 	classified, application := classify.scope(operation, err)
 	if classified != nil {
-		return classified
+		return presentFailure(classified)
 	}
 	return application
 }
@@ -256,7 +250,7 @@ func (classify classifier) inspect(operation string, err error) *Error {
 // transaction. Only adapter-confirmed rejection or database/sql's not-performed
 // contract proves no commit; every other failure after acquisition is Unknown.
 func statementOutcome(err error) error {
-	classified, ok := err.(*Error)
+	classified, ok := safeerror.UnwrapOwned(err).(*Error)
 	if !ok || classified == nil {
 		return err
 	}
@@ -269,11 +263,12 @@ func statementOutcome(err error) error {
 		classified.outcome = Unknown
 		classified.detail.Code = CommitUnknown
 	}
-	return classified
+	return presentFailure(classified)
 }
 
 func failure(operation string, code Code) error {
-	return &Error{operation: operation, detail: Detail{Code: code}, outcome: Unspecified}
+	value := &Error{operation: operation, detail: Detail{Code: code}, outcome: Unspecified}
+	return presentFailure(value)
 }
 
 // poolExhausted marks an AcquireTimeout expiry while the caller's context was
@@ -281,13 +276,13 @@ func failure(operation string, code Code) error {
 // classification code is kept; fault.Overloaded joins the cause so transports
 // report a retryable 503 with a short retry hint.
 func poolExhausted(err error) error {
-	classified, ok := err.(*Error)
+	classified, ok := safeerror.UnwrapOwned(err).(*Error)
 	if !ok || classified == nil {
 		return err
 	}
-	classified.cause = errors.Join(fault.New(fault.Overloaded, "database pool acquisition timed out"), classified.cause)
+	classified.cause = safeerror.Join("operation failed", safeerror.NewFault(fault.Overloaded, "database pool acquisition timed out"), classified.cause)
 	classified.notSent = true
-	return classified
+	return safeerror.Retain(err, classified)
 }
 
 // FoundryStatementUnknown labels a failure observed after a framework
@@ -295,9 +290,9 @@ func poolExhausted(err error) error {
 // the statement's implicit transaction may already have committed.
 func FoundryStatementUnknown(seal sqlowner.OutcomeSeal, operation string, cause error) error {
 	if !seal.Valid() {
-		return fault.New(fault.Invalid, "invalid SQL owner capability")
+		return safeerror.NewFault(fault.Invalid, "invalid SQL owner capability")
 	}
-	return &Error{operation: operation, detail: Detail{Code: CommitUnknown}, outcome: Unknown, cause: cause}
+	return presentFailure(&Error{operation: operation, detail: Detail{Code: CommitUnknown}, outcome: Unknown, cause: cause})
 }
 
 // NewError constructs a classified framework failure without a driver cause.
@@ -307,5 +302,7 @@ func NewError(operation string, code Code) error {
 	if code == "" {
 		code = QueryFailed
 	}
-	return failure(operation, code)
+	failure := &Error{operation: operation, detail: Detail{Code: code}, outcome: Unspecified}
+	failure.captureDiagnostic(false)
+	return failure
 }

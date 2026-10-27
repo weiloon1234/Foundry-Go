@@ -29,6 +29,8 @@ The lazy source receives the completed table declaration. It runs once when comp
 
 A source failure, panic or `runtime.Goexit` leaves a sticky failure. Later operations keep failing safely rather than running unscoped. Context predicate callbacks resolve on every execution, so reusing a query does not retain a previous request's tenant. Callback errors or invalid predicates fail closed before SQL.
 
+A scope source is contained until its actual exit; panic/Goexit is classified as `fault.Panicked`. Recursive scope requirements are bounded by the compiler.
+
 ## Where scopes apply
 
 Scopes apply to reads, counts, aggregates, pages, cursors, chunks, relations, joins, subqueries, CTEs, updates, deletes, lookup writes and source writes. Each source keeps its own scopes; a parent's bypass does not remove a target or pivot scope. Scope predicates remain inside joined sources so outer joins retain unmatched outer rows.

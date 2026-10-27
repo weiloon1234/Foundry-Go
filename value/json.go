@@ -1,14 +1,12 @@
 package value
 
 import (
-	"encoding/json"
 	jsonv2 "encoding/json/v2"
-	"io"
 	"reflect"
-	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -39,10 +37,9 @@ func NewJSON[T any](input T) (JSON[T], error) {
 	if err := budget.check(reflect.ValueOf(input), 0); err != nil {
 		return JSON[T]{}, err
 	}
-	keys := jsonKeyEncoding{}
-	data, err := jsonv2.Marshal(input, json.DefaultOptionsV1(), keys.options())
+	data, err := jsoncodec.Marshal(input)
 	if err != nil {
-		return JSON[T]{}, invalidJSONCause(keys.failure(err))
+		return JSON[T]{}, invalidJSONCause(err)
 	}
 	return ParseJSON[T](string(data))
 }
@@ -68,9 +65,12 @@ func ParseJSON[T any](text string) (JSON[T], error) {
 	return JSON[T]{text: canonical}, nil
 }
 
-func invalidJSON() error { return fault.New(fault.Invalid, "invalid typed JSON value or schema") }
 func invalidJSONCause(err error) error {
-	return fault.Wrap(fault.Invalid, "invalid typed JSON value or schema", safeerror.Diagnostic("JSON codec failed", err))
+	return safeerror.WrapFault(fault.Invalid, "invalid typed JSON value or schema", safeerror.Diagnostic("JSON codec failed", err))
+}
+
+func invalidJSON() error {
+	return safeerror.NewFault(fault.Invalid, "invalid typed JSON value or schema")
 }
 func (v JSON[T]) IsZero() bool     { return v.text == "" }
 func (v JSON[T]) IsJSONNull() bool { return v.text == "null" }
@@ -92,14 +92,8 @@ func (v JSON[T]) Decode() (T, error) {
 }
 func decodeJSON[T any](text string) (T, error) {
 	var result T
-	decoder := json.NewDecoder(strings.NewReader(text))
-	decoder.UseNumber()
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&result); err != nil {
+	if err := jsoncodec.UnmarshalExact([]byte(text), &result, jsonv2.RejectUnknownMembers(true)); err != nil {
 		return *new(T), invalidJSONCause(err)
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return *new(T), invalidJSON()
 	}
 	return result, nil
 }
@@ -116,7 +110,7 @@ func (v *JSON[T]) UnmarshalJSON(data []byte) error {
 	}
 	decoded, err := ParseJSON[T](string(data))
 	if err != nil {
-		return err
+		return jsoncodec.MethodError(err)
 	}
 	*v = decoded
 	return nil

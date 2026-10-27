@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/idempotencystore"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -74,7 +75,7 @@ func (o Operation[I, R]) Run(ctx context.Context, scope Scope, key Key, input I,
 		return Result[R]{}, invalid("operation requires context, trusted scope and handler")
 	}
 	if _, err := ParseKey(key.text); err != nil || len(key.text) > o.store.config.MaxKeyBytes {
-		return Result[R]{}, BadKey
+		return Result[R]{}, failure(BadKey, nil)
 	}
 	lease, err := o.store.calls.Begin(ctx)
 	if err != nil {
@@ -132,7 +133,7 @@ func (o Operation[I, R]) run(ctx context.Context, scope Scope, key Key, input I,
 			}
 			row, exists := stored.Get()
 			if !exists {
-				return Unavailable
+				return failure(Unavailable, nil)
 			}
 			result, err = o.restore(ctx, row, fingerprint)
 			return err
@@ -193,7 +194,7 @@ func (o Operation[I, R]) run(ctx context.Context, scope Scope, key Key, input I,
 		locked = lockTimeout(err)
 		return nil
 	}); failed != nil {
-		return Result[R]{}, failure(Unavailable, errors.Join(err, failed))
+		return Result[R]{}, failure(Unavailable, safeerror.Join("operation failed", err, failed))
 	}
 	switch {
 	case outcome == database.Committed:
@@ -225,7 +226,7 @@ func (o Operation[I, R]) admit(ctx context.Context, tx *database.Tx, address ide
 	}
 	// The uncommitted claim is this request's own retained record.
 	if retained >= int64(o.store.config.MaxRetainedPerCaller) {
-		return Capacity
+		return failure(Capacity, nil)
 	}
 	return nil
 }
@@ -242,15 +243,15 @@ func lockTimeout(err error) bool {
 // Unavailable: re-executing a committed operation could duplicate its effects.
 func (o Operation[I, R]) restore(ctx context.Context, row idempotencystore.Record, fingerprint string) (Result[R], error) {
 	if row.Fingerprint != fingerprint {
-		return Result[R]{}, Mismatch
+		return Result[R]{}, failure(Mismatch, nil)
 	}
 	if len(row.Representation) == 0 || len(row.Representation) > o.store.config.MaxResultBytes {
-		return Result[R]{}, Unavailable
+		return Result[R]{}, failure(Unavailable, nil)
 	}
 	completed, complete := row.CompletedAt.Get()
 	expires, expiring := row.ExpiresAt.Get()
 	if !complete || !expiring || completed.IsZero() || !expires.UTC().After(completed.UTC()) || !identityPart(row.ResultSchema) || row.ResultHash != digest("foundry.idempotency.result.v1", string(row.Representation)) {
-		return Result[R]{}, Unavailable
+		return Result[R]{}, failure(Unavailable, nil)
 	}
 	value, err := o.output.restore(ctx, row.Representation, o.store.config.MaxResultBytes)
 	if err != nil {
@@ -270,13 +271,13 @@ func (o Operation[I, R]) reconcile(ctx context.Context, address idempotencystore
 		}
 		row, exists := stored.Get()
 		if !exists {
-			return Unavailable
+			return failure(Unavailable, nil)
 		}
 		result, err = o.restore(ctx, row, fingerprint)
 		return err
 	}, database.TxOptions{Isolation: database.ReadCommitted, ReadOnly: true})
 	if err != nil {
-		return Result[R]{}, failure(Unavailable, errors.Join(cause, err))
+		return Result[R]{}, failure(Unavailable, safeerror.Join("operation failed", cause, err))
 	}
 	result.committed = true
 	// The caller receives the resolved outcome and still reports the lost commit

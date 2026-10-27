@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (h *Hub) validateClusterPresence(ctx context.Context, key subscriptionKey, snapshot PresenceSnapshot) (PresenceSnapshot, error) {
 	channel := h.registry.channels[key.channel]
 	if channel == nil || channel.memberWire == nil || snapshot.Revision == 0 || snapshot.Revision > 1<<53-1 || len(snapshot.Members) > h.config.MaxPresenceMembers {
-		return PresenceSnapshot{}, fault.New(fault.Invalid, "invalid cluster presence snapshot")
+		return PresenceSnapshot{}, safeerror.NewFault(fault.Invalid, "invalid cluster presence snapshot")
 	}
 	seen := make(map[MemberID]bool, len(snapshot.Members))
 	total := 0
@@ -23,12 +24,12 @@ func (h *Hub) validateClusterPresence(ctx context.Context, key subscriptionKey, 
 	limits.Bytes = h.config.MaxMemberBytes
 	for _, frame := range snapshot.Members {
 		if !validDigest(string(frame.ID)) || seen[frame.ID] || frame.Connections < 1 || frame.Connections > h.cluster.config.MaxConnections {
-			return PresenceSnapshot{}, fault.New(fault.Invalid, "invalid cluster member metadata")
+			return PresenceSnapshot{}, safeerror.NewFault(fault.Invalid, "invalid cluster member metadata")
 		}
 		seen[frame.ID] = true
 		total += frame.Connections
 		if total > h.cluster.config.MaxConnections {
-			return PresenceSnapshot{}, fault.New(fault.Invalid, "cluster presence exceeds connection capacity")
+			return PresenceSnapshot{}, safeerror.NewFault(fault.Invalid, "cluster presence exceeds connection capacity")
 		}
 		frame.Data = slices.Clone(frame.Data)
 		if err := channel.memberWire(ctx, frame.Data, limits); err != nil {

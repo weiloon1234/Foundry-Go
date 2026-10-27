@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/namedservice"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/notifications"
@@ -20,10 +21,10 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			*target.connection = s.Services.Database.Default
 		}
 		if _, ok := s.Services.Database.Connections[*target.connection]; !ok {
-			return f, fault.New(fault.Missing, "feature database is not configured")
+			return f, safeerror.NewFault(fault.Missing, "feature database is not configured")
 		}
 		if !sqlname.Valid(*target.schema) {
-			return f, fault.New(fault.Invalid, "feature requires a valid PostgreSQL schema")
+			return f, safeerror.NewFault(fault.Invalid, "feature requires a valid PostgreSQL schema")
 		}
 	}
 	if f.Auth.Sessions.Enabled || f.Auth.Tokens.Enabled {
@@ -43,10 +44,10 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			}
 		}
 		if len(f.Auth.Browser.Guards) < 1 || len(f.Auth.Browser.Guards) > 128 {
-			return f, fault.New(fault.Invalid, "browser auth requires bounded named guard policies")
+			return f, safeerror.NewFault(fault.Invalid, "browser auth requires bounded named guard policies")
 		}
 		if _, ok := f.Auth.Browser.Guards[f.Auth.Browser.Default]; !ok {
-			return f, fault.New(fault.Missing, "default browser guard is not configured")
+			return f, safeerror.NewFault(fault.Missing, "default browser guard is not configured")
 		}
 		cookies := make(map[string]bool)
 		for name, policy := range f.Auth.Browser.Guards {
@@ -59,7 +60,7 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			// Two browser actors must not overwrite one another's credentials.
 			id := string(policy.Cookie) + "\x00" + policy.Options.Domain + "\x00" + policy.Options.Path
 			if cookies[id] {
-				return f, fault.New(fault.Duplicate, "browser guard policies share a cookie scope")
+				return f, safeerror.NewFault(fault.Duplicate, "browser guard policies share a cookie scope")
 			}
 			cookies[id] = true
 		}
@@ -113,11 +114,11 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			return f, err
 		}
 		if len(f.Outbox.Jobs) > 128 {
-			return f, fault.New(fault.Invalid, "too many configured job outboxes")
+			return f, safeerror.NewFault(fault.Invalid, "too many configured job outboxes")
 		}
 		for name, destination := range f.Outbox.Jobs {
 			if _, ok := s.Services.Jobs.Connections[name]; !ok {
-				return f, fault.New(fault.Missing, "outbox job connection is not configured")
+				return f, safeerror.NewFault(fault.Missing, "outbox job connection is not configured")
 			}
 			if err := destination.Validate(); err != nil {
 				return f, err
@@ -128,10 +129,10 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 		// The cleanup job is enqueued through the job connection's outbox and
 		// cleans through the extension store.
 		if !f.Extensions.Enabled || !f.Outbox.Enabled {
-			return f, fault.New(fault.Invalid, "features.extension_cleanup requires features.extensions and features.outbox")
+			return f, safeerror.NewFault(fault.Invalid, "features.extension_cleanup requires features.extensions and features.outbox")
 		}
 		if _, ok := f.Outbox.Jobs[name]; !ok {
-			return f, fault.New(fault.Missing, "features.extension_cleanup.jobs has no features.outbox.jobs destination")
+			return f, safeerror.NewFault(fault.Missing, "features.extension_cleanup.jobs has no features.outbox.jobs destination")
 		}
 	}
 	if f.Locales.Enabled {
@@ -140,12 +141,12 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			return f, err
 		}
 		if f.Locales.Fallback != "" && !locales.Contains(f.Locales.Fallback) {
-			return f, fault.New(fault.Missing, "locale fallback is not configured")
+			return f, safeerror.NewFault(fault.Missing, "locale fallback is not configured")
 		}
 	}
 	if f.Attachments.Enabled {
 		if !f.Extensions.Enabled || len(s.Services.Storage.Disks) == 0 {
-			return f, fault.New(fault.Missing, "attachments require model extensions and storage")
+			return f, safeerror.NewFault(fault.Missing, "attachments require model extensions and storage")
 		}
 		if err := f.Attachments.Config.Validate(); err != nil {
 			return f, err

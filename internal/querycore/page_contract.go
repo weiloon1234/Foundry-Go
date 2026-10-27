@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"math"
 )
 
@@ -30,7 +31,7 @@ func ValidPageSize(size int) bool { return size > 0 && size <= MaxPageSize }
 
 func PageOffset(r PageRequest) (int, error) {
 	if r.Number < 1 || !ValidPageSize(r.Size) || r.Number-1 > math.MaxInt/r.Size {
-		return 0, fault.New(fault.Invalid, "invalid page number, size or offset overflow")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid page number, size or offset overflow")
 	}
 	return (r.Number - 1) * r.Size, nil
 }
@@ -55,7 +56,7 @@ func (p Page[R]) Validate() error {
 		return err
 	}
 	if p.Total < 0 || p.Pages != PageCount(p.Total, p.Size) || len(p.Items) > p.Size {
-		return fault.New(fault.Invalid, "invalid numbered page metadata")
+		return safeerror.NewFault(fault.Invalid, "invalid numbered page metadata")
 	}
 	return nil
 }
@@ -67,7 +68,7 @@ func (p SimplePage[R]) Validate() error {
 		return err
 	}
 	if len(p.Items) > p.Size || p.HasMore && len(p.Items) != p.Size {
-		return fault.New(fault.Invalid, "invalid simple page metadata")
+		return safeerror.NewFault(fault.Invalid, "invalid simple page metadata")
 	}
 	return nil
 }

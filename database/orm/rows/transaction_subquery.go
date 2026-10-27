@@ -1,7 +1,7 @@
 package rows
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -55,7 +55,7 @@ func transactionValueSource[V any](q TransactionValueSource[V]) (ormcore.RecordS
 	r.Source.Err = ormcore.ValidateRecordSource(r, reflect.TypeFor[V](), true)
 	r.Source.Node.Source.RequiresTransaction = true
 	if c.Scan == nil || c.Bind == nil || c.Clone == nil {
-		r.Source.Err = errors.Join(r.Source.Err, ormcore.Invalid("transaction scalar requires its codec"))
+		r.Source.Err = safeerror.Join("operation failed", r.Source.Err, ormcore.Invalid("transaction scalar requires its codec"))
 	}
 	return r, c
 }

@@ -10,7 +10,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/email"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/health"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -37,7 +38,7 @@ func DiskProbeKey() storage.ObjectKey {
 // s3:ListBucket (it may be limited to the probe key's prefix) to get 404s.
 func Disk(id health.ProbeID, disk *storage.Disk, key storage.ObjectKey) (health.Probe, error) {
 	if disk == nil {
-		return health.Probe{}, fault.New(fault.Invalid, "disk readiness probe requires a disk")
+		return health.Probe{}, safeerror.NewFault(fault.Invalid, "disk readiness probe requires a disk")
 	}
 	if err := key.Validate(); err != nil {
 		return health.Probe{}, err
@@ -53,12 +54,7 @@ func Disk(id health.ProbeID, disk *storage.Disk, key storage.ObjectKey) (health.
 
 // forbidden classifies with the bounded walker; provider causes are foreign.
 func forbidden(err error) bool {
-	found := false
-	errorgraph.Walk(err, func(current error) bool {
-		found = errorgraph.Matches(current, storage.Forbidden)
-		return !found
-	})
-	return found
+	return callback.ErrorIs(err, storage.Forbidden)
 }
 
 // Mailer reports whether the mailer still admits submissions. Mail drivers
@@ -66,11 +62,11 @@ func forbidden(err error) bool {
 // transport failures surface through send results and mail diagnostics.
 func Mailer(id health.ProbeID, mailer *email.Mailer) (health.Probe, error) {
 	if mailer == nil {
-		return health.Probe{}, fault.New(fault.Invalid, "mail readiness probe requires a mailer")
+		return health.Probe{}, safeerror.NewFault(fault.Invalid, "mail readiness probe requires a mailer")
 	}
 	return health.Probe{ID: id, Check: func(ctx context.Context) error {
 		if mailer.Snapshot().Closing {
-			return fault.New(fault.Closed, "mailer is closing")
+			return safeerror.NewFault(fault.Closed, "mailer is closing")
 		}
 		return ctx.Err()
 	}}, nil

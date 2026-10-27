@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/namedservice"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 	"github.com/weiloon1234/Foundry-Go/redis"
@@ -68,11 +69,11 @@ func WithRedisStores(stores ...RedisStore) Option {
 	owned := slices.Clone(stores)
 	return func(o *options) error {
 		if len(owned) > namedservice.MaxEntries-len(o.redisStores) {
-			return fault.New(fault.Invalid, "too many declared Redis stores")
+			return safeerror.NewFault(fault.Invalid, "too many declared Redis stores")
 		}
 		for _, store := range owned {
 			if store == nil {
-				return fault.New(fault.Invalid, "nil Redis store declaration")
+				return safeerror.NewFault(fault.Invalid, "nil Redis store declaration")
 			}
 		}
 		o.redisStores = append(o.redisStores, owned...)
@@ -116,7 +117,7 @@ func (p *Plan) resolveRedisStores() error {
 			return err
 		}
 		if seen[store.key] {
-			return fault.New(fault.Duplicate, "Redis store service key is duplicated")
+			return safeerror.NewFault(fault.Duplicate, "Redis store service key is duplicated")
 		}
 		seen[store.key] = true
 		p.redisStores = append(p.redisStores, store)

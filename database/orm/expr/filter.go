@@ -1,10 +1,10 @@
 package expr
 
 import (
-	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -130,7 +130,7 @@ func TextNullableRowAt[S, M any, V ~string](scope Scope[S, M], column orm.TextEx
 }
 
 func checkedTextColumn[V any](data rowData[V]) rowData[V] {
-	data.core.Err = errors.Join(data.core.Err, data.column.Err, validateTextColumn(data.column.Text))
+	data.core.Err = safeerror.Join("operation failed", data.core.Err, data.column.Err, validateTextColumn(data.column.Text))
 	data.column.Err = data.core.Err
 	return data
 }

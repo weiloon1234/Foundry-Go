@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/eventseam"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 )
 
@@ -39,14 +40,14 @@ type ListenerQueue struct {
 
 func NewListenerQueue(bus *Bus, policy jobs.Policy) (*ListenerQueue, error) {
 	if bus == nil || bus.done == nil {
-		return nil, fault.New(fault.Invalid, "listener queue requires a prepared bus")
+		return nil, safeerror.NewFault(fault.Invalid, "listener queue requires a prepared bus")
 	}
 	queue := &ListenerQueue{bus: bus, definition: ListenerDefinition(policy)}
 	if err := queue.definition.Validate(); err != nil {
 		return nil, err
 	}
 	if !bus.listeners.CompareAndSwap(nil, queue) {
-		return nil, fault.New(fault.Duplicate, "bus already has a listener queue")
+		return nil, safeerror.NewFault(fault.Duplicate, "bus already has a listener queue")
 	}
 	return queue, nil
 }
@@ -58,10 +59,10 @@ func (*ListenerQueue) Format(state fmt.State, _ rune) {
 // set once, after the dispatcher's registry includes Declaration.
 func (q *ListenerQueue) Bind(dispatcher *jobs.Dispatcher) error {
 	if q == nil || dispatcher == nil {
-		return fault.New(fault.Invalid, "listener queue binding requires a dispatcher")
+		return safeerror.NewFault(fault.Invalid, "listener queue binding requires a dispatcher")
 	}
 	if !q.dispatcher.CompareAndSwap(nil, dispatcher) {
-		return fault.New(fault.Duplicate, "listener queue is already bound")
+		return safeerror.NewFault(fault.Duplicate, "listener queue is already bound")
 	}
 	return nil
 }
@@ -69,13 +70,13 @@ func (q *ListenerQueue) Bind(dispatcher *jobs.Dispatcher) error {
 // Declaration is the job handler that delivers one queued listener.
 func (q *ListenerQueue) Declaration() (jobs.Declaration, error) {
 	if q == nil || q.bus == nil {
-		return jobs.Declaration{}, fault.New(fault.Invalid, "listener queue is not initialized")
+		return jobs.Declaration{}, safeerror.NewFault(fault.Invalid, "listener queue is not initialized")
 	}
 	return q.definition.Declare(func(ctx context.Context, input queuedListener) error {
 		key := topicKey{input.Name, input.Version}
 		registered, ok := q.bus.registry[key]
 		if !ok {
-			return fault.New(fault.Missing, "queued listener event is not registered")
+			return safeerror.NewFault(fault.Missing, "queued listener event is not registered")
 		}
 		operation, entry, release, err := q.bus.begin(ctx, key, registered.schema.typ)
 		if err != nil {
@@ -92,18 +93,18 @@ func (q *ListenerQueue) Declaration() (jobs.Declaration, error) {
 			}
 			return callback.Isolated(fmt.Sprintf("queued event listener %s", item.name), func() error { return item.invoke(operation, captured) })
 		}
-		return fault.New(fault.Missing, "queued listener is not registered")
+		return safeerror.NewFault(fault.Missing, "queued listener is not registered")
 	})
 }
 
 func (b *Bus) enqueueListener(ctx context.Context, key topicKey, name ListenerID, payloadJSON string) error {
 	queue := b.listeners.Load()
 	if queue == nil {
-		return fault.New(fault.Invalid, "queued event listener requires a bound listener queue")
+		return safeerror.NewFault(fault.Invalid, "queued event listener requires a bound listener queue")
 	}
 	dispatcher := queue.dispatcher.Load()
 	if dispatcher == nil {
-		return fault.New(fault.Invalid, "queued event listener requires a bound listener queue")
+		return safeerror.NewFault(fault.Invalid, "queued event listener requires a bound listener queue")
 	}
 	_, err := queue.definition.Dispatch(ctx, dispatcher, queuedListener{Name: key.name, Version: key.version, Listener: name, Payload: json.RawMessage(payloadJSON)}, jobs.Options[queuedListener]{})
 	return err
@@ -120,13 +121,13 @@ type Interceptor func(ctx context.Context, name Name, version Version, payloadJS
 // an interceptor; production code cannot silently suppress listeners.
 func (b *Bus) Intercept(token eventseam.Token, interceptor Interceptor) (func(), error) {
 	if !token.Valid() {
-		return nil, fault.New(fault.Invalid, "event interception is reserved for framework test helpers")
+		return nil, safeerror.NewFault(fault.Invalid, "event interception is reserved for framework test helpers")
 	}
 	if b == nil || b.done == nil || interceptor == nil {
-		return nil, fault.New(fault.Invalid, "event interception requires a bus and interceptor")
+		return nil, safeerror.NewFault(fault.Invalid, "event interception requires a bus and interceptor")
 	}
 	if !b.interceptor.CompareAndSwap(nil, &interceptor) {
-		return nil, fault.New(fault.Duplicate, "bus is already intercepted")
+		return nil, safeerror.NewFault(fault.Duplicate, "bus is already intercepted")
 	}
 	installed := &interceptor
 	return func() { b.interceptor.CompareAndSwap(installed, nil) }, nil

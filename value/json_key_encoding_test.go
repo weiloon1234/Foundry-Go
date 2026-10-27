@@ -1,11 +1,19 @@
 package value_test
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/weiloon1234/Foundry-Go/testkit"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -118,4 +126,76 @@ func TestJSONDecodingRetainsPrivateCause(t *testing.T) {
 	if privateJSONDecodeCause.formatted.Load() != 0 {
 		t.Fatal("typed JSON decoder error formatted")
 	}
+}
+
+type structTextKey struct{ Text string }
+
+func (k structTextKey) MarshalText() ([]byte, error) { return []byte(k.Text), nil }
+
+type integerTextKey int
+
+func (integerTextKey) MarshalText() ([]byte, error) { return []byte("integer-method"), nil }
+
+type stringAppendKey string
+
+func (stringAppendKey) AppendText([]byte) ([]byte, error) {
+	panic("string keys must ignore AppendText")
+}
+
+func TestJSONMapKeyEncodingMatchesEncodingJSON(t *testing.T) {
+	// The experiment-enabled encoding/json delegates to v2. Use the legacy
+	// stdlib implementation as the persisted-byte compatibility oracle.
+	testkit.TrackExternalInputs(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "run", "./testdata/jsonkeyoracle/main.go")
+	cmd.Env = append(os.Environ(), "GOEXPERIMENT=nojsonv2", "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off")
+	var output limitedOracleOutput
+	cmd.Stdout, cmd.Stderr = &output, &output
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("legacy encoding/json oracle: %v: %s", err, output.data)
+	}
+	var expected map[string]string
+	if err := json.Unmarshal(output.data, &expected); err != nil {
+		t.Fatal(err)
+	}
+	pointer := pointerStringKey("original")
+	for _, test := range []struct {
+		name  string
+		input any
+	}{
+		{"string", map[string]int{"original": 1}},
+		{"named string with text method", map[stringTextKey]int{"original": 1}},
+		{"named string with appender", map[stringAppendKey]int{"original": 1}},
+		{"pointer", map[*pointerStringKey]int{&pointer: 1}},
+		{"nil pointer", map[*pointerStringKey]int{nil: 1}},
+		{"integer", map[int]int{-42: 1}},
+		{"unsigned integer", map[uint64]int{42: 1}},
+		{"integer with text method", map[integerTextKey]int{42: 1}},
+		{"text marshaler struct", map[structTextKey]int{{Text: "original"}: 1}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			want, ok := expected[test.name]
+			if !ok {
+				t.Fatal("missing stdlib oracle case")
+			}
+			got, err := value.EncodeJSON(t.Context(), test.input, encodingLimits())
+			if err != nil || string(got) != string(want) {
+				t.Fatalf("got %s (%v), want %s", got, err, want)
+			}
+		})
+	}
+}
+
+type limitedOracleOutput struct{ data []byte }
+
+func (b *limitedOracleOutput) Write(p []byte) (int, error) {
+	n := len(p)
+	if remaining := 64*1024 - len(b.data); remaining > 0 {
+		if len(p) > remaining {
+			p = p[:remaining]
+		}
+		b.data = append(b.data, p...)
+	}
+	return n, nil
 }

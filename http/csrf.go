@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const CSRFMiddlewareID MiddlewareID = "foundry.csrf"
@@ -26,20 +27,20 @@ type csrfPolicy struct {
 
 func compileCSRF(c CSRFConfig) (csrfPolicy, error) {
 	if len(c.TrustedOrigins) > maxPublicOrigins {
-		return csrfPolicy{}, fault.New(fault.Invalid, "too many CSRF trusted origins")
+		return csrfPolicy{}, safeerror.NewFault(fault.Invalid, "too many CSRF trusted origins")
 	}
 	p := csrfPolicy{native: stdhttp.NewCrossOriginProtection(), trusted: make(map[Origin]bool, len(c.TrustedOrigins))}
 	for _, input := range c.TrustedOrigins {
 		origin, err := ParseOrigin(string(input))
 		if err != nil || origin == NullOrigin {
-			return csrfPolicy{}, fault.New(fault.Invalid, "CSRF trust requires an HTTP(S) origin")
+			return csrfPolicy{}, safeerror.NewFault(fault.Invalid, "CSRF trust requires an HTTP(S) origin")
 		}
 		if p.trusted[origin] {
-			return csrfPolicy{}, fault.New(fault.Duplicate, "CSRF trusted origin is repeated")
+			return csrfPolicy{}, safeerror.NewFault(fault.Duplicate, "CSRF trusted origin is repeated")
 		}
 		p.trusted[origin] = true
 		if err := p.native.AddTrustedOrigin(string(origin)); err != nil {
-			return csrfPolicy{}, fault.Wrap(fault.Invalid, "invalid CSRF trusted origin", err)
+			return csrfPolicy{}, safeerror.WrapFault(fault.Invalid, "invalid CSRF trusted origin", err)
 		}
 	}
 	return p, nil
@@ -77,7 +78,7 @@ func csrfVary(header stdhttp.Header, r *stdhttp.Request) {
 }
 func (p csrfPolicy) check(r *stdhttp.Request) error {
 	if r == nil || p.native == nil {
-		return fault.New(fault.Invalid, "CSRF requires a policy and request")
+		return safeerror.NewFault(fault.Invalid, "CSRF requires a policy and request")
 	}
 	if err := r.Context().Err(); err != nil {
 		return err
@@ -87,7 +88,7 @@ func (p csrfPolicy) check(r *stdhttp.Request) error {
 	}
 	origins, sites := r.Header.Values("Origin"), r.Header.Values("Sec-Fetch-Site")
 	if len(origins) > 1 || len(sites) > 1 {
-		return Forbidden
+		return Forbidden.WithCause(nil)
 	}
 	var site string
 	if len(sites) == 1 {
@@ -95,7 +96,7 @@ func (p csrfPolicy) check(r *stdhttp.Request) error {
 		switch site {
 		case "same-origin", "same-site", "cross-site", "none":
 		default:
-			return Forbidden
+			return Forbidden.WithCause(nil)
 		}
 	}
 	var origin Origin
@@ -103,11 +104,11 @@ func (p csrfPolicy) check(r *stdhttp.Request) error {
 		var err error
 		origin, err = ParseOrigin(origins[0])
 		if err != nil || origin == NullOrigin {
-			return Forbidden
+			return Forbidden.WithCause(nil)
 		}
 	}
 	if site == "" && origin == "" {
-		return Forbidden
+		return Forbidden.WithCause(nil)
 	}
 	target, err := requestOrigin(r)
 	if err != nil {
@@ -116,7 +117,7 @@ func (p csrfPolicy) check(r *stdhttp.Request) error {
 	// The standard library's legacy fallback compares only hosts. Enforce scheme
 	// as well and reject contradictory Origin evidence even with Fetch Metadata.
 	if origin != "" && origin != target && !p.trusted[origin] {
-		return Forbidden
+		return Forbidden.WithCause(nil)
 	}
 	// The native check reads only these fields; a minimal header avoids cloning
 	// every request header on each unsafe request.

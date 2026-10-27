@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // OriginPattern declares an additional browser origin that is not an exact
@@ -32,7 +33,7 @@ type originMatcher struct {
 
 func compileOriginPattern(p OriginPattern) (originMatcher, error) {
 	invalid := func() (originMatcher, error) {
-		return originMatcher{}, fault.New(fault.Invalid, "origin pattern requires an exact non-HTTP(S) origin or an HTTP(S) subdomain wildcard such as https://*.example.com")
+		return originMatcher{}, safeerror.NewFault(fault.Invalid, "origin pattern requires an exact non-HTTP(S) origin or an HTTP(S) subdomain wildcard such as https://*.example.com")
 	}
 	text := string(p)
 	if len(text) > maxOriginBytes {

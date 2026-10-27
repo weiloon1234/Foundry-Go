@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/xml"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	"path"
 	"strconv"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/datatable/internal/spreadsheet"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const (
@@ -103,8 +104,8 @@ func checkArchiveDirectory(at io.ReaderAt, size int64) error {
 		return invalid("import XLSX is not a valid workbook")
 	}
 	tail := make([]byte, window)
-	if _, err := at.ReadAt(tail, size-window); err != nil && !errors.Is(err, io.EOF) {
-		return fault.Wrap(fault.Invalid, "import XLSX could not be read", err)
+	if _, err := at.ReadAt(tail, size-window); err != nil && !callback.ErrorIs(err, io.EOF) {
+		return invalidWithCause("import XLSX could not be read", err)
 	}
 	for i := len(tail) - record; i >= 0; i-- {
 		if binary.LittleEndian.Uint32(tail[i:]) == 0x06054b50 {
@@ -167,7 +168,7 @@ func (b *budgetReader) Read(p []byte) (int, error) {
 	}
 	n, err := b.body.Read(p)
 	if n < 0 || n > len(p) {
-		return 0, fault.New(fault.Internal, "import reader returned an invalid count")
+		return 0, safeerror.NewFault(fault.Internal, "import reader returned an invalid count")
 	}
 	if b.budget.remaining -= int64(n); b.budget.remaining < 0 {
 		return 0, invalid("import XLSX exceeds its decompressed size limit")
@@ -177,7 +178,7 @@ func (b *budgetReader) Read(p []byte) (int, error) {
 			return 0, failure
 		}
 	}
-	if err != nil && !errors.Is(err, io.EOF) {
+	if err != nil && !callback.ErrorIs(err, io.EOF) {
 		return n, invalid("import XLSX part is invalid")
 	}
 	return n, err
@@ -304,7 +305,7 @@ func (r *xlsxReader) readMetadata(name string, target any) error {
 	}
 	defer body.Close()
 	if err := newDecoder(io.LimitReader(body, maxMetadataBytes)).Decode(target); err != nil {
-		if errors.Is(err, fault.Invalid) {
+		if callback.ErrorIs(err, fault.Invalid) {
 			return err
 		}
 		return invalid("import XLSX metadata is malformed")
@@ -412,7 +413,7 @@ func (r *xlsxReader) sharedStrings(name string) ([]string, error) {
 	inItem, inText, phonetic := false, false, 0
 	for {
 		token, err := decoder.Token()
-		if errors.Is(err, io.EOF) {
+		if callback.ErrorIs(err, io.EOF) {
 			return result, nil
 		}
 		if err != nil {
@@ -462,7 +463,7 @@ func appendBounded(builder *strings.Builder, data []byte, maximum int) {
 }
 
 func xmlError(err error) error {
-	if errors.Is(err, fault.Invalid) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if callback.ErrorIs(err, fault.Invalid) || callback.ErrorIs(err, context.Canceled) || callback.ErrorIs(err, context.DeadlineExceeded) {
 		return err
 	}
 	return invalid("import XLSX worksheet is malformed")
@@ -473,7 +474,7 @@ func xmlError(err error) error {
 func (r *xlsxReader) next() (int, []rawCell, error) {
 	for {
 		token, err := r.decoder.Token()
-		if errors.Is(err, io.EOF) {
+		if callback.ErrorIs(err, io.EOF) {
 			return 0, nil, io.EOF
 		}
 		if err != nil {
@@ -609,7 +610,7 @@ func attribute(start xml.StartElement, name string) string {
 	return ""
 }
 func unexpectedEOF(err error) error {
-	if errors.Is(err, io.EOF) {
+	if callback.ErrorIs(err, io.EOF) {
 		return invalid("import XLSX worksheet is truncated")
 	}
 	return err

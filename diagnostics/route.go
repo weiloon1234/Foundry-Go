@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
@@ -27,20 +28,20 @@ const (
 // available only through an explicitly bound Profile route with Profiling set.
 func Route[M any](runtime *Runtime, route foundryhttp.AuthenticatedRoute[foundryhttp.NoPath, M], endpoint Endpoint) foundryhttp.RouteRegistration {
 	if runtime == nil || runtime.slots == nil {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "diagnostics requires an initialized runtime"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "diagnostics requires an initialized runtime"))
 	}
 	if endpoint != Liveness && endpoint != Readiness && endpoint != Status && endpoint != Metrics && endpoint != Profile {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "unknown diagnostics endpoint"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "unknown diagnostics endpoint"))
 	}
 	if endpoint == Profile && !runtime.profiling {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "diagnostics profiling is not enabled"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "diagnostics profiling is not enabled"))
 	}
 	description, err := route.Description()
 	if err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if description.Method != foundryhttp.GET {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "diagnostics requires a GET route"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "diagnostics requires a GET route"))
 	}
 	return route.HandleRaw(func(writer stdhttp.ResponseWriter, request *stdhttp.Request, _ M, _ foundryhttp.NoPath) {
 		writer.Header().Set("Cache-Control", "no-store")

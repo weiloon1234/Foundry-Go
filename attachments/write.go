@@ -4,7 +4,6 @@ import "time"
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 
@@ -14,6 +13,7 @@ import (
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -74,13 +74,13 @@ func (c Collection[M, K]) writePrepared(ctx context.Context, m *Manager, owner m
 		journalErr := m.scheduleCleanup(cleanupCtx, id, c.queue, "publication_failed")
 		if journalErr != nil {
 			result.PendingCleanup = append(result.PendingCleanup, operationID(id))
-			return errors.Join(err, journalErr)
+			return joinFailures(err, journalErr)
 		}
 		status, cleanupErr := m.reconcile(cleanupCtx, id, false)
 		if status.State != Cleaned {
 			result.PendingCleanup = append(result.PendingCleanup, operationID(id))
 		}
-		return errors.Join(err, cleanupErr)
+		return joinFailures(err, cleanupErr)
 	}
 	result.Publication = Published
 	result.Attachment = value.Set(attachment)
@@ -89,7 +89,7 @@ func (c Collection[M, K]) writePrepared(ctx context.Context, m *Manager, owner m
 	cleanupErr := err
 	pending, nextErr := m.cleanupMany(cleanupCtx, old)
 	result.PendingCleanup = append(result.PendingCleanup, pending...)
-	cleanupErr = errors.Join(cleanupErr, nextErr)
+	cleanupErr = joinFailures(cleanupErr, nextErr)
 	if len(c.definition.policy.Variants) > 0 {
 		// Queued variants were enqueued by the publication transaction.
 		// Otherwise generate them now; a failure never unpublishes.
@@ -97,7 +97,7 @@ func (c Collection[M, K]) writePrepared(ctx context.Context, m *Manager, owner m
 		if c.variantQueue == nil {
 			if variantErr := m.generate(ctx, id, false); variantErr != nil {
 				result.PendingVariants = true
-				cleanupErr = errors.Join(cleanupErr, variantErr)
+				cleanupErr = joinFailures(cleanupErr, variantErr)
 			} else if refreshed, err := c.withVariants(ctx, m, attachment); err == nil {
 				result.Attachment = value.Set(refreshed)
 			}
@@ -152,11 +152,11 @@ func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner m
 	}
 	stored, putErr := disk.Put(ctx, key, candidate.open(), storage.PutOptions{ContentType: candidate.info.MediaType, Size: value.Set(candidate.info.Size), Checksum: value.Set(candidate.digest), Condition: storage.IfAbsent()})
 	if putErr != nil {
-		return id, release, errors.Join(putErr, m.recordPutFailure(ctx, id, putErr))
+		return id, release, joinFailures(putErr, m.recordPutFailure(ctx, id, putErr))
 	}
 	if stored.Object.ETag == "" {
-		cause := storage.Failure(storage.IntegrityFailed, storage.PutOperation, storage.Applied, nil)
-		return id, release, errors.Join(cause, m.recordPutFailure(ctx, id, cause))
+		cause := storageFailure(storage.IntegrityFailed, storage.PutOperation, storage.Applied, nil)
+		return id, release, joinFailures(cause, m.recordPutFailure(ctx, id, cause))
 	}
 	pinCtx, pinCancel := m.cleanupContext(ctx)
 	defer pinCancel()
@@ -240,7 +240,7 @@ func (c Collection[M, K]) publishPrepared(ctx context.Context, tx *database.Tx, 
 			return err
 		}
 		if prepared.IsZero() || prepared.collection != c.Name() || prepared.locale != locale {
-			return fault.New(fault.Invalid, "prepared upload belongs to another collection")
+			return attachmentFailure(fault.Invalid, "prepared upload belongs to another collection")
 		}
 		id := model.IDFromBytes[store.File](prepared.operation.Bytes())
 		attachment, old, err := c.publish(ctx, tx, m, id, owner, replace || c.definition.policy.Cardinality == Single)
@@ -261,7 +261,7 @@ func (c Collection[M, K]) Discard(ctx context.Context, m *Manager, prepared Prep
 		return err
 	}
 	if prepared.IsZero() || prepared.collection != c.Name() {
-		return fault.New(fault.Invalid, "prepared upload belongs to another collection")
+		return attachmentFailure(fault.Invalid, "prepared upload belongs to another collection")
 	}
 	return m.calls.Run(ctx, "attachment discard", func(ctx context.Context) error {
 		cleanupCtx, cancel := m.cleanupContext(ctx)
@@ -284,7 +284,7 @@ func ownerIntentBound(ctx context.Context, tx *database.Tx, scope, subject strin
 		return err
 	}
 	if count+adding > MaxOwnerIntents {
-		return fault.New(fault.Conflict, "attachment owner has too many unresolved intents")
+		return attachmentFailure(fault.Conflict, "attachment owner has too many unresolved intents")
 	}
 	return nil
 }
@@ -318,7 +318,7 @@ func (c Collection[M, K]) afterCommit(outer *database.Tx, m *Manager, id model.I
 			defer cancel()
 			_, err := m.cleanupMany(cleanupCtx, old)
 			if generate {
-				err = errors.Join(err, m.generate(ctx, id, false))
+				err = joinFailures(err, m.generate(ctx, id, false))
 			}
 			return err
 		})
@@ -366,7 +366,7 @@ func (c Collection[M, K]) stage(ctx context.Context, m *Manager, id model.ID[sto
 		// upload may be for a model its publishing transaction creates later;
 		// publication then recounts under that lock.
 		subject, err := c.definition.owner.Lock(ctx, tx, m.store.Registry(), owner)
-		if !ownerRequired && errors.Is(err, database.NotFound) {
+		if !ownerRequired && callback.ErrorIs(err, database.NotFound) {
 			subject, err = c.definition.owner.Subject(owner)
 		}
 		if err != nil {
@@ -419,7 +419,7 @@ func (m *Manager) recordPutFailure(ctx context.Context, id model.ID[store.File],
 	// Only an explicit Unchanged storage result proves this invocation published
 	// nothing. Unknown, Applied and extension failures remain visible for settlement.
 	next := Uncertain
-	if detail, ok := cause.(*storage.Error); ok && detail.Outcome() == storage.Unchanged {
+	if storageUnchanged(cause) {
 		next = Cleaned
 	}
 	cleanupCtx, cancel := m.cleanupContext(ctx)
@@ -453,8 +453,8 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 			return err
 		}
 		row, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
-		if outer != nil && errors.Is(err, database.NotFound) {
-			return fault.New(fault.Invalid, "prepared upload is not visible to this transaction; prepare it before the transaction begins")
+		if outer != nil && callback.ErrorIs(err, database.NotFound) {
+			return attachmentFailure(fault.Invalid, "prepared upload is not visible to this transaction; prepare it before the transaction begins")
 		}
 		if err != nil {
 			return err
@@ -463,7 +463,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 			return err
 		}
 		if row.State != string(Stored) || row.WriterID != m.writer || row.Scope != subject.Scope || row.SubjectKey != subject.Key || row.Collection != string(c.Name()) {
-			return fault.New(fault.Conflict, "upload is no longer available for publication")
+			return attachmentFailure(fault.Conflict, "upload is no longer available for publication")
 		}
 		f := store.Files
 		if outer != nil {
@@ -478,7 +478,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 			return err
 		}
 		if len(existing) > MaxCollectionFiles || !replace && len(existing) >= c.definition.policy.MaxFiles {
-			return fault.New(fault.Conflict, "attachment collection is full")
+			return attachmentFailure(fault.Conflict, "attachment collection is full")
 		}
 		position := int32(0)
 		if len(existing) > 0 {
@@ -486,7 +486,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 				position = existing[0].SortOrder
 			} else {
 				if existing[len(existing)-1].SortOrder == math.MaxInt32 {
-					return fault.New(fault.Conflict, "attachment collection needs reordering")
+					return attachmentFailure(fault.Conflict, "attachment collection needs reordering")
 				}
 				position = existing[len(existing)-1].SortOrder + 1
 			}
@@ -546,11 +546,23 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 		result, err = c.attachment(m, final)
 		return err
 	}
+	// Savepoint cleanup may join the body error with other failures. Retain
+	// only this owner's immutable diagnostic before crossing that boundary;
+	// the entire returned graph still owns cleanup and unknown outcomes.
+	var diagnostic string
+	publish := func(ctx context.Context, tx *database.Tx) error {
+		err := body(ctx, tx)
+		diagnostic, _ = safeerror.OwnedMessage(err)
+		return err
+	}
 	var err error
 	if outer != nil {
-		err = m.store.Join(ctx, outer, body)
+		err = m.store.Join(ctx, outer, publish)
 	} else {
-		err = m.store.Write(ctx, body)
+		err = m.store.Write(ctx, publish)
+	}
+	if diagnostic != "" {
+		err = safeerror.Owned(diagnostic, err)
 	}
 	return result, removed, err
 }
@@ -568,7 +580,7 @@ func (m *Manager) scheduleCleanup(ctx context.Context, id model.ID[store.File], 
 			return nil
 		}
 		if row.State != string(Stored) {
-			return fault.New(fault.Conflict, "upload cannot be scheduled for cleanup")
+			return attachmentFailure(fault.Conflict, "upload cannot be scheduled for cleanup")
 		}
 		now, err := m.store.Now()
 		if err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -55,7 +56,7 @@ func (j CleanupJob) Handler(runtime Runtime) (jobs.Handler[CleanupRequest], erro
 	}
 	// Without a manager every delivery would succeed without cleaning anything.
 	if runtime.Metadata == nil && runtime.Translations == nil && runtime.Attachments == nil {
-		return nil, fault.New(fault.Invalid, "model extension cleanup job requires a manager")
+		return nil, safeerror.NewFault(fault.Invalid, "model extension cleanup job requires a manager")
 	}
 	return func(ctx context.Context, request CleanupRequest) error {
 		err := runtime.settle(ctx, request.Owner, request.Identity)
@@ -96,7 +97,7 @@ func (j CleanupJob) ToOutbox(queue jobs.Queue, producers map[*database.DB]*jobs.
 }
 func (q *CleanupQueue) Validate() error {
 	if q == nil || len(q.producers) == 0 {
-		return fault.New(fault.Invalid, "model extension cleanup queue requires outbox producers")
+		return safeerror.NewFault(fault.Invalid, "model extension cleanup queue requires outbox producers")
 	}
 	if err := q.job.definition.Validate(); err != nil {
 		return err
@@ -106,7 +107,7 @@ func (q *CleanupQueue) Validate() error {
 	}
 	for db, producer := range q.producers {
 		if db == nil || producer == nil {
-			return fault.New(fault.Invalid, "model extension cleanup queue requires a pool and producer")
+			return safeerror.NewFault(fault.Invalid, "model extension cleanup queue requires a pool and producer")
 		}
 		if err := producer.Destination().Validate(); err != nil {
 			return err
@@ -126,12 +127,12 @@ func (q *CleanupQueue) enqueue(ctx context.Context, tx *database.Tx, owner exten
 			return err
 		}
 	}
-	return fault.New(fault.Invalid, "model deletion pool has no extension cleanup outbox")
+	return safeerror.NewFault(fault.Invalid, "model deletion pool has no extension cleanup outbox")
 }
 
 // errOwnerExists rolls back a settlement whose owner was created again while
 // it ran; settle then skips that owner as if it had found it first.
-var errOwnerExists = fault.New(fault.Conflict, "model extension owner exists again")
+var errOwnerExists = safeerror.NewFault(fault.Conflict, "model extension owner exists again")
 
 // settle removes one deleted owner's extension data in one transaction of the
 // store's pool, unless the owner exists again. Every step joins that plain

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"unsafe"
 
@@ -88,7 +89,7 @@ func uniqueModel[M any](ctx context.Context, ex database.Executor, q queryState)
 		return value.Optional[M]{}, err
 	}
 	if len(rows) > 1 {
-		return value.Optional[M]{}, fault.New(fault.Internal, "model lookup key has multiple matches in its scope")
+		return value.Optional[M]{}, safeerror.NewFault(fault.Internal, "model lookup key has multiple matches in its scope")
 	}
 	if len(rows) == 0 {
 		return value.Optional[M]{}, nil

@@ -1,6 +1,9 @@
 package http
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+)
 
 // HeaderValue is an HTTP field value, distinct from a field name or method.
 // Validation checks its byte bound and rejects control bytes except horizontal
@@ -11,11 +14,11 @@ const MaxHeaderValueBytes = 8192
 
 func (v HeaderValue) Validate() error {
 	if len(v) > MaxHeaderValueBytes {
-		return fault.New(fault.Invalid, "HTTP header value exceeds its byte bound")
+		return safeerror.NewFault(fault.Invalid, "HTTP header value exceeds its byte bound")
 	}
 	for i := range len(v) {
 		if v[i] != '\t' && (v[i] < 0x20 || v[i] == 0x7f) {
-			return fault.New(fault.Invalid, "HTTP header value contains an invalid control byte")
+			return safeerror.NewFault(fault.Invalid, "HTTP header value contains an invalid control byte")
 		}
 	}
 	return nil

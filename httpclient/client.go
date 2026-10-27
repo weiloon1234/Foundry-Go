@@ -2,7 +2,6 @@ package httpclient
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	sharedtransport "github.com/weiloon1234/Foundry-Go/internal/httptransport"
 	"github.com/weiloon1234/Foundry-Go/internal/ownedstream"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/tracing"
@@ -254,14 +254,14 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 	defer func() {
 		var cleanup error
 		if requestBody != nil {
-			cleanup = errors.Join(cleanup, requestBody.Close(), requestBody.Err())
+			cleanup = safeerror.Join("operation failed", cleanup, requestBody.Close(), requestBody.Err())
 		}
 		if responseBody != nil {
-			cleanup = errors.Join(cleanup, responseBody.Close(), responseBody.Err())
+			cleanup = safeerror.Join("operation failed", cleanup, responseBody.Close(), responseBody.Err())
 		}
 		if cleanup != nil {
 			retry = false
-			err = failure(BodyFailed, c.Name(), request.method, number, 0, errors.Join(err, cleanup))
+			err = failure(BodyFailed, c.Name(), request.method, number, 0, safeerror.Join("operation failed", err, cleanup))
 		}
 		if parent.Err() != nil {
 			retry = false
@@ -285,7 +285,7 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 			}
 		}
 		if invokeErr != nil || openErr != nil || requestBody == nil {
-			return false, 0, failure(BodyFailed, c.Name(), request.method, number, 0, errors.Join(invokeErr, openErr))
+			return false, 0, failure(BodyFailed, c.Name(), request.method, number, 0, safeerror.Join("operation failed", invokeErr, openErr))
 		}
 		body = requestBody
 	}
@@ -343,7 +343,12 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 		return false, 0, parent.Err()
 	}
 	if transportErr != nil || op.Err() != nil {
-		return canRetry && !errorgraph.Is(transportErr, DestinationDenied), -1, failure(TransportFailed, c.Name(), request.method, number, 0, canceled(op, transportErr))
+		denied := false
+		complete := callback.ErrorWalk(transportErr, func(current error) bool {
+			denied = errorgraph.Matches(current, DestinationDenied)
+			return !denied
+		})
+		return canRetry && complete && !denied, -1, failure(TransportFailed, c.Name(), request.method, number, 0, canceled(op, transportErr))
 	}
 	if response == nil || responseBody == nil || response.StatusCode < 100 || response.StatusCode > 599 {
 		return false, 0, failure(TransportFailed, c.Name(), request.method, number, 0, invalid())

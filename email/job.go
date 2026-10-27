@@ -2,6 +2,7 @@ package email
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/jobs"
@@ -21,7 +22,7 @@ func JobHandler[P any](mailer *Mailer, build Builder[P]) jobs.Handler[P] {
 	return func(ctx context.Context, data P) error {
 		attempt, ok := jobs.Current(ctx)
 		if !ok || mailer == nil || build == nil {
-			return jobs.Permanent(Construction)
+			return jobs.Permanent(emaildiag.Failure(Construction))
 		}
 		var message Message
 		var buildFailure Kind
@@ -30,19 +31,19 @@ func JobHandler[P any](mailer *Mailer, build Builder[P]) jobs.Handler[P] {
 			message, err = build(ctx, data)
 			if err != nil {
 				buildFailure = Classification(err)
-				return Construction
+				return emaildiag.Failure(Construction)
 			}
 			return nil
 		})
 		if ctx.Err() != nil || buildFailure == Transient {
-			return Transient
+			return emaildiag.Failure(Transient)
 		}
 		if failed != nil {
-			return jobs.Permanent(Construction)
+			return jobs.Permanent(emaildiag.Failure(Construction))
 		}
 		for _, a := range message.attachments {
 			if a.Version == "" && a.IfMatch == "" {
-				return jobs.Permanent(Construction)
+				return jobs.Permanent(emaildiag.Failure(Construction))
 			}
 		}
 		result, err := mailer.Send(ctx, message, SendOptions{IdempotencyKey: IdempotencyKey("email/" + attempt.ID.String())})

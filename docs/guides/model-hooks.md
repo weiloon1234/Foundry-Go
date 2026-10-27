@@ -78,6 +78,10 @@ Errors, panic, `runtime.Goexit` and cancellation abort the write scope. Applicat
 
 A normal nested write owns a savepoint. Rollback discards its changes and queued after-commit work. Success transfers callbacks to the parent, and only the outer commit runs them. After-commit failure cannot roll back persistence and does not skip later queued callbacks. The commit context belongs to the outer transaction; nested request values are not implicitly merged into it.
 
+Local hooks and observers return failures through a safe `database.AfterCommitFailed` error with a committed outcome. The wrapper preserves `errors.Is` and `errors.As` identity without invoking the cause's formatting methods, even when its `Error()` would panic or call `runtime.Goexit`.
+
+The existing [model write outcomes](model-writes.md) apply: an uncertain commit or an after-commit failure from a write that owns the outer transaction retains a typed reconciliation candidate. A write inside a caller-owned transaction returns before that transaction's final outcome; the caller must handle its outer transaction error. No write or callback is automatically retried. In-process callbacks do not provide crash durability.
+
 No callback is automatically retried. Unknown commit outcomes require reconciliation through the [write outcome contract](model-writes.md#transaction-ownership-and-failures). In-process callbacks have no crash durability. Use [outbox](outbox.md) and [audit](audit.md) in the supplied transaction for persisted effects.
 
 ## Set and per-model behavior

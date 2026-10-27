@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type columnMetadataDeclaration struct {
@@ -63,7 +64,7 @@ func (m *tableMetadata) initialize(id TableID, row contract.Schema, describeScal
 			return invalid("invalid datatable column")
 		}
 		if _, exists := m.byColumn[c.name]; exists {
-			return fault.New(fault.Duplicate, "datatable column is repeated")
+			return safeerror.NewFault(fault.Duplicate, "datatable column is repeated")
 		}
 		scalar, err := describeScalar(c.name)
 		if err != nil {
@@ -110,7 +111,7 @@ func (m *tableMetadata) initialize(id TableID, row contract.Schema, describeScal
 	}
 	for _, f := range filters {
 		if _, exists := m.byColumn[f.name]; exists {
-			return fault.New(fault.Duplicate, "extra filter overlaps a displayed column")
+			return safeerror.NewFault(fault.Duplicate, "extra filter overlaps a displayed column")
 		}
 		if err := m.addFilter(f, filterLocation{index: len(m.info.Filters)}); err != nil {
 			return err
@@ -134,7 +135,7 @@ func (m *tableMetadata) addFilter(f filterMetadataDeclaration, location filterLo
 		return invalid("invalid datatable filter")
 	}
 	if _, exists := m.byFilter[f.name]; exists {
-		return fault.New(fault.Duplicate, "datatable filter is repeated")
+		return safeerror.NewFault(fault.Duplicate, "datatable filter is repeated")
 	}
 	m.byFilter[f.name] = location
 	return nil

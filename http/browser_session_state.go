@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -53,7 +54,7 @@ func bindBrowserResponse(ctx context.Context, mutable bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.typed || s.sealed {
-		return fault.New(fault.Invalid, "browser session response is already bound")
+		return safeerror.NewFault(fault.Invalid, "browser session response is already bound")
 	}
 	s.typed = true
 	s.mutable = mutable && !safeBrowserMethod(s.method)
@@ -61,7 +62,7 @@ func bindBrowserResponse(ctx context.Context, mutable bool) error {
 }
 func (s *browserSessionState) operation(ctx context.Context, fn func(context.Context) (string, time.Time, error)) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "browser session operation requires a context")
+		return safeerror.NewFault(fault.Invalid, "browser session operation requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -69,7 +70,7 @@ func (s *browserSessionState) operation(ctx context.Context, fn func(context.Con
 	s.mu.Lock()
 	if s.sealed || !s.typed || !s.mutable || s.used {
 		s.mu.Unlock()
-		return fault.New(fault.Conflict, "session mutation requires one uncommitted typed unsafe response")
+		return safeerror.NewFault(fault.Conflict, "session mutation requires one uncommitted typed unsafe response")
 	}
 	s.used = true
 	s.busy = true
@@ -92,12 +93,12 @@ func (s *browserSessionState) operation(ctx context.Context, fn func(context.Con
 		return canceled
 	}
 	if err != nil {
-		return fault.Wrap(fault.Internal, "HTTP session mutation failed", err)
+		return safeerror.WrapFailure(fault.Internal, "HTTP session mutation failed", err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.sealed {
-		return fault.New(fault.Conflict, "browser session response is closed")
+		return safeerror.NewFault(fault.Conflict, "browser session response is closed")
 	}
 	s.cookie = cookie
 	s.deadline = deadline
@@ -116,7 +117,7 @@ func publishBrowserSession(ctx context.Context, w stdhttp.ResponseWriter, status
 		s.sealed = true
 		s.cancel()
 		s.mu.Unlock()
-		return fault.New(fault.Conflict, "session mutation did not finish before response")
+		return safeerror.NewFault(fault.Conflict, "session mutation did not finish before response")
 	}
 	s.sealed = true
 	cookie, deadline := s.cookie, s.deadline
@@ -138,7 +139,7 @@ func publishBrowserSession(ctx context.Context, w stdhttp.ResponseWriter, status
 				return err
 			}
 			if !now.Before(deadline) {
-				return Unauthenticated
+				return Unauthenticated.WithCause(nil)
 			}
 			return nil
 		})

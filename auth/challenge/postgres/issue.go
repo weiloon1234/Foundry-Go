@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
@@ -24,7 +25,7 @@ func (b *Backend) Issue(ctx context.Context, address challenge.Address, identity
 		return challenge.Record{}, err
 	}
 	if prepare == nil {
-		return challenge.Record{}, fault.New(fault.Invalid, "challenge issuance requires preparation")
+		return challenge.Record{}, safeerror.NewFault(fault.Invalid, "challenge issuance requires preparation")
 	}
 	var result challenge.Record
 	err := b.within(ctx, func(tx *database.Tx) error {
@@ -33,7 +34,7 @@ func (b *Backend) Issue(ctx context.Context, address challenge.Address, identity
 			return err
 		}
 		if !present {
-			return fault.New(fault.Internal, "challenge subject was not created")
+			return safeerror.NewFault(fault.Internal, "challenge subject was not created")
 		}
 		binding, err := prepare(ctx, tx)
 		if err != nil {

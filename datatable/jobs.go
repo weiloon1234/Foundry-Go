@@ -2,9 +2,9 @@ package datatable
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 )
 
@@ -45,12 +45,12 @@ func ExportHandler[P, S, R, A any](table Table[S, R, A], manager *Manager, resol
 			if err != nil {
 				return err
 			}
-			defer func() { err = errors.Join(err, artifact.Close()) }()
+			defer func() { err = safeerror.Join("operation failed", err, artifact.Close()) }()
 			// Isolation lets the ownership defer run on normal return after Goexit too.
 			deliveryContext, stop := manager.deliveryContext(ctx, artifact)
 			defer stop()
 			return callback.Isolated("deliver datatable export", func() error {
-				return errors.Join(deliver(deliveryContext, payload, artifact), deliveryContext.Err())
+				return safeerror.Join("operation failed", deliver(deliveryContext, payload, artifact), deliveryContext.Err())
 			})
 		})
 	}, nil

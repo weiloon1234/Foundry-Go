@@ -5,6 +5,7 @@ package money
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/textvalue"
 	"golang.org/x/text/currency"
 )
@@ -91,5 +92,5 @@ func (c *Currency) UnmarshalJSON(data []byte) error {
 }
 
 func invalidCurrency() error {
-	return fault.New(fault.Invalid, "invalid or unsupported ISO 4217 currency code")
+	return safeerror.NewFault(fault.Invalid, "invalid or unsupported ISO 4217 currency code")
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Only framework-owned operation names reach this helper. Request and response
@@ -19,7 +20,7 @@ func cleanupEndpointResource(r *stdhttp.Request, operation string, cleanup func(
 	if owned != nil {
 		logRouteFailure(r, message+" failed", owned)
 	} else if returned != nil {
-		logRouteFailure(r, message+" failed", fault.Wrap(fault.Internal, message+" failed", returned))
+		logRouteFailure(r, message+" failed", safeerror.WrapFailure(fault.Internal, message+" failed", returned))
 	}
 }
 

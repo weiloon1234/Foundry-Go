@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -27,7 +28,7 @@ type Ciphertext struct {
 
 func ParseCiphertext(encoded string) (Ciphertext, error) {
 	invalid := func() (Ciphertext, error) {
-		return Ciphertext{}, fault.New(fault.Invalid, "invalid encryption envelope")
+		return Ciphertext{}, safeerror.NewFault(fault.Invalid, "invalid encryption envelope")
 	}
 	if len(encoded) > maxEnvelopeBytes {
 		return invalid()
@@ -48,7 +49,7 @@ func ParseCiphertext(encoded string) (Ciphertext, error) {
 // during rotation; it is not secret and never authenticates anything.
 func EnvelopePrefix(id KeyID) (string, error) {
 	if !identifier.Semantic(string(id)) {
-		return "", fault.New(fault.Invalid, "invalid encryption key ID")
+		return "", safeerror.NewFault(fault.Invalid, "invalid encryption key ID")
 	}
 	return version + ":" + string(id) + ":", nil
 }

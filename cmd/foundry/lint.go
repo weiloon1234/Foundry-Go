@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"io"
 
 	"github.com/weiloon1234/Foundry-Go/cli"
@@ -18,7 +20,7 @@ func runLint(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		return err
 	}
 	if !*noRaw {
-		return cli.Usage("lint requires --no-raw; usage: foundry lint --no-raw ./...")
+		return clidiag.Usage("lint requires --no-raw; usage: foundry lint --no-raw ./...")
 	}
 	diagnostics, err := noraw.Check(ctx, ".", flags.Args())
 	if err != nil {
@@ -30,7 +32,7 @@ func runLint(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		}
 	}
 	if len(diagnostics) > 0 {
-		return fmt.Errorf("no-raw: %d raw SQL call site(s)", len(diagnostics))
+		return safeerror.New(fmt.Sprintf("no-raw: %d raw SQL call site(s)", len(diagnostics)))
 	}
 	return nil
 }

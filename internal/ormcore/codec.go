@@ -6,6 +6,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"reflect"
@@ -25,7 +27,7 @@ func ScalarCodec[V any]() codec.Codec[V] {
 	if typ.PkgPath() == "github.com/weiloon1234/Foundry-Go/model" && strings.HasPrefix(typ.Name(), "ID[") {
 		return codec.New(func(v V) (driver.Value, error) { return bindModelID(unsafe.Pointer(&v)) }, func(raw any) (v V, err error) { err = decodeModelID(raw, unsafe.Pointer(&v)); return }).WithParameterType(idRepresentation.ParameterType())
 	}
-	return primitiveCodec[V](typ.Kind())
+	return codec.FoundryPrimitive[V](sqlowner.Metadata())
 }
 
 // NumberCodec selects only numeric representations. Decimal has its exact codec.
@@ -37,7 +39,7 @@ func NumberCodec[V any]() codec.Codec[V] {
 	if !numericKind(kind) {
 		return codec.Codec[V]{}
 	}
-	return primitiveCodec[V](kind)
+	return codec.FoundryPrimitive[V](sqlowner.Metadata())
 }
 
 // TimeCodec retains the exact framework codec, with no representation adapter.
@@ -54,7 +56,7 @@ func KeyScalarCodec[V any]() codec.Codec[V] {
 	if kind != reflect.String && !integerKind(kind) {
 		return codec.Codec[V]{}
 	}
-	return primitiveCodec[V](kind)
+	return codec.FoundryPrimitive[V](sqlowner.Metadata())
 }
 
 func frameworkCodec(t reflect.Type) any {
@@ -79,17 +81,6 @@ func temporalCodec(t reflect.Type) any {
 	return nil
 }
 
-// Pointer arguments never enter a function-valued callback: the static dispatch
-// below lets escape analysis keep &v on the stack. Each branch delegates codec
-// validation to the existing implementation, and writes only on successful decode.
-func primitiveCodec[V any](kind reflect.Kind) codec.Codec[V] {
-	parameter := primitiveParameter(kind)
-	if parameter == 0 {
-		return codec.Codec[V]{}
-	}
-	return codec.New(func(v V) (driver.Value, error) { return bindPrimitive(kind, unsafe.Pointer(&v)) }, func(raw any) (v V, err error) { err = decodePrimitive(kind, raw, unsafe.Pointer(&v)); return }).WithParameterType(parameter)
-}
-
 var idRepresentation = codec.ID[struct{}]()
 
 func bindModelID(p unsafe.Pointer) (driver.Value, error) {
@@ -111,11 +102,11 @@ func EnumCodec[E interface {
 	resolve := sync.OnceValue(func() enum.Descriptor[E] { var e E; return e.EnumDescriptor() })
 	check := sync.OnceValue(func() error {
 		if err := resolve().Validate(); err != nil {
-			return fault.Wrap(fault.Invalid, "orm: invalid enum descriptor", err)
+			return safeerror.WrapFailure(fault.Invalid, "orm: invalid enum descriptor", err)
 		}
 		return nil
 	})
-	c := primitiveCodec[E](reflect.TypeFor[E]().Kind()).Validated(func(v E) error {
+	c := codec.FoundryPrimitive[E](sqlowner.Metadata()).Validated(func(v E) error {
 		if err := check(); err != nil {
 			return err
 		}

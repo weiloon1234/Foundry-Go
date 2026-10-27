@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -27,7 +28,7 @@ func (p Provider[M, K]) ValidateGuard(guard Guard[M]) error {
 		return err
 	}
 	if guard.definition.providerID != p.definition.id {
-		return fault.New(fault.Invalid, "guard must share the provider declaration")
+		return safeerror.NewFault(fault.Invalid, "guard must share the provider declaration")
 	}
 	return nil
 }
@@ -41,7 +42,7 @@ func (p Provider[M, K]) Resolve(ctx context.Context, reference model.Reference[M
 		return *new(M), err
 	}
 	if ctx == nil {
-		return *new(M), fault.New(fault.Invalid, "provider lookup requires a context")
+		return *new(M), safeerror.NewFault(fault.Invalid, "provider lookup requires a context")
 	}
 	var result M
 	err := callback.Isolated("resolve authentication model", func() error {

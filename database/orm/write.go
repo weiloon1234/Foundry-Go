@@ -2,7 +2,7 @@ package orm
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 	"time"
 	"unsafe"
@@ -335,7 +335,7 @@ func writeOne[M any](ctx context.Context, writer database.Transactor, q querySta
 	}, nil, modelCallbacks(q.table, unsafe.Pointer(&candidate)))
 	if err != nil {
 		if present && reconcile {
-			return *new(M), &WriteError[M]{cause: err, candidate: candidate}
+			return *new(M), writeFailure(err, candidate)
 		}
 		return *new(M), err
 	}
@@ -363,7 +363,7 @@ func executeWriteAll(ctx context.Context, writer database.Transactor, p writePla
 	err, reconcile := executeWrite(ctx, writer, p, nil, &count, nil)
 	if err != nil {
 		if reconcile {
-			return 0, &WriteError[int64]{cause: err, candidate: count}
+			return 0, writeFailure(err, count)
 		}
 		return 0, err
 	}
@@ -503,7 +503,7 @@ func returning(ctx context.Context, rows rowSource, scan func(database.Row) erro
 func returningN(ctx context.Context, rows rowSource, scan func(database.Row) error, expected int) error {
 	n, err := returningCount(ctx, rows, scan, expected)
 	if err == nil && n < expected {
-		return database.NewError("model write returned too few rows", database.NotFound)
+		return querycore.DatabaseFailure("model write returned too few rows", database.NotFound)
 	}
 	return err
 }
@@ -511,7 +511,7 @@ func returningCount(ctx context.Context, rows rowSource, scan func(database.Row)
 	n := 0
 	err := consume(ctx, rows, func(row database.Row) error {
 		if n >= expected {
-			return database.NewError("model write returned too many rows", database.TooManyRows)
+			return querycore.DatabaseFailure("model write returned too many rows", database.TooManyRows)
 		}
 		n++
 		return scan(row)
@@ -609,7 +609,7 @@ func insertMany[M any](ctx context.Context, writer database.Transactor, q queryS
 	}, nil, nil)
 	if err != nil {
 		if reconcile && len(items) > 0 {
-			return nil, &WriteError[[]M]{cause: err, candidate: items}
+			return nil, writeFailure(err, items)
 		}
 		return nil, err
 	}
@@ -631,7 +631,9 @@ func autocommit(ctx context.Context, p writePlan, source clock.Clock, send autoc
 	if err != nil {
 		return err, false
 	}
-	err = p.returning(ctx, nil, rows, scan)
+	err = callback.Isolated("decode autocommit write", func() error {
+		return p.returning(ctx, nil, rows, scan)
+	})
 	if err != nil {
 		return inspectOutcome(err, true)
 	}
@@ -651,7 +653,7 @@ func inspectOutcome(err error, autocommitted bool) (error, bool) {
 		return nil
 	})
 	if inspection != nil {
-		err = errors.Join(err, inspection)
+		err = safeerror.Join("operation failed", err, inspection)
 		outcome = ""
 	}
 	if autocommitted {
@@ -661,7 +663,7 @@ func inspectOutcome(err error, autocommitted bool) (error, bool) {
 		case database.Unknown, database.Committed:
 			return err, true
 		}
-		return database.FoundryStatementUnknown(sqlowner.Outcomes(), "model write", err), true
+		return safeerror.Retain(err, database.FoundryStatementUnknown(sqlowner.Outcomes(), "model write", err)), true
 	}
 	return err, reconcile
 }
@@ -720,4 +722,8 @@ func (p writePlan) mutate(ctx context.Context) (writePlan, error) {
 		return p, err
 	}
 	return p.mutateConflict(ctx)
+}
+
+func writeFailure[R any](cause error, candidate R) error {
+	return safeerror.Owned("model write requires transaction outcome reconciliation", &WriteError[R]{cause: cause, candidate: candidate})
 }

@@ -2,8 +2,11 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"log/slog"
+	"slices"
+	"sync"
+
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
@@ -11,12 +14,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/schedule"
 	"github.com/weiloon1234/Foundry-Go/temporal"
-	"log/slog"
-	"slices"
-	"sync"
 )
 
 // Routes constructs only domain handlers from typed resources; the framework
@@ -57,7 +58,7 @@ func New(settings Settings, opts ...Option) *Builder {
 			break
 		}
 		if option == nil {
-			b.state.err = fault.New(fault.Invalid, "nil application option")
+			b.state.err = safeerror.NewFault(fault.Invalid, "nil application option")
 			break
 		}
 		b.state.err = option(&b.state.options)
@@ -71,7 +72,7 @@ func (b *Builder) mutate(fn func()) {
 	b.state.mu.Lock()
 	defer b.state.mu.Unlock()
 	if b.state.built {
-		b.state.err = fault.New(fault.Closed, "application builder is already built")
+		b.state.err = safeerror.NewFault(fault.Closed, "application builder is already built")
 		return
 	}
 	if b.state.err == nil {
@@ -82,12 +83,12 @@ func (b *Builder) HTTP(routes ...Routes) *Builder {
 	b.mutate(func() {
 		for _, r := range routes {
 			if r == nil {
-				b.state.err = fault.New(fault.Invalid, "nil application routes")
+				b.state.err = safeerror.NewFault(fault.Invalid, "nil application routes")
 				return
 			}
 		}
 		if len(routes) > 128-len(b.state.routes) {
-			b.state.err = fault.New(fault.Invalid, "too many route constructors")
+			b.state.err = safeerror.NewFault(fault.Invalid, "too many route constructors")
 			return
 		}
 		b.state.routes = append(b.state.routes, routes...)
@@ -115,7 +116,7 @@ func (b *Builder) SPA(id http.RouteID, assets foundation.Key[*http.Assets], conf
 	config.Exclude = slices.Clone(config.Exclude)
 	b.mutate(func() {
 		if len(b.state.spas) >= 64 {
-			b.state.err = fault.New(fault.Invalid, "too many SPA declarations")
+			b.state.err = safeerror.NewFault(fault.Invalid, "too many SPA declarations")
 			return
 		}
 		b.state.spas = append(b.state.spas, spaDeclaration{id: id, assets: assets, config: config})
@@ -142,12 +143,12 @@ func (b *Builder) RegisterPlugin(plugins ...foundation.Plugin) *Builder {
 }
 func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if b == nil || b.state == nil || ctx == nil {
-		return nil, fault.New(fault.Invalid, "application build needs a builder and context")
+		return nil, safeerror.NewFault(fault.Invalid, "application build needs a builder and context")
 	}
 	b.state.mu.Lock()
 	if b.state.built {
 		b.state.mu.Unlock()
-		return nil, fault.New(fault.Closed, "application builder is already built")
+		return nil, safeerror.NewFault(fault.Closed, "application builder is already built")
 	}
 	b.state.built = true
 	settings, configured, routes, spas, middleware, observers, providers, plugins, buildErr := b.state.settings, b.state.options, slices.Clone(b.state.routes), slices.Clone(b.state.spas), slices.Clone(b.state.middleware), slices.Clone(b.state.observers), slices.Clone(b.state.providers), slices.Clone(b.state.plugins), b.state.err
@@ -183,7 +184,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 		return nil, err
 	}
 	if !s.HTTP.Enabled && (len(routes) > 0 || len(spas) > 0 || len(middleware) > 0 || len(observers) > 0) {
-		return nil, fault.New(fault.Invalid, "HTTP declarations require HTTP to be enabled")
+		return nil, safeerror.NewFault(fault.Invalid, "HTTP declarations require HTTP to be enabled")
 	}
 	channels, err := logging.PrepareChannels(s.Log.Default, s.Log.inTimeZone(s.TimeZone), configured.logger, configured.logHandlers...)
 	if err != nil {
@@ -245,7 +246,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	builder := foundation.NewBuilder(options...)
 	builder.Register(foundation.Module{Name: "foundry.application.logging", OnBoot: func(ctx context.Context, r *foundation.Runtime) error {
 		if err := r.OnShutdown("channels", func(context.Context) error { return channels.Close() }); err != nil {
-			return errors.Join(err, channels.Close())
+			return safeerror.Join("operation failed", err, channels.Close())
 		}
 		return channels.Start(ctx)
 	}})
@@ -291,16 +292,16 @@ func (Builder) LogValue() slog.Value       { return slog.StringValue("applicatio
 // application budget so cleanup always receives part of it.
 func validateShutdownBudget(s Settings) error {
 	if s.ShutdownTimeout <= 0 || s.StopDelay < 0 || s.StartupTimeout < 0 {
-		return fault.New(fault.Invalid, "application shutdown/startup timeouts must be positive and the stop delay non-negative")
+		return safeerror.NewFault(fault.Invalid, "application shutdown/startup timeouts must be positive and the stop delay non-negative")
 	}
 	if s.HTTP.Enabled && s.StopDelay+s.HTTP.Server.ShutdownTimeout >= s.ShutdownTimeout {
-		return fault.New(fault.Invalid, "HTTP shutdown grace plus stop delay must be shorter than the application shutdown timeout")
+		return safeerror.NewFault(fault.Invalid, "HTTP shutdown grace plus stop delay must be shorter than the application shutdown timeout")
 	}
 	if s.Realtime.Enabled && !s.Realtime.Shared && s.StopDelay+s.Realtime.HTTP.ShutdownTimeout+s.Realtime.Config.DrainTimeout >= s.ShutdownTimeout {
-		return fault.New(fault.Invalid, "realtime shutdown grace plus stop delay must be shorter than the application shutdown timeout")
+		return safeerror.NewFault(fault.Invalid, "realtime shutdown grace plus stop delay must be shorter than the application shutdown timeout")
 	}
 	if s.StopDelay >= s.ShutdownTimeout {
-		return fault.New(fault.Invalid, "stop delay must be shorter than the application shutdown timeout")
+		return safeerror.NewFault(fault.Invalid, "stop delay must be shorter than the application shutdown timeout")
 	}
 	return nil
 }

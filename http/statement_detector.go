@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"log/slog"
 	stdhttp "net/http"
 
@@ -18,7 +19,7 @@ const StatementDetectorMiddlewareID MiddlewareID = "foundry.database.statement_s
 func StatementDetector(detector *database.StatementDetector, logger *slog.Logger) Middleware {
 	return DefineMiddleware(StatementDetectorMiddlewareID, func(next stdhttp.Handler) (stdhttp.Handler, error) {
 		if detector == nil || logger == nil {
-			return nil, fault.New(fault.Invalid, "statement detector middleware requires detector and logger")
+			return nil, safeerror.NewFault(fault.Invalid, "statement detector middleware requires detector and logger")
 		}
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			ctx, scope := detector.Begin(r.Context())

@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -73,7 +74,7 @@ func scanSession(row database.Row) (storedSession, error) {
 		return storedSession{}, err
 	}
 	if assurance < 0 || assurance > 255 {
-		return storedSession{}, fault.New(fault.Invalid, "stored session assurance is invalid")
+		return storedSession{}, safeerror.NewFault(fault.Invalid, "stored session assurance is invalid")
 	}
 	e.ID, e.Assurance = parsed, uint8(assurance)
 	for _, pair := range []struct {
@@ -122,7 +123,7 @@ func (b *Backend) readSessions(ctx context.Context, executor database.Executor, 
 	var rows []storedSession
 	err := database.ForEach(ctx, executor, b.selectEntries()+" "+where, arguments, scanSession, func(row storedSession) error {
 		if len(rows) >= limit {
-			return fault.New(fault.Invalid, "stored session rows exceed their bound")
+			return safeerror.NewFault(fault.Invalid, "stored session rows exceed their bound")
 		}
 		rows = append(rows, row)
 		return nil

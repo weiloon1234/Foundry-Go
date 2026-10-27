@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -92,7 +92,7 @@ const PostgresStandardTime LocalResolution = LocalResolution(querycore.PostgresS
 
 func textOperationArgument(text string, err error) ormcore.OperationArgument {
 	v, bindErr := codec.String[string]().Bind(text)
-	return scalarParameter(codec.TypeText, v, errors.Join(err, bindErr))
+	return scalarParameter(codec.TypeText, v, safeerror.Join("operation failed", err, bindErr))
 }
 
 func unitArgument(unit, minimum temporalUnit) ormcore.OperationArgument {
@@ -118,7 +118,7 @@ func elapsedArgument(duration time.Duration) ormcore.OperationArgument {
 	interval, err := temporal.Elapsed(duration)
 	arg := intervalArgument(interval)
 	if err != nil {
-		arg.Value.Err = errors.Join(arg.Value.Err, err)
+		arg.Value.Err = safeerror.Join("operation failed", arg.Value.Err, err)
 	}
 	return arg
 }

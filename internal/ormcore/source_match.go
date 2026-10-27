@@ -2,6 +2,7 @@ package ormcore
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/encryption"
@@ -9,7 +10,7 @@ import (
 
 // AmbiguousSourceMatch rejects nondeterministic UPDATE FROM results.
 func AmbiguousSourceMatch() error {
-	return database.NewError("SQL-mapped update matched multiple source rows for one model", database.TooManyRows)
+	return querycore.DatabaseFailure("SQL-mapped update matched multiple source rows for one model", database.TooManyRows)
 }
 
 // SourceMatchRow validates the compiler's trailing match count before publication.

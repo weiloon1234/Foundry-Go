@@ -1,6 +1,7 @@
 package application
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"log/slog"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -24,10 +25,10 @@ func prepareStatementDetector(s Settings, logger *slog.Logger) ([]infrastructure
 		return nil, nil, nil
 	}
 	if !s.HTTP.Enabled {
-		return nil, nil, fault.New(fault.Invalid, "request statement detector requires HTTP")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "request statement detector requires HTTP")
 	}
 	if s.Services.Namespace.Environment != "development" && !c.AllowNonDevelopment {
-		return nil, nil, fault.New(fault.Invalid, "statement detector outside development requires explicit AllowNonDevelopment")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "statement detector outside development requires explicit AllowNonDevelopment")
 	}
 	d, err := database.NewStatementDetector(c.Limits)
 	if err != nil {

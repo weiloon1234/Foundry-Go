@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -21,15 +22,15 @@ type RetryToken string
 
 func (t RetryToken) Validate() error {
 	if len(t) != sha256.Size*2 || strings.ToLower(string(t)) != string(t) {
-		return fault.New(fault.Invalid, "invalid job retry token")
+		return safeerror.NewFault(fault.Invalid, "invalid job retry token")
 	}
 	if _, err := hex.DecodeString(string(t)); err != nil {
-		return fault.New(fault.Invalid, "invalid job retry token")
+		return safeerror.NewFault(fault.Invalid, "invalid job retry token")
 	}
 	return nil
 }
 
-var ErrNotRetryable = fault.New(fault.Conflict, "job is not retryable in the observed failed state")
+var ErrNotRetryable = safeerror.Sentinel(fault.Conflict, "job is not retryable in the observed failed state")
 
 // RetryToken returns a token for an independent failed job. Workflow members must
 // not be reopened independently: their dependent transitions are already committed.
@@ -129,7 +130,7 @@ func (d *Dispatcher) retry(ctx context.Context, queue Queue, request RetryReques
 	}
 	backend, ok := d.backend.(RetryBackend)
 	if !ok {
-		return false, fault.New(fault.Invalid, "job backend does not support manual retry")
+		return false, safeerror.NewFault(fault.Invalid, "job backend does not support manual retry")
 	}
 	return backend.JobRetry(ctx, key, request)
 }
@@ -138,7 +139,7 @@ func (d *Dispatcher) retry(ctx context.Context, queue Queue, request RetryReques
 // Record and retain it when reconciling an uncertain backend response.
 func (d Definition[P]) Retry(ctx context.Context, dispatcher *Dispatcher, id ID[P], queue Queue, token RetryToken) (bool, error) {
 	if dispatcher == nil || dispatcher.registry == nil {
-		return false, fault.New(fault.Invalid, "job retry requires a dispatcher")
+		return false, safeerror.NewFault(fault.Invalid, "job retry requires a dispatcher")
 	}
 	if err := d.check(dispatcher.registry); err != nil {
 		return false, err

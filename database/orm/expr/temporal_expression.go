@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"time"
 
@@ -399,7 +399,7 @@ func TransactionTime[S, M any](scope Scope[S, M]) OrderedRowExpression[S, tempor
 	result.data.core.Refs = []ormcore.Reference{scope.core.Reference, {Scope: reflect.TypeFor[S]()}}
 	result.data.core.Err = scope.core.Err
 	if scope.core.Owner == nil || scope.core.Table == "" {
-		result.data.core.Err = errors.Join(result.data.core.Err, ormcore.Invalid("database time requires a source scope"))
+		result.data.core.Err = safeerror.Join("operation failed", result.data.core.Err, ormcore.Invalid("database time requires a source scope"))
 	}
 	return orderedRow(result)
 }

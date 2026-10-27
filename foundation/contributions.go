@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Collection groups typed feature contributions within one explicit service
@@ -30,7 +31,7 @@ func Contribute[T any](r *Registrar, collection Collection[T], id string, create
 // and S. Feature helpers infer S from their existing typed declarations.
 func ContributeAs[S, T any](r *Registrar, collection Collection[T], id string, create func(Resolver) (T, error)) error {
 	if !validName(collection.name) || len(collection.name) > 1024 || !validName(id) || len(id) > 1024 || create == nil || r == nil || r.registry == nil {
-		return fault.New(fault.Invalid, "invalid typed feature contribution")
+		return safeerror.NewFault(fault.Invalid, "invalid typed feature contribution")
 	}
 	key := NewKey[T](fmt.Sprintf("foundry.contribution.%q.%q", collection.name, id))
 	return r.registry.add(serviceDefinition{
@@ -42,7 +43,7 @@ func ContributeAs[S, T any](r *Registrar, collection Collection[T], id string, c
 				return nil, err
 			}
 			if nilValue(value) {
-				return nil, fault.New(fault.Invalid, "nil feature contribution")
+				return nil, safeerror.NewFault(fault.Invalid, "nil feature contribution")
 			}
 			return value, nil
 		},
@@ -54,7 +55,7 @@ func ContributeAs[S, T any](r *Registrar, collection Collection[T], id string, c
 // follows the same rules as Resolve. Constructors must remain pure.
 func Contributions[T any](r Resolver, collection Collection[T]) ([]T, error) {
 	if nilValue(r) || !validName(collection.name) {
-		return nil, fault.New(fault.Invalid, "invalid contribution collection")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid contribution collection")
 	}
 	values, err := r.resolveCollection(collectionRef{collection.name, reflect.TypeFor[T]()})
 	if err != nil {
@@ -64,7 +65,7 @@ func Contributions[T any](r Resolver, collection Collection[T]) ([]T, error) {
 	for i, value := range values {
 		item, ok := value.(T)
 		if !ok {
-			return nil, fault.New(fault.Internal, "invalid contribution value type")
+			return nil, safeerror.NewFault(fault.Internal, "invalid contribution value type")
 		}
 		result[i] = item
 	}

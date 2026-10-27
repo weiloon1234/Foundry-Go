@@ -115,7 +115,7 @@ func R2Config(bucket, endpoint string, credentials aws.CredentialsProvider) Conf
 }
 func (c Config) Validate() error {
 	invalid := func() error {
-		return storage.Failure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
+		return newFailure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	if c.Provider != AWS && c.Provider != R2 && c.Provider != Compatible || len(c.Bucket) < 3 || len(c.Bucket) > 63 || c.Region == "" || len(c.Region) > 128 || c.PartBytes < MinPartBytes || c.PartBytes > MaxPartBytes || c.MaxUploads < 1 || c.MaxUploads > 64 || c.MaxObjectBytes < 1 || c.MaxObjectBytes > c.PartBytes*MaxParts || c.ReadAttempts < 1 || c.ReadAttempts > 5 || c.PartAttempts < 1 || c.PartAttempts > 5 || c.AbortTimeout <= 0 || c.AbortTimeout > time.Minute || c.PartConcurrency < 1 || c.PartConcurrency > 16 {
 		return invalid()

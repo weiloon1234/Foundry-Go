@@ -1,7 +1,5 @@
 package websocket
 
-import "math/rand/v2"
-
 import (
 	"context"
 	"crypto/sha256"
@@ -9,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
+	rand "math/rand/v2"
 
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 )
@@ -25,13 +25,13 @@ import (
 // registry or authority limits in the same namespace. It is the unrecoverable
 // configuration fault that terminates a running hub; adapters return it (or
 // wrap it) for such state. Other operation failures are treated as transient.
-var PolicyConflict = fault.New(fault.Conflict, "live WebSocket cluster policy differs")
+var PolicyConflict = safeerror.Sentinel(fault.Conflict, "live WebSocket cluster policy differs")
 
 // MembershipConflict reports that the authority still holds a different
 // membership of this connection for the scope, typically left behind by a
 // leave that failed transiently. The hub releases that record and joins again;
 // it is a per-operation failure, never a namespace policy conflict.
-var MembershipConflict = fault.New(fault.Conflict, "WebSocket connection holds a different membership for this scope")
+var MembershipConflict = safeerror.Sentinel(fault.Conflict, "WebSocket connection holds a different membership for this scope")
 
 // Resubscription backoff after a lost fan-out stream.
 const (
@@ -101,13 +101,13 @@ func NewPublisher(registry *Registry, config Config, backend ClusterBackend, clu
 }
 func (h *Hub) configureCluster(backend ClusterBackend, config ClusterConfig) error {
 	if backend == nil {
-		return fault.New(fault.Invalid, "WebSocket cluster requires an adapter")
+		return safeerror.NewFault(fault.Invalid, "WebSocket cluster requires an adapter")
 	}
 	if err := config.Validate(); err != nil {
 		return err
 	}
 	if config.Buffer.PayloadBytes < base64.StdEncoding.EncodedLen(h.config.MaxFrameBytes)+2048 {
-		return fault.New(fault.Invalid, "cluster fan-out buffer cannot hold its encoded frame")
+		return safeerror.NewFault(fault.Invalid, "cluster fan-out buffer cannot hold its encoded frame")
 	}
 	retention := 2 * config.ConnectionTTL
 	for _, channel := range h.registry.ordered {
@@ -145,7 +145,7 @@ func (h *Hub) configureCluster(backend ClusterBackend, config ClusterConfig) err
 // later stream loss is recovered by resubscribing without stopping the hub.
 func (h *Hub) Start(ctx context.Context) error {
 	if h == nil || h.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "WebSocket start requires a hub and context")
+		return safeerror.NewFault(fault.Invalid, "WebSocket start requires a hub and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -153,7 +153,7 @@ func (h *Hub) Start(ctx context.Context) error {
 	h.mu.Lock()
 	if h.closing {
 		h.mu.Unlock()
-		return Stopping
+		return codeFailure(Stopping)
 	}
 	state := h.cluster
 	if state == nil {
@@ -176,7 +176,7 @@ func (h *Hub) Start(ctx context.Context) error {
 			return err
 		}
 		if stopping {
-			return Stopping
+			return codeFailure(Stopping)
 		}
 		return nil
 	case <-ctx.Done():
@@ -196,10 +196,10 @@ func (e *clusterError) Error() string   { return string(e.code) }
 func (e *clusterError) Unwrap() []error { return []error{e.code, e.cause} }
 
 func clusterCode(err error) Code {
-	if failure, ok := err.(*clusterError); ok {
+	if failure, ok := safeerror.UnwrapOwned(err).(*clusterError); ok {
 		return failure.code
 	}
-	if code, ok := err.(Code); ok {
+	if code, ok := safeerror.UnwrapOwned(err).(Code); ok {
 		return code
 	}
 	return ""
@@ -246,15 +246,15 @@ func (h *Hub) clusterCall(ctx context.Context, operation func(context.Context) e
 		h.clusterRecovered()
 		return nil
 	case denial != "":
-		return denial
+		return codeFailure(denial)
 	case caller.Err() != nil:
 		return err
 	case terminal:
 		h.clusterTerminated(err)
-		return &clusterError{code: Stopping, cause: err}
+		return safeerror.Owned(string(Stopping), &clusterError{code: Stopping, cause: err})
 	default:
 		h.clusterDegraded(err)
-		return &clusterError{code: Unavailable, cause: err}
+		return safeerror.Owned(string(Unavailable), &clusterError{code: Unavailable, cause: err})
 	}
 }
 func (h *Hub) clusterDegraded(err error) {
@@ -343,7 +343,7 @@ func (h *Hub) superviseCluster(recovering bool) {
 		}
 		relaunch := false
 		if !returned && ctx.Err() == nil && h.terminalError() == nil {
-			h.streamLost(fault.New(fault.Panicked, "WebSocket cluster receive exited abnormally"))
+			h.streamLost(safeerror.NewFault(fault.Panicked, "WebSocket cluster receive exited abnormally"))
 			h.mu.Lock()
 			if relaunch = !h.closing; relaunch {
 				h.background++
@@ -437,11 +437,11 @@ func (h *Hub) subscribeCluster(ctx context.Context) (pubsub.Stream, <-chan struc
 			return err
 		}
 		if stream == nil {
-			return fault.New(fault.Invalid, "cluster adapter returned no subscription")
+			return safeerror.NewFault(fault.Invalid, "cluster adapter returned no subscription")
 		}
 		rawDone = stream.Done()
 		if rawDone == nil {
-			return fault.New(fault.Invalid, "cluster subscription has no ownership completion")
+			return safeerror.NewFault(fault.Invalid, "cluster subscription has no ownership completion")
 		}
 		return nil
 	})
@@ -482,7 +482,7 @@ func (h *Hub) receiveStream(ctx context.Context, stream pubsub.Stream) error {
 		}
 		failed := callback.Invoke("WebSocket cluster envelope", func() error {
 			if message.Channel != topic || len(message.Data) > maximum {
-				return fault.New(fault.Invalid, "cluster delivered an invalid transport frame")
+				return safeerror.NewFault(fault.Invalid, "cluster delivered an invalid transport frame")
 			}
 			return h.receiveCluster(ctx, message.Data)
 		})

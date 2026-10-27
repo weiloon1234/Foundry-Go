@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // WithDatabaseScopes snapshots consumer settings and aligns every declared
@@ -29,7 +30,7 @@ func (s Settings) WithDatabaseScopes(databases infrastructure.DatabaseSettings) 
 			return Settings{}, err
 		}
 		if *target.schema != "" && *target.schema != "public" && *target.schema != scope {
-			return Settings{}, fault.New(fault.Invalid, "feature schema conflicts with database scope")
+			return Settings{}, safeerror.NewFault(fault.Invalid, "feature schema conflicts with database scope")
 		}
 		*target.connection, *target.schema = name, scope
 	}

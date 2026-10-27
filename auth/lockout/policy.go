@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -29,11 +30,11 @@ func DefaultPolicy() Policy {
 }
 func (p Policy) Validate() error {
 	if p.MaxFailures < 1 || p.MaxFailures > MaxFailures {
-		return fault.New(fault.Invalid, "invalid login failure threshold")
+		return safeerror.NewFault(fault.Invalid, "invalid login failure threshold")
 	}
 	for _, d := range []time.Duration{p.Window, p.LockFor} {
 		if d < time.Millisecond || d > MaxDuration || d%time.Millisecond != 0 {
-			return fault.New(fault.Invalid, "lockout durations require whole milliseconds between 1ms and 24h")
+			return safeerror.NewFault(fault.Invalid, "lockout durations require whole milliseconds between 1ms and 24h")
 		}
 	}
 	return nil
@@ -81,14 +82,14 @@ func (l Limits) Validate() error {
 		}
 	}
 	if l.Account.MaxFailures < l.PerClient.MaxFailures {
-		return fault.New(fault.Invalid, "lockout ceilings must not be lower than the per-client threshold")
+		return safeerror.NewFault(fault.Invalid, "lockout ceilings must not be lower than the per-client threshold")
 	}
 	if address, enabled := l.Address.Get(); enabled {
 		if err := address.Validate(); err != nil {
 			return err
 		}
 		if address.MaxFailures < l.PerClient.MaxFailures {
-			return fault.New(fault.Invalid, "lockout ceilings must not be lower than the per-client threshold")
+			return safeerror.NewFault(fault.Invalid, "lockout ceilings must not be lower than the per-client threshold")
 		}
 	}
 	return nil

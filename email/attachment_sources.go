@@ -2,6 +2,7 @@ package email
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"io"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
@@ -30,40 +31,40 @@ type StoredAttachment interface {
 // Queueing/snapshotting requires stored references instead of runtime uploads.
 func (m Message) AttachUpload(ctx context.Context, file UploadSource) (Message, error) {
 	if ctx == nil || file == nil || len(m.attachments)+len(m.data) >= MaxAttachments {
-		return Message{}, Construction
+		return Message{}, emaildiag.Failure(Construction)
 	}
 	if ctx.Err() != nil {
-		return Message{}, Transient
+		return Message{}, emaildiag.Failure(Transient)
 	}
 	var attachment DataAttachment
 	err := callback.Isolated("prepare email upload", func() (err error) {
 		name := filename.StripInvisible(file.Name())
 		if (Attachment{Filename: name, ContentType: "application/octet-stream"}).validateMetadata() != nil {
-			return Construction
+			return emaildiag.Failure(Construction)
 		}
 		reader, err := file.Open(ctx)
 		if reader != nil {
 			defer func() {
 				if closeErr := reader.Close(); closeErr != nil && err == nil {
-					err = Construction
+					err = emaildiag.Failure(Construction)
 				}
 			}()
 		}
 		if err != nil || reader == nil {
-			return Construction
+			return emaildiag.Failure(Construction)
 		}
 		data, err := io.ReadAll(io.LimitReader(workscope.Reader(ctx, reader), MaxDataAttachmentBytes+1))
 		if err != nil || len(data) == 0 || len(data) > MaxDataAttachmentBytes {
-			return Construction
+			return emaildiag.Failure(Construction)
 		}
 		attachment = DataAttachment{metadata: Attachment{Filename: name, ContentType: storage.MediaType(mediatype.Detect(data, file.ClientContentType()))}, data: data}
 		return attachment.metadata.validateMetadata()
 	})
 	if ctx.Err() != nil {
-		return Message{}, Transient
+		return Message{}, emaildiag.Failure(Transient)
 	}
 	if err != nil {
-		return Message{}, Construction
+		return Message{}, emaildiag.Failure(Construction)
 	}
 	return m.AttachData(attachment), nil
 }
@@ -75,7 +76,7 @@ func (m Message) AttachUpload(ctx context.Context, file UploadSource) (Message, 
 // for the lifetime of queued mail; a reference does not prevent deletion.
 func (m Message) AttachStored(file StoredAttachment) (Message, error) {
 	if file == nil || len(m.attachments)+len(m.data) >= MaxAttachments {
-		return Message{}, Construction
+		return Message{}, emaildiag.Failure(Construction)
 	}
 	var attachment Attachment
 	if err := callback.Isolated("prepare stored email attachment", func() error {
@@ -83,7 +84,7 @@ func (m Message) AttachStored(file StoredAttachment) (Message, error) {
 		attachment, err = file.EmailAttachment()
 		return err
 	}); err != nil || attachment.Validate() != nil || attachment.Version == "" && attachment.IfMatch == "" {
-		return Message{}, Construction
+		return Message{}, emaildiag.Failure(Construction)
 	}
 	return m.Attach(attachment), nil
 }

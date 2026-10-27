@@ -1,7 +1,7 @@
 package rows
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -55,9 +55,9 @@ func sourceOf[S any](s SelectionSource[S]) ormcore.Source {
 func SelectScalar[S, V any](source SelectionSource[S], selected expr.Selected[S, V]) Scalar[S, V] {
 	c := expr.FoundrySelectedColumn(selected, sqlowner.Expressions())
 	s := ormcore.SelectScalar(sourceOf(source), expr.FoundrySelected(selected, sqlowner.Expressions()))
-	s.Err = errors.Join(s.Err, c.Err)
+	s.Err = safeerror.Join("operation failed", s.Err, c.Err)
 	if c.Bind == nil || c.Clone == nil {
-		s.Err = errors.Join(s.Err, ormcore.Invalid("scalar selection requires a value codec"))
+		s.Err = safeerror.Join("operation failed", s.Err, ormcore.Invalid("scalar selection requires a value codec"))
 	}
 	return Scalar[S, V]{source: s, column: c}
 }

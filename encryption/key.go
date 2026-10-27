@@ -13,6 +13,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -40,19 +41,19 @@ type keyState struct {
 // It performs no I/O and never logs or includes key material in errors.
 func ParseKey(id KeyID, encoded secret.String) (Key, error) {
 	if !identifier.Semantic(string(id)) || len(encoded.Reveal()) != base64.RawURLEncoding.EncodedLen(keyBytes) {
-		return Key{}, fault.New(fault.Invalid, "invalid encryption key")
+		return Key{}, safeerror.NewFault(fault.Invalid, "invalid encryption key")
 	}
 	raw, err := base64.RawURLEncoding.Strict().DecodeString(encoded.Reveal())
 	if err != nil || len(raw) != keyBytes || base64.RawURLEncoding.EncodeToString(raw) != encoded.Reveal() {
-		return Key{}, fault.New(fault.Invalid, "invalid encryption key encoding")
+		return Key{}, safeerror.NewFault(fault.Invalid, "invalid encryption key encoding")
 	}
 	block, err := aes.NewCipher(raw)
 	if err != nil {
-		return Key{}, fault.Wrap(fault.Internal, "encryption initialization failed", err)
+		return Key{}, safeerror.WrapFailure(fault.Internal, "encryption initialization failed", err)
 	}
 	aead, err := cipher.NewGCMWithRandomNonce(block)
 	if err != nil {
-		return Key{}, fault.Wrap(fault.Internal, "encryption initialization failed", err)
+		return Key{}, safeerror.WrapFailure(fault.Internal, "encryption initialization failed", err)
 	}
 	state := &keyState{id: id, aead: aead}
 	copy(state.material[:], raw)
@@ -63,11 +64,11 @@ func ParseKey(id KeyID, encoded secret.String) (Key, error) {
 // its Secret before encrypting durable data; do not generate keys at each boot.
 func GenerateKey(id KeyID) (Key, error) {
 	if !identifier.Semantic(string(id)) {
-		return Key{}, fault.New(fault.Invalid, "invalid encryption key ID")
+		return Key{}, safeerror.NewFault(fault.Invalid, "invalid encryption key ID")
 	}
 	var raw [keyBytes]byte
 	if _, err := rand.Read(raw[:]); err != nil {
-		return Key{}, fault.Wrap(fault.Internal, "encryption key generation failed", err)
+		return Key{}, safeerror.WrapFailure(fault.Internal, "encryption key generation failed", err)
 	}
 	return ParseKey(id, secret.New(base64.RawURLEncoding.EncodeToString(raw[:])))
 }
@@ -97,32 +98,32 @@ type Keyring struct {
 
 func NewKeyring(active KeyID, keys ...Key) (*Keyring, error) {
 	if len(keys) < 1 || len(keys) > MaxKeys {
-		return nil, fault.New(fault.Invalid, "encryption requires a bounded nonempty keyring")
+		return nil, safeerror.NewFault(fault.Invalid, "encryption requires a bounded nonempty keyring")
 	}
 	ring := &Keyring{keys: make(map[KeyID]*keyState, len(keys))}
 	for _, key := range keys {
 		if key.state == nil {
-			return nil, fault.New(fault.Invalid, "encryption key is uninitialized")
+			return nil, safeerror.NewFault(fault.Invalid, "encryption key is uninitialized")
 		}
 		if _, exists := ring.keys[key.ID()]; exists {
-			return nil, fault.New(fault.Duplicate, "duplicate encryption key ID")
+			return nil, safeerror.NewFault(fault.Duplicate, "duplicate encryption key ID")
 		}
 		for _, prior := range ring.keys {
 			if subtle.ConstantTimeCompare(prior.material[:], key.state.material[:]) == 1 {
-				return nil, fault.New(fault.Duplicate, "encryption key material is reused")
+				return nil, safeerror.NewFault(fault.Duplicate, "encryption key material is reused")
 			}
 		}
 		ring.keys[key.ID()] = key.state
 	}
 	ring.active = ring.keys[active]
 	if ring.active == nil {
-		return nil, fault.New(fault.Invalid, "active encryption key is missing")
+		return nil, safeerror.NewFault(fault.Invalid, "active encryption key is missing")
 	}
 	return ring, nil
 }
 func (r *Keyring) Validate() error {
 	if r == nil || r.active == nil {
-		return fault.New(fault.Invalid, "encryption keyring is uninitialized")
+		return safeerror.NewFault(fault.Invalid, "encryption keyring is uninitialized")
 	}
 	return nil
 }
@@ -140,7 +141,7 @@ func (k *keyState) reserve() error {
 	for {
 		count := k.encryptions.Load()
 		if count >= maxEncryptions {
-			return fault.New(fault.Internal, "encryption key usage limit reached; rotate the key")
+			return safeerror.NewFault(fault.Internal, "encryption key usage limit reached; rotate the key")
 		}
 		if k.encryptions.CompareAndSwap(count, count+1) {
 			return nil

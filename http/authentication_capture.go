@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Registry returns the immutable declaration/capacity owner for another typed
@@ -27,7 +28,7 @@ func (a *Authentication) CaptureCredentials(r *stdhttp.Request) (auth.Credential
 		return auth.Credentials{}, err
 	}
 	if r == nil || r.URL == nil {
-		return auth.Credentials{}, fault.New(fault.Invalid, "credential capture requires a request")
+		return auth.Credentials{}, safeerror.NewFault(fault.Invalid, "credential capture requires a request")
 	}
 	if err := r.Context().Err(); err != nil {
 		return auth.Credentials{}, err

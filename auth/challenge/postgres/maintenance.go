@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -51,7 +52,7 @@ func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit in
 		return 0, err
 	}
 	if limit < 1 || limit > challenge.MaxPrune {
-		return 0, fault.New(fault.Invalid, "invalid challenge prune limit")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid challenge prune limit")
 	}
 	var removed uint64
 	err = b.within(ctx, func(tx *database.Tx) error {
@@ -70,7 +71,7 @@ func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit in
 				return err
 			}
 			if !present {
-				return fault.New(fault.Invalid, "stored challenge has no subject")
+				return safeerror.NewFault(fault.Invalid, "stored challenge has no subject")
 			}
 			found, err := entries(scope, subject.Key).Where(challengestore.Entries.ID.Eq(candidate.ID)).ForUpdate().First(ctx, tx)
 			if err != nil {

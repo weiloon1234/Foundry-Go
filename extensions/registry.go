@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -108,7 +109,7 @@ func NewRegistry(owners ...Declaration) (*Registry, error) {
 		// Storage and previous models attribute persisted identities to this
 		// owner, so they cannot name another owner's current or declared model.
 		if _, exists := r.owners[owner.name]; exists || slices.ContainsFunc(owner.recorded, func(name string) bool { return models[name] }) {
-			return nil, fault.New(fault.Duplicate, "model extension owner already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "model extension owner already registered")
 		}
 		r.owners[owner.name] = owner
 		r.names = append(r.names, owner.name)

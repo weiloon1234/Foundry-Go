@@ -2,7 +2,7 @@ package orm
 
 import (
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"unsafe"
 
@@ -49,7 +49,7 @@ func (r AggregateRelation[M, V]) Using(computation AggregateRelation[M, V]) Aggr
 		return AggregateRelation[M, V]{plan: &relationPlan{err: invalid("aggregate requires a bound slot")}}
 	}
 	p := bindAggregate(r.plan.slot, computation.plan, r.plan.loaded)
-	p.err = errors.Join(r.plan.err, p.err)
+	p.err = safeerror.Join("operation failed", r.plan.err, p.err)
 	return AggregateRelation[M, V]{plan: p}
 }
 
@@ -60,9 +60,9 @@ func bindAggregate(slot *slotCore, computation *relationPlan, loaded func(unsafe
 	p := copyRelationPlan(computation)
 	p.slot, p.loaded, p.load = slot, loaded, loadAggregate
 	if slot == nil {
-		p.err = errors.Join(p.err, invalid("aggregate requires a bound slot"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("aggregate requires a bound slot"))
 	} else {
-		p.err = errors.Join(p.err, slot.err)
+		p.err = safeerror.Join("operation failed", p.err, slot.err)
 	}
 	return p
 }
@@ -140,15 +140,15 @@ func FoundryRelated[M, N, V any](source AggregateSource[M, N], expression ormcor
 		return result
 	}
 	measure, ok := expression.Node.(querycore.AggregateNode)
-	p.err = errors.Join(expression.Err, column.Err)
+	p.err = safeerror.Join("operation failed", expression.Err, column.Err)
 	if !ok || column.Scan == nil {
-		p.err = errors.Join(p.err, invalid("aggregate requires a native computation and scanner"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("aggregate requires a native computation and scanner"))
 	}
 	owner := aggregateOwner(input)
 	if owner == nil {
-		p.err = errors.Join(p.err, invalid("aggregate requires a bound relation input"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("aggregate requires a bound relation input"))
 	} else {
-		p.err = errors.Join(p.err, ormcore.CheckReferenceSet(ormcore.Source{Scope: reflect.TypeFor[N](), Owners: map[string]any{owner.model.Table: owner}}, expression.Refs, expression.ReferenceFree))
+		p.err = safeerror.Join("operation failed", p.err, ormcore.CheckReferenceSet(ormcore.Source{Scope: reflect.TypeFor[N](), Owners: map[string]any{owner.model.Table: owner}}, expression.Refs, expression.ReferenceFree))
 	}
 	assign := func(v V) func(unsafe.Pointer, uintptr) {
 		return func(base unsafe.Pointer, offset uintptr) {
@@ -222,7 +222,7 @@ func validateAggregateMetadata(p *relationPlan, owner *tableCore) error {
 	if owner != nil && owner != p.slot.owner {
 		return invalid("aggregate belongs to a different table declaration")
 	}
-	return errors.Join(p.slot.err, tableError(p.slot.owner), validateAggregateInput(a.input, p.slot.owner))
+	return safeerror.Join("operation failed", p.slot.err, tableError(p.slot.owner), validateAggregateInput(a.input, p.slot.owner))
 }
 
 func validateAggregateInput(input aggregateInput, owner *tableCore) error {

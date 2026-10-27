@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (b *Backend) taggedCost(key cache.EntryKey, size int) (int, error) {
@@ -16,7 +17,7 @@ func (b *Backend) taggedCost(key cache.EntryKey, size int) (int, error) {
 		return 0, err
 	}
 	if b.config.MaxBytes < sha256.Size || cost > b.config.MaxBytes-sha256.Size {
-		return 0, fault.New(fault.Invalid, "tagged entry exceeds memory byte budget")
+		return 0, safeerror.NewFault(fault.Invalid, "tagged entry exceeds memory byte budget")
 	}
 	return cost + sha256.Size, nil
 }

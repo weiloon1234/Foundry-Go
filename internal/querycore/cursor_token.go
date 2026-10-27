@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"io"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -27,7 +28,9 @@ type CursorEnvelope struct {
 
 type CursorValue = sqlvalue.Value
 
-func InvalidCursor() error { return fault.New(fault.Invalid, "invalid cursor token or query scope") }
+func InvalidCursor() error {
+	return safeerror.NewFault(fault.Invalid, "invalid cursor token or query scope")
+}
 
 func EncodeCursorValue(v driver.Value) (CursorValue, error) {
 	encoded, err := sqlvalue.Encode(v)

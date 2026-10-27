@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -52,14 +53,14 @@ func (integerPathCodec[V]) Parse(text string) (V, error) {
 		parsed, err := strconv.ParseUint(text, 10, 64)
 		value := V(parsed)
 		if err != nil || strconv.FormatUint(uint64(value), 10) != text {
-			return zero, fault.New(fault.Invalid, "invalid integer path parameter")
+			return zero, safeerror.NewFault(fault.Invalid, "invalid integer path parameter")
 		}
 		return value, nil
 	}
 	parsed, err := strconv.ParseInt(text, 10, 64)
 	value := V(parsed)
 	if err != nil || strconv.FormatInt(int64(value), 10) != text {
-		return zero, fault.New(fault.Invalid, "invalid integer path parameter")
+		return zero, safeerror.NewFault(fault.Invalid, "invalid integer path parameter")
 	}
 	return value, nil
 }
@@ -86,14 +87,14 @@ func (modelIDPathCodec[M]) Parse(text string) (model.ID[M], error) {
 		return model.ID[M]{}, err
 	}
 	if id.IsZero() {
-		return id, fault.New(fault.Invalid, "model path identity is empty")
+		return id, safeerror.NewFault(fault.Invalid, "model path identity is empty")
 	}
 	return id, nil
 }
 
 func (modelIDPathCodec[M]) Format(id model.ID[M]) (string, error) {
 	if id.IsZero() {
-		return "", fault.New(fault.Invalid, "model path identity is empty")
+		return "", safeerror.NewFault(fault.Invalid, "model path identity is empty")
 	}
 	return id.String(), nil
 }

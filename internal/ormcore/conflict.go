@@ -1,7 +1,7 @@
 package ormcore
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 
@@ -26,7 +26,7 @@ func ConflictVisibility(source Source, scope reflect.Type) VisibleScope {
 	out := VisibleScope{Scope: scope, Checks: AppendChecks(source.Checks), Required: querycore.ScopeRequirement{Err: source.Err}}
 	owner := source.Owners[source.Node.Source.Name()]
 	if owner == nil || len(source.Node.Source.Columns) == 0 {
-		out.Required.Err = errors.Join(out.Required.Err, Invalid("conflict rows require complete model metadata"))
+		out.Required.Err = safeerror.Join("operation failed", out.Required.Err, Invalid("conflict rows require complete model metadata"))
 	}
 	out.Owners = map[string]any{querycore.ConflictStoredTable: owner, querycore.ConflictProposedTable: owner}
 	out.Required.Sources = map[string][]querycore.Column{
@@ -72,7 +72,7 @@ func ConflictKeys(scope reflect.Type, keys []Expression) ConflictPolicy {
 	for _, key := range keys {
 		owner, err := conflictReferences(p.Owner, scope, key.Refs, key.ReferenceFree, false)
 		p.Owner = owner
-		p.Err = errors.Join(p.Err, key.Err, err)
+		p.Err = safeerror.Join("operation failed", p.Err, key.Err, err)
 		p.Policy.Keys = append(p.Policy.Keys, key.Node)
 	}
 	return p
@@ -90,7 +90,7 @@ func ConflictPredicates(p ConflictPolicy, scope reflect.Type, predicates []Predi
 		}
 		owner, err := conflictReferences(p.Owner, scope, predicate.Refs, predicate.ReferenceFree, rows)
 		p.Owner = owner
-		p.Err = errors.Join(p.Err, predicate.Err, err)
+		p.Err = safeerror.Join("operation failed", p.Err, predicate.Err, err)
 		nodes = append(nodes, predicate.Node)
 	}
 	if rows {
@@ -103,5 +103,5 @@ func ConflictPredicates(p ConflictPolicy, scope reflect.Type, predicates []Predi
 
 func ConflictCalculation(destination Reference, field querycore.FieldRef, err error, scope reflect.Type, value Expression) ConflictAssignment {
 	_, referenceErr := conflictReferences(destination.Owner, scope, value.Refs, value.ReferenceFree, true)
-	return ConflictAssignment{Owner: destination.Owner, Err: errors.Join(err, value.Err, referenceErr), Update: querycore.ConflictUpdate{Field: field, Value: value.Node}}
+	return ConflictAssignment{Owner: destination.Owner, Err: safeerror.Join("operation failed", err, value.Err, referenceErr), Update: querycore.ConflictUpdate{Field: field, Value: value.Node}}
 }

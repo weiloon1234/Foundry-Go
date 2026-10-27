@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -24,7 +25,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.MaxDeclarations <= 0 || c.MaxKeyBytes <= 0 || c.MaxKeyBytes > keyspace.MaxKeyBytes || c.MaxConcurrent <= 0 || c.MaxSubscriptions <= 0 || c.Timeout <= 0 {
-		return fault.New(fault.Invalid, "invalid pub/sub broker bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid pub/sub broker bounds")
 	}
 	return c.Buffer.Validate()
 }

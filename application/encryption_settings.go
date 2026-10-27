@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -55,10 +56,10 @@ func (s EncryptionSettings) keyring() (*encryption.Keyring, error) {
 		if s.Key.IsZero() && len(s.Previous) == 0 {
 			return nil, nil
 		}
-		return nil, fault.New(fault.Invalid, "application encryption keys require an active key ID")
+		return nil, safeerror.NewFault(fault.Invalid, "application encryption keys require an active key ID")
 	}
 	if len(s.Previous) >= encryption.MaxKeys {
-		return nil, fault.New(fault.Invalid, "too many retained encryption keys")
+		return nil, safeerror.NewFault(fault.Invalid, "too many retained encryption keys")
 	}
 	active, err := encryption.ParseKey(s.KeyID, s.Key)
 	if err != nil {
@@ -67,7 +68,7 @@ func (s EncryptionSettings) keyring() (*encryption.Keyring, error) {
 	keys := []encryption.Key{active}
 	for id, retained := range s.Previous {
 		if id == s.KeyID {
-			return nil, fault.New(fault.Duplicate, "the active encryption key is also listed as a previous key")
+			return nil, safeerror.NewFault(fault.Duplicate, "the active encryption key is also listed as a previous key")
 		}
 		key, err := encryption.ParseKey(id, retained.Key)
 		if err != nil {
@@ -100,7 +101,7 @@ func registerEncryption(builder *foundation.Builder, keyring *encryption.Keyring
 func (s Services) Encryption() (*encryption.Keyring, error) {
 	keyring, err := Resolve(s, EncryptionKey)
 	if err != nil {
-		return nil, fault.Wrap(fault.Missing, "application encryption keys are not configured", err)
+		return nil, safeerror.WrapFault(fault.Missing, "application encryption keys are not configured", err)
 	}
 	return keyring, nil
 }

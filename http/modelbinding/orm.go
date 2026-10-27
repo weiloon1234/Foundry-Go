@@ -5,6 +5,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -25,7 +26,7 @@ func ThroughRelation[P, A, B any, K comparable, R orm.DirectRelation[A, B]](exec
 // Example: modelbinding.ThroughSelectedRelation(db,projects,func(p Models[Team,Project])Project{return p.Child},ProjectRelations.Tasks,Tasks.Slug,slugFromPath).
 func ThroughSelectedRelation[P, A, M, B any, K comparable, R orm.DirectRelation[M, B]](executor database.Executor, parent Resolver[P, A], selectParent func(A) M, relation R, field orm.KeyColumn[B, K], key func(P) K) Resolver[P, Models[A, B]] {
 	if nilValue(executor) || selectParent == nil || key == nil {
-		return Resolver[P, Models[A, B]]{err: fault.New(fault.Invalid, "nested binding requires an executor and typed selectors")}
+		return Resolver[P, Models[A, B]]{err: safeerror.NewFault(fault.Invalid, "nested binding requires an executor and typed selectors")}
 	}
 	lookup := orm.RelatedUnique(relation, field)
 	result := Then(parent, func(ctx context.Context, path P, previous A) (value.Optional[B], error) {

@@ -10,7 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -68,14 +68,14 @@ func CompareField[V any](c codec.Codec[V], before, after value.Optional[V], assi
 // Its snapshots and errors follow CompareField. Example: CompareFieldPolicy(policy, value.Set(before), value.Set(after), true).
 func CompareFieldPolicy[V any](policy FieldPolicy[V], before, after value.Optional[V], assigned bool) (FieldChange[V], error) {
 	if policy.bind == nil || policy.clone == nil {
-		return FieldChange[V]{}, fault.New(fault.Invalid, "field change requires a declared codec policy")
+		return FieldChange[V]{}, safeerror.NewFault(fault.Invalid, "field change requires a declared codec policy")
 	}
 
 	if !before.IsSet() && !after.IsSet() {
-		return FieldChange[V]{}, fault.New(fault.Invalid, "field change requires a model snapshot")
+		return FieldChange[V]{}, safeerror.NewFault(fault.Invalid, "field change requires a model snapshot")
 	}
 	if assigned && !after.IsSet() {
-		return FieldChange[V]{}, fault.New(fault.Invalid, "deleted field cannot be assigned")
+		return FieldChange[V]{}, safeerror.NewFault(fault.Invalid, "deleted field cannot be assigned")
 	}
 	same, err := sameField(policy, before, after)
 	if err != nil {
@@ -100,11 +100,11 @@ func sameField[V any](c FieldPolicy[V], before, after value.Optional[V]) (bool, 
 	}
 	left, err := bindSnapshot(c, before)
 	if err != nil {
-		return false, lifecore.Failure("compare original model field failed", err)
+		return false, safeerror.Prefix("compare original model field", err)
 	}
 	right, err := bindSnapshot(c, after)
 	if err != nil {
-		return false, lifecore.Failure("compare resulting model field failed", err)
+		return false, safeerror.Prefix("compare resulting model field", err)
 	}
 	return sameStoredValue(left, right)
 }
@@ -125,10 +125,10 @@ func sameStoredValue(left, right driver.Value) (bool, error) {
 		case nil, bool, int64, string, []byte, time.Time:
 		case float64:
 			if math.IsNaN(v) || math.IsInf(v, 0) {
-				return false, fault.New(fault.Invalid, "field change requires a finite number")
+				return false, safeerror.NewFault(fault.Invalid, "field change requires a finite number")
 			}
 		default:
-			return false, fault.New(fault.Invalid, "unsupported field change codec representation")
+			return false, safeerror.NewFault(fault.Invalid, "unsupported field change codec representation")
 		}
 	}
 	switch v := left.(type) {

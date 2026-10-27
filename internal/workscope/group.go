@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Group has bounded, queued admission and no background goroutine or owned
@@ -33,7 +34,7 @@ type Group struct {
 
 func New(maximum int, timeout time.Duration) (*Group, error) {
 	if maximum < 1 || maximum > 4096 || timeout <= 0 || timeout > 24*time.Hour {
-		return nil, fault.New(fault.Invalid, "invalid operation scope")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid operation scope")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Group{slots: admission.New(maximum), timeout: timeout, ctx: ctx, cancel: cancel, done: make(chan struct{})}, nil
@@ -66,7 +67,7 @@ func (l *Lease) Release() {
 // Run uses the same admission path for callback-scoped operations.
 func (g *Group) Begin(ctx context.Context) (*Lease, error) {
 	if g == nil || g.done == nil || ctx == nil {
-		return nil, fault.New(fault.Invalid, "invalid operation scope")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid operation scope")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -75,11 +76,11 @@ func (g *Group) Begin(ctx context.Context) (*Lease, error) {
 	closing := g.closing
 	g.mu.Unlock()
 	if closing {
-		return nil, fault.New(fault.Closed, "operation scope is closed")
+		return nil, safeerror.NewFault(fault.Closed, "operation scope is closed")
 	}
 	if g.nested(ctx) {
 		if !g.slots.TryAcquire() {
-			return nil, fault.New(fault.Overloaded, "service has no available operation capacity")
+			return nil, safeerror.NewFault(fault.Overloaded, "service has no available operation capacity")
 		}
 	} else if err := g.slots.Acquire(ctx, admission.Wait(g.timeout), g.ctx.Done()); err != nil {
 		return nil, err
@@ -88,7 +89,7 @@ func (g *Group) Begin(ctx context.Context) (*Lease, error) {
 	if g.closing {
 		g.mu.Unlock()
 		g.slots.Release()
-		return nil, fault.New(fault.Closed, "operation scope is closed")
+		return nil, safeerror.NewFault(fault.Closed, "operation scope is closed")
 	}
 	g.active++
 	g.mu.Unlock()
@@ -126,7 +127,7 @@ func (g *Group) nested(ctx context.Context) bool {
 
 func (g *Group) Run(ctx context.Context, name string, fn func(context.Context) error) error {
 	if fn == nil {
-		return fault.New(fault.Invalid, "operation scope requires a callback")
+		return safeerror.NewFault(fault.Invalid, "operation scope requires a callback")
 	}
 	lease, err := g.Begin(ctx)
 	if err != nil {
@@ -154,11 +155,11 @@ func (g *Group) Done() <-chan struct{} {
 // groups together. It does not change admission or wait for active work.
 func (g *Group) CheckClose(ctx context.Context) error {
 	if g == nil || g.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "invalid operation scope")
+		return safeerror.NewFault(fault.Invalid, "invalid operation scope")
 	}
 	for f, _ := ctx.Value(frameKey{}).(*frame); f != nil; f = f.parent {
 		if f.group == g && f.active.Load() {
-			return fault.New(fault.Cycle, "operation cannot wait for its own exit")
+			return safeerror.NewFault(fault.Cycle, "operation cannot wait for its own exit")
 		}
 	}
 	return nil

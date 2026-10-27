@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -25,7 +26,7 @@ func DefineCursor[M, P, F, T any](route foundryhttp.Route[P], filters foundryhtt
 			return err
 		}
 		if page.Size > config.MaximumSize {
-			return fault.New(fault.Invalid, "page size exceeds endpoint maximum")
+			return safeerror.NewFault(fault.Invalid, "page size exceeds endpoint maximum")
 		}
 		return nil
 	}
@@ -40,7 +41,7 @@ func DefineCursor[M, P, F, T any](route foundryhttp.Route[P], filters foundryhtt
 }
 func cursorResponse[P, F, M, T any](in CursorRequest[P, F, M], page CursorResult[M, T], build func(orm.CursorRequest[M]) (string, error)) (CursorResponse[T], error) {
 	if !page.defined || page.size != in.Page.Size {
-		return CursorResponse[T]{}, fault.New(fault.Invalid, "cursor result does not match its HTTP request")
+		return CursorResponse[T]{}, safeerror.NewFault(fault.Invalid, "cursor result does not match its HTTP request")
 	}
 	var links Links
 	if page.next.IsSet() {

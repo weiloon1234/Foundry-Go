@@ -3,7 +3,7 @@ package expr
 import (
 	"database/sql"
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/decimal"
@@ -17,9 +17,9 @@ import (
 // The field's own metadata, not its Go underlying type, authorizes aggregation.
 func aggregateRowData[S, V any](input RowExpression[S, V], kind querycore.AggregateKind, cast querycore.AggregateCast, ordered bool) rowData[V] {
 	data := input.data
-	data.core.Err = errors.Join(data.core.Err, data.column.Err)
+	data.core.Err = safeerror.Join("operation failed", data.core.Err, data.column.Err)
 	if ordered && !data.column.AggregateInput {
-		data.core.Err = errors.Join(data.core.Err, ormcore.Invalid("aggregate requires an ordered declared result field"))
+		data.core.Err = safeerror.Join("operation failed", data.core.Err, ormcore.Invalid("aggregate requires an ordered declared result field"))
 	}
 	data.core.Sensitive = data.core.Sensitive || data.column.Sensitive
 	data.core = ormcore.Aggregate(data.core, kind, cast)

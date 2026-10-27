@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"sort"
 	"sync"
 
@@ -35,11 +36,11 @@ type StatementDetector struct {
 // Example: detector, err := database.NewStatementDetector(limits).
 func NewStatementDetector(c StatementDetectorConfig) (*StatementDetector, error) {
 	if c.Threshold < 1 || c.Threshold > 1000000 || c.MaxShapes < 1 || c.MaxShapes > 1024 {
-		return nil, fault.New(fault.Invalid, "invalid statement detector limits")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid statement detector limits")
 	}
 	d := &StatementDetector{config: c}
 	if _, err := rand.Read(d.key[:]); err != nil {
-		return nil, fault.New(fault.Invalid, "statement detector entropy unavailable")
+		return nil, safeerror.NewFault(fault.Invalid, "statement detector entropy unavailable")
 	}
 	return d, nil
 }
@@ -172,10 +173,10 @@ func (s *StatementScope) Report() StatementReport {
 func WithStatementDetector(d *StatementDetector) Option {
 	return func(s *poolSettings) error {
 		if d == nil || d.config.Threshold < 1 {
-			return fault.New(fault.Invalid, "statement detector is uninitialized")
+			return safeerror.NewFault(fault.Invalid, "statement detector is uninitialized")
 		}
 		if s.statementDetector != nil {
-			return fault.New(fault.Invalid, "statement detector already configured")
+			return safeerror.NewFault(fault.Invalid, "statement detector already configured")
 		}
 		s.statementDetector = d
 		return nil

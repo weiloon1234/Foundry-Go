@@ -2,7 +2,7 @@ package expr
 
 import (
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -26,13 +26,13 @@ func operationArg[S, V any](e Selected[S, V]) ormcore.OperationArgument {
 }
 func operationValue[S, V any](op querycore.ScalarOperation, c ormcore.Column[V], args ...ormcore.OperationArgument) Selected[S, V] {
 	core := ormcore.Operation(op, c.Kind, args...)
-	core.Err = errors.Join(core.Err, c.Err)
+	core.Err = safeerror.Join("operation failed", core.Err, c.Err)
 	return Selected[S, V]{data: rowData[V]{core: core, column: c}}
 }
 func rowCompare[V any](d rowData[V], op querycore.Operator, values ...V) ormcore.Predicate {
 	err := d.core.Err
 	if d.core.Node == nil || d.column.Bind == nil || d.column.Clone == nil {
-		return ormcore.Predicate{Err: errors.Join(err, ormcore.Invalid("uninitialized expression"))}
+		return ormcore.Predicate{Err: safeerror.Join("operation failed", err, ormcore.Invalid("uninitialized expression"))}
 	}
 	captured := make([]any, len(values))
 	for i, v := range values {

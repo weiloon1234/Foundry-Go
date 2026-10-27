@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
@@ -60,10 +61,10 @@ func prepareEventOutboxes(s Settings, declarations []EventDeclaration) ([]eventO
 			return nil, err
 		}
 		if d.key.Name() == "" {
-			return nil, fault.New(fault.Invalid, "event outbox requires a producer key")
+			return nil, safeerror.NewFault(fault.Invalid, "event outbox requires a producer key")
 		}
 		if _, exists := declared[d.destination]; exists || keys[d.key] {
-			return nil, fault.New(fault.Duplicate, "event outbox destination or producer key is declared twice")
+			return nil, safeerror.NewFault(fault.Duplicate, "event outbox destination or producer key is declared twice")
 		}
 		declared[d.destination], keys[d.key] = d, true
 	}
@@ -71,14 +72,14 @@ func prepareEventOutboxes(s Settings, declarations []EventDeclaration) ([]eventO
 		return nil, nil
 	}
 	if !s.Features.Events.Enabled || !s.Features.Outbox.Enabled {
-		return nil, fault.New(fault.Invalid, "event outboxes require features.events and features.outbox to be enabled")
+		return nil, safeerror.NewFault(fault.Invalid, "event outboxes require features.events and features.outbox to be enabled")
 	}
 	if len(configured) > 128 || len(declared) > 128 {
-		return nil, fault.New(fault.Invalid, "too many configured event outbox destinations")
+		return nil, safeerror.NewFault(fault.Invalid, "too many configured event outbox destinations")
 	}
 	for destination := range declared {
 		if _, exists := configured[destination]; !exists {
-			return nil, fault.New(fault.Missing, "event outbox destination has no features.outbox.events connection")
+			return nil, safeerror.NewFault(fault.Missing, "event outbox destination has no features.outbox.events connection")
 		}
 	}
 	destinations := make([]outbox.Destination, 0, len(configured))
@@ -93,7 +94,7 @@ func prepareEventOutboxes(s Settings, declarations []EventDeclaration) ([]eventO
 		}
 		d, exists := declared[destination]
 		if !exists {
-			return nil, fault.New(fault.Missing, "features.outbox.events destination has no EventOutbox declaration")
+			return nil, safeerror.NewFault(fault.Missing, "features.outbox.events destination has no EventOutbox declaration")
 		}
 		name := configured[destination]
 		if name == "" {
@@ -101,10 +102,10 @@ func prepareEventOutboxes(s Settings, declarations []EventDeclaration) ([]eventO
 		}
 		connection, exists := s.Services.Jobs.Connections[name]
 		if !exists {
-			return nil, fault.New(fault.Missing, "event outbox job connection is not configured")
+			return nil, safeerror.NewFault(fault.Missing, "event outbox job connection is not configured")
 		}
 		if connection.Driver != infrastructure.RedisJobs {
-			return nil, fault.New(fault.Invalid, "event outbox requires a durable Redis job connection")
+			return nil, safeerror.NewFault(fault.Invalid, "event outbox requires a durable Redis job connection")
 		}
 		group := groups[name]
 		if group == nil {

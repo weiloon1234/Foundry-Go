@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
 )
@@ -32,7 +34,7 @@ const usage = "outbox stats|failed|requeue|prune [--format text|json]; failed: [
 
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
-		return Command{}, fault.New(fault.Invalid, "outbox commands require help output")
+		return Command{}, safeerror.NewFault(fault.Invalid, "outbox commands require help output")
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(help, usage+"\n"); err != nil {
@@ -41,13 +43,13 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, flag.ErrHelp
 	}
 	if len(args) < 2 || args[0] != "outbox" {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result := Command{operation: args[1]}
 	switch result.operation {
 	case "stats", "failed", "requeue", "prune":
 	default:
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	flags := flag.NewFlagSet("outbox "+result.operation, flag.ContinueOnError)
 	flags.SetOutput(help)
@@ -55,7 +57,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	if result.operation == "failed" || result.operation == "requeue" {
 		flags.Func("kind", "producer family, such as job or event", func(text string) error {
 			if !identifier.Semantic(text) {
-				return fault.New(fault.Invalid, "invalid outbox kind")
+				return safeerror.NewFault(fault.Invalid, "invalid outbox kind")
 			}
 			result.selection.Kind = text
 			return nil
@@ -80,13 +82,13 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, err
 	}
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result.json = *format == "json"
 	switch result.operation {
 	case "failed":
 		if result.selection.Limit < 1 || result.selection.Limit > 100 {
-			return Command{}, cli.Usage("--limit must be between 1 and 100")
+			return Command{}, clidiag.Usage("--limit must be between 1 and 100")
 		}
 	case "requeue":
 		selected := 0
@@ -96,17 +98,17 @@ func Parse(args []string, help io.Writer) (Command, error) {
 			}
 		}
 		if selected != 1 {
-			return Command{}, cli.Usage("requeue requires exactly one of --all, --kind or --id")
+			return Command{}, clidiag.Usage("requeue requires exactly one of --all, --kind or --id")
 		}
 		if result.selection.Limit < 1 || result.selection.Limit > publisher.MaxOperationBatch {
-			return Command{}, cli.Usage("--limit must be between 1 and 10000")
+			return Command{}, clidiag.Usage("--limit must be between 1 and 10000")
 		}
 	case "prune":
 		if result.olderThan <= 0 {
-			return Command{}, cli.Usage("--older-than must be a positive duration")
+			return Command{}, clidiag.Usage("--older-than must be a positive duration")
 		}
 		if result.selection.Limit < 1 || result.selection.Limit > publisher.MaxOperationBatch {
-			return Command{}, cli.Usage("--limit must be between 1 and 10000")
+			return Command{}, clidiag.Usage("--limit must be between 1 and 10000")
 		}
 	}
 	return result, nil
@@ -116,7 +118,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 // constructor resolves the configured publisher after boot; parsing does no I/O.
 func Declaration(construct func(foundation.Resolver) (*publisher.Publisher, error)) (cli.Declaration, error) {
 	if construct == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "outbox commands require a publisher constructor")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "outbox commands require a publisher constructor")
 	}
 	definition := cli.Define("outbox", "Inspect, requeue and prune transactional outbox publication", func(args []string, help io.Writer) (Command, error) {
 		if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -145,7 +147,7 @@ type changed struct {
 // covers only confirmed batches.
 func (c Command) Run(ctx context.Context, p *publisher.Publisher, output io.Writer) error {
 	if ctx == nil || output == nil || p == nil {
-		return fault.New(fault.Invalid, "outbox command requires context, publisher and output")
+		return safeerror.NewFault(fault.Invalid, "outbox command requires context, publisher and output")
 	}
 	switch c.operation {
 	case "stats":
@@ -210,7 +212,7 @@ func (c Command) Run(ctx context.Context, p *publisher.Publisher, output io.Writ
 			}
 		}
 	}
-	return fault.New(fault.Invalid, "uninitialized outbox command; use Parse")
+	return safeerror.NewFault(fault.Invalid, "uninitialized outbox command; use Parse")
 }
 
 func (c Command) report(output io.Writer, rows int) error {

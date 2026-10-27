@@ -2,7 +2,6 @@ package schedule
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"slices"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
@@ -60,7 +60,7 @@ type Scheduler struct {
 
 func New(manager *lease.Manager, registry *Registry, config Config) (*Scheduler, error) {
 	if manager == nil || registry == nil || len(registry.entries) == 0 {
-		return nil, fault.New(fault.Invalid, "scheduler requires leases and registered schedules")
+		return nil, safeerror.NewFault(fault.Invalid, "scheduler requires leases and registered schedules")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (s *Scheduler) bindLogger(logger *slog.Logger) {
 // Parent cancellation starts a graceful drain.
 func (s *Scheduler) Run(ctx context.Context) error {
 	if s == nil || s.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "scheduler requires initialization and context")
+		return safeerror.NewFault(fault.Invalid, "scheduler requires initialization and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -116,7 +116,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	s.mu.Lock()
 	if s.started || s.stopped {
 		s.mu.Unlock()
-		return fault.New(fault.Closed, "scheduler already started or stopped")
+		return safeerror.NewFault(fault.Closed, "scheduler already started or stopped")
 	}
 	run, cancel := context.WithCancel(context.Background())
 	run = maintenance.WithContext(observability.WithContext(run, observability.FromContext(ctx)), admissionGate(ctx))
@@ -190,7 +190,7 @@ func (s *Scheduler) readClock() (time.Time, error) {
 		return time.Time{}, err
 	}
 	if !validInstant(now) {
-		return time.Time{}, fault.New(fault.Invalid, "scheduler clock is outside the supported range")
+		return time.Time{}, safeerror.NewFault(fault.Invalid, "scheduler clock is outside the supported range")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -231,7 +231,7 @@ func (s *Scheduler) epoch(ctx, admit context.Context, proof lease.Proof) error {
 			}
 		}
 		next, err := d.spec.Next(start)
-		if err != nil && !errors.Is(err, fault.Missing) {
+		if err != nil && !callback.ErrorIs(err, fault.Missing) {
 			s.mu.Unlock()
 			return err
 		}
@@ -274,7 +274,7 @@ func (s *Scheduler) epoch(ctx, admit context.Context, proof lease.Proof) error {
 			return s.drainTasks(ctx)
 		case _, ok := <-s.config.Wake:
 			if !ok {
-				return fault.New(fault.Closed, "scheduler wake channel closed")
+				return safeerror.NewFault(fault.Closed, "scheduler wake channel closed")
 			}
 		case <-ticks:
 		}
@@ -372,7 +372,7 @@ func (s *Scheduler) tick(ctx context.Context, proof lease.Proof, now time.Time) 
 					cursor = now
 				}
 				next, err := d.spec.Next(cursor)
-				if err != nil && !errors.Is(err, fault.Missing) {
+				if err != nil && !callback.ErrorIs(err, fault.Missing) {
 					return skipped, handled, err
 				}
 				status.Next = next
@@ -422,7 +422,7 @@ func (s *Scheduler) tick(ctx context.Context, proof lease.Proof, now time.Time) 
 				cursor = now
 			}
 			next, err := d.spec.Next(cursor)
-			if err != nil && !errors.Is(err, fault.Missing) {
+			if err != nil && !callback.ErrorIs(err, fault.Missing) {
 				return skipped, handled, err
 			}
 			status.Next = next
@@ -464,7 +464,7 @@ func recentOccurrences(spec Spec, first, now time.Time, limit int) ([]time.Time,
 			ring = append(ring, at)
 			scanned++
 			next, err := spec.Next(at)
-			if err != nil && !errors.Is(err, fault.Missing) {
+			if err != nil && !callback.ErrorIs(err, fault.Missing) {
 				return nil, time.Time{}, 0, err
 			}
 			at = next
@@ -478,7 +478,7 @@ func recentOccurrences(spec Spec, first, now time.Time, limit int) ([]time.Time,
 		}
 		span := now.Sub(start) / 2
 		next, err := spec.Next(now.Add(-span).Add(-time.Nanosecond))
-		if err != nil && !errors.Is(err, fault.Missing) {
+		if err != nil && !callback.ErrorIs(err, fault.Missing) {
 			return nil, time.Time{}, 0, err
 		}
 		if next.IsZero() || !next.After(start) {
@@ -540,11 +540,11 @@ func (s *Scheduler) Drain(ctx context.Context) error {
 
 func (s *Scheduler) shutdown(ctx context.Context, begin func()) error {
 	if s == nil || s.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "scheduler stop requires initialization and context")
+		return safeerror.NewFault(fault.Invalid, "scheduler stop requires initialization and context")
 	}
 	frame, _ := ctx.Value(invocationKey{}).(*invocationFrame)
 	if frame != nil && frame.scheduler == s && frame.active.Load() {
-		return fault.New(fault.Cycle, "schedule cannot wait for its own scheduler shutdown")
+		return safeerror.NewFault(fault.Cycle, "schedule cannot wait for its own scheduler shutdown")
 	}
 	begin()
 	select {

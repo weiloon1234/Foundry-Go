@@ -60,7 +60,7 @@ func InsertEach[M any, K comparable](ctx context.Context, writer database.Transa
 		if completed {
 			cause, reconcile := inspectOutcome(err, false)
 			if reconcile {
-				return nil, &WriteError[[]M]{cause: cause, candidate: result}
+				return nil, writeFailure(cause, result)
 			}
 			return nil, cause
 		}

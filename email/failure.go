@@ -2,6 +2,7 @@ package email
 
 import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 )
 
@@ -10,10 +11,10 @@ import (
 type Kind string
 
 const (
-	Construction Kind = "email construction failed"
-	Permanent    Kind = "email permanently rejected"
-	Transient    Kind = "email temporarily unavailable before acceptance"
-	Ambiguous    Kind = "email acceptance is unknown"
+	Construction Kind = emaildiag.Construction
+	Permanent    Kind = emaildiag.Permanent
+	Transient    Kind = emaildiag.Transient
+	Ambiguous    Kind = emaildiag.Ambiguous
 )
 
 func (k Kind) Error() string { return string(k) }

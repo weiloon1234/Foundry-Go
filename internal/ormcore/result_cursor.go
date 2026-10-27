@@ -3,7 +3,7 @@ package ormcore
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 	"unsafe"
@@ -22,7 +22,7 @@ type ResultCursor struct {
 func NewResultCursor(r RecordSource, scope reflect.Type) ResultCursor {
 	err := ValidateRecordSource(r, r.Record.Type, false)
 	node, nodeErr := querycore.ResultCursorNode(r.Source.Node, r.Record.Columns, r.Record.Scan != nil)
-	r.Source = Source{Node: node, Scope: scope, Owners: map[string]any{node.Source.Name(): r.Record.Owner}, Err: errors.Join(err, nodeErr), Checks: AppendChecks(r.Source.Checks, r.Record.Checks...)}
+	r.Source = Source{Node: node, Scope: scope, Owners: map[string]any{node.Source.Name(): r.Record.Owner}, Err: safeerror.Join("operation failed", err, nodeErr), Checks: AppendChecks(r.Source.Checks, r.Record.Checks...)}
 	r.Direct = false
 	return ResultCursor{Record: r}
 }
@@ -30,10 +30,10 @@ func NewResultCursor(r RecordSource, scope reflect.Type) ResultCursor {
 func CursorOrder(q ResultCursor, orders []Order) ResultCursor {
 	q.Orders = slices.Clone(q.Orders)
 	for _, o := range orders {
-		q.Record.Source.Err = errors.Join(q.Record.Source.Err, o.Err, CheckReferences(q.Record.Source, o.Refs))
+		q.Record.Source.Err = safeerror.Join("operation failed", q.Record.Source.Err, o.Err, CheckReferences(q.Record.Source, o.Refs))
 		field, ok := o.Node.Expression.(querycore.FieldRef)
 		if !ok || o.Node.Nulls != querycore.NullsDefault {
-			q.Record.Source.Err = errors.Join(q.Record.Source.Err, Invalid("cursor ordering requires plain output fields with default NULL placement"))
+			q.Record.Source.Err = safeerror.Join("operation failed", q.Record.Source.Err, Invalid("cursor ordering requires plain output fields with default NULL placement"))
 		}
 		q.Orders = append(q.Orders, querycore.QueryOrder{Field: field, Descending: o.Node.Descending})
 	}
@@ -42,10 +42,10 @@ func CursorOrder(q ResultCursor, orders []Order) ResultCursor {
 func CursorUnique(q ResultCursor, keys []Expression) ResultCursor {
 	q.Unique = make([]querycore.FieldRef, len(keys))
 	for i, k := range keys {
-		q.Record.Source.Err = errors.Join(q.Record.Source.Err, k.Err, CheckReferences(q.Record.Source, k.Refs))
+		q.Record.Source.Err = safeerror.Join("operation failed", q.Record.Source.Err, k.Err, CheckReferences(q.Record.Source, k.Refs))
 		f, ok := k.Node.(querycore.FieldRef)
 		if !ok {
-			q.Record.Source.Err = errors.Join(q.Record.Source.Err, Invalid("cursor identity requires output fields"))
+			q.Record.Source.Err = safeerror.Join("operation failed", q.Record.Source.Err, Invalid("cursor identity requires output fields"))
 		}
 		q.Unique[i] = f
 	}
@@ -97,7 +97,7 @@ func PlanResultCursor(ctx context.Context, q ResultCursor, size int, token strin
 	}
 	for _, check := range q.Record.Source.Checks {
 		if check != nil {
-			err = errors.Join(err, check())
+			err = safeerror.Join("operation failed", err, check())
 		}
 	}
 	statement, err := querycore.CompileRead(q.Record.Source.Node, ctx, false, err, true)

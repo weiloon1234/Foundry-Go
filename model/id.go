@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/textvalue"
 )
 
@@ -27,7 +28,7 @@ func NewIDAt[M any](now time.Time) (ID[M], error) {
 	var id ID[M]
 	// Compare time instants before UnixMilli, which can overflow for huge years.
 	if now.Before(time.UnixMilli(0)) || !now.Before(time.UnixMilli(1<<48)) {
-		return id, fault.New(fault.Invalid, "UUIDv7 time is outside the 48-bit millisecond range")
+		return id, safeerror.NewFault(fault.Invalid, "UUIDv7 time is outside the 48-bit millisecond range")
 	}
 	rand.Read(id.value[:]) // crypto/rand.Read always fills the buffer or terminates.
 	millis := uint64(now.UnixMilli())
@@ -45,7 +46,7 @@ func NewIDAt[M any](now time.Time) (ID[M], error) {
 func ParseID[M any](text string) (ID[M], error) {
 	var id ID[M]
 	if len(text) != 36 || text[8] != '-' || text[13] != '-' || text[18] != '-' || text[23] != '-' {
-		return id, fault.New(fault.Invalid, "invalid UUID text")
+		return id, safeerror.NewFault(fault.Invalid, "invalid UUID text")
 	}
 	var compact [32]byte
 	j := 0
@@ -57,7 +58,7 @@ func ParseID[M any](text string) (ID[M], error) {
 		j++
 	}
 	if _, err := hex.Decode(id.value[:], compact[:]); err != nil {
-		return ID[M]{}, fault.New(fault.Invalid, "invalid UUID text")
+		return ID[M]{}, safeerror.NewFault(fault.Invalid, "invalid UUID text")
 	}
 	return id, nil
 }

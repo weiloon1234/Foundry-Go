@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Transactor owns a callback's atomic transaction scope. DB and Session open a
@@ -18,7 +19,7 @@ type Transactor interface {
 // Successful return releases the savepoint; only the outer scope can commit.
 func (tx *Tx) Transaction(ctx context.Context, fn func(*Tx) error, options ...TxOptions) error {
 	if len(options) != 0 {
-		return fault.New(fault.Invalid, "nested transaction options must be set on the outer transaction")
+		return safeerror.NewFault(fault.Invalid, "nested transaction options must be set on the outer transaction")
 	}
 	return tx.Savepoint(ctx, fn)
 }

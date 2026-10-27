@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // maxEndpointResponseHeaders bounds the headers one WithHeaders callback adds.
@@ -55,10 +56,10 @@ func (e Endpoint[P, Q, B, R]) validateHeaders() error {
 		return nil
 	}
 	if *e.headers == nil {
-		return fault.New(fault.Invalid, "response header callback is missing")
+		return safeerror.NewFault(fault.Invalid, "response header callback is missing")
 	}
 	if e.response.credentials || e.response.kind != payloadJSON && e.response.kind != payloadEmpty {
-		return fault.New(fault.Invalid, "response headers require a non-credential JSON or empty response")
+		return safeerror.NewFault(fault.Invalid, "response headers require a non-credential JSON or empty response")
 	}
 	return nil
 }
@@ -83,7 +84,7 @@ func (e Endpoint[P, Q, B, R]) responseHeaders(ctx context.Context, result R) ([]
 
 func endpointHeaders(input []ResponseHeader) ([]ResponseHeader, error) {
 	if len(input) > maxEndpointResponseHeaders {
-		return nil, fault.New(fault.Invalid, "too many endpoint response headers")
+		return nil, safeerror.NewFault(fault.Invalid, "too many endpoint response headers")
 	}
 	result := make([]ResponseHeader, 0, len(input))
 	seen := make(map[HeaderName]bool, len(input))
@@ -96,11 +97,11 @@ func endpointHeaders(input []ResponseHeader) ([]ResponseHeader, error) {
 			return nil, err
 		}
 		if !endpointHeaderNames[name] && !applicationHeader(name) {
-			return nil, fault.New(fault.Invalid, "endpoint response header is not allowed")
+			return nil, safeerror.NewFault(fault.Invalid, "endpoint response header is not allowed")
 		}
 		repeatable := name == "Link" || name == "Vary"
 		if seen[name] && !repeatable {
-			return nil, fault.New(fault.Duplicate, "endpoint response header is repeated")
+			return nil, safeerror.NewFault(fault.Duplicate, "endpoint response header is repeated")
 		}
 		seen[name] = true
 		result = append(result, ResponseHeader{Name: name, Value: header.Value})

@@ -2,7 +2,7 @@ package orm
 
 import (
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -68,7 +68,7 @@ func relationExistence[M any](p *relationPlan) Predicate[M] {
 		result.err = invalid("relation requires bound source and target metadata")
 		return result
 	}
-	if err := errors.Join(declarationCoreError(p.slot.owner), declarationCoreError(p.target), p.query.err); err != nil {
+	if err := safeerror.Join("operation failed", declarationCoreError(p.slot.owner), declarationCoreError(p.target), p.query.err); err != nil {
 		result.err = err
 		return result
 	}

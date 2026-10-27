@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -19,13 +20,13 @@ func OrderedCTEs(root SelectNode) ([]*CteNode, error) {
 	walk.Source = func(s TableSource, depth int) {
 		if s.Self != nil {
 			if s.Self != self {
-				walk.Err = fault.New(fault.Invalid, "recursive reference is outside its owning step")
+				walk.Err = safeerror.NewFault(fault.Invalid, "recursive reference is outside its owning step")
 			} else if walk.RecursiveRestriction != "" {
-				walk.Err = fault.New(fault.Invalid, "recursive reference is not allowed in "+walk.RecursiveRestriction)
+				walk.Err = safeerror.NewFault(fault.Invalid, "recursive reference is not allowed in "+walk.RecursiveRestriction)
 			} else {
 				selfCount++
 				if selfCount > 1 {
-					walk.Err = fault.New(fault.Invalid, "recursive step must reference its working table exactly once")
+					walk.Err = safeerror.NewFault(fault.Invalid, "recursive step must reference its working table exactly once")
 				}
 			}
 			return
@@ -38,15 +39,15 @@ func OrderedCTEs(root SelectNode) ([]*CteNode, error) {
 		}
 		d := s.Cte
 		if !sqlname.Valid(d.Name) || d.Materialization > CteNotMaterialized || len(d.Columns) == 0 || len(d.Columns) != len(d.Query.Selections) {
-			walk.Err = fault.New(fault.Invalid, "invalid CTE definition")
+			walk.Err = safeerror.NewFault(fault.Invalid, "invalid CTE definition")
 			return
 		}
 		if other := names[d.Name]; other != nil && other != d {
-			walk.Err = fault.New(fault.Invalid, "statement repeats a CTE name with different definitions")
+			walk.Err = safeerror.NewFault(fault.Invalid, "statement repeats a CTE name with different definitions")
 			return
 		}
 		if active[d] {
-			walk.Err = fault.New(fault.Invalid, "cyclic CTE dependency requires an explicit recursive query")
+			walk.Err = safeerror.NewFault(fault.Invalid, "cyclic CTE dependency requires an explicit recursive query")
 			return
 		}
 		if visited[d] {
@@ -60,12 +61,12 @@ func OrderedCTEs(root SelectNode) ([]*CteNode, error) {
 		walk.SelectNode(d.Query, depth+1)
 		if r := d.Recursion; r != nil && walk.Err == nil {
 			if r.Reference == nil || r.Reference.Name != d.Name || !slices.Equal(r.Reference.Columns, d.Columns) || len(r.Step.Selections) != len(d.Columns) || r.Operator > UnionAllSet || d.Materialization == CteNotMaterialized {
-				walk.Err = fault.New(fault.Invalid, "invalid recursive CTE definition or materialization")
+				walk.Err = safeerror.NewFault(fault.Invalid, "invalid recursive CTE definition or materialization")
 			} else {
 				self, selfCount = r.Reference, 0
 				walk.SelectNode(r.Step, depth+1)
 				if walk.Err == nil && selfCount != 1 {
-					walk.Err = fault.New(fault.Invalid, "recursive step must reference its working table exactly once")
+					walk.Err = safeerror.NewFault(fault.Invalid, "recursive step must reference its working table exactly once")
 				}
 			}
 		}
@@ -79,7 +80,7 @@ func OrderedCTEs(root SelectNode) ([]*CteNode, error) {
 	}
 	for name := range names {
 		if tables[name] {
-			return nil, fault.New(fault.Invalid, "CTE name shadows a physical table reference; choose another CTE name or qualify the table")
+			return nil, safeerror.NewFault(fault.Invalid, "CTE name shadows a physical table reference; choose another CTE name or qualify the table")
 		}
 	}
 	return order, nil
@@ -106,7 +107,7 @@ func (c *Compiler) CompileCTEs(node SelectNode) (string, error) {
 		columns := make([]string, len(d.Columns))
 		for i, column := range d.Columns {
 			if !sqlname.Valid(column.Name) {
-				return "", fault.New(fault.Invalid, "invalid CTE output column")
+				return "", safeerror.NewFault(fault.Invalid, "invalid CTE output column")
 			}
 			columns[i] = Quoted(column.Name)
 		}

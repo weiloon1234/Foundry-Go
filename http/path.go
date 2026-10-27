@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/httppath"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // NoPath is the concrete parameter type for routes without URL parameters.
@@ -57,7 +58,7 @@ type pathSegment = httppath.Segment
 
 func validateParameterText(text string, tail bool) error {
 	if !httppath.ValidText(text) || text == "" && !tail {
-		return fault.New(fault.Invalid, "path parameter is empty or contains control characters")
+		return safeerror.NewFault(fault.Invalid, "path parameter is empty or contains control characters")
 	}
 	parts := []string{text}
 	if tail && text != "" {
@@ -65,7 +66,7 @@ func validateParameterText(text string, tail bool) error {
 	}
 	for _, part := range parts {
 		if part == "." || part == ".." || part == "/" || tail && text != "" && part == "" {
-			return fault.New(fault.Invalid, "path parameter contains a structural or empty segment")
+			return safeerror.NewFault(fault.Invalid, "path parameter contains a structural or empty segment")
 		}
 	}
 	return nil
@@ -108,7 +109,7 @@ func (p Path[P]) parse() ([]pathSegment, error) {
 			return nil, binding.err
 		}
 		if binding.decode == nil || binding.encode == nil || bindings[binding.name] {
-			return nil, fault.New(fault.Invalid, "path parameter requires a unique name, codec and field selector")
+			return nil, safeerror.NewFault(fault.Invalid, "path parameter requires a unique name, codec and field selector")
 		}
 		bindings[binding.name] = true
 	}
@@ -117,12 +118,12 @@ func (p Path[P]) parse() ([]pathSegment, error) {
 			continue
 		}
 		if !bindings[segment.Name] {
-			return nil, fault.New(fault.Invalid, "route path has an unbound parameter")
+			return nil, safeerror.NewFault(fault.Invalid, "route path has an unbound parameter")
 		}
 		delete(bindings, segment.Name)
 	}
 	if len(bindings) != 0 {
-		return nil, fault.New(fault.Invalid, "path binding does not occur in the route pattern")
+		return nil, safeerror.NewFault(fault.Invalid, "path binding does not occur in the route pattern")
 	}
 	return segments, nil
 }
@@ -153,14 +154,14 @@ func (p Path[P]) URL(parameters P) (string, error) {
 		return nil
 	})
 	if err != nil {
-		return "", fault.Wrap(fault.Internal, "route URL callback failed", err)
+		return "", safeerror.WrapFailure(fault.Internal, "route URL callback failed", err)
 	}
 	if failed != nil {
 		code := fault.Invalid
 		if pathInternalFailure(failed) {
 			code = fault.Internal
 		}
-		return "", fault.Wrap(code, "route URL parameters could not be encoded", failed)
+		return "", safeerror.WrapFault(code, "route URL parameters could not be encoded", failed)
 	}
 	var out strings.Builder
 	out.Grow(len(p.pattern) + 16)
@@ -231,7 +232,7 @@ func (p Path[P]) decode(r *stdhttp.Request, segments []pathSegment) (P, error) {
 	})
 	if err != nil || pathInternalFailure(failed) {
 		if err == nil {
-			err = fault.Wrap(fault.Internal, "HTTP path field binding failed", failed)
+			err = safeerror.WrapFailure(fault.Internal, "HTTP path field binding failed", failed)
 		}
 		logRouteFailure(r, "HTTP path decoding failed", err)
 		return *new(P), InternalError.WithCause(err)
@@ -240,7 +241,7 @@ func (p Path[P]) decode(r *stdhttp.Request, segments []pathSegment) (P, error) {
 		return *new(P), RequestTimeout.WithCause(canceled)
 	}
 	if failed != nil {
-		return *new(P), &responseError{code: BadRequest, cause: failed, issues: []contract.Issue{{Path: "/path/" + failedName, Code: contract.ValueIssue}}}
+		return *new(P), responseFailure(BadRequest, failed, []contract.Issue{{Path: "/path/" + failedName, Code: contract.ValueIssue}})
 	}
 	return result, nil
 }
@@ -250,7 +251,7 @@ func (p Path[P]) decode(r *stdhttp.Request, segments []pathSegment) (P, error) {
 // ordinary codec errors describe invalid input and retain their private cause.
 func pathInternalFailure(err error) bool {
 	failure, ok := err.(*fault.Error)
-	return ok && failure != nil && (failure.Code() == fault.Internal || failure.Code() == fault.Panicked)
+	return safeerror.IsPanic(err) || safeerror.HasCode(err, fault.Internal) || ok && failure != nil && (failure.Code() == fault.Internal || failure.Code() == fault.Panicked)
 }
 
 func nativePath(segments []pathSegment) string {

@@ -2,7 +2,9 @@ package idempotency
 
 import (
 	"fmt"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Code contains safe public outcome categories, never stored input or key data.
@@ -28,5 +30,11 @@ func (e *Error) Error() string              { return e.code.Error() }
 func (e *Error) Unwrap() error              { return e.cause }
 func (e *Error) Is(target error) bool       { return target == e.code }
 func (e *Error) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(e.Error())) }
-func failure(code Code, cause error) error  { return &Error{code: code, cause: cause} }
-func invalid(message string) error          { return fault.New(fault.Invalid, message) }
+func failure(code Code, cause error) error {
+	if cause == nil {
+		cause = code
+	}
+	failure := &Error{code: code, cause: cause}
+	return safeerror.Owned(failure.Error(), failure)
+}
+func invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }

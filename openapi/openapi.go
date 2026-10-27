@@ -17,6 +17,7 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/contractname"
 	"github.com/weiloon1234/Foundry-Go/internal/httppath"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const SpecificationVersion = "3.1.1"
@@ -42,14 +43,14 @@ const MaxServers = 16
 // Validate checks the required title and version and every server entry.
 func (o Options) Validate() error {
 	if !validText(o.Title) || !validText(o.APIVersion) {
-		return fault.New(fault.Invalid, "OpenAPI requires a title and API version")
+		return safeerror.NewFault(fault.Invalid, "OpenAPI requires a title and API version")
 	}
 	if len(o.Servers) > MaxServers {
-		return fault.New(fault.Invalid, "OpenAPI servers exceed MaxServers")
+		return safeerror.NewFault(fault.Invalid, "OpenAPI servers exceed MaxServers")
 	}
 	for _, server := range o.Servers {
 		if !server.valid() {
-			return fault.New(fault.Invalid, "OpenAPI server requires an http(s) URL or absolute path without credentials, query or fragment")
+			return safeerror.NewFault(fault.Invalid, "OpenAPI server requires an http(s) URL or absolute path without credentials, query or fragment")
 		}
 	}
 	return nil
@@ -135,7 +136,7 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 			}
 		}
 		if previous, exists := pathShapes[shape.String()]; exists && previous != path {
-			return nil, fault.New(fault.Conflict, "OpenAPI cannot represent different parameter names at the same path position")
+			return nil, safeerror.NewFault(fault.Conflict, "OpenAPI cannot represent different parameter names at the same path position")
 		}
 		pathShapes[shape.String()] = path
 		item, found := paths[path].(object)
@@ -145,7 +146,7 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 		}
 		method := strings.ToLower(string(op.Route.Method))
 		if _, duplicate := item[method]; duplicate {
-			return nil, fault.New(fault.Conflict, "OpenAPI path/method collision")
+			return nil, safeerror.NewFault(fault.Conflict, "OpenAPI path/method collision")
 		}
 		operation := object{"operationId": string(op.Route.ID), "x-foundry-client-name": op.Name, "x-foundry-access": op.Route.Access, "x-foundry-limits": op.Limits}
 		if documentation := op.Route.Documentation; documentation != nil {
@@ -330,7 +331,7 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 		return nil, err
 	}
 	if len(data) >= manifest.MaxBytes {
-		return nil, fault.New(fault.Invalid, "OpenAPI output exceeds its byte budget")
+		return nil, safeerror.NewFault(fault.Invalid, "OpenAPI output exceeds its byte budget")
 	}
 	return append(data, '\n'), nil
 }

@@ -1,10 +1,10 @@
 package orm
 
 import (
-	"errors"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 	"reflect"
@@ -53,9 +53,9 @@ func FoundrySource[M any](q Query[M], seal sqlowner.MetadataSeal) ormcore.Source
 		return ormcore.Source{Err: invalid("invalid SQL owner capability")}
 	}
 
-	err := errors.Join(declarationCoreError(q.state.table), q.state.err, q.state.ast.Validate())
+	err := safeerror.Join("operation failed", declarationCoreError(q.state.table), q.state.err, q.state.ast.Validate())
 	if len(q.state.relations) > 0 {
-		err = errors.Join(err, invalid("projection source cannot request eager-loaded model values"))
+		err = safeerror.Join("operation failed", err, invalid("projection source cannot request eager-loaded model values"))
 	}
 	if err != nil {
 		return ormcore.Source{Err: err}
@@ -70,12 +70,12 @@ func sourceCheck(q queryState) func() error { return func() error { return valid
 // Example: FoundryWhere(q,p,sqlowner.Queries()).
 func FoundryWhere[M any](q Query[M], p ormcore.Predicate, seal sqlowner.QuerySeal) Query[M] {
 	if !seal.Valid() {
-		q.state.err = errors.Join(q.state.err, invalid("invalid SQL owner capability"))
+		q.state.err = safeerror.Join("operation failed", q.state.err, invalid("invalid SQL owner capability"))
 		return q
 	}
 
 	source := ormcore.Source{Scope: reflect.TypeFor[M](), Owners: map[string]any{q.state.ast.Table: q.state.table}}
-	err := errors.Join(p.Err, ormcore.CheckReferenceSet(source, p.Refs, p.ReferenceFree))
+	err := safeerror.Join("operation failed", p.Err, ormcore.CheckReferenceSet(source, p.Refs, p.ReferenceFree))
 	return q.Where(Predicate[M]{owner: q.state.table, expression: querycore.RetainPredicate(p.Node), err: err})
 }
 
@@ -83,12 +83,12 @@ func FoundryWhere[M any](q Query[M], p ormcore.Predicate, seal sqlowner.QuerySea
 // Example: FoundryOrderBy(q,o,sqlowner.Queries()).
 func FoundryOrderBy[M any](q Query[M], o ormcore.Order, seal sqlowner.QuerySeal) Query[M] {
 	if !seal.Valid() {
-		q.state.err = errors.Join(q.state.err, invalid("invalid SQL owner capability"))
+		q.state.err = safeerror.Join("operation failed", q.state.err, invalid("invalid SQL owner capability"))
 		return q
 	}
 
 	source := ormcore.Source{Scope: reflect.TypeFor[M](), Owners: map[string]any{q.state.ast.Table: q.state.table}}
-	err := errors.Join(o.Err, ormcore.CheckReferenceSet(source, o.Refs, o.ReferenceFree))
+	err := safeerror.Join("operation failed", o.Err, ormcore.CheckReferenceSet(source, o.Refs, o.ReferenceFree))
 	order := querycore.ModelOrder(o.Node)
 	return q.OrderBy(Order[M]{owner: q.state.table, core: order, err: err})
 }

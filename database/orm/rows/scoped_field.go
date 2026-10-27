@@ -1,7 +1,7 @@
 package rows
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -16,16 +16,16 @@ func At[S, R, V any](scope expr.Scope[S, R], field Field[R, V]) expr.RowExpressi
 	var column ormcore.Column[V]
 	err := metadata.Err
 	if field.core == nil || field.column == nil {
-		err = errors.Join(err, ormcore.Invalid("record field requires a declaration"))
+		err = safeerror.Join("operation failed", err, ormcore.Invalid("record field requires a declaration"))
 	} else {
 		column = field.column()
 		if metadata.Owner != field.core.owner || metadata.Table == "" {
-			err = errors.Join(err, ormcore.Invalid("record field belongs to a different declaration"))
+			err = safeerror.Join("operation failed", err, ormcore.Invalid("record field belongs to a different declaration"))
 		}
 		column.Field = querycore.FieldRef{Table: metadata.Table, Column: field.core.column.Name}
 	}
 	column.Reference = metadata.Reference
-	return expr.FoundryRowExpression[S](ormcore.Expression{Node: column.Field, Refs: []ormcore.Reference{column.Reference}, Err: errors.Join(err, column.Err)}, column, sqlowner.Expressions())
+	return expr.FoundryRowExpression[S](ormcore.Expression{Node: column.Field, Refs: []ormcore.Reference{column.Reference}, Err: safeerror.Join("operation failed", err, column.Err)}, column, sqlowner.Expressions())
 }
 
 // AtNullable widens a required projection field from a nullable join side. Example: rows.AtNullable(rows.NullableRightScope(j,scope),Totals.Count).

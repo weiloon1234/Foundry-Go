@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
@@ -16,26 +17,26 @@ const snapshotAttempts = 3
 
 func tagCapability(store *Store) (TaggedBackend, error) {
 	if store == nil || store.backend == nil {
-		return nil, fault.New(fault.Invalid, "cache tags require an initialized store")
+		return nil, safeerror.NewFault(fault.Invalid, "cache tags require an initialized store")
 	}
 	backend, ok := store.backend.(TaggedBackend)
 	if !ok {
-		return nil, fault.New(fault.Invalid, "cache backend does not support atomic tags")
+		return nil, safeerror.NewFault(fault.Invalid, "cache backend does not support atomic tags")
 	}
 	if store.coordination != nil {
 		if _, ok := backend.(CoordinatedTaggedBackend); !ok {
-			return nil, fault.New(fault.Invalid, "cache backend does not support coordinated tags")
+			return nil, safeerror.NewFault(fault.Invalid, "cache backend does not support coordinated tags")
 		}
 	}
 	return backend, nil
 }
 func (s *Store) validateTags(tags []Tag) error {
 	if s == nil || len(tags) == 0 || len(tags) > s.config.MaxTags {
-		return fault.New(fault.Invalid, "invalid cache tag count")
+		return safeerror.NewFault(fault.Invalid, "invalid cache tag count")
 	}
 	for _, tag := range tags {
 		if tag.store != s || tag.address == nil {
-			return fault.New(fault.Invalid, "cache tag belongs to another store or is uninitialized")
+			return safeerror.NewFault(fault.Invalid, "cache tag belongs to another store or is uninitialized")
 		}
 	}
 	return nil
@@ -79,10 +80,10 @@ func resolveTagKeys(tags []Tag) ([]EntryKey, error) {
 // encoding keys or performing I/O. Operations share the same typed API and Store.
 func (c Cache[K, V]) WithTags(first Tag, rest ...Tag) (Cache[K, V], error) {
 	if c.store == nil || c.definition == nil {
-		return Cache[K, V]{}, fault.New(fault.Invalid, "cache view is not initialized")
+		return Cache[K, V]{}, safeerror.NewFault(fault.Invalid, "cache view is not initialized")
 	}
 	if len(rest) >= c.store.config.MaxTags {
-		return Cache[K, V]{}, fault.New(fault.Invalid, "cache tag count exceeds its limit")
+		return Cache[K, V]{}, safeerror.NewFault(fault.Invalid, "cache tag count exceeds its limit")
 	}
 	tags := append([]Tag{first}, rest...)
 	if err := c.store.validateTags(tags); err != nil {
@@ -99,7 +100,7 @@ func (c Cache[K, V]) WithTags(first Tag, rest ...Tag) (Cache[K, V], error) {
 // A remote error may hide an applied invalidation; no implicit retry occurs.
 func (s *Store) InvalidateTags(ctx context.Context, first Tag, rest ...Tag) error {
 	if s == nil || len(rest) >= s.config.MaxTags {
-		return fault.New(fault.Invalid, "invalid cache store or tag count")
+		return safeerror.NewFault(fault.Invalid, "invalid cache store or tag count")
 	}
 	tags := append([]Tag{first}, rest...)
 	if err := s.validateTags(tags); err != nil {
@@ -163,7 +164,7 @@ func (c Cache[K, V]) snapshot(ctx context.Context) (accessSnapshot, error) {
 		return accessSnapshot{}, err
 	}
 	if len(versions) != len(keys) {
-		return accessSnapshot{}, fault.New(fault.Invalid, "cache backend returned an invalid tag snapshot")
+		return accessSnapshot{}, safeerror.NewFault(fault.Invalid, "cache backend returned an invalid tag snapshot")
 	}
 	stamps := make([]TagStamp, len(keys))
 	for i, key := range keys {
@@ -224,7 +225,7 @@ type snapshotAccess struct {
 func (a snapshotAccess) Get(ctx context.Context, _ EntryKey) ([]byte, bool, error) {
 	reader, ok := a.reader.(SnapshotReadBackend)
 	if !ok {
-		return nil, false, fault.New(fault.Invalid, "cache backend does not support snapshot reads")
+		return nil, false, safeerror.NewFault(fault.Invalid, "cache backend does not support snapshot reads")
 	}
 	_, data, found, err := reader.ReadSnapshot(ctx, a.base, a.tags, true)
 	return data, found, err
@@ -232,7 +233,7 @@ func (a snapshotAccess) Get(ctx context.Context, _ EntryKey) ([]byte, bool, erro
 func (a snapshotAccess) Exists(ctx context.Context, _ EntryKey) (bool, error) {
 	reader, ok := a.reader.(SnapshotReadBackend)
 	if !ok {
-		return false, fault.New(fault.Invalid, "cache backend does not support snapshot reads")
+		return false, safeerror.NewFault(fault.Invalid, "cache backend does not support snapshot reads")
 	}
 	_, _, found, err := reader.ReadSnapshot(ctx, a.base, a.tags, false)
 	return found, err
@@ -282,7 +283,7 @@ func (c Cache[K, V]) observe(ctx context.Context, base EntryKey, payload bool) (
 			return observation{}, err
 		}
 		if !key.resolves(base, keys) {
-			return observation{}, fault.New(fault.Invalid, "cache backend returned an invalid tag snapshot")
+			return observation{}, safeerror.NewFault(fault.Invalid, "cache backend returned an invalid tag snapshot")
 		}
 		result := observation{access: taggedEntryAccess(backend, key), found: found}
 		if found && payload {
@@ -324,7 +325,7 @@ func (c Cache[K, V]) observe(ctx context.Context, base EntryKey, payload bool) (
 func (c Cache[K, V]) exists(ctx context.Context, access entryAccess) (bool, error) {
 	backend, ok := access.backend.(EntryBackend)
 	if !ok {
-		return false, fault.New(fault.Invalid, "cache backend does not support entry inspection")
+		return false, safeerror.NewFault(fault.Invalid, "cache backend does not support entry inspection")
 	}
 	return backend.Exists(ctx, access.key)
 }
@@ -349,7 +350,7 @@ func (b taggedAccess) Forget(ctx context.Context, _ EntryKey) (bool, error) {
 func (b taggedAccess) Increment(ctx context.Context, _ EntryKey, delta int64, ttl TTL) (int64, error) {
 	backend, ok := b.backend.(TaggedCounterBackend)
 	if !ok {
-		return 0, fault.New(fault.Invalid, "cache backend does not support tagged counters")
+		return 0, safeerror.NewFault(fault.Invalid, "cache backend does not support tagged counters")
 	}
 	return backend.IncrementTagged(ctx, b.key, delta, ttl)
 }
@@ -357,7 +358,7 @@ func (b taggedAccess) Increment(ctx context.Context, _ EntryKey, delta int64, tt
 func (b taggedAccess) PutLeased(ctx context.Context, _ EntryKey, data []byte, ttl TTL, proof lease.Proof) error {
 	backend, ok := b.backend.(CoordinatedTaggedBackend)
 	if !ok {
-		return fault.New(fault.Invalid, "cache backend does not support coordinated tags")
+		return safeerror.NewFault(fault.Invalid, "cache backend does not support coordinated tags")
 	}
 	return backend.PutTaggedLeased(ctx, b.key, data, ttl, proof)
 }

@@ -3,6 +3,7 @@ package extensionslot
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 	"unsafe"
@@ -52,11 +53,11 @@ func New[M, S any](binding Binding[M, S]) Slot[M] {
 	s := &state{name: binding.Name, table: binding.Table, valueType: reflect.TypeFor[S]()}
 	switch {
 	case binding.Name == "" || binding.Table == "" || binding.Get == nil || binding.Set == nil || binding.Loaded == nil || binding.Count == nil:
-		s.err = fault.New(fault.Invalid, "extension slot requires a generated binding")
+		s.err = safeerror.NewFault(fault.Invalid, "extension slot requires a generated binding")
 	case binding.Fetch == nil:
 		s.err = binding.Unbound
 		if s.err == nil {
-			s.err = fault.New(fault.Missing, "extension slot is not bound to a runtime")
+			s.err = safeerror.NewFault(fault.Missing, "extension slot is not bound to a runtime")
 		}
 	}
 	s.prepare = func(base unsafe.Pointer, length int, missing bool) sequence {
@@ -76,7 +77,7 @@ func New[M, S any](binding Binding[M, S]) Slot[M] {
 				return batch{}, err
 			}
 			if len(fetched) != end-start {
-				return batch{}, fault.New(fault.Invalid, "extension slot fetch returned a different number of values")
+				return batch{}, safeerror.NewFault(fault.Invalid, "extension slot fetch returned a different number of values")
 			}
 			count := 0
 			for _, v := range fetched {
@@ -102,7 +103,7 @@ func New[M, S any](binding Binding[M, S]) Slot[M] {
 // Metadata exposes validated slot shape without dispatch. Example: slot.Metadata().
 func (s Slot[M]) Metadata() (string, string, reflect.Type, error) {
 	if s.core == nil {
-		return "", "", nil, fault.New(fault.Invalid, "extension slot requires a generated descriptor")
+		return "", "", nil, safeerror.NewFault(fault.Invalid, "extension slot requires a generated descriptor")
 	}
 	return s.core.name, s.core.table, s.core.valueType, s.core.err
 }
@@ -111,7 +112,7 @@ func (s Slot[M]) Metadata() (string, string, reflect.Type, error) {
 // Example: slot.Load(ctx,ex,parents,limits,&remaining,&attached,true).
 func (s Slot[M]) Load(ctx context.Context, ex database.Executor, parents []M, limits querycore.RelationLimits, remaining, attached *int, missing bool) ([]M, error) {
 	if s.core == nil {
-		return nil, fault.New(fault.Invalid, "extension slot requires a bound descriptor")
+		return nil, safeerror.NewFault(fault.Invalid, "extension slot requires a bound descriptor")
 	}
 	if err := s.core.load(ctx, ex, unsafe.Pointer(unsafe.SliceData(parents)), len(parents), limits, remaining, attached, missing); err != nil {
 		return nil, err

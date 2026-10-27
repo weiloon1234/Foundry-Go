@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
@@ -29,7 +30,7 @@ type Scope struct {
 
 func (s Scope) Validate() error {
 	if !identifier.Semantic(string(s.Channel)) || s.HasRoom && !validRoom(s.Room) || !s.HasRoom && s.Room != "" {
-		return fault.New(fault.Invalid, "invalid WebSocket scope")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket scope")
 	}
 	return nil
 }
@@ -60,10 +61,10 @@ type ClusterLimits struct {
 
 func (l ClusterLimits) Validate() error {
 	if !validPresenceBounds(l.PresenceMembers, l.MemberBytes, l.FrameBytes) {
-		return fault.New(fault.Invalid, "cluster presence cannot fit its bounded frame")
+		return safeerror.NewFault(fault.Invalid, "cluster presence cannot fit its bounded frame")
 	}
 	if l.Connections < 1 || l.Connections > 1<<20 || l.ConnectionsPerSubject < 1 || l.ConnectionsPerSubject > l.Connections || l.Subscriptions < 1 || l.Subscriptions > 1024 || l.PresenceMembers < 1 || l.PresenceMembers > 4096 || l.MemberBytes < 2 || l.MemberBytes > 1<<20 || l.FrameBytes < 4096 || l.FrameBytes > 1<<20 || l.ConnectionTTL < 100*time.Millisecond || l.ConnectionTTL > 5*time.Minute || l.ConnectionTTL%time.Millisecond != 0 || l.Retention < 2*l.ConnectionTTL || l.Retention > 24*time.Hour || l.Retention%time.Millisecond != 0 {
-		return fault.New(fault.Invalid, "invalid WebSocket cluster authority bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket cluster authority bounds")
 	}
 	return nil
 }
@@ -87,7 +88,7 @@ func (k ClusterKey) Validate() error {
 		return err
 	}
 	if !validDigest(k.policy) {
-		return fault.New(fault.Invalid, "invalid WebSocket cluster policy fingerprint")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket cluster policy fingerprint")
 	}
 	return k.limits.Validate()
 }
@@ -126,16 +127,16 @@ func (m ClusterMembership) Validate(limits ClusterLimits) error {
 		return err
 	}
 	if m.Subject != "" && !validDigest(string(m.Subject)) {
-		return fault.New(fault.Invalid, "invalid WebSocket subject key")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket subject key")
 	}
 	if !m.Presence {
 		if len(m.Data) != 0 {
-			return fault.New(fault.Invalid, "non-presence membership has member data")
+			return safeerror.NewFault(fault.Invalid, "non-presence membership has member data")
 		}
 		return nil
 	}
 	if m.Subject == "" {
-		return fault.New(fault.Invalid, "presence membership needs a subject")
+		return safeerror.NewFault(fault.Invalid, "presence membership needs a subject")
 	}
 	_, err := jsonwire.Decode(m.Data, jsonwire.Limits{Bytes: limits.MemberBytes, Depth: jsonwire.MaxDepth, Nodes: 65536})
 	return err
@@ -168,7 +169,7 @@ type ClusterBackend interface {
 
 func ValidateClusterOperation(ctx context.Context, key ClusterKey) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "WebSocket cluster operation requires context")
+		return safeerror.NewFault(fault.Invalid, "WebSocket cluster operation requires context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -180,7 +181,7 @@ func ValidateClusterConnection(ctx context.Context, key ClusterKey, instance Ins
 		return err
 	}
 	if instance.IsZero() || connection.IsZero() {
-		return fault.New(fault.Invalid, "WebSocket cluster operation needs instance and connection identities")
+		return safeerror.NewFault(fault.Invalid, "WebSocket cluster operation needs instance and connection identities")
 	}
 	return nil
 }

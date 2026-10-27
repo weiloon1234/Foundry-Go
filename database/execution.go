@@ -3,13 +3,14 @@ package database
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"sync"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlcallback"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
@@ -35,13 +36,13 @@ func execute(ctx context.Context, executor sqlExecutor, classify classifier, ins
 	started := instrument.start()
 	rows := int64(-1)
 	defer func() { instrument.finish(ctx, "exec", statement, started, rows, err) }()
-	raw, err := executor.ExecContext(ctx, statement, safeArguments(arguments)...)
+	raw, err := executor.ExecContext(ctx, statement, arguments...)
 	if err != nil {
-		return Result{}, classify.wrap("execute", err)
+		return Result{}, sqlcallback.Retain(err, classify.wrap("execute", err))
 	}
 	count, err := raw.RowsAffected()
 	if err != nil {
-		return Result{}, classify.wrap("affected rows", err)
+		return Result{}, sqlcallback.Retain(err, classify.wrap("affected rows", err))
 	}
 	rows = count
 	return Result{RowsAffected: count}, nil
@@ -55,24 +56,32 @@ func query(ctx context.Context, executor sqlExecutor, classify classifier, instr
 // driver rows on cancellation, but only Close returns Foundry's checked-out
 // connection and resource owner. A forgotten stream is therefore closed when
 // ctx ends instead of retaining the connection and blocking pool shutdown.
-func queryStatement(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, observers lifecycle.Observers, owner observerOwner, release func() error, statement string, arguments []any, autocommit bool) (*Rows, error) {
+func queryStatement(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, observers lifecycle.Observers, owner observerOwner, release func() error, statement string, arguments []any, autocommit bool) (result *Rows, failure error) {
+	transferred := false
+	defer func() {
+		if !transferred {
+			failure = safeerror.Join("operation failed", failure, release())
+		}
+	}()
 	instrument = instrument.locate(ctx)
 	started := instrument.start()
-	rows, err := executor.QueryContext(ctx, statement, safeArguments(arguments)...)
+	rows, err := executor.QueryContext(ctx, statement, arguments...)
 	if err != nil {
 		failure := classify.wrap("query", err)
 		if autocommit {
 			failure = statementOutcome(failure)
 		}
+		failure = sqlcallback.Retain(err, failure)
 		instrument.finish(ctx, "query", statement, started, -1, failure)
-		return nil, errors.Join(failure, release())
+		return nil, failure
 	}
-	result := &Rows{raw: rows, classify: classify, observers: observers, observerOwner: owner, release: release, autocommit: autocommit, probe: instrument, started: started, statement: statement, ctx: ctx}
+	result = &Rows{raw: rows, classify: classify, observers: observers, observerOwner: owner, release: release, autocommit: autocommit, probe: instrument, started: started, statement: statement, ctx: ctx}
 	// A query can finish as its context ends. Publish the stop hook while
 	// holding the same mutex as Close, before the cancellation callback reads it.
 	result.mu.Lock()
 	result.stop = context.AfterFunc(ctx, func() { _ = result.Close() })
 	result.mu.Unlock()
+	transferred = true
 	return result, nil
 }
 
@@ -85,7 +94,7 @@ func (db *DB) Exec(ctx context.Context, statement string, arguments ...any) (res
 	if err != nil {
 		return Result{}, err
 	}
-	defer func() { err = errors.Join(err, release()) }()
+	defer func() { err = safeerror.Join("operation failed", err, release()) }()
 	instrument.wait = sinceStart(acquired)
 	// Mark again on completion so a long write does not consume its own
 	// read-your-writes window.
@@ -120,14 +129,14 @@ func (db *DB) Query(ctx context.Context, statement string, arguments ...any) (*R
 // complete iteration whose Err and Close both succeed confirms the commit.
 func (db *DB) FoundryAutocommitQuery(seal sqlowner.AutocommitSeal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {
 	if !seal.Valid() {
-		return nil, fault.New(fault.Invalid, "invalid SQL owner capability")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid SQL owner capability")
 	}
 	db.markWrite(ctx)
 	instrument := db.instrumented(PrimaryPool)
 	acquired := instrument.start()
 	conn, release, err := db.acquire(ctx)
 	if err != nil {
-		if classified, ok := err.(*Error); ok && classified != nil {
+		if classified, ok := safeerror.UnwrapOwned(err).(*Error); ok && classified != nil {
 			classified.outcome = NoCommit
 		}
 		return nil, err
@@ -172,9 +181,9 @@ type Rows struct {
 func (r *Rows) wrap(operation string, err error) error {
 	classified := r.classify.wrap(operation, err)
 	if r.autocommit {
-		return statementOutcome(classified)
+		classified = statementOutcome(classified)
 	}
-	return classified
+	return sqlcallback.Retain(err, classified)
 }
 
 // Observers retains the actual database owner's immutable registrations, even
@@ -202,8 +211,8 @@ func (r *Rows) Scan(destinations ...any) error {
 	if r.closed {
 		return failure("scan", Closed)
 	}
-	if err := r.raw.Scan(safeDestinations(destinations)...); err != nil {
-		r.err = errors.Join(r.err, r.wrap("scan", err))
+	if err := r.raw.Scan(sqlcallback.Destinations(destinations)...); err != nil {
+		r.err = safeerror.Join("operation failed", r.err, r.wrap("scan", err))
 		_ = r.close()
 		return r.err
 	}
@@ -227,7 +236,7 @@ func (r *Rows) Err() error {
 	if r.closed {
 		return r.err
 	}
-	return errors.Join(r.err, r.wrap("iterate", r.raw.Err()))
+	return safeerror.Join("operation failed", r.err, r.wrap("iterate", r.raw.Err()))
 }
 
 // Close is idempotent and preserves scan, iteration, and release errors.
@@ -251,7 +260,7 @@ func (r *Rows) close() error {
 	if r.autocommit {
 		released = statementOutcome(released)
 	}
-	r.err = errors.Join(r.err, closeErr, iterateErr, released)
+	r.err = safeerror.Join("operation failed", r.err, closeErr, iterateErr, released)
 	if r.afterClose != nil {
 		r.afterClose()
 	}
@@ -275,7 +284,7 @@ func ScanOne(ctx context.Context, executor Executor, statement string, arguments
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
+	defer func() { err = safeerror.Join("operation failed", err, rows.Close()) }()
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
 			return err
@@ -295,13 +304,13 @@ func ScanOne(ctx context.Context, executor Executor, statement string, arguments
 // error or panic. It retains no collection; callbacks decide what to retain.
 func ForEach[T any](ctx context.Context, executor Executor, statement string, arguments []any, scan func(Row) (T, error), yield func(T) error) (err error) {
 	if scan == nil || yield == nil {
-		return fault.New(fault.Invalid, "row iteration requires scan and yield callbacks")
+		return safeerror.NewFault(fault.Invalid, "row iteration requires scan and yield callbacks")
 	}
 	rows, err := executor.Query(ctx, statement, arguments...)
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
+	defer func() { err = safeerror.Join("operation failed", err, rows.Close()) }()
 	for rows.Next() {
 		value, err := scan(rows)
 		if err != nil {

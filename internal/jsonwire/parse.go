@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const (
@@ -19,14 +20,20 @@ const (
 )
 
 func invalid() error {
-	return fault.New(fault.Invalid, "invalid JSON syntax, representation or resource bound")
+	return safeerror.NewFault(fault.Invalid, "invalid JSON syntax, representation or resource bound")
 }
 
 // Bound failures name the exceeded limit. The messages are static and safe for
 // redacted diagnostics; they never include document content.
-func byteBound() error  { return fault.New(fault.Invalid, "JSON document exceeds its byte bound") }
-func depthBound() error { return fault.New(fault.Invalid, "JSON document exceeds its depth bound") }
-func nodeBound() error  { return fault.New(fault.Invalid, "JSON document exceeds its node bound") }
+func byteBound() error {
+	return safeerror.NewFault(fault.Invalid, "JSON document exceeds its byte bound")
+}
+func depthBound() error {
+	return safeerror.NewFault(fault.Invalid, "JSON document exceeds its depth bound")
+}
+func nodeBound() error {
+	return safeerror.NewFault(fault.Invalid, "JSON document exceeds its node bound")
+}
 
 // Parse rejects duplicate object keys, lossy Unicode and PostgreSQL text NUL.
 // Numbers retain exact canonical decimal text, never an intermediate float.

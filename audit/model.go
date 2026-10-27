@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -44,7 +45,7 @@ func (r *Recorder) RecordModel(ctx context.Context, tx *database.Tx, entry recor
 		return err
 	}
 	if tx == nil {
-		return fault.New(fault.Invalid, "audit recording requires a transaction")
+		return safeerror.NewFault(fault.Invalid, "audit recording requires a transaction")
 	}
 	entry, err = entry.Compact(r.config.valueLimit())
 	if err != nil {
@@ -129,11 +130,11 @@ func subjectHistory[M, K any](ctx context.Context, recorder *Recorder, subject m
 
 func restoreModel[M, K any](template model.Reference[M, K], row auditstore.Entry) (ModelRecord[M, K], error) {
 	if row.Action != "" || row.Version != 0 || row.Redacted {
-		return ModelRecord[M, K]{}, fault.New(fault.Invalid, "invalid stored model audit metadata")
+		return ModelRecord[M, K]{}, safeerror.NewFault(fault.Invalid, "invalid stored model audit metadata")
 	}
 	subject, present := row.Subject.Get()
 	if !present {
-		return ModelRecord[M, K]{}, fault.New(fault.Invalid, "model audit has no subject")
+		return ModelRecord[M, K]{}, safeerror.NewFault(fault.Invalid, "model audit has no subject")
 	}
 	identity, err := subject.Decode()
 	if err != nil {
@@ -148,7 +149,7 @@ func restoreModel[M, K any](template model.Reference[M, K], row auditstore.Entry
 		return ModelRecord[M, K]{}, err
 	}
 	if uint8(entry.Redaction()) != row.Redaction {
-		return ModelRecord[M, K]{}, fault.New(fault.Invalid, "stored model audit redaction policy does not match its payload")
+		return ModelRecord[M, K]{}, safeerror.NewFault(fault.Invalid, "stored model audit redaction policy does not match its payload")
 	}
 	changes, err := record.RestoreModel(template, entry)
 	if err != nil {

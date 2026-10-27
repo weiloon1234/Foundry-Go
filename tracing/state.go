@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func stateKeyPart(text string, maximum int, digitFirst bool) bool {
@@ -32,7 +33,9 @@ func validStateKey(key string) bool {
 }
 
 func normalizeState(text string) (string, error) {
-	invalid := func() (string, error) { return "", fault.New(fault.Invalid, "invalid or oversized tracestate") }
+	invalid := func() (string, error) {
+		return "", safeerror.NewFault(fault.Invalid, "invalid or oversized tracestate")
+	}
 	if len(text) > MaxStateBytes {
 		return invalid()
 	}

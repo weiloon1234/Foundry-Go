@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
@@ -46,7 +47,7 @@ type RequestMetrics struct {
 
 func NewRequestMetrics(maxSeries int) (*RequestMetrics, error) {
 	if maxSeries < 1 || maxSeries > 4096 {
-		return nil, fault.New(fault.Invalid, "invalid HTTP metric series bound")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid HTTP metric series bound")
 	}
 	return &RequestMetrics{limit: maxSeries, bounds: observability.DurationBuckets(), series: make(map[requestMetricKey]*RequestMetric)}, nil
 }

@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Relation loading qualifies a validated single-model predicate. Only explicit
@@ -14,7 +15,7 @@ func RequalifyCorrelation(q Subquery, alias string) Subquery {
 		return q
 	}
 	if len(q.Correlation.Sources) != 1 {
-		q.Err = fault.New(fault.Invalid, "model correlation requires one outer source when qualified")
+		q.Err = safeerror.NewFault(fault.Invalid, "model correlation requires one outer source when qualified")
 		return q
 	}
 	for from := range q.Correlation.Sources {
@@ -37,7 +38,7 @@ type correlationRenamer struct {
 func (r *correlationRenamer) visit(depth int) bool {
 	r.nodes++
 	if depth > MaxExpressionDepth || r.nodes > MaxExpressionNodes {
-		r.err = fault.New(fault.Invalid, "correlation qualification exceeds its resource bound")
+		r.err = safeerror.NewFault(fault.Invalid, "correlation qualification exceeds its resource bound")
 	}
 	return r.err == nil
 }
@@ -54,18 +55,18 @@ func (r *correlationRenamer) query(q Subquery, depth int) Subquery {
 		return q
 	}
 	if q.Node.Source.Name() == r.from {
-		r.err = fault.New(fault.Invalid, "correlation shadows its outer source")
+		r.err = safeerror.NewFault(fault.Invalid, "correlation shadows its outer source")
 		return q
 	}
 	for _, j := range q.Node.Joins {
 		if j.Source.Name() == r.from {
-			r.err = fault.New(fault.Invalid, "correlation shadows its outer source")
+			r.err = safeerror.NewFault(fault.Invalid, "correlation shadows its outer source")
 			return q
 		}
 	}
 	required := *q.Correlation
 	if r.from != r.to && required.Sources[r.to] != nil {
-		r.err = fault.New(fault.Invalid, "qualified correlation repeats an outer source")
+		r.err = safeerror.NewFault(fault.Invalid, "qualified correlation repeats an outer source")
 		return q
 	}
 	required.Sources = maps.Clone(required.Sources)
@@ -96,7 +97,7 @@ func (r *correlationRenamer) avoidCapture(node SelectNode, required ScopeRequire
 		return node
 	}
 	if count != 1 {
-		r.err = fault.New(fault.Invalid, "invalid or repeated select source")
+		r.err = safeerror.NewFault(fault.Invalid, "invalid or repeated select source")
 		return node
 	}
 	names, err := NamesInSelects(node)

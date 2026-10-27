@@ -2,11 +2,11 @@ package database
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const savepointCleanupTimeout = 5 * time.Second
@@ -19,7 +19,7 @@ const savepointCleanupTimeout = 5 * time.Second
 // even when application code ignores the savepoint error.
 func (tx *Tx) Savepoint(ctx context.Context, fn func(*Tx) error) error {
 	if fn == nil {
-		return fault.New(fault.Invalid, "savepoint callback is nil")
+		return safeerror.NewFault(fault.Invalid, "savepoint callback is nil")
 	}
 	release, err := tx.enter()
 	if err != nil {
@@ -34,7 +34,7 @@ func (tx *Tx) Savepoint(ctx context.Context, fn func(*Tx) error) error {
 	}
 	child := &Tx{statementSite: tx.instrumented().locate(ctx).site, owner: tx.owner, raw: tx.raw, scope: &operationScope{ctx: scope, cancel: tx.control.cancel}, classify: tx.classify, control: tx.control, state: TxActive, observers: tx.observers, timeSource: tx.timeSource}
 	err = invokeScope("savepoint callback", func() error { return fn(child) })
-	err = errors.Join(err, child.finishScope())
+	err = safeerror.Join("database scope cleanup failed", err, child.finishScope())
 	if err == nil {
 		err = scope.Err()
 	}
@@ -46,7 +46,7 @@ func (tx *Tx) Savepoint(ctx context.Context, fn func(*Tx) error) error {
 			child.setState(TxUnknown)
 			tx.control.poison(cleanupErr)
 		}
-		return errors.Join(tx.classify.scoped("savepoint", err), cleanupErr)
+		return safeerror.Retain(err, safeerror.Join("database savepoint cleanup failed", tx.classify.scoped("savepoint", err), cleanupErr))
 	}
 	if _, err := execute(scope, tx.raw, tx.classify, tx.owner.instrumented(PrimaryPool).control(), "RELEASE SAVEPOINT "+name, nil); err != nil {
 		child.setState(TxUnknown)

@@ -2,7 +2,7 @@ package rows
 
 import (
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"unsafe"
 
@@ -64,7 +64,7 @@ func scalarRecord[V any](column ormcore.Column[V]) *valueRecordDefinition {
 		return row.Scan(column.Scan((*V)(p)))
 	}}
 	if column.Scan == nil || column.Bind == nil || column.Clone == nil {
-		d.record.Err = errors.Join(d.record.Err, ormcore.Invalid("value source requires its codec"))
+		d.record.Err = safeerror.Join("operation failed", d.record.Err, ormcore.Invalid("value source requires its codec"))
 	}
 	return d
 }
@@ -76,7 +76,7 @@ func valueSource[V any](q ValueSource[V]) (ormcore.RecordSource, ormcore.Column[
 	r, c := q.valueData(nil)
 	r.Source.Err = ormcore.ValidateRecordSource(r, reflect.TypeFor[V](), false)
 	if c.Scan == nil || c.Bind == nil || c.Clone == nil {
-		r.Source.Err = errors.Join(r.Source.Err, ormcore.Invalid("value set requires its codec"))
+		r.Source.Err = safeerror.Join("operation failed", r.Source.Err, ormcore.Invalid("value set requires its codec"))
 	}
 	return r, c
 }

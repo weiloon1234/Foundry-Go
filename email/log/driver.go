@@ -4,6 +4,7 @@ package log
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"log/slog"
 
 	"github.com/weiloon1234/Foundry-Go/email"
@@ -13,16 +14,16 @@ type Driver struct{ logger *slog.Logger }
 
 func New(logger *slog.Logger) (*Driver, error) {
 	if logger == nil {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	return &Driver{logger: logger}, nil
 }
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.logger == nil || ctx == nil || out.Validate() != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	if ctx.Err() != nil {
-		return email.Receipt{}, email.Transient
+		return email.Receipt{}, emaildiag.Failure(email.Transient)
 	}
 	d.logger.InfoContext(ctx, "email acceptance simulated", "recipients", out.Message().RecipientCount(), "bytes", out.Size(), "attachments", len(out.Attachments()))
 	return email.Receipt{}, nil

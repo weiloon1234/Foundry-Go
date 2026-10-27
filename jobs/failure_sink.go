@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -39,7 +40,7 @@ type FailureSink interface {
 func WithFailureSink(sink FailureSink) WorkerOption {
 	return func(worker *Worker) error {
 		if sink == nil || isNil(sink) {
-			return fault.New(fault.Invalid, "job failure sink is required")
+			return safeerror.NewFault(fault.Invalid, "job failure sink is required")
 		}
 		worker.sinks = append(worker.sinks, sink)
 		return nil
@@ -56,7 +57,7 @@ func failureSinks(key foundation.Key[*Dispatcher]) foundation.Collection[failure
 // dispatcher named by key. id names the sink uniquely for that dispatcher.
 func RegisterFailureSink(r *foundation.Registrar, key foundation.Key[*Dispatcher], id string, construct func(foundation.Resolver) (FailureSink, error)) error {
 	if construct == nil || r == nil || key.Name() == "" {
-		return fault.New(fault.Invalid, "job failure sink requires a dispatcher and constructor")
+		return safeerror.NewFault(fault.Invalid, "job failure sink requires a dispatcher and constructor")
 	}
 	return foundation.Contribute(r, failureSinks(key), id, func(resolver foundation.Resolver) (failureSinkContribution, error) {
 		sink, err := construct(resolver)
@@ -64,7 +65,7 @@ func RegisterFailureSink(r *foundation.Registrar, key foundation.Key[*Dispatcher
 			return failureSinkContribution{}, err
 		}
 		if sink == nil || isNil(sink) {
-			return failureSinkContribution{}, fault.New(fault.Invalid, "job failure sink constructor returned nil")
+			return failureSinkContribution{}, safeerror.NewFault(fault.Invalid, "job failure sink constructor returned nil")
 		}
 		return failureSinkContribution{sink}, nil
 	})

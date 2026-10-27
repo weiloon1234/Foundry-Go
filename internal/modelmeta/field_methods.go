@@ -2,6 +2,7 @@ package modelmeta
 
 import (
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"strings"
 )
@@ -43,20 +44,20 @@ func FieldMethods(model reflect.Type, fields map[string]reflect.Type) ([]FieldMe
 		name := strings.TrimPrefix(method.Name, prefix)
 		stored, ok := fields[name]
 		if !ok {
-			return nil, fmt.Errorf("model %s targets no persisted field: %s", strings.ToLower(prefix), method.Name)
+			return nil, safeerror.New(fmt.Sprintf("model %s targets no persisted field: %s", strings.ToLower(prefix), method.Name))
 		}
 		method, ok = model.MethodByName(method.Name)
 		if !ok {
-			return nil, fmt.Errorf("model field method %s requires a value receiver", prefix+name)
+			return nil, safeerror.New(fmt.Sprintf("model field method %s requires a value receiver", prefix+name))
 		}
 		sig := method.Type
 		valid := !sig.IsVariadic() && sig.NumOut() == 2 && sig.Out(1) == errorType
 		if prefix == "Mutate" {
 			if !valid || sig.NumIn() != 2 || !ValidMutatorInput(sig.In(1)) || sig.Out(0) != stored {
-				return nil, fmt.Errorf("model mutator %s requires signature (Input) (fieldType, error) with a concrete non-null input", method.Name)
+				return nil, safeerror.New(fmt.Sprintf("model mutator %s requires signature (Input) (fieldType, error) with a concrete non-null input", method.Name))
 			}
 		} else if !valid || sig.NumIn() != 1 || sig.Out(0).Kind() == reflect.Interface {
-			return nil, fmt.Errorf("model accessor %s requires signature () (Result, error) with a concrete result", method.Name)
+			return nil, safeerror.New(fmt.Sprintf("model accessor %s requires signature () (Result, error) with a concrete result", method.Name))
 		}
 		methods = append(methods, FieldMethod{Field: name, Prefix: prefix, Bound: method.Func.Interface()})
 	}

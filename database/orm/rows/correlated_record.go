@@ -1,7 +1,7 @@
 package rows
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -72,7 +72,7 @@ func projectCorrelation[S, R any](c ormcore.Correlation, schema Schema[R], mappi
 		}
 	}
 	if r.Owner == nil {
-		r.Correlation.Source.Err = errors.Join(r.Correlation.Source.Err, ormcore.Invalid("correlated projection requires a declaration"))
+		r.Correlation.Source.Err = safeerror.Join("operation failed", r.Correlation.Source.Err, ormcore.Invalid("correlated projection requires a declaration"))
 	}
 	return r
 }

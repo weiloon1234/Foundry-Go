@@ -2,7 +2,7 @@ package orm
 
 import (
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"unsafe"
 
@@ -381,7 +381,7 @@ func Or[M any](ps ...Predicate[M]) Predicate[M] { return junction(true, ps) }
 // Not negates a condition. Example: Not(users.Email.Like("%@example.com")).
 func Not[M any](p Predicate[M]) Predicate[M] {
 	if p.owner == nil && p.rawScope != reflect.TypeFor[M]() {
-		p.err = errors.Join(p.err, invalid("predicate has no table declaration"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("predicate has no table declaration"))
 	}
 	p.expression = querycore.RetainPredicate(querycore.Negation{Child: querycore.PredicateNode(p.expression)})
 	return p
@@ -390,18 +390,18 @@ func junction[M any](or bool, ps []Predicate[M]) Predicate[M] {
 	p := Predicate[M]{}
 	children := make([]querycore.Expression, len(ps))
 	for i, x := range ps {
-		p.err = errors.Join(p.err, x.err)
+		p.err = safeerror.Join("operation failed", p.err, x.err)
 		if x.owner != nil {
 			if p.owner != nil && p.owner != x.owner {
-				p.err = errors.Join(p.err, invalid("predicates must belong to the same table declaration"))
+				p.err = safeerror.Join("operation failed", p.err, invalid("predicates must belong to the same table declaration"))
 			}
 			p.owner = x.owner
 		} else if x.rawScope != reflect.TypeFor[M]() {
-			p.err = errors.Join(p.err, invalid("predicate has no table declaration"))
+			p.err = safeerror.Join("operation failed", p.err, invalid("predicate has no table declaration"))
 		}
 		if x.rawScope != nil {
 			if x.rawScope != reflect.TypeFor[M]() {
-				p.err = errors.Join(p.err, invalid("raw predicate belongs to a different model"))
+				p.err = safeerror.Join("operation failed", p.err, invalid("raw predicate belongs to a different model"))
 			}
 			p.rawScope = x.rawScope
 		}

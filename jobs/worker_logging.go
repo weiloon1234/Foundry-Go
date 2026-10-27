@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type WorkerOption func(*Worker) error
@@ -17,7 +18,7 @@ type WorkerOption func(*Worker) error
 func WithWorkerLogger(logger *slog.Logger) WorkerOption {
 	return func(worker *Worker) error {
 		if logger == nil {
-			return fault.New(fault.Invalid, "job worker requires a non-nil logger")
+			return safeerror.NewFault(fault.Invalid, "job worker requires a non-nil logger")
 		}
 		worker.logger = logger
 		return nil

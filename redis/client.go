@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 )
 
@@ -66,13 +66,13 @@ func Open(ctx context.Context, config Config) (*Client, error) {
 		return nil, err
 	}
 	if err = client.Start(ctx); err != nil {
-		return nil, errors.Join(err, client.Close(context.Background()))
+		return nil, safeerror.Join("operation failed", err, client.Close(context.Background()))
 	}
 	return client, nil
 }
 func (c *Client) valid(ctx context.Context) error {
 	if c == nil || c.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "Redis needs an initialized client and context")
+		return safeerror.NewFault(fault.Invalid, "Redis needs an initialized client and context")
 	}
 	return nil
 }
@@ -106,7 +106,7 @@ func (c *Client) Start(ctx context.Context) error {
 	c.mu.Lock()
 	if c.closing {
 		c.mu.Unlock()
-		return fault.New(fault.Closed, "Redis client is closed")
+		return safeerror.NewFault(fault.Closed, "Redis client is closed")
 	}
 	if c.started {
 		c.mu.Unlock()
@@ -128,7 +128,7 @@ func (c *Client) Start(ctx context.Context) error {
 	}
 	if !c.enter() {
 		c.mu.Unlock()
-		return fault.New(fault.Closed, "Redis client is closed")
+		return safeerror.NewFault(fault.Closed, "Redis client is closed")
 	}
 	c.started = true
 	c.mu.Unlock()
@@ -141,14 +141,14 @@ func (c *Client) Start(ctx context.Context) error {
 	err := classify(attempt, raw.Ping(attempt).Err())
 	cancel()
 	if err != nil {
-		err = errors.Join(err, classify(context.Background(), raw.Close()))
+		err = safeerror.Join("operation failed", err, classify(context.Background(), raw.Close()))
 	}
 	c.mu.Lock()
 	if err != nil {
 		c.raw = nil
 	}
 	if err == nil && c.closing {
-		err = fault.New(fault.Closed, "Redis client closed during startup")
+		err = safeerror.NewFault(fault.Closed, "Redis client closed during startup")
 	}
 	c.startErr = err
 	c.ready.Store(err == nil)
@@ -174,11 +174,11 @@ func (c *Client) execute(ctx context.Context, operation func(context.Context, *d
 		return nil, err
 	}
 	if !c.enter() {
-		return nil, fault.New(fault.Closed, "Redis client is closed")
+		return nil, safeerror.NewFault(fault.Closed, "Redis client is closed")
 	}
 	defer c.leave()
 	if !c.ready.Load() {
-		return nil, fault.New(fault.Conflict, "Redis client has not started successfully")
+		return nil, safeerror.NewFault(fault.Conflict, "Redis client has not started successfully")
 	}
 	if err := c.slots.Acquire(ctx, admission.Wait(c.config.OperationTimeout), c.stopping); err != nil {
 		return nil, err

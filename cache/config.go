@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Config bounds one application's typed cache access. Namespace is mandatory.
@@ -38,7 +39,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.MaxKeyBytes <= 0 || c.MaxKeyBytes > MaxKeyBytes || c.MaxValueBytes <= 0 || c.MaxDeclarations <= 0 || c.MaxBatchEntries <= 0 || c.MaxBatchEntries > MaxBatchEntries || c.MaxTags <= 0 || c.MaxTags > MaxTags || c.MaxFills <= 0 || c.MaxFillWaiters <= 0 || c.Timeout <= 0 || c.LoadTimeout <= 0 || c.LoadTimeout > MaxLoadTimeout {
-		return fault.New(fault.Invalid, "invalid cache limits")
+		return safeerror.NewFault(fault.Invalid, "invalid cache limits")
 	}
 	return nil
 }

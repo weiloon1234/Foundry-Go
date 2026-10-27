@@ -2,6 +2,7 @@ package data
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -29,7 +30,7 @@ func decode[V any](text string, l Limits) (V, error) {
 		return *new(V), err
 	}
 	if canonical != text {
-		return *new(V), fault.New(fault.Invalid, "stored Redis data is not canonical JSON")
+		return *new(V), safeerror.NewFault(fault.Invalid, "stored Redis data is not canonical JSON")
 	}
 	return snapshot.Decode()
 }

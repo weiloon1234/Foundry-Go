@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Limiter consumes capacity using only its declaration's key type. Its zero value
@@ -20,7 +21,7 @@ func (l Limiter[K]) Name() Name   { return (Declaration[K]{l.definition}).Name()
 func (l Limiter[K]) Limit() Limit { return (Declaration[K]{l.definition}).Limit() }
 func (l Limiter[K]) Validate() error {
 	if l.store == nil || l.store.backend == nil {
-		return fault.New(fault.Invalid, "rate limiter is not bound")
+		return safeerror.NewFault(fault.Invalid, "rate limiter is not bound")
 	}
 	return (Declaration[K]{l.definition}).Validate()
 }
@@ -58,7 +59,7 @@ func (l Limiter[K]) TakeWith(ctx context.Context, cost uint32, resolve func(cont
 // is not refunded when fn fails, and nothing is retried.
 func (l Limiter[K]) Attempt(ctx context.Context, key K, cost uint32, fn func(context.Context) error) (Decision, error) {
 	if fn == nil {
-		return Decision{}, fault.New(fault.Invalid, "rate limit attempt requires a callback")
+		return Decision{}, safeerror.NewFault(fault.Invalid, "rate limit attempt requires a callback")
 	}
 	decision, err := l.Take(ctx, key, cost)
 	if err != nil || !decision.Allowed {
@@ -139,7 +140,7 @@ func (l Limiter[K]) inspect(ctx context.Context, key K, fn func(context.Context,
 	}
 	backend, ok := l.store.backend.(InspectBackend)
 	if !ok {
-		return fault.New(fault.Invalid, "rate limit backend does not support inspection")
+		return safeerror.NewFault(fault.Invalid, "rate limit backend does not support inspection")
 	}
 	return l.run(ctx, func(context.Context) (K, error) { return key, nil }, func(ctx context.Context, address Key) error {
 		return fn(ctx, backend, address)
@@ -154,7 +155,7 @@ func (l Limiter[K]) run(ctx context.Context, resolve func(context.Context) (K, e
 		return err
 	}
 	if ctx == nil || resolve == nil {
-		return fault.New(fault.Invalid, "rate limiting requires context and key resolver")
+		return safeerror.NewFault(fault.Invalid, "rate limiting requires context and key resolver")
 	}
 	operation, cancel := context.WithTimeout(ctx, l.store.config.Timeout)
 	defer cancel()
@@ -181,7 +182,7 @@ func (l Limiter[K]) run(ctx context.Context, resolve func(context.Context) (K, e
 			return err
 		}
 		if len(logical) > l.store.config.MaxKeyBytes {
-			return fault.New(fault.Invalid, "encoded rate limit key exceeds its limit")
+			return safeerror.NewFault(fault.Invalid, "encoded rate limit key exceeds its limit")
 		}
 		address, err := NewKey(l.store.config.Namespace, l.Name(), logical)
 		if err != nil {

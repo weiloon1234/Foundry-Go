@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -27,7 +28,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.MaxKeyBytes <= 0 || c.MaxKeyBytes > keyspace.MaxKeyBytes || c.MaxDeclarations <= 0 || c.MaxConcurrent <= 0 || c.Timeout <= 0 {
-		return fault.New(fault.Invalid, "invalid rate limit store bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid rate limit store bounds")
 	}
 	return nil
 }
@@ -45,7 +46,7 @@ type Store struct {
 
 func NewStore(backend Backend, config Config) (*Store, error) {
 	if backend == nil {
-		return nil, fault.New(fault.Invalid, "rate limit store requires a backend")
+		return nil, safeerror.NewFault(fault.Invalid, "rate limit store requires a backend")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err

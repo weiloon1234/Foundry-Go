@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -35,7 +36,7 @@ func messageID(m Message, key IdempotencyKey, domain string) (string, error) {
 		digest := sha256.Sum256([]byte("foundry.email.message-id\x00" + string(key)))
 		copy(id[:], digest[:])
 	} else if _, err := rand.Read(id[:]); err != nil {
-		return "", Construction
+		return "", emaildiag.Failure(Construction)
 	}
 	return "<" + hex.EncodeToString(id[:]) + "@" + domain + ">", nil
 }
@@ -81,10 +82,10 @@ func buildMIME(m Message, attachments []ResolvedAttachment, limit int, id string
 	body := func(w io.Writer) error { return writeRelated(w, m, inline) }
 	if len(ordinary) > 0 {
 		if err := writeMultipart(b, "mixed", body, ordinary); err != nil {
-			return nil, Construction
+			return nil, emaildiag.Failure(Construction)
 		}
 	} else if err := body(b); err != nil {
-		return nil, Construction
+		return nil, emaildiag.Failure(Construction)
 	}
 	return slices.Clone(b.Bytes()), nil
 }
@@ -154,12 +155,12 @@ func (w *childPartWriter) Write(data []byte) (int, error) {
 	for i, c := range data {
 		w.header = append(w.header, c)
 		if len(w.header) > 64<<10 {
-			return 0, Construction
+			return 0, emaildiag.Failure(Construction)
 		}
 		if len(w.header) >= 4 && string(w.header[len(w.header)-4:]) == "\r\n\r\n" {
 			h, err := textproto.NewReader(bufio.NewReader(bytes.NewReader(w.header))).ReadMIMEHeader()
 			if err != nil {
-				return 0, Construction
+				return 0, emaildiag.Failure(Construction)
 			}
 			w.body, err = w.parent.CreatePart(h)
 			if err != nil {
@@ -178,7 +179,7 @@ func writeChild(mw *multipart.Writer, write func(io.Writer) error) error {
 		return err
 	}
 	if w.body == nil {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	return nil
 }

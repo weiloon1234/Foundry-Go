@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -53,7 +53,7 @@ func JSONProperty[S, P, V any](parent JSONPath[S, P], field JSONField[P, V]) JSO
 // Example: expr.JSONIndex(scores, -1).
 func JSONIndex[S any, P ~[]V, V any](parent JSONPath[S, P], index int32) JSONPath[S, V] {
 	arg := integerArgument(index)
-	arg.Value.Err = errors.Join(arg.Value.Err, ormcore.JSONCollection(reflect.TypeFor[P]()))
+	arg.Value.Err = safeerror.Join("operation failed", arg.Value.Err, ormcore.JSONCollection(reflect.TypeFor[P]()))
 	return jsonPathOperation[S, V](querycore.JsonIndexOperation, jsonPathArg(parent), arg)
 }
 
@@ -61,19 +61,19 @@ func JSONIndex[S any, P ~[]V, V any](parent JSONPath[S, P], index int32) JSONPat
 // Example: expr.JSONMapKey(labels, "language").
 func JSONMapKey[S any, P ~map[K]V, K comparable, V any](parent JSONPath[S, P], key K) JSONPath[S, V] {
 	name, err := querycore.JSONMapKey(key)
-	return jsonPathOperation[S, V](querycore.JsonPropertyOperation, jsonPathArg(parent), jsonKeyArgument(name, false, errors.Join(err, ormcore.JSONCollection(reflect.TypeFor[P]()))))
+	return jsonPathOperation[S, V](querycore.JsonPropertyOperation, jsonPathArg(parent), jsonKeyArgument(name, false, safeerror.Join("operation failed", err, ormcore.JSONCollection(reflect.TypeFor[P]()))))
 }
 
 // JSONArrayElement selects a fixed array element using its validated declaration.
 // Example: expr.JSONArrayElement(fixed, Elements, 1).
 func JSONArrayElement[S, P, V any](parent JSONPath[S, P], array JSONFixedArray[P, V], index int32) JSONPath[S, V] {
 	arg := integerArgument(index)
-	arg.Value.Err = errors.Join(arg.Value.Err, array.Validate())
+	arg.Value.Err = safeerror.Join("operation failed", arg.Value.Err, array.Validate())
 	return jsonPathOperation[S, V](querycore.JsonIndexOperation, jsonPathArg(parent), arg)
 }
 
 func jsonKeyArgument(name string, literal bool, err error) ormcore.OperationArgument {
-	err = errors.Join(err, querycore.ValidateJSONProperty(name))
+	err = safeerror.Join("operation failed", err, querycore.ValidateJSONProperty(name))
 	arg := textOperationArgument(name, err)
 	node := arg.Value.Node.(querycore.ParameterNode)
 	node.Literal = literal
@@ -122,9 +122,9 @@ func JSONDocument[S, P any](path JSONPath[S, value.JSON[P]]) JSONPath[S, P] {
 func jsonRebind[S, P any](core ormcore.Expression) JSONPath[S, P] {
 	c := columnCodec(codec.Nullable(codec.JSON[P]()))
 	if core.Node == nil {
-		core.Err = errors.Join(core.Err, ormcore.Invalid("uninitialized JSON path"))
+		core.Err = safeerror.Join("operation failed", core.Err, ormcore.Invalid("uninitialized JSON path"))
 	}
-	core.Err = errors.Join(core.Err, c.Err)
+	core.Err = safeerror.Join("operation failed", core.Err, c.Err)
 	return JSONPath[S, P]{data: rowData[value.Nullable[value.JSON[P]]]{core: core, column: c}}
 }
 

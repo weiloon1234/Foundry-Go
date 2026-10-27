@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/faultwrap"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Cache accepts only its declared key and value types. Values are serialized
@@ -20,7 +21,7 @@ type Cache[K, V any] struct {
 
 func (c Cache[K, V]) valid(ctx context.Context) error {
 	if ctx == nil || c.store == nil || c.definition == nil {
-		return fault.New(fault.Invalid, "cache operation needs an initialized handle and context")
+		return safeerror.NewFault(fault.Invalid, "cache operation needs an initialized handle and context")
 	}
 	return c.store.active()
 }
@@ -68,14 +69,14 @@ func (c Cache[K, V]) execute(ctx context.Context, key K, fn func(context.Context
 
 func (c Cache[K, V]) address(key K) (EntryKey, error) {
 	if c.store == nil || c.definition == nil {
-		return EntryKey{}, fault.New(fault.Invalid, "cache address is not initialized")
+		return EntryKey{}, safeerror.NewFault(fault.Invalid, "cache address is not initialized")
 	}
 	logical, err := c.definition.keys.Encode(key)
 	if err != nil {
 		return EntryKey{}, err
 	}
 	if len(logical) > c.store.config.MaxKeyBytes {
-		return EntryKey{}, fault.New(fault.Invalid, "encoded cache key exceeds its limit")
+		return EntryKey{}, safeerror.NewFault(fault.Invalid, "encoded cache key exceeds its limit")
 	}
 	return NewEntryKey(c.store.config.Namespace, c.definition.name, logical)
 }
@@ -164,7 +165,7 @@ func (c Cache[K, V]) encode(ctx context.Context, value V, ttl TTL) ([]byte, erro
 		return nil, err
 	}
 	if len(data) > c.store.config.MaxValueBytes {
-		return nil, fault.New(fault.Invalid, "encoded cache value exceeds its limit")
+		return nil, safeerror.NewFault(fault.Invalid, "encoded cache value exceeds its limit")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

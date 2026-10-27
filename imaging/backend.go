@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Backend selects native discovery. AutoBackend is the default: portable codecs
@@ -23,10 +24,10 @@ const (
 
 // ErrNativeUnavailable matches a missing, disabled or incompatible native runtime,
 // or a requested native capability absent from the installed libvips build.
-var ErrNativeUnavailable = errors.New("native image capability is unavailable")
+var ErrNativeUnavailable = safeerror.New("native image capability is unavailable")
 
 func nativeFailure(message string) error {
-	return fault.Wrap(fault.Invalid, message, ErrNativeUnavailable)
+	return safeerror.WrapFault(fault.Invalid, message, ErrNativeUnavailable)
 }
 func nativeUnavailable() error {
 	return nativeFailure("requested image feature requires an available libvips runtime")

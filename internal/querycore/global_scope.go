@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -31,7 +32,7 @@ func (l *LazyScopes) Get(table string) ([]ScopeDefinition, error) {
 	l.Once.Do(func() {
 		defer l.Ready.Store(true)
 		if l.Source == nil {
-			l.Err = fault.New(fault.Invalid, "global scope source is nil")
+			l.Err = safeerror.NewFault(fault.Invalid, "global scope source is nil")
 			return
 		}
 		var scopes []ScopeDefinition
@@ -54,7 +55,7 @@ func ValidateScopes(scopes []ScopeDefinition, table string) error {
 	seen := make(map[GlobalScopeName]bool, len(scopes))
 	for _, scope := range scopes {
 		if !sqlname.Valid(string(scope.Name)) || seen[scope.Name] || (scope.Resolve == nil) == (scope.Predicate == nil) {
-			return fault.New(fault.Invalid, "global scopes require unique identifier names and exactly one predicate source")
+			return safeerror.NewFault(fault.Invalid, "global scopes require unique identifier names and exactly one predicate source")
 		}
 		seen[scope.Name] = true
 		if scope.Predicate != nil {
@@ -72,7 +73,7 @@ func (q QueryCore) ValidateScopeOptions() error {
 		return nil
 	}
 	if q.Model == nil {
-		return fault.New(fault.Invalid, "global scope removal requires model metadata")
+		return safeerror.NewFault(fault.Invalid, "global scope removal requires model metadata")
 	}
 	if q.Model.ScopeSource != nil {
 		// Checked when the deferred scopes are expanded.
@@ -84,7 +85,7 @@ func (q QueryCore) ValidateScopeOptions() error {
 func CheckRemovals(scopes []ScopeDefinition, removed []GlobalScopeName) error {
 	for _, name := range removed {
 		if !slices.ContainsFunc(scopes, func(s ScopeDefinition) bool { return s.Name == name }) {
-			return fault.New(fault.Invalid, "global scope removal names an undeclared scope")
+			return safeerror.NewFault(fault.Invalid, "global scope removal names an undeclared scope")
 		}
 	}
 	return nil
@@ -156,7 +157,7 @@ func (q QueryCore) DeferredScopes(lazy *LazyScopes) ScopeNode {
 				ctx = node.Context
 			}
 			if ctx == nil {
-				return nil, fault.New(fault.Invalid, "global scope "+string(node.Name)+" reads the request context; execute the query or bind it with WithScopeContext")
+				return nil, safeerror.NewFault(fault.Invalid, "global scope "+string(node.Name)+" reads the request context; execute the query or bind it with WithScopeContext")
 			}
 			resolved, err := node.Resolve(ctx)
 			if err != nil {
@@ -173,7 +174,7 @@ func (q QueryCore) DeferredScopes(lazy *LazyScopes) ScopeNode {
 func ContextScopeResolver(scope ScopeDefinition, table string) func(context.Context) (Expression, error) {
 	return func(ctx context.Context) (Expression, error) {
 		var predicate Expression
-		err := callback.Invoke("global scope resolution", func() error {
+		err := callback.Isolated("global scope resolution", func() error {
 			var err error
 			predicate, err = scope.Resolve(ctx)
 			return err
@@ -182,7 +183,7 @@ func ContextScopeResolver(scope ScopeDefinition, table string) func(context.Cont
 			return nil, err
 		}
 		if predicate == nil {
-			return nil, fault.New(fault.Invalid, "global scope resolved to an empty predicate")
+			return nil, safeerror.NewFault(fault.Invalid, "global scope resolved to an empty predicate")
 		}
 		nodes := 0
 		if err := ValidateExpression(predicate, table, 0, &nodes); err != nil {
@@ -210,14 +211,14 @@ func (ScopeNode) ExpressionNode() {}
 
 func (n ScopeNode) Resolved(executing context.Context) (Expression, error) {
 	if n.Resolve == nil {
-		return nil, fault.New(fault.Invalid, "invalid global scope")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid global scope")
 	}
 	ctx := executing
 	if ctx == nil {
 		ctx = n.Context
 	}
 	if ctx == nil && n.NeedsContext {
-		return nil, fault.New(fault.Invalid, "global scope "+string(n.Name)+" reads the request context; execute the query or bind it with WithScopeContext")
+		return nil, safeerror.NewFault(fault.Invalid, "global scope "+string(n.Name)+" reads the request context; execute the query or bind it with WithScopeContext")
 	}
 	return n.Resolve(ctx)
 }

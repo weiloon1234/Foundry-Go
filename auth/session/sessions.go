@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	credentialcore "github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -48,7 +49,7 @@ func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provide
 }
 func (s *Sessions[M, K]) Validate() error {
 	if s == nil {
-		return fault.New(fault.Invalid, "session binding is missing")
+		return safeerror.NewFault(fault.Invalid, "session binding is missing")
 	}
 	if err := s.store.validate(); err != nil {
 		return err
@@ -84,10 +85,10 @@ func (s *Sessions[M, K]) verify(ctx context.Context, credential secret.String) (
 		}
 		record, present := found.Get()
 		if !present {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		if !record.Hash.Equal(hash) {
-			return fault.New(fault.Invalid, "session backend returned a different credential")
+			return safeerror.NewFault(fault.Invalid, "session backend returned a different credential")
 		}
 		info, err := s.info(record)
 		if err != nil {
@@ -171,10 +172,10 @@ func (s *Sessions[M, K]) WithObserver(observer auth.Observer) (*Sessions[M, K], 
 		return nil, err
 	}
 	if observer == nil {
-		return nil, fault.New(fault.Invalid, "session observer is nil")
+		return nil, safeerror.NewFault(fault.Invalid, "session observer is nil")
 	}
 	if s.observer != nil {
-		return nil, fault.New(fault.Duplicate, "session observer already configured")
+		return nil, safeerror.NewFault(fault.Duplicate, "session observer already configured")
 	}
 	next := *s
 	next.observer = observer
@@ -196,13 +197,13 @@ func (s *Sessions[M, K]) issueWith(ctx context.Context, proof auth.Proof[M, K], 
 		return Issued[M, K]{}, err
 	}
 	if deadline.IsSet() && !proof.HasIssuanceCheck() {
-		return Issued[M, K]{}, fault.New(fault.Invalid, "credential creation deadline requires a transactional proof check")
+		return Issued[M, K]{}, safeerror.NewFault(fault.Invalid, "credential creation deadline requires a transactional proof check")
 	}
 
 	var result Issued[M, K]
 	err := func(op context.Context) error {
 		if _, scoped := proof.AccessScopes(); scoped {
-			return fault.New(fault.Invalid, "scoped credential proofs cannot issue unscoped sessions")
+			return safeerror.NewFault(fault.Invalid, "scoped credential proofs cannot issue unscoped sessions")
 		}
 		if _, err := s.provider.Parse(proof.Identity()); err != nil {
 			return err
@@ -216,14 +217,14 @@ func (s *Sessions[M, K]) issueWith(ctx context.Context, proof auth.Proof[M, K], 
 		}
 		if proof.Assurance() == auth.PendingMFA {
 			if options.Remember {
-				return fault.New(fault.Invalid, "pending MFA cannot request remembered sessions")
+				return safeerror.NewFault(fault.Invalid, "pending MFA cannot request remembered sessions")
 			}
 			policy = s.store.config.Pending
 		}
 		var impersonator value.Optional[Impersonator]
 		if granted, present := grant.Get(); present {
 			if options.Remember || proof.Assurance() != auth.Authenticated || proof.HasIssuanceCheck() {
-				return fault.New(fault.Invalid, "impersonation sessions are fully authenticated, unchecked and never remembered")
+				return safeerror.NewFault(fault.Invalid, "impersonation sessions are fully authenticated, unchecked and never remembered")
 			}
 			policy, impersonator = granted.lifetime, value.Set(granted.impersonator)
 		}
@@ -241,13 +242,13 @@ func (s *Sessions[M, K]) issueWith(ctx context.Context, proof auth.Proof[M, K], 
 		if proof.HasIssuanceCheck() {
 			backend, ok := s.store.backend.(CheckedBackend)
 			if !ok {
-				return fault.New(fault.Invalid, "credential backend cannot enforce issuance checks")
+				return safeerror.NewFault(fault.Invalid, "credential backend cannot enforce issuance checks")
 			}
 			record, err = credentialcore.CheckCreation(op, proof.CheckIssuance, func(check func(context.Context, *database.Tx) error) (Record, error) {
 				if until, present := deadline.Get(); present {
 					completing, ok := s.store.backend.(DeadlineBackend)
 					if !ok {
-						return Record{}, fault.New(fault.Invalid, "credential backend cannot enforce a creation deadline")
+						return Record{}, safeerror.NewFault(fault.Invalid, "credential backend cannot enforce a creation deadline")
 					}
 					return completing.CreateBefore(op, s.address, request, until, check)
 				}
@@ -260,7 +261,7 @@ func (s *Sessions[M, K]) issueWith(ctx context.Context, proof auth.Proof[M, K], 
 			return err
 		}
 		if record.ID != id || record.Subject != request.Subject || !record.Hash.Equal(hash) || record.Assurance != request.Assurance || record.Remember != request.Remember || record.Lifetime != request.Lifetime || record.Device != request.Device || record.Impersonator != request.Impersonator {
-			return fault.New(fault.Invalid, "session backend changed issued credential metadata")
+			return safeerror.NewFault(fault.Invalid, "session backend changed issued credential metadata")
 		}
 		info, err := s.info(record)
 		if err != nil {
@@ -298,10 +299,10 @@ func (s *Sessions[M, K]) Rotate(ctx context.Context, credential secret.String) (
 		}
 		record, present := found.Get()
 		if !present {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		if !record.Hash.Equal(hash) {
-			return fault.New(fault.Invalid, "session backend returned a different rotated credential")
+			return safeerror.NewFault(fault.Invalid, "session backend returned a different rotated credential")
 		}
 		info, err := s.info(record)
 		if err != nil {
@@ -342,7 +343,7 @@ func (s *Sessions[M, K]) RevokeID(ctx context.Context, reference model.Reference
 		return false, err
 	}
 	if id.IsZero() {
-		return false, fault.New(fault.Invalid, "session revocation requires an identifier")
+		return false, safeerror.NewFault(fault.Invalid, "session revocation requires an identifier")
 	}
 	var removed bool
 	err := s.store.execute(ctx, func(op context.Context) error {
@@ -406,13 +407,13 @@ func (s *Sessions[M, K]) List(ctx context.Context, reference model.Reference[M, 
 			return err
 		}
 		if len(records) > MaxSessions {
-			return fault.New(fault.Invalid, "session backend exceeded result limit")
+			return safeerror.NewFault(fault.Invalid, "session backend exceeded result limit")
 		}
 		result = make([]Info[M, K], len(records))
 		seen := make(map[model.ID[Record]]bool, len(records))
 		for i, record := range records {
 			if record.Subject != identity || seen[record.ID] {
-				return fault.New(fault.Invalid, "session backend returned foreign or duplicate metadata")
+				return safeerror.NewFault(fault.Invalid, "session backend returned foreign or duplicate metadata")
 			}
 			seen[record.ID] = true
 			result[i], err = s.info(record)
@@ -432,14 +433,14 @@ func (s *Sessions[M, K]) Prune(ctx context.Context, limit int) (uint64, error) {
 		return 0, err
 	}
 	if limit < 1 || limit > MaxPageSize {
-		return 0, fault.New(fault.Invalid, "invalid session prune page size")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid session prune page size")
 	}
 	var count uint64
 	err := s.store.execute(ctx, func(op context.Context) error {
 		var err error
 		count, err = s.store.backend.Prune(op, s.address, limit)
 		if err == nil && count > uint64(limit) {
-			return fault.New(fault.Invalid, "session backend exceeded prune limit")
+			return safeerror.NewFault(fault.Invalid, "session backend exceeded prune limit")
 		}
 		return err
 	})

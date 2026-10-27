@@ -16,6 +16,7 @@ import (
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
@@ -77,7 +78,7 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 			return err
 		}
 		if !active[subject] {
-			return database.NotFound
+			return safeerror.Owned(string(database.NotFound), database.NotFound)
 		}
 		rows, err := extensionrow.For(owner, []model.Reference[M, K]{reference})
 		if err != nil {
@@ -88,7 +89,7 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 		return store.Translations.Query().Where(f.Scope.Eq(owner.Scope()), f.SubjectKey.Eq(subject)).OrderBy(f.Field.Asc(), f.Locale.Asc()).Limit(MaxRowsPerOwner+1).Each(ctx, tx, func(row store.Translation) error {
 			bytes += len(row.Value)
 			if len(result) >= MaxRowsPerOwner || bytes > MaxBatchBytes {
-				return fault.New(fault.Conflict, "translation result exceeds its row or byte limit")
+				return safeerror.NewFault(fault.Conflict, "translation result exceeds its row or byte limit")
 			}
 			if err := validateOwnerRow(rows, row); err != nil {
 				return err
@@ -126,7 +127,7 @@ func (f Field[M, K]) matchingKeys(ctx context.Context, m *Manager, locale i18n.L
 		// equality; only ownership/index columns are selected, never the text.
 		return rows.EachRead(ctx, tx, rows.Read(store.TranslationsIndex(store.Translations.Query().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.Field.Eq(string(f.Name())), fields.Locale.Eq(string(locale)), fields.Value.Eq(text)).OrderBy(fields.KeyColumn.Asc()).Limit(querycore.MaxIdentityBatch+1))), func(row store.TranslationIndex) error {
 			if len(keys) >= querycore.MaxIdentityBatch {
-				return fault.New(fault.Conflict, "translation matching scope exceeds its limit")
+				return safeerror.NewFault(fault.Conflict, "translation matching scope exceeds its limit")
 			}
 			if err := validateOwnerIndex(extensionrow.Unknown(f.definition.owner), row); err != nil {
 				return err
@@ -251,7 +252,7 @@ func cleanupSubject(ctx context.Context, tx *database.Tx, m *Manager, owner exte
 			return err
 		}
 		if retained[subject.Key] {
-			return fault.New(fault.Conflict, "translation cleanup requires a deleted owner")
+			return safeerror.NewFault(fault.Conflict, "translation cleanup requires a deleted owner")
 		}
 		_, err = deleteSubject(ctx, tx, subject)
 		return err

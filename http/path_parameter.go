@@ -3,6 +3,7 @@ package http
 import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PathParameter binds a named URL parameter to a concrete field of P. Its
@@ -34,7 +35,7 @@ func Param[P, V any](name string, codec PathCodec[V], field func(*P) *V) PathPar
 	return PathParameter[P]{name: name, scalar: scalar, decode: func(path *P, text string) error {
 		destination := field(path)
 		if destination == nil {
-			return fault.New(fault.Internal, "path field selector returned nil")
+			return safeerror.NewFault(fault.Internal, "path field selector returned nil")
 		}
 		decoded, err := codec.Parse(text)
 		if err != nil {
@@ -45,7 +46,7 @@ func Param[P, V any](name string, codec PathCodec[V], field func(*P) *V) PathPar
 	}, encode: func(path *P) (string, error) {
 		source := field(path)
 		if source == nil {
-			return "", fault.New(fault.Internal, "path field selector returned nil")
+			return "", safeerror.NewFault(fault.Internal, "path field selector returned nil")
 		}
 		return codec.Format(*source)
 	}}

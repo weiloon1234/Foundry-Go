@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonshape"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // URLSyntax describes the scalar codec's lexical contract before URL escaping.
@@ -49,7 +50,7 @@ type describedURLCodec[V any] struct {
 func describeURL[V any](codec PathCodec[V], description contract.Scalar[V], syntax URLSyntax) PathCodec[V] {
 	err := description.Validate()
 	if !validPathCodec(codec) {
-		err = fault.New(fault.Invalid, "URL scalar requires a codec")
+		err = safeerror.NewFault(fault.Invalid, "URL scalar requires a codec")
 	}
 	return describedURLCodec[V]{codec: codec, description: description, syntax: syntax, err: err}
 }
@@ -114,13 +115,13 @@ func (c enumURLCodec[E, P]) Parse(text string) (E, error) {
 		return *new(E), err
 	}
 	if !c.descriptor.Contains(value) {
-		return *new(E), fault.New(fault.Invalid, "invalid enum URL value")
+		return *new(E), safeerror.NewFault(fault.Invalid, "invalid enum URL value")
 	}
 	return value, nil
 }
 func (c enumURLCodec[E, P]) Format(value E) (string, error) {
 	if !c.descriptor.Contains(value) {
-		return "", fault.New(fault.Invalid, "invalid enum URL value")
+		return "", safeerror.NewFault(fault.Invalid, "invalid enum URL value")
 	}
 	return (textPathCodec[E, P]{}).Format(value)
 }

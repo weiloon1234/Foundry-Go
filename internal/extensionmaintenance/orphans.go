@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -159,7 +160,9 @@ func Prune[R any](ctx context.Context, store *extensions.Store, owner extensions
 	}
 	return count, nil
 }
-func invalid() error { return fault.New(fault.Invalid, "invalid model extension maintenance request") }
+func invalid() error {
+	return safeerror.NewFault(fault.Invalid, "invalid model extension maintenance request")
+}
 
 // Stale identifies one row recorded under an earlier scope of its registered
 // owner, such as rows written before a table rename or a declared storage model

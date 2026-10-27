@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -16,7 +17,7 @@ func validateCredential(address session.Address, hash session.Digest) error {
 		return err
 	}
 	if hash.IsZero() {
-		return fault.New(fault.Invalid, "session credential hash is empty")
+		return safeerror.NewFault(fault.Invalid, "session credential hash is empty")
 	}
 	return nil
 }
@@ -62,7 +63,7 @@ func (b *Backend) Lookup(ctx context.Context, address session.Address, hash sess
 		return value.Optional[session.Record]{}, err
 	}
 	if b == nil || b.db == nil || ctx == nil {
-		return value.Optional[session.Record]{}, fault.New(fault.Invalid, "session PostgreSQL operation requires a backend and context")
+		return value.Optional[session.Record]{}, safeerror.NewFault(fault.Invalid, "session PostgreSQL operation requires a backend and context")
 	}
 	scope, err := address.Key()
 	if err != nil {
@@ -109,7 +110,7 @@ func (b *Backend) Rotate(ctx context.Context, address session.Address, old, next
 		return value.Optional[session.Record]{}, err
 	}
 	if next.IsZero() || next.Equal(old) {
-		return value.Optional[session.Record]{}, fault.New(fault.Invalid, "session rotation requires a new secret hash")
+		return value.Optional[session.Record]{}, safeerror.NewFault(fault.Invalid, "session rotation requires a new secret hash")
 	}
 	var result value.Optional[session.Record]
 	err := b.within(ctx, func(tx *database.Tx) error {

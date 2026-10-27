@@ -1,6 +1,7 @@
 package querycore
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -9,7 +10,7 @@ import (
 // ResultCursorNode preserves the complete input window behind an allocated alias.
 func ResultCursorNode(source SelectNode, columns []Column, hasDecoder bool) (SelectNode, error) {
 	if len(columns) == 0 || len(columns) != len(source.Selections) || len(columns) > MaxExpressionNodes || !hasDecoder {
-		return SelectNode{}, fault.New(fault.Invalid, "cursor result requires bounded columns and a complete decoder")
+		return SelectNode{}, safeerror.NewFault(fault.Invalid, "cursor result requires bounded columns and a complete decoder")
 	}
 	names, err := NamesInSelects(source)
 	if err != nil {
@@ -26,7 +27,7 @@ func ResultCursorNode(source SelectNode, columns []Column, hasDecoder bool) (Sel
 // ResultCursorOrders validates identity and appends missing identity fields.
 func ResultCursorOrders(node SelectNode, columns []Column, orders []QueryOrder, unique []FieldRef) ([]QueryOrder, error) {
 	fail := func() ([]QueryOrder, error) {
-		return nil, fault.New(fault.Invalid, "cursor result requires bounded, unique output fields and a UniqueBy declaration")
+		return nil, safeerror.NewFault(fault.Invalid, "cursor result requires bounded, unique output fields and a UniqueBy declaration")
 	}
 	if node.Source.Query == nil || len(unique) == 0 || len(unique) > MaxCursorFields || len(orders) > MaxCursorFields {
 		return fail()
@@ -56,7 +57,7 @@ func ResultCursorOrders(node SelectNode, columns []Column, orders []QueryOrder, 
 		}
 	}
 	if len(orders) > MaxCursorFields {
-		return nil, fault.New(fault.Invalid, "cursor result exceeds its field bound")
+		return nil, safeerror.NewFault(fault.Invalid, "cursor result exceeds its field bound")
 	}
 	return orders, nil
 }
@@ -70,14 +71,14 @@ type ResultCursorField struct {
 // ResultCursorFields shares output codec/identity validation across typed adapters.
 func ResultCursorFields(node SelectNode, columns []Column, orders []QueryOrder, fields []ResultCursorField) ([]int, []bool, error) {
 	if len(fields) > len(columns) {
-		return nil, nil, fault.New(fault.Invalid, "cursor result exceeds its field bound")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "cursor result exceeds its field bound")
 	}
 	sensitivity, err := SelectSensitivity(node)
 	if err != nil {
 		return nil, nil, err
 	}
 	if len(sensitivity) != len(columns) {
-		return nil, nil, fault.New(fault.Invalid, "cursor sensitivity requires complete output metadata")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "cursor sensitivity requires complete output metadata")
 	}
 	sensitive := make(map[string]bool, len(columns))
 	byColumn := make(map[string]Column, len(columns))
@@ -88,10 +89,10 @@ func ResultCursorFields(node SelectNode, columns []Column, orders []QueryOrder, 
 	getters := make(map[string]int, len(fields))
 	for i, f := range fields {
 		if _, ok := getters[f.Name]; ok || !f.Valid {
-			return nil, nil, fault.New(fault.Invalid, "cursor result has invalid field getters")
+			return nil, nil, safeerror.NewFault(fault.Invalid, "cursor result has invalid field getters")
 		}
 		if _, ok := byColumn[f.Name]; !ok {
-			return nil, nil, fault.New(fault.Invalid, "cursor getter is not a declared output field")
+			return nil, nil, safeerror.NewFault(fault.Invalid, "cursor getter is not a declared output field")
 		}
 		getters[f.Name] = i
 	}
@@ -100,10 +101,10 @@ func ResultCursorFields(node SelectNode, columns []Column, orders []QueryOrder, 
 	for i, o := range orders {
 		j, ok := getters[o.Field.Column]
 		if !ok {
-			return nil, nil, fault.New(fault.Invalid, "cursor result requires declared codecs and getters for every ordered field")
+			return nil, nil, safeerror.NewFault(fault.Invalid, "cursor result requires declared codecs and getters for every ordered field")
 		}
 		if fields[j].Sensitive || sensitive[o.Field.Column] {
-			return nil, nil, fault.New(fault.Invalid, "sensitive fields cannot be cursor keys")
+			return nil, nil, safeerror.NewFault(fault.Invalid, "sensitive fields cannot be cursor keys")
 		}
 		indices[i] = j
 		required[i] = !byColumn[o.Field.Column].Nullable

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -36,7 +37,7 @@ func (b *Broker) reserve() (*subscriptionState, error) {
 	// Subscriptions are long-lived, so the bound fails fast instead of queueing;
 	// Overloaded tells callers the same request may succeed after one closes.
 	if len(b.subscriptions) >= b.config.MaxSubscriptions {
-		return nil, fault.New(fault.Overloaded, "pub/sub subscription capacity reached")
+		return nil, safeerror.NewFault(fault.Overloaded, "pub/sub subscription capacity reached")
 	}
 	lifetime, cancel := context.WithCancel(b.lifetime)
 	s := &subscriptionState{broker: b, ready: make(chan struct{}), done: make(chan struct{}), drained: make(chan struct{}), watchDone: make(chan struct{}), lifetime: lifetime, cancel: cancel}
@@ -83,7 +84,7 @@ func (s *subscriptionState) acquire(ctx context.Context) error {
 		return err
 	}
 	if s.reading {
-		return fault.New(fault.Conflict, "pub/sub subscription already has an active receiver")
+		return safeerror.NewFault(fault.Conflict, "pub/sub subscription already has an active receiver")
 	}
 	s.reading = true
 	return nil
@@ -110,7 +111,7 @@ func (s *Subscription[V]) Done() <-chan struct{} {
 }
 func (s *Subscription[V]) Err() error {
 	if s == nil || s.state == nil {
-		return fault.New(fault.Invalid, "pub/sub subscription is not initialized")
+		return safeerror.NewFault(fault.Invalid, "pub/sub subscription is not initialized")
 	}
 	s.state.mu.Lock()
 	defer s.state.mu.Unlock()
@@ -118,11 +119,11 @@ func (s *Subscription[V]) Err() error {
 }
 func (s *Subscription[V]) Close(ctx context.Context) error {
 	if s == nil || s.state == nil || ctx == nil {
-		return fault.New(fault.Invalid, "pub/sub close needs subscription and context")
+		return safeerror.NewFault(fault.Invalid, "pub/sub close needs subscription and context")
 	}
 	for frame, _ := ctx.Value(operationKey{}).(*operationFrame); frame != nil; frame = frame.parent {
 		if frame.subscription == s.state && frame.active.Load() {
-			return fault.New(fault.Cycle, "pub/sub receiver cannot wait for its own shutdown")
+			return safeerror.NewFault(fault.Cycle, "pub/sub receiver cannot wait for its own shutdown")
 		}
 	}
 	s.state.beginClose(ErrClosed)
@@ -140,7 +141,7 @@ func (s *Subscription[V]) Close(ctx context.Context) error {
 }
 func (s *Subscription[V]) Receive(ctx context.Context) (V, error) {
 	if s == nil || s.state == nil || ctx == nil {
-		return *new(V), fault.New(fault.Invalid, "pub/sub receive needs subscription and context")
+		return *new(V), safeerror.NewFault(fault.Invalid, "pub/sub receive needs subscription and context")
 	}
 	_, value, err := receive[V](ctx, s.state)
 	return value, err
@@ -168,7 +169,7 @@ func receive[V any](ctx context.Context, state *subscriptionState) (int, V, erro
 		}
 		index, known := state.channels[message.Channel]
 		if !known || len(message.Data) > state.broker.config.Buffer.PayloadBytes {
-			return fault.New(fault.Invalid, "pub/sub adapter returned an invalid channel or oversized payload")
+			return safeerror.NewFault(fault.Invalid, "pub/sub adapter returned an invalid channel or oversized payload")
 		}
 		position = index
 		snapshot, err := value.ParseJSON[V](string(message.Data))

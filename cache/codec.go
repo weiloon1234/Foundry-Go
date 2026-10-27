@@ -2,11 +2,14 @@ package cache
 
 import (
 	"bytes"
-	"encoding"
 	"encoding/json"
 	"io"
 
+	"encoding"
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -37,7 +40,7 @@ func NewCodec[V any](encode func(V) ([]byte, error), decode func([]byte) (V, err
 }
 func (c Codec[V]) Validate() error {
 	if c.encode == nil || c.decode == nil {
-		return fault.New(fault.Invalid, "cache value codec is not initialized")
+		return safeerror.NewFault(fault.Invalid, "cache value codec is not initialized")
 	}
 	return nil
 }
@@ -46,15 +49,18 @@ func (c Codec[V]) Validate() error {
 // It preserves dynamic JSON numbers as json.Number and rejects trailing documents.
 // Change the declaration name/version when changing an incompatible stored format.
 func JSON[V any]() Codec[V] {
-	return NewCodec(func(value V) ([]byte, error) { return json.Marshal(value) }, func(data []byte) (V, error) {
+	return NewCodec(func(value V) ([]byte, error) { return jsoncodec.Marshal(value) }, func(data []byte) (V, error) {
 		var value V
 		decoder := json.NewDecoder(bytes.NewReader(data))
-		decoder.UseNumber()
-		if err := decoder.Decode(&value); err != nil {
+		var raw json.RawMessage
+		if err := decoder.Decode(&raw); err != nil {
 			return *new(V), err
 		}
-		if err := decoder.Decode(new(any)); err != io.EOF {
-			return *new(V), fault.New(fault.Invalid, "cache JSON contains trailing input")
+		if err := jsoncodec.UnmarshalExact(raw, &value); err != nil {
+			return *new(V), err
+		}
+		if err := decoder.Decode(&raw); err != io.EOF {
+			return *new(V), safeerror.NewFault(fault.Invalid, "cache JSON contains trailing input")
 		}
 		return value, nil
 	})

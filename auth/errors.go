@@ -3,7 +3,10 @@
 // serialized attribution nor a model reference is evidence of authentication.
 package auth
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+)
 
 // Code is a transport-independent, stable authentication failure.
 type Code string
@@ -28,7 +31,18 @@ const (
 func (c Code) Error() string { return string(c) }
 
 // WithCause retains diagnostic identity without formatting credential details.
-func (c Code) WithCause(cause error) error { return &failure{code: c, cause: cause} }
+func (c Code) WithCause(cause error) error {
+	if cause == nil {
+		cause = c
+	}
+	failure := &failure{code: c, cause: cause}
+	switch c {
+	case Unauthenticated, Forbidden, MFARequired, CredentialLimit, ConfirmationRequired, ImpersonationForbidden:
+		return safeerror.Owned(failure.Error(), failure)
+	default:
+		return failure
+	}
+}
 
 type failure struct {
 	code  Code
@@ -42,5 +56,5 @@ func operationFailure(err error) error {
 	if err == nil {
 		return nil
 	}
-	return fault.Wrap(fault.Internal, "authentication operation failed", err)
+	return safeerror.WrapFailure(fault.Internal, "authentication operation failed", err)
 }

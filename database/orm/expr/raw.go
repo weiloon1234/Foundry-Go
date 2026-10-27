@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -22,5 +22,5 @@ func Raw[S, V any](sql string, args ...any) Selected[S, V] {
 func RawWithCodec[S, V any](c codec.Codec[V], sql string, args ...any) Selected[S, V] {
 	node := querycore.NewRawFragment(sql, args)
 	column := columnCodec(c)
-	return Selected[S, V]{data: rowData[V]{column: column, core: ormcore.Expression{Node: node, ReferenceFree: true, Refs: []ormcore.Reference{{Scope: reflect.TypeFor[S]()}}, Err: errors.Join(node.Validate(), column.Err)}}}
+	return Selected[S, V]{data: rowData[V]{column: column, core: ormcore.Expression{Node: node, ReferenceFree: true, Refs: []ormcore.Reference{{Scope: reflect.TypeFor[S]()}}, Err: safeerror.Join("operation failed", node.Validate(), column.Err)}}}
 }

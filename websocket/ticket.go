@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -39,15 +40,15 @@ type TicketRedeemer interface {
 func WithTickets(redeemers ...TicketRedeemer) Option {
 	return func(o *options) error {
 		if len(redeemers) == 0 || len(redeemers)+len(o.tickets) > MaxTicketRedeemers {
-			return fault.New(fault.Invalid, "WebSocket tickets require a bounded set of redeemers")
+			return safeerror.NewFault(fault.Invalid, "WebSocket tickets require a bounded set of redeemers")
 		}
 		for _, redeemer := range redeemers {
 			if redeemer == nil || !identifier.Semantic(string(redeemer.TicketSource())) {
-				return fault.New(fault.Invalid, "WebSocket ticket redeemer requires a credential source")
+				return safeerror.NewFault(fault.Invalid, "WebSocket ticket redeemer requires a credential source")
 			}
 			for _, existing := range o.tickets {
 				if existing.TicketSource() == redeemer.TicketSource() {
-					return fault.New(fault.Duplicate, "WebSocket ticket credential source is repeated")
+					return safeerror.NewFault(fault.Duplicate, "WebSocket ticket credential source is repeated")
 				}
 			}
 			o.tickets = append(o.tickets, redeemer)
@@ -132,7 +133,7 @@ func (h *Hub) redeemTicket(r *stdhttp.Request, credentials auth.Credentials, tic
 // an incomplete inspection, is a transient failure the client may retry.
 func ticketFailure(err error) foundryhttp.ErrorCode {
 	unauthenticated := false
-	complete := errorgraph.Walk(err, func(current error) bool {
+	complete := callback.ErrorWalk(err, func(current error) bool {
 		unauthenticated = errorgraph.Matches(current, auth.Unauthenticated)
 		return !unauthenticated
 	})

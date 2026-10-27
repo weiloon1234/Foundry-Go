@@ -3,6 +3,7 @@ package querycore
 import (
 	"context"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -13,7 +14,7 @@ type RelationLimits struct{ BatchSize, MaxRows, MaxDepth int }
 func DefaultRelationLimits() RelationLimits { return RelationLimits{500, 10000, 8} }
 func (l RelationLimits) Validate() error {
 	if l.BatchSize < 1 || l.BatchSize > 1000 || l.MaxRows < 1 || l.MaxRows > 1000000 || l.MaxDepth < 1 || l.MaxDepth > 32 {
-		return fault.New(fault.Invalid, "invalid relation resource limits")
+		return safeerror.NewFault(fault.Invalid, "invalid relation resource limits")
 	}
 	return nil
 }
@@ -22,9 +23,9 @@ func (l RelationLimits) Validate() error {
 func ConsumeRelationBudget(remaining *int, count int, attached bool) error {
 	if count > *remaining {
 		if attached {
-			return fault.New(fault.Invalid, "attached related models exceed the shared loading budget")
+			return safeerror.NewFault(fault.Invalid, "attached related models exceed the shared loading budget")
 		}
-		return fault.New(fault.Invalid, "related rows exceed the shared loading budget")
+		return safeerror.NewFault(fault.Invalid, "related rows exceed the shared loading budget")
 	}
 	*remaining -= count
 	return nil
@@ -85,7 +86,7 @@ func GroupRelationRows[N any](rows []N, seen map[sqlvalue.Value]bool, read func(
 			return nil, err
 		}
 		if !present || !seen[key] {
-			return nil, fault.New(fault.Invalid, "related row key does not match requested keys; check key equality semantics")
+			return nil, safeerror.NewFault(fault.Invalid, "related row key does not match requested keys; check key equality semantics")
 		}
 		group, exists := groups[key]
 		if !exists {

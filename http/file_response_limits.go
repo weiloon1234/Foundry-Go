@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // FileResponseLimits bounds a file representation and native range parsing.
@@ -22,12 +23,12 @@ func DefaultFileResponseLimits() FileResponseLimits {
 }
 func (l FileResponseLimits) Validate() error {
 	if l.Bytes <= 0 || l.Ranges <= 0 || l.Ranges > 128 || l.RangeBytes <= 0 || l.RangeBytes > 65536 {
-		return fault.New(fault.Invalid, "invalid file response limits")
+		return safeerror.NewFault(fault.Invalid, "invalid file response limits")
 	}
 	// Keep the native sum of ranges and multipart framing representable even
 	// when an application configures extraordinarily large virtual sources.
 	if l.Bytes > math.MaxInt64/int64(l.Ranges+1) {
-		return fault.New(fault.Invalid, "file response limits exceed safe range arithmetic")
+		return safeerror.NewFault(fault.Invalid, "file response limits exceed safe range arithmetic")
 	}
 	return nil
 }
@@ -37,13 +38,13 @@ func (l FileResponseLimits) Validate() error {
 // rejected instead of silently choosing one of several competing declarations.
 func (l FileResponseLimits) checkRange(values []string) error {
 	if len(values) > 1 {
-		return BadRequest
+		return BadRequest.WithCause(nil)
 	}
 	if len(values) == 0 || values[0] == "" {
 		return nil
 	}
 	if len(values[0]) > l.RangeBytes || strings.Count(values[0], ",") >= l.Ranges {
-		return BadRequest
+		return BadRequest.WithCause(nil)
 	}
 	return nil
 }

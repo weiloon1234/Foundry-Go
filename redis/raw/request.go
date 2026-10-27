@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -45,7 +46,7 @@ func (r Request) Validate(ns keyspace.Namespace, l Limits) error {
 		return err
 	}
 	if r.invalid || r.name == "" || len(r.args) > l.Arguments || r.Bytes() > l.RequestBytes {
-		return fault.New(fault.Invalid, "invalid or oversized raw Redis request")
+		return safeerror.NewFault(fault.Invalid, "invalid or oversized raw Redis request")
 	}
 	keys := 0
 	for _, a := range r.args {
@@ -54,13 +55,13 @@ func (r Request) Validate(ns keyspace.Namespace, l Limits) error {
 		}
 		if a.key.text != "" {
 			if a.key.Namespace() != ns {
-				return fault.New(fault.Invalid, "raw Redis keys must belong to the configured namespace")
+				return safeerror.NewFault(fault.Invalid, "raw Redis keys must belong to the configured namespace")
 			}
 			keys++
 		}
 	}
 	if keys == 0 {
-		return fault.New(fault.Invalid, "raw Redis requests require a scoped key")
+		return safeerror.NewFault(fault.Invalid, "raw Redis requests require a scoped key")
 	}
 	return nil
 }

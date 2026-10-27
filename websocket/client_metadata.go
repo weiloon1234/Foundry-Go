@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
@@ -80,7 +81,7 @@ type ClientDescription struct {
 // counts, origins or credential refresh policy.
 func (limits ClientLimits) Validate() error {
 	if limits.OperationMilliseconds < 1 || limits.OperationMilliseconds > int64(time.Minute/time.Millisecond) {
-		return fault.New(fault.Invalid, "invalid client operation bound")
+		return safeerror.NewFault(fault.Invalid, "invalid client operation bound")
 	}
 	config := DefaultConfig()
 	config.MaxConnections, config.MaxPresenceScopes = 1, 1
@@ -99,7 +100,7 @@ func (limits ClientLimits) Validate() error {
 // NewDistributed. It starts no hub, opens no sockets and invokes no handlers.
 func DescribeClient(registry *Registry, config Config) (ClientDescription, error) {
 	if registry == nil {
-		return ClientDescription{}, fault.New(fault.Invalid, "client contract requires a WebSocket registry")
+		return ClientDescription{}, safeerror.NewFault(fault.Invalid, "client contract requires a WebSocket registry")
 	}
 	if err := config.Validate(); err != nil {
 		return ClientDescription{}, err

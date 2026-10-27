@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/outboxstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -34,7 +35,7 @@ func (s Selection) validate() (Selection, error) {
 		s.Limit = 1000
 	}
 	if s.Limit < 1 || s.Limit > MaxOperationBatch || s.Kind != "" && !identifier.Semantic(s.Kind) {
-		return s, fault.New(fault.Invalid, "invalid outbox selection kind or batch limit")
+		return s, safeerror.NewFault(fault.Invalid, "invalid outbox selection kind or batch limit")
 	}
 	return s, nil
 }
@@ -60,7 +61,7 @@ func (p *Publisher) Requeue(ctx context.Context, selection Selection) (int, erro
 		return 0, err
 	}
 	if p == nil || p.writer == nil || ctx == nil {
-		return 0, fault.New(fault.Invalid, "outbox requeue requires an initialized publisher and context")
+		return 0, safeerror.NewFault(fault.Invalid, "outbox requeue requires an initialized publisher and context")
 	}
 	now, err := temporal.NewDateTime(p.config.Clock.Now().Truncate(time.Microsecond))
 	if err != nil {
@@ -97,7 +98,7 @@ func (p *Publisher) Prune(ctx context.Context, cutoff time.Time, limit int) (int
 		limit = 1000
 	}
 	if p == nil || p.writer == nil || ctx == nil || limit < 1 || limit > MaxOperationBatch || cutoff.IsZero() {
-		return 0, fault.New(fault.Invalid, "outbox prune requires a publisher, cutoff and batch limit")
+		return 0, safeerror.NewFault(fault.Invalid, "outbox prune requires a publisher, cutoff and batch limit")
 	}
 	before, err := temporal.NewDateTime(cutoff.UTC().Truncate(time.Microsecond))
 	if err != nil {
@@ -142,7 +143,7 @@ func (p *Publisher) Failed(ctx context.Context, selection Selection) ([]Failure,
 		return nil, err
 	}
 	if p == nil || p.writer == nil || ctx == nil || selection.Limit > 100 {
-		return nil, fault.New(fault.Invalid, "outbox failure listing requires a publisher, context and at most 100 rows")
+		return nil, safeerror.NewFault(fault.Invalid, "outbox failure listing requires a publisher, context and at most 100 rows")
 	}
 	fields := outboxstore.Messages
 	var result []Failure
@@ -170,7 +171,7 @@ type Stats struct {
 
 func (p *Publisher) Stats(ctx context.Context) (Stats, error) {
 	if p == nil || p.writer == nil || ctx == nil {
-		return Stats{}, fault.New(fault.Invalid, "outbox stats require an initialized publisher and context")
+		return Stats{}, safeerror.NewFault(fault.Invalid, "outbox stats require an initialized publisher and context")
 	}
 	fields := outboxstore.Messages
 	var stats Stats

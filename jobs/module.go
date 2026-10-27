@@ -1,9 +1,11 @@
 package jobs
 
 import (
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
-	"slices"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module preserves the advanced single-connection API. Named assembly uses
@@ -17,7 +19,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*Dispatcher], dispatc
 			return err
 		}
 		if dispatch.Namespace != worker.Namespace {
-			return fault.New(fault.Invalid, "job module dispatcher and worker must share a namespace")
+			return safeerror.NewFault(fault.Invalid, "job module dispatcher and worker must share a namespace")
 		}
 		if err := register(r); err != nil {
 			return err
@@ -32,7 +34,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*Dispatcher], dispatc
 func ConnectionModule(name foundation.ProviderID, key foundation.Key[*Dispatcher], dispatch DispatchConfig, requires []foundation.ProviderID, construct func(foundation.Resolver) (Backend, []Declaration, error)) foundation.Module {
 	return foundation.Module{Name: name, Requires: slices.Clone(requires), OnRegister: func(r *foundation.Registrar) error {
 		if construct == nil {
-			return fault.New(fault.Invalid, "job module requires a backend and declaration factory")
+			return safeerror.NewFault(fault.Invalid, "job module requires a backend and declaration factory")
 		}
 		if err := dispatch.Validate(); err != nil {
 			return err
@@ -85,7 +87,7 @@ type workerBinding struct{}
 
 func validateWorkerDispatcher(dispatcher *Dispatcher, config WorkerConfig) error {
 	if dispatcher == nil || dispatcher.slots == nil || dispatcher.config.Namespace != config.Namespace {
-		return fault.New(fault.Invalid, "worker and dispatcher must share a namespace")
+		return safeerror.NewFault(fault.Invalid, "worker and dispatcher must share a namespace")
 	}
 	return nil
 }

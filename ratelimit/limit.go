@@ -2,8 +2,10 @@
 package ratelimit
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxWindow bounds live policy retention and retry durations.
@@ -22,7 +24,7 @@ func PerMinute(requests uint32) Limit { return Limit{requests, time.Minute} }
 func PerHour(requests uint32) Limit   { return Limit{requests, time.Hour} }
 func (l Limit) Validate() error {
 	if l.Requests == 0 || l.Window < time.Millisecond || l.Window > MaxWindow || l.Window%time.Millisecond != 0 {
-		return fault.New(fault.Invalid, "rate limit needs positive capacity and a whole-millisecond window between 1ms and 24h")
+		return safeerror.NewFault(fault.Invalid, "rate limit needs positive capacity and a whole-millisecond window between 1ms and 24h")
 	}
 	return nil
 }
@@ -31,7 +33,7 @@ func (l Limit) ValidateCost(cost uint32) error {
 		return err
 	}
 	if cost == 0 || cost > l.Requests {
-		return fault.New(fault.Invalid, "rate limit cost must be positive and no greater than capacity")
+		return safeerror.NewFault(fault.Invalid, "rate limit cost must be positive and no greater than capacity")
 	}
 	return nil
 }
@@ -53,7 +55,7 @@ func (d Decision) Validate(limit Limit, cost uint32) error {
 	if d.Limit != limit.Requests || d.Remaining > limit.Requests || d.ResetAfter <= 0 || d.ResetAfter > limit.Window || d.ResetAfter%time.Millisecond != 0 ||
 		(d.Allowed && (d.RetryAfter != 0 || d.Remaining > limit.Requests-cost)) ||
 		(!d.Allowed && (d.RetryAfter != d.ResetAfter || d.Remaining >= cost)) {
-		return fault.New(fault.Internal, "invalid rate limit decision")
+		return safeerror.NewFault(fault.Internal, "invalid rate limit decision")
 	}
 	return nil
 }
@@ -67,7 +69,7 @@ func (d Decision) ValidatePeek(limit Limit, cost uint32) error {
 	}
 	if d.Limit != limit.Requests || d.Remaining > limit.Requests || d.ResetAfter <= 0 || d.ResetAfter > limit.Window || d.ResetAfter%time.Millisecond != 0 ||
 		d.Allowed != (cost <= d.Remaining) || (d.Allowed && d.RetryAfter != 0) || (!d.Allowed && d.RetryAfter != d.ResetAfter) {
-		return fault.New(fault.Internal, "invalid rate limit inspection")
+		return safeerror.NewFault(fault.Internal, "invalid rate limit inspection")
 	}
 	return nil
 }

@@ -68,9 +68,9 @@ its internal classification. Custom codecs must terminate, respect ownership and
 be safe for concurrent calls; Foundry does not abandon an active callback.
 
 `WriteError` preserves Go wrapped/joined error classification. It inspects custom
-error methods on the caller's goroutine before writing headers or body. A panic
-there produces a safe 500 response and an injected-logger diagnostic without
-exposing panic payloads; `runtime.Goexit` ends the calling goroutine. Error methods must terminate and support
+error methods inside containment before writing headers or body. Panic and
+`runtime.Goexit` produce a safe 500 response and an injected-logger diagnostic
+without exposing panic payloads. Error methods must terminate and support
 concurrent classification. [Bounded traversal](http-requests.md#typed-public-errors)
 prevents cyclic error chains from trapping classification. The native response
 writer stays outside the callback.

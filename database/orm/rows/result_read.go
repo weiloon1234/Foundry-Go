@@ -234,7 +234,7 @@ func requireRecord[R any](ctx context.Context, ex database.Executor, r ormcore.R
 	if result, ok := item.Get(); ok {
 		return result, nil
 	}
-	return *new(R), database.NewError("query first", database.NotFound)
+	return *new(R), querycore.DatabaseFailure("query first", database.NotFound)
 }
 
 // Paginate requires explicit ordering and no outer window; nested windows remain.

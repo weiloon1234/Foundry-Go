@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // SignedEndpoint retains the original path, query, body and response types.
@@ -37,10 +38,10 @@ func (e SignedEndpoint[P, Q, B, R]) Validate() error {
 	}
 	for _, parameter := range e.endpoint.query.parameters {
 		if parameter.info.Name == signedURLExpires || parameter.info.Name == signedURLSignature {
-			return fault.New(fault.Invalid, "signed endpoint query uses a reserved signing parameter")
+			return safeerror.NewFault(fault.Invalid, "signed endpoint query uses a reserved signing parameter")
 		}
 		if e.signer.policy.ignored[parameter.info.Name] {
-			return fault.New(fault.Invalid, "signed endpoint query declares a parameter its verification ignores")
+			return safeerror.NewFault(fault.Invalid, "signed endpoint query declares a parameter its verification ignores")
 		}
 	}
 	return nil

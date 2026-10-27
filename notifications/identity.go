@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -55,7 +56,9 @@ func digest(parts ...string) string {
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }
-func invalid() error                       { return fault.New(fault.Invalid, "invalid notification declaration or data") }
+func invalid() error {
+	return safeerror.NewFault(fault.Invalid, "invalid notification declaration or data")
+}
 func semantic(text string) bool            { return identifier.Semantic(text) }
 func stringVersion(version Version) string { return strconv.FormatUint(uint64(version), 10) }
 

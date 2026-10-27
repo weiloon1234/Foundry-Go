@@ -4,10 +4,10 @@ package value
 
 import (
 	"bytes"
-	"encoding/json"
-	"io"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Optional represents an omitted field or a present T, including T's zero value.
@@ -24,14 +24,14 @@ func (v Optional[T]) IsZero() bool   { return !v.set }
 func (v Optional[T]) Get() (T, bool) { return v.value, v.set }
 func (v Optional[T]) MarshalJSON() ([]byte, error) {
 	if !v.set {
-		return nil, fault.New(fault.Missing, "omitted field has no JSON value; use omitzero")
+		return nil, safeerror.NewFault(fault.Missing, "omitted field has no JSON value; use omitzero")
 	}
 	return marshalPresent(v.value)
 }
 func (v *Optional[T]) UnmarshalJSON(data []byte) error {
 	var decoded T
 	if isNull(data) && !isNullable(decoded) && !isJSONDocument(decoded) {
-		return fault.New(fault.Invalid, "non-nullable field cannot decode null")
+		return safeerror.NewFault(fault.Invalid, "non-nullable field cannot decode null")
 	}
 	if err := unmarshalPresent(data, &decoded); err != nil {
 		return err
@@ -86,12 +86,12 @@ func IsOptionalType[T any]() bool {
 }
 
 func marshalPresent[T any](v T) ([]byte, error) {
-	data, err := json.Marshal(v)
+	data, err := jsoncodec.Marshal(v)
 	if err != nil {
-		return nil, err
+		return nil, jsoncodec.MethodError(err)
 	}
 	if isNull(data) && !isNullable(v) && !isJSONDocument(v) {
-		return nil, fault.New(fault.Invalid, "present value encoded null; use Nullable explicitly")
+		return nil, safeerror.NewFault(fault.Invalid, "present value encoded null; use Nullable explicitly")
 	}
 	return data, nil
 }
@@ -100,13 +100,5 @@ func marshalPresent[T any](v T) ([]byte, error) {
 // descriptors, including when wrappers nest and the outer decoder's options
 // cannot pass through a custom UnmarshalJSON method.
 func unmarshalPresent(data []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return fault.New(fault.Invalid, "invalid JSON value boundary")
-	}
-	return nil
+	return jsoncodec.MethodError(jsoncodec.UnmarshalExact(data, target))
 }

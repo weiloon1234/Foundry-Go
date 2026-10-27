@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -60,7 +61,7 @@ type compiledCachePolicy struct {
 
 func (p CachePolicy) compile() (compiledCachePolicy, error) {
 	invalid := func(message string) (compiledCachePolicy, error) {
-		return compiledCachePolicy{}, fault.New(fault.Invalid, message)
+		return compiledCachePolicy{}, safeerror.NewFault(fault.Invalid, message)
 	}
 	shared, hasShared := p.SharedMaxAge.Get()
 	if p.NoStore {

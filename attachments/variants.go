@@ -5,8 +5,8 @@ import "time"
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	"slices"
 
@@ -17,8 +17,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -78,7 +78,7 @@ type VariantInfo struct {
 // VariantUnavailable reports a declared variant that has not been generated
 // (yet) for an attachment, for example while its job is queued. It matches
 // fault.Missing.
-var VariantUnavailable = fault.New(fault.Missing, "attachment variant is not available")
+var VariantUnavailable = safeerror.Sentinel(fault.Missing, "attachment variant is not available")
 
 type storedVariant struct {
 	info    VariantInfo
@@ -247,9 +247,9 @@ func (m *Manager) generate(ctx context.Context, id model.ID[store.File], replace
 	var failures error
 	for _, variant := range variants {
 		if err := ctx.Err(); err != nil {
-			return errors.Join(failures, err)
+			return joinFailures(failures, err)
 		}
-		failures = errors.Join(failures, m.produceVariant(ctx, original, variant, data))
+		failures = joinFailures(failures, m.produceVariant(ctx, original, variant, data))
 	}
 	return failures
 }
@@ -307,12 +307,12 @@ func (m *Manager) readOriginal(ctx context.Context, original store.File) ([]byte
 		return nil, err
 	}
 	if int64(len(data)) != original.Size || !diskVerified(info, digest) && storage.SHA256(sha256.Sum256(data)) != digest {
-		return nil, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
+		return nil, storageFailure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	return data, nil
 }
 
-var errOriginalSuperseded = fault.New(fault.Conflict, "attachment original is no longer ready")
+var errOriginalSuperseded = safeerror.NewFault(fault.Conflict, "attachment original is no longer ready")
 
 // produceVariant writes one derived file under its own intent and publishes
 // it only while the original is still ready, retiring the previous ready
@@ -323,7 +323,7 @@ func (m *Manager) produceVariant(ctx context.Context, original store.File, varia
 		return err
 	}
 	if output.Size() > MaxUploadBytes {
-		return storage.Failure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
+		return storageFailure(storage.LimitExceeded, storage.PutOperation, storage.Unchanged, nil)
 	}
 	hash := sha256.New()
 	if _, err := io.Copy(hash, output.Reader()); err != nil {
@@ -344,7 +344,7 @@ func (m *Manager) produceVariant(ctx context.Context, original store.File, varia
 	info := output.Info()
 	media := storage.MediaType(info.Format.MediaType())
 	if err := m.stageVariant(ctx, original, id, variant.name, key, media, output.Size(), digest, info); err != nil {
-		if errors.Is(err, errOriginalSuperseded) {
+		if callback.ErrorIs(err, errOriginalSuperseded) {
 			return nil
 		}
 		return err
@@ -355,16 +355,16 @@ func (m *Manager) produceVariant(ctx context.Context, original store.File, varia
 	}
 	stored, putErr := disk.Put(ctx, key, output.Reader(), storage.PutOptions{ContentType: media, Size: value.Set(output.Size()), Checksum: value.Set(digest), Condition: storage.IfAbsent()})
 	if putErr == nil && stored.Object.ETag == "" {
-		putErr = storage.Failure(storage.IntegrityFailed, storage.PutOperation, storage.Applied, nil)
+		putErr = storageFailure(storage.IntegrityFailed, storage.PutOperation, storage.Applied, nil)
 	}
 	if putErr != nil {
-		return errors.Join(putErr, m.recordVariantFailure(ctx, id, putErr))
+		return joinFailures(putErr, m.recordVariantFailure(ctx, id, putErr))
 	}
 	publishCtx, cancel := m.cleanupContext(ctx)
 	defer cancel()
 	retired, err := m.publishVariant(publishCtx, original.ID, id, stored.Object)
 	for _, previous := range retired {
-		err = errors.Join(err, m.cleanupVariant(publishCtx, previous))
+		err = joinFailures(err, m.cleanupVariant(publishCtx, previous))
 	}
 	return err
 }
@@ -384,7 +384,7 @@ func (m *Manager) stageVariant(ctx context.Context, original store.File, id mode
 			return err
 		}
 		if count >= maxVariantIntents {
-			return fault.New(fault.Conflict, "attachment has too many unresolved variant intents")
+			return attachmentFailure(fault.Conflict, "attachment has too many unresolved variant intents")
 		}
 		now, err := m.store.Now()
 		if err != nil {
@@ -399,7 +399,7 @@ func (m *Manager) stageVariant(ctx context.Context, original store.File, id mode
 // result proves nothing was published; everything else awaits settlement.
 func (m *Manager) recordVariantFailure(ctx context.Context, id model.ID[store.Variant], cause error) error {
 	next := VariantUncertain
-	if detail, ok := cause.(*storage.Error); ok && detail.Outcome() == storage.Unchanged {
+	if storageUnchanged(cause) {
 		next = VariantCleaned
 	}
 	cleanupCtx, cancel := m.cleanupContext(ctx)
@@ -510,7 +510,7 @@ func (m *Manager) cleanupVariantsOf(ctx context.Context, fileID model.ID[store.F
 	}
 	var failures error
 	for _, id := range ids {
-		failures = errors.Join(failures, m.cleanupVariant(ctx, id))
+		failures = joinFailures(failures, m.cleanupVariant(ctx, id))
 	}
 	return failures
 }
@@ -546,12 +546,12 @@ func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]
 		return err
 	}
 	deleteErr := disk.Delete(ctx, key, pinnedDelete(row.ObjectVersion, row.ETag))
-	if deleteErr != nil && (errorgraph.Is(deleteErr, storage.PreconditionFailed) || errorgraph.Is(deleteErr, storage.NotFound)) {
+	if deleteErr != nil && (callback.ErrorIs(deleteErr, storage.PreconditionFailed) || callback.ErrorIs(deleteErr, storage.NotFound)) {
 		_, statErr := disk.Stat(ctx, key, storage.ReadOptions{Version: storage.VersionID(row.ObjectVersion)})
-		if errorgraph.Is(statErr, storage.NotFound) {
+		if callback.ErrorIs(statErr, storage.NotFound) {
 			deleteErr = nil
 		} else if statErr != nil {
-			deleteErr = errors.Join(deleteErr, statErr)
+			deleteErr = joinFailures(deleteErr, statErr)
 		}
 	}
 	journalCtx, cancel := m.cleanupContext(ctx)
@@ -585,7 +585,7 @@ func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]
 		_, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, draft...)
 		return err
 	})
-	return errors.Join(deleteErr, journalErr)
+	return joinFailures(deleteErr, journalErr)
 }
 
 // sweepVariants retries variant cleanup and settles variant intents whose
@@ -616,12 +616,12 @@ func (m *Manager) sweepVariants(ctx context.Context, cutoff temporal.DateTime, l
 	var failures error
 	for _, row := range rows {
 		if err := ctx.Err(); err != nil {
-			return errors.Join(failures, err)
+			return joinFailures(failures, err)
 		}
 		if row.State == string(VariantCleanup) {
-			failures = errors.Join(failures, m.cleanupVariant(ctx, row.ID))
+			failures = joinFailures(failures, m.cleanupVariant(ctx, row.ID))
 		} else {
-			failures = errors.Join(failures, m.settleVariant(ctx, row.ID, cutoff))
+			failures = joinFailures(failures, m.settleVariant(ctx, row.ID, cutoff))
 		}
 	}
 	return failures
@@ -666,7 +666,7 @@ func (m *Manager) settleVariant(ctx context.Context, id model.ID[store.Variant],
 		return err
 	}
 	info, statErr := disk.Stat(ctx, key, storage.ReadOptions{})
-	absent := errorgraph.Is(statErr, storage.NotFound)
+	absent := callback.ErrorIs(statErr, storage.NotFound)
 	if statErr != nil && !absent {
 		return statErr
 	}
@@ -676,7 +676,7 @@ func (m *Manager) settleVariant(ctx context.Context, id model.ID[store.Variant],
 			return err
 		}
 		if current.State != string(VariantUncertain) || current.WriterID != m.writer {
-			return fault.New(fault.Conflict, "variant settlement changed concurrently")
+			return attachmentFailure(fault.Conflict, "variant settlement changed concurrently")
 		}
 		now, err := m.store.Now()
 		if err != nil {
@@ -718,7 +718,7 @@ func (c Collection[M, K]) loadVariants(ctx context.Context, tx *database.Tx, m *
 		return err
 	}
 	if len(rows) > len(ids)*MaxVariants*2 {
-		return fault.New(fault.Conflict, "attachment batch exceeds its variant limit")
+		return attachmentFailure(fault.Conflict, "attachment batch exceeds its variant limit")
 	}
 	byFile := make(map[[16]byte][]storedVariant, len(ids))
 	for _, row := range rows {

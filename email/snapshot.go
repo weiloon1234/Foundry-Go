@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"log/slog"
 
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -39,17 +40,17 @@ func CaptureMessage(message Message) (Snapshot, error) {
 	}
 	for _, a := range message.attachments {
 		if a.Version == "" && a.IfMatch == "" {
-			return Snapshot{}, Construction
+			return Snapshot{}, emaildiag.Failure(Construction)
 		}
 	}
 	// In-memory content is not durable; snapshots reference stored files.
 	if len(message.data) > 0 || len(message.text)+len(message.html) > value.JSONMaxBytes {
-		return Snapshot{}, Construction
+		return Snapshot{}, emaildiag.Failure(Construction)
 	}
 	wire := snapshotWire{1, message.from, message.to, message.cc, message.bcc, message.replyTo, message.subject, message.text, message.html, message.headers, message.attachments, message.locale}
 	data, err := value.NewJSON(wire)
 	if err != nil {
-		return Snapshot{}, Construction
+		return Snapshot{}, emaildiag.Failure(Construction)
 	}
 	return Snapshot{data: data}, nil
 }
@@ -57,7 +58,7 @@ func CaptureMessage(message Message) (Snapshot, error) {
 func (s Snapshot) Message() (Message, error) {
 	wire, err := s.data.Decode()
 	if err != nil || wire.Version != 1 {
-		return Message{}, Construction
+		return Message{}, emaildiag.Failure(Construction)
 	}
 	message := Message{from: wire.From, to: wire.To, cc: wire.CC, bcc: wire.BCC, replyTo: wire.ReplyTo, subject: wire.Subject, text: wire.Text, html: wire.HTML, headers: wire.Headers, attachments: wire.Attachments, locale: wire.Locale}
 	if err := message.Validate(); err != nil {
@@ -65,7 +66,7 @@ func (s Snapshot) Message() (Message, error) {
 	}
 	for _, a := range message.attachments {
 		if a.Version == "" && a.IfMatch == "" {
-			return Message{}, Construction
+			return Message{}, emaildiag.Failure(Construction)
 		}
 	}
 	return message, nil
@@ -78,11 +79,11 @@ func (s Snapshot) MarshalJSON() ([]byte, error) {
 }
 func (s *Snapshot) UnmarshalJSON(data []byte) error {
 	if s == nil || len(data) > value.JSONMaxBytes {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	var result Snapshot
 	if err := json.Unmarshal(data, &result.data); err != nil {
-		return Construction
+		return emaildiag.Failure(Construction)
 	}
 	if _, err := result.Message(); err != nil {
 		return err

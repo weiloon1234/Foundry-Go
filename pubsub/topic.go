@@ -2,9 +2,9 @@ package pubsub
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -18,7 +18,7 @@ func (t Topic[K, V]) Name() Name       { return (Declaration[K, V]{t.definition}
 func (t Topic[K, V]) Version() Version { return (Declaration[K, V]{t.definition}).Version() }
 func (t Topic[K, V]) Validate() error {
 	if t.broker == nil || t.broker.done == nil {
-		return fault.New(fault.Invalid, "pub/sub topic is not bound")
+		return safeerror.NewFault(fault.Invalid, "pub/sub topic is not bound")
 	}
 	return (Declaration[K, V]{t.definition}).Validate()
 }
@@ -31,7 +31,7 @@ func (t Topic[K, V]) address(ctx context.Context, key K) (Channel, error) {
 		return Channel{}, err
 	}
 	if len(logical) > t.broker.config.MaxKeyBytes {
-		return Channel{}, fault.New(fault.Invalid, "pub/sub logical key exceeds its bound")
+		return Channel{}, safeerror.NewFault(fault.Invalid, "pub/sub logical key exceeds its bound")
 	}
 	return NewChannel(t.broker.config.Namespace, t.Name(), t.Version(), logical)
 }
@@ -58,7 +58,7 @@ func (t Topic[K, V]) Publish(ctx context.Context, key K, input V) (uint64, error
 			return err
 		}
 		if len(text) > t.broker.config.Buffer.PayloadBytes {
-			return fault.New(fault.Invalid, "pub/sub encoded payload exceeds its bound")
+			return safeerror.NewFault(fault.Invalid, "pub/sub encoded payload exceeds its bound")
 		}
 		if err := ctx.Err(); err != nil {
 			return err
@@ -92,7 +92,7 @@ func (t Topic[K, V]) SubscribeKeys(ctx context.Context, first K, rest ...K) (*Ke
 		return nil, err
 	}
 	if len(rest) >= t.broker.config.Buffer.Channels {
-		return nil, fault.New(fault.Invalid, "pub/sub channel count exceeds its bound")
+		return nil, safeerror.NewFault(fault.Invalid, "pub/sub channel count exceeds its bound")
 	}
 	keys := append([]K{first}, rest...)
 	state, err := t.subscribe(ctx, keys)
@@ -122,7 +122,7 @@ func (t Topic[K, V]) subscribe(ctx context.Context, keys []K) (*subscriptionStat
 				return err
 			}
 			if _, duplicate := state.channels[channel]; duplicate {
-				return fault.New(fault.Duplicate, "pub/sub subscription repeats a key")
+				return safeerror.NewFault(fault.Duplicate, "pub/sub subscription repeats a key")
 			}
 			channels[i] = channel
 			state.channels[channel] = i
@@ -135,10 +135,10 @@ func (t Topic[K, V]) subscribe(ctx context.Context, keys []K) (*subscriptionStat
 			return err
 		}
 		if state.stream == nil {
-			return fault.New(fault.Internal, "pub/sub adapter returned an empty stream")
+			return safeerror.NewFault(fault.Internal, "pub/sub adapter returned an empty stream")
 		}
 		if state.rawDone == nil {
-			return fault.New(fault.Internal, "pub/sub adapter returned an unowned stream")
+			return safeerror.NewFault(fault.Internal, "pub/sub adapter returned an unowned stream")
 		}
 		return nil
 	})
@@ -146,7 +146,7 @@ func (t Topic[K, V]) subscribe(ctx context.Context, keys []K) (*subscriptionStat
 		if state != nil {
 			state.beginClose(err)
 			<-state.done
-			err = errors.Join(err, state.cleanupErr)
+			err = safeerror.Join("operation failed", err, state.cleanupErr)
 		}
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (t Topic[K, V]) subscribe(ctx context.Context, keys []K) (*subscriptionStat
 	case <-t.broker.lifetime.Done():
 		state.beginClose(ErrClosed)
 		<-state.done
-		return nil, errors.Join(ErrClosed, state.cleanupErr)
+		return nil, safeerror.Join("operation failed", ErrClosed, state.cleanupErr)
 	default:
 	}
 	return state, nil
@@ -181,13 +181,13 @@ func (s *KeyedSubscription[K, V]) Done() <-chan struct{} {
 }
 func (s *KeyedSubscription[K, V]) Err() error {
 	if s == nil {
-		return fault.New(fault.Invalid, "pub/sub subscription is not initialized")
+		return safeerror.NewFault(fault.Invalid, "pub/sub subscription is not initialized")
 	}
 	return s.typed.Err()
 }
 func (s *KeyedSubscription[K, V]) Close(ctx context.Context) error {
 	if s == nil {
-		return fault.New(fault.Invalid, "pub/sub close needs subscription and context")
+		return safeerror.NewFault(fault.Invalid, "pub/sub close needs subscription and context")
 	}
 	return s.typed.Close(ctx)
 }
@@ -195,7 +195,7 @@ func (s *KeyedSubscription[K, V]) Close(ctx context.Context) error {
 // Receive returns the next payload together with the key it was published to.
 func (s *KeyedSubscription[K, V]) Receive(ctx context.Context) (Delivery[K, V], error) {
 	if s == nil || s.typed.state == nil || ctx == nil {
-		return Delivery[K, V]{}, fault.New(fault.Invalid, "pub/sub receive needs subscription and context")
+		return Delivery[K, V]{}, safeerror.NewFault(fault.Invalid, "pub/sub receive needs subscription and context")
 	}
 	position, value, err := receive[V](ctx, s.typed.state)
 	if err != nil {

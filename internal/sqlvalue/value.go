@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Value retains the driver kind, exact text and owned byte encoding. This is an
@@ -20,7 +21,7 @@ type Value struct {
 	Text string `json:"t,omitempty"`
 }
 
-func invalid() error { return fault.New(fault.Invalid, "invalid encoded SQL value") }
+func invalid() error { return safeerror.NewFault(fault.Invalid, "invalid encoded SQL value") }
 
 // NormalizeNull maps driver nil byte slices to SQL NULL. Non-nil empty slices
 // remain empty bytes, matching PostgreSQL and the database/sql byte boundary.

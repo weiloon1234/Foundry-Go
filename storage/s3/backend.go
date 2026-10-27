@@ -2,7 +2,6 @@ package s3
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/http"
 	"sync"
@@ -14,6 +13,7 @@ import (
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go/logging"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -60,15 +60,15 @@ func Open(ctx context.Context, config Config) (*Backend, error) {
 }
 func (b *Backend) Start(ctx context.Context) error {
 	if b == nil || ctx == nil {
-		return storage.Failure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
+		return newFailure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	b.lifecycle.Lock()
 	defer b.lifecycle.Unlock()
 	if !b.prepared {
-		return storage.Failure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
+		return newFailure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	if b.closed {
-		return storage.Failure(storage.Closed, storage.OpenOperation, storage.NotApplicable, nil)
+		return newFailure(storage.Closed, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	if err := ctx.Err(); err != nil {
 		return failure(storage.OpenOperation, storage.NotApplicable, err)
@@ -136,15 +136,15 @@ func (b *Backend) Close() error {
 }
 func (b *Backend) ready(ctx context.Context, op storage.Operation) error {
 	if b == nil || ctx == nil {
-		return storage.Failure(storage.Invalid, op, storage.NotApplicable, nil)
+		return newFailure(storage.Invalid, op, storage.NotApplicable, nil)
 	}
 	b.lifecycle.Lock()
 	defer b.lifecycle.Unlock()
 	if !b.prepared || !b.started {
-		return storage.Failure(storage.Invalid, op, storage.NotApplicable, nil)
+		return newFailure(storage.Invalid, op, storage.NotApplicable, nil)
 	}
 	if b.closed {
-		return storage.Failure(storage.Closed, op, storage.NotApplicable, nil)
+		return newFailure(storage.Closed, op, storage.NotApplicable, nil)
 	}
 	return failureIf(op, storage.Unchanged, ctx.Err())
 }
@@ -206,7 +206,7 @@ func (b *Backend) readOptions(options storage.ReadOptions) error {
 		return err
 	}
 	if options.Version == "null" {
-		return storage.Failure(storage.Unsupported, storage.OpenOperation, storage.NotApplicable, nil)
+		return newFailure(storage.Unsupported, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	return b.Capabilities().ValidateRead(options)
 }
@@ -228,7 +228,7 @@ func joinClose(op storage.Operation, state storage.Outcome, primary, cleanup err
 	if primary == nil && cleanup == nil {
 		return nil
 	}
-	return failure(op, state, errors.Join(primary, cleanup))
+	return failure(op, state, safeerror.Join("operation failed", primary, cleanup))
 }
 
 var _ storage.Backend = (*Backend)(nil)

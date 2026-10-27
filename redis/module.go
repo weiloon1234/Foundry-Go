@@ -2,9 +2,9 @@ package redis
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module prepares a distinct client for each application and starts it at boot.
@@ -22,9 +22,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Client], config Conf
 		if err = r.OnShutdown("connections", func(ctx context.Context) error {
 			err := client.Close(ctx)
 			<-client.Done()
-			return errors.Join(err, client.Close(context.Background()))
+			return safeerror.Join("operation failed", err, client.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, client.Close(ctx))
+			return safeerror.Join("operation failed", err, client.Close(ctx))
 		}
 		return client.Start(ctx)
 	}}

@@ -2,7 +2,7 @@ package orm
 
 import (
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"math"
 
 	"github.com/weiloon1234/Foundry-Go/decimal"
@@ -12,7 +12,7 @@ import (
 
 // ErrBoundExceeded means a guarded per-key adjustment rejected a visible row.
 // A missing or hidden key returns database.NotFound instead.
-var ErrBoundExceeded = errors.New("numeric adjustment bound exceeded")
+var ErrBoundExceeded = safeerror.New("numeric adjustment bound exceeded")
 
 // Bound constrains the result of an atomic numeric adjustment. Construct bounds
 // with AtLeast or AtMost; the zero value is invalid. The database evaluates
@@ -111,5 +111,5 @@ func adjustment[M any, V NumberValue](c columnData[V], amount V, subtract bool, 
 }
 
 func boundExceeded() error {
-	return fault.Wrap(fault.Conflict, "numeric adjustment rejected by bound", ErrBoundExceeded)
+	return safeerror.WrapFailure(fault.Conflict, "numeric adjustment rejected by bound", ErrBoundExceeded)
 }

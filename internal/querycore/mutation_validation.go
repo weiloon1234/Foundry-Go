@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (c *Compiler) AssignmentParameter(column string, bind func() (driver.Value, error)) (string, error) {
@@ -20,7 +21,7 @@ func BindAssignment(column Column, bind func() (driver.Value, error)) (driver.Va
 		return nil, err
 	}
 	if bound == nil && !column.Nullable {
-		return nil, fault.New(fault.Invalid, "NULL assignment requires a nullable model field")
+		return nil, safeerror.NewFault(fault.Invalid, "NULL assignment requires a nullable model field")
 	}
 	return bound, nil
 }

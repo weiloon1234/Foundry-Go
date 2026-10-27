@@ -2,7 +2,7 @@ package orm
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -25,7 +25,7 @@ func (p sourceWritePlan) mapping(m ormcore.ModelMapping, key bool) (string, erro
 	if !key && m.NullableKey {
 		return "", invalid("nullable source keys cannot be used as assignments")
 	}
-	if err := errors.Join(m.Err, m.Value.Err, ormcore.CheckReferenceSet(p.source, m.Value.Refs, m.Value.ReferenceFree)); err != nil {
+	if err := safeerror.Join("operation failed", m.Err, m.Value.Err, ormcore.CheckReferenceSet(p.source, m.Value.Refs, m.Value.ReferenceFree)); err != nil {
 		return "", err
 	}
 	if m.Destination.Owner != p.query.table || m.Field.Table != p.query.ast.Table || m.Value.Node == nil {
@@ -105,7 +105,7 @@ func (p sourceWritePlan) preflight(ctx context.Context, writer database.Transact
 	if err := writeContext(ctx, writer); err != nil {
 		return p, err
 	}
-	if err := errors.Join(p.err, p.valuesErr, p.source.Err); err != nil {
+	if err := safeerror.Join("operation failed", p.err, p.valuesErr, p.source.Err); err != nil {
 		return p, err
 	}
 	for _, check := range p.source.Checks {
@@ -168,7 +168,7 @@ func executeSourceCount(ctx context.Context, writer database.Transactor, p sourc
 	n, err, reconcile := executeSourceWrite(ctx, writer, p, 0, nil)
 	if err != nil {
 		if reconcile {
-			return 0, &WriteError[int64]{cause: err, candidate: n}
+			return 0, writeFailure(err, n)
 		}
 		return 0, err
 	}

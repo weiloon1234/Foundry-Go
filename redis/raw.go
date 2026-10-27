@@ -3,11 +3,12 @@ package redis
 import (
 	"context"
 	_ "embed"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/redis/raw"
 )
 
@@ -42,7 +43,7 @@ func rawArguments(request raw.Request) []any {
 func validateRawRequest(request raw.Request, limits raw.Limits) error {
 	keys := request.Keys()
 	if len(keys) == 0 {
-		return fault.New(fault.Invalid, "raw Redis command requires a key")
+		return safeerror.NewFault(fault.Invalid, "raw Redis command requires a key")
 	}
 	return request.Validate(keys[0].Namespace(), limits)
 }
@@ -55,7 +56,7 @@ func (c *Client) ExecuteRaw(ctx context.Context, request raw.Request, limits raw
 	}
 	result, err := c.execute(ctx, func(ctx context.Context, client *driver.Client) (any, error) {
 		value, err := client.Do(ctx, rawArguments(request)...).Result()
-		if err != nil && !errors.Is(err, driver.Nil) {
+		if err != nil && !callback.ErrorIs(err, driver.Nil) {
 			return nil, err
 		}
 		return raw.CaptureReply(ctx, value, limits.Reply)
@@ -73,7 +74,7 @@ func (c *Client) ExecuteRawBatch(ctx context.Context, requests []raw.Request, mo
 		return nil, err
 	}
 	if len(requests) > limits.Commands {
-		return nil, fault.New(fault.Invalid, "raw Redis pipeline exceeds its command bound")
+		return nil, safeerror.NewFault(fault.Invalid, "raw Redis pipeline exceeds its command bound")
 	}
 	remaining := limits.RequestBytes
 	for i, r := range requests {
@@ -81,11 +82,11 @@ func (c *Client) ExecuteRawBatch(ctx context.Context, requests []raw.Request, mo
 			return nil, err
 		}
 		if r.Bytes() > remaining {
-			return nil, fault.New(fault.Invalid, "raw Redis pipeline exceeds its byte bound")
+			return nil, safeerror.NewFault(fault.Invalid, "raw Redis pipeline exceeds its byte bound")
 		}
 		remaining -= r.Bytes()
 		if i > 0 && r.Keys()[0].Namespace() != requests[0].Keys()[0].Namespace() {
-			return nil, fault.New(fault.Invalid, "raw Redis pipeline keys must share a namespace")
+			return nil, safeerror.NewFault(fault.Invalid, "raw Redis pipeline keys must share a namespace")
 		}
 	}
 	result, err := c.execute(ctx, func(ctx context.Context, client *driver.Client) (any, error) {
@@ -103,13 +104,13 @@ func (c *Client) ExecuteRawBatch(ctx context.Context, requests []raw.Request, mo
 			commands[i] = pipeline.Do(ctx, rawArguments(r)...)
 		}
 		_, err := pipeline.Exec(ctx)
-		if err != nil && !errors.Is(err, driver.Nil) {
+		if err != nil && !callback.ErrorIs(err, driver.Nil) {
 			return nil, err
 		}
 		values := make([]any, len(commands))
 		for i, command := range commands {
 			value, err := command.Result()
-			if err != nil && !errors.Is(err, driver.Nil) {
+			if err != nil && !callback.ErrorIs(err, driver.Nil) {
 				return nil, err
 			}
 			values[i] = value
@@ -137,7 +138,7 @@ func (c *Client) ExpireRaw(ctx context.Context, key raw.Key, ttl cache.TTL) (boo
 	}
 	n, ok := result.(int64)
 	if !ok || n != 0 && n != 1 {
-		return false, fault.New(fault.Internal, "invalid Redis expiry result")
+		return false, safeerror.NewFault(fault.Internal, "invalid Redis expiry result")
 	}
 	return n == 1, nil
 }

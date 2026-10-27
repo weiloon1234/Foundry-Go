@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ResolveAll collects services registered with exactly the declared type T, in
@@ -14,7 +15,7 @@ import (
 // values retain their usual application lifetime and concurrency ownership.
 func ResolveAll[T any](r Resolver) ([]T, error) {
 	if nilValue(r) {
-		return nil, fault.New(fault.Invalid, "invalid service resolver")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid service resolver")
 	}
 	values, err := r.resolveAll(reflect.TypeFor[T]())
 	if err != nil {
@@ -24,7 +25,7 @@ func ResolveAll[T any](r Resolver) ([]T, error) {
 	for i, value := range values {
 		item, ok := value.(T)
 		if !ok {
-			return nil, fault.New(fault.Internal, "service value does not match its declared type")
+			return nil, safeerror.NewFault(fault.Internal, "service value does not match its declared type")
 		}
 		result[i] = item
 	}

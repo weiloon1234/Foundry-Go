@@ -96,11 +96,9 @@ every failure, rather than exposing a partially assigned DTO.
 Paths use JSON Pointer. Unknown fields produce one issue on their containing
 object without echoing unknown names; received values are never included in the
 error message. Internal causes remain available through ordinary error inspection.
-Panic and Goexit in decoding codecs become safe internal faults. A direct
-`Encode` call runs codecs on the caller's goroutine: a panic becomes a safe
-internal fault, while `runtime.Goexit` ends that goroutine. Typed endpoints
-encode their response inside the handler's isolated boundary, so Goexit there
-is still a safe 500. Cancellation is checked
+Panic and Goexit in JSON decoding and encoding codecs become safe internal
+faults, including direct `Encode` calls. Typed endpoints return a safe 500.
+Cancellation is checked
 around bounded work, and an active codec is waited for until it actually returns.
 A real codec panic is retained even if cancellation also occurs.
 

@@ -2,7 +2,6 @@ package idempotency
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"strconv"
 	"time"
@@ -53,7 +52,7 @@ func (s *Store) Prune(ctx context.Context, limit int) (int64, error) {
 	})
 	if err != nil {
 		var transaction *database.Error
-		if !errors.As(err, &transaction) || transaction.Outcome() != database.Committed {
+		if !callback.ErrorAs(err, &transaction) || transaction.Outcome() != database.Committed {
 			return 0, err
 		}
 	}

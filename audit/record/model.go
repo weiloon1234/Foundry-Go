@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -71,7 +72,7 @@ func (e Entry) Payload() (string, error) {
 // metadata, snapshot states and redaction under the entry's own policy.
 func (e Entry) Validate() error {
 	if e.data == nil {
-		return fault.New(fault.Invalid, "audit entry is not initialized")
+		return safeerror.NewFault(fault.Invalid, "audit entry is not initialized")
 	}
 	return nil
 }
@@ -82,11 +83,11 @@ func (e Entry) Validate() error {
 func ParseEntry(identity model.Identity, operation lifecycle.Operation, payload string) (Entry, error) {
 	parsed, err := value.ParseJSON[dataWire](payload)
 	if err != nil {
-		return Entry{}, fault.Wrap(fault.Invalid, "invalid audit payload", err)
+		return Entry{}, safeerror.WrapFault(fault.Invalid, "invalid audit payload", err)
 	}
 	wire, err := parsed.Decode()
 	if err != nil {
-		return Entry{}, fault.Wrap(fault.Invalid, "invalid audit payload", err)
+		return Entry{}, safeerror.WrapFault(fault.Invalid, "invalid audit payload", err)
 	}
 	text, err := parsed.Text()
 	if err != nil {
@@ -167,12 +168,12 @@ func parseData(identity model.Identity, operation lifecycle.Operation, wire data
 		return nil, err
 	}
 	if wire.Version < uint32(RedactionV1) || wire.Version > uint32(CurrentRedaction) {
-		return nil, fault.New(fault.Invalid, "invalid audit snapshot version or field count")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid audit snapshot version or field count")
 	}
 	policy := Redaction(wire.Version)
 	if !sqlname.Valid(wire.Primary) ||
 		policy.Sensitive(wire.Primary) || len(wire.Fields) == 0 || len(wire.Fields) > MaxFields {
-		return nil, fault.New(fault.Invalid, "invalid audit snapshot version or field count")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid audit snapshot version or field count")
 	}
 	data := &entryData{redaction: policy, primary: wire.Primary, fields: make([]capturedField, 0, len(wire.Fields))}
 	seen := make(map[string]struct{}, len(wire.Fields))
@@ -182,7 +183,7 @@ func parseData(identity model.Identity, operation lifecycle.Operation, wire data
 			return nil, err
 		}
 		if _, exists := seen[field.name]; exists {
-			return nil, fault.New(fault.Duplicate, "duplicate audit field")
+			return nil, safeerror.NewFault(fault.Duplicate, "duplicate audit field")
 		}
 		seen[field.name] = struct{}{}
 		if err := validateField(field, before, after, policy); err != nil {
@@ -196,7 +197,7 @@ func parseData(identity model.Identity, operation lifecycle.Operation, wire data
 		data.fields = append(data.fields, field)
 	}
 	if _, present := seen[wire.Primary]; !present {
-		return nil, fault.New(fault.Missing, "audit payload omitted its subject field")
+		return nil, safeerror.NewFault(fault.Missing, "audit payload omitted its subject field")
 	}
 	return data, nil
 }
@@ -210,7 +211,7 @@ func (e Entry) Compact(limit int) (Entry, error) {
 		return Entry{}, err
 	}
 	if limit < 1 {
-		return Entry{}, fault.New(fault.Invalid, "audit value limit must be positive")
+		return Entry{}, safeerror.NewFault(fault.Invalid, "audit value limit must be positive")
 	}
 	if e.data.redaction < RedactionV2 {
 		return e, nil
@@ -305,7 +306,7 @@ func (d *entryData) encode() error {
 			return d.canonical(text)
 		}
 	}
-	return fault.New(fault.Invalid, "audit field metadata exceeds its representation bound")
+	return safeerror.NewFault(fault.Invalid, "audit field metadata exceeds its representation bound")
 }
 
 // canonical stores the same canonical text a stored row reloads with, and
@@ -313,7 +314,7 @@ func (d *entryData) encode() error {
 func (d *entryData) canonical(text string) error {
 	canonical, _, err := jsonwire.Parse([]byte(text))
 	if err != nil {
-		return fault.Wrap(fault.Invalid, "audit payload exceeds its representation bound", err)
+		return safeerror.WrapFault(fault.Invalid, "audit payload exceeds its representation bound", err)
 	}
 	d.text = canonical
 	return nil
@@ -326,7 +327,7 @@ func (d *entryData) marshal() (string, error) {
 	}
 	encoded, err := json.Marshal(dataWire{Version: uint32(d.redaction), Primary: d.primary, Fields: fields})
 	if err != nil {
-		return "", fault.Wrap(fault.Invalid, "audit payload capture failed", err)
+		return "", safeerror.WrapFailure(fault.Invalid, "audit payload capture failed", err)
 	}
 	return string(encoded), nil
 }
@@ -387,7 +388,7 @@ func (Builder[M, K]) Format(state fmt.State, _ rune) {
 // conventionally sensitive primary column, fail before binding the subject key.
 func NewBuilder[M, K any](template model.Reference[M, K], operation lifecycle.Operation, primary string, disclosure Disclosure) (*Builder[M, K], error) {
 	if !sqlname.Valid(primary) || disclosure != Automatic || SensitiveName(primary) {
-		return nil, fault.New(fault.Invalid, "audit subject key must permit explicit identity capture")
+		return nil, safeerror.NewFault(fault.Invalid, "audit subject key must permit explicit identity capture")
 	}
 	before, after, err := existence(operation)
 	if err != nil {
@@ -395,7 +396,7 @@ func NewBuilder[M, K any](template model.Reference[M, K], operation lifecycle.Op
 	}
 	identity, err := template.Identity()
 	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "audit subject capture failed", err)
+		return nil, safeerror.WrapFailure(fault.Invalid, "audit subject capture failed", err)
 	}
 	return &Builder[M, K]{template: template, identity: identity, operation: operation,
 		primary: primary, before: before, after: after, seen: make(map[string]struct{})}, nil
@@ -403,10 +404,10 @@ func NewBuilder[M, K any](template model.Reference[M, K], operation lifecycle.Op
 
 func (b *Builder[M, K]) Add(field Field[M]) error {
 	if b == nil || b.seen == nil {
-		return fault.New(fault.Invalid, "audit builder is not initialized")
+		return safeerror.NewFault(fault.Invalid, "audit builder is not initialized")
 	}
 	if b.closed {
-		return fault.New(fault.Closed, "audit capture is already complete")
+		return safeerror.NewFault(fault.Closed, "audit capture is already complete")
 	}
 	if b.err != nil {
 		return b.err
@@ -423,7 +424,7 @@ func (b *Builder[M, K]) skips(name string, assigned, changed bool) bool {
 // skip records an omitted field for duplicate and bound detection.
 func (b *Builder[M, K]) skip(name string) error {
 	if b.closed {
-		return fault.New(fault.Closed, "audit capture is already complete")
+		return safeerror.NewFault(fault.Closed, "audit capture is already complete")
 	}
 	if b.err != nil {
 		return b.err
@@ -441,13 +442,13 @@ func (b *Builder[M, K]) fail(err error) error {
 
 func (b *Builder[M, K]) claim(name string) error {
 	if !sqlname.Valid(name) {
-		return fault.New(fault.Invalid, "audit field requires a declared column")
+		return safeerror.NewFault(fault.Invalid, "audit field requires a declared column")
 	}
 	if _, exists := b.seen[name]; exists {
-		return fault.New(fault.Duplicate, "duplicate audit field")
+		return safeerror.NewFault(fault.Duplicate, "duplicate audit field")
 	}
 	if len(b.seen) >= MaxFields {
-		return fault.New(fault.Invalid, "audit capture exceeds its field bound")
+		return safeerror.NewFault(fault.Invalid, "audit capture exceeds its field bound")
 	}
 	b.seen[name] = struct{}{}
 	return nil
@@ -456,11 +457,11 @@ func (b *Builder[M, K]) claim(name string) error {
 func (b *Builder[M, K]) add(item Field[M]) error {
 	field := item.field
 	if !sqlname.Valid(field.name) || item.before != b.before || item.after != b.after {
-		return fault.New(fault.Invalid, "audit field does not match its model operation")
+		return safeerror.NewFault(fault.Invalid, "audit field does not match its model operation")
 	}
 	if field.name == b.primary && (item.excluded ||
 		(b.before && field.before.state != Disclosed) || (b.after && field.after.state != Disclosed)) {
-		return fault.New(fault.Invalid, "audit subject field cannot hide its captured identity")
+		return safeerror.NewFault(fault.Invalid, "audit subject field cannot hide its captured identity")
 	}
 	if err := b.claim(field.name); err != nil {
 		return err
@@ -482,17 +483,17 @@ func (b *Builder[M, K]) add(item Field[M]) error {
 
 func (b *Builder[M, K]) Build() (Model[M, K], error) {
 	if b == nil || b.seen == nil {
-		return Model[M, K]{}, fault.New(fault.Invalid, "audit builder is not initialized")
+		return Model[M, K]{}, safeerror.NewFault(fault.Invalid, "audit builder is not initialized")
 	}
 	if b.closed {
-		return Model[M, K]{}, fault.New(fault.Closed, "audit capture is already complete")
+		return Model[M, K]{}, safeerror.NewFault(fault.Closed, "audit capture is already complete")
 	}
 	b.closed = true
 	if b.err != nil {
 		return Model[M, K]{}, b.err
 	}
 	if _, present := b.seen[b.primary]; !present {
-		return Model[M, K]{}, fault.New(fault.Missing, "audit capture omitted its subject field")
+		return Model[M, K]{}, safeerror.NewFault(fault.Missing, "audit capture omitted its subject field")
 	}
 	data := &entryData{redaction: CurrentRedaction, primary: b.primary, fields: b.fields}
 	b.fields = nil
@@ -511,7 +512,7 @@ func existence(operation lifecycle.Operation) (before, after bool, err error) {
 	case lifecycle.Delete, lifecycle.ForceDelete:
 		return true, false, nil
 	default:
-		return false, false, fault.New(fault.Invalid, "audit requires a captured model operation")
+		return false, false, safeerror.NewFault(fault.Invalid, "audit requires a captured model operation")
 	}
 }
 
@@ -519,7 +520,7 @@ func validateField(field capturedField, before, after bool, policy Redaction) er
 	if !sqlname.Valid(field.name) || field.typ < codec.TypeBoolean || field.typ > codec.TypeJSON ||
 		(field.before.state != Absent) != before || (field.after.state != Absent) != after || field.assigned && !after ||
 		before != after && !field.changed {
-		return fault.New(fault.Invalid, "invalid audit field metadata or snapshot states")
+		return safeerror.NewFault(fault.Invalid, "invalid audit field metadata or snapshot states")
 	}
 	sensitive := policy.Sensitive(field.name)
 	for _, snapshot := range []Snapshot{field.before, field.after} {
@@ -554,18 +555,18 @@ func validatePrimary(field capturedField, identity model.Identity, before, after
 		return err
 	}
 	if before && after && (field.assigned || field.changed) {
-		return fault.New(fault.Invalid, "audit cannot replace or assign an existing subject key")
+		return safeerror.NewFault(fault.Invalid, "audit cannot replace or assign an existing subject key")
 	}
 	for _, snapshot := range []Snapshot{field.before, field.after} {
 		if snapshot.state == Absent {
 			continue
 		}
 		if snapshot.state != Disclosed {
-			return fault.New(fault.Invalid, "audit subject field cannot hide its captured identity")
+			return safeerror.NewFault(fault.Invalid, "audit subject field cannot hide its captured identity")
 		}
 		encoded, err := json.Marshal(snapshot.value)
 		if err != nil || string(encoded) != key {
-			return fault.New(fault.Invalid, "audit subject does not match its stored snapshots")
+			return safeerror.NewFault(fault.Invalid, "audit subject does not match its stored snapshots")
 		}
 	}
 	return nil

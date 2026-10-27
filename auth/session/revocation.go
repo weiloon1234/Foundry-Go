@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -17,11 +18,11 @@ func (s *Sessions[M, K]) RevokeAllIn(ctx context.Context, tx *database.Tx, refer
 		return 0, err
 	}
 	if tx == nil {
-		return 0, fault.New(fault.Invalid, "credential revocation requires a transaction")
+		return 0, safeerror.NewFault(fault.Invalid, "credential revocation requires a transaction")
 	}
 	backend, ok := s.store.backend.(TransactionalBackend)
 	if !ok {
-		return 0, fault.New(fault.Invalid, "credential backend cannot join revocation transaction")
+		return 0, safeerror.NewFault(fault.Invalid, "credential backend cannot join revocation transaction")
 	}
 	var count uint64
 	err := s.store.execute(ctx, func(op context.Context) error {
@@ -50,7 +51,7 @@ func (s *Sessions[M, K]) Revocation() (auth.Revocation[M, K], error) {
 		return auth.Revocation[M, K]{}, err
 	}
 	if _, ok := s.store.backend.(TransactionalBackend); !ok {
-		return auth.Revocation[M, K]{}, fault.New(fault.Invalid, "credential backend cannot join revocation transaction")
+		return auth.Revocation[M, K]{}, safeerror.NewFault(fault.Invalid, "credential backend cannot join revocation transaction")
 	}
 	key, err := s.address.Key()
 	if err != nil {

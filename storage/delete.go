@@ -2,9 +2,9 @@ package storage
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxBatchDelete bounds one DeleteMany or DeletePrefix page.
@@ -38,7 +38,7 @@ func (d *Disk) DeleteMany(ctx context.Context, keys []ObjectKey) (DeleteManyResu
 		return DeleteManyResult{}, err
 	}
 	if len(keys) == 0 || len(keys) > MaxBatchDelete {
-		return DeleteManyResult{}, Failure(Invalid, DeleteOperation, Unchanged, nil)
+		return DeleteManyResult{}, newFailure(Invalid, DeleteOperation, Unchanged, nil)
 	}
 	owned := make([]ObjectKey, len(keys))
 	seen := make(map[ObjectKey]bool, len(keys))
@@ -47,7 +47,7 @@ func (d *Disk) DeleteMany(ctx context.Context, keys []ObjectKey) (DeleteManyResu
 			return DeleteManyResult{}, err
 		}
 		if seen[key] {
-			return DeleteManyResult{}, Failure(Invalid, DeleteOperation, Unchanged, nil)
+			return DeleteManyResult{}, newFailure(Invalid, DeleteOperation, Unchanged, nil)
 		}
 		seen[key], owned[i] = true, key
 	}
@@ -61,7 +61,7 @@ func (d *Disk) DeleteMany(ctx context.Context, keys []ObjectKey) (DeleteManyResu
 		var returned []error
 		err = callback.Isolated("storage batch delete", func() error { var err error; returned, err = batch.DeleteBatch(op, owned); return err })
 		if err == nil && len(returned) != len(owned) {
-			err = Failure(IntegrityFailed, DeleteOperation, Unknown, nil)
+			err = newFailure(IntegrityFailed, DeleteOperation, Unknown, nil)
 		}
 		if err != nil {
 			err = finish(DeleteOperation, op, err, Applied)
@@ -92,10 +92,10 @@ func (d *Disk) DeleteMany(ctx context.Context, keys []ObjectKey) (DeleteManyResu
 			continue
 		}
 		result.Failed = append(result.Failed, DeleteFailure{Key: key, Err: failed})
-		failures = errors.Join(failures, failed)
+		failures = safeerror.Join("operation failed", failures, failed)
 	}
 	if failures != nil {
-		return result, Failure(Unavailable, DeleteOperation, mutationOutcome(result.Failed[0].Err), failures)
+		return result, newFailure(Unavailable, DeleteOperation, mutationOutcome(result.Failed[0].Err), failures)
 	}
 	return result, nil
 }
@@ -120,7 +120,7 @@ type DeletePrefixResult struct {
 // survive, and a directory is never implied to be empty afterwards.
 func (d *Disk) DeletePrefix(ctx context.Context, options DeletePrefixOptions) (DeletePrefixResult, error) {
 	if options.Prefix.String() == "" || options.Limit < 1 || options.Limit > MaxBatchDelete {
-		return DeletePrefixResult{}, Failure(Invalid, DeleteOperation, Unchanged, nil)
+		return DeletePrefixResult{}, newFailure(Invalid, DeleteOperation, Unchanged, nil)
 	}
 	page, err := d.List(ctx, ListOptions{Prefix: options.Prefix, Cursor: options.Cursor, Limit: options.Limit})
 	if err != nil {

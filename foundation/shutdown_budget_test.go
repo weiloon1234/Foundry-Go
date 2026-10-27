@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
@@ -62,18 +63,30 @@ func TestGracefulServiceStopReturnsNilAndCommandInterruptionDoesNot(t *testing.T
 }
 
 func TestKernelFailureIsReportedOnce(t *testing.T) {
+	assertOnce := func(err, cause error) {
+		t.Helper()
+		count := 0
+		complete := errorgraph.Walk(err, func(current error) bool {
+			if current == cause {
+				count++
+			}
+			return true
+		})
+		if !complete || count != 1 {
+			t.Fatalf("failure must be retained exactly once: %v", err)
+		}
+		if strings.Contains(err.Error(), cause.Error()) {
+			t.Fatal("application failure text escaped redaction")
+		}
+	}
 	failure := errors.New("kernel exploded")
 	app := build(t, kernelModule(foundation.CLI, func(context.Context) error { return failure }))
 	err := app.Run(t.Context(), foundation.CLI)
-	if !errors.Is(err, failure) || strings.Count(err.Error(), failure.Error()) != 1 {
-		t.Fatalf("kernel failure must be reported exactly once: %v", err)
-	}
+	assertOnce(err, failure)
 	bootFailure := errors.New("boot exploded")
 	app = build(t, kernelModule(foundation.HTTP, func(context.Context) error { return nil }), foundation.Module{Name: "broken", OnBoot: func(context.Context, *foundation.Runtime) error { return bootFailure }})
 	err = app.Run(t.Context(), foundation.HTTP)
-	if !errors.Is(err, bootFailure) || strings.Count(err.Error(), bootFailure.Error()) != 1 {
-		t.Fatalf("boot failure must be reported exactly once: %v", err)
-	}
+	assertOnce(err, bootFailure)
 }
 
 func TestStopDelayKeepsKernelsServingWhileStopping(t *testing.T) {

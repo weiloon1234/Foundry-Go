@@ -4,8 +4,9 @@ package orm
 
 import (
 	"database/sql/driver"
-	"errors"
+
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"sort"
 	"strings"
@@ -138,10 +139,10 @@ func Define[M any, T CheckedTable](name string, declare func(Builder[M], *M) T, 
 
 	}
 	if d.typ.Kind() != reflect.Struct {
-		d.errors = append(d.errors, fmt.Errorf("orm %s: model must be a struct", name))
+		d.errors = append(d.errors, safeerror.New(fmt.Sprintf("orm %s: model must be a struct", name)))
 	}
 	if declare == nil {
-		d.errors = append(d.errors, fmt.Errorf("orm %s: declaration callback is missing", name))
+		d.errors = append(d.errors, safeerror.New(fmt.Sprintf("orm %s: declaration callback is missing", name)))
 	} else {
 		result = declare(Builder[M]{d}, template)
 	}
@@ -162,16 +163,16 @@ func Check(tables ...CheckedTable) error {
 	var errs []error
 	for _, t := range tables {
 		if t == nil || reflect.ValueOf(t).Kind() == reflect.Pointer && reflect.ValueOf(t).IsNil() {
-			errs = append(errs, errors.New("orm: missing table"))
+			errs = append(errs, safeerror.New("orm: missing table"))
 		} else {
 			errs = append(errs, callback.Isolated("validate ORM declaration", func() error { return t.ormError() }))
 		}
 	}
-	return errors.Join(errs...)
+	return safeerror.Join("operation failed", errs...)
 }
 
 func (d *declaration) fail(field, message string) {
-	d.errors = append(d.errors, fmt.Errorf("orm %s.%s: %s", d.core.model.Table, field, message))
+	d.errors = append(d.errors, safeerror.New(fmt.Sprintf("orm %s.%s: %s", d.core.model.Table, field, message)))
 }
 
 func bindField(d *declaration, ptr unsafe.Pointer, typ reflect.Type, nullable bool, kind codec.ParameterType) *columnCore {
@@ -180,7 +181,7 @@ func bindField(d *declaration, ptr unsafe.Pointer, typ reflect.Type, nullable bo
 		return c
 	}
 	if d.sealed {
-		c.owner = &tableCore{err: errors.New("orm: declarations are sealed; declare fields inside Define")}
+		c.owner = &tableCore{err: safeerror.New("orm: declarations are sealed; declare fields inside Define")}
 		return c
 	}
 	c.owner = d.core
@@ -329,9 +330,9 @@ func seal(d *declaration) {
 	configureConventions(d)
 	configureFieldMethods(d)
 	if _, err := d.core.model.ValidateColumns(true); err != nil {
-		d.errors = append(d.errors, fmt.Errorf("orm %s: %w", d.core.model.Table, err))
+		d.errors = append(d.errors, safeerror.Prefix("orm "+d.core.model.Table, err))
 	}
-	d.core.err = declarationError(errors.Join(d.errors...))
+	d.core.err = declarationError(safeerror.Join("operation failed", d.errors...))
 	core := d.core
 	core.check = sync.OnceValue(func() error {
 		errs := []error{core.err}
@@ -340,7 +341,7 @@ func seal(d *declaration) {
 				errs = append(errs, callback.Isolated("validate ORM column "+core.model.Table+"."+c.field.Name, c.check))
 			}
 		}
-		return declarationError(errors.Join(errs...))
+		return declarationError(safeerror.Join("operation failed", errs...))
 	})
 	d.core.selections = querycore.ColumnSelections(d.core.model.Table, d.core.model.Columns)
 	d.template = nil
@@ -491,5 +492,5 @@ func declarationError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return errors.Join(fault.New(fault.Invalid, "invalid orm declaration"), err)
+	return safeerror.Join("operation failed", safeerror.NewFault(fault.Invalid, "invalid orm declaration"), err)
 }

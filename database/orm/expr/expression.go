@@ -4,7 +4,7 @@ package expr
 
 import (
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -44,9 +44,9 @@ type Order[S any] struct {
 // At re-scopes a model column without erasing its value type. Example: expr.At(rows.Scope(members),Members.Name).
 func At[S, M, V, P any](scope Scope[S, M], column orm.ExpressionColumn[M, V, P]) Expression[S, V, P] {
 	c, projected := orm.FoundryColumn(column, sqlowner.Metadata())
-	err := errors.Join(c.Err, scope.core.Err)
+	err := safeerror.Join("operation failed", c.Err, scope.core.Err)
 	if scope.core.Owner == nil || scope.core.Owner != c.Owner || scope.core.Table == "" {
-		err = errors.Join(err, ormcore.Invalid("column belongs to a different model scope"))
+		err = safeerror.Join("operation failed", err, ormcore.Invalid("column belongs to a different model scope"))
 	}
 	c.Field.Table = scope.core.Table
 	c.Reference = scope.core.Reference
@@ -142,7 +142,7 @@ func (e Expression[S, V, P]) IsNotNull() Predicate[S] { return nullComparison(e,
 func nullComparison[S, V, P any](e Expression[S, V, P], op querycore.Operator) Predicate[S] {
 	err := e.core.Err
 	if !e.column.Nullable {
-		err = errors.Join(err, ormcore.Invalid("nullness requires a nullable expression"))
+		err = safeerror.Join("operation failed", err, ormcore.Invalid("nullness requires a nullable expression"))
 	}
 	return Predicate[S]{core: ormcore.Predicate{Node: querycore.Comparison{Operand: e.core.Node, Operator: op}, Refs: e.core.Refs, ReferenceFree: e.core.ReferenceFree, Err: err}}
 }

@@ -1,13 +1,15 @@
 package application
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/credential"
-	"github.com/weiloon1234/Foundry-Go/maintenance"
-	"github.com/weiloon1234/Foundry-Go/observability"
 	"log/slog"
 	"slices"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/maintenance"
+	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
 type ObservabilitySettings struct {
@@ -57,16 +59,16 @@ func (s ErrorLogSettings) reporter(logger *slog.Logger) (observability.Reporter,
 func prepareObservation(s ObservabilitySettings, options options, logger *slog.Logger, gate *maintenance.Gate) (*observability.Recorder, error) {
 	if options.recorder != nil {
 		if len(options.reporters) > 0 || len(options.exporters) > 0 || len(options.batchExporters) > 0 || s.ErrorLog.Enabled {
-			return nil, fault.New(fault.Invalid, "supplied observability cannot also declare reporters/exporters")
+			return nil, safeerror.NewFault(fault.Invalid, "supplied observability cannot also declare reporters/exporters")
 		}
 		if s.Maintenance {
-			return nil, fault.New(fault.Invalid, "supplied recorder owns its maintenance policy")
+			return nil, safeerror.NewFault(fault.Invalid, "supplied recorder owns its maintenance policy")
 		}
 		return options.recorder, nil
 	}
 	if !s.Enabled {
 		if len(options.reporters) > 0 || len(options.exporters) > 0 || len(options.batchExporters) > 0 || s.ErrorLog.Enabled {
-			return nil, fault.New(fault.Invalid, "observation declarations require observability enabled")
+			return nil, safeerror.NewFault(fault.Invalid, "observation declarations require observability enabled")
 		}
 		return nil, nil
 	}
@@ -87,7 +89,7 @@ func prepareObservation(s ObservabilitySettings, options options, logger *slog.L
 func WithErrorReporter(reporter observability.Reporter) Option {
 	return func(o *options) error {
 		if credential.IsNil(reporter) {
-			return fault.New(fault.Invalid, "nil error reporter")
+			return safeerror.NewFault(fault.Invalid, "nil error reporter")
 		}
 		o.reporters = append(o.reporters, reporter)
 		return nil
@@ -96,7 +98,7 @@ func WithErrorReporter(reporter observability.Reporter) Option {
 func WithTraceExporter(exporter observability.TraceExporter) Option {
 	return func(o *options) error {
 		if credential.IsNil(exporter) {
-			return fault.New(fault.Invalid, "nil trace exporter")
+			return safeerror.NewFault(fault.Invalid, "nil trace exporter")
 		}
 		o.exporters = append(o.exporters, exporter)
 		return nil
@@ -108,7 +110,7 @@ func WithTraceExporter(exporter observability.TraceExporter) Option {
 func WithTraceBatchExporter(exporter observability.TraceBatchExporter) Option {
 	return func(o *options) error {
 		if credential.IsNil(exporter) {
-			return fault.New(fault.Invalid, "nil trace batch exporter")
+			return safeerror.NewFault(fault.Invalid, "nil trace batch exporter")
 		}
 		o.batchExporters = append(o.batchExporters, exporter)
 		return nil

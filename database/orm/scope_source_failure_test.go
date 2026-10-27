@@ -28,7 +28,7 @@ func TestScopeSourceFailureNeverReachesSQL(t *testing.T) {
 				var statements []string
 				db := hookDB(t, testConnector{statements: &statements, columns: hookColumns, values: hookValues("stored", nil, nil)})
 				ctx := t.Context()
-				var all, count, cursor, chunk, remove func() error
+				var all, count, cursor, chunk, remove, update, setUpdate, setDelete func() error
 				table := hookedFields(nil, WithGlobalScopes(func(table hookedTable) []GlobalScope[hookedRow] {
 					fail()
 					return []GlobalScope[hookedRow]{Scope(table.Table, "tenant", func(context.Context) (Predicate[hookedRow], error) { return table.Key().Eq(7), nil })}
@@ -42,10 +42,13 @@ func TestScopeSourceFailureNeverReachesSQL(t *testing.T) {
 				}
 				chunk = func() error { return q.Chunk(ctx, db, 2, func([]hookedRow) error { return nil }) }
 				remove = func() error { _, err := table.Delete(ctx, db, 1); return err }
+				update = func() error { _, err := table.Update(ctx, db, 1, table.Name.Set("changed")); return err }
+				setUpdate = func() error { _, err := q.UpdateAll(ctx, db, table.Name.Set("changed")); return err }
+				setDelete = func() error { _, err := q.DeleteAll(ctx, db); return err }
 				for _, terminal := range []struct {
 					name string
 					run  func() error
-				}{{"first", all}, {"later", all}, {"count", count}, {"cursor", cursor}, {"chunk", chunk}, {"delete", remove}} {
+				}{{"first", all}, {"later", all}, {"count", count}, {"cursor", cursor}, {"chunk", chunk}, {"delete", remove}, {"update", update}, {"set update", setUpdate}, {"set delete", setDelete}} {
 					err := terminal.run()
 					if !errors.Is(err, fault.Panicked) {
 						t.Fatalf("%s did not retain source failure: %v", terminal.name, err)

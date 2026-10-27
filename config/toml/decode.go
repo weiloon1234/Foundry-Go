@@ -13,6 +13,7 @@ import (
 	parser "github.com/pelletier/go-toml/v2"
 	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // DefaultMaxBytes bounds an input document when Options.MaxBytes is zero.
@@ -40,47 +41,47 @@ type Options struct {
 // sensitive input and must not be logged. Decode does not close the reader.
 func Decode[T any](reader io.Reader, schema *config.Schema[T], options Options) (config.Values, error) {
 	if reader == nil || schema == nil || strings.TrimSpace(options.Name) == "" {
-		return config.Values{}, fault.New(fault.Invalid, "TOML configuration needs a reader, schema and source name")
+		return config.Values{}, safeerror.NewFault(fault.Invalid, "TOML configuration needs a reader, schema and source name")
 	}
 	limit := options.MaxBytes
 	if limit == 0 {
 		limit = DefaultMaxBytes
 	}
 	if limit < 0 || limit == math.MaxInt64 {
-		return config.Values{}, fault.New(fault.Invalid, "invalid TOML configuration byte limit")
+		return config.Values{}, safeerror.NewFault(fault.Invalid, "invalid TOML configuration byte limit")
 	}
 	data, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil {
-		return config.Values{}, fault.Wrap(fault.Invalid, "cannot read TOML configuration from "+options.Name, err)
+		return config.Values{}, safeerror.WrapFault(fault.Invalid, "cannot read TOML configuration from "+options.Name, err)
 	}
 	if int64(len(data)) > limit {
-		return config.Values{}, fault.New(fault.Invalid, "TOML configuration exceeds byte limit in "+options.Name)
+		return config.Values{}, safeerror.NewFault(fault.Invalid, "TOML configuration exceeds byte limit in "+options.Name)
 	}
 	var document map[string]any
 	if err := parser.Unmarshal(data, &document); err != nil {
-		return config.Values{}, fault.Wrap(fault.Invalid, "cannot parse TOML configuration from "+options.Name, err)
+		return config.Values{}, safeerror.WrapFault(fault.Invalid, "cannot parse TOML configuration from "+options.Name, err)
 	}
 	normalized, err := normalize(document, 0)
 	if err != nil {
-		return config.Values{}, fault.Wrap(fault.Invalid, "invalid TOML configuration in "+options.Name, err)
+		return config.Values{}, safeerror.WrapFault(fault.Invalid, "invalid TOML configuration in "+options.Name, err)
 	}
 	values, err := config.DecodeObject(normalized.(map[string]any), schema, options.Name)
 	if err != nil {
-		return config.Values{}, fault.Wrap(fault.Invalid, "invalid TOML configuration in "+options.Name, err)
+		return config.Values{}, safeerror.WrapFault(fault.Invalid, "invalid TOML configuration in "+options.Name, err)
 	}
 	return values, nil
 }
 
 func normalize(value any, depth int) (any, error) {
 	if depth > maxDepth {
-		return nil, fault.New(fault.Invalid, "TOML configuration nesting exceeds limit")
+		return nil, safeerror.NewFault(fault.Invalid, "TOML configuration nesting exceeds limit")
 	}
 	switch value := value.(type) {
 	case string, int64, bool:
 		return value, nil
 	case float64:
 		if math.IsNaN(value) || math.IsInf(value, 0) {
-			return nil, fault.New(fault.Invalid, "TOML configuration requires finite numbers")
+			return nil, safeerror.NewFault(fault.Invalid, "TOML configuration requires finite numbers")
 		}
 		return value, nil
 	case time.Time:
@@ -110,7 +111,7 @@ func normalize(value any, depth int) (any, error) {
 		}
 		return value, nil
 	default:
-		return nil, fault.New(fault.Invalid, "unsupported TOML configuration value")
+		return nil, safeerror.NewFault(fault.Invalid, "unsupported TOML configuration value")
 	}
 }
 

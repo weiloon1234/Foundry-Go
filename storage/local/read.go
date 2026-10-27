@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -41,7 +42,7 @@ func (b *Backend) Open(ctx context.Context, key storage.ObjectKey, options stora
 		err = ctx.Err()
 	}
 	if err != nil {
-		return nil, storage.ReadInfo{}, failure(storage.Unavailable, storage.OpenOperation, storage.NotApplicable, errors.Join(err, file.Close()))
+		return nil, storage.ReadInfo{}, failure(storage.Unavailable, storage.OpenOperation, storage.NotApplicable, safeerror.Join("operation failed", err, file.Close()))
 	}
 	reader := &objectReader{file: file, ctx: ctx, section: io.NewSectionReader(file, dataOffset+offset, length), length: length}
 	return reader, storage.ReadInfo{Object: info, Offset: offset, Length: length}, nil
@@ -84,7 +85,7 @@ func (r *objectReader) Read(p []byte) (int, error) {
 		}
 	}
 	if canceled := r.ctx.Err(); canceled != nil {
-		return n, failure(storage.Unavailable, storage.OpenOperation, storage.NotApplicable, errors.Join(canceled, err))
+		return n, failure(storage.Unavailable, storage.OpenOperation, storage.NotApplicable, safeerror.Join("operation failed", canceled, err))
 	}
 	return n, err
 }

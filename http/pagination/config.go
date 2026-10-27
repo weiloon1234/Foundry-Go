@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type LinkMode uint8
@@ -50,13 +51,13 @@ func DefaultConfig() Config {
 }
 func (c Config) Validate() error {
 	if !httpquery.ValidName(c.NumberParam) || !httpquery.ValidName(c.SizeParam) || c.NumberParam == c.SizeParam {
-		return fault.New(fault.Invalid, "pagination requires distinct valid query parameter names")
+		return safeerror.NewFault(fault.Invalid, "pagination requires distinct valid query parameter names")
 	}
 	if c.MaximumPage < 0 || (orm.PageRequest{Number: c.maximumPage(), Size: max(c.MaximumSize, 1)}).Validate() != nil {
-		return fault.New(fault.Invalid, "pagination maximum page must be representable with the maximum size")
+		return safeerror.NewFault(fault.Invalid, "pagination maximum page must be representable with the maximum size")
 	}
 	if c.PageWindow < 0 || c.PageWindow > MaximumPageWindow {
-		return fault.New(fault.Invalid, "pagination page window is outside its bound")
+		return safeerror.NewFault(fault.Invalid, "pagination page window is outside its bound")
 	}
 	return validateSizeConfig(c.DefaultSize, c.MaximumSize, c.Links)
 }
@@ -77,7 +78,7 @@ func validateSizeConfig(defaultSize, maximumSize int, links LinkMode) error {
 		return err
 	}
 	if defaultSize < 1 || defaultSize > maximumSize || links != RelativeLinks && links != PublicLinks {
-		return fault.New(fault.Invalid, "invalid pagination defaults, maximum size or link policy")
+		return safeerror.NewFault(fault.Invalid, "invalid pagination defaults, maximum size or link policy")
 	}
 	return nil
 }

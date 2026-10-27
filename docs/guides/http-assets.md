@@ -65,6 +65,24 @@ and `MatchedRoute` reports the SPA. A SPA with the same prefix extends the mount
 so it answers the mount's misses inside that mount's route middleware; keep that
 middleware free of assumptions about which directory answers.
 
+For an application-rendered not-found page, register
+`assets.Mount("web.public", "/").WithNavigationFallback(siteLost).Register()`,
+where `siteLost` is a `net/http.Handler`. It runs inside the mount's middleware
+only for a missing, allowed asset path that passes
+`http.IsHTMLNavigation(request, name)`: GET/HEAD, an extensionless asset name,
+and a bounded Accept header explicitly permitting `text/html` with positive
+quality. Existing files, hidden paths, missing images/scripts, JSON requests
+and lookup failures retain their existing behavior. A nil handler disables it;
+the original mount value is unchanged.
+
+The handler owns its status, body and headers, including cache policy and HEAD
+body handling; the mount adds no asset cache headers. Declared routes and equal
+or more specific SPAs retain precedence. A covering SPA's exclusions and misses
+remain JSON 404s rather than falling through to this handler. Reserve API
+namespaces through declared routes or SPA exclusions as before; this hook does
+not define a new reserved-prefix list. The exported predicate is also the SPA's
+single navigation rule; it does not itself check asset existence or exclusions.
+
 Successful asset lookups are cached for one second (at most 4,096 entries), so a
 replaced file in a directory source is observed within that window; misses are
 never cached. Files that report no modification time, such as `embed.FS`

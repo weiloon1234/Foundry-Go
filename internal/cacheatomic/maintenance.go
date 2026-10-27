@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxPrune bounds the records one prune batch removes. Adapters re-export it.
@@ -113,7 +114,7 @@ type PruneResult struct {
 
 // CapacityError is the shared quota rejection after reclaiming expiry failed.
 func CapacityError(adapter string) error {
-	return fault.New(fault.Invalid, adapter+" capacity reached")
+	return safeerror.NewFault(fault.Invalid, adapter+" capacity reached")
 }
 
 // RunPruner calls pass every interval until stop closes. A tick repeats full

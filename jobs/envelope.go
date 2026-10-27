@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/tracing"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -84,21 +85,21 @@ func (e Envelope) Validate() error {
 	switch e.wire.EnvelopeVersion {
 	case 0:
 		if e.wire.Trace.IsSet() {
-			return fault.New(fault.Invalid, "legacy job envelope cannot contain trace context")
+			return safeerror.NewFault(fault.Invalid, "legacy job envelope cannot contain trace context")
 		}
 	case TracedEnvelope:
 		if !e.wire.Trace.IsSet() {
-			return fault.New(fault.Invalid, "traced job envelope requires trace context")
+			return safeerror.NewFault(fault.Invalid, "traced job envelope requires trace context")
 		}
 	case ExtendedEnvelope:
 		if !e.wire.extended() {
-			return fault.New(fault.Invalid, "extended job envelope carries no extended field")
+			return safeerror.NewFault(fault.Invalid, "extended job envelope carries no extended field")
 		}
 	default:
-		return fault.New(fault.Invalid, "unsupported job envelope transport version")
+		return safeerror.NewFault(fault.Invalid, "unsupported job envelope transport version")
 	}
 	if e.wire.EnvelopeVersion != ExtendedEnvelope && e.wire.extended() {
-		return fault.New(fault.Invalid, "job envelope fields require the extended transport format")
+		return safeerror.NewFault(fault.Invalid, "job envelope fields require the extended transport format")
 	}
 	if trace, present := e.wire.Trace.Get(); present {
 		if err := trace.Validate(); err != nil {
@@ -106,7 +107,7 @@ func (e Envelope) Validate() error {
 		}
 	}
 	if e.ID().IsZero() || !identifier.Semantic(string(e.Name())) || e.Version() == 0 || len(e.payload) == 0 || len(e.payload) > MaxPayloadBytes {
-		return fault.New(fault.Invalid, "invalid job envelope identity or payload bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid job envelope identity or payload bounds")
 	}
 	if err := e.wire.Unique.Validate(); err != nil {
 		return err
@@ -118,7 +119,7 @@ func (e Envelope) Validate() error {
 		return err
 	}
 	if !e.AvailableAt().IsZero() && (e.AvailableAt().Year() < 1970 || e.AvailableAt().Year() > 9999) {
-		return fault.New(fault.Invalid, "invalid job scheduled time")
+		return safeerror.NewFault(fault.Invalid, "invalid job scheduled time")
 	}
 	return nil
 }
@@ -142,7 +143,7 @@ func (e Envelope) MarshalJSON() ([]byte, error) {
 // structurally valid: a worker records them as failed with an inspectable reason.
 func DecodeEnvelope(data []byte) (Envelope, error) {
 	if len(data) > MaxEnvelopeBytes {
-		return Envelope{}, fault.New(fault.Invalid, "job envelope exceeds transport bounds")
+		return Envelope{}, safeerror.NewFault(fault.Invalid, "job envelope exceeds transport bounds")
 	}
 	captured, err := value.ParseJSON[envelopeWire](string(data))
 	if err != nil {

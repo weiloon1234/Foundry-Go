@@ -3,6 +3,7 @@ package querycore
 import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func JsonOperationSpec(op ScalarOperation) (OperationSpec, bool) {
@@ -34,7 +35,7 @@ func (n OperationNode) ValidateJSON() error {
 			want = codec.TypeInteger
 		}
 		if input.Kind != want {
-			return fault.New(fault.Invalid, "JSON operation has incompatible inputs")
+			return safeerror.NewFault(fault.Invalid, "JSON operation has incompatible inputs")
 		}
 	}
 	want := codec.TypeBoolean
@@ -49,12 +50,12 @@ func (n OperationNode) ValidateJSON() error {
 	}
 	if n.Kind == JsonScalarOperation {
 		if n.Result == codec.TypeJSON || n.Result == codec.TypeBytes {
-			return fault.New(fault.Invalid, "JSON scalar extraction requires a scalar codec")
+			return safeerror.NewFault(fault.Invalid, "JSON scalar extraction requires a scalar codec")
 		}
 		return nil // The shared operation validator checks the closed SQL type.
 	}
 	if n.Result != want {
-		return fault.New(fault.Invalid, "JSON operation has an incompatible result")
+		return safeerror.NewFault(fault.Invalid, "JSON operation has an incompatible result")
 	}
 	return nil
 }

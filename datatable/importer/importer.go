@@ -8,7 +8,6 @@ package importer
 
 import (
 	"context"
-	"errors"
 	"io"
 	"slices"
 	"strings"
@@ -21,6 +20,7 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonpointer"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -194,7 +194,7 @@ func (d *definition[R]) initialize(spec Spec[R]) error {
 		}
 		for _, previous := range d.columns[:i] {
 			if strings.EqualFold(previous.heading, column.heading) {
-				return fault.New(fault.Duplicate, "import column heading is repeated")
+				return safeerror.NewFault(fault.Duplicate, "import column heading is repeated")
 			}
 		}
 	}
@@ -305,7 +305,7 @@ func (d *definition[R]) run(ctx context.Context, source Source, handle Handler[R
 			return report, err
 		}
 		number, cells, err := reader.next()
-		if errors.Is(err, io.EOF) {
+		if callback.ErrorIs(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -343,7 +343,7 @@ func (d *definition[R]) run(ctx context.Context, source Source, handle Handler[R
 func (d *definition[R]) headings(reader rowReader) ([]int, error) {
 	for {
 		number, cells, err := reader.next()
-		if errors.Is(err, io.EOF) {
+		if callback.ErrorIs(err, io.EOF) {
 			return nil, invalid("import heading row is missing")
 		}
 		if err != nil {
@@ -375,7 +375,8 @@ func (d *definition[R]) headings(reader rowReader) ([]int, error) {
 			}
 		}
 		if len(issues) != 0 {
-			return nil, &HeadingError{issues: issues}
+			failure := &HeadingError{issues: issues}
+			return nil, safeerror.Owned(failure.Error(), failure)
 		}
 		return mapping, nil
 	}
@@ -413,7 +414,7 @@ func (d *definition[R]) parse(ctx context.Context, mapping []int, cells []rawCel
 	}
 	err := d.rule.Check(ctx, row, d.limits.Validation)
 	var failed *validation.Errors
-	if errors.As(err, &failed) {
+	if callback.ErrorAs(err, &failed) {
 		return row, failed.Issues(), nil
 	}
 	return row, nil, err
@@ -434,4 +435,9 @@ func blank(cells []rawCell) bool {
 	return true
 }
 
-func invalid(message string) error { return fault.New(fault.Invalid, message) }
+func invalid(message string) error { return invalidWithCause(message, nil) }
+
+func invalidWithCause(message string, cause error) error {
+	failure := safeerror.WrapFault(fault.Invalid, message, cause)
+	return safeerror.Owned(failure.Error(), failure)
+}

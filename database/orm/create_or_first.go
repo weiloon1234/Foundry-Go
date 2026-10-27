@@ -2,7 +2,7 @@ package orm
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 	"unsafe"
 
@@ -58,18 +58,18 @@ func CreateOrFirst[M any](ctx context.Context, writer database.Transactor, q Que
 			return requireLookupMatch(ctx, tx, state, created)
 		}
 		if reconcile {
-			return *new(M), &WriteError[M]{cause: insertErr, candidate: created}
+			return *new(M), writeFailure(insertErr, created)
 		}
 		conflict, err := ormcore.OwnInsertConflict(ctx, tx, state.ast.Table, statementErr, insertErr)
 		if err != nil {
-			return *new(M), errors.Join(insertErr, err)
+			return *new(M), safeerror.Join("operation failed", insertErr, err)
 		}
 		if !conflict {
 			return *new(M), insertErr
 		}
 		candidates, _, err := eachCandidates[M](ctx, tx, selected, statement, 1)
 		if err != nil {
-			return *new(M), errors.Join(insertErr, err)
+			return *new(M), safeerror.Join("operation failed", insertErr, err)
 		}
 		if len(candidates) == 0 {
 			return *new(M), insertErr

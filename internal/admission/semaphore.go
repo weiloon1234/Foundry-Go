@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // DefaultWait bounds how long an operation queues for capacity when its owner
@@ -56,14 +57,14 @@ func (s *Semaphore) Acquire(ctx context.Context, wait time.Duration, stop <-chan
 	}
 	select {
 	case <-stop:
-		return fault.New(fault.Closed, "operation admission is closed")
+		return safeerror.NewFault(fault.Closed, "operation admission is closed")
 	default:
 	}
 	if s.TryAcquire() {
 		return nil
 	}
 	if wait <= 0 {
-		return fault.New(fault.Overloaded, "operation capacity is exhausted")
+		return safeerror.NewFault(fault.Overloaded, "operation capacity is exhausted")
 	}
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
@@ -71,11 +72,11 @@ func (s *Semaphore) Acquire(ctx context.Context, wait time.Duration, stop <-chan
 	case s.slots <- struct{}{}:
 		return nil
 	case <-stop:
-		return fault.New(fault.Closed, "operation admission is closed")
+		return safeerror.NewFault(fault.Closed, "operation admission is closed")
 	case <-timer.C:
-		return fault.New(fault.Overloaded, "operation capacity is exhausted")
+		return safeerror.NewFault(fault.Overloaded, "operation capacity is exhausted")
 	case <-ctx.Done():
-		return fault.Wrap(fault.Overloaded, "operation capacity wait ended", ctx.Err())
+		return safeerror.WrapFault(fault.Overloaded, "operation capacity wait ended", ctx.Err())
 	}
 }
 

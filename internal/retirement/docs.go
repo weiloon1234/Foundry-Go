@@ -1,8 +1,8 @@
 package retirement
 
 import (
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/scanner"
 	"go/token"
 	"path"
@@ -41,7 +41,7 @@ func CheckDocument(name string, data []byte) error {
 	codeLine := 0
 	checkCode := func() {
 		if !before && (language == "" || language == "go" || language == "golang") && retiredCodeName(strings.Join(code, "\n"), unqualified) {
-			failures = append(failures, fmt.Errorf("%s:%d: unqualified retired API in Go block; use its retained qualified owner", name, codeLine))
+			failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: unqualified retired API in Go block; use its retained qualified owner", name, codeLine)))
 		}
 	}
 	for i, line := range strings.Split(string(data), "\n") {
@@ -79,12 +79,12 @@ func CheckDocument(name string, data []byte) error {
 			}
 		}
 		if bad {
-			failures = append(failures, fmt.Errorf("%s:%d: unqualified retired API in code; use its retained qualified owner", name, i+1))
+			failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: unqualified retired API in code; use its retained qualified owner", name, i+1)))
 			continue
 		}
 		for _, pattern := range patterns {
 			if pattern.MatchString(line) {
-				failures = append(failures, fmt.Errorf("%s:%d: retired API outside a migration before block", name, i+1))
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: retired API outside a migration before block", name, i+1)))
 				break
 			}
 		}
@@ -92,7 +92,7 @@ func CheckDocument(name string, data []byte) error {
 	if fence != "" {
 		checkCode()
 	}
-	return errors.Join(failures...)
+	return safeerror.Join("operation failed", failures...)
 }
 
 // Scan code rather than prose or string contents. A selector rooted at another

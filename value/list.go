@@ -1,11 +1,11 @@
 package value
 
 import (
-	"encoding/json"
 	"encoding/json/jsontext"
-	jsonv2 "encoding/json/v2"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // List is a slice whose JSON form is never null: a nil or empty List encodes
@@ -20,7 +20,8 @@ func (l List[T]) MarshalJSON() ([]byte, error) {
 	if l == nil {
 		return []byte("[]"), nil
 	}
-	return json.Marshal([]T(l))
+	data, err := jsoncodec.Marshal([]T(l))
+	return data, jsoncodec.MethodError(err)
 }
 
 // MarshalJSONTo is the encoding/json/v2 form used by Foundry's encoder. It
@@ -29,13 +30,13 @@ func (l List[T]) MarshalJSONTo(encoder *jsontext.Encoder) error {
 	if l == nil {
 		l = List[T]{}
 	}
-	return jsonv2.MarshalEncode(encoder, []T(l))
+	return jsoncodec.MarshalEncode(encoder, []T(l))
 }
 
 // UnmarshalJSON rejects null and decodes elements with exact numbers.
 func (l *List[T]) UnmarshalJSON(data []byte) error {
 	if isNull(data) {
-		return fault.New(fault.Invalid, "list field cannot decode null")
+		return safeerror.NewFault(fault.Invalid, "list field cannot decode null")
 	}
 	decoded := []T{}
 	if err := unmarshalPresent(data, &decoded); err != nil {

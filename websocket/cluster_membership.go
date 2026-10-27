@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func (c *connectionState) joinCluster(ctx context.Context, subscription *subscriptionState, data []byte, count int) ([]historyFrame, PresenceSnapshot, error) {
@@ -43,13 +44,13 @@ func (c *connectionState) joinCluster(ctx context.Context, subscription *subscri
 				return err
 			}
 			if len(frames) > subscription.channel.replay.Messages {
-				return fault.New(fault.Invalid, "cluster replay exceeds its count bound")
+				return safeerror.NewFault(fault.Invalid, "cluster replay exceeds its count bound")
 			}
 			bytes := 0
 			for _, frame := range frames {
 				bytes += len(frame)
 				if bytes > subscription.channel.replay.Bytes {
-					return fault.New(fault.Invalid, "cluster replay exceeds its byte bound")
+					return safeerror.NewFault(fault.Invalid, "cluster replay exceeds its byte bound")
 				}
 				frame = slices.Clone(frame)
 				response, err := h.decodePublication(ctx, frame)
@@ -57,7 +58,7 @@ func (c *connectionState) joinCluster(ctx context.Context, subscription *subscri
 					return err
 				}
 				if response.Channel != subscription.key.channel {
-					return fault.New(fault.Invalid, "cluster replay crossed channel boundaries")
+					return safeerror.NewFault(fault.Invalid, "cluster replay crossed channel boundaries")
 				}
 				if reaches(response, subscription.key) {
 					history = append(history, historyFrame{response: response, data: frame})

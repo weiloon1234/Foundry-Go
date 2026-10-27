@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -18,13 +19,13 @@ type Binding struct{ hash credential.Digest }
 
 func Bind(parts ...secret.String) (Binding, error) {
 	if len(parts) < 1 || len(parts) > 8 {
-		return Binding{}, fault.New(fault.Invalid, "invalid challenge binding components")
+		return Binding{}, safeerror.NewFault(fault.Invalid, "invalid challenge binding components")
 	}
 	values := make([]string, len(parts))
 	for i, part := range parts {
 		raw := part.Reveal()
 		if len(raw) == 0 || len(raw) > 4096 || !utf8.ValidString(raw) {
-			return Binding{}, fault.New(fault.Invalid, "invalid challenge binding component")
+			return Binding{}, safeerror.NewFault(fault.Invalid, "invalid challenge binding component")
 		}
 		values[i] = raw
 	}

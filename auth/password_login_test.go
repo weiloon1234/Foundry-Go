@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraphtest"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -367,5 +368,26 @@ func TestPasswordLoginRejectsIncompleteBindingsAndTimeout(t *testing.T) {
 	var nilLogin *auth.PasswordLogin[passwordSubject, int64, loginEmail]
 	if _, err := nilLogin.Authenticate(t.Context(), "", password.Plaintext{}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil login accepted", err)
+	}
+}
+
+func TestPasswordLoginFailureReportContainsHostileInspection(t *testing.T) {
+	h := loginHasher(t, 2)
+	for _, mode := range []string{"cycle", "panic", "goexit"} {
+		cause := &errorgraphtest.Error{Mode: mode}
+		binding := loginBinding(passwordSubject{})
+		binding.Lookup = func(context.Context, loginEmail) (value.Optional[passwordSubject], error) {
+			return value.Optional[passwordSubject]{}, cause
+		}
+		observed := 0
+		login, setupErr := loginInstance(t, h, binding).WithObserver(func(context.Context, auth.Event) { observed++ })
+		if setupErr != nil {
+			t.Fatal(setupErr)
+		}
+		result, err := login.Authenticate(t.Context(), "member@example.test", loginPlain(t, "private password"))
+		assertNoPasswordAuthority(t, result)
+		if err == nil || !errors.Is(err, cause) || observed != 0 || cause.Formatted.Load() != 0 || cause.Visits.Load() > 512 {
+			t.Fatal("password failure reporting escaped containment")
+		}
 	}
 }

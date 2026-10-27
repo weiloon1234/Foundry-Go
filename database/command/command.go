@@ -5,7 +5,6 @@ package command
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"io"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/seed"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -78,14 +78,14 @@ const usage = "usage: migrate status|up [--database name] [--schema name] [--for
 // one migration target on it.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
-		return Command{}, fault.New(fault.Invalid, "database commands need a help writer")
+		return Command{}, safeerror.NewFault(fault.Invalid, "database commands need a help writer")
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		_, err := io.WriteString(help, usage+"\n")
-		return Command{}, errors.Join(flag.ErrHelp, err)
+		return Command{}, safeerror.Join("operation failed", flag.ErrHelp, err)
 	}
 	if len(args) < 2 {
-		return Command{}, fault.New(fault.Invalid, usage)
+		return Command{}, safeerror.NewFault(fault.Invalid, usage)
 	}
 	var result Command
 	switch args[0] + " " + args[1] {
@@ -107,7 +107,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		result.operation = runPrunables
 		result.prune = prune.DefaultOptions()
 	default:
-		return Command{}, fault.New(fault.Invalid, usage)
+		return Command{}, safeerror.NewFault(fault.Invalid, usage)
 	}
 	flags := flag.NewFlagSet(args[0]+" "+args[1], flag.ContinueOnError)
 	flags.SetOutput(help)
@@ -115,7 +115,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	if result.operation == runSeeders {
 		flags.Func("id", "seeder ID; repeat to select more than one", func(value string) error {
 			if !identifier.Semantic(value) {
-				return fault.New(fault.Invalid, "invalid seeder ID")
+				return safeerror.NewFault(fault.Invalid, "invalid seeder ID")
 			}
 			result.selected = append(result.selected, seed.ID(value))
 			return nil
@@ -124,7 +124,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	if result.operation == runPrunables {
 		flags.Func("name", "prunable name; repeat to select more than one", func(value string) error {
 			if !identifier.Semantic(value) {
-				return fault.New(fault.Invalid, "invalid prunable name")
+				return safeerror.NewFault(fault.Invalid, "invalid prunable name")
 			}
 			result.prunables = append(result.prunables, prune.Name(value))
 			return nil
@@ -139,7 +139,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 				return err
 			}
 			if result.database != "" {
-				return fault.New(fault.Duplicate, "database selection is repeated")
+				return safeerror.NewFault(fault.Duplicate, "database selection is repeated")
 			}
 			result.database = name
 			return nil
@@ -149,10 +149,10 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		flags.Func("migration", "migration to show, as origin/id", func(value string) error {
 			origin, id, ok := strings.Cut(value, "/")
 			if !ok || !identifier.Semantic(origin) || !identifier.Semantic(id) {
-				return fault.New(fault.Invalid, "migration must be origin/id")
+				return safeerror.NewFault(fault.Invalid, "migration must be origin/id")
 			}
 			if result.migration != (migrate.Key{}) {
-				return fault.New(fault.Duplicate, "migration selection is repeated")
+				return safeerror.NewFault(fault.Duplicate, "migration selection is repeated")
 			}
 			result.migration = migrate.Key{Origin: migrate.Origin(origin), ID: migrate.ID(id)}
 			return nil
@@ -161,10 +161,10 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	if result.migrates() {
 		flags.Func("schema", "migration target schema on the selected database", func(value string) error {
 			if !sqlname.Valid(value) {
-				return fault.New(fault.Invalid, "invalid migration schema")
+				return safeerror.NewFault(fault.Invalid, "invalid migration schema")
 			}
 			if result.schema != "" {
-				return fault.New(fault.Duplicate, "schema selection is repeated")
+				return safeerror.NewFault(fault.Duplicate, "schema selection is repeated")
 			}
 			result.schema = value
 			return nil
@@ -178,21 +178,21 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, err
 	}
 	if result.operation == showMigration && result.migration == (migrate.Key{}) {
-		return Command{}, fault.New(fault.Invalid, "migrate show needs --migration origin/id")
+		return Command{}, safeerror.NewFault(fault.Invalid, "migrate show needs --migration origin/id")
 	}
 	if result.operation == rollback && (result.steps < 1 || result.steps > migrate.MaxRollbackSteps) {
-		return Command{}, fault.New(fault.Invalid, "rollback --step must be a positive bounded count")
+		return Command{}, safeerror.NewFault(fault.Invalid, "rollback --step must be a positive bounded count")
 	}
 	if result.operation == runPrunables && (result.prune.BatchSize < 1 || result.prune.MaxBatches < 1) {
-		return Command{}, fault.New(fault.Invalid, "prune bounds must be positive")
+		return Command{}, safeerror.NewFault(fault.Invalid, "prune bounds must be positive")
 	}
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") {
-		return Command{}, fault.New(fault.Invalid, "database commands accept flags only; format must be text or json")
+		return Command{}, safeerror.NewFault(fault.Invalid, "database commands accept flags only; format must be text or json")
 	}
 	seen := make(map[seed.ID]bool, len(result.selected))
 	for _, id := range result.selected {
 		if seen[id] {
-			return Command{}, fault.New(fault.Duplicate, "seeder selection is duplicated")
+			return Command{}, safeerror.NewFault(fault.Duplicate, "seeder selection is duplicated")
 		}
 		seen[id] = true
 	}
@@ -222,7 +222,7 @@ func (c Command) migrates() bool {
 // An output error may follow committed work and never triggers an automatic retry.
 func (c Command) Run(ctx context.Context, resources Resources, output io.Writer) error {
 	if output == nil {
-		return fault.New(fault.Invalid, "database commands need an output writer")
+		return safeerror.NewFault(fault.Invalid, "database commands need an output writer")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -230,27 +230,27 @@ func (c Command) Run(ctx context.Context, resources Resources, output io.Writer)
 	switch c.operation {
 	case status, up, rollback, showMigration:
 		if resources.Migrations == nil && len(resources.MigrationTargets) == 0 {
-			return fault.New(fault.Missing, "database command needs a migration runner")
+			return safeerror.NewFault(fault.Missing, "database command needs a migration runner")
 		}
 		if resources.Migrations != nil && len(resources.MigrationTargets) != 0 {
-			return fault.New(fault.Invalid, "database command takes either a migration runner or migration targets")
+			return safeerror.NewFault(fault.Invalid, "database command takes either a migration runner or migration targets")
 		}
 		if resources.Migrations != nil && c.schema != "" {
-			return fault.New(fault.Invalid, "--schema selects among migration targets")
+			return safeerror.NewFault(fault.Invalid, "--schema selects among migration targets")
 		}
 	case listSeeders, runSeeders:
 		if resources.Seeders == nil {
-			return fault.New(fault.Missing, "database command needs a seeder registry")
+			return safeerror.NewFault(fault.Missing, "database command needs a seeder registry")
 		}
 	case listPrunables, runPrunables:
 		if resources.Prunables == nil {
-			return fault.New(fault.Missing, "database command needs a prunable registry")
+			return safeerror.NewFault(fault.Missing, "database command needs a prunable registry")
 		}
 	default:
-		return fault.New(fault.Invalid, "uninitialized database command; use Parse")
+		return safeerror.NewFault(fault.Invalid, "uninitialized database command; use Parse")
 	}
 	if c.database != "" && c.database != resources.DatabaseName {
-		return fault.New(fault.Invalid, "the --database selection does not match the supplied database resources")
+		return safeerror.NewFault(fault.Invalid, "the --database selection does not match the supplied database resources")
 	}
 	if len(resources.MigrationTargets) != 0 && c.migrates() {
 		return c.runTargets(ctx, resources, output)
@@ -261,42 +261,42 @@ func (c Command) Run(ctx context.Context, resources Resources, output io.Writer)
 		if err != nil {
 			return err
 		}
-		return errors.Join(report.Check(), c.writeStatus(output, report))
+		return safeerror.Join("operation failed", report.Check(), c.writeStatus(output, report))
 	case up:
 		result, err := resources.Migrations.Up(ctx)
-		return errors.Join(err, c.writeMigrations(output, result))
+		return safeerror.Join("operation failed", err, c.writeMigrations(output, result))
 	case rollback:
 		if !c.confirmed {
 			plan, err := resources.Migrations.RollbackPlan(ctx, c.steps)
 			if err != nil {
 				return err
 			}
-			return errors.Join(c.writeRollbackPlan(output, plan), fault.New(fault.Invalid, "rollback is destructive; review the plan and rerun with --confirm"))
+			return safeerror.Join("operation failed", c.writeRollbackPlan(output, plan), safeerror.NewFault(fault.Invalid, "rollback is destructive; review the plan and rerun with --confirm"))
 		}
 		result, err := resources.Migrations.Rollback(ctx, c.steps)
-		return errors.Join(err, c.writeRollback(output, result))
+		return safeerror.Join("operation failed", err, c.writeRollback(output, result))
 	case showMigration:
 		shown, ok := c.show(resources.Migrations.Registry(), "")
 		if !ok {
-			return fault.New(fault.Missing, "migration is not registered")
+			return safeerror.NewFault(fault.Missing, "migration is not registered")
 		}
 		return c.writeShown(output, shown)
 	case listSeeders:
 		return c.writeSeeders(output, resources.Seeders.IDs())
 	case runSeeders:
 		if resources.Database == nil {
-			return fault.New(fault.Missing, "seed run needs a database")
+			return safeerror.NewFault(fault.Missing, "seed run needs a database")
 		}
 		result, err := resources.Seeders.Run(ctx, resources.Database, c.selected...)
-		return errors.Join(err, c.writeSeedResult(output, result))
+		return safeerror.Join("operation failed", err, c.writeSeedResult(output, result))
 	case listPrunables:
 		return c.writePrunables(output, resources.Prunables.Names())
 	case runPrunables:
 		if resources.Database == nil {
-			return fault.New(fault.Missing, "prune run needs a database")
+			return safeerror.NewFault(fault.Missing, "prune run needs a database")
 		}
 		result, err := resources.Prunables.Run(ctx, resources.Database, c.prune, c.prunables...)
-		return errors.Join(err, c.writePruneResult(output, result))
+		return safeerror.Join("operation failed", err, c.writePruneResult(output, result))
 	}
 	panic("unreachable database command operation")
 }

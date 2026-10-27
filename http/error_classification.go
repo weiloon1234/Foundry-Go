@@ -18,3 +18,12 @@ func transportErrorAs[T error](err error) (value T, found, complete bool) {
 	})
 	return value, found, complete
 }
+
+func transportErrorIs(err, target error) bool {
+	matched := false
+	complete := walkTransportErrors(err, func(current error) bool {
+		matched = errorgraph.Matches(current, target)
+		return !matched
+	})
+	return complete && matched
+}

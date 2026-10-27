@@ -6,25 +6,26 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
 func decodeCursor[T any](cursor storage.Cursor, result *T) error {
 	if len(cursor.Token()) > storage.MaxCursorBytes {
-		return storage.Invalid
+		return safeerror.Owned(string(storage.Invalid), storage.Invalid)
 	}
 	data, err := base64.RawURLEncoding.DecodeString(cursor.Token())
 	if err != nil {
-		return storage.Invalid
+		return safeerror.Owned(string(storage.Invalid), storage.Invalid)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(result); err != nil {
-		return storage.Invalid
+		return safeerror.Owned(string(storage.Invalid), storage.Invalid)
 	}
 	var extra any
 	if decoder.Decode(&extra) != io.EOF {
-		return storage.Invalid
+		return safeerror.Owned(string(storage.Invalid), storage.Invalid)
 	}
 	return nil
 }
@@ -35,7 +36,7 @@ func encodeCursor[T any](value T) (storage.Cursor, error) {
 	}
 	text := base64.RawURLEncoding.EncodeToString(data)
 	if len(text) > storage.MaxCursorBytes {
-		return storage.Cursor{}, storage.LimitExceeded
+		return storage.Cursor{}, safeerror.Owned(string(storage.LimitExceeded), storage.LimitExceeded)
 	}
 	return storage.NewCursor(text), nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
@@ -61,42 +62,42 @@ func DefaultConfig() Config {
 
 func (c Config) Validate() error {
 	if c.MaxPresenceScopes < 1 || c.MaxPresenceScopes > 4096 || int64(c.MaxPresenceScopes)*int64(c.MaxPresenceMembers)*int64(c.MaxMemberBytes+128) > 128<<20 {
-		return fault.New(fault.Invalid, "WebSocket presence scope budget exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "WebSocket presence scope budget exceeds its bound")
 	}
 	if c.HeartbeatInterval < 10*time.Millisecond || c.HeartbeatInterval > 5*time.Minute || c.PongTimeout < 10*time.Millisecond || c.PongTimeout > time.Minute || c.AuthRefreshInterval < 10*time.Millisecond || c.AuthRefreshInterval > 5*time.Minute || c.DrainTimeout < time.Millisecond || c.DrainTimeout > time.Minute || c.MaxConnectionsPerIP < 1 || c.MaxConnectionsPerIP > 65536 || c.MaxConnectionsPerSubject < 1 || c.MaxConnectionsPerSubject > 65536 || c.DeduplicationEntries < 1 || c.DeduplicationEntries > 65536 {
-		return fault.New(fault.Invalid, "invalid WebSocket heartbeat, refresh, drain or connection bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket heartbeat, refresh, drain or connection bounds")
 	}
 	if err := c.MessageRate.Validate(); err != nil {
 		return err
 	}
 	if c.MaxConnections < 1 || c.MaxConnections > 1<<20 || c.MaxSubscriptions < 1 || c.MaxSubscriptions > 1024 || c.MaxFrameBytes < 4096 || c.MaxFrameBytes > 1<<20 || c.InboundQueue < 1 || c.InboundQueue > 1024 || c.OutboundQueue < 1 || c.OutboundQueue > 4096 || c.MaxOperations < 1 || c.MaxOperations > 65536 || c.OperationTimeout <= 0 || c.OperationTimeout > time.Minute || c.WriteTimeout <= 0 || c.WriteTimeout > time.Minute {
-		return fault.New(fault.Invalid, "invalid WebSocket runtime bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket runtime bounds")
 	}
 	// Queued bytes are enforced when frames are queued, so the budget is the
 	// actual retained data rather than a worst-case per-connection product.
 	if c.MaxQueuedBytes < c.MaxFrameBytes || c.MaxQueuedBytes > 64<<20 || c.MaxTotalQueuedBytes < int64(c.MaxQueuedBytes) || c.MaxTotalQueuedBytes > 16<<30 {
-		return fault.New(fault.Invalid, "invalid WebSocket queued byte budget")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket queued byte budget")
 	}
 	if err := c.Payload.Validate(); err != nil {
 		return err
 	}
 	if c.Payload.Bytes > c.MaxFrameBytes-4096 || c.Payload.Depth > 63 || c.Payload.Nodes > 65500 || c.Payload.Steps > 1<<20 || c.Payload.Issues > 128 {
-		return fault.New(fault.Invalid, "invalid WebSocket payload bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket payload bounds")
 	}
 	if !validPresenceBounds(c.MaxPresenceMembers, c.MaxMemberBytes, c.MaxFrameBytes) || c.MaxMemberBytes > c.Payload.Bytes {
-		return fault.New(fault.Invalid, "invalid WebSocket presence bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket presence bounds")
 	}
 	if len(c.AdditionalOrigins) > 128 {
-		return fault.New(fault.Invalid, "too many WebSocket origins")
+		return safeerror.NewFault(fault.Invalid, "too many WebSocket origins")
 	}
 	seen := make(map[foundryhttp.Origin]bool)
 	for _, raw := range c.AdditionalOrigins {
 		origin, err := foundryhttp.ParseOrigin(string(raw))
 		if err != nil || origin == foundryhttp.NullOrigin {
-			return fault.New(fault.Invalid, "invalid WebSocket origin")
+			return safeerror.NewFault(fault.Invalid, "invalid WebSocket origin")
 		}
 		if seen[origin] {
-			return fault.New(fault.Duplicate, "duplicate WebSocket origin")
+			return safeerror.NewFault(fault.Duplicate, "duplicate WebSocket origin")
 		}
 		seen[origin] = true
 	}

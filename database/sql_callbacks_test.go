@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"runtime"
 	"sync/atomic"
 	"testing"
 
@@ -116,5 +117,95 @@ func TestSQLCallbackClassificationKeepsContextPrecedence(t *testing.T) {
 	var classified *database.Error
 	if !errors.As(err, &classified) || classified.Code() != database.DeadlineExceeded {
 		t.Fatal("context classification precedence changed")
+	}
+}
+
+type hostileSQLInspectionError struct {
+	privateSQLError
+	mode string
+}
+
+func (e *hostileSQLInspectionError) Error() string {
+	e.formatted.Add(1)
+	switch e.mode {
+	case "format_panic":
+		panic("private")
+	case "format_goexit":
+		runtime.Goexit()
+	}
+	return "private SQL error"
+}
+func (e *hostileSQLInspectionError) Format(s fmt.State, _ rune) {
+	e.formatted.Add(1)
+	switch e.mode {
+	case "format_panic":
+		panic("private")
+	case "format_goexit":
+		runtime.Goexit()
+	}
+	_, _ = s.Write([]byte("private SQL error"))
+}
+func (e *hostileSQLInspectionError) Is(error) bool {
+	switch e.mode {
+	case "is_panic":
+		panic("private")
+	case "is_goexit":
+		runtime.Goexit()
+	}
+	return false
+}
+func (e *hostileSQLInspectionError) As(any) bool {
+	switch e.mode {
+	case "as_panic":
+		panic("private")
+	case "as_goexit":
+		runtime.Goexit()
+	}
+	return false
+}
+func (e *hostileSQLInspectionError) Unwrap() error {
+	if e.mode == "cycle" {
+		return e
+	}
+	return nil
+}
+func TestSQLCallbacksKeepHostileInspectionOutsideForeignLibraries(t *testing.T) {
+	for _, mode := range []string{"format_panic", "format_goexit", "is_panic", "is_goexit", "as_panic", "as_goexit", "cycle"} {
+		t.Run(mode, func(t *testing.T) {
+			for _, operation := range []string{"valuer", "scanner", "driver"} {
+				t.Run(operation, func(t *testing.T) {
+					cause := &hostileSQLInspectionError{mode: mode}
+					state := &driverState{}
+					if operation == "driver" {
+						state.exec = func(context.Context, string, []driver.NamedValue) (driver.Result, error) { return nil, cause }
+					}
+					db := open(t, state, nil)
+					var err error
+					switch operation {
+					case "valuer":
+						v := errorValuer{cause}
+						p := &v
+						_, err = db.Exec(t.Context(), "SELECT $1", &p)
+					case "driver":
+						_, err = db.Exec(t.Context(), "SELECT 1")
+					case "scanner":
+						rows, e := db.Query(t.Context(), "SELECT 1")
+						if e != nil || !rows.Next() {
+							t.Fatal("query failed")
+						}
+						s := errorScanner{cause}
+						p := &s
+						err = rows.Scan(&p)
+					}
+					if err == nil || !errors.Is(err, cause) {
+						t.Fatal("hostile SQL cause lost")
+					}
+					_ = fmt.Sprintf("%v %+v %#v", err, err, err)
+					if cause.formatted.Load() != 0 {
+						t.Fatal("private error formatted")
+					}
+				})
+			}
+		})
 	}
 }

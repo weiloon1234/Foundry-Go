@@ -5,6 +5,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"slices"
 	"sync"
 
@@ -20,22 +21,22 @@ type Driver struct {
 
 func New(capacity int) (*Driver, error) {
 	if capacity < 1 || capacity > 10000 {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	return &Driver{capacity: capacity}, nil
 }
 func (*Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("memory email driver")) }
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || ctx == nil || out.Validate() != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	if ctx.Err() != nil {
-		return email.Receipt{}, email.Transient
+		return email.Receipt{}, emaildiag.Failure(email.Transient)
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed || len(d.messages) >= d.capacity {
-		return email.Receipt{}, email.Transient
+		return email.Receipt{}, emaildiag.Failure(email.Transient)
 	}
 	d.messages = append(d.messages, out)
 	return email.Receipt{}, nil

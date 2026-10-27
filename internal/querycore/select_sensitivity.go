@@ -1,5 +1,7 @@
 package querycore
 
+import "github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 import "github.com/weiloon1234/Foundry-Go/fault"
 
 // SelectSensitivity follows output provenance rather than decoder metadata: a
@@ -19,7 +21,7 @@ type sensitivityWalk struct {
 func (s *sensitivityWalk) visit(depth, size int) error {
 	s.nodes++
 	if depth > MaxExpressionDepth || s.nodes > MaxExpressionNodes || size > MaxExpressionNodes {
-		return fault.New(fault.Invalid, "output sensitivity analysis exceeds its resource bound")
+		return safeerror.NewFault(fault.Invalid, "output sensitivity analysis exceeds its resource bound")
 	}
 	return nil
 }
@@ -94,13 +96,13 @@ func (s *sensitivityWalk) source(source TableSource, outer map[FieldRef]bool, de
 	case source.Self != nil:
 		flags, ok := s.self[source.Self]
 		if !ok {
-			return nil, fault.New(fault.Invalid, "output sensitivity requires an owned recursive reference")
+			return nil, safeerror.NewFault(fault.Invalid, "output sensitivity requires an owned recursive reference")
 		}
 		inputs = append(inputs, flags)
 	}
 	for _, flags := range inputs {
 		if len(flags) != len(result) {
-			return nil, fault.New(fault.Invalid, "output sensitivity requires matching source columns")
+			return nil, safeerror.NewFault(fault.Invalid, "output sensitivity requires matching source columns")
 		}
 		for i, sensitive := range flags {
 			result[i] = result[i] || sensitive
@@ -111,7 +113,7 @@ func (s *sensitivityWalk) source(source TableSource, outer map[FieldRef]bool, de
 
 func (s *sensitivityWalk) cte(c *CteNode, depth int) ([]bool, error) {
 	if s.active[c] {
-		return nil, fault.New(fault.Invalid, "output sensitivity found a cyclic CTE")
+		return nil, safeerror.NewFault(fault.Invalid, "output sensitivity found a cyclic CTE")
 	}
 	s.active[c] = true
 	defer delete(s.active, c)
@@ -121,7 +123,7 @@ func (s *sensitivityWalk) cte(c *CteNode, depth int) ([]bool, error) {
 	}
 	r := c.Recursion
 	if r.Reference == nil {
-		return nil, fault.New(fault.Invalid, "output sensitivity requires a recursive reference")
+		return nil, safeerror.NewFault(fault.Invalid, "output sensitivity requires a recursive reference")
 	}
 	s.self[r.Reference] = result
 	defer delete(s.self, r.Reference)
@@ -133,7 +135,7 @@ func (s *sensitivityWalk) cte(c *CteNode, depth int) ([]bool, error) {
 			return nil, err
 		}
 		if len(step) != len(result) {
-			return nil, fault.New(fault.Invalid, "recursive sensitivity requires matching outputs")
+			return nil, safeerror.NewFault(fault.Invalid, "recursive sensitivity requires matching outputs")
 		}
 		changed := false
 		for i, sensitive := range step {
@@ -156,7 +158,7 @@ func (s *sensitivityWalk) expression(expression ValueExpression, fields map[Fiel
 		} // COUNT(*) has no value dependency.
 		flag, ok := fields[f]
 		if !ok {
-			w.Err = fault.New(fault.Invalid, "output sensitivity requires a declared field")
+			w.Err = safeerror.NewFault(fault.Invalid, "output sensitivity requires a declared field")
 			return
 		}
 		sensitive = sensitive || flag

@@ -64,7 +64,7 @@ func TestCyclicDriverFailureReleasesSendAndShutdownOwnership(t *testing.T) {
 		return email.Receipt{}, nil
 	}), nil, nil)
 	result, err := m.Send(t.Context(), message(t), email.SendOptions{})
-	if err != email.Ambiguous || result.Accepted || m.Snapshot().Active != 0 {
+	if !errors.Is(err, email.Ambiguous) || result.Accepted || m.Snapshot().Active != 0 {
 		t.Fatal("cyclic driver failure retained ownership or claimed acceptance")
 	}
 	if cycle.visits.Load() == 0 || cycle.visits.Load() > 256 {
@@ -103,7 +103,7 @@ func TestCyclicAttachmentFailureDoesNotSubmitOrRetainCapacity(t *testing.T) {
 		return email.Receipt{}, nil
 	}), registry, nil)
 	result, err := m.Send(t.Context(), message(t).Attach(attachment), email.SendOptions{})
-	if err != email.Construction || result.Accepted || calls.Load() != 0 || m.Snapshot().Active != 0 {
+	if !errors.Is(err, email.Construction) || result.Accepted || calls.Load() != 0 || m.Snapshot().Active != 0 {
 		t.Fatal("unclassifiable attachment failure submitted or retained send")
 	}
 	if cycle.visits.Load() == 0 || cycle.visits.Load() > 256 {

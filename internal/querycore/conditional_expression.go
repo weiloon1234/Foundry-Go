@@ -1,5 +1,7 @@
 package querycore
 
+import "github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 import "github.com/weiloon1234/Foundry-Go/fault"
 
 type ConditionalKind uint8
@@ -20,7 +22,7 @@ func (ConditionalNode) ValueNode() {}
 // ValidateConditionalArguments checks conditional shape before allocation or traversal.
 func ValidateConditionalArguments(kind ConditionalKind, count int) error {
 	if count == 0 || count > MaxExpressionNodes || (kind != CoalesceValues && kind != NullIfValues) || (kind == NullIfValues && count != 2) {
-		return fault.New(fault.Invalid, "invalid conditional value arguments")
+		return safeerror.NewFault(fault.Invalid, "invalid conditional value arguments")
 	}
 	return nil
 }

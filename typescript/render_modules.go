@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Runtime sources by module, in emission order. The core and realtime modules
@@ -183,7 +184,7 @@ func entryModule(prefix string, source *manifest.Manifest, document manifest.Doc
 	for name := range r.uses {
 		info, ok := declared[name]
 		if !ok {
-			return nil, fault.New(fault.Internal, "generated client refers to an undeclared runtime name "+name)
+			return nil, safeerror.NewFault(fault.Internal, "generated client refers to an undeclared runtime name "+name)
 		}
 		imports[index(info.realtime)][index(info.value)] = append(imports[index(info.realtime)][index(info.value)], name)
 	}
@@ -254,7 +255,7 @@ func renderModules(source *manifest.Manifest, prefix string, surfaces []Surface)
 	}
 	for _, data := range files {
 		if len(data) > maxOutputBytes {
-			return nil, fault.New(fault.Invalid, "TypeScript output exceeds its publication byte budget")
+			return nil, safeerror.NewFault(fault.Invalid, "TypeScript output exceeds its publication byte budget")
 		}
 	}
 	return files, nil

@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/randomtoken"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
@@ -26,28 +27,28 @@ func (d Digest) Equal(other Digest) bool {
 func ParseDigest(text string) (Digest, error) {
 	var result Digest
 	if len(text) != sha256.Size*2 {
-		return result, fault.New(fault.Invalid, "invalid stored credential digest")
+		return result, safeerror.NewFault(fault.Invalid, "invalid stored credential digest")
 	}
 	if _, err := hex.Decode(result.bytes[:], []byte(text)); err != nil || result.Hex() != text || result.IsZero() {
-		return Digest{}, fault.New(fault.Invalid, "invalid stored credential digest")
+		return Digest{}, safeerror.NewFault(fault.Invalid, "invalid stored credential digest")
 	}
 	return result, nil
 }
 func Hash(value secret.String) (Digest, error) {
 	text := value.Reveal()
 	if len(text) != EncodedSecretBytes {
-		return Digest{}, fault.New(fault.Invalid, "invalid credential encoding")
+		return Digest{}, safeerror.NewFault(fault.Invalid, "invalid credential encoding")
 	}
 	decoded, err := base64.RawURLEncoding.Strict().DecodeString(text)
 	if err != nil || len(decoded) != SecretBytes || base64.RawURLEncoding.EncodeToString(decoded) != text {
-		return Digest{}, fault.New(fault.Invalid, "invalid credential encoding")
+		return Digest{}, safeerror.NewFault(fault.Invalid, "invalid credential encoding")
 	}
 	return Digest{bytes: sha256.Sum256(decoded)}, nil
 }
 func New() (secret.String, Digest, error) {
 	token, err := randomtoken.Base64(SecretBytes)
 	if err != nil {
-		return secret.String{}, Digest{}, fault.Wrap(fault.Internal, "credential generation failed", err)
+		return secret.String{}, Digest{}, safeerror.WrapFailure(fault.Internal, "credential generation failed", err)
 	}
 	digest, err := Hash(token)
 	if err != nil {

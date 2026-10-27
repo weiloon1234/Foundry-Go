@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Observer identifies one model-owned hook factory. M and H retain the concrete
@@ -53,7 +54,7 @@ func (o Observer[M, H]) Name() string { return o.name }
 // Validate checks the declaration without constructing operation-local hooks.
 func (o Observer[M, H]) Validate() error {
 	if !identifier.Semantic(o.name) || !o.kind.valid() {
-		return fault.New(fault.Invalid, "invalid model observer identifier")
+		return safeerror.NewFault(fault.Invalid, "invalid model observer identifier")
 	}
 	return nil
 }
@@ -76,7 +77,7 @@ func (o Observer[M, H]) Declare(factory func() H) (Declaration, error) {
 		return Declaration{}, err
 	}
 	if factory == nil {
-		return Declaration{}, fault.New(fault.Invalid, "model observer needs a hook factory")
+		return Declaration{}, safeerror.NewFault(fault.Invalid, "model observer needs a hook factory")
 	}
 	return Declaration{name: o.name, model: reflect.TypeFor[M](), hooks: reflect.TypeFor[H](), factory: factory, kind: o.kind}, nil
 }
@@ -112,16 +113,16 @@ func NewObservers(declarations ...Declaration) (Observers, error) {
 	names := make(map[string]struct{}, len(declarations))
 	for _, item := range declarations {
 		if !identifier.Semantic(item.name) || item.model == nil || item.hooks == nil || item.factory == nil || !item.kind.valid() {
-			return Observers{}, fault.New(fault.Invalid, "invalid model observer declaration")
+			return Observers{}, safeerror.NewFault(fault.Invalid, "invalid model observer declaration")
 		}
 		if _, exists := names[item.name]; exists {
-			return Observers{}, fault.New(fault.Duplicate, "duplicate model observer identifier")
+			return Observers{}, safeerror.NewFault(fault.Duplicate, "duplicate model observer identifier")
 		}
 		names[item.name] = struct{}{}
 		key := observerGroupKey{model: item.model, kind: item.kind}
 		group, exists := set.groups[key]
 		if exists && group.hooks != item.hooks {
-			return Observers{}, fault.New(fault.Invalid, "model observers have incompatible hook declarations")
+			return Observers{}, safeerror.NewFault(fault.Invalid, "model observers have incompatible hook declarations")
 		}
 		group.hooks = item.hooks
 		group.factories = append(group.factories, item.factory)
@@ -134,7 +135,7 @@ func NewObservers(declarations ...Declaration) (Observers, error) {
 		}
 		merged, exists := deletions.groups[view]
 		if exists && merged.hooks != item.hooks {
-			return Observers{}, fault.New(fault.Invalid, "model observers have incompatible hook declarations")
+			return Observers{}, safeerror.NewFault(fault.Invalid, "model observers have incompatible hook declarations")
 		}
 		merged.hooks = item.hooks
 		merged.factories = append(merged.factories, item.factory)
@@ -192,13 +193,13 @@ func RetrievalObserverFactories[M, H any](set Observers) ([]func() H, error) {
 func observerFactories[M, H any](set Observers, kind observerKind) ([]func() H, error) {
 	group, exists := set.groups[observerGroupKey{model: reflect.TypeFor[M](), kind: kind}]
 	if exists && group.hooks != reflect.TypeFor[H]() {
-		return nil, fault.New(fault.Invalid, "model observer hook type does not match the generated adapter")
+		return nil, safeerror.NewFault(fault.Invalid, "model observer hook type does not match the generated adapter")
 	}
 	result := make([]func() H, len(group.factories))
 	for i, stored := range group.factories {
 		factory, ok := stored.(func() H)
 		if !ok || factory == nil {
-			return nil, fault.New(fault.Internal, "model observer factory does not match its declaration")
+			return nil, safeerror.NewFault(fault.Internal, "model observer factory does not match its declaration")
 		}
 		result[i] = factory
 	}

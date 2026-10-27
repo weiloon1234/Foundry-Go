@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 
 	"github.com/weiloon1234/Foundry-Go/attachments"
@@ -13,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const variantUsage = "attachments variants --owner name --collection name [--missing] [--batch 20] [--format text|json]"
@@ -30,7 +32,7 @@ type VariantCommand struct {
 // ParseVariants validates the command before boot and performs no I/O.
 func ParseVariants(args []string, help io.Writer) (VariantCommand, error) {
 	if help == nil {
-		return VariantCommand{}, fault.New(fault.Invalid, "attachment variant commands require help output")
+		return VariantCommand{}, safeerror.NewFault(fault.Invalid, "attachment variant commands require help output")
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(help, "usage: "+variantUsage+"\n"); err != nil {
@@ -39,7 +41,7 @@ func ParseVariants(args []string, help io.Writer) (VariantCommand, error) {
 		return VariantCommand{}, flag.ErrHelp
 	}
 	if len(args) < 2 || args[0] != "attachments" || args[1] != "variants" {
-		return VariantCommand{}, cli.Usage(variantUsage)
+		return VariantCommand{}, clidiag.Usage(variantUsage)
 	}
 	flags := flag.NewFlagSet("attachments variants", flag.ContinueOnError)
 	flags.SetOutput(help)
@@ -52,10 +54,10 @@ func ParseVariants(args []string, help io.Writer) (VariantCommand, error) {
 		return VariantCommand{}, err
 	}
 	if flags.NArg() != 0 || !identifier.Semantic(*owner) || !identifier.Semantic(*collection) || *format != "text" && *format != "json" {
-		return VariantCommand{}, cli.Usage(variantUsage)
+		return VariantCommand{}, clidiag.Usage(variantUsage)
 	}
 	if *batch < 1 || *batch > attachments.MaxRegenerationBatch {
-		return VariantCommand{}, cli.Usage("--batch must be between 1 and 100")
+		return VariantCommand{}, clidiag.Usage("--batch must be between 1 and 100")
 	}
 	return VariantCommand{owner: extensions.OwnerName(*owner), collection: attachments.Name(*collection), missing: *missing, batch: *batch, json: *format == "json"}, nil
 }
@@ -64,7 +66,7 @@ func ParseVariants(args []string, help io.Writer) (VariantCommand, error) {
 // "attachment-variants". The manager is resolved after boot.
 func VariantDeclaration(construct func(foundation.Resolver) (*attachments.Manager, error)) (cli.Declaration, error) {
 	if construct == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "attachment variant commands require a manager constructor")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "attachment variant commands require a manager constructor")
 	}
 	definition := cli.Define("attachment-variants", "Regenerate declared attachment image variants in bounded batches", func(args []string, help io.Writer) (VariantCommand, error) {
 		if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -93,7 +95,7 @@ type variantReport struct {
 // after the whole collection was processed.
 func (c VariantCommand) Run(ctx context.Context, manager *attachments.Manager, out io.Writer) error {
 	if ctx == nil || out == nil || manager == nil || c.batch < 1 {
-		return fault.New(fault.Invalid, "attachment variant command requires context, manager and output")
+		return safeerror.NewFault(fault.Invalid, "attachment variant command requires context, manager and output")
 	}
 	report := variantReport{Failed: []string{}}
 	options := attachments.RegenerationOptions{Missing: c.missing, Limit: c.batch}
@@ -116,7 +118,7 @@ func (c VariantCommand) Run(ctx context.Context, manager *attachments.Manager, o
 		return err
 	}
 	if len(report.Failed) > 0 {
-		return fault.New(fault.Conflict, "some attachments failed variant generation")
+		return safeerror.NewFault(fault.Conflict, "some attachments failed variant generation")
 	}
 	return nil
 }

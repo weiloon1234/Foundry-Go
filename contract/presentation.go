@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PresentationKind is an optional public display hint. It never changes codecs,
@@ -111,7 +112,7 @@ func (p Presentation) ValidateSchema(schema Schema) error {
 // exported; output names the owner's kind in the error.
 func RejectPasswordOutput(schema Schema, output string) error {
 	if PasswordTypes(schema.Types)[schema.Root] {
-		return fault.New(fault.Invalid, "password presentation is input-only; it cannot be "+output+" output")
+		return safeerror.NewFault(fault.Invalid, "password presentation is input-only; it cannot be "+output+" output")
 	}
 	return nil
 }

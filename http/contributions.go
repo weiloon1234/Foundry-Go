@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type routeDeclaration interface {
@@ -45,7 +46,7 @@ func spaContributions(key foundation.Key[*Router]) foundation.Collection[spaDecl
 // resolve domain services but must not resolve the router being constructed.
 func RegisterRoute[D routeDeclaration](r *foundation.Registrar, key foundation.Key[*Router], declaration D, construct func(foundation.Resolver) (RouteRegistration, error)) error {
 	if key.Name() == "" || construct == nil {
-		return fault.New(fault.Invalid, "route contribution requires a router and constructor")
+		return safeerror.NewFault(fault.Invalid, "route contribution requires a router and constructor")
 	}
 	if err := declaration.Validate(); err != nil {
 		return err
@@ -64,10 +65,10 @@ func RegisterRoute[D routeDeclaration](r *foundation.Registrar, key foundation.K
 			return RouteRegistration{}, registration.err
 		}
 		if registration.info.ID != id || registration.handler == nil {
-			return RouteRegistration{}, fault.New(fault.Invalid, "route contribution returned a different identity or no handler")
+			return RouteRegistration{}, safeerror.NewFault(fault.Invalid, "route contribution returned a different identity or no handler")
 		}
 		if !contract.accepts(registration.contract) {
-			return RouteRegistration{}, fault.New(fault.Invalid, "route contribution returned a different transport contract")
+			return RouteRegistration{}, safeerror.NewFault(fault.Invalid, "route contribution returned a different transport contract")
 		}
 		return registration, nil
 	})
@@ -78,7 +79,7 @@ func RegisterRoute[D routeDeclaration](r *foundation.Registrar, key foundation.K
 // redirects and 404/405 responses do not acquire a fabricated route identity.
 func RegisterMiddleware(r *foundation.Registrar, key foundation.Key[*Router], middleware Middleware) error {
 	if key.Name() == "" {
-		return fault.New(fault.Invalid, "middleware contribution requires a router")
+		return safeerror.NewFault(fault.Invalid, "middleware contribution requires a router")
 	}
 	if err := middleware.Validate(); err != nil {
 		return err
@@ -99,7 +100,7 @@ func RegisterMiddleware(r *foundation.Registrar, key foundation.Key[*Router], mi
 // defer to the SPA as WithSPA describes.
 func RegisterSPA(r *foundation.Registrar, key foundation.Key[*Router], id RouteID, assets foundation.Key[*Assets], config SPAConfig) error {
 	if key.Name() == "" || assets.Name() == "" || !identifier.Semantic(string(id)) {
-		return fault.New(fault.Invalid, "SPA contribution requires a router, an assets key and a semantic route ID")
+		return safeerror.NewFault(fault.Invalid, "SPA contribution requires a router, an assets key and a semantic route ID")
 	}
 	if err := config.Validate(); err != nil {
 		return err
@@ -128,7 +129,7 @@ func RegisterRouter(r *foundation.Registrar, key foundation.Key[*Router]) error 
 // provider/plugin contributions. Duplicate/ambiguous routes fail as one graph.
 func RegisterRouterWithRoutes(r *foundation.Registrar, key foundation.Key[*Router], construct func(foundation.Resolver) ([]RouteRegistration, error)) error {
 	if construct == nil {
-		return fault.New(fault.Invalid, "router requires a route constructor")
+		return safeerror.NewFault(fault.Invalid, "router requires a route constructor")
 	}
 	return registerRouter(r, key, construct)
 }

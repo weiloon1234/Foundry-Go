@@ -1,8 +1,8 @@
 package retirement
 
 import (
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -30,7 +30,7 @@ func checkExposures(fset *token.FileSet, sources map[string]*sourcePackage, deni
 		}
 		pkg, _ := config.Check(source.owner, fset, source.files, info)
 		if pkg == nil {
-			return fmt.Errorf("%s: no scope for exposure check", source.owner)
+			return safeerror.New(fmt.Sprintf("%s: no scope for exposure check", source.owner))
 		}
 		w.interfaceDocs = interfaceDocs(source.files, info)
 		w.owner = source.owner
@@ -44,7 +44,7 @@ func checkExposures(fset *token.FileSet, sources map[string]*sourcePackage, deni
 			w.object(obj, name)
 		}
 	}
-	return errors.Join(w.failures...)
+	return safeerror.Join("operation failed", w.failures...)
 }
 
 type exposureWalker struct {
@@ -78,7 +78,7 @@ func (w *exposureWalker) fail(reason, selector string, pos token.Pos) {
 	key := reason + ":" + selector + ":" + w.fset.Position(pos).String()
 	if !w.reported[key] {
 		w.reported[key] = true
-		w.failures = append(w.failures, fmt.Errorf("%s: %s %s.%s", w.fset.Position(pos), reason, w.owner, selector))
+		w.failures = append(w.failures, safeerror.New(fmt.Sprintf("%s: %s %s.%s", w.fset.Position(pos), reason, w.owner, selector)))
 	}
 }
 

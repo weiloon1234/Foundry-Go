@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PathFloat retains float32, float64 and their named types in URL parameters.
@@ -53,5 +54,5 @@ func (c floatPathCodec[V]) Format(value V) (string, error) {
 }
 
 func invalidURLFloat() error {
-	return fault.New(fault.Invalid, "invalid floating-point URL parameter")
+	return safeerror.NewFault(fault.Invalid, "invalid floating-point URL parameter")
 }

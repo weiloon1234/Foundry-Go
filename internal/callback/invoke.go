@@ -2,11 +2,11 @@
 package callback
 
 import (
-	"fmt"
 	"runtime"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // maxPanicFrames bounds retained panic locations; the innermost frames matter.
@@ -18,17 +18,17 @@ const maxPanicFrames = 32
 func Invoke(operation string, fn func() error) (err error) {
 	defer func() {
 		if recover() != nil {
-			err = fault.Panic(operation+" panicked", panicFrames())
+			err = safeerror.Panic(operation+" panicked", panicFrames())
 		}
 	}()
 	if err = fn(); err != nil {
 		// An inner owned callback already contained this failure. Keep its
 		// concrete classification so an outer boundary need not inspect
 		// arbitrary application error methods to discover the panic/Goexit.
-		if failure, ok := err.(*fault.Error); ok && failure.Code() == fault.Panicked {
-			return failure
+		if safeerror.IsPanic(err) {
+			return err
 		}
-		return fmt.Errorf("%s: %w", operation, err)
+		return safeerror.Prefix(operation, err)
 	}
 	return nil
 }
@@ -39,7 +39,7 @@ func Invoke(operation string, fn func() error) (err error) {
 func Isolated(operation string, fn func() error) error {
 	result := make(chan error, 1)
 	go func() {
-		var err error = fault.New(fault.Panicked, operation+" exited without returning")
+		var err error = safeerror.NewFault(fault.Panicked, operation+" exited without returning")
 		defer func() { result <- err }()
 		err = Invoke(operation, fn)
 	}()

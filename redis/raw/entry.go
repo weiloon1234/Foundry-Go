@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Exists checks a resource of any native Redis data type through its typed key.
@@ -52,7 +53,7 @@ func (k Keys[K]) DeleteMany(ctx context.Context, inputs ...K) (uint64, error) {
 	var count uint64
 	err := k.store.execute(ctx, func(ctx context.Context) error {
 		if len(inputs) > k.store.config.Limits.Arguments {
-			return fault.New(fault.Invalid, "raw Redis deletion batch exceeds its bound")
+			return safeerror.NewFault(fault.Invalid, "raw Redis deletion batch exceeds its bound")
 		}
 		if len(inputs) == 0 {
 			return nil
@@ -80,7 +81,7 @@ func (k Keys[K]) DeleteMany(ctx context.Context, inputs ...K) (uint64, error) {
 			return err
 		}
 		if count > uint64(len(seen)) {
-			return fault.New(fault.Internal, "invalid raw Redis deletion count")
+			return safeerror.NewFault(fault.Internal, "invalid raw Redis deletion count")
 		}
 		return nil
 	})

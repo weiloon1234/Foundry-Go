@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -19,11 +20,11 @@ const checksumMetadata = "foundry-sha256"
 
 func (b *Backend) info(key storage.ObjectKey, size *int64, media, tag, version *string, modified *time.Time, metadata map[string]string) (storage.ObjectInfo, error) {
 	if size == nil || modified == nil {
-		return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
+		return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
 	}
 	instant, err := temporal.NewDateTime(*modified)
 	if err != nil {
-		return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, err)
+		return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, err)
 	}
 	info := storage.ObjectInfo{Key: key, Size: *size, ContentType: storage.MediaType(aws.ToString(media)), ETag: storage.ETag(aws.ToString(tag)), Version: b.versionID(aws.ToString(version)), Modified: instant}
 	if info.ContentType == "" {
@@ -32,15 +33,15 @@ func (b *Backend) info(key storage.ObjectKey, size *int64, media, tag, version *
 	if digest, ok := metadata[checksumMetadata]; ok {
 		parsed, err := storage.ParseSHA256(digest)
 		if err != nil {
-			return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, err)
+			return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, err)
 		}
 		info.Checksum = value.Set(parsed)
 	}
 	if err := info.Validate(); err != nil {
-		return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, err)
+		return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, err)
 	}
 	if info.Size > b.config.MaxObjectBytes || info.ETag == "" {
-		return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
+		return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
 	}
 	return info, nil
 }
@@ -56,7 +57,7 @@ func (b *Backend) Stat(ctx context.Context, key storage.ObjectKey, options stora
 		return storage.ObjectInfo{}, err
 	}
 	if options.Range.IsSet() {
-		return storage.ObjectInfo{}, storage.Failure(storage.Invalid, storage.StatOperation, storage.NotApplicable, nil)
+		return storage.ObjectInfo{}, newFailure(storage.Invalid, storage.StatOperation, storage.NotApplicable, nil)
 	}
 	input := &awss3.HeadObjectInput{Bucket: aws.String(b.config.Bucket), Key: aws.String(full)}
 	if options.IfMatch != "" {
@@ -70,14 +71,14 @@ func (b *Backend) Stat(ctx context.Context, key storage.ObjectKey, options stora
 		return storage.ObjectInfo{}, failure(storage.StatOperation, storage.NotApplicable, err)
 	}
 	if result == nil {
-		return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
+		return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.StatOperation, storage.NotApplicable, nil)
 	}
 	info, err := b.info(key, result.ContentLength, result.ContentType, result.ETag, result.VersionId, result.LastModified, result.Metadata)
 	if err != nil {
 		return storage.ObjectInfo{}, failure(storage.StatOperation, storage.NotApplicable, err)
 	}
 	if options.IfMatch != "" && info.ETag != options.IfMatch || options.Version != "" && info.Version != options.Version {
-		return storage.ObjectInfo{}, storage.Failure(storage.PreconditionFailed, storage.StatOperation, storage.NotApplicable, nil)
+		return storage.ObjectInfo{}, newFailure(storage.PreconditionFailed, storage.StatOperation, storage.NotApplicable, nil)
 	}
 	return info, nil
 }
@@ -105,12 +106,12 @@ func (b *Backend) Open(ctx context.Context, key storage.ObjectKey, options stora
 	result, err := b.client.GetObject(ctx, input, b.readRetry)
 	if err != nil {
 		if result != nil && result.Body != nil {
-			err = errors.Join(err, result.Body.Close())
+			err = safeerror.Join("operation failed", err, result.Body.Close())
 		}
 		return nil, storage.ReadInfo{}, failure(storage.OpenOperation, storage.NotApplicable, err)
 	}
 	if result == nil {
-		return nil, storage.ReadInfo{}, storage.Failure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
+		return nil, storage.ReadInfo{}, newFailure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
 	}
 	size := result.ContentLength
 	offset, length := int64(0), aws.ToInt64(size)
@@ -120,33 +121,35 @@ func (b *Backend) Open(ctx context.Context, key storage.ObjectKey, options stora
 		if err == nil {
 			expectedOffset, expectedLength, e := span.Resolve(total)
 			if e != nil || offset != expectedOffset || length != expectedLength || result.ContentLength == nil || *result.ContentLength != length {
-				err = storage.IntegrityFailed
+				err = safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 			}
 		}
 		size = &total
 	} else if aws.ToString(result.ContentRange) != "" {
-		err = storage.IntegrityFailed
+		err = safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 	}
 	var info storage.ObjectInfo
 	if err == nil {
 		info, err = b.info(key, size, result.ContentType, result.ETag, result.VersionId, result.LastModified, result.Metadata)
 	}
 	if err == nil && (options.IfMatch != "" && info.ETag != options.IfMatch || options.Version != "" && info.Version != options.Version) {
-		err = storage.PreconditionFailed
+		err = safeerror.Owned(string(storage.PreconditionFailed), storage.PreconditionFailed)
 	}
 	if result.Body == nil {
-		err = storage.IntegrityFailed
+		err = safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 	}
 	if err != nil {
 		if result.Body != nil {
-			err = errors.Join(err, result.Body.Close())
+			err = safeerror.Join("operation failed", err, result.Body.Close())
 		}
 		return nil, storage.ReadInfo{}, failure(storage.OpenOperation, storage.NotApplicable, err)
 	}
 	return result.Body, storage.ReadInfo{Object: info, Offset: offset, Length: length}, nil
 }
 func parseContentRange(text string) (offset, length, total int64, err error) {
-	invalid := func() (int64, int64, int64, error) { return 0, 0, 0, storage.IntegrityFailed }
+	invalid := func() (int64, int64, int64, error) {
+		return 0, 0, 0, safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
+	}
 	if !strings.HasPrefix(text, "bytes ") {
 		return invalid()
 	}
@@ -181,7 +184,7 @@ func (b *Backend) Delete(ctx context.Context, key storage.ObjectKey, options sto
 	// explicitly selected historical version; ValidateDelete rejects that
 	// combination. A version selector alone deletes exactly that version.
 	if options.Version == "null" {
-		return storage.Failure(storage.Unsupported, storage.DeleteOperation, storage.Unchanged, nil)
+		return newFailure(storage.Unsupported, storage.DeleteOperation, storage.Unchanged, nil)
 	}
 	if err := b.Capabilities().ValidateDelete(options); err != nil {
 		return err
@@ -196,9 +199,11 @@ func (b *Backend) Delete(ctx context.Context, key storage.ObjectKey, options sto
 	_, err = b.client.DeleteObject(ctx, input)
 	if err != nil {
 		classified := failure(storage.DeleteOperation, storage.Unknown, err)
-		if classified.Code() == storage.NotFound {
+		var detail *storage.Error
+		errors.As(classified, &detail)
+		if detail.Code() == storage.NotFound {
 			if options.IfMatch != "" {
-				return storage.Failure(storage.PreconditionFailed, storage.DeleteOperation, storage.Unchanged, err)
+				return newFailure(storage.PreconditionFailed, storage.DeleteOperation, storage.Unchanged, err)
 			}
 			return nil
 		}

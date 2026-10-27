@@ -509,8 +509,13 @@ func TestXLSXImportBoundsTokensWhateverDelimitersTheyContain(t *testing.T) {
 		"comment":       {heading + `<!--` + strings.Repeat("a<b>", 1<<19) + `-->`, ""},
 		"instruction":   {heading + `<?pi ` + strings.Repeat("a<b>", 1<<19) + `?>`, ""},
 	} {
-		if _, _, err := run(parts[0], parts[1]); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "oversized value") {
+		_, _, err := run(parts[0], parts[1])
+		if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "oversized value") {
 			t.Fatal("unbounded XML token accepted", name, err)
+		}
+		var failure *fault.Error
+		if !errors.As(err, &failure) || failure.Code() != fault.Invalid || failure.Message() != "import XLSX contains an oversized value" {
+			t.Fatal("XML token bound lost its typed diagnostic", name, err)
 		}
 	}
 	if _, _, err := run(`<!DOCTYPE x [<!ENTITY a "b">]>`+heading, ""); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "document type declaration") {

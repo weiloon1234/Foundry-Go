@@ -1,12 +1,10 @@
 package database
 
-import "math/rand/v2"
-
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"log/slog"
+	rand "math/rand/v2"
 
 	"strings"
 	"time"
@@ -14,6 +12,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlcallback"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -47,7 +47,7 @@ type readPool struct {
 func WithReadPool(adapter func() (Adapter, error), config PoolConfig, maxConnections int) Option {
 	return func(settings *poolSettings) error {
 		if settings.read != nil || adapter == nil || maxConnections <= 0 {
-			return fault.New(fault.Invalid, "read pool requires one adapter factory and a positive combined connection bound")
+			return safeerror.NewFault(fault.Invalid, "read pool requires one adapter factory and a positive combined connection bound")
 		}
 		if err := config.Validate(); err != nil {
 			return err
@@ -64,7 +64,7 @@ func WithReadPool(adapter func() (Adapter, error), config PoolConfig, maxConnect
 func WithConnectionLimit(maxConnections int) Option {
 	return func(settings *poolSettings) error {
 		if maxConnections <= 0 || settings.connectionLimit != 0 {
-			return fault.New(fault.Invalid, "database needs one positive combined connection limit")
+			return safeerror.NewFault(fault.Invalid, "database needs one positive combined connection limit")
 		}
 		settings.connectionLimit = maxConnections
 		return nil
@@ -79,7 +79,7 @@ func prepareReadPool(primary PoolConfig, options poolSettings) (*readPool, int, 
 			limit = primary.MaxOpen
 		}
 		if primary.MaxOpen > limit {
-			return nil, 0, fault.New(fault.Invalid, "primary pool exceeds the combined connection bound")
+			return nil, 0, safeerror.NewFault(fault.Invalid, "primary pool exceeds the combined connection bound")
 		}
 		return nil, limit, nil
 	}
@@ -89,7 +89,7 @@ func prepareReadPool(primary PoolConfig, options poolSettings) (*readPool, int, 
 		limit = min(limit, settings.maxConnections)
 	}
 	if settings.config.MaxOpen > limit || primary.MaxOpen > limit-settings.config.MaxOpen {
-		return nil, 0, fault.New(fault.Invalid, "primary and read pool limits exceed the combined connection bound")
+		return nil, 0, safeerror.NewFault(fault.Invalid, "primary and read pool limits exceed the combined connection bound")
 	}
 	var adapter Adapter
 	err := callback.Isolated("construct database read adapter", func() error {
@@ -101,7 +101,7 @@ func prepareReadPool(primary PoolConfig, options poolSettings) (*readPool, int, 
 		return nil, 0, err
 	}
 	if adapter.Connector == nil {
-		return nil, 0, fault.New(fault.Invalid, "database read adapter needs a connector")
+		return nil, 0, safeerror.NewFault(fault.Invalid, "database read adapter needs a connector")
 	}
 	return &readPool{adapter: adapter, config: settings.config}, limit, nil
 }
@@ -179,10 +179,10 @@ func (p PrimaryExecutor) Clock() clock.Clock {
 // FoundryAutocommitQuery keeps framework single-statement writes on primary.
 func (p PrimaryExecutor) FoundryAutocommitQuery(seal sqlowner.AutocommitSeal, ctx context.Context, statement string, arguments ...any) (*Rows, error) {
 	if !seal.Valid() {
-		return nil, fault.New(fault.Invalid, "invalid SQL owner capability")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid SQL owner capability")
 	}
 	if p.db == nil {
-		return nil, &Error{operation: "query", detail: Detail{Code: NotReady}, outcome: NoCommit}
+		return nil, presentFailure(&Error{operation: "query", detail: Detail{Code: NotReady}, outcome: NoCommit})
 	}
 	return p.db.FoundryAutocommitQuery(seal, ctx, statement, arguments...)
 }
@@ -269,7 +269,7 @@ func (db *DB) pingPool(ctx context.Context, role PoolRole) error {
 }
 
 func openPool(adapter Adapter, config PoolConfig) *sql.DB {
-	raw := sql.OpenDB(adapter.Connector)
+	raw := sql.OpenDB(sqlcallback.Connector(adapter.Connector))
 	raw.SetMaxOpenConns(config.MaxOpen)
 	raw.SetMaxIdleConns(config.MaxIdle)
 	raw.SetConnMaxLifetime(config.MaxLifetime)
@@ -279,7 +279,7 @@ func openPool(adapter Adapter, config PoolConfig) *sql.DB {
 
 // openProbe prepares, without connecting, one serialized health connection.
 func openProbe(adapter Adapter, config PoolConfig) *sql.DB {
-	raw := sql.OpenDB(adapter.Connector)
+	raw := sql.OpenDB(sqlcallback.Connector(adapter.Connector))
 	raw.SetMaxOpenConns(1)
 	raw.SetMaxIdleConns(1)
 	raw.SetConnMaxLifetime(config.MaxLifetime)
@@ -326,7 +326,7 @@ func pingStartingPool(ctx context.Context, role PoolRole, raw *sql.DB, config Po
 			timer.Stop()
 			canceled := classify.wrap("start "+string(role), ctx.Err())
 			startupLog(ctx, logger, slog.LevelError, "database startup canceled", role, attempt, started, 0, canceled)
-			return errors.Join(err, canceled)
+			return safeerror.Join("operation failed", err, canceled)
 		}
 		delay = min(delay*2, startRetryMaximum)
 	}
@@ -334,7 +334,7 @@ func pingStartingPool(ctx context.Context, role PoolRole, raw *sql.DB, config Po
 
 // SQLSTATE class 28 is the standard invalid-authorization class.
 func transientStartFailure(err error) bool {
-	classified, ok := err.(*Error)
+	classified, ok := safeerror.UnwrapOwned(err).(*Error)
 	if !ok || classified == nil {
 		return false
 	}
@@ -350,13 +350,13 @@ func (db *DB) closePools() error {
 		result = db.classify.wrap("close primary", db.raw.Close())
 	}
 	if db.probe != nil {
-		result = errors.Join(result, db.classify.wrap("close primary probe", db.probe.Close()))
+		result = safeerror.Join("operation failed", result, db.classify.wrap("close primary probe", db.probe.Close()))
 	}
 	if db.read != nil && db.read.raw != nil {
-		result = errors.Join(result, classifier(db.read.adapter.Classify).wrap("close read", db.read.raw.Close()))
+		result = safeerror.Join("operation failed", result, classifier(db.read.adapter.Classify).wrap("close read", db.read.raw.Close()))
 	}
 	if db.read != nil && db.read.probe != nil {
-		result = errors.Join(result, classifier(db.read.adapter.Classify).wrap("close read probe", db.read.probe.Close()))
+		result = safeerror.Join("operation failed", result, classifier(db.read.adapter.Classify).wrap("close read probe", db.read.probe.Close()))
 	}
 	return result
 }

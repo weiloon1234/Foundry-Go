@@ -2,11 +2,12 @@ package http
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	stdhttp "net/http"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Native range/precondition failures are held before commit so the endpoint
@@ -60,7 +61,7 @@ func (w *fileResponseWriter) Write(data []byte) (int, error) {
 	}
 	n, err := w.native.Write(data)
 	if n < 0 || n > len(data) {
-		w.failed = fault.New(fault.Internal, "HTTP writer returned an invalid count")
+		w.failed = safeerror.NewFault(fault.Internal, "HTTP writer returned an invalid count")
 		return 0, errFileTransfer
 	}
 	w.written += int64(n)
@@ -80,7 +81,7 @@ func (w *fileResponseWriter) flush() error {
 	if w.failed != nil {
 		return errFileTransfer
 	}
-	if err := stdhttp.NewResponseController(w.native).Flush(); err != nil && !errors.Is(err, stdhttp.ErrNotSupported) {
+	if err := stdhttp.NewResponseController(w.native).Flush(); err != nil && !callback.ErrorIs(err, stdhttp.ErrNotSupported) {
 		w.failed = err
 		return errFileTransfer
 	}

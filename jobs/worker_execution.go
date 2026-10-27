@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
@@ -10,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/tracing"
@@ -43,7 +43,7 @@ func (w *Worker) process(run workerRun, key Key, reservation Reservation, reserv
 		return false
 	}
 	if reservation.Ownership.ID() != envelope.ID() {
-		w.logBackendFailure(run.work, "reserve", key, fault.New(fault.Internal, "backend returned mismatched job ownership"))
+		w.logBackendFailure(run.work, "reserve", key, safeerror.NewFault(fault.Internal, "backend returned mismatched job ownership"))
 		return false
 	}
 	parent := tracing.WithoutContext(run.work)
@@ -91,7 +91,7 @@ func (w *Worker) process(run workerRun, key Key, reservation Reservation, reserv
 		state.finalized = err == nil
 		// finalize returns the sentinel itself; never traverse a backend error.
 		if err != nil && err != ErrOwnershipLost {
-			state.failure = errors.Join(failure, err)
+			state.failure = safeerror.Join("operation failed", failure, err)
 			return false
 		}
 		return true
@@ -123,7 +123,7 @@ func (w *Worker) process(run workerRun, key Key, reservation Reservation, reserv
 		<-beat.done
 		validUntil = beat.renewed.Add(w.config.LeaseDuration)
 		if beat.err != nil {
-			state.completion, state.requested, state.failure = result, true, errors.Join(failure, beat.err)
+			state.completion, state.requested, state.failure = result, true, safeerror.Join("operation failed", failure, beat.err)
 			outcome = jobOutcome(result)
 			return true
 		}
@@ -157,7 +157,7 @@ func (w *Worker) process(run workerRun, key Key, reservation Reservation, reserv
 	if delay > 0 && prepareErr == nil && invocation.Err() == nil {
 		return complete(Result{State: Waiting, Delay: delay, Reason: RateLimited}, nil)
 	}
-	if parent.Err() != nil || run.reserve.Err() != nil || errors.Is(context.Cause(invocation), ErrCancelled) || errors.Is(context.Cause(invocation), ErrOwnershipLost) {
+	if parent.Err() != nil || run.reserve.Err() != nil || callback.ErrorIs(context.Cause(invocation), ErrCancelled) || callback.ErrorIs(context.Cause(invocation), ErrOwnershipLost) {
 		return complete(Result{State: Waiting, Reason: WorkerStopped}, nil)
 	}
 	operation, stopOperation := context.WithTimeout(work, w.config.OperationTimeout)
@@ -184,7 +184,7 @@ func (w *Worker) process(run workerRun, key Key, reservation Reservation, reserv
 		return false
 	}
 	if attempt == 0 || attempt > envelope.Policy().Attempts || attempt != reservation.Attempts+1 {
-		invalid := fault.New(fault.Internal, "backend returned an invalid job attempt")
+		invalid := safeerror.NewFault(fault.Internal, "backend returned an invalid job attempt")
 		w.logBackendFailure(parent, "start", key, invalid)
 		complete(Result{State: Waiting, Reason: WorkerStopped, Refund: true}, nil)
 		outcome, state.failure, state.requested = observability.Failed, invalid, false
@@ -197,7 +197,7 @@ func (w *Worker) process(run workerRun, key Key, reservation Reservation, reserv
 	handlerErr := prepareErr
 	if handlerErr == nil {
 		if invoke == nil {
-			handlerErr = fault.New(fault.Internal, "job preparation returned no handler")
+			handlerErr = safeerror.NewFault(fault.Internal, "job preparation returned no handler")
 		} else {
 			handlerErr = callback.Isolated("execute job", func() error { return invoke(handlerContext) })
 		}
@@ -215,7 +215,7 @@ func (w *Worker) process(run workerRun, key Key, reservation Reservation, reserv
 // rolling deploy another replica may know it, so the default policy consumes
 // attempts with the envelope's own backoff before retaining it as a failure.
 func (w *Worker) unregistered(key Key, reservation Reservation, envelope Envelope, state *attemptState, finish func(Result, error) bool) bool {
-	missing := fault.New(fault.Missing, "job name or version is not registered")
+	missing := safeerror.NewFault(fault.Missing, "job name or version is not registered")
 	if !w.config.RetryUnregistered {
 		return finish(Result{State: Failed, Reason: Unregistered}, missing)
 	}
@@ -228,7 +228,7 @@ func (w *Worker) unregistered(key Key, reservation Reservation, envelope Envelop
 	})
 	cancel()
 	if err != nil {
-		return finish(Result{State: Waiting, Reason: Unregistered, Refund: true}, errors.Join(missing, err))
+		return finish(Result{State: Waiting, Reason: Unregistered, Refund: true}, safeerror.Join("operation failed", missing, err))
 	}
 	state.number = attempt
 	policy := envelope.Policy()
@@ -237,7 +237,7 @@ func (w *Worker) unregistered(key Key, reservation Reservation, envelope Envelop
 	}
 	delay, err := policy.RetryDelay(attempt)
 	if err != nil {
-		return finish(Result{State: Failed, Reason: Unregistered}, errors.Join(missing, err))
+		return finish(Result{State: Failed, Reason: Unregistered}, safeerror.Join("operation failed", missing, err))
 	}
 	return finish(Result{State: Waiting, Reason: Unregistered, Delay: policy.jittered(delay)}, missing)
 }
@@ -333,7 +333,7 @@ func safeExecutionResult(policy Policy, attempt, exceptions uint32, err, cause e
 		return nil
 	})
 	if failed != nil {
-		return limitExceptions(policy, exceptions, executionResult(policy, attempt, fault.New(fault.Panicked, "job outcome classifier failed"), nil, stopping))
+		return limitExceptions(policy, exceptions, executionResult(policy, attempt, safeerror.NewFault(fault.Panicked, "job outcome classifier failed"), nil, stopping))
 	}
 	return result
 }
@@ -362,11 +362,11 @@ func executionResult(policy Policy, attempt uint32, err, cause error, stopping b
 	}
 	reason := HandlerFailed
 	switch {
-	case errors.Is(cause, ErrCancelled):
+	case callback.ErrorIs(cause, ErrCancelled):
 		reason = CancelRequested
 	case errorgraph.Has[*permanentError](err):
 		return Result{State: Failed, Reason: HandlerFailed}
-	case errors.Is(cause, context.DeadlineExceeded):
+	case callback.ErrorIs(cause, context.DeadlineExceeded):
 		reason = TimedOut
 	case stopping:
 		return Result{State: Waiting, Reason: WorkerStopped, Refund: true}

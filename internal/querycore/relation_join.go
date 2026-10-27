@@ -1,5 +1,7 @@
 package querycore
 
+import "github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 import "github.com/weiloon1234/Foundry-Go/internal/sqlname"
 import "github.com/weiloon1234/Foundry-Go/fault"
 
@@ -58,7 +60,7 @@ func RelationHopJoin(node SelectNode, targetAlias string, foreign FieldRef, sour
 // ValidateMorphName uses the persisted identifier grammar for discriminators.
 func ValidateMorphName(name string) error {
 	if !sqlname.Valid(name) {
-		return fault.New(fault.Invalid, "morph names use the identifier grammar")
+		return safeerror.NewFault(fault.Invalid, "morph names use the identifier grammar")
 	}
 	return nil
 }

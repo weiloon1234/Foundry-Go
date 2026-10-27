@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type ScalarOperation uint8
@@ -171,14 +172,14 @@ func (n OperationNode) Validate() error {
 	}
 	spec, ok := n.Kind.Spec()
 	if !ok || len(n.Arguments) < spec.Min || len(n.Arguments) > spec.Max {
-		return fault.New(fault.Invalid, "invalid scalar operation arguments")
+		return safeerror.NewFault(fault.Invalid, "invalid scalar operation arguments")
 	}
 	if _, err := ParameterSQLType(n.Result); err != nil {
 		return err
 	}
 	for _, a := range n.Arguments {
 		if a.Value == nil {
-			return fault.New(fault.Invalid, "scalar operation requires a declared value")
+			return safeerror.NewFault(fault.Invalid, "scalar operation requires a declared value")
 		}
 		if _, err := ParameterSQLType(a.Kind); err != nil {
 			return err
@@ -186,11 +187,11 @@ func (n OperationNode) Validate() error {
 	}
 	if n.Kind == SphericalDistanceOperation {
 		if n.Result != codec.TypeFloat {
-			return fault.New(fault.Invalid, "distance requires a floating result")
+			return safeerror.NewFault(fault.Invalid, "distance requires a floating result")
 		}
 		for _, a := range n.Arguments {
 			if a.Kind != codec.TypeFloat {
-				return fault.New(fault.Invalid, "distance requires floating coordinates")
+				return safeerror.NewFault(fault.Invalid, "distance requires floating coordinates")
 			}
 		}
 		return nil
@@ -205,11 +206,11 @@ func (n OperationNode) Validate() error {
 		switch {
 		case n.Kind <= AbsOperation:
 			if !NumericRepresentation(n.Result) || a.Kind != n.Result || (n.Kind == RemainderOperation && n.Result == codec.TypeFloat) {
-				return fault.New(fault.Invalid, "arithmetic requires compatible numeric representations")
+				return safeerror.NewFault(fault.Invalid, "arithmetic requires compatible numeric representations")
 			}
 		case n.Kind == CastOperation:
 			if !NumericRepresentation(a.Kind) || (n.Result != codec.TypeDecimal && n.Result != codec.TypeFloat) {
-				return fault.New(fault.Invalid, "invalid numeric conversion")
+				return safeerror.NewFault(fault.Invalid, "invalid numeric conversion")
 			}
 		default:
 			want := codec.TypeText
@@ -217,7 +218,7 @@ func (n OperationNode) Validate() error {
 				want = codec.TypeInteger
 			}
 			if a.Kind != want {
-				return fault.New(fault.Invalid, "text operation has an incompatible representation")
+				return safeerror.NewFault(fault.Invalid, "text operation has an incompatible representation")
 			}
 		}
 	}
@@ -227,7 +228,7 @@ func (n OperationNode) Validate() error {
 			want = codec.TypeInteger
 		}
 		if n.Result != want {
-			return fault.New(fault.Invalid, "text operation has an incompatible result")
+			return safeerror.NewFault(fault.Invalid, "text operation has an incompatible result")
 		}
 	}
 	return nil
@@ -251,7 +252,7 @@ func (c *Compiler) OperationArguments(n OperationNode, grouped map[FieldRef]bool
 		args[i] = "CAST(" + text + " AS " + typeName + ")"
 		argumentBytes += len(args[i])
 		if argumentBytes > MaxScalarSQLBytes {
-			return nil, fault.New(fault.Invalid, "scalar SQL arguments exceed their resource bound")
+			return nil, safeerror.NewFault(fault.Invalid, "scalar SQL arguments exceed their resource bound")
 		}
 	}
 	return args, nil
@@ -285,7 +286,7 @@ func (c *Compiler) OperationSQL(n OperationNode, grouped map[FieldRef]bool, grou
 		if err == nil {
 			c.ScalarSQLBytes += len(c.render(sql, false))
 			if c.ScalarSQLBytes > MaxScalarSQLBytes {
-				sql, err = "", fault.New(fault.Invalid, "scalar SQL expansion exceeds its resource bound")
+				sql, err = "", safeerror.NewFault(fault.Invalid, "scalar SQL expansion exceeds its resource bound")
 			}
 		}
 	}()

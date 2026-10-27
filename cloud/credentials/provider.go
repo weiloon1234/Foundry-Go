@@ -17,6 +17,7 @@ import (
 	"github.com/aws/smithy-go/logging"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/namedservice"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -40,7 +41,7 @@ type Value struct {
 func (Value) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("cloud credentials")) }
 func (v Value) Validate() error {
 	if v.AccessKey.IsZero() || v.SecretKey.IsZero() {
-		return fault.New(fault.Invalid, "cloud credentials are incomplete")
+		return safeerror.NewFault(fault.Invalid, "cloud credentials are incomplete")
 	}
 	return nil
 }
@@ -54,7 +55,7 @@ type ProviderFunc func(context.Context) (Value, error)
 
 func (f ProviderFunc) Retrieve(ctx context.Context) (Value, error) {
 	if f == nil || ctx == nil {
-		return Value{}, fault.New(fault.Invalid, "invalid credential provider")
+		return Value{}, safeerror.NewFault(fault.Invalid, "invalid credential provider")
 	}
 	if err := ctx.Err(); err != nil {
 		return Value{}, err
@@ -77,22 +78,22 @@ func (s Settings) Validate() error {
 	switch s.Mode {
 	case Chain:
 		if !s.AccessKey.IsZero() || !s.SecretKey.IsZero() || !s.SessionToken.IsZero() {
-			return fault.New(fault.Invalid, "chain credentials cannot contain static keys")
+			return safeerror.NewFault(fault.Invalid, "chain credentials cannot contain static keys")
 		}
 	case Static:
 		if s.Profile != "" {
-			return fault.New(fault.Invalid, "static credentials cannot select a profile")
+			return safeerror.NewFault(fault.Invalid, "static credentials cannot select a profile")
 		}
 		return (Value{AccessKey: s.AccessKey, SecretKey: s.SecretKey, SessionToken: s.SessionToken}).Validate()
 	default:
-		return fault.New(fault.Invalid, "unsupported credential source")
+		return safeerror.NewFault(fault.Invalid, "unsupported credential source")
 	}
 	if len(s.Profile) > 128 {
-		return fault.New(fault.Invalid, "invalid AWS profile")
+		return safeerror.NewFault(fault.Invalid, "invalid AWS profile")
 	}
 	for _, r := range s.Profile {
 		if r < 32 || r == 127 {
-			return fault.New(fault.Invalid, "invalid AWS profile")
+			return safeerror.NewFault(fault.Invalid, "invalid AWS profile")
 		}
 	}
 	return nil
@@ -118,12 +119,12 @@ func Prepare(settings Settings) (*Source, error) {
 }
 func (s *Source) Start(ctx context.Context) error {
 	if s == nil || s.state == nil || ctx == nil {
-		return fault.New(fault.Invalid, "credential source needs context")
+		return safeerror.NewFault(fault.Invalid, "credential source needs context")
 	}
 	s.state.mu.Lock()
 	defer s.state.mu.Unlock()
 	if s.state.closed {
-		return fault.New(fault.Closed, "credential source is closed")
+		return safeerror.NewFault(fault.Closed, "credential source is closed")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -143,7 +144,7 @@ func (s *Source) Start(ctx context.Context) error {
 		config, err := awsconfig.LoadDefaultConfig(ctx, options...)
 		if err != nil {
 			transport.CloseIdleConnections()
-			return fault.Wrap(fault.Invalid, "cannot initialize cloud credential chain", err)
+			return safeerror.WrapFault(fault.Invalid, "cannot initialize cloud credential chain", err)
 		}
 		s.state.provider = config.Credentials
 		s.state.transport = transport
@@ -153,7 +154,7 @@ func (s *Source) Start(ctx context.Context) error {
 }
 func (s *Source) Retrieve(ctx context.Context) (Value, error) {
 	if s == nil || s.state == nil || ctx == nil {
-		return Value{}, fault.New(fault.Invalid, "credential source needs context")
+		return Value{}, safeerror.NewFault(fault.Invalid, "credential source needs context")
 	}
 	if err := ctx.Err(); err != nil {
 		return Value{}, err
@@ -161,7 +162,7 @@ func (s *Source) Retrieve(ctx context.Context) (Value, error) {
 	s.state.mu.Lock()
 	if s.state.closed || !s.state.started {
 		s.state.mu.Unlock()
-		return Value{}, fault.New(fault.Closed, "credential source is not active")
+		return Value{}, safeerror.NewFault(fault.Closed, "credential source is not active")
 	}
 	settings, provider := s.state.settings, s.state.provider
 	s.state.mu.Unlock()
@@ -170,7 +171,7 @@ func (s *Source) Retrieve(ctx context.Context) (Value, error) {
 	}
 	result, err := provider.Retrieve(ctx)
 	if err != nil {
-		return Value{}, fault.Wrap(fault.Invalid, "cannot retrieve cloud credentials", err)
+		return Value{}, safeerror.WrapFault(fault.Invalid, "cannot retrieve cloud credentials", err)
 	}
 	value := Value{AccessKey: secret.New(result.AccessKeyID), SecretKey: secret.New(result.SecretAccessKey), SessionToken: secret.New(result.SessionToken)}
 	if result.CanExpire {

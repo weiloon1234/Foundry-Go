@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Counter retains its declared key type through exact int64 reads and mutations.
@@ -45,12 +46,12 @@ func (c Counter[K]) Increment(ctx context.Context, key K, delta int64, initialTT
 	var value int64
 	err := c.cache.execute(ctx, key, func(ctx context.Context, access entryAccess) error {
 		if c.backend == nil {
-			return fault.New(fault.Invalid, "cache counter is not initialized")
+			return safeerror.NewFault(fault.Invalid, "cache counter is not initialized")
 		}
 		var err error
 		backend, ok := access.backend.(CounterBackend)
 		if !ok {
-			return fault.New(fault.Invalid, "cache backend does not support counters")
+			return safeerror.NewFault(fault.Invalid, "cache backend does not support counters")
 		}
 		value, err = backend.Increment(ctx, access.key, delta, initialTTL)
 		return err
@@ -65,7 +66,7 @@ func (c Counter[K]) Increment(ctx context.Context, key K, delta int64, initialTT
 // Decrement subtracts a nonnegative amount. Use Increment for a signed delta.
 func (c Counter[K]) Decrement(ctx context.Context, key K, amount int64, initialTTL TTL) (int64, error) {
 	if amount < 0 {
-		return 0, fault.New(fault.Invalid, "cache counter decrement requires a nonnegative amount")
+		return 0, safeerror.NewFault(fault.Invalid, "cache counter decrement requires a nonnegative amount")
 	}
 	return c.Increment(ctx, key, -amount, initialTTL)
 }
@@ -77,7 +78,7 @@ func (c Counter[K]) WithTags(first Tag, rest ...Tag) (Counter[K], error) {
 		return Counter[K]{}, err
 	}
 	if _, ok := view.store.backend.(TaggedCounterBackend); !ok {
-		return Counter[K]{}, fault.New(fault.Invalid, "cache backend does not support tagged counters")
+		return Counter[K]{}, safeerror.NewFault(fault.Invalid, "cache backend does not support tagged counters")
 	}
 	c.cache = view
 	return c, nil

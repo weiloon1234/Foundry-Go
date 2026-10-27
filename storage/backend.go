@@ -66,16 +66,16 @@ type Backend interface {
 func (c Capabilities) ValidatePut(options PutOptions) error {
 	conditional := options.Condition.RequiresAbsence() || options.Condition.Match() != ""
 	if options.Condition.RequiresAbsence() && !c.ConditionalCreate || options.Condition.Match() != "" && !c.ConditionalReplace {
-		return Failure(Unsupported, PutOperation, Unchanged, nil)
+		return newFailure(Unsupported, PutOperation, Unchanged, nil)
 	}
 	if conditional && c.ConditionalWriteMaxBytes > 0 {
 		size, supplied := options.Size.Get()
 		if !supplied || size > c.ConditionalWriteMaxBytes {
-			return Failure(Unsupported, PutOperation, Unchanged, nil)
+			return newFailure(Unsupported, PutOperation, Unchanged, nil)
 		}
 	}
 	if !options.Metadata.IsZero() && !c.ObjectMetadata {
-		return Failure(Unsupported, PutOperation, Unchanged, nil)
+		return newFailure(Unsupported, PutOperation, Unchanged, nil)
 	}
 	return nil
 }
@@ -83,7 +83,7 @@ func (c Capabilities) ValidatePut(options PutOptions) error {
 // ValidateRead rejects read selectors the adapter cannot honor exactly.
 func (c Capabilities) ValidateRead(options ReadOptions) error {
 	if options.Range.IsSet() && !c.Ranges || options.IfMatch != "" && !c.ConditionalRead || options.Version != "" && !c.Versions {
-		return Failure(Unsupported, OpenOperation, NotApplicable, nil)
+		return newFailure(Unsupported, OpenOperation, NotApplicable, nil)
 	}
 	return nil
 }
@@ -92,7 +92,7 @@ func (c Capabilities) ValidateRead(options ReadOptions) error {
 // before any provider request. A version selector deletes exactly that version.
 func (c Capabilities) ValidateDelete(options DeleteOptions) error {
 	if options.IfMatch != "" && !c.ConditionalDelete || options.Version != "" && !c.Versions || options.IfMatch != "" && options.Version != "" && !c.ConditionalVersionDelete {
-		return Failure(Unsupported, DeleteOperation, Unchanged, nil)
+		return newFailure(Unsupported, DeleteOperation, Unchanged, nil)
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func (c Capabilities) ValidateDelete(options DeleteOptions) error {
 // ValidateList rejects listing modes the adapter cannot represent.
 func (c Capabilities) ValidateList(options ListOptions) error {
 	if options.Delimited && !c.DelimitedList {
-		return Failure(Unsupported, ListOperation, NotApplicable, nil)
+		return newFailure(Unsupported, ListOperation, NotApplicable, nil)
 	}
 	return nil
 }

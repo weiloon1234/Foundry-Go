@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type replayJSON[R any] interface {
@@ -36,7 +37,7 @@ var replayHeaderNames = []HeaderName{"Location", "Content-Language", "Etag"}
 
 func replayHeaders(input []ResponseHeader) ([]ResponseHeader, error) {
 	if len(input) > len(replayHeaderNames) {
-		return nil, fault.New(fault.Invalid, "too many replay response headers")
+		return nil, safeerror.NewFault(fault.Invalid, "too many replay response headers")
 	}
 	result := slices.Clone(input)
 	seen := map[HeaderName]bool{}
@@ -48,7 +49,7 @@ func replayHeaders(input []ResponseHeader) ([]ResponseHeader, error) {
 		}
 		h.Name = name
 		if !slices.Contains(replayHeaderNames, h.Name) || seen[h.Name] || len(h.Value) > 4096 || h.Validate() != nil {
-			return nil, fault.New(fault.Invalid, "invalid or forbidden replay response header")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid or forbidden replay response header")
 		}
 		seen[h.Name] = true
 	}
@@ -94,7 +95,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) inputEncoding() idempotency.Input[Input[
 		}
 		data, err := json.Marshal(fingerprintRequest{path, query, body})
 		if err == nil && len(data) > limit {
-			return nil, PayloadTooLarge
+			return nil, PayloadTooLarge.WithCause(nil)
 		}
 		return data, err
 	})
@@ -133,7 +134,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) outputEncoding() idempotency.Encoding[R]
 		}
 		if e.endpoint.response.kind == payloadEmpty {
 			if len(stored.Body) != 0 {
-				return *new(R), fault.New(fault.Invalid, "empty replay contains a body")
+				return *new(R), safeerror.NewFault(fault.Invalid, "empty replay contains a body")
 			}
 			return *new(R), nil
 		}
@@ -150,10 +151,10 @@ func decodeStoredResponse(data []byte, status int, allowHeaders bool) (storedRes
 		return storedResponse{}, err
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return storedResponse{}, fault.New(fault.Invalid, "invalid stored response boundary")
+		return storedResponse{}, safeerror.NewFault(fault.Invalid, "invalid stored response boundary")
 	}
 	if stored.Status != status || !allowHeaders && len(stored.Headers) != 0 {
-		return storedResponse{}, fault.New(fault.Invalid, "stored response policy changed")
+		return storedResponse{}, safeerror.NewFault(fault.Invalid, "stored response policy changed")
 	}
 	var err error
 	stored.Headers, err = replayHeaders(stored.Headers)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/plugin/manifest"
 )
 
@@ -39,7 +40,7 @@ type Report struct {
 func (r Report) Check() error {
 	for _, check := range r.Checks {
 		if check.Required && !check.Passed {
-			return fault.New(fault.Missing, "doctor prerequisites failed; inspect the reported checks")
+			return safeerror.NewFault(fault.Missing, "doctor prerequisites failed; inspect the reported checks")
 		}
 	}
 	return nil
@@ -57,7 +58,7 @@ func Inspect(ctx context.Context, options Options) (Report, error) { return insp
 func inspect(ctx context.Context, options Options, execute probe) (Report, error) {
 	var result Report
 	if ctx == nil || options.Timeout <= 0 || options.Timeout > time.Minute {
-		return result, fault.New(fault.Invalid, "doctor requires a context and timeout between zero and one minute")
+		return result, safeerror.NewFault(fault.Invalid, "doctor requires a context and timeout between zero and one minute")
 	}
 	if err := ctx.Err(); err != nil {
 		return result, err

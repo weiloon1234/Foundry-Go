@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"os"
 	"os/signal"
@@ -77,14 +78,14 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 		return err
 	}
 	if flags.NArg() != 0 {
-		return cli.Usage("generate accepts flags only; use --dir to select a package")
+		return clidiag.Usage("generate accepts flags only; use --dir to select a package")
 	}
 	if *recover {
 		if *check {
-			return cli.Usage("--recover and --check cannot be combined")
+			return clidiag.Usage("--recover and --check cannot be combined")
 		}
 		if *recursive || *fieldDocs {
-			return cli.Usage("--recover uses the journal's recorded package scope; omit --recursive and --field-docs")
+			return clidiag.Usage("--recover uses the journal's recorded package scope; omit --recursive and --field-docs")
 		}
 		report, err := generate.Recover(ctx, *dir)
 		if err != nil {
@@ -119,7 +120,7 @@ func runAgent(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		return err
 	}
 	if len(args) == 0 || (args[0] != "complete" && args[0] != "hover" && args[0] != "definition") {
-		return cli.Usage(usage)
+		return clidiag.Usage(usage)
 	}
 	flags := flag.NewFlagSet("agent "+args[0], flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -136,16 +137,16 @@ func runAgent(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		return err
 	}
 	if flags.NArg() != 0 {
-		return cli.Usage("agent inspection accepts flags only")
+		return clidiag.Usage("agent inspection accepts flags only")
 	}
 	if options.File == "" || options.Line < 1 || options.Column < 1 {
-		return cli.Usage("agent requires --file and positive --line and --column")
+		return clidiag.Usage("agent requires --file and positive --line and --column")
 	}
 	if *format != "json" && *format != "text" {
-		return cli.Usage("agent format must be json or text")
+		return clidiag.Usage("agent format must be json or text")
 	}
 	if *timeout <= 0 {
-		return cli.Usage("agent timeout must be positive")
+		return clidiag.Usage("agent timeout must be positive")
 	}
 	ctx, cancel := context.WithTimeout(ctx, *timeout)
 	defer cancel()

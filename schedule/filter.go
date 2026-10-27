@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -27,7 +28,7 @@ func UnlessBetween(from, to temporal.Time) Window { return Window{From: from, To
 func (w Window) enabled() bool { return w != (Window{}) }
 func (w Window) Validate() error {
 	if w.enabled() && offset(w.From) == offset(w.To) {
-		return fault.New(fault.Invalid, "schedule window requires distinct start and end times")
+		return safeerror.NewFault(fault.Invalid, "schedule window requires distinct start and end times")
 	}
 	return nil
 }
@@ -61,11 +62,11 @@ type Predicate func(context.Context, Invocation) (bool, error)
 
 func validateDays(days []time.Weekday) error {
 	if len(days) > 7 {
-		return fault.New(fault.Invalid, "schedule days exceed one week")
+		return safeerror.NewFault(fault.Invalid, "schedule days exceed one week")
 	}
 	for i, day := range days {
 		if day < time.Sunday || day > time.Saturday || slices.Contains(days[:i], day) {
-			return fault.New(fault.Invalid, "invalid or duplicate schedule day")
+			return safeerror.NewFault(fault.Invalid, "invalid or duplicate schedule day")
 		}
 	}
 	return nil

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // unknownClient groups attempts that carry no trusted client address, such as
@@ -33,7 +34,7 @@ func (t Throttle[K]) clientTargets(ctx context.Context, key K) ([]clientTarget, 
 		return nil, err
 	}
 	if len(logical) > t.store.config.MaxKeyBytes {
-		return nil, fault.New(fault.Invalid, "encoded login key exceeds its limit")
+		return nil, safeerror.NewFault(fault.Invalid, "encoded login key exceeds its limit")
 	}
 	sum := sha256.Sum256([]byte(logical))
 	account := hex.EncodeToString(sum[:])
@@ -92,10 +93,10 @@ func (t Throttle[K]) runClient(ctx context.Context, key K, verify func(context.C
 			}
 			admission, err := t.store.backend.LockoutBegin(op, target.key, target.policy, generation)
 			if err != nil {
-				return &unavailable{err}
+				return unavailableFailure(err)
 			}
 			if err := admission.Validate(target.policy); err != nil {
-				return &unavailable{err}
+				return unavailableFailure(err)
 			}
 			if admission.Decision.Status == StatusLocked {
 				if denied == nil || admission.Decision.RetryAfter > denied.retryAfter {
@@ -112,7 +113,7 @@ func (t Throttle[K]) runClient(ctx context.Context, key K, verify func(context.C
 			return err
 		}
 		if denied != nil {
-			return denied
+			return safeerror.Owned(denied.Error(), denied)
 		}
 		verified, err = verify(op)
 		if err != nil {
@@ -133,13 +134,13 @@ func (t Throttle[K]) runClient(ctx context.Context, key K, verify func(context.C
 			}
 			decision, err := t.store.backend.LockoutFinish(op, target.key, target.policy, snapshots[i], outcome)
 			if err != nil {
-				return &unavailable{err}
+				return unavailableFailure(err)
 			}
 			if err := decision.Validate(target.policy); err != nil {
-				return &unavailable{err}
+				return unavailableFailure(err)
 			}
 			if outcome == Succeeded && decision.Triggered {
-				return &unavailable{fault.New(fault.Internal, "successful attempt started a lock")}
+				return unavailableFailure(safeerror.NewFault(fault.Internal, "successful attempt started a lock"))
 			}
 			switch decision.Status {
 			case StatusLocked:
@@ -163,13 +164,13 @@ func (t Throttle[K]) runClient(ctx context.Context, key K, verify func(context.C
 					return t.observer(op, Notice[K]{key: key, retryAfter: triggered.RetryAfter})
 				})
 			}
-			return rejection
+			return safeerror.Owned(rejection.Error(), rejection)
 		}
 		if locked.Status == StatusLocked {
-			return &Rejection{retryAfter: locked.RetryAfter}
+			return rejectionFailure(locked.RetryAfter, nil, false)
 		}
 		if expired {
-			return Expired
+			return safeerror.Owned(Expired.Error(), Expired)
 		}
 		return nil
 	})
@@ -196,7 +197,7 @@ func (t Throttle[K]) resetClient(ctx context.Context, key K) (bool, error) {
 			}
 			reset, err := t.store.backend.LockoutReset(op, target.key, target.policy)
 			if err != nil {
-				return &unavailable{err}
+				return unavailableFailure(err)
 			}
 			changed = changed || reset
 		}

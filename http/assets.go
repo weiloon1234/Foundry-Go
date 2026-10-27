@@ -2,11 +2,11 @@ package http
 
 import (
 	"context"
-	"errors"
 	"os"
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Assets owns a prepared asset source. Directory handles stay open until all
@@ -47,12 +47,12 @@ func OpenAssets(ctx context.Context, config AssetsConfig) (*Assets, error) {
 }
 func (a *Assets) start(ctx context.Context) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "assets require a context")
+		return safeerror.NewFault(fault.Invalid, "assets require a context")
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.started || a.closing {
-		return fault.New(fault.Conflict, "assets already started or closed")
+		return safeerror.NewFault(fault.Conflict, "assets already started or closed")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -63,7 +63,7 @@ func (a *Assets) start(ctx context.Context) error {
 			return err
 		}
 		if err := ctx.Err(); err != nil {
-			return errors.Join(err, root.Close())
+			return safeerror.Join("operation failed", err, root.Close())
 		}
 		a.root = root
 	}
@@ -72,7 +72,7 @@ func (a *Assets) start(ctx context.Context) error {
 }
 func (a *Assets) acquire(ctx context.Context) (func(), error) {
 	if a == nil || ctx == nil {
-		return nil, Unavailable
+		return nil, Unavailable.WithCause(nil)
 	}
 	// Asset requests carry no body: a deadline here is the server's own budget.
 	if err := ctx.Err(); err != nil {
@@ -81,7 +81,7 @@ func (a *Assets) acquire(ctx context.Context) (func(), error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !a.started || a.closing {
-		return nil, Unavailable
+		return nil, Unavailable.WithCause(nil)
 	}
 	a.active++
 	var once sync.Once
@@ -116,12 +116,12 @@ func (a *Assets) Close(ctx context.Context) error {
 		return nil
 	}
 	if ctx == nil {
-		return fault.New(fault.Invalid, "assets close requires a context")
+		return safeerror.NewFault(fault.Invalid, "assets close requires a context")
 	}
 	a.mu.Lock()
 	if a.done == nil {
 		a.mu.Unlock()
-		return fault.New(fault.Invalid, "assets are not constructed")
+		return safeerror.NewFault(fault.Invalid, "assets are not constructed")
 	}
 	a.closing = true
 	finish := a.active == 0

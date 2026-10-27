@@ -1,14 +1,14 @@
 package modelmeta
 
 import (
-	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"unsafe"
 )
 
 // FieldAt validates a pointer against one exported, unambiguous top-level field.
 func FieldAt(model reflect.Type, template, ptr unsafe.Pointer, typ reflect.Type) (int, error) {
-	fail := func(message string) (int, error) { return -1, fmt.Errorf("%s", message) }
+	fail := func(message string) (int, error) { return -1, safeerror.New(message) }
 	if ptr == nil || model.Kind() != reflect.Struct {
 		return fail("field pointer must name a top-level model field")
 	}

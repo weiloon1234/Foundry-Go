@@ -1,7 +1,7 @@
 package ormcore
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
@@ -35,13 +35,13 @@ func CombineJoinConditions(any bool, conditions []JoinCondition) JoinCondition {
 		right.add(c.Right)
 		out.LeftFree = out.LeftFree && c.LeftFree
 		out.RightFree = out.RightFree && c.RightFree
-		out.Err = errors.Join(out.Err, c.Err)
+		out.Err = safeerror.Join("operation failed", out.Err, c.Err)
 		if c.Node == nil {
-			out.Err = errors.Join(out.Err, Invalid("uninitialized join condition"))
+			out.Err = safeerror.Join("operation failed", out.Err, Invalid("uninitialized join condition"))
 		}
 	}
 	out.Left, out.Right = left.values, right.values
-	out.Err = errors.Join(out.Err, left.err, right.err)
+	out.Err = safeerror.Join("operation failed", out.Err, left.err, right.err)
 	out.Node = querycore.Junction{Any: any, Children: children}
 	return out
 }
@@ -49,7 +49,7 @@ func CombineJoinConditions(any bool, conditions []JoinCondition) JoinCondition {
 // NegateJoinCondition retains both sides while negating SQL three-valued truth.
 func NegateJoinCondition(on JoinCondition) JoinCondition {
 	if on.Node == nil {
-		on.Err = errors.Join(on.Err, Invalid("uninitialized join condition"))
+		on.Err = safeerror.Join("operation failed", on.Err, Invalid("uninitialized join condition"))
 	}
 	on.Node = querycore.Negation{Child: on.Node}
 	return on
@@ -58,7 +58,7 @@ func NegateJoinCondition(on JoinCondition) JoinCondition {
 // FilterJoinCondition adds predicates owned by just one side of an ON boundary.
 func FilterJoinCondition(on JoinCondition, left bool, predicates []Predicate) JoinCondition {
 	if len(predicates) > querycore.MaxExpressionNodes {
-		on.Err = errors.Join(on.Err, Invalid("join filters exceed their resource bound"))
+		on.Err = safeerror.Join("operation failed", on.Err, Invalid("join filters exceed their resource bound"))
 		return on
 	}
 	conditions := make([]JoinCondition, 1, len(predicates)+1)

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/encrypted"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -35,7 +36,7 @@ func NullableEncryptedSealer[V encrypted.Value[V]](v value.Nullable[V], capture 
 }
 func OpenEncryptedValue[V encrypted.Value[V]](row database.Row, table, column string, key func() (driver.Value, error), field *V) error {
 	if field == nil {
-		return fault.New(fault.Invalid, "encrypted field destination is missing")
+		return safeerror.NewFault(fault.Invalid, "encrypted field destination is missing")
 	}
 	ctx, keys, binding, err := OpenScope(row, table, column, key)
 	if err != nil {
@@ -50,7 +51,7 @@ func OpenEncryptedValue[V encrypted.Value[V]](row database.Row, table, column st
 }
 func OpenNullableEncryptedValue[V encrypted.Value[V]](row database.Row, table, column string, key func() (driver.Value, error), field *value.Nullable[V]) error {
 	if field == nil {
-		return fault.New(fault.Invalid, "encrypted field destination is missing")
+		return safeerror.NewFault(fault.Invalid, "encrypted field destination is missing")
 	}
 	item, present := field.Get()
 	if !present {

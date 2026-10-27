@@ -1,8 +1,8 @@
 package orm
 
 import (
-	"errors"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -13,10 +13,10 @@ func relationMorphName[M model.Morphable]() (model.MorphName, error) {
 }
 func morphTarget[N any](p *relationPlan, kind KeyColumn[N, model.MorphName], name model.MorphName, err error) *relationPlan {
 	p = copyRelationPlan(p)
-	p.err = errors.Join(p.err, err)
+	p.err = safeerror.Join("operation failed", p.err, err)
 	c := relationColumn(kind)
 	if c.core == nil || c.core.owner != p.target {
-		p.err = errors.Join(p.err, invalid("morph type must belong to the related model"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("morph type must belong to the related model"))
 		return p
 	}
 	p.query = where(p.query, []Predicate[N]{comparison[N](c, querycore.Equal, []model.MorphName{name})})
@@ -45,9 +45,9 @@ func MorphToOf[M any, N model.Morphable, K comparable](slot One[M, N], id KeyCol
 	r.plan = copyRelationPlan(r.plan)
 	name, err := relationMorphName[N]()
 	c := relationColumn(kind)
-	r.plan.err = errors.Join(r.plan.err, err)
+	r.plan.err = safeerror.Join("operation failed", r.plan.err, err)
 	if c.core == nil || r.plan.slot == nil || c.core.owner != r.plan.slot.owner {
-		r.plan.err = errors.Join(r.plan.err, invalid("morph type must belong to the source model"))
+		r.plan.err = safeerror.Join("operation failed", r.plan.err, invalid("morph type must belong to the source model"))
 	} else {
 		r.plan.morph = &relationMorph{kind: c.core, name: string(name)}
 	}
@@ -55,15 +55,15 @@ func MorphToOf[M any, N model.Morphable, K comparable](slot One[M, N], id KeyCol
 }
 func morphPivot[P any](p *relationPlan, kind KeyColumn[P, model.MorphName], name model.MorphName, err error) *relationPlan {
 	p = copyJoined(p)
-	p.err = errors.Join(p.err, err)
+	p.err = safeerror.Join("operation failed", p.err, err)
 	c := relationColumn(kind)
 	if p.join == nil || c.core == nil || c.core.owner != p.join.pivot.table {
-		p.err = errors.Join(p.err, invalid("morph type must belong to the pivot model"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("morph type must belong to the pivot model"))
 		return p
 	}
 	p.join.pivot = where(p.join.pivot, []Predicate[P]{comparison[P](c, querycore.Equal, []model.MorphName{name})})
 	p.join.defaults, err = relationPivotDefaults(p.join.defaults, c.core, string(name))
-	p.err = errors.Join(p.err, err)
+	p.err = safeerror.Join("operation failed", p.err, err)
 	return p
 }
 

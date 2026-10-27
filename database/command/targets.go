@@ -2,7 +2,6 @@ package command
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -20,10 +20,10 @@ func (c Command) selectTargets(targets []MigrationTarget) ([]MigrationTarget, er
 	slices.SortFunc(ordered, func(a, b MigrationTarget) int { return strings.Compare(a.Schema, b.Schema) })
 	for i, target := range ordered {
 		if target.Runner == nil || !sqlname.Valid(target.Schema) {
-			return nil, fault.New(fault.Invalid, "migration target needs a runner and a valid schema")
+			return nil, safeerror.NewFault(fault.Invalid, "migration target needs a runner and a valid schema")
 		}
 		if i > 0 && target.Schema == ordered[i-1].Schema {
-			return nil, fault.New(fault.Duplicate, "migration target schema is repeated")
+			return nil, safeerror.NewFault(fault.Duplicate, "migration target schema is repeated")
 		}
 	}
 	if c.schema == "" {
@@ -34,7 +34,7 @@ func (c Command) selectTargets(targets []MigrationTarget) ([]MigrationTarget, er
 			return []MigrationTarget{target}, nil
 		}
 	}
-	return nil, fault.New(fault.Missing, "no migration target uses the selected schema")
+	return nil, safeerror.NewFault(fault.Missing, "no migration target uses the selected schema")
 }
 
 // show reads one definition and its metadata from a registry without I/O.
@@ -70,16 +70,16 @@ func (c Command) runTargets(ctx context.Context, resources Resources, output io.
 				return err
 			}
 			reports = append(reports, targetReport{Schema: target.Schema, Report: report})
-			conflicts = errors.Join(conflicts, report.Check())
+			conflicts = safeerror.Join("operation failed", conflicts, report.Check())
 		}
-		return errors.Join(conflicts, c.writeTargetStatus(output, name, reports))
+		return safeerror.Join("operation failed", conflicts, c.writeTargetStatus(output, name, reports))
 	case up:
 		runs := make([]targetRun, 0, len(targets))
 		for _, target := range targets {
 			result, err := target.Runner.Up(ctx)
 			runs = append(runs, targetRun{Schema: target.Schema, RunResult: result})
 			if err != nil {
-				return errors.Join(err, c.writeTargetRuns(output, name, runs))
+				return safeerror.Join("operation failed", err, c.writeTargetRuns(output, name, runs))
 			}
 		}
 		return c.writeTargetRuns(output, name, runs)
@@ -91,12 +91,12 @@ func (c Command) runTargets(ctx context.Context, resources Resources, output io.
 			}
 		}
 		if len(shown) == 0 {
-			return fault.New(fault.Missing, "migration is not registered on the selected targets")
+			return safeerror.NewFault(fault.Missing, "migration is not registered on the selected targets")
 		}
 		return c.writeTargetShown(output, name, shown)
 	default:
 		if len(targets) != 1 {
-			return fault.New(fault.Invalid, fmt.Sprintf("rollback needs --schema to select one of %d migration targets", len(targets)))
+			return safeerror.NewFault(fault.Invalid, fmt.Sprintf("rollback needs --schema to select one of %d migration targets", len(targets)))
 		}
 		target := targets[0]
 		if !c.confirmed {
@@ -104,9 +104,9 @@ func (c Command) runTargets(ctx context.Context, resources Resources, output io.
 			if err != nil {
 				return err
 			}
-			return errors.Join(c.writeTargetRollbackPlan(output, name, target.Schema, plan), fault.New(fault.Invalid, "rollback is destructive; review the plan and rerun with --confirm"))
+			return safeerror.Join("operation failed", c.writeTargetRollbackPlan(output, name, target.Schema, plan), safeerror.NewFault(fault.Invalid, "rollback is destructive; review the plan and rerun with --confirm"))
 		}
 		result, err := target.Runner.Rollback(ctx, c.steps)
-		return errors.Join(err, c.writeTargetRollback(output, name, target.Schema, result))
+		return safeerror.Join("operation failed", err, c.writeTargetRollback(output, name, target.Schema, result))
 	}
 }

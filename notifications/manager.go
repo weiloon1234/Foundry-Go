@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
@@ -77,7 +78,7 @@ func (m *Manager) begin(ctx context.Context) (context.Context, func(), error) {
 	m.mu.Lock()
 	if m.closing {
 		m.mu.Unlock()
-		return nil, nil, fault.New(fault.Closed, "notification manager is closing")
+		return nil, nil, safeerror.NewFault(fault.Closed, "notification manager is closing")
 	}
 	// Waiters count as active so Done stays open until they are admitted or leave.
 	m.active++
@@ -130,7 +131,7 @@ func (m *Manager) Close(ctx context.Context) error {
 	}
 	for frame, _ := ctx.Value(operationKey{}).(*operationFrame); frame != nil; frame = frame.parent {
 		if frame.manager == m && frame.active.Load() {
-			return fault.New(fault.Cycle, "notification callback cannot wait for itself")
+			return safeerror.NewFault(fault.Cycle, "notification callback cannot wait for itself")
 		}
 	}
 	m.mu.Lock()

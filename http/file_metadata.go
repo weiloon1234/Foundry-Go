@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MediaType is a concrete response media type, optionally with parameters.
@@ -18,7 +19,7 @@ func (m MediaType) Validate() error {
 	media, _, err := mime.ParseMediaType(string(m))
 	major, minor, slash := strings.Cut(media, "/")
 	if err != nil || !slash || major == "" || minor == "" || strings.ContainsAny(media, "*") || strings.Contains(minor, "/") {
-		return fault.New(fault.Invalid, "invalid response media type")
+		return safeerror.NewFault(fault.Invalid, "invalid response media type")
 	}
 	return nil
 }
@@ -37,11 +38,11 @@ func (tag EntityTag) Validate() error {
 	}
 	text := strings.TrimPrefix(string(tag), "W/")
 	if len(text) < 2 || text[0] != '"' || text[len(text)-1] != '"' {
-		return fault.New(fault.Invalid, "invalid entity tag")
+		return safeerror.NewFault(fault.Invalid, "invalid entity tag")
 	}
 	for _, b := range []byte(text[1 : len(text)-1]) {
 		if b != 0x21 && !(b >= 0x23 && b <= 0x7e) && b < 0x80 {
-			return fault.New(fault.Invalid, "invalid entity tag")
+			return safeerror.NewFault(fault.Invalid, "invalid entity tag")
 		}
 	}
 	return nil

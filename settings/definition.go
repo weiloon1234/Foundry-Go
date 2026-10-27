@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -292,7 +293,7 @@ func New(store *extensions.Store, keys ...Registration) (*Manager, error) {
 			return nil, err
 		}
 		if _, ok := m.keys[key.name]; ok {
-			return nil, fault.New(fault.Duplicate, "setting already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "setting already registered")
 		}
 		m.keys[key.name] = key
 		if key.cache > 0 && m.cache == nil {
@@ -330,4 +331,4 @@ func (m *Manager) selected(s Selection) (Registration, error) {
 	}
 	return registration, nil
 }
-func invalid() error { return fault.New(fault.Invalid, "invalid setting declaration or data") }
+func invalid() error { return safeerror.NewFault(fault.Invalid, "invalid setting declaration or data") }

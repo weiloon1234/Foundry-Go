@@ -42,6 +42,9 @@ func updateOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, erro
 
 If the competitor is not visible under the original query, the unique violation remains an error. This relies on READ COMMITTED visibility; a competitor committed after a REPEATABLE READ/SERIALIZABLE snapshot may remain invisible. Unknown outcomes never become success, definite rollback or an automatic retry.
 
+Conflict recovery requires the server-reported schema, table and constraint to match a unique index of the destination. Unqualified destinations resolve through the transaction's `search_path`. Missing or mismatched identity, including a same-named index in another schema or a partition or inheritance child violation, preserves the original error. Deferred constraint failures at commit do not trigger a competitor lookup or retry.
+
+
 `UpdateOrCreate` prepares only the chosen branch. The existing model is locked and rows close before its callback. The callback receives the actual transaction and returns assignments. Creation-only keys stay out of the update. The subsequent ordinary update preserves original predicates and the selected key; changed values may leave the old filter, as with any update.
 
 ## Ownership and concurrency

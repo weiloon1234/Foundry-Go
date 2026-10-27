@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/storageio"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -90,9 +91,11 @@ func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentTyp
 		}
 		if err != nil || closeErr != nil || removeErr != nil {
 			result = storage.ObjectInfo{}
-			err = failure(storage.Unavailable, op, state, errors.Join(err, closeErr, removeErr))
+			err = failure(storage.Unavailable, op, state, safeerror.Join("operation failed", err, closeErr, removeErr))
 			if removeErr != nil {
-				err = err.(*storage.Error).WithCleanup(storage.NewCleanupID(directory + "/" + temporary))
+				var detail *storage.Error
+				errors.As(err, &detail)
+				err = safeerror.Retain(err, detail.WithCleanup(storage.NewCleanupID(directory+"/"+temporary)))
 			}
 		}
 	}()

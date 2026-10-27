@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Mode uint8
@@ -16,7 +17,7 @@ const (
 
 func (m Mode) Validate() error {
 	if m != Pipelined && m != Transaction {
-		return fault.New(fault.Invalid, "invalid Redis pipeline mode")
+		return safeerror.NewFault(fault.Invalid, "invalid Redis pipeline mode")
 	}
 	return nil
 }
@@ -58,12 +59,12 @@ type Result[R any] struct {
 
 func (r Result[R]) Value() (R, error) {
 	if r.pipeline == nil || r.state == nil {
-		return *new(R), fault.New(fault.Invalid, "invalid Redis pipeline result")
+		return *new(R), safeerror.NewFault(fault.Invalid, "invalid Redis pipeline result")
 	}
 	select {
 	case <-r.pipeline.done:
 	default:
-		return *new(R), fault.New(fault.Conflict, "Redis pipeline result is not ready")
+		return *new(R), safeerror.NewFault(fault.Conflict, "Redis pipeline result is not ready")
 	}
 	if r.pipeline.err != nil {
 		return *new(R), r.pipeline.err
@@ -101,15 +102,15 @@ func Ignore[R any](p *Pipeline, c Command[R]) error {
 }
 func (p *Pipeline) enqueue(q queued) error {
 	if p == nil || p.done == nil {
-		return fault.New(fault.Invalid, "Redis pipeline is uninitialized")
+		return safeerror.NewFault(fault.Invalid, "Redis pipeline is uninitialized")
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.started {
-		return fault.New(fault.Conflict, "Redis pipeline has already started")
+		return safeerror.NewFault(fault.Conflict, "Redis pipeline has already started")
 	}
 	if q.request.invalid || len(p.entries) >= MaxCommands || q.request.Bytes() > MaxRequestBytes-p.bytes {
-		return fault.New(fault.Invalid, "Redis pipeline exceeds its construction bound")
+		return safeerror.NewFault(fault.Invalid, "Redis pipeline exceeds its construction bound")
 	}
 	p.entries = append(p.entries, q)
 	p.bytes += q.request.Bytes()
@@ -117,12 +118,12 @@ func (p *Pipeline) enqueue(q queued) error {
 }
 func (p *Pipeline) Run(ctx context.Context, s *Store) error {
 	if p == nil || p.done == nil {
-		return fault.New(fault.Invalid, "Redis pipeline is uninitialized")
+		return safeerror.NewFault(fault.Invalid, "Redis pipeline is uninitialized")
 	}
 	p.mu.Lock()
 	if p.started {
 		p.mu.Unlock()
-		return fault.New(fault.Conflict, "Redis pipeline has already started")
+		return safeerror.NewFault(fault.Conflict, "Redis pipeline has already started")
 	}
 	p.started = true
 	entries := p.entries
@@ -130,7 +131,7 @@ func (p *Pipeline) Run(ctx context.Context, s *Store) error {
 	p.mu.Unlock()
 	p.err = s.execute(ctx, func(ctx context.Context) error {
 		if len(entries) > s.config.Limits.Commands || p.bytes > s.config.Limits.RequestBytes {
-			return fault.New(fault.Invalid, "Redis pipeline exceeds its configured bound")
+			return safeerror.NewFault(fault.Invalid, "Redis pipeline exceeds its configured bound")
 		}
 		requests := make([]Request, len(entries))
 		for i, e := range entries {
@@ -147,7 +148,7 @@ func (p *Pipeline) Run(ctx context.Context, s *Store) error {
 			return err
 		}
 		if len(replies) != len(entries) {
-			return fault.New(fault.Internal, "Redis pipeline reply count does not match its commands")
+			return safeerror.NewFault(fault.Internal, "Redis pipeline reply count does not match its commands")
 		}
 		if err := validateReplies(ctx, replies, s.config.Limits.Reply, true); err != nil {
 			return err

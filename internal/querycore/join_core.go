@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type JoinedNode struct {
@@ -27,7 +28,7 @@ func JoinNodes(leftNode, rightNode SelectNode, leftAliases, rightAliases map[str
 	for _, side := range []map[string]reflect.Type{leftAliases, rightAliases} {
 		for name, identity := range side {
 			if aliases[name] != nil || identities[identity] {
-				result.Err = fault.New(fault.Invalid, "join repeats an alias name or typed alias identity")
+				result.Err = safeerror.NewFault(fault.Invalid, "join repeats an alias name or typed alias identity")
 				return result
 			}
 			aliases[name], identities[identity] = identity, true

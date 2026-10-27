@@ -2,12 +2,13 @@ package postgres
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -25,7 +26,7 @@ func (b *Backend) liveFamily() string {
 
 func (b *Backend) ready(ctx context.Context) error {
 	if b == nil || b.db == nil || ctx == nil {
-		return fault.New(fault.Invalid, "token PostgreSQL operation requires a backend and context")
+		return safeerror.NewFault(fault.Invalid, "token PostgreSQL operation requires a backend and context")
 	}
 	return nil
 }
@@ -40,7 +41,7 @@ func (b *Backend) IssueTicket(ctx context.Context, address token.Address, identi
 		return value.Optional[temporal.DateTime]{}, err
 	}
 	if family.IsZero() || lifetime < time.Second || lifetime > token.MaxTicketLifetime || max < 1 || max > token.MaxFamilyTickets {
-		return value.Optional[temporal.DateTime]{}, fault.New(fault.Invalid, "invalid token ticket issuance")
+		return value.Optional[temporal.DateTime]{}, safeerror.NewFault(fault.Invalid, "invalid token ticket issuance")
 	}
 	if err := b.ready(ctx); err != nil {
 		return value.Optional[temporal.DateTime]{}, err
@@ -66,7 +67,7 @@ func (b *Backend) IssueTicket(ctx context.Context, address token.Address, identi
 		// concurrent issuer's ticket; READ COMMITTED gives the next one a fresh view.
 		var locked string
 		if err := database.ScanOne(ctx, tx, `SELECT f.id::text FROM `+live, []any{family.String(), scope, key, now}, &locked); err != nil {
-			if errors.Is(err, database.NotFound) {
+			if callback.ErrorIs(err, database.NotFound) {
 				return nil
 			}
 			return err
@@ -76,7 +77,7 @@ func (b *Backend) IssueTicket(ctx context.Context, address token.Address, identi
 			`(SELECT k.ticket_hash FROM `+tickets+` k WHERE k.scope = $2 AND k.family_id = $1 AND k.expires_at > $4 ORDER BY k.created_at DESC, k.ticket_hash OFFSET $7))) `+
 			`INSERT INTO `+tickets+` (ticket_hash, scope, family_id, created_at, expires_at) SELECT $5, $2, id, $4, $6 FROM live RETURNING expires_at`,
 			[]any{family.String(), scope, key, now, hash.Hex(), now.Add(lifetime), max - 1}, &expires)
-		if errors.Is(err, database.NotFound) {
+		if callback.ErrorIs(err, database.NotFound) {
 			return nil
 		}
 		present = err == nil
@@ -118,7 +119,7 @@ func (b *Backend) RedeemTicket(ctx context.Context, address token.Address, hash 
 	err = database.ScanOne(ctx, b.db, `DELETE FROM `+b.ticketTable()+` t USING `+b.liveFamily()+` JOIN `+b.table("foundry_token_subjects")+` s ON s.key = f.subject_key AND s.scope = f.scope `+
 		`WHERE t.scope = $1 AND t.ticket_hash = $2 AND t.expires_at > $3 AND f.id = t.family_id AND f.scope = t.scope AND NOT `+dead("$3")+
 		` RETURNING t.family_id::text, s.identity::text, t.expires_at`, []any{scope, hash.Hex(), now}, &family, &identity, &expires)
-	if errors.Is(err, database.NotFound) {
+	if callback.ErrorIs(err, database.NotFound) {
 		return value.Optional[token.TicketRecord]{}, nil
 	}
 	if err != nil {
@@ -145,7 +146,7 @@ func (b *Backend) RedeemTicket(ctx context.Context, address token.Address, hash 
 // a lock, like request authentication, and omits a family that is not live.
 func (b *Backend) LookupFamily(ctx context.Context, address token.Address, identity model.Identity, family model.ID[token.Record]) (value.Optional[token.Record], error) {
 	if family.IsZero() {
-		return value.Optional[token.Record]{}, fault.New(fault.Invalid, "token family lookup requires an identifier")
+		return value.Optional[token.Record]{}, safeerror.NewFault(fault.Invalid, "token family lookup requires an identifier")
 	}
 	if err := b.ready(ctx); err != nil {
 		return value.Optional[token.Record]{}, err
@@ -180,7 +181,7 @@ func (b *Backend) LookupFamily(ctx context.Context, address token.Address, ident
 // candidate set is materialized once so its LIMIT bounds the delete.
 func (b *Backend) PruneTickets(ctx context.Context, address token.Address, limit int) (uint64, error) {
 	if limit < 1 || limit > token.MaxPruneFamilies {
-		return 0, fault.New(fault.Invalid, "invalid token ticket prune limit")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid token ticket prune limit")
 	}
 	if err := b.ready(ctx); err != nil {
 		return 0, err

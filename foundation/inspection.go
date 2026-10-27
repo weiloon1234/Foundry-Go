@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	pluginmanifest "github.com/weiloon1234/Foundry-Go/plugin/manifest"
 )
 
@@ -27,11 +28,11 @@ func (b *Builder) OverrideContributions(owner ProviderID, register func(*Registr
 		return b
 	}
 	if b.built {
-		b.err = fault.New(fault.Closed, "builder has already been built")
+		b.err = safeerror.NewFault(fault.Closed, "builder has already been built")
 		return b
 	}
 	if !validName(string(owner)) || strings.HasPrefix(string(owner), "plugin:") || register == nil {
-		b.err = fault.New(fault.Invalid, "invalid application contribution override")
+		b.err = safeerror.NewFault(fault.Invalid, "invalid application contribution override")
 		return b
 	}
 	b.overrides = append(b.overrides, contributionOverride{owner: owner, register: register})
@@ -93,7 +94,7 @@ func (b *Builder) Inspect(ctx context.Context) (Inspection, error) {
 
 func registerProviders(ctx context.Context, entries []providerEntry, overrides []contributionOverride) ([]providerEntry, *registry, error) {
 	if ctx == nil {
-		return nil, nil, fault.New(fault.Invalid, "nil assembly context")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "nil assembly context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err

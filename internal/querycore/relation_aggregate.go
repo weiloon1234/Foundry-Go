@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"database/sql/driver"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -35,7 +36,7 @@ func RelationAggregateSelect(node SelectNode, inputTable, inputAlias string, gro
 		}
 		node.Predicates = append(slices.Clone(node.Predicates), Comparison{Operand: group, Operator: In, Values: RetainComparisonValues(bindings), Bind: func(v any) (driver.Value, error) {
 			if !driver.IsValue(v) {
-				return nil, fault.New(fault.Invalid, "aggregate key is not a database value")
+				return nil, safeerror.NewFault(fault.Invalid, "aggregate key is not a database value")
 			}
 			return v, nil
 		}})

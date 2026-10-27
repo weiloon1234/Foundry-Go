@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MaxAllocationParts bounds Allocate and Split results.
@@ -29,7 +30,7 @@ func New(amount decimal.Decimal, c Currency) (Money, error) {
 		return Money{}, err
 	}
 	if amount.Scale() > minor {
-		return Money{}, fault.New(fault.Invalid, "money amount has more fractional digits than its currency")
+		return Money{}, safeerror.NewFault(fault.Invalid, "money amount has more fractional digits than its currency")
 	}
 	return Money{amount: amount, currency: c}, nil
 }
@@ -85,7 +86,7 @@ func (m Money) MinorUnits() (int64, error) {
 		return 0, err
 	}
 	if !units.IsInt64() {
-		return 0, fault.New(fault.Invalid, "money minor units exceed int64")
+		return 0, safeerror.NewFault(fault.Invalid, "money minor units exceed int64")
 	}
 	return units.Int64(), nil
 }
@@ -117,7 +118,7 @@ func (m Money) same(other Money) error {
 		return err
 	}
 	if m.currency != other.currency {
-		return fault.New(fault.Invalid, "money currencies differ")
+		return safeerror.NewFault(fault.Invalid, "money currencies differ")
 	}
 	return nil
 }
@@ -249,7 +250,7 @@ func (m Money) Split(parts int) ([]Money, error) {
 }
 
 func invalidAllocation() error {
-	return fault.New(fault.Invalid, "money allocation requires 1 to 1024 non-negative ratios with a positive total")
+	return safeerror.NewFault(fault.Invalid, "money allocation requires 1 to 1024 non-negative ratios with a positive total")
 }
 
 // wire is the JSON object form. Amount text always has the currency's minor
@@ -328,5 +329,5 @@ func (m *Money) UnmarshalJSON(data []byte) error {
 }
 
 func invalidJSON() error {
-	return fault.New(fault.Invalid, `money JSON must be an object with string "amount" and "currency" fields`)
+	return safeerror.NewFault(fault.Invalid, `money JSON must be an object with string "amount" and "currency" fields`)
 }

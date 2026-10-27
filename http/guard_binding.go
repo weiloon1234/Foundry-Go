@@ -3,6 +3,7 @@ package http
 import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // GuardBinding is a route group's concrete default actor. Separate model types
@@ -20,7 +21,7 @@ func BindGuard[M any](authentication *Authentication, guard auth.Guard[M]) (Guar
 		return GuardBinding[M]{}, err
 	}
 	if !authentication.hasSource(guard.Source()) {
-		return GuardBinding[M]{}, fault.New(fault.Missing, "guard credential source is not configured")
+		return GuardBinding[M]{}, safeerror.NewFault(fault.Missing, "guard credential source is not configured")
 	}
 	return GuardBinding[M]{authentication, guard}, nil
 }
@@ -43,7 +44,7 @@ func OptionallyAuthenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], b
 // sources for a stateless API; browser-session adapters already own CSRF.
 func NewCookieAuthentication(registry *auth.Registry, config CSRFConfig, sources ...CredentialSource) (*Authentication, error) {
 	if len(sources) == 0 {
-		return nil, fault.New(fault.Invalid, "cookie authentication needs a source")
+		return nil, safeerror.NewFault(fault.Invalid, "cookie authentication needs a source")
 	}
 	policy, err := compileCSRF(config)
 	if err != nil {
@@ -55,7 +56,7 @@ func NewCookieAuthentication(registry *auth.Registry, config CSRFConfig, sources
 	}
 	for i := range a.sources {
 		if a.sources[i].info.Kind != CookieCredentialKind {
-			return nil, fault.New(fault.Invalid, "cookie authentication requires only cookie sources")
+			return nil, safeerror.NewFault(fault.Invalid, "cookie authentication requires only cookie sources")
 		}
 		a.sources[i].info.OriginProtection = true
 	}

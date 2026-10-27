@@ -12,6 +12,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/tracing"
 )
@@ -131,11 +132,11 @@ func New(config Config, reporters ...Reporter) (*Recorder, error) {
 		return nil, err
 	}
 	if len(reporters) > 16 {
-		return nil, fault.New(fault.Invalid, "error reporter count exceeds its bound")
+		return nil, safeerror.NewFault(fault.Invalid, "error reporter count exceeds its bound")
 	}
 	for _, reporter := range reporters {
 		if reporter == nil {
-			return nil, fault.New(fault.Invalid, "error reporter cannot be nil")
+			return nil, safeerror.NewFault(fault.Invalid, "error reporter cannot be nil")
 		}
 	}
 	gate := config.Maintenance
@@ -183,10 +184,10 @@ func (r *Recorder) admit() error {
 	for {
 		current := r.state.Load()
 		if current&closingBit != 0 {
-			return fault.New(fault.Closed, "observation admission is closed")
+			return safeerror.NewFault(fault.Closed, "observation admission is closed")
 		}
 		if current >= uint64(r.config.MaxActive) {
-			return fault.New(fault.Conflict, "observation admission exceeds its bound")
+			return safeerror.NewFault(fault.Conflict, "observation admission exceeds its bound")
 		}
 		if r.state.CompareAndSwap(current, current+1) {
 			return nil
@@ -211,7 +212,7 @@ func (r *Recorder) Start(ctx context.Context, operation Operation) (context.Cont
 		return ctx, nil, nil
 	}
 	if r.done == nil || ctx == nil {
-		return ctx, nil, fault.New(fault.Invalid, "observation requires a recorder and context")
+		return ctx, nil, safeerror.NewFault(fault.Invalid, "observation requires a recorder and context")
 	}
 	if err := operation.Validate(); err != nil {
 		increment(&r.droppedSpans)
@@ -405,12 +406,12 @@ func (r *Recorder) Gate() *maintenance.Gate {
 // shutdown of the same recorder. Direct standalone Run needs no reservation.
 func (r *Recorder) Claim() error {
 	if r == nil || r.done == nil {
-		return fault.New(fault.Invalid, "observation ownership requires an initialized recorder")
+		return safeerror.NewFault(fault.Invalid, "observation ownership requires an initialized recorder")
 	}
 	r.life.Lock()
 	defer r.life.Unlock()
 	if r.claimed || r.running || r.closing() {
-		return fault.New(fault.Conflict, "observation recorder is already owned, started or closed")
+		return safeerror.NewFault(fault.Conflict, "observation recorder is already owned, started or closed")
 	}
 	r.claimed = true
 	return nil

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/lifecore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/statementmeta"
 	"github.com/weiloon1234/Foundry-Go/value"
 	"slices"
@@ -120,19 +121,19 @@ func (p *PlanBytes) Scan(source any) error {
 }
 
 func invalidPlan() error {
-	return fault.New(fault.Invalid, "invalid or oversized PostgreSQL query plan")
+	return safeerror.NewFault(fault.Invalid, "invalid or oversized PostgreSQL query plan")
 }
 
 // Explain shares bounded plan execution across typed query frontends.
 func Explain(ctx context.Context, executor database.Executor, compile func(context.Context) (Statement, error), analyze bool) (Plan, error) {
 	if ctx == nil || executor == nil {
-		return Plan{}, fault.New(fault.Invalid, "query execution requires a context and executor")
+		return Plan{}, safeerror.NewFault(fault.Invalid, "query execution requires a context and executor")
 	}
 	if err := ctx.Err(); err != nil {
 		return Plan{}, err
 	}
 	if compile == nil {
-		return Plan{}, fault.New(fault.Invalid, "invalid query plan capability")
+		return Plan{}, safeerror.NewFault(fault.Invalid, "invalid query plan capability")
 	}
 	var result Plan
 	ctx = statementmeta.CaptureSite(ctx)

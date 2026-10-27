@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -70,11 +71,11 @@ func (s *Sessions[M, K]) RevokeOthers(ctx context.Context) (uint64, error) {
 	}
 	if info.Impersonated() {
 		// Logging the subject out everywhere is the subject's own decision.
-		return 0, auth.ImpersonationForbidden
+		return 0, auth.ImpersonationForbidden.WithCause(nil)
 	}
 	backend, ok := s.store.backend.(SelectiveBackend)
 	if !ok {
-		return 0, fault.New(fault.Invalid, "session backend cannot revoke other sessions")
+		return 0, safeerror.NewFault(fault.Invalid, "session backend cannot revoke other sessions")
 	}
 	var count uint64
 	err = s.store.execute(ctx, func(op context.Context) error {
@@ -105,11 +106,11 @@ func (s *Sessions[M, K]) ConfirmCurrent(ctx context.Context) (Info[M, K], error)
 	if info.Impersonated() {
 		// The impersonator does not know the subject's password; an impersonated
 		// session can never pass a password confirmation.
-		return Info[M, K]{}, auth.ImpersonationForbidden
+		return Info[M, K]{}, auth.ImpersonationForbidden.WithCause(nil)
 	}
 	backend, ok := s.store.backend.(ConfirmationBackend)
 	if !ok {
-		return Info[M, K]{}, fault.New(fault.Invalid, "session backend cannot record password confirmation")
+		return Info[M, K]{}, safeerror.NewFault(fault.Invalid, "session backend cannot record password confirmation")
 	}
 	var result Info[M, K]
 	err = s.store.execute(ctx, func(op context.Context) error {
@@ -123,10 +124,10 @@ func (s *Sessions[M, K]) ConfirmCurrent(ctx context.Context) (Info[M, K], error)
 		}
 		record, present := found.Get()
 		if !present {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		if record.ID != info.ID().value || record.Subject != identity || !record.ConfirmedAt.IsSet() {
-			return fault.New(fault.Invalid, "session backend confirmed a different session")
+			return safeerror.NewFault(fault.Invalid, "session backend confirmed a different session")
 		}
 		result, err = s.info(record)
 		return err
@@ -146,7 +147,7 @@ func (s *Sessions[M, K]) RequireNotImpersonating(ctx context.Context) error {
 		return err
 	}
 	if info.Impersonated() {
-		return auth.ImpersonationForbidden
+		return auth.ImpersonationForbidden.WithCause(nil)
 	}
 	return nil
 }
@@ -156,18 +157,18 @@ func (s *Sessions[M, K]) RequireNotImpersonating(ctx context.Context) error {
 // backend's current time rather than the scope's cached metadata.
 func (s *Sessions[M, K]) RequireConfirmed(ctx context.Context, within time.Duration) error {
 	if within <= 0 {
-		return fault.New(fault.Invalid, "password confirmation window must be positive")
+		return safeerror.NewFault(fault.Invalid, "password confirmation window must be positive")
 	}
 	info, err := s.Current(ctx)
 	if err != nil {
 		return err
 	}
 	if !info.ConfirmedAt().IsSet() {
-		return auth.ConfirmationRequired
+		return auth.ConfirmationRequired.WithCause(nil)
 	}
 	backend, ok := s.store.backend.(ConfirmationBackend)
 	if !ok {
-		return fault.New(fault.Invalid, "session backend cannot check password confirmation")
+		return safeerror.NewFault(fault.Invalid, "session backend cannot check password confirmation")
 	}
 	var recent bool
 	err = s.store.execute(ctx, func(op context.Context) error {
@@ -182,7 +183,7 @@ func (s *Sessions[M, K]) RequireConfirmed(ctx context.Context, within time.Durat
 		return err
 	}
 	if !recent {
-		return auth.ConfirmationRequired
+		return auth.ConfirmationRequired.WithCause(nil)
 	}
 	return nil
 }
@@ -193,7 +194,7 @@ func (s *Sessions[M, K]) RequireConfirmed(ctx context.Context, within time.Durat
 // schedule; the auth package does not depend on the scheduler.
 func (s *Sessions[M, K]) PruneExpired(ctx context.Context, batch, maxBatches int) (uint64, error) {
 	if batch < 1 || batch > MaxPageSize || maxBatches < 1 {
-		return 0, fault.New(fault.Invalid, "invalid session prune bounds")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid session prune bounds")
 	}
 	var total uint64
 	for range maxBatches {

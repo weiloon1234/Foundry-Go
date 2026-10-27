@@ -2,11 +2,11 @@ package s3
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module prepares an adapter without I/O and loads its SDK configuration during boot. Disk
@@ -20,7 +20,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*Backend], config Con
 func CredentialsModule(name foundation.ProviderID, key foundation.Key[*Backend], config Config, requires []foundation.ProviderID, provider func(foundation.Resolver) (credentials.Provider, error)) foundation.Module {
 	return module(name, key, requires, func(r foundation.Resolver) (Config, error) {
 		if provider == nil {
-			return Config{}, fault.New(fault.Invalid, "cloud credential resolver is missing")
+			return Config{}, safeerror.NewFault(fault.Invalid, "cloud credential resolver is missing")
 		}
 		value, err := provider(r)
 		return config.WithCredentials(value), err
@@ -41,7 +41,7 @@ func module(name foundation.ProviderID, key foundation.Key[*Backend], requires [
 			return err
 		}
 		if err := r.OnShutdown("storage-transport", func(context.Context) error { return backend.Close() }); err != nil {
-			return errors.Join(err, backend.Close())
+			return safeerror.Join("operation failed", err, backend.Close())
 		}
 		return backend.Start(ctx)
 	}}

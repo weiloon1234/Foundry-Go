@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Direction string
@@ -59,7 +60,7 @@ func DefineIncoming[C, R, S, P any](channel Channel[C, R, S], id EventID, payloa
 func (e Incoming[C, R, S, P]) Authorize(check func(context.Context, MessageContext[R, S], P) error) Incoming[C, R, S, P] {
 	e.authorize = check
 	if check == nil {
-		e.validate = func() error { return fault.New(fault.Invalid, "event authorization callback is required") }
+		e.validate = func() error { return safeerror.NewFault(fault.Invalid, "event authorization callback is required") }
 	}
 	return e
 }
@@ -82,10 +83,10 @@ func (e Incoming[C, R, S, P]) relay(outgoing Outgoing[C, P], others bool) EventR
 	original := e.validate
 	e.validate = func() error {
 		if outgoing.definition == nil || outgoing.definition.channel != e.channel.token {
-			return fault.New(fault.Invalid, "relay requires an outgoing event on the same channel")
+			return safeerror.NewFault(fault.Invalid, "relay requires an outgoing event on the same channel")
 		}
 		if original == nil {
-			return fault.New(fault.Invalid, "relay input is not initialized")
+			return safeerror.NewFault(fault.Invalid, "relay input is not initialized")
 		}
 		return original()
 	}
@@ -108,7 +109,7 @@ func (e Incoming[C, R, S, P]) Handle(handler func(context.Context, MessageContex
 	d := &eventDefinition{token: e.token, channel: e.channel.token, id: e.id, direction: ClientToServer, dynamic: e.dynamic, accepted: e.accepted, description: e.description}
 	d.validate = func() error {
 		if e.token == nil || !identifier.Semantic(string(e.id)) || handler == nil || e.decode == nil || e.validate == nil {
-			return fault.New(fault.Invalid, "invalid incoming WebSocket event")
+			return safeerror.NewFault(fault.Invalid, "invalid incoming WebSocket event")
 		}
 		if err := e.channel.Validate(); err != nil {
 			return err
@@ -119,7 +120,7 @@ func (e Incoming[C, R, S, P]) Handle(handler func(context.Context, MessageContex
 		payload, err := e.decode(ctx, data, limits)
 		if err != nil {
 			if errors.Is(err, fault.Invalid) {
-				return InvalidPayload
+				return codeFailure(InvalidPayload)
 			}
 			return err
 		}
@@ -133,7 +134,7 @@ func (e Incoming[C, R, S, P]) Handle(handler func(context.Context, MessageContex
 			return err
 		}
 		if e.accepted && !accept() {
-			return Stopping
+			return codeFailure(Stopping)
 		}
 		return handler(ctx, message, payload)
 	}

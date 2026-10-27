@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // OneOf accepts one of the declared scalar values without coercion. Input and
@@ -71,10 +72,10 @@ func Enum[E enum.Scalar](descriptor enum.Descriptor[E]) Rule[E] {
 		return nil
 	})
 	if ownedErr != nil {
-		return failed[E](fault.Wrap(fault.Invalid, "enum validation definition failed", ownedErr))
+		return failed[E](safeerror.WrapFailure(fault.Invalid, "enum validation definition failed", ownedErr))
 	}
 	if definitionErr != nil {
-		return failed[E](fault.Wrap(fault.Invalid, "invalid enum validation definition", definitionErr))
+		return failed[E](safeerror.WrapFault(fault.Invalid, "invalid enum validation definition", definitionErr))
 	}
 	set := make(map[E]struct{}, len(cases))
 	for _, item := range cases {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ServerConfig bounds native HTTP connection I/O. Start with DefaultServerConfig
@@ -82,27 +83,27 @@ func DefaultServerConfig() ServerConfig {
 func (c ServerConfig) Validate() error {
 	_, port, err := net.SplitHostPort(c.Address)
 	if err != nil || strings.TrimSpace(c.Address) != c.Address || port == "" {
-		return fault.New(fault.Invalid, "HTTP address requires host:port")
+		return safeerror.NewFault(fault.Invalid, "HTTP address requires host:port")
 	}
 	for _, digit := range port {
 		if digit < '0' || digit > '9' {
-			return fault.New(fault.Invalid, "HTTP port must be numeric")
+			return safeerror.NewFault(fault.Invalid, "HTTP port must be numeric")
 		}
 	}
 	if _, err := strconv.ParseUint(port, 10, 16); err != nil {
-		return fault.New(fault.Invalid, "HTTP port is out of range")
+		return safeerror.NewFault(fault.Invalid, "HTTP port is out of range")
 	}
 	if c.ReadHeaderTimeout <= 0 || c.ReadTimeout <= 0 || c.WriteTimeout <= 0 || c.IdleTimeout <= 0 || c.RequestTimeout <= 0 || c.ShutdownTimeout <= 0 || c.MaxHeaderBytes <= 0 {
-		return fault.New(fault.Invalid, "HTTP timeouts and header limit must be positive")
+		return safeerror.NewFault(fault.Invalid, "HTTP timeouts and header limit must be positive")
 	}
 	if c.MaxBodyBytes <= 0 {
-		return fault.New(fault.Invalid, "HTTP body limit must be positive")
+		return safeerror.NewFault(fault.Invalid, "HTTP body limit must be positive")
 	}
 	if c.MaxConcurrentRequests < 0 || c.MaxConcurrentRequests > 1<<20 {
-		return fault.New(fault.Invalid, "HTTP concurrent request limit is out of range")
+		return safeerror.NewFault(fault.Invalid, "HTTP concurrent request limit is out of range")
 	}
 	if c.MaxConnections < 0 || c.MaxConnections > 1<<20 {
-		return fault.New(fault.Invalid, "HTTP connection limit is out of range")
+		return safeerror.NewFault(fault.Invalid, "HTTP connection limit is out of range")
 	}
 	return c.validateMaintenancePaths()
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // File is an opaque handle to a fully captured request-owned upload. Its zero
@@ -33,7 +34,7 @@ func (f File) ContentType() string { return f.detected }
 func (File) String() string        { return "uploaded file" }
 func (File) GoString() string      { return "uploaded file" }
 func (File) MarshalJSON() ([]byte, error) {
-	return nil, fault.New(fault.Invalid, "uploaded files require multipart transport")
+	return nil, safeerror.NewFault(fault.Invalid, "uploaded files require multipart transport")
 }
 
 var _ json.Marshaler = File{}
@@ -43,7 +44,7 @@ var _ json.Marshaler = File{}
 // nor an unrestricted os.File is exposed. Both contexts govern every operation.
 func (f File) Open(ctx context.Context) (io.ReadSeekCloser, error) {
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "upload reader requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "upload reader requires a context")
 	}
 	if f.owner == nil {
 		return nil, fs.ErrInvalid
@@ -55,7 +56,7 @@ func (f File) Open(ctx context.Context) (io.ReadSeekCloser, error) {
 		return nil, err
 	}
 	if len(b.readers) >= b.config.MaxReaders {
-		return nil, &LimitError{Kind: Readers}
+		return nil, safeerror.Owned("upload resource limit exceeded", &LimitError{Kind: Readers})
 	}
 	raw, err := b.root.Open(f.key)
 	if err != nil {
@@ -67,7 +68,7 @@ func (f File) Open(ctx context.Context) (io.ReadSeekCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		return nil, fault.New(fault.Internal, "captured upload changed")
+		return nil, safeerror.NewFault(fault.Internal, "captured upload changed")
 	}
 	reader := &Reader{owner: b, raw: raw, ctx: ctx}
 	b.readers[reader] = struct{}{}

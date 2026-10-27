@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type jobContribution struct {
@@ -23,7 +24,7 @@ func jobContributions(key foundation.Key[*Dispatcher]) foundation.Collection[job
 // middleware and admission. No queue/backend operations run during registration.
 func RegisterJob[P any](r *foundation.Registrar, key foundation.Key[*Dispatcher], definition Definition[P], construct func(foundation.Resolver) (Declaration, error)) error {
 	if key.Name() == "" || construct == nil || r == nil {
-		return fault.New(fault.Invalid, "job contribution requires a dispatcher and constructor")
+		return safeerror.NewFault(fault.Invalid, "job contribution requires a dispatcher and constructor")
 	}
 	if err := definition.Validate(); err != nil {
 		return err
@@ -35,7 +36,7 @@ func RegisterJob[P any](r *foundation.Registrar, key foundation.Key[*Dispatcher]
 			return jobContribution{}, err
 		}
 		if !dispatcher.managed {
-			return jobContribution{}, fault.New(fault.Invalid, "job contributions require a jobs Module")
+			return jobContribution{}, safeerror.NewFault(fault.Invalid, "job contributions require a jobs Module")
 		}
 		declaration, err := construct(resolver)
 		if err != nil {
@@ -43,7 +44,7 @@ func RegisterJob[P any](r *foundation.Registrar, key foundation.Key[*Dispatcher]
 		}
 		expected := definition.declaration()
 		if declaration.key != expected.key || declaration.typ != expected.typ || !declaration.policy.same(expected.policy) {
-			return jobContribution{}, fault.New(fault.Invalid, "job contribution returned a different identity, payload type or policy")
+			return jobContribution{}, safeerror.NewFault(fault.Invalid, "job contribution returned a different identity, payload type or policy")
 		}
 		return jobContribution{declaration, owner}, nil
 	})
@@ -68,7 +69,7 @@ func bindContributions(r *foundation.Registrar, key foundation.Key[*Dispatcher])
 		}
 		for _, contribution := range contributions {
 			if previous, exists := owners[contribution.declaration.key]; exists {
-				return jobBinding{}, fault.New(fault.Duplicate, fmt.Sprintf("job %s v%d belongs to both %s and %s", contribution.declaration.key.name, contribution.declaration.key.version, previous, contribution.owner))
+				return jobBinding{}, safeerror.NewFault(fault.Duplicate, fmt.Sprintf("job %s v%d belongs to both %s and %s", contribution.declaration.key.name, contribution.declaration.key.version, previous, contribution.owner))
 			}
 			owners[contribution.declaration.key] = contribution.owner
 			declarations = append(declarations, contribution.declaration)

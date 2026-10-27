@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -20,16 +20,16 @@ type Window[S any] struct {
 func WindowFor[S, M any](scope Scope[S, M]) Window[S] {
 	err := scope.core.Err
 	if scope.core.Owner == nil || scope.core.Table == "" {
-		err = errors.Join(err, ormcore.Invalid("window requires a source scope"))
+		err = safeerror.Join("operation failed", err, ormcore.Invalid("window requires a source scope"))
 	}
 	refs, referenceErr := ormcore.MergeReferences([]ormcore.Reference{scope.core.Reference, {Scope: reflect.TypeFor[S]()}})
-	return Window[S]{data: ormcore.Window{Spec: querycore.WindowSpec{Err: errors.Join(err, referenceErr)}, Refs: refs}}
+	return Window[S]{data: ormcore.Window{Spec: querycore.WindowSpec{Err: safeerror.Join("operation failed", err, referenceErr)}, Refs: refs}}
 }
 func ownedWindow[S any](w Window[S]) ormcore.Window {
 	data := w.data
 	var err error
 	data.Refs, err = ormcore.MergeReferences(data.Refs, []ormcore.Reference{{Scope: reflect.TypeFor[S]()}})
-	data.Spec.Err = errors.Join(data.Spec.Err, err)
+	data.Spec.Err = safeerror.Join("operation failed", data.Spec.Err, err)
 	return data
 }
 
@@ -102,7 +102,7 @@ func Following(count int64) FrameOffset {
 }
 func (w Window[S]) between(kind querycore.FrameKind, start, end FrameBoundary) Window[S] {
 	if ormcore.NilDescriptor(start) || ormcore.NilDescriptor(end) {
-		w.data.Spec.Err = errors.Join(w.data.Spec.Err, ormcore.Invalid("window frame requires two boundaries"))
+		w.data.Spec.Err = safeerror.Join("operation failed", w.data.Spec.Err, ormcore.Invalid("window frame requires two boundaries"))
 		return w
 	}
 	w.data = ormcore.WindowBetween(w.data, kind, start.frameBoundary(), end.frameBoundary())

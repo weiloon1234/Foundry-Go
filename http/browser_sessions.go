@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -32,7 +33,7 @@ func DefaultBrowserSessionConfig() BrowserSessionConfig {
 }
 func (c BrowserSessionConfig) Validate() error {
 	if nilCookieValue(c.Clock) || !c.Options.HTTPOnly || c.Options.MaxAge != 0 || !c.Options.Expires.IsZero() {
-		return fault.New(fault.Invalid, "browser sessions require a clock, HttpOnly and server-owned expiry")
+		return safeerror.NewFault(fault.Invalid, "browser sessions require a clock, HttpOnly and server-owned expiry")
 	}
 	if err := DefineCookie(c.Cookie, SecretCookie(), c.Options).Validate(); err != nil {
 		return err
@@ -53,7 +54,7 @@ func (a *browserSessionAdapter) now() (time.Time, error) {
 		return time.Time{}, err
 	}
 	if instant.IsZero() {
-		return time.Time{}, fault.New(fault.Invalid, "browser session clock returned zero time")
+		return time.Time{}, safeerror.NewFault(fault.Invalid, "browser session clock returned zero time")
 	}
 	return now, nil
 }
@@ -86,12 +87,12 @@ func NewBrowserSessions[M model.Identifiable, K any](registry *auth.Registry, se
 	source := CredentialSource{name: sessions.Guard().Source(), info: CredentialInfo{Source: sessions.Guard().Source(), Kind: CookieCredentialKind, Name: string(config.Cookie), OriginProtection: true}, read: func(r *stdhttp.Request) (value.Optional[secret.String], error) {
 		state := browserState(r.Context())
 		if state == nil || state.owner != adapter {
-			return value.Optional[secret.String]{}, fault.New(fault.Missing, "browser session request is not bound")
+			return value.Optional[secret.String]{}, safeerror.NewFault(fault.Missing, "browser session request is not bound")
 		}
 		state.mu.Lock()
 		defer state.mu.Unlock()
 		if state.sealed {
-			return value.Optional[secret.String]{}, fault.New(fault.Missing, "browser session request is closed")
+			return value.Optional[secret.String]{}, safeerror.NewFault(fault.Missing, "browser session request is closed")
 		}
 		return state.credential, nil
 	}}
@@ -104,7 +105,7 @@ func NewBrowserSessions[M model.Identifiable, K any](registry *auth.Registry, se
 }
 func (b *BrowserSessions[M, K]) Validate() error {
 	if b == nil || b.adapter == nil || b.authentication == nil {
-		return fault.New(fault.Invalid, "browser sessions are not configured")
+		return safeerror.NewFault(fault.Invalid, "browser sessions are not configured")
 	}
 	return b.sessions.Validate()
 }
@@ -166,7 +167,7 @@ func (a *browserSessionAdapter) readCredential(r *stdhttp.Request) (value.Option
 		return value.Optional[secret.String]{}, err
 	}
 	if a.cookie.options.Secure && !IsSecure(r) {
-		return value.Optional[secret.String]{}, BadRequest
+		return value.Optional[secret.String]{}, BadRequest.WithCause(nil)
 	}
 	credential, err := a.cookie.Read(r)
 	if err != nil {
@@ -185,7 +186,7 @@ func (b *BrowserSessions[M, K]) state(ctx context.Context) (*browserSessionState
 	}
 	state := browserState(ctx)
 	if state == nil || state.owner != b.adapter {
-		return nil, fault.New(fault.Missing, "browser session request is not bound to this adapter")
+		return nil, safeerror.NewFault(fault.Missing, "browser session request is not bound to this adapter")
 	}
 	return state, nil
 }
@@ -200,7 +201,7 @@ func (b *BrowserSessions[M, K]) issueCookie(ctx context.Context, issued session.
 		return "", time.Time{}, err
 	}
 	if !now.Before(deadline) {
-		return "", time.Time{}, auth.Unauthenticated
+		return "", time.Time{}, auth.Unauthenticated.WithCause(nil)
 	}
 	cookie := b.adapter.cookie
 	if info.Remembered() {
@@ -264,7 +265,7 @@ func (b *BrowserSessions[M, K]) CompleteMFA(ctx context.Context, factor auth.Sec
 	err = state.operation(ctx, func(op context.Context) (string, time.Time, error) {
 		pending, present := state.credential.Get()
 		if !present {
-			return "", time.Time{}, auth.Unauthenticated
+			return "", time.Time{}, auth.Unauthenticated.WithCause(nil)
 		}
 		issued, err := b.sessions.CompleteMFA(op, pending, factor, options)
 		if err != nil {
@@ -292,7 +293,7 @@ func (b *BrowserSessions[M, K]) Rotate(ctx context.Context) (session.Info[M, K],
 	err = state.operation(ctx, func(op context.Context) (string, time.Time, error) {
 		old, present := state.credential.Get()
 		if !present {
-			return "", time.Time{}, auth.Unauthenticated
+			return "", time.Time{}, auth.Unauthenticated.WithCause(nil)
 		}
 		issued, err := b.sessions.Rotate(op, old)
 		if err != nil {

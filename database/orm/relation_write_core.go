@@ -3,6 +3,7 @@ package orm
 import (
 	"context"
 	"database/sql/driver"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 	"unsafe"
@@ -78,7 +79,7 @@ func pivotKey(c *columnCore, ptr unsafe.Pointer) (pivotWriteKey, error) {
 		return pivotWriteKey{}, err
 	}
 	if raw == nil {
-		return pivotWriteKey{}, fault.New(fault.Missing, "relation writes require non-null keys")
+		return pivotWriteKey{}, safeerror.NewFault(fault.Missing, "relation writes require non-null keys")
 	}
 	id, err := querycore.RecordEqualityKey(c.kind, raw)
 	return pivotWriteKey{raw: raw, identity: id}, err
@@ -125,7 +126,7 @@ func pivotRead(ctx context.Context, tx *database.Tx, q queryState, lock querycor
 			if ordered {
 				return invalid("relation write exceeds its row limit")
 			}
-			return database.NewError("relation write rows", database.TooManyRows)
+			return querycore.DatabaseFailure("relation write rows", database.TooManyRows)
 		}
 		ptr := reflect.New(q.table.typ).UnsafePointer()
 		if err := hydrate(q.table, row, ptr); err != nil {
@@ -152,7 +153,7 @@ func pivotSourceKey(ctx context.Context, tx *database.Tx, p *relationPlan, sourc
 		return pivotWriteKey{}, err
 	}
 	if len(rows) != 1 {
-		return pivotWriteKey{}, database.NewError("relation source", database.NotFound)
+		return pivotWriteKey{}, querycore.DatabaseFailure("relation source", database.NotFound)
 	}
 	return pivotKey(pivotColumn(q.table, p.local.Column), rows[0])
 }
@@ -179,7 +180,7 @@ func pivotTargetKeys(ctx context.Context, tx *database.Tx, p *relationPlan, targ
 		return nil, err
 	}
 	if len(rows) != len(requested) {
-		return nil, database.NewError("relation target", database.NotFound)
+		return nil, querycore.DatabaseFailure("relation target", database.NotFound)
 	}
 	found := map[sqlvalue.Value]unsafe.Pointer{}
 	for _, ptr := range rows {
@@ -188,7 +189,7 @@ func pivotTargetKeys(ctx context.Context, tx *database.Tx, p *relationPlan, targ
 			return nil, e
 		}
 		if !seen[k.identity] || found[k.identity] != nil {
-			return nil, database.NewError("relation target identity", database.TooManyRows)
+			return nil, querycore.DatabaseFailure("relation target identity", database.TooManyRows)
 		}
 		found[k.identity] = ptr
 	}
@@ -198,7 +199,7 @@ func pivotTargetKeys(ctx context.Context, tx *database.Tx, p *relationPlan, targ
 	for _, k := range requested {
 		ptr := found[k.identity]
 		if ptr == nil {
-			return nil, database.NewError("relation target", database.NotFound)
+			return nil, querycore.DatabaseFailure("relation target", database.NotFound)
 		}
 		key, e := pivotKey(foreign, ptr)
 		if e != nil {
@@ -215,7 +216,7 @@ func pivotTargetKeys(ctx context.Context, tx *database.Tx, p *relationPlan, targ
 			return nil, e
 		}
 		if len(matches) != len(keys) {
-			return nil, database.NewError("relation target key", database.TooManyRows)
+			return nil, querycore.DatabaseFailure("relation target key", database.TooManyRows)
 		}
 	}
 	return keys, nil
@@ -313,7 +314,7 @@ func writePivots(ctx context.Context, tx *database.Tx, p *relationPlan, source u
 		attach = nil
 	case pivotUpdate:
 		if len(keep) == 0 {
-			return out, database.NewError("pivot update", database.NotFound)
+			return out, querycore.DatabaseFailure("pivot update", database.NotFound)
 		}
 		attach = nil
 	}

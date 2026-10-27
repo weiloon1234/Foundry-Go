@@ -93,6 +93,13 @@ func TestJSONDiagnosticCausesKeepHTTP500(t *testing.T) {
 					if recorder.Code != test.status || response.Code != test.code {
 						t.Fatalf("HTTP classification: status %d, code %s", recorder.Code, response.Code)
 					}
+					control := httptest.NewRecorder()
+					if err := WriteError(control, httptest.NewRequest(stdhttp.MethodGet, "/", nil), test.code); err != nil {
+						t.Fatal(err)
+					}
+					if recorder.Body.String() != control.Body.String() {
+						t.Fatalf("response bytes changed: %q != %q", recorder.Body.String(), control.Body.String())
+					}
 					if strings.Contains(recorder.Body.String(), "private") {
 						t.Fatal("diagnostic cause disclosed")
 					}
@@ -121,9 +128,30 @@ func TestParseJSONMapKeyValidationKeepsHTTPClassification(t *testing.T) {
 			if err := WriteError(recorder, httptest.NewRequest(stdhttp.MethodGet, "/", nil), failure); err != nil {
 				t.Fatal(err)
 			}
+			control := httptest.NewRecorder()
+			if err := WriteError(control, httptest.NewRequest(stdhttp.MethodGet, "/", nil), BadRequest); err != nil {
+				t.Fatal(err)
+			}
+			if recorder.Body.String() != control.Body.String() {
+				t.Fatal("direct ParseJSON response bytes changed")
+			}
 			if recorder.Code != stdhttp.StatusBadRequest {
 				t.Fatalf("direct ParseJSON classification changed: HTTP %d", recorder.Code)
 			}
 		})
+	}
+}
+func TestJSONDiagnosticCausesDoNotSupplyRetryHints(t *testing.T) {
+	_, failure := value.NewJSON(rejectedJSONSnapshot{fault.Overloaded})
+	response := httptest.NewRecorder()
+	control := httptest.NewRecorder()
+	if err := WriteError(response, httptest.NewRequest("GET", "/", nil), Unavailable.WithCause(failure)); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteError(control, httptest.NewRequest("GET", "/", nil), Unavailable); err != nil {
+		t.Fatal(err)
+	}
+	if response.Body.String() != control.Body.String() || response.Header().Get("Retry-After") != control.Header().Get("Retry-After") {
+		t.Fatal("diagnostic cause changed response bytes or retry hint")
 	}
 }

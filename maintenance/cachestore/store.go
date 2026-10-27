@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 )
 
@@ -31,7 +32,7 @@ var _ maintenance.Store = (*Store)(nil)
 
 func New(store *cache.Store) (*Store, error) {
 	if store == nil {
-		return nil, fault.New(fault.Invalid, "maintenance cache store is missing")
+		return nil, safeerror.NewFault(fault.Invalid, "maintenance cache store is missing")
 	}
 	values, err := declaration.Bind(store)
 	if err != nil {
@@ -42,14 +43,14 @@ func New(store *cache.Store) (*Store, error) {
 
 func (s *Store) Load(ctx context.Context) (maintenance.State, bool, error) {
 	if s == nil {
-		return maintenance.State{}, false, fault.New(fault.Invalid, "maintenance cache store is not initialized")
+		return maintenance.State{}, false, safeerror.NewFault(fault.Invalid, "maintenance cache store is not initialized")
 	}
 	return s.values.Get(ctx, current)
 }
 
 func (s *Store) Save(ctx context.Context, state maintenance.State) error {
 	if s == nil {
-		return fault.New(fault.Invalid, "maintenance cache store is not initialized")
+		return safeerror.NewFault(fault.Invalid, "maintenance cache store is not initialized")
 	}
 	if err := state.Validate(); err != nil {
 		return err

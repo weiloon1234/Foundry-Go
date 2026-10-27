@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	store "github.com/weiloon1234/Foundry-Go/internal/notificationstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -97,7 +98,7 @@ func (b Binding[M, K, P]) Capture(ctx context.Context, recipient model.Reference
 		if ctx.Err() != nil {
 			return PendingNotification[M, P]{}, ctx.Err()
 		}
-		return PendingNotification[M, P]{}, fault.New(fault.Invalid, "notification capture failed")
+		return PendingNotification[M, P]{}, safeerror.NewFault(fault.Invalid, "notification capture failed")
 	}
 	return result, nil
 }
@@ -150,7 +151,7 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 		return store.Envelope{}, err
 	}
 	if row.Scope != r.scope || row.SubjectKey != captured.subject {
-		return store.Envelope{}, fault.New(fault.Conflict, "notification identity already has different input")
+		return store.Envelope{}, safeerror.NewFault(fault.Conflict, "notification identity already has different input")
 	}
 	if row.Fingerprint != captured.fingerprint {
 		// A notification captured before its binding's channel set changed keeps
@@ -163,7 +164,7 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 		identity, _ := captured.identity.Text()
 		payload, _ := captured.input.Text()
 		if len(deliveries) == 0 || fingerprintWith(r, identity, payload, storedChannels(deliveries)) != row.Fingerprint {
-			return store.Envelope{}, fault.New(fault.Conflict, "notification identity already has different input")
+			return store.Envelope{}, safeerror.NewFault(fault.Conflict, "notification identity already has different input")
 		}
 		return row, nil
 	}

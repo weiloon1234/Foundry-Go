@@ -20,6 +20,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -46,7 +47,7 @@ func Binding(table, column string, key driver.Value) (encryption.Context, error)
 		return encryption.Context{}, err
 	}
 	if table == "" || column == "" {
-		return encryption.Context{}, fault.New(fault.Invalid, "encrypted field binding requires a table and column")
+		return encryption.Context{}, safeerror.NewFault(fault.Invalid, "encrypted field binding requires a table and column")
 	}
 	return encryption.NewContext(Purpose, secret.New(strconv.Quote(table)+":"+strconv.Quote(column)+":"+text))
 }
@@ -64,7 +65,7 @@ func keyText(key driver.Value) (string, error) {
 			return "b" + hex.EncodeToString(v), nil
 		}
 	}
-	return "", fault.New(fault.Invalid, "encrypted fields require an assigned primary key")
+	return "", safeerror.NewFault(fault.Invalid, "encrypted fields require an assigned primary key")
 }
 
 // state is shared by both field types: the stored envelope and, once
@@ -77,10 +78,10 @@ type state struct {
 
 func (s state) seal(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (state, error) {
 	if keys == nil {
-		return state{}, fault.New(fault.Missing, "database has no encryption key ring for encrypted model fields")
+		return state{}, safeerror.NewFault(fault.Missing, "database has no encryption key ring for encrypted model fields")
 	}
 	if !s.open {
-		return state{}, fault.New(fault.Invalid, "encrypted field has no plaintext to store")
+		return state{}, safeerror.NewFault(fault.Invalid, "encrypted field has no plaintext to store")
 	}
 	sealed, err := keys.Encrypt(ctx, binding, s.plain)
 	if err != nil {
@@ -91,10 +92,10 @@ func (s state) seal(ctx context.Context, keys *encryption.Keyring, binding encry
 
 func (s state) unseal(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (state, error) {
 	if keys == nil {
-		return state{}, fault.New(fault.Missing, "database has no encryption key ring for encrypted model fields")
+		return state{}, safeerror.NewFault(fault.Missing, "database has no encryption key ring for encrypted model fields")
 	}
 	if s.sealed.IsZero() {
-		return state{}, fault.New(fault.Invalid, "encrypted field has no stored value")
+		return state{}, safeerror.NewFault(fault.Invalid, "encrypted field has no stored value")
 	}
 	plain, err := keys.Decrypt(ctx, binding, s.sealed)
 	if err != nil {
@@ -112,7 +113,7 @@ func (s state) equal(other state) bool {
 
 func (s state) bind() (driver.Value, error) {
 	if s.sealed.IsZero() {
-		return nil, fault.New(fault.Invalid, "encrypted field was not sealed before binding")
+		return nil, safeerror.NewFault(fault.Invalid, "encrypted field was not sealed before binding")
 	}
 	return s.sealed.Encoded(), nil
 }
@@ -192,7 +193,7 @@ func NewJSON[T any](input T) (JSON[T], error) {
 // strict shape checks.
 func (j JSON[T]) Decode() (T, error) {
 	if !j.state.open {
-		return *new(T), fault.New(fault.Invalid, "encrypted JSON field was not opened")
+		return *new(T), safeerror.NewFault(fault.Invalid, "encrypted JSON field was not opened")
 	}
 	snapshot, err := value.ParseJSON[T](j.state.plain.Reveal())
 	if err != nil {

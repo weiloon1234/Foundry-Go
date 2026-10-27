@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Isolation selects portable PostgreSQL transaction isolation levels.
@@ -33,14 +33,14 @@ type TxOptions struct {
 func (o TxOptions) sqlOptions() (*sql.TxOptions, error) {
 	levels := [...]sql.IsolationLevel{sql.LevelDefault, sql.LevelReadCommitted, sql.LevelRepeatableRead, sql.LevelSerializable}
 	if int(o.Isolation) >= len(levels) {
-		return nil, fault.New(fault.Invalid, "invalid transaction isolation")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid transaction isolation")
 	}
 	return &sql.TxOptions{Isolation: levels[o.Isolation], ReadOnly: o.ReadOnly}, nil
 }
 
 func transactionOptions(fn func(*Tx) error, options []TxOptions) (*sql.TxOptions, error) {
 	if fn == nil || len(options) > 1 {
-		return nil, fault.New(fault.Invalid, "transaction needs a callback and at most one option set")
+		return nil, safeerror.NewFault(fault.Invalid, "transaction needs a callback and at most one option set")
 	}
 	var selected TxOptions
 	if len(options) == 1 {
@@ -90,7 +90,7 @@ type transactionControl struct {
 func (c *transactionControl) poison(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.abort = errors.Join(c.abort, err)
+	c.abort = safeerror.Join("operation failed", c.abort, err)
 }
 func (c *transactionControl) failure() error { c.mu.Lock(); defer c.mu.Unlock(); return c.abort }
 
@@ -137,7 +137,7 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 	defer func() {
 		if !released {
 			if releaseErr := release(); releaseErr != nil {
-				err = errors.Join(err, releaseErr)
+				err = safeerror.Join("operation failed", err, releaseErr)
 			}
 		}
 	}()
@@ -162,8 +162,8 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 	err = invokeScope("transaction callback", func() error { return fn(tx) })
 	// Join only when scope cleanup also failed so a lone callback error keeps
 	// its exact identity.
-	if scopeErr := errors.Join(tx.finishScope(), tx.control.failure()); scopeErr != nil {
-		err = errors.Join(err, scopeErr)
+	if scopeErr := safeerror.Join("operation failed", tx.finishScope(), tx.control.failure()); scopeErr != nil {
+		err = safeerror.Join("operation failed", err, scopeErr)
 	}
 	if err == nil {
 		err = classify.wrap("transaction", lifetime.Err())
@@ -186,7 +186,7 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 			tx.setState(TxRolledBack)
 		} else {
 			tx.setState(TxUnknown)
-			rollbackErr = errors.Join(rollbackErr, discardConnection(conn))
+			rollbackErr = safeerror.Join("operation failed", rollbackErr, discardConnection(conn))
 		}
 		if classified == nil {
 			// Application failures keep their identity. An unconfirmed rollback
@@ -198,22 +198,22 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 			if cause == nil {
 				cause = lifetime.Err()
 			}
-			rollback, _ := classify.wrap("rollback", cause).(*Error)
+			rollback, _ := safeerror.UnwrapOwned(classify.wrap("rollback", cause)).(*Error)
 			if rollback == nil {
 				rollback = &Error{operation: "rollback", detail: Detail{Code: QueryFailed}}
 			}
 			rollback.outcome = NoCommit
-			return errors.Join(application, rollback)
+			return safeerror.Join("operation failed", application, presentFailure(rollback))
 		}
 		if confirmed {
 			classified.outcome = RolledBack
 		} else {
 			classified.outcome = NoCommit
 		}
-		return errors.Join(classified, classify.wrap("rollback", rollbackErr))
+		return safeerror.Retain(err, safeerror.Join("operation failed", presentFailure(classified), classify.wrap("rollback", rollbackErr)))
 	}
 	if commitErr := raw.Commit(); commitErr != nil {
-		classified := classify.wrap("commit", commitErr).(*Error)
+		classified := safeerror.UnwrapOwned(classify.wrap("commit", commitErr)).(*Error)
 		if classified.detail.CommitRejected {
 			classified.outcome = RolledBack
 			tx.setState(TxRolledBack)
@@ -225,9 +225,9 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 			if options == nil || !options.ReadOnly {
 				owner.markWrite(ctx)
 			}
-			return errors.Join(classified, classify.wrap("discard uncertain commit", discardConnection(conn)))
+			return safeerror.Join("operation failed", presentFailure(classified), classify.wrap("discard uncertain commit", discardConnection(conn)))
 		}
-		return classified
+		return presentFailure(classified)
 	}
 	timer.Stop()
 	tx.setState(TxCommitted)
@@ -246,16 +246,16 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 			failures = append(failures, err)
 		}
 	}
-	return afterCommitFailure(errors.Join(failures...))
+	return afterCommitFailure(safeerror.Join("operation failed", failures...))
 }
 
-// The committed outcome must wrap application errors before callback isolation
-// formats them. Never invoke application Error/Format methods after commitment.
+// Wrap application errors before callback isolation formats them, retaining the
+// committed outcome and cause without invoking application Error/Format methods.
 func afterCommitFailure(cause error) error {
 	if cause == nil {
 		return nil
 	}
-	return &Error{operation: "after commit", detail: Detail{Code: AfterCommitFailed}, outcome: Committed, cause: cause}
+	return presentFailure(&Error{operation: "after commit", detail: Detail{Code: AfterCommitFailed}, outcome: Committed, cause: cause})
 }
 
 func (tx *Tx) setState(state TxState) { tx.mu.Lock(); defer tx.mu.Unlock(); tx.state = state }
@@ -282,7 +282,7 @@ func (tx *Tx) callbacks() []func(context.Context) error {
 // have no crash durability; enqueue durable publication through the outbox layer.
 func (tx *Tx) AfterCommit(fn func(context.Context) error) error {
 	if fn == nil {
-		return fault.New(fault.Invalid, "after-commit callback is nil")
+		return safeerror.NewFault(fault.Invalid, "after-commit callback is nil")
 	}
 	release, err := tx.enter()
 	if err != nil {

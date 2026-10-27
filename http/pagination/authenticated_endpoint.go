@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // AuthenticatedNumberedEndpoint supplies a concrete actor before a numbered page read.
@@ -94,7 +95,7 @@ func (e authenticatedPageEndpoint[P, F, W, A, Page, Response]) Handle(handler fu
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if handler == nil {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated pagination endpoint requires a handler"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated pagination endpoint requires a handler"))
 	}
 	return e.transport.Handle(func(ctx context.Context, actor A, input foundryhttp.Input[P, parameters[F, W], foundryhttp.NoBody]) (Response, error) {
 		in := request(input)

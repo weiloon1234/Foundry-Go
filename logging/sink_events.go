@@ -2,7 +2,7 @@ package logging
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	"log/slog"
 	"sync/atomic"
@@ -75,7 +75,7 @@ func (e *sinkEvents) notice(kind noticeKind, err error) {
 	if err != nil {
 		attrs = append(attrs, slog.Any("diagnostic", errordiag.Describe(err)))
 		var errno syscall.Errno
-		if errors.As(err, &errno) {
+		if callback.ErrorAs(err, &errno) {
 			attrs = append(attrs, slog.String("errno", errno.Error()))
 		}
 	}

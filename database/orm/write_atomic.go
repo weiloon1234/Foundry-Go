@@ -38,7 +38,7 @@ func atomicModels[R any](ctx context.Context, writer database.Transactor, run fu
 		if completed {
 			classified, reconcile := inspectOutcome(err, false)
 			if reconcile {
-				return *new(R), &WriteError[R]{cause: classified, candidate: result}
+				return *new(R), writeFailure(classified, result)
 			}
 			err = classified
 		}

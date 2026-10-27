@@ -3,6 +3,7 @@ package orm
 import (
 	"context"
 	"database/sql/driver"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"unsafe"
 
 	auditrecord "github.com/weiloon1234/Foundry-Go/audit/record"
@@ -100,14 +101,14 @@ func Audit[M any, K comparable](table Table[M, K], changes Changes[M], policy Au
 	}
 	operation, ok := state.operation.Get()
 	if !ok {
-		return zero, fault.New(fault.Missing, "audit requires captured model changes")
+		return zero, safeerror.NewFault(fault.Missing, "audit requires captured model changes")
 	}
 	snapshot := state.after
 	if snapshot == nil {
 		snapshot = state.before
 	}
 	if snapshot == nil {
-		return zero, fault.New(fault.Missing, "audit requires a stored model snapshot")
+		return zero, safeerror.NewFault(fault.Missing, "audit requires a stored model snapshot")
 	}
 	key := table.Key().key
 	stored := *(*K)(unsafe.Add(snapshot, key.core.offset))

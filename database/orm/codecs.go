@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"strings"
 	"sync"
@@ -66,7 +67,7 @@ func isInstant(t reflect.Type) bool {
 func isNullableInstant(t reflect.Type) bool {
 	return t == reflect.TypeFor[value.Nullable[time.Time]]() || t == reflect.TypeFor[value.Nullable[temporal.DateTime]]()
 }
-func invalid(message string) error { return fault.New(fault.Invalid, "orm: "+message) }
+func invalid(message string) error { return safeerror.NewFault(fault.Invalid, "orm: "+message) }
 
 // IDOf declares a model-owned foreign ID column. Example: IDOf(b, &o.BuyerID).
 func IDOf[M, T any](b Builder[M], ptr *model.ID[T]) Column[M, model.ID[T]] {

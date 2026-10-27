@@ -111,7 +111,7 @@ func TestJSONEnumKeyMembershipAndDescriptorOwnership(t *testing.T) {
 	}
 }
 
-type FailingKey string
+type FailingKey struct{ text string }
 
 func (k *FailingKey) UnmarshalText(data []byte) error {
 	if string(data) == "panic" {
@@ -120,8 +120,18 @@ func (k *FailingKey) UnmarshalText(data []byte) error {
 	if string(data) == "goexit" {
 		runtime.Goexit()
 	}
-	*k = FailingKey(data)
+	k.text = string(data)
 	return nil
+}
+
+func (k FailingKey) MarshalText() ([]byte, error) {
+	switch k.text {
+	case "marshal-panic":
+		panic("private key panic")
+	case "marshal-goexit":
+		runtime.Goexit()
+	}
+	return []byte(k.text), nil
 }
 
 type FailingKeyDTO struct{ Values map[FailingKey]string }
@@ -129,12 +139,13 @@ type FailingKeyDTO struct{ Values map[FailingKey]string }
 func TestJSONMapKeyPanicAndGoexitAreInternal(t *testing.T) {
 	descriptor := DefineJSON[FailingKeyDTO](Schema{Root: "github.com/weiloon1234/Foundry-Go/contract.FailingKeyDTO", Types: []Type{
 		{ID: "github.com/weiloon1234/Foundry-Go/contract.FailingKeyDTO", Kind: ObjectKind, Properties: []Property{{Name: "Values", Type: "values", Required: true}}},
-		JSONMapType[map[FailingKey]string]("values", "text", "app.FailingKey", StringJSONKey[FailingKey]()),
+		JSONMapType[map[FailingKey]string]("values", "text", "app.FailingKey", DefineJSONKey(DefineScalar[FailingKey](Type{ID: "github.com/weiloon1234/Foundry-Go/contract.FailingKey", Kind: StringKind}))),
 		{ID: "text", Kind: StringKind},
 	}})
-	for _, name := range []string{"panic", "goexit"} {
+	for _, name := range []string{"panic", "goexit", "marshal-panic", "marshal-goexit"} {
 		result, err := descriptor.Decode(context.Background(), []byte("{\"Values\":{\""+name+"\":\"x\"}}"), dtoLimits())
-		if !errors.Is(err, fault.Internal) || result.Values != nil || strings.Contains(err.Error(), "private") {
+		var rejected *DecodeError
+		if !errors.Is(err, fault.Internal) || errors.As(err, &rejected) || result.Values != nil || strings.Contains(err.Error(), "private") {
 			t.Fatal("key panic became input rejection", err)
 		}
 	}
@@ -192,5 +203,31 @@ func TestJSONMapKeyRuntimeOwnershipInIncludedSchemas(t *testing.T) {
 	other := JSONMapType[map[SecondMapKey]string]("map", "string", "key", StringJSONKey[SecondMapKey]())
 	if !sameNormalizedType(first, same) || sameNormalizedType(first, other) {
 		t.Fatal("matching metadata erased concrete native key ownership")
+	}
+}
+
+type directStringKey string
+
+func (directStringKey) MarshalText() ([]byte, error)       { panic("string keys bypass text encoding") }
+func (k *directStringKey) UnmarshalText(data []byte) error { *k = directStringKey(data); return nil }
+
+type DirectStringKeyDTO struct{ Values map[directStringKey]string }
+
+func TestStringMapKeyEncodingPrecedence(t *testing.T) {
+	descriptor := DefineJSON[DirectStringKeyDTO](Schema{Root: "github.com/weiloon1234/Foundry-Go/contract.DirectStringKeyDTO", Types: []Type{
+		{ID: "github.com/weiloon1234/Foundry-Go/contract.DirectStringKeyDTO", Kind: ObjectKind, Properties: []Property{{Name: "Values", Type: "map", Required: true}}},
+		JSONMapType[map[directStringKey]string]("map", "text", "key", StringJSONKey[directStringKey]()),
+		{ID: "text", Kind: StringKind},
+	}})
+	got, err := descriptor.Encode(t.Context(), DirectStringKeyDTO{Values: map[directStringKey]string{"original": "value"}}, dtoLimits())
+	if err != nil || string(got) != `{"Values":{"original":"value"}}` {
+		t.Fatalf("unexpected contract bytes %s: %v", got, err)
+	}
+	decoded, err := descriptor.Decode(t.Context(), got, dtoLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Values["original"] != "value" {
+		t.Fatal("typed key changed")
 	}
 }

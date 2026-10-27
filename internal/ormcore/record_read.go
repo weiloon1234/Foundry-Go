@@ -2,7 +2,7 @@ package ormcore
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -15,7 +15,7 @@ func CompileRecord(ctx context.Context, r RecordSource) (querycore.Statement, er
 	err := ValidateRecordSource(r, r.Record.Type, r.Transaction)
 	for _, c := range AppendChecks(r.Source.Checks, r.Record.Checks...) {
 		if c != nil {
-			err = errors.Join(err, c())
+			err = safeerror.Join("operation failed", err, c())
 		}
 	}
 	return querycore.CompileRead(r.Source.Node, ctx, r.Transaction, err, r.Record.Scan != nil)

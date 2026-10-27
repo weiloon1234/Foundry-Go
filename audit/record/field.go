@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 )
@@ -90,13 +91,13 @@ func CaptureField[M, V any](name string, c codec.Codec[V], change lifecycle.Fiel
 
 func captureStoredField(field FoundryStoredField, disclosure Disclosure) (capturedField, error) {
 	if !sqlname.Valid(field.Name) {
-		return capturedField{}, fault.New(fault.Invalid, "audit field requires a declared column")
+		return capturedField{}, safeerror.NewFault(fault.Invalid, "audit field requires a declared column")
 	}
 	if err := disclosure.Validate(); err != nil {
 		return capturedField{}, err
 	}
 	if !field.Before && !field.After || field.Assigned && !field.After {
-		return capturedField{}, fault.New(fault.Invalid, "audit field requires a stored change")
+		return capturedField{}, safeerror.NewFault(fault.Invalid, "audit field requires a stored change")
 	}
 	result := capturedField{name: field.Name, typ: field.Type, assigned: field.Assigned, changed: field.Changed}
 	if disclosure == Exclude {
@@ -113,7 +114,7 @@ func captureStoredField(field FoundryStoredField, disclosure Disclosure) (captur
 	}
 	err := callback.Isolated("capture audit field", func() error {
 		if field.Bind == nil {
-			return fault.New(fault.Invalid, "audit field has no stored codec")
+			return safeerror.NewFault(fault.Invalid, "audit field has no stored codec")
 		}
 		for _, after := range []bool{false, true} {
 			if !after && !field.Before || after && !field.After {
@@ -136,7 +137,7 @@ func captureStoredField(field FoundryStoredField, disclosure Disclosure) (captur
 		return nil
 	})
 	if err != nil {
-		return capturedField{}, fault.Wrap(fault.Invalid, "audit field capture failed", err)
+		return capturedField{}, safeerror.WrapFailure(fault.Invalid, "audit field capture failed", err)
 	}
 	return result, nil
 }
@@ -147,7 +148,7 @@ func captureStoredField(field FoundryStoredField, disclosure Disclosure) (captur
 // and delete operations retain complete snapshots.
 func Capture[M, K, V any](builder *Builder[M, K], name string, c codec.Codec[V], change lifecycle.FieldChange[V], disclosure Disclosure) error {
 	if builder == nil || builder.seen == nil {
-		return fault.New(fault.Invalid, "audit builder is not initialized")
+		return safeerror.NewFault(fault.Invalid, "audit builder is not initialized")
 	}
 	if err := disclosure.Validate(); err != nil {
 		return builder.fail(err)

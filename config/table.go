@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
 	"io"
 	"sort"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/namedservice"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const MaxTableEntries = namedservice.MaxEntries
@@ -23,7 +25,7 @@ const maxObjectDepth = 64
 // keys are rejected rather than ambiguously reinterpreted as namespace paths.
 func DecodeObject[T any](object map[string]any, schema *Schema[T], source string) (Values, error) {
 	if schema == nil || object == nil || strings.TrimSpace(source) == "" {
-		return Values{}, fault.New(fault.Invalid, "configuration object needs a schema, object and source")
+		return Values{}, safeerror.NewFault(fault.Invalid, "configuration object needs a schema, object and source")
 	}
 	fields, namespaces := make(map[string]bool), make(map[string]bool)
 	for _, name := range schema.Names() {
@@ -37,11 +39,11 @@ func DecodeObject[T any](object map[string]any, schema *Schema[T], source string
 	var flatten func(map[string]any, string, int) error
 	flatten = func(table map[string]any, prefix string, depth int) error {
 		if depth > maxObjectDepth {
-			return fault.New(fault.Invalid, "configuration nesting exceeds limit")
+			return safeerror.NewFault(fault.Invalid, "configuration nesting exceeds limit")
 		}
 		for _, key := range objectKeys(table) {
 			if strings.ContainsRune(key, '.') {
-				return fault.New(fault.Invalid, "configuration namespace segments cannot contain dots")
+				return safeerror.NewFault(fault.Invalid, "configuration namespace segments cannot contain dots")
 			}
 			name, value := prefix+key, table[key]
 			if fields[name] {
@@ -54,7 +56,7 @@ func DecodeObject[T any](object map[string]any, schema *Schema[T], source string
 			}
 			nested, ok := value.(map[string]any)
 			if !namespaces[name] || !ok {
-				return fault.New(fault.Invalid, "configuration contains an undeclared setting or invalid namespace")
+				return safeerror.NewFault(fault.Invalid, "configuration contains an undeclared setting or invalid namespace")
 			}
 			if err := flatten(nested, name+".", depth+1); err != nil {
 				return err
@@ -68,20 +70,23 @@ func DecodeObject[T any](object map[string]any, schema *Schema[T], source string
 	return result, nil
 }
 func objectText(value any) (string, error) {
+	if err := normalizedObject(value, 0); err != nil {
+		return "", err
+	}
 	switch value := value.(type) {
 	case string:
 		return value, nil
 	case int64:
 		return strconv.FormatInt(value, 10), nil
 	case float64:
-		data, err := json.Marshal(value)
+		data, err := jsoncodec.Marshal(value)
 		return string(data), err
 	case json.Number:
 		return value.String(), nil
 	case bool:
 		return strconv.FormatBool(value), nil
 	default:
-		data, err := json.Marshal(value)
+		data, err := jsoncodec.Marshal(value)
 		return string(data), err
 	}
 }
@@ -104,29 +109,29 @@ func objectKeys[V any](table map[string]V) []string {
 // oversized input and excessive depth fail without a partial result.
 func DecodeTable[K ~string, V any](raw string, schema *Schema[V], defaults func(K) V, validate func(V) error) (map[K]V, error) {
 	if schema == nil || defaults == nil || len(raw) > MaxTableBytes {
-		return nil, fault.New(fault.Invalid, "invalid named configuration table")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid named configuration table")
 	}
 	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.UseNumber()
 	decoded, err := readObjectValue(decoder, 0)
 	if err != nil {
-		return nil, fault.New(fault.Invalid, "invalid named configuration table")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid named configuration table")
 	}
 	if _, err = decoder.Token(); err != io.EOF {
-		return nil, fault.New(fault.Invalid, "named configuration requires one object")
+		return nil, safeerror.NewFault(fault.Invalid, "named configuration requires one object")
 	}
 	object, ok := decoded.(map[string]any)
 	if !ok || len(object) > MaxTableEntries {
-		return nil, fault.New(fault.Invalid, "named configuration requires a bounded object")
+		return nil, safeerror.NewFault(fault.Invalid, "named configuration requires a bounded object")
 	}
 	result := make(map[K]V, len(object))
 	for _, name := range objectKeys(object) {
 		if !identifier.Semantic(name) {
-			return nil, fault.New(fault.Invalid, "invalid configured service name")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid configured service name")
 		}
 		entry, ok := object[name].(map[string]any)
 		if !ok {
-			return nil, fault.New(fault.Invalid, "named configuration entry must be an object")
+			return nil, safeerror.NewFault(fault.Invalid, "named configuration entry must be an object")
 		}
 		layer, err := DecodeObject(entry, schema, "named configuration")
 		if err != nil {
@@ -145,7 +150,7 @@ func DecodeTable[K ~string, V any](raw string, schema *Schema[V], defaults func(
 // depth. encoding/json's map decoder would silently accept the last duplicate.
 func readObjectValue(d *json.Decoder, depth int) (any, error) {
 	if depth > maxObjectDepth {
-		return nil, fault.New(fault.Invalid, "configuration nesting exceeds limit")
+		return nil, safeerror.NewFault(fault.Invalid, "configuration nesting exceeds limit")
 	}
 	token, err := d.Token()
 	if err != nil {
@@ -165,10 +170,10 @@ func readObjectValue(d *json.Decoder, depth int) (any, error) {
 			}
 			key, ok := token.(string)
 			if !ok {
-				return nil, fault.New(fault.Invalid, "invalid object key")
+				return nil, safeerror.NewFault(fault.Invalid, "invalid object key")
 			}
 			if _, exists := result[key]; exists {
-				return nil, fault.New(fault.Duplicate, "duplicate configuration key")
+				return nil, safeerror.NewFault(fault.Duplicate, "duplicate configuration key")
 			}
 			value, err := readObjectValue(d, depth+1)
 			if err != nil {
@@ -178,7 +183,7 @@ func readObjectValue(d *json.Decoder, depth int) (any, error) {
 		}
 		end, err := d.Token()
 		if err != nil || end != json.Delim('}') {
-			return nil, fault.New(fault.Invalid, "invalid configuration object")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid configuration object")
 		}
 		return result, nil
 	case '[':
@@ -192,10 +197,37 @@ func readObjectValue(d *json.Decoder, depth int) (any, error) {
 		}
 		end, err := d.Token()
 		if err != nil || end != json.Delim(']') {
-			return nil, fault.New(fault.Invalid, "invalid configuration array")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid configuration array")
 		}
 		return result, nil
 	default:
-		return nil, fault.New(fault.Invalid, "invalid configuration delimiter")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid configuration delimiter")
 	}
+}
+
+// normalizedObject accepts only the concrete scalar/collection representation
+// produced by our file adapters. It never calls user conversion methods.
+func normalizedObject(value any, depth int) error {
+	if depth > maxObjectDepth {
+		return safeerror.NewFault(fault.Invalid, "configuration nesting exceeds limit")
+	}
+	switch value := value.(type) {
+	case nil, string, bool, int64, float64, json.Number:
+		return nil
+	case []any:
+		for _, item := range value {
+			if err := normalizedObject(item, depth+1); err != nil {
+				return err
+			}
+		}
+	case map[string]any:
+		for _, item := range value {
+			if err := normalizedObject(item, depth+1); err != nil {
+				return err
+			}
+		}
+	default:
+		return safeerror.NewFault(fault.Invalid, "configuration object contains an unsupported value")
+	}
+	return nil
 }

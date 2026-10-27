@@ -119,7 +119,7 @@ func validRoom(room string) bool {
 // its ID when one was decoded and valid, so errors can correlate.
 func DecodeRequest(data []byte, maxBytes int) (Request, error) {
 	if maxBytes < 1 || maxBytes > 1<<20 {
-		return Request{}, Malformed
+		return Request{}, codeFailure(Malformed)
 	}
 	var request Request
 	present, err := decodeObject(data, maxBytes, func(name string) wireMember {
@@ -148,28 +148,28 @@ func DecodeRequest(data []byte, maxBytes int) (Request, error) {
 		identified.ID = request.ID
 	}
 	if err != nil || !identifier.Semantic(string(request.ID)) || !identifier.Semantic(string(request.Channel)) {
-		return identified, Malformed
+		return identified, codeFailure(Malformed)
 	}
 	if request.Version != ProtocolVersion {
-		return request, UnsupportedVersion
+		return request, codeFailure(UnsupportedVersion)
 	}
 	if present["replay"] && (request.Action != Subscribe || request.Replay == nil || *request.Replay < 0 || *request.Replay > MaxReplayMessages) {
-		return request, Malformed
+		return request, codeFailure(Malformed)
 	}
 	if present["room"] && (request.Room == nil || !validRoom(*request.Room)) {
-		return request, Malformed
+		return request, codeFailure(Malformed)
 	}
 	switch request.Action {
 	case Subscribe, Unsubscribe:
 		if present["event"] || present["payload"] {
-			return request, Malformed
+			return request, codeFailure(Malformed)
 		}
 	case Message:
 		if !identifier.Semantic(string(request.Event)) || len(request.Payload) == 0 {
-			return request, Malformed
+			return request, codeFailure(Malformed)
 		}
 	default:
-		return request, Malformed
+		return request, codeFailure(Malformed)
 	}
 	return request, nil
 }

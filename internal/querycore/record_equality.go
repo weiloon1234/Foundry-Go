@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"math/big"
@@ -17,7 +18,7 @@ func EncodeModelKey(raw driver.Value) (sqlvalue.Value, error) {
 	}
 	key, err := sqlvalue.Encode(raw)
 	if err != nil {
-		return sqlvalue.Value{}, fault.New(fault.Invalid, "model key has no canonical database representation")
+		return sqlvalue.Value{}, safeerror.NewFault(fault.Invalid, "model key has no canonical database representation")
 	}
 	return key, nil
 }

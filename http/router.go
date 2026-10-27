@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Router is an immutable, concurrency-safe native net/http handler. All route
@@ -53,7 +54,7 @@ func matchedContext(ctx context.Context, state *matchedRoute) context.Context {
 // Prepare, or used directly by net/http testing tools.
 func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 	if !nativeRoutingAvailable() {
-		return nil, fault.New(fault.Invalid, "Foundry routing requires modern net/http ServeMux behavior")
+		return nil, safeerror.NewFault(fault.Invalid, "Foundry routing requires modern net/http ServeMux behavior")
 	}
 	router := &Router{mux: stdhttp.NewServeMux(), endpoints: make(map[RouteID]func() EndpointInfo)}
 	ids := make(map[RouteID]bool, len(registrations))
@@ -66,10 +67,10 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 			return nil, registration.err
 		}
 		if registration.handler == nil {
-			return nil, fault.New(fault.Invalid, "empty route registration")
+			return nil, safeerror.NewFault(fault.Invalid, "empty route registration")
 		}
 		if ids[registration.info.ID] {
-			return nil, fault.New(fault.Duplicate, "route ID is already registered: "+string(registration.info.ID))
+			return nil, safeerror.NewFault(fault.Duplicate, "route ID is already registered: "+string(registration.info.ID))
 		}
 		ids[registration.info.ID] = true
 		handler, err := ApplyMiddleware(registration.handler, registration.middlewares...)
@@ -80,7 +81,7 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 		declaredErrors := slices.Clone(registration.errors)
 		for _, definition := range declaredErrors {
 			if prior, exists := errorCatalog[definition.Code]; exists && prior != definition {
-				return nil, fault.New(fault.Conflict, "HTTP error code has conflicting declarations")
+				return nil, safeerror.NewFault(fault.Conflict, "HTTP error code has conflicting declarations")
 			}
 			errorCatalog[definition.Code] = definition
 		}
@@ -118,7 +119,7 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 			router.mux.Handle(registration.pattern, matched)
 			return nil
 		}); err != nil {
-			return nil, fault.Wrap(fault.Conflict, "route conflicts with an existing pattern: "+string(registration.info.ID), err)
+			return nil, safeerror.WrapFault(fault.Conflict, "route conflicts with an existing pattern: "+string(registration.info.ID), err)
 		}
 		router.routes = append(router.routes, registration.info.clone())
 		if registration.endpoint != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -31,7 +32,7 @@ func DefineRevocation[M model.Identifiable, K any](name RevocationName, provider
 }
 func (r Revocation[M, K]) Validate() error {
 	if !identifier.Semantic(string(r.name)) || r.revoke == nil {
-		return fault.New(fault.Invalid, "credential revocation requires a stable name and transaction callback")
+		return safeerror.NewFault(fault.Invalid, "credential revocation requires a stable name and transaction callback")
 	}
 	return r.provider.Validate()
 }
@@ -51,7 +52,7 @@ func NewRevocations[M model.Identifiable, K any](provider Provider[M, K], target
 		return nil, err
 	}
 	if len(targets) < 1 || len(targets) > MaxRevocationTargets {
-		return nil, fault.New(fault.Invalid, "credential revocation requires a bounded nonempty set of stores")
+		return nil, safeerror.NewFault(fault.Invalid, "credential revocation requires a bounded nonempty set of stores")
 	}
 	targets = slices.Clone(targets)
 	for _, target := range targets {
@@ -59,20 +60,20 @@ func NewRevocations[M model.Identifiable, K any](provider Provider[M, K], target
 			return nil, err
 		}
 		if target.provider.definition.id != provider.definition.id {
-			return nil, fault.New(fault.Invalid, "revocation stores must share the same provider declaration")
+			return nil, safeerror.NewFault(fault.Invalid, "revocation stores must share the same provider declaration")
 		}
 	}
 	slices.SortFunc(targets, func(a, b Revocation[M, K]) int { return strings.Compare(string(a.name), string(b.name)) })
 	for i := 1; i < len(targets); i++ {
 		if targets[i].name == targets[i-1].name {
-			return nil, fault.New(fault.Duplicate, "duplicate credential revocation store")
+			return nil, safeerror.NewFault(fault.Duplicate, "duplicate credential revocation store")
 		}
 	}
 	return &Revocations[M, K]{provider: provider, targets: targets}, nil
 }
 func (r *Revocations[M, K]) Validate() error {
 	if r == nil || len(r.targets) == 0 {
-		return fault.New(fault.Invalid, "credential revocations are not configured")
+		return safeerror.NewFault(fault.Invalid, "credential revocations are not configured")
 	}
 	return nil
 }
@@ -86,7 +87,7 @@ func (r *Revocations[M, K]) Invalidate(ctx context.Context, tx *database.Tx, sub
 		return err
 	}
 	if ctx == nil || tx == nil {
-		return fault.New(fault.Invalid, "credential invalidation requires a context and transaction")
+		return safeerror.NewFault(fault.Invalid, "credential invalidation requires a context and transaction")
 	}
 	return tx.Savepoint(ctx, func(child *database.Tx) error {
 		identity, err := subject.FoundryIdentity()

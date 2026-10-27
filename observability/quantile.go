@@ -1,8 +1,10 @@
 package observability
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"math"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // QuantileEstimate interpolates within the framework's cumulative histogram.
@@ -15,12 +17,12 @@ type QuantileEstimate struct {
 
 func EstimateQuantile(buckets []uint64, count uint64, q float64) (QuantileEstimate, error) {
 	if len(buckets) != len(durationBounds) || math.IsNaN(q) || q < 0 || q > 1 {
-		return QuantileEstimate{}, fault.New(fault.Invalid, "invalid histogram quantile")
+		return QuantileEstimate{}, safeerror.NewFault(fault.Invalid, "invalid histogram quantile")
 	}
 	var previous uint64
 	for _, value := range buckets {
 		if value < previous || value > count {
-			return QuantileEstimate{}, fault.New(fault.Invalid, "invalid cumulative histogram")
+			return QuantileEstimate{}, safeerror.NewFault(fault.Invalid, "invalid cumulative histogram")
 		}
 		previous = value
 	}

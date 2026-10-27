@@ -40,7 +40,7 @@ func (p writePlan) returningAdjustment(ctx context.Context, tx *database.Tx, row
 		return err
 	}
 	if n == 0 {
-		return database.NewError("model write returned too few rows", database.NotFound)
+		return querycore.DatabaseFailure("model write returned too few rows", database.NotFound)
 	}
 	return boundExceeded()
 }

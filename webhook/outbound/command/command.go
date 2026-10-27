@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 	"github.com/weiloon1234/Foundry-Go/webhook/outbound"
@@ -34,7 +36,7 @@ type Command struct {
 
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
-		return Command{}, fault.New(fault.Invalid, "webhook commands require help output")
+		return Command{}, safeerror.NewFault(fault.Invalid, "webhook commands require help output")
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		if _, err := io.WriteString(help, usage+"\n"); err != nil {
@@ -43,7 +45,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		return Command{}, flag.ErrHelp
 	}
 	if len(args) < 2 || args[0] != "webhooks" || args[1] != "deliveries" && args[1] != "replay" && args[1] != "prune" {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	result := Command{operation: args[1]}
 	flags := flag.NewFlagSet("webhooks "+result.operation, flag.ContinueOnError)
@@ -64,7 +66,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 		flags.Func("state", "pending, succeeded or failed", func(text string) error {
 			state := outbound.DeliveryState(text)
 			if state != outbound.Pending && state != outbound.Succeeded && state != outbound.Failed {
-				return fault.New(fault.Invalid, "invalid delivery state")
+				return safeerror.NewFault(fault.Invalid, "invalid delivery state")
 			}
 			result.state = value.Set(state)
 			return nil
@@ -86,14 +88,14 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	if result.operation == "prune" {
 		maximum = outbound.MaxPruneBatch
 		if result.olderThan < time.Hour {
-			return Command{}, cli.Usage("prune requires --older-than of at least 1h")
+			return Command{}, clidiag.Usage("prune requires --older-than of at least 1h")
 		}
 	}
 	if flags.NArg() != 0 || (*format != "text" && *format != "json") || result.limit < 1 || result.limit > maximum {
-		return Command{}, cli.Usage(usage)
+		return Command{}, clidiag.Usage(usage)
 	}
 	if result.operation == "replay" && (result.failed == !result.delivery.IsZero() || !result.delivery.IsZero() && result.endpoint.IsSet()) {
-		return Command{}, cli.Usage("replay requires exactly one of --delivery or --failed")
+		return Command{}, clidiag.Usage("replay requires exactly one of --delivery or --failed")
 	}
 	result.json = *format == "json"
 	return result, nil
@@ -103,7 +105,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 // after boot; parsing performs no I/O.
 func Declaration(construct func(foundation.Resolver) (outbound.Queue, error)) (cli.Declaration, error) {
 	if construct == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "webhook commands require a queue constructor")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "webhook commands require a queue constructor")
 	}
 	definition := cli.Define("webhooks", "Inspect, replay and prune outbound webhook deliveries", func(args []string, help io.Writer) (Command, error) {
 		if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -136,7 +138,7 @@ type deliveryRow struct {
 // Run emits delivery metadata only: never payloads, URLs, secrets or errors.
 func (c Command) Run(ctx context.Context, queue outbound.Queue, out io.Writer) error {
 	if ctx == nil || out == nil || c.operation == "" {
-		return fault.New(fault.Invalid, "webhook command requires context, queue and output; use Parse")
+		return safeerror.NewFault(fault.Invalid, "webhook command requires context, queue and output; use Parse")
 	}
 	if err := queue.Validate(); err != nil {
 		return err
@@ -189,7 +191,7 @@ func (c Command) Run(ctx context.Context, queue outbound.Queue, out io.Writer) e
 			}
 		}
 	}
-	return fault.New(fault.Invalid, "uninitialized webhook command; use Parse")
+	return safeerror.NewFault(fault.Invalid, "uninitialized webhook command; use Parse")
 }
 func (c Command) report(out io.Writer, name string, count int) error {
 	if c.json {

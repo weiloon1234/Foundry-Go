@@ -5,6 +5,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/httpclient"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
@@ -78,7 +79,7 @@ var CoordinationKey = foundation.NewKey[*lease.Manager](string(CoordinationProvi
 
 func (s *Services) Leases() (*lease.Manager, error) {
 	if s == nil || s.Coordination == nil {
-		return nil, fault.New(fault.Missing, "coordination is not configured")
+		return nil, safeerror.NewFault(fault.Missing, "coordination is not configured")
 	}
 	return s.Coordination, nil
 }

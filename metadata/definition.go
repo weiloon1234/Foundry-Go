@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Name string
@@ -106,7 +107,7 @@ func New(store *extensions.Store, keys ...Registration) (*Manager, error) {
 			return nil, err
 		}
 		if _, ok := m.keys[key.key]; ok {
-			return nil, fault.New(fault.Duplicate, "metadata key already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "metadata key already registered")
 		}
 		m.keys[key.key] = key.id
 	}
@@ -130,4 +131,6 @@ func (k Key[M, K, V]) check(m *Manager) error {
 	}
 	return k.definition.owner.Check(m.store.Registry())
 }
-func invalid() error { return fault.New(fault.Invalid, "invalid metadata declaration or data") }
+func invalid() error {
+	return safeerror.NewFault(fault.Invalid, "invalid metadata declaration or data")
+}

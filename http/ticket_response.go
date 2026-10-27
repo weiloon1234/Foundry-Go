@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/authtransport"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TicketResponse delivers a single-use WebSocket handshake ticket from
@@ -24,7 +25,7 @@ func TicketResponse[M, K any](status int, source clock.Clock) Response[token.Tic
 				return authtransport.TicketResponse{}, err
 			}
 			if ticket.Family().IsZero() || !now.UTC().Before(ticket.ExpiresAt().UTC()) {
-				return authtransport.TicketResponse{}, fault.New(fault.Invalid, "issued ticket is missing or expired")
+				return authtransport.TicketResponse{}, safeerror.NewFault(fault.Invalid, "issued ticket is missing or expired")
 			}
 			if _, err := token.HashSecret(ticket.Secret()); err != nil {
 				return authtransport.TicketResponse{}, err

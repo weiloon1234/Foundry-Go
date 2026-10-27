@@ -3,6 +3,7 @@ package value
 import (
 	"encoding"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"reflect"
 	"sync"
 
@@ -53,7 +54,7 @@ func validateJSONShape(node any, typ reflect.Type, depth int) error {
 			return invalidJSON()
 		}
 	}
-	if typ.Implements(reflect.TypeFor[json.Unmarshaler]()) || reflect.PointerTo(typ).Implements(reflect.TypeFor[json.Unmarshaler]()) {
+	if typ.Implements(reflect.TypeFor[json.Unmarshaler]()) || reflect.PointerTo(typ).Implements(reflect.TypeFor[json.Unmarshaler]()) || typ.Implements(reflect.TypeFor[jsonv2.UnmarshalerFrom]()) || reflect.PointerTo(typ).Implements(reflect.TypeFor[jsonv2.UnmarshalerFrom]()) {
 		return nil
 	}
 	if typ.Implements(reflect.TypeFor[encoding.TextUnmarshaler]()) || reflect.PointerTo(typ).Implements(reflect.TypeFor[encoding.TextUnmarshaler]()) {

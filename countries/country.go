@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -81,7 +82,7 @@ type Country struct {
 	UpdatedAt temporal.DateTime
 }
 
-func invalid() error { return fault.New(fault.Invalid, "invalid country reference data") }
+func invalid() error { return safeerror.NewFault(fault.Invalid, "invalid country reference data") }
 
 // CountryTable binds the persisted Country columns. Example: Countries.Query().Limit(10).
 type CountryTable struct {

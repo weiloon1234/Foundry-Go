@@ -1,6 +1,7 @@
 package local_test
 
 import (
+	"errors"
 	"io"
 	"io/fs"
 	"path/filepath"
@@ -36,7 +37,8 @@ func TestCyclicSourceErrorCleansStagingAndPreservesPublishedObject(t *testing.T)
 	}
 	cycle := &cyclicSourceError{}
 	_, err = disk.Put(t.Context(), object, io.MultiReader(strings.NewReader("partial"), rejectedSource{cycle}), storage.PutOptions{})
-	detail, ok := err.(*storage.Error)
+	var detail *storage.Error
+	ok := errors.As(err, &detail)
 	if !ok || detail.Code() != storage.Unavailable || detail.Outcome() != storage.Unchanged {
 		t.Fatal("source failure lost unchanged outcome")
 	}

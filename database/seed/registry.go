@@ -4,13 +4,15 @@ package seed
 
 import (
 	"context"
-	"errors"
 	"sort"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/dependency"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ID names a seeder once at registration. Use namespaces such as app.countries
@@ -37,19 +39,19 @@ func New(definitions ...Definition) (*Registry, error) {
 	r := &Registry{byID: make(map[ID]Definition, len(definitions))}
 	for _, definition := range definitions {
 		if !identifier.Semantic(string(definition.ID)) || definition.Run == nil {
-			return nil, fault.New(fault.Invalid, "invalid seeder definition")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid seeder definition")
 		}
 		if _, exists := r.byID[definition.ID]; exists {
-			return nil, fault.New(fault.Duplicate, "duplicate seeder "+string(definition.ID))
+			return nil, safeerror.NewFault(fault.Duplicate, "duplicate seeder "+string(definition.ID))
 		}
 		definition.Requires = append([]ID(nil), definition.Requires...)
 		sort.Slice(definition.Requires, func(i, j int) bool { return definition.Requires[i] < definition.Requires[j] })
 		for i, id := range definition.Requires {
 			if !identifier.Semantic(string(id)) || id == definition.ID {
-				return nil, fault.New(fault.Invalid, "invalid seeder dependency")
+				return nil, safeerror.NewFault(fault.Invalid, "invalid seeder dependency")
 			}
 			if i > 0 && id == definition.Requires[i-1] {
-				return nil, fault.New(fault.Duplicate, "duplicate seeder dependency")
+				return nil, safeerror.NewFault(fault.Duplicate, "duplicate seeder dependency")
 			}
 		}
 		r.byID[definition.ID] = definition
@@ -68,9 +70,9 @@ func (r *Registry) order(ids []ID) ([]ID, error) {
 	ordered, failure := dependency.Order(ids, func(id ID) ([]ID, bool) { definition, exists := r.byID[id]; return definition.Requires, exists })
 	if failure != nil {
 		if failure.Kind == dependency.Cycle {
-			return nil, fault.New(fault.Cycle, "seeder dependency cycle at "+string(failure.Key))
+			return nil, safeerror.NewFault(fault.Cycle, "seeder dependency cycle at "+string(failure.Key))
 		}
-		return nil, fault.New(fault.Missing, "seeder is not registered: "+string(failure.Key))
+		return nil, safeerror.NewFault(fault.Missing, "seeder is not registered: "+string(failure.Key))
 	}
 	return ordered, nil
 }
@@ -92,7 +94,7 @@ type Result struct {
 // if a later seeder fails. The same seeder may run again in a later explicit call.
 func (r *Registry) Run(ctx context.Context, db *database.DB, selected ...ID) (Result, error) {
 	if db == nil {
-		return Result{}, fault.New(fault.Invalid, "seeding needs a database")
+		return Result{}, safeerror.NewFault(fault.Invalid, "seeding needs a database")
 	}
 	roots := append([]ID(nil), selected...)
 	if len(roots) == 0 {
@@ -101,7 +103,7 @@ func (r *Registry) Run(ctx context.Context, db *database.DB, selected ...ID) (Re
 		sort.Slice(roots, func(i, j int) bool { return roots[i] < roots[j] })
 		for i, id := range roots {
 			if i > 0 && id == roots[i-1] {
-				return Result{}, fault.New(fault.Duplicate, "seeder selection is duplicated")
+				return Result{}, safeerror.NewFault(fault.Duplicate, "seeder selection is duplicated")
 			}
 		}
 	}
@@ -118,8 +120,7 @@ func (r *Registry) Run(ctx context.Context, db *database.DB, selected ...ID) (Re
 		err := db.Transaction(ctx, func(tx *database.Tx) error { return definition.Run(ctx, tx) })
 		if err != nil {
 			result.StoppedAt = &id
-			var detail *database.Error
-			if errors.As(err, &detail) && detail.Outcome() == database.Committed {
+			if committed(err) {
 				result.Committed = append(result.Committed, id)
 			}
 			return result, err
@@ -127,4 +128,15 @@ func (r *Registry) Run(ctx context.Context, db *database.DB, selected ...ID) (Re
 		result.Committed = append(result.Committed, id)
 	}
 	return result, nil
+}
+
+// A failed inspection never proves that a seeder committed.
+func committed(err error) bool {
+	committed := false
+	inspection := callback.Isolated("inspect seeder outcome", func() error {
+		detail, found, complete := errorgraph.As[*database.Error](err)
+		committed = complete && found && detail != nil && detail.Outcome() == database.Committed
+		return nil
+	})
+	return inspection == nil && committed
 }

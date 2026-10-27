@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/challengestore"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
@@ -27,7 +28,7 @@ type Config struct {
 func DefaultConfig() Config { return Config{Schema: "public", Clock: clock.System{}} }
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || credential.IsNil(c.Clock) {
-		return fault.New(fault.Invalid, "challenge PostgreSQL adapter requires a schema and clock")
+		return safeerror.NewFault(fault.Invalid, "challenge PostgreSQL adapter requires a schema and clock")
 	}
 	return nil
 }
@@ -39,7 +40,7 @@ type Backend struct {
 
 func New(db *database.DB, config Config) (*Backend, error) {
 	if db == nil {
-		return nil, fault.New(fault.Invalid, "challenge PostgreSQL adapter requires a database pool")
+		return nil, safeerror.NewFault(fault.Invalid, "challenge PostgreSQL adapter requires a database pool")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -51,7 +52,7 @@ var _ challenge.Backend = (*Backend)(nil)
 
 func (b *Backend) within(ctx context.Context, fn func(*database.Tx) error) error {
 	if b == nil || b.db == nil || ctx == nil {
-		return fault.New(fault.Invalid, "challenge operation requires a backend and context")
+		return safeerror.NewFault(fault.Invalid, "challenge operation requires a backend and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -71,7 +72,7 @@ func (b *Backend) now() (temporal.DateTime, error) {
 		return temporal.DateTime{}, err
 	}
 	if instant.IsZero() {
-		return temporal.DateTime{}, fault.New(fault.Invalid, "challenge clock returned zero time")
+		return temporal.DateTime{}, safeerror.NewFault(fault.Invalid, "challenge clock returned zero time")
 	}
 	return instant, nil
 }
@@ -88,7 +89,7 @@ func validateCredential(address challenge.Address, hash challenge.Digest) error 
 		return err
 	}
 	if hash.IsZero() {
-		return fault.New(fault.Invalid, "challenge credential hash is empty")
+		return safeerror.NewFault(fault.Invalid, "challenge credential hash is empty")
 	}
 	return nil
 }

@@ -2,10 +2,12 @@ package modelbinding
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // IdempotentEndpoint resolves and authorizes the resource on every request, then
@@ -24,7 +26,7 @@ func Idempotent[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, M, R], store *idem
 	case foundryhttp.SignedEndpoint[P, Q, B, R]:
 		adapted.transport = foundryhttp.IdempotentSigned(transport, store, definition)
 	default:
-		adapted.err = fault.New(fault.Invalid, "model-bound transport does not support idempotent operations")
+		adapted.err = safeerror.NewFault(fault.Invalid, "model-bound transport does not support idempotent operations")
 		return adapted
 	}
 	return adapted
@@ -52,7 +54,7 @@ func (e IdempotentEndpoint[P, Q, B, M, R]) Handle(scope func(context.Context, In
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if scope == nil || handler == nil {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "model-bound idempotency needs scope and transaction callbacks"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "model-bound idempotency needs scope and transaction callbacks"))
 	}
 	return e.transport.Prepare(func(ctx context.Context, in foundryhttp.Input[P, Q, B]) (idempotency.Scope, foundryhttp.TransactionHandler[P, Q, B, R], error) {
 		bound, err := resolveInput(ctx, e.source.resolver, in)
@@ -83,7 +85,7 @@ func IdempotentAuthenticated[P, Q, B, S, M, R any](endpoint AuthenticatedEndpoin
 	case foundryhttp.AuthenticatedEndpoint[P, Q, B, S, R]:
 		adapted.transport = foundryhttp.IdempotentAuthenticated(transport, store, definition)
 	default:
-		adapted.err = fault.New(fault.Invalid, "authenticated transport does not support required idempotent identity")
+		adapted.err = safeerror.NewFault(fault.Invalid, "authenticated transport does not support required idempotent identity")
 		return adapted
 	}
 	return adapted
@@ -111,7 +113,7 @@ func (e AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R]) Handle(scope func(con
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if scope == nil || handler == nil {
-		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "authenticated model idempotency needs scope and transaction callbacks"))
+		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated model idempotency needs scope and transaction callbacks"))
 	}
 	return e.transport.Prepare(func(ctx context.Context, actor S, in foundryhttp.Input[P, Q, B]) (idempotency.Scope, foundryhttp.TransactionHandler[P, Q, B, R], error) {
 		bound, err := resolveInput(ctx, e.source.resolver, in)

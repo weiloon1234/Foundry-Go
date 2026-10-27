@@ -2,8 +2,8 @@ package ormcore
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -29,11 +29,11 @@ func RawComplete(ctx context.Context, ex database.Executor, columns []string, st
 	}
 	actual, err := rows.Columns()
 	if err != nil {
-		return errors.Join(err, rows.Close())
+		return safeerror.Join("operation failed", err, rows.Close())
 	}
 	order, err := rawColumnOrder(columns, actual)
 	if err != nil {
-		return errors.Join(err, rows.Close())
+		return safeerror.Join("operation failed", err, rows.Close())
 	}
 	mapped := &rawRow{Rows: rows, order: order, destinations: make([]any, len(order))}
 	return Collect(ctx, rows, func(database.Row) error { return scan(mapped) }, callbacks)
@@ -68,21 +68,21 @@ func rawColumnOrder(declared, actual []string) ([]int, error) {
 	for i, name := range actual {
 		index, ok := indices[name]
 		if !ok {
-			errs = append(errs, fmt.Errorf("unexpected column %q", name))
+			errs = append(errs, safeerror.New(fmt.Sprintf("unexpected column %q", name)))
 		}
 		if seen[name] {
-			errs = append(errs, fmt.Errorf("duplicate column %q", name))
+			errs = append(errs, safeerror.New(fmt.Sprintf("duplicate column %q", name)))
 		}
 		seen[name] = true
 		order[i] = index
 	}
 	for _, name := range declared {
 		if !seen[name] {
-			errs = append(errs, fmt.Errorf("missing column %q", name))
+			errs = append(errs, safeerror.New(fmt.Sprintf("missing column %q", name)))
 		}
 	}
 	if len(errs) != 0 {
-		return nil, errors.Join(fault.New(fault.Invalid, "raw result columns do not match declaration"), errors.Join(errs...))
+		return nil, safeerror.Join("operation failed", safeerror.NewFault(fault.Invalid, "raw result columns do not match declaration"), safeerror.Join("operation failed", errs...))
 	}
 	return order, nil
 }

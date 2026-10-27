@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -42,23 +43,23 @@ func durationValid(d time.Duration) bool {
 }
 func (l Lifetime) Validate(mode Mode) error {
 	if !durationValid(l.Access) || !durationValid(l.Absolute) || l.Access > l.Absolute {
-		return fault.New(fault.Invalid, "invalid token access or absolute lifetime")
+		return safeerror.NewFault(fault.Invalid, "invalid token access or absolute lifetime")
 	}
 	switch mode {
 	case Personal:
 		if l.RefreshIdle != 0 || l.Access != l.Absolute {
-			return fault.New(fault.Invalid, "personal tokens require one fixed expiry")
+			return safeerror.NewFault(fault.Invalid, "personal tokens require one fixed expiry")
 		}
 	case Renewable:
 		if !durationValid(l.RefreshIdle) || l.RefreshIdle < l.Access || l.RefreshIdle > l.Absolute {
-			return fault.New(fault.Invalid, "invalid token refresh idle lifetime")
+			return safeerror.NewFault(fault.Invalid, "invalid token refresh idle lifetime")
 		}
 	case Challenge:
 		if l.RefreshIdle != 0 || l.Access != l.Absolute || l.Absolute > 15*time.Minute {
-			return fault.New(fault.Invalid, "MFA token requires a short fixed expiry")
+			return safeerror.NewFault(fault.Invalid, "MFA token requires a short fixed expiry")
 		}
 	default:
-		return fault.New(fault.Invalid, "invalid token mode")
+		return safeerror.NewFault(fault.Invalid, "invalid token mode")
 	}
 	return nil
 }
@@ -108,13 +109,13 @@ func (c Config) Validate() error {
 		}
 	}
 	if c.MaxPerSubject < 1 || c.MaxPendingPerSubject < 1 || c.MaxPerSubject+c.MaxPendingPerSubject > MaxTokens || c.MaxRotations < 1 || c.MaxRotations > MaxRotations || c.MaxConcurrent < 1 || c.MaxConcurrent > 65536 || c.Timeout <= 0 {
-		return fault.New(fault.Invalid, "invalid token capacity or timeout")
+		return safeerror.NewFault(fault.Invalid, "invalid token capacity or timeout")
 	}
 	if c.AccessGrace < 0 || c.AccessGrace > c.Renewable.Access || c.AccessGrace%time.Microsecond != 0 {
-		return fault.New(fault.Invalid, "token access grace must be between zero and the renewable access lifetime")
+		return safeerror.NewFault(fault.Invalid, "token access grace must be between zero and the renewable access lifetime")
 	}
 	if c.TicketLifetime != 0 && (c.TicketLifetime < time.Second || c.TicketLifetime > MaxTicketLifetime || c.TicketLifetime%time.Microsecond != 0 || c.MaxTicketsPerFamily < 1) || c.MaxTicketsPerFamily < 0 || c.MaxTicketsPerFamily > MaxFamilyTickets {
-		return fault.New(fault.Invalid, "invalid token ticket lifetime or capacity")
+		return safeerror.NewFault(fault.Invalid, "invalid token ticket lifetime or capacity")
 	}
 	return nil
 }
@@ -123,12 +124,12 @@ func (c Config) Validate() error {
 // both bearer-token grammar and common secret-scanner patterns.
 func validatePrefix(prefix string) error {
 	if len(prefix) > MaxPrefixBytes {
-		return fault.New(fault.Invalid, "token prefix is too long")
+		return safeerror.NewFault(fault.Invalid, "token prefix is too long")
 	}
 	for i := range len(prefix) {
 		c := prefix[i]
 		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_') {
-			return fault.New(fault.Invalid, "token prefix allows only lowercase letters, digits and underscores")
+			return safeerror.NewFault(fault.Invalid, "token prefix allows only lowercase letters, digits and underscores")
 		}
 	}
 	return nil

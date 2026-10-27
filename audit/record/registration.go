@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Writer is the narrow storage boundary used by generated audit observers. The
@@ -39,7 +40,7 @@ func Declare(install func(*foundation.Registrar, foundation.Key[*database.DB], R
 // existing duplicate, dependency, construction and frozen-state handling.
 func (d Declaration) Register(r *foundation.Registrar, pool foundation.Key[*database.DB], resolve ResolveWriter) error {
 	if d.install == nil || resolve == nil {
-		return fault.New(fault.Invalid, "audit registration requires a model declaration and writer")
+		return safeerror.NewFault(fault.Invalid, "audit registration requires a model declaration and writer")
 	}
 	return d.install(r, pool, resolve)
 }
@@ -50,7 +51,7 @@ func (d Declaration) Register(r *foundation.Registrar, pool foundation.Key[*data
 func ObserverName[M any]() (string, error) {
 	typ := reflect.TypeFor[M]()
 	if typ.Kind() != reflect.Struct || typ.Name() == "" || typ.PkgPath() == "" {
-		return "", fault.New(fault.Invalid, "audit observer requires a defined model struct")
+		return "", safeerror.NewFault(fault.Invalid, "audit observer requires a defined model struct")
 	}
 	digest := sha256.Sum256([]byte(typ.PkgPath() + "." + typ.Name()))
 	return "foundry.audit." + hex.EncodeToString(digest[:]), nil

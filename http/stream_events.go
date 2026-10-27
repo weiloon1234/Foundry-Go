@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Event is one server-sent event. Data is encoded by the stream's declared JSON
@@ -36,11 +37,11 @@ const (
 func (e Event[T]) validate() error {
 	for _, field := range []string{e.ID, e.Name} {
 		if len(field) > maxEventFieldBytes || !utf8.ValidString(field) || strings.ContainsAny(field, "\r\n\x00") {
-			return fault.New(fault.Invalid, "event ID and name must be bounded single-line text")
+			return safeerror.NewFault(fault.Invalid, "event ID and name must be bounded single-line text")
 		}
 	}
 	if e.Retry < 0 || e.Retry > maxEventRetry {
-		return fault.New(fault.Invalid, "event retry must be between zero and 24 hours")
+		return safeerror.NewFault(fault.Invalid, "event retry must be between zero and 24 hours")
 	}
 	return nil
 }
@@ -66,7 +67,7 @@ func DefaultEventStreamConfig() EventStreamConfig {
 
 func (c EventStreamConfig) Validate() error {
 	if c.Queue <= 0 || c.Queue > maxEventQueue || c.Heartbeat < 0 || c.Heartbeat > 0 && c.Heartbeat < minEventHeartbeat {
-		return fault.New(fault.Invalid, "event stream requires a queue of 1–4096 and a heartbeat of zero or at least one second")
+		return safeerror.NewFault(fault.Invalid, "event stream requires a queue of 1–4096 and a heartbeat of zero or at least one second")
 	}
 	return c.Data.Validate()
 }
@@ -89,14 +90,14 @@ func (s *EventSink[T]) Send(ctx context.Context, event Event[T]) error {
 	}
 	select {
 	case <-s.stopped:
-		return fault.New(fault.Closed, "event stream ended")
+		return safeerror.NewFault(fault.Closed, "event stream ended")
 	default:
 	}
 	select {
 	case s.queue <- event:
 		return nil
 	case <-s.stopped:
-		return fault.New(fault.Closed, "event stream ended")
+		return safeerror.NewFault(fault.Closed, "event stream ended")
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -130,7 +131,7 @@ func ServeEvents[T any](w stdhttp.ResponseWriter, r *stdhttp.Request, descriptor
 		return err
 	}
 	if produce == nil {
-		return fault.New(fault.Invalid, "event stream requires a producer")
+		return safeerror.NewFault(fault.Invalid, "event stream requires a producer")
 	}
 	ctx := r.Context()
 	if err := ctx.Err(); err != nil {
@@ -238,7 +239,7 @@ func (s *eventWriter[T]) event(ctx context.Context, event Event[T]) error {
 		if canceled := ctx.Err(); canceled != nil {
 			return canceled
 		}
-		return InternalError.WithCause(fault.Wrap(fault.Internal, "event data failed its contract or EventStreamConfig.Data bounds", err))
+		return InternalError.WithCause(safeerror.WrapFailure(fault.Internal, "event data failed its contract or EventStreamConfig.Data bounds", err))
 	}
 	s.buffer.Reset()
 	if event.ID != "" {
@@ -278,14 +279,14 @@ func (s *eventWriter[T]) write(data []byte) error {
 		err = io.ErrShortWrite
 	}
 	if err != nil {
-		return fault.Wrap(fault.Internal, "event stream could not be written", err)
+		return safeerror.WrapFault(fault.Internal, "event stream could not be written", err)
 	}
 	return s.flush()
 }
 
 func (s *eventWriter[T]) flush() error {
 	if err := s.controller.Flush(); err != nil {
-		return fault.Wrap(fault.Internal, "event stream could not be flushed", err)
+		return safeerror.WrapFault(fault.Internal, "event stream could not be flushed", err)
 	}
 	return nil
 }

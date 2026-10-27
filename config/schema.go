@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -78,7 +79,7 @@ func (k Key[T, V]) validate(target *T) error {
 	}
 	field := k.access(target)
 	if field == nil {
-		return fault.New(fault.Invalid, "setting accessor returned nil")
+		return safeerror.NewFault(fault.Invalid, "setting accessor returned nil")
 	}
 	return k.check(*field)
 }
@@ -92,11 +93,11 @@ func (k Key[T, V]) decode(target *T, raw string) error {
 func (k Key[T, V]) assign(target *T, value any) error {
 	typed, ok := value.(V)
 	if !ok {
-		return fault.New(fault.Invalid, "override type does not match setting declaration")
+		return safeerror.NewFault(fault.Invalid, "override type does not match setting declaration")
 	}
 	field := k.access(target)
 	if field == nil {
-		return fault.New(fault.Invalid, "setting accessor returned nil")
+		return safeerror.NewFault(fault.Invalid, "setting accessor returned nil")
 	}
 	*field = typed
 	return nil
@@ -177,30 +178,30 @@ type Schema[T any] struct {
 // names and environment-name collisions fail before any input is decoded.
 func New[T any](fields ...Field[T]) (*Schema[T], error) {
 	if reflect.TypeFor[T]().Kind() != reflect.Struct {
-		return nil, fault.New(fault.Invalid, "configuration requires a settings struct")
+		return nil, safeerror.NewFault(fault.Invalid, "configuration requires a settings struct")
 	}
 	schema := &Schema[T]{fields: append([]Field[T](nil), fields...), byName: make(map[string]Field[T])}
 	envNames := make(map[string]string)
 	for i, field := range schema.fields {
 		if field == nil || (reflect.ValueOf(field).Kind() == reflect.Pointer && reflect.ValueOf(field).IsNil()) || !field.valid() {
-			return nil, fault.New(fault.Invalid, "invalid configuration field declaration")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid configuration field declaration")
 		}
 		field = field.snapshot()
 		schema.fields[i] = field
 		name := field.name()
 		if _, exists := schema.byName[name]; exists {
-			return nil, fault.New(fault.Duplicate, "configuration field "+name+" is duplicated")
+			return nil, safeerror.NewFault(fault.Duplicate, "configuration field "+name+" is duplicated")
 		}
 		env := environmentName("", name)
 		if prior, exists := envNames[env]; exists {
-			return nil, fault.New(fault.Duplicate, "configuration environment names collide: "+prior+" and "+name)
+			return nil, safeerror.NewFault(fault.Duplicate, "configuration environment names collide: "+prior+" and "+name)
 		}
 		schema.byName[name] = field
 		envNames[env] = name
 	}
 	for env, name := range envNames {
 		if prior, exists := envNames[env+"_FILE"]; exists {
-			return nil, fault.New(fault.Duplicate, "configuration environment names collide with a _FILE variant: "+name+" and "+prior)
+			return nil, safeerror.NewFault(fault.Duplicate, "configuration environment names collide with a _FILE variant: "+name+" and "+prior)
 		}
 	}
 	for _, field := range schema.fields {
@@ -208,7 +209,7 @@ func New[T any](fields ...Field[T]) (*Schema[T], error) {
 		for index := strings.LastIndexByte(name, '.'); index >= 0; index = strings.LastIndexByte(name, '.') {
 			name = name[:index]
 			if _, exists := schema.byName[name]; exists {
-				return nil, fault.New(fault.Duplicate, "configuration field also owns a namespace: "+name)
+				return nil, safeerror.NewFault(fault.Duplicate, "configuration field also owns a namespace: "+name)
 			}
 		}
 	}
@@ -235,7 +236,7 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 			var zero T
 			result = zero
 			report = Report{}
-			err = fault.New(fault.Panicked, "configuration decoder or accessor panicked")
+			err = safeerror.NewFault(fault.Panicked, "configuration decoder or accessor panicked")
 		}
 	}()
 	value, err := copyConfiguration(defaults)
@@ -252,10 +253,10 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 	apply := func(name, raw, source string) error {
 		field, exists := s.byName[name]
 		if !exists {
-			return fault.New(fault.Invalid, "unknown configuration field "+name+" in "+source)
+			return safeerror.NewFault(fault.Invalid, "unknown configuration field "+name+" in "+source)
 		}
 		if err := field.decode(&value, raw); err != nil {
-			return fault.Wrap(fault.Invalid, "cannot decode configuration field "+name+" from "+source, err)
+			return safeerror.WrapFault(fault.Invalid, "cannot decode configuration field "+name+" from "+source, err)
 		}
 		sources[name] = source
 		if field.table() {
@@ -265,7 +266,7 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 	}
 	for _, file := range inputs.Files {
 		if strings.TrimSpace(file.Name) == "" {
-			return result, report, fault.New(fault.Invalid, "configuration source needs a name")
+			return result, report, safeerror.NewFault(fault.Invalid, "configuration source needs a name")
 		}
 		names := make([]string, 0, len(file.Data))
 		for name := range file.Data {
@@ -314,10 +315,10 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 	for _, override := range inputs.Overrides {
 		field, exists := s.byName[override.name]
 		if !exists {
-			return result, report, fault.New(fault.Invalid, "override references an undeclared setting")
+			return result, report, safeerror.NewFault(fault.Invalid, "override references an undeclared setting")
 		}
 		if err := field.assign(&value, override.value); err != nil {
-			return result, report, fault.Wrap(fault.Invalid, "invalid override for "+override.name, err)
+			return result, report, safeerror.WrapFault(fault.Invalid, "invalid override for "+override.name, err)
 		}
 		sources[override.name] = "override"
 	}
@@ -328,12 +329,12 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 	}
 	for _, field := range s.fields {
 		if err := field.validate(&value); err != nil {
-			return result, Report{}, fault.Wrap(fault.Invalid, "invalid configuration field "+field.name(), err)
+			return result, Report{}, safeerror.WrapFault(fault.Invalid, "invalid configuration field "+field.name(), err)
 		}
 	}
 	if inputs.Validate != nil {
 		if err := inputs.Validate(value); err != nil {
-			return result, report, fault.Wrap(fault.Invalid, "configuration validation failed", err)
+			return result, report, safeerror.WrapFailure(fault.Invalid, "configuration validation failed", err)
 		}
 	}
 	for _, field := range s.fields {
@@ -363,7 +364,7 @@ func copyConfiguration[T any](value T) (T, error) {
 // Cyclic/deep graphs and opaque mutable fields are rejected rather than shared.
 func copyValue(value reflect.Value, depth int) (reflect.Value, error) {
 	if depth > 64 {
-		return reflect.Value{}, fault.New(fault.Invalid, "configuration contains a cycle or excessive nesting")
+		return reflect.Value{}, safeerror.NewFault(fault.Invalid, "configuration contains a cycle or excessive nesting")
 	}
 	typ := value.Type()
 	if immutableConfigurationType(typ) {
@@ -378,7 +379,7 @@ func copyValue(value reflect.Value, depth int) (reflect.Value, error) {
 		for i := 0; i < value.NumField(); i++ {
 			if typ.Field(i).PkgPath != "" {
 				if mutableType(typ.Field(i).Type) {
-					return reflect.Value{}, fault.New(fault.Invalid, "configuration has an opaque mutable field in "+typ.String())
+					return reflect.Value{}, safeerror.NewFault(fault.Invalid, "configuration has an opaque mutable field in "+typ.String())
 				}
 				continue
 			}
@@ -407,7 +408,7 @@ func copyValue(value reflect.Value, depth int) (reflect.Value, error) {
 		return out, nil
 	case reflect.Map:
 		if typ.Key().Kind() != reflect.String {
-			return reflect.Value{}, fault.New(fault.Invalid, "configuration maps require string keys")
+			return reflect.Value{}, safeerror.NewFault(fault.Invalid, "configuration maps require string keys")
 		}
 		if value.IsNil() {
 			return reflect.Zero(typ), nil
@@ -441,7 +442,7 @@ func copyValue(value reflect.Value, depth int) (reflect.Value, error) {
 		}
 		return out, nil
 	default:
-		return reflect.Value{}, fault.New(fault.Invalid, fmt.Sprintf("configuration type %s cannot be copied safely", typ))
+		return reflect.Value{}, safeerror.NewFault(fault.Invalid, fmt.Sprintf("configuration type %s cannot be copied safely", typ))
 	}
 }
 

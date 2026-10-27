@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -19,7 +19,7 @@ func Coalesce[S, V any](first RowValue[S, value.Nullable[V]], fallback RowValue[
 func CoalesceValue[S, V any](first Selected[S, value.Nullable[V]], fallback Selected[S, V]) Selected[S, V] {
 	out := conditionalData(querycore.CoalesceValues, fallback.data.column, first.data.core, fallback.data.core)
 	if value.IsNullableType[V]() {
-		out.core.Err = errors.Join(out.core.Err, ormcore.Invalid("non-null fallback must not be nullable"))
+		out.core.Err = safeerror.Join("operation failed", out.core.Err, ormcore.Invalid("non-null fallback must not be nullable"))
 	}
 	return Selected[S, V]{data: out}
 }
@@ -29,7 +29,7 @@ func CoalesceValue[S, V any](first Selected[S, value.Nullable[V]], fallback Sele
 func CoalesceNullable[S, V any](first RowValue[S, value.Nullable[V]], rest ...RowValue[S, value.Nullable[V]]) RowExpression[S, value.Nullable[V]] {
 	initial := rowInput(first).data
 	if len(rest) >= querycore.MaxExpressionNodes {
-		initial.core.Err = errors.Join(initial.core.Err, ormcore.Invalid("COALESCE exceeds its argument bound"))
+		initial.core.Err = safeerror.Join("operation failed", initial.core.Err, ormcore.Invalid("COALESCE exceeds its argument bound"))
 		return RowExpression[S, value.Nullable[V]]{data: initial}
 	}
 	arguments := make([]ormcore.Expression, 1, len(rest)+1)
@@ -44,7 +44,7 @@ func CoalesceNullable[S, V any](first RowValue[S, value.Nullable[V]], rest ...Ro
 // Example: expr.CoalesceNullableValue(expr.Nullable(expr.Count[User]().Value())).
 func CoalesceNullableValue[S, V any](first Selected[S, value.Nullable[V]], rest ...Selected[S, value.Nullable[V]]) Selected[S, value.Nullable[V]] {
 	if len(rest) >= querycore.MaxExpressionNodes {
-		first.data.core.Err = errors.Join(first.data.core.Err, ormcore.Invalid("COALESCE exceeds its argument bound"))
+		first.data.core.Err = safeerror.Join("operation failed", first.data.core.Err, ormcore.Invalid("COALESCE exceeds its argument bound"))
 		return first
 	}
 	arguments := make([]ormcore.Expression, 1, len(rest)+1)
@@ -82,7 +82,7 @@ func NullIfNullableValue[S, V any](first, second Selected[S, value.Nullable[V]])
 
 func conditionalData[V any](kind querycore.ConditionalKind, column ormcore.Column[V], arguments ...ormcore.Expression) rowData[V] {
 	core := ormcore.Conditional(kind, arguments...)
-	core.Err = errors.Join(core.Err, column.Err)
+	core.Err = safeerror.Join("operation failed", core.Err, column.Err)
 	return rowData[V]{core: core, column: column}
 }
 
@@ -170,7 +170,7 @@ func Grouped[S any](condition Predicate[S]) HavingPredicate[S] {
 
 func caseData[V any](builder ormcore.CaseBuilder, column ormcore.Column[V], otherwise ormcore.Expression) rowData[V] {
 	core := builder.Finish(otherwise)
-	core.Err = errors.Join(core.Err, column.Err)
+	core.Err = safeerror.Join("operation failed", core.Err, column.Err)
 	return rowData[V]{core: core, column: column}
 }
 func caseNullData[V any](builder ormcore.CaseBuilder, column ormcore.Column[V]) rowData[value.Nullable[V]] {

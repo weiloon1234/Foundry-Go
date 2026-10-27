@@ -48,10 +48,9 @@ on its pointer. Pointer-only encoders are rejected because top-level values and
 map elements do not have the required addressability under the framework's
 native semantics. Persistence models remain excluded from public DTO contracts.
 
-Codec failures return no partial DTO or response bytes. Panics are internal
-failures, as is Goexit while decoding or inside a typed endpoint; a direct
-`Encode` call runs on the caller's goroutine, where Goexit ends that goroutine.
-Ordinary codec rejection is invalid input. Cancellation
+Codec failures return no partial DTO or response bytes. Panic and Goexit are
+contained as internal failures in decoding, direct `Encode` calls and typed
+endpoints. Ordinary codec rejection is invalid input. Cancellation
 waits for active callback work to finish. Codecs must be bounded, deterministic,
 concurrency-safe and must not retain borrowed decoders, encoders or input.
 

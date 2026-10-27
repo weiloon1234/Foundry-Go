@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // List preserves resource/element types in insertion order. Its length is
@@ -28,7 +29,7 @@ func (l List[K, V]) push(ctx context.Context, key K, end End, values []V) (uint6
 	var length uint64
 	err := l.execute(ctx, key, func(ctx context.Context, k Key, limits Limits) error {
 		if len(values) == 0 || len(values) > limits.Entries {
-			return fault.New(fault.Invalid, "Redis list push exceeds its bound")
+			return safeerror.NewFault(fault.Invalid, "Redis list push exceeds its bound")
 		}
 		texts := make([]string, len(values))
 		for i, input := range values {
@@ -43,7 +44,7 @@ func (l List[K, V]) push(ctx context.Context, key K, end End, values []V) (uint6
 		var err error
 		length, err = l.backend.ListPush(ctx, k, texts, end, limits)
 		if err == nil && (length < uint64(len(texts)) || length > uint64(limits.Entries)) {
-			return fault.New(fault.Internal, "invalid Redis list length")
+			return safeerror.NewFault(fault.Internal, "invalid Redis list length")
 		}
 		return err
 	})
@@ -97,7 +98,7 @@ func (l List[K, V]) Range(ctx context.Context, key K, start, stop int64) ([]V, e
 			return err
 		}
 		if len(texts) > limits.Entries {
-			return fault.New(fault.Invalid, "Redis list exceeds its cardinality bound")
+			return safeerror.NewFault(fault.Invalid, "Redis list exceeds its cardinality bound")
 		}
 		result = make([]V, 0, len(texts))
 		remaining := limits.ReplyBytes
@@ -106,7 +107,7 @@ func (l List[K, V]) Range(ctx context.Context, key K, start, stop int64) ([]V, e
 				return err
 			}
 			if len(text) > remaining {
-				return fault.New(fault.Invalid, "Redis list reply exceeds its bound")
+				return safeerror.NewFault(fault.Invalid, "Redis list reply exceeds its bound")
 			}
 			remaining -= len(text)
 			item, err := decode[V](text, limits)

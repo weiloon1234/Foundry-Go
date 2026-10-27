@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // WithEncryption gives the pool the application key ring used by encrypted
@@ -15,7 +16,7 @@ import (
 func WithEncryption(keys *encryption.Keyring) Option {
 	return func(settings *poolSettings) error {
 		if keys == nil {
-			return fault.New(fault.Invalid, "database encryption key ring cannot be nil")
+			return safeerror.NewFault(fault.Invalid, "database encryption key ring cannot be nil")
 		}
 		if err := keys.Validate(); err != nil {
 			return err
@@ -60,11 +61,11 @@ type EncryptedRow interface {
 func FieldEncryption(row Row) (context.Context, *encryption.Keyring, error) {
 	scoped, ok := row.(EncryptedRow)
 	if !ok {
-		return nil, nil, fault.New(fault.Invalid, "result row cannot decrypt encrypted model fields")
+		return nil, nil, safeerror.NewFault(fault.Invalid, "result row cannot decrypt encrypted model fields")
 	}
 	ctx, keys := scoped.FieldEncryption()
 	if keys == nil {
-		return nil, nil, fault.New(fault.Missing, "database has no encryption key ring for encrypted model fields")
+		return nil, nil, safeerror.NewFault(fault.Missing, "database has no encryption key ring for encrypted model fields")
 	}
 	if ctx == nil {
 		ctx = context.Background()

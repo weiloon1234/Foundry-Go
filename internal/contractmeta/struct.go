@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonshape"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -26,7 +27,7 @@ func TypeID(typ reflect.Type) contract.TypeID {
 // typed providers, so their native codecs are not erased by serialization.
 func Struct(root reflect.Type, structures []reflect.Type, overrides map[reflect.Type]contract.Type, includes ...contract.Type) (contract.Schema, error) {
 	invalid := func() (contract.Schema, error) {
-		return contract.Schema{}, fault.New(fault.Invalid, "invalid framework wire metadata")
+		return contract.Schema{}, safeerror.NewFault(fault.Invalid, "invalid framework wire metadata")
 	}
 	if root == nil || len(structures) > jsonwire.MaxNodes || len(includes) > jsonwire.MaxNodes {
 		return invalid()

@@ -1,5 +1,7 @@
 package querycore
 
+import "github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 import "github.com/weiloon1234/Foundry-Go/fault"
 
 // RecordLayout describes the complete output expected by a record decoder.
@@ -17,16 +19,16 @@ func CompatibleRecords(left, right RecordLayout) error {
 			return r.Err
 		}
 		if len(r.Columns) == 0 || len(r.Columns) > MaxExpressionNodes || len(r.Columns) != len(r.Node.Selections) || !r.HasDecoder {
-			return fault.New(fault.Invalid, "set input requires a complete record and decoder")
+			return safeerror.NewFault(fault.Invalid, "set input requires a complete record and decoder")
 		}
 	}
 	if len(left.Columns) != len(right.Columns) {
-		return fault.New(fault.Invalid, "set input column counts differ")
+		return safeerror.NewFault(fault.Invalid, "set input column counts differ")
 	}
 	for i, l := range left.Columns {
 		r := right.Columns[i]
 		if l.Name != r.Name || l.Nullable != r.Nullable {
-			return fault.New(fault.Invalid, "set input record layouts differ")
+			return safeerror.NewFault(fault.Invalid, "set input record layouts differ")
 		}
 	}
 	return nil

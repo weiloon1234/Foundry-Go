@@ -3,7 +3,7 @@ package retirement
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/ast"
 	"go/importer"
 	"go/token"
@@ -54,7 +54,7 @@ func exposureImporters(fset *token.FileSet, packages map[string]*sourcePackage) 
 		cmd.Dir = dir
 		data, err := cmd.Output()
 		if err != nil {
-			return nil, fmt.Errorf("%s: resolve exposure imports: %w", dir, err)
+			return nil, safeerror.Prefix(dir+": resolve exposure imports", err)
 		}
 		exports := make(map[string]string)
 		decoder := json.NewDecoder(bytes.NewReader(data))

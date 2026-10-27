@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // The immutable pointer keeps aggregateNode comparable for zero-declaration
@@ -13,7 +14,7 @@ type AggregateFilter struct{ Predicates []Expression }
 // ValidateAggregateFilterCount checks the shared constructor/compiler bound.
 func ValidateAggregateFilterCount(count int) error {
 	if count == 0 || count > MaxExpressionNodes {
-		return fault.New(fault.Invalid, "aggregate filter requires bounded row predicates")
+		return safeerror.NewFault(fault.Invalid, "aggregate filter requires bounded row predicates")
 	}
 	return nil
 }
@@ -63,7 +64,7 @@ func (c *Compiler) AggregateFilterSQL(a AggregateNode, grouped map[FieldRef]bool
 		return "", err
 	}
 	if outer && !local {
-		return "", fault.New(fault.Invalid, "aggregate filter requires a local input; outer-only references change SQL query ownership")
+		return "", safeerror.NewFault(fault.Invalid, "aggregate filter requires a local input; outer-only references change SQL query ownership")
 	}
 	return " FILTER (" + strings.TrimPrefix(sql.String(), " ") + ")", nil
 }

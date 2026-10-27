@@ -3,7 +3,6 @@ package doctor
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const maxOutputBytes = 64 << 10
@@ -25,7 +25,7 @@ type output struct {
 func (o *output) Write(p []byte) (int, error) {
 	if len(p) > maxOutputBytes-o.data.Len() {
 		o.cancel()
-		return 0, fault.New(fault.Invalid, "doctor tool output exceeds its bound")
+		return 0, safeerror.NewFault(fault.Invalid, "doctor tool output exceeds its bound")
 	}
 	return o.data.Write(p)
 }
@@ -42,7 +42,7 @@ func run(ctx context.Context, options Options, executable string, args ...string
 	command.Stderr = io.Discard
 	err := command.Run()
 	if err != nil {
-		return nil, errors.Join(err, ctx.Err())
+		return nil, safeerror.Join("operation failed", err, ctx.Err())
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

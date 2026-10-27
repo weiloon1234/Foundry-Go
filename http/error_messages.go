@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Decoder messages deliberately describe the expected shape, never the rejected
@@ -129,7 +130,7 @@ func findErrorPresenter(w stdhttp.ResponseWriter) (*errorPresenter, error) {
 				return nil
 			}
 		}
-		return fault.New(fault.Invalid, "HTTP response wrapper chain exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "HTTP response wrapper chain exceeds its bound")
 	})
 	return result, err
 }

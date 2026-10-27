@@ -1,10 +1,8 @@
 package lease
 
-import "math/rand/v2"
-
 import (
 	"context"
-	"errors"
+	rand "math/rand/v2"
 
 	"time"
 
@@ -13,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 	"github.com/weiloon1234/Foundry-Go/internal/faultwrap"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // TryAcquire attempts once. Contention returns (nil,false,nil). A returned guard
@@ -47,13 +46,13 @@ func (l Leases[K]) Acquire(ctx context.Context, key K, ttl, wait time.Duration) 
 // With always waits for the callback's actual exit before releasing its slot.
 func (l Leases[K]) With(ctx context.Context, key K, ttl, wait time.Duration, fn func(context.Context) error) (bool, error) {
 	if fn == nil {
-		return false, fault.New(fault.Invalid, "lease callback is required")
+		return false, safeerror.NewFault(fault.Invalid, "lease callback is required")
 	}
 	return l.with(ctx, key, ttl, wait, func(ctx context.Context, _ Proof) error { return fn(ctx) })
 }
 func (l Leases[K]) with(ctx context.Context, key K, ttl, wait time.Duration, fn func(context.Context, Proof) error) (bool, error) {
 	if fn == nil {
-		return false, fault.New(fault.Invalid, "lease callback is required")
+		return false, safeerror.NewFault(fault.Invalid, "lease callback is required")
 	}
 	if err := l.begin(ctx, ttl, wait); err != nil {
 		return false, err
@@ -80,11 +79,11 @@ func (l Leases[K]) with(ctx context.Context, key K, ttl, wait time.Duration, fn 
 	if cause == ErrReleased {
 		cause = nil
 	}
-	return ran, errors.Join(err, cause, cleanup)
+	return ran, safeerror.Join("operation failed", err, cause, cleanup)
 }
 func (l Leases[K]) begin(ctx context.Context, ttl, wait time.Duration) error {
 	if l.definition == nil {
-		return fault.New(fault.Invalid, "lease handle is not initialized")
+		return safeerror.NewFault(fault.Invalid, "lease handle is not initialized")
 	}
 	if err := l.manager.ValidateScope(ttl, wait); err != nil {
 		return err
@@ -124,12 +123,12 @@ func (l Leases[K]) acquire(ctx context.Context, key K, ttl, wait time.Duration, 
 		})
 		stop()
 		if err == nil && ok && (parent.Err() != nil || !time.Now().Before(until)) {
-			err = errors.Join(ErrLost, parent.Err())
+			err = safeerror.Join("operation failed", ErrLost, parent.Err())
 		}
 		if err != nil {
 			// The authority may have applied a command whose response was lost. Make one
 			// owner-conditional cleanup attempt; expiry bounds any unknown remaining key.
-			return nil, false, errors.Join(err, l.manager.releaseOwner(address, owner))
+			return nil, false, safeerror.Join("operation failed", err, l.manager.releaseOwner(address, owner))
 		}
 		if ok {
 			g := newGuard(l.manager, parent, unlink, address, owner, ttl, until, heartbeat, finish)
@@ -164,7 +163,7 @@ func (l Leases[K]) address(ctx context.Context, key K) (Key, error) {
 			return err
 		}
 		if len(logical) > l.manager.config.MaxKeyBytes {
-			return fault.New(fault.Invalid, "lease key exceeds its limit")
+			return safeerror.NewFault(fault.Invalid, "lease key exceeds its limit")
 		}
 		address, err = NewKey(l.manager.config.Namespace, l.definition.name, logical)
 		return err

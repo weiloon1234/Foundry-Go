@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"hash"
 	"io"
 	"io/fs"
@@ -18,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const Variable = "FOUNDRY_TEST_INPUTS"
@@ -42,7 +42,7 @@ type fingerprint struct {
 // Tools are explicit caller-selected files/trees and may live outside the repo.
 func Compute(ctx context.Context, root string, identity []string, tools []Tool) (string, error) {
 	if ctx == nil {
-		return "", errors.New("test inputs require a context")
+		return "", safeerror.New("test inputs require a context")
 	}
 	canonical, err := filepath.Abs(root)
 	if err != nil {
@@ -66,7 +66,7 @@ func Compute(ctx context.Context, root string, identity []string, tools []Tool) 
 	seen := make(map[string]bool)
 	for _, tool := range tools {
 		if tool.Name == "" || seen[tool.Name] {
-			return "", errors.New("test input tool names must be unique")
+			return "", safeerror.New("test input tool names must be unique")
 		}
 		seen[tool.Name] = true
 		f.add(tool.Name)
@@ -80,7 +80,7 @@ func Compute(ctx context.Context, root string, identity []string, tools []Tool) 
 		}
 		path, err = filepath.EvalSymlinks(path)
 		if err != nil {
-			return "", errors.New("selected test input tool is unavailable")
+			return "", safeerror.New("selected test input tool is unavailable")
 		}
 		f.add(path)
 		if tool.Tree {
@@ -122,7 +122,7 @@ func sourceFile(name string) bool {
 func (f *fingerprint) tree(label, root string) error {
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
-			return errors.New("test input source tree is unreadable")
+			return safeerror.New("test input source tree is unreadable")
 		}
 		if err := f.ctx.Err(); err != nil {
 			return err
@@ -131,7 +131,7 @@ func (f *fingerprint) tree(label, root string) error {
 			if strings.HasPrefix(entry.Name(), ".") && entry.Name() != frameworkinfo.GenerationManifest || entry.Name() == "node_modules" || entry.Name() == "bin" || entry.Name() == "coverage" {
 				return nil
 			}
-			return errors.New("test input source symlinks are unsupported; use explicit source files")
+			return safeerror.New("test input source symlinks are unsupported; use explicit source files")
 		}
 		if entry.IsDir() {
 			if path != root && (strings.HasPrefix(entry.Name(), ".") || entry.Name() == "node_modules" || entry.Name() == "bin" || entry.Name() == "coverage") {
@@ -155,19 +155,19 @@ func (f *fingerprint) file(label, path string) (err error) {
 	}
 	before, err := os.Lstat(path)
 	if err != nil || !before.Mode().IsRegular() {
-		return errors.New("test input must be a readable regular file")
+		return safeerror.New("test input must be a readable regular file")
 	}
 	if before.Size() > maxFileBytes || before.Size() > maxTotalBytes-f.bytes || f.files >= maxFiles {
-		return errors.New("test input fingerprint exceeds its resource bound")
+		return safeerror.New("test input fingerprint exceeds its resource bound")
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return errors.New("test input cannot be opened")
+		return safeerror.New("test input cannot be opened")
 	}
-	defer func() { err = errors.Join(err, file.Close()) }()
+	defer func() { err = safeerror.Join("operation failed", err, file.Close()) }()
 	opened, err := file.Stat()
 	if err != nil || !os.SameFile(before, opened) {
-		return errors.New("test input changed while opening")
+		return safeerror.New("test input changed while opening")
 	}
 	f.add(label)
 	var size [8]byte
@@ -183,7 +183,7 @@ func (f *fingerprint) file(label, path string) (err error) {
 		n, readErr := reader.Read(buffer)
 		read += int64(n)
 		if read > before.Size() {
-			return errors.New("test input grew during fingerprint")
+			return safeerror.New("test input grew during fingerprint")
 		}
 		if n > 0 {
 			_, _ = f.hash.Write(buffer[:n])
@@ -192,12 +192,12 @@ func (f *fingerprint) file(label, path string) (err error) {
 			break
 		}
 		if readErr != nil {
-			return errors.New("test input read failed")
+			return safeerror.New("test input read failed")
 		}
 	}
 	after, err := file.Stat()
 	if err != nil || read != before.Size() || after.Size() != before.Size() || !before.ModTime().Equal(after.ModTime()) || after.Mode() != before.Mode() {
-		return errors.New("test input changed during fingerprint")
+		return safeerror.New("test input changed during fingerprint")
 	}
 	f.bytes += read
 	f.files++

@@ -6,7 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/lockout"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // authenticationRetryAfter snapshots only the framework's bounded lockout
@@ -14,9 +14,9 @@ import (
 func authenticationRetryAfter(err error) (time.Duration, error) {
 	var retry time.Duration
 	failure := callback.Isolated("HTTP lockout retry classification", func() error {
-		rejected, found, complete := errorgraph.As[*lockout.Rejection](err)
+		rejected, found, complete := transportErrorAs[*lockout.Rejection](err)
 		if !complete {
-			return fault.New(fault.Invalid, "HTTP lockout retry classification exceeded traversal bounds")
+			return safeerror.NewFault(fault.Invalid, "HTTP lockout retry classification exceeded traversal bounds")
 		}
 		if found {
 			value := rejected.RetryAfter()

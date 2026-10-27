@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Now reads an explicit application clock. It does not change the system clock
@@ -25,13 +26,13 @@ func Now(source clock.Clock) (DateTime, error) {
 
 func validateClock(source clock.Clock) error {
 	if source == nil {
-		return fault.New(fault.Invalid, "application clock is required")
+		return safeerror.NewFault(fault.Invalid, "application clock is required")
 	}
 	v := reflect.ValueOf(source)
 	switch v.Kind() {
 	case reflect.Pointer, reflect.Interface, reflect.Func, reflect.Map, reflect.Slice, reflect.Chan:
 		if v.IsNil() {
-			return fault.New(fault.Invalid, "application clock is required")
+			return safeerror.NewFault(fault.Invalid, "application clock is required")
 		}
 	}
 	return nil
@@ -60,7 +61,7 @@ func (v DateTime) FormatIn(zone *time.Location) (string, error) {
 	}
 	_, offset := v.instant.In(zone).Zone()
 	if offset <= -24*3600 || offset >= 24*3600 || offset%60 != 0 {
-		return "", fault.New(fault.Invalid, "timezone offset cannot be represented in RFC3339")
+		return "", safeerror.NewFault(fault.Invalid, "timezone offset cannot be represented in RFC3339")
 	}
 	return v.instant.In(zone).Format(time.RFC3339Nano), nil
 }
@@ -69,7 +70,7 @@ func (v DateTime) FormatIn(zone *time.Location) (string, error) {
 // local wall time using the existing strict gap/overlap policy for zone.
 func ParseDateTimeIn(text string, zone *time.Location) (DateTime, error) {
 	if zone == nil {
-		return DateTime{}, fault.New(fault.Invalid, "timezone is required")
+		return DateTime{}, safeerror.NewFault(fault.Invalid, "timezone is required")
 	}
 	if instant, err := ParseDateTime(text); err == nil {
 		return instant, nil

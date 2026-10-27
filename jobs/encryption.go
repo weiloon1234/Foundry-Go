@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -56,15 +57,15 @@ func (d Definition[P]) plaintext(ctx context.Context, envelope Envelope) (string
 		return envelope.PayloadJSON(), nil
 	}
 	if d.keyring == nil {
-		return "", fault.New(fault.Invalid, "encrypted job payload requires the definition's keyring")
+		return "", safeerror.NewFault(fault.Invalid, "encrypted job payload requires the definition's keyring")
 	}
 	var encoded string
 	if err := json.Unmarshal([]byte(envelope.PayloadJSON()), &encoded); err != nil {
-		return "", &payloadError{cause: fault.New(fault.Invalid, "encrypted job payload is malformed")}
+		return "", payloadFailure(safeerror.NewFault(fault.Invalid, "encrypted job payload is malformed"))
 	}
 	ciphertext, err := encryption.ParseCiphertext(encoded)
 	if err != nil {
-		return "", &payloadError{cause: err}
+		return "", payloadFailure(err)
 	}
 	binding, err := d.encryptionContext()
 	if err != nil {
@@ -82,7 +83,7 @@ func (d Definition[P]) plaintext(ctx context.Context, envelope Envelope) (string
 func (d Definition[P]) Payload(ctx context.Context, envelope Envelope) (P, error) {
 	var zero P
 	if ctx == nil || envelope.Name() != d.name || envelope.Version() != d.version {
-		return zero, fault.New(fault.Invalid, "envelope belongs to another job definition")
+		return zero, safeerror.NewFault(fault.Invalid, "envelope belongs to another job definition")
 	}
 	text, err := d.plaintext(ctx, envelope)
 	if err != nil {

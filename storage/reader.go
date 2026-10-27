@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"hash"
 	"io"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type putReader struct {
@@ -38,11 +38,11 @@ func (r *putReader) Read(p []byte) (int, error) {
 	maximum := int(min(int64(len(p)), r.maximum-r.read+1))
 	n, err := r.source.Read(p[:maximum])
 	if n < 0 || n > maximum {
-		r.failed = Failure(IntegrityFailed, PutOperation, Unchanged, nil)
+		r.failed = newFailure(IntegrityFailed, PutOperation, Unchanged, nil)
 		return 0, r.failed
 	}
 	if int64(n) > r.maximum-r.read {
-		r.failed = Failure(LimitExceeded, PutOperation, Unchanged, nil)
+		r.failed = newFailure(LimitExceeded, PutOperation, Unchanged, nil)
 		return 0, r.failed
 	}
 	r.read += int64(n)
@@ -54,7 +54,7 @@ func (r *putReader) Read(p []byte) (int, error) {
 		}
 	}
 	if canceled := r.ctx.Err(); canceled != nil {
-		r.failed = errors.Join(canceled, err)
+		r.failed = safeerror.Join("operation failed", canceled, err)
 		return n, r.failed
 	}
 	return n, err
@@ -88,10 +88,10 @@ func (r *ownedReader) Read(p []byte) (n int, err error) {
 	r.readMu.Lock()
 	defer r.readMu.Unlock()
 	if r.closing.Load() {
-		return 0, Failure(Closed, OpenOperation, NotApplicable, nil)
+		return 0, newFailure(Closed, OpenOperation, NotApplicable, nil)
 	}
 	if r.ctx.Err() != nil {
-		return 0, Failure(Unavailable, OpenOperation, NotApplicable, context.Cause(r.ctx))
+		return 0, newFailure(Unavailable, OpenOperation, NotApplicable, context.Cause(r.ctx))
 	}
 	allowed := int(min(int64(len(p)), r.length-r.read+1))
 	var returned error
@@ -100,7 +100,7 @@ func (r *ownedReader) Read(p []byte) (n int, err error) {
 		err = returned
 	}
 	if n < 0 || n > allowed || int64(n) > r.length-r.read {
-		return 0, Failure(IntegrityFailed, OpenOperation, NotApplicable, nil)
+		return 0, newFailure(IntegrityFailed, OpenOperation, NotApplicable, nil)
 	}
 	r.read += int64(n)
 	if n > 0 {
@@ -115,14 +115,14 @@ func (r *ownedReader) Read(p []byte) (n int, err error) {
 		var actual SHA256
 		copy(actual[:], r.digest.Sum(nil))
 		if actual != r.checksum {
-			err = Failure(IntegrityFailed, OpenOperation, NotApplicable, nil)
+			err = newFailure(IntegrityFailed, OpenOperation, NotApplicable, nil)
 		}
 	}
 	if err == io.EOF && r.read != r.length {
 		err = io.ErrUnexpectedEOF
 	}
 	if r.ctx.Err() != nil {
-		return n, Failure(Unavailable, OpenOperation, NotApplicable, errors.Join(context.Cause(r.ctx), err))
+		return n, newFailure(Unavailable, OpenOperation, NotApplicable, safeerror.Join("operation failed", context.Cause(r.ctx), err))
 	}
 	if err != nil && err != io.EOF {
 		return n, finish(OpenOperation, r.ctx, err, NotApplicable)
@@ -139,14 +139,14 @@ func (r *ownedReader) Close() error {
 		r.watchMu.Unlock()
 		r.cancel()
 		if err := closeBody(r.raw); err != nil {
-			r.closeErr = Failure(Unavailable, CloseOperation, NotApplicable, err)
+			r.closeErr = newFailure(Unavailable, CloseOperation, NotApplicable, err)
 		}
 		r.readMu.Lock()
 		r.readMu.Unlock()
 		r.disk.mu.Lock()
 		delete(r.disk.readers, r)
 		if r.closeErr != nil {
-			r.disk.closeErr = errors.Join(r.disk.closeErr, Failure(Unavailable, CloseOperation, NotApplicable, r.closeErr))
+			r.disk.closeErr = safeerror.Join("operation failed", r.disk.closeErr, newFailure(Unavailable, CloseOperation, NotApplicable, r.closeErr))
 		}
 		r.disk.mu.Unlock()
 		r.release()

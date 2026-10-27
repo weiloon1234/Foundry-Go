@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -17,7 +18,7 @@ type Plaintext struct{ value secret.String }
 
 func NewPlaintext(raw secret.String) (Plaintext, error) {
 	if raw.IsZero() || len(raw.Reveal()) > MaxPasswordBytes {
-		return Plaintext{}, fault.New(fault.Invalid, "password input is empty or exceeds its byte limit")
+		return Plaintext{}, safeerror.NewFault(fault.Invalid, "password input is empty or exceeds its byte limit")
 	}
 	return Plaintext{value: raw}, nil
 }
@@ -32,12 +33,12 @@ func (Plaintext) LogValue() slog.Value         { return slog.StringValue(secret.
 func (Plaintext) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 func (p *Plaintext) UnmarshalJSON(data []byte) error {
 	if p == nil {
-		return fault.New(fault.Invalid, "password input destination is missing")
+		return safeerror.NewFault(fault.Invalid, "password input destination is missing")
 	}
 	*p = Plaintext{}
 	var raw string
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fault.New(fault.Invalid, "invalid password input")
+		return safeerror.NewFault(fault.Invalid, "invalid password input")
 	}
 	parsed, err := NewPlaintext(secret.New(raw))
 	if err != nil {

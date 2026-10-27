@@ -1,7 +1,7 @@
 package ormcore
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -19,7 +19,7 @@ func LockTargets(lock RowLock, targets []Scope) RowLock {
 	return lock
 }
 func LockRecord(r RecordSource, locks []RowLock) RecordSource {
-	r.Source.Err = errors.Join(r.Source.Err, ValidateRecordSource(r, r.Record.Type, r.Transaction))
+	r.Source.Err = safeerror.Join("operation failed", r.Source.Err, ValidateRecordSource(r, r.Record.Type, r.Transaction))
 	r.Source = LockSource(r.Source, locks)
 	r.Transaction = true
 	r.Direct = false
@@ -30,16 +30,16 @@ func LockRecord(r RecordSource, locks []RowLock) RecordSource {
 func LockSource(source Source, locks []RowLock) Source {
 	source.Node.Locks = make([]querycore.LockSpec, len(locks))
 	if len(locks) == 0 {
-		source.Err = errors.Join(source.Err, Invalid("locked result requires at least one lock clause"))
+		source.Err = safeerror.Join("operation failed", source.Err, Invalid("locked result requires at least one lock clause"))
 	}
 	for i, lock := range locks {
-		source.Err = errors.Join(source.Err, lock.Err)
+		source.Err = safeerror.Join("operation failed", source.Err, lock.Err)
 		spec := lock.Spec
 		if spec.Explicit {
 			spec.Targets = make([]string, len(lock.Targets))
 		}
 		for j, t := range lock.Targets {
-			source.Err = errors.Join(source.Err, t.Err, CheckReferences(source, []Reference{t.Reference}))
+			source.Err = safeerror.Join("operation failed", source.Err, t.Err, CheckReferences(source, []Reference{t.Reference}))
 			spec.Targets[j] = t.Table
 		}
 		source.Node.Locks[i] = spec
@@ -53,7 +53,7 @@ func RecordLockBehavior(r RecordSource, behavior querycore.LockBehavior) RecordS
 }
 func SourceLockBehavior(s Source, behavior querycore.LockBehavior) Source {
 	if len(s.Node.Locks) == 0 {
-		s.Err = errors.Join(s.Err, Invalid("lock policy requires at least one lock clause"))
+		s.Err = safeerror.Join("operation failed", s.Err, Invalid("lock policy requires at least one lock clause"))
 		return s
 	}
 	s.Node.Locks = slices.Clone(s.Node.Locks)
@@ -68,7 +68,7 @@ func RecordLockTargets(r RecordSource, targets []Scope) RecordSource {
 }
 func SourceLockTargets(s Source, targets []Scope) Source {
 	if len(s.Node.Locks) != 1 {
-		s.Err = errors.Join(s.Err, Invalid("Of requires a single lock clause"))
+		s.Err = safeerror.Join("operation failed", s.Err, Invalid("Of requires a single lock clause"))
 		return s
 	}
 	return LockSource(s, []RowLock{LockTargets(RowLock{Spec: s.Node.Locks[0]}, targets)})

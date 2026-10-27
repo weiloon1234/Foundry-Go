@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Config bounds concurrent captures/deliveries and the active dispatch chain.
@@ -24,7 +25,7 @@ type Config struct {
 func DefaultConfig() Config { return Config{MaxInFlight: 256, MaxDepth: 32} }
 func (c Config) Validate() error {
 	if c.MaxInFlight <= 0 || c.MaxDepth <= 0 {
-		return fault.New(fault.Invalid, "event concurrency and dispatch depth must be positive")
+		return safeerror.NewFault(fault.Invalid, "event concurrency and dispatch depth must be positive")
 	}
 	return nil
 }
@@ -70,7 +71,7 @@ func prepare(config Config) (*Bus, error) {
 }
 func (b *Bus) bind(declarations []Declaration, managed bool) error {
 	if b == nil {
-		return fault.New(fault.Invalid, "nil event bus")
+		return safeerror.NewFault(fault.Invalid, "nil event bus")
 	}
 	registry, err := newRegistry(declarations)
 	if err != nil {
@@ -79,10 +80,10 @@ func (b *Bus) bind(declarations []Declaration, managed bool) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.bound || b.started || b.closing {
-		return fault.New(fault.Closed, "event registration is frozen")
+		return safeerror.NewFault(fault.Closed, "event registration is frozen")
 	}
 	if b.managed != managed {
-		return fault.New(fault.Invalid, "application module owns event registration")
+		return safeerror.NewFault(fault.Invalid, "application module owns event registration")
 	}
 	b.registry = registry
 	b.bound = true
@@ -92,25 +93,25 @@ func (b *Bus) bind(declarations []Declaration, managed bool) error {
 func (b *Bus) Start(ctx context.Context) error { return b.start(ctx, false) }
 func (b *Bus) start(ctx context.Context, managed bool) error {
 	if b == nil || ctx == nil {
-		return fault.New(fault.Invalid, "event startup requires a bus and context")
+		return safeerror.NewFault(fault.Invalid, "event startup requires a bus and context")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.managed != managed {
-		return fault.New(fault.Invalid, "application module owns event startup")
+		return safeerror.NewFault(fault.Invalid, "application module owns event startup")
 	}
 	if b.closing {
-		return fault.New(fault.Closed, "event bus is closing")
+		return safeerror.NewFault(fault.Closed, "event bus is closing")
 	}
 	if !b.bound {
-		return fault.New(fault.Invalid, "event registration is not bound")
+		return safeerror.NewFault(fault.Invalid, "event registration is not bound")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if b.started {
 		if b.lifetime.Err() != nil {
-			return fault.New(fault.Closed, "event lifetime ended")
+			return safeerror.NewFault(fault.Closed, "event lifetime ended")
 		}
 		return nil
 	}
@@ -128,11 +129,11 @@ func (b *Bus) Done() <-chan struct{} { return b.done }
 // Closing from this bus's active handler context fails instead of waiting on itself.
 func (b *Bus) Close(ctx context.Context) error {
 	if b == nil || ctx == nil || b.done == nil {
-		return fault.New(fault.Invalid, "event shutdown requires a bus and context")
+		return safeerror.NewFault(fault.Invalid, "event shutdown requires a bus and context")
 	}
 	for _, frame := range chainFrom(ctx) {
 		if frame.bus == b && frame.active.Load() {
-			return fault.New(fault.Cycle, "event handler cannot wait for its own bus shutdown")
+			return safeerror.NewFault(fault.Cycle, "event handler cannot wait for its own bus shutdown")
 		}
 	}
 	b.beginClose()
@@ -182,7 +183,7 @@ func chainFrom(ctx context.Context) []*dispatchFrame {
 
 func (b *Bus) begin(ctx context.Context, key topicKey, typ reflect.Type) (context.Context, registration, func(), error) {
 	if b == nil || ctx == nil {
-		return nil, registration{}, nil, fault.New(fault.Invalid, "event dispatch requires a bus and context")
+		return nil, registration{}, nil, safeerror.NewFault(fault.Invalid, "event dispatch requires a bus and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, registration{}, nil, err
@@ -198,7 +199,7 @@ func (b *Bus) begin(ctx context.Context, key topicKey, typ reflect.Type) (contex
 	b.mu.Lock()
 	if !b.started || b.closing || b.lifetime == nil || b.lifetime.Err() != nil {
 		b.mu.Unlock()
-		return nil, registration{}, nil, fault.New(fault.Closed, "event bus is not running")
+		return nil, registration{}, nil, safeerror.NewFault(fault.Closed, "event bus is not running")
 	}
 	entry, err := b.registry.lookup(key, typ)
 	if err != nil {
@@ -207,7 +208,7 @@ func (b *Bus) begin(ctx context.Context, key topicKey, typ reflect.Type) (contex
 	}
 	if len(chain) >= b.config.MaxDepth {
 		b.mu.Unlock()
-		return nil, registration{}, nil, fault.New(fault.Cycle, "event dispatch depth exceeded")
+		return nil, registration{}, nil, safeerror.NewFault(fault.Cycle, "event dispatch depth exceeded")
 	}
 	// Count the caller as active while it waits, so Close keeps Done open until
 	// the waiter has either been admitted and finished or given up.

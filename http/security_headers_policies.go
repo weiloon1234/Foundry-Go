@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // CrossOriginOpenerPolicy selects Cross-Origin-Opener-Policy. Zero omits it.
@@ -23,7 +24,7 @@ func (p CrossOriginOpenerPolicy) Validate() error {
 	case "", OpenerSameOrigin, OpenerSameOriginAllowPopups, OpenerNoOpenerAllowPopups, OpenerUnsafeNone:
 		return nil
 	}
-	return fault.New(fault.Invalid, "unsupported cross-origin opener policy")
+	return safeerror.NewFault(fault.Invalid, "unsupported cross-origin opener policy")
 }
 
 // CrossOriginEmbedderPolicy selects Cross-Origin-Embedder-Policy. Zero omits it.
@@ -42,7 +43,7 @@ func (p CrossOriginEmbedderPolicy) Validate() error {
 	case "", EmbedderRequireCORP, EmbedderCredentialless, EmbedderUnsafeNone:
 		return nil
 	}
-	return fault.New(fault.Invalid, "unsupported cross-origin embedder policy")
+	return safeerror.NewFault(fault.Invalid, "unsupported cross-origin embedder policy")
 }
 
 // CrossOriginResourcePolicy selects Cross-Origin-Resource-Policy, which limits
@@ -60,7 +61,7 @@ func (p CrossOriginResourcePolicy) Validate() error {
 	case "", ResourceSameOrigin, ResourceSameSite, ResourceCrossOrigin:
 		return nil
 	}
-	return fault.New(fault.Invalid, "unsupported cross-origin resource policy")
+	return safeerror.NewFault(fault.Invalid, "unsupported cross-origin resource policy")
 }
 
 // PermissionFeature names one Permissions-Policy feature. The constants cover
@@ -99,20 +100,20 @@ const maxPermissionOrigins = 32
 // dictionary, for example: camera=(), geolocation=(self "https://maps.example").
 func compilePermissionsPolicy(directives []PermissionDirective) (HeaderValue, error) {
 	if len(directives) > maxPermissionDirectives {
-		return "", fault.New(fault.Invalid, "permissions policy exceeds its directive bound")
+		return "", safeerror.NewFault(fault.Invalid, "permissions policy exceeds its directive bound")
 	}
 	seen := make(map[PermissionFeature]bool, len(directives))
 	members := make([]string, 0, len(directives))
 	for _, directive := range directives {
 		if !validPermissionFeature(directive.Feature) {
-			return "", fault.New(fault.Invalid, "permissions policy feature must be a lowercase token")
+			return "", safeerror.NewFault(fault.Invalid, "permissions policy feature must be a lowercase token")
 		}
 		if seen[directive.Feature] {
-			return "", fault.New(fault.Duplicate, "permissions policy feature is repeated")
+			return "", safeerror.NewFault(fault.Duplicate, "permissions policy feature is repeated")
 		}
 		seen[directive.Feature] = true
 		if len(directive.Origins) > maxPermissionOrigins || directive.Any && (directive.Self || len(directive.Origins) != 0) {
-			return "", fault.New(fault.Invalid, "permissions policy allowlist is invalid or unbounded")
+			return "", safeerror.NewFault(fault.Invalid, "permissions policy allowlist is invalid or unbounded")
 		}
 		if directive.Any {
 			members = append(members, string(directive.Feature)+"=*")
@@ -126,7 +127,7 @@ func compilePermissionsPolicy(directives []PermissionDirective) (HeaderValue, er
 		for _, input := range directive.Origins {
 			origin, err := ParseOrigin(string(input))
 			if err != nil || origin == NullOrigin || origins[origin] {
-				return "", fault.New(fault.Invalid, "permissions policy origins must be distinct HTTP(S) origins")
+				return "", safeerror.NewFault(fault.Invalid, "permissions policy origins must be distinct HTTP(S) origins")
 			}
 			origins[origin] = true
 			items = append(items, `"`+string(origin)+`"`)

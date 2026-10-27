@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -18,10 +19,10 @@ func (f *Factors[M, K]) Enroll(ctx context.Context, password auth.PasswordResult
 	var result Enrollment[M]
 	err := f.withPassword(ctx, password, func(op context.Context, tx *database.Tx, current M, stored value.Optional[Record], now temporal.DateTime) (Change, error) {
 		if f.model.Enabled(current) {
-			return Change{}, fault.New(fault.Conflict, "MFA is already enabled")
+			return Change{}, safeerror.NewFault(fault.Conflict, "MFA is already enabled")
 		}
 		if previous, present := stored.Get(); present && previous.ConfirmedAt.IsSet() {
-			return Change{}, fault.New(fault.Conflict, "confirmed MFA factor cannot be replaced by enrollment")
+			return Change{}, safeerror.NewFault(fault.Conflict, "confirmed MFA factor cannot be replaced by enrollment")
 		}
 		label, err := f.model.AccountLabel(current)
 		if err != nil {
@@ -70,7 +71,7 @@ func (f *Factors[M, K]) Enroll(ctx context.Context, password auth.PasswordResult
 // commit together. The result is not an authenticated proof or a login response.
 func (f *Factors[M, K]) Confirm(ctx context.Context, password auth.PasswordResult[M, K], id EnrollmentID[M], code TOTPCode) (RecoveryCodes[M], error) {
 	if id.IsZero() {
-		return RecoveryCodes[M]{}, fault.New(fault.Invalid, "enrollment ID is empty")
+		return RecoveryCodes[M]{}, safeerror.NewFault(fault.Invalid, "enrollment ID is empty")
 	}
 	response, err := TOTPResponse(code)
 	if err != nil {
@@ -80,11 +81,11 @@ func (f *Factors[M, K]) Confirm(ctx context.Context, password auth.PasswordResul
 	err = f.withPassword(ctx, password, func(op context.Context, tx *database.Tx, current M, stored value.Optional[Record], now temporal.DateTime) (Change, error) {
 		record, present := stored.Get()
 		if !present || record.ID != id.id || f.model.Enabled(current) || record.ConfirmedAt.IsSet() {
-			return Change{}, auth.Unauthenticated
+			return Change{}, auth.Unauthenticated.WithCause(nil)
 		}
 		expiry, pending := record.PendingUntil.Get()
 		if !pending || !now.UTC().Before(expiry.UTC()) {
-			return Change{}, auth.Unauthenticated
+			return Change{}, auth.Unauthenticated.WithCause(nil)
 		}
 		record, err := f.verify(op, record, response, now)
 		if err != nil {

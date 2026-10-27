@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type operationKey struct{}
@@ -38,7 +39,7 @@ func nestedIn(frame *operationFrame, s *Scope) bool {
 
 func (s *Scope) check(ctx context.Context) error {
 	if s == nil || s.registry == nil || s.ctx == nil || ctx == nil {
-		return fault.New(fault.Invalid, "authentication requires a scope and context")
+		return safeerror.NewFault(fault.Invalid, "authentication requires a scope and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -47,7 +48,7 @@ func (s *Scope) check(ctx context.Context) error {
 	closed := s.closed
 	s.mu.Unlock()
 	if closed {
-		return fault.New(fault.Closed, "authentication scope is closed")
+		return safeerror.NewFault(fault.Closed, "authentication scope is closed")
 	}
 	return s.ctx.Err()
 }
@@ -101,15 +102,15 @@ func (s *Scope) resolve(ctx context.Context, id *declarationID, fn func(context.
 		return nil, err
 	}
 	if !s.registry.guards[id] {
-		return nil, fault.New(fault.Missing, "authentication guard is not registered in this scope")
+		return nil, safeerror.NewFault(fault.Missing, "authentication guard is not registered in this scope")
 	}
 	if recursive(ctx, s, id) {
-		return nil, fault.New(fault.Cycle, "recursive authentication guard resolution")
+		return nil, safeerror.NewFault(fault.Cycle, "recursive authentication guard resolution")
 	}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return nil, fault.New(fault.Closed, "authentication scope is closed")
+		return nil, safeerror.NewFault(fault.Closed, "authentication scope is closed")
 	}
 	entry, exists := s.guards[id]
 	if !exists {
@@ -147,7 +148,7 @@ func (s *Scope) evaluate(ctx context.Context, id *declarationID, fn func(context
 		return err
 	}
 	if !s.registry.policies[id] {
-		return fault.New(fault.Missing, "authentication policy is not registered in this scope")
+		return safeerror.NewFault(fault.Missing, "authentication policy is not registered in this scope")
 	}
 	return s.run(ctx, id, fn)
 }
@@ -159,12 +160,12 @@ func (s *Scope) run(ctx context.Context, id *declarationID, fn func(context.Cont
 		return err
 	}
 	if recursive(ctx, s, id) {
-		return fault.New(fault.Cycle, "recursive authentication policy evaluation")
+		return safeerror.NewFault(fault.Cycle, "recursive authentication policy evaluation")
 	}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return fault.New(fault.Closed, "authentication scope is closed")
+		return safeerror.NewFault(fault.Closed, "authentication scope is closed")
 	}
 	s.active.Add(1)
 	s.mu.Unlock()
@@ -182,7 +183,7 @@ func (s *Scope) run(ctx context.Context, id *declarationID, fn func(context.Cont
 		return err
 	}
 	if denial != nil {
-		return denial
+		return safeerror.Owned(denial.Error(), denial)
 	}
 	return nil
 }

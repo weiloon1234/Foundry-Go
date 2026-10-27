@@ -29,13 +29,13 @@ func HashSecret(value secret.String) (Digest, error) {
 	if len(text) > credential.EncodedSecretBytes {
 		prefix := text[:len(text)-credential.EncodedSecretBytes]
 		if validatePrefix(prefix) != nil {
-			return Digest{}, auth.Unauthenticated
+			return Digest{}, auth.Unauthenticated.WithCause(nil)
 		}
 		value = secret.New(text[len(prefix):])
 	}
 	hash, err := credential.Hash(value)
 	if err != nil {
-		return Digest{}, auth.Unauthenticated
+		return Digest{}, auth.Unauthenticated.WithCause(nil)
 	}
 	return Digest{hash: hash}, nil
 }

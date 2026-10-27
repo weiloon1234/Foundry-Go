@@ -190,9 +190,9 @@ Internal causes remain available for diagnostics.
 Custom readers, codecs and handlers finish before their owned resources are
 released. Handlers, response preparation and application hooks (preparation,
 authorization, file sources) run through an isolated boundary: panics and Goexit
-become internal failures. Framework hot paths (path/query codecs, body reads,
-URL generation and error classification) run on the request goroutine without a
-per-call goroutine: a panic becomes an internal failure, while `runtime.Goexit`
+become internal failures. JSON conversion and error classification also contain
+Goexit. Path/query codecs, body reads and URL generation run on the request
+goroutine without a per-call goroutine: a panic becomes an internal failure, while `runtime.Goexit`
 ends that goroutine as any Go call does; the kernel still releases the request. Cancellation is checked around the stages and after callbacks
 return; an uncooperative callback is not abandoned. Native I/O timeouts and
 connection shutdown own blocked network I/O.

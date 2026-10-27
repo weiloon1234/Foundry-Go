@@ -12,6 +12,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -37,11 +38,11 @@ func ParsePublicBase(address string) (PublicBase, error) {
 		return PublicBase{}, err
 	}
 	if parsed.RawQuery != "" {
-		return PublicBase{}, Failure(Invalid, SignOperation, NotApplicable, nil)
+		return PublicBase{}, newFailure(Invalid, SignOperation, NotApplicable, nil)
 	}
 	for _, part := range strings.Split(parsed.Path, "/") {
 		if part == "." || part == ".." {
-			return PublicBase{}, Failure(Invalid, SignOperation, NotApplicable, nil)
+			return PublicBase{}, newFailure(Invalid, SignOperation, NotApplicable, nil)
 		}
 	}
 	return PublicBase{address: address}, nil
@@ -59,18 +60,18 @@ func (b PublicBase) URL(key ObjectKey) (string, error) {
 	raw := strings.TrimRight(parsed.EscapedPath(), "/") + "/" + escaped
 	path, err := url.PathUnescape(raw)
 	if err != nil {
-		return "", Failure(Invalid, SignOperation, NotApplicable, err)
+		return "", newFailure(Invalid, SignOperation, NotApplicable, err)
 	}
 	parsed.Path, parsed.RawPath = path, raw
 	return parsed.String(), nil
 }
 func parseStorageURL(address string) (*url.URL, error) {
 	if len(address) == 0 || len(address) > 32<<10 {
-		return nil, Failure(Invalid, SignOperation, NotApplicable, nil)
+		return nil, newFailure(Invalid, SignOperation, NotApplicable, nil)
 	}
 	parsed, err := url.Parse(address)
 	if err != nil || parsed.Scheme != "https" && parsed.Scheme != "http" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" || parsed.Opaque != "" {
-		return nil, Failure(Invalid, SignOperation, NotApplicable, err)
+		return nil, newFailure(Invalid, SignOperation, NotApplicable, err)
 	}
 	return parsed, nil
 }
@@ -100,11 +101,11 @@ const MaxLinkLifetime = 7 * 24 * time.Hour
 
 func (o LinkOptions) Validate() error {
 	if o.ExpiresIn < time.Second || o.ExpiresIn > MaxLinkLifetime || !headerText(o.ResponseContentDisposition) {
-		return Failure(Invalid, SignOperation, NotApplicable, nil)
+		return newFailure(Invalid, SignOperation, NotApplicable, nil)
 	}
 	if o.ResponseContentType != "" {
 		if err := o.ResponseContentType.Validate(); err != nil {
-			return Failure(Invalid, SignOperation, NotApplicable, err)
+			return newFailure(Invalid, SignOperation, NotApplicable, err)
 		}
 	}
 	return o.Version.Validate()
@@ -132,18 +133,18 @@ type UploadLinkOptions struct {
 
 func (o UploadLinkOptions) Validate(maximum int64) error {
 	if o.ExpiresIn < time.Second || o.ExpiresIn > MaxLinkLifetime || o.Condition.Match() != "" {
-		return Failure(Invalid, SignOperation, NotApplicable, nil)
+		return newFailure(Invalid, SignOperation, NotApplicable, nil)
 	}
 	// SigV4 omits Content-Length from the signature when it is zero, so an
 	// empty upload link would accept any size. Store empty objects with Put.
 	if o.Size < 1 {
-		return Failure(Invalid, SignOperation, NotApplicable, fault.New(fault.Invalid, "an upload link requires a size of at least one byte"))
+		return newFailure(Invalid, SignOperation, NotApplicable, safeerror.NewFault(fault.Invalid, "an upload link requires a size of at least one byte"))
 	}
 	if o.Size > maximum {
-		return Failure(LimitExceeded, SignOperation, NotApplicable, nil)
+		return newFailure(LimitExceeded, SignOperation, NotApplicable, nil)
 	}
 	if err := o.ContentType.Validate(); err != nil {
-		return Failure(Invalid, SignOperation, NotApplicable, err)
+		return newFailure(Invalid, SignOperation, NotApplicable, err)
 	}
 	return nil
 }
@@ -164,12 +165,12 @@ func NewUploadLink(address, method string, headers http.Header, expires time.Tim
 		return UploadLink{}, err
 	}
 	if method != http.MethodPut || expires.IsZero() || expires.Year() < 1 || expires.Year() > 9999 || len(headers) > 32 {
-		return UploadLink{}, Failure(Invalid, SignOperation, NotApplicable, nil)
+		return UploadLink{}, newFailure(Invalid, SignOperation, NotApplicable, nil)
 	}
 	for name, values := range headers {
 		for _, value := range values {
 			if !headerText(name) || !headerText(value) {
-				return UploadLink{}, Failure(Invalid, SignOperation, NotApplicable, nil)
+				return UploadLink{}, newFailure(Invalid, SignOperation, NotApplicable, nil)
 			}
 		}
 	}
@@ -183,7 +184,7 @@ func (UploadLink) String() string             { return "temporary storage upload
 func (UploadLink) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("temporary storage upload URL")) }
 func (UploadLink) LogValue() slog.Value       { return slog.StringValue("temporary storage upload URL") }
 func (UploadLink) MarshalJSON() ([]byte, error) {
-	return nil, Failure(Invalid, SignOperation, NotApplicable, nil)
+	return nil, newFailure(Invalid, SignOperation, NotApplicable, nil)
 }
 
 // SignedFormProvider presigns a browser form upload (an HTML POST policy).
@@ -205,13 +206,13 @@ type UploadFormOptions struct {
 
 func (o UploadFormOptions) Validate(maximum int64) error {
 	if o.ExpiresIn < time.Second || o.ExpiresIn > MaxLinkLifetime || o.MinSize < 0 || o.MaxSize < 1 || o.MinSize > o.MaxSize {
-		return Failure(Invalid, SignOperation, NotApplicable, nil)
+		return newFailure(Invalid, SignOperation, NotApplicable, nil)
 	}
 	if o.MaxSize > maximum {
-		return Failure(LimitExceeded, SignOperation, NotApplicable, nil)
+		return newFailure(LimitExceeded, SignOperation, NotApplicable, nil)
 	}
 	if err := o.ContentType.Validate(); err != nil {
-		return Failure(Invalid, SignOperation, NotApplicable, err)
+		return newFailure(Invalid, SignOperation, NotApplicable, err)
 	}
 	return nil
 }
@@ -240,13 +241,13 @@ func NewUploadForm(address string, fields []FormField, expires time.Time) (Uploa
 		return UploadForm{}, err
 	}
 	if expires.IsZero() || expires.Year() < 1 || expires.Year() > 9999 || len(fields) == 0 || len(fields) > maxFormFields {
-		return UploadForm{}, Failure(Invalid, SignOperation, NotApplicable, nil)
+		return UploadForm{}, newFailure(Invalid, SignOperation, NotApplicable, nil)
 	}
 	seen := make(map[string]bool, len(fields))
 	for _, field := range fields {
 		name := strings.ToLower(field.Name)
 		if field.Name == "" || name == uploadFormFile || seen[name] || !headerText(field.Name) || !formText(field.Value) {
-			return UploadForm{}, Failure(Invalid, SignOperation, NotApplicable, nil)
+			return UploadForm{}, newFailure(Invalid, SignOperation, NotApplicable, nil)
 		}
 		seen[name] = true
 	}
@@ -265,7 +266,7 @@ func (UploadForm) Format(s fmt.State, _ rune) {
 }
 func (UploadForm) LogValue() slog.Value { return slog.StringValue("temporary storage upload form") }
 func (UploadForm) MarshalJSON() ([]byte, error) {
-	return nil, Failure(Invalid, SignOperation, NotApplicable, nil)
+	return nil, newFailure(Invalid, SignOperation, NotApplicable, nil)
 }
 func formText(text string) bool {
 	if len(text) > maxFormValueBytes {
@@ -292,7 +293,7 @@ func NewTemporaryURL(address string, expires time.Time) (TemporaryURL, error) {
 		return TemporaryURL{}, err
 	}
 	if expires.IsZero() || expires.Year() < 1 || expires.Year() > 9999 {
-		return TemporaryURL{}, Failure(Invalid, SignOperation, NotApplicable, nil)
+		return TemporaryURL{}, newFailure(Invalid, SignOperation, NotApplicable, nil)
 	}
 	return TemporaryURL{address: address, expires: expires.UTC().Round(0)}, nil
 }
@@ -302,7 +303,7 @@ func (TemporaryURL) String() string             { return "temporary storage URL"
 func (TemporaryURL) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("temporary storage URL")) }
 func (TemporaryURL) LogValue() slog.Value       { return slog.StringValue("temporary storage URL") }
 func (TemporaryURL) MarshalJSON() ([]byte, error) {
-	return nil, Failure(Invalid, SignOperation, NotApplicable, nil)
+	return nil, newFailure(Invalid, SignOperation, NotApplicable, nil)
 }
 
 func (d *Disk) PublicURL(ctx context.Context, key ObjectKey) (string, error) {
@@ -313,11 +314,11 @@ func (d *Disk) PublicURL(ctx context.Context, key ObjectKey) (string, error) {
 		return "", err
 	}
 	if d.config.Visibility != Public {
-		return "", Failure(Forbidden, SignOperation, NotApplicable, nil)
+		return "", newFailure(Forbidden, SignOperation, NotApplicable, nil)
 	}
 	provider, ok := d.backend.(URLProvider)
 	if !ok {
-		return "", Failure(Unsupported, SignOperation, NotApplicable, nil)
+		return "", newFailure(Unsupported, SignOperation, NotApplicable, nil)
 	}
 	op, release, err := d.begin(ctx, SignOperation)
 	if err != nil {
@@ -345,11 +346,11 @@ func (d *Disk) TemporaryURL(ctx context.Context, key ObjectKey, options LinkOpti
 		return TemporaryURL{}, err
 	}
 	if options.Version != "" && !d.capabilities.Versions {
-		return TemporaryURL{}, Failure(Unsupported, SignOperation, NotApplicable, nil)
+		return TemporaryURL{}, newFailure(Unsupported, SignOperation, NotApplicable, nil)
 	}
 	provider, ok := d.backend.(SignedURLProvider)
 	if !ok {
-		return TemporaryURL{}, Failure(Unsupported, SignOperation, NotApplicable, nil)
+		return TemporaryURL{}, newFailure(Unsupported, SignOperation, NotApplicable, nil)
 	}
 	op, release, err := d.begin(ctx, SignOperation)
 	if err != nil {
@@ -385,7 +386,7 @@ func (d *Disk) TemporaryUploadURL(ctx context.Context, key ObjectKey, options Up
 	}
 	provider, ok := d.backend.(SignedUploadProvider)
 	if !ok {
-		return UploadLink{}, Failure(Unsupported, SignOperation, NotApplicable, nil)
+		return UploadLink{}, newFailure(Unsupported, SignOperation, NotApplicable, nil)
 	}
 	op, release, err := d.begin(ctx, SignOperation)
 	if err != nil {
@@ -423,7 +424,7 @@ func (d *Disk) TemporaryUploadForm(ctx context.Context, key ObjectKey, options U
 	}
 	provider, ok := d.backend.(SignedFormProvider)
 	if !ok {
-		return UploadForm{}, Failure(Unsupported, SignOperation, NotApplicable, nil)
+		return UploadForm{}, newFailure(Unsupported, SignOperation, NotApplicable, nil)
 	}
 	op, release, err := d.begin(ctx, SignOperation)
 	if err != nil {

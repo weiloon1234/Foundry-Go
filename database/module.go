@@ -2,11 +2,11 @@ package database
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module registers a typed, prepared pool and starts it during application boot.
@@ -17,7 +17,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*DB], adapter func() 
 	options = slices.Clone(options)
 	return foundation.Module{Name: name, OnRegister: func(r *foundation.Registrar) error {
 		if adapter == nil {
-			return fault.New(fault.Invalid, "database module needs an adapter factory")
+			return safeerror.NewFault(fault.Invalid, "database module needs an adapter factory")
 		}
 		if err := foundation.Factory(r, key, func(foundation.Resolver) (*DB, error) {
 			value, err := adapter()
@@ -45,9 +45,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*DB], adapter func() 
 			// The application's caller may stop waiting, but lifecycle ownership
 			// cannot finish until the underlying pool has actually drained.
 			<-db.Done()
-			return errors.Join(err, db.Close(context.Background()))
+			return safeerror.Join("operation failed", err, db.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, db.Close(ctx))
+			return safeerror.Join("operation failed", err, db.Close(ctx))
 		}
 		if err := db.bindRuntimeClock(r.Clock()); err != nil {
 			return err

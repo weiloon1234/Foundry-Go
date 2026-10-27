@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 )
 
@@ -115,7 +116,7 @@ func (s *Store) start(ctx context.Context, fallback *slog.Logger) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closing {
-		return fault.New(fault.Closed, "idempotency store is closed")
+		return safeerror.NewFault(fault.Closed, "idempotency store is closed")
 	}
 	if p.started || s.config.PruneInterval == 0 {
 		return nil

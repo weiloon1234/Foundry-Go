@@ -2,13 +2,13 @@ package infrastructure
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/redis"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/storage/local"
@@ -32,7 +32,7 @@ func (p *Plan) assemble() {
 				return err
 			}
 			if err = r.OnShutdown("credentials", func(context.Context) error { return source.Close() }); err != nil {
-				return errors.Join(err, source.Close())
+				return safeerror.Join("operation failed", err, source.Close())
 			}
 			return source.Start(ctx)
 		}})

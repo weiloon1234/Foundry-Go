@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Limits shares the persistent adapter ceilings and defaults. Byte accounting
@@ -22,7 +23,7 @@ func DefaultLimits() Limits {
 func ValidValueLimit(limit int) bool { return limit >= 20 && limit <= 64<<20 }
 func (l Limits) Validate() error {
 	if l.MaxEntries < 1 || l.MaxEntries > 1000000 || l.MaxBytes < 1 || l.MaxBytes > 1<<40 || !ValidValueLimit(l.MaxValueBytes) {
-		return fault.New(fault.Invalid, "invalid persistent cache limits")
+		return safeerror.NewFault(fault.Invalid, "invalid persistent cache limits")
 	}
 	return nil
 }
@@ -38,7 +39,7 @@ func NamespacePrefix(namespace cache.Namespace) (string, error) {
 	text := probe.String()
 	suffix := len(":" + name + ":" + strings.Repeat("0", 2*sha256.Size))
 	if len(text) <= suffix || !strings.Contains(text, ":"+namespace.Application+":"+namespace.Environment+":") {
-		return "", fault.New(fault.Internal, "unexpected cache address format")
+		return "", safeerror.NewFault(fault.Internal, "unexpected cache address format")
 	}
 	return text[:len(text)-suffix+1], nil
 }

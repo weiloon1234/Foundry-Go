@@ -1,11 +1,13 @@
 package jobs
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/keyspace"
-	"github.com/weiloon1234/Foundry-Go/lease"
 	"slices"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
+	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
 // Subscription gives a queue a positive share of reservation opportunities.
@@ -60,10 +62,10 @@ func (c WorkerConfig) Validate() error {
 		return err
 	}
 	if c.Concurrency <= 0 || c.Concurrency > 4096 || len(c.Queues) == 0 || len(c.Queues) > 64 || c.PollInterval <= 0 || c.PollInterval > time.Minute || c.HeartbeatInterval <= 0 || c.HeartbeatInterval > c.LeaseDuration/3 || c.OperationTimeout <= 0 || c.OperationTimeout > c.LeaseDuration/3 {
-		return fault.New(fault.Invalid, "invalid worker concurrency, queues or timing bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid worker concurrency, queues or timing bounds")
 	}
 	if c.MaxPollInterval < 0 || c.MaxPollInterval > time.Minute || c.MaxPollInterval != 0 && c.MaxPollInterval < c.PollInterval || c.DrainTimeout < 0 || c.DrainTimeout > time.Hour || c.FailureBackoff < 0 || c.FailureBackoff > 10*time.Minute {
-		return fault.New(fault.Invalid, "invalid worker idle, drain or failure backoff bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid worker idle, drain or failure backoff bounds")
 	}
 	seen := make(map[Queue]bool)
 	total := 0
@@ -72,13 +74,13 @@ func (c WorkerConfig) Validate() error {
 			return err
 		}
 		if queue.Weight == 0 || seen[queue.Queue] {
-			return fault.New(fault.Invalid, "worker queues require unique names and positive weights")
+			return safeerror.NewFault(fault.Invalid, "worker queues require unique names and positive weights")
 		}
 		seen[queue.Queue] = true
 		total += int(queue.Weight)
 	}
 	if total > 1024 {
-		return fault.New(fault.Invalid, "worker queue weight capacity exceeded")
+		return safeerror.NewFault(fault.Invalid, "worker queue weight capacity exceeded")
 	}
 	return nil
 }
@@ -88,7 +90,7 @@ func (c WorkerConfig) Validate() error {
 // with the configured application timeout before any worker starts.
 func (c WorkerConfig) ValidateShutdown(timeout time.Duration) error {
 	if timeout <= 0 || c.DrainTimeout+c.OperationTimeout > timeout {
-		return fault.New(fault.Invalid, "worker drain timeout plus operation timeout must fit within the application shutdown timeout")
+		return safeerror.NewFault(fault.Invalid, "worker drain timeout plus operation timeout must fit within the application shutdown timeout")
 	}
 	return nil
 }

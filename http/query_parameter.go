@@ -2,9 +2,10 @@ package http
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/contract"
 
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -40,7 +41,7 @@ type queryBindingFailure struct {
 }
 
 func querySelectorFailure() *queryBindingFailure {
-	return &queryBindingFailure{cause: fault.New(fault.Internal, "query field selector returned nil"), internal: true}
+	return &queryBindingFailure{cause: safeerror.NewFault(fault.Internal, "query field selector returned nil"), internal: true}
 }
 
 // QueryParam requires exactly one value, including its explicit zero or empty
@@ -171,7 +172,9 @@ func bindQueryParameter[Q, V any](info QueryParameterInfo, codec QueryCodec[V], 
 
 type queryBudget struct{ pairs, bytes int }
 
-func queryLimitFailure() error { return fault.New(fault.Invalid, "query transport limit exceeded") }
+func queryLimitFailure() error {
+	return safeerror.NewFault(fault.Invalid, "query transport limit exceeded")
+}
 
 func (b *queryBudget) take(name, text string) error {
 	if b.pairs == 0 || len(name) > b.bytes || len(text) > b.bytes-len(name) {

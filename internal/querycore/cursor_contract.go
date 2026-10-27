@@ -1,6 +1,7 @@
 package querycore
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"unique"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -82,7 +83,7 @@ func (r CursorRequest[R]) Validate() error {
 // Empty pages carry no cursor; a nonempty page's navigation remains a hint.
 func (p CursorPage[R]) Validate() error {
 	if !ValidPageSize(p.Size) || len(p.Items) > p.Size || len(p.Items) == 0 && (p.Next.IsSet() || p.Previous.IsSet()) {
-		return fault.New(fault.Invalid, "invalid cursor page metadata")
+		return safeerror.NewFault(fault.Invalid, "invalid cursor page metadata")
 	}
 	for _, optional := range []value.Optional[Cursor[R]]{p.Next, p.Previous} {
 		if cursor, set := optional.Get(); set {

@@ -1,6 +1,7 @@
 package s3_test
 
 import (
+	"errors"
 	"io"
 	"runtime"
 	"strings"
@@ -46,7 +47,8 @@ func TestMalformedSourceErrorsAbortMultipartAndReleaseCapacity(t *testing.T) {
 			malformed := &malformedUploadError{mode: mode}
 			source := io.MultiReader(&zeroSource{remaining: s3.MinPartBytes + 1}, rejectedUploadSource{malformed})
 			_, err := disk.Put(t.Context(), objectKey(t), source, storage.PutOptions{})
-			detail, ok := err.(*storage.Error)
+			var detail *storage.Error
+			ok := errors.As(err, &detail)
 			if !ok || detail.Code() != storage.Unavailable || detail.Outcome() != storage.Unchanged {
 				t.Fatal("failed staging lost unchanged publication outcome")
 			}
@@ -66,5 +68,22 @@ func TestMalformedSourceErrorsAbortMultipartAndReleaseCapacity(t *testing.T) {
 				t.Fatal("later upload could not use released adapter capacity", err)
 			}
 		})
+	}
+}
+
+func TestCyclicSourceAndDistinctPartFailureStillAbort(t *testing.T) {
+	peer := &uploadPeer{failParts: 10}
+	disk, _ := wireDisk(t, peer, func(config *s3.Config) { config.PartConcurrency = 2 })
+	cause := &malformedUploadError{mode: "cycle"}
+	source := io.MultiReader(&zeroSource{remaining: s3.MinPartBytes + 1}, rejectedUploadSource{cause})
+	_, err := disk.Put(t.Context(), objectKey(t), source, storage.PutOptions{})
+	if err == nil || cause.visits.Load() > 512 {
+		t.Fatal("cleanup traversed source graph to deduplicate multipart failure")
+	}
+	peer.mu.Lock()
+	aborts, active, completes := peer.aborts, peer.active, peer.completes
+	peer.mu.Unlock()
+	if aborts != 1 || active || completes != 0 || disk.Stats().Active != 0 {
+		t.Fatal("distinct part failure prevented cleanup")
 	}
 }

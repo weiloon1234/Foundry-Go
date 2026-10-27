@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -33,7 +34,7 @@ const (
 
 func ValidateDuration(ttl time.Duration) error {
 	if ttl < MinDuration || ttl > MaxDuration {
-		return fault.New(fault.Invalid, "lease duration must be between 10ms and 24h")
+		return safeerror.NewFault(fault.Invalid, "lease duration must be between 10ms and 24h")
 	}
 	return nil
 }
@@ -52,7 +53,7 @@ type Backend interface {
 // ValidateOperation shares the adapter input boundary. Release passes MinDuration.
 func ValidateOperation(ctx context.Context, key Key, owner Owner, ttl time.Duration) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "lease requires a context")
+		return safeerror.NewFault(fault.Invalid, "lease requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -67,10 +68,10 @@ func ValidateOperation(ctx context.Context, key Key, owner Owner, ttl time.Durat
 }
 
 // ErrLost means ownership could no longer be confirmed within its validity window.
-var ErrLost = fault.New(fault.Conflict, "lease ownership lost")
+var ErrLost = safeerror.Sentinel(fault.Conflict, "lease ownership lost")
 
 // ErrReleased marks explicit release of a guard's work context.
-var ErrReleased = fault.New(fault.Closed, "lease released")
+var ErrReleased = safeerror.Sentinel(fault.Closed, "lease released")
 
 // KeyFeature is the physical address family owned by this adapter.
 const KeyFeature keyspace.Feature = "lease"

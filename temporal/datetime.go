@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/textvalue"
 )
 
@@ -20,20 +21,20 @@ func NewDateTime(instant time.Time) (DateTime, error) {
 	// monotonic reading; Round(0) is retained to keep monotonic stripping explicit.
 	instant = instant.UTC().Round(0).Truncate(time.Microsecond)
 	if instant.Year() < 1 || instant.Year() > 9999 {
-		return DateTime{}, fault.New(fault.Invalid, "instant exceeds supported years")
+		return DateTime{}, safeerror.NewFault(fault.Invalid, "instant exceeds supported years")
 	}
 	return DateTime{instant}, nil
 }
 func ParseDateTime(text string) (DateTime, error) {
 	if !dateTimePattern.MatchString(text) {
-		return DateTime{}, fault.New(fault.Invalid, "expected RFC3339 date-time with an explicit offset")
+		return DateTime{}, safeerror.NewFault(fault.Invalid, "expected RFC3339 date-time with an explicit offset")
 	}
 	v, err := time.Parse(time.RFC3339Nano, text)
 	if err != nil {
-		return DateTime{}, fault.New(fault.Invalid, "invalid date-time")
+		return DateTime{}, safeerror.NewFault(fault.Invalid, "invalid date-time")
 	}
 	if v.Year() < 1 {
-		return DateTime{}, fault.New(fault.Invalid, "date-time year is outside the supported range")
+		return DateTime{}, safeerror.NewFault(fault.Invalid, "date-time year is outside the supported range")
 	}
 	return NewDateTime(v)
 }
@@ -45,7 +46,7 @@ func (v DateTime) Add(duration time.Duration) (DateTime, error) {
 }
 func (v DateTime) LocalIn(zone *time.Location) (LocalDateTime, error) {
 	if zone == nil {
-		return LocalDateTime{}, fault.New(fault.Invalid, "timezone is required")
+		return LocalDateTime{}, safeerror.NewFault(fault.Invalid, "timezone is required")
 	}
 	local := v.instant.In(zone)
 	date, err := NewDate(local.Year(), local.Month(), local.Day())

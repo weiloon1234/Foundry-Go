@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -13,7 +13,7 @@ import (
 func uuidRowComparison[S, V any](input RowValue[S, V], op querycore.Operator, values ...V) Predicate[S] {
 	d := rowInput(input).data
 	if d.column.Kind != codec.TypeUUID {
-		d.core.Err = errors.Join(d.core.Err, ormcore.Invalid("UUID comparison requires a UUID codec"))
+		d.core.Err = safeerror.Join("operation failed", d.core.Err, ormcore.Invalid("UUID comparison requires a UUID codec"))
 	}
 	return Predicate[S]{core: rowCompare(d, op, values...)}
 }

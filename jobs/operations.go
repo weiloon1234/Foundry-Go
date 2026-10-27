@@ -2,9 +2,10 @@ package jobs
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // QueueStats is safe operational depth for one queue. Waiting jobs are eligible
@@ -46,7 +47,7 @@ func (d *Dispatcher) Stats(ctx context.Context, queue Queue) (QueueStats, error)
 	}
 	backend, ok := d.backend.(StatsBackend)
 	if !ok {
-		return QueueStats{}, fault.New(fault.Invalid, "job backend does not report queue statistics")
+		return QueueStats{}, safeerror.NewFault(fault.Invalid, "job backend does not report queue statistics")
 	}
 	return backend.JobStats(ctx, key)
 }
@@ -68,7 +69,7 @@ func (d *Dispatcher) Forget(ctx context.Context, queue Queue, target Target) (bo
 	}
 	backend, ok := d.backend.(ForgetBackend)
 	if !ok {
-		return false, fault.New(fault.Invalid, "job backend does not support forgetting records")
+		return false, safeerror.NewFault(fault.Invalid, "job backend does not support forgetting records")
 	}
 	return backend.JobForget(ctx, key, target)
 }
@@ -98,7 +99,7 @@ func (d *Dispatcher) RetryFailed(ctx context.Context, queue Queue, options ListO
 			return false, nil
 		}
 		changed, err := d.Retry(ctx, queue, RetryRequest{Target: record.Envelope.Target(), Token: token})
-		if errors.Is(err, ErrNotRetryable) {
+		if callback.ErrorIs(err, ErrNotRetryable) {
 			return false, nil
 		}
 		return changed, err

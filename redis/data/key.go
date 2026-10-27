@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -38,7 +39,7 @@ func NewKey(namespace keyspace.Namespace, name Name, version Version, kind Kind,
 }
 func (k Key) Validate() error {
 	if k.version == 0 || k.kind != HashKind && k.kind != SetKind && k.kind != SortedSetKind && k.kind != ListKind {
-		return fault.New(fault.Invalid, "invalid Redis data key kind or version")
+		return safeerror.NewFault(fault.Invalid, "invalid Redis data key kind or version")
 	}
 	return k.address.Validate()
 }
@@ -54,14 +55,14 @@ func (k Key) Kind() Kind                    { return k.kind }
 // ValidateBatch requires a canonical, bounded batch within one namespace.
 func ValidateBatch(keys []Key) error {
 	if len(keys) > MaxBatchKeys {
-		return fault.New(fault.Invalid, "Redis data batch exceeds its bound")
+		return safeerror.NewFault(fault.Invalid, "Redis data batch exceeds its bound")
 	}
 	for i, k := range keys {
 		if err := k.Validate(); err != nil {
 			return err
 		}
 		if i > 0 && (k.Namespace() != keys[0].Namespace() || k.String() <= keys[i-1].String()) {
-			return fault.New(fault.Invalid, "Redis data batch must be unique, ordered and in one namespace")
+			return safeerror.NewFault(fault.Invalid, "Redis data batch must be unique, ordered and in one namespace")
 		}
 	}
 	return nil

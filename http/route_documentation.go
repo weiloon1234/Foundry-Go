@@ -10,6 +10,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Documentation bounds. Summary and tags are single lines; a description may
@@ -33,7 +34,7 @@ type RouteDocumentation struct {
 
 // Validate checks text bounds and rejects empty or duplicate tags.
 func (d RouteDocumentation) Validate() error {
-	invalid := func(message string) error { return fault.New(fault.Invalid, "route documentation "+message) }
+	invalid := func(message string) error { return safeerror.NewFault(fault.Invalid, "route documentation "+message) }
 	if len(d.Summary) > MaxRouteSummaryBytes || !documentationText(d.Summary, false) {
 		return invalid("summary must be one line of valid text within MaxRouteSummaryBytes")
 	}
@@ -107,7 +108,7 @@ type endpointExamples struct {
 // declared schema; the endpoint retains only the encoded bytes.
 func (e Endpoint[P, Q, B, R]) WithBodyExample(body B) Endpoint[P, Q, B, R] {
 	if e.body.kind != payloadJSON {
-		e.examples.err = fault.New(fault.Invalid, "a body example requires a JSON request body")
+		e.examples.err = safeerror.NewFault(fault.Invalid, "a body example requires a JSON request body")
 		return e
 	}
 	e.examples.body, e.examples.err = encodeExample(e.examples.err, func(ctx context.Context) ([]byte, error) {
@@ -120,7 +121,7 @@ func (e Endpoint[P, Q, B, R]) WithBodyExample(body B) Endpoint[P, Q, B, R] {
 // endpoint's own response contract like WithBodyExample.
 func (e Endpoint[P, Q, B, R]) WithResponseExample(response R) Endpoint[P, Q, B, R] {
 	if e.response.kind != payloadJSON {
-		e.examples.err = fault.New(fault.Invalid, "a response example requires a JSON response")
+		e.examples.err = safeerror.NewFault(fault.Invalid, "a response example requires a JSON response")
 		return e
 	}
 	e.examples.response, e.examples.err = encodeExample(e.examples.err, func(ctx context.Context) ([]byte, error) {
@@ -136,7 +137,7 @@ func encodeExample(previous error, encode func(context.Context) ([]byte, error))
 	// Encoding performs no I/O; a declaration has no request context.
 	data, err := encode(context.Background())
 	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "endpoint example does not satisfy its contract", err)
+		return nil, safeerror.WrapFault(fault.Invalid, "endpoint example does not satisfy its contract", err)
 	}
 	return data, nil
 }

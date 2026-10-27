@@ -5,12 +5,11 @@
 // deduplication retention must cover this recovery window.
 package publisher
 
-import "math/rand/v2"
-
 import (
 	"context"
 	"fmt"
 	"log/slog"
+	rand "math/rand/v2"
 
 	"reflect"
 	"slices"
@@ -28,6 +27,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/outboxstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -89,10 +89,10 @@ func DefaultConfig() Config {
 }
 func (c Config) Validate() error {
 	if c.MaxAttempts == 0 || c.MaxAttempts > 1000000 || c.RetryDelay <= 0 || c.RetryDelay > 24*time.Hour || c.OperationTimeout <= 0 || c.OperationTimeout > time.Hour || c.PollInterval <= 0 || c.PollInterval > time.Minute || c.MaxInFlight < 1 || c.MaxInFlight > 1024 || nilValue(c.Clock) {
-		return fault.New(fault.Invalid, "invalid outbox publication bounds or clock")
+		return safeerror.NewFault(fault.Invalid, "invalid outbox publication bounds or clock")
 	}
 	if c.MaxRetryDelay < 0 || c.MaxRetryDelay > 24*time.Hour || c.MaxRetryDelay != 0 && c.MaxRetryDelay < c.RetryDelay || c.Jitter < 0 || c.Jitter > time.Hour || c.MaxPollInterval < 0 || c.MaxPollInterval > time.Minute || c.MaxPollInterval != 0 && c.MaxPollInterval < c.PollInterval {
-		return fault.New(fault.Invalid, "invalid outbox retry or polling bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid outbox retry or polling bounds")
 	}
 	return nil
 }
@@ -155,30 +155,30 @@ type Publisher struct {
 // Construction performs no I/O or migrations. Routes freeze before publication.
 func New(writer database.Transactor, config Config, routes ...Route) (*Publisher, error) {
 	if nilValue(writer) {
-		return nil, fault.New(fault.Invalid, "outbox publisher requires a transaction authority")
+		return nil, safeerror.NewFault(fault.Invalid, "outbox publisher requires a transaction authority")
 	}
 	if _, nested := writer.(*database.Tx); nested {
-		return nil, fault.New(fault.Invalid, "outbox publisher cannot borrow a business transaction")
+		return nil, safeerror.NewFault(fault.Invalid, "outbox publisher cannot borrow a business transaction")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
 	if len(routes) == 0 || len(routes) > 128 {
-		return nil, fault.New(fault.Invalid, "outbox publisher requires 1 to 128 routes")
+		return nil, safeerror.NewFault(fault.Invalid, "outbox publisher requires 1 to 128 routes")
 	}
 	fields := outboxstore.Messages
 	index := make(map[routeKey]Route, len(routes))
 	claims := make([]orm.Predicate[outboxstore.Message], 0, len(routes))
 	for _, route := range routes {
 		if !identifier.Semantic(route.Kind) || route.Publish == nil {
-			return nil, fault.New(fault.Invalid, "invalid outbox publication route")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid outbox publication route")
 		}
 		if err := route.Destination.Validate(); err != nil {
 			return nil, err
 		}
 		key := routeKey{route.Kind, route.Destination}
 		if _, seen := index[key]; seen {
-			return nil, fault.New(fault.Duplicate, "outbox publication route already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "outbox publication route already registered")
 		}
 		index[key] = route
 		claims = append(claims, orm.And(fields.Kind.Eq(route.Kind), fields.Destination.Eq(route.Destination)))
@@ -212,7 +212,7 @@ func (p *Publisher) PublishBatch(ctx context.Context) ([]Result, error) {
 
 func (p *Publisher) check(ctx context.Context) error {
 	if p == nil || p.slots == nil || ctx == nil {
-		return fault.New(fault.Invalid, "outbox publisher requires initialization and context")
+		return safeerror.NewFault(fault.Invalid, "outbox publisher requires initialization and context")
 	}
 	return nil
 }
@@ -376,7 +376,7 @@ func (p *Publisher) run(ctx context.Context, logger *slog.Logger) error {
 		return err
 	}
 	if !p.running.CompareAndSwap(false, true) {
-		return fault.New(fault.Conflict, "outbox publisher is already running")
+		return safeerror.NewFault(fault.Conflict, "outbox publisher is already running")
 	}
 	defer p.running.Store(false)
 	idle, failures := p.config.PollInterval, 0

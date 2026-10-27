@@ -3,6 +3,9 @@ package application
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/encryption"
@@ -12,12 +15,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/schedule"
 	"github.com/weiloon1234/Foundry-Go/temporal"
-	"log/slog"
-	"slices"
 )
 
 const Provider foundation.ProviderID = "foundry.application"
@@ -56,7 +58,7 @@ func (s Services) Calendar() schedule.Calendar { return s.calendar }
 
 func (s Services) Image() (*imaging.Engine, error) {
 	if s.image == nil {
-		return nil, fault.New(fault.Missing, "image processing is not configured")
+		return nil, safeerror.NewFault(fault.Missing, "image processing is not configured")
 	}
 	return s.image, nil
 }
@@ -105,7 +107,7 @@ func (a *App) Models() []slots.Declaration {
 func (a *App) Resources() Services { return a.resources }
 func (a *App) HTTPReady(ctx context.Context) (string, error) {
 	if a == nil || a.server == nil {
-		return "", fault.New(fault.Missing, "HTTP is not configured")
+		return "", safeerror.NewFault(fault.Missing, "HTTP is not configured")
 	}
 	return a.server.Ready(ctx)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type handle[K any] struct {
@@ -35,7 +36,7 @@ func (h handle[K]) address(ctx context.Context, key K) (Key, error) {
 		return Key{}, err
 	}
 	if len(text) > h.store.config.MaxKeyBytes {
-		return Key{}, fault.New(fault.Invalid, "Redis data key exceeds its bound")
+		return Key{}, safeerror.NewFault(fault.Invalid, "Redis data key exceeds its bound")
 	}
 	return NewKey(h.store.config.Namespace, h.Name(), h.Version(), h.definition.kind, text)
 }
@@ -93,7 +94,7 @@ func (h handle[K]) Count(ctx context.Context, key K) (uint64, error) {
 			return err
 		}
 		if count > uint64(l.Entries) {
-			return fault.New(fault.Internal, "invalid Redis data cardinality")
+			return safeerror.NewFault(fault.Internal, "invalid Redis data cardinality")
 		}
 		return nil
 	})
@@ -116,7 +117,7 @@ func (h handle[K]) DeleteMany(ctx context.Context, keys ...K) (uint64, error) {
 	var count uint64
 	err := h.store.execute(ctx, func(ctx context.Context) error {
 		if len(keys) > h.store.config.MaxBatchKeys {
-			return fault.New(fault.Invalid, "Redis data batch exceeds its bound")
+			return safeerror.NewFault(fault.Invalid, "Redis data batch exceeds its bound")
 		}
 		if len(keys) == 0 {
 			return nil
@@ -137,7 +138,7 @@ func (h handle[K]) DeleteMany(ctx context.Context, keys ...K) (uint64, error) {
 			return err
 		}
 		if count > uint64(len(addresses)) {
-			return fault.New(fault.Internal, "invalid Redis data deletion count")
+			return safeerror.NewFault(fault.Internal, "invalid Redis data deletion count")
 		}
 		return nil
 	})

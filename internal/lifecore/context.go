@@ -3,6 +3,7 @@ package lifecore
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -16,7 +17,7 @@ type depthKey struct{}
 func Context(ctx context.Context) (context.Context, error) {
 	depth, _ := ctx.Value(depthKey{}).(int)
 	if depth >= MaxDepth {
-		return nil, fault.New(fault.Invalid, "model lifecycle nesting exceeds its depth bound; check recursive hooks")
+		return nil, safeerror.NewFault(fault.Invalid, "model lifecycle nesting exceeds its depth bound; check recursive hooks")
 	}
 	return context.WithValue(ctx, depthKey{}, depth+1), nil
 }

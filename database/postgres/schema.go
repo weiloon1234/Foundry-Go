@@ -1,17 +1,16 @@
 package postgres
 
-import "github.com/jackc/pgx/v5"
-
-import "math/rand/v2"
-
 import (
 	"context"
 	"database/sql/driver"
+	pgx "github.com/jackc/pgx/v5"
+	rand "math/rand/v2"
 
 	"time"
 
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Per-connection state lives in pgconn's custom data, owned by one connection.
@@ -56,10 +55,10 @@ THEN pg_catalog.set_config('search_path', $2, false) ELSE NULL END,
 pg_catalog.set_config('TimeZone', 'UTC', false), pg_catalog.pg_my_temp_schema()`,
 			pgx.QueryExecModeExec, schema, schemaPath(schema)).Scan(&path, &zone, &temporary)
 		if err != nil {
-			return fault.Wrap(fault.Internal, "cannot establish PostgreSQL schema scope", err)
+			return safeerror.WrapFault(fault.Internal, "cannot establish PostgreSQL schema scope", err)
 		}
 		if path == nil || *path != schemaPath(schema) || temporary != 0 {
-			return fault.New(fault.Invalid, "PostgreSQL schema scope is absent, inaccessible, or holds session temporary objects")
+			return safeerror.NewFault(fault.Invalid, "PostgreSQL schema scope is absent, inaccessible, or holds session temporary objects")
 		}
 		// Record what this server reports for the established scope. An empty
 		// report means the server does not announce search_path changes.

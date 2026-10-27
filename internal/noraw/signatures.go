@@ -2,6 +2,7 @@ package noraw
 
 import (
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"go/types"
 )
 
@@ -43,7 +44,7 @@ func (g *packageGraph) rawSignatures() ([]rawSignature, types.Type, error) {
 	for _, path := range rawPackages {
 		p, err := g.importer.Import(path)
 		if err != nil {
-			return nil, nil, fmt.Errorf("no-raw: cannot load raw API type information")
+			return nil, nil, safeerror.New(fmt.Sprintf("no-raw: cannot load raw API type information"))
 		}
 		if path == databasePath {
 			executor = p.Scope().Lookup("Executor").Type()

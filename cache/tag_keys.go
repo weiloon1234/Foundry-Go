@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ValidateTagKeys validates the bounded, canonical address sequence accepted by
@@ -11,7 +12,7 @@ import (
 // their lifecycle and context checks remain adapter-owned. Input is not mutated.
 func ValidateTagKeys(keys []EntryKey) error {
 	if len(keys) == 0 || len(keys) > MaxTags+1 {
-		return fault.New(fault.Invalid, "invalid cache tag count")
+		return safeerror.NewFault(fault.Invalid, "invalid cache tag count")
 	}
 	applicationTags := 0
 	for i, key := range keys {
@@ -22,14 +23,14 @@ func ValidateTagKeys(keys []EntryKey) error {
 			return err
 		}
 		if key.Namespace() != keys[0].Namespace() {
-			return fault.New(fault.Invalid, "cache tags cross namespaces")
+			return safeerror.NewFault(fault.Invalid, "cache tags cross namespaces")
 		}
 		if i > 0 && strings.Compare(keys[i-1].String(), key.String()) >= 0 {
-			return fault.New(fault.Invalid, "cache tags must be canonical and unique")
+			return safeerror.NewFault(fault.Invalid, "cache tags must be canonical and unique")
 		}
 	}
 	if applicationTags > MaxTags {
-		return fault.New(fault.Invalid, "invalid cache tag count")
+		return safeerror.NewFault(fault.Invalid, "invalid cache tag count")
 	}
 	return nil
 }

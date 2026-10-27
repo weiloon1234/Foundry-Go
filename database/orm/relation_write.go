@@ -171,7 +171,7 @@ func relationMutation[M, N, P, R any](ctx context.Context, writer database.Trans
 		if completed {
 			cause, reconcile := inspectOutcome(err, false)
 			if reconcile {
-				return zero, &WriteError[R]{cause: cause, candidate: candidate}
+				return zero, writeFailure(cause, candidate)
 			}
 			return zero, cause
 		}

@@ -85,7 +85,8 @@ func TestCustomTransactorErrorInspectionRetainsOnlyReconciliationCandidate(t *te
 			if err == nil || got.ID != 0 {
 				t.Fatal("failed write published result")
 			}
-			detail, retained := err.(*WriteError[record])
+			var detail *WriteError[record]
+			retained := errors.As(err, &detail)
 			want := mode != "ordinary" && mode != "unspecified"
 			if retained != want {
 				t.Fatal("reconciliation classification changed")

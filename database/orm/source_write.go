@@ -186,7 +186,7 @@ func sourceReturning[M any](ctx context.Context, writer database.Transactor, p s
 	})
 	if err != nil {
 		if reconcile {
-			return nil, &WriteError[[]M]{cause: err, candidate: candidate}
+			return nil, writeFailure(err, candidate)
 		}
 		return nil, err
 	}

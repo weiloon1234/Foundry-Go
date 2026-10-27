@@ -1,16 +1,16 @@
 package filelock
 
-import "math/rand/v2"
-
 import (
 	"context"
 	"errors"
 	"io/fs"
+	rand "math/rand/v2"
 
 	"os"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type mode uint8
@@ -45,7 +45,7 @@ const (
 // closes its descriptor, so an abandoned waiter holds no thread or file.
 func acquire(ctx context.Context, root *os.Root, name string, m mode) (func(), error) {
 	if ctx == nil || root == nil {
-		return nil, fault.New(fault.Invalid, "file lock requires a context and root")
+		return nil, safeerror.NewFault(fault.Invalid, "file lock requires a context and root")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func acquire(ctx context.Context, root *os.Root, name string, m mode) (func(), e
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() != 0 {
 		_ = file.Close()
-		return nil, fault.New(fault.Invalid, "invalid file lock")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid file lock")
 	}
 	release := func() { _ = file.Close() }
 	delay := firstPoll

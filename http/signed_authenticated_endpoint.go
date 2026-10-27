@@ -2,9 +2,11 @@ package http
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/value"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // SignedAuthenticatedEndpoint retains the concrete subject and DTO contracts.
@@ -27,7 +29,7 @@ func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) Method() Method  { return e.
 func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) Pattern() string { return e.signed.Pattern() }
 func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) Validate() error {
 	if e.transport == nil {
-		return fault.New(fault.Invalid, "signed authentication requires a transport")
+		return safeerror.NewFault(fault.Invalid, "signed authentication requires a transport")
 	}
 	if err := e.transport.Validate(); err != nil {
 		return err
@@ -84,7 +86,7 @@ func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) HandleBound(bind Authenticat
 	}
 	bound, ok := e.transport.(boundAuthenticatedTransport[P, Q, B, S, R])
 	if !ok {
-		return InvalidRouteRegistration(fault.New(fault.Invalid, "signed authenticated transport does not support binding"))
+		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "signed authenticated transport does not support binding"))
 	}
 	return signedRegistration(bound.HandleBound(bind), e.signed.signer, e.signed.endpoint.route.spec, e.Pattern(), true)
 }

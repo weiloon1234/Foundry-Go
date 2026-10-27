@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/openapi"
 )
 
@@ -35,7 +36,7 @@ type exportArguments struct {
 // handlers or external transports.
 func ExportCommand(name cli.Name, api openapi.Options, sources Sources, surfaces ...Surface) (cli.Declaration, error) {
 	if sources == nil {
-		return cli.Declaration{}, fault.New(fault.Invalid, "contract export requires a sources resolver")
+		return cli.Declaration{}, safeerror.NewFault(fault.Invalid, "contract export requires a sources resolver")
 	}
 	if err := api.Validate(); err != nil {
 		return cli.Declaration{}, err
@@ -53,10 +54,10 @@ func ExportCommand(name cli.Name, api openapi.Options, sources Sources, surfaces
 		flags.BoolVar(&args.Vue, "vue", false, "emit the optional Vue form subscription adapter")
 	}, func(args exportArguments) error {
 		if args.Dir == "" {
-			return fault.New(fault.Invalid, "contract export requires --dir")
+			return safeerror.NewFault(fault.Invalid, "contract export requires --dir")
 		}
 		if !prefixPattern.MatchString(args.Prefix) {
-			return fault.New(fault.Invalid, "invalid client artifact prefix")
+			return safeerror.NewFault(fault.Invalid, "invalid client artifact prefix")
 		}
 		return nil
 	}))

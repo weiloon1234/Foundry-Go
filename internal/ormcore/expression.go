@@ -1,7 +1,7 @@
 package ormcore
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -29,15 +29,15 @@ func Operation(kind querycore.ScalarOperation, result codec.ParameterType, argum
 		nodes[i] = querycore.OperationArgument{Value: input.Node, Kind: argument.Kind}
 		refs.add(input.Refs)
 		out.ReferenceFree = out.ReferenceFree && input.ReferenceFree
-		out.Err = errors.Join(out.Err, input.Err)
+		out.Err = safeerror.Join("operation failed", out.Err, input.Err)
 		if input.Node == nil {
-			out.Err = errors.Join(out.Err, Invalid("uninitialized expression"))
+			out.Err = safeerror.Join("operation failed", out.Err, Invalid("uninitialized expression"))
 		}
 	}
 	out.Refs = refs.values
-	out.Err = errors.Join(out.Err, refs.err)
+	out.Err = safeerror.Join("operation failed", out.Err, refs.err)
 	node := querycore.OperationNode{Kind: kind, Arguments: nodes, Result: result}
-	out.Err = errors.Join(out.Err, node.Validate())
+	out.Err = safeerror.Join("operation failed", out.Err, node.Validate())
 	out.Node = node
 	return out
 }
@@ -45,9 +45,9 @@ func Operation(kind querycore.ScalarOperation, result codec.ParameterType, argum
 // CompareExpressions preserves both operands' declaration provenance.
 func CompareExpressions(left, right Expression, op querycore.Operator, text ...bool) Predicate {
 	refs, referenceErr := MergeReferences(left.Refs, right.Refs)
-	err := errors.Join(left.Err, right.Err, referenceErr)
+	err := safeerror.Join("operation failed", left.Err, right.Err, referenceErr)
 	if left.Node == nil || right.Node == nil {
-		err = errors.Join(err, Invalid("uninitialized comparison operand"))
+		err = safeerror.Join("operation failed", err, Invalid("uninitialized comparison operand"))
 	}
 	return Predicate{Node: querycore.BinaryComparison{Left: left.Node, Right: right.Node, Operator: op, Text: len(text) == 1 && text[0]}, Refs: refs, ReferenceFree: left.ReferenceFree && right.ReferenceFree, Err: err}
 }
@@ -65,21 +65,21 @@ func Conjunction(predicates []Predicate) Predicate {
 		children[i] = p.Node
 		refs.add(p.Refs)
 		out.ReferenceFree = out.ReferenceFree && p.ReferenceFree
-		out.Err = errors.Join(out.Err, p.Err)
+		out.Err = safeerror.Join("operation failed", out.Err, p.Err)
 		if p.Node == nil {
-			out.Err = errors.Join(out.Err, Invalid("uninitialized predicate"))
+			out.Err = safeerror.Join("operation failed", out.Err, Invalid("uninitialized predicate"))
 		}
 	}
 	out.Node = querycore.Junction{Children: children}
 	out.Refs = refs.values
-	out.Err = errors.Join(out.Err, refs.err)
+	out.Err = safeerror.Join("operation failed", out.Err, refs.err)
 	return out
 }
 
 // NegatePredicate retains ownership and errors under SQL NOT.
 func NegatePredicate(p Predicate) Predicate {
 	if p.Node == nil {
-		p.Err = errors.Join(p.Err, Invalid("uninitialized predicate"))
+		p.Err = safeerror.Join("operation failed", p.Err, Invalid("uninitialized predicate"))
 	}
 	p.Node = querycore.Negation{Child: p.Node}
 	return p

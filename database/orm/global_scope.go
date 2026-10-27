@@ -2,7 +2,7 @@ package orm
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 
@@ -72,7 +72,7 @@ func withoutGlobalScope[M any](q queryState, scopes []GlobalScope[M]) queryState
 	q.ast.WithoutScopes = slices.Clone(q.ast.WithoutScopes)
 	for _, scope := range scopes {
 		if scope.owner == nil || scope.owner != q.table {
-			q.err = errors.Join(q.err, invalid("global scope belongs to a different table declaration"))
+			q.err = safeerror.Join("operation failed", q.err, invalid("global scope belongs to a different table declaration"))
 		}
 		q.ast.WithoutScopes = append(q.ast.WithoutScopes, scope.definition.Name)
 	}

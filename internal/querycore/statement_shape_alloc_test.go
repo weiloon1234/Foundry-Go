@@ -1,3 +1,5 @@
+//go:build !race
+
 package querycore
 
 import (
@@ -11,26 +13,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-func TestStatementShapeRechecksExecutionScope(t *testing.T) {
-	active := statementmeta.Enable(t.Context())
-	var c Compiler
-	for _, ctx := range []context.Context{active, context.Background(), active, nil} {
-		c.BeginStatement(ctx)
-		want := ctx != nil && statementmeta.Active(ctx)
-		if (c.fragments != nil) != want {
-			t.Fatal("fragment state disagrees with execution scope")
-		}
-		text, err := c.Parameter(int64(7))
-		if err != nil {
-			t.Fatal(err)
-		}
-		s := c.Statement("SELECT " + text)
-		if (s.Shape != "") != want {
-			t.Fatal("reused compiler retained stale shape state", s.Shape)
-		}
-	}
-}
-
+// Allocation equality excludes race instrumentation and its goroutine bookkeeping.
+// Scope reuse and statement equivalence also run under race in statement_shape_scope_test.go.
 func TestInactiveCompileAllocations(t *testing.T) {
 	columns := []Column{{Name: "id"}, {Name: "name"}}
 	assignment := MutationAssignment{Field: FieldRef{Table: "records", Column: "name"}, AssignmentValue: AssignmentValue{Bind: func() (driver.Value, error) { return "private", nil }}}

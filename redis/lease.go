@@ -7,6 +7,7 @@ import (
 
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
@@ -49,7 +50,7 @@ func (c *Client) LeaseTransfer(ctx context.Context, key lease.Key, from, to leas
 // as corrupt (such as a lease key without TTL). It is never used implicitly.
 func (c *Client) LeaseForceRelease(ctx context.Context, key lease.Key) (bool, error) {
 	if ctx == nil {
-		return false, fault.New(fault.Invalid, "lease requires a context")
+		return false, safeerror.NewFault(fault.Invalid, "lease requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -65,7 +66,7 @@ func (c *Client) LeaseForceRelease(ctx context.Context, key lease.Key) (bool, er
 	}
 	removed, ok := result.(int64)
 	if !ok || removed < 0 || removed > 1 {
-		return false, fault.New(fault.Internal, "invalid Redis lease removal count")
+		return false, safeerror.NewFault(fault.Internal, "invalid Redis lease removal count")
 	}
 	return removed == 1, nil
 }
@@ -85,7 +86,7 @@ func (c *Client) leaseCommand(ctx context.Context, key lease.Key, owner lease.Ow
 	}
 	status, ok := result.(int64)
 	if !ok {
-		return false, fault.New(fault.Internal, "invalid Redis lease reply")
+		return false, safeerror.NewFault(fault.Internal, "invalid Redis lease reply")
 	}
 	switch status {
 	case 0:
@@ -93,7 +94,7 @@ func (c *Client) leaseCommand(ctx context.Context, key lease.Key, owner lease.Ow
 	case 1:
 		return true, nil
 	case -1:
-		return false, fault.New(fault.Invalid, "stored Redis lease owner is corrupt")
+		return false, safeerror.NewFault(fault.Invalid, "stored Redis lease owner is corrupt")
 	}
-	return false, fault.New(fault.Internal, "invalid Redis lease status")
+	return false, safeerror.NewFault(fault.Internal, "invalid Redis lease status")
 }

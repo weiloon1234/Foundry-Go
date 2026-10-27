@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Handler executes one freshly decoded payload. Attempt metadata is available
@@ -31,7 +32,7 @@ func (d Definition[P]) Version() Version { return d.version }
 func (d Definition[P]) Policy() Policy   { return d.policy.snapshot() }
 func (d Definition[P]) Validate() error {
 	if !identifier.Semantic(string(d.name)) || d.version == 0 {
-		return fault.New(fault.Invalid, "job requires a semantic name and nonzero payload version")
+		return safeerror.NewFault(fault.Invalid, "job requires a semantic name and nonzero payload version")
 	}
 	if err := validatePayloadType(reflect.TypeFor[P]()); err != nil {
 		return err
@@ -72,13 +73,13 @@ func NewRegistry(declarations ...Declaration) (*Registry, error) {
 	entries := make(map[jobKey]Declaration, len(declarations))
 	for _, item := range declarations {
 		if item.typ == nil || !identifier.Semantic(string(item.key.name)) || item.key.version == 0 {
-			return nil, fault.New(fault.Invalid, "invalid job declaration")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid job declaration")
 		}
 		if err := item.policy.Validate(); err != nil {
 			return nil, err
 		}
 		if _, exists := entries[item.key]; exists {
-			return nil, fault.New(fault.Duplicate, "job name and version are already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "job name and version are already registered")
 		}
 		item.policy = item.policy.snapshot()
 		entries[item.key] = item
@@ -87,11 +88,11 @@ func NewRegistry(declarations ...Declaration) (*Registry, error) {
 }
 func (r *Registry) lookup(key jobKey) (Declaration, error) {
 	if r == nil || r.entries == nil {
-		return Declaration{}, fault.New(fault.Invalid, "job registry is not initialized")
+		return Declaration{}, safeerror.NewFault(fault.Invalid, "job registry is not initialized")
 	}
 	declaration, ok := r.entries[key]
 	if !ok {
-		return Declaration{}, fault.New(fault.Missing, "job name or version is not registered")
+		return Declaration{}, safeerror.NewFault(fault.Missing, "job name or version is not registered")
 	}
 	return declaration, nil
 }
@@ -100,3 +101,8 @@ type payloadError struct{ cause error }
 
 func (*payloadError) Error() string   { return "job payload does not match its registered schema" }
 func (e *payloadError) Unwrap() error { return e.cause }
+
+func payloadFailure(cause error) error {
+	failure := &payloadError{cause: cause}
+	return safeerror.Owned(failure.Error(), failure)
+}

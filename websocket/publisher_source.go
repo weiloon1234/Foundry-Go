@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PublisherSource is implemented by a socket Hub and a server-side Publisher.
@@ -28,7 +29,7 @@ func (p *Publisher) publicationHub() *Hub {
 // the borrowed adapter open until Done closes.
 func (p *Publisher) Close(ctx context.Context) error {
 	if p == nil {
-		return fault.New(fault.Invalid, "WebSocket publisher is not initialized")
+		return safeerror.NewFault(fault.Invalid, "WebSocket publisher is not initialized")
 	}
 	return p.hub.Stop(ctx)
 }
@@ -42,11 +43,11 @@ func (p *Publisher) Done() <-chan struct{} {
 }
 func publicationHub(source PublisherSource) (*Hub, error) {
 	if source == nil {
-		return nil, fault.New(fault.Invalid, "WebSocket publication requires a publisher")
+		return nil, safeerror.NewFault(fault.Invalid, "WebSocket publication requires a publisher")
 	}
 	hub := source.publicationHub()
 	if hub == nil || hub.done == nil {
-		return nil, fault.New(fault.Invalid, "WebSocket publisher is not initialized")
+		return nil, safeerror.NewFault(fault.Invalid, "WebSocket publisher is not initialized")
 	}
 	return hub, nil
 }

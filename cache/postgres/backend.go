@@ -9,7 +9,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"log/slog"
 	"sync"
 	"time"
@@ -21,6 +21,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/cacheatomic"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -60,7 +61,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if !sqlname.Valid(c.Schema) || c.Clock != nil && credential.IsNil(c.Clock) || !cacheatomic.ValidPruneInterval(c.PruneInterval) {
-		return fault.New(fault.Invalid, "invalid PostgreSQL cache configuration")
+		return safeerror.NewFault(fault.Invalid, "invalid PostgreSQL cache configuration")
 	}
 	return nil
 }
@@ -94,7 +95,7 @@ func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
 func New(db *database.DB, config Config) (*Backend, error) {
 	if db == nil {
-		return nil, fault.New(fault.Invalid, "PostgreSQL cache requires a database")
+		return nil, safeerror.NewFault(fault.Invalid, "PostgreSQL cache requires a database")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -114,7 +115,7 @@ func New(db *database.DB, config Config) (*Backend, error) {
 // no-ops. The first write seeds the usage estimate with one bounded count.
 func (b *Backend) Start(ctx context.Context) error {
 	if b == nil || b.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "PostgreSQL cache requires a backend and context")
+		return safeerror.NewFault(fault.Invalid, "PostgreSQL cache requires a backend and context")
 	}
 	leave, err := b.enter(ctx)
 	if err != nil {
@@ -134,7 +135,7 @@ func (b *Backend) Start(ctx context.Context) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return fault.New(fault.Closed, "PostgreSQL cache is closed")
+		return safeerror.NewFault(fault.Closed, "PostgreSQL cache is closed")
 	}
 	lifetime, stop := context.WithCancel(context.Background())
 	b.stop = stop
@@ -152,7 +153,7 @@ func (b *Backend) Start(ctx context.Context) error {
 // It never closes the borrowed database. A canceled caller only stops waiting.
 func (b *Backend) Close(ctx context.Context) error {
 	if b == nil || b.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "PostgreSQL cache close needs context")
+		return safeerror.NewFault(fault.Invalid, "PostgreSQL cache close needs context")
 	}
 	b.mu.Lock()
 	b.closed = true
@@ -171,7 +172,7 @@ func (b *Backend) Close(ctx context.Context) error {
 func (b *Backend) Done() <-chan struct{} { return b.done }
 func (b *Backend) enter(ctx context.Context) (func(), error) {
 	if b == nil || b.db == nil || b.done == nil || ctx == nil {
-		return nil, fault.New(fault.Invalid, "PostgreSQL cache requires a backend and context")
+		return nil, safeerror.NewFault(fault.Invalid, "PostgreSQL cache requires a backend and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -179,7 +180,7 @@ func (b *Backend) enter(ctx context.Context) (func(), error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return nil, fault.New(fault.Closed, "PostgreSQL cache is closed")
+		return nil, safeerror.NewFault(fault.Closed, "PostgreSQL cache is closed")
 	}
 	b.active++
 	return b.leave, nil
@@ -211,7 +212,7 @@ func queryRow(ctx context.Context, executor database.Executor, statement string,
 	if err != nil {
 		return false, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
+	defer func() { err = safeerror.Join("operation failed", err, rows.Close()) }()
 	if !rows.Next() {
 		return false, rows.Err()
 	}
@@ -229,7 +230,7 @@ func (b *Backend) now(ctx context.Context, executor database.Executor) (time.Tim
 	var now time.Time
 	found, err := queryRow(ctx, executor, `SELECT pg_catalog.clock_timestamp()`, nil, &now)
 	if err == nil && !found {
-		err = fault.New(fault.Internal, "missing PostgreSQL clock result")
+		err = safeerror.NewFault(fault.Internal, "missing PostgreSQL clock result")
 	}
 	return now, err
 }
@@ -349,7 +350,7 @@ func (b *Backend) seed(ctx context.Context) error {
 // write validates one single-statement write before any I/O.
 func (b *Backend) write(ctx context.Context, key cache.EntryKey, data []byte, ttl cache.TTL) (func(), string, error) {
 	if ctx == nil {
-		return nil, "", fault.New(fault.Invalid, "PostgreSQL cache requires a backend and context")
+		return nil, "", safeerror.NewFault(fault.Invalid, "PostgreSQL cache requires a backend and context")
 	}
 	if err := key.Validate(); err != nil {
 		return nil, "", err
@@ -358,7 +359,7 @@ func (b *Backend) write(ctx context.Context, key cache.EntryKey, data []byte, tt
 		return nil, "", err
 	}
 	if len(data) > b.config.MaxValueBytes {
-		return nil, "", fault.New(fault.Invalid, "cache value exceeds limit")
+		return nil, "", safeerror.NewFault(fault.Invalid, "cache value exceeds limit")
 	}
 	leave, err := b.enter(ctx)
 	if err != nil {
@@ -420,7 +421,7 @@ RETURNING (SELECT size FROM previous)`, append([]any{id, key.String(), nonNil(da
 // usable entry. Unusable rows are removed but reported as absent.
 func (b *Backend) Forget(ctx context.Context, key cache.EntryKey) (bool, error) {
 	if ctx == nil {
-		return false, fault.New(fault.Invalid, "PostgreSQL cache requires a backend and context")
+		return false, safeerror.NewFault(fault.Invalid, "PostgreSQL cache requires a backend and context")
 	}
 	if err := key.Validate(); err != nil {
 		return false, err
@@ -539,13 +540,13 @@ func (b *Backend) Access(ctx context.Context, key cache.EntryKey, mode cacheatom
 				}
 				// A concurrent insert won; lock and apply the change to it.
 			}
-			return fault.New(fault.Conflict, "PostgreSQL cache entry changed repeatedly")
+			return safeerror.NewFault(fault.Conflict, "PostgreSQL cache entry changed repeatedly")
 		}, database.TxOptions{Isolation: database.ReadCommitted})
 		if err == nil {
 			b.usage.Add(entries, bytes)
 			return nil
 		}
-		if !errors.Is(err, errFull) {
+		if !callback.ErrorIs(err, errFull) {
 			return err
 		}
 		if reclaimed || !b.usage.ReconcileDue() {
@@ -606,7 +607,7 @@ func (b *Backend) Prune(ctx context.Context, limit int) (int, error) {
 // operations) and recounts the usage estimate with a bounded scan.
 func (b *Backend) Sweep(ctx context.Context, limit int) (PruneResult, error) {
 	if limit < 1 || limit > MaxPrune {
-		return PruneResult{}, fault.New(fault.Invalid, "invalid cache prune limit")
+		return PruneResult{}, safeerror.NewFault(fault.Invalid, "invalid cache prune limit")
 	}
 	leave, err := b.enter(ctx)
 	if err != nil {
@@ -632,7 +633,7 @@ func (b *Backend) recount(ctx context.Context) (PruneResult, error) {
 	var result PruneResult
 	found, err := queryRow(ctx, b.db.Primary(), `SELECT count(*), COALESCE(sum(size),0)::bigint FROM (SELECT octet_length(address)+octet_length(payload) AS size FROM `+b.table+` LIMIT $1) AS counted`, []any{bound}, &result.Entries, &result.Bytes)
 	if err == nil && !found {
-		err = fault.New(fault.Internal, "missing PostgreSQL cache usage result")
+		err = safeerror.NewFault(fault.Internal, "missing PostgreSQL cache usage result")
 	}
 	if err != nil {
 		return PruneResult{}, err
@@ -658,7 +659,7 @@ func (b *Backend) FlushNamespace(ctx context.Context, namespace cache.Namespace)
 	var count, bytes int64
 	found, err := queryRow(ctx, b.db.Primary(), `WITH removed AS (DELETE FROM `+b.table+` WHERE starts_with(address, $1) RETURNING octet_length(address)+octet_length(payload) AS size) SELECT count(*), COALESCE(sum(size),0)::bigint FROM removed`, []any{prefix}, &count, &bytes)
 	if err == nil && !found {
-		err = fault.New(fault.Internal, "missing PostgreSQL cache flush result")
+		err = safeerror.NewFault(fault.Internal, "missing PostgreSQL cache flush result")
 	}
 	if err != nil {
 		return 0, err

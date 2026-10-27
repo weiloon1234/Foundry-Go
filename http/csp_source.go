@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // CSPSource is one source expression. Use a constructor; its zero value is
@@ -57,7 +58,7 @@ func cspDigest(name string, digest []byte) CSPSource {
 
 func (s CSPSource) Validate() error {
 	if len(s.text) > 2048 {
-		return fault.New(fault.Invalid, "content security policy source exceeds its byte bound")
+		return safeerror.NewFault(fault.Invalid, "content security policy source exceeds its byte bound")
 	}
 	valid := false
 	switch s.kind {
@@ -77,7 +78,7 @@ func (s CSPSource) Validate() error {
 		valid = strings.HasSuffix(s.text, ":") && validCSPScheme(strings.TrimSuffix(s.text, ":"))
 	}
 	if !valid {
-		return fault.New(fault.Invalid, "invalid content security policy source")
+		return safeerror.NewFault(fault.Invalid, "invalid content security policy source")
 	}
 	return nil
 }

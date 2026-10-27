@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/authtransport"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -34,14 +35,14 @@ func tokenPayload[M, K any](issued token.Issued[M, K], source clock.Clock) (auth
 	}
 	info := issued.Info()
 	if info.ID().IsZero() || info.Assurance().Validate() != nil || now.UTC().Before(info.IssuedAt().UTC()) || !now.UTC().Before(info.AccessExpiresAt().UTC()) {
-		return empty, fault.New(fault.Invalid, "issued token is missing or expired")
+		return empty, safeerror.NewFault(fault.Invalid, "issued token is missing or expired")
 	}
 	if _, err := token.HashSecret(issued.AccessSecret()); err != nil {
 		return empty, err
 	}
 	refresh, hasRefresh := issued.RefreshSecret().Get()
 	if hasRefresh != (info.Mode() == token.Renewable) {
-		return empty, fault.New(fault.Invalid, "invalid issued token pair")
+		return empty, safeerror.NewFault(fault.Invalid, "invalid issued token pair")
 	}
 	var refreshText value.Optional[string]
 	if hasRefresh {

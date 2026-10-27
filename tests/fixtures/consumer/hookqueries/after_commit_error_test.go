@@ -34,11 +34,34 @@ func (e *privateAfterCommitError) Error() string {
 	}
 	return "private-hook-value"
 }
+
+type privateAfterCommitFormatter struct {
+	*privateAfterCommitError
+	formatCalls int
+}
+
+func (e *privateAfterCommitFormatter) Format(state fmt.State, _ rune) {
+	e.formatCalls++
+	switch e.mode {
+	case "format-panic":
+		panic("private-hook-value")
+	case "format-goexit":
+		runtime.Goexit()
+	default:
+		fmt.Fprint(state, "private-hook-value")
+	}
+}
+
 func TestORMAfterCommitNeverFormatsLocalOrObserverErrors(t *testing.T) {
 	for _, source := range []string{"local", "observer"} {
-		for _, mode := range []string{"return", "panic", "goexit"} {
+		for _, mode := range []string{"return", "panic", "goexit", "format-return", "format-panic", "format-goexit"} {
 			t.Run(source+"/"+mode, func(t *testing.T) {
-				cause := &privateAfterCommitError{mode: mode}
+				application := &privateAfterCommitError{mode: mode}
+				formatter := &privateAfterCommitFormatter{privateAfterCommitError: application}
+				var cause error = application
+				if strings.HasPrefix(mode, "format-") {
+					cause = formatter
+				}
 				calls := 0
 				fail := func(context.Context, lifecycle.Operation, orm.Changes[hookqueries.Member]) error {
 					calls++
@@ -81,7 +104,12 @@ func TestORMAfterCommitNeverFormatsLocalOrObserverErrors(t *testing.T) {
 				_, err = hookqueries.Members.Insert(hookqueries.WithTrace(t.Context(), trace), db, hookqueries.Members.Key().Set(id), hookqueries.Members.Email.Set("stored@example.test"), hookqueries.Members.IntroducerID.Set(id))
 				var original *privateAfterCommitError
 				var outcome *database.Error
-				if !errors.Is(err, cause) || !errors.As(err, &original) || original != cause || !errors.As(err, &outcome) || outcome.Outcome() != database.Committed || !errors.Is(err, database.AfterCommitFailed) {
+				identity := errors.As(err, &original) && original == application
+				if cause == formatter {
+					var originalFormatter *privateAfterCommitFormatter
+					identity = errors.As(err, &originalFormatter) && originalFormatter == formatter
+				}
+				if !errors.Is(err, cause) || !identity || !errors.As(err, &outcome) || outcome.Outcome() != database.Committed || !errors.Is(err, database.AfterCommitFailed) {
 					t.Fatal("ORM callback lost cause or outcome", err)
 				}
 				for _, s := range []string{err.Error(), fmt.Sprintf("%v", err), fmt.Sprintf("%+v", err), fmt.Sprintf("%#v", err)} {
@@ -89,8 +117,8 @@ func TestORMAfterCommitNeverFormatsLocalOrObserverErrors(t *testing.T) {
 						t.Fatal("ORM callback disclosed application text")
 					}
 				}
-				if cause.formatted != 0 || calls != 1 || db.Stats().Owners != 0 {
-					t.Fatal("ORM callback formatted, retried or leaked ownership", cause.formatted, calls)
+				if application.formatted != 0 || formatter.formatCalls != 0 || calls != 1 || db.Stats().Owners != 0 {
+					t.Fatal("ORM callback formatted, retried or leaked ownership", application.formatted, formatter.formatCalls, calls)
 				}
 			})
 		}

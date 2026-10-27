@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -47,12 +48,12 @@ func BearerCredential(name auth.CredentialName) CredentialSource {
 			return value.Optional[secret.String]{}, nil
 		}
 		if len(values) != 1 || len(values[0]) > auth.MaxCredentialBytes+7 {
-			return value.Optional[secret.String]{}, auth.Unauthenticated
+			return value.Optional[secret.String]{}, auth.Unauthenticated.WithCause(nil)
 		}
 		scheme, token, ok := strings.Cut(values[0], " ")
 		token = strings.TrimLeft(token, " ")
 		if !ok || !strings.EqualFold(scheme, "Bearer") || !bearerToken(token) {
-			return value.Optional[secret.String]{}, auth.Unauthenticated
+			return value.Optional[secret.String]{}, auth.Unauthenticated.WithCause(nil)
 		}
 		return value.Set(secret.New(token)), nil
 	}}
@@ -111,7 +112,7 @@ type Authentication struct {
 func NewAuthentication(registry *auth.Registry, sources ...CredentialSource) (*Authentication, error) {
 	for _, source := range sources {
 		if source.info.Kind == CookieCredentialKind && !source.info.OriginProtection && !source.unprotected {
-			return nil, fault.New(fault.Invalid, "cookie credentials require NewCookieAuthentication origin/CSRF protection or an explicit WithoutOriginProtection opt-out")
+			return nil, safeerror.NewFault(fault.Invalid, "cookie credentials require NewCookieAuthentication origin/CSRF protection or an explicit WithoutOriginProtection opt-out")
 		}
 	}
 	return newAuthentication(registry, sources)
@@ -121,15 +122,15 @@ func newAuthentication(registry *auth.Registry, sources []CredentialSource) (*Au
 		return nil, err
 	}
 	if len(sources) > auth.MaxCredentials {
-		return nil, fault.New(fault.Invalid, "too many HTTP credential sources")
+		return nil, safeerror.NewFault(fault.Invalid, "too many HTTP credential sources")
 	}
 	seen := make(map[auth.CredentialName]bool, len(sources))
 	for _, source := range sources {
 		if !identifier.Semantic(string(source.name)) || source.read == nil {
-			return nil, fault.New(fault.Invalid, "invalid HTTP credential source")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid HTTP credential source")
 		}
 		if seen[source.name] {
-			return nil, fault.New(fault.Duplicate, "HTTP credential source is repeated")
+			return nil, safeerror.NewFault(fault.Duplicate, "HTTP credential source is repeated")
 		}
 		seen[source.name] = true
 		if source.validate != nil {
@@ -142,7 +143,7 @@ func newAuthentication(registry *auth.Registry, sources []CredentialSource) (*Au
 }
 func (a *Authentication) validate() error {
 	if a == nil {
-		return fault.New(fault.Invalid, "HTTP authentication requires an adapter")
+		return safeerror.NewFault(fault.Invalid, "HTTP authentication requires an adapter")
 	}
 	return a.registry.Validate()
 }
@@ -167,7 +168,7 @@ func (a *Authentication) inputs(r *stdhttp.Request) (auth.Credentials, error) {
 		return err
 	})
 	if err != nil {
-		return auth.Credentials{}, fault.Wrap(fault.Internal, "HTTP credential extraction failed", err)
+		return auth.Credentials{}, safeerror.WrapFailure(fault.Internal, "HTTP credential extraction failed", err)
 	}
 	return credentials, nil
 }
@@ -264,7 +265,7 @@ func authenticationError(err error) error {
 	failed := callback.Isolated("HTTP authentication error classification", func() error {
 		_, found, complete := transportErrorAs[classifiedError](err)
 		if !complete {
-			return fault.New(fault.Invalid, "HTTP authentication error classification exceeded traversal bounds")
+			return safeerror.NewFault(fault.Invalid, "HTTP authentication error classification exceeded traversal bounds")
 		}
 		if found {
 			return nil

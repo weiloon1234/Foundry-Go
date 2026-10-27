@@ -41,6 +41,6 @@ func FuzzAssetPathAndSPABoundaries(f *testing.F) {
 			t.Fatal("non-local redirect")
 		}
 		// Exercise bounded, quote-aware HTML navigation independently of URL syntax.
-		_ = htmlNavigation([]string{accept}, name)
+		_ = IsHTMLNavigation(request, name)
 	})
 }

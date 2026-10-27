@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Adapter supplies an explicitly constructed standard Go connector and error
@@ -21,6 +22,7 @@ import (
 // Connector methods must honor their contexts and database/sql's driver contract,
 // including error methods invoked inside database/sql. Drivers must not panic or
 // call runtime.Goexit. Classify must be safe to share; Foundry owns its invocation.
+// Its input may be safely wrapped; errors.Is/As retain the original driver cause.
 type Adapter struct {
 	Connector driver.Connector
 	Classify  func(error) Detail
@@ -58,7 +60,7 @@ func DefaultPoolConfig() PoolConfig {
 // Validate rejects impossible or unbounded connection/acquisition settings.
 func (c PoolConfig) Validate() error {
 	if c.MaxOpen <= 0 || c.MaxIdle < 0 || c.MaxIdle > c.MaxOpen || c.MaxLifetime < 0 || c.MaxIdleTime < 0 || c.ConnectTimeout <= 0 || c.AcquireTimeout <= 0 || c.CommitTimeout <= 0 || c.StartupTimeout < 0 {
-		return fault.New(fault.Invalid, "invalid database pool bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid database pool bounds")
 	}
 	return nil
 }
@@ -116,7 +118,7 @@ func Open(ctx context.Context, adapter Adapter, config PoolConfig, options ...Op
 		return nil, err
 	}
 	if err := db.Start(ctx); err != nil {
-		return nil, errors.Join(err, db.Close(context.Background()))
+		return nil, safeerror.Join("operation failed", err, db.Close(context.Background()))
 	}
 	return db, nil
 }
@@ -126,7 +128,7 @@ func Open(ctx context.Context, adapter Adapter, config PoolConfig, options ...Op
 // pure provider registration and constructor injection before lifecycle boot.
 func Prepare(adapter Adapter, config PoolConfig, options ...Option) (*DB, error) {
 	if adapter.Connector == nil {
-		return nil, fault.New(fault.Invalid, "database adapter needs a connector")
+		return nil, safeerror.NewFault(fault.Invalid, "database adapter needs a connector")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -202,7 +204,7 @@ func (db *DB) Start(ctx context.Context) error {
 		err = pingStartingPool(ctx, ReadPool, db.read.raw, db.read.config, classifier(db.read.adapter.Classify), db.startupLogger)
 	}
 	if err != nil {
-		err = errors.Join(err, db.closePools())
+		err = safeerror.Join("operation failed", err, db.closePools())
 	}
 	db.mu.Lock()
 	if err == nil && db.closing {
@@ -351,7 +353,7 @@ func (db *DB) acquirePool(ctx context.Context, role PoolRole) (*sql.Conn, func()
 // failure affects readiness; it is not a process liveness failure.
 func (db *DB) Ping(ctx context.Context) (err error) {
 	for _, health := range db.Health(ctx) {
-		err = errors.Join(err, health.Error)
+		err = safeerror.Join("operation failed", err, health.Error)
 	}
 	return err
 }

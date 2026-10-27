@@ -1,6 +1,9 @@
 package cache
 
-import "github.com/weiloon1234/Foundry-Go/fault"
+import (
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+)
 
 // A non-zero-size identity distinguishes declarations with the same name even
 // when they happen to use the same Go types. Reuse the declared value to bind again.
@@ -26,7 +29,7 @@ func (d Declaration[K, V]) Name() Name {
 }
 func (d Declaration[K, V]) Validate() error {
 	if d.definition == nil || !validName(string(d.definition.name)) {
-		return fault.New(fault.Invalid, "invalid cache declaration")
+		return safeerror.NewFault(fault.Invalid, "invalid cache declaration")
 	}
 	if err := d.definition.keys.Validate(); err != nil {
 		return err
@@ -42,17 +45,17 @@ func (d Declaration[K, V]) Bind(store *Store) (Cache[K, V], error) {
 		return Cache[K, V]{}, err
 	}
 	if store == nil || store.backend == nil {
-		return Cache[K, V]{}, fault.New(fault.Invalid, "cache declaration requires an initialized store")
+		return Cache[K, V]{}, safeerror.NewFault(fault.Invalid, "cache declaration requires an initialized store")
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	id, exists := store.declarations[d.Name()]
 	if exists && id != &d.definition.id {
-		return Cache[K, V]{}, fault.New(fault.Duplicate, "cache family already has a different declaration")
+		return Cache[K, V]{}, safeerror.NewFault(fault.Duplicate, "cache family already has a different declaration")
 	}
 	if !exists {
 		if len(store.declarations) >= store.config.MaxDeclarations {
-			return Cache[K, V]{}, fault.New(fault.Invalid, "cache declaration limit exceeded")
+			return Cache[K, V]{}, safeerror.NewFault(fault.Invalid, "cache declaration limit exceeded")
 		}
 		store.declarations[d.Name()] = &d.definition.id
 	}

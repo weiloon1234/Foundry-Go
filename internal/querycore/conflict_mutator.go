@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 
@@ -21,7 +22,7 @@ func ValidateConflictMutator(u ConflictUpdate, field FieldMutator) error {
 			expected = field.Output
 		}
 		if reflect.TypeOf(StoredInput(u.Literal.Value)) != expected {
-			return fault.New(fault.Invalid, "conflict literal does not match its declared mutated field type")
+			return safeerror.NewFault(fault.Invalid, "conflict literal does not match its declared mutated field type")
 		}
 		return nil
 	}
@@ -31,7 +32,7 @@ func ValidateConflictMutator(u ConflictUpdate, field FieldMutator) error {
 	if source, ok := UnwrapSensitivity(u.Value).(FieldRef); ok && source.Table == ConflictProposedTable && source.Column == u.Field.Column {
 		return nil
 	}
-	return fault.New(fault.Invalid, "conflict field with a Go mutator requires Set, SetNull, or its own proposed value")
+	return safeerror.NewFault(fault.Invalid, "conflict field with a Go mutator requires Set, SetNull, or its own proposed value")
 }
 
 // MutateConflictLiterals transforms a reusable policy once, independently of its

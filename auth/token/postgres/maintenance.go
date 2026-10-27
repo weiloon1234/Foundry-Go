@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
@@ -16,7 +17,7 @@ func (b *Backend) RevokeID(ctx context.Context, address token.Address, identity 
 		return false, err
 	}
 	if id.IsZero() {
-		return false, fault.New(fault.Invalid, "token revocation requires an identifier")
+		return false, safeerror.NewFault(fault.Invalid, "token revocation requires an identifier")
 	}
 	var removed bool
 	err := b.within(ctx, func(tx *database.Tx) error {
@@ -57,10 +58,10 @@ func (b *Backend) List(ctx context.Context, address token.Address, identity mode
 		return nil, err
 	}
 	if limit < 1 || limit > token.MaxTokens {
-		return nil, fault.New(fault.Invalid, "invalid token listing limit")
+		return nil, safeerror.NewFault(fault.Invalid, "invalid token listing limit")
 	}
 	if b == nil || b.db == nil || ctx == nil {
-		return nil, fault.New(fault.Invalid, "token PostgreSQL operation requires a backend and context")
+		return nil, safeerror.NewFault(fault.Invalid, "token PostgreSQL operation requires a backend and context")
 	}
 	scope, err := address.Key()
 	if err != nil {
@@ -82,7 +83,7 @@ func (b *Backend) List(ctx context.Context, address token.Address, identity mode
 		}
 		if current.Live(now) {
 			if len(result) >= limit {
-				return nil, fault.New(fault.Invalid, "live token listing exceeds requested limit")
+				return nil, safeerror.NewFault(fault.Invalid, "live token listing exceeds requested limit")
 			}
 			result = append(result, current)
 		}
@@ -102,10 +103,10 @@ func (b *Backend) Prune(ctx context.Context, address token.Address, limit int) (
 		return 0, err
 	}
 	if limit < 1 || limit > token.MaxPruneFamilies {
-		return 0, fault.New(fault.Invalid, "invalid token prune family limit")
+		return 0, safeerror.NewFault(fault.Invalid, "invalid token prune family limit")
 	}
 	if b == nil || b.db == nil || ctx == nil {
-		return 0, fault.New(fault.Invalid, "token PostgreSQL operation requires a backend and context")
+		return 0, safeerror.NewFault(fault.Invalid, "token PostgreSQL operation requires a backend and context")
 	}
 	now, err := b.now()
 	if err != nil {

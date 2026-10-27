@@ -1,5 +1,7 @@
 package querycore
 
+import "github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 import "github.com/weiloon1234/Foundry-Go/fault"
 
 // SensitiveValue retains a codec's mark when a computation chooses a different
@@ -28,5 +30,5 @@ func UnwrapSensitivity(v ValueExpression) ValueExpression {
 		}
 		v = mark.Value
 	}
-	return ParameterNode{Err: fault.New(fault.Invalid, "value sensitivity exceeds its depth bound")}
+	return ParameterNode{Err: safeerror.NewFault(fault.Invalid, "value sensitivity exceeds its depth bound")}
 }

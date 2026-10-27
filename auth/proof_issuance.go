@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type issuanceCheck struct {
@@ -26,7 +27,7 @@ func (p Proof[M, K]) WithIssuanceCheck(check func(context.Context, *database.Tx)
 		return Proof[M, K]{}, err
 	}
 	if check == nil || p.issuance != nil {
-		return Proof[M, K]{}, fault.New(fault.Invalid, "proof requires one immutable issuance check")
+		return Proof[M, K]{}, safeerror.NewFault(fault.Invalid, "proof requires one immutable issuance check")
 	}
 	p.issuance = &issuanceCheck{verify: check}
 	return p, nil
@@ -39,7 +40,7 @@ func (p Proof[M, K]) HasIssuanceCheck() bool { return p.issuance != nil }
 // by an adapter without the corresponding atomic creation capability.
 func (p Proof[M, K]) CheckIssuance(ctx context.Context, tx *database.Tx) error {
 	if ctx == nil || tx == nil {
-		return fault.New(fault.Invalid, "proof check requires a context and transaction")
+		return safeerror.NewFault(fault.Invalid, "proof check requires a context and transaction")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -65,7 +66,7 @@ func (p Proof[M, K]) WithAccessScopes(scopes AccessScopes[M]) (Proof[M, K], erro
 		return Proof[M, K]{}, err
 	}
 	if old, scoped := p.AccessScopes(); scoped && !old.ContainsAll(scopes) {
-		return Proof[M, K]{}, Forbidden
+		return Proof[M, K]{}, Forbidden.WithCause(nil)
 	}
 	p.grants = scopes.grant
 	if p.grants == nil {

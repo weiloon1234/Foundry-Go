@@ -3,8 +3,8 @@ package settings
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"slices"
 	"strings"
 
@@ -15,6 +15,7 @@ import (
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionvalue"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -54,7 +55,7 @@ func (k Key[V]) Decode(ctx context.Context, r Record) (V, error) {
 
 // errNoUpgrade is returned for a stored version the declaration cannot read.
 func errNoUpgrade() error {
-	return fault.New(fault.Conflict, "stored setting version has no declared upgrade")
+	return safeerror.NewFault(fault.Conflict, "stored setting version has no declared upgrade")
 }
 
 // record validates a stored row. A value written by an earlier version with a
@@ -160,7 +161,7 @@ const (
 	MaxLoadBytes = 64 << 20
 )
 
-var errPageFull = errors.New("settings page is full")
+var errPageFull = safeerror.New("settings page is full")
 
 func (m *Manager) listNames(filter Filter) ([]string, error) {
 	if filter.Group != "" && !identifier.Semantic(string(filter.Group)) {
@@ -240,7 +241,7 @@ func ListPage(ctx context.Context, m *Manager, filter Filter, after Cursor, limi
 			result.Records = append(result.Records, record)
 			return nil
 		})
-		if errors.Is(err, errPageFull) {
+		if callback.ErrorIs(err, errPageFull) {
 			return nil
 		}
 		return err
@@ -254,7 +255,7 @@ func ListPage(ctx context.Context, m *Manager, filter Filter, after Cursor, limi
 // pageFull ends a non-empty page at the byte budget. A single row always fits:
 // stored values and parameters are individually far below MaxBatchBytes.
 func pageFull(page *Page, err error) error {
-	if len(page.Records) == 0 || !errors.Is(err, fault.Conflict) {
+	if len(page.Records) == 0 || !callback.ErrorIs(err, fault.Conflict) {
 		return err
 	}
 	page.Next = After(page.Records[len(page.Records)-1])
@@ -281,7 +282,7 @@ func List(ctx context.Context, m *Manager, filter Filter) ([]Record, error) {
 				return nil, err
 			}
 			if size > MaxLoadBytes-retained {
-				return nil, fault.New(fault.Conflict, "settings list exceeds its byte limit; use ListPage")
+				return nil, safeerror.NewFault(fault.Conflict, "settings list exceeds its byte limit; use ListPage")
 			}
 			retained += size
 		}
@@ -422,7 +423,7 @@ func (m *Manager) load(ctx context.Context, names []Name) (Batch, error) {
 				return err
 			}
 			if size > MaxLoadBytes-retained {
-				return fault.New(fault.Conflict, "settings batch exceeds its byte limit")
+				return safeerror.NewFault(fault.Conflict, "settings batch exceeds its byte limit")
 			}
 			retained += size
 			loaded[record.name] = value.Set(record)

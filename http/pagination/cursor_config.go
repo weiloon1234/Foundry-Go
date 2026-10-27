@@ -3,6 +3,7 @@ package pagination
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // CursorConfig declares two exclusive directions and a bounded page size.
@@ -19,7 +20,7 @@ func DefaultCursorConfig() CursorConfig {
 }
 func (c CursorConfig) Validate() error {
 	if !httpquery.ValidName(c.AfterParam) || !httpquery.ValidName(c.BeforeParam) || !httpquery.ValidName(c.SizeParam) || c.AfterParam == c.BeforeParam || c.AfterParam == c.SizeParam || c.BeforeParam == c.SizeParam {
-		return fault.New(fault.Invalid, "cursor pagination requires distinct valid query parameter names")
+		return safeerror.NewFault(fault.Invalid, "cursor pagination requires distinct valid query parameter names")
 	}
 	return validateSizeConfig(c.DefaultSize, c.MaximumSize, c.Links)
 }

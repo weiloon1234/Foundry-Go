@@ -7,6 +7,7 @@ import (
 	"log/syslog"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const syslogSupported = true
@@ -24,7 +25,7 @@ type syslogConnection struct{ writer *syslog.Writer }
 func openSyslog(config SyslogConfig) (*syslogConnection, error) {
 	writer, err := syslog.Dial(config.Network, config.Address, syslogFacilities[config.Facility]|syslog.LOG_INFO, config.Tag)
 	if err != nil {
-		return nil, fault.Wrap(fault.Internal, "cannot connect to syslog", err)
+		return nil, safeerror.WrapFault(fault.Internal, "cannot connect to syslog", err)
 	}
 	return &syslogConnection{writer: writer}, nil
 }

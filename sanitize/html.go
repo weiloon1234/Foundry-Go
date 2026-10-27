@@ -12,6 +12,7 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const MaxInputBytes = 1 << 20
@@ -134,5 +135,5 @@ func (w *boundedOutput) Write(p []byte) (int, error) {
 	return n, err
 }
 func invalid() error {
-	return fault.New(fault.Invalid, "invalid HTML sanitization policy, input or output bound")
+	return safeerror.NewFault(fault.Invalid, "invalid HTML sanitization policy, input or output bound")
 }

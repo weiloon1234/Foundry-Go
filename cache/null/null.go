@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cacheint"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Backend implements every typed cache capability without storage, so stores
@@ -40,7 +41,7 @@ func (Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
 func operation(ctx context.Context, key cache.EntryKey) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "null cache operation requires a context")
+		return safeerror.NewFault(fault.Invalid, "null cache operation requires a context")
 	}
 	if err := key.Validate(); err != nil {
 		return err
@@ -181,7 +182,7 @@ func (Backend) GetManyTagged(ctx context.Context, keys []cache.TaggedKey) ([]cac
 
 func live(ctx context.Context) error {
 	if ctx == nil {
-		return fault.New(fault.Invalid, "null cache operation requires a context")
+		return safeerror.NewFault(fault.Invalid, "null cache operation requires a context")
 	}
 	return ctx.Err()
 }

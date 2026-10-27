@@ -3,6 +3,7 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraphtest"
 	"io"
 	"strings"
 	"testing"
@@ -265,4 +266,30 @@ type deleter struct {
 func (d *deleter) Delete(_ context.Context, key storage.ObjectKey, _ storage.DeleteOptions) error {
 	*d.deleted = append(*d.deleted, key.String())
 	return nil
+}
+
+type graphCopier struct {
+	backend
+	cause         error
+	copies, reads int
+}
+
+func (c *graphCopier) Copy(context.Context, storage.ObjectKey, storage.ObjectKey, storage.CopyOptions, int64) (storage.ObjectInfo, error) {
+	c.copies++
+	return storage.ObjectInfo{}, c.cause
+}
+func (c *graphCopier) Open(context.Context, storage.ObjectKey, storage.ReadOptions) (io.ReadCloser, storage.ReadInfo, error) {
+	c.reads++
+	return nil, storage.ReadInfo{}, c.cause
+}
+func TestIncompleteServerCopyClassificationNeverStreams(t *testing.T) {
+	for _, mode := range []string{"cycle", "panic", "goexit"} {
+		cause := &errorgraphtest.Error{Mode: mode}
+		backend := &graphCopier{cause: cause}
+		disk := diskFor(t, backend, 1)
+		_, err := disk.CopyTo(t.Context(), testKey(t), disk, key(t, "copy"), storage.CopyOptions{})
+		if err == nil || !errors.Is(err, cause) || backend.copies != 1 || backend.reads != 0 || cause.Formatted.Load() != 0 || cause.Visits.Load() > 512 {
+			t.Fatal("incomplete server copy inspection triggered a second publication")
+		}
+	}
 }

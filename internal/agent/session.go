@@ -5,13 +5,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // A cold workspace may still be canceling background analysis when shutdown
@@ -189,7 +190,7 @@ func (s *session) close() error {
 	if s.exitErr != nil {
 		exitErr = fmt.Errorf("wait for gopls exit: %w", s.exitErr)
 	}
-	return errors.Join(shutdownErr, exitErr)
+	return safeerror.Join("operation failed", shutdownErr, exitErr)
 }
 
 type ServerInfo struct {

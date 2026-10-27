@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -38,22 +39,22 @@ func (r Record) Validate(address Address, subject model.Identity) error {
 		return err
 	}
 	if r.Address != address || r.Subject != subject || r.ID.IsZero() || r.Ciphertext.IsZero() || len(r.Ciphertext.Encoded()) > 512 || !validInstant(r.CreatedAt) {
-		return fault.New(fault.Invalid, "invalid stored MFA factor")
+		return safeerror.NewFault(fault.Invalid, "invalid stored MFA factor")
 	}
 	pending, isPending := r.PendingUntil.Get()
 	confirmed, isConfirmed := r.ConfirmedAt.Get()
 	step, used := r.LastStep.Get()
 	if isPending == isConfirmed {
-		return fault.New(fault.Invalid, "MFA factor must be pending or confirmed")
+		return safeerror.NewFault(fault.Invalid, "MFA factor must be pending or confirmed")
 	}
 	if isPending {
 		if !validInstant(pending) || used || len(r.RecoveryHashes) != 0 {
-			return fault.New(fault.Invalid, "invalid pending MFA factor")
+			return safeerror.NewFault(fault.Invalid, "invalid pending MFA factor")
 		}
 		return validateEnrollmentLifetime(pending.UTC().Sub(r.CreatedAt.UTC()))
 	}
 	if !validInstant(confirmed) || confirmed.UTC().Before(r.CreatedAt.UTC()) || !used || step < 0 || step > 253402300799/totpPeriodSeconds {
-		return fault.New(fault.Invalid, "invalid confirmed MFA factor")
+		return safeerror.NewFault(fault.Invalid, "invalid confirmed MFA factor")
 	}
 	return validateRecoveryHashes(r.RecoveryHashes)
 }

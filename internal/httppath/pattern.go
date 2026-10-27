@@ -2,9 +2,11 @@
 package httppath
 
 import (
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Segment is a literal or named parameter in the shared route grammar.
@@ -17,14 +19,14 @@ type Segment struct {
 // Parse validates route syntax without binding a concrete DTO or starting I/O.
 func Parse(pattern string) ([]Segment, error) {
 	if pattern == "" || pattern[0] != '/' || !utf8.ValidString(pattern) {
-		return nil, fault.New(fault.Invalid, "route path must start with a slash")
+		return nil, safeerror.NewFault(fault.Invalid, "route path must start with a slash")
 	}
 	parts := strings.Split(pattern[1:], "/")
 	segments := make([]Segment, 0, len(parts))
 	names := make(map[string]bool)
 	for i, part := range parts {
 		if part == "" && i != len(parts)-1 {
-			return nil, fault.New(fault.Invalid, "route path contains an empty segment")
+			return nil, safeerror.NewFault(fault.Invalid, "route path contains an empty segment")
 		}
 		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
 			name := part[1 : len(part)-1]
@@ -33,14 +35,14 @@ func Parse(pattern string) ([]Segment, error) {
 				name = strings.TrimSuffix(name, "...")
 			}
 			if !validPathName(name) || names[name] || tail && i != len(parts)-1 {
-				return nil, fault.New(fault.Invalid, "route path has an invalid or duplicate parameter")
+				return nil, safeerror.NewFault(fault.Invalid, "route path has an invalid or duplicate parameter")
 			}
 			names[name] = true
 			segments = append(segments, Segment{Name: name, Tail: tail})
 			continue
 		}
 		if part == "." || part == ".." || strings.ContainsAny(part, "{}%?#\\") || !ValidText(part) {
-			return nil, fault.New(fault.Invalid, "route path contains an invalid literal segment")
+			return nil, safeerror.NewFault(fault.Invalid, "route path contains an invalid literal segment")
 		}
 		segments = append(segments, Segment{Literal: part})
 	}

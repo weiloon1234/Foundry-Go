@@ -2,10 +2,12 @@ package validation
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/i18n/message"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // WithTranslation attaches a generated, typed message to a leaf rule. Arguments
@@ -27,7 +29,7 @@ func WithTranslation[T, A any](rule Rule[T], translated message.Message[A], args
 		return err
 	})
 	if err != nil {
-		return failed[T](fault.Wrap(fault.Invalid, "invalid validation message", err))
+		return failed[T](safeerror.WrapFault(fault.Invalid, "invalid validation message", err))
 	}
 	if err := validateLabelParameters(prepared.Description().Definition); err != nil {
 		return failed[T](err)

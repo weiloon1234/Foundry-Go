@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/textvalue"
 )
 
@@ -59,7 +60,9 @@ func Parse(text string) (Decimal, error) {
 	return Decimal{text: strings.Clone(whole)}, nil
 }
 
-func invalid() error { return fault.New(fault.Invalid, "invalid decimal syntax or digit bound") }
+func invalid() error {
+	return safeerror.NewFault(fault.Invalid, "invalid decimal syntax or digit bound")
+}
 
 // FromInt64 converts an integer exactly, without a parse failure path.
 func FromInt64(value int64) Decimal {

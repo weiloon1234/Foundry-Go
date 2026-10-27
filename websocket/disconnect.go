@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -13,7 +14,7 @@ import (
 // uses live pub/sub; an error never proves that no instance acted on the command.
 func DisconnectConnection(ctx context.Context, source PublisherSource, id ConnectionID) error {
 	if id.IsZero() {
-		return fault.New(fault.Invalid, "disconnect requires a connection identity")
+		return safeerror.NewFault(fault.Invalid, "disconnect requires a connection identity")
 	}
 	hub, err := publicationHub(source)
 	if err != nil {

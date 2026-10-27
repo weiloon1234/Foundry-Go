@@ -2,14 +2,14 @@ package value
 
 import (
 	"context"
-	"encoding/json"
 	"encoding/json/jsontext"
-	jsonv2 "encoding/json/v2"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // JSONEncodingLimits bounds an encoded document and the native input inspection.
@@ -28,7 +28,7 @@ type JSONEncodingLimits struct {
 
 func (l JSONEncodingLimits) Validate() error {
 	if l.Bytes <= 0 || l.Depth < 0 || l.Depth > JSONMaxDepth || l.Nodes <= 0 || l.Steps <= 0 {
-		return fault.New(fault.Invalid, "invalid JSON encoding limits")
+		return safeerror.NewFault(fault.Invalid, "invalid JSON encoding limits")
 	}
 	return nil
 }
@@ -38,12 +38,11 @@ func (l JSONEncodingLimits) Validate() error {
 // Optional/Nullable values share the same input inspection as typed snapshots.
 // It returns no bytes on failure. It does not infer a DTO schema; contract.JSON
 // adds the generated schema checks before a transport can publish these bytes.
-// Panics in codecs become internal faults. Codecs run on the caller's goroutine,
-// so runtime.Goexit in a codec ends that goroutine like any other Go call.
+// Panic and Goexit in codecs become internal faults.
 // Cancellation never abandons a codec that is still running or retaining resources.
 func EncodeJSON[T any](ctx context.Context, input T, limits JSONEncodingLimits) ([]byte, error) {
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "JSON encoding requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "JSON encoding requires a context")
 	}
 	if err := limits.Validate(); err != nil {
 		return nil, err
@@ -58,13 +57,11 @@ func EncodeJSON[T any](ctx context.Context, input T, limits JSONEncodingLimits) 
 		if err := budget.check(reflect.ValueOf(input), 0); err != nil {
 			return err
 		}
-		keys := jsonKeyEncoding{}
-		err := jsonv2.MarshalWrite(&output, input, json.DefaultOptionsV1(), keys.options(),
+		return jsoncodec.MarshalWrite(&output, input,
 			jsontext.AllowInvalidUTF8(false), jsontext.AllowDuplicateNames(false))
-		return keys.failure(err)
 	})
-	if failure, ok := err.(*fault.Error); ok && failure.Code() == fault.Panicked {
-		return nil, fault.Wrap(fault.Internal, "JSON value codec failed", err)
+	if safeerror.IsPanic(err) {
+		return nil, safeerror.WrapFailure(fault.Internal, "JSON value codec failed", err)
 	}
 	if canceled := ctx.Err(); canceled != nil {
 		return nil, canceled
@@ -73,7 +70,7 @@ func EncodeJSON[T any](ctx context.Context, input T, limits JSONEncodingLimits) 
 		err = output.err
 	}
 	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "invalid JSON value encoding", err)
+		return nil, safeerror.WrapFault(fault.Invalid, "invalid JSON value encoding", err)
 	}
 	// The encoder already guarantees syntax; one allocation-free scan bounds the
 	// emitted document's depth and nodes, including custom codec output.
@@ -82,7 +79,7 @@ func EncodeJSON[T any](ctx context.Context, input T, limits JSONEncodingLimits) 
 		return nil, canceled
 	}
 	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "invalid JSON value encoding", err)
+		return nil, safeerror.WrapFault(fault.Invalid, "invalid JSON value encoding", err)
 	}
 	return output.data, nil
 }
@@ -103,7 +100,7 @@ func (w *jsonOutput) Write(data []byte) (int, error) {
 		return 0, err
 	}
 	if len(data) > w.limit-len(w.data) {
-		w.err = fault.New(fault.Invalid, "JSON output byte bound exceeded")
+		w.err = safeerror.NewFault(fault.Invalid, "JSON output byte bound exceeded")
 		return 0, w.err
 	}
 	w.data = append(w.data, data...)

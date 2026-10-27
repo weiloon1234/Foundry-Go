@@ -1,30 +1,30 @@
 package s3
 
-import "github.com/aws/smithy-go"
-
 import (
+	smithy "github.com/aws/smithy-go"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
 // Provider text, signed URLs and credential details remain only in Unwrap.
 // HTTP rejection can establish Unchanged; an interrupted response after a
 // publishing request remains Unknown and must never trigger an automatic retry.
-func failure(op storage.Operation, state storage.Outcome, err error) *storage.Error {
-	var result *storage.Error
+func failure(op storage.Operation, state storage.Outcome, err error) error {
+	var result error
 	inspection := callback.Isolated("S3 error classification", func() error {
 		result = classifyFailure(op, state, err)
 		return nil
 	})
 	if inspection != nil {
-		return storage.Failure(storage.Unavailable, op, state, inspection)
+		return newFailure(storage.Unavailable, op, state, safeerror.Join("operation failed", err, inspection))
 	}
 	return result
 }
 
-func classifyFailure(op storage.Operation, state storage.Outcome, err error) *storage.Error {
+func classifyFailure(op storage.Operation, state storage.Outcome, err error) error {
 	code := storage.Unavailable
 	candidates := [...]storage.Code{storage.NotFound, storage.Forbidden, storage.Unsupported, storage.PreconditionFailed, storage.RangeNotSatisfiable, storage.LimitExceeded, storage.Invalid, storage.IntegrityFailed, storage.Closed}
 	selected := len(candidates)
@@ -52,7 +52,7 @@ func classifyFailure(op storage.Operation, state storage.Outcome, err error) *st
 		return true
 	})
 	if !complete {
-		return storage.Failure(code, op, state, err)
+		return newFailure(code, op, state, err)
 	}
 	if selected < len(candidates) {
 		code = candidates[selected]
@@ -62,14 +62,14 @@ func classifyFailure(op storage.Operation, state storage.Outcome, err error) *st
 		if id, ok := own.Cleanup().Get(); ok {
 			result = result.WithCleanup(id)
 		}
-		return result
+		return safeerror.Retain(err, result)
 	}
 	if api != nil {
 		if api.ErrorCode() == "NoSuchBucket" {
 			if state == storage.Unknown {
 				state = storage.Unchanged
 			}
-			return storage.Failure(storage.Unavailable, op, state, err)
+			return newFailure(storage.Unavailable, op, state, err)
 		}
 		switch api.ErrorCode() {
 		case "NoSuchKey", "NoSuchVersion", "NotFound":
@@ -104,15 +104,15 @@ func classifyFailure(op storage.Operation, state storage.Outcome, err error) *st
 			}
 		}
 	}
-	return storage.Failure(code, op, state, err)
+	return newFailure(code, op, state, err)
 }
 
 func noSuchUpload(err error) bool {
-	var api smithy.APIError
-	errorgraph.Walk(err, func(current error) bool {
-		var matched bool
-		api, matched = errorgraph.AsShallow[smithy.APIError](current)
-		return !matched
+	matched := false
+	inspected := callback.Isolated("S3 missing upload classification", func() error {
+		api, found, complete := errorgraph.As[smithy.APIError](err)
+		matched = complete && found && api != nil && api.ErrorCode() == "NoSuchUpload"
+		return nil
 	})
-	return api != nil && api.ErrorCode() == "NoSuchUpload"
+	return inspected == nil && matched
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Dispatch captures a typed payload and runs registered listeners in order.
@@ -54,7 +55,7 @@ func dispatch(ctx context.Context, bus *Bus, entry registration, captured payloa
 		return err
 	}
 	if captured.typ != entry.schema.typ {
-		return fault.New(fault.Internal, "captured event has the wrong payload schema")
+		return safeerror.NewFault(fault.Internal, "captured event has the wrong payload schema")
 	}
 	if bus.intercepted(ctx, entry.schema.key, captured) {
 		return ctx.Err()
@@ -84,7 +85,7 @@ func dispatch(ctx context.Context, bus *Bus, entry registration, captured payloa
 // This has no crash durability; durable publication requires an outbox row.
 func (t Topic[E]) AfterCommit(ctx context.Context, tx *database.Tx, bus *Bus, input E) error {
 	if tx == nil {
-		return fault.New(fault.Invalid, "after-commit event requires a transaction")
+		return safeerror.NewFault(fault.Invalid, "after-commit event requires a transaction")
 	}
 	operation, _, release, err := bus.begin(ctx, topicKey{t.name, t.version}, reflect.TypeFor[E]())
 	if err != nil {

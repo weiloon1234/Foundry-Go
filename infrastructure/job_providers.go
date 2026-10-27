@@ -2,14 +2,16 @@ package infrastructure
 
 import (
 	"context"
+	"slices"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/jobs/inline"
 	"github.com/weiloon1234/Foundry-Go/jobs/memory"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/redis"
-	"slices"
 )
 
 func (p *Plan) jobConnection(name jobs.ConnectionName, s JobConnectionSettings) {
@@ -71,20 +73,20 @@ func (p *Plan) jobConnection(name jobs.ConnectionName, s JobConnectionSettings) 
 // default queue. It registers no resources until the returned module is added.
 func (p *Plan) Worker(owner foundation.ProviderID, name jobs.ConnectionName, config jobs.WorkerConfig, requires []foundation.ProviderID) (foundation.Module, error) {
 	if p == nil {
-		return foundation.Module{}, fault.New(fault.Invalid, "worker requires an infrastructure plan")
+		return foundation.Module{}, safeerror.NewFault(fault.Invalid, "worker requires an infrastructure plan")
 	}
 	if name == "" {
 		name = p.settings.Jobs.Default
 	}
 	connection, ok := p.settings.Jobs.Connections[name]
 	if !ok {
-		return foundation.Module{}, fault.New(fault.Missing, "worker connection is not configured")
+		return foundation.Module{}, safeerror.NewFault(fault.Missing, "worker connection is not configured")
 	}
 	if config.Namespace == (keyspace.Namespace{}) {
 		config.Namespace = connection.Dispatch.Namespace
 	}
 	if config.Namespace != connection.Dispatch.Namespace {
-		return foundation.Module{}, fault.New(fault.Invalid, "worker namespace differs from its connection")
+		return foundation.Module{}, safeerror.NewFault(fault.Invalid, "worker namespace differs from its connection")
 	}
 	if len(config.Queues) == 0 {
 		config.Queues = []jobs.Subscription{{Queue: connection.DefaultQueue, Weight: 1}}

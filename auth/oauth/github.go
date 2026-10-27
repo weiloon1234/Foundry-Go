@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/httpclient"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -46,7 +47,7 @@ func (c *Client) githubProfile(ctx context.Context, access secret.String) (Profi
 	}
 	id, err := strconv.ParseInt(user.ID.String(), 10, 64)
 	if err != nil || id <= 0 || user.Login == "" {
-		return Profile{}, fault.New(fault.Invalid, "GitHub user response has no account ID")
+		return Profile{}, safeerror.NewFault(fault.Invalid, "GitHub user response has no account ID")
 	}
 	profile := Profile{Subject: strconv.FormatInt(id, 10), Username: user.Login, Name: user.Name, Email: user.Email, AvatarURL: user.AvatarURL}
 	if profile.Name == "" {

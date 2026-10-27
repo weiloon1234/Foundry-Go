@@ -19,6 +19,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
@@ -45,7 +46,7 @@ type Streams struct {
 
 func (s Streams) Validate() error {
 	if s.In == nil || s.Out == nil || s.Err == nil {
-		return fault.New(fault.Invalid, "CLI requires explicit input, output and error streams")
+		return safeerror.NewFault(fault.Invalid, "CLI requires explicit input, output and error streams")
 	}
 	return nil
 }
@@ -79,7 +80,7 @@ func (c Command[A]) AllowDuringMaintenance() Command[A] {
 }
 func (c Command[A]) Validate() error {
 	if !identifier.Semantic(string(c.Name())) || len(c.description.Summary) > 4096 || !utf8.ValidString(c.description.Summary) || strings.IndexFunc(c.description.Summary, unicode.IsControl) >= 0 || c.decode == nil {
-		return fault.New(fault.Invalid, "command requires a semantic name, single-line summary and typed decoder")
+		return safeerror.NewFault(fault.Invalid, "command requires a semantic name, single-line summary and typed decoder")
 	}
 	return nil
 }
@@ -97,7 +98,7 @@ func (c Command[A]) Declare(construct func(foundation.Resolver) (Handler[A], err
 		return Declaration{}, err
 	}
 	if construct == nil {
-		return Declaration{}, fault.New(fault.Invalid, "command requires a typed handler constructor")
+		return Declaration{}, safeerror.NewFault(fault.Invalid, "command requires a typed handler constructor")
 	}
 	return Declaration{description: c.description, parse: func(args []string, help io.Writer) (func(context.Context, foundation.Resolver, Streams) error, error) {
 		input, err := c.decode(args, help)
@@ -110,7 +111,7 @@ func (c Command[A]) Declare(construct func(foundation.Resolver) (Handler[A], err
 				return err
 			}
 			if handler == nil {
-				return fault.New(fault.Invalid, "command constructor returned a nil handler")
+				return safeerror.NewFault(fault.Invalid, "command constructor returned a nil handler")
 			}
 			if err := ctx.Err(); err != nil {
 				return err
@@ -127,15 +128,15 @@ type Registry struct{ entries map[Name]Declaration }
 
 func New(declarations ...Declaration) (*Registry, error) {
 	if len(declarations) > MaxCommands {
-		return nil, fault.New(fault.Invalid, "too many CLI commands")
+		return nil, safeerror.NewFault(fault.Invalid, "too many CLI commands")
 	}
 	r := &Registry{entries: make(map[Name]Declaration, len(declarations))}
 	for _, d := range declarations {
 		if d.parse == nil || !identifier.Semantic(string(d.description.Name)) {
-			return nil, fault.New(fault.Invalid, "invalid CLI declaration")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid CLI declaration")
 		}
 		if _, exists := r.entries[d.description.Name]; exists {
-			return nil, fault.New(fault.Duplicate, "duplicate CLI command")
+			return nil, safeerror.NewFault(fault.Duplicate, "duplicate CLI command")
 		}
 		r.entries[d.description.Name] = d
 	}
@@ -155,12 +156,12 @@ func (r *Registry) Describe() []Description {
 
 func validateArguments(args []string) error {
 	if len(args) > MaxArguments {
-		return Usage("too many command arguments")
+		return ownedUsage("too many command arguments")
 	}
 	size := 0
 	for _, arg := range args {
 		if len(arg) > MaxArgumentBytes-size || !utf8.ValidString(arg) || strings.ContainsRune(arg, 0) {
-			return Usage("command arguments exceed their bounds or contain invalid text")
+			return ownedUsage("command arguments exceed their bounds or contain invalid text")
 		}
 		size += len(arg)
 	}
@@ -168,7 +169,7 @@ func validateArguments(args []string) error {
 }
 func (r *Registry) Parse(args []string, help io.Writer) (Invocation, error) {
 	if r == nil || r.entries == nil || help == nil {
-		return Invocation{}, fault.New(fault.Invalid, "CLI parsing requires a registry and help writer")
+		return Invocation{}, safeerror.NewFault(fault.Invalid, "CLI parsing requires a registry and help writer")
 	}
 	if err := validateArguments(args); err != nil {
 		return Invocation{}, err
@@ -196,11 +197,11 @@ func (r *Registry) Parse(args []string, help io.Writer) (Invocation, error) {
 		args = args[1:]
 	}
 	if len(args) == 0 {
-		return Invocation{}, Usage("expected a command; use --help")
+		return Invocation{}, ownedUsage("expected a command; use --help")
 	}
 	d, ok := r.entries[Name(args[0])]
 	if !ok {
-		return Invocation{}, Usage("unknown command; use --help")
+		return Invocation{}, ownedUsage("unknown command; use --help")
 	}
 	var invoke func(context.Context, foundation.Resolver, Streams) error
 	var parseErr error
@@ -212,7 +213,7 @@ func (r *Registry) Parse(args []string, help io.Writer) (Invocation, error) {
 		return Invocation{}, parseErr
 	}
 	if invoke == nil {
-		return Invocation{}, fault.New(fault.Internal, "command parser returned no invocation")
+		return Invocation{}, safeerror.NewFault(fault.Internal, "command parser returned no invocation")
 	}
 	return Invocation{state: &invocation{registry: r, name: d.description.Name, maintenance: bypass || d.description.Maintenance, run: invoke}}, nil
 }
@@ -241,7 +242,7 @@ func (Invocation) Format(state fmt.State, _ rune) {
 }
 func (i Invocation) Run(ctx context.Context, resolver foundation.Resolver, streams Streams) error {
 	if i.state == nil || i.state.run == nil || ctx == nil {
-		return fault.New(fault.Invalid, "uninitialized CLI invocation or context")
+		return safeerror.NewFault(fault.Invalid, "uninitialized CLI invocation or context")
 	}
 	if err := streams.Validate(); err != nil {
 		return err
@@ -250,7 +251,7 @@ func (i Invocation) Run(ctx context.Context, resolver foundation.Resolver, strea
 		return err
 	}
 	if !i.state.claimed.CompareAndSwap(false, true) {
-		return fault.New(fault.Closed, "CLI invocation already ran")
+		return safeerror.NewFault(fault.Closed, "CLI invocation already ran")
 	}
 	return observability.Observe(ctx, observability.Operation{Kind: observability.CLI, Name: observability.Name(i.Name())}, func(ctx context.Context) error {
 		gate := maintenance.FromContext(ctx)

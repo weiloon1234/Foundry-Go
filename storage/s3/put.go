@@ -1,11 +1,12 @@
 package s3
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 	"bytes"
 	"context"
 	"crypto/md5" // S3's Content-MD5 transport integrity, never password/security hashing.
 	"encoding/base64"
-	"errors"
 	"io"
 	"sync"
 	"time"
@@ -40,7 +41,7 @@ func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Read
 		return storage.ObjectInfo{}, err
 	}
 	if source == nil {
-		return storage.ObjectInfo{}, storage.Failure(storage.Invalid, storage.PutOperation, storage.Unchanged, nil)
+		return storage.ObjectInfo{}, newFailure(storage.Invalid, storage.PutOperation, storage.Unchanged, nil)
 	}
 	if err := options.Validate(b.config.MaxObjectBytes); err != nil {
 		return storage.ObjectInfo{}, err
@@ -65,8 +66,8 @@ func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Read
 	err = callback.Invoke("S3 object publication", func() error { var err error; info, err = writer.publish(source); return err })
 	// Every part request has exited before the outcome is classified, any
 	// abort starts or a pooled buffer is reused.
-	if drained := writer.drain(); err != nil && drained != nil && !errors.Is(err, drained) {
-		err = errors.Join(err, drained)
+	if drained := writer.drain(); err != nil && drained != nil {
+		err = safeerror.Join("operation failed", err, drained)
 	}
 	writer.recycle()
 	if err == nil {
@@ -80,16 +81,19 @@ func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Read
 		state = storage.Applied
 	}
 	primary := failure(storage.PutOperation, state, err)
+	var detail *storage.Error
+	callback.ErrorAs(primary, &detail)
 	if writer.upload != "" && !writer.completed {
 		cleanupContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), b.config.AbortTimeout)
 		cleanup := callback.Invoke("S3 multipart abort", func() error { return b.abort(cleanupContext, full, writer.upload) })
 		cancel()
 		if cleanup != nil {
-			primary = storage.Failure(primary.Code(), storage.PutOperation, primary.Outcome(), errors.Join(primary, cleanup)).WithCleanup(writer.cleanupID())
+			primary = safeerror.Retain(primary, storage.Failure(detail.Code(), storage.PutOperation, detail.Outcome(), safeerror.Join("operation failed", primary, cleanup)).WithCleanup(writer.cleanupID()))
 		}
 	}
-	if writer.creationUncertain || primary.Outcome() == storage.Unknown && writer.upload != "" {
-		primary = primary.WithCleanup(writer.cleanupID())
+	callback.ErrorAs(primary, &detail)
+	if writer.creationUncertain || detail.Outcome() == storage.Unknown && writer.upload != "" {
+		primary = safeerror.Retain(primary, detail.WithCleanup(writer.cleanupID()))
 	}
 	return storage.ObjectInfo{}, primary
 }
@@ -98,10 +102,10 @@ func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Read
 // retryable Unavailable failure matching fault.Overloaded; nothing was sent.
 func (b *Backend) admitUpload(ctx context.Context) error {
 	if err := b.uploads.Acquire(ctx, admission.DefaultWait, b.stop); err != nil {
-		if errors.Is(err, fault.Closed) {
-			return storage.Failure(storage.Closed, storage.PutOperation, storage.Unchanged, err)
+		if callback.ErrorIs(err, fault.Closed) {
+			return newFailure(storage.Closed, storage.PutOperation, storage.Unchanged, err)
 		}
-		return storage.Failure(storage.Unavailable, storage.PutOperation, storage.Unchanged, err)
+		return newFailure(storage.Unavailable, storage.PutOperation, storage.Unchanged, err)
 	}
 	return nil
 }
@@ -109,7 +113,7 @@ func (b *Backend) admitUpload(ctx context.Context) error {
 // validateMetadata rejects provider-specific metadata the profile cannot store.
 func (b *Backend) validateMetadata(metadata storage.ObjectMetadata) error {
 	if metadata.EncryptionKey != "" && b.config.Provider == R2 {
-		return storage.Failure(storage.Unsupported, storage.PutOperation, storage.Unchanged, nil)
+		return newFailure(storage.Unsupported, storage.PutOperation, storage.Unchanged, nil)
 	}
 	return nil
 }
@@ -250,7 +254,7 @@ func (w *multipartWriter) flush() error {
 			return err
 		}
 		if w.upload == "" {
-			return storage.IntegrityFailed
+			return safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 		}
 		w.creationUncertain = false
 	}
@@ -260,7 +264,7 @@ func (w *multipartWriter) flush() error {
 	w.mu.Lock()
 	if len(w.parts) >= MaxParts {
 		w.mu.Unlock()
-		return storage.LimitExceeded
+		return safeerror.Owned(string(storage.LimitExceeded), storage.LimitExceeded)
 	}
 	number := int32(len(w.parts) + 1)
 	w.parts = append(w.parts, types.CompletedPart{})
@@ -315,7 +319,7 @@ func (w *multipartWriter) part(number int32, data []byte) (types.CompletedPart, 
 		return types.CompletedPart{}, err
 	}
 	if result == nil || aws.ToString(result.ETag) == "" {
-		return types.CompletedPart{}, storage.IntegrityFailed
+		return types.CompletedPart{}, safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 	}
 	if err := storage.ETag(*result.ETag).Validate(); err != nil {
 		return types.CompletedPart{}, err
@@ -332,10 +336,10 @@ func (w *multipartWriter) publish(source io.Reader) (storage.ObjectInfo, error) 
 		return storage.ObjectInfo{}, err
 	}
 	if expected, ok := w.options.Size.Get(); ok && size != expected {
-		return storage.ObjectInfo{}, storage.IntegrityFailed
+		return storage.ObjectInfo{}, safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 	}
 	if expected, ok := w.options.Checksum.Get(); ok && digest != expected {
-		return storage.ObjectInfo{}, storage.IntegrityFailed
+		return storage.ObjectInfo{}, safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 	}
 	if err := w.parent.Err(); err != nil {
 		return storage.ObjectInfo{}, err
@@ -359,7 +363,7 @@ func (w *multipartWriter) publish(source io.Reader) (storage.ObjectInfo, error) 
 		}
 		w.completed = true
 		if result == nil {
-			return storage.ObjectInfo{}, storage.IntegrityFailed
+			return storage.ObjectInfo{}, safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 		}
 		tag, version, response = aws.ToString(result.ETag), aws.ToString(result.VersionId), result.ResultMetadata
 	} else {
@@ -392,12 +396,12 @@ func (w *multipartWriter) publish(source io.Reader) (storage.ObjectInfo, error) 
 		}
 		w.completed = true
 		if result == nil {
-			return storage.ObjectInfo{}, storage.IntegrityFailed
+			return storage.ObjectInfo{}, safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 		}
 		tag, version, response = aws.ToString(result.ETag), aws.ToString(result.VersionId), result.ResultMetadata
 	}
 	if tag == "" || storage.ETag(tag).Validate() != nil {
-		return storage.ObjectInfo{}, storage.IntegrityFailed
+		return storage.ObjectInfo{}, safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 	}
 	// The acknowledgement establishes publication. Its response Date stands in
 	// for Last-Modified unless an optional read pinned to the acknowledged
@@ -413,13 +417,13 @@ func (w *multipartWriter) publish(source io.Reader) (storage.ObjectInfo, error) 
 		observed, err := w.backend.Stat(w.ctx, w.key, storage.ReadOptions{IfMatch: info.ETag, Version: info.Version})
 		if err == nil {
 			if observed.Size != size || observed.ContentType != w.options.ContentType {
-				return storage.ObjectInfo{}, storage.IntegrityFailed
+				return storage.ObjectInfo{}, safeerror.Owned(string(storage.IntegrityFailed), storage.IntegrityFailed)
 			}
 			info.Modified = observed.Modified
 		}
 	}
 	if err := info.Validate(); err != nil {
-		return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.PutOperation, storage.Applied, err)
+		return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.PutOperation, storage.Applied, err)
 	}
 	return info, nil
 }

@@ -2,10 +2,10 @@ package extensions
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module owns its Store and requires providers owning its borrowed database.
@@ -33,9 +33,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Store], requires []f
 		if err := r.OnShutdown("model-extensions", func(ctx context.Context) error {
 			err := s.Close(ctx)
 			<-s.Done()
-			return errors.Join(err, s.Close(context.Background()))
+			return safeerror.Join("operation failed", err, s.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, s.Close(ctx))
+			return safeerror.Join("operation failed", err, s.Close(ctx))
 		}
 		return nil
 	}}

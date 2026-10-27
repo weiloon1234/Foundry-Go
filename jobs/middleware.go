@@ -2,13 +2,13 @@ package jobs
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -53,7 +53,7 @@ type HandlerOptions[P any] struct {
 func RateLimit[P, K any](limiter ratelimit.Limiter[K], key func(P) K) Admission[P] {
 	return func(ctx context.Context, payload P) (time.Duration, error) {
 		if key == nil {
-			return 0, fault.New(fault.Invalid, "job rate limit requires a key resolver")
+			return 0, safeerror.NewFault(fault.Invalid, "job rate limit requires a key resolver")
 		}
 		decision, err := limiter.TakeWith(ctx, 1, func(context.Context) (K, error) { return key(payload), nil })
 		if err != nil {
@@ -74,10 +74,10 @@ func (d Definition[P]) DeclareWith(handler Handler[P], options HandlerOptions[P]
 		return Declaration{}, err
 	}
 	if len(options.Middleware) > 64 {
-		return Declaration{}, fault.New(fault.Invalid, "job middleware capacity exceeded")
+		return Declaration{}, safeerror.NewFault(fault.Invalid, "job middleware capacity exceeded")
 	}
 	if handler == nil && (len(options.Middleware) > 0 || options.Admission != nil || options.Skip != nil || options.Overlap.enabled() || options.Throttle.enabled()) {
-		return Declaration{}, fault.New(fault.Invalid, "producer-only job cannot have execution callbacks")
+		return Declaration{}, safeerror.NewFault(fault.Invalid, "producer-only job cannot have execution callbacks")
 	}
 	if options.Overlap.enabled() {
 		if err := options.Overlap.options.Validate(); err != nil {
@@ -104,11 +104,11 @@ func (d Definition[P]) DeclareWith(handler Handler[P], options HandlerOptions[P]
 		}
 		snapshot, err := value.ParseJSON[P](text)
 		if err != nil {
-			return preparedJob{}, &payloadError{cause: err}
+			return preparedJob{}, payloadFailure(err)
 		}
 		payload, err := snapshot.Decode()
 		if err != nil {
-			return preparedJob{}, &payloadError{cause: err}
+			return preparedJob{}, payloadFailure(err)
 		}
 		if options.Admission != nil {
 			delay, err := options.Admission(ctx, payload)
@@ -116,7 +116,7 @@ func (d Definition[P]) DeclareWith(handler Handler[P], options HandlerOptions[P]
 				return preparedJob{}, err
 			}
 			if delay < 0 || delay > MaxDelay {
-				return preparedJob{}, fault.New(fault.Invalid, "job admission returned an invalid delay")
+				return preparedJob{}, safeerror.NewFault(fault.Invalid, "job admission returned an invalid delay")
 			}
 			if delay > 0 {
 				return preparedJob{delay: delay}, nil
@@ -180,7 +180,7 @@ func (d Definition[P]) DeclareWith(handler Handler[P], options HandlerOptions[P]
 			mu.Lock()
 			if released {
 				mu.Unlock()
-				return fault.New(fault.Closed, "job overlap lease was already released")
+				return safeerror.NewFault(fault.Closed, "job overlap lease was already released")
 			}
 			invoked = true
 			mu.Unlock()
@@ -228,7 +228,7 @@ func invokeMiddleware[P any](ctx context.Context, payload P, handler Handler[P],
 		for i := entered - 1; i >= 0; i-- {
 			item := middleware[i]
 			if item.After != nil {
-				result = errors.Join(result, callback.Isolated("after job", func() error { return item.After(ctx, payload) }))
+				result = safeerror.Join("operation failed", result, callback.Isolated("after job", func() error { return item.After(ctx, payload) }))
 			}
 		}
 	}
@@ -237,7 +237,7 @@ func invokeMiddleware[P any](ctx context.Context, payload P, handler Handler[P],
 			item := middleware[i]
 			if item.Failed != nil {
 				failure := result
-				result = errors.Join(result, callback.Isolated("failed job", func() error { return item.Failed(ctx, payload, failure) }))
+				result = safeerror.Join("operation failed", result, callback.Isolated("failed job", func() error { return item.Failed(ctx, payload, failure) }))
 			}
 		}
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -73,10 +74,10 @@ func WithLockout[M model.Identifiable, K, I any](reset *Reset[M, K], throttle lo
 		return nil, err
 	}
 	if key == nil {
-		return nil, fault.New(fault.Invalid, "password reset lockout requires a login-key mapping")
+		return nil, safeerror.NewFault(fault.Invalid, "password reset lockout requires a login-key mapping")
 	}
 	if reset.unlock != nil {
-		return nil, fault.New(fault.Duplicate, "password reset already clears a lockout")
+		return nil, safeerror.NewFault(fault.Duplicate, "password reset already clears a lockout")
 	}
 	next := *reset
 	next.unlock = func(ctx context.Context, subject M) error {
@@ -96,10 +97,10 @@ func (r *Reset[M, K]) WithObserver(observer auth.Observer) (*Reset[M, K], error)
 		return nil, err
 	}
 	if observer == nil {
-		return nil, fault.New(fault.Invalid, "password reset observer is nil")
+		return nil, safeerror.NewFault(fault.Invalid, "password reset observer is nil")
 	}
 	if r.observer != nil {
-		return nil, fault.New(fault.Duplicate, "password reset observer already configured")
+		return nil, safeerror.NewFault(fault.Duplicate, "password reset observer already configured")
 	}
 	next := *r
 	next.observer = observer
@@ -111,12 +112,12 @@ func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Prov
 		return nil, err
 	}
 	if binding.Lock == nil || binding.Email == nil || binding.EmailRevision == nil || binding.Hash == nil || binding.SetPassword == nil || binding.ValidatePassword == nil || binding.Invalidate == nil {
-		return nil, fault.New(fault.Invalid, "password reset requires model, password policy and transactional invalidation callbacks")
+		return nil, safeerror.NewFault(fault.Invalid, "password reset requires model, password policy and transactional invalidation callbacks")
 	}
 	flow, err := challenge.New[M, K, challenge.PasswordReset](store, provider, challenge.Model[M, K]{Lock: binding.Lock, Binding: func(subject M) (challenge.Binding, error) {
 		hash := binding.Hash(subject)
 		if err := hash.Validate(); err != nil {
-			return challenge.Binding{}, auth.Unauthenticated
+			return challenge.Binding{}, auth.Unauthenticated.WithCause(nil)
 		}
 		return challenge.BindRevision(binding.EmailRevision(subject), secret.New(binding.Email(subject)), hash.Encoded())
 	}, Eligible: binding.Eligible}, lifetime)
@@ -127,7 +128,7 @@ func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Prov
 }
 func (r *Reset[M, K]) Validate() error {
 	if r == nil || r.flow == nil {
-		return fault.New(fault.Invalid, "password reset is not configured")
+		return safeerror.NewFault(fault.Invalid, "password reset is not configured")
 	}
 	return r.flow.Validate()
 }
@@ -178,7 +179,7 @@ func (r *Reset[M, K]) consume(ctx context.Context, token Token[M], plain passwor
 			return *new(M), err
 		}
 		if r.model.Hash(updated) != next || r.model.Email(updated) != r.model.Email(subject) || r.model.EmailRevision(updated) != r.model.EmailRevision(subject) {
-			return *new(M), fault.New(fault.Invalid, "password reset changed email state or returned a different password hash")
+			return *new(M), safeerror.NewFault(fault.Invalid, "password reset changed email state or returned a different password hash")
 		}
 		// Flow verifies model identity before committing. Do so before invalidation as
 		// well, so a faulty setter cannot target another account's credentials.
@@ -191,7 +192,7 @@ func (r *Reset[M, K]) consume(ctx context.Context, token Token[M], plain passwor
 			return *new(M), err
 		}
 		if before != after {
-			return *new(M), fault.New(fault.Invalid, "password reset changed model identity")
+			return *new(M), safeerror.NewFault(fault.Invalid, "password reset changed model identity")
 		}
 		if err := r.model.Invalidate(op, tx, updated); err != nil {
 			return *new(M), err

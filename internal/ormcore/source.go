@@ -4,7 +4,7 @@ package ormcore
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -80,7 +80,7 @@ type Order struct {
 	Err           error
 }
 
-func Invalid(message string) error { return fault.New(fault.Invalid, message) }
+func Invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }
 func CheckReferences(s Source, refs []Reference) error {
 	if len(refs) == 0 || len(s.Owners) == 0 {
 		return Invalid("expression requires an owned source")
@@ -130,7 +130,7 @@ type RowSource interface {
 
 // Consume owns close/error handling for model and projected reads.
 func Consume(ctx context.Context, rows RowSource, scan func(database.Row) error) (err error) {
-	defer func() { err = errors.Join(err, rows.Close()) }()
+	defer func() { err = safeerror.Join("operation failed", err, rows.Close()) }()
 	for rows.Next() {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -139,7 +139,7 @@ func Consume(ctx context.Context, rows RowSource, scan func(database.Row) error)
 			return err
 		}
 	}
-	return errors.Join(ctx.Err(), rows.Err())
+	return safeerror.Join("operation failed", ctx.Err(), rows.Err())
 }
 
 // Read centralizes projection/scalar execution and discards unfinished rows.
@@ -161,7 +161,7 @@ func readComplete(ctx context.Context, ex database.Executor, node querycore.Sele
 	}
 	for _, check := range checks {
 		if check != nil {
-			planError = errors.Join(planError, check())
+			planError = safeerror.Join("operation failed", planError, check())
 		}
 	}
 	if transaction {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/textvalue"
 )
 
@@ -20,7 +21,7 @@ type Interval struct {
 // them into one another. Sub-microsecond precision is rejected.
 func NewInterval(months, days int32, elapsed time.Duration) (Interval, error) {
 	if elapsed%time.Microsecond != 0 {
-		return Interval{}, fault.New(fault.Invalid, "interval requires whole microseconds")
+		return Interval{}, safeerror.NewFault(fault.Invalid, "interval requires whole microseconds")
 	}
 	return Interval{months: months, days: days, elapsed: elapsed}, nil
 }

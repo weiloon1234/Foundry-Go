@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
@@ -63,7 +64,7 @@ func (s *Scheduler) execute(leader context.Context, index int, id ExecutionID, i
 				state, reason, failure = Failed, CoordinationFailed, err
 			}
 		} else if err != nil {
-			failure = errors.Join(failure, err)
+			failure = safeerror.Join("operation failed", failure, err)
 			lost := false
 			inspection := callback.Isolated("classify schedule coordination", func() error {
 				lost = errorgraph.Is(err, lease.ErrLost)
@@ -155,14 +156,14 @@ func (s *Scheduler) invoke(parent context.Context, d Declaration, invocation Inv
 			reason = HookFailed
 		}
 	}
-	err = errors.Join(err, ctx.Err())
+	err = safeerror.Join("operation failed", err, ctx.Err())
 	if err != nil && d.options.Failed != nil {
 		failure := err
 		hookErr := callback.Isolated("failed schedule", func() error { return d.options.Failed(ctx, invocation, failure) })
 		if hookErr != nil && reason == NoReason {
 			reason = HookFailed
 		}
-		err = errors.Join(err, hookErr)
+		err = safeerror.Join("operation failed", err, hookErr)
 	}
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):

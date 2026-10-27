@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"io"
 	"os"
 
@@ -28,7 +29,7 @@ func runContracts(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		return err
 	}
 	if flags.NArg() != 0 || *input == "" || options.Dir == "" {
-		return cli.Usage("contracts requires --manifest and --dir; positional arguments are unsupported")
+		return clidiag.Usage("contracts requires --manifest and --dir; positional arguments are unsupported")
 	}
 	if err := ctx.Err(); err != nil {
 		return err

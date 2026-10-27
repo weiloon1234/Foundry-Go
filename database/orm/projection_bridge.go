@@ -1,7 +1,7 @@
 package orm
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -24,12 +24,12 @@ func FoundryPredicate[M any](p Predicate[M], seal sqlowner.MetadataSeal) ormcore
 	}
 	result := ormcore.Predicate{Node: querycore.PredicateNode(p.expression), Err: p.err}
 	if p.owner != nil {
-		result.Err = errors.Join(result.Err, declarationCoreError(p.owner))
+		result.Err = safeerror.Join("operation failed", result.Err, declarationCoreError(p.owner))
 		result.Refs = []ormcore.Reference{{Scope: reflect.TypeFor[M](), Table: p.owner.model.Table, Owner: p.owner}}
 	} else if p.rawScope == reflect.TypeFor[M]() {
 		result.Refs = []ormcore.Reference{{Scope: p.rawScope}}
 	} else {
-		result.Err = errors.Join(result.Err, invalid("predicate requires a model declaration"))
+		result.Err = safeerror.Join("operation failed", result.Err, invalid("predicate requires a model declaration"))
 	}
 	return result
 }

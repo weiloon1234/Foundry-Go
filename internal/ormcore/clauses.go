@@ -1,16 +1,16 @@
 package ormcore
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
 func clauseExpression(s *Source, e Expression) {
-	s.Err = errors.Join(s.Err, e.Err, CheckReferenceSet(*s, e.Refs, e.ReferenceFree))
+	s.Err = safeerror.Join("operation failed", s.Err, e.Err, CheckReferenceSet(*s, e.Refs, e.ReferenceFree))
 	if e.Node == nil {
-		s.Err = errors.Join(s.Err, Invalid("uninitialized clause expression"))
+		s.Err = safeerror.Join("operation failed", s.Err, Invalid("uninitialized clause expression"))
 	}
 }
 
@@ -28,9 +28,9 @@ func GroupBy(s Source, keys []Expression) Source {
 func Having(s Source, predicates []Predicate) Source {
 	s.Node.Having = slices.Clone(s.Node.Having)
 	for _, p := range predicates {
-		s.Err = errors.Join(s.Err, p.Err, CheckReferenceSet(s, p.Refs, p.ReferenceFree))
+		s.Err = safeerror.Join("operation failed", s.Err, p.Err, CheckReferenceSet(s, p.Refs, p.ReferenceFree))
 		if p.Node == nil {
-			s.Err = errors.Join(s.Err, Invalid("uninitialized HAVING predicate"))
+			s.Err = safeerror.Join("operation failed", s.Err, Invalid("uninitialized HAVING predicate"))
 		}
 		s.Node.Having = append(s.Node.Having, p.Node)
 	}

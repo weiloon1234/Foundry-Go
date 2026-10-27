@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type spaFallback struct {
@@ -28,7 +29,7 @@ type spaFallback struct {
 // or rewritten.
 func (r *Router) WithSPA(id RouteID, assets *Assets, config SPAConfig) (*Router, error) {
 	if r == nil || r.mux == nil {
-		return nil, fault.New(fault.Invalid, "SPA requires a router")
+		return nil, safeerror.NewFault(fault.Invalid, "SPA requires a router")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -39,15 +40,15 @@ func (r *Router) WithSPA(id RouteID, assets *Assets, config SPAConfig) (*Router,
 	}
 	for _, prior := range r.spas {
 		if prior.prefix == mount.prefix {
-			return nil, fault.New(fault.Duplicate, "SPA prefix already configured")
+			return nil, safeerror.NewFault(fault.Duplicate, "SPA prefix already configured")
 		}
 	}
 	if !assets.config.allowed(string(config.Index)) {
-		return nil, fault.New(fault.Invalid, "SPA entry is hidden by asset policy")
+		return nil, safeerror.NewFault(fault.Invalid, "SPA entry is hidden by asset policy")
 	}
 	for _, route := range r.routes {
 		if route.ID == id {
-			return nil, fault.New(fault.Duplicate, "SPA route ID is already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "SPA route ID is already registered")
 		}
 	}
 	registration := mount.Register()
@@ -94,7 +95,7 @@ func (s *spaFallback) serve(w stdhttp.ResponseWriter, r *stdhttp.Request) bool {
 		}
 	} else {
 		selection, err = s.assets.selectAsset(r.Context(), name, strings.HasSuffix(r.URL.Path, "/"))
-		if isMissingAsset(err) && s.assets.config.allowed(strings.TrimSuffix(name, "/")) && htmlNavigation(r.Header.Values("Accept"), name) {
+		if isMissingAsset(err) && s.assets.config.allowed(strings.TrimSuffix(name, "/")) && IsHTMLNavigation(r, name) {
 			selection, err = s.entry(r.Context())
 			selection.varyAccept = true
 		}
@@ -116,7 +117,7 @@ func (s *spaFallback) entry(ctx context.Context) (assetSelection, error) {
 		return assetSelection{}, err
 	}
 	if !info.mode.IsRegular() {
-		return assetSelection{}, InternalError.WithCause(fault.New(fault.Invalid, "SPA entry must be a regular file"))
+		return assetSelection{}, InternalError.WithCause(safeerror.NewFault(fault.Invalid, "SPA entry must be a regular file"))
 	}
 	return assetSelection{name: string(s.config.Index)}, nil
 }

@@ -76,6 +76,10 @@ func (e *emitter) finish(source string) ([]byte, error) {
 	if e.err != nil {
 		return nil, e.err
 	}
+	body, err := e.frameworkDiagnostics(e.finishFieldHelp())
+	if err != nil {
+		return nil, err
+	}
 	var out bytes.Buffer
 	fmt.Fprintf(&out, "%s\n// Source: %s.\n\npackage %s\n\n", generatedHeader, path.Base(filepath.ToSlash(source)), e.pkg.name)
 	if len(e.imports) > 0 {
@@ -85,7 +89,7 @@ func (e *emitter) finish(source string) ([]byte, error) {
 		}
 		out.WriteString(")\n\n")
 	}
-	out.Write(e.finishFieldHelp())
+	out.Write(body)
 	formatted, err := format.Source(out.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("format generated source: %w", err)

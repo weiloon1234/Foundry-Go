@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/textvalue"
 )
 
@@ -17,13 +18,13 @@ type LocalDateTime struct {
 
 func NewLocalDateTime(date Date, clock Time) (LocalDateTime, error) {
 	if date.IsZero() {
-		return LocalDateTime{}, fault.New(fault.Invalid, "local date-time requires a date")
+		return LocalDateTime{}, safeerror.NewFault(fault.Invalid, "local date-time requires a date")
 	}
 	return LocalDateTime{date, clock}, nil
 }
 func ParseLocalDateTime(text string) (LocalDateTime, error) {
 	if len(text) < 19 || (text[10] != 'T' && text[10] != ' ') {
-		return LocalDateTime{}, fault.New(fault.Invalid, "expected local YYYY-MM-DDTHH:MM:SS")
+		return LocalDateTime{}, safeerror.NewFault(fault.Invalid, "expected local YYYY-MM-DDTHH:MM:SS")
 	}
 	date, err := ParseDate(text[:10])
 	if err != nil {
@@ -41,7 +42,7 @@ func (v LocalDateTime) IsZero() bool   { return v.date.IsZero() }
 func (v LocalDateTime) String() string { return v.date.String() + "T" + v.clock.String() }
 func (v LocalDateTime) Add(duration time.Duration) (LocalDateTime, error) {
 	if v.IsZero() {
-		return LocalDateTime{}, fault.New(fault.Invalid, "local date-time is absent")
+		return LocalDateTime{}, safeerror.NewFault(fault.Invalid, "local date-time is absent")
 	}
 	wall := v.wall().Add(duration)
 	date, err := NewDate(wall.Year(), wall.Month(), wall.Day())
@@ -59,7 +60,7 @@ func (v LocalDateTime) wall() time.Time { return v.date.wall().Add(time.Duration
 // this bound. No machine-local timezone or arbitrary DST choice is used.
 func (v LocalDateTime) In(zone *time.Location) (DateTime, error) {
 	if zone == nil || v.IsZero() {
-		return DateTime{}, fault.New(fault.Invalid, "local date-time and timezone are required")
+		return DateTime{}, safeerror.NewFault(fault.Invalid, "local date-time and timezone are required")
 	}
 	wall := v.wall()
 	start, end := wall.Add(-24*time.Hour), wall.Add(24*time.Hour)
@@ -68,12 +69,12 @@ func (v LocalDateTime) In(zone *time.Location) (DateTime, error) {
 	seen := make(map[int]bool)
 	for cursor, steps := start, 0; !cursor.After(end); steps++ {
 		if steps >= 256 {
-			return DateTime{}, fault.New(fault.Invalid, "timezone has excessive transitions")
+			return DateTime{}, safeerror.NewFault(fault.Invalid, "timezone has excessive transitions")
 		}
 		local := cursor.In(zone)
 		_, offset := local.Zone()
 		if offset < -24*3600 || offset > 24*3600 {
-			return DateTime{}, fault.New(fault.Invalid, "timezone offset exceeds supported bounds")
+			return DateTime{}, safeerror.NewFault(fault.Invalid, "timezone offset exceeds supported bounds")
 		}
 		if !seen[offset] {
 			seen[offset] = true
@@ -81,7 +82,7 @@ func (v LocalDateTime) In(zone *time.Location) (DateTime, error) {
 			actual := candidate.In(zone)
 			if actual.Year() == wall.Year() && actual.Month() == wall.Month() && actual.Day() == wall.Day() && actual.Hour() == wall.Hour() && actual.Minute() == wall.Minute() && actual.Second() == wall.Second() && actual.Nanosecond() == wall.Nanosecond() {
 				if matched && !match.Equal(candidate) {
-					return DateTime{}, fault.New(fault.Conflict, "local date-time is ambiguous in this timezone")
+					return DateTime{}, safeerror.NewFault(fault.Conflict, "local date-time is ambiguous in this timezone")
 				}
 				match = candidate
 				matched = true
@@ -92,18 +93,18 @@ func (v LocalDateTime) In(zone *time.Location) (DateTime, error) {
 			break
 		}
 		if !next.After(cursor) {
-			return DateTime{}, fault.New(fault.Invalid, "invalid timezone transition")
+			return DateTime{}, safeerror.NewFault(fault.Invalid, "invalid timezone transition")
 		}
 		cursor = next
 	}
 	if !matched {
-		return DateTime{}, fault.New(fault.Invalid, "local date-time does not exist in this timezone")
+		return DateTime{}, safeerror.NewFault(fault.Invalid, "local date-time does not exist in this timezone")
 	}
 	return NewDateTime(match)
 }
 func (v LocalDateTime) MarshalText() ([]byte, error) {
 	if v.IsZero() {
-		return nil, fault.New(fault.Invalid, "local date-time is absent")
+		return nil, safeerror.NewFault(fault.Invalid, "local date-time is absent")
 	}
 	return []byte(v.String()), nil
 }

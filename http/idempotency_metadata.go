@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const IdempotencyKeyHeader HeaderName = "Idempotency-Key"
@@ -37,10 +38,10 @@ func idempotencyInfo(d idempotency.Definition, c idempotency.Config, headers boo
 func idempotencyKeyPattern(maximum int) string { return idempotency.KeyPattern(maximum) }
 func (i IdempotencyInfo) Validate() error {
 	if (idempotency.Definition{ID: i.Operation, Version: i.Version}).Validate() != nil || i.Header != IdempotencyKeyHeader || i.MinKeyBytes != idempotency.MinKeyBytes || i.MaxKeyBytes < i.MinKeyBytes || i.MaxKeyBytes > idempotency.MaxKeyBytes || i.KeyPattern != idempotencyKeyPattern(i.MaxKeyBytes) || i.Fingerprint != "prepared-path-query-body-v1" || !i.SuccessOnly || i.DuplicateWaitMilliseconds < 1 || i.DuplicateWaitMilliseconds > int64(5*time.Minute/time.Millisecond) || i.RetentionSeconds < 3600 || i.RetentionSeconds > int64(365*24*time.Hour/time.Second) {
-		return fault.New(fault.Invalid, "invalid HTTP idempotency policy")
+		return safeerror.NewFault(fault.Invalid, "invalid HTTP idempotency policy")
 	}
 	if len(i.ApplicationHeaders) != 0 && !slices.Equal(i.ApplicationHeaders, replayHeaderNames) {
-		return fault.New(fault.Invalid, "invalid replay header policy")
+		return safeerror.NewFault(fault.Invalid, "invalid replay header policy")
 	}
 	return nil
 }

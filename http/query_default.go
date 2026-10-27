@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -37,7 +38,7 @@ func DefaultQueryParam[Q, V any](name string, codec QueryCodec[V], defaultValue 
 			return err
 		}
 		if len(text) > maxQueryDefaultBytes || !utf8.ValidString(text) {
-			return fault.New(fault.Invalid, "query default requires bounded UTF-8 metadata")
+			return safeerror.NewFault(fault.Invalid, "query default requires bounded UTF-8 metadata")
 		}
 		decoded, err := codec.Parse(text)
 		if err != nil {
@@ -48,12 +49,12 @@ func DefaultQueryParam[Q, V any](name string, codec QueryCodec[V], defaultValue 
 			return err
 		}
 		if canonical != text {
-			return fault.New(fault.Invalid, "query default is not a canonical codec value")
+			return safeerror.NewFault(fault.Invalid, "query default is not a canonical codec value")
 		}
 		return nil
 	})
 	if err != nil {
-		parameter.err = fault.Wrap(fault.Invalid, "invalid query default declaration", err)
+		parameter.err = safeerror.WrapFault(fault.Invalid, "invalid query default declaration", err)
 		return parameter
 	}
 	text = strings.Clone(text)

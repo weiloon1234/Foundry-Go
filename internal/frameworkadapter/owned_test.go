@@ -42,3 +42,25 @@ func TestPromotedMarkerIsNotFrameworkOwned(t *testing.T) {
 		t.Fatal("contained Goexit reported success")
 	}
 }
+
+type catcher[K any] struct{ called bool }
+
+func (c *catcher[K]) FoundryAdapter(K)            { c.called = true }
+func adapterCatcher[K any](_ func(K)) *catcher[K] { return new(catcher[K]) }
+
+func TestInferredAdapterMarkerCarriesNoCapability(t *testing.T) {
+	backend, err := memory.New(memory.DefaultConfig(), clock.System{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	captured := adapterCatcher(backend.FoundryAdapter)
+	if frameworkadapter.Is(captured) {
+		t.Fatal("inferred application marker was trusted")
+	}
+	if err := frameworkadapter.Call(captured, "application", func() error { runtime.Goexit(); return nil }); err == nil {
+		t.Fatal("inferred marker bypassed callback isolation")
+	}
+	if captured.called {
+		t.Fatal("no-op marker was invoked")
+	}
+}

@@ -2,11 +2,11 @@ package events
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module prepares one bus per application, binds all provider contributions
@@ -49,9 +49,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Bus], config Config)
 		if err := r.OnShutdown("listeners", func(ctx context.Context) error {
 			err := bus.Close(ctx)
 			<-bus.Done()
-			return errors.Join(err, bus.Close(context.Background()))
+			return safeerror.Join("operation failed", err, bus.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, bus.Close(ctx))
+			return safeerror.Join("operation failed", err, bus.Close(ctx))
 		}
 		return bus.start(ctx, true)
 	}}
@@ -150,7 +150,7 @@ func Subscribe(subscribers ...Subscriber) ([]Declaration, error) {
 	var result []Declaration
 	for _, subscriber := range subscribers {
 		if subscriber == nil {
-			return nil, fault.New(fault.Invalid, "nil event subscriber")
+			return nil, safeerror.NewFault(fault.Invalid, "nil event subscriber")
 		}
 		declarations, err := subscriber.Declarations()
 		if err != nil {
@@ -166,7 +166,7 @@ func Subscribe(subscribers ...Subscriber) ([]Declaration, error) {
 // subscriber uniquely within the bus.
 func RegisterSubscriber(r *foundation.Registrar, busKey foundation.Key[*Bus], id string, construct func(foundation.Resolver) (Subscriber, error)) error {
 	if construct == nil {
-		return fault.New(fault.Invalid, "event subscriber requires a constructor")
+		return safeerror.NewFault(fault.Invalid, "event subscriber requires a constructor")
 	}
 	return foundation.ContributeAs[Subscriber](r, eventContributions(busKey), fmt.Sprintf("subscriber.%q", id), func(resolver foundation.Resolver) (eventContribution, error) {
 		bus, err := managedBus(resolver, busKey)
@@ -191,7 +191,7 @@ func managedBus(resolver foundation.Resolver, key foundation.Key[*Bus]) (*Bus, e
 		return nil, err
 	}
 	if bus == nil || !bus.managed {
-		return nil, fault.New(fault.Invalid, "registered event contributions require an events Module")
+		return nil, safeerror.NewFault(fault.Invalid, "registered event contributions require an events Module")
 	}
 	return bus, nil
 }

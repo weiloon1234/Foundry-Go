@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -35,17 +36,17 @@ func (c RoutingConfig) Validate() error {
 		return err
 	}
 	if c.SlowQueryThreshold < 0 || c.StickyReadWindow < 0 {
-		return fault.New(fault.Invalid, "PostgreSQL slow query threshold cannot be negative")
+		return safeerror.NewFault(fault.Invalid, "PostgreSQL slow query threshold cannot be negative")
 	}
 	if c.MaxConnections <= 0 || c.Primary.Pool.MaxOpen > c.MaxConnections {
-		return fault.New(fault.Invalid, "PostgreSQL primary pool exceeds the combined connection bound")
+		return safeerror.NewFault(fault.Invalid, "PostgreSQL primary pool exceeds the combined connection bound")
 	}
 	if read, configured := c.Read.Get(); configured {
 		if err := read.Validate(); err != nil {
 			return err
 		}
 		if read.Pool.MaxOpen > c.MaxConnections-c.Primary.Pool.MaxOpen {
-			return fault.New(fault.Invalid, "PostgreSQL primary and read pools exceed the combined connection bound")
+			return safeerror.NewFault(fault.Invalid, "PostgreSQL primary and read pools exceed the combined connection bound")
 		}
 	}
 	return nil

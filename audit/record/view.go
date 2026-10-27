@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -33,10 +34,10 @@ func (v FieldValue[V]) Get() (value.Optional[V], error) {
 		return value.Optional[V]{}, nil
 	}
 	if v.snapshot.state == Oversized {
-		return value.Optional[V]{}, fault.New(fault.Missing, "audit value exceeded its bound; only its digest was retained")
+		return value.Optional[V]{}, safeerror.NewFault(fault.Missing, "audit value exceeded its bound; only its digest was retained")
 	}
 	if v.snapshot.state != Disclosed {
-		return value.Optional[V]{}, fault.New(fault.Missing, "audit value is redacted")
+		return value.Optional[V]{}, safeerror.NewFault(fault.Missing, "audit value is redacted")
 	}
 	var result V
 	err := callback.Isolated("decode audit field", func() error {
@@ -45,13 +46,13 @@ func (v FieldValue[V]) Get() (value.Optional[V], error) {
 			return err
 		}
 		if v.decode == nil {
-			return fault.New(fault.Invalid, "audit field codec is not initialized")
+			return safeerror.NewFault(fault.Invalid, "audit field codec is not initialized")
 		}
 		result, err = v.decode(bound)
 		return err
 	})
 	if err != nil {
-		return value.Optional[V]{}, fault.Wrap(fault.Invalid, "audit field decode failed", err)
+		return value.Optional[V]{}, safeerror.WrapFailure(fault.Invalid, "audit field decode failed", err)
 	}
 	return value.Set(result), nil
 }
@@ -107,18 +108,18 @@ func ReadField[M, K, V any](view View[M, K], name string, c codec.Codec[V]) (val
 // Example: FoundryReadField(view, "name", codec.TypeText, decode, sqlowner.Metadata()).
 func FoundryReadField[M, K, V any](view View[M, K], name string, kind codec.ParameterType, decode func(any) (V, error), seal sqlowner.MetadataSeal) (value.Optional[FieldChange[V]], error) {
 	if !seal.Valid() {
-		return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "invalid audit metadata capability")
+		return value.Optional[FieldChange[V]]{}, safeerror.NewFault(fault.Invalid, "invalid audit metadata capability")
 	}
 	return readField(view, name, kind, decode)
 }
 
 func readField[M, K, V any](view View[M, K], name string, kind codec.ParameterType, decode func(any) (V, error)) (value.Optional[FieldChange[V]], error) {
 	if view.fields == nil {
-		return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "audit view is not initialized")
+		return value.Optional[FieldChange[V]]{}, safeerror.NewFault(fault.Invalid, "audit view is not initialized")
 	}
 	if field, present := view.fields[name]; present {
 		if field.typ != kind {
-			return value.Optional[FieldChange[V]]{}, fault.New(fault.Invalid, "audit field codec does not match its stored representation")
+			return value.Optional[FieldChange[V]]{}, safeerror.NewFault(fault.Invalid, "audit field codec does not match its stored representation")
 		}
 		return value.Set(FieldChange[V]{before: FieldValue[V]{snapshot: field.before, decode: decode},
 			after: FieldValue[V]{snapshot: field.after, decode: decode}, assigned: field.assigned, changed: field.changed}), nil

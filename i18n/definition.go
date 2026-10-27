@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const (
@@ -120,7 +121,7 @@ func sameDefinition(a, b MessageDefinition) bool {
 	return a.Key == b.Key && a.Plural == b.Plural && a.Kind == b.Kind && slices.Equal(a.Parameters, b.Parameters)
 }
 func invalidMessage() error {
-	return fault.New(fault.Invalid, "invalid localization declaration, catalog or argument")
+	return safeerror.NewFault(fault.Invalid, "invalid localization declaration, catalog or argument")
 }
 
 // maxQuotedBytes bounds each developer-owned coordinate quoted in an error.
@@ -161,13 +162,13 @@ func catalogError(locale LocaleID, file, key, reason string) error {
 	}
 	message.WriteString(": ")
 	message.WriteString(reason)
-	return fault.New(fault.Invalid, message.String())
+	return safeerror.NewFault(fault.Invalid, message.String())
 }
 
 // definitionError names the declaration key and problem; declarations are
 // developer-owned and contain no received values.
 func definitionError(key MessageKey, reason string) error {
-	return fault.New(fault.Invalid, "invalid localization declaration "+boundedQuote(string(key))+": "+reason)
+	return safeerror.NewFault(fault.Invalid, "invalid localization declaration "+boundedQuote(string(key))+": "+reason)
 }
 
 // argumentError names the message key and parameter, never the argument value.
@@ -176,7 +177,7 @@ func argumentError(key MessageKey, parameter, reason string) error {
 	if parameter != "" {
 		message += " parameter " + boundedQuote(parameter)
 	}
-	return fault.New(fault.Invalid, message+": "+reason)
+	return safeerror.NewFault(fault.Invalid, message+": "+reason)
 }
 func validText(s string) bool {
 	return len(s) <= MaxTextBytes && utf8.ValidString(s) && !strings.ContainsRune(s, 0)

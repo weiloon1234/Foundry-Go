@@ -168,7 +168,7 @@ func writeEach[M any](ctx context.Context, writer database.Transactor, q querySt
 			var reconcile bool
 			err, reconcile = inspectOutcome(err, false)
 			if reconcile {
-				return nil, &WriteError[[]M]{cause: err, candidate: result}
+				return nil, writeFailure(err, result)
 			}
 		}
 		return nil, err
@@ -187,7 +187,7 @@ func eachCandidates[M any](ctx context.Context, tx *database.Tx, q queryState, s
 	candidates := make([]M, 0)
 	err = consume(ctx, rows, func(row database.Row) error {
 		if len(candidates) >= limit+1 {
-			return database.NewError("model write returned too many rows", database.TooManyRows)
+			return querycore.DatabaseFailure("model write returned too many rows", database.TooManyRows)
 		}
 		var item M
 		if err := hydrate(q.table, row, unsafe.Pointer(&item)); err != nil {
@@ -220,7 +220,7 @@ func eachCandidates[M any](ctx context.Context, tx *database.Tx, q queryState, s
 			return nil, nil, err
 		}
 		if seen[identity] {
-			return nil, nil, database.NewError("per-model write identity", database.TooManyRows)
+			return nil, nil, querycore.DatabaseFailure("per-model write identity", database.TooManyRows)
 		}
 		seen[identity] = true
 		if bytes, ok := key.([]byte); ok {

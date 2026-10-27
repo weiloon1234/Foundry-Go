@@ -9,6 +9,7 @@ import (
 	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/ratewindow"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
@@ -68,7 +69,7 @@ func (c *Client) ClearRateLimit(ctx context.Context, key ratelimit.Key) (bool, e
 	}
 	removed, ok := result.(int64)
 	if !ok || removed < 0 || removed > 1 {
-		return false, fault.New(fault.Internal, "invalid Redis rate limit clear reply")
+		return false, safeerror.NewFault(fault.Internal, "invalid Redis rate limit clear reply")
 	}
 	return removed == 1, nil
 }
@@ -83,27 +84,27 @@ func (c *Client) rateLimit(ctx context.Context, key ratelimit.Key, limit ratelim
 	}
 	parts, ok := result.([]any)
 	if !ok || len(parts) == 0 {
-		return ratelimit.Decision{}, fault.New(fault.Internal, "invalid Redis rate limit reply")
+		return ratelimit.Decision{}, safeerror.NewFault(fault.Internal, "invalid Redis rate limit reply")
 	}
 	status, ok := parts[0].(int64)
 	if !ok {
-		return ratelimit.Decision{}, fault.New(fault.Internal, "invalid Redis rate limit status")
+		return ratelimit.Decision{}, safeerror.NewFault(fault.Internal, "invalid Redis rate limit status")
 	}
 	if len(parts) == 1 {
 		switch status {
 		case -1:
-			return ratelimit.Decision{}, fault.New(fault.Invalid, "stored Redis rate limit metadata is corrupt")
+			return ratelimit.Decision{}, safeerror.NewFault(fault.Invalid, "stored Redis rate limit metadata is corrupt")
 		case -3:
-			return ratelimit.Decision{}, fault.New(fault.Invalid, "Redis rate limit clock outside supported epoch range")
+			return ratelimit.Decision{}, safeerror.NewFault(fault.Invalid, "Redis rate limit clock outside supported epoch range")
 		}
 	}
 	if len(parts) != 3 || (status != 0 && status != 1) {
-		return ratelimit.Decision{}, fault.New(fault.Internal, "invalid Redis rate limit result")
+		return ratelimit.Decision{}, safeerror.NewFault(fault.Internal, "invalid Redis rate limit result")
 	}
 	remaining, okRemaining := parts[1].(int64)
 	reset, okReset := parts[2].(int64)
 	if !okRemaining || !okReset || remaining < 0 || remaining > math.MaxUint32 || reset <= 0 || reset > limit.Window.Milliseconds() {
-		return ratelimit.Decision{}, fault.New(fault.Internal, "invalid Redis rate limit bounds")
+		return ratelimit.Decision{}, safeerror.NewFault(fault.Internal, "invalid Redis rate limit bounds")
 	}
 	decision := ratelimit.Decision{Allowed: status == 1, Limit: limit.Requests, Remaining: uint32(remaining), ResetAfter: time.Duration(reset) * time.Millisecond}
 	if !decision.Allowed {

@@ -1,7 +1,7 @@
 package ormcore
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 
@@ -16,9 +16,9 @@ type CommonTable struct {
 }
 
 func NewCommonTable(name string, r RecordSource) CommonTable {
-	r.Source.Err = errors.Join(r.Source.Err, ValidateRecordSource(r, r.Record.Type, r.Transaction))
+	r.Source.Err = safeerror.Join("operation failed", r.Source.Err, ValidateRecordSource(r, r.Record.Type, r.Transaction))
 	if !sqlname.Valid(name) {
-		r.Source.Err = errors.Join(r.Source.Err, Invalid("CTE requires a valid name and record query"))
+		r.Source.Err = safeerror.Join("operation failed", r.Source.Err, Invalid("CTE requires a valid name and record query"))
 	}
 	return CommonTable{Definition: &querycore.CteNode{Name: name, Query: r.Source.Node, Columns: slices.Clone(r.Record.Columns)}, Record: r}
 }
@@ -35,7 +35,7 @@ func Materialize(c CommonTable, mode querycore.CteMaterialization) CommonTable {
 func CommonTableRecord(c CommonTable) RecordSource {
 	r := c.Record
 	if c.Definition == nil {
-		r.Source.Err = errors.Join(r.Source.Err, Invalid("CTE requires a definition"))
+		r.Source.Err = safeerror.Join("operation failed", r.Source.Err, Invalid("CTE requires a definition"))
 		return r
 	}
 	d := c.Definition
@@ -57,7 +57,7 @@ func RecursiveRecord(name string, anchor RecordSource) (RecordSource, *querycore
 }
 
 func CompleteRecursion(c CommonTable, step RecordSource, ref *querycore.RecursiveReference, operator querycore.SetOperator) CommonTable {
-	c.Record.Source.Err = errors.Join(c.Record.Source.Err, CompatibleRecordSources(c.Record, step))
+	c.Record.Source.Err = safeerror.Join("operation failed", c.Record.Source.Err, CompatibleRecordSources(c.Record, step))
 	c.Record.Source.Checks = AppendChecks(c.Record.Source.Checks, step.Source.Checks...)
 	c.Record.Source.Checks = AppendChecks(c.Record.Source.Checks, step.Record.Checks...)
 	if c.Definition != nil {
@@ -79,7 +79,7 @@ func CompatibleRecordSources(a, b RecordSource) error {
 func CombineRecords(a, b RecordSource, operator querycore.SetOperator, scope reflect.Type) RecordSource {
 	err := CompatibleRecordSources(a, b)
 	if operator > querycore.ExceptAllSet {
-		err = errors.Join(err, Invalid("invalid set operator"))
+		err = safeerror.Join("operation failed", err, Invalid("invalid set operator"))
 	}
 	r := RecordSource{Record: a.Record, Transaction: a.Transaction, Direct: true}
 	r.Source = Source{Scope: scope, Node: querycore.SelectNode{Source: querycore.TableSource{Set: &querycore.SetNode{Left: a.Source.Node, Right: b.Source.Node, Operator: operator}, Alias: querycore.SetAlias, Columns: slices.Clone(a.Record.Columns)}, Selections: querycore.ColumnSelections(querycore.SetAlias, a.Record.Columns)}, Aliases: map[string]reflect.Type{querycore.SetAlias: scope}, Owners: map[string]any{querycore.SetAlias: a.Record.Owner}, Err: err, Checks: AppendChecks(a.Source.Checks, b.Source.Checks...)}
@@ -89,7 +89,7 @@ func CombineRecords(a, b RecordSource, operator querycore.SetOperator, scope ref
 
 func SetRecord(r RecordSource) RecordSource {
 	if r.Source.Node.Source.Set == nil {
-		r.Source.Err = errors.Join(r.Source.Err, Invalid("set requires two complete inputs"))
+		r.Source.Err = safeerror.Join("operation failed", r.Source.Err, Invalid("set requires two complete inputs"))
 	}
 	r.Direct = DirectRecord(r.Source)
 	return r

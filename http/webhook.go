@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	stdhttp "net/http"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -33,13 +32,13 @@ func VerifyWebhook[A any](verifier *webhook.Verifier[A]) Middleware {
 			if verification != nil {
 				code := InternalError
 				switch {
-				case errors.Is(verification, webhook.InvalidSignature):
+				case callback.ErrorIs(verification, webhook.InvalidSignature):
 					code = Unauthenticated
-				case errors.Is(verification, webhook.BodyTooLarge):
+				case callback.ErrorIs(verification, webhook.BodyTooLarge):
 					code = PayloadTooLarge
-				case errors.Is(verification, context.Canceled), errors.Is(verification, context.DeadlineExceeded):
+				case callback.ErrorIs(verification, context.Canceled), callback.ErrorIs(verification, context.DeadlineExceeded):
 					code = RequestTimeout
-				case errors.Is(verification, fault.Invalid):
+				case callback.ErrorIs(verification, fault.Invalid):
 					code = BadRequest
 				}
 				writeRoutingError(w, r, code)

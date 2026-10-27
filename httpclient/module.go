@@ -2,11 +2,11 @@ package httpclient
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module binds one named upstream to its typed service key. requires identifies
@@ -43,9 +43,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Client], config Conf
 		if err := r.OnShutdown("httpclient", func(ctx context.Context) error {
 			err := client.Close(ctx)
 			<-client.Done()
-			return errors.Join(err, client.Close(context.Background()))
+			return safeerror.Join("operation failed", err, client.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, client.Close(ctx))
+			return safeerror.Join("operation failed", err, client.Close(ctx))
 		}
 		return nil
 	}}

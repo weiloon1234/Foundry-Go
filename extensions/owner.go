@@ -17,6 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -210,7 +211,7 @@ func (o Owner[M, K]) Lock(ctx context.Context, tx *database.Tx, registry *Regist
 		return Subject{}, err
 	}
 	if !found {
-		return Subject{}, database.NotFound
+		return Subject{}, safeerror.Owned(string(database.NotFound), database.NotFound)
 	}
 	return subject, nil
 }
@@ -269,4 +270,4 @@ func Digest(parts ...string) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
-func invalid(message string) error { return fault.New(fault.Invalid, message) }
+func invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }

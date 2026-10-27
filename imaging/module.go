@@ -2,9 +2,9 @@ package imaging
 
 import (
 	"context"
-	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module constructs the configured engine and drains its actual operations at
@@ -23,9 +23,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Engine], config Conf
 		if err := r.OnShutdown("imaging", func(ctx context.Context) error {
 			err := engine.Close(ctx)
 			<-engine.Done()
-			return errors.Join(err, engine.Close(context.Background()))
+			return safeerror.Join("operation failed", err, engine.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, engine.Close(ctx))
+			return safeerror.Join("operation failed", err, engine.Close(ctx))
 		}
 		if config.Backend == AutoBackend && engine.NativeError() != nil {
 			r.Logger().WarnContext(ctx, "native image features are unavailable; portable imaging remains available", "reason", engine.NativeError())

@@ -31,6 +31,9 @@ type browserSetup struct {
 }
 
 func browserPrepare(t *testing.T) *browserSetup {
+	return browserPrepareWithBackend(t, nil)
+}
+func browserPrepareWithBackend(t *testing.T, wrap func(*sessionpg.Backend) session.Backend) *browserSetup {
 	t.Helper()
 	db := pgtest.Open(t)
 	schema := pgtest.Namespace(t, db)
@@ -57,7 +60,11 @@ func browserPrepare(t *testing.T) *browserSetup {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := session.NewStore(backend, session.DefaultConfig(keyspace.Namespace{Application: "http-browser-test", Environment: "test"}))
+	var selected session.Backend = backend
+	if wrap != nil {
+		selected = wrap(backend)
+	}
+	store, err := session.NewStore(selected, session.DefaultConfig(keyspace.Namespace{Application: "http-browser-test", Environment: "test"}))
 	if err != nil {
 		t.Fatal(err)
 	}

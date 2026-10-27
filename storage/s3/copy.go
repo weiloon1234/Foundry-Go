@@ -23,7 +23,7 @@ const maxCopyBytes int64 = 5 << 30
 // a compatible profile that has not declared ServerCopy. CopyObject is a
 // mutation and is never retried automatically.
 func (b *Backend) Copy(ctx context.Context, source, target storage.ObjectKey, options storage.CopyOptions, maximum int64) (storage.ObjectInfo, error) {
-	declined := storage.Failure(storage.Unsupported, storage.CopyOperation, storage.Unchanged, nil)
+	declined := newFailure(storage.Unsupported, storage.CopyOperation, storage.Unchanged, nil)
 	if err := b.ready(ctx, storage.CopyOperation); err != nil {
 		return storage.ObjectInfo{}, err
 	}
@@ -56,13 +56,13 @@ func (b *Backend) Copy(ctx context.Context, source, target storage.ObjectKey, op
 		return storage.ObjectInfo{}, unchanged(err)
 	}
 	if info.Size > min(maximum, b.config.MaxObjectBytes) {
-		return storage.ObjectInfo{}, storage.Failure(storage.LimitExceeded, storage.CopyOperation, storage.Unchanged, nil)
+		return storage.ObjectInfo{}, newFailure(storage.LimitExceeded, storage.CopyOperation, storage.Unchanged, nil)
 	}
 	if info.Size > maxCopyBytes {
 		return storage.ObjectInfo{}, declined
 	}
 	if size, supplied := write.Size.Get(); supplied && size != info.Size {
-		return storage.ObjectInfo{}, storage.Failure(storage.Invalid, storage.CopyOperation, storage.Unchanged, nil)
+		return storage.ObjectInfo{}, newFailure(storage.Invalid, storage.CopyOperation, storage.Unchanged, nil)
 	}
 	checksum, known := info.Checksum.Get()
 	if expected, declared := write.Checksum.Get(); declared {
@@ -70,7 +70,7 @@ func (b *Backend) Copy(ctx context.Context, source, target storage.ObjectKey, op
 			return storage.ObjectInfo{}, declined
 		}
 		if expected != checksum {
-			return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.CopyOperation, storage.Unchanged, nil)
+			return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.CopyOperation, storage.Unchanged, nil)
 		}
 	}
 	if write.ContentType == "" {
@@ -86,18 +86,18 @@ func (b *Backend) Copy(ctx context.Context, source, target storage.ObjectKey, op
 		return storage.ObjectInfo{}, failure(storage.CopyOperation, storage.Unknown, err)
 	}
 	if result == nil || result.CopyObjectResult == nil || result.CopyObjectResult.LastModified == nil {
-		return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.CopyOperation, storage.Applied, nil)
+		return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.CopyOperation, storage.Applied, nil)
 	}
 	modified, err := temporal.NewDateTime(*result.CopyObjectResult.LastModified)
 	if err != nil {
-		return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.CopyOperation, storage.Applied, err)
+		return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.CopyOperation, storage.Applied, err)
 	}
 	copied := storage.ObjectInfo{Key: target, Size: info.Size, ContentType: write.ContentType, Modified: modified, ETag: storage.ETag(aws.ToString(result.CopyObjectResult.ETag)), Version: b.versionID(aws.ToString(result.VersionId)), Checksum: value.Optional[storage.SHA256]{}}
 	if known {
 		copied.Checksum = value.Set(checksum)
 	}
 	if copied.ETag == "" || copied.Validate() != nil {
-		return storage.ObjectInfo{}, storage.Failure(storage.IntegrityFailed, storage.CopyOperation, storage.Applied, nil)
+		return storage.ObjectInfo{}, newFailure(storage.IntegrityFailed, storage.CopyOperation, storage.Applied, nil)
 	}
 	return copied, nil
 }
@@ -113,9 +113,6 @@ func copySource(bucket, key string, version storage.VersionID) string {
 
 // unchanged reports a failed pre-copy read as a copy that changed nothing.
 func unchanged(err error) error {
-	if failed, ok := err.(*storage.Error); ok {
-		return storage.Failure(failed.Code(), storage.CopyOperation, storage.Unchanged, err)
-	}
 	return failure(storage.CopyOperation, storage.Unchanged, err)
 }
 

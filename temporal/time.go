@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/textvalue"
 )
 
@@ -18,18 +19,18 @@ type Time struct{ nanos int64 }
 
 func NewTime(hour, minute, second, nanosecond int) (Time, error) {
 	if hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59 || nanosecond < 0 || nanosecond >= 1e9 {
-		return Time{}, fault.New(fault.Invalid, "invalid wall-clock time")
+		return Time{}, safeerror.NewFault(fault.Invalid, "invalid wall-clock time")
 	}
 	nanosecond = int(time.Duration(nanosecond).Truncate(time.Microsecond))
 	return Time{int64(hour)*int64(time.Hour) + int64(minute)*int64(time.Minute) + int64(second)*int64(time.Second) + int64(nanosecond)}, nil
 }
 func ParseTime(text string) (Time, error) {
 	if !timePattern.MatchString(text) {
-		return Time{}, fault.New(fault.Invalid, "expected HH:MM:SS with optional nanoseconds")
+		return Time{}, safeerror.NewFault(fault.Invalid, "expected HH:MM:SS with optional nanoseconds")
 	}
 	v, err := time.Parse(timeLayout, text)
 	if err != nil {
-		return Time{}, fault.New(fault.Invalid, "invalid wall-clock time")
+		return Time{}, safeerror.NewFault(fault.Invalid, "invalid wall-clock time")
 	}
 	return NewTime(v.Hour(), v.Minute(), v.Second(), v.Nanosecond())
 }

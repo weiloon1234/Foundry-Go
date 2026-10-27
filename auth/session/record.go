@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -72,7 +73,7 @@ func (i Impersonator) Validate() error {
 		return err
 	}
 	if i.Guard == "" || i.Session.IsZero() {
-		return fault.New(fault.Invalid, "invalid session impersonator")
+		return safeerror.NewFault(fault.Invalid, "invalid session impersonator")
 	}
 	return nil
 }
@@ -83,7 +84,7 @@ func (r Record) Validate(address Address) error {
 		return err
 	}
 	if r.Address != address || r.ID.IsZero() || r.Hash.IsZero() {
-		return fault.New(fault.Invalid, "invalid session record scope or identifier")
+		return safeerror.NewFault(fault.Invalid, "invalid session record scope or identifier")
 	}
 	if _, err := address.SubjectKey(r.Subject); err != nil {
 		return err
@@ -95,21 +96,21 @@ func (r Record) Validate(address Address) error {
 		return err
 	}
 	if r.Assurance == auth.PendingMFA && (r.Remember || r.Lifetime.Sliding) {
-		return fault.New(fault.Invalid, "pending MFA session cannot persist or slide")
+		return safeerror.NewFault(fault.Invalid, "pending MFA session cannot persist or slide")
 	}
 	created, seen, idle, expires := r.CreatedAt.UTC(), r.LastSeenAt.UTC(), r.IdleExpiresAt.UTC(), r.ExpiresAt.UTC()
 	if r.CreatedAt.IsZero() || r.LastSeenAt.IsZero() || r.IdleExpiresAt.IsZero() || r.ExpiresAt.IsZero() || seen.Before(created) || !expires.After(created) || !idle.After(seen) || idle.After(expires) || !expires.Equal(created.Add(r.Lifetime.Absolute)) || idle.After(seen.Add(r.Lifetime.Idle)) {
-		return fault.New(fault.Invalid, "invalid stored session lifetime")
+		return safeerror.NewFault(fault.Invalid, "invalid stored session lifetime")
 	}
 	if confirmed, present := r.ConfirmedAt.Get(); present && (confirmed.IsZero() || confirmed.UTC().Before(created) || r.Assurance != auth.Authenticated) {
-		return fault.New(fault.Invalid, "invalid stored session confirmation")
+		return safeerror.NewFault(fault.Invalid, "invalid stored session confirmation")
 	}
 	if impersonator, present := r.Impersonator.Get(); present {
 		if err := impersonator.Validate(); err != nil {
 			return err
 		}
 		if r.Assurance != auth.Authenticated || r.Remember || r.ConfirmedAt.IsSet() {
-			return fault.New(fault.Invalid, "invalid stored impersonation session")
+			return safeerror.NewFault(fault.Invalid, "invalid stored impersonation session")
 		}
 	}
 	return r.Device.Validate()
@@ -190,7 +191,7 @@ func (c Creation) Validate(address Address) error {
 		return err
 	}
 	if c.ID.IsZero() || c.Hash.IsZero() || c.Maximum < 1 || c.PendingMaximum < 1 || c.Maximum+2*c.PendingMaximum > MaxSessions {
-		return fault.New(fault.Invalid, "invalid session creation")
+		return safeerror.NewFault(fault.Invalid, "invalid session creation")
 	}
 	if err := c.Limit.Validate(); err != nil {
 		return err
@@ -205,14 +206,14 @@ func (c Creation) Validate(address Address) error {
 		return err
 	}
 	if c.Assurance == auth.PendingMFA && (c.Remember || c.Lifetime.Sliding) {
-		return fault.New(fault.Invalid, "pending MFA session cannot persist or slide")
+		return safeerror.NewFault(fault.Invalid, "pending MFA session cannot persist or slide")
 	}
 	if impersonator, present := c.Impersonator.Get(); present {
 		if err := impersonator.Validate(); err != nil {
 			return err
 		}
 		if c.Assurance != auth.Authenticated || c.Remember {
-			return fault.New(fault.Invalid, "impersonation sessions must be fully authenticated and not remembered")
+			return safeerror.NewFault(fault.Invalid, "impersonation sessions must be fully authenticated and not remembered")
 		}
 	}
 	return nil

@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type EventInfo struct {
@@ -69,16 +70,16 @@ func Register[C, R, S any](channel Channel[C, R, S], events ...EventRegistration
 			}
 		}
 		if len(owned) > MaxChannelEvents {
-			return fault.New(fault.Invalid, "too many channel events")
+			return safeerror.NewFault(fault.Invalid, "too many channel events")
 		}
 		seen := make(map[EventID]bool)
 		for _, item := range owned {
 			e := item.definition
 			if e == nil || e.token == nil || e.channel != channel.token || !identifier.Semantic(string(e.id)) || e.validate == nil || e.description == nil || (e.direction != ClientToServer && e.direction != ServerToClient) {
-				return fault.New(fault.Invalid, "invalid channel event registration")
+				return safeerror.NewFault(fault.Invalid, "invalid channel event registration")
 			}
 			if seen[e.id] {
-				return fault.New(fault.Duplicate, "channel event already registered")
+				return safeerror.NewFault(fault.Duplicate, "channel event already registered")
 			}
 			seen[e.id] = true
 			if err := e.validate(); err != nil {
@@ -100,7 +101,7 @@ func Register[C, R, S any](channel Channel[C, R, S], events ...EventRegistration
 					}
 				}
 				if !found {
-					return fault.New(fault.Missing, "relay outgoing event is not registered")
+					return safeerror.NewFault(fault.Missing, "relay outgoing event is not registered")
 				}
 			}
 		}
@@ -182,19 +183,19 @@ func outputPresentation(describe func() (contract.Schema, error), output string)
 
 func NewRegistry(registrations ...Registration) (*Registry, error) {
 	if len(registrations) < 1 || len(registrations) > MaxChannels {
-		return nil, fault.New(fault.Invalid, "WebSocket registry needs 1 to 256 channels")
+		return nil, safeerror.NewFault(fault.Invalid, "WebSocket registry needs 1 to 256 channels")
 	}
 	r := &Registry{channels: make(map[ChannelID]*channelDefinition, len(registrations))}
 	for _, registration := range registrations {
 		d := registration.definition
 		if d == nil || d.validate == nil {
-			return nil, fault.New(fault.Invalid, "invalid channel registration")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid channel registration")
 		}
 		if err := d.validate(); err != nil {
 			return nil, err
 		}
 		if r.channels[d.id] != nil {
-			return nil, fault.New(fault.Duplicate, "channel already registered")
+			return nil, safeerror.NewFault(fault.Duplicate, "channel already registered")
 		}
 		r.channels[d.id] = d
 		r.ordered = append(r.ordered, d)

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"slices"
 	"strings"
 
@@ -30,7 +31,7 @@ type Driver struct {
 
 func New(config Config) (*Driver, error) {
 	if !httptransport.Token(config.ServerToken.Reveal()) || config.MessageStream != "" && !httptransport.Token(config.MessageStream) || len(config.MessageStream) > 128 {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	c, err := httptransport.New(config.HTTP, "https://api.postmarkapp.com")
 	if err != nil {
@@ -57,7 +58,7 @@ type header struct{ Name, Value string }
 
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.client == nil || out.Validate() != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	m := out.Message()
 	body := struct {
@@ -86,7 +87,7 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	r, err := d.client.Request(ctx, "/email", "application/json", data)
 	if err != nil {
@@ -103,22 +104,22 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	}
 	decoded := httptransport.JSON(data, &result) == nil
 	if decoded && result.ErrorCode != nil && *result.ErrorCode == 100 {
-		return email.Receipt{}, email.Transient
+		return email.Receipt{}, emaildiag.Failure(email.Transient)
 	}
 	if err := httptransport.Status(status); err != nil {
 		return email.Receipt{}, err
 	}
 	if !decoded || result.ErrorCode == nil {
-		return email.Receipt{}, email.Ambiguous
+		return email.Receipt{}, emaildiag.Failure(email.Ambiguous)
 	}
 	if *result.ErrorCode != 0 {
 		if *result.ErrorCode == 101 {
-			return email.Receipt{}, email.Ambiguous
+			return email.Receipt{}, emaildiag.Failure(email.Ambiguous)
 		}
-		return email.Receipt{}, email.Permanent
+		return email.Receipt{}, emaildiag.Failure(email.Permanent)
 	}
 	if result.MessageID == "" {
-		return email.Receipt{}, email.Ambiguous
+		return email.Receipt{}, emaildiag.Failure(email.Ambiguous)
 	}
 	receipt := email.Receipt{MessageID: result.MessageID}
 	return receipt, receipt.Validate()

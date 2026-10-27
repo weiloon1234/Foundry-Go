@@ -6,7 +6,6 @@ package extensioncommand
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionmaintenance"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Options struct {
@@ -49,14 +49,14 @@ func parse(name string, args []string, help io.Writer, maintenance bool) (Option
 		usage += "\n       " + name + " rescope --owner name [--page-size 100] [--format text|json] [--apply]"
 	}
 	if help == nil || !identifier.Semantic(name) {
-		return Options{}, fault.New(fault.Invalid, usage)
+		return Options{}, safeerror.NewFault(fault.Invalid, usage)
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		_, err := io.WriteString(help, usage+"\n")
-		return Options{}, errors.Join(flag.ErrHelp, err)
+		return Options{}, safeerror.Join("operation failed", flag.ErrHelp, err)
 	}
 	if len(args) < 2 || args[0] != name || args[1] != "orphans" && args[1] != "undeclared" && (!maintenance || args[1] != "rescope") {
-		return Options{}, fault.New(fault.Invalid, usage)
+		return Options{}, safeerror.NewFault(fault.Invalid, usage)
 	}
 	rescope, undeclared := args[1] == "rescope", args[1] == "undeclared"
 	flags := flag.NewFlagSet(name+" "+args[1], flag.ContinueOnError)
@@ -76,7 +76,7 @@ func parse(name string, args []string, help io.Writer, maintenance bool) (Option
 		return Options{}, err
 	}
 	if flags.NArg() != 0 || !identifier.Semantic(*owner) || *size < 1 || *size > 1000 || *format != "text" && *format != "json" {
-		return Options{}, fault.New(fault.Invalid, usage)
+		return Options{}, safeerror.NewFault(fault.Invalid, usage)
 	}
 	return Options{owner: extensions.OwnerName(*owner), pageSize: *size, json: *format == "json", rescope: rescope, apply: apply != nil && *apply, undeclared: undeclared}, nil
 }
@@ -87,7 +87,7 @@ func parse(name string, args []string, help io.Writer, maintenance bool) (Option
 // names only and modifies nothing.
 func RunUndeclared(ctx context.Context, options Options, out io.Writer, inspect func(context.Context, extensions.OwnerName) (extensionmaintenance.Undeclared, error)) error {
 	if ctx == nil || out == nil || options.owner == "" || !options.undeclared || inspect == nil {
-		return fault.New(fault.Invalid, "uninitialized model extension undeclared-name command")
+		return safeerror.NewFault(fault.Invalid, "uninitialized model extension undeclared-name command")
 	}
 	return callback.Isolated("model extension undeclared-name command", func() error {
 		report, err := inspect(ctx, options.owner)
@@ -115,7 +115,7 @@ func RunUndeclared(ctx context.Context, options Options, out io.Writer, inspect 
 // under a model the owner does not declare) marker.
 func RunRescope(ctx context.Context, options Options, out io.Writer, rescope func(context.Context, extensions.OwnerName, extensionmaintenance.Cursor, int, bool) (extensionmaintenance.RescopePage, error)) error {
 	if ctx == nil || out == nil || options.owner == "" || options.pageSize < 1 || !options.rescope || rescope == nil {
-		return fault.New(fault.Invalid, "uninitialized model extension re-scope command")
+		return safeerror.NewFault(fault.Invalid, "uninitialized model extension re-scope command")
 	}
 	return callback.Isolated("model extension re-scope command", func() error {
 		var cursor extensionmaintenance.Cursor
@@ -165,7 +165,7 @@ func RunRescope(ctx context.Context, options Options, out io.Writer, rescope fun
 }
 func Run[R any](ctx context.Context, options Options, out io.Writer, inspect func(context.Context, extensions.OwnerName, extensionmaintenance.Cursor, int) (extensionmaintenance.Page[R], error), columns func(R) []string) error {
 	if ctx == nil || out == nil || options.owner == "" || options.pageSize < 1 || options.rescope || options.undeclared || inspect == nil || columns == nil {
-		return fault.New(fault.Invalid, "uninitialized model extension inspection command")
+		return safeerror.NewFault(fault.Invalid, "uninitialized model extension inspection command")
 	}
 	return callback.Isolated("model extension inspection command", func() error {
 		var cursor extensionmaintenance.Cursor

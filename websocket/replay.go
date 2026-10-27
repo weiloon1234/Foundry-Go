@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ReplayConfig retains a recent per-channel bucket. Room replay filters that
@@ -20,7 +21,7 @@ func (c ReplayConfig) Validate() error {
 		return nil
 	}
 	if c.Messages < 1 || c.Messages > MaxReplayMessages || c.Bytes < 1 || c.Bytes > 4<<20 || c.TTL < time.Millisecond || c.TTL > 24*time.Hour || c.TTL%time.Millisecond != 0 {
-		return fault.New(fault.Invalid, "invalid WebSocket replay bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid WebSocket replay bounds")
 	}
 	return nil
 }
@@ -53,7 +54,7 @@ func (h *Hub) retainLocked(response Response, data []byte) error {
 		return nil
 	}
 	if len(data) > policy.Bytes {
-		return fault.New(fault.Invalid, "publication exceeds its channel replay byte bound")
+		return safeerror.NewFault(fault.Invalid, "publication exceeds its channel replay byte bound")
 	}
 	now := time.Now()
 	h.pruneHistoryLocked(response.Channel, now)

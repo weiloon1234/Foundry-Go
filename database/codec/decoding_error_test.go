@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -37,5 +38,31 @@ func TestDecodeAndScanRedactWithoutReclassifying(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestCodecCallbacksContainPanicAndGoexit(t *testing.T) {
+	for _, mode := range []string{"panic", "exit"} {
+		t.Run(mode, func(t *testing.T) {
+			fail := func() {
+				if mode == "exit" {
+					runtime.Goexit()
+				}
+				panic("private codec")
+			}
+			c := codec.New(func(string) (driver.Value, error) { fail(); return nil, nil }, func(any) (string, error) { fail(); return "partial", nil })
+			_, bindErr := c.Bind("private")
+			decoded, decodeErr := c.Decode("private")
+			destination := "original"
+			scanErr := c.Scan(&destination).Scan("private")
+			for _, err := range []error{bindErr, decodeErr, scanErr} {
+				if !errors.Is(err, fault.Panicked) {
+					t.Fatal("callback failure not contained")
+				}
+			}
+			if decoded != "" || destination != "original" {
+				t.Fatal("failed codec published partial output")
+			}
+		})
 	}
 }

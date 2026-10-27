@@ -30,7 +30,7 @@ func (c Collection[M, K]) matchingKeys(ctx context.Context, m *Manager) ([]K, er
 				return err
 			}
 			if len(rows) > MaxBatchFiles {
-				return fault.New(fault.Conflict, "attachment scope exceeds its file limit")
+				return attachmentFailure(fault.Conflict, "attachment scope exceeds its file limit")
 			}
 			seen := make(map[string]bool)
 			for _, row := range rows {
@@ -43,7 +43,7 @@ func (c Collection[M, K]) matchingKeys(ctx context.Context, m *Manager) ([]K, er
 				}
 				seen[subject] = true
 				if len(seen) > querycore.MaxIdentityBatch {
-					return fault.New(fault.Conflict, "attachment scope exceeds its owner limit")
+					return attachmentFailure(fault.Conflict, "attachment scope exceeds its owner limit")
 				}
 				identity, err := row.Identity.Decode()
 				if err != nil {

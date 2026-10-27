@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -32,7 +33,7 @@ type Broker struct {
 
 func NewBroker(backend Backend, config Config) (*Broker, error) {
 	if backend == nil {
-		return nil, fault.New(fault.Invalid, "pub/sub broker requires an adapter")
+		return nil, safeerror.NewFault(fault.Invalid, "pub/sub broker requires an adapter")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -75,7 +76,7 @@ func (b *Broker) operation(ctx context.Context, sub *subscriptionState) (context
 // deadlock on capacity held by its caller.
 func (b *Broker) acquire(ctx context.Context) error {
 	if b == nil || b.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "pub/sub operation needs an initialized broker and context")
+		return safeerror.NewFault(fault.Invalid, "pub/sub operation needs an initialized broker and context")
 	}
 	b.mu.Lock()
 	closing := b.closing
@@ -88,7 +89,7 @@ func (b *Broker) acquire(ctx context.Context) error {
 	}
 	if b.nested(ctx) {
 		if !b.slots.TryAcquire() {
-			return fault.New(fault.Overloaded, "pub/sub operation capacity is exhausted")
+			return safeerror.NewFault(fault.Overloaded, "pub/sub operation capacity is exhausted")
 		}
 	} else if err := b.slots.Acquire(ctx, admission.Wait(b.config.Timeout), b.lifetime.Done()); err != nil {
 		if errors.Is(err, fault.Closed) {
@@ -156,7 +157,7 @@ func (b *Broker) remove(s *subscriptionState, cleanup error) {
 	defer b.mu.Unlock()
 	delete(b.subscriptions, s)
 	if b.closing {
-		b.closeErr = errors.Join(b.closeErr, cleanup)
+		b.closeErr = safeerror.Join("operation failed", b.closeErr, cleanup)
 	}
 	close(s.done)
 	b.finishLocked()
@@ -166,11 +167,11 @@ func (b *Broker) remove(s *subscriptionState, cleanup error) {
 // can wait again; no resource slot is released before the owned callback exits.
 func (b *Broker) Close(ctx context.Context) error {
 	if b == nil || b.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "pub/sub close needs a broker and context")
+		return safeerror.NewFault(fault.Invalid, "pub/sub close needs a broker and context")
 	}
 	for frame, _ := ctx.Value(operationKey{}).(*operationFrame); frame != nil; frame = frame.parent {
 		if frame.broker == b && frame.active.Load() {
-			return fault.New(fault.Cycle, "pub/sub operation cannot wait for its own broker shutdown")
+			return safeerror.NewFault(fault.Cycle, "pub/sub operation cannot wait for its own broker shutdown")
 		}
 	}
 	b.mu.Lock()

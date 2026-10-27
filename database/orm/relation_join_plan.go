@@ -2,8 +2,8 @@ package orm
 
 import (
 	"context"
-	"errors"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 	"unsafe"
 )
@@ -31,7 +31,7 @@ func (m *relationMorph) matches(base unsafe.Pointer) (bool, error) {
 func copyJoined(p *relationPlan) *relationPlan {
 	p = copyRelationPlan(p)
 	if p.join == nil {
-		p.err = errors.Join(p.err, invalid("relation requires a joined plan"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("relation requires a joined plan"))
 		return p
 	}
 	j := *p.join
@@ -80,13 +80,13 @@ func validateJoinedMetadata(p *relationPlan) error {
 		return nil
 	}
 	q := p.join.pivot
-	if err := errors.Join(tableError(q.table), q.err); err != nil {
+	if err := safeerror.Join("operation failed", tableError(q.table), q.err); err != nil {
 		return err
 	}
 	if q.ast.Limit.IsSet() || q.ast.Offset != 0 {
 		return invalid("pivot scopes cannot use global windows")
 	}
-	return errors.Join(q.ast.ValidateSoftDeleteScope(), q.ast.ValidateScopeOptions(), q.table.model.ValidateGlobalScopes())
+	return safeerror.Join("operation failed", q.ast.ValidateSoftDeleteScope(), q.ast.ValidateScopeOptions(), q.table.model.ValidateGlobalScopes())
 }
 func validateJoined(p *relationPlan, depth int, limits RelationLimits, nodes *int) error {
 	if p.choice > 3 || p.choice == 1 && len(p.query.ast.Orders) == 0 {
@@ -169,9 +169,9 @@ func relationThroughOrder[N any](p *relationPlan, orders []Order[N], pivot bool)
 		if pivot {
 			owner = p.join.pivot.table
 		}
-		p.err = errors.Join(p.err, o.err)
+		p.err = safeerror.Join("operation failed", p.err, o.err)
 		if o.owner != owner {
-			p.err = errors.Join(p.err, invalid("order belongs to a different table declaration"))
+			p.err = safeerror.Join("operation failed", p.err, invalid("order belongs to a different table declaration"))
 		}
 		p.join.orders = append(p.join.orders, querycore.RelationOrder{Value: o.core.Value(), Descending: o.core.Descending, Nulls: o.core.Nulls, Pivot: pivot})
 	}

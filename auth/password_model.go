@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/password"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -40,7 +41,7 @@ type PasswordModel[M model.Identifiable, I any] struct {
 
 func (m PasswordModel[M, I]) Validate() error {
 	if m.Lookup == nil || m.Lock == nil || m.Hash == nil || m.Rehash == nil || m.RequiresMFA == nil {
-		return fault.New(fault.Invalid, "password model requires lookup, transactional lock, stored hash, conditional rehash and MFA policy")
+		return safeerror.NewFault(fault.Invalid, "password model requires lookup, transactional lock, stored hash, conditional rehash and MFA policy")
 	}
 	return nil
 }

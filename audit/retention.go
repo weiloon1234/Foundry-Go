@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -20,7 +21,7 @@ func (r *Recorder) PruneBefore(ctx context.Context, tx *database.Tx, cutoff temp
 		return 0, err
 	}
 	if tx == nil || cutoff.IsZero() || limit < 1 || limit > querycore.MaxPageSize {
-		return 0, fault.New(fault.Invalid, "audit pruning requires a transaction, cutoff and bounded row limit")
+		return 0, safeerror.NewFault(fault.Invalid, "audit pruning requires a transaction, cutoff and bounded row limit")
 	}
 	return auditstore.Prune(ctx, tx, string(area), cutoff, limit)
 }
@@ -33,7 +34,7 @@ func (r *Recorder) CountBefore(ctx context.Context, tx *database.Tx, cutoff temp
 		return 0, err
 	}
 	if tx == nil || cutoff.IsZero() {
-		return 0, fault.New(fault.Invalid, "audit counting requires a transaction and cutoff")
+		return 0, safeerror.NewFault(fault.Invalid, "audit counting requires a transaction and cutoff")
 	}
 	return auditstore.CountBefore(ctx, tx, string(area), cutoff)
 }
@@ -56,13 +57,13 @@ func (r *Recorder) PruneRetention(ctx context.Context, tx *database.Tx, now temp
 // retention returns Missing; a zero now is invalid.
 func (r *Recorder) RetentionCutoff(now temporal.DateTime) (temporal.DateTime, error) {
 	if r == nil {
-		return temporal.DateTime{}, fault.New(fault.Invalid, "audit recorder is not initialized")
+		return temporal.DateTime{}, safeerror.NewFault(fault.Invalid, "audit recorder is not initialized")
 	}
 	if r.config.RetentionDays == 0 {
-		return temporal.DateTime{}, fault.New(fault.Missing, "audit retention is not configured")
+		return temporal.DateTime{}, safeerror.NewFault(fault.Missing, "audit retention is not configured")
 	}
 	if now.IsZero() {
-		return temporal.DateTime{}, fault.New(fault.Invalid, "audit retention requires a current time")
+		return temporal.DateTime{}, safeerror.NewFault(fault.Invalid, "audit retention requires a current time")
 	}
 	return now.Add(-time.Duration(r.config.RetentionDays) * 24 * time.Hour)
 }
@@ -92,7 +93,7 @@ func (s *Scope) PruneRetention(ctx context.Context, now temporal.DateTime, batch
 // Recorder.RetentionCutoff.
 func (s *Scope) RetentionCutoff(now temporal.DateTime) (temporal.DateTime, error) {
 	if s == nil {
-		return temporal.DateTime{}, fault.New(fault.Invalid, "audit scope requires an initialized handle")
+		return temporal.DateTime{}, safeerror.NewFault(fault.Invalid, "audit scope requires an initialized handle")
 	}
 	return s.recorder.RetentionCutoff(now)
 }
@@ -101,7 +102,7 @@ func (s *Scope) RetentionCutoff(now temporal.DateTime) (temporal.DateTime, error
 // would remove from the selected area. It never reads payloads or deletes.
 func (s *Scope) CountBefore(ctx context.Context, cutoff temporal.DateTime) (int64, error) {
 	if s == nil || ctx == nil {
-		return 0, fault.New(fault.Invalid, "audit scope requires an initialized handle and context")
+		return 0, safeerror.NewFault(fault.Invalid, "audit scope requires an initialized handle and context")
 	}
 	var count int64
 	err := s.db.Transaction(ctx, func(tx *database.Tx) error {
@@ -116,10 +117,10 @@ func (s *Scope) CountBefore(ctx context.Context, cutoff temporal.DateTime) (int6
 
 func (s *Scope) prune(ctx context.Context, batch int, step func(*database.Tx, *Recorder) (int64, error)) (int64, error) {
 	if s == nil || ctx == nil {
-		return 0, fault.New(fault.Invalid, "audit scope requires an initialized handle and context")
+		return 0, safeerror.NewFault(fault.Invalid, "audit scope requires an initialized handle and context")
 	}
 	if batch < 1 || batch > querycore.MaxPageSize {
-		return 0, fault.New(fault.Invalid, "audit pruning requires a bounded batch size")
+		return 0, safeerror.NewFault(fault.Invalid, "audit pruning requires a bounded batch size")
 	}
 	if _, err := s.recorder.area(ctx); err != nil {
 		return 0, err

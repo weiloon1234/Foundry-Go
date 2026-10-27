@@ -12,7 +12,7 @@ import (
 // to address or replace the canonical object.
 func validateKeyText(nfc bool, text string) error {
 	if nfc && !norm.NFC.IsNormalString(text) {
-		return storage.Failure(storage.Unsupported, storage.PutOperation, storage.Unchanged, nil)
+		return newFailure(storage.Unsupported, storage.PutOperation, storage.Unchanged, nil)
 	}
 	return nil
 }

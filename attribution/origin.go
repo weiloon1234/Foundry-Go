@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -65,13 +66,13 @@ func SanitizeUserAgent(raw string) string {
 func (r Request) Validate() error {
 	id := string(r.ID)
 	if len(id) > MaxRequestIDBytes || !utf8.ValidString(id) || strings.TrimSpace(id) != id || strings.IndexFunc(id, unicode.IsControl) >= 0 {
-		return fault.New(fault.Invalid, "invalid attribution request ID")
+		return safeerror.NewFault(fault.Invalid, "invalid attribution request ID")
 	}
 	if len(r.UserAgent) > MaxUserAgentBytes || !utf8.ValidString(r.UserAgent) || strings.IndexFunc(r.UserAgent, unicode.IsControl) >= 0 {
-		return fault.New(fault.Invalid, "invalid attribution user agent")
+		return safeerror.NewFault(fault.Invalid, "invalid attribution user agent")
 	}
 	if r.IP.Zone() != "" {
-		return fault.New(fault.Invalid, "attribution IP cannot include a local interface zone")
+		return safeerror.NewFault(fault.Invalid, "attribution IP cannot include a local interface zone")
 	}
 	return nil
 }
@@ -95,17 +96,17 @@ func (Origin) Format(state fmt.State, _ rune)  { _, _ = state.Write([]byte("attr
 func (o Origin) Validate() error {
 	if subject, present := o.subject.Get(); present {
 		if o.system != "" {
-			return fault.New(fault.Invalid, "attribution cannot combine model and system subjects")
+			return safeerror.NewFault(fault.Invalid, "attribution cannot combine model and system subjects")
 		}
 		if err := subject.Validate(); err != nil {
 			return err
 		}
 	}
 	if o.system != "" && (!identifier.Semantic(string(o.system)) || o.guard != "") {
-		return fault.New(fault.Invalid, "invalid system attribution")
+		return safeerror.NewFault(fault.Invalid, "invalid system attribution")
 	}
 	if o.guard != "" && !identifier.Semantic(string(o.guard)) {
-		return fault.New(fault.Invalid, "invalid attribution guard name")
+		return safeerror.NewFault(fault.Invalid, "invalid attribution guard name")
 	}
 	return o.request.Validate()
 }
@@ -115,13 +116,13 @@ func (o Origin) Validate() error {
 // custom read getter runs. A custom metadata adapter must be pure.
 func (o Origin) WithModel(subject model.Identifiable) (Origin, error) {
 	if subject == nil {
-		return Origin{}, fault.New(fault.Invalid, "attribution requires a model")
+		return Origin{}, safeerror.NewFault(fault.Invalid, "attribution requires a model")
 	}
 	rv := reflect.ValueOf(subject)
 	switch rv.Kind() {
 	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
 		if rv.IsNil() {
-			return Origin{}, fault.New(fault.Invalid, "attribution requires a non-nil model")
+			return Origin{}, safeerror.NewFault(fault.Invalid, "attribution requires a non-nil model")
 		}
 	}
 	var identity model.Identity
@@ -146,7 +147,7 @@ func (o Origin) WithIdentity(subject model.Identity) (Origin, error) {
 // WithSystem replaces the model subject and clears authentication metadata.
 func (o Origin) WithSystem(system SystemID) (Origin, error) {
 	if system == "" {
-		return Origin{}, fault.New(fault.Invalid, "system attribution requires an identifier")
+		return Origin{}, safeerror.NewFault(fault.Invalid, "system attribution requires an identifier")
 	}
 	o.subject = value.Optional[model.Identity]{}
 	o.system = system
@@ -180,7 +181,7 @@ type contextKey struct{}
 // cancellation. It does not install security credentials or authorization state.
 func WithContext(ctx context.Context, origin Origin) (context.Context, error) {
 	if ctx == nil {
-		return nil, fault.New(fault.Invalid, "attribution requires a context")
+		return nil, safeerror.NewFault(fault.Invalid, "attribution requires a context")
 	}
 	if err := origin.Validate(); err != nil {
 		return nil, err
@@ -213,7 +214,7 @@ func (o Origin) MarshalJSON() ([]byte, error) {
 }
 func (o *Origin) UnmarshalJSON(data []byte) error {
 	if o == nil {
-		return fault.New(fault.Invalid, "nil attribution destination")
+		return safeerror.NewFault(fault.Invalid, "nil attribution destination")
 	}
 	encoded, err := value.ParseJSON[originWire](string(data))
 	if err != nil {

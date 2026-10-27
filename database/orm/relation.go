@@ -2,7 +2,7 @@ package orm
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"unsafe"
 
@@ -207,9 +207,9 @@ func newRelationCore(slot *slotCore, a, b *columnCore, source, target reflect.Ty
 		p.err = invalid("relation local key belongs to a different table declaration")
 	}
 	if p.target.typ != slot.target || slot.target != target || slot.owner == nil || slot.owner.typ != source {
-		p.err = errors.Join(p.err, invalid("relation slot/model mismatch"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("relation slot/model mismatch"))
 	}
-	p.err = errors.Join(p.err, slot.err, declarationCoreError(slot.owner), declarationCoreError(p.target))
+	p.err = safeerror.Join("operation failed", p.err, slot.err, declarationCoreError(slot.owner), declarationCoreError(p.target))
 	return p
 }
 

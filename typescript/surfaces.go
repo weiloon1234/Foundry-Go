@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
@@ -37,17 +38,17 @@ var reservedSurfaceNames = []string{"manifest", "openapi", "react", "vue"}
 // case-insensitively, since case-insensitive file systems would merge them.
 func validateSurfaces(surfaces []Surface) ([]Surface, error) {
 	if len(surfaces) > MaxSurfaces {
-		return nil, fault.New(fault.Invalid, "too many client surfaces")
+		return nil, safeerror.NewFault(fault.Invalid, "too many client surfaces")
 	}
 	result := make([]Surface, len(surfaces))
 	seen := make(map[string]bool, len(surfaces))
 	for i, surface := range surfaces {
 		folded := strings.ToLower(surface.Name)
 		if !prefixPattern.MatchString(surface.Name) || slices.Contains(reservedSurfaceNames, folded) || strings.HasPrefix(folded, "runtime") {
-			return nil, fault.New(fault.Invalid, "invalid client surface name")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid client surface name")
 		}
 		if seen[folded] {
-			return nil, fault.New(fault.Duplicate, "client surface name is repeated")
+			return nil, safeerror.NewFault(fault.Duplicate, "client surface name is repeated")
 		}
 		seen[folded] = true
 		result[i] = Surface{Name: surface.Name, Routes: slices.Clone(surface.Routes), Channels: slices.Clone(surface.Channels), Paths: slices.Clone(surface.Paths), Guards: slices.Clone(surface.Guards)}

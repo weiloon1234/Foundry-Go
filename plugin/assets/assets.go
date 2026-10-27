@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/plugin/manifest"
 )
 
@@ -56,12 +57,12 @@ func New(declaration manifest.Manifest, id ID, files ...File) (*Bundle, error) {
 // that they belong to this exact distribution and have not been manually edited.
 func Snapshot(files []File) (map[string][]byte, error) {
 	if len(files) > MaxFiles {
-		return nil, fault.New(fault.Invalid, "plugin file count exceeds its bound")
+		return nil, safeerror.NewFault(fault.Invalid, "plugin file count exceeds its bound")
 	}
 	outputs := make(map[string][]byte, len(files))
 	for _, file := range files {
 		if _, exists := outputs[file.Path]; exists {
-			return nil, fault.New(fault.Duplicate, "plugin distribution repeats a file path")
+			return nil, safeerror.NewFault(fault.Duplicate, "plugin distribution repeats a file path")
 		}
 		outputs[file.Path] = file.Data
 	}
@@ -92,7 +93,7 @@ func (b *Bundle) Files() []FileInfo {
 // newly created empty directories; it never recursively deletes directories.
 func (b *Bundle) Publish(ctx context.Context, dir string, check bool) (Report, error) {
 	if b == nil || b.files == nil {
-		return Report{}, fault.New(fault.Invalid, "uninitialized plugin assets")
+		return Report{}, safeerror.NewFault(fault.Invalid, "uninitialized plugin assets")
 	}
 	return generate.PublishDistribution(ctx, dir, b.info, b.files, check)
 }
@@ -101,7 +102,7 @@ func (b *Bundle) Publish(ctx context.Context, dir string, check bool) (Report, e
 // available through foundry generate --recover --dir <selected output root>.
 func Recover(ctx context.Context, dir string) (Recovery, error) {
 	if ctx == nil {
-		return Recovery{}, fault.New(fault.Invalid, "nil plugin publication context")
+		return Recovery{}, safeerror.NewFault(fault.Invalid, "nil plugin publication context")
 	}
 	return generate.Recover(ctx, dir)
 }
@@ -113,7 +114,7 @@ var bundles = foundation.NewCollection[*Bundle]("plugin.assets")
 func Register(r *foundation.Registrar, bundle *Bundle) error {
 	declaration, ok := r.Plugin()
 	if !ok || bundle == nil || bundle.files == nil || bundle.info.Plugin != declaration.ID || bundle.info.Release != declaration.Version {
-		return fault.New(fault.Invalid, "asset bundle differs from its plugin owner or release")
+		return safeerror.NewFault(fault.Invalid, "asset bundle differs from its plugin owner or release")
 	}
 	return foundation.Contribute(r, bundles, fmt.Sprintf("%q.%q", bundle.info.Plugin, bundle.info.Name), func(foundation.Resolver) (*Bundle, error) { return bundle, nil })
 }

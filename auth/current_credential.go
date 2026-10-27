@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -17,7 +18,7 @@ type CredentialSlot[C any] struct{ id *declarationID }
 func NewCredentialSlot[C any]() CredentialSlot[C] { return CredentialSlot[C]{id: &declarationID{}} }
 func (s CredentialSlot[C]) Validate() error {
 	if s.id == nil {
-		return fault.New(fault.Invalid, "credential slot is not declared")
+		return safeerror.NewFault(fault.Invalid, "credential slot is not declared")
 	}
 	return nil
 }
@@ -57,7 +58,7 @@ func attach[M, K, C any](proof Proof[M, K], slot CredentialSlot[C], metadata C, 
 		return Proof[M, K]{}, err
 	}
 	if proof.credential != nil {
-		return Proof[M, K]{}, fault.New(fault.Duplicate, "proof already carries credential metadata")
+		return Proof[M, K]{}, safeerror.NewFault(fault.Duplicate, "proof already carries credential metadata")
 	}
 	proof.credential = &attachedCredential{slot: slot.id, value: metadata, impersonated: impersonated}
 	return proof, nil
@@ -76,14 +77,14 @@ func CurrentCredential[M, C any](ctx context.Context, guard Guard[M], slot Crede
 		return *new(C), err
 	}
 	if !result.subject.IsSet() {
-		return *new(C), Unauthenticated
+		return *new(C), Unauthenticated.WithCause(nil)
 	}
 	if result.credential == nil || result.credential.slot != slot.id {
-		return *new(C), fault.New(fault.Missing, "current credential metadata is unavailable for this guard")
+		return *new(C), safeerror.NewFault(fault.Missing, "current credential metadata is unavailable for this guard")
 	}
 	metadata, ok := result.credential.value.(C)
 	if !ok {
-		return *new(C), fault.New(fault.Internal, "invalid current credential metadata")
+		return *new(C), safeerror.NewFault(fault.Internal, "invalid current credential metadata")
 	}
 	return metadata, nil
 }
@@ -104,10 +105,10 @@ func CurrentProof[M model.Identifiable, K any](ctx context.Context, provider Pro
 		return Proof[M, K]{}, err
 	}
 	if !result.subject.IsSet() {
-		return Proof[M, K]{}, Unauthenticated
+		return Proof[M, K]{}, Unauthenticated.WithCause(nil)
 	}
 	if result.credential != nil && result.credential.impersonated {
-		return Proof[M, K]{}, ImpersonationForbidden
+		return Proof[M, K]{}, ImpersonationForbidden.WithCause(nil)
 	}
 	reference, err := provider.Parse(result.identity)
 	if err != nil {

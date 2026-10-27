@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ForceBackend is an optional administrative capability that removes a lease
@@ -22,11 +23,11 @@ type ForceBackend interface {
 // their own fencing. The backend must implement ForceBackend.
 func (l Leases[K]) ForceRelease(ctx context.Context, key K) (bool, error) {
 	if l.definition == nil {
-		return false, fault.New(fault.Invalid, "lease handle is not initialized")
+		return false, safeerror.NewFault(fault.Invalid, "lease handle is not initialized")
 	}
 	backend, ok := l.manager.backend.(ForceBackend)
 	if !ok {
-		return false, fault.New(fault.Invalid, "lease backend does not support forced release")
+		return false, safeerror.NewFault(fault.Invalid, "lease backend does not support forced release")
 	}
 	if err := l.manager.begin(ctx); err != nil {
 		return false, err

@@ -60,8 +60,8 @@ func TestCredentialFailureClassificationIsBoundedAndRedacted(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
 			err := NewGate(1, time.Second).Execute(t.Context(), func(context.Context) error { calls++; return test.cause })
-			classified, ok := err.(*fault.Error)
-			if calls != 1 || !ok || classified.Code() != test.code {
+			var classified *fault.Error
+			if calls != 1 || !errors.As(err, &classified) || classified.Code() != test.code {
 				t.Fatal("incorrect classification or replay", calls, err)
 			}
 			for _, format := range []string{"%v", "%+v", "%#v"} {
@@ -96,8 +96,8 @@ func TestCredentialFailureCustomAsFailsClosed(t *testing.T) {
 			for _, cause := range []error{errors.Join(opaque, overloaded), errors.Join(overloaded, opaque)} {
 				calls := 0
 				err := NewGate(1, time.Second).Execute(t.Context(), func(context.Context) error { calls++; return cause })
-				classified, ok := err.(*fault.Error)
-				if calls != 1 || !ok || classified.Code() != fault.Internal {
+				var classified *fault.Error
+				if calls != 1 || !errors.As(err, &classified) || classified.Code() != fault.Internal {
 					t.Fatal("unsafe As result was classified optimistically", calls, err)
 				}
 				for _, format := range []string{"%v", "%+v", "%#v"} {

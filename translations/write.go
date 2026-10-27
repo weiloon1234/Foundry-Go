@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
 	store "github.com/weiloon1234/Foundry-Go/internal/extensionstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -102,7 +103,7 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 		}
 		keys[i] = extensions.Digest(subject.Scope, subject.Key, string(a.field.Name()), string(a.locale))
 		if seen[keys[i]] {
-			return fault.New(fault.Duplicate, "duplicate translated field and locale")
+			return safeerror.NewFault(fault.Duplicate, "duplicate translated field and locale")
 		}
 		seen[keys[i]] = true
 	}
@@ -125,7 +126,7 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 		return err
 	}
 	if count+int64(len(assignments)-len(existing)) > MaxRowsPerOwner {
-		return fault.New(fault.Conflict, "model translation row limit reached")
+		return safeerror.NewFault(fault.Conflict, "model translation row limit reached")
 	}
 	now, err := m.store.Now()
 	if err != nil {

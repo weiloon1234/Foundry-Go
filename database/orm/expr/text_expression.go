@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -303,7 +303,7 @@ func SubstringValue[S any, V ~string](input Selected[S, V], start int32, count i
 	args = append(args, integerArgument(count))
 	result := operationValue[S](querycore.SubstringOperation, columnCodec(codec.String[string]()), args...)
 	if err := querycore.ValidateSubstringCount(count); err != nil {
-		result.data.core.Err = errors.Join(result.data.core.Err, err)
+		result.data.core.Err = safeerror.Join("operation failed", result.data.core.Err, err)
 	}
 	return result
 }
@@ -320,7 +320,7 @@ func SubstringNullableValue[S any, V ~string](input Selected[S, value.Nullable[V
 	args = append(args, integerArgument(count))
 	result := operationValue[S](querycore.SubstringOperation, columnCodec(codec.Nullable(codec.String[string]())), args...)
 	if err := querycore.ValidateSubstringCount(count); err != nil {
-		result.data.core.Err = errors.Join(result.data.core.Err, err)
+		result.data.core.Err = safeerror.Join("operation failed", result.data.core.Err, err)
 	}
 	return result
 }

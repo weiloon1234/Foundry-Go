@@ -136,12 +136,12 @@ func (p corsPolicy) share(header stdhttp.Header, origin string) {
 
 func corsRequestedHeaders(values []string) ([]string, error) {
 	if len(values) > maxCORSItems {
-		return nil, BadRequest
+		return nil, BadRequest.WithCause(nil)
 	}
 	size := 0
 	for _, value := range values {
 		if len(value) > maxCORSHeaderBytes-size {
-			return nil, BadRequest
+			return nil, BadRequest.WithCause(nil)
 		}
 		size += len(value)
 	}
@@ -152,12 +152,12 @@ func corsRequestedHeaders(values []string) ([]string, error) {
 		for name := range strings.SplitSeq(value, ",") {
 			count++
 			if count > maxCORSItems {
-				return nil, BadRequest
+				return nil, BadRequest.WithCause(nil)
 			}
 			name = strings.Trim(name, " \t")
 			canonical, err := HeaderName(name).Canonical()
 			if err != nil || name == "*" {
-				return nil, BadRequest
+				return nil, BadRequest.WithCause(nil)
 			}
 			key := strings.ToLower(name)
 			if !seen[key] {

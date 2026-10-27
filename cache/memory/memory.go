@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkadapter"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Config bounds both entry count and the sum of physical-key and payload bytes.
@@ -30,7 +31,7 @@ type Config struct {
 func DefaultConfig() Config { return Config{MaxEntries: 10000, MaxBytes: 64 << 20} }
 func (c Config) Validate() error {
 	if c.MaxEntries <= 0 || c.MaxBytes <= 0 {
-		return fault.New(fault.Invalid, "memory cache limits must be positive")
+		return safeerror.NewFault(fault.Invalid, "memory cache limits must be positive")
 	}
 	return nil
 }
@@ -112,13 +113,13 @@ func New(config Config, source clock.Clock) (*Backend, error) {
 		return nil, err
 	}
 	if source == nil {
-		return nil, fault.New(fault.Invalid, "memory cache requires a clock")
+		return nil, safeerror.NewFault(fault.Invalid, "memory cache requires a clock")
 	}
 	return &Backend{config: config, clock: source, entries: make(map[cache.EntryKey]*list.Element)}, nil
 }
 func (b *Backend) validateContext(ctx context.Context) error {
 	if b == nil || b.clock == nil || ctx == nil {
-		return fault.New(fault.Invalid, "memory cache operation is not initialized")
+		return safeerror.NewFault(fault.Invalid, "memory cache operation is not initialized")
 	}
 	return ctx.Err()
 }
@@ -133,7 +134,7 @@ func (b *Backend) active(ctx context.Context) error {
 		return err
 	}
 	if b.closed {
-		return fault.New(fault.Closed, "memory cache is closed")
+		return safeerror.NewFault(fault.Closed, "memory cache is closed")
 	}
 	return nil
 }
@@ -249,7 +250,7 @@ func (b *Backend) write(ctx context.Context, key cache.EntryKey, data []byte, tt
 func (b *Backend) entryCost(key cache.EntryKey, valueBytes int) (int, error) {
 	keyBytes := len(key.String())
 	if keyBytes > b.config.MaxBytes || valueBytes > b.config.MaxBytes-keyBytes {
-		return 0, fault.New(fault.Invalid, "entry exceeds memory cache byte budget")
+		return 0, safeerror.NewFault(fault.Invalid, "entry exceeds memory cache byte budget")
 	}
 	return keyBytes + valueBytes, nil
 }
@@ -344,7 +345,7 @@ func (b *Backend) Stats() Stats {
 }
 func (b *Backend) Close(ctx context.Context) error {
 	if b == nil || ctx == nil {
-		return fault.New(fault.Invalid, "memory cache close requires a backend and context")
+		return safeerror.NewFault(fault.Invalid, "memory cache close requires a backend and context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err

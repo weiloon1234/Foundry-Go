@@ -2,6 +2,7 @@ package querycore
 
 import (
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"reflect"
 )
@@ -9,7 +10,7 @@ import (
 // AliasNode preserves source windows and filters inside their SELECT boundary.
 func AliasNode(node SelectNode, columns []Column, direct bool, alias string, identity reflect.Type, err error) JoinedNode {
 	if !sqlname.Valid(alias) {
-		return JoinedNode{Err: fault.New(fault.Invalid, "alias requires a record query and valid name")}
+		return JoinedNode{Err: safeerror.NewFault(fault.Invalid, "alias requires a record query and valid name")}
 	}
 	if err != nil {
 		return JoinedNode{Err: err}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 	client "github.com/weiloon1234/Foundry-Go/testkit/websocket"
@@ -415,7 +416,7 @@ func (b *flakyJoinBackend) WebSocketJoin(ctx context.Context, k ws.ClusterKey, i
 		if b.conflict {
 			return ws.PresenceSnapshot{}, ws.PolicyConflict
 		}
-		return ws.PresenceSnapshot{}, fault.New(fault.Timeout, "simulated authority latency spike")
+		return ws.PresenceSnapshot{}, safeerror.NewFault(fault.Timeout, "simulated authority latency spike")
 	}
 	return b.ClusterBackend.WebSocketJoin(ctx, k, instance, id, membership)
 }
@@ -463,5 +464,5 @@ type cleanupWaitStream struct {
 func (s *cleanupWaitStream) Close(ctx context.Context) error {
 	err := s.backend.hub.Stop(ctx)
 	s.backend.result <- err
-	return errors.Join(err, s.Stream.Close(ctx))
+	return safeerror.Join("operation failed", err, s.Stream.Close(ctx))
 }

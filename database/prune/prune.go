@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Name identifies one prunable declaration, such as app.sessions.
@@ -46,10 +47,10 @@ func New(targets ...Target) (*Registry, error) {
 	r := &Registry{byName: make(map[Name]int, len(targets))}
 	for _, target := range targets {
 		if !identifier.Semantic(string(target.name)) || target.run == nil || (target.mode != Lifecycle && target.mode != Mass) {
-			return nil, fault.New(fault.Invalid, "invalid prunable declaration")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid prunable declaration")
 		}
 		if _, exists := r.byName[target.name]; exists {
-			return nil, fault.New(fault.Duplicate, "duplicate prunable "+string(target.name))
+			return nil, safeerror.NewFault(fault.Duplicate, "duplicate prunable "+string(target.name))
 		}
 		r.byName[target.name] = len(r.targets)
 		r.targets = append(r.targets, target)
@@ -99,10 +100,10 @@ type Result struct {
 // MaxBatches is reached. A failure stops the run and reports confirmed work.
 func (r *Registry) Run(ctx context.Context, db database.Transactor, options Options, selected ...Name) (Result, error) {
 	if ctx == nil || db == nil {
-		return Result{}, fault.New(fault.Invalid, "pruning requires a context and database")
+		return Result{}, safeerror.NewFault(fault.Invalid, "pruning requires a context and database")
 	}
 	if options.BatchSize < 1 || options.BatchSize > orm.MaxPerModelWriteRows || options.MaxBatches < 1 {
-		return Result{}, fault.New(fault.Invalid, "invalid prune bounds")
+		return Result{}, safeerror.NewFault(fault.Invalid, "invalid prune bounds")
 	}
 	targets := r.targets
 	if len(selected) != 0 {
@@ -111,10 +112,10 @@ func (r *Registry) Run(ctx context.Context, db database.Transactor, options Opti
 		for _, name := range selected {
 			index, exists := r.byName[name]
 			if !exists {
-				return Result{}, fault.New(fault.Missing, "prunable is not registered: "+string(name))
+				return Result{}, safeerror.NewFault(fault.Missing, "prunable is not registered: "+string(name))
 			}
 			if seen[name] {
-				return Result{}, fault.New(fault.Duplicate, "prunable selection is duplicated")
+				return Result{}, safeerror.NewFault(fault.Duplicate, "prunable selection is duplicated")
 			}
 			seen[name] = true
 			targets = append(targets, r.targets[index])

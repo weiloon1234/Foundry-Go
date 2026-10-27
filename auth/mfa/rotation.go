@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -63,11 +64,11 @@ func (s *Store) ReencryptStale(ctx context.Context, after RotationCursor, limit 
 		return Rotation{}, err
 	}
 	if limit < 1 || limit > MaxRotationBatch {
-		return Rotation{}, fault.New(fault.Invalid, "invalid MFA rotation batch size")
+		return Rotation{}, safeerror.NewFault(fault.Invalid, "invalid MFA rotation batch size")
 	}
 	backend, ok := s.backend.(RotationBackend)
 	if !ok {
-		return Rotation{}, fault.New(fault.Invalid, "MFA backend cannot rotate encryption keys")
+		return Rotation{}, safeerror.NewFault(fault.Invalid, "MFA backend cannot rotate encryption keys")
 	}
 	result := Rotation{Next: after}
 	err := s.gate.Execute(ctx, func(op context.Context) error {
@@ -76,11 +77,11 @@ func (s *Store) ReencryptStale(ctx context.Context, after RotationCursor, limit 
 			return err
 		}
 		if len(stale) > limit {
-			return fault.New(fault.Invalid, "MFA rotation listing exceeded its limit")
+			return safeerror.NewFault(fault.Invalid, "MFA rotation listing exceeded its limit")
 		}
 		for _, item := range stale {
 			if item.Owner <= result.Next.owner || item.Generation.IsZero() || item.Ciphertext.IsZero() {
-				return fault.New(fault.Invalid, "MFA rotation listing is unordered or incomplete")
+				return safeerror.NewFault(fault.Invalid, "MFA rotation listing is unordered or incomplete")
 			}
 			result.Next = RotationCursor{owner: item.Owner}
 			binding, err := factorContext(item.Owner, item.Generation)

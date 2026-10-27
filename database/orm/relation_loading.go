@@ -112,7 +112,7 @@ func relationLoader[M, N any, K comparable](local columnData[K], foreign columnD
 			key, _ := position.Get()
 			group := groups[key]
 			if p.singular && len(group) > 1 {
-				return database.NewError("singular relation cardinality", database.TooManyRows)
+				return querycore.DatabaseFailure("singular relation cardinality", database.TooManyRows)
 			}
 			if err := ctx.Err(); err != nil {
 				return err

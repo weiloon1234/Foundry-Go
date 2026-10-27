@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -25,7 +26,7 @@ type Lifetime struct {
 
 func (l Lifetime) Validate() error {
 	if l.Idle < time.Millisecond || l.Absolute < l.Idle || l.Absolute > MaxLifetime || l.Idle%time.Microsecond != 0 || l.Absolute%time.Microsecond != 0 {
-		return fault.New(fault.Invalid, "session lifetime requires microsecond precision, positive idle expiry and a bounded absolute expiry")
+		return safeerror.NewFault(fault.Invalid, "session lifetime requires microsecond precision, positive idle expiry and a bounded absolute expiry")
 	}
 	return nil
 }
@@ -60,7 +61,7 @@ func (c Config) Validate() error {
 		}
 	}
 	if c.MaxPerSubject < 1 || c.MaxPendingPerSubject < 1 || c.MaxPerSubject+2*c.MaxPendingPerSubject > MaxSessions || c.MaxConcurrent < 1 || c.MaxConcurrent > 65536 || c.Timeout <= 0 || c.Pending.Sliding {
-		return fault.New(fault.Invalid, "invalid session capacity, timeout or pending-MFA lifetime")
+		return safeerror.NewFault(fault.Invalid, "invalid session capacity, timeout or pending-MFA lifetime")
 	}
 	return nil
 }

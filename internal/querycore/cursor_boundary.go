@@ -25,7 +25,7 @@ func ReadCursorBoundary(token string, present, backward bool, scope string, fiel
 	}
 	for _, field := range fields {
 		if field.Sensitive {
-			return CursorBoundary{}, fault.New(fault.Invalid, "sensitive fields cannot be cursor keys")
+			return CursorBoundary{}, safeerror.NewFault(fault.Invalid, "sensitive fields cannot be cursor keys")
 		}
 	}
 	b := CursorBoundary{Backward: backward, Present: present}

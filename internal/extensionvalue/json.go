@@ -8,6 +8,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -16,7 +17,7 @@ const MaxBatchBytes = 4 << 20
 
 // ErrBatchLimit reports a batch retaining more than MaxBatchBytes of JSON. It
 // matches fault.Conflict; slot loading retries such a batch in smaller parts.
-var ErrBatchLimit = fault.New(fault.Conflict, "model extension JSON batch exceeds its byte limit")
+var ErrBatchLimit = safeerror.NewFault(fault.Conflict, "model extension JSON batch exceeds its byte limit")
 
 // BatchBudget bounds retained JSON across a streamed result. A caller returns
 // no partial result when this fails; one individually bounded row is decoded at

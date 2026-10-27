@@ -4,14 +4,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
-	"github.com/weiloon1234/Foundry-Go/ratelimit"
 	stdhttp "net/http"
 	"net/netip"
 	"strconv"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
 // RateLimit admits one unit using a concrete resource key. The limiter owns key
@@ -36,7 +37,7 @@ func rateLimitMiddleware[K any](limiter ratelimit.Limiter[K], key func(*stdhttp.
 			return nil, err
 		}
 		if key == nil {
-			return nil, fault.New(fault.Invalid, "HTTP rate limiting requires a key resolver")
+			return nil, safeerror.NewFault(fault.Invalid, "HTTP rate limiting requires a key resolver")
 		}
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			var keyError error
@@ -92,7 +93,7 @@ func (o IPRateLimitOptions) compile() (IPRateLimitOptions, error) {
 		o.IPv6Prefix = defaults.IPv6Prefix
 	}
 	if o.IPv4Prefix < 1 || o.IPv4Prefix > 32 || o.IPv6Prefix < 1 || o.IPv6Prefix > 128 {
-		return IPRateLimitOptions{}, fault.New(fault.Invalid, "IP rate-limit prefixes must be 1-32 for IPv4 and 1-128 for IPv6")
+		return IPRateLimitOptions{}, safeerror.NewFault(fault.Invalid, "IP rate-limit prefixes must be 1-32 for IPv4 and 1-128 for IPv6")
 	}
 	return o, nil
 }
@@ -105,7 +106,7 @@ func (o IPRateLimitOptions) key(ip netip.Addr) (netip.Addr, error) {
 	}
 	ip = ip.Unmap().WithZone("")
 	if !ip.IsValid() {
-		return netip.Addr{}, BadRequest
+		return netip.Addr{}, BadRequest.WithCause(nil)
 	}
 	bits := compiled.IPv4Prefix
 	if ip.Is6() {
@@ -113,7 +114,7 @@ func (o IPRateLimitOptions) key(ip netip.Addr) (netip.Addr, error) {
 	}
 	prefix, err := ip.Prefix(bits)
 	if err != nil {
-		return netip.Addr{}, BadRequest
+		return netip.Addr{}, BadRequest.WithCause(nil)
 	}
 	return prefix.Addr(), nil
 }
@@ -145,9 +146,10 @@ func RateLimitByIPWith(limiter ratelimit.Limiter[netip.Addr], options IPRateLimi
 // internal error: it must never be reported as a quota rejection.
 func RateLimitExceeded(decision ratelimit.Decision) error {
 	if decision.Allowed || decision.RetryAfter <= 0 || decision.Remaining > decision.Limit {
-		return InternalError.WithCause(fault.New(fault.Invalid, "rate-limit rejection requires a denied decision"))
+		return InternalError.WithCause(safeerror.NewFault(fault.Invalid, "rate-limit rejection requires a denied decision"))
 	}
-	return &rateLimitRejection{decision: decision}
+	failure := &rateLimitRejection{decision: decision}
+	return safeerror.Owned(failure.Error(), failure)
 }
 
 type rateLimitRejection struct{ decision ratelimit.Decision }
@@ -180,9 +182,9 @@ func rateLimitedHeaders(header stdhttp.Header, err error) error {
 	var decision ratelimit.Decision
 	found := false
 	failure = callback.Isolated("HTTP rate-limit retry classification", func() error {
-		rejected, matched, complete := errorgraph.As[*rateLimitRejection](err)
+		rejected, matched, complete := transportErrorAs[*rateLimitRejection](err)
 		if !complete {
-			return fault.New(fault.Invalid, "HTTP rate-limit retry classification exceeded traversal bounds")
+			return safeerror.NewFault(fault.Invalid, "HTTP rate-limit retry classification exceeded traversal bounds")
 		}
 		if matched && rejected != nil {
 			decision, found = rejected.decision, true

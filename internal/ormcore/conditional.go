@@ -1,7 +1,7 @@
 package ormcore
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -20,13 +20,13 @@ func Conditional(kind querycore.ConditionalKind, arguments ...Expression) Expres
 		nodes[i] = input.Node
 		refs.add(input.Refs)
 		out.ReferenceFree = out.ReferenceFree && input.ReferenceFree
-		out.Err = errors.Join(out.Err, input.Err)
+		out.Err = safeerror.Join("operation failed", out.Err, input.Err)
 		if input.Node == nil {
-			out.Err = errors.Join(out.Err, Invalid("uninitialized conditional operand"))
+			out.Err = safeerror.Join("operation failed", out.Err, Invalid("uninitialized conditional operand"))
 		}
 	}
 	out.Refs = refs.values
-	out.Err = errors.Join(out.Err, refs.err)
+	out.Err = safeerror.Join("operation failed", out.Err, refs.err)
 	out.Node = querycore.ConditionalNode{Kind: kind, Arguments: nodes}
 	return out
 }
@@ -46,14 +46,14 @@ func (c CaseBuilder) Empty() bool { return len(c.branches) == 0 }
 // Append returns an independent CASE derivation with bounded branch/reference work.
 func (c CaseBuilder) Append(condition Predicate, result Expression) CaseBuilder {
 	if len(c.branches) >= querycore.MaxExpressionNodes {
-		c.err = errors.Join(c.err, Invalid("CASE exceeds its branch bound"))
+		c.err = safeerror.Join("operation failed", c.err, Invalid("CASE exceeds its branch bound"))
 		return c
 	}
 	referenceFree := c.referenceFree || c.Empty()
 	refs, err := MergeReferences(c.refs, condition.Refs, result.Refs)
-	c.err = errors.Join(c.err, condition.Err, result.Err, err)
+	c.err = safeerror.Join("operation failed", c.err, condition.Err, result.Err, err)
 	if condition.Node == nil || result.Node == nil {
-		c.err = errors.Join(c.err, Invalid("uninitialized CASE branch"))
+		c.err = safeerror.Join("operation failed", c.err, Invalid("uninitialized CASE branch"))
 	}
 	c.branches = append(slices.Clone(c.branches), querycore.CaseBranch{Condition: condition.Node, Result: result.Node})
 	c.refs = refs
@@ -64,9 +64,9 @@ func (c CaseBuilder) Append(condition Predicate, result Expression) CaseBuilder 
 // Finish requires a branch and an explicit ELSE, preserving fallback provenance.
 func (c CaseBuilder) Finish(otherwise Expression) Expression {
 	refs, err := MergeReferences(c.refs, otherwise.Refs)
-	err = errors.Join(c.err, otherwise.Err, err)
+	err = safeerror.Join("operation failed", c.err, otherwise.Err, err)
 	if c.Empty() || otherwise.Node == nil {
-		err = errors.Join(err, Invalid("CASE requires a branch and an explicit ELSE"))
+		err = safeerror.Join("operation failed", err, Invalid("CASE requires a branch and an explicit ELSE"))
 	}
 	return Expression{Node: querycore.CaseNode{Branches: c.branches, Otherwise: otherwise.Node}, Refs: refs, ReferenceFree: c.referenceFree && otherwise.ReferenceFree, Err: err}
 }

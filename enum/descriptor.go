@@ -4,16 +4,15 @@ package enum
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"go/token"
 	"reflect"
 	"slices"
 	"strings"
 	"sync"
 
-	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/jsoncodec"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Scalar is the set of supported enum underlying types. Platform pointers and
@@ -44,7 +43,7 @@ type validationResult struct {
 	err  error
 }
 
-var errValidationIncomplete = errors.New("enum declaration validation did not complete")
+var errValidationIncomplete = safeerror.New("enum declaration validation did not complete")
 
 // Describe is a declaration boundary used by generated code. It copies cases;
 // registries and custom declarations must Validate before accepting a descriptor.
@@ -81,41 +80,44 @@ func (d Descriptor[E]) Validate() error {
 
 func (d Descriptor[E]) validate() error {
 	if strings.TrimSpace(d.packagePath) == "" || strings.ContainsAny(d.packagePath, " \t\r\n\\") || !token.IsIdentifier(d.name) || !token.IsExported(d.name) || len(d.cases) == 0 {
-		return fmt.Errorf("invalid enum declaration")
+		return safeerror.New("invalid enum declaration")
 	}
 	names := make(map[string]bool)
 	values := make(map[E]bool)
 	wireValues := make(map[string]bool)
 	for _, c := range d.cases {
 		if !token.IsIdentifier(c.Name) || names[c.Name] || values[c.Value] {
-			return fmt.Errorf("invalid or duplicate enum case")
+			return safeerror.New("invalid or duplicate enum case")
 		}
 		if c.LabelKey != "" && c.LabelKey.Validate() != nil {
-			return fmt.Errorf("invalid enum label key")
+			return safeerror.New("invalid enum label key")
 		}
-		data, err := marshalWireValue(c.Value)
+		data, err := jsoncodec.Marshal(c.Value)
 		if err != nil {
-			return err
+			return safeerror.Wrap("invalid enum wire value", err)
 		}
 		if string(data) == "null" || wireValues[string(data)] {
-			return fmt.Errorf("invalid or duplicate serialized enum value")
+			return safeerror.New("invalid or duplicate serialized enum value")
 		}
 		// A custom marshaler must not turn a named scalar into an object, a
 		// stringified number, a lossy number, or a different enum value.
 		if reflect.TypeFor[E]().Kind() == reflect.String {
 			if len(data) == 0 || data[0] != '"' {
-				return fmt.Errorf("string enum must serialize as a JSON string")
+				return safeerror.New("string enum must serialize as a JSON string")
 			}
 		} else {
 			for i, b := range data {
 				if (b < '0' || b > '9') && !(i == 0 && b == '-') {
-					return fmt.Errorf("integer enum must serialize as an exact JSON integer")
+					return safeerror.New("integer enum must serialize as an exact JSON integer")
 				}
 			}
 		}
 		var decoded E
-		if err := json.Unmarshal(data, &decoded); err != nil || decoded != c.Value {
-			return fmt.Errorf("enum serialization does not preserve its value")
+		if err := jsoncodec.Unmarshal(data, &decoded); err != nil {
+			return safeerror.Diagnostic("enum serialization does not preserve its value", err)
+		}
+		if decoded != c.Value {
+			return safeerror.New("enum serialization does not preserve its value")
 		}
 		names[c.Name] = true
 		values[c.Value] = true
@@ -143,21 +145,11 @@ func (d Descriptor[E]) Definition() (Definition, error) {
 	}
 	result := Definition{PackagePath: d.packagePath, Name: d.name, Cases: make([]WireCase, 0, len(d.cases))}
 	for _, c := range d.cases {
-		data, err := marshalWireValue(c.Value)
+		data, err := jsoncodec.Marshal(c.Value)
 		if err != nil {
 			return Definition{}, err
 		}
 		result.Cases = append(result.Cases, WireCase{Name: c.Name, Value: data, LabelKey: c.LabelKey})
 	}
 	return result, nil
-}
-
-// marshalWireValue is the enum JSON boundary; custom marshaler errors remain
-// inspectable without exposing their messages in declaration diagnostics.
-func marshalWireValue(value any) ([]byte, error) {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return nil, fault.Wrap(fault.Invalid, "invalid enum wire value", err)
-	}
-	return data, nil
 }

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 )
 
@@ -34,7 +35,7 @@ func (b *Buffer) Push(message pubsub.Message) error {
 		return b.err
 	}
 	if len(message.Data) == 0 || len(message.Data) > b.limits.PayloadBytes {
-		b.finishLocked(fault.New(fault.Invalid, "pub/sub incoming payload exceeds its bound"))
+		b.finishLocked(safeerror.NewFault(fault.Invalid, "pub/sub incoming payload exceeds its bound"))
 		return b.err
 	}
 	if b.size == len(b.entries) || len(message.Data) > b.limits.Bytes-b.bytes {
@@ -69,7 +70,7 @@ func (b *Buffer) Done() <-chan struct{} { return b.done }
 func (b *Buffer) Err() error            { b.mu.Lock(); defer b.mu.Unlock(); return b.err }
 func (b *Buffer) Next(ctx context.Context) (pubsub.Message, error) {
 	if ctx == nil {
-		return pubsub.Message{}, fault.New(fault.Invalid, "pub/sub receive needs context")
+		return pubsub.Message{}, safeerror.NewFault(fault.Invalid, "pub/sub receive needs context")
 	}
 	for {
 		b.mu.Lock()

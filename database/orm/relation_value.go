@@ -1,7 +1,7 @@
 package orm
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -34,7 +34,7 @@ func FoundryRelatedValue[M, N, V any](source AggregateSource[M, N], expression o
 	subquery := querycore.RelationExistence(node, r.local.Table, r.slot.owner.model.Columns)
 	subquery.Err = err
 	subquery.RelationCheck = func() error {
-		return errors.Join(validateAggregateInput(a.input, r.slot.owner), validateRelationMetadata(r, r.slot.owner))
+		return safeerror.Join("operation failed", validateAggregateInput(a.input, r.slot.owner), validateRelationMetadata(r, r.slot.owner))
 	}
 	result.Node = querycore.ScalarSubquery{Query: subquery}
 	result.Err = err

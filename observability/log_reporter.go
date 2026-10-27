@@ -14,6 +14,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // LogReporterConfig controls the built-in structured-log error reporter.
@@ -39,14 +40,14 @@ func DefaultLogReporterConfig() LogReporterConfig {
 
 func (c LogReporterConfig) Validate() error {
 	if c.Level < slog.LevelDebug || c.Level > slog.LevelError || c.Window < 0 || c.Window > 24*time.Hour || c.MaxFingerprints < 1 || c.MaxFingerprints > 4096 {
-		return fault.New(fault.Invalid, "invalid error log reporter bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid error log reporter bounds")
 	}
 	if len(c.DontReportFaults) > 64 || len(c.DontReportStatuses) > 64 || len(c.DontReportOutcomes) > 8 {
-		return fault.New(fault.Invalid, "too many error log reporter filters")
+		return safeerror.NewFault(fault.Invalid, "too many error log reporter filters")
 	}
 	for _, status := range c.DontReportStatuses {
 		if status < 100 || status > 599 {
-			return fault.New(fault.Invalid, "invalid error log reporter status filter")
+			return safeerror.NewFault(fault.Invalid, "invalid error log reporter status filter")
 		}
 	}
 	for _, outcome := range c.DontReportOutcomes {
@@ -79,7 +80,7 @@ type logReporter struct {
 // least recently reported fingerprint is forgotten first.
 func LogReporter(logger *slog.Logger, config LogReporterConfig) (Reporter, error) {
 	if logger == nil {
-		return nil, fault.New(fault.Invalid, "error log reporter requires a logger")
+		return nil, safeerror.NewFault(fault.Invalid, "error log reporter requires a logger")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err

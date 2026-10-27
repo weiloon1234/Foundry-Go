@@ -1,7 +1,7 @@
 package ormcore
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"maps"
 	"reflect"
 
@@ -12,14 +12,14 @@ import (
 func JoinSources(left, right Source, on JoinCondition, kind querycore.JoinKind, scope reflect.Type) Source {
 	// Both the SQL and its boundary metadata come from the same rowSource call.
 	// Promoted marker methods cannot authorize a different embedded source.
-	if err := errors.Join(left.Err, right.Err, validateJoinSource(left, true), validateJoinSource(right, false)); err != nil {
+	if err := safeerror.Join("operation failed", left.Err, right.Err, validateJoinSource(left, true), validateJoinSource(right, false)); err != nil {
 		return Source{Scope: scope, Err: err}
 	}
 	err := on.Err
 	if kind != querycore.CrossJoin {
-		err = errors.Join(err, CheckReferenceSet(left, on.Left, on.LeftFree), CheckReferenceSet(right, on.Right, on.RightFree))
+		err = safeerror.Join("operation failed", err, CheckReferenceSet(left, on.Left, on.LeftFree), CheckReferenceSet(right, on.Right, on.RightFree))
 	}
-	node := querycore.JoinNodes(left.Node, right.Node, left.Aliases, right.Aliases, errors.Join(left.Err, err), right.Err, on.Node, kind)
+	node := querycore.JoinNodes(left.Node, right.Node, left.Aliases, right.Aliases, safeerror.Join("operation failed", left.Err, err), right.Err, on.Node, kind)
 	owners := maps.Clone(left.Owners)
 	if owners == nil {
 		owners = map[string]any{}
@@ -60,9 +60,9 @@ func validateJoinSource(source Source, allowChain bool) error {
 
 // Rescope validates the declaration and side before retaining a model reference.
 func Rescope(scope Scope, owners map[string]any, err error) Scope {
-	scope.Err = errors.Join(scope.Err, err)
+	scope.Err = safeerror.Join("operation failed", scope.Err, err)
 	if scope.Owner == nil || owners[scope.Table] != scope.Owner {
-		scope.Err = errors.Join(scope.Err, Invalid("scope is not on this join side"))
+		scope.Err = safeerror.Join("operation failed", scope.Err, Invalid("scope is not on this join side"))
 	}
 	return scope
 }

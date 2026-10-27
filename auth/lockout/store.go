@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
@@ -26,7 +27,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.MaxKeyBytes < 1 || c.MaxKeyBytes > keyspace.MaxKeyBytes || c.MaxDeclarations < 1 || c.MaxDeclarations > 65536 || c.MaxConcurrent < 1 || c.MaxConcurrent > 65536 || c.Timeout <= 0 {
-		return fault.New(fault.Invalid, "invalid lockout store bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid lockout store bounds")
 	}
 	return nil
 }
@@ -43,7 +44,7 @@ type Store struct {
 
 func NewStore(backend Backend, config Config) (*Store, error) {
 	if credential.IsNil(backend) {
-		return nil, fault.New(fault.Invalid, "lockout requires a backend")
+		return nil, safeerror.NewFault(fault.Invalid, "lockout requires a backend")
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err

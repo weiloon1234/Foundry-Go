@@ -13,7 +13,7 @@ import (
 func ValidateJSONKind(kind string) error { return database.JSONKind(kind).Validate() }
 func ValidateJSONProperty(name string) error {
 	if len(name) > value.JSONMaxBytes || !utf8.ValidString(name) || strings.ContainsRune(name, 0) {
-		return fault.New(fault.Invalid, "invalid JSON property name")
+		return safeerror.NewFault(fault.Invalid, "invalid JSON property name")
 	}
 	return nil
 }
@@ -29,7 +29,7 @@ func JSONMapKey[K comparable](key K) (string, error) {
 			var object map[string]json.RawMessage
 			err = json.Unmarshal([]byte(text), &object)
 			if err == nil && len(object) != 1 {
-				err = fault.New(fault.Invalid, "JSON map key must encode one property")
+				err = safeerror.NewFault(fault.Invalid, "JSON map key must encode one property")
 			}
 			for k := range object {
 				name = k
@@ -37,7 +37,7 @@ func JSONMapKey[K comparable](key K) (string, error) {
 		}
 	}
 	if err != nil {
-		return "", fault.Wrap(fault.Invalid, "invalid JSON map key", safeerror.Diagnostic("JSON map key failed", err))
+		return "", safeerror.WrapFault(fault.Invalid, "invalid JSON map key", safeerror.Diagnostic("JSON map key failed", err))
 	}
 	return name, nil
 }

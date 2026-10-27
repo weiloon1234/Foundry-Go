@@ -2,10 +2,10 @@ package datatable
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Module retains borrowed providers until query and export-generation callbacks
@@ -37,9 +37,9 @@ func Module(name foundation.ProviderID, key foundation.Key[*Manager], requires [
 			err := manager.Close(ctx)
 			<-manager.DoneQueries()
 			<-manager.DoneExports()
-			return errors.Join(err, manager.Close(context.Background()))
+			return safeerror.Join("operation failed", err, manager.Close(context.Background()))
 		}); err != nil {
-			return errors.Join(err, manager.Close(ctx))
+			return safeerror.Join("operation failed", err, manager.Close(ctx))
 		}
 		return nil
 	}}

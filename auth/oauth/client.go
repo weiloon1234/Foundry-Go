@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/httpclient"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -50,17 +51,17 @@ func NewClient(provider Provider, outbound *httpclient.Client, source clock.Cloc
 		return nil, err
 	}
 	if outbound == nil || !outbound.RestrictsDestinations() {
-		return nil, fault.New(fault.Invalid, "OAuth requires an httpclient with restricted destinations")
+		return nil, safeerror.NewFault(fault.Invalid, "OAuth requires an httpclient with restricted destinations")
 	}
 	if credential.IsNil(source) {
-		return nil, fault.New(fault.Invalid, "OAuth requires a clock")
+		return nil, safeerror.NewFault(fault.Invalid, "OAuth requires a clock")
 	}
 	return &Client{provider: provider, http: outbound, clock: source, lifetime: DefaultPendingLifetime, keys: newKeySet()}, nil
 }
 
 func (c *Client) Validate() error {
 	if c == nil || c.http == nil || c.keys == nil {
-		return fault.New(fault.Invalid, "OAuth client is not configured")
+		return safeerror.NewFault(fault.Invalid, "OAuth client is not configured")
 	}
 	return nil
 }
@@ -121,7 +122,7 @@ type Callback struct {
 // ParseCallback reads code, state and error from a callback query, rejecting
 // repeated or oversized parameters.
 func ParseCallback(query url.Values) (Callback, error) {
-	invalid := auth.Unauthenticated.WithCause(fault.New(fault.Invalid, "malformed OAuth callback"))
+	invalid := auth.Unauthenticated.WithCause(safeerror.NewFault(fault.Invalid, "malformed OAuth callback"))
 	single := func(name string, limit int) (string, error) {
 		values := query[name]
 		if len(values) > 1 || len(values) == 1 && (len(values[0]) > limit || strings.ContainsFunc(values[0], controlOrSpace)) {
@@ -162,13 +163,13 @@ func (c *Client) Complete(ctx context.Context, pending Pending, callback Callbac
 	}
 	now := c.clock.Now()
 	if pending.provider != c.provider.Name || !now.Before(pending.expires) || !pending.matchesState(callback.State) {
-		return Profile{}, auth.Unauthenticated.WithCause(fault.New(fault.Invalid, "OAuth callback does not match its pending request"))
+		return Profile{}, auth.Unauthenticated.WithCause(safeerror.NewFault(fault.Invalid, "OAuth callback does not match its pending request"))
 	}
 	if callback.Error != "" {
 		return Profile{}, auth.Unauthenticated.WithCause(Denied)
 	}
 	if callback.Code.IsZero() {
-		return Profile{}, auth.Unauthenticated.WithCause(fault.New(fault.Invalid, "OAuth callback has no code"))
+		return Profile{}, auth.Unauthenticated.WithCause(safeerror.NewFault(fault.Invalid, "OAuth callback has no code"))
 	}
 	tokens, idToken, err := c.exchange(ctx, pending, callback.Code)
 	if err != nil {
@@ -219,10 +220,10 @@ func (c *Client) exchange(ctx context.Context, pending Pending, code secret.Stri
 	}
 	if decoded.Error != "" || response.Status() != 200 {
 		// The code or verifier was rejected: an invalid or replayed callback.
-		return Token{}, "", auth.Unauthenticated.WithCause(fault.New(fault.Invalid, "OAuth token endpoint rejected the authorization code"))
+		return Token{}, "", auth.Unauthenticated.WithCause(safeerror.NewFault(fault.Invalid, "OAuth token endpoint rejected the authorization code"))
 	}
 	if decoded.AccessToken == "" || len(decoded.AccessToken) > 16384 || !strings.EqualFold(decoded.TokenType, "bearer") {
-		return Token{}, "", fault.New(fault.Invalid, "OAuth token response is malformed")
+		return Token{}, "", safeerror.NewFault(fault.Invalid, "OAuth token response is malformed")
 	}
 	result := Token{Access: secret.New(decoded.AccessToken), Scopes: strings.Fields(strings.ReplaceAll(decoded.Scope, ",", " "))}
 	if decoded.RefreshToken != "" {
@@ -231,12 +232,12 @@ func (c *Client) exchange(ctx context.Context, pending Pending, code secret.Stri
 	if decoded.ExpiresIn != "" {
 		seconds, err := strconv.ParseInt(decoded.ExpiresIn.String(), 10, 64)
 		if err != nil || seconds <= 0 || seconds > 366*24*3600 {
-			return Token{}, "", fault.New(fault.Invalid, "OAuth token expiry is malformed")
+			return Token{}, "", safeerror.NewFault(fault.Invalid, "OAuth token expiry is malformed")
 		}
 		result.ExpiresAt = value.Set(c.clock.Now().Add(time.Duration(seconds) * time.Second).UTC())
 	}
 	if c.provider.Source == OpenIDConnect && decoded.IDToken == "" {
-		return Token{}, "", fault.New(fault.Invalid, "OpenID Connect token response has no ID token")
+		return Token{}, "", safeerror.NewFault(fault.Invalid, "OpenID Connect token response has no ID token")
 	}
 	return result, decoded.IDToken, nil
 }
@@ -244,16 +245,16 @@ func (c *Client) exchange(ctx context.Context, pending Pending, code secret.Stri
 // decodeDocument decodes one bounded JSON document from a provider.
 func decodeDocument(data []byte, target any) error {
 	if len(data) == 0 || len(data) > maxProviderResponseBytes {
-		return fault.New(fault.Invalid, "OAuth provider response is empty or too large")
+		return safeerror.NewFault(fault.Invalid, "OAuth provider response is empty or too large")
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.UseNumber()
 	if err := decoder.Decode(target); err != nil {
-		return fault.Wrap(fault.Invalid, "OAuth provider response is malformed", err)
+		return safeerror.WrapFault(fault.Invalid, "OAuth provider response is malformed", err)
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
-		return fault.New(fault.Invalid, "OAuth provider response has trailing data")
+		return safeerror.NewFault(fault.Invalid, "OAuth provider response has trailing data")
 	}
 	return nil
 }

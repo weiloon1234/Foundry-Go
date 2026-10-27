@@ -13,6 +13,7 @@ import (
 	driver "github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/maintnotifications"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -62,25 +63,25 @@ func DefaultConfig() Config {
 }
 func (c Config) Validate() error {
 	if c.Host == "" || strings.ContainsAny(c.Host, ",/\\ \t\r\n") || !validText(c.Host) || c.Port == 0 || c.Database < 0 || c.Database > int(^uint32(0)>>1) || !validText(c.User) || !validText(c.Password.Reveal()) {
-		return fault.New(fault.Invalid, "Redis needs an explicit TCP endpoint and valid credentials/database")
+		return safeerror.NewFault(fault.Invalid, "Redis needs an explicit TCP endpoint and valid credentials/database")
 	}
 	if c.MaxConnections <= 0 || c.MaxConnections > 65536 || c.MaxOperations < c.MaxConnections || c.MaxOperations > 1<<20 || c.MaxSubscriptions <= 0 || c.MaxSubscriptions > 65536 || c.ConnectTimeout <= 0 || c.OperationTimeout <= 0 || c.PoolTimeout <= 0 || c.MaxIdleTime <= 0 || c.MaxLifetime <= 0 || c.MaxValueBytes <= 0 || c.MaxValueBytes > 512<<20 {
-		return fault.New(fault.Invalid, "invalid Redis connection, operation or payload bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid Redis connection, operation or payload bounds")
 	}
 	switch c.TLS {
 	case VerifyTLS:
 		if c.TLSConfig != nil {
 			v := c.TLSConfig
 			if v.InsecureSkipVerify || v.MinVersion != 0 && v.MinVersion < tls.VersionTLS12 || v.MaxVersion != 0 && v.MaxVersion < max(v.MinVersion, tls.VersionTLS12) {
-				return fault.New(fault.Invalid, "Redis TLS requires verified peers and TLS 1.2 or newer")
+				return safeerror.NewFault(fault.Invalid, "Redis TLS requires verified peers and TLS 1.2 or newer")
 			}
 		}
 	case DisableTLS:
 		if c.TLSConfig != nil {
-			return fault.New(fault.Invalid, "disabled Redis TLS cannot configure TLS")
+			return safeerror.NewFault(fault.Invalid, "disabled Redis TLS cannot configure TLS")
 		}
 	default:
-		return fault.New(fault.Invalid, "unsupported Redis TLS mode")
+		return safeerror.NewFault(fault.Invalid, "unsupported Redis TLS mode")
 	}
 	return nil
 }
@@ -109,7 +110,7 @@ func (c Config) options() *driver.Options {
 			transport.ServerName = c.Host
 		}
 	}
-	return &driver.Options{Network: "tcp", Addr: net.JoinHostPort(c.Host, strconv.Itoa(int(c.Port))),
+	options := &driver.Options{Network: "tcp", Addr: net.JoinHostPort(c.Host, strconv.Itoa(int(c.Port))),
 		Username: c.User, Password: c.Password.Reveal(), DB: c.Database, TLSConfig: transport,
 		Protocol: 2, MaxRetries: -1, DialerRetries: 1, ContextTimeoutEnabled: true,
 		DialTimeout: c.ConnectTimeout, ReadTimeout: c.OperationTimeout, WriteTimeout: c.OperationTimeout,
@@ -117,4 +118,8 @@ func (c Config) options() *driver.Options {
 		MaxIdleConns: c.MaxConnections, MaxConcurrentDials: c.MaxConnections,
 		ConnMaxIdleTime: c.MaxIdleTime, ConnMaxLifetime: c.MaxLifetime,
 		DisableIdentity: true, MaintNotificationsConfig: &maintnotifications.Config{Mode: maintnotifications.ModeDisabled}}
+	if transport != nil {
+		options.Dialer = tlsDialer(transport, c.ConnectTimeout)
+	}
+	return options
 }

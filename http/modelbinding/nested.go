@@ -3,6 +3,7 @@ package modelbinding
 import (
 	"context"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -18,7 +19,7 @@ type Models[P, C any] struct {
 // must be concurrency-safe and retain ownership until they return after cancel.
 func Then[P, A, B any](parent Resolver[P, A], child func(context.Context, P, A) (value.Optional[B], error)) Resolver[P, Models[A, B]] {
 	if child == nil {
-		return Resolver[P, Models[A, B]]{err: fault.New(fault.Invalid, "nested binding requires a child resolver")}
+		return Resolver[P, Models[A, B]]{err: safeerror.NewFault(fault.Invalid, "nested binding requires a child resolver")}
 	}
 	// The composed check validates the parent once at registration; request
 	// lookups reuse the validated parent without revalidating every ancestor.

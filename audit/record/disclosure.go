@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Disclosure controls one generated model field's audit representation.
@@ -24,7 +25,7 @@ const (
 
 func (d Disclosure) Validate() error {
 	if d > Redact {
-		return fault.New(fault.Invalid, "invalid audit field disclosure")
+		return safeerror.NewFault(fault.Invalid, "invalid audit field disclosure")
 	}
 	return nil
 }
@@ -50,7 +51,7 @@ const (
 
 func (r Redaction) Validate() error {
 	if r < RedactionV1 || r > CurrentRedaction {
-		return fault.New(fault.Invalid, "unknown audit redaction policy")
+		return safeerror.NewFault(fault.Invalid, "unknown audit redaction policy")
 	}
 	return nil
 }

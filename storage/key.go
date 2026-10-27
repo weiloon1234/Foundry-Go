@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const MaxKeyBytes = 1024
@@ -21,7 +22,7 @@ type DiskID string
 
 func (d DiskID) Validate() error {
 	if !identifier.Semantic(string(d)) {
-		return fault.New(fault.Invalid, "invalid storage disk identifier")
+		return safeerror.NewFault(fault.Invalid, "invalid storage disk identifier")
 	}
 	return nil
 }
@@ -48,7 +49,7 @@ func (k ObjectKey) MarshalText() ([]byte, error) {
 }
 func (k *ObjectKey) UnmarshalText(text []byte) error {
 	if k == nil {
-		return fault.New(fault.Invalid, "missing object key destination")
+		return safeerror.NewFault(fault.Invalid, "missing object key destination")
 	}
 	*k = ObjectKey{}
 	parsed, err := ParseKey(string(text))
@@ -65,15 +66,15 @@ func (k ObjectKey) MarshalJSON() ([]byte, error) {
 }
 func (k *ObjectKey) UnmarshalJSON(data []byte) error {
 	if k == nil {
-		return fault.New(fault.Invalid, "missing object key destination")
+		return safeerror.NewFault(fault.Invalid, "missing object key destination")
 	}
 	*k = ObjectKey{}
 	if len(data) > MaxKeyBytes*6+2 {
-		return fault.New(fault.Invalid, "object key JSON exceeds its limit")
+		return safeerror.NewFault(fault.Invalid, "object key JSON exceeds its limit")
 	}
 	var text string
 	if err := json.Unmarshal(data, &text); err != nil {
-		return fault.New(fault.Invalid, "object key requires a JSON string")
+		return safeerror.NewFault(fault.Invalid, "object key requires a JSON string")
 	}
 	return k.UnmarshalText([]byte(text))
 }
@@ -99,7 +100,7 @@ func (p Prefix) Contains(key ObjectKey) bool {
 	return key.Validate() == nil && strings.HasPrefix(key.text, p.text)
 }
 func validateName(text string, prefix bool) error {
-	invalid := func() error { return fault.New(fault.Invalid, "invalid object key or prefix") }
+	invalid := func() error { return safeerror.NewFault(fault.Invalid, "invalid object key or prefix") }
 	if len(text) > MaxKeyBytes || !utf8.ValidString(text) {
 		return invalid()
 	}

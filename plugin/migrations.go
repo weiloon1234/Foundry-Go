@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // MigrationOrigin is stable across plugin releases. Individual definitions keep
@@ -30,7 +31,7 @@ func migrationContributions(key foundation.Key[*migrate.Registry]) foundation.Co
 func RegisterMigrations(r *Registrar, key foundation.Key[*migrate.Registry], definitions ...migrate.Definition) error {
 	declaration, ok := r.Plugin()
 	if !ok || key.Name() == "" {
-		return fault.New(fault.Invalid, "plugin migrations require a plugin registrar and registry key")
+		return safeerror.NewFault(fault.Invalid, "plugin migrations require a plugin registrar and registry key")
 	}
 	origin := MigrationOrigin(declaration.ID)
 	for _, definition := range definitions {
@@ -38,14 +39,14 @@ func RegisterMigrations(r *Registrar, key foundation.Key[*migrate.Registry], def
 			definition.Key.Origin = origin
 		}
 		if definition.Key.Origin != origin {
-			return fault.New(fault.Invalid, "plugin migration has a foreign origin")
+			return safeerror.NewFault(fault.Invalid, "plugin migration has a foreign origin")
 		}
 		order, err := Version(definition.Version).Compare(declaration.Version)
 		if err != nil {
 			return err
 		}
 		if order > 0 {
-			return fault.New(fault.Invalid, "plugin migration was introduced after the installed plugin version")
+			return safeerror.NewFault(fault.Invalid, "plugin migration was introduced after the installed plugin version")
 		}
 		definition = definition.Clone()
 		if err := foundation.Contribute(r, migrationContributions(key), fmt.Sprintf("%q.%q", definition.Key.Origin, definition.Key.ID), func(resolver foundation.Resolver) (migrate.Definition, error) {

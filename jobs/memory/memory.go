@@ -12,6 +12,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/lease"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -34,7 +35,7 @@ func (c Config) Validate() error {
 		return err
 	}
 	if c.Clock == nil {
-		return fault.New(fault.Invalid, "memory job backend requires a clock")
+		return safeerror.NewFault(fault.Invalid, "memory job backend requires a clock")
 	}
 	return nil
 }
@@ -96,7 +97,7 @@ func (b *Backend) begin(ctx context.Context, key jobs.Key) (time.Time, func(), e
 		return time.Time{}, nil, err
 	}
 	if b == nil || b.entries == nil {
-		return time.Time{}, nil, fault.New(fault.Invalid, "memory job backend is not initialized")
+		return time.Time{}, nil, safeerror.NewFault(fault.Invalid, "memory job backend is not initialized")
 	}
 	b.mu.Lock()
 	if err := ctx.Err(); err != nil {
@@ -105,7 +106,7 @@ func (b *Backend) begin(ctx context.Context, key jobs.Key) (time.Time, func(), e
 	}
 	if b.closed {
 		b.mu.Unlock()
-		return time.Time{}, nil, fault.New(fault.Closed, "memory job backend is closed")
+		return time.Time{}, nil, safeerror.NewFault(fault.Closed, "memory job backend is closed")
 	}
 	now := b.config.Clock.Now()
 	if now.Before(b.lastTime) {
@@ -307,7 +308,7 @@ func (b *Backend) JobEnqueue(ctx context.Context, key jobs.Key, envelope jobs.En
 	at := address{key, envelope.ID()}
 	if previous, ok := b.entries[at]; ok {
 		if previous.encoded != string(data) {
-			return false, fault.New(fault.Conflict, "job identity already belongs to a different envelope")
+			return false, safeerror.NewFault(fault.Conflict, "job identity already belongs to a different envelope")
 		}
 		return false, nil
 	}
@@ -318,7 +319,7 @@ func (b *Backend) JobEnqueue(ctx context.Context, key jobs.Key, envelope jobs.En
 			return false, jobs.ErrNotUnique
 		}
 		if len(b.unique) >= b.config.MaxEntries {
-			return false, fault.Wrap(fault.Overloaded, "job uniqueness capacity is exhausted", jobs.ErrQueueFull)
+			return false, safeerror.WrapFault(fault.Overloaded, "job uniqueness capacity is exhausted", jobs.ErrQueueFull)
 		}
 	}
 	size := int64(len(data) + len(envelope.PayloadJSON()) + 8*len(envelope.Policy().Backoff))
@@ -326,14 +327,14 @@ func (b *Backend) JobEnqueue(ctx context.Context, key jobs.Key, envelope jobs.En
 		return false, jobs.ErrQueueFull
 	}
 	if b.sequence == ^uint64(0) {
-		return false, fault.New(fault.Conflict, "memory job sequence exhausted")
+		return false, safeerror.NewFault(fault.Conflict, "memory job sequence exhausted")
 	}
 	available := envelope.AvailableAt()
 	if available.IsZero() {
 		available = now
 	}
 	if available.After(now.Add(jobs.MaxDelay)) {
-		return false, fault.New(fault.Invalid, "job schedule exceeds maximum delay")
+		return false, safeerror.NewFault(fault.Invalid, "job schedule exceeds maximum delay")
 	}
 	b.sequence++
 	item := &entry{queue: key, bytes: size, encoded: string(data), sequence: b.sequence, record: jobs.Record{Envelope: envelope, CreatedAt: now, AvailableAt: available}}
@@ -463,7 +464,7 @@ func (b *Backend) JobFinish(ctx context.Context, key jobs.Key, proof jobs.Owners
 		state, reason = jobs.Failed, jobs.AttemptLimit
 	}
 	if state == jobs.Succeeded && item.record.State != jobs.Running {
-		return false, fault.New(fault.Invalid, "unstarted job cannot succeed")
+		return false, safeerror.NewFault(fault.Invalid, "unstarted job cannot succeed")
 	}
 	if state == jobs.Waiting {
 		item.record.AvailableAt = now.Add(result.Delay)
@@ -498,7 +499,7 @@ func (b *Backend) JobCancel(ctx context.Context, key jobs.Key, target jobs.Targe
 }
 func (b *Backend) JobInspect(ctx context.Context, key jobs.Key, id jobs.ExecutionID) (value.Optional[jobs.Record], error) {
 	if id.IsZero() {
-		return value.Optional[jobs.Record]{}, fault.New(fault.Invalid, "job inspection requires an identity")
+		return value.Optional[jobs.Record]{}, safeerror.NewFault(fault.Invalid, "job inspection requires an identity")
 	}
 	_, release, err := b.begin(ctx, key)
 	if err != nil {
@@ -569,7 +570,7 @@ func (b *Backend) JobForget(ctx context.Context, key jobs.Key, target jobs.Targe
 // unfinished work is intentionally not persisted by the memory adapter.
 func (b *Backend) Close() error {
 	if b == nil || b.entries == nil {
-		return fault.New(fault.Invalid, "memory job backend is not initialized")
+		return safeerror.NewFault(fault.Invalid, "memory job backend is not initialized")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()

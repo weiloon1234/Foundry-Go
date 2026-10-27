@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/emaildiag"
 	"mime"
 	"mime/multipart"
 	"net/textproto"
@@ -34,11 +35,11 @@ type Driver struct {
 
 func New(config Config) (*Driver, error) {
 	if !httptransport.Token(config.APIKey.Reveal()) || config.Domain == "" || len(config.Domain) > 253 {
-		return nil, email.Construction
+		return nil, emaildiag.Failure(email.Construction)
 	}
 	for _, c := range config.Domain {
 		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '.') {
-			return nil, email.Construction
+			return nil, emaildiag.Failure(email.Construction)
 		}
 	}
 	c, err := httptransport.New(config.HTTP, "https://api.mailgun.net")
@@ -59,7 +60,7 @@ func (Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Mailgun drive
 func (*Driver) StructuredSubmission() bool { return true }
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.client == nil || out.Validate() != nil {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	m := out.Message()
 	var body bytes.Buffer
@@ -98,11 +99,11 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 		}
 	}
 	if headerBytes > 16<<10 {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	for _, field := range fields {
 		if mw.WriteField(field[0], field[1]) != nil {
-			return email.Receipt{}, email.Construction
+			return email.Receipt{}, emaildiag.Failure(email.Construction)
 		}
 	}
 	for _, a := range out.Attachments() {
@@ -115,14 +116,14 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 		header := textproto.MIMEHeader{"Content-Disposition": {mime.FormatMediaType("form-data", map[string]string{"name": field, "filename": filename})}, "Content-Type": {string(ref.ContentType)}}
 		part, err := mw.CreatePart(header)
 		if err != nil {
-			return email.Receipt{}, email.Construction
+			return email.Receipt{}, emaildiag.Failure(email.Construction)
 		}
 		if _, err = part.Write(a.Bytes()); err != nil {
-			return email.Receipt{}, email.Construction
+			return email.Receipt{}, emaildiag.Failure(email.Construction)
 		}
 	}
 	if mw.Close() != nil || body.Len() > httptransport.MaxRequestBytes {
-		return email.Receipt{}, email.Construction
+		return email.Receipt{}, emaildiag.Failure(email.Construction)
 	}
 	r, err := d.client.Request(ctx, "/v3/"+url.PathEscape(d.domain)+"/messages", mw.FormDataContentType(), body.Bytes())
 	if err != nil {
@@ -140,7 +141,7 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 		ID string `json:"id"`
 	}
 	if json.Unmarshal(data, &result) != nil || result.ID == "" {
-		return email.Receipt{}, email.Ambiguous
+		return email.Receipt{}, emaildiag.Failure(email.Ambiguous)
 	}
 	receipt := email.Receipt{MessageID: result.ID}
 	return receipt, receipt.Validate()

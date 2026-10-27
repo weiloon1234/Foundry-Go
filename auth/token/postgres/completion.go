@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
@@ -20,13 +21,13 @@ var _ token.CompletionBackend = (*Backend)(nil)
 // and schema restoration follow the shared savepoint boundary. Nothing commits.
 func (b *Backend) ConsumePendingIn(ctx context.Context, tx *database.Tx, address token.Address, expected token.Record) error {
 	if b == nil {
-		return fault.New(fault.Invalid, "credential backend is missing")
+		return safeerror.NewFault(fault.Invalid, "credential backend is missing")
 	}
 	if err := expected.Validate(address); err != nil {
 		return err
 	}
 	if expected.Assurance != auth.PendingMFA || expected.Mode != token.Challenge {
-		return auth.Unauthenticated
+		return auth.Unauthenticated.WithCause(nil)
 	}
 	return credential.InSchema(ctx, tx, b.db, b.config.Schema, func(child *database.Tx) error {
 		subject, family, entry, present, err := readCredential(ctx, child, address, expected.AccessHash, false, true)
@@ -34,10 +35,10 @@ func (b *Backend) ConsumePendingIn(ctx context.Context, tx *database.Tx, address
 			return err
 		}
 		if !present {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		if entry.Generation != family.Generation {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		current, err := record(address, subject, family, entry)
 		if err != nil {
@@ -48,7 +49,7 @@ func (b *Backend) ConsumePendingIn(ctx context.Context, tx *database.Tx, address
 			return err
 		}
 		if current.ID != expected.ID || current.Subject != expected.Subject || !current.AccessHash.Equal(expected.AccessHash) || current.Assurance != auth.PendingMFA || current.Mode != token.Challenge || current.CreatedAt != expected.CreatedAt || current.AccessExpiresAt != expected.AccessExpiresAt || current.ExpiresAt != expected.ExpiresAt || now.Before(current.CreatedAt.UTC()) || !current.LiveAccess(now) {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		_, err = orm.Delete(ctx, child, families(subject.Scope, subject.Key), tokenstore.Families.ID, family.ID)
 		return err
@@ -60,7 +61,7 @@ func (b *Backend) ConsumePendingIn(ctx context.Context, tx *database.Tx, address
 // rolls back the inserted credential and all joined factor/consumption writes.
 func (b *Backend) CreateBefore(ctx context.Context, address token.Address, creation token.Creation, deadline temporal.DateTime, check func(context.Context, *database.Tx) error) (token.Record, error) {
 	if b == nil || check == nil || deadline.IsZero() || deadline.UTC().Unix() < 0 || deadline.UTC().Nanosecond()%1000 != 0 || creation.Assurance != auth.Authenticated {
-		return token.Record{}, fault.New(fault.Invalid, "MFA creation requires a full proof check and deadline")
+		return token.Record{}, safeerror.NewFault(fault.Invalid, "MFA creation requires a full proof check and deadline")
 	}
 	return b.create(ctx, address, creation, check, func() error {
 		now, err := b.now()
@@ -68,7 +69,7 @@ func (b *Backend) CreateBefore(ctx context.Context, address token.Address, creat
 			return err
 		}
 		if !now.Before(deadline.UTC()) {
-			return auth.Unauthenticated
+			return auth.Unauthenticated.WithCause(nil)
 		}
 		return nil
 	})

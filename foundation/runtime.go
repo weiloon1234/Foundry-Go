@@ -2,7 +2,6 @@ package foundation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -13,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
@@ -91,10 +91,10 @@ func (r *Runtime) SelectedKernels() []KernelKind { return r.core.app.selectedKer
 // application shutdown. Use jobs for durable work, not unmanaged goroutines.
 func (r *Runtime) Go(name TaskID, run func(context.Context) error) error {
 	if !validName(string(name)) {
-		return fault.New(fault.Invalid, "invalid task ID")
+		return safeerror.NewFault(fault.Invalid, "invalid task ID")
 	}
 	if run == nil {
-		return fault.New(fault.Invalid, "managed task requires a callback")
+		return safeerror.NewFault(fault.Invalid, "managed task requires a callback")
 	}
 	return r.core.tasks.start(taskName{owner: r.owner, name: name}, func(ctx context.Context) error {
 		return r.core.observe(ctx, observability.Operation{Kind: observability.Resource, Name: observationName(string(r.owner) + "." + string(name))}, run)
@@ -106,17 +106,17 @@ func (r *Runtime) Go(name TaskID, run func(context.Context) error) error {
 // work exits. Callers retain ownership if registration returns an error.
 func (r *Runtime) OnShutdown(name ResourceID, close func(context.Context) error) error {
 	if !validName(string(name)) || close == nil {
-		return fault.New(fault.Invalid, "invalid resource cleanup")
+		return safeerror.NewFault(fault.Invalid, "invalid resource cleanup")
 	}
 	key := resourceName{r.owner, name}
 	label := fmt.Sprintf("provider[%s]:%s", r.owner, name)
 	r.core.mu.Lock()
 	defer r.core.mu.Unlock()
 	if r.core.sealed {
-		return fault.New(fault.Closed, "resource registration is closed")
+		return safeerror.NewFault(fault.Closed, "resource registration is closed")
 	}
 	if _, exists := r.core.resourceNames[key]; exists {
-		return fault.New(fault.Duplicate, "resource "+label+" is already registered")
+		return safeerror.NewFault(fault.Duplicate, "resource "+label+" is already registered")
 	}
 	r.core.resourceNames[key] = struct{}{}
 	r.core.cleanups = append(r.core.cleanups, cleanup{label, close, observationName(string(r.owner) + "." + string(name))})
@@ -127,7 +127,7 @@ func (r *Runtime) onPluginShutdown(close func(context.Context) error) error {
 	r.core.mu.Lock()
 	defer r.core.mu.Unlock()
 	if r.core.sealed {
-		return fault.New(fault.Closed, "plugin shutdown registration is closed")
+		return safeerror.NewFault(fault.Closed, "plugin shutdown registration is closed")
 	}
 	r.core.cleanups = append(r.core.cleanups, cleanup{"plugin shutdown " + string(r.owner), close, observationName(string(r.owner) + ".shutdown")})
 	return nil
@@ -158,21 +158,21 @@ func (g *taskGroup) startReported(name taskName, run func(context.Context) error
 
 func (g *taskGroup) launch(name taskName, run func(context.Context) error, record bool) error {
 	if run == nil {
-		return fault.New(fault.Invalid, "nil managed task")
+		return safeerror.NewFault(fault.Invalid, "nil managed task")
 	}
 	g.mu.Lock()
 	if g.sealed || g.ctx.Err() != nil {
 		g.mu.Unlock()
-		return fault.New(fault.Closed, "managed tasks are stopping")
+		return safeerror.NewFault(fault.Closed, "managed tasks are stopping")
 	}
 	if _, exists := g.active[name]; exists {
 		g.mu.Unlock()
-		return fault.New(fault.Duplicate, "task "+name.String()+" is already active")
+		return safeerror.NewFault(fault.Duplicate, "task "+name.String()+" is already active")
 	}
 	g.active[name] = struct{}{}
 	g.mu.Unlock()
 	go func() {
-		var err error = fault.New(fault.Panicked, "task "+name.String()+" exited without returning")
+		var err error = safeerror.NewFault(fault.Panicked, "task "+name.String()+" exited without returning")
 		defer func() { g.finish(name, err, record) }()
 		err = invoke("task "+name.String(), func() error {
 			err := run(g.ctx)
@@ -220,7 +220,11 @@ func (g *taskGroup) pending() []string {
 	sort.Strings(names)
 	return names
 }
-func (g *taskGroup) err() error { g.mu.Lock(); defer g.mu.Unlock(); return errors.Join(g.failures...) }
+func (g *taskGroup) err() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return safeerror.Join("operation failed", g.failures...)
+}
 
 // Only suppress an error when every leaf is ordinary cancellation. Joining a
 // real failure with cancellation must retain that failure. The shared bounded

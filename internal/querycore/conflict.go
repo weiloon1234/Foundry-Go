@@ -1,6 +1,7 @@
 package querycore
 
 import (
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -57,5 +58,5 @@ func (p Conflict) CheckReturned(q QueryCore, requested, returned int) error {
 	if p.Action != ConflictDoUpdate || len(p.Condition) != 0 || len(p.RowCondition) != 0 || returned >= requested || len(q.ScopePredicates()) == 0 {
 		return nil
 	}
-	return fault.New(fault.Conflict, "upsert conflicts with a row outside the model's global scopes")
+	return safeerror.NewFault(fault.Conflict, "upsert conflicts with a row outside the model's global scopes")
 }

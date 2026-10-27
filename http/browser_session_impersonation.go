@@ -2,12 +2,13 @@ package http
 
 import (
 	"context"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	stdhttp "net/http"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -22,7 +23,7 @@ func (b *BrowserSessions[M, K]) shares(impersonation *session.Impersonation[M, K
 	}
 	name := b.sessions.Guard().Name()
 	if impersonation.Actors().Guard().Name() != name || impersonation.Targets().Guard().Name() != name {
-		return fault.New(fault.Invalid, "impersonation must use this browser guard for actors and targets")
+		return safeerror.NewFault(fault.Invalid, "impersonation must use this browser guard for actors and targets")
 	}
 	return nil
 }
@@ -76,7 +77,7 @@ func (b *BrowserSessions[M, K]) StopImpersonating(ctx context.Context, impersona
 	err = state.operation(ctx, func(op context.Context) (string, time.Time, error) {
 		issued, err := impersonation.Resume(op)
 		if err != nil {
-			if !errors.Is(err, session.ActorSessionEnded) {
+			if !callback.ErrorIs(err, session.ActorSessionEnded) {
 				return "", time.Time{}, err
 			}
 			// The impersonation session is already revoked: clear its cookie.

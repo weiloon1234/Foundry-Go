@@ -4,30 +4,31 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
 func (p Conflict) ValidateShape(q QueryCore, c *Compiler, validateMutator func(ConflictUpdate) error) error {
 	if p.Action != ConflictNothing && p.Action != ConflictDoUpdate {
-		return fault.New(fault.Invalid, "upsert requires an explicit conflict action")
+		return safeerror.NewFault(fault.Invalid, "upsert requires an explicit conflict action")
 	}
 	if p.Named && (!sqlname.Valid(p.Constraint) || len(p.Keys) != 0) {
-		return fault.New(fault.Invalid, "invalid named conflict constraint")
+		return safeerror.NewFault(fault.Invalid, "invalid named conflict constraint")
 	}
 	if len(p.Keys) > MaxExpressionNodes || len(p.Updates) > len(c.Columns) {
-		return fault.New(fault.Invalid, "conflict columns exceed model metadata")
+		return safeerror.NewFault(fault.Invalid, "conflict columns exceed model metadata")
 	}
 	if err := p.validateTarget(q, c); err != nil {
 		return err
 	}
 	if p.Action == ConflictNothing {
 		if len(p.Updates) != 0 || len(p.Condition) != 0 || len(p.RowCondition) != 0 {
-			return fault.New(fault.Invalid, "DO NOTHING cannot contain update assignments or conditions")
+			return safeerror.NewFault(fault.Invalid, "DO NOTHING cannot contain update assignments or conditions")
 		}
 		return nil
 	}
 	if (!p.Named && len(p.Keys) == 0) || len(p.Updates) == 0 {
-		return fault.New(fault.Invalid, "conflict update requires a target and assignments")
+		return safeerror.NewFault(fault.Invalid, "conflict update requires a target and assignments")
 	}
 	seen := map[string]bool{}
 	for _, u := range p.Updates {
@@ -36,10 +37,10 @@ func (p Conflict) ValidateShape(q QueryCore, c *Compiler, validateMutator func(C
 		}
 		_, declared := c.Columns[u.Field.Column]
 		if !declared || seen[u.Field.Column] || u.Field.Column == q.Model.Primary || !u.validMode() {
-			return fault.New(fault.Invalid, "conflict update has an invalid, repeated or primary-key assignment")
+			return safeerror.NewFault(fault.Invalid, "conflict update has an invalid, repeated or primary-key assignment")
 		}
 		if u.Null && !c.Columns[u.Field.Column].Nullable {
-			return fault.New(fault.Invalid, "NULL conflict assignment requires a nullable model field")
+			return safeerror.NewFault(fault.Invalid, "NULL conflict assignment requires a nullable model field")
 		}
 		seen[u.Field.Column] = true
 		if err := validateMutator(u); err != nil {

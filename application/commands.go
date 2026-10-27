@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/weiloon1234/Foundry-Go/internal/clidiag"
 	"maps"
 	"net/netip"
 	"runtime"
@@ -18,6 +19,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 )
 
@@ -37,7 +39,7 @@ var downCommand = cli.Define("down", "Put every instance sharing the maintenance
 	flags.Func("retry", "Retry-After seconds advertised to clients (0-86400)", func(value string) error {
 		seconds, err := strconv.Atoi(value)
 		if err != nil || seconds < 0 || time.Duration(seconds)*time.Second > maintenance.MaxRetryAfter {
-			return fault.New(fault.Invalid, "retry must be whole seconds up to one day")
+			return safeerror.NewFault(fault.Invalid, "retry must be whole seconds up to one day")
 		}
 		args.Retry = time.Duration(seconds) * time.Second
 		return nil
@@ -50,7 +52,7 @@ var downCommand = cli.Define("down", "Put every instance sharing the maintenance
 		if err != nil {
 			address, addressErr := netip.ParseAddr(value)
 			if addressErr != nil {
-				return fault.New(fault.Invalid, "allow requires an IP address or CIDR")
+				return safeerror.NewFault(fault.Invalid, "allow requires an IP address or CIDR")
 			}
 			address = address.Unmap().WithZone("")
 			prefix = netip.PrefixFrom(address, address.BitLen())
@@ -67,7 +69,7 @@ var downCommand = cli.Define("down", "Put every instance sharing the maintenance
 	})
 }, func(args DownArguments) error {
 	if args.Secret != "" && args.WithSecret {
-		return cli.Usage("use either --secret or --with-secret")
+		return clidiag.Usage("use either --secret or --with-secret")
 	}
 	return nil
 })).AllowDuringMaintenance()
@@ -87,7 +89,7 @@ func MaintenanceCommands() ([]cli.Declaration, error) {
 		}
 		store, err := foundation.Resolve(r, MaintenanceStoreKey)
 		if err != nil {
-			return nil, nil, fault.Wrap(fault.Missing, "maintenance commands require a configured maintenance store", err)
+			return nil, nil, safeerror.WrapFault(fault.Missing, "maintenance commands require a configured maintenance store", err)
 		}
 		return gate, store, nil
 	}

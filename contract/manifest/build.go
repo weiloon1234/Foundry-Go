@@ -13,10 +13,11 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 func invalid(message string) error {
-	return fault.New(fault.Invalid, "invalid client contract: "+message)
+	return safeerror.NewFault(fault.Invalid, "invalid client contract: "+message)
 }
 
 type graph struct {

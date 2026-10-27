@@ -21,7 +21,8 @@ func TestNestedOwnedFailureKeepsConcreteClassification(t *testing.T) {
 					panic("private application panic")
 				})
 			})
-			failure, ok := err.(*fault.Error)
+			var failure *fault.Error
+			ok := errors.As(err, &failure)
 			if !ok || failure.Code() != fault.Panicked || strings.Contains(err.Error(), "private") {
 				t.Fatal("nested classification lost", err)
 			}
@@ -31,7 +32,7 @@ func TestNestedOwnedFailureKeepsConcreteClassification(t *testing.T) {
 func TestOrdinaryCallbackErrorKeepsContextAndIdentity(t *testing.T) {
 	original := errors.New("ordinary")
 	err := callback.Isolated("operation", func() error { return original })
-	if !errors.Is(err, original) || err.Error() != "operation: ordinary" {
+	if !errors.Is(err, original) || err.Error() != "operation failed" {
 		t.Fatal(err)
 	}
 }
@@ -40,7 +41,8 @@ func panickingHelper() { panic("private payload") }
 
 func TestPanicRetainsSourceFramesWithoutPayload(t *testing.T) {
 	err := callback.Invoke("operation", func() error { panickingHelper(); return nil })
-	failure, ok := err.(*fault.Error)
+	var failure *fault.Error
+	ok := errors.As(err, &failure)
 	if !ok || failure.Code() != fault.Panicked {
 		t.Fatal("panic classification lost", err)
 	}
@@ -54,7 +56,8 @@ func TestPanicRetainsSourceFramesWithoutPayload(t *testing.T) {
 		}
 	}
 	isolated := callback.Isolated("isolated", func() error { panickingHelper(); return nil })
-	if contained, ok := isolated.(*fault.Error); !ok || len(contained.Frames()) == 0 {
+	var contained *fault.Error
+	if !errors.As(isolated, &contained) || len(contained.Frames()) == 0 {
 		t.Fatal("isolated panic lost frames", isolated)
 	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // ClientIP returns the IP captured in shared request attribution. The HTTP
@@ -146,7 +147,7 @@ func validateRequestEdgePolicies(handler stdhttp.Handler, chain []Middleware) er
 		return err
 	}
 	if required := slices.Index(ids, PublicURLRequiredMiddlewareID); required >= 0 && slices.Index(ids, PublicURLMiddlewareID) > required {
-		return fault.New(fault.Invalid, "PublicURLs must run before RequirePublicURLs in one middleware chain")
+		return safeerror.NewFault(fault.Invalid, "PublicURLs must run before RequirePublicURLs in one middleware chain")
 	}
 	if router, ok := handler.(*Router); ok && router != nil {
 		outer := slices.ContainsFunc(ids, proxyDependentMiddleware)
@@ -155,7 +156,7 @@ func validateRequestEdgePolicies(handler stdhttp.Handler, chain []Middleware) er
 				return err
 			}
 			if outer && slices.Contains(route.Middlewares, TrustedProxyMiddlewareID) {
-				return fault.New(fault.Invalid, "route "+string(route.ID)+" installs TrustedProxy inside a global policy that depends on it; install TrustedProxy globally before rate limits, CSRF, PublicURLs and sessions")
+				return safeerror.NewFault(fault.Invalid, "route "+string(route.ID)+" installs TrustedProxy inside a global policy that depends on it; install TrustedProxy globally before rate limits, CSRF, PublicURLs and sessions")
 			}
 		}
 	}
@@ -169,7 +170,7 @@ func validateProxyOrdering(ids []MiddlewareID) error {
 	}
 	for _, id := range ids[:proxy] {
 		if proxyDependentMiddleware(id) {
-			return fault.New(fault.Invalid, "middleware "+string(id)+" runs before TrustedProxy and would use the proxy's address or scheme; install TrustedProxy first")
+			return safeerror.NewFault(fault.Invalid, "middleware "+string(id)+" runs before TrustedProxy and would use the proxy's address or scheme; install TrustedProxy first")
 		}
 	}
 	return nil

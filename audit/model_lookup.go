@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/auditstore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -24,7 +25,7 @@ func FindModel[M, K any](ctx context.Context, executor database.Executor, record
 		return value.Optional[ModelRecord[M, K]]{}, err
 	}
 	if id.IsZero() {
-		return value.Optional[ModelRecord[M, K]]{}, fault.New(fault.Invalid, "model audit lookup requires a nonzero ID")
+		return value.Optional[ModelRecord[M, K]]{}, safeerror.NewFault(fault.Invalid, "model audit lookup requires a nonzero ID")
 	}
 	f := auditstore.Entries
 	selected, err := auditstore.Entries.Query().Where(f.Area.Eq(string(area)), f.Operation.Ne(0)).Where(auditstore.Entries.Key().Eq(model.IDFromBytes[auditstore.Entry](id.Bytes()))).First(ctx, executor)
@@ -37,7 +38,7 @@ func FindModel[M, K any](ctx context.Context, executor database.Executor, record
 	}
 	subject, present := row.Subject.Get()
 	if !present {
-		return value.Optional[ModelRecord[M, K]]{}, fault.New(fault.Invalid, "model audit has no subject")
+		return value.Optional[ModelRecord[M, K]]{}, safeerror.NewFault(fault.Invalid, "model audit has no subject")
 	}
 	identity, err := subject.Decode()
 	if err != nil {

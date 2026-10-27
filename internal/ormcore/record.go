@@ -3,7 +3,7 @@ package ormcore
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"reflect"
 	"slices"
 	"unsafe"
@@ -43,18 +43,18 @@ type RecordSource struct {
 
 func ValidateRecord(r Record, typ reflect.Type) error {
 	if r.Type != typ || typ == nil || r.Owner == nil || r.Scan == nil || len(r.Columns) == 0 || len(r.Columns) > querycore.MaxExpressionNodes {
-		return errors.Join(r.Err, Invalid("record requires its complete declared result and decoder"))
+		return safeerror.Join("operation failed", r.Err, Invalid("record requires its complete declared result and decoder"))
 	}
 	return r.Err
 }
 
 func ValidateRecordSource(r RecordSource, typ reflect.Type, transaction bool) error {
-	err := errors.Join(r.Source.Err, ValidateRecord(r.Record, typ))
+	err := safeerror.Join("operation failed", r.Source.Err, ValidateRecord(r.Record, typ))
 	if r.Transaction != transaction {
-		err = errors.Join(err, Invalid("record executor kind does not match its source"))
+		err = safeerror.Join("operation failed", err, Invalid("record executor kind does not match its source"))
 	}
 	if len(r.Source.Node.Selections) != len(r.Record.Columns) {
-		return errors.Join(err, Invalid("record selection is incomplete"))
+		return safeerror.Join("operation failed", err, Invalid("record selection is incomplete"))
 	}
 	for i, item := range r.Source.Node.Selections {
 		name := item.Alias
@@ -64,20 +64,20 @@ func ValidateRecordSource(r RecordSource, typ reflect.Type, transaction bool) er
 			}
 		}
 		if name != r.Record.Columns[i].Name {
-			err = errors.Join(err, Invalid("record selection order does not match its decoder"))
+			err = safeerror.Join("operation failed", err, Invalid("record selection order does not match its decoder"))
 		}
 	}
 	return err
 }
 
 func SelectRecord(source Source, scope Scope, record Record, typ reflect.Type) RecordSource {
-	source.Err = errors.Join(source.Err, scope.Err, ValidateRecord(record, typ), CheckReferences(source, []Reference{scope.Reference}))
+	source.Err = safeerror.Join("operation failed", source.Err, scope.Err, ValidateRecord(record, typ), CheckReferences(source, []Reference{scope.Reference}))
 	if scope.Owner != record.Owner {
-		source.Err = errors.Join(source.Err, Invalid("record scope belongs to another declaration"))
+		source.Err = safeerror.Join("operation failed", source.Err, Invalid("record scope belongs to another declaration"))
 	}
 	node, err := querycore.SelectRecordNode(source.Node, scope.Table, record.Columns, record.Scan != nil)
 	source.Node = node
-	source.Err = errors.Join(source.Err, err)
+	source.Err = safeerror.Join("operation failed", source.Err, err)
 	source.Checks = AppendChecks(source.Checks, record.Checks...)
 	return RecordSource{Source: source, Record: record}
 }

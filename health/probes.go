@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type ProbeID string
@@ -36,7 +37,7 @@ func DefaultConfig() Config {
 
 func (c Config) Validate() error {
 	if c.MaxProbes < 1 || c.MaxProbes > 256 || c.MaxConcurrent < 1 || c.MaxConcurrent > 64 || c.CheckTimeout <= 0 || c.CheckTimeout > time.Minute || c.ProbeTimeout <= 0 || c.ProbeTimeout > c.CheckTimeout {
-		return fault.New(fault.Invalid, "invalid readiness probe resource bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid readiness probe resource bounds")
 	}
 	return nil
 }
@@ -88,15 +89,15 @@ func NewRegistry(config Config, probes ...Probe) (*Registry, error) {
 		return nil, err
 	}
 	if len(probes) > config.MaxProbes {
-		return nil, fault.New(fault.Invalid, "readiness probe count exceeds its bound")
+		return nil, safeerror.NewFault(fault.Invalid, "readiness probe count exceeds its bound")
 	}
 	seen := make(map[ProbeID]bool, len(probes))
 	for _, probe := range probes {
 		if len(probe.ID) > 128 || !identifier.Semantic(string(probe.ID)) || probe.Check == nil {
-			return nil, fault.New(fault.Invalid, "readiness probe requires an ID and callback")
+			return nil, safeerror.NewFault(fault.Invalid, "readiness probe requires an ID and callback")
 		}
 		if seen[probe.ID] {
-			return nil, fault.New(fault.Duplicate, "duplicate readiness probe ID")
+			return nil, safeerror.NewFault(fault.Duplicate, "duplicate readiness probe ID")
 		}
 		seen[probe.ID] = true
 	}
@@ -117,7 +118,7 @@ func (r *Registry) Describe() []ProbeID {
 // A dependency failure returns a non-ready report without exporting its error.
 func (r *Registry) Check(ctx context.Context) (Report, error) {
 	if r == nil || r.done == nil || ctx == nil {
-		return Report{}, fault.New(fault.Invalid, "readiness requires a registry and context")
+		return Report{}, safeerror.NewFault(fault.Invalid, "readiness requires a registry and context")
 	}
 	started := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, r.config.CheckTimeout)
@@ -225,7 +226,7 @@ func (r *Registry) check(parent context.Context, probe Probe) Result {
 // wait; Done closes when every accepted callback has actually exited.
 func (r *Registry) Close(ctx context.Context) error {
 	if r == nil || r.done == nil || ctx == nil {
-		return fault.New(fault.Invalid, "readiness close requires a registry and context")
+		return safeerror.NewFault(fault.Invalid, "readiness close requires a registry and context")
 	}
 	r.mu.Lock()
 	if !r.closing {

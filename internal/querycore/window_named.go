@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 )
 
@@ -20,7 +21,7 @@ func (w WindowSpec) ReferenceOnly() bool {
 // definitions. Bare OVER name differs from copying a definition in parentheses.
 func ResolveWindow(w WindowSpec, copying bool, depth int) (WindowSpec, error) {
 	if depth > MaxExpressionDepth {
-		return WindowSpec{}, fault.New(fault.Invalid, "named window exceeds its depth bound")
+		return WindowSpec{}, safeerror.NewFault(fault.Invalid, "named window exceeds its depth bound")
 	}
 	if w.Err != nil {
 		return WindowSpec{}, w.Err
@@ -29,7 +30,7 @@ func ResolveWindow(w WindowSpec, copying bool, depth int) (WindowSpec, error) {
 		return w, nil
 	}
 	if !sqlname.Valid(w.Reference.Name) {
-		return WindowSpec{}, fault.New(fault.Invalid, "invalid named window reference")
+		return WindowSpec{}, safeerror.NewFault(fault.Invalid, "invalid named window reference")
 	}
 	base, err := ResolveWindow(w.Reference.Definition, true, depth+1)
 	if err != nil {
@@ -39,13 +40,13 @@ func ResolveWindow(w WindowSpec, copying bool, depth int) (WindowSpec, error) {
 		return base, nil
 	}
 	if base.Frame != nil {
-		return WindowSpec{}, fault.New(fault.Invalid, "a framed named window cannot be extended or inherited")
+		return WindowSpec{}, safeerror.NewFault(fault.Invalid, "a framed named window cannot be extended or inherited")
 	}
 	if len(w.Partitions) != 0 {
-		return WindowSpec{}, fault.New(fault.Invalid, "an inherited window cannot add PARTITION BY")
+		return WindowSpec{}, safeerror.NewFault(fault.Invalid, "an inherited window cannot add PARTITION BY")
 	}
 	if len(base.Orders) != 0 && len(w.Orders) != 0 {
-		return WindowSpec{}, fault.New(fault.Invalid, "an inherited window cannot replace existing ORDER BY")
+		return WindowSpec{}, safeerror.NewFault(fault.Invalid, "an inherited window cannot replace existing ORDER BY")
 	}
 	w.Partitions = base.Partitions
 	if len(w.Orders) == 0 {
@@ -62,7 +63,7 @@ func VisitWindowSpec(w WindowSpec, item func(ValueExpression) error, reference f
 		return w.Err
 	}
 	if len(w.Partitions) > MaxExpressionNodes || len(w.Orders) > MaxExpressionNodes {
-		return fault.New(fault.Invalid, "window exceeds its resource bound")
+		return safeerror.NewFault(fault.Invalid, "window exceeds its resource bound")
 	}
 	if w.Reference != nil {
 		if err := reference(w.Reference); err != nil {
@@ -89,15 +90,15 @@ func OrderedWindows(s SelectNode) ([]*NamedWindow, error) {
 	walk := SelectWalk{LocalSelect: true}
 	walk.Named = func(d *NamedWindow, depth int) {
 		if !sqlname.Valid(d.Name) {
-			walk.Err = fault.New(fault.Invalid, "invalid named window definition")
+			walk.Err = safeerror.NewFault(fault.Invalid, "invalid named window definition")
 			return
 		}
 		if other := names[d.Name]; other != nil && other != d {
-			walk.Err = fault.New(fault.Invalid, "SELECT repeats a window name with different definitions")
+			walk.Err = safeerror.NewFault(fault.Invalid, "SELECT repeats a window name with different definitions")
 			return
 		}
 		if active[d] {
-			walk.Err = fault.New(fault.Invalid, "cyclic named window dependency")
+			walk.Err = safeerror.NewFault(fault.Invalid, "cyclic named window dependency")
 			return
 		}
 		if visited[d] {

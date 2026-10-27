@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/tracing"
 )
@@ -38,10 +39,10 @@ func (o Operation) Validate() error {
 	switch o.Kind {
 	case HTTP, OutboundHTTP, Job, Schedule, Socket, SocketMessage, CLI, Provider, Kernel, Resource:
 	default:
-		return fault.New(fault.Invalid, "invalid observed operation kind")
+		return safeerror.NewFault(fault.Invalid, "invalid observed operation kind")
 	}
 	if len(o.Name) > 128 || !identifier.Semantic(string(o.Name)) {
-		return fault.New(fault.Invalid, "observed operation requires a bounded declared name")
+		return safeerror.NewFault(fault.Invalid, "observed operation requires a bounded declared name")
 	}
 	return nil
 }
@@ -71,7 +72,7 @@ func (r Result) Normalized(kind Kind) (Result, error) { return r.normalize(kind)
 
 func (r Result) normalize(kind Kind) (Result, error) {
 	if r.Status != 0 && (kind != HTTP || r.Status < 100 || r.Status > 599) {
-		return Result{}, fault.New(fault.Invalid, "invalid observation status")
+		return Result{}, safeerror.NewFault(fault.Invalid, "invalid observation status")
 	}
 	if r.Outcome == "" {
 		r.Outcome = Succeeded
@@ -85,7 +86,7 @@ func (r Result) normalize(kind Kind) (Result, error) {
 	case Succeeded, Failed, Rejected, Cancelled, TimedOut, Panicked:
 		return r, nil
 	default:
-		return Result{}, fault.New(fault.Invalid, "invalid observation outcome")
+		return Result{}, safeerror.NewFault(fault.Invalid, "invalid observation outcome")
 	}
 }
 
@@ -160,22 +161,22 @@ func DefaultConfig() Config {
 
 func (c Config) Validate() error {
 	if c.MaxSeries < 1 || c.MaxSeries > 4096 || c.MaxRecent < 0 || c.MaxRecent > 4096 || c.MaxActive < 1 || c.MaxActive > 1<<20 || c.ErrorQueue < 1 || c.ErrorQueue > 4096 || c.ReporterConcurrency < 1 || c.ReporterConcurrency > 16 || c.ReporterTimeout <= 0 || c.ReporterTimeout > time.Minute {
-		return fault.New(fault.Invalid, "invalid observability resource bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid observability resource bounds")
 	}
 	if c.TraceQueue < 1 || c.TraceQueue > 4096 || c.TraceConcurrency < 1 || c.TraceConcurrency > 16 || c.TraceTimeout <= 0 || c.TraceTimeout > time.Minute || len(c.TraceExporters)+len(c.TraceBatchExporters) > 16 || c.TraceBatchSize < 0 || c.TraceBatchSize > 512 {
-		return fault.New(fault.Invalid, "invalid trace export resource bounds")
+		return safeerror.NewFault(fault.Invalid, "invalid trace export resource bounds")
 	}
 	if !(c.TraceSampleRatio >= 0 && c.TraceSampleRatio <= 1) {
-		return fault.New(fault.Invalid, "trace sampling ratio must be between 0 and 1")
+		return safeerror.NewFault(fault.Invalid, "trace sampling ratio must be between 0 and 1")
 	}
 	for _, exporter := range c.TraceExporters {
 		if exporter == nil {
-			return fault.New(fault.Invalid, "trace exporter cannot be nil")
+			return safeerror.NewFault(fault.Invalid, "trace exporter cannot be nil")
 		}
 	}
 	for _, exporter := range c.TraceBatchExporters {
 		if exporter == nil {
-			return fault.New(fault.Invalid, "trace batch exporter cannot be nil")
+			return safeerror.NewFault(fault.Invalid, "trace batch exporter cannot be nil")
 		}
 	}
 	return nil

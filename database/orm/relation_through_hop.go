@@ -1,9 +1,9 @@
 package orm
 
 import (
-	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 	"reflect"
@@ -14,10 +14,10 @@ func hopRelation[M, I, N any, A, B comparable](slot *slotCore, local KeyColumn[M
 	a, f, s, b := relationColumn(local), relationColumn(first), relationColumn(second), relationColumn(foreign)
 	p := newRelationCore(slot, a.core, b.core, reflect.TypeFor[M](), reflect.TypeFor[N]())
 	if f.core == nil || s.core == nil || f.core.owner == nil || f.core.owner != s.core.owner {
-		p.err = errors.Join(p.err, invalid("through keys must belong to one intermediate model"))
+		p.err = safeerror.Join("operation failed", p.err, invalid("through keys must belong to one intermediate model"))
 	} else {
 		p.join = &relationJoin{hop: true, pivot: newQuery(f.core.owner), first: querycore.FieldRef{Table: f.core.owner.model.Table, Column: f.core.metadata.Name}, second: querycore.FieldRef{Table: s.core.owner.model.Table, Column: s.core.metadata.Name}}
-		p.err = errors.Join(p.err, declarationCoreError(f.core.owner))
+		p.err = safeerror.Join("operation failed", p.err, declarationCoreError(f.core.owner))
 	}
 	return p, a, f
 }

@@ -2,11 +2,13 @@ package http
 
 import (
 	"mime"
+	stdhttp "net/http"
 	"path"
 	"slices"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // SPAConfig declares an unmatched-route fallback. Prefix and Exclude are
@@ -34,7 +36,7 @@ func (c SPAConfig) Validate() error {
 		return err
 	}
 	if len(c.Exclude) > 64 {
-		return fault.New(fault.Invalid, "SPA exclusions exceed limit")
+		return safeerror.NewFault(fault.Invalid, "SPA exclusions exceed limit")
 	}
 	seen := make(map[string]bool, len(c.Exclude))
 	for _, prefix := range c.Exclude {
@@ -42,7 +44,7 @@ func (c SPAConfig) Validate() error {
 			return err
 		}
 		if seen[prefix] {
-			return fault.New(fault.Duplicate, "duplicate SPA exclusion")
+			return safeerror.NewFault(fault.Duplicate, "duplicate SPA exclusion")
 		}
 		seen[prefix] = true
 	}
@@ -52,7 +54,15 @@ func (c SPAConfig) snapshot() SPAConfig { c.Exclude = slices.Clone(c.Exclude); r
 func matchesAssetPrefix(location, prefix string) bool {
 	return prefix == "" || prefix == "/" || location == prefix || strings.HasPrefix(location, prefix+"/")
 }
-func htmlNavigation(values []string, name string) bool {
+
+// IsHTMLNavigation reports whether r is a GET/HEAD navigation to an
+// extensionless asset name whose bounded Accept header permits text/html (q > 0).
+// name is relative to the asset source, and may end with a directory slash.
+func IsHTMLNavigation(r *stdhttp.Request, name string) bool {
+	if r == nil || (r.Method != stdhttp.MethodGet && r.Method != stdhttp.MethodHead) {
+		return false
+	}
+	values := r.Header.Values("Accept")
 	if path.Ext(strings.TrimSuffix(name, "/")) != "" || len(values) > 32 {
 		return false
 	}

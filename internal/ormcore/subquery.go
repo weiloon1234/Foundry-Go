@@ -1,7 +1,7 @@
 package ormcore
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"slices"
 	"sort"
 
@@ -13,7 +13,7 @@ import (
 func SelectSubquery(source Source) querycore.Subquery {
 	err := source.Err
 	if source.Scope == nil || len(source.Owners) == 0 {
-		err = errors.Join(err, Invalid("subquery requires a declared source"))
+		err = safeerror.Join("operation failed", err, Invalid("subquery requires a declared source"))
 	}
 	node := source.Node
 	// Ordinary aliases select their complete record; joined existence uses SELECT 1.
@@ -35,9 +35,9 @@ func SelectSubquery(source Source) querycore.Subquery {
 
 // SelectScalar validates exactly one typed selection before building a subquery.
 func SelectScalar(source Source, value Expression) Source {
-	source.Err = errors.Join(source.Err, value.Err, CheckReferenceSet(source, value.Refs, value.ReferenceFree))
+	source.Err = safeerror.Join("operation failed", source.Err, value.Err, CheckReferenceSet(source, value.Refs, value.ReferenceFree))
 	if value.Node == nil {
-		source.Err = errors.Join(source.Err, Invalid("scalar selection requires a value"))
+		source.Err = safeerror.Join("operation failed", source.Err, Invalid("scalar selection requires a value"))
 	}
 	source.Node.Selections = []querycore.SelectItem{{Expression: value.Node, Alias: "value", Sensitive: value.Sensitive}}
 	return source
@@ -47,7 +47,7 @@ func SelectScalar(source Source, value Expression) Source {
 func AnchorExpression(source Source) Expression {
 	out := Expression{ReferenceFree: true, Err: source.Err}
 	if source.Scope == nil || len(source.Owners) == 0 || len(source.Owners) > querycore.MaxExpressionNodes {
-		out.Err = errors.Join(out.Err, Invalid("subquery requires a declared outer scope"))
+		out.Err = safeerror.Join("operation failed", out.Err, Invalid("subquery requires a declared outer scope"))
 		return out
 	}
 	names := make([]string, 0, len(source.Owners))
@@ -64,10 +64,10 @@ func AnchorExpression(source Source) Expression {
 // ScalarExpression is a SELECT boundary, independent of its outer aggregate phase.
 func ScalarExpression(outer Source, inner Source) Expression {
 	out := AnchorExpression(outer)
-	out.Err = errors.Join(out.Err, inner.Err)
+	out.Err = safeerror.Join("operation failed", out.Err, inner.Err)
 	inner.Checks = AppendChecks(inner.Checks, outer.Checks...)
 	query := SelectSubquery(inner)
-	out.Err = errors.Join(out.Err, query.Err)
+	out.Err = safeerror.Join("operation failed", out.Err, query.Err)
 	out.Node = querycore.ScalarSubquery{Query: query}
 	return out
 }
@@ -83,7 +83,7 @@ func ExistsPredicate(outer Source, inner Source) Predicate {
 func MembershipPredicate(left Expression, inner Source) Predicate {
 	err := left.Err
 	if left.Node == nil {
-		err = errors.Join(err, Invalid("membership requires a row value"))
+		err = safeerror.Join("operation failed", err, Invalid("membership requires a row value"))
 	}
 	return Predicate{Node: querycore.SubqueryPredicate{Operand: left.Node, Query: SelectSubquery(inner)}, Refs: left.Refs, ReferenceFree: left.ReferenceFree, Err: err}
 }
@@ -92,7 +92,7 @@ func MembershipPredicate(left Expression, inner Source) Predicate {
 func WhereSource(source Source, predicates []Predicate) Source {
 	source.Node.Predicates = slices.Clone(source.Node.Predicates)
 	for _, p := range predicates {
-		source.Err = errors.Join(source.Err, p.Err, CheckReferenceSet(source, p.Refs, p.ReferenceFree))
+		source.Err = safeerror.Join("operation failed", source.Err, p.Err, CheckReferenceSet(source, p.Refs, p.ReferenceFree))
 		source.Node.Predicates = append(source.Node.Predicates, p.Node)
 	}
 	return source

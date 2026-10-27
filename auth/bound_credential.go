@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -36,7 +37,7 @@ type Binder[B any] struct{ id *binderID }
 
 func (b Binder[B]) Bind(bound B) (BoundCredential, error) {
 	if b.id == nil {
-		return BoundCredential{}, fault.New(fault.Invalid, "credential binder is not defined")
+		return BoundCredential{}, safeerror.NewFault(fault.Invalid, "credential binder is not defined")
 	}
 	return BoundCredential{binder: b.id, value: bound}, nil
 }
@@ -51,7 +52,7 @@ func BindStrategy[M, K, B any](strategy Strategy[M, K], verify func(context.Cont
 		strategy.bound = func(ctx context.Context, credential BoundCredential) (value.Optional[Proof[M, K]], error) {
 			bound, ok := credential.value.(B)
 			if credential.binder != id || !ok {
-				return value.Optional[Proof[M, K]]{}, Unauthenticated
+				return value.Optional[Proof[M, K]]{}, Unauthenticated.WithCause(nil)
 			}
 			return verify(ctx, bound)
 		}
@@ -64,13 +65,13 @@ func BindStrategy[M, K, B any](strategy Strategy[M, K], verify func(context.Cont
 // credential, never both, so an ambiguous combination fails instead.
 func (c Credentials) WithBound(name CredentialName, bound BoundCredential) (Credentials, error) {
 	if !identifier.Semantic(string(name)) || bound.IsZero() {
-		return Credentials{}, fault.New(fault.Invalid, "invalid bound authentication credential")
+		return Credentials{}, safeerror.NewFault(fault.Invalid, "invalid bound authentication credential")
 	}
 	if !c.values[name].IsZero() || !c.bound[name].IsZero() {
-		return Credentials{}, fault.New(fault.Duplicate, "authentication credential source is repeated")
+		return Credentials{}, safeerror.NewFault(fault.Duplicate, "authentication credential source is repeated")
 	}
 	if len(c.values)+len(c.bound) >= MaxCredentials {
-		return Credentials{}, fault.New(fault.Invalid, "too many authentication credential sources")
+		return Credentials{}, safeerror.NewFault(fault.Invalid, "too many authentication credential sources")
 	}
 	bounds := make(map[CredentialName]BoundCredential, len(c.bound)+1)
 	for source, credential := range c.bound {

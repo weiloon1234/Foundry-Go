@@ -1,5 +1,7 @@
 package database
 
+import "github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 import "github.com/weiloon1234/Foundry-Go/fault"
 
 // JSONKind identifies a JSON value's top-level shape. JSONNull is distinct from SQL NULL.
@@ -19,5 +21,5 @@ func (k JSONKind) Validate() error {
 	case JSONObject, JSONArray, JSONString, JSONNumber, JSONBoolean, JSONNull:
 		return nil
 	}
-	return fault.New(fault.Invalid, "invalid JSON kind")
+	return safeerror.NewFault(fault.Invalid, "invalid JSON kind")
 }

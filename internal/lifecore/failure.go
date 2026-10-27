@@ -1,5 +1,7 @@
 package lifecore
 
+import "github.com/weiloon1234/Foundry-Go/internal/safeerror"
+
 // failure retains classification without formatting application errors or values.
 type failure struct {
 	message string
@@ -16,5 +18,5 @@ func Failure(message string, cause error) error {
 	if cause == nil {
 		return nil
 	}
-	return &failure{message: message, cause: cause}
+	return safeerror.Retain(cause, safeerror.Owned(message, &failure{message: message, cause: cause}))
 }

@@ -1,7 +1,7 @@
 package orm
 
 import (
-	"errors"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
@@ -26,7 +26,7 @@ func FoundryConflict[M any](metadata ormcore.ConflictPolicy, seal sqlowner.Expre
 	}
 	owner, ok := metadata.Owner.(*tableCore)
 	if metadata.Owner != nil && !ok {
-		metadata.Err = errors.Join(metadata.Err, invalid("invalid conflict declaration"))
+		metadata.Err = safeerror.Join("operation failed", metadata.Err, invalid("invalid conflict declaration"))
 	}
 	return Conflict[M]{state: conflictPolicy{core: metadata.Policy, owner: owner, err: metadata.Err}}
 }
@@ -38,7 +38,7 @@ func FoundryConflictUpdate[M any](metadata ormcore.ConflictAssignment, seal sqlo
 	}
 	owner, ok := metadata.Owner.(*tableCore)
 	if !ok || owner == nil {
-		metadata.Err = errors.Join(metadata.Err, invalid("invalid conflict destination"))
+		metadata.Err = safeerror.Join("operation failed", metadata.Err, invalid("invalid conflict destination"))
 	}
 	return ConflictUpdate[M]{state: conflictUpdate{update: metadata.Update, owner: owner, err: metadata.Err}}
 }

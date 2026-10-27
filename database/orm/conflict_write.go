@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -14,8 +15,8 @@ import (
 func Upsert[M any](ctx context.Context, writer database.Transactor, q Query[M], policy Conflict[M], assignments ...Assignment[M]) (value.Optional[M], error) {
 	items, err := insertMany(ctx, writer, q.state, [][]Assignment[M]{assignments}, &policy.state)
 	if err != nil {
-		if failure, ok := err.(*WriteError[[]M]); ok && len(failure.candidate) == 1 {
-			return value.Optional[M]{}, &WriteError[value.Optional[M]]{cause: failure.cause, candidate: value.Set(failure.candidate[0])}
+		if failure, ok := safeerror.UnwrapOwned(err).(*WriteError[[]M]); ok && len(failure.candidate) == 1 {
+			return value.Optional[M]{}, writeFailure(failure.cause, value.Set(failure.candidate[0]))
 		}
 		return value.Optional[M]{}, err
 	}
