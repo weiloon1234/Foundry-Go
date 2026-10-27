@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## v0.1.0 — 2026-10-27
+
+**Highlights:** The native typed ORM replaces generated models and `database/query`.
+This is a breaking change; see the [migration guide](docs/guides/orm-migration.md).
+Against the previous main, the 70-model app measured a 72% faster cold build, 76%
+less cache and 78% smaller archives; reads were 11–57% faster with fewer allocations.
+See the [Stage 11 release-candidate measurements](docs/evidence/goway-stage11-measurements.md#final-release-candidate-30578f82).
+
+### Known limitations
+
+The models-package archive is about 26.8% of the old size in the 70-model synthetic
+app and 30% in the consumer fixture, against a 25% goal. At 70 models, median compiler
+RSS is about 5.9 GB against a 5 GB goal. Per-model generic instantiation is a likely
+contributor. ChainBuild is within measurement noise of its pre-4a baseline; its
+strict no-slower target is not established. See the [Stage 11 report](docs/evidence/goway-stage11-measurements.md#final-release-candidate-30578f82).
+
 - Preserve custom codec handling of nil interface comparison values without
   escaping compiler containment; cached adapter type mismatches retain their
   existing typed panic diagnostic without per-value isolation.
