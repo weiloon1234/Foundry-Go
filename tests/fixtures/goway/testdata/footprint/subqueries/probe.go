@@ -26,5 +26,5 @@ func F() rows.Query[models.User, result] {
 	count := rows.SelectScalar(rows.From(models.Orders.Query()), expr.Count[models.Order]().Value())
 	nullable := rows.SelectScalar(outer, expr.Row(expr.Value(models.Users.Nickname)).Value())
 	ids := rows.SelectScalar(outer, expr.Row(expr.Value(models.Users.ID)).Value())
-	return rows.Select(outer, schema, rows.MapSelected(schema.Count, rows.ScalarQuery(outer, count)), rows.MapSelected(schema.Nickname, rows.ScalarNullableQuery(outer, nullable))).Where(rows.ExistsQuery(outer, count), rows.InQuery(expr.Value(models.Users.ID), ids), expr.Not(rows.InNullableQuery(expr.Value(models.Users.Email), nullable)))
+	return rows.Select(outer, schema, rows.MapSelected(schema.Count, rows.ScalarRowQuery(outer, count).Value()), rows.MapSelected(schema.Nickname, rows.ScalarNullableRowQuery(outer, nullable).Value())).Where(rows.ExistsQuery(outer, count), rows.InQuery(expr.Value(models.Users.ID), ids), expr.Not(rows.InNullableQuery(expr.Value(models.Users.Email), nullable)))
 }

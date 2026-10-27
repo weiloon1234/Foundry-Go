@@ -308,7 +308,7 @@ func checkInputAggregate[S, V any](t *testing.T, inputSource, storedSource Selec
 		t.Fatalf("input aggregate differs from stored aggregate:\n%#v\n%#v", actual, expected)
 	}
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {raw}}}
-	got, err := iq.All(t.Context(), openTest(t, state))
+	got, err := Read(iq).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].Value.IsNull() {
 		t.Fatal(got, err)
 	}

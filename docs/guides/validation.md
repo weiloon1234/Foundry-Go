@@ -66,7 +66,7 @@ failures remain separate outcomes.
 
 `All` checks children in order and accumulates bounded diagnostics. `Bail` stops
 its own sequence after the first rejection; an enclosing `All` may continue
-with other fields. `Each` validates slice elements in order and includes their
+with other fields. `validation.Each` validates slice elements in order and includes their
 indices in issue paths. `EachKey` and `EachValue` validate map keys and values in
 ascending key order with entry paths such as `/labels/en`; they accept native
 string or integer keys and reject key types with custom codecs. Configure
@@ -182,7 +182,7 @@ They own their membership lists and reject duplicate or invalid declarations.
 `Enum` uses the existing generated descriptor, including its actual JSON cases.
 `MinItems` and `MaxItems` accept ordinary or named slices; nil and empty slices
 have length zero. `Distinct` checks scalar elements with native equality and
-bounded work. It reports at the collection path. `Each` reports element paths.
+bounded work. It reports at the collection path. `validation.Each` reports element paths.
 None of these rules normalize input.
 
 ## Format rules and wire representations

@@ -74,7 +74,7 @@ func checkNullableCodec[V any](t *testing.T, options ...orm.ColumnOption[V]) {
 	invalid(err)
 	_, err = table.Query().All(t.Context(), db)
 	invalid(err)
-	_, err = rows.SelectValue(table.Query(), table.Key()).All(t.Context(), db)
+	_, err = rows.Read(rows.SelectValue(table.Query(), table.Key())).All(t.Context(), db)
 	invalid(err)
 
 	// A valid source isolates row validation from table validation. The invalid field
@@ -95,7 +95,7 @@ func checkNullableCodec[V any](t *testing.T, options ...orm.ColumnOption[V]) {
 	})
 	invalid(rows.Check(schema))
 	alias := rows.As[struct{}](source.Query(), "valid")
-	_, err = rows.Select(alias, schema, rows.Map(schema.Bad, expr.At(rows.Scope(alias), source.Bad))).All(t.Context(), db)
+	_, err = rows.Read(rows.Select(alias, schema, rows.Map(schema.Bad, expr.At(rows.Scope(alias), source.Bad)))).All(t.Context(), db)
 	invalid(err)
 }
 

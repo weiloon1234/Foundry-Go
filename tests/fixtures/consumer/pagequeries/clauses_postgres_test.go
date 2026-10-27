@@ -17,8 +17,8 @@ import (
 func TestPostgresPagesRetainRelationalSemantics(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		o, totals := models.Orders, reports.BuyerTotalRows
-		grouped := rows.Having(rows.GroupBy(rows.Select(rows.From(o.Query()), totals.Row,
-			rows.Map(totals.BuyerID, expr.Value(o.BuyerID)), rows.MapSelected(totals.Total, expr.Sum(o.TotalCents).Value()), rows.MapSelected(totals.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(totals.Average, expr.Avg(o.TotalCents).Value())), expr.Group(expr.Value(o.BuyerID))), expr.Count[models.Order]().Gt(0)).OrderBy(expr.Value(o.BuyerID).Asc())
+		grouped := rows.OrderBy(rows.Having(rows.GroupBy(rows.Select(rows.From(o.Query()), totals.Row,
+			rows.Map(totals.BuyerID, expr.Value(o.BuyerID)), rows.MapSelected(totals.Total, expr.Sum(o.TotalCents).Value()), rows.MapSelected(totals.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(totals.Average, expr.Avg(o.TotalCents).Value())), expr.Group(expr.Value(o.BuyerID))), expr.Count[models.Order]().Gt(0)), expr.Value(o.BuyerID).Asc())
 		p, err := rows.Read(grouped).Paginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err

@@ -157,7 +157,7 @@ func (s textSlot[M, K]) unbound() error {
 func (s textSlot[M, K]) relation(fetch extensionslot.Fetch[M, Text]) extensionslot.Slot[M] {
 	table := ""
 	if s.field.definition != nil {
-		table = s.field.definition.owner.ModelName()
+		table = extensions.ORMIdentity(s.field.definition.owner).ModelName()
 	}
 	return extensionslot.New(extensionslot.Binding[M, Text]{
 		Name: s.binding.Field, Table: table, Get: s.binding.Get, Set: s.binding.Set,

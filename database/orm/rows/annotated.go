@@ -27,7 +27,7 @@ type Annotated[M, V any] struct {
 
 // WithValue selects a complete model and a computed row value in one statement.
 // Model retrieval callbacks and eager relations retain their ordinary ownership.
-// Example: rows.WithValue(Users.Query(),expr.RelatedValue(UserRelations.Orders,expr.Count[Order]())).All(ctx,db).
+// Example: rows.ReadRecord(rows.WithValue(Users.Query(),expr.RelatedValue(UserRelations.Orders,expr.Count[Order]()))).All(ctx,db).
 func WithValue[M, V any](q orm.Query[M], computed expr.RowValue[M, V]) RecordRead[M, Annotated[M, V]] {
 	r := orm.FoundryModelRead(q, sqlowner.Metadata())
 	if r.Source.Err != nil {

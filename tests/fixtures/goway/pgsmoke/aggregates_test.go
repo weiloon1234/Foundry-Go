@@ -117,7 +117,7 @@ func TestStage6a3AggregatesGroupsAndDistinct(t *testing.T) {
 		}
 		return q
 	}
-	got, err := build(table.Query(), true).All(ctx, db)
+	got, err := rows.Read(build(table.Query(), true)).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 {
 		t.Fatal("scope/group count", got)
@@ -156,31 +156,31 @@ func TestStage6a3AggregatesGroupsAndDistinct(t *testing.T) {
 	if last.Count != 1 || last.Present != 0 || last.Distinct != 0 || !last.Total.IsNull() || !last.Average.IsNull() || !last.FloatTotal.IsNull() || !last.FloatAverage.IsNull() || !last.PeriodTotal.IsNull() || !last.PeriodAverage.IsNull() || !last.Min.IsNull() || !last.Max.IsNull() || !last.FilteredTotal.IsNull() || last.Filtered != 0 {
 		t.Fatal("all-NULL/filtered group", last)
 	}
-	empty, err := build(table.Query().Where(table.Bucket.Lt(0)), false).All(ctx, db)
+	empty, err := rows.Read(build(table.Query().Where(table.Bucket.Lt(0)), false)).All(ctx, db)
 	must(t, err)
 	if len(empty) != 1 || empty[0].Count != 0 || empty[0].Present != 0 || empty[0].Distinct != 0 || !empty[0].Total.IsNull() || !empty[0].Average.IsNull() || !empty[0].FloatTotal.IsNull() || !empty[0].PeriodTotal.IsNull() || !empty[0].Min.IsNull() {
 		t.Fatal("empty aggregate", empty)
 	}
 	count := expr.Count[rows.Alias[aggregateSide, aggregateSample]]()
-	filtered, err := rows.Having(build(table.Query(), true), count.Gt(1)).All(ctx, db)
+	filtered, err := rows.Read(rows.Having(build(table.Query(), true), count.Gt(1))).All(ctx, db)
 	must(t, err)
 	if len(filtered) != 1 || filtered[0].Bucket != 1 {
 		t.Fatal("HAVING", filtered)
 	}
 	modelBucket, id := expr.Value(table.Bucket), expr.Value(table.Key())
-	distinct := rows.DistinctOn(rows.FromModel(table.Query()), expr.Group(modelBucket)).OrderBy(modelBucket.Asc(), id.Desc())
-	chosen, err := distinct.All(ctx, db)
+	distinct := rows.OrderBy(rows.DistinctOn(rows.FromModel(table.Query()), expr.Group(modelBucket)), modelBucket.Asc(), id.Desc())
+	chosen, err := rows.Read(distinct).All(ctx, db)
 	must(t, err)
 	if len(chosen) != 2 || chosen[0].ID != 2 || chosen[1].ID != 3 {
 		t.Fatal("DISTINCT ON/scopes", chosen)
 	}
-	values, err := rows.Distinct(rows.SelectValue(table.Query(), table.Bucket)).All(ctx, db)
+	values, err := rows.Read(rows.Distinct(rows.SelectValue(table.Query(), table.Bucket))).All(ctx, db)
 	must(t, err)
 	if len(values) != 2 {
 		t.Fatal("DISTINCT values", values)
 	}
 	// Selected aggregate keys/order remain read-only and obey grouping rules.
-	single, err := rows.DistinctOnValues(build(table.Query().Where(table.Bucket.Eq(1)), false), count.Value().Key()).All(ctx, db)
+	single, err := rows.Read(rows.DistinctOnValues(build(table.Query().Where(table.Bucket.Eq(1)), false), count.Value().Key())).All(ctx, db)
 	must(t, err)
 	if len(single) != 1 || single[0].Count != 2 {
 		t.Fatal(single)
@@ -191,7 +191,7 @@ func TestStage6a3AggregatesGroupsAndDistinct(t *testing.T) {
 		if e != nil {
 			return e
 		}
-		out, e := build(table.Query(), true).All(ctx, tx)
+		out, e := rows.Read(build(table.Query(), true)).All(ctx, tx)
 		if e != nil {
 			return e
 		}
@@ -203,7 +203,7 @@ func TestStage6a3AggregatesGroupsAndDistinct(t *testing.T) {
 	if !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	out, err := build(table.Query(), true).All(ctx, db)
+	out, err := rows.Read(build(table.Query(), true)).All(ctx, db)
 	must(t, err)
 	if len(out) != 2 || out[0].Count != 2 {
 		t.Fatal("aggregate rollback", out)

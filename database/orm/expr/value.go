@@ -142,11 +142,6 @@ func nullableData[V any](e rowData[V]) rowData[value.Nullable[V]] {
 	return rowData[value.Nullable[V]]{core: e.core, column: out}
 }
 
-// NullFor captures SQL NULL with an exemplar's type. Example: expr.NullFor(expr.Value(Users.Age)).
-func NullFor[S, V any](v RowValue[S, V]) RowExpression[S, value.Nullable[V]] {
-	return NullableRow(v).Param(value.Null[V]())
-}
-
 // FoundrySelected exposes sealed selected metadata to rows. Example: FoundrySelected(e,sqlowner.Expressions()).
 func FoundrySelected[S, V any](e Selected[S, V], seal sqlowner.ExpressionSeal) ormcore.Expression {
 	if !seal.Valid() {

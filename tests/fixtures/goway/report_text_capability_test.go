@@ -239,7 +239,7 @@ func TestReportModelPredicateNestedRelationTargetMarker(t *testing.T) {
 			} {
 				for operation, predicate := range map[string]orm.Predicate[models.User]{
 					"Has":        orm.Has[models.User, models.User](relation, ps...),
-					"DoesntHave": orm.DoesntHave[models.User, models.User](relation, ps...),
+					"DoesntHave": orm.Not(orm.Has(relation, ps...)),
 				} {
 					_, err := rowset.CompileRead(rowset.Read(q.Where(expr.ModelPredicate(predicate))))
 					if matching {

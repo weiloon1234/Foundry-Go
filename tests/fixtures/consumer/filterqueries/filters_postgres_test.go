@@ -28,7 +28,7 @@ func TestPostgresFilteredGroupsAndWindows(t *testing.T) {
 			rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.Count[models.Order]().Value()),
 			rowset.MapSelected(reports.BuyerTotalRows.Average, expr.Avg(o.TotalCents).Filter(expr.ModelPredicate(o.TotalCents.Lt(3))).Value()),
 		), expr.Group(expr.Value(o.BuyerID))), filtered.Gt(decimal.FromInt64(1)))
-		rows, err := q.All(t.Context(), tx)
+		rows, err := rowset.Read(q).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -49,13 +49,13 @@ func TestPostgresFilteredGroupsAndWindows(t *testing.T) {
 			}
 		}
 		w := expr.WindowFor(rowset.ModelScope(base)).OrderBy(expr.Value(o.TotalCents).Asc()).RowsBetween(expr.UnboundedPreceding(), expr.CurrentRow())
-		window := rowset.Select(rowset.From(base), windowqueries.WindowTotals.Row,
+		window := rowset.OrderBy(rowset.Select(rowset.From(base), windowqueries.WindowTotals.Row,
 			rowset.Map(windowqueries.WindowTotals.Amount, expr.Value(o.TotalCents)),
 			rowset.MapSelected(windowqueries.WindowTotals.Running, expr.Over(filtered, w)),
 			rowset.MapSelected(windowqueries.WindowTotals.Count, expr.Over(expr.Count[models.Order]().Filter(expr.ModelPredicate(o.TotalCents.Gt(1))), w)),
 			rowset.MapSelected(windowqueries.WindowTotals.Any, expr.Over(expr.Exists[models.Order]().Filter(expr.ModelPredicate(o.TotalCents.Gt(2))), w)),
-		).OrderBy(expr.Value(o.TotalCents).Asc())
-		values, err := window.All(t.Context(), tx)
+		), expr.Value(o.TotalCents).Asc())
+		values, err := rowset.Read(window).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -146,13 +146,13 @@ func TestPostgresFilteredCTEsAndCorrelations(t *testing.T) {
 		p, child := rowset.OuterScope(link, rowset.ModelScope(people)), rowset.InnerScope(link, rowset.Scope(orders))
 		count := expr.Count[rowset.Correlation[models.User, rowset.Alias[orderAlias, models.Order]]]()
 		filtered := rowset.SelectCorrelatedScalar(link, count.Filter(expr.Equal(expr.At(child, models.Orders.BuyerID), expr.At(p, models.Users.ID))).Value())
-		got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(people), rowset.CorrelatedScalarQuery(filtered)), expr.Value(models.Users.Email).Asc())).All(t.Context(), tx)
+		got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(people), rowset.CorrelatedScalarRowQuery(filtered).Value()), expr.Value(models.Users.Email).Asc())).All(t.Context(), tx)
 		if err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of[int64](2), value.Of[int64](1), value.Of[int64](0)}) {
 			t.Fatal("correlated filter count", got, err)
 		}
 		// PostgreSQL would move this aggregate to the parent SELECT; reject it before execution.
 		invalid := rowset.SelectCorrelatedScalar(link, count.Filter(expr.OrderRow(expr.At(p, models.Users.Age)).Gt(0)).Value())
-		if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), rowset.CorrelatedScalarQuery(invalid)))); !errors.Is(err, fault.Invalid) {
+		if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), rowset.CorrelatedScalarRowQuery(invalid).Value()))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("outer-only filter silently changed query ownership", err)
 		}
 		return nil

@@ -25,7 +25,8 @@
     "LoadMissing",
     "MorphName",
     "Morphable",
-    "Mutate"
+    "Mutate",
+    "DoesntHave"
   ],
   "database/prune": [
     "Model"
@@ -33,7 +34,11 @@
   "extensions": [
     "DefineOwner",
     "DefineOwnerWith",
-    "Owner.QueryScope"
+    "Owner.QueryScope",
+    "Scope",
+    "Owner.ModelName",
+    "Owner.Reference",
+    "Owner.Active"
   ],
   "http/modelbinding": [
     "ByField",
@@ -88,10 +93,24 @@
     "Compile",
     "Preflight",
     "Each",
+    "Query.All",
     "RecordRead.All",
     "SetQuery.All",
     "ValueSetQuery.All",
-    "ValueCursorQuery.Key"
+    "ValueCursorQuery.Key",
+    "Paginate",
+    "SimplePaginate",
+    "Query.OrderBy",
+    "ExplainLocked",
+    "ExplainAnalyzeLocked",
+    "ScalarQuery",
+    "ScalarNullableQuery",
+    "CorrelatedScalarQuery",
+    "CorrelatedScalarNullableQuery",
+    "TransactionScalarQuery",
+    "TransactionScalarNullableQuery",
+    "TransactionCorrelatedScalarQuery",
+    "TransactionCorrelatedScalarNullableQuery"
   ],
   "database/orm/expr": [
     "Select",
@@ -107,7 +126,9 @@
     "JSONPath.Exists",
     "JSONPath.IsMissing",
     "JSONPath.IsJSONNull",
-    "JSONPath.Contains"
+    "JSONPath.Contains",
+    "JSONOrderedScalar",
+    "NullFor"
   ],
   "datatable": [
     "Config.DownloadTimeout"

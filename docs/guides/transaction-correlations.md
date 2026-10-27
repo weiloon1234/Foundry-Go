@@ -40,9 +40,9 @@ separate from filtering before that per-parent limit.
 ## Correlated scalars and membership
 
 `SelectTransactionCorrelatedScalar` retains the outer type and exact selected
-value. `TransactionCorrelatedScalarQuery` yields a nullable outer selected value;
-the nullable counterpart keeps one layer. Row counterparts support outer
-predicates. An empty inner result becomes NULL; multiple rows remain a cardinality error.
+value. `rows.TransactionCorrelatedScalarRowQuery(selected).Value()` yields a
+nullable outer selected value; the nullable row constructor keeps one layer.
+Use the row expression directly for outer predicates. An empty inner result becomes NULL; multiple rows remain a cardinality error.
 
 `TransactionInCorrelatedQuery`, `TransactionInNullableCorrelatedQuery` and
 `Exists()` retain outer ownership and SQL's three-valued NULL behavior.

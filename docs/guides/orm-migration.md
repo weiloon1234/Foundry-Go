@@ -12,6 +12,197 @@ coordinated generation barrier. Keep DTO, enum, configuration and client generat
 Do not edit generated files or ownership manifests by hand. Model and projection
 generation and the former query runtime are retired.
 
+## Removed API spellings
+
+This documentation-only migration table covers the retirement denial ledger and
+the former shared contracts. Use the native column, scope and read families in
+the compiled examples below; there is no compatibility import or alias.
+
+<!-- orm-example: retired-surface-before -->
+```text
+Removed spelling | Native replacement
+--- | ---
+attachments.AddFiles | attachments.AddFilesTo
+attachments.Collection.Matching | attachments.Matching
+attachments.DefineMany | attachments.ManyOf with extensions.BindSlot
+attachments.DefineOne | attachments.OneOf with extensions.BindSlot
+attachments.ManySlot | attachments.ManyHandle
+attachments.ManySlot.Add | attachments.ManyHandle.Add
+attachments.ManySlot.AddFile | attachments.ManyHandle.AddFile
+attachments.ManySlot.AddIn | attachments.ManyHandle.AddIn
+attachments.ManySlot.Format | attachments.ManyHandle.Format
+attachments.ManySlot.From | attachments.ManyHandle.From
+attachments.ManySlot.PublicURLs | attachments.ManyHandle.PublicURLs
+attachments.ManySlot.Reorder | attachments.ManyHandle.Reorder
+attachments.OneSlot | attachments.OneHandle
+attachments.OneSlot.Format | attachments.OneHandle.Format
+attachments.OneSlot.From | attachments.OneHandle.From
+attachments.OneSlot.PublicURL | attachments.OneHandle.PublicURL
+orm.Extension | handle.From(manager).Relation(slot)
+orm.LegacyIdentityScope | orm.ModelIdentity.Scope on a validated identity
+orm.Predicate.Not | orm.Not(predicate)
+orm.Load | orm.LoadFrom(ctx, executor, query.With(relations...), parents)
+orm.LoadMissing | orm.LoadMissingFrom(ctx, executor, query.With(relations...), parents)
+orm.MorphName | model.MorphName
+orm.Morphable | model.Morphable
+orm.Mutate | model Mutate<Field> method and typed orm.Input* declaration
+prune.Model | prune.ORMModel or prune.ORMSoftModel
+extensions.DefineOwner | extensions.DefineORMOwner with orm.IdentityOf and OwnerOptions
+extensions.DefineOwnerWith | extensions.DefineORMOwner with explicit OwnerOptions
+extensions.Owner.QueryScope | extensions.ORMIdentity(owner).Scope(keys...)
+modelbinding.ByField | modelbinding.ByColumn
+modelbinding.Through | modelbinding.ThroughRelation
+modelbinding.ThroughSelected | modelbinding.ThroughSelectedRelation
+metadata.DefineValue | metadata.ValueOf with extensions.BindSlot
+metadata.Key.Matching | metadata.Matching
+metadata.ValueSlot | metadata.ValueHandle
+metadata.ValueSlot.Describe | metadata.ValueHandle.Describe
+metadata.ValueSlot.Forget | metadata.ValueHandle.Forget
+metadata.ValueSlot.ForgetIn | metadata.ValueHandle.ForgetIn
+metadata.ValueSlot.Format | metadata.ValueHandle.Format
+metadata.ValueSlot.From | metadata.ValueHandle.From
+metadata.ValueSlot.Key | metadata.Define for a standalone key; a bound handle retains its descriptor privately
+metadata.ValueSlot.Name | metadata.ValueHandle.Name
+metadata.ValueSlot.Registration | metadata.ValueHandle.Registration
+metadata.ValueSlot.Save | metadata.ValueHandle.Save
+metadata.ValueSlot.SaveIn | metadata.ValueHandle.SaveIn
+metadata.ValueSlot.Validate | metadata.ValueHandle.Validate
+factory.Model | factory.Define with a typed table and assignments
+factory.New | factory.Define
+translations.DefineText | translations.TextOf with extensions.BindSlot
+translations.Field.Matching | translations.Matching
+translations.TextSlot | translations.TextHandle
+translations.TextSlot.Clear | translations.TextHandle.Clear
+translations.TextSlot.ClearIn | translations.TextHandle.ClearIn
+translations.TextSlot.Describe | translations.TextHandle.Describe
+translations.TextSlot.Field | translations.Define for a standalone field; a bound handle retains its descriptor privately
+translations.TextSlot.Forget | translations.TextHandle.Forget
+translations.TextSlot.ForgetIn | translations.TextHandle.ForgetIn
+translations.TextSlot.Format | translations.TextHandle.Format
+translations.TextSlot.From | translations.TextHandle.From
+translations.TextSlot.MergeRule | translations.TextHandle.MergeRule
+translations.TextSlot.Name | translations.TextHandle.Name
+translations.TextSlot.Options | translations.TextHandle.Options
+translations.TextSlot.Registration | translations.TextHandle.Registration
+translations.TextSlot.Rule | translations.TextHandle.Rule
+translations.TextSlot.Save | translations.TextHandle.Save
+translations.TextSlot.SaveIn | translations.TextHandle.SaveIn
+translations.TextSlot.Sync | translations.TextHandle.Sync
+translations.TextSlot.SyncIn | translations.TextHandle.SyncIn
+translations.TextSlot.Validate | translations.TextHandle.Validate
+rows.Count | rows.Read(query).Count(ctx, executor)
+rows.Compile | rows.CompileRead
+rows.Preflight | rows.PreflightRead
+rows.Each | rows.EachRead
+rows.Paginate | rows.Read(query).Paginate
+rows.SimplePaginate | rows.Read(query).SimplePaginate
+rows.Query.OrderBy | rows.OrderBy(query, orders...)
+rows.ExplainLocked | rows.ExplainTransaction
+rows.ExplainAnalyzeLocked | rows.ExplainAnalyzeTransaction
+orm.DoesntHave | orm.Not(orm.Has(relation, predicates...))
+expr.JSONOrderedScalar | expr.OrderNullableRow(expr.JSONScalar(path, codec))
+expr.NullFor | expr.NullableRow(v).Param(value.Null[T]())
+extensions.Scope | extensions.ORMIdentity(owner).Scope
+extensions.Owner.ModelName | extensions.ORMIdentity(owner).ModelName
+extensions.Owner.Reference | extensions.ORMIdentity(owner).Reference
+extensions.Owner.Active | extensions.Owner.ActiveSubjects (discard the ordered-key result when unused)
+rows.ScalarQuery | rows.ScalarRowQuery(...).Value()
+rows.ScalarNullableQuery | rows.ScalarNullableRowQuery(...).Value()
+rows.CorrelatedScalarQuery | rows.CorrelatedScalarRowQuery(...).Value()
+rows.CorrelatedScalarNullableQuery | rows.CorrelatedScalarNullableRowQuery(...).Value()
+rows.TransactionScalarQuery | rows.TransactionScalarRowQuery(...).Value()
+rows.TransactionScalarNullableQuery | rows.TransactionScalarNullableRowQuery(...).Value()
+rows.TransactionCorrelatedScalarQuery | rows.TransactionCorrelatedScalarRowQuery(...).Value()
+rows.TransactionCorrelatedScalarNullableQuery | rows.TransactionCorrelatedScalarNullableRowQuery(...).Value()
+rows.Query.All | rows.Read(query).All
+rows.RecordRead.All | rows.ReadRecord(record).All
+rows.SetQuery.All | rows.ReadSet(set).All
+rows.ValueSetQuery.All | rows.ReadValues(values).All
+rows.ValueCursorQuery.Key | expr.Group(cursor.Value())
+expr.Select | row.Value(); aggregate.Value() also remains
+expr.JSONKind | database.JSONKind
+expr.JSONObject | database.JSONObject
+expr.JSONArray | database.JSONArray
+expr.JSONString | database.JSONString
+expr.JSONNumber | database.JSONNumber
+expr.JSONBoolean | database.JSONBoolean
+expr.JSONNull | database.JSONNull
+expr.JSONPath.Kind | expr.JSONTypeNullable(path.JSON())
+expr.JSONPath.Length | expr.JSONLengthNullable(path.JSON())
+expr.JSONPath.Exists | path.JSON().IsNotNull()
+expr.JSONPath.IsMissing | path.JSON().IsNull()
+expr.JSONPath.IsJSONNull | expr.JSONTypeNullable(path.JSON()) compared with database.JSONNull
+expr.JSONPath.Contains | expr.JSONContainsNullable(path.JSON(), operand)
+datatable.Config.DownloadTimeout | datatable.Manager.DownloadTimeout (including a nil manager)
+model.NewID | model.NewIDAt
+jobs.LegacyEnvelope | jobs.EnvelopeV1; version-1 bytes and default decoding unchanged
+database/query (all builders and execution) | database/orm declarations and reads; orm/expr expressions; orm/rows projections, sets and CTEs
+query.PageRequest | orm.PageRequest
+query.Page | orm.PageResult
+query.SimplePage | orm.SimplePage
+query.CursorRequest | orm.CursorRequest
+query.CursorPage | orm.CursorPage
+query.Cursor | orm.Cursor
+query.ParseCursor | orm.ParseCursor
+query.CursorInputError | orm.CursorInputError
+query.Plan | orm.Plan
+query.PlanNode | orm.PlanNode
+query.Statement | orm.Statement
+query.WriteError | orm.WriteError
+query.RelationLimits | orm.RelationLimits
+query.DefaultRelationLimits | orm.DefaultRelationLimits
+query.MaxExpressionDepth | orm.MaxExpressionDepth
+query.MaxExpressionNodes | orm.MaxExpressionNodes
+query.MaxParameters | orm.MaxParameters
+query.MaxMembershipValues | orm.MaxMembershipValues
+query.MaxScalarSQLBytes | orm.MaxScalarSQLBytes
+query.MaxPageSize | orm.MaxPageSize
+query.MaxCursorBytes | orm.MaxCursorBytes
+query.MaxCursorFields | orm.MaxCursorFields
+query.MaxInsertRows | orm.MaxInsertRows
+query.MaxPerModelWriteRows | orm.MaxPerModelWriteRows
+query.MaxRelationWriteRows | orm.MaxRelationWriteRows
+query.MaxIdentityBatch | orm.MaxIdentityBatch
+query.MaxChunkSize | orm.MaxChunkSize
+query.DefaultChunkSize | orm.DefaultChunkSize
+query.JSONKind | database.JSONKind
+query.JSONNull | database.JSONNull
+query.JSONBoolean | database.JSONBoolean
+query.JSONNumber | database.JSONNumber
+query.JSONString | database.JSONString
+query.JSONArray | database.JSONArray
+query.JSONObject | database.JSONObject
+query.MorphName | model.MorphName
+query.Morphable | model.Morphable
+query.DateUnit | expr.DateUnit
+query.TimestampUnit | expr.TimestampUnit
+query.TimeZone | expr.TimeZone
+query.LocalResolution | expr.LocalResolution
+query.GeographicPoint | expr.GeographicPoint
+query.MaxPlanBytes | internal policy; no application-level replacement
+query.MaxPlanNodes | internal policy; no application-level replacement
+query.MaxPlanDepth | internal policy; no application-level replacement
+query.MaxLifecycleDepth | internal policy; no application-level replacement
+query.ModelField / RecordField | rows.Field[R,V] and typed projection columns
+query.ConflictValueField / ModelValueField | orm conflict expressions and typed assignments
+query.ModelScope / RecordScope | rows.As / rows.Scope
+query.NullableModelScope / NullableRecordScope | outer-join nullable row scopes
+FoundryExplain / FoundryObservers bridges | native Explain terminals / registered ORM observers; no application capability token
+```
+
+`Table.Find`, `Table.Require`, `Table.Update` and `Table.Delete` remain the keyed
+model operations, including hooks and duplicate-row diagnostics. Scoped
+`orm.Update` and `orm.Delete` perform keyed `writeOne` operations within the
+query's visibility, retaining lifecycle and cardinality checks. Row-value
+carriers and aggregates retain `.Value()`; selected read families share
+`CompileRead`, `PreflightRead`, `EachRead` and `Result` terminals. Missing JSON paths,
+SQL NULL and JSON null remain distinct. Loading existing parents uses a query so
+its relation depth/row budgets and already-loaded-slot policy survive.
+
+The cursor descriptor now publishes the native ORM type ID. Regenerate clients
+and contract manifests together; token bytes and model identity are unchanged.
+The version-1 job envelope has a versioned name; queued bytes need no migration.
+
 ## Use the compiled examples
 
 The after blocks are copied verbatim from the
@@ -238,9 +429,9 @@ func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) 
 }
 ```
 
-`Where`, `OrderBy`, `Limit`, `Offset`, `First`, `All`, `Count` and `Exists` stay on
-typed model queries. Replace legacy `RequireFirst` with `Require` on model queries
-and locked model queries; rows result adapters retain `RequireFirst`.
+`Where`, `OrderBy`, `Limit`, `Offset`, `First`, `All`, `Query.Count` and `Exists` stay on
+typed model queries. Model queries
+and locked model queries use `Require`; rows result adapters retain `Result.RequireFirst`.
 `ForUpdate` and other lock selections retain
 the `*database.Tx` requirement. Scopes and soft-delete visibility stay attached.
 
@@ -353,7 +544,7 @@ soft deletion for a declared soft-delete model; Restore clears its timestamp.
 
 ## Declare and load relations
 
-Keep `relation.One`, `Many`, `Through` and other slots on the model. Bind them inside
+Keep `relation.One`, `Many`, `relation.Through` and other slots on the model. Bind them inside
 Define with `OneOf`, `ManyOf` or the matching slot constructor. Declare relation
 variables after both tables exist, replacing `defineXRelations` and generated
 relation sets:
@@ -386,14 +577,13 @@ func relations(ctx context.Context, db database.Executor, existing []models.Orde
 
 `HasManyOf`, `HasOneOf`, many-to-many/pivot, through, morph and one-of-many declarations
 follow the same typed slot/key pattern. Existing relationship filters and aggregates
-use the declared relation (`orm.Has`, `DoesntHave`, and the typed aggregate helpers).
-`With` composes the eager tree; `Load` returns copies of existing parents and
-`LoadMissing` preserves already loaded slots. Relations keep target/pivot scopes,
+use the declared relation (`orm.Has`, `orm.Not(orm.Has(...))`, and typed aggregates).
+`With` composes the eager tree; `orm.LoadFrom` returns copies of existing parents and
+`orm.LoadMissingFrom` preserves already loaded slots. Relations keep target/pivot scopes,
 soft-delete visibility, bounded batches and all-or-error attachment.
 
 `LoadFrom`/`LoadMissingFrom` take `(ctx, executor, query, parents)`; the query
-supplies its `With` tree and relation limits. Do not replace that behavior with
-plain `Load` if the caller needs query-specific limits. The supplied parent slice
+supplies its `With` tree and relation limits. The supplied parent slice
 still owns its authorization provenance; these helpers do not refetch it.
 
 ## Move lifecycle factories and observers
@@ -678,8 +868,7 @@ func lookup(ctx context.Context, tx *database.Tx) error {
 ```
 
 `orm.UpdateOrCreate` takes separate creation assignments and an update callback
-returning assignments. `orm.CreateOrFirst` replaces the old insertion-first
-`InsertOrFirst`: insertion runs in a savepoint, and only an own-table unique violation
+returning assignments. `orm.CreateOrFirst` runs insertion in a savepoint, and only an own-table unique violation
 with matching schema/table/constraint provenance permits rollback and competitor
 lookup. Missing provenance and uncertain outcomes fail closed. Internal reads skip
 Retrieved. These operations do not automatically retry.
@@ -789,7 +978,7 @@ After:
 <!-- orm-example: scalar-after -->
 ```go
 func scalar(ctx context.Context, db database.Executor) error {
-	_, err := rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents).All(ctx, db)
+	_, err := rows.Read(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)).All(ctx, db)
 	return err
 }
 ```
@@ -951,7 +1140,7 @@ func sets(ctx context.Context, db database.Executor) error {
 	if err != nil {
 		return err
 	}
-	_, err = rows.Distinct(rows.FromModel(models.Orders.Query())).All(ctx, db)
+	_, err = rows.Read(rows.Distinct(rows.FromModel(models.Orders.Query()))).All(ctx, db)
 	return err
 }
 ```
@@ -1278,7 +1467,7 @@ the result; a joined or grouped result may need more than its parent ID.
 
 ### Keep group and relation filters in their phases
 
-`Count` returns a required `int64`. Exact numeric `Sum` returns nullable
+`expr.Count` returns a required `int64`. Exact numeric `Sum` returns nullable
 `decimal.Decimal`, including for integer input. Pass the present-value decimal
 codec to `NullableHaving`, which supplies null operations. Keep the source's
 GROUP BY and aggregate mappings; these filter constructors do not add grouping.
@@ -1692,7 +1881,7 @@ These recipes address idioms identified during the pilot migration.
 
 ### Locked find by key
 
-The legacy `ForUpdate().RequireFind(ctx, tx, key)` is replaced by `Where` with a typed key predicate and `Require`:
+For a locked lookup by key, use `Where` with a typed key predicate and `Require`:
 
 <!-- orm-example: pilot-recipe-locked-find -->
 ```go

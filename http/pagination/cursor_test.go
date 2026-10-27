@@ -213,7 +213,7 @@ func TestCursorQueryCodecPreservesTypedPosition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const cursorID = "github.com/weiloon1234/Foundry-Go/database/query.Cursor[github.com/weiloon1234/Foundry-Go/http/pagination_test.cursorSource]"
+	const cursorID = "github.com/weiloon1234/Foundry-Go/database/orm.Cursor[github.com/weiloon1234/Foundry-Go/http/pagination_test.cursorSource]"
 	for _, field := range info.Query {
 		if field.Name == "after" || field.Name == "before" {
 			if field.Scalar == nil || string(field.Scalar.Value.ID) != cursorID {

@@ -37,12 +37,12 @@ func TestPostgresJSONSourceAndRelationScopes(t *testing.T) {
 		parent := rows.OuterScope(link, rows.ModelScope(q))
 		child := rows.InnerScope(link, rows.Scope(previous))
 		pathSelected := rows.SelectCorrelatedScalar(link, expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.At(child, f.Settings)), jsonqueries.Theme)), codec.String[string]()).Value()).Where(expr.Less(expr.At(child, f.Key()), expr.At(parent, f.Key()))).OrderBy(expr.At(child, f.Key()).Desc()).Limit(1)
-		pathValues, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(f.Key().Asc())), rows.CorrelatedScalarNullableQuery(pathSelected))).All(t.Context(), tx)
+		pathValues, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(f.Key().Asc())), rows.CorrelatedScalarNullableRowQuery(pathSelected).Value())).All(t.Context(), tx)
 		if err != nil || len(pathValues) != 3 || !pathValues[0].IsNull() || pathValues[1] != value.Of("dark") || !pathValues[2].IsNull() {
 			t.Fatal(pathValues, err)
 		}
 		selected := rows.SelectCorrelatedScalar(link, expr.JSONContains(expr.At(parent, f.Settings), expr.At(child, f.Settings)).Value()).Where(expr.Less(expr.At(child, f.Key()), expr.At(parent, f.Key()))).OrderBy(expr.At(child, f.Key()).Desc()).Limit(1)
-		values, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(f.Key().Asc())), rows.CorrelatedScalarQuery(selected))).All(t.Context(), tx)
+		values, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(f.Key().Asc())), rows.CorrelatedScalarRowQuery(selected).Value())).All(t.Context(), tx)
 		if err != nil || len(values) != 3 || !values[0].IsNull() || values[1] != value.Of(false) || values[2] != value.Of(true) {
 			t.Fatal(values, err)
 		}

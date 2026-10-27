@@ -23,4 +23,4 @@ var lateral = rows.AsTransactionLateral[result](record, "lateral_record")
 var _ context.Context
 var _ *database.Tx
 
-var _ = rows.TransactionScalarQuery(parent, selected)
+var _ = rows.TransactionScalarRowQuery(parent, selected).Value()

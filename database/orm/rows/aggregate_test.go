@@ -61,7 +61,7 @@ func TestAggregateResultFamiliesAndReusableCodecs(t *testing.T) {
 				t.Fatal(s.SQLText)
 			}
 			state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"9223372036854775808"}}}
-			got, err := q.All(t.Context(), openTest(t, state))
+			got, err := Read(q).All(t.Context(), openTest(t, state))
 			if err != nil || len(got) != 2 || !got[0].Value.IsNull() {
 				t.Fatal(got, err)
 			}
@@ -147,7 +147,7 @@ func checkAggregateFallback[S, V any](t *testing.T, source SelectionSource[S], a
 		t.Fatal(statement)
 	}
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{bound}}}
-	got, err := q.All(t.Context(), openTest(t, state))
+	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 1 || !reflect.DeepEqual(got[0].Value, want) {
 		t.Fatal(got, err)
 	}
@@ -189,7 +189,7 @@ func TestGroupedFilteredAggregatesAndSelectedOrdering(t *testing.T) {
 		t.Fatal(s.SQLText)
 	}
 	state := &driverState{columns: []string{"group", "count", "total"}, rows: [][]driver.Value{{int64(1), int64(2), "5"}}}
-	got, err := q.All(t.Context(), openTest(t, state))
+	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 1 || got[0].Count != 2 {
 		t.Fatal(got, err)
 	}
@@ -223,7 +223,7 @@ func TestAggregateScopedFamiliesAndOwnership(t *testing.T) {
 		expr.Nullable(expr.SumAt(scope, other.Exact).Param(decimal.FromInt64(1)).Value()),
 	} {
 		state := &driverState{}
-		got, err := expressionQuery(a, selected, codec.Nullable(codec.Decimal())).All(t.Context(), openTest(t, state))
+		got, err := Read(expressionQuery(a, selected, codec.Nullable(codec.Decimal()))).All(t.Context(), openTest(t, state))
 		if !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 			t.Fatal("aggregate lost ownership/error", got, err, state.sql)
 		}
@@ -237,7 +237,7 @@ func TestAggregateScopedFamiliesAndOwnership(t *testing.T) {
 		DistinctOnValues(q, expr.ProjectionKey[Alias[left, aggregateRecord]]{}), OrderBy(q, expr.SelectedOrder[Alias[left, aggregateRecord]]{}),
 	} {
 		state := &driverState{}
-		got, err := invalid.All(t.Context(), openTest(t, state))
+		got, err := Read(invalid).All(t.Context(), openTest(t, state))
 		if !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 			t.Fatal("clause lost ownership/error", got, err, state.sql)
 		}
@@ -248,7 +248,7 @@ func TestDistinctReadOnlyModelsAndGroupingRules(t *testing.T) {
 	o := declareOrders()
 	original := FromModel(o.Query())
 	key := expr.Value(o.MemberID)
-	on := DistinctOn(original, expr.Group(key)).OrderBy(key.Asc(), expr.Value(o.ID).Desc())
+	on := OrderBy(DistinctOn(original, expr.Group(key)), key.Asc(), expr.Value(o.ID).Desc())
 	plain := Distinct(on)
 	if original.source.Node.Distinct.Kind != querycore.NoDistinct || on.source.Node.Distinct.Kind != querycore.DistinctOn || plain.source.Node.Distinct.Kind != querycore.DistinctRows {
 		t.Fatal("DISTINCT derivation mutated ancestors")
@@ -257,7 +257,7 @@ func TestDistinctReadOnlyModelsAndGroupingRules(t *testing.T) {
 		t.Fatal("DISTINCT retained ON keys")
 	}
 	state := &driverState{columns: []string{"id", "member_id"}, rows: [][]driver.Value{{int64(2), int64(1)}}}
-	got, err := on.All(t.Context(), openTest(t, state))
+	got, err := Read(on).All(t.Context(), openTest(t, state))
 	if err != nil || !reflect.DeepEqual(got, []order{{ID: 2, MemberID: 1}}) || !strings.Contains(state.sql, "SELECT DISTINCT ON") {
 		t.Fatal(got, err, state.sql)
 	}
@@ -279,7 +279,7 @@ func TestDistinctReadOnlyModelsAndGroupingRules(t *testing.T) {
 		DistinctOn(selected),
 	} {
 		state := &driverState{}
-		out, err := invalid.All(t.Context(), openTest(t, state))
+		out, err := Read(invalid).All(t.Context(), openTest(t, state))
 		if !errors.Is(err, fault.Invalid) || out != nil || state.sql != "" {
 			t.Fatal("invalid grouped/distinct query accepted", out, err, state.sql)
 		}

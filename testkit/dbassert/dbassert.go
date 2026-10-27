@@ -10,15 +10,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 )
 
-// Query is satisfied by generated model queries, such as QueryUsers().Where(...),
-// and by query.Query[M]. Its model scopes, including soft-delete visibility,
+// Query is satisfied by native ORM queries and row results. Its model scopes,
+// including soft-delete visibility,
 // apply exactly as they do in application code.
 type Query interface {
 	Count(context.Context, database.Executor) (int64, error)
 	Exists(context.Context, database.Executor) (bool, error)
 }
 
-// Trashable is a generated soft-deleting model query deriving its own type.
+// Trashable is a soft-deleting model query deriving its own type.
 type Trashable[Q any] interface {
 	Query
 	OnlyTrashed() Q

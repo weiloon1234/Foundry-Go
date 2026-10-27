@@ -28,7 +28,7 @@ func checkNullableCorrelation(t *testing.T, tx *database.Tx) error {
 	order := rows.InnerScope(link, rows.ModelScope(models.Orders.Query()))
 	count := rows.SelectCorrelatedScalar(link, expr.CountFieldAt(order, models.Orders.ID).Value()).Where(expr.Equal(expr.NullableRow(expr.At(order, models.Orders.BuyerID)), expr.AtNullable(sponsor, models.Users.ID)))
 	outerUser := rows.LeftScope(joined, rows.Scope(users))
-	values, err := rows.ReadScalar(rows.SelectScalar(joined, rows.CorrelatedScalarQuery(count))).OrderBy(expr.At(outerUser, models.Users.Email).Asc()).All(t.Context(), tx)
+	values, err := rows.ReadScalar(rows.SelectScalar(joined, rows.CorrelatedScalarRowQuery(count).Value())).OrderBy(expr.At(outerUser, models.Users.Email).Asc()).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func checkNullableCorrelation(t *testing.T, tx *database.Tx) error {
 	innerUser := rows.InnerScope(innerJoin, rows.LeftScope(joined, rows.Scope(users)))
 	innerSponsor := rows.InnerNullableScope(innerJoin, sponsorScope)
 	emails := rows.SelectCorrelatedScalar(innerJoin, expr.Row(expr.AtNullable(innerSponsor, models.Users.Email)).Value()).Where(expr.Equal(expr.At(innerUser, models.Users.ID), expr.At(outerOrder, models.Orders.BuyerID)))
-	selected, err := rows.ReadScalar(rows.SelectScalar(rows.From(models.Orders.Query()), rows.CorrelatedScalarNullableQuery(emails))).
+	selected, err := rows.ReadScalar(rows.SelectScalar(rows.From(models.Orders.Query()), rows.CorrelatedScalarNullableRowQuery(emails).Value())).
 		OrderBy(expr.Value(models.Orders.TotalCents).Asc()).All(t.Context(), tx)
 	if err != nil {
 		return err

@@ -1,8 +1,9 @@
 # Go-way data layer
 
-The `goway-data-layer` branch replaces generated model APIs with handwritten,
-typed declarations backed by the existing SQL core. The old API remains available
-until Stage 8. This is a branch program in progress, not a released replacement.
+The Go-way data layer uses handwritten, typed declarations backed by the shared
+SQL core. Stage 8 removes model generation and the former query runtime. DTO and
+transport generation remain. Application migration and final performance gates
+retain their separate status below.
 
 The [master status](../00-master-architecture-and-parity.md#go-way-data-layer)
 owns delivery status. The planning record,
@@ -31,6 +32,10 @@ and business code. Removing model generation does not remove DTO or enum generat
 | R9 | Do not build public generic types from embedding chains. Each type declares its own methods as thin shells over shared helpers; every embedding level recompiles each promoted method, and its pointer wrapper, per instantiation. |
 
 ## Stages and evidence
+
+Individual slice entries and dated integration reports retain historical acceptance
+conditions. The aggregate Stage 8 row describes the current retirement state;
+intermediate coexistence notes below are historical, not supported alternatives.
 
 | Stage | Scope | Status |
 | --- | --- | --- |
@@ -67,7 +72,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 6c1 | Complete record/projection adapters and transaction-only composition | Done; committed at `638dc34`. |
 | 6c2 | CTEs, recursive CTEs and record/scalar set operations | Done; committed at `5cbe31d`. |
 | 6c3 | Completed-result cursors, read/page adapters, result locks and sensitivity | Done; committed in integration batch 5 at `5873773`. |
-| 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | COMPLETE for the approved slices. 6c1–6c3 delivered; `transaction_nullable_record` is delivered in 6b4 (73/73 catalogue rows). Projection streaming through rows.Each is delivered in datatable slice 1. |
+| 6c | Rows/projections, CTEs, recursive queries, sets and result cursors | COMPLETE for the approved slices. 6c1–6c3 delivered; `transaction_nullable_record` is delivered in 6b4 (73/73 catalogue rows). Projection streaming uses rows.EachRead. |
 | 6d1 | Windows, ranking/value functions and typed frames | Done; committed in integration batch 5 at `5873773`. |
 | 6d2 | Text, temporal, interval and geographic functions | Done; committed in integration batch 5 at `5873773`. |
 | 6d3 | Typed JSON paths and document functions | Done; committed at `05b830c`. |
@@ -92,7 +97,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 8a lane C | Shared page and cursor contracts | Done pending the lead’s commit; querycore owns contracts, public aliases and HTTP schema identities retained. |
 | 8a lane D | Extension loading and identity backing contracts | Done pending the lead’s commit; shared internal loader, legacy compatibility entry points retained. |
 | 8 D8 | Handwritten ORM model/extension scaffolds | Done pending the lead’s commit; existing flags, collision-safe names and DTO generation retained. |
-| 8 | Retire model generation and old query API; extend scaffold | In progress; Stage 8a and D8 delivered. Model/query emitter retirement remains Stage 8c. |
+| 8 | Retire model generation and old query API; extend scaffold | Stage 8 complete. Model generation, engine, bridges and approved redundant paths retired; exemption-free guard and native cursor contract publication delivered. The final audit also removed the alternate DTO collection terminal. See [8d3c evidence](../../docs/evidence/goway-stage8d3c-report.md). |
 | 9 wave 1 | B1 foundations, lane C reporting/interval/transaction consumers and D1 foundations | Done pending the lead’s commit; generated callers and parity oracles coexist. |
 | 9 B2/B3 | Lifecycle consumers, observer counts, typed unset and soft-model batches | Done pending the lead’s commit; bounded lifecycle writes and stored/input identities retained. |
 | 9 C A1 | Shared models/catalog/query fixtures and eleven dependent query packages | Done pending the lead’s commit; original result identities and generated parity oracles retained. |
@@ -108,7 +113,7 @@ and business code. Removing model generation does not remove DTO or enum generat
 | 9 B reads | Retrieval streaming, scalar/DTO/complete-record pagination and safe draft-helper cleanup | Done pending the lead’s commit; EachRead retains callback identity and bounded iteration. |
 | 9 C terminals | Derived aggregates, JSONKind, complete-record DISTINCT ON, relation ordering and cursor inspection | Done pending the lead’s commit; scalarqueries/keyqueries and dependent query consumers migrated. |
 | 9 D loaders | Root direct, joined and aggregate relation tests; editor probes | Done pending the lead’s commit; LoadFrom/LoadMissingFrom preserve query-owned budgets and all existing assertions. |
-| 9 | Migrate consumer fixtures and compiler catalogue | COMPLETE. 587 ported, 445 unaffected, zero pending; frozen oracles retained. Remaining generator/API retirement belongs to Stage 8c. |
+| 9 | Migrate consumer fixtures and compiler catalogue | COMPLETE. 587 ported, 445 unaffected, zero pending; frozen oracles retained. Generator/API retirement is complete in Stage 8. |
 | 10 | Guides, examples and editor coverage | Done for the integrated guide/editor coverage; compiled examples, excerpt guards and relocated editor anchors. Current acceptance is recorded in batch 10 evidence. |
 | 11 | Full acceptance and whole-app performance evidence | Measurement runbook and tooling prepared. Final paired runtime, Stage 6 timing, footprint and whole-app gates remain pending quiet-host execution. |
 | 12 | Consumer application migration, separately authorized | Later |
@@ -339,7 +344,7 @@ They use retained `postgres.Isolate` schemas. PostgreSQL execution is lead-owned
 
 | Decision | Adopted direction |
 | --- | --- |
-| D1 | `database/orm`, `orm/expr` and `orm/rows`; retire `database/query` at Stage 8. |
+| D1 | `database/orm`, `orm/expr` and `orm/rows` are the only supported data-layer surface. |
 | D2 | A typed table struct returned by `orm.Define`, with a separate relation namespace to avoid initialization cycles. Measure the cost of the entire table declaration. |
 | D3 | Explicit capability constructors: number, text, enum, generic column, nullable and temporal families. Custom representations require an explicit codec. |
 | D4 | Validate field offsets at declaration/startup; use those offsets on the hot path. |
@@ -347,7 +352,7 @@ They use retained `postgres.Isolate` schemas. PostgreSQL execution is lead-owned
 | D6 | Work in this branch/worktree. The lead owns commits, pushes and synchronization with main. |
 | D7 | application.WithTables snapshots an explicit CheckedTable list and validates it through orm.Check before constructing providers/handlers. Model packages expose fresh Tables() lists; no registry or startup I/O. |
 | D8 | Extend the existing `foundry make` scaffold to write an initial model declaration once. |
-| D9 | Coexist with the old API until Stage 8; migrate subsystems before removal. |
+| D9 | Subsystem migration precedes retirement; Stage 8 completes removal. |
 | D10 | Stage 1 is the gate. Its approved model ceiling is 40%, superseding the original 25%; retain measured usage budgets. |
 | D11 | Keep executor raw SQL, add typed raw hydration and opt-in fragments; provide an optional project no-raw guard. |
 | D12 | Increment/decrement accepts a strictly positive finite magnitude. Reject zero, negative zero, negatives, NaN and infinity; use atomic `AtLeast`/`AtMost` bounds. `validation.Positive` and `DecimalPositive` exist on the branch. |
@@ -360,63 +365,16 @@ Binding the primary field twice is a startup error, not another column declarati
 
 ## Old to new API
 
-Names in planned rows remain subject to their owning stage's consumer acceptance.
-
-| Old call/declaration | New call/declaration | Status |
-| --- | --- | --- |
-| `QueryOrders().Where(OrderFields().TotalCents.Gt(100)).All(ctx, db)` | `Orders.Query().Where(Orders.TotalCents.Gt(100)).All(ctx, db)` | Core ported |
-| `QueryOrders().Find(ctx, db, id)` | `Orders.Find(ctx, db, id)` | Ported |
-| `q.CursorPaginate(ctx, ex, request)` | `orm.CursorPaginate(ctx, ex, q, request)` | Stage 3.1c; unchanged HTTP request/result adapters |
-| `q.ChunkByID(ctx, ex, size, visit)` | `orm.ChunkByKey(ctx, ex, q, Orders.ID, size, visit)` | Stage 3.1c |
-| `q.EachByID(ctx, ex, size, visit)` | `orm.EachByKey(ctx, ex, q, Orders.ID, size, visit)` | Stage 3.1c |
-| `q.ForUpdate().RequireFind(ctx, tx, id)` | `q.Where(Orders.ID.Eq(id)).ForUpdate().Require(ctx, tx)` | Stage 3.1c; transaction-only |
-| `QueryOrders().Create(ctx, tx, OrderDraft{}.SetTotalCents(v))` | `Orders.Insert(ctx, tx, Orders.TotalCents.Set(v))` | Core ported |
-| `QueryOrders().With(OrderRelations().Buyer)` | `Orders.Query().With(OrderRelations.Buyer)` | Direct eager trees ported, Stage 4b |
-| `defineOrderRelations() OrderRelationSet` | Separate typed relation namespace using direct, through and morph `orm.*Of` constructors | Direct kinds ported in 4b, joined families in 4c; typed aggregate slots delivered in 4d |
-| `q.WhereHas(UserRelations().Orders)` | `q.Where(orm.Has(UserRelations.Orders))` | Direct kinds in 4b, joined families in 4c; target predicates and nested `Has` compose |
-| `q.WhereDoesntHave(UserRelations().Orders)` | `q.Where(orm.DoesntHave(UserRelations.Orders))` | Direct kinds in 4b, joined families in 4c; correlated `NOT EXISTS` |
-| `r.Orders.Where(p).OrderBy(o).With(child)` | `r.Orders.Where(p).OrderBy(o).With(child)` | Stage 4b; immutable target-owned constraints and nested branches |
-| `q.WithRelationLimits(limits)` | `orm.WithRelationLimits(q, limits)` | Stage 4b; package function, shared limits type and defaults |
-| `q.With(r).Load(ctx, ex, parents)` | `orm.Load(ctx, ex, parents, r)` | Direct and joined families ported; no parent statement |
-| `q.With(r).LoadMissing(ctx, ex, parents)` | `orm.LoadMissing(ctx, ex, parents, r)` | Stage 4b; loaded-empty slots stay loaded |
-| `ManyToMany(...)` with a `relation.Through[N,P]` slot | `orm.ManyToManyOf(slot, local, pivotLocal, pivotForeign, foreign)` with `orm.ThroughOf` binding | Stage 4c; thin `ThroughRelation[M,N,P]` descriptor and `relation.Link[N,P]` results |
-| `r.WherePivot(p).OrderByPivot(o).WithPivot(child)` | `r.WherePivot(p).OrderByPivot(o).WithPivot(child)` | Stage 4c; typed pivot constraints and nested pivot branches |
-| `HasOneThrough(...)` / `HasManyThrough(...)` | `orm.HasOneThroughOf(...)` / `orm.HasManyThroughOf(...)` | Stage 4c; both key pairs checked, singular and many slots retained |
-| `r.OfMany(o)` / `r.LatestOfMany()` / `r.OldestOfMany()` | Same methods on singular descriptors | Stage 4c; immutable `DISTINCT ON` option with primary-key tie-breaker |
-| `MorphOne` / `MorphMany` / `MorphTo` / `MorphToMany` / `MorphedByMany` | Corresponding `orm.*Of` constructor and one concrete slot per target | Stage 4c; validated discriminator and eligible-key batches |
-| Generated aggregate slots loaded with `With` | `orm.ValueOf`, slot `.Using(expr.Related(...))`, optional `orm.Pivot(...)` | 4d; `With`/`Load`/`LoadMissing` unchanged |
-| Generated retrieval hooks/observers | `orm.WithRetrievalHooks`, `NewRetrievalObserver`, `RegisterRetrievalObserver` | B5c; closed complete-model batches |
-| `defineXGlobalScopes` and scope bypasses | `orm.WithGlobalScopes`, `Scope`, `WithoutGlobalScope(s)` and relation/pivot package bypasses | B5c; executing context retained |
-| Transaction selectors and LATERAL | `rows.Transaction*` composition, transaction scopes and `AsTransactionLateral` | 6b4; only transaction terminals execute |
-| Generated source-write field eligibility | `PrimaryOf`, role-aware `MapInsert`/`MapUpdate`, `SoftDeletes` token | Typed roles; Input carriers cannot enter source mappings |
-| Generated extension declarations and factories | `SlotOf`/`IdentityOf`, `extensions.DefineORMOwner`, `slots.DeclareORM`, `factory.Define` | 7s3a; old adapters coexist |
-| Generated scalar/IN/EXISTS selectors | `rows.SelectScalar`, `ScalarQuery`, `InQuery`, `ExistsQuery` and nullable variants | 6b2; selection sources cannot enter joins without aliasing |
-| Correlated and lateral selectors | `rows.Correlate`, correlated scalar/IN/EXISTS and cross/inner/left LATERAL functions | 6b3; explicit enclosing scope |
-| Generated audit policy/capture/readers | `orm.AuditPolicyOf`, `Audit`, `Auditing`, `AuditRead` and nullable/encrypted variants | B5d; shared record policy and instance-owned recorder |
-| Complete model/projected record sources | `rows.ModelRecord`, `RecordOf`, `AsRecord`, `SelectRecord` | 6c1; preserved scopes, read-only results |
-| Transaction record/projection sources | `rows.TransactionOf`, `LockedRecord`, `AsTransaction`, `SelectTransaction`, `SelectTransactionRecord` | 6c1; `All` requires `*database.Tx` |
-| Raw selected expressions and predicates | `expr.Raw`, `RawWithCodec`, `orm.WhereRaw` | 6a4; explicit argument/result boundary and optional no-raw lint |
-| Generated `Distinct`/set query surface | `rows.Distinct(...)`; `rows.Union`/`Intersect`/`Except`, ALL and scalar variants | DISTINCT delivered 6a3; sets delivered 6c2 |
-| Pivot attach/detach/sync/toggle/update | `orm.Attach`, `Detach`, `Sync`, `Toggle`, `UpdatePivot` and batch/force variants | 5b; package functions, concrete endpoints and pivot assignments |
-| Ordinary/transaction CTEs and recursion | `rows.CTE`, `TransactionCTE`, `RecursiveCTE`, `RecursiveAllCTE` | 6c2; immutable definitions and non-executable recursive self |
-| Generated conflict/upsert wrappers | `orm.OnConflict`, `OnConflictConstraint`, `ConflictSet`/`Incoming`/`Null`, `Upsert`/`UpsertMany` | 6e1; explicit immutable policy and typed optional/batch results |
-| Completed-result and scalar cursors | `rows.CursorFor` / `ValueCursorFor`, explicit `UniqueBy`, `Paginate` | 6c3; output identity and sensitivity checked before SQL |
-| Result read/page and lock terminals | `rows.Read*`, `SelectTransactionValue`, `ForUpdate`/other lock functions and `LockRows` | 6c3; retained inner windows and transaction-only locks |
-| Window/ranking and scalar function families | `expr.WindowFor`, `Over`, typed frame/range functions and scalar package functions | 6d1–6d2; row and selected phases remain distinct |
-| Computed/partial conflict targets and calculations | `rows.OnConflictKeys`, `ConflictRowsOf`, `SetConflictValue`, target/row predicates and scalar adapters | 6e2; stored/proposed scopes are not SELECT sources |
-| Generated creation and lookup writes | `orm.CreateEach`, `FirstOrCreate`, `UpdateOrCreate`, `CreateOrFirst` | 6e4; bounded lifecycle and no automatic retry |
-| Generated prune and explain | `orm.PruneBatch`/`ForcePruneBatch`, `orm.Explain*`, `rows.Explain*` | 6e4; exact soft token and transaction-only locked variants |
-| `prune.Model` | `prune.ORMModel` / `ORMSoftModel` | 8a lane B; legacy registration remains in its compatibility file |
-| Datatable generated selections | `rows.Query`, `expr.Selected`, `expr.ProjectionOrder`, row/relation predicates | Single runtime cutover; DTO generation retained |
-| Insert-select and source update/delete | `rows.InsertFrom`, `UpdateFrom`, `DeleteUsing`/`ForceDeleteUsing`, `MapInsert`/`MapUpdate`, `MatchSource` | 6e3; exact scoped mappings, Exec or bounded Returning |
-| Generated JSON path accessors | `expr.JSONFieldOf`, `JSONRoot`, `JSONProperty`, typed key/index/scalar adapters | 6d3; startup validation, no generated path catalogue |
-| Scoped keyed Patch/Remove | `orm.Update` / `orm.Delete` with scoped query, own key and typed identity | 7s2; ordinary lifecycle and scoped cardinality |
-| Ordered UUID predicates | `orm.UUIDLess`/`UUIDGreater` and inclusive variants; scoped/nullable `expr` variants | Stage 7 capabilities; PostgreSQL byte ordering |
-| Per-model UpdateEach/DeleteEach | `orm.UpdateEach` / `orm.DeleteEach` package functions | Stage 7 capabilities; complete candidate locking and one atomic owner |
-| `query.SelectValue(QueryOrders(), ...)` | `rows.SelectValue(Orders.Query(), ...)` | Basic scalar selection ported |
-| Model annotation plus `foundry generate` | Plain struct plus `orm.Define` | Core ported; DTO/enum generation retained |
+The complete [retired spelling table](../../docs/guides/orm-migration.md#removed-api-spellings)
+is documentation-only migration history. The guide's compiled after examples are
+the supported native API. Earlier slice mappings are superseded, including the
+intermediate loading, row-value and terminal spellings.
 
 ## Feature parity contract
+
+This is the historical planning/transfer matrix, retained to interpret catalogue
+coverage. Intermediate spellings in the old and stage columns are not supported
+APIs; use the migration table above for their final replacements.
 
 “Preserve” states the program's target, not completion of the feature. The current
 consumer retains Stage 1 golden coverage and adds core, direct and joined-relation cases.
@@ -439,7 +397,7 @@ consumer retains Stage 1 golden coverage and adds core, direct and joined-relati
 | Direct belongs-to, has-one, has-many, self and nullable-FK relations | Slots and generated relation sets | `BelongsToOf`/`HasOneOf`/`HasManyOf`; delivered in 4b, including singular cardinality checks |
 | Nested and constrained eager loads; LoadMissing | Descriptor `Where`/`OrderBy`/`With`, query `Load`/`LoadMissing` | Stage 4b: immutable descriptors, complete target batches at each level, package `Load`/`LoadMissing`, loaded-empty preservation and primary-key order tie-breakers |
 | Relation limits and depth | Query `WithRelationLimits` and shared loading budgets | Stage 4b: `orm.WithRelationLimits(q, limits)`; shared row/attachment budgets and depth bound, defaults from the existing owner. No relation `Limit`/`Offset` or per-parent limits |
-| Relation existence filters | `WhereHas`/`WhereDoesntHave`, descriptor `Exists` | Stage 4b: `Where(orm.Has/DoesntHave(...))`, nested correlated subqueries with related scopes and zero extra statements |
+| Relation existence filters | `WhereHas`/`WhereDoesntHave`, descriptor `Exists` | Stage 4b: `Where(orm.Has(...))` / `Where(orm.Not(orm.Has(...)))`, nested correlated subqueries with related scopes and zero extra statements |
 | Pivots and WithPivot | Generated relation sets, `Through` slots and joined loaders | Stage 4c delivered: `ThroughOf` and `ManyToManyOf`, typed links, target/pivot constraints and nested branches, independent pivot ownership and soft-delete scopes |
 | Has-one/has-many-through | Joined hop loaders | Stage 4c delivered: `HasOneThroughOf`/`HasManyThroughOf`, both key pairs checked and shared batched plans |
 | One-of-many | Latest, oldest and custom singular choices | Stage 4c delivered: immutable `OfMany`/`LatestOfMany`/`OldestOfMany`, `DISTINCT ON` per parent and primary-key tie-breaker |

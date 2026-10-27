@@ -94,7 +94,7 @@ func TestAggregateFilterCorrelationOwnership(t *testing.T) {
 	type scope = Correlation[Alias[left, aggregateRecord], Alias[right, aggregateRecord]]
 	count := expr.Count[scope]()
 	for name, aggregate := range map[string]expr.OrderedAggregate[scope, int64]{"outer only": count.Filter(x.Ne(0)), "local": count.Filter(y.Ne(0)), "mixed": count.Filter(expr.Equal(y, x)), "local argument": expr.CountFieldAt(InnerScope(link, Scope(b)), d.Exact).Filter(x.Ne(0))} {
-		_, err := CompileRead(ReadScalar(SelectScalar(a, CorrelatedScalarQuery(SelectCorrelatedScalar(link, aggregate.Value())))))
+		_, err := CompileRead(ReadScalar(SelectScalar(a, CorrelatedScalarRowQuery(SelectCorrelatedScalar(link, aggregate.Value())).Value())))
 		if name == "outer only" {
 			if !errors.Is(err, fault.Invalid) {
 				t.Fatal("implicit aggregate ownership change accepted", err)
@@ -110,7 +110,7 @@ func TestAggregateFilterCorrelationOwnership(t *testing.T) {
 	parent := expr.At(OuterScope(nested, InnerScope(link, Scope(b))), d.Exact)
 	inner := expr.At(InnerScope(nested, Scope(child)), d.Exact)
 	for name, p := range map[string]expr.Predicate[scope]{"outer only": nested.Where(expr.Equal(inner, grandparent)).Exists(), "local": nested.Where(expr.Equal(inner, parent)).Exists()} {
-		_, err := CompileRead(ReadScalar(SelectScalar(a, CorrelatedScalarQuery(SelectCorrelatedScalar(link, count.Filter(p).Value())))))
+		_, err := CompileRead(ReadScalar(SelectScalar(a, CorrelatedScalarRowQuery(SelectCorrelatedScalar(link, count.Filter(p).Value())).Value())))
 		if name == "outer only" && !errors.Is(err, fault.Invalid) {
 			t.Fatal("nested outer capture changed ownership", err)
 		}

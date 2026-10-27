@@ -15,10 +15,10 @@ partitioning. Neither operation erases scope or makes an aggregate a row operand
 func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
 	u := models.Users
 	bucket := expr.When(expr.ModelPredicate(u.Age.Gt(20)), expr.Param(u.Age, 1)).Else(expr.Param(u.Age, 0))
-	return rowset.GroupBy(rowset.Select(rowset.From(models.Users.Query()), keyqueries.BucketCounts.Row,
+	return rowset.OrderBy(rowset.GroupBy(rowset.Select(rowset.From(models.Users.Query()), keyqueries.BucketCounts.Row,
 		rowset.MapSelected(keyqueries.BucketCounts.Bucket, bucket.Value()),
 		rowset.MapSelected(keyqueries.BucketCounts.Count, expr.Count[models.User]().Value()),
-	), expr.Group(bucket)).OrderBy(bucket.Asc())
+	), expr.Group(bucket)), bucket.Asc())
 }
 ```
 

@@ -56,7 +56,7 @@ func orphanTable() extensionmaintenance.Table[store.TranslationIndex] {
 			if after != "" {
 				q = q.Where(f.KeyColumn.Gt(after))
 			}
-			return store.TranslationsIndex(q).All(ctx, tx)
+			return rows.Read(store.TranslationsIndex(q)).All(ctx, tx)
 		},
 		Lock: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope string, keys []string) ([]store.TranslationIndex, error) {
 			f := store.Translations
@@ -88,7 +88,7 @@ func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerNa
 	}
 	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
 		f := store.Translations
-		return rows.Distinct(rows.SelectValue(store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Field.Asc()).Limit(limit), f.Field)).All(ctx, tx)
+		return rows.Read(rows.Distinct(rows.SelectValue(store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Field.Asc()).Limit(limit), f.Field))).All(ctx, tx)
 	}, func(scope, name string) bool {
 		_, declared := m.fields[extensions.Digest(scope, name)]
 		return declared

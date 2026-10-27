@@ -25,7 +25,7 @@ func (g newGolden) fixB(ctx context.Context, db *database.DB) {
 	schema := ormrows.Define(func(b ormrows.Builder[EmailRow], r *EmailRow) fields {
 		return fields{b.Row(), ormrows.TextOf(b, &r.Email)}
 	})
-	g.show(must(ormrows.Select(joined, schema, ormrows.Map(schema.Email, expr.At(ormrows.RightScope(joined, ormrows.Scope(users)), models.Users.Email))).All(ctx, db)))
+	g.show(must(ormrows.Read(ormrows.Select(joined, schema, ormrows.Map(schema.Email, expr.At(ormrows.RightScope(joined, ormrows.Scope(users)), models.Users.Email)))).All(ctx, db)))
 	fmt.Fprintln(&g.output, "load-duplicate-and-missing")
 	buyer := must(model.ParseID[models.User](buyerID))
 	missing := must(model.ParseID[models.User]("01890f47-1a00-7000-8000-000000000009"))

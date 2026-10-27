@@ -106,13 +106,13 @@ func checkProjectedCTEs(t *testing.T, tx *database.Tx, users []models.User) erro
 	joined := rowset.LeftJoin(u, source, rowset.OnEqual(expr.At(rowset.Scope(u), models.Users.ID), rowset.At(f, reports.BuyerTotalRows.BuyerID)))
 	user := rowset.LeftScope(joined, rowset.Scope(u))
 	stats := rowset.NullableRightScope(joined, rowset.Scope(source))
-	report := rowset.Select(joined, reports.UserOrderStatsRows.Row,
+	report := rowset.OrderBy(rowset.Select(joined, reports.UserOrderStatsRows.Row,
 		rowset.Map(reports.UserOrderStatsRows.ID, expr.At(user, models.Users.ID)),
 		rowset.Map(reports.UserOrderStatsRows.Email, expr.At(user, models.Users.Email)),
 		rowset.MapSelected(reports.UserOrderStatsRows.Total, expr.Row(rowset.AtNullableValue(stats, reports.BuyerTotalRows.Total)).Value()),
 		rowset.MapSelected(reports.UserOrderStatsRows.Orders, expr.Row(rowset.AtNullable(stats, reports.BuyerTotalRows.Orders)).Value()),
-	).OrderBy(expr.At(user, models.Users.Email).Asc())
-	rows, err := report.All(t.Context(), tx)
+	), expr.At(user, models.Users.Email).Asc())
+	rows, err := rowset.Read(report).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}

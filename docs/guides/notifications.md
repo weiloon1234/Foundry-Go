@@ -22,7 +22,7 @@ names do not permit substituting a different lookup authority.
 
 `notifications.Bind(definition, recipient, channels...)` retains both model and
 payload types. Freeze its `Registration()` with `NewRegistry`, then construct
-`New(existingDB, registry, config)`. Duplicate recipient, notification/version or
+`notifications.New(existingDB, registry, config)`. Duplicate recipient, notification/version or
 channel declarations fail explicitly. A binding supports at most 16 channels and
 one database channel. Construction performs no I/O or migrations.
 

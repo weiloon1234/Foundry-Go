@@ -19,7 +19,7 @@ import (
 func TestCompleteRecordAliasesAndWindows(t *testing.T) {
 	m := declareMembers()
 	schema := declareRows()
-	q := Limit(Offset(Select(From(m.Query().Where(m.ID.Ne(0))), schema, Map(schema.Name, expr.Value(m.Name)), Map(schema.ID, expr.Value(m.ID))).OrderBy(expr.Value(m.ID).Desc()), 2), 3)
+	q := Limit(Offset(OrderBy(Select(From(m.Query().Where(m.ID.Ne(0))), schema, Map(schema.Name, expr.Value(m.Name)), Map(schema.ID, expr.Value(m.ID))), expr.Value(m.ID).Desc()), 2), 3)
 	a := AsRecord[left](RecordOf(q), "report")
 	selected := SelectRecord(a, Scope(a)).Where(At(Scope(a), schema.ID).Ne(0)).Limit(1)
 	state := &driverState{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(3), "Ada"}}}

@@ -29,6 +29,6 @@ func Query() rows.Query[rows.Alias[side, models.User], Result] {
 	nickname := expr.At(rows.Scope(source), models.Users.Nickname)
 	choice := expr.When(nickname.IsNull(), name).When(name.Eq(""), expr.Row(name).Value().Param("fallback")).Else(name)
 	nullable := expr.When(name.Ne(""), choice).ElseNull()
-	missing := expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.NullFor(name))
-	return rows.Select(source, schema, rows.MapSelected(schema.Required, expr.Coalesce(expr.NullIf(choice, name), choice).Value()), rows.MapSelected(schema.Missing, missing.Value())).Where(choice.Ne("")).OrderBy(choice.Asc())
+	missing := expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.NullableRow(name).Param(value.Null[string]()))
+	return rows.OrderBy(rows.Select(source, schema, rows.MapSelected(schema.Required, expr.Coalesce(expr.NullIf(choice, name), choice).Value()), rows.MapSelected(schema.Missing, missing.Value())).Where(choice.Ne("")), choice.Asc())
 }

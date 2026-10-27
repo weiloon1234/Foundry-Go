@@ -117,7 +117,7 @@ appear in a projection; generation rejects these. Renaming the table or column, 
 changing a primary key, needs re-encryption.
 
 Every write uses a fresh random nonce, so encrypted fields have no `Eq`, `Like`,
-ordering, conflict-update, `Select` mapping or aggregate operations; the compiler
+ordering, conflict-update, `rows.Select` mapping or aggregate operations; the compiler
 rejects them, and a nullable field offers only `IsNull`/`IsNotNull`. Set-based
 writes (`PatchAll`, `Values` on insert-from or update-from) reject encrypted
 assignments, because one envelope cannot belong to many rows; per-model writes,

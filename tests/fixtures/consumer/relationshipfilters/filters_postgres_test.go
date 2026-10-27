@@ -46,7 +46,7 @@ func TestPostgresRelationshipFilters(t *testing.T) {
 				t.Error("relationship predicate returned wrong parent count", n, test.want, err)
 			}
 		}
-		if n, err := models.Users.Query().Where(orm.DoesntHave(orders)).Count(t.Context(), tx); err != nil || n != 1 {
+		if n, err := models.Users.Query().Where(orm.Not(orm.Has(orders))).Count(t.Context(), tx); err != nil || n != 1 {
 			t.Error("WhereDoesntHave mismatch", err)
 		}
 		if n, err := models.Orders.Query().Where(orm.Has(models.OrderLinks.Buyer)).Count(t.Context(), tx); err != nil || n != 3 {
@@ -144,7 +144,7 @@ func checkThroughFilters(t *testing.T, tx *database.Tx, users []models.User) err
 			t.Error("natural-key or nested target/pivot filter mismatch", n, test.want, err)
 		}
 	}
-	if n, err := models.Users.Query().Where(orm.DoesntHave(models.UserLinks.Groups)).Count(t.Context(), tx); err != nil || n != 1 {
+	if n, err := models.Users.Query().Where(orm.Not(orm.Has(models.UserLinks.Groups))).Count(t.Context(), tx); err != nil || n != 1 {
 		t.Error("NULL/missing pivot targets became matches", err)
 	}
 	return nil

@@ -23,4 +23,4 @@ var lateral = rows.AsTransactionLateral[result](record, "lateral_record")
 var _ context.Context
 var _ *database.Tx
 
-var _ = rows.CorrelatedScalarQuery(selected)
+var _ = rows.CorrelatedScalarRowQuery(selected).Value()

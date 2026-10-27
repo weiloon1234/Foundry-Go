@@ -72,7 +72,7 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 		if err != nil {
 			return err
 		}
-		active, err := owner.Active(ctx, tx, m.store.Registry(), []model.Reference[M, K]{reference})
+		active, _, err := owner.ActiveSubjects(ctx, tx, m.store.Registry(), []model.Reference[M, K]{reference})
 		if err != nil {
 			return err
 		}

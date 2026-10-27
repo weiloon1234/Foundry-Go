@@ -1,6 +1,9 @@
 package comparisonqueries_test
 
 import (
+	decimal "github.com/weiloon1234/Foundry-Go/decimal"
+	"github.com/weiloon1234/Foundry-Go/value"
+
 	"errors"
 	"strings"
 	"testing"
@@ -76,7 +79,7 @@ func TestPostgresCorrelatedRowComparisonsAndRelationAliases(t *testing.T) {
 			t.Fatal(items, err)
 		}
 		total := rows.CorrelatedScalarNullableRowQuery(rows.SelectCorrelatedScalar(matching, expr.SumAt(order, models.Orders.TotalCents).Value()))
-		if n, err := expr.Where(q, expr.NotDistinctFrom(total, expr.NullFor(expr.DecimalOf(expr.Value(f.Age))))).Count(t.Context(), tx); err != nil || n != 2 {
+		if n, err := expr.Where(q, expr.NotDistinctFrom(total, expr.NullableRow(expr.DecimalOf(expr.Value(f.Age))).Param(value.Null[decimal.Decimal]()))).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal("nullable correlated total lost NULL", n, err)
 		}
 		items, err = q.Where(orm.Has(models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, purchased)))).All(t.Context(), tx)

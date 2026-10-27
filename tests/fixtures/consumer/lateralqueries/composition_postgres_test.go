@@ -92,7 +92,7 @@ func TestPostgresLateralChainedNullableScopes(t *testing.T) {
 		chain := rows.LeftJoinLateral(first, matched)
 		retained := rows.LeftNullableScope(chain, rows.NullableRightScope(first, rows.LateralScope(latest)))
 		found := rows.NullableRightScope(chain, rows.LateralScope(matched))
-		pairs, err := rows.Select(chain, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Row(expr.AtNullable(retained, models.Orders.BuyerID)).Value()), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(found, models.Users.ID)).Value())).All(t.Context(), tx)
+		pairs, err := rows.Read(rows.Select(chain, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Row(expr.AtNullable(retained, models.Orders.BuyerID)).Value()), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(found, models.Users.ID)).Value()))).All(t.Context(), tx)
 		if err != nil || len(pairs) != 4 {
 			t.Fatal(pairs, err)
 		}

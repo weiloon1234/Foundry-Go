@@ -137,7 +137,7 @@ func (s manySlot[M, K]) From(m *Manager) manySlot[M, K] {
 func relationOf[M any, K comparable, S any](s slotDefinition[M, K, S], m *Manager, loaded func(S) bool, count func(S) int, convert func([]File[M]) (S, error)) extensionslot.Slot[M] {
 	binding := extensionslot.Binding[M, S]{Name: s.binding.Field, Get: s.binding.Get, Set: s.binding.Set, Loaded: loaded, Count: count, Unbound: s.unbound()}
 	if s.collection.definition != nil {
-		binding.Table = s.collection.definition.owner.ModelName()
+		binding.Table = extensions.ORMIdentity(s.collection.definition.owner).ModelName()
 	}
 	if m != nil {
 		binding.Fetch = func(ctx context.Context, executor database.Executor, parents []M) ([]S, error) {

@@ -477,7 +477,7 @@ commit for persisted changes):
 | --- | --- |
 | `EventLogin` | `sessions`/`tokens` `.WithObserver`: full issuance and MFA completion |
 | `EventLogout` | `Logout`, `RevokeCurrent` |
-| `EventOtherDevicesLoggedOut` | `RevokeOthers` (`Count` holds the revoked total) |
+| `EventOtherDevicesLoggedOut` | `RevokeOthers` (`EventOtherDevicesLoggedOut.Count` holds the revoked total) |
 | `EventFailed` | `PasswordLogin.WithObserver`; `Subject` only when an account matched |
 | `EventLockout` | `PasswordLogin.WithObserver` when a failure starts a lock |
 | `EventPasswordReset` | `passwordreset.Reset.WithObserver` |

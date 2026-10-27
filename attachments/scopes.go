@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -24,7 +25,7 @@ func (c Collection[M, K]) matchingKeys(ctx context.Context, m *Manager) ([]K, er
 				return err
 			}
 			f := store.Files
-			rows, err := store.Index(store.Files.Query().Where(f.Scope.Eq(c.definition.owner.Scope()), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).OrderBy(f.SubjectKey.Asc(), f.ID.Asc()).Limit(MaxBatchFiles+1)).All(ctx, tx)
+			rows, err := rows.Read(store.Index(store.Files.Query().Where(f.Scope.Eq(c.definition.owner.Scope()), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).OrderBy(f.SubjectKey.Asc(), f.ID.Asc()).Limit(MaxBatchFiles+1))).All(ctx, tx)
 			if err != nil {
 				return err
 			}

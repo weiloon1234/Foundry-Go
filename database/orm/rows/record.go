@@ -83,7 +83,7 @@ func AsRecord[A, R any](source RecordSource[R], alias string) Aliased[A, R] {
 }
 
 // RecordRead retains the input scope and complete record decoder without model writes.
-// Example: rows.SelectRecord(alias,rows.Scope(alias)).All(ctx,db).
+// Example: rows.ReadRecord(rows.SelectRecord(alias,rows.Scope(alias))).All(ctx,db).
 type RecordRead[S, R any] struct {
 	_            [0]*S
 	_            [0]*R

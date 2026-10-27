@@ -7,7 +7,7 @@ scope describes output fields, independently of the original input scope:
 c := rows.CursorFor(rows.ModelRecord(Orders.Query().Limit(200)))
 id := expr.At(c.Scope(), Orders.ID)
 c = c.OrderBy(id.Asc()).UniqueBy(expr.Group(id))
-page, err := c.Paginate(ctx, db, query.CursorRequest[Order]{Size: 20})
+page, err := c.Paginate(ctx, db, orm.CursorRequest[Order]{Size: 20})
 ```
 
 Input filters, grouping, ordering and windows stay inside an allocated SELECT
@@ -19,7 +19,7 @@ fields with default NULL placement; select computed values into a declared row
 first. Repeated, foreign, sensitive or uninitialized keys fail before SQL.
 
 `ValueCursorFor(rows.Values(selected))` retains the scalar's exact codec and
-nullability. Use `c.UniqueBy(c.Key())`; explicitly deduplicate before the cursor
+nullability. Use `c.UniqueBy(expr.Group(c.Value()))`; explicitly deduplicate before the cursor
 when values repeat. `Value()` provides the completed scalar for filtering and
 ordering. Cursor builders are read-only and cannot be reused as record sources.
 
@@ -29,7 +29,7 @@ compiler. Backward reads reverse the returned items into canonical order. Empty
 pages carry no navigation tokens. A decode, close, lifecycle or token-encoding
 failure discards the entire page. Tokens are positions, not authorization,
 encrypted data or a snapshot; authorize every request. Sensitive codecs cannot
-supply automatic cursor keys. Use the existing `query.CursorRequest` and
+supply automatic cursor keys. Use the existing `orm.CursorRequest` and
 `query.CursorPage` transport types.
 
 `Read(report)` adapts a row query to `All`, `First`, `RequireFirst`, `Count`,

@@ -50,7 +50,7 @@ malformed nesting into a balanced document.
 ## Collections
 
 `collection` transforms ordinary typed slices. `Map`, `Filter`, `FlatMap`,
-`Find`, `Any`, `All`, `Count`, `Reduce`, `Partition`, `KeyBy`, `GroupBy`,
+`Find`, `Any`, `All`, `collection.Count`, `Reduce`, `Partition`, `KeyBy`, `GroupBy`,
 `UniqueBy`, `SortBy`, `SortByDesc`, `MinBy`, `MaxBy`, `CountBy`, `SumBy` and
 `AverageBy` execute callbacks synchronously. Result containers are independent;
 pointer/map/slice elements keep normal Go reference semantics. Callbacks obey the

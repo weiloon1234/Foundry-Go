@@ -39,7 +39,7 @@ func TestReportProjectionGolden(t *testing.T) {
 					defer db.Close(t.Context())
 
 					f := expr.Value(models.Orders.TotalCents)
-					q := rowset.Select(rowset.From(models.Orders.Query()), reportSchema, rowset.Map(reportSchema.Amount, f)).Where(expr.ModelPredicate(models.Orders.TotalCents.Gt(100))).OrderBy(f.Desc())
+					q := rowset.OrderBy(rowset.Select(rowset.From(models.Orders.Query()), reportSchema, rowset.Map(reportSchema.Amount, f)).Where(expr.ModelPredicate(models.Orders.TotalCents.Gt(100))), f.Desc())
 					switch shape {
 					case "group":
 						q = rowset.Having(rowset.GroupBy(q, expr.Group(f)), expr.Count[models.Order]().Gt(0))
@@ -64,10 +64,10 @@ func TestReportProjectionGolden(t *testing.T) {
 							t.Fatal(err)
 						}
 					case "page":
-						p, err := rowset.Paginate(t.Context(), db, q, orm.Page(1, 1))
+						p, err := rowset.Read(q).Paginate(t.Context(), db, orm.Page(1, 1))
 						fmt.Fprintln(&g.output, oracleSnapshot([]any{p, err != nil}))
 					case "simple":
-						p, err := rowset.SimplePaginate(t.Context(), db, q, orm.Page(1, 1))
+						p, err := rowset.Read(q).SimplePaginate(t.Context(), db, orm.Page(1, 1))
 						fmt.Fprintln(&g.output, oracleSnapshot([]any{p, err != nil}))
 					}
 

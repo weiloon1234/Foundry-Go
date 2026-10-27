@@ -14,11 +14,11 @@ import (
 func TestReportReorderingPreservesMaterializedWinnerSelection(t *testing.T) {
 	m, r := declareMembers(), declareRows()
 	base := Select(From(m.Query().Where(orm.NumberKey(m.Key()).Gt(2))), r, Map(r.ID, expr.Value(m.ID)), Map(r.Name, expr.Value(m.Name)))
-	winners := Limit(DistinctOn(base, expr.Group(expr.Value(m.ID))).OrderBy(expr.Value(m.ID).Desc()), 5)
+	winners := Limit(OrderBy(DistinctOn(base, expr.Group(expr.Value(m.ID))), expr.Value(m.ID).Desc()), 5)
 	source := AsRecord[left](RecordOf(winners), "winners")
 	id := At(Scope(source), r.ID)
 	name := At(Scope(source), r.Name)
-	report := Select(source, r, MapSelected(r.ID, id.Value()), MapSelected(r.Name, name.Value())).OrderBy(id.Desc())
+	report := OrderBy(Select(source, r, MapSelected(r.ID, id.Value()), MapSelected(r.Name, name.Value())), id.Desc())
 	statement, err := CompileRead(Read(ReorderUnwindowed(report, id.Asc())))
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestReportReorderingPreservesMaterializedWinnerSelection(t *testing.T) {
 func TestReportReorderingReplacesOnlyOuterOrders(t *testing.T) {
 	m, r := declareMembers(), declareRows()
 	id := expr.Value(m.ID)
-	report := Select(From(m.Query().Where(orm.NumberKey(m.Key()).Gt(4))), r, Map(r.ID, id), Map(r.Name, expr.Value(m.Name))).OrderBy(id.Desc())
+	report := OrderBy(Select(From(m.Query().Where(orm.NumberKey(m.Key()).Gt(4))), r, Map(r.ID, id), Map(r.Name, expr.Value(m.Name))), id.Desc())
 	before, err := CompileRead(Read(report))
 	if err != nil {
 		t.Fatal(err)

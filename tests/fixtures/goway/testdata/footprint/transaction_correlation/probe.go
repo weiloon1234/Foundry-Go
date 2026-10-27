@@ -31,5 +31,5 @@ func Scalar(ctx context.Context, tx *database.Tx) ([]value.Nullable[int64], erro
 	c := rows.TransactionCorrelate(parent, child)
 	inner := rows.TransactionInnerScope(c, rows.TransactionScope(child))
 	selected := rows.SelectTransactionCorrelatedScalar(c, expr.Row(expr.At(inner, models.Orders.TotalCents)).Value()).Limit(1).ForShare()
-	return rows.SelectTransactionValue(parent, rows.TransactionCorrelatedScalarQuery(selected)).Where(selected.Exists()).All(ctx, tx)
+	return rows.SelectTransactionValue(parent, rows.TransactionCorrelatedScalarRowQuery(selected).Value()).Where(selected.Exists()).All(ctx, tx)
 }

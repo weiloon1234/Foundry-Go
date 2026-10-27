@@ -35,4 +35,4 @@ var normal = rows.As[a](models.Users.Query(), "ordinary")
 var normalChild = rows.As[b](models.Users.Query(), "ordinary_child")
 var normalJoin = rows.LeftJoin(normal, normalChild, rows.On(expr.At(rows.Scope(normal), models.Users.ID), expr.At(rows.Scope(normalChild), models.Users.ID)))
 
-var invalid = rows.ScalarQuery(rows.From(models.Users.Query()), rows.TransactionScalarOf(selected).ForUpdate())
+var invalid = rows.ScalarRowQuery(rows.From(models.Users.Query()), rows.TransactionScalarOf(selected).ForUpdate()).Value()

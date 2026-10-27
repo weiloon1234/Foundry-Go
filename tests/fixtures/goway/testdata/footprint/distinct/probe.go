@@ -8,7 +8,7 @@ import (
 
 func Query() rows.Query[models.Order, models.Order] {
 	buyer := expr.Value(models.Orders.BuyerID)
-	return rows.DistinctOn(rows.FromModel(models.Orders.Query()), expr.Group(buyer)).OrderBy(buyer.Asc(), expr.Value(models.Orders.ID).Desc())
+	return rows.OrderBy(rows.DistinctOn(rows.FromModel(models.Orders.Query()), expr.Group(buyer)), buyer.Asc(), expr.Value(models.Orders.ID).Desc())
 }
 func Values() rows.Query[models.Order, int64] {
 	q := rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)

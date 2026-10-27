@@ -71,8 +71,8 @@ Their terminal methods require `*database.Tx`. Ordinary reads accept
 transaction behavior. A `*orm.WriteError[M]` preserves a hydrated candidate when
 transaction confirmation is uncertain. The candidate does not prove persistence.
 
-Hooks and mutators remain outside this increment. Direct
-relations, inner joins and projections are described below.
+Declare lifecycle hooks with `orm.WithHooks` and field mutators on the model.
+Direct relations, joins and projections are described below.
 
 The key field is bound only by `TableOf`. Derive ordered numeric capabilities
 with `orm.NumberKey(table.Key())` or text capabilities with
@@ -113,7 +113,7 @@ default; use package `ForceDelete` with a `WithTrashed` or `OnlyTrashed` query f
 deleted records. `Query.ForceDeleteAll` respects query visibility. Explicit timestamp roles
 win over names; explicit timestamp constructors conflict with `NoTimestamps()`.
 `CreatedAt`, `UpdatedAt`, and `SoftDelete` retain the instant type as their second
-type parameter. Upsert remains deferred.
+type parameter. Upserts use `orm.OnConflict` with typed targets and assignments.
 
 `Query.Chunk(ctx, ex, size, func([]M) error)` reads bounded batches with stable
 ordering and preserves Limit/Offset. Later batches advance from the last ordered
@@ -136,9 +136,9 @@ loaded, err := orm.LoadFrom(ctx, db, Orders.Query().With(OrderRelations.Buyer), 
 
 `OneOf` and `ManyOf` bind `relation.One` and `relation.Many` fields. Nullable
 foreign IDs retain their non-null key type. The loader uses the shared engine's
-500-key batches and 10,000-row fetched/attachment budgets. `Load` returns copies;
+500-key batches and 10,000-row fetched/attachment budgets. `orm.LoadFrom` returns copies;
 errors publish no partial result. Target soft deletes and context scopes remain
-active. `Each` closes each parent batch before loading relations.
+active. `Query.Each` closes each parent batch before loading relations.
 
 For joins, `rows.As[Tag]` creates a distinct scope, `expr.At` binds a model column
 to that scope, and `rows.LeftScope`/`RightScope` move fields into the joined scope.
@@ -179,8 +179,8 @@ public surface. No consumer migration is needed on this branch.
 Stage 3.1a adds `JSONOf`/`NullableJSONOf` for `value.JSON[T]` and
 `IntervalOf`/`NullableIntervalOf` for `temporal.Interval`. JSON handles keep the
 payload type through equality, membership, containment and assignment. They expose
-`Asc`/`Desc` and `IsJSONNull`, but no range comparisons or text patterns. `Kind`
-and `Length` expressions remain Stage 6d. Interval handles add ordered comparisons
+`Asc`/`Desc` and `IsJSONNull`, but no range comparisons or text patterns. `expr.JSONType` and
+`expr.JSONLength` inspect JSON expressions. Interval handles add ordered comparisons
 and sorting, without numeric adjustments or text patterns. Nullable handles distinguish SQL NULL from
 values; JSON null is represented by `value.JSON[value.Nullable[T]]`.
 
@@ -188,7 +188,7 @@ Use `TableOf(b, &m.Period, orm.Codec(codec.Interval()))` for an interval natural
 key. PostgreSQL compares intervals using 30-day months and 24-hour days: an
 `Eq(temporal.Months(1))` predicate also matches stored `30 days`. Interval natural
 keys therefore collide for `1 mon` and `30 days`; hydration preserves their distinct
-calendar and elapsed components. Interval `Sum`/`Avg` capabilities remain Stage 6a.
+calendar and elapsed components. Use `expr.SumInterval` and `expr.AvgInterval` for interval aggregates.
 `BytesOf`/`NullableBytesOf` retain buffer ownership and distinguish empty bytes
 from NULL. `Text.IContains` and `NullableText.IContains` treat `%`, `_` and `\`
 as literal substring characters and match case-insensitively. For example,
@@ -215,7 +215,7 @@ projections reject encrypted values because they cannot open them yet.
 
 Hydration publishes only complete, successfully opened models. Buffered reads,
 page reads, eager loads, and each chunk discard the failing batch. Streaming
-`Each` retains rows already delivered before an error; it never delivers the
+`Query.Each` retains rows already delivered before an error; it never delivers the
 failing row or any later row. This matches the old API's streaming behavior.
 
 Stage 3.1c adds cursor pagination and primary-key chunking as package functions:
@@ -289,13 +289,13 @@ missing, err := orm.LoadMissingFrom(ctx, db, q.With(UserRelations.Orders), users
 
 Each query load executes one parent statement plus, for each tree branch,
 `ceil(distinct eligible non-null keys / batch size)` statements. Nested branches
-batch the complete fetched target collection. `Load` and `LoadMissing` issue no
+batch the complete fetched target collection. `orm.LoadFrom` and `orm.LoadMissingFrom` issue no
 parent statement; the latter preserves already-loaded slots, including empty
 ones. `LoadFrom` and `LoadMissingFrom` accept a query with `With` relations and
 `WithRelationLimits` overrides. They validate that query without fetching or
 filtering the supplied parents; parent predicates, order and window do not change
-the input collection. All four functions share the same copy-and-load engine. Supplied parent provenance/authorization belongs to the caller. Related
-soft-delete and declared scopes still apply. `Has`/`DoesntHave` are correlated
+the input collection. Both functions share the same copy-and-load engine. Supplied parent provenance/authorization belongs to the caller. Related
+soft-delete and declared scopes still apply. `orm.Has`/`orm.Not(orm.Has(...))` are correlated
 EXISTS predicates, compose recursively, and add zero statements or eager loads.
 
 Defaults come from the shared relation-limits owner: batches of 500, depth 8,
@@ -359,7 +359,7 @@ their scopes. A singular descriptor's `OfMany(orders...)`, `LatestOfMany()` and
 `OldestOfMany()` select one target per parent through `DISTINCT ON`, with a primary
 key tie-breaker. `OfMany` requires an order; latest and oldest use the primary key.
 
-`MorphName` and `Morphable` reuse the old API's persisted discriminator contract.
+`model.MorphName` and `model.Morphable` reuse the old API's persisted discriminator contract.
 `MorphOneOf` and `MorphManyOf` filter targets by the source's declared name.
 `MorphToOf` declares one concrete slot per possible target and loads only matching
 source rows. `MorphToManyOf` and `MorphedByManyOf` constrain the pivot discriminator.
@@ -369,8 +369,9 @@ Each joined family uses one SELECT per key batch. Nested target and pivot branch
 batch their complete collections under the same depth and fetched/attached-value
 budgets. Each attached link consumes two values. Polymorphic inverses batch each
 concrete discriminator group; an empty eligible key set sends no statement.
-`Has` and `DoesntHave` also accept these descriptors without extra round trips.
-Relation writes and pivot lifecycle remain Stage 5b.
+`orm.Has` and `orm.Not(orm.Has(...))` also accept these descriptors without extra round trips.
+Relation writes use `orm.Attach`, `orm.Detach`, `orm.Sync` and their batch variants;
+pivot lifecycle callbacks retain the declared model ownership.
 ## Field mutators and explicit accessors
 
 `orm.Check` reports invalid declarations before application resources start.
@@ -566,7 +567,7 @@ Aggregate sources must be framework descriptors: zero, nil and application wrapp
 One-of-many and MorphTo inputs are rejected at plan validation. Inputs requesting
 eager target or pivot children are also rejected; load those as separate branches.
 
-Loading uses existing `With`, `Load` and `LoadMissing`, including nested target and
+Loading uses existing `With`, `orm.LoadFrom` and `orm.LoadMissingFrom`, including nested target and
 pivot branches, transactions, locked reads and chunk windows. Each selected slot
 executes one grouped statement per batch of distinct eligible non-null source keys.
 Slots are not fused. A query adds its parent statement; explicit loads add none.
@@ -576,7 +577,7 @@ and each computed parent slot consumes one attachment, including empty results.
 These limits bound returned data, not the rows examined by the database.
 
 `Get()` returns the typed value and a loaded flag. A loaded zero/false/SQL NULL is
-preserved by `LoadMissing`; `Load` refreshes it. No related models are hydrated to
+preserved by `orm.LoadMissingFrom`; `orm.LoadFrom` refreshes it. No related models are hydrated to
 compute a summary. Errors or cancellation discard the collected result and leave
 caller-owned parents untouched. All statements use the supplied executor; choose
 transaction isolation when separate slots require one consistent snapshot.
@@ -593,7 +594,7 @@ read observers with `NewRetrievalObserver[Order]("orders.read")` and
 `application.New`. Write and retrieval observer kinds remain distinct.
 
 Reads use the actual rows' frozen observer owner. Unknown executor wrappers
-cannot prove absence and receive no internal capability. `Each` keeps streaming
+cannot prove absence and receive no internal capability. `Query.Each` keeps streaming
 when callbacks cannot run; otherwise it reads bounded, stable, closed batches
 before callbacks and delivery. `All`, pagination, chunks and loaded relation
 roles dispatch retrieval. A failed batch publishes no pending models. Earlier
@@ -982,8 +983,8 @@ Articles.Key()), extensions.OwnerOptions{StorageModel: "articles"})`. Keep that
 storage identity pinned across table renames.
 
 Bind each descriptor to its concrete manager once, then pass
-`bound.Title.Relation(Articles.Title)` to `With`, `Load` or
-`LoadMissing`. This uses the existing extension fetcher and shared relation row
+`bound.Title.Relation(Articles.Title)` to a query with `With`, then use `orm.LoadFrom` or
+`orm.LoadMissingFrom`. This uses the existing extension fetcher and shared relation row
 budgets, including loaded-empty values and batch splitting. Register
 `slots.DeclareORM(owner, parts)` through the existing model-extension
 assembly to retain deletion cleanup. Runtime managers never live in the table.
@@ -1064,8 +1065,8 @@ The registry uses `orm.MaxPerModelWriteRows`.
 
 `Explain` returns a bounded typed PostgreSQL `Plan` without running the SELECT;
 `ExplainAnalyze` explicitly executes it. Neither hydrates models, dispatches
-retrieval callbacks nor runs eager loads. Locked models use `ExplainLocked` or
-`ExplainAnalyzeLocked`, requiring `*database.Tx`. The corresponding `rows`
+retrieval callbacks nor runs eager loads. Locked models use `orm.ExplainLocked` or
+`orm.ExplainAnalyzeLocked`, requiring `*database.Tx`. The corresponding `rows`
 functions accept ordinary `Result`, locked results or transaction-owned records
 and scalars. Adapt projections, scalars and sets through the existing `rows.Read*`
 functions. `rows.ExplainCursor`/`ExplainValueCursor` and their Analyze variants

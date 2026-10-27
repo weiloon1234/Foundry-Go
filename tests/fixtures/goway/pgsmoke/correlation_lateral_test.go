@@ -33,8 +33,8 @@ func TestStage6b3CorrelationAndLateral(t *testing.T) {
 	latest := rows.AsLateral[joinThird](record, "latest")
 	joined := rows.LeftJoinLateral(parent, latest)
 	ls, rs := rows.LeftScope(joined, rows.Scope(parent)), rows.NullableRightScope(joined, rows.LateralScope(latest))
-	q := rows.Select(joined, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(expr.At(ls, table.Key())).Value()), rows.Map(schema.RightID, expr.AtNullable(rs, table.Key())), rows.Map(schema.Note, expr.AtNullableValue(rs, table.Note))).OrderBy(expr.At(ls, table.Key()).Asc())
-	got, err := q.All(ctx, db)
+	q := rows.OrderBy(rows.Select(joined, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(expr.At(ls, table.Key())).Value()), rows.Map(schema.RightID, expr.AtNullable(rs, table.Key())), rows.Map(schema.Note, expr.AtNullableValue(rs, table.Note))), expr.At(ls, table.Key()).Asc())
+	got, err := rows.Read(q).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 || got[0].RightID != value.Of(int64(3)) || !got[1].RightID.IsNull() {
 		t.Fatal(got)
@@ -43,7 +43,7 @@ func TestStage6b3CorrelationAndLateral(t *testing.T) {
 	rejected := rows.LeftJoinLateral(parent, latest, on)
 	ns := rows.NullableRightScope(rejected, rows.LateralScope(latest))
 	ps := rows.LeftScope(rejected, rows.Scope(parent))
-	got, err = rows.Select(rejected, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(expr.At(ps, table.Key())).Value()), rows.Map(schema.RightID, expr.AtNullable(ns, table.Key())), rows.Map(schema.Note, expr.AtNullableValue(ns, table.Note))).All(ctx, db)
+	got, err = rows.Read(rows.Select(rejected, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(expr.At(ps, table.Key())).Value()), rows.Map(schema.RightID, expr.AtNullable(ns, table.Key())), rows.Map(schema.Note, expr.AtNullableValue(ns, table.Note)))).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 || !got[0].RightID.IsNull() || !got[1].RightID.IsNull() {
 		t.Fatal("ON did not preserve parents", got)
@@ -51,19 +51,19 @@ func TestStage6b3CorrelationAndLateral(t *testing.T) {
 	count := rows.SelectCorrelatedScalar(c, expr.Count[rows.Correlation[rows.Alias[joinLeft, joinNode], rows.Alias[joinRight, joinNode]]]().Value())
 	ids := rows.SelectCorrelatedScalar(c, expr.Row(expr.At(inner, table.ParentID)).Value())
 	parentID := expr.At(rows.Scope(parent), table.Key())
-	countQuery := rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(parentID).Value()), rows.MapSelected(schema.RightID, rows.CorrelatedScalarQuery(count)), rows.Map(schema.Note, expr.At(rows.Scope(parent), table.Note))).OrderBy(parentID.Asc())
-	got, err = countQuery.All(ctx, db)
+	countQuery := rows.OrderBy(rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(parentID).Value()), rows.MapSelected(schema.RightID, rows.CorrelatedScalarRowQuery(count).Value()), rows.Map(schema.Note, expr.At(rows.Scope(parent), table.Note))), parentID.Asc())
+	got, err = rows.Read(countQuery).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 || got[0].RightID != value.Of(int64(2)) || got[1].RightID != value.Of(int64(0)) {
 		t.Fatal("correlated aggregate or soft-delete scope", got)
 	}
-	got, err = countQuery.Where(c.Exists(), rows.InNullableCorrelatedQuery(parentID, ids)).All(ctx, db)
+	got, err = rows.Read(countQuery.Where(c.Exists(), rows.InNullableCorrelatedQuery(parentID, ids))).All(ctx, db)
 	must(t, err)
 	if len(got) != 1 || got[0].LeftID != value.Of(int64(1)) {
 		t.Fatal(got)
 	}
 	many := rows.SelectCorrelatedScalar(c, expr.Row(expr.At(inner, table.Key())).Value())
-	_, err = rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(parentID).Value()), rows.MapSelected(schema.RightID, rows.CorrelatedScalarQuery(many)), rows.Map(schema.Note, expr.At(rows.Scope(parent), table.Note))).All(ctx, db)
+	_, err = rows.Read(rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(parentID).Value()), rows.MapSelected(schema.RightID, rows.CorrelatedScalarRowQuery(many).Value()), rows.Map(schema.Note, expr.At(rows.Scope(parent), table.Note)))).All(ctx, db)
 	var sqlstate interface{ SQLState() string }
 	if !errors.As(err, &sqlstate) || sqlstate.SQLState() != "21000" {
 		t.Fatal("scalar cardinality was hidden", err)

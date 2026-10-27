@@ -25,7 +25,7 @@ func CoalesceValue[S, V any](first Selected[S, value.Nullable[V]], fallback Sele
 }
 
 // CoalesceNullable retains one nullable layer when all inputs may be NULL.
-// Example: expr.CoalesceNullable(expr.Value(Users.Nickname),expr.NullFor(expr.Value(Users.Name))).
+// Example: expr.CoalesceNullable(expr.Value(Users.Nickname),expr.NullableRow(expr.Value(Users.Name)).Param(value.Null[string]())).
 func CoalesceNullable[S, V any](first RowValue[S, value.Nullable[V]], rest ...RowValue[S, value.Nullable[V]]) RowExpression[S, value.Nullable[V]] {
 	initial := rowInput(first).data
 	if len(rest) >= querycore.MaxExpressionNodes {
@@ -69,7 +69,7 @@ func NullIfValue[S, V any](first, second Selected[S, V]) Selected[S, value.Nulla
 }
 
 // NullIfNullable compares nullable row values while retaining one nullable layer.
-// Example: expr.NullIfNullable(expr.Value(Users.Nickname),expr.NullFor(expr.Value(Users.Name))).
+// Example: expr.NullIfNullable(expr.Value(Users.Nickname),expr.NullableRow(expr.Value(Users.Name)).Param(value.Null[string]())).
 func NullIfNullable[S, V any](first, second RowValue[S, value.Nullable[V]]) RowExpression[S, value.Nullable[V]] {
 	return RowExpression[S, value.Nullable[V]]{data: NullIfNullableValue(Row(first).Value(), Row(second).Value()).data}
 }

@@ -35,4 +35,4 @@ var normal = rows.As[a](models.Users.Query(), "ordinary")
 var normalChild = rows.As[b](models.Users.Query(), "ordinary_child")
 var normalJoin = rows.LeftJoin(normal, normalChild, rows.On(expr.At(rows.Scope(normal), models.Users.ID), expr.At(rows.Scope(normalChild), models.Users.ID)))
 
-var invalid = rows.CorrelatedScalarQuery(correlated)
+var invalid = rows.CorrelatedScalarRowQuery(correlated).Value()

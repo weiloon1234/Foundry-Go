@@ -6,6 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -109,7 +110,7 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 		return err
 	}
 	q, f := store.Translations.Query(), store.Translations
-	existing, err := store.TranslationsIndex(q.Where(f.KeyColumn.In(keys...))).All(ctx, tx)
+	existing, err := rows.Read(store.TranslationsIndex(q.Where(f.KeyColumn.In(keys...)))).All(ctx, tx)
 	if err != nil {
 		return err
 	}

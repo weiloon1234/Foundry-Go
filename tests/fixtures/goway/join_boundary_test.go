@@ -49,7 +49,7 @@ func requireRejectedJoin[S any](t *testing.T, source rowset.Source[S]) {
 	db := capture.open(t.Context())
 	defer db.Close(t.Context())
 	q := rowset.Select(source, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.Count[S]().Value()))
-	got, err := q.All(t.Context(), db)
+	got, err := rowset.Read(q).All(t.Context(), db)
 	if !errors.Is(err, fault.Invalid) || got != nil || capture.statements != 0 {
 		t.Fatalf("unwrapped source reached execution: err=%v rows=%v statements=%d", err, got, capture.statements)
 	}
@@ -110,7 +110,7 @@ func TestJoinAllowsPromotedAliasBoundary(t *testing.T) {
 	capture := &goldenCapture{scriptedColumns: []string{"count"}, scriptedBatches: [][][]driver.Value{{{int64(2)}}}}
 	db := capture.open(t.Context())
 	defer db.Close(t.Context())
-	got, err := rowset.Select(joined, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.Count[joinedScope]().Value())).All(t.Context(), db)
+	got, err := rowset.Read(rowset.Select(joined, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.Count[joinedScope]().Value()))).All(t.Context(), db)
 	if err != nil || len(got) != 1 || got[0].Count != 2 || capture.statements != 1 {
 		t.Fatalf("valid promoted alias rejected: err=%v rows=%v statements=%d", err, got, capture.statements)
 	}

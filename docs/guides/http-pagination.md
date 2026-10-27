@@ -117,7 +117,7 @@ count and a bounded number of items. Invalid service results fail before success
 bytes are sent. Counts and rows can observe different database states; use the
 ORM's documented transaction isolation when a consistent snapshot is required.
 
-`DefineSimple` expects `orm.SimplePage[DTO]`. Use `SimplePaginate` in the service
+`DefineSimple` expects `orm.SimplePage[DTO]`. Use `rows.Read(query).SimplePaginate` in the service
 and `MapSimplePage` to choose DTO values. Its metadata contains `current_page`,
 `per_page` and `has_more`; it does not claim totals. `HasMore` requires a full page,
 as defined by the ORM's lookahead read.

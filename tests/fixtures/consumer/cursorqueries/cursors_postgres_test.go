@@ -65,7 +65,7 @@ func TestPostgresProjectionCursors(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		cursor := rows.CursorFor(rows.RecordOf(summaries()))
 		ordered := cursor.OrderBy(rows.At(cursor.Scope(), reports.UserSummaries.Nickname).Asc(), rows.At(cursor.Scope(), reports.UserSummaries.Email).Desc()).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID)))
-		want, err := rows.Read(summaries().OrderBy(expr.Value(models.Users.Nickname).Asc(), expr.Value(models.Users.Email).Desc())).All(t.Context(), tx)
+		want, err := rows.Read(rows.OrderBy(summaries(), expr.Value(models.Users.Nickname).Asc(), expr.Value(models.Users.Email).Desc())).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -86,7 +86,7 @@ func TestPostgresProjectionCursors(t *testing.T) {
 		}
 		// Input ordering/windows identify a bounded dataset independently of
 		// the order used to traverse it. No inner limit/offset is discarded.
-		input := rows.Offset(rows.Limit(summaries().OrderBy(expr.Value(models.Users.Email).Asc()), 2), 1)
+		input := rows.Offset(rows.Limit(rows.OrderBy(summaries(), expr.Value(models.Users.Email).Asc()), 2), 1)
 		bounded := rows.CursorFor(rows.RecordOf(input))
 		boundedWant, err := rows.Read(input).All(t.Context(), tx)
 		if err != nil {
@@ -107,7 +107,7 @@ func TestPostgresRecordCursorMetadataSurvivesComposition(t *testing.T) {
 		cte := rows.CTE("foundry_cursor", rows.RecordOf(input))
 		a := rows.AsRecord[reportAlias](cte, "summary")
 		combined := rows.Union(rows.RecordOf(input), rows.RecordOf(input))
-		want, err := rows.Read(input.OrderBy(expr.Value(models.Users.Email).Asc())).All(t.Context(), tx)
+		want, err := rows.Read(rows.OrderBy(input, expr.Value(models.Users.Email).Asc())).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}

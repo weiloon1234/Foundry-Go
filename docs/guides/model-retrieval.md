@@ -37,7 +37,7 @@ A pool read has no implicit write transaction, so earlier callback side effects 
 
 ## Complete models and streaming
 
-Model reads, complete-record selections, pages and relation loads carry retrieval metadata. Set results use the first input's decoder and lifecycle declaration; SQL inputs do not dispatch independently. Through relations dispatch target and pivot roles. `Load` and `LoadMissing` do not redispatch retrieval for supplied parent models.
+Model reads, complete-record selections, pages and relation loads carry retrieval metadata. Set results use the first input's decoder and lifecycle declaration; SQL inputs do not dispatch independently. Through relations dispatch target and pivot roles. `orm.LoadFrom` and `orm.LoadMissingFrom` do not redispatch retrieval for supplied parent models.
 
 `Table.Raw` hydrates complete models and dispatches retrieval, but bypasses all automatic scopes. Callers must supply tenant and visibility predicates themselves. DTO projections, scalars, `rows.Raw`, write candidate hydration and SQL `RETURNING` skip retrieval callbacks.
 

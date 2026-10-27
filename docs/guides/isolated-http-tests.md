@@ -2,7 +2,7 @@
 
 T05 native verification passed. The [master](../../blueprint/00-master-architecture-and-parity.md#typed-api-delivery)
 owns acceptance status. The [independent consumer](../../tests/fixtures/consumer/isolatedhttp/application.go)
-uses ordinary application assembly, generated models, typed HTTP DTOs and a real
+uses ordinary application assembly, handwritten ORM declarations, typed HTTP DTOs and a real
 PostgreSQL transaction per write. Handlers contain no test schema argument.
 
 The low-level alias `pgtest` imports `testkit/postgres`; `pgapp` imports

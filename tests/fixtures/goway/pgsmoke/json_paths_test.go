@@ -18,7 +18,7 @@ func readJSON[V any](t *testing.T, ex database.Executor, v expr.Selected[jsonpat
 	s := rows.Define(func(b rows.Builder[windowResult[V]], r *windowResult[V]) windowFields[V] {
 		return windowFields[V]{b.Row(), rows.FieldOf(b, &r.Value, orm.Codec(c))}
 	})
-	got, err := rows.Select(rows.FromModel(jsonpaths.Documents.Query()), s, rows.MapSelected(s.Value, v)).All(t.Context(), ex)
+	got, err := rows.Read(rows.Select(rows.FromModel(jsonpaths.Documents.Query()), s, rows.MapSelected(s.Value, v))).All(t.Context(), ex)
 	must(t, err)
 	if len(got) != 1 {
 		t.Fatal(got)
@@ -65,10 +65,10 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	if v := readJSON(t, db, expr.JSONTextScalar(expr.JSONPointer(nick), codec.String[string]()).Value(), codec.Nullable(codec.String[string]())); !v.IsNull() {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, expr.JSONOrderedScalar(age, codec.Signed[int64]()).Value(), codec.Nullable(codec.Signed[int64]())); v != value.Of(int64(42)) {
+	if v := readJSON(t, db, expr.OrderNullableRow(expr.JSONScalar(age, codec.Signed[int64]())).Value(), codec.Nullable(codec.Signed[int64]())); v != value.Of(int64(42)) {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, expr.JSONOrderedScalar(expr.JSONIndex(scores, -1), codec.Signed[int64]()).Value(), codec.Nullable(codec.Signed[int64]())); v != value.Of(int64(3)) {
+	if v := readJSON(t, db, expr.OrderNullableRow(expr.JSONScalar(expr.JSONIndex(scores, -1), codec.Signed[int64]())).Value(), codec.Nullable(codec.Signed[int64]())); v != value.Of(int64(3)) {
 		t.Fatal(v)
 	}
 	if v := readJSON(t, db, expr.JSONTextScalar(expr.JSONMapKey(expr.JSONProperty(profile, jsonpaths.Attributes), 2), codec.String[string]()).Value(), codec.Nullable(codec.String[string]())); v != value.Of("two") {

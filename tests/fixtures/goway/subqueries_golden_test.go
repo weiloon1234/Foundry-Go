@@ -55,6 +55,6 @@ func runSubqueryNew(g *goldenCapture) {
 	countZero := rowset.SelectScalar(rowset.From(o.Query().Limit(0)), expr.Count[models.Order]().Value())
 	exists := rowset.As[joinC](o.Query().Where(o.TotalCents.Gt(3)), "exists_orders")
 	s := subqueryRows
-	q := rowset.Select(outer, s, rowset.MapSelected(s.Amount, rowset.ScalarQuery(outer, amount)), rowset.MapSelected(s.Count, rowset.ScalarQuery(outer, count)), rowset.MapSelected(s.Name, rowset.ScalarNullableQuery(outer, name))).Where(rowset.InQuery(expr.Value(u.ID), ids), expr.Not(rowset.InNullableQuery(expr.Value(u.Email), name)), rowset.ExistsQuery(outer, exists), expr.GreaterNullable(expr.NullableRow(expr.Value(u.Age)), rowset.ScalarRowQuery(outer, age)), expr.Not(rowset.ExistsQuery(outer, countZero))).OrderBy(expr.Value(u.Age).Asc())
-	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
+	q := rowset.OrderBy(rowset.Select(outer, s, rowset.MapSelected(s.Amount, rowset.ScalarRowQuery(outer, amount).Value()), rowset.MapSelected(s.Count, rowset.ScalarRowQuery(outer, count).Value()), rowset.MapSelected(s.Name, rowset.ScalarNullableRowQuery(outer, name).Value())).Where(rowset.InQuery(expr.Value(u.ID), ids), expr.Not(rowset.InNullableQuery(expr.Value(u.Email), name)), rowset.ExistsQuery(outer, exists), expr.GreaterNullable(expr.NullableRow(expr.Value(u.Age)), rowset.ScalarRowQuery(outer, age)), expr.Not(rowset.ExistsQuery(outer, countZero))), expr.Value(u.Age).Asc())
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(q).All(ctx, db))}))
 }

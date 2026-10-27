@@ -63,7 +63,7 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 			}
 			for name, predicate := range map[string]orm.Predicate[j.Target]{
 				"Has":        orm.Has(invalidRelation),
-				"DoesntHave": orm.DoesntHave(invalidRelation),
+				"DoesntHave": orm.Not(orm.Has(invalidRelation)),
 			} {
 				if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query().Where(predicate)))); !errors.Is(err, fault.Invalid) {
 					t.Fatal(name+" lost construction error", err)

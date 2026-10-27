@@ -68,12 +68,12 @@ schema plumbing in a representative full HTTP case. Complete the common gate.
 
 ## Concrete T04 API
 
-`ByField` composes the existing primary-key adapter with `query.Unique`.
-`Through` loads a child using the parent's direct relation and unique stored key.
-`ThroughSelected` adds another level while selecting its concrete parent from
-the earlier `Models[Parent,Child]` bundle. `Then` provides a typed custom-child
-composition boundary. Direct generated BelongsTo/HasOne/HasMany relationships
-share `query.RelatedUnique`; pivot semantics require an explicit custom resolver.
+`ByColumn` binds a unique native stored column. `ThroughRelation` resolves a child
+through the parent's declared relation and stored key. `ThroughSelectedRelation`
+selects a concrete parent from an earlier `Models[Parent,Child]` bundle. `Then`
+provides typed custom composition. Native lookup validation rejects duplicate rows
+and preserves scopes, eager loading and retrieval hooks; pivot resolution remains
+explicit. These are the current replacements for the original T04 adapters.
 
 `WithAuthorization` on bound plain/authenticated endpoints owns the post-binding
 resource policy. Transport request authorization remains the earlier T03 stage.

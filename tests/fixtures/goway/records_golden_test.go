@@ -45,7 +45,7 @@ func runRecordNew(g *goldenCapture, kind string) {
 		q = q.Where(models.Orders.TotalCents.Gt(10)).OrderBy(models.Orders.TotalCents.Desc()).Limit(3).Offset(1)
 	}
 	if kind == "projection" {
-		projected := rowset.Offset(rowset.Limit(rowset.Select(rowset.From(q), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.Value(models.Orders.TotalCents)).Value()))).OrderBy(expr.Value(models.Orders.TotalCents).Desc()), 3), 1)
+		projected := rowset.Offset(rowset.Limit(rowset.OrderBy(rowset.Select(rowset.From(q), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.Value(models.Orders.TotalCents)).Value()))), expr.Value(models.Orders.TotalCents).Desc()), 3), 1)
 		a := rowset.AsRecord[joinA](rowset.RecordOf(projected), "r")
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.ReadRecord(rowset.SelectRecord(a, rowset.Scope(a)).Limit(2)).All(ctx, db))}))
 		return

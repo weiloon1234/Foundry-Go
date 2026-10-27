@@ -71,7 +71,7 @@ inner := rows.SelectScalar(
     rows.From(Orders.Query().OrderBy(Orders.TotalCents.Desc()).Limit(1)),
     expr.Row(expr.Value(Orders.TotalCents)).Value(),
 )
-amount := rows.ScalarQuery(outer, inner)
+amount := rows.ScalarRowQuery(outer, inner).Value()
 // Map amount with rows.MapSelected to a value.Nullable[int64] row field.
 ```
 
@@ -80,12 +80,12 @@ amount := rows.ScalarQuery(outer, inner)
 projected record. `WhereScalar` adds row predicates with the descriptor's source
 scope. Existing `SelectValue` remains unchanged for direct scalar reads.
 
-`ScalarQuery` widens an independent scalar's result to `value.Nullable[V]`.
+`ScalarRowQuery` widens an independent scalar's result to `value.Nullable[V]`.
 No rows becomes SQL NULL; multiple rows produce PostgreSQL cardinality error
-`21000`. The API adds no implicit LIMIT. `ScalarNullableQuery` retains one existing
-nullable layer. Passing already nullable input to `ScalarQuery` fails validation,
-as with `expr.Nullable`. Row counterparts `ScalarRowQuery` and
-`ScalarNullableRowQuery` expose the same result in row comparisons or arithmetic.
+`21000`. The API adds no implicit LIMIT. `ScalarNullableRowQuery` retains one existing
+nullable layer. Passing already nullable input to `ScalarRowQuery` fails validation,
+as with `expr.Nullable`. Both constructors produce row expressions for comparisons
+or arithmetic; call `.Value()` to use the same result in a selected phase.
 An aggregate inside that SELECT stays in the inner phase.
 
 `InQuery(rowValue, scalar)` requires matching exact types, including nullability.
@@ -107,7 +107,7 @@ PostgreSQL FULL JOIN conditions retain its planner restrictions.
 ## Correlation and LATERAL
 
 `Correlate(outer, inner)` binds an inner SELECT to a declared enclosing scope.
-Use `From` for model queries, `ModelScope` for their model fields, or `As`/`Scope`
+Use `From` for model queries, `ModelScope` for their model fields, or `rows.As`/`rows.Scope`
 for aliases. `OuterScope` and `InnerScope` lift fields into
 `Correlation[Outer,Inner]`; the nullable variants retain outer-join nullability.
 A containing `CorrelatedSource` can serve as the outer scope of another
@@ -132,7 +132,7 @@ amount := expr.AtNullable(
 ```
 
 `SelectCorrelatedScalar` accepts a lifted selected expression. Consume it with
-`CorrelatedScalarQuery`, its nullable/row counterparts, `InCorrelatedQuery`,
+`CorrelatedScalarRowQuery`, its nullable counterpart, `InCorrelatedQuery`,
 `InNullableCorrelatedQuery`, or `Exists`. Missing scalar rows become NULL;
 multiple rows remain a database cardinality error. Inner aggregates stay in their
 own SELECT. Correlated descriptors have `Where`, `OrderBy`, `Limit`, `Offset` and
@@ -176,30 +176,32 @@ See [transaction composition](transactions.md) for transaction joins, subqueries
 
 ## Report reads
 
-Use package functions when a report retains a `rows.Query[S, R]`:
+Adapt a `rows.Query[S, R]` with `rows.Read` for collection and pagination:
 
 ```go
 q := rows.ReorderUnwindowed(report, name.Asc(), id.Asc())
 if err := rows.PreflightRead(ctx, rows.Read(q)); err != nil { return err }
 total, err := rows.Read(q).Count(ctx, tx)
-page, err := rows.Paginate(ctx, tx, q, orm.Page(1, 20))
-more, err := rows.SimplePaginate(ctx, tx, q, orm.Page(1, 20))
+page, err := rows.Read(q).Paginate(ctx, tx, orm.Page(1, 20))
+more, err := rows.Read(q).SimplePaginate(ctx, tx, orm.Page(1, 20))
 err = rows.EachRead(ctx, tx, rows.Read(rows.Limit(q, 10001)), writeCSV)
 ```
 
-`Compile(q)` returns an immutable `orm.Statement` for inspection. `Preflight`
+`rows.CompileRead(rows.Read(q))` returns an immutable `orm.Statement` for inspection. `rows.PreflightRead`
 uses the executing request context, resolving context scopes without opening a
 connection. Execution uses its own current context and the supplied executor.
-`Count` wraps the complete selection, preserving grouping, HAVING, DISTINCT and
+`Result.Count` wraps the complete selection, preserving grouping, HAVING, DISTINCT and
 existing result windows. Pagination requires explicit ordering and no outer
 limit/offset. Supply a unique final tie-breaker. Use a repeatable-read transaction
 when the count and page must share one snapshot.
 
 `ReorderUnwindowed` replaces only outer ordering. It rejects outer LIMIT/OFFSET,
 DISTINCT ON and an empty order list; nested windows and scopes survive.
-`Each` retains one decoded result at a time. A callback error, panic, Goexit,
-decoding failure or cancellation closes the rows; completed callbacks cannot be
-undone. It does not run complete-model retrieval hooks, matching projection reads.
+`rows.EachRead` streams scalar/DTO results one row at a time. Complete-model
+reads with possible retrieval callbacks use bounded batches, closing rows before
+model retrieval dispatch and delivery; other complete-model reads stream. Callback errors preserve identity and stop traversal;
+panic, Goexit, decoding failure and cancellation close the rows. Completed batches
+remain delivered. See [read terminals](results.md) for batch and factory ownership.
 Exports should set their own row limit and stop on the first excess row.
 
 Scalar SELECTs keep their subquery boundary when composed with `OrderScalar`,

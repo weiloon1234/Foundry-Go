@@ -20,18 +20,6 @@ func ExplainAnalyze[S, R any](ctx context.Context, ex database.Executor, q Resul
 	return explainRecord(ctx, ex, q.core, true, false)
 }
 
-// ExplainLocked retains transaction ownership for a locked result.
-// Example: rows.ExplainLocked(ctx, tx, rows.ForUpdate(rows.Read(report))).
-func ExplainLocked[S, R any](ctx context.Context, tx *database.Tx, q LockedResult[S, R]) (orm.Plan, error) {
-	return explainRecord(ctx, tx, q.core, false, true)
-}
-
-// ExplainAnalyzeLocked takes result locks in the caller's transaction.
-// Example: rows.ExplainAnalyzeLocked(ctx, tx, rows.ForUpdate(rows.Read(report))).
-func ExplainAnalyzeLocked[S, R any](ctx context.Context, tx *database.Tx, q LockedResult[S, R]) (orm.Plan, error) {
-	return explainRecord(ctx, tx, q.core, true, true)
-}
-
 // ExplainTransaction plans records retaining nested transaction requirements.
 // Example: rows.ExplainTransaction(ctx, tx, rows.LockedRecord(Users.Query().ForUpdate())).
 func ExplainTransaction[R any](ctx context.Context, tx *database.Tx, q TransactionRecordSource[R]) (orm.Plan, error) {

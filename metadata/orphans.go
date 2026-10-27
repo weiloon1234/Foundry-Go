@@ -70,7 +70,7 @@ func orphanTable() extensionmaintenance.Table[store.MetaIndex] {
 			if after != "" {
 				q = q.Where(f.KeyColumn.Gt(after))
 			}
-			return store.MetadataIndex(q).All(ctx, tx)
+			return rows.Read(store.MetadataIndex(q)).All(ctx, tx)
 		},
 		Lock: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope string, keys []string) ([]store.MetaIndex, error) {
 			f := store.Metadata
@@ -125,7 +125,7 @@ func rescopeTable() extensionmaintenance.RescopeTable[store.MetaIndex] {
 			if lock {
 				return rows.ForUpdate(rows.Read(store.MetadataIndex(q))).All(ctx, tx)
 			}
-			return store.MetadataIndex(q).All(ctx, tx)
+			return rows.Read(store.MetadataIndex(q)).All(ctx, tx)
 		},
 		Row: func(row store.MetaIndex) (extensionrow.Identity, []string) {
 			return extensionrow.Identity{Key: row.Key, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity}, []string{row.Name}
@@ -164,7 +164,7 @@ func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerNa
 	}
 	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
 		f := store.Metadata
-		return rows.Distinct(rows.SelectValue(store.Metadata.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Name.Asc()).Limit(limit), f.Name)).All(ctx, tx)
+		return rows.Read(rows.Distinct(rows.SelectValue(store.Metadata.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Name.Asc()).Limit(limit), f.Name))).All(ctx, tx)
 	}, func(scope, name string) bool {
 		_, declared := m.keys[extensions.Digest(scope, name)]
 		return declared

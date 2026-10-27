@@ -40,7 +40,7 @@ func TestPostgresNaturalKeyJoins(t *testing.T) {
 		nc := rows.LeftScope(natural, rows.Scope(countries))
 		nl := rows.RightScope(natural, rows.Scope(locations))
 		naturalReport := rows.Select(natural, reports.LocationRows, rows.MapSelected(reports.LocationRows.CountryCode, expr.Row(expr.At(nc, models.Countries.Code)).Value()), rows.MapSelected(reports.LocationRows.LocationCode, expr.Row(expr.At(nl, models.Locations.Code)).Value()), rows.MapSelected(reports.LocationRows.CountryName, expr.Row(expr.At(nc, models.Countries.Name)).Value()))
-		naturalRows, err := naturalReport.All(t.Context(), counter)
+		naturalRows, err := rows.Read(naturalReport).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}

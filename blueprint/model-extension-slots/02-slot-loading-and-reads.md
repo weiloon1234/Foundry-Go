@@ -3,68 +3,26 @@
 Prerequisites: E01. Status belongs to the
 [master](../00-master-architecture-and-parity.md#model-extension-slot-delivery).
 
-## Existing behavior and additions
+## Native slot loading
 
-`query.With` accepts `query.Relation[M]`, which is sealed: its methods are
-unexported and its loader receives only a `database.Executor`
-(relation loading (historical path: `../../database/query/relation_loading.go`)). Aggregates already
-use a relation whose fetch function is supplied by a constructor and whose slot
-getter/setter is bound by generated code
-(aggregate relation (historical path: `../../database/query/relation_aggregate.go`)). The extension
-managers already batch-load one declaration for up to 1000 owners inside one
-read snapshot ([translations](../../translations/read.go),
-[attachments](../../attachments/read.go), [metadata](../../metadata/values.go)).
+Declare model slots with `orm.SlotOf`, bind the table key and slot through
+`extensions.BindSlot`, and declare a native translation, attachment or metadata
+handle. `handle.From(manager).Relation(slot)` supplies a typed eager relation to
+`Query.With`. The ORM imports no extension package; its shared loader owns relation
+validation, depth, batching and publication.
 
-E02 connects the two. A bound slot descriptor becomes an ordinary eager-loading
-relation, so extension data loads wherever relations load.
+Fetch returns one loaded value per parent in input order. An unbound handle fails
+before parent SQL. `LoadMissingFrom` skips loaded slots. Fetched values count
+against query-owned relation row/depth budgets; failures publish no partial parents.
+Cancellation, loaded-empty state and duplicate-slot validation remain shared with
+ordinary relations.
 
-## Externally fetched slot relation
-
-Add one exported relation kind to `database/query` with the aggregate shape. The
-extension package supplies its fetch function; generated slot bindings supply the
-slot name, model table, getter and setter:
-
-```go
-type SlotFetch[M, S any] func(ctx context.Context, executor database.Executor, parents []M) ([]S, error)
-
-type ExtensionBinding[M, S any] struct {
-    Name, Table string
-    Get         func(M) S
-    Set         func(M, S) M
-    Loaded      func(S) bool
-    Count       func(S) int
-    Fetch       SlotFetch[M, S] // nil leaves the slot unbound
-    Unbound     error
-}
-
-func NewExtensionSlot[M, S any](binding ExtensionBinding[M, S]) ExtensionSlot[M]
-```
-
-Slot descriptors embed `query.ExtensionSlot[M]`, which implements the sealed
-relation interface, so a bound descriptor passes directly to `With`.
-Fetch returns one loaded slot value per selected parent, index-aligned, as
-aggregate fetches do. `database/query` imports no extension package. The relation:
-
-- validates before parent SQL; an unbound descriptor fails with a fault naming the
-  slot and `<Model>Extensions().From(runtime)`;
-- skips already loaded slots under `LoadMissing` through `IsLoaded`;
-- charges each loaded value (a stored text set, metadata value or file) against
-  the shared `RelationLimits` budget as fetched and attached, per parent batch, so
-  an over-budget read stops early without publishing partial parents;
-- enforces `MaxDepth` like other relations;
-- honors cancellation and discards the complete result on any fetch error.
-
-`TextSlot`, `OneSlot`, `ManySlot` and `ValueSlot` descriptors embed it.
-`(<Model>ExtensionSlots).All()` returns every bound slot for an edit screen.
-
-## Where slots load
-
-Anywhere existing relations load: `All`, `First`, `Find`, `RequireFind`, numbered,
-simple and cursor pagination, `Each`/`Chunk` per batch, explicit `Load` and
-`LoadMissing`, and nested inside relation descriptors
-(`QueryUsers().With(UserRelations().Articles.With(x.Title))`) and pivot models.
-`Count` and `Exists` never load slots. Repeating one slot in a query fails
-validation through the existing duplicate-slot check.
+Complete-model reads, pagination and streaming can load slots. Existing parents
+use `LoadFrom` or `LoadMissingFrom` with an explicitly configured query and no
+parent SELECT. Count and existence terminals never load slots. Nested relation
+queries carry slot relations through the same owner. The
+[articles declaration](../../tests/fixtures/consumer/articles/tables.go) is the
+executable shape; there is no generated extension namespace.
 
 ## Transactions and snapshots
 
@@ -121,10 +79,10 @@ API in this series. A localized slot kind needs its own resolution design.
 ## Acceptance
 
 - PostgreSQL statement counts: 1 and 100 articles with three slots issue the same
-  statements, a forced two-batch read exactly two batches, and `LoadMissing` on
+  statements, a forced two-batch read exactly two batches, and `LoadMissingFrom` on
   loaded slots none; 1000 articles are measured by the E05 benchmark. Nested
   relation plus slot; numbered, simple and cursor pagination; chunked iteration;
-  `Load` and `LoadMissing`.
+  `LoadFrom` and `LoadMissingFrom`.
 - Not loaded, loaded empty and loaded present stay distinct for every slot kind.
 - Soft-deleted owners, removed catalog locales, unready attachments and variants
   behave as their managers already define.

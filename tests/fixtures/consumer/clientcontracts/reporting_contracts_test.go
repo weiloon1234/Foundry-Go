@@ -73,8 +73,8 @@ func reportingContracts(t *testing.T) (*manifest.Manifest, *foundryhttp.Router) 
 	return source, router
 }
 
-// Frozen outputs were rendered from f3cfffd, before the datatable source cutover,
-// using these same fixture registrations. Baselines are never updated by this gate.
+// Current outputs publish the native cursor ID. The migration check retains the
+// immutable pre-cutover cohort and restricts changes to that ID and ownership hashes.
 func TestDatatableContractBytes(t *testing.T) {
 	for _, name := range []string{"client", "reporting"} {
 		t.Run(name, func(t *testing.T) {
@@ -88,7 +88,7 @@ func TestDatatableContractBytes(t *testing.T) {
 			if _, err := typescript.Generate(t.Context(), source, options); err != nil {
 				t.Fatal(err)
 			}
-			expected := filepath.Join("testdata", "datatable-baseline", name)
+			expected := filepath.Join("testdata", "native-cursor-contracts", name)
 			assertContractBytes(t, dir, expected)
 		})
 	}
@@ -136,7 +136,7 @@ func assertContractBytes(t *testing.T, actual, baseline string) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got, want) {
-			t.Errorf("pre-cutover contract bytes changed: %s", name)
+			t.Errorf("published contract bytes changed: %s", name)
 		}
 	}
 }

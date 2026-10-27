@@ -22,7 +22,7 @@ func TestPostgresGroupedAndJoinedCursors(t *testing.T) {
 			rows.Map(totals.BuyerID, expr.Value(o.BuyerID)), rows.MapSelected(totals.Total, expr.Sum(o.TotalCents).Value()), rows.MapSelected(totals.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(totals.Average, expr.Avg(o.TotalCents).Value())), expr.Group(expr.Value(o.BuyerID))), expr.Count[models.Order]().Gt(0))
 		cursor := rows.CursorFor(rows.RecordOf(grouped))
 		total, buyerID := rows.At(cursor.Scope(), totals.Total), rows.At(cursor.Scope(), totals.BuyerID)
-		want, err := rows.OrderBy(grouped, expr.Sum(o.TotalCents).Desc(), expr.Value(o.BuyerID).Asc()).All(t.Context(), tx)
+		want, err := rows.Read(rows.OrderBy(grouped, expr.Sum(o.TotalCents).Desc(), expr.Value(o.BuyerID).Asc())).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -36,13 +36,13 @@ func TestPostgresGroupedAndJoinedCursors(t *testing.T) {
 		pairs := rows.Select(joined, pairRows.Row, rows.Map(pairRows.BuyerID, buyerIDInput), rows.Map(pairRows.OrderID, orderIDInput), rows.Map(pairRows.BuyerEmail, expr.At(left, models.Users.Email)), rows.Map(pairRows.TotalCents, expr.At(right, models.Orders.TotalCents)))
 		pairCursor := rows.CursorFor(rows.RecordOf(pairs))
 		pairBuyer, pairOrder := rows.At(pairCursor.Scope(), pairRows.BuyerID), rows.At(pairCursor.Scope(), pairRows.OrderID)
-		pairWant, err := pairs.OrderBy(buyerIDInput.Asc(), orderIDInput.Asc()).All(t.Context(), tx)
+		pairWant, err := rows.Read(rows.OrderBy(pairs, buyerIDInput.Asc(), orderIDInput.Asc())).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
 		checkTraversal(t, tx, pairCursor.UniqueBy(expr.Group(pairBuyer), expr.Group(pairOrder)), pairWant)
-		winnerPairs := rows.DistinctOn(pairs, expr.Group(buyerIDInput)).OrderBy(buyerIDInput.Asc(), orderIDInput.Desc())
-		pairWinners, err := winnerPairs.All(t.Context(), tx)
+		winnerPairs := rows.OrderBy(rows.DistinctOn(pairs, expr.Group(buyerIDInput)), buyerIDInput.Asc(), orderIDInput.Desc())
+		pairWinners, err := rows.Read(winnerPairs).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -62,7 +62,7 @@ func TestPostgresGroupedAndJoinedCursors(t *testing.T) {
 			t.Fatal("distinct query did not select the last ordered row per buyer")
 		}
 		// Exercise both group orders independently of whichever UUIDs were drawn.
-		reversed, err := rows.DistinctOn(pairs, expr.Group(buyerIDInput)).OrderBy(buyerIDInput.Desc(), orderIDInput.Desc()).All(t.Context(), tx)
+		reversed, err := rows.Read(rows.OrderBy(rows.DistinctOn(pairs, expr.Group(buyerIDInput)), buyerIDInput.Desc(), orderIDInput.Desc())).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}

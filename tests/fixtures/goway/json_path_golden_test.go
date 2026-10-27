@@ -32,7 +32,7 @@ func jsonGolden[N any](t *testing.T, next expr.Selected[jsonpaths.Document, N], 
 	f := rowset.Define(func(b rowset.Builder[windowGoldenRow[N]], r *windowGoldenRow[N]) windowGoldenFields[N] {
 		return windowGoldenFields[N]{b.Row(), rowset.FieldOf(b, &r.Value, orm.Codec(c))}
 	})
-	got := must(rowset.Select(rowset.FromModel(jsonpaths.Documents.Query()), f, rowset.MapSelected(f.Value, next)).Where(np...).All(ctx, ndb))
+	got := must(rowset.Read(rowset.Select(rowset.FromModel(jsonpaths.Documents.Query()), f, rowset.MapSelected(f.Value, next)).Where(np...)).All(ctx, ndb))
 	values := make([]N, len(got))
 	for i, r := range got {
 		values[i] = r.Value
@@ -148,10 +148,10 @@ func TestStage6d3JSONGolden(t *testing.T) {
 	for _, sample := range []driver.Value{nil, "dark"} {
 		jsonGolden(t, expr.JSONTextScalar(ntheme, codec.String[string]()).Value(), codec.Nullable(codec.String[string]()), sample, nil)
 	}
-	jsonGolden(t, expr.JSONOrderedScalar(nage, codec.Signed[int64]()).Value(), codec.Nullable(codec.Signed[int64]()), int64(42), nil)
+	jsonGolden(t, expr.OrderNullableRow(expr.JSONScalar(nage, codec.Signed[int64]())).Value(), codec.Nullable(codec.Signed[int64]()), int64(42), nil)
 	jsonGolden(t, expr.JSONTextScalar(expr.JSONMapKey(nkeys, 2), codec.String[string]()).Value(), codec.Nullable(codec.String[string]()), "two", nil)
 	jsonGolden(t, expr.JSONTextScalar(expr.JSONMapKey(nlabels, "runtime'key"), codec.String[string]()).Value(), codec.Nullable(codec.String[string]()), "label", nil)
-	jsonGolden(t, expr.JSONOrderedScalar(expr.JSONIndex(nscores, -1), codec.Signed[int64]()).Value(), codec.Nullable(codec.Signed[int64]()), int64(3), nil)
+	jsonGolden(t, expr.OrderNullableRow(expr.JSONScalar(expr.JSONIndex(nscores, -1), codec.Signed[int64]())).Value(), codec.Nullable(codec.Signed[int64]()), int64(3), nil)
 	jsonGolden(t, expr.JSONLengthNullable(nscores.JSON()).Value(), codec.Nullable(codec.Signed[int64]()), int64(3), nil)
 
 	npred := []expr.Predicate[jsonpaths.Document]{ntheme.JSON().IsNotNull(), ntheme.JSON().IsNull(), expr.JSONTypeNullable(ntheme.JSON()).Eq(value.Of(database.JSONNull)), expr.JSONContainsNullable(nscores.JSON(), nscores.JSON().Param(value.Of(must(value.NewJSON([]int64{2}))))).Eq(value.Of(true))}
@@ -165,5 +165,5 @@ func TestStage6d3JSONGolden(t *testing.T) {
 	jsonGolden(t, expr.JSONTextScalar(nq, codec.String[string]()).Value(), codec.Nullable(codec.String[string]()), "quoted", nil)
 
 	newFixed := expr.JSONArrayElement(expr.JSONRoot(expr.Value(jsonpaths.Documents.Fixed)), jsonpaths.FixedElements, -2)
-	jsonGolden(t, expr.JSONOrderedScalar(newFixed, codec.Signed[int64]()).Value(), codec.Nullable(codec.Signed[int64]()), int64(2), nil)
+	jsonGolden(t, expr.OrderNullableRow(expr.JSONScalar(newFixed, codec.Signed[int64]())).Value(), codec.Nullable(codec.Signed[int64]()), int64(2), nil)
 }

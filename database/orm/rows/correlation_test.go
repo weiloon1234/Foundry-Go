@@ -35,9 +35,9 @@ func TestCorrelatedScalarMembershipAndExists(t *testing.T) {
 	count := SelectCorrelatedScalar(c, expr.Count[Correlation[member, order]]().Value())
 	ids := SelectCorrelatedScalar(c, expr.Row(child).Value())
 	schema := correlationCountSchema()
-	q := Select(outer, schema, MapSelected(schema.Count, CorrelatedScalarQuery(count))).Where(c.Exists(), count.Exists(), InCorrelatedQuery(expr.Value(m.ID), ids))
+	q := Select(outer, schema, MapSelected(schema.Count, CorrelatedScalarRowQuery(count).Value())).Where(c.Exists(), count.Exists(), InCorrelatedQuery(expr.Value(m.ID), ids))
 	state := &driverState{columns: []string{"count"}, rows: [][]driver.Value{{int64(2)}, {nil}}}
-	got, err := q.All(t.Context(), openTest(t, state))
+	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || got[0].Count != value.Of(int64(2)) || !got[1].Count.IsNull() {
 		t.Fatal(got, err)
 	}
@@ -66,7 +66,7 @@ func TestNestedCorrelationUsesOnlyEnclosingScopes(t *testing.T) {
 	schema := declareRows()
 	q := Select(a, schema, Map(schema.ID, expr.At(Scope(a), m.ID)), Map(schema.Name, expr.At(Scope(a), m.Name))).Where(first.Exists())
 	state := &driverState{columns: []string{"id", "name"}}
-	if _, err := q.All(t.Context(), openTest(t, state)); err != nil {
+	if _, err := Read(q).All(t.Context(), openTest(t, state)); err != nil {
 		t.Fatal(err)
 	}
 	for _, part := range []string{`"d"."id" > "a"."id"`, `"d"."id" < "b"."id"`, `LIMIT $1`} {
@@ -102,11 +102,11 @@ func TestCorrelationRejectsForeignOwnersShadowingAndZeroDescriptors(t *testing.T
 		t.Fatal("shadowing accepted")
 	}
 	for _, q := range []Query[member, correlationCount]{
-		Select(outer, schema, MapSelected(schema.Count, CorrelatedScalarQuery(selected))),
-		Select(outer, schema, MapSelected(schema.Count, CorrelatedScalarQuery(SelectCorrelatedScalar(valid, expr.Count[Correlation[member, order]]().Value())))).Where(other.Exists()),
+		Select(outer, schema, MapSelected(schema.Count, CorrelatedScalarRowQuery(selected).Value())),
+		Select(outer, schema, MapSelected(schema.Count, CorrelatedScalarRowQuery(SelectCorrelatedScalar(valid, expr.Count[Correlation[member, order]]().Value())).Value())).Where(other.Exists()),
 	} {
 		state := &driverState{}
-		if got, err := q.All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
+		if got, err := Read(q).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 			t.Fatal(got, err, state.sql)
 		}
 	}
@@ -138,7 +138,7 @@ func TestCorrelationNullableScopesAndDeferredChecks(t *testing.T) {
 		t.Fatal("eager validation")
 	}
 	state := &driverState{}
-	if _, err := q.All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || checks != 1 || state.sql != "" {
+	if _, err := Read(q).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || checks != 1 || state.sql != "" {
 		t.Fatal(err, checks, state.sql)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"foundry.test/goway/reporting"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/testkit/postgres"
@@ -129,7 +130,7 @@ func TestPersistence(t *testing.T) {
 	must(t, err)
 	ro, err := reporting.Orders.Insert(ctx, db, reporting.Orders.TenantID.Set(7), reporting.Orders.MemberID.Set(m.ID), reporting.Orders.Label.Set("Report"), reporting.Orders.Amount.Set(amount))
 	must(t, err)
-	projected, err := reporting.SelectOrders(7).All(ctx, db)
+	projected, err := rows.Read(reporting.SelectOrders(7)).All(ctx, db)
 	must(t, err)
 	if len(projected) != 1 || projected[0].ID != ro.ID || projected[0].MemberName != "Member" || projected[0].Label != "Report" || projected[0].Amount.Cmp(amount) != 0 {
 		t.Fatal("projection persisted values")

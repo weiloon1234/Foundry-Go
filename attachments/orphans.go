@@ -109,7 +109,7 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 				// exact owner/codec metadata at this explicit range boundary.
 				q = q.Where(orm.UUIDGreater(f.ID, id))
 			}
-			return store.Index(q).All(ctx, tx)
+			return rows.Read(store.Index(q)).All(ctx, tx)
 		},
 		Lock: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope string, keys []string) ([]store.FileIndex, error) {
 			ids := make([]model.ID[store.File], len(keys))
@@ -169,7 +169,7 @@ func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerNa
 	}
 	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
 		f := store.Files
-		return rows.Distinct(rows.SelectValue(store.Files.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Collection.Asc()).Limit(limit), f.Collection)).All(ctx, tx)
+		return rows.Read(rows.Distinct(rows.SelectValue(store.Files.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Collection.Asc()).Limit(limit), f.Collection))).All(ctx, tx)
 	}, func(scope, name string) bool {
 		_, declared := m.collections[extensions.Digest(scope, name)]
 		return declared

@@ -28,7 +28,7 @@ func TestPostgresScalarCTEDiscoveryAndCorrelations(t *testing.T) {
 		child := rowset.InnerScope(link, rowset.Scope(previous))
 		caption := expr.Concat(expr.Lower(expr.At(parent, scalarqueries.Samples.Name)), expr.Lower(expr.At(child, scalarqueries.Samples.Name)))
 		correlated := rowset.SelectCorrelatedScalar(link, caption.Value()).Where(expr.Less(expr.At(child, scalarqueries.Samples.ID), expr.At(parent, scalarqueries.Samples.ID))).OrderBy(expr.At(child, scalarqueries.Samples.ID).Desc()).Limit(1)
-		scalarValues(t, tx, rowset.CorrelatedScalarQuery(correlated), []value.Nullable[string]{value.Null[string](), value.Of("beta élan_20% "), value.Of("beta")})
+		scalarValues(t, tx, rowset.CorrelatedScalarRowQuery(correlated).Value(), []value.Nullable[string]{value.Null[string](), value.Of("beta élan_20% "), value.Of("beta")})
 		return nil
 	})
 }

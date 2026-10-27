@@ -42,10 +42,10 @@ func TestPostgresComputedJoinConditions(t *testing.T) {
 		}
 		leftJoin := rowset.LeftJoin(younger, older, adjacent.WhereRight(expr.At(o, models.Users.Status).Eq(models.StatusActive)))
 		l, r := rowset.LeftScope(leftJoin, rowset.Scope(younger)), rowset.NullableRightScope(leftJoin, rowset.Scope(older))
-		pairs, err := rowset.Select(leftJoin, reports.UserPairs.Row,
+		pairs, err := rowset.Read(rowset.OrderBy(rowset.Select(leftJoin, reports.UserPairs.Row,
 			rowset.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(l, models.Users.ID)).Value())),
 			rowset.Map(reports.UserPairs.RightID, expr.AtNullable(r, models.Users.ID)),
-		).OrderBy(expr.At(l, models.Users.Age).Asc()).All(t.Context(), tx)
+		), expr.At(l, models.Users.Age).Asc())).All(t.Context(), tx)
 		if err != nil || len(pairs) != 4 {
 			t.Fatal(pairs, err)
 		}

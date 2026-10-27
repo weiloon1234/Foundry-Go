@@ -27,8 +27,9 @@ supplies scope; keep outer filters on the executing outer query.
 ## Select a value per outer row
 
 `rows.SelectCorrelatedScalar` returns a value tied to its outer owner. Embed it
-with `CorrelatedScalarQuery`, or `CorrelatedScalarNullableQuery` when the inner
-value is already nullable. A scalar COUNT yields a present zero over empty input,
+with `rows.CorrelatedScalarRowQuery(selected).Value()`, or
+`rows.CorrelatedScalarNullableRowQuery(selected).Value()` when the inner value is
+already nullable. A scalar COUNT yields a present zero over empty input,
 but the general scalar result stays nullable because a SELECT can yield no row.
 Multiple rows cause a database cardinality error; no implicit limit is added.
 

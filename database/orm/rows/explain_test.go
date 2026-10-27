@@ -49,7 +49,7 @@ func TestExplainResultShapesAndCursor(t *testing.T) {
 				plan, err = ExplainAnalyzeValueCursor(ctx, db, c.UniqueBy(expr.Group(c.Value())))
 			case "locked":
 				err = db.Transaction(ctx, func(tx *database.Tx) error {
-					plan, err = ExplainLocked(ctx, tx, ForUpdate(Read(projection)))
+					plan, err = ExplainTransaction(ctx, tx, ForUpdate(Read(projection)))
 					return err
 				})
 			case "transaction":
@@ -74,7 +74,7 @@ func TestExplainResultShapesAndCursor(t *testing.T) {
 	}
 	state := &driverState{}
 	db := openTest(t, state)
-	if _, err := ExplainLocked(context.Background(), nil, ForUpdate(Read(FromModel(m.Query())))); !errors.Is(err, fault.Invalid) {
+	if _, err := ExplainTransaction(context.Background(), nil, ForUpdate(Read(FromModel(m.Query())))); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	c := CursorFor(ModelRecord(m.Query()))

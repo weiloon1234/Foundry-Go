@@ -76,12 +76,12 @@ func TestTransactionCorrelatedSourceValidationAndImmutability(t *testing.T) {
 		t.Fatal("LATERAL escaped transaction", err)
 	}
 	// The same correlated SQL must never escape through ordinary model/read shapes.
-	for _, s := range []querycore.SelectNode{q.Where(locked.Exists()).core.Source.Node, SelectTransactionValue(a, TransactionCorrelatedScalarQuery(locked.Limit(1))).core.Source.Node} {
+	for _, s := range []querycore.SelectNode{q.Where(locked.Exists()).core.Source.Node, SelectTransactionValue(a, TransactionCorrelatedScalarRowQuery(locked.Limit(1)).Value()).core.Source.Node} {
 		if _, e := querycore.CompileRead(s, t.Context(), false, nil, true); !errors.Is(e, fault.Invalid) || !strings.Contains(e.Error(), "transaction-scoped") {
 			t.Fatal("correlated lock escaped", e)
 		}
 	}
-	compileTransaction(t, SelectTransactionValue(a, TransactionCorrelatedScalarQuery(locked.Limit(1))).core.Source)
+	compileTransaction(t, SelectTransactionValue(a, TransactionCorrelatedScalarRowQuery(locked.Limit(1)).Value()).core.Source)
 }
 func TestTransactionComputedMembershipQualificationAndBindings(t *testing.T) {
 	m := declareMembers()
@@ -120,7 +120,7 @@ func TestTransactionComputedMembershipQualificationAndBindings(t *testing.T) {
 	}
 	b := AsTransaction[right](LockedRecord(m.Query().ForUpdate()), "inner_records")
 	locked := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), m.ID)).Value())
-	for _, s := range []querycore.SelectNode{SelectTransactionValue(a, TransactionScalarQuery(a, locked)).core.Source.Node, q.Where(TransactionInQuery(f, locked)).core.Source.Node, q.Where(TransactionExistsQuery(a, locked)).core.Source.Node} {
+	for _, s := range []querycore.SelectNode{SelectTransactionValue(a, TransactionScalarRowQuery(a, locked).Value()).core.Source.Node, q.Where(TransactionInQuery(f, locked)).core.Source.Node, q.Where(TransactionExistsQuery(a, locked)).core.Source.Node} {
 		if _, e := querycore.CompileRead(s, t.Context(), false, nil, true); !errors.Is(e, fault.Invalid) || !strings.Contains(e.Error(), "transaction-scoped") {
 			t.Fatal("ordinary locked value", e)
 		}

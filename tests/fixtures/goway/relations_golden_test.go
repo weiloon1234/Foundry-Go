@@ -48,7 +48,7 @@ func TestDirectRelationSQLMatchesOldAPI(t *testing.T) {
 	if _, err = uf.Query().Where(orm.Has(ur.Orders, nested)).All(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = uf.Query().Where(orm.DoesntHave(ur.Orders, nested)).All(ctx, db); err != nil {
+	if _, err = uf.Query().Where(orm.Not(orm.Has(ur.Orders, nested))).All(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 

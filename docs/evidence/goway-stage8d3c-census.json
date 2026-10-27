@@ -1,0 +1,515 @@
+{
+  "base": "ff2f1c4c",
+  "current_source_hashes": [
+    {
+      "file": "tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go",
+      "before": "48c126710a1edd4a40bdaa9bb7e9ebb00c0cadc121742a40f1a7092ac12d2ccb",
+      "after": "58e9f6cd19e42ac3957e913d926237155ea204376ce3179dd2a8d4e2354d94bd",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/clientcontracts/cursor_publication_test.go",
+      "before": null,
+      "after": "8e9b20c29eb8acc326411eed20ffe1bfbfe5566db5d15597c40311dfb7536278",
+      "review": "Native cursor publication only; historical observations and backend selection unchanged."
+    },
+    {
+      "file": "tests/fixtures/consumer/clientcontracts/reporting_contracts_test.go",
+      "before": "47c0eca4c80d62a8c35921402e31d09707883052c8f2273fed15df7df084a43c",
+      "after": "4a588fed3e13f3f3a240b1cb1c1bef8034edfa52d58361c686f651f0e2bf9b21",
+      "review": "Native cursor publication only; historical observations and backend selection unchanged."
+    },
+    {
+      "file": "tests/fixtures/consumer/comparisonqueries/joins_postgres_test.go",
+      "before": "7ae5be1b06c4a950a14226f4a739be31dc2758510d97911677604d4a6ad09a79",
+      "after": "96807f2b13e06544b57f4e1c9e204055d462bd9cc8c92fe0d606ac1d4c14d435",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/comparisonqueries/predicates_postgres_test.go",
+      "before": "1f07fa48609f07f383bec9820922695c0049b70ccc0645a24f27708185edc92a",
+      "after": "56ebea4cd80920702d83d85cd8d8c8e072bffb1c328b20fe922eb2adefa3b727",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/comparisonqueries/subqueries_postgres_test.go",
+      "before": "51eac9a22a290924c7b763cfeb7d9b460f53c7fb8ca4f9be46135146c42bba05",
+      "after": "3a43d161cbe128dd2fb4f64f3e97eac80b2bba309735fe0ad0c2f936090122cb",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/correlations/correlations_postgres_test.go",
+      "before": "f7bafbfdd7b551a086c09adb2f954461349fd1242f80e93c4831c8d49604545a",
+      "after": "61b58af20e548eb5d64d7da11022a8ae1ff9172c28e0cf93da025ad7a7f9f75b",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/correlations/nullable/nullable_postgres_test.go",
+      "before": "9c09afd9465f31675c72fcaafbbcdb3dcef9c9b119836a2d648094534265ea1f",
+      "after": "35081df92eb499dd5398b3f1a0b588ff466b67b0ab577f3ed026719bd6b70356",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/ctes/ctes_postgres_test.go",
+      "before": "1a707f7994f415003a44360147fc88b7f7d0f23ebd2535a1ddf8a0c93fd9ddfa",
+      "after": "7fd09bcd1ef3857b967acab830a5f344bf56b7963c5c81666810a403dad0164c",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/cursorqueries/clauses_postgres_test.go",
+      "before": "431f2fd9a5b9a21856c0abb2ee5bcceda766f1cfd74dc5c53b9b154271590a8d",
+      "after": "cd3b74d88e8706d0b04165c4cbb53488435b023bc357dfdbbaf5e4424b02c410",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/cursorqueries/cursors_postgres_test.go",
+      "before": "d73795b568d1c0526cfa0ded28fe65cfbbb6774efb91004fdfb0892f704b1401",
+      "after": "e74d409a1072360ecc06d98e40d873f35d00230cf92cc4fa5ec8fae954c21a94",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go",
+      "before": "2b11434a5dca776a8bd976a038ecaecb1e2e63e12e60c791571e41286e6c3609",
+      "after": "09fcf9c372303db4e167d4e2dd9b17e282c5ee602c2c74ea94e6b1b6c31eb437",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/expressionqueries/expressions_postgres_test.go",
+      "before": "a60967bee93fc9b0e02fdbaced64de0bbef7bb29f31aa136db3331dfdc3f1a10",
+      "after": "43a46a3783822ff8f1fe6b96c3e12e52d3c9afca4e25dfa071af53b4862bd12d",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/filterqueries/filters_postgres_test.go",
+      "before": "c73726e574c88129a6af7fa1c111a620f9e41d352e9bd46bfeee0e5833307563",
+      "after": "86269cd6de298e4c8663a74bd80975b128d6a022ec9b4abe21ac050c06a4bbb9",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/framequeries/named_postgres_test.go",
+      "before": "4858cae197965044d7abc9d7eeff99942e9bccb144820d7648eec7c92c98ad87",
+      "after": "59612f7bfa80165f6fd4fc91a07fdde22d156ad2e69794f9673c87063ff36cfb",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/joinqueries/inner/inner_postgres_test.go",
+      "before": "f55045afaf7a53060520e2e5549ef8496848c0431325a00c47d22c76ec010711",
+      "after": "9b48d1f078ca3cb6df4c489dbc9ddacc03862877981c392128a011a6acba19f5",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/joinqueries/joins_postgres_test.go",
+      "before": "6620e1a17983f94e99dd05ce3f13287fe77f2e90adfd0b7f8a2a20ccc425c8d3",
+      "after": "99dca4d3df4276c00baac608146db697650902fa1caef0121ef26f545bba2244",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/joinqueries/natural/natural_postgres_test.go",
+      "before": "01eb3401788ff0c3cf0f810bd3beb10a0fa3367990e19afe95e059f9536d04f1",
+      "after": "d5b7aa24e91123d8b3a08ff61c417b7f3e993093957d35499c785a51b94363cd",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/joinqueries/outer/outer_postgres_test.go",
+      "before": "60373a0e7098da8cfdd58fc73bad0b6e084944befb9afef6659aa95f9a1efc64",
+      "after": "fb90b0ab8262f9578cad744722d946748128e244b40fac7c4b72094c6777b86f",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/jsonqueries/composition_postgres_test.go",
+      "before": "a0dd9a20ed41fd4819891db4d2999dd65260d51ca0e20d2b0fc89d1ea2d12c1c",
+      "after": "e284109cb4915c6b900d02cd2d73dea86239f4987926cd2a6244ef1756da5826",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/jsonqueries/path_postgres_test.go",
+      "before": "5be27e5155d8565392273e71d95c8d135d097fcbda4c1034be1811d6b2d658ae",
+      "after": "9e64d2db85b4e601da43745b304daf4c40681a5e28c24928d6083326e4526d45",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/jsonqueries/path_sql_test.go",
+      "before": "8d4a89764a4f3222284bf60fc08857f0744e65c691fb8c64ef38716ce50545b3",
+      "after": "bd4a61a0b1671a94f5a8bfd92784fbc7d3e7ca00655ce9849e1ddfa30244fbf1",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/jsonqueries/snapshot_postgres_test.go",
+      "before": "49008a7a8284f73ad3222277bcebcb834db5ad437be3f2fceb96e7393b168c58",
+      "after": "8ab93303a588f4a016d6752d773a9c0f78d075fc8f152854f67caa40c32b85c9",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/keyqueries/clause_parity_test.go",
+      "before": "08f7ce4522b7d312c697ba6ab565ff3f7e3f1e04feb4a0068a83342a3317dd35",
+      "after": "61b86e0534b32c3dbaaf9d713cae646320958091973fc8905696a954a0d0d2f5",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/keyqueries/keys_postgres_test.go",
+      "before": "ff3076a8fec83ab0ee44c483d7a660868f8dfdb0e8d260d701eee8d20736cb81",
+      "after": "0cc26a9a6b0159f20f5cd9e8aef3a0a341443925d859cb5deb796a413baa9f2f",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/keyqueries/keys_test.go",
+      "before": "e2f09c14ab034799896122ac74121cac09d1c766896af01efed30768b1664dba",
+      "after": "bf5be31897c20d355e7d2a2cd6903334a5d916e8b3221193b92dd8698d656447",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/lateralqueries/composition_postgres_test.go",
+      "before": "ff58165af7b0ea2b48ec75b259e94716191541bb5aef26852c93fa967884ddbf",
+      "after": "0efaf707e20bd8e112a5b40c0c462f8edeb300697ca47de2f877c3dcc6a8cd11",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/lateralqueries/records_postgres_test.go",
+      "before": "d52f3613e52917c1ce45ac5500c88f0c8780cee8d2eeb4165eb13fafae88e055",
+      "after": "b0c51868b1809fced941704eab2b5bf98e1d8c78abedfd981e0e5d08c38b071f",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/lockqueries/clauses_postgres_test.go",
+      "before": "9a6f93431b293c746f7ba31b28819b0a8f63d7f169d7665d3bd77246d06aaf0d",
+      "after": "a52ae3e26936abf19a145f2117b4b4652d0ecc6dc8a04b2489669b8d1e5f6473",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/pagequeries/clauses_postgres_test.go",
+      "before": "676ecf00443d480dd168a39036ed018c0328b69e1d845f9f7c0d08f906aee941",
+      "after": "b7105d9fa5492b2ff90ee436be3cfa344bbd1d1c7c448adf757d1c398b3f521d",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/pagequeries/pages_postgres_test.go",
+      "before": "9c49fc9c08a363023cb1931616ee0099458c4eedd6264dfd2dd5918d7784ec6f",
+      "after": "7fa19a02803b7ee72569c9c4832c8f5f235cf102cd57407df46d74301b802616",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/projectionqueries/projections_postgres_test.go",
+      "before": "18fb24e6336784e0315150109c6f56ebe467323bffbfc469ac3aa444e5a62878",
+      "after": "bdf5ee5029fd80b29f10ab00a88da4ac344ea61672b244fb4df2994c89d485c0",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/relationshipfilters/filters_postgres_test.go",
+      "before": "bfde9f8e500a1cfb575442df02ecab8167edf98b6a796d2a06b1c4283d5cecbe",
+      "after": "d9569dd0ff20aaeb4973f99eb9fde2975f1081f2dd1196d13285f1715dd01a5c",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/retrievalqueries/composition_postgres_test.go",
+      "before": "1bfb102c930a2359f90bfdfad821320e088bddb581026715cf738a5423267ae8",
+      "after": "3d40b1ee0499d693b46cc57f3c29e66951ca89a71a5e3c493dff80770bd82a72",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/scalarqueries/composition_postgres_test.go",
+      "before": "c7f06d80a53712541943a7f9b931e4a7880904ae9a4ca1da7672e4b0a8af29d2",
+      "after": "2aa772f5c0c741b6f8b13d8b12f662af830eb270f38afbf5212ee65b425e9e52",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/scalarqueries/derived_aggregate_postgres_test.go",
+      "before": "6a59a40ba297725a01ed1759703e632f677ecd578a21a3e2e420f4ea281beea0",
+      "after": "94d027d5d615cf6cf31c0bba6727040a229a50eb77bfa4d3206960d205489c9f",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go",
+      "before": "66b2f7d126a96312a9003eca0d25a708ced8e6d1e48c2a22d7ee11ebc3090dd9",
+      "after": "a350406fc554afc780362382a89f14756df3a3b79c212a003c3799e0d2c3836a",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/setqueries/sets_postgres_test.go",
+      "before": "9635f7c56c0d56d3e0f7eb19fe89aeccccb4f8117e309aa0b76bdea8cf0b6c19",
+      "after": "14e9f655d35e1e555647197e49b8bbf020453dc03ec0008de4df9f76d02ecec1",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/softqueries/visibility_postgres_test.go",
+      "before": "b05e3ccf5b908a477fbc8e435c3ac03089773552c9dc9fa1794d60b241efab36",
+      "after": "c65efe71b9d83a024c691ea3a59fe8d96a0298f04a532467d03e362d17b122be",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/temporalqueries/composition_postgres_test.go",
+      "before": "0469b58b8141d3a9a9b18020abcfdb8ed2e73f1a1790e36929c91c943827d41d",
+      "after": "56ee7e516a09162db65fe58d6599fd5c81e8f481eea77fdd4d8be1c9ffd25763",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/temporalqueries/extract_postgres_test.go",
+      "before": "5ec29e36a9bdc3a11368beb738464b0dc6f7456426df0393636d43bdfa5125ce",
+      "after": "29dd3329219f06fe5f6932be7acca522931122fe88793fc6ef0ea23d84a2deba",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go",
+      "before": "1ec0682248f2846376ed8993788a141121526b21ed2cc3c9af1fb8c82773bbb0",
+      "after": "850b5969390ffdb6a748b029f4d15929facf5c7423a7b3b9ae5e93ed6899e138",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/transactionqueries/subqueries_postgres_test.go",
+      "before": "5089b233f69c79c2bb9af9b66c5b513db67e25fd347b28219ad073e59770b574",
+      "after": "ac6bd190ce3c90a11cd79ed44cf47bef10eb87f59af8a7318b45079c987731fc",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/consumer/windowqueries/windows_postgres_test.go",
+      "before": "912b49fa023920a7c5ceb93698a151e1acd47325a5d6657954d70e87afb0e41e",
+      "after": "213df63994b3d4dcfa38b4d73e4fa675f0c6265a122f79b4aadc9895d8000086",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/aggregate_golden_test.go",
+      "before": "de41ab6e30621d5cc4e1f8f0f2e7813616086cbd0d689bac6935651759e8b2b1",
+      "after": "d13f5d872e5b82fb1cc7eae66095b1db2976f610d19586820a7741bdddabb7fb",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/conditional_golden_test.go",
+      "before": "747703eaed516114bc13e46ad00fc1f9d5e58a884f13bd652b62cc6657abe735",
+      "after": "8ce3f2f7498ba75575f76a77552c6ab3854338c6587bc87eeaecffa483967158",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/correlation_lateral_golden_test.go",
+      "before": "94e6ea2e804f5e0313d0543f5ce18df6175858b969a7925457cfa664d2c78a8f",
+      "after": "c90f546be31d7d5a68942ff82d72ebebe9992d8f4810b2b0366bd23f16e4dcd4",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/expression_golden_test.go",
+      "before": "b6e89d9e2111a4d39e65074b2e8bd7774385541fc402debb4a9971c42e724685",
+      "after": "8c5e106c35c5c294e6cae94e53c0ed771cb3409efd49bd73002fa72cb4833ee7",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/extension_matching_test.go",
+      "before": "ad313df7e6647e4c12c0103aad9e7d663e18d498f47f5b236375edc2171028db",
+      "review": "Reviewed native owner identity composition; original assertions retained.",
+      "after": "12b7f7147f1997d4aece6af8ebb4a1448885963fb1515172f7513eee374e97a1"
+    },
+    {
+      "file": "tests/fixtures/goway/golden_new_loading_test.go",
+      "before": "c09fee60642ac75f8289bb3478eb5e63bf361a8556cbb19bc5c77c0821467080",
+      "after": "9b11dc342536780a01e2b491fc7583ec9dc82a288d1cabd54bba079da2c34d66",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/golden_new_relations_test.go",
+      "before": "a4dce62d0da21ad7125dc37e959d69f157cbd707dafe48f1a676ed55d081a017",
+      "after": "c640a208a098894e5355e29ba18a1261ab43aec87a746b80565da2a65f059232",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/integration_adapters_behavior_test.go",
+      "before": "b5ab67e094818306d4d64b273c3ac7d828cba0aec61aefb5af92f24dfc2564a7",
+      "review": "Reviewed native owner identity composition; original assertions retained.",
+      "after": "9e45eb062814cfbc6d7ac3896e96c1dd2ff7df30b782464c06fb5f8ebab93fbe"
+    },
+    {
+      "file": "tests/fixtures/goway/join_boundary_test.go",
+      "before": "6143a8b30ce5ca2eb20b02b3b567afeb2d36a9f5ae72ec3842abeee7614acd1f",
+      "after": "172c7c5e29a8e21137bf4a9f9395c465e74b470aecd7a03dc11a045ece1cdbd3",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/joins_golden_test.go",
+      "before": "ae2bad519a30a5875ce773092dea4b471f1c7849465fdf89fece584fa09d3783",
+      "after": "0c67cb17d180034009fdce4d74caf2a7249ff17c070d1ac10855eb50abb1a593",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/json_path_golden_test.go",
+      "before": "d8a58c3815bdea9c67d00b1c78a644aea0e3bedfbad70f158d4ef7d9df8aaf43",
+      "after": "7973efe5cd1563404122272d23b885b9b8d7d4eda6c798e0a8fc8584662c861f",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/migration/examples_test.go",
+      "before": "9d269664347ab18ad6893d97b16c9f82417b19503fa38981e285fcc36d029a36",
+      "after": "1cb8dc4c67e8e3855b4ccfe85649df20e2453d499e0cd0752f7ea671ee30e42c",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/migration/sql_test.go",
+      "before": "d418a27916d9eaedb0426cdd471afb259e79763262c01e916bf382585451437b",
+      "after": "7ebdb218695f6600aeb6bc22cdc00b0787e4f5ee68f0970ccc77e4505dfa23e7",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/on_conditions_golden_test.go",
+      "before": "e3a3dde134cabf993b9e9954bb8d327b0b6da51eecd61e32e6febc16601d7ab6",
+      "after": "4db1f8faee4c9391e387da801f775e20dbb6b2c7064e2692ab49ed9d28d318c0",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/aggregates_test.go",
+      "before": "1aa31140123b917431ae4e1145d723d528b95d810e96b0bb3ae05795fe9463cb",
+      "after": "dfe2f1073db4200378d9a9404c4b47fbb97991b65324bc11af276388933fbce9",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/conditionals_test.go",
+      "before": "712040796ec04c75e2edda726947afba5af3a019143541c78f21c7986c17a595",
+      "after": "cee5beee3aafffc29a7c7faab44c705711dc84e7d07fcf8234b5d80b2ccef54f",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/correlation_lateral_test.go",
+      "before": "6a5ec2d013601dc0886f5a55d7da94b6bfcad8d34384be8586ecf7c0ce6d5469",
+      "after": "b7a33665c9f1d4203da1cf64bbeb8b2956077a92df27ef386efb3d9adca8128e",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/expressions_test.go",
+      "before": "a13145f586fe4519b8a46278921f82a5da98ec1e63d4bb5be9cf1793312c3701",
+      "after": "b5fe2c79b9794bb49aa56bc06a687a07508ff9ab69fe1717aac5c74962d672e1",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/joins_test.go",
+      "before": "e2c5b3bc719a26c1a8c9ec0da27a5114efb6382643ba054bd4686d8b0b0b74f9",
+      "after": "13db24337717cba6e0b6c52de10b9dab08d7070169f8ef270037ccaf3ce2a999",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/json_paths_test.go",
+      "before": "f8405ed8003c9d410dc6d38aed8d5ae2420000ef575b314c8556bf302eddb4fe",
+      "after": "c273ac4553fd32cacba51fd572f85f720a142e1fc17492d8a9b40d3510911f78",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/raw_fragments_test.go",
+      "before": "467e6762863ffac907ddc82657f12bb93d3f9554746a297764dec0cc15939163",
+      "after": "3a46421d33e4e33a56c2c96efcc4891affa666a6d8fd19cf6bab7bbf700ba5f0",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/relations_test.go",
+      "before": "3168ee42b8ad458d9d0cb9e38cdb7daf059132ddc65d273afcbdee5b87c58811",
+      "after": "21ebeb6c799e62a1631fd4cff1a0da8b78ce187a4ac2da012c2c2901a1d6bd27",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/report_projection_test.go",
+      "before": "6e477f21530e6be799dcdb1b60ce6f6048c7f3b944080f1a67371bbadea4940b",
+      "after": "7fae69b5d02d252b2b941efea2899aed3ecec4ffc6751a21407f4065d3cb4bff",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/scalars_test.go",
+      "before": "784f6b65b343bf222a232e913d00891d879b21aa82032649c7c623fabd04f4c1",
+      "after": "1aa2d27e0264d5c3e19ae8d36491fb368c32aa43cdee077c6d48a779203bc024",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/smoke_test.go",
+      "before": "ebcdecd23721e930b2288d068fb67f61b071758fadcccd2a2d74515594f50405",
+      "after": "82c119c53c6bf999d94b9e4a515a0af8753d78b1a0215d5e841f4b8fe9fa0d28",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/source_write_test.go",
+      "before": "56f43f0699daf05d19bfd6986303c4aba0dfbc488a845cdd45bd18c83065d771",
+      "after": "a2fea922cadc493e4e65659a46d402fc7bf5debda024de49a505588438c69f36",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/subqueries_test.go",
+      "before": "0c67547c57af640e855dfd99cb50873435c423d42504020323cca1647f2a8469",
+      "after": "bb65a81e09152e3be0cd095f5fa12d2fa560bcad29214bad31dfa471d8e8ebea",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/transaction_composition_test.go",
+      "before": "e5d8e4217d675ede4f0f015e2e5f2716b1cdaad8d6974e5ed1743a0311df85f4",
+      "after": "2d006cfa1a6f4d144e103e99cbe868fb71331901f0b2ebffb22a40e4f471fe14",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/pgsmoke/windows_test.go",
+      "before": "d92c3464ea5266d9224cd162dbde56582f181d262401faa8a9dc29461de295f3",
+      "after": "17fd733000aff9fcbb06c8f8bae6295cd58ad348747ad433db2c70c3eb8d14de",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/raw_fragment_test.go",
+      "before": "dfa502e6021a6808f5f24f6bf0f481b309567934c4decd7a54dfc62e2b78b3c5",
+      "after": "18d05f9b5fb52c75b24325635cd1859f5574b7889defc73fe337aeaf620df5bc",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/records_golden_test.go",
+      "before": "51be6a1dba538388ccbe90ff0029f5d79f018e8448a1c82ac27bd6fa4e1661ca",
+      "after": "8e637b3355be0eed2eb7aaba062e212d87a04c85d253c5dfb65f9f5513f4148e",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/relation_filter_behavior_test.go",
+      "before": "1ff55e9b7275e1dfd75cf74e9fb64eb34107f253ec9f0114bcb2ecafad3577b8",
+      "after": "458d1e3a6559826b06bb92e34b897f85b2abed9192e48176eb4d0a2cdf9a380d",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/relations_golden_test.go",
+      "before": "caf05f6b7562dcf2ebb6568a33b411907cfa9c38d8c33f45f493a64936a4a550",
+      "after": "a50a5ee71d6841b7850573f3d9546e255309d46b2b98e6d01d5baab545023d53",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/relations_joined_golden_test.go",
+      "before": "6df4bc827814e9e2f5c5c0978570470c1a04c9da5c9362e44b32590425898e3f",
+      "after": "41224a14607d2d15a9f97911b9337297f40b8660e7735047d147c414140471a8",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/report_projection_golden_test.go",
+      "before": "0137e4a82680834262c0bc78a4f7c05f2adfd15830922387e0b6e0d7882aef8a",
+      "after": "de0fb6b570f37dc00b5104b1c5b800d4a3a36f7df306e0e1385e4858d98a4f10",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/report_text_capability_test.go",
+      "before": "d623400b3a451bf1f816cc0f5d17c651915acc9b7a43046d373f0cb9720433a8",
+      "after": "a889d4fc8607ba621c360a8bdaa38a4fab89eef89b90d449d8ee0979d121e582",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/retrieval_scope_behavior_test.go",
+      "before": "7b0fe48436152cb503d9bdf8e1f5fd4e8a9cd609caad1ee5dbc47106b9b41165",
+      "after": "82abadbf7521a770a9b71b784a304b366e454543de62b5eee4544dfec99b6988",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/scalar_golden_test.go",
+      "before": "6be5a3cd9f0848042fbedc0e0d7156c5104dab9efec50b50abe709294588ab9a",
+      "after": "2b0667602c58296a61a9273d27592a050fceab024ce13a9407bc9cb2bfdccaf9",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/subqueries_golden_test.go",
+      "before": "897e3c9634342aec8e06bb5969b6f87c0c10dbd87713b029c58db3c19ddbec89",
+      "after": "ff81754859b3b5f44de624d227d390967d13fbcfdb60d9b64d957b688886dcde",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/transaction_composition_golden_test.go",
+      "before": "66a1f44665bd127b70093f34b1af6c41b532f63d53c2d05ef3cefccfbe482734",
+      "after": "b1aecd66dc69985b87533cfea8464ffaa19804438858d2e361a26be0ed7593bf",
+      "review": "Reviewed selected scalar shortcuts \u2192 retained row constructors plus Value(); existing SQL, codec, nullability, transaction/correlation and hydration assertions retained."
+    },
+    {
+      "file": "tests/fixtures/goway/window_golden_test.go",
+      "before": "c0f44003ab990a16847ec5dd053547f8353b3a5fd189a1959eb0717357da494f",
+      "after": "077469f3471cf4e7fb27db4fe756ce548eac347f2aa96858ba93bc71682379e9",
+      "review": "Reviewed native read/order/pagination, predicate and expression composition migration; SQL, binding, hydration, ownership and error assertions retained."
+    }
+  ]
+}

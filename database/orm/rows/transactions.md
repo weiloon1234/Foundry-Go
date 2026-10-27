@@ -36,8 +36,7 @@ Correlated sources, scalar results and records have no independent execution or
 ordinary-source conversion. Nested correlations explicitly lift enclosing scopes.
 Use `ProjectTransactionCorrelated` for a complete declared projection.
 
-`TransactionScalarQuery`, `TransactionScalarNullableQuery`, their row-expression
-counterparts, `TransactionInQuery`, `TransactionInNullableQuery` and
+`TransactionScalarRowQuery`, `TransactionScalarNullableRowQuery`, `TransactionInQuery`, `TransactionInNullableQuery` and
 `TransactionExistsQuery` reuse the shared subquery compiler. For example,
 `rows.TransactionScalarOf(selected).ForShare().NoWait()` adds a lock while
 retaining a scalar's codec. `Of` and `LockRows` accept preserved targets in that
@@ -46,8 +45,9 @@ for EXISTS composition. `TransactionValueOf(rows.Values(selected))` lifts an
 ordinary scalar, retaining its codec and clauses. Missing scalar rows become NULL; no implicit LIMIT is
 added, and multiple rows retain PostgreSQL's cardinality error.
 
-The `TransactionCorrelatedScalarQuery` family and `TransactionInCorrelatedQuery`
-retain the required enclosing scope. Correlated selections support inner ordering,
+The `TransactionCorrelatedScalarRowQuery` family and `TransactionInCorrelatedQuery`
+retain the required enclosing scope. Call `.Value()` on a scalar row expression
+to use its selected result. Correlated selections support inner ordering,
 grouping, HAVING and locks. Correlated records also support DISTINCT variants.
 Lock policy changes without an existing lock fail validation. Results execute
 through the caller's `*database.Tx`; no pool or session adapter is introduced.
@@ -58,11 +58,11 @@ execution before issuing SQL; embedding a transaction scope marker in an ordinar
 model does not grant transaction execution.
 
 Transaction and locked query phases also have distinct private layouts, so an
-explicit Go conversion cannot turn them into ordinary query wrappers. Legacy
-`query.TransactionOf` marks its stored source at construction, before composition.
+explicit Go conversion cannot turn them into ordinary query wrappers. Transaction
+requirements are stamped at construction, before composition.
 
 The persistent conversion guard enumerates exported types in `orm`, `orm/expr`,
-`orm/rows` and legacy `query`, including pairs across packages. Private zero-size
+`orm/rows`, including pairs across packages. Private zero-size
 fields separate execution, row/selected expression, relation cardinality,
 nullability and write-plan phases. Intentional same-phase conversions are listed
 individually with reasons; a new mutually convertible pair requires review.

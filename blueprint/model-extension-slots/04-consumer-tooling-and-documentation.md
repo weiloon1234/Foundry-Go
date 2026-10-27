@@ -5,25 +5,24 @@ Prerequisites: E01–E03. Status belongs to the
 
 ## Independent consumer
 
-Add an `articles` scenario to the [independent consumer](../../tests/fixtures/consumer/README.md).
+The `articles` scenario is delivered to the [independent consumer](../../tests/fixtures/consumer/README.md).
 It is a framework acceptance example, not a starter product, and uses only public
 imports. It declares an `Article` with two translated fields, a single logo, a
 gallery with a thumbnail variant, a typed metadata value and an ordinary author
-relation. It assembles through `application.New` with
-`Models(models.FoundryExtensions()...)` and exercises list, show, create, update and
+relation. It assembles through `application.New` with native slot declarations and exercises list, show, create, update and
 delete over real HTTP, PostgreSQL and a local disk:
 
 - a public list with request-locale titles and logo and gallery file details from
   loaded slots (the local disk has no public URLs; link derivation parity is
   covered by E02);
-- an edit screen loading every slot through `All()`;
+- an edit screen loading explicitly declared slot relations;
 - JSON and multipart create/update with slot-derived validation, `SyncIn`,
-  metadata `SaveIn` and post-commit `ReplaceFile`/`AddFiles`;
+  metadata `SaveIn` and post-commit `ReplaceFile`/`AddFilesTo`;
 - hard delete removing extension rows and files, and soft delete preserving them.
 
 The existing [profiles consumer](../../tests/fixtures/consumer/profiles/profile.go)
-stays unchanged as the explicit-declaration example. The guide shows how to move
-such a model to generated declarations using E01's scope-equality guarantee.
+uses the same native declaration owners. The guide preserves owner/storage
+identity when migrating existing data to handwritten tables and handles.
 
 ## Tooling
 
@@ -34,16 +33,13 @@ such a model to generated declarations using E01's scope-equality guarantee.
 - **Undeclared stored names.** A read-only command in the existing
   `translations`/`metadata`/`attachments` command families lists stored field,
   key and collection names that no current slot declares, for example after a Go
-  field rename without `foundry:"name=..."`. It prints opaque keys and names only
+  field rename that accidentally changes an explicit stored name. It prints opaque keys and names only
   and has no delete flag, like the orphan commands.
-- **Scaffolds.** `foundry make model` slot flags were not delivered in this
-  series. Scaffolds keep their check-first publication; declaring slot fields
-  and `define<Model>Extensions` by hand stays short, and an attachment policy always
-  needs an explicit disk, which a scaffold could not choose. Follow-up delivered
-  on 2026-09-30: `--translated`, `--attachment`, `--attachments`, `--metadata`
-  and a required `--disk` for attachments. The model is checked together with
-  the declarations generation creates for it, then generated; its attachment
-  policies accept nothing until the application lists media types.
+- **Scaffolds.** `foundry make model` writes handwritten ORM declarations and
+  explicit native handles for `--translated`, `--attachment`, `--attachments` and
+  `--metadata`. Attachment flags require `--disk` and policies accept no media
+  until configured. Check-first publication and retained DTO generation stay in
+  their existing owners; model policies are not generated.
 
 ## Documentation
 
@@ -54,12 +50,12 @@ such a model to generated declarations using E01's scope-equality guarantee.
   [attachments](../../docs/guides/attachments.md),
   [relations](../../docs/guides/model-relations.md) and
   [localization](../../docs/guides/localization.md) guides.
-- [Model generation](../../docs/guides/model-generation.md) documents slot fields
-  among supported field kinds.
+- [Model declarations](../../docs/guides/model-generation.md) explain handwritten
+  fields and the retained DTO/transport generation boundary.
 - The [agent language tooling](../../docs/guides/agent-language-tooling.md)
   scenarios gain slot completion and hover probes.
 - The changelog records delivered behavior. The compatibility policy records the
-  generated owner identity and stored-name rules.
+  explicit owner identity and stored-name rules.
 
 ## Acceptance
 

@@ -1,6 +1,8 @@
 package transactionqueries
 
 import (
+	"github.com/weiloon1234/Foundry-Go/value"
+
 	"errors"
 	"testing"
 
@@ -61,10 +63,10 @@ func TestPostgresTransactionScalarCardinalityAndNulls(t *testing.T) {
 				predicate = expr.OrderRow(fields.ID).Gt(1)
 			}
 			values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Row(fields.ID).Value()).Where(predicate)).ForUpdate()
-			scalar := rows.TransactionScalarQuery(outer, values)
+			scalar := rows.TransactionScalarRowQuery(outer, values).Value()
 			if mode == "nullable" {
-				nullable := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.NullFor(fields.ID).Value()).Where(predicate)).ForUpdate()
-				scalar = rows.TransactionScalarNullableQuery(outer, nullable)
+				nullable := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.NullableRow(fields.ID).Param(value.Null[int64]()).Value()).Where(predicate)).ForUpdate()
+				scalar = rows.TransactionScalarNullableRowQuery(outer, nullable).Value()
 			}
 			err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 				items, err := rows.SelectTransactionValue(outer, scalar).All(ctx, tx)
@@ -106,7 +108,7 @@ func TestPostgresTransactionNullableMembershipAndScalarRow(t *testing.T) {
 	outer := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "outer_records")
 	inner := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "inner_records")
 	a, b := recordAt(rows.TransactionScope(outer)), recordAt(rows.TransactionScope(inner))
-	nullable := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.NullFor(b.ID).Value()).Where(b.ID.Eq(2))).ForShare()
+	nullable := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.NullableRow(b.ID).Param(value.Null[int64]()).Value()).Where(b.ID.Eq(2))).ForShare()
 	predicate := rows.TransactionInNullableQuery(a.ID, nullable)
 	for _, p := range []expr.Predicate[rows.TransactionAlias[claimedAlias, Record]]{predicate, expr.Not(predicate)} {
 		if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {

@@ -42,7 +42,7 @@ func readWindow[V any](t *testing.T, ex database.Executor, d windowTable, e expr
 	s := rows.Define(func(b rows.Builder[windowResult[V]], r *windowResult[V]) windowFields[V] {
 		return windowFields[V]{b.Row(), rows.FieldOf(b, &r.Value, orm.Codec(c))}
 	})
-	out, err := rows.Select(rows.FromModel(d.Query()), s, rows.MapSelected(s.Value, e)).OrderBy(expr.Value(d.ID).Asc()).All(t.Context(), ex)
+	out, err := rows.Read(rows.OrderBy(rows.Select(rows.FromModel(d.Query()), s, rows.MapSelected(s.Value, e)), expr.Value(d.ID).Asc())).All(t.Context(), ex)
 	must(t, err)
 	values := make([]V, len(out))
 	for i, r := range out {

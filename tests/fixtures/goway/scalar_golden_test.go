@@ -30,7 +30,7 @@ func scalarGolden[V any](t *testing.T, nv expr.Selected[scalars.Record, V], c co
 	f := rowset.Define(func(b rowset.Builder[windowGoldenRow[V]], r *windowGoldenRow[V]) windowGoldenFields[V] {
 		return windowGoldenFields[V]{b.Row(), rowset.FieldOf(b, &r.Value, orm.Codec(c))}
 	})
-	got := must(rowset.Select(rowset.FromModel(scalars.Records.Query()), f, rowset.MapSelected(f.Value, nv)).All(ctx, newDB))
+	got := must(rowset.Read(rowset.Select(rowset.FromModel(scalars.Records.Query()), f, rowset.MapSelected(f.Value, nv))).All(ctx, newDB))
 	values := make([]V, len(got))
 	for i, r := range got {
 		values[i] = r.Value

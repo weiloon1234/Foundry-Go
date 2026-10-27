@@ -46,123 +46,135 @@ func retrievalFixtureDriver(values [][]driver.Value) *driverState {
 }
 
 func TestRetrievalDispatchClosesStoredRowsBeforeCallbackIO(t *testing.T) {
-	for _, kind := range []string{"pool", "session", "transaction", "savepoint"} {
-		t.Run(kind, func(t *testing.T) {
-			state := retrievalFixtureDriver([][]driver.Value{{int64(1), "stored"}, {int64(2), "second"}})
-			db := open(t, state, oneObserverConnection)
-			factories := 0
-			var seen []retrievalFixtureRecord
-			var retained context.Context
-			definition := retrievalTable(orm.WithRetrievalHooks(func() orm.RetrievalHooks[retrievalFixtureRecord] {
-				factories++
-				if state.rowsClosed.Load() != 1 {
-					t.Error("factory ran before complete hydration and row closure")
-				}
-				return orm.RetrievalHooks[retrievalFixtureRecord]{Retrieved: func(ctx context.Context, executor database.Executor, item retrievalFixtureRecord) error {
-					retained = ctx
-					if _, ok := executor.(rowObserverExecutor); !ok {
-						return errors.New("retrieval callback bypassed the supplied executor wrapper")
+	for _, complete := range []bool{false, true} {
+		for _, kind := range []string{"pool", "session", "transaction", "savepoint"} {
+			t.Run(strconv.FormatBool(complete)+"/"+kind, func(t *testing.T) {
+				state := retrievalFixtureDriver([][]driver.Value{{int64(1), "stored"}, {int64(2), "second"}})
+				db := open(t, state, oneObserverConnection)
+				factories := 0
+				var seen []retrievalFixtureRecord
+				var retained context.Context
+				definition := retrievalTable(orm.WithRetrievalHooks(func() orm.RetrievalHooks[retrievalFixtureRecord] {
+					factories++
+					if state.rowsClosed.Load() != 1 {
+						t.Error("factory ran before complete hydration and row closure")
 					}
-					seen = append(seen, item)
-					item.Name = "local callback edit"
-					_, err := executor.Exec(ctx, "SELECT 1")
+					return orm.RetrievalHooks[retrievalFixtureRecord]{Retrieved: func(ctx context.Context, executor database.Executor, item retrievalFixtureRecord) error {
+						retained = ctx
+						if _, ok := executor.(rowObserverExecutor); !ok {
+							return errors.New("retrieval callback bypassed the supplied executor wrapper")
+						}
+						seen = append(seen, item)
+						item.Name = "local callback edit"
+						_, err := executor.Exec(ctx, "SELECT 1")
+						return err
+					}}
+				}))
+				q := definition.Query()
+				if _, err := orm.Compile(q); err != nil || factories != 0 {
+					t.Fatal("metadata construction ran retrieval factories", err)
+				}
+				var items []retrievalFixtureRecord
+				err := runObserverOwner(t, db, t.Context(), kind, func(executor database.Executor) error {
+					var err error
+					read := q.All
+					if complete {
+						read = rows.Read(rows.FromModel(q)).All
+					}
+					items, err = read(t.Context(), rowObserverExecutor{executor})
 					return err
-				}}
-			}))
-			q := definition.Query()
-			if _, err := orm.Compile(q); err != nil || factories != 0 {
-				t.Fatal("metadata construction ran retrieval factories", err)
-			}
-			var items []retrievalFixtureRecord
-			err := runObserverOwner(t, db, t.Context(), kind, func(executor database.Executor) error {
-				var err error
-				items, err = q.All(t.Context(), rowObserverExecutor{executor})
-				return err
+				})
+				want := []retrievalFixtureRecord{{1, "stored"}, {2, "second"}}
+				if err != nil || factories != 1 || !reflect.DeepEqual(items, want) || !reflect.DeepEqual(seen, want) {
+					t.Fatal("stored models or once-per-fetch callback order changed", items, seen, factories, err)
+				}
+				if retained == nil || !errors.Is(retained.Err(), context.Canceled) || db.Stats().Owners != 0 {
+					t.Fatal("retrieval context or resource ownership escaped")
+				}
 			})
-			want := []retrievalFixtureRecord{{1, "stored"}, {2, "second"}}
-			if err != nil || factories != 1 || !reflect.DeepEqual(items, want) || !reflect.DeepEqual(seen, want) {
-				t.Fatal("stored models or once-per-fetch callback order changed", items, seen, factories, err)
-			}
-			if retained == nil || !errors.Is(retained.Err(), context.Canceled) || db.Stats().Owners != 0 {
-				t.Fatal("retrieval context or resource ownership escaped")
-			}
-		})
+		}
 	}
 }
 
 func TestRetrievalDispatchFailuresDiscardResults(t *testing.T) {
-	for _, mode := range []string{"empty", "scan", "iterate", "close", "factory-panic", "factory-goexit", "callback-error", "callback-panic", "callback-goexit", "cancel"} {
-		t.Run(mode, func(t *testing.T) {
-			cause := errors.New("retrieval fixture failure")
-			state := &driverState{}
-			state.query = func(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
-				rows := &resultRows{state: state, columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "stored"}}}
-				switch mode {
-				case "empty":
-					rows.values = nil
-				case "scan":
-					rows.values[0][0] = "invalid integer"
-				case "iterate":
-					rows.nextError = cause
-				case "close":
-					rows.closeError = cause
-				}
-				return rows, nil
-			}
-			db := open(t, state, oneObserverConnection)
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			factories, callbacks := 0, 0
-			q := retrievalTable(orm.WithRetrievalHooks(func() orm.RetrievalHooks[retrievalFixtureRecord] {
-				factories++
-				switch mode {
-				case "factory-panic":
-					panic("private factory payload")
-				case "factory-goexit":
-					runtime.Goexit()
-				}
-				return orm.RetrievalHooks[retrievalFixtureRecord]{Retrieved: func(context.Context, database.Executor, retrievalFixtureRecord) error {
-					callbacks++
+	for _, complete := range []bool{false, true} {
+		for _, mode := range []string{"empty", "scan", "iterate", "close", "factory-panic", "factory-goexit", "callback-error", "callback-panic", "callback-goexit", "cancel"} {
+			t.Run(strconv.FormatBool(complete)+"/"+mode, func(t *testing.T) {
+				cause := errors.New("retrieval fixture failure")
+				state := &driverState{}
+				state.query = func(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
+					rows := &resultRows{state: state, columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "stored"}}}
 					switch mode {
-					case "callback-error":
-						return cause
-					case "callback-panic":
-						panic("private callback payload")
-					case "callback-goexit":
+					case "empty":
+						rows.values = nil
+					case "scan":
+						rows.values[0][0] = "invalid integer"
+					case "iterate":
+						rows.nextError = cause
+					case "close":
+						rows.closeError = cause
+					}
+					return rows, nil
+				}
+				db := open(t, state, oneObserverConnection)
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				factories, callbacks := 0, 0
+				q := retrievalTable(orm.WithRetrievalHooks(func() orm.RetrievalHooks[retrievalFixtureRecord] {
+					factories++
+					switch mode {
+					case "factory-panic":
+						panic("private factory payload")
+					case "factory-goexit":
 						runtime.Goexit()
-					case "cancel":
-						cancel()
 					}
-					return nil
-				}}
-			})).Query()
-			items, err := q.All(ctx, db)
-			if mode == "empty" {
-				if err != nil || items == nil || len(items) != 0 || factories != 0 || callbacks != 0 {
-					t.Fatal("empty fetch invoked hooks or lost empty-slice semantics", err)
+					return orm.RetrievalHooks[retrievalFixtureRecord]{Retrieved: func(context.Context, database.Executor, retrievalFixtureRecord) error {
+						callbacks++
+						switch mode {
+						case "callback-error":
+							return cause
+						case "callback-panic":
+							panic("private callback payload")
+						case "callback-goexit":
+							runtime.Goexit()
+						case "cancel":
+							cancel()
+						}
+						return nil
+					}}
+				})).Query()
+				read := q.All
+				if complete {
+					read = rows.Read(rows.FromModel(q)).All
 				}
-			} else {
-				if err == nil || items != nil {
-					t.Fatal("failed retrieval published partial models", items, err)
-				}
-				if mode == "scan" || mode == "iterate" || mode == "close" {
-					if factories != 0 || callbacks != 0 {
-						t.Fatal("failed hydration constructed hooks")
+				items, err := read(ctx, db)
+				if mode == "empty" {
+					if err != nil || items == nil || len(items) != 0 || factories != 0 || callbacks != 0 {
+						t.Fatal("empty fetch invoked hooks or lost empty-slice semantics", err)
+					}
+				} else {
+					if err == nil || items != nil {
+						t.Fatal("failed retrieval published partial models", items, err)
+					}
+					if mode == "scan" || mode == "iterate" || mode == "close" {
+						if factories != 0 || callbacks != 0 {
+							t.Fatal("failed hydration constructed hooks")
+						}
+					}
+					if mode == "factory-panic" || mode == "factory-goexit" || mode == "callback-panic" || mode == "callback-goexit" {
+						if !errors.Is(err, fault.Panicked) {
+							t.Fatal("panic/Goexit escaped callback isolation", err)
+						}
+					}
+					if mode == "cancel" && !errors.Is(err, context.Canceled) {
+						t.Fatal("callback cancellation was hidden", err)
 					}
 				}
-				if mode == "factory-panic" || mode == "factory-goexit" || mode == "callback-panic" || mode == "callback-goexit" {
-					if !errors.Is(err, fault.Panicked) {
-						t.Fatal("panic/Goexit escaped callback isolation", err)
-					}
+				if state.rowsClosed.Load() != 1 || db.Stats().Owners != 0 || db.Stats().InUse != 0 {
+					t.Fatal("retrieval failure leaked rows or owners")
 				}
-				if mode == "cancel" && !errors.Is(err, context.Canceled) {
-					t.Fatal("callback cancellation was hidden", err)
-				}
-			}
-			if state.rowsClosed.Load() != 1 || db.Stats().Owners != 0 || db.Stats().InUse != 0 {
-				t.Fatal("retrieval failure leaked rows or owners")
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -402,7 +414,7 @@ func TestRetrievalDispatchExcludesScalarsAndDeclaredDTOs(t *testing.T) {
 		return retrievalDTO{b.Row(), rows.NumberOf(b, &m.ID), rows.TextOf(b, &m.Name)}
 	})
 	projection := rows.Select(rows.From(q), dto, rows.Map(dto.ID, expr.Value(table.Key())), rows.Map(dto.Name, expr.Value(table.Name)))
-	if items, err := projection.All(t.Context(), db); err != nil || len(items) != 1 || factories != 0 {
+	if items, err := rows.Read(projection).All(t.Context(), db); err != nil || len(items) != 1 || factories != 0 {
 		t.Fatal("scalar/DTO reads acquired model retrieval callbacks", factories, err)
 	}
 	// Set results already use their first input's decoder/record declaration.

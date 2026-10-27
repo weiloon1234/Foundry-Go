@@ -10,7 +10,7 @@ import (
 
 // FromModel adapts a model query to a complete read-only model result/source.
 // Scopes remain applied; eager-loading requests require explicit collection loading.
-// Example: rows.Distinct(rows.FromModel(Users.Query())).All(ctx,db).
+// Example: rows.Read(rows.Distinct(rows.FromModel(Users.Query()))).All(ctx,db).
 func FromModel[M any](q orm.Query[M]) Query[M, M] {
 	source, decode := orm.FoundryModel(q, sqlowner.Metadata())
 	return Query[M, M]{source: source, decode: decode, recordOwner: source.Owners[source.Node.Source.Name()]}

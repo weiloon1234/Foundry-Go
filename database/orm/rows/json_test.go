@@ -68,7 +68,7 @@ func TestJSONPathOwnershipAndValidation(t *testing.T) {
 		t.Fatal(captureErr)
 	}
 	state := &driverState{}
-	_, err := expressionQuery(src, expr.Count[jsonTestRecord]().Value(), codec.Signed[int64]()).Where(expr.JSONContainsNullable(foreign.JSON(), foreign.JSON().Param(value.Of(document))).Eq(value.Of(true))).All(t.Context(), openTest(t, state))
+	_, err := Read(expressionQuery(src, expr.Count[jsonTestRecord]().Value(), codec.Signed[int64]()).Where(expr.JSONContainsNullable(foreign.JSON(), foreign.JSON().Param(value.Of(document))).Eq(value.Of(true)))).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal(err, state.sql)
 	}
@@ -77,7 +77,7 @@ func TestJSONPathOwnershipAndValidation(t *testing.T) {
 	rejectScalar(t, src, expr.JSONOptional(expr.JSONPath[jsonTestRecord, value.Optional[string]]{}).JSON().Param(value.Null[value.JSON[string]]()).Value(), codec.Nullable(codec.JSON[string]()))
 	kind := expr.JSONType(expr.Value(d.Doc))
 	state = &driverState{}
-	_, err = expressionQuery(src, kind.Value(), codec.String[database.JSONKind]()).Where(kind.Eq(database.JSONKind("bad"))).All(t.Context(), openTest(t, state))
+	_, err = Read(expressionQuery(src, kind.Value(), codec.String[database.JSONKind]()).Where(kind.Eq(database.JSONKind("bad")))).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal(err, state.sql)
 	}
@@ -90,7 +90,7 @@ func TestJSONPathSQLAndNullDecoding(t *testing.T) {
 	name := expr.JSONOptional(expr.JSONProperty(root, expr.JSONFieldOf(func(p *jsonTestPayload) *value.Optional[string] { return &p.Name })))
 	age := expr.JSONProperty(root, expr.JSONFieldOf(func(p *jsonTestPayload) *int64 { return &p.Age }))
 	keys := expr.JSONProperty(root, expr.JSONFieldOf(func(p *jsonTestPayload) *map[int]string { return &p.Keys }))
-	scalar := expr.JSONOrderedScalar(age, codec.Signed[int64]())
+	scalar := expr.OrderNullableRow(expr.JSONScalar(age, codec.Signed[int64]()))
 	s := expressionSQL(t, expressionQuery(src, scalar.Value(), codec.Nullable(codec.Signed[int64]())).Where(expr.JSONTextScalar(expr.JSONMapKey(keys, 2), codec.String[string]()).Like("a%"), name.JSON().IsNotNull(), name.JSON().IsNull(), expr.JSONTypeNullable(name.JSON()).Eq(value.Of(database.JSONNull))))
 	for _, want := range []string{"E'age'", "AS jsonb", "E'name'", "IS NOT NULL", "IS NULL", "JSONB_TYPEOF"} {
 		if !strings.Contains(s.SQLText, want) {
@@ -111,7 +111,7 @@ func TestJSONPathSQLAndNullDecoding(t *testing.T) {
 	}
 	for _, sample := range []driver.Value{nil, "null"} {
 		state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{sample}}}
-		got, err := expressionQuery(src, expr.JSONTypeNullable(name.JSON()).Value(), codec.Nullable(codec.String[database.JSONKind]())).All(t.Context(), openTest(t, state))
+		got, err := Read(expressionQuery(src, expr.JSONTypeNullable(name.JSON()).Value(), codec.Nullable(codec.String[database.JSONKind]()))).All(t.Context(), openTest(t, state))
 		if err != nil || len(got) != 1 {
 			t.Fatal(got, err)
 		}
@@ -127,7 +127,7 @@ func TestJSONPathSQLAndNullDecoding(t *testing.T) {
 	}
 	// Invalid JSON scalar shape is rejected, not silently coerced by the result codec.
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{"null"}}}
-	if _, err := expressionQuery(src, name.JSON().Value(), codec.Nullable(codec.JSON[string]())).All(t.Context(), openTest(t, state)); err == nil {
+	if _, err := Read(expressionQuery(src, name.JSON().Value(), codec.Nullable(codec.JSON[string]()))).All(t.Context(), openTest(t, state)); err == nil {
 		t.Fatal("JSON null decoded as required string")
 	}
 }

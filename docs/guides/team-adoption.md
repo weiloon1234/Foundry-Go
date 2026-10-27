@@ -41,7 +41,7 @@ with the module's selection and fail on a known mismatch, so an older global
 binary cannot silently generate code for a newer runtime. Retain `go.mod` and `go.sum` in the boilerplate. The
 [independent consumer](../../tests/fixtures/consumer/go.mod) uses this arrangement,
 and its [tool acceptance](../../tests/fixtures/consumer/pinned_tool_test.go)
-checks the real CLI and generated model metadata.
+checks the real CLI and retained generated output.
 
 For private hosting, configure Go's private-module access for the actual module
 path and provision repository credentials outside source control. A local

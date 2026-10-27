@@ -43,13 +43,13 @@ func TestComputedDistinctAndPartitionKeys(t *testing.T) {
 	id := expr.Value(d.ID)
 	base := From(d.Query())
 	key := expr.When(expr.OrderRow(id).Gt(1), expr.Param(d.ID, 2)).Else(expr.Param(d.ID, 3))
-	q := DistinctOn(FromModel(d.Query()), expr.Group(key)).OrderBy(key.Asc(), id.Desc())
+	q := OrderBy(DistinctOn(FromModel(d.Query()), expr.Group(key)), key.Asc(), id.Desc())
 	s, err := CompileRead(Read(q))
 	if err != nil || len(s.Arguments()) != 3 || !strings.Contains(s.SQL(), "DISTINCT ON (CASE") {
 		t.Fatal(s.SQL(), s.Arguments(), err)
 	}
 	other := expr.When(expr.OrderRow(id).Gt(1), expr.Param(d.ID, 2)).Else(expr.Param(d.ID, 4))
-	if _, err := CompileRead(Read(DistinctOn(FromModel(d.Query()), expr.Group(key)).OrderBy(other.Asc()))); !errors.Is(err, fault.Invalid) {
+	if _, err := CompileRead(Read(OrderBy(DistinctOn(FromModel(d.Query()), expr.Group(key)), other.Asc()))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("distinct prefix ignored parameters", err)
 	}
 	window := expr.WindowFor(ModelScope(d.Query())).PartitionBy(expr.Group(key)).OrderBy(id.Asc())

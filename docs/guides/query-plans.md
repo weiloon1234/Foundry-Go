@@ -15,7 +15,7 @@ func analyzeOrders(ctx context.Context, tx *database.Tx) (orm.Plan, error) {
 
 ## Transaction ownership
 
-Use `ExplainLocked` or `ExplainAnalyzeLocked` for an ORM locked query. Both require `*database.Tx`. Analysis acquires the selected locks in that transaction; commit or rollback remains the caller's responsibility. A SELECT can invoke volatile functions, so treat analysis as execution. There is no arbitrary-statement shortcut.
+Use `orm.ExplainLocked` or `orm.ExplainAnalyzeLocked` for an ORM locked query. Both require `*database.Tx`. Analysis acquires the selected locks in that transaction; commit or rollback remains the caller's responsibility. A SELECT can invoke volatile functions, so treat analysis as execution. There is no arbitrary-statement shortcut.
 
 For projection/scalar/set results adapted through `rows.Read`, `ReadScalar` or `ReadSet`, use `rows.Explain` and `rows.ExplainAnalyze`. The rows package also exposes locked, transaction-record and cursor variants. Cursor inspection plans the canonical completed query without inventing a pagination boundary.
 

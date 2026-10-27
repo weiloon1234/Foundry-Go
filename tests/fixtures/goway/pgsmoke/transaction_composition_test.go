@@ -40,7 +40,7 @@ func TestStage6b4TransactionComposition(t *testing.T) {
 			t.Fatal(got)
 		}
 		scalar := rows.SelectTransactionCorrelatedScalar(c, expr.Row(expr.At(is, table.Key())).Value()).OrderBy(expr.At(is, table.Key()).Asc()).Limit(1).ForShare()
-		got, err = rows.SelectTransactionValue(a, rows.TransactionCorrelatedScalarQuery(scalar)).Where(c.Exists()).All(ctx, tx)
+		got, err = rows.SelectTransactionValue(a, rows.TransactionCorrelatedScalarRowQuery(scalar).Value()).Where(c.Exists()).All(ctx, tx)
 		if err != nil {
 			return err
 		}

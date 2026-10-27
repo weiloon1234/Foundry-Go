@@ -1,6 +1,8 @@
 package attachments
 
 import (
+	extensionidentity "github.com/weiloon1234/Foundry-Go/extensions"
+
 	"context"
 	"database/sql/driver"
 	"io"
@@ -145,7 +147,7 @@ func openAttachmentsWith(t *testing.T, migrations []migrate.Definition, wrap fun
 }
 func member(t *testing.T, id int64) model.Reference[extensiontest.Member, int64] {
 	t.Helper()
-	return extensiontest.Members.Reference(id)
+	return extensionidentity.ORMIdentity(extensiontest.Members).Reference(id)
 }
 func uploadText(text string) Upload {
 	return Upload{Source: strings.NewReader(text), OriginalName: "note.txt"}

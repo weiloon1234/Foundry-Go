@@ -214,7 +214,7 @@ same cutoff as originals; because an unresolved variant is never ready, a
 present object is deleted rather than published. Storage inspection of
 originals does not list the variant prefix.
 
-Loaded attachments (`Load`, `List`, `First`, `Find`, `LoadLocalized`) carry their
+Loaded attachments (`Collection.Load`, `List`, `First`, `Find`, `LoadLocalized`) carry their
 ready variants from one extra bounded query. `Attachment.Variant(v)` and
 `Variants()` report them. `VariantPublicURLOf` and `VariantTemporaryURLOf` derive
 links with no database or storage I/O, pinned to the variant's stored version;
@@ -257,7 +257,7 @@ Unknown writers require operator settlement; worker retries do not infer it.
 
 ## Reads and localization
 
-`List`, `First`, `Find` and `Load` recheck current owner visibility. `Load` takes
+`List`, `First`, `Find` and `Collection.Load` recheck current owner visibility. `Collection.Load` takes
 up to 1000 owner references, uses one repeatable-read snapshot and two SELECTs
 for a nonempty active set, and returns an in-memory batch. Batch access performs
 no I/O and returns copied slices. The aggregate limit is 4096 files and 4 MiB of
@@ -273,7 +273,7 @@ manager read admission, and the reader holds one disk stream slot until closed.
 
 `PublicURL` and `TemporaryURL` recheck ready membership and derive the link from
 the stored key and version; keys are immutable per upload, so no storage request
-is made. For attachments already loaded through `Load`, `List`, `First` or
+is made. For attachments already loaded through `Collection.Load`, `List`, `First` or
 `Find`, `PublicURLOf`, `PublicURLsOf` (in order, for listings) and
 `TemporaryURLOf` derive links with no database or storage I/O. Links to script-capable
 files follow the download-only default above. They accept only

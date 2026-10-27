@@ -15,4 +15,4 @@ var parentID = expr.At(parentScope, models.Users.ID)
 var buyerID = expr.At(childScope, models.Orders.BuyerID)
 var selected = rows.SelectCorrelatedScalar(link.Where(expr.Equal(buyerID, parentID)), expr.Row(buyerID).Value())
 
-var _ = rows.ScalarQuery(parent, selected)
+var _ = rows.ScalarRowQuery(parent, selected).Value()

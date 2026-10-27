@@ -39,7 +39,7 @@ func SelectOrders(tenant int64) rows.Query[OrderScope, OrderRow] {
 	member := rows.LeftScope(joined, m)
 	order := rows.RightScope(joined, o)
 	id := expr.At(order, Orders.ID)
-	return rows.Select(joined, OrderRows,
+	return rows.OrderBy(rows.Select(joined, OrderRows,
 		rows.Map(OrderRows.ID, id), rows.Map(OrderRows.MemberName, expr.At(member, Members.Name)), rows.Map(OrderRows.Label, expr.At(order, Orders.Label)), rows.Map(OrderRows.Amount, expr.At(order, Orders.Amount)),
-	).Where(expr.At(member, Members.TenantID).Eq(tenant), expr.At(order, Orders.TenantID).Eq(tenant)).OrderBy(id.Asc())
+	).Where(expr.At(member, Members.TenantID).Eq(tenant), expr.At(order, Orders.TenantID).Eq(tenant)), id.Asc())
 }

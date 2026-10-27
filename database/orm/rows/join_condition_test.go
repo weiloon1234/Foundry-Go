@@ -19,7 +19,7 @@ func TestJoinConditionCompositionAndSideFilters(t *testing.T) {
 	s := outerSchema()
 	q := Select(j, s, MapSelected(s.ID, expr.NullableRow(expr.At(LeftScope(j, Scope(a)), m.ID)).Value()), Map(s.Nickname, expr.AtNullable(NullableRightScope(j, Scope(b)), m.Name)))
 	state := &driverState{columns: []string{"id", "nickname"}}
-	if _, err := q.All(t.Context(), openTest(t, state)); err != nil {
+	if _, err := Read(q).All(t.Context(), openTest(t, state)); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(state.sql, "IS NOT DISTINCT FROM") || !strings.Contains(state.sql, "NOT ") || !strings.Contains(state.sql, `"a"."name" <> $1`) || !strings.Contains(state.sql, `"b"."name" <> $2`) || strings.Contains(state.sql, " WHERE ") {

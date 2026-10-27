@@ -69,7 +69,7 @@ immediate capacity error.
 
 ## Authentication and room ownership
 
-`New(registry, authentication, config)` borrows the existing HTTP authentication
+`websocket.New(registry, authentication, config)` borrows the existing HTTP authentication
 adapter. It captures declared bearer/cookie inputs at the handshake. Each subscribe
 creates and closes a fresh auth scope: provider eligibility, credential validity
 and channel authorization run again before admission. Incoming messages reuse the

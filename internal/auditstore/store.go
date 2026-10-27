@@ -57,5 +57,5 @@ func RecentActivity(ctx context.Context, executor database.Executor, q orm.Query
 	if before > 0 {
 		q = q.Where(f.Sequence.Lt(before))
 	}
-	return Activities(q.OrderBy(f.Sequence.Desc()).Limit(limit)).All(ctx, executor)
+	return rows.Read(Activities(q.OrderBy(f.Sequence.Desc()).Limit(limit))).All(ctx, executor)
 }

@@ -1,7 +1,6 @@
 package rows
 
 import (
-	"context"
 	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -20,7 +19,7 @@ type Mapping[S, R any] struct {
 	expression ormcore.Expression
 }
 
-// Query retains input scope S and result R without heavy engine types. Example: projection.All(ctx,db).
+// Query retains input scope S and result R without heavy engine types. Example: rows.Read(projection).All(ctx,db).
 type Query[S, R any] struct {
 	_           [0]*S
 	source      ormcore.Source
@@ -93,30 +92,4 @@ func SelectValue[M, V, P any](source orm.Query[M], column orm.ExpressionColumn[M
 func (q Query[S, R]) Where(predicates ...expr.Predicate[S]) Query[S, R] {
 	q.source = whereSource(q.source, predicates)
 	return q
-}
-
-// OrderBy appends scoped sort directions. Example: report.OrderBy(orderID.Asc()).
-func (q Query[S, R]) OrderBy(orders ...expr.Order[S]) Query[S, R] {
-	q.source = orderSource(q.source, orders)
-	return q
-}
-
-// All hydrates complete rows and discards partial results on failure. Example: report.All(ctx,db).
-func (q Query[S, R]) All(ctx context.Context, ex database.Executor) ([]R, error) {
-	result := make([]R, 0)
-	err := ormcore.Read(ctx, ex, q.source.Node, q.source.Err, q.source.Checks, func(row database.Row) error {
-		if q.decode == nil {
-			return ormcore.Invalid("missing row decoder")
-		}
-		item, err := q.decode(row)
-		if err != nil {
-			return err
-		}
-		result = append(result, item)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
 }

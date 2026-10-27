@@ -21,9 +21,9 @@ func TestSubqueryHydrationAndPhaseBoundary(t *testing.T) {
 	inner := SelectScalar(From(o.Query().Where(o.MemberID.Gt(4)).Limit(1)), expr.Row(expr.Value(o.ID)).Value())
 	nullable := SelectScalar(From(m.Query().Where(m.ID.Eq(1))), expr.Row(expr.Value(m.Nickname)).Value())
 	s := outerSchema()
-	q := Select(outer, s, MapSelected(s.ID, ScalarQuery(outer, inner)), MapSelected(s.Nickname, ScalarNullableQuery(outer, nullable))).Where(ExistsQuery(outer, inner), InQuery(expr.Value(m.ID), inner), expr.Not(InNullableQuery(expr.Value(m.Name), nullable)))
+	q := Select(outer, s, MapSelected(s.ID, ScalarRowQuery(outer, inner).Value()), MapSelected(s.Nickname, ScalarNullableRowQuery(outer, nullable).Value())).Where(ExistsQuery(outer, inner), InQuery(expr.Value(m.ID), inner), expr.Not(InNullableQuery(expr.Value(m.Name), nullable)))
 	state := &driverState{columns: []string{"id", "nickname"}, rows: [][]driver.Value{{nil, nil}, {int64(9), "nick"}}}
-	got, err := q.All(t.Context(), openTest(t, state))
+	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].ID.IsNull() || !got[0].Nickname.IsNull() || got[1].ID != value.Of(int64(9)) {
 		t.Fatal(got, err)
 	}
@@ -50,18 +50,18 @@ func TestSubqueriesRetainErrorsAndOuterDeclarations(t *testing.T) {
 	nullable := SelectScalar(outer, expr.Row(expr.Value(m.Nickname)).Value())
 	s := outerSchema()
 	for _, q := range []Query[member, outerRecord]{
-		Select(outer, s, MapSelected(s.ID, ScalarQuery(outer, bad)), MapSelected(s.Nickname, ScalarNullableQuery(outer, nullable))),
-		Select(outer, s, MapSelected(s.ID, ScalarQuery(foreign, valid)), MapSelected(s.Nickname, ScalarNullableQuery(outer, nullable))),
-		Select(outer, s, MapSelected(s.ID, ScalarQuery(outer, valid)), MapSelected(s.Nickname, ScalarQuery(outer, SelectScalar(outer, expr.Row(expr.Value(m.Name)).Value())))).Where(ExistsQuery(foreign, outer)),
+		Select(outer, s, MapSelected(s.ID, ScalarRowQuery(outer, bad).Value()), MapSelected(s.Nickname, ScalarNullableRowQuery(outer, nullable).Value())),
+		Select(outer, s, MapSelected(s.ID, ScalarRowQuery(foreign, valid).Value()), MapSelected(s.Nickname, ScalarNullableRowQuery(outer, nullable).Value())),
+		Select(outer, s, MapSelected(s.ID, ScalarRowQuery(outer, valid).Value()), MapSelected(s.Nickname, ScalarRowQuery(outer, SelectScalar(outer, expr.Row(expr.Value(m.Name)).Value())).Value())).Where(ExistsQuery(foreign, outer)),
 	} {
 		state := &driverState{}
-		got, err := q.All(t.Context(), openTest(t, state))
+		got, err := Read(q).All(t.Context(), openTest(t, state))
 		if !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 			t.Fatal(got, err, state.sql)
 		}
 	}
 	// Required scalar entry point rejects an already nullable input at construction.
-	double := ScalarQuery(outer, nullable)
+	double := ScalarRowQuery(outer, nullable).Value()
 	if expr.FoundrySelected(double, sqlowner.Expressions()).Err == nil {
 		t.Fatal("nested nullable scalar accepted")
 	}
@@ -70,7 +70,7 @@ func TestSubqueriesRetainErrorsAndOuterDeclarations(t *testing.T) {
 		t.Fatal("missing invalid subquery node")
 	}
 	state := &driverState{}
-	if _, err := Select(outer, s, MapSelected(s.ID, ScalarQuery(outer, valid)), MapSelected(s.Nickname, ScalarNullableQuery(outer, nullable))).Where(ExistsQuery(outer, nilSource)).All(t.Context(), openTest(t, state)); err == nil || state.sql != "" {
+	if _, err := Read(Select(outer, s, MapSelected(s.ID, ScalarRowQuery(outer, valid).Value()), MapSelected(s.Nickname, ScalarNullableRowQuery(outer, nullable).Value())).Where(ExistsQuery(outer, nilSource))).All(t.Context(), openTest(t, state)); err == nil || state.sql != "" {
 		t.Fatal("nil source executed", err)
 	}
 }
@@ -93,7 +93,7 @@ func TestScalarFiltersSnapshotAndSubqueryChecks(t *testing.T) {
 		t.Fatal("eager declaration check")
 	}
 	state := &driverState{}
-	if _, err := q.All(t.Context(), openTest(t, state)); err == nil || checks != 1 || state.sql != "" {
+	if _, err := Read(q).All(t.Context(), openTest(t, state)); err == nil || checks != 1 || state.sql != "" {
 		t.Fatal(err, checks, state.sql)
 	}
 }
@@ -121,7 +121,7 @@ func TestSubqueryErrorsSurviveParametersAndDepthIsShared(t *testing.T) {
 	s := declareRows()
 	q := Select(source, s, Map(s.ID, expr.Value(m.ID)), Map(s.Name, expr.Value(m.Name))).Where(InQuery(expr.Value(m.ID), inner))
 	state := &driverState{}
-	if _, err := q.All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
+	if _, err := Read(q).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal("nested SELECT escaped shared bounds", err)
 	}
 }

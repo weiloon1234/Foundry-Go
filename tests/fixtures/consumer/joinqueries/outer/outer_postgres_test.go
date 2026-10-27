@@ -34,7 +34,7 @@ func TestPostgresOuterAndChainedJoins(t *testing.T) {
 		cs := rows.LeftNullableScope(chain, sponsorScope)
 		cp := rows.NullableRightScope(chain, rows.Scope(purchases))
 		chainReport := rows.Select(chain, reports.ReferralOrderRows, rows.MapSelected(reports.ReferralOrderRows.UserID, expr.Row(expr.At(cr, models.Users.ID)).Value()), rows.MapSelected(reports.ReferralOrderRows.IntroducerID, expr.Row(expr.AtNullable(cs, models.Users.ID)).Value()), rows.MapSelected(reports.ReferralOrderRows.IntroducerOrderID, expr.Row(expr.AtNullable(cp, models.Orders.ID)).Value()))
-		chainRows, err := chainReport.All(t.Context(), counter)
+		chainRows, err := rows.Read(chainReport).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}

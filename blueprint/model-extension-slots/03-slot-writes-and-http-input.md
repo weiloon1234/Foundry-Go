@@ -12,18 +12,17 @@ transaction ([translations](../../translations/write.go)), versioned metadata
 publication ([attachments](../../attachments/write.go)). Request DTOs already
 decode `map[i18n.LocaleID]string` as a JSON object, and multipart forms carry it
 as a JSON part (`form:"title,json"`). Uploaded files arrive as
-[`foundryhttp.UploadedFile`](../../http/uploaded_file.go). Nothing turns an
-uploaded file into an attachment upload, and no rule checks map keys against the
-runtime locale catalog.
+[`foundryhttp.UploadedFile`](../../http/uploaded_file.go). Native handles adapt uploaded files through the existing attachment boundary and
+validate locale keys against the runtime catalog.
 
-E03 adds write methods on bound descriptors that take the model value, plus
+The native handles retain write methods on bound descriptors that take the model value, plus
 validation rules derived from slot policy, so request validation and persistence
 share one source of truth.
 
 ## Translated text
 
-Bound `TextSlot` methods derive the owner reference through the generated
-`FoundryReference`:
+Bound `TextHandle` methods derive the owner reference through the validated
+native slot/key binding:
 
 - `SaveIn(ctx, tx, owner, map[i18n.LocaleID]string)` merges: it upserts the
   supplied locales and leaves others unchanged.
@@ -46,7 +45,7 @@ fixture shows real need.
 
 ## Metadata values
 
-Bound `ValueSlot` methods `SaveIn`, `Save`, `ForgetIn` and `Forget` reuse
+Bound `ValueHandle` methods `SaveIn`, `Save`, `ForgetIn` and `Forget` reuse
 `Key.SetIn` and `Key.Forget` with the declared version and contract. `ForgetIn`
 adds the missing transaction-joined removal to the existing metadata owner, as
 `ForgetIn` and `ClearIn` do for translations. Adding
@@ -76,17 +75,17 @@ and unqueued variants run after commit.
   (io.ReadSeekCloser, error)`, `Name() string` and `ClientContentType() string`.
   `foundryhttp.UploadedFile` already satisfies it, so `attachments` does not import
   `http`. Detected bytes stay authoritative; the client type is only the existing hint.
-- Bound `OneSlot` and `ManySlot` methods: `ReplaceFile(ctx, owner, file)`,
+- Bound `OneHandle` and `ManyHandle` methods: `ReplaceFile(ctx, owner, file)`,
   `AddFile` for `Many`, and the `Upload` forms `Replace`/`Add`, plus `Detach`,
   `Clear` and `Reorder` taking the model value. The framework opens and closes the
   reader within the call; request cleanup still owns the spooled file.
-- `attachments.AddFiles(ctx, slot, owner, files)` publishes files in order and stops at the first
+- `attachments.AddFilesTo(ctx, slot, owner, files)` publishes files in order and stops at the first
   failure. It returns every result so far and never claims all-or-nothing
   publication. Atomic multi-file replacement is out of scope.
 
 ## Validation derived from slots
 
-- `TextSlot.Rule()` returns a validation rule for `map[i18n.LocaleID]string`. It
+- `TextHandle.Rule()` returns a validation rule for `map[i18n.LocaleID]string`. It
   takes one catalog snapshot through `i18n.SnapshotLocales` from the borrowed
   catalog, then checks supported keys, `Options.Require` and the same text
   validation as the write. Issues use entry paths such as `/body/title/ms` through
@@ -125,7 +124,7 @@ the manifest's supported locales and `LocaleMap<V>` for request maps keyed by
   preserved; unsupported locale and missing required locale rejected by both the
   rule and the write; parent rollback of translation and metadata writes;
   metadata version mismatch.
-- Attachments after commit: published and unpublished results and `AddFiles`
+- Attachments after commit: published and unpublished results and `AddFilesTo`
   partial publication. Uncertain publication, request cancellation and spooled-file
   cleanup are the existing attachment and multipart contracts, which slot writes
   reuse unchanged and whose suites cover them.

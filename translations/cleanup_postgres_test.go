@@ -1,6 +1,8 @@
 package translations
 
 import (
+	extensionidentity "github.com/weiloon1234/Foundry-Go/extensions"
+
 	"fmt"
 	"testing"
 
@@ -24,7 +26,7 @@ func TestPostgresTranslationCleanupExceedsPerModelWriteBatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := extensiontest.Members.Reference(1)
+	owner := extensionidentity.ORMIdentity(extensiontest.Members).Reference(1)
 	assignments := make([]Assignment[extensiontest.Member, int64], 0, len(fields)*len(catalog.Locales()))
 	for _, field := range fields {
 		for _, locale := range catalog.Locales() {

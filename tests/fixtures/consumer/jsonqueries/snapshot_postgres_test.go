@@ -17,7 +17,7 @@ func checkSnapshotKind(t *testing.T, tx *database.Tx, original []jsonqueries.Doc
 		rowset.MapSelected(r.Kind, expr.JSONType(expr.Value(f.Settings)).Value()),
 		rowset.MapSelected(r.BackupKind, expr.JSONTypeNullable(expr.Value(f.Backup)).Value()),
 		rowset.MapSelected(r.Matches, expr.JSONContainsNullable(expr.Value(f.Backup), expr.NullableRow(expr.Param(f.Settings, filter))).Value()))
-	rows, err := selected.All(t.Context(), tx)
+	rows, err := rowset.Read(selected).All(t.Context(), tx)
 	if err != nil || len(rows) != 3 {
 		t.Fatal(rows, err)
 	}

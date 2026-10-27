@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var invalid = models.Users.Query().Where(orm.DoesntHave(models.OrderLinks.Buyer))
+var invalid = models.Users.Query().Where(orm.Not(orm.Has(models.OrderLinks.Buyer)))

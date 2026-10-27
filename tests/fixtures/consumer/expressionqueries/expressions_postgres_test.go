@@ -55,7 +55,7 @@ func TestPostgresRowConditionalResults(t *testing.T) {
 			t.Fatal("nullable computed predicate", err)
 		}
 		nullable := expr.NullIfNullable(expr.Value(u.Nickname), expr.NullableRow(expr.Param(u.Email, "Bee")))
-		if got, err := rows.ReadScalar(rows.SelectScalar(rows.From(base), expr.CoalesceNullable(nullable, expr.NullFor(expr.Value(u.Email))).Value())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[string]{value.Null[string](), value.Null[string](), value.Null[string]()}) {
+		if got, err := rows.ReadScalar(rows.SelectScalar(rows.From(base), expr.CoalesceNullable(nullable, expr.NullableRow(expr.Value(u.Email)).Param(value.Null[string]())).Value())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[string]{value.Null[string](), value.Null[string](), value.Null[string]()}) {
 			t.Fatal("nullable result layers", got, err)
 		}
 		if _, err := models.Users.Update(t.Context(), tx, users[0].ID, models.Users.Nickname.Set("")); err != nil {
@@ -116,7 +116,7 @@ func TestPostgresConditionalCompositionAndFailures(t *testing.T) {
 		// A selected scalar owns its grouping and discovers dependencies even
 		// when the only reference to its CTE is inside a conditional value.
 		chosen := rows.LimitScalar(rows.OrderScalar(rows.SelectScalar(common, expr.Row(expr.At(f, u.Age)).Value()), expr.At(f, u.Age).Desc()), 1)
-		age := expr.CoalesceValue(rows.ScalarQuery(rows.From(people), chosen), expr.Param(u.Age, -1).Value())
+		age := expr.CoalesceValue(rows.ScalarRowQuery(rows.From(people), chosen).Value(), expr.Param(u.Age, -1).Value())
 		if got, err := rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(people), age), expr.Value(u.Email).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int{22, 22, 22}) {
 			t.Fatal("conditional scalar/CTE composition", got, err)
 		}

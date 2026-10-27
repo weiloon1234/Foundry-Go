@@ -67,11 +67,11 @@ func lazyDB(t *testing.T) (*database.DB, *lazyDriver) {
 }
 func TestPackageLevelProjectionWaitsForEnumInitialization(t *testing.T) {
 	db, d := lazyDB(t)
-	got, err := enuminit.Projection.Where(enuminit.State.Eq(enuminit.Active)).All(t.Context(), db)
+	got, err := rows.Read(enuminit.Projection.Where(enuminit.State.Eq(enuminit.Active))).All(t.Context(), db)
 	if err != nil || len(got) != 1 || got[0].State != enuminit.Active || !got[0].Nullable.IsNull() {
 		t.Fatalf("projection: %+v %v", got, err)
 	}
-	values, err := enuminit.Values.All(t.Context(), db)
+	values, err := rows.Read(enuminit.Values).All(t.Context(), db)
 	if err != nil || len(values) != 1 || values[0] != enuminit.Active {
 		t.Fatal(values, err)
 	}
@@ -108,7 +108,7 @@ func TestLazyProjectionErrorsBeforeSQL(t *testing.T) {
 		t.Fatal("descriptor resolved during construction")
 	}
 	db, d := lazyDB(t)
-	if _, err := q.All(t.Context(), db); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.Read(q).All(t.Context(), db); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	if badDescriptorCalls != 1 || d.queries != 0 {
@@ -140,7 +140,7 @@ func TestLazyProjectionErrorsBeforeSQL(t *testing.T) {
 	if badDescriptorCalls != before {
 		t.Fatal("row checked during Select")
 	}
-	if _, err := selected.All(t.Context(), db); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.Read(selected).All(t.Context(), db); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	if badDescriptorCalls != before+1 || d.queries != 0 {

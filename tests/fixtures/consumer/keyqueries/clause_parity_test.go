@@ -95,7 +95,7 @@ func TestPostgresORMComputedKeyClauses(t *testing.T) {
 		bucket := expr.When(expr.OrderRow(total).Gt(1), expr.Row(total).Value().Param(1)).Else(expr.Row(total).Value().Param(0))
 		selected := rows.SelectCorrelatedScalar(c.Where(expr.Equal(buyer, parent)), expr.Row(bucket).Value())
 		selected = rows.OrderCorrelatedScalar(rows.DistinctOnCorrelatedScalarValues(rows.GroupByCorrelatedScalar(selected, expr.Group(bucket)), expr.Row(bucket).Value().Key()), bucket.Desc()).Limit(1)
-		outer := rows.OrderScalar(rows.SelectScalar(rows.From(q), rows.CorrelatedScalarQuery(selected)), expr.Value(models.Users.Age).Asc())
+		outer := rows.OrderScalar(rows.SelectScalar(rows.From(q), rows.CorrelatedScalarRowQuery(selected).Value()), expr.Value(models.Users.Age).Asc())
 		if got, err := rows.ReadScalar(outer).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(1)), value.Of(int64(1)), value.Null[int64]()}) {
 			t.Fatal("correlated computed keys", got, err)
 		}

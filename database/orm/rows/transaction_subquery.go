@@ -39,7 +39,7 @@ func transactionRecordSubquery(r ormcore.RecordSource) ormcore.Source {
 }
 
 // TransactionValueSource retains a single value's exact codec and executor requirement.
-// Example: rows.TransactionScalarQuery(parent,selected).
+// Example: rows.TransactionScalarRowQuery(parent,selected).Value().
 type TransactionValueSource[V any] interface {
 	transactionValue(*V) (ormcore.RecordSource, ormcore.Column[V])
 }
@@ -104,31 +104,19 @@ func TransactionInNullableQuery[S TransactionScopeType, V any](left expr.RowValu
 	return expr.FoundryPredicateValue[S](ormcore.MembershipPredicate(expr.FoundryRowValue(left, sqlowner.Expressions()), r.Source), sqlowner.Expressions())
 }
 
-// TransactionScalarQuery widens a missing scalar to NULL without adding LIMIT.
-// Example: rows.TransactionScalarQuery(parent,selected).
-func TransactionScalarQuery[S TransactionScopeType, V any](outer TransactionSelectionSource[S], inner TransactionValueSource[V]) expr.Selected[S, value.Nullable[V]] {
-	r, c := transactionValueSource(inner)
-	return expr.Nullable(expr.FoundrySelectedValue[S](ormcore.ScalarExpression(transactionSelectionOf(outer), r.Source), c, sqlowner.Expressions()))
-}
-
-// TransactionScalarNullableQuery preserves one nullable result layer.
-// Example: rows.TransactionScalarNullableQuery(parent,nullableSelection).
-func TransactionScalarNullableQuery[S TransactionScopeType, V any](outer TransactionSelectionSource[S], inner TransactionValueSource[value.Nullable[V]]) expr.Selected[S, value.Nullable[V]] {
-	r, c := transactionValueSource(inner)
-	return expr.FoundrySelectedValue[S](ormcore.ScalarExpression(transactionSelectionOf(outer), r.Source), c, sqlowner.Expressions())
-}
-
 // TransactionScalarRowQuery makes a transaction scalar available in row expressions.
 // Example: rows.TransactionScalarRowQuery(parent,selected).
 func TransactionScalarRowQuery[S TransactionScopeType, V any](outer TransactionSelectionSource[S], inner TransactionValueSource[V]) expr.RowExpression[S, value.Nullable[V]] {
-	v := TransactionScalarQuery(outer, inner)
+	r, c := transactionValueSource(inner)
+	v := expr.Nullable(expr.FoundrySelectedValue[S](ormcore.ScalarExpression(transactionSelectionOf(outer), r.Source), c, sqlowner.Expressions()))
 	return expr.FoundryRowExpression[S](expr.FoundrySelected(v, sqlowner.Expressions()), expr.FoundrySelectedColumn(v, sqlowner.Expressions()), sqlowner.Expressions())
 }
 
 // TransactionScalarNullableRowQuery makes a transaction scalar available in row expressions.
 // Example: rows.TransactionScalarNullableRowQuery(parent,selected).
 func TransactionScalarNullableRowQuery[S TransactionScopeType, V any](outer TransactionSelectionSource[S], inner TransactionValueSource[value.Nullable[V]]) expr.RowExpression[S, value.Nullable[V]] {
-	v := TransactionScalarNullableQuery(outer, inner)
+	r, c := transactionValueSource(inner)
+	v := expr.FoundrySelectedValue[S](ormcore.ScalarExpression(transactionSelectionOf(outer), r.Source), c, sqlowner.Expressions())
 	return expr.FoundryRowExpression[S](expr.FoundrySelected(v, sqlowner.Expressions()), expr.FoundrySelectedColumn(v, sqlowner.Expressions()), sqlowner.Expressions())
 }
 func (q TransactionRead[S, R]) transactionSubquery() ormcore.Source {

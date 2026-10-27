@@ -82,7 +82,7 @@ func valueSource[V any](q ValueSource[V]) (ormcore.RecordSource, ormcore.Column[
 }
 
 // ValueSetQuery retains one exact scalar type in the combined output scope.
-// Example: values.Where(values.Value().Ne(id)).All(ctx,db).
+// Example: rows.ReadValues(values.Where(values.Value().Ne(id))).All(ctx,db).
 type ValueSetQuery[V any] struct {
 	_         [0]*V
 	scalarSet [0]struct{}

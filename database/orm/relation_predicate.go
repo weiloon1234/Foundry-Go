@@ -28,12 +28,6 @@ func Has[M, N any](r ExistenceRelation[M, N], ps ...Predicate[N]) Predicate[M] {
 	return relationExistence[M](relationWhere(plan, ps))
 }
 
-// DoesntHave matches parents with no scoped related match, without extra SQL.
-// Example: Users.Query().Where(orm.DoesntHave(UserRelations.Orders)).
-func DoesntHave[M, N any](r ExistenceRelation[M, N], ps ...Predicate[N]) Predicate[M] {
-	return Not(Has(r, ps...))
-}
-
 // Validate the actual metadata before child predicate types are erased. A
 // promoted relationTarget marker alone cannot establish either model owner.
 func relationPredicatePlan(plan *relationPlan, source, target reflect.Type) (*relationPlan, error) {

@@ -26,7 +26,7 @@ func testEncryptedRow[V any](t *testing.T, c codec.Codec[V]) {
 	state := &driverState{}
 	db := openTest(t, state)
 	source := As[left](declareMembers().Query(), "m")
-	if _, err := Select(source, schema).All(t.Context(), db); err == nil {
+	if _, err := Read(Select(source, schema)).All(t.Context(), db); err == nil {
 		t.Fatal("encrypted projection executed")
 	}
 	if _, err := Raw(t.Context(), db, schema, "must not execute"); err == nil {

@@ -82,7 +82,7 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	assertRetentionRedacted(t, "rows/value-record", rows.Values(scalar), secret)
 	assertRetentionRedacted(t, "rows/value-set", rows.UnionValues(rows.Values(scalar), rows.Values(scalar)), secret)
 	assertRetentionRedacted(t, "rows/transaction-value-input", rows.TransactionValueOf(rows.Values(scalar)), secret)
-	assertRetentionRedacted(t, "rows/scalar-expression", rows.ScalarQuery(source, scalar), secret)
+	assertRetentionRedacted(t, "rows/scalar-expression", rows.ScalarRowQuery(source, scalar).Value(), secret)
 	assertRetentionRedacted(t, "rows/exists", rows.ExistsQuery(source, scalar), secret)
 	assertRetentionRedacted(t, "rows/projection", report, secret)
 	assertRetentionRedacted(t, "rows/record", record, secret)

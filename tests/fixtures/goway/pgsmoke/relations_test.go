@@ -144,7 +144,7 @@ func TestDirectEagerTreesAndExistence(t *testing.T) {
 		predicate := orm.Has(children, orm.Has(children, n.Label.Eq("grand")))
 		expected := []int64{1, 2}
 		if negative {
-			predicate = orm.DoesntHave(children, orm.Has(children, n.Label.Eq("grand")))
+			predicate = orm.Not(orm.Has(children, orm.Has(children, n.Label.Eq("grand"))))
 			expected = []int64{3}
 		}
 		got, err := n.Query().Where(n.ID.In(1, 2, 3), predicate).OrderBy(n.ID.Asc()).All(scoped, db)

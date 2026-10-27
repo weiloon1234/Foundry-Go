@@ -1,6 +1,8 @@
 package redis
 
 import (
+	extensionidentity "github.com/weiloon1234/Foundry-Go/extensions"
+
 	"context"
 	"errors"
 	"strings"
@@ -118,7 +120,7 @@ func TestRedisAttachmentReconciliationOutboxAndWorker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := extensiontest.Members.Reference(1)
+	owner := extensionidentity.ORMIdentity(extensiontest.Members).Reference(1)
 	first, err := collection.Add(t.Context(), manager, owner, attachments.Upload{Source: strings.NewReader("old")})
 	if err != nil {
 		t.Fatal(err)

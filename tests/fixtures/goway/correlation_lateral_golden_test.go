@@ -54,8 +54,8 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 		c = c.Where(expr.Equal(buyer, uid))
 		count := rowset.SelectCorrelatedScalar(c, expr.Count[rowset.Correlation[models.User, models.Order]]().Value())
 		ids := rowset.SelectCorrelatedScalar(c, expr.Row(buyer).Value())
-		q := rowset.Select(outer, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarQuery(count))).Where(c.Exists(), rowset.InCorrelatedQuery(expr.Value(models.Users.ID), ids))
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
+		q := rowset.Select(outer, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarRowQuery(count).Value())).Where(c.Exists(), rowset.InCorrelatedQuery(expr.Value(models.Users.ID), ids))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(q).All(ctx, db))}))
 		return
 	}
 	a, b := rowset.As[joinA](models.Users.Query(), "a"), rowset.As[joinB](models.Orders.Query(), "b")
@@ -71,7 +71,7 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 		child := expr.At(rowset.InnerScope(nested, rowset.Scope(d)), models.Orders.BuyerID)
 		c = c.Where(nested.Where(expr.Equal(child, parent)).Limit(1).Exists())
 		count := rowset.SelectCorrelatedScalar(c, expr.Count[rowset.Correlation[rowset.Alias[joinA, models.User], rowset.Alias[joinB, models.Order]]]().Value())
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarQuery(count))).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarRowQuery(count).Value()))).All(ctx, db))}))
 		return
 	}
 	record := rowset.SelectCorrelatedRecord(c, inner).OrderBy(expr.At(inner, models.Orders.TotalCents).Desc()).Limit(1)
@@ -80,19 +80,19 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 	case "cross":
 		j := rowset.CrossJoinLateral(a, latest)
 		v := expr.At(rowset.RightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(v).Value()))).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(v).Value())))).All(ctx, db))}))
 	case "inner":
 		j := rowset.InnerJoinLateral(a, latest)
 		v := expr.At(rowset.RightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(v).Value()))).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(v).Value())))).All(ctx, db))}))
 	case "left":
 		j := rowset.LeftJoinLateral(a, latest)
 		v := expr.AtNullable(rowset.NullableRightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.Map(correlationGoldenRows.Amount, v)).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(j, correlationGoldenRows, rowset.Map(correlationGoldenRows.Amount, v))).All(ctx, db))}))
 	case "on":
 		on := rowset.On(expr.At(rowset.Scope(a), models.Users.ID), expr.At(rowset.LateralScope(latest), models.Orders.BuyerID))
 		j := rowset.LeftJoinLateral(a, latest, on)
 		v := expr.AtNullable(rowset.NullableRightScope(j, rowset.LateralScope(latest)), models.Orders.TotalCents)
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Select(j, correlationGoldenRows, rowset.Map(correlationGoldenRows.Amount, v)).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(j, correlationGoldenRows, rowset.Map(correlationGoldenRows.Amount, v))).All(ctx, db))}))
 	}
 }

@@ -18,7 +18,7 @@ base execution contract.
 | Numbers | `Min`, `Max`, `Between`, integer `MultipleOf`, exact `DecimalMin`, `DecimalMax`, `DecimalBetween`, `DecimalMaxPlaces`, `DecimalMultipleOf` |
 | Related values | `Compare` with `GreaterThan`, `GreaterOrEqual`, `LessThan`, `LessOrEqual` or their `Decimal…` equivalents; `Confirmed` with two typed fields; existing `Same`, `Different` and temporal field comparisons |
 | Current time | `AfterNow`, `BeforeNow`, `AfterToday`, `BeforeToday` and their `OrEqual` forms, reading an injected `temporal.Service` at check time |
-| Collections | `Items`, `ItemsBetween`, `MinItems`, `MaxItems`, `ContainsItems`, `ExcludesItems`, `Distinct`, `DistinctIgnoringCase`, `DistinctBy`, `Each` |
+| Collections | `Items`, `ItemsBetween`, `MinItems`, `MaxItems`, `ContainsItems`, `ExcludesItems`, `Distinct`, `DistinctIgnoringCase`, `DistinctBy`, `validation.Each` |
 | Maps | `EachKey`, `EachValue` in ascending key order with entry paths |
 | Password strength | `Password[string]` or `PasswordValue[password.Plaintext]`, using `PasswordOptions` |
 | Presence and conditions | `Required`, `RequiredNullable`, `Present`, `Absent`, `Prohibited`, `Optional`, `Nullable`, `NonEmpty`; compose `When`/`Unless` instead of string field names |

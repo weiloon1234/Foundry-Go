@@ -45,7 +45,7 @@ on another payload. Optional, nullable, pointer and nested document layers use
 <!-- go-source: tests/fixtures/consumer/jsonqueries/path_sql_test.go -->
 ```go
 profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(f.Settings)), jsonqueries.ProfileField))
-age := expr.JSONOrderedScalar(expr.JSONProperty(profile, jsonqueries.AgeField), codec.Signed[int64]())
+age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonqueries.AgeField), codec.Signed[int64]()))
 selected := rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), age.Eq(42))), age.Value()))
 ```
 
@@ -56,7 +56,7 @@ negative indices from the end. Fixed arrays use `JSONFixedArrayOf` with
 `JSONArrayElement`. Out-of-range indices and missing ancestors yield SQL NULL.
 There is no untyped string-key step for a declared struct property.
 
-`JSONScalar(path, codec)` returns `value.Nullable[P]`. `JSONOrderedScalar` and
+`JSONScalar(path, codec)` returns `value.Nullable[P]`. `expr.OrderNullableRow(expr.JSONScalar(...))` and
 `JSONTextScalar` retain supported ordered/text capabilities and accept present
 comparison values. Exact named types and codecs survive extraction; enums do
 not acquire LIKE through their string representation. Unsupported or opaque
@@ -85,9 +85,9 @@ use an explicit DTO representation if clients need that distinction.
 
 Columns accept exact-payload `Eq`, `Ne`, `In`, `Contains` and `ContainedBy` values.
 `expr.JSONType(expr.Value(column))` yields `database.JSONKind`, and `expr.JSONLength`
-measures a whole array document. Kind constants in `database` are `JSONObject`, `JSONArray`,
-`JSONString`, `JSONNumber`, `JSONBoolean` and `JSONNull`. Nullable and selected
-function families preserve phase and one nullable layer. `JSONKind` has one
+measures a whole array document. Kind constants in `database` are `database.JSONObject`, `database.JSONArray`,
+`database.JSONString`, `database.JSONNumber`, `database.JSONBoolean` and `database.JSONNull`. Nullable and selected
+function families preserve phase and one nullable layer. `database.JSONKind` has one
 shared identity, including in retained report DTOs.
 
 `JSONContains`/`JSONContainedBy` compare typed document operands. Capture a child

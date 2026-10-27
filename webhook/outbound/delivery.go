@@ -560,7 +560,7 @@ func (q Queue) ReplayFailed(ctx context.Context, endpoint value.Optional[Endpoin
 				}
 				endpoints = endpoints.Where(e.ID.Eq(row.ID))
 			}
-			active, err := rows.SelectValue(endpoints.OrderBy(e.ID.Asc()).Limit(q.service.config.MaxEndpoints+1), e.ID).All(ctx, tx)
+			active, err := rows.Read(rows.SelectValue(endpoints.OrderBy(e.ID.Asc()).Limit(q.service.config.MaxEndpoints+1), e.ID)).All(ctx, tx)
 			if err != nil || len(active) == 0 {
 				return err
 			}
@@ -672,7 +672,7 @@ func (s *Service) PruneDeliveries(ctx context.Context, olderThan time.Duration, 
 				return err
 			}
 			f := store.Deliveries
-			ids, err := rows.SelectValue(store.Deliveries.Query().Where(f.State.In(string(Succeeded), string(Failed)), f.UpdatedAt.Lt(cutoff)).OrderBy(f.UpdatedAt.Asc(), f.ID.Asc()).Limit(limit), f.ID).All(ctx, tx)
+			ids, err := rows.Read(rows.SelectValue(store.Deliveries.Query().Where(f.State.In(string(Succeeded), string(Failed)), f.UpdatedAt.Lt(cutoff)).OrderBy(f.UpdatedAt.Asc(), f.ID.Asc()).Limit(limit), f.ID)).All(ctx, tx)
 			if err != nil || len(ids) == 0 {
 				return err
 			}

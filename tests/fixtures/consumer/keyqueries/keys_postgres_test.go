@@ -18,10 +18,10 @@ func TestPostgresComputedGroupKeys(t *testing.T) {
 		base := models.Users.Query()
 		u := models.Users
 		bucket := expr.When(expr.ModelPredicate(u.Age.Gt(20)), expr.Param(u.Age, 1)).Else(expr.Param(u.Age, 0))
-		if got, err := buckets().All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []keyqueries.BucketCount{{Bucket: 0, Count: 1}, {Bucket: 1, Count: 2}}) {
+		if got, err := rowset.Read(buckets()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []keyqueries.BucketCount{{Bucket: 0, Count: 1}, {Bucket: 1, Count: 2}}) {
 			t.Fatal("computed group hydration or parameter identity", got, err)
 		}
-		if got, err := rowset.Having(buckets(), expr.Grouped(bucket.Eq(1))).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []keyqueries.BucketCount{{Bucket: 1, Count: 2}}) {
+		if got, err := rowset.Read(rowset.Having(buckets(), expr.Grouped(bucket.Eq(1)))).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []keyqueries.BucketCount{{Bucket: 1, Count: 2}}) {
 			t.Fatal("computed group HAVING", got, err)
 		}
 		// A larger selected key must reuse its grouped child's parameter IDs.
@@ -61,7 +61,7 @@ func TestPostgresComputedPartitionsAndDistinct(t *testing.T) {
 		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(base), rank), expr.Value(u.Age).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 1, 2}) {
 			t.Fatal("computed row partition", got, err)
 		}
-		if got, err := rowset.DistinctOn(rowset.FromModel(base), expr.Group(bucket)).OrderBy(bucket.Asc(), expr.Value(u.Age).Desc()).All(t.Context(), tx); err != nil || len(got) != 2 || got[0].ID != users[0].ID || got[1].ID != users[2].ID {
+		if got, err := rowset.Read(rowset.OrderBy(rowset.DistinctOn(rowset.FromModel(base), expr.Group(bucket)), bucket.Asc(), expr.Value(u.Age).Desc())).All(t.Context(), tx); err != nil || len(got) != 2 || got[0].ID != users[0].ID || got[1].ID != users[2].ID {
 			t.Fatal("computed DISTINCT ON precedence", got, err)
 		}
 		// Window outputs are evaluated before DISTINCT ON.
@@ -105,7 +105,7 @@ func TestPostgresComputedKeyComposition(t *testing.T) {
 		child := rowset.InnerScope(link, rowset.Scope(orders))
 		innerKey := expr.When(expr.OrderRow(expr.At(child, models.Orders.TotalCents)).Gt(1), expr.Row(expr.At(child, models.Orders.TotalCents)).Value().Param(1)).Else(expr.Row(expr.At(child, models.Orders.TotalCents)).Value().Param(0))
 		selected := rowset.OrderCorrelatedScalar(rowset.DistinctOnCorrelatedScalarValues(rowset.GroupByCorrelatedScalar(rowset.SelectCorrelatedScalar(link, innerKey.Value()).Where(expr.Equal(expr.At(child, models.Orders.BuyerID), expr.At(parent, models.Users.ID))), expr.Group(innerKey)), innerKey.Value().Key()), innerKey.Desc()).Limit(1)
-		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(base), rowset.CorrelatedScalarQuery(selected)), expr.Value(u.Age).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(1)), value.Of(int64(1)), value.Null[int64]()}) {
+		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(base), rowset.CorrelatedScalarRowQuery(selected).Value()), expr.Value(u.Age).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(1)), value.Of(int64(1)), value.Null[int64]()}) {
 			t.Fatal("correlated computed keys", got, err)
 		}
 		// Projected computed keys become ordinary fields for the next query scope.

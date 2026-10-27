@@ -37,7 +37,7 @@ func TestOuterJoinNullabilityAndKinds(t *testing.T) {
 		return Select(source, s, Map(s.ID, expr.AtNullable(scope, m.ID)), Map(s.Nickname, expr.AtNullableValue(scope, m.Nickname)))
 	}
 	state := &driverState{columns: []string{"id", "nickname"}, rows: [][]driver.Value{{nil, nil}, {int64(3), "nick"}}}
-	got, err := project(l).All(t.Context(), openTest(t, state))
+	got, err := Read(project(l)).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].ID.IsNull() || !got[0].Nickname.IsNull() || got[1].ID != value.Of(int64(3)) {
 		t.Fatal(got, err)
 	}
@@ -50,12 +50,12 @@ func TestOuterJoinNullabilityAndKinds(t *testing.T) {
 	}{
 		{"RIGHT", func(state *driverState) error {
 			scope := NullableLeftScope(r, Scope(a))
-			_, err := Select(r, s, Map(s.ID, expr.AtNullable(scope, m.ID)), Map(s.Nickname, expr.AtNullableValue(scope, m.Nickname))).All(t.Context(), openTest(t, state))
+			_, err := Read(Select(r, s, Map(s.ID, expr.AtNullable(scope, m.ID)), Map(s.Nickname, expr.AtNullableValue(scope, m.Nickname)))).All(t.Context(), openTest(t, state))
 			return err
 		}},
 		{"FULL", func(state *driverState) error {
 			x, y := NullableLeftScope(f, Scope(a)), NullableRightScope(f, Scope(b))
-			_, err := Select(f, s, Map(s.ID, expr.AtNullable(x, m.ID)), Map(s.Nickname, expr.AtNullableValue(y, m.Nickname))).All(t.Context(), openTest(t, state))
+			_, err := Read(Select(f, s, Map(s.ID, expr.AtNullable(x, m.ID)), Map(s.Nickname, expr.AtNullableValue(y, m.Nickname)))).All(t.Context(), openTest(t, state))
 			return err
 		}},
 	}
@@ -90,7 +90,7 @@ func TestNullableScopeChainAndSourceBoundaries(t *testing.T) {
 	}
 	state := &driverState{columns: []string{"id"}, rows: [][]driver.Value{{nil}}}
 	q := Select(chain, schema, Map(schema.ID, e)).Where(e.IsNull())
-	if _, err := q.All(t.Context(), openTest(t, state)); err != nil {
+	if _, err := Read(q).All(t.Context(), openTest(t, state)); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(state.sql, `CROSS JOIN`) || !strings.Contains(state.sql, `LIMIT $2`) || !strings.Contains(state.sql, `"orders" WHERE`) {
@@ -99,7 +99,7 @@ func TestNullableScopeChainAndSourceBoundaries(t *testing.T) {
 	state = &driverState{}
 	other := declareOrders()
 	bad := Select(chain, schema, Map(schema.ID, expr.AtNullable(scope, other.ID)))
-	if _, err := bad.All(t.Context(), openTest(t, state)); err == nil || state.sql != "" {
+	if _, err := Read(bad).All(t.Context(), openTest(t, state)); err == nil || state.sql != "" {
 		t.Fatal("foreign declaration accepted", err)
 	}
 }

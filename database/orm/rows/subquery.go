@@ -83,27 +83,17 @@ func InNullableQuery[S, I, V any](left expr.RowValue[S, V], inner Scalar[I, valu
 	return expr.FoundryPredicateValue[S](ormcore.MembershipPredicate(expr.FoundryRowValue(left, sqlowner.Expressions()), inner.source), sqlowner.Expressions())
 }
 
-// ScalarQuery selects an independent value, widening no-row results to NULL. Example: rows.ScalarQuery(rows.From(users),inner).
-func ScalarQuery[S, I, V any](outer SelectionSource[S], inner Scalar[I, V]) expr.Selected[S, value.Nullable[V]] {
-	core := ormcore.ScalarExpression(sourceOf(outer), inner.source)
-	return expr.Nullable(expr.FoundrySelectedValue[S](core, inner.column, sqlowner.Expressions()))
-}
-
-// ScalarNullableQuery keeps one nullable layer for an already nullable result. Example: rows.ScalarNullableQuery(rows.From(users),nullableInner).
-func ScalarNullableQuery[S, I, V any](outer SelectionSource[S], inner Scalar[I, value.Nullable[V]]) expr.Selected[S, value.Nullable[V]] {
-	return expr.FoundrySelectedValue[S](ormcore.ScalarExpression(sourceOf(outer), inner.source), inner.column, sqlowner.Expressions())
-}
-
 // ScalarRowQuery evaluates an independent scalar in row comparisons or arithmetic. Example: expr.GreaterNullable(age,rows.ScalarRowQuery(outer,inner)).
 func ScalarRowQuery[S, I, V any](outer SelectionSource[S], inner Scalar[I, V]) expr.RowExpression[S, value.Nullable[V]] {
-	e := ScalarQuery(outer, inner)
-	return expr.FoundryRowExpression[S](expr.FoundrySelected(e, sqlowner.Expressions()), expr.FoundrySelectedColumn(e, sqlowner.Expressions()), sqlowner.Expressions())
+	core := ormcore.ScalarExpression(sourceOf(outer), inner.source)
+	v := expr.Nullable(expr.FoundrySelectedValue[S](core, inner.column, sqlowner.Expressions()))
+	return expr.FoundryRowExpression[S](expr.FoundrySelected(v, sqlowner.Expressions()), expr.FoundrySelectedColumn(v, sqlowner.Expressions()), sqlowner.Expressions())
 }
 
 // ScalarNullableRowQuery retains one nullable layer in row expressions. Example: rows.ScalarNullableRowQuery(outer,nullableInner).
 func ScalarNullableRowQuery[S, I, V any](outer SelectionSource[S], inner Scalar[I, value.Nullable[V]]) expr.RowExpression[S, value.Nullable[V]] {
-	e := ScalarNullableQuery(outer, inner)
-	return expr.FoundryRowExpression[S](expr.FoundrySelected(e, sqlowner.Expressions()), expr.FoundrySelectedColumn(e, sqlowner.Expressions()), sqlowner.Expressions())
+	v := expr.FoundrySelectedValue[S](ormcore.ScalarExpression(sourceOf(outer), inner.source), inner.column, sqlowner.Expressions())
+	return expr.FoundryRowExpression[S](expr.FoundrySelected(v, sqlowner.Expressions()), expr.FoundrySelectedColumn(v, sqlowner.Expressions()), sqlowner.Expressions())
 }
 
 func whereSource[S any](source ormcore.Source, predicates []expr.Predicate[S]) ormcore.Source {

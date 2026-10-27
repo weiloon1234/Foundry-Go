@@ -65,8 +65,8 @@ func runConditionalNew(g *goldenCapture) {
 	choice := expr.When(age.Gt(18), expr.Coalesce(nickname, email)).When(age.Gt(10), fallback).Else(email)
 	nullable := expr.When(age.Gt(0), choice).ElseNull()
 	s := conditionalRows
-	q := rowset.Select(a, s, rowset.MapSelected(s.Required, choice.Value()), rowset.MapSelected(s.Missing, expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.NullableRow(fallback)).Value())).Where(expr.NullIf(choice, fallback).IsNotNull()).OrderBy(choice.Asc())
-	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
+	q := rowset.OrderBy(rowset.Select(a, s, rowset.MapSelected(s.Required, choice.Value()), rowset.MapSelected(s.Missing, expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.NullableRow(fallback)).Value())).Where(expr.NullIf(choice, fallback).IsNotNull()), choice.Asc())
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(q).All(ctx, db))}))
 }
 
 func runSelectedConditionalNew(g *goldenCapture) {
@@ -79,5 +79,5 @@ func runSelectedConditionalNew(g *goldenCapture) {
 	result := expr.CoalesceValue(expr.NullIfValue(choice, count.Param(0).Value()), count.Param(0).Value())
 	s := expressionRows
 	q := rowset.Select(a, s, rowset.MapSelected(s.Number, result), rowset.MapSelected(s.Exact, expr.DecimalValue(result)), rowset.MapSelected(s.Approx, expr.FloatValue(result)), rowset.MapSelected(s.Missing, expr.WhenValue(count.Gt(10), count.Value()).ElseNull()))
-	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(q.All(ctx, db))}))
+	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(q).All(ctx, db))}))
 }

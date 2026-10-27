@@ -20,9 +20,9 @@ transaction/session sequential.
 | `All(ctx, executor)` | Complete `[]M`; no partial collected result on failure |
 | `First(ctx, executor)` | `value.Optional[M]`; no match is absence, not a zero model |
 | `Require(ctx, executor)` | Complete `M`, or `database.NotFound` |
-| `Count(ctx, executor)` | Selected-window count without model hydration |
+| `Query.Count(ctx, executor)` | Selected-window count without model hydration |
 | `Exists(ctx, executor)` | Whether the selected window has a row |
-| `Each(ctx, executor, callback)` | Bounded iteration with cleanup on all exits |
+| `Query.Each(ctx, executor, callback)` | Bounded iteration with cleanup on all exits |
 | `orm.Compile(query)` | Redacted `orm.Statement`, no I/O |
 
 Use `rows.Read`/`ReadScalar`/`ReadRecord` and the package terminals for

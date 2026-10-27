@@ -1,6 +1,8 @@
 package translations
 
 import (
+	extensionidentity "github.com/weiloon1234/Foundry-Go/extensions"
+
 	"context"
 	"database/sql/driver"
 	"strings"
@@ -37,7 +39,7 @@ func TestPostgresTranslationLoadPagesBeyondOnePage(t *testing.T) {
 	}
 	references := make([]model.Reference[extensiontest.Member, int64], owners)
 	for i := range references {
-		references[i] = extensiontest.Members.Reference(int64(i + 1))
+		references[i] = extensionidentity.ORMIdentity(extensiontest.Members).Reference(int64(i + 1))
 		assignments := make([]Assignment[extensiontest.Member, int64], 0, 5)
 		for _, locale := range locales.Locales() {
 			assignments = append(assignments, name.SetValue(locale, string(locale)))
@@ -137,7 +139,7 @@ func TestPostgresTranslationSetBasedWritesAndRegionalFallback(t *testing.T) {
 	}
 	statements := func(assignments ...Assignment[extensiontest.Member, int64]) int64 {
 		sent.Store(0)
-		if err := Set(t.Context(), m, owner.Reference(2), assignments...); err != nil {
+		if err := Set(t.Context(), m, extensionidentity.ORMIdentity(owner).Reference(2), assignments...); err != nil {
 			t.Fatal(err)
 		}
 		return sent.Load()
@@ -153,13 +155,13 @@ func TestPostgresTranslationSetBasedWritesAndRegionalFallback(t *testing.T) {
 		t.Fatal("writes are not set-based", small, large)
 	}
 	sent.Store(0)
-	removed, err := fields[1].Clear(t.Context(), m, owner.Reference(2))
+	removed, err := fields[1].Clear(t.Context(), m, extensionidentity.ORMIdentity(owner).Reference(2))
 	if err != nil || removed != 3 {
 		t.Fatal("clear", removed, err)
 	}
 	cleared := sent.Load()
 	sent.Store(0)
-	removed, err = DeleteAll(t.Context(), m, owner, owner.Reference(2))
+	removed, err = DeleteAll(t.Context(), m, owner, extensionidentity.ORMIdentity(owner).Reference(2))
 	if err != nil || removed != len(many)-3 {
 		t.Fatal("delete all", removed, err)
 	}
@@ -167,10 +169,10 @@ func TestPostgresTranslationSetBasedWritesAndRegionalFallback(t *testing.T) {
 		t.Fatal("deletes are not set-based", cleared, deleted)
 	}
 
-	if err := Set(t.Context(), m, owner.Reference(1), title.SetValue("en", "Color"), title.SetValue("ms", "Warna")); err != nil {
+	if err := Set(t.Context(), m, extensionidentity.ORMIdentity(owner).Reference(1), title.SetValue("en", "Color"), title.SetValue("ms", "Warna")); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := title.Resolve(t.Context(), m, owner.Reference(1), "en-GB")
+	resolved, err := title.Resolve(t.Context(), m, extensionidentity.ORMIdentity(owner).Reference(1), "en-GB")
 	got, ok := resolved.Get()
 	if err != nil || !ok || got.Locale != "en" || got.Text != "Color" {
 		t.Fatal("regional parent fallback", got, err)
@@ -187,7 +189,7 @@ func TestPostgresTranslationMatchingUsesValueHashIndex(t *testing.T) {
 	}
 	long := strings.Repeat("長い値", 4000)
 	for id, text := range map[int64]string{1: "Red", 2: "Red", 3: "Blue", 4: long} {
-		if err := name.Set(t.Context(), m, owner.Reference(id), "en", text); err != nil {
+		if err := name.Set(t.Context(), m, extensionidentity.ORMIdentity(owner).Reference(id), "en", text); err != nil {
 			t.Fatal(err)
 		}
 	}

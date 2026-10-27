@@ -51,14 +51,14 @@ func TestCorrelatedClausesKeepCapabilitiesAndErrors(t *testing.T) {
 	if scalar.core.Source.Node.Distinct.Kind != 0 {
 		t.Fatal("distinct changed the input")
 	}
-	if _, err := orm.Compile(expr.Where(m.Query(), ExistsQuery(From(m.Query()), SelectScalar(a, CorrelatedScalarQuery(distinct))))); err != nil {
+	if _, err := orm.Compile(expr.Where(m.Query(), ExistsQuery(From(m.Query()), SelectScalar(a, CorrelatedScalarRowQuery(distinct).Value())))); err != nil {
 		t.Fatal(err)
 	}
 	for _, invalid := range []CorrelatedScalar[Alias[left, member], Alias[right, member], int64]{
 		DistinctOnCorrelatedScalar(scalar),
 		DistinctOnCorrelatedScalar(scalar, expr.Group(parent)).OrderBy(child.Asc()),
 	} {
-		_, err := orm.Compile(expr.Where(m.Query(), ExistsQuery(From(m.Query()), SelectScalar(a, CorrelatedScalarQuery(invalid)))))
+		_, err := orm.Compile(expr.Where(m.Query(), ExistsQuery(From(m.Query()), SelectScalar(a, CorrelatedScalarRowQuery(invalid).Value()))))
 		if !errors.Is(err, fault.Invalid) {
 			t.Fatalf("invalid correlated distinct clause accepted: %v", err)
 		}

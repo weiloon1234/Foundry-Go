@@ -62,11 +62,11 @@ func TestStage6a3AggregateGolden(t *testing.T) {
 	defer newDB.Close(ctx)
 
 	newBuyer, newAmount := expr.Value(models.Orders.BuyerID), expr.Value(models.Orders.TotalCents)
-	newQ := rowset.DistinctOn(rowset.FromModel(models.Orders.Query()), expr.Group(newBuyer)).OrderBy(newBuyer.Asc(), newAmount.Desc())
+	newQ := rowset.OrderBy(rowset.DistinctOn(rowset.FromModel(models.Orders.Query()), expr.Group(newBuyer)), newBuyer.Asc(), newAmount.Desc())
 
-	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(newQ.All(ctx, newDB))}))
+	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(rowset.Read(newQ).All(ctx, newDB))}))
 
-	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(rowset.Distinct(rowset.FromModel(models.Orders.Query())).All(ctx, newDB))}))
+	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(rowset.Read(rowset.Distinct(rowset.FromModel(models.Orders.Query()))).All(ctx, newDB))}))
 	if !oracleEqual(t, "aggregate_golden/2", after.output.String()) {
 		t.Fatal("frozen legacy comparison differs")
 	}
@@ -85,7 +85,7 @@ func runAggregateNew(g *goldenCapture) {
 	s := aggregateBuyerRows
 	q := rowset.Select(a, s, rowset.Map(s.Buyer, buyer), rowset.MapSelected(s.Count, count.Value()), rowset.MapSelected(s.Distinct, expr.CountDistinctFieldAt(scope, models.Orders.TotalCents).Value()), rowset.MapSelected(s.Total, total.Value()), rowset.MapSelected(s.Average, expr.AvgAt(scope, models.Orders.TotalCents).Value()), rowset.MapSelected(s.Min, expr.MinAt(scope, models.Orders.TotalCents).Value()), rowset.MapSelected(s.Max, expr.MaxAt(scope, models.Orders.TotalCents).Value()))
 	q = rowset.OrderBy(rowset.Having(rowset.GroupBy(q, expr.Group(buyer)), expr.HavingAnd(count.Gt(0), expr.HavingOr(total.IsNull(), total.Gt(decimal.FromInt64(1))))), count.Desc(), buyer.Asc())
-	got := must(q.All(ctx, db))
+	got := must(rowset.Read(q).All(ctx, db))
 	// Owners differ between APIs; compare the same concrete printable row shape.
 	normalized := make([]aggregateGoldenResult, len(got))
 	for i, r := range got {

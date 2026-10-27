@@ -1,6 +1,8 @@
 package rows
 
 import (
+	"github.com/weiloon1234/Foundry-Go/value"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -62,7 +64,7 @@ func TestPostgresSphericalDistance(t *testing.T) {
 				t.Fatalf("distance %v,%v = %v, want %v", tc.lat, tc.lon, got, tc.want)
 			}
 		}
-		nullable := expr.SphericalDistanceNullable(expr.NullFor(f), expr.NullableRow(expr.Param(d.Latitude, 1)), origin)
+		nullable := expr.SphericalDistanceNullable(expr.NullableRow(f).Param(value.Null[float64]()), expr.NullableRow(expr.Param(d.Latitude, 1)), origin)
 		got, err := ReadScalar(SelectScalar(source, nullable.Value())).RequireFirst(t.Context(), tx)
 		if err != nil {
 			return err

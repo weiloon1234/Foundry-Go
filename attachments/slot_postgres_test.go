@@ -57,7 +57,7 @@ func TestPostgresSlotAcceptsAgreesWithWrites(t *testing.T) {
 	binding := extensions.SlotBinding[extensiontest.Member, int64, Many[extensiontest.Member]]{
 		Field: "Documents",
 		Reference: func(m extensiontest.Member) model.Reference[extensiontest.Member, int64] {
-			return extensiontest.Members.Reference(m.ID)
+			return extensions.ORMIdentity(extensiontest.Members).Reference(m.ID)
 		},
 		Get: func(extensiontest.Member) Many[extensiontest.Member] { return Many[extensiontest.Member]{} },
 		Set: func(m extensiontest.Member, _ Many[extensiontest.Member]) extensiontest.Member { return m },
@@ -154,7 +154,7 @@ func TestPostgresSlotLinksMatchCollectionLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, err := ManyCollection(gallery).List(t.Context(), m, owners.Reference(owner.ID))
+	files, err := ManyCollection(gallery).List(t.Context(), m, extensions.ORMIdentity(owners).Reference(owner.ID))
 	if err != nil {
 		t.Fatal(err)
 	}

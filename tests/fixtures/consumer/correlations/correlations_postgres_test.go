@@ -31,11 +31,11 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	counts := rowset.SelectCorrelatedScalar(matched, expr.CountFieldAt(order, models.Orders.ID).Value())
 	totals := rowset.SelectCorrelatedScalar(matched, expr.SumAt(order, models.Orders.TotalCents).Value())
 	r := reports.UserOrderStatsRows
-	report := rowset.Select(rowset.From(models.Users.Query()), r.Row,
+	report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), r.Row,
 		rowset.Map(r.ID, expr.Value(u.ID)), rowset.Map(r.Email, expr.Value(u.Email)),
-		rowset.MapSelected(r.Orders, rowset.CorrelatedScalarQuery(counts)),
-		rowset.MapSelected(r.Total, rowset.CorrelatedScalarNullableQuery(totals))).OrderBy(expr.Value(u.Email).Asc())
-	rows, err := report.All(t.Context(), tx)
+		rowset.MapSelected(r.Orders, rowset.CorrelatedScalarRowQuery(counts).Value()),
+		rowset.MapSelected(r.Total, rowset.CorrelatedScalarNullableRowQuery(totals).Value())), expr.Value(u.Email).Asc())
+	rows, err := rowset.Read(report).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	}
 	// Outer grouping validates references in SELECT/HAVING; WHERE remains before
 	// grouping. A key group can safely contain a correlated scalar count.
-	if groups, err := rowset.GroupBy(report, expr.Group(expr.Value(u.ID)), expr.Group(expr.Value(u.Email))).All(t.Context(), tx); err != nil || len(groups) != 3 {
+	if groups, err := rowset.Read(rowset.GroupBy(report, expr.Group(expr.Value(u.ID)), expr.Group(expr.Value(u.Email)))).All(t.Context(), tx); err != nil || len(groups) != 3 {
 		t.Error("grouped correlated report failed", err)
 	}
 	grouped := rowset.Having(rowset.GroupBy(rowset.FromModel(models.Users.Query()), expr.Group(expr.Value(u.ID))), expr.Grouped(matched.Exists()))
@@ -102,12 +102,12 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.FromRows(ungrouped), expr.Count[models.User]().Value()))); !errors.Is(err, fault.Invalid) {
 		t.Error("ungrouped outer reference reached SQL", err)
 	}
-	if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.CorrelatedScalarQuery(rowset.SelectCorrelatedScalar(link, expr.CountFieldAt(buyer, models.Users.ID).Value()))))); !errors.Is(err, fault.Invalid) {
+	if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.CorrelatedScalarRowQuery(rowset.SelectCorrelatedScalar(link, expr.CountFieldAt(buyer, models.Users.ID).Value())).Value()))); !errors.Is(err, fault.Invalid) {
 		t.Error("outer-only aggregate changed SELECT ownership", err)
 	}
 	// A limited scalar is per outer row. A filtered/limited aliased source retains
 	// its global window before correlation, just as it does before a join.
-	chosen := rowset.CorrelatedScalarQuery(rowset.SelectCorrelatedScalar(matched, expr.Row(expr.At(order, models.Orders.ID)).Value()).OrderBy(expr.At(order, models.Orders.TotalCents).Desc()).Limit(1))
+	chosen := rowset.CorrelatedScalarRowQuery(rowset.SelectCorrelatedScalar(matched, expr.Row(expr.At(order, models.Orders.ID)).Value()).OrderBy(expr.At(order, models.Orders.TotalCents).Desc()).Limit(1)).Value()
 	if selected, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), chosen)).OrderBy(expr.Value(u.Email).Asc()).All(t.Context(), tx); err != nil || len(selected) != 3 || selected[0].IsNull() || !selected[2].IsNull() {
 		t.Error("correlated scalar window mismatch", err)
 	}
@@ -119,7 +119,7 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 		t.Error("source window moved past correlation", err)
 	}
 	err = tx.Savepoint(t.Context(), func(child *database.Tx) error {
-		rows, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.CorrelatedScalarQuery(ids))).All(t.Context(), child)
+		rows, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.CorrelatedScalarRowQuery(ids).Value())).All(t.Context(), child)
 		var detail *database.Error
 		if rows != nil || !errors.As(err, &detail) || detail.SQLState() != "21000" {
 			t.Error("correlated scalar cardinality failure changed", err)
@@ -131,7 +131,7 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if rows, err := report.All(ctx, queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, context.Canceled) {
+	if rows, err := rowset.Read(report).All(ctx, queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, context.Canceled) {
 		t.Error("canceled correlated report reached database", err)
 	}
 	// Correlated predicates participate in ordinary scoped writes.

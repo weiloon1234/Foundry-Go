@@ -92,7 +92,7 @@ func TestPostgresTypedTemporalExtraction(t *testing.T) {
 			t.Fatal(items, err)
 		}
 		counts := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(q), temporalqueries.CalendarSummaries, rows.MapSelected(temporalqueries.CalendarSummaries.Year, year.Value()), rows.MapSelected(temporalqueries.CalendarSummaries.Rows, expr.Count[temporalqueries.Sample]().Value()), rows.MapSelected(temporalqueries.CalendarSummaries.Latest, expr.Max(f.Date).Value())), expr.Group(year)), year.Asc())
-		if items, err := counts.All(t.Context(), tx); err != nil || len(items) != 3 || items[2].Rows != 2 {
+		if items, err := rows.Read(counts).All(t.Context(), tx); err != nil || len(items) != 3 || items[2].Rows != 2 {
 			t.Fatal(items, err)
 		}
 		latest := expr.YearNullableValue(expr.Max(f.Date).Value())

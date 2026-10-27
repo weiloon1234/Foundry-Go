@@ -62,7 +62,7 @@ func TestPostgresNamedWindowScopesAndDependencies(t *testing.T) {
 		}
 		inner := rowset.LimitScalar(rowset.SelectScalar(rowset.From(q), expr.RowNumber(expr.WindowFor(rowset.ModelScope(q)).OrderBy(expr.Value(f.ID).Asc()).Named("same"))), 1)
 		outerWindow := expr.WindowFor(rowset.ModelScope(q)).OrderBy(expr.Value(f.ID).Desc()).Named("same")
-		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), rowset.ScalarQuery(rowset.From(q), inner)), expr.RowNumber(outerWindow).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(1)), value.Of(int64(1)), value.Of(int64(1)), value.Of(int64(1))}) {
+		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), rowset.ScalarRowQuery(rowset.From(q), inner).Value()), expr.RowNumber(outerWindow).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(1)), value.Of(int64(1)), value.Of(int64(1)), value.Of(int64(1))}) {
 			t.Fatal("named window SELECT namespace", got, err)
 		}
 		earlier := rowset.As[earlierSample](q, "earlier")
@@ -71,7 +71,7 @@ func TestPostgresNamedWindowScopesAndDependencies(t *testing.T) {
 		child := rowset.InnerScope(link, rowset.Scope(earlier))
 		perParent := expr.WindowFor(parent).PartitionBy(expr.Group(expr.At(parent, framequeries.Samples.ID))).Named("per_parent")
 		counts := rowset.SelectCorrelatedScalar(link, expr.Over(expr.CountFieldAt(child, framequeries.Samples.ID), perParent)).Where(expr.Less(expr.At(child, framequeries.Samples.ID), expr.At(parent, framequeries.Samples.ID))).Limit(1)
-		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), rowset.CorrelatedScalarQuery(counts)), expr.Value(f.ID).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Null[int64](), value.Of(int64(1)), value.Of(int64(2)), value.Of(int64(3))}) {
+		if got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), rowset.CorrelatedScalarRowQuery(counts).Value()), expr.Value(f.ID).Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Null[int64](), value.Of(int64(1)), value.Of(int64(2)), value.Of(int64(3))}) {
 			t.Fatal("named window correlation", got, err)
 		}
 		return nil

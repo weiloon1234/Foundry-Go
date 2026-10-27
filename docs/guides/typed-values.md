@@ -24,7 +24,7 @@ New identities use UUIDv7: millisecond timestamp plus cryptographic random bits.
 
 Use `json:",omitzero"` on optional DTO fields. An absent `Optional` cannot encode as a standalone JSON value. An explicit null requires `Nullable`; decoding null into `Optional[int]` fails. Failed decoding leaves the receiver unchanged. A present nil pointer/map that would accidentally encode as null is rejected during serialization; use the explicit nullable type.
 
-JSON decoding into an existing DTO follows normal Go behavior: absent object keys do not reset existing fields. Decode each independent request into a fresh DTO. [Database codecs](database-codecs.md) and [generated drafts](model-generation.md) preserve these states at persistence boundaries; the value types alone do not execute SQL.
+JSON decoding into an existing DTO follows normal Go behavior: absent object keys do not reset existing fields. Decode each independent request into a fresh DTO. [Database codecs](database-codecs.md) and [typed assignments](model-writes.md) preserve these states at persistence boundaries; the value types alone do not execute SQL.
 
 ## Temporal boundaries
 

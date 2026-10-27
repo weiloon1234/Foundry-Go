@@ -1,6 +1,8 @@
 package attachments
 
 import (
+	extensionidentity "github.com/weiloon1234/Foundry-Go/extensions"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -37,7 +39,7 @@ func TestPostgresAttachmentCollectionsIdentityAndOrdering(t *testing.T) {
 	if _, err := testSingle.Find(t.Context(), f.manager, member(t, 2), latest.ID()); !errors.Is(err, database.NotFound) {
 		t.Fatal("foreign owner attachment escaped", err)
 	}
-	other, err := testOther.Add(t.Context(), f.manager, extensiontest.Others.Reference(1), uploadText("other"))
+	other, err := testOther.Add(t.Context(), f.manager, extensionidentity.ORMIdentity(extensiontest.Others).Reference(1), uploadText("other"))
 	if err != nil || !other.Attachment.IsSet() {
 		t.Fatal("owner type collision", err)
 	}

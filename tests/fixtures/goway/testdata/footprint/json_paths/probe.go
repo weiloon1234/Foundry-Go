@@ -34,7 +34,7 @@ func Run(ctx context.Context, db database.Executor) ([]result, error) {
 	root := expr.JSONRoot(expr.Value(d.Settings))
 	theme := expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(root, jsonpaths.Theme)), codec.String[string]())
 	profile := expr.JSONOptional(expr.JSONProperty(root, jsonpaths.UserProfile))
-	age := expr.JSONOrderedScalar(expr.JSONProperty(profile, jsonpaths.Age), codec.Signed[int64]())
+	age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonpaths.Age), codec.Signed[int64]()))
 	key := expr.JSONTextScalar(expr.JSONMapKey(expr.JSONProperty(profile, jsonpaths.Attributes), 2), codec.String[string]())
-	return rows.Select(rows.FromModel(d.Query()), schema, rows.MapSelected(schema.Theme, theme.Value()), rows.MapSelected(schema.Age, age.Value()), rows.MapSelected(schema.Key, key.Value())).Where(theme.Like("d%"), age.Gt(18)).All(ctx, db)
+	return rows.Read(rows.Select(rows.FromModel(d.Query()), schema, rows.MapSelected(schema.Theme, theme.Value()), rows.MapSelected(schema.Age, age.Value()), rows.MapSelected(schema.Key, key.Value())).Where(theme.Like("d%"), age.Gt(18))).All(ctx, db)
 }

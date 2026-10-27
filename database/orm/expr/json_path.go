@@ -90,12 +90,6 @@ func JSONScalar[S, P any](path JSONPath[S, P], c codec.Codec[P]) RowExpression[S
 	return RowExpression[S, value.Nullable[P]]{data: operationValue[S](querycore.JsonScalarOperation, columnCodec(codec.Nullable(c)), jsonPathArg(path)).data}
 }
 
-// JSONOrderedScalar adds comparisons only for ordered payloads.
-// Example: expr.JSONOrderedScalar(age, codec.Signed[int64]()).
-func JSONOrderedScalar[S any, P orderedScalar](path JSONPath[S, P], c codec.Codec[P]) NullableOrderedRowExpression[S, P] {
-	return OrderNullableRow(JSONScalar(path, c))
-}
-
 // JSONTextScalar adds pattern predicates only for string payloads.
 // Example: expr.JSONTextScalar(name, codec.String[string]()).
 func JSONTextScalar[S any, P ~string](path JSONPath[S, P], c codec.Codec[P]) NullableTextRowExpression[S, P] {

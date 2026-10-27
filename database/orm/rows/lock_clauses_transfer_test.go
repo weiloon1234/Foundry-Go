@@ -93,7 +93,7 @@ func TestLockClausesRejectWindowsInsideCalculations(t *testing.T) {
 		}
 	}
 	inner := LimitScalar(SelectScalar(source, calculation), 1)
-	outer := ReadScalar(SelectScalar(source, ScalarQuery(source, inner)))
+	outer := ReadScalar(SelectScalar(source, ScalarRowQuery(source, inner).Value()))
 	if _, e := ormcore.CompileRecord(t.Context(), LockRows(outer, UpdateLock(Target(ModelScope(m.Query())))).core); e != nil {
 		t.Fatal("independent inner window blocked outer lock", e)
 	}

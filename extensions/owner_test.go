@@ -15,8 +15,8 @@ func TestOwnerScopeFollowsTheDeclaredStorageModel(t *testing.T) {
 	original := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_members"), extensions.OwnerOptions{})
 	renamed := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{})
 	pinned := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
-	if original.StorageModel() != "extension_members" || pinned.StorageModel() != "extension_members" || pinned.ModelName() != "extension_people" {
-		t.Fatal("storage model", pinned.StorageModel(), pinned.ModelName())
+	if original.StorageModel() != "extension_members" || pinned.StorageModel() != "extension_members" || extensions.ORMIdentity(pinned).ModelName() != "extension_people" {
+		t.Fatal("storage model", pinned.StorageModel(), extensions.ORMIdentity(pinned).ModelName())
 	}
 	if renamed.Scope() == original.Scope() {
 		t.Fatal("an undeclared rename kept the table-derived scope")
@@ -25,7 +25,7 @@ func TestOwnerScopeFollowsTheDeclaredStorageModel(t *testing.T) {
 		t.Fatal("a declared storage model must keep the persisted scope across a rename")
 	}
 	// Identities persisted before the rename are attributed to the old table.
-	stored, err := original.Reference(7).Identity()
+	stored, err := extensions.ORMIdentity(original).Reference(7).Identity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestOwnerScopeFollowsTheDeclaredStorageModel(t *testing.T) {
 	if _, err := renamed.Parse(stored); err == nil {
 		t.Fatal("an undeclared model attribution was accepted")
 	}
-	before, err := original.Subject(original.Reference(7))
+	before, err := original.Subject(extensions.ORMIdentity(original).Reference(7))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestRegistryRejectsStorageModelCollisionsAndAdoptsRenamedIdentities(t *test
 	if _, err := extensions.NewRegistry(pinned.Registration(), extensiontest.Others.Registration()); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("storage model collision depends on registration order", err)
 	}
-	legacy, err := extensiontest.Members.Reference(3).Identity()
+	legacy, err := extensions.ORMIdentity(extensiontest.Members).Reference(3).Identity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestRegistryRejectsStorageModelCollisionsAndAdoptsRenamedIdentities(t *test
 	if err != nil || subject.Scope != renamed.Scope() {
 		t.Fatal("re-scope boundary", err)
 	}
-	expected, err := renamed.Subject(renamed.Reference(3))
+	expected, err := renamed.Subject(extensions.ORMIdentity(renamed).Reference(3))
 	if err != nil || subject.Key != expected.Key {
 		t.Fatal("adopted subject key", err)
 	}
@@ -127,11 +127,11 @@ func TestSubjectKeyMatchesSubject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacy, err := extensiontest.Members.Reference(7).Identity()
+	legacy, err := extensions.ORMIdentity(extensiontest.Members).Reference(7).Identity()
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err := pinned.Reference(7).Identity()
+	current, err := extensions.ORMIdentity(pinned).Reference(7).Identity()
 	if err != nil {
 		t.Fatal(err)
 	}

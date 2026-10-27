@@ -16,7 +16,7 @@ type memberOwner = extensions.Owner[extensiontest.Member, int64]
 // stored is the row identity a store writes for owner's member id.
 func stored(t *testing.T, owner memberOwner, id int64, parts ...string) Identity {
 	t.Helper()
-	subject, err := owner.Subject(owner.Reference(id))
+	subject, err := owner.Subject(extensions.ORMIdentity(owner).Reference(id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func stored(t *testing.T, owner memberOwner, id int64, parts ...string) Identity
 // path only skips re-deriving an identity that equals the expected one.
 func TestRowsDecideAsFullValidation(t *testing.T) {
 	owner := extensiontest.Members
-	references := []model.Reference[extensiontest.Member, int64]{owner.Reference(1), owner.Reference(2)}
+	references := []model.Reference[extensiontest.Member, int64]{extensions.ORMIdentity(owner).Reference(1), extensions.ORMIdentity(owner).Reference(2)}
 	batch, err := For(owner, references)
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestRowsDecideAsFullValidation(t *testing.T) {
 			t.Fatal("expected identity text differs from the stored snapshot, so stored rows miss the fast path", err)
 		}
 	}
-	subject, err := owner.Subject(owner.Reference(1))
+	subject, err := owner.Subject(extensions.ORMIdentity(owner).Reference(1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestRowsValidateRowsRecordedBeforeARename(t *testing.T) {
 	original := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_members"), extensions.OwnerOptions{})
 	pinned := extensions.DefineORMOwner("members", extensiontest.MemberIdentity("extension_people"), extensions.OwnerOptions{StorageModel: "extension_members"})
 	row := stored(t, original, 7, "seo")
-	rows, err := For(pinned, []model.Reference[extensiontest.Member, int64]{pinned.Reference(7)})
+	rows, err := For(pinned, []model.Reference[extensiontest.Member, int64]{extensions.ORMIdentity(pinned).Reference(7)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestRowsBoundTheirBatch(t *testing.T) {
 	owner := extensiontest.Members
 	references := make([]model.Reference[extensiontest.Member, int64], querycore.MaxIdentityBatch+1)
 	for i := range references {
-		references[i] = owner.Reference(int64(i + 1))
+		references[i] = extensions.ORMIdentity(owner).Reference(int64(i + 1))
 	}
 	if _, err := For(owner, references); !errors.Is(err, fault.Invalid) {
 		t.Fatal("an oversized batch was accepted", err)

@@ -140,7 +140,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 		if visited != 2 {
 			return errors.New("keyset iteration discarded explicit visibility")
 		}
-		labels, err := rows.Select(rows.From(childQuery), softqueries.MemberLabels, rows.Map(softqueries.MemberLabels.ID, expr.Value(f.Key())), rows.Map(softqueries.MemberLabels.Name, expr.Value(f.Name))).All(ctx, tx)
+		labels, err := rows.Read(rows.Select(rows.From(childQuery), softqueries.MemberLabels, rows.Map(softqueries.MemberLabels.ID, expr.Value(f.Key())), rows.Map(softqueries.MemberLabels.Name, expr.Value(f.Name)))).All(ctx, tx)
 		if err != nil {
 			return err
 		}

@@ -99,10 +99,10 @@ func (d Declaration) Describe() Description {
 	return Description{Owner: d.owner.Describe(), Slots: d.parts.clone().Slots}
 }
 
-// Validate checks that the declaration came from generated code.
+// Validate checks that the declaration retains an owner and cleanup registration.
 func (d Declaration) Validate() error {
 	if d.owner.Name() == "" || d.install == nil {
-		return fault.New(fault.Invalid, "model extension declaration requires generated owner and cleanup registration")
+		return fault.New(fault.Invalid, "model extension declaration requires declared owner and cleanup registration")
 	}
 	return nil
 }

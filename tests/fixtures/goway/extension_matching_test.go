@@ -117,7 +117,7 @@ func TestExtensionMatchingUsesBoundedManagerQueries(t *testing.T) {
 							if test.name == "attachment" {
 								id = 1
 							}
-							ref := e.Owner.Reference(id)
+							ref := extensions.ORMIdentity(e.Owner).Reference(id)
 							identity := must(ref.Identity())
 							wire := must(identity.MarshalJSON())
 							subject := must(e.Owner.SubjectKey(ref))

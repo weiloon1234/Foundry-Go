@@ -24,7 +24,7 @@ statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectS
 type. It removes one nullable layer, retaining empty strings and numeric zero.
 `CoalesceNullable` retains one layer. `NullIf` adds one nullable layer to matching
 required inputs; `NullIfNullable` does not nest wrappers. `NullableRow` explicitly
-widens a required row value. `NullFor` uses an exemplar's codec to construct NULL.
+widens a required row value. `expr.NullableRow(v).Param(value.Null[T]())` uses the exemplar's codec for NULL.
 For generic nullable expressions, literal comparisons take a present
 `value.Nullable[V]` (for example, `value.Of(v)`). A SQL NULL literal in equality
 or membership is rejected; use `IsNull`/`IsNotNull` to test absence. Dedicated

@@ -17,7 +17,7 @@ func TestPostgresScalarProjectionAndDerivedAggregation(t *testing.T) {
 			rowset.MapSelected(r.Caption, expr.Lower(expr.Trim(expr.Value(f.Name))).Value()),
 			rowset.MapSelected(r.LineTotal, expr.Multiply(expr.DecimalOf(expr.Value(f.Quantity)), expr.Value(f.Amount)).Value()),
 			rowset.MapSelected(r.AmountWithTax, expr.AddNullable(expr.NullableRow(expr.Value(f.Amount)), expr.Value(f.Tax)).Value()))
-		rows, err := selected.OrderBy(expr.Value(f.ID).Asc()).All(t.Context(), tx)
+		rows, err := rowset.Read(rowset.OrderBy(selected, expr.Value(f.ID).Asc())).All(t.Context(), tx)
 		if err != nil || len(rows) != 3 {
 			t.Fatal(rows, err)
 		}

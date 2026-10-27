@@ -114,7 +114,7 @@ func sets(ctx context.Context, db database.Executor) error {
 	if err != nil {
 		return err
 	}
-	_, err = rows.Distinct(rows.FromModel(models.Orders.Query())).All(ctx, db)
+	_, err = rows.Read(rows.Distinct(rows.FromModel(models.Orders.Query()))).All(ctx, db)
 	return err
 }
 

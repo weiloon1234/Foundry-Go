@@ -7,6 +7,6 @@ import (
 )
 
 func wrong() {
-	p, _ := rows.SimplePaginate(nil, nil, rows.SelectValue(models.Users.Query(), models.Users.Nickname), orm.PageRequest{})
+	p, _ := rows.Read(rows.SelectValue(models.Users.Query(), models.Users.Nickname)).SimplePaginate(nil, nil, orm.PageRequest{})
 	var _ orm.SimplePage[string] = p
 }

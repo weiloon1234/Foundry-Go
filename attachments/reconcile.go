@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
@@ -224,7 +225,7 @@ func (m *Manager) ReconcilePending(ctx context.Context, limit int) ([]ReconcileR
 		err = m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 			f := store.Files
 			q := store.Files.Query().Where(orm.Or(f.State.Eq(string(CleanupPending)), orm.And(f.State.Eq(string(Stored)), f.UpdatedAt.Lte(cutoff)), orm.And(f.State.In(string(Writing), string(Uncertain)), f.UpdatedAt.Lte(settleCutoff)))).OrderBy(f.UpdatedAt.Asc(), f.ID.Asc()).Limit(limit + len(active))
-			found, err := store.Index(q).All(ctx, tx)
+			found, err := rowset.Read(store.Index(q)).All(ctx, tx)
 			if err != nil {
 				return err
 			}

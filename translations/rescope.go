@@ -52,7 +52,7 @@ func rescopeTable() extensionmaintenance.RescopeTable[store.TranslationIndex] {
 			if lock {
 				return rows.ForUpdate(rows.Read(store.TranslationsIndex(q))).All(ctx, tx)
 			}
-			return store.TranslationsIndex(q).All(ctx, tx)
+			return rows.Read(store.TranslationsIndex(q)).All(ctx, tx)
 		},
 		Row: func(row store.TranslationIndex) (extensionrow.Identity, []string) {
 			return extensionrow.Identity{Key: row.Key, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity}, []string{row.Field, row.Locale}

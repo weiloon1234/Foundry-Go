@@ -2,21 +2,57 @@
 
 ## Unreleased
 
-- Complete Stage 8d3a caller closure and transfer 262 legacy test entry points to
-  native/shared owners with an audited ledger guard. Remove the 30 approved
-  compatibility APIs and rename `jobs.LegacyEnvelope` to `EnvelopeV1` without changing
-  v1 decoding. Preserve native cursor eligibility for expression-column ordering
-  and reject soft-delete plans without soft-delete metadata. The engine and bridges
-  remain until 8d3b.
+### Breaking data-layer changes
 
-- Render native and shared UPDATE SET lists in model declaration order for canonical
-  SQL text across equivalent updates, keeping bindings aligned. The four legacy frozen
-  comparisons that recorded assignment order replay with SET-order normalization;
-  their frozen bytes and provenance remain unchanged.
-
-- Complete Stage 8d1: move morph contracts to `model`, share relation limits through
-  `querycore`, and expose native ORM limits for bounded application batches. Native
-  dependencies retain only two explicit legacy bridges; engine removal follows in 8d3.
+- Remove generated persistence models, drafts, query/projection wrappers and their
+  generator directives. Handwrite `database/orm` declarations and `orm/rows`
+  projections; DTO, enum, validation, configuration and transport generation remain.
+- Remove `database/query`, all data-layer legacy bridges and compatibility aliases.
+  The [migration table](docs/guides/orm-migration.md#removed-api-spellings) lists every
+  denied spelling and the native replacement. The retirement guard has no allowlist.
+- Remove `Predicate.Not`, `rows.Count`, `RecordRead.All`, `SetQuery.All`,
+  `ValueSetQuery.All`, `ValueCursorQuery.Key`, `expr.Select` for row values,
+  `expr.JSONKind` and its constant re-exports, the `JSONPath` convenience methods,
+  `rows.Compile/Preflight/Each`, `orm.Load/LoadMissing`, `orm.Mutate`, `model.NewID`, transitional
+  morph aliases, and `datatable.Config.DownloadTimeout`. Keep row/aggregate
+  `.Value()`, `Table.Find/Require/Update/Delete`, distinct scoped writes,
+  `rows.Result`, the `*Read` terminals, `LoadFrom/LoadMissingFrom` and
+  `Manager.DownloadTimeout`. Extension slots use native handles and explicit slots;
+  removed owner/factory/model-binding helpers are covered in the migration table.
+- Remove `rows.Query.All`; collect projections with `rows.Read(query).All`.
+  Complete model reads retain hydration, retrieval callbacks and error propagation.
+- Remove `rows.Paginate` and `rows.SimplePaginate`; use the `Result` methods.
+- Remove `rows.Query.OrderBy`; use `rows.OrderBy(query, orders...)` for row and selected orders.
+- Remove `rows.ExplainLocked` and `rows.ExplainAnalyzeLocked`; use the transaction explain family.
+- Remove `orm.DoesntHave`; use `orm.Not(orm.Has(...))`.
+- Remove `expr.JSONOrderedScalar`; compose `expr.OrderNullableRow(expr.JSONScalar(...))`.
+- Remove `expr.NullFor`; compose `expr.NullableRow(v).Param(value.Null[T]())`.
+- Remove `extensions.Scope`, `Owner.ModelName` and `Owner.Reference`; use the corresponding
+  methods on `extensions.ORMIdentity(owner)`. Persisted `Owner.Scope` and storage-aware `Owner.Parse` remain.
+- Remove `extensions.Owner.Active`; use `ActiveSubjects` and discard ordered keys when unused.
+- Remove `rows.ScalarQuery` and `rows.ScalarNullableQuery`; use the corresponding
+  `ScalarRowQuery` / `ScalarNullableRowQuery` constructor followed by `.Value()`.
+- Remove `rows.CorrelatedScalarQuery` and `rows.CorrelatedScalarNullableQuery`; use
+  the corresponding `CorrelatedScalarRowQuery` / `CorrelatedScalarNullableRowQuery` plus `.Value()`.
+- Remove `rows.TransactionScalarQuery` and `rows.TransactionScalarNullableQuery`; use
+  `TransactionScalarRowQuery` / `TransactionScalarNullableRowQuery` plus `.Value()`.
+- Remove `rows.TransactionCorrelatedScalarQuery` and `rows.TransactionCorrelatedScalarNullableQuery`;
+  use `TransactionCorrelatedScalarRowQuery` / `TransactionCorrelatedScalarNullableRowQuery` plus `.Value()`.
+- Rename model-query `RequireFirst` to `Require` (row-result `RequireFirst` remains), and
+  insertion-first `InsertOrFirst` to `orm.CreateOrFirst`.
+- Rename `jobs.LegacyEnvelope` to `jobs.EnvelopeV1`, without an alias. Version-1
+  bytes and default decoding are unchanged.
+- Canonicalize UPDATE SET lists into model declaration order, with bindings in the
+  same order. Frozen historical SET-order comparisons retain their original bytes.
+- **Contract-ID change:** cursor request schemas now identify
+  `github.com/weiloon1234/Foundry-Go/database/orm.Cursor[...]`, replacing
+  `github.com/weiloon1234/Foundry-Go/database/query.Cursor[...]`. Regenerate clients,
+  manifests and OpenAPI together. Cursor token bytes, version and model identity
+  are unchanged. The historical datatable baseline is retained; the new native
+  cursor contract cohort records every old/new protected-artifact hash.
+- Add built-in validation message keys `foundry.decimal_positive` and
+  `foundry.positive`. Applications with translation-completeness tests must add
+  locale text for both keys.
 
 - Document lone timestamps as developer-managed fields with `NoTimestamps` and
   a compiled migration example.
@@ -32,7 +68,10 @@
   release consumer and deterministic old/new synthetic application measurement tool.
 
 
-### Go-way data layer (branch, in progress)
+### Earlier Go-way delivery history
+
+These entries describe intermediate checkpoints. Stage 8 is now complete; the
+breaking-change summary above supersedes their coexistence and pending-retirement notes.
 
 - Complete Stage 8c: model generation retired, persistence models recognized
   natively and rejected deterministically after generation; the legacy engine is

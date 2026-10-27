@@ -130,7 +130,7 @@ func (m *Manager) InspectStorage(ctx context.Context, options StorageInspection)
 		if len(keys) > 0 {
 			if err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 				f := store.Files
-				rows, err := rows.SelectValue(store.Files.Query().Where(f.Disk.Eq(string(options.Disk.ID())), f.ObjectKey.In(keys...)).Limit(storage.MaxPageSize+1), f.ObjectKey).All(ctx, tx)
+				rows, err := rows.Read(rows.SelectValue(store.Files.Query().Where(f.Disk.Eq(string(options.Disk.ID())), f.ObjectKey.In(keys...)).Limit(storage.MaxPageSize+1), f.ObjectKey)).All(ctx, tx)
 				if err != nil {
 					return err
 				}

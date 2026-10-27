@@ -5,11 +5,14 @@ existing `httppagination.MemberResponse` DTO and explicit `PresentMember` access
 mapping. Reporting contracts reuse the published `reporting` rows schemas and
 datatable sources; they do not redeclare projections or persistence models.
 
-The endpoint declarations, DTO identities, TypeScript sources and frozen contract
-artifacts remain unchanged. `TestDatatableContractBytes` compares every generated
-manifest, OpenAPI and client artifact to its frozen baseline. The native TypeScript
-gate retains strict negative contracts, real HTTP/WebSocket behavior, optional
-React/Vue form adapters and bundle assertions.
+The native cursor descriptor publishes the ORM owner's type ID. Endpoint and DTO
+identities, token bytes and datatable reporting contracts are unchanged.
+`TestDatatableContractBytes` compares generated artifacts with
+`testdata/native-cursor-contracts`. `TestCursorContractPublication` restricts changes
+from the immutable `testdata/datatable-baseline` to the cursor ID and resulting
+ownership hashes. Its provenance lists old/new hashes for every protected artifact.
 
-The accepted `httppagination` ORM migration still needs integration in this base;
-its public result aliases remain compatible. No generated output is retired here.
+Publish only through `make publish-cursor-contracts`; reruns require identical
+bytes. Run `make datatable-contracts` to check the publication. The native
+TypeScript gate retains strict negative contracts, HTTP/WebSocket behavior,
+React/Vue form adapters and bundle assertions.

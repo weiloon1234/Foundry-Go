@@ -47,7 +47,7 @@ func TestPostgresCaseInsensitiveContainsKeepsWildcardsAndNullLiteral(t *testing.
 			}
 		}
 		for name, q := range literalTextCases() {
-			got, err := q.All(t.Context(), tx)
+			got, err := Read(q).All(t.Context(), tx)
 			if err != nil {
 				return err
 			}

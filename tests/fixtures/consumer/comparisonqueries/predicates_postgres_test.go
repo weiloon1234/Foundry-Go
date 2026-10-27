@@ -1,6 +1,8 @@
 package comparisonqueries_test
 
 import (
+	"github.com/weiloon1234/Foundry-Go/value"
+
 	"errors"
 	"reflect"
 	"testing"
@@ -32,9 +34,9 @@ func TestPostgresRowValueComparisons(t *testing.T) {
 			{"greater equal", expr.GreaterOrEqual(nextAge, expr.Param(f.Age, 22)), []int{21, 22}},
 			{"text pattern", expr.Like(expr.Lower(expr.Value(f.Email)), expr.Param(f.Email, "a%@example.test")), []int{20}},
 			{"nullable pattern", expr.LikeNullable(expr.LowerNullable(expr.Value(f.Nickname)), expr.NullableRow(expr.Param(f.Email, "b%"))), []int{21}},
-			{"null equality is unknown", expr.Equal(expr.Value(f.Nickname), expr.NullFor(expr.Value(f.Email))), []int{}},
-			{"null equal", expr.NotDistinctFrom(expr.Value(f.Nickname), expr.NullFor(expr.Value(f.Email))), []int{20, 22}},
-			{"null distinct", expr.DistinctFrom(expr.Value(f.Nickname), expr.NullFor(expr.Value(f.Email))), []int{21}},
+			{"null equality is unknown", expr.Equal(expr.Value(f.Nickname), expr.NullableRow(expr.Value(f.Email)).Param(value.Null[string]())), []int{}},
+			{"null equal", expr.NotDistinctFrom(expr.Value(f.Nickname), expr.NullableRow(expr.Value(f.Email)).Param(value.Null[string]())), []int{20, 22}},
+			{"null distinct", expr.DistinctFrom(expr.Value(f.Nickname), expr.NullableRow(expr.Value(f.Email)).Param(value.Null[string]())), []int{21}},
 			{"nullable range", expr.LessNullable(expr.NullableRow(expr.Value(f.Age)), expr.NullableRow(expr.Param(f.Age, 22))), []int{20, 21}},
 		} {
 			rows, err := expr.Where(models.Users.Query(), test.condition).OrderBy(f.Age.Asc()).All(t.Context(), tx)

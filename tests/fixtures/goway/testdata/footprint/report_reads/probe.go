@@ -20,10 +20,10 @@ func Read(ctx context.Context, ex database.Executor, yield func(int64) error) er
 	if _, err := rows.Read(q).Count(ctx, ex); err != nil {
 		return err
 	}
-	if _, err := rows.Paginate(ctx, ex, q, orm.Page(1, 20)); err != nil {
+	if _, err := rows.Read(q).Paginate(ctx, ex, orm.Page(1, 20)); err != nil {
 		return err
 	}
-	if _, err := rows.SimplePaginate(ctx, ex, q, orm.Page(1, 20)); err != nil {
+	if _, err := rows.Read(q).SimplePaginate(ctx, ex, orm.Page(1, 20)); err != nil {
 		return err
 	}
 	return rows.EachRead(ctx, ex, rows.Read(q), yield)

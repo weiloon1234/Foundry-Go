@@ -37,7 +37,7 @@ func (o Owner[M, K]) Registration() Declaration {
 	if o.definition == nil {
 		return Declaration{}
 	}
-	return Declaration{name: o.Name(), model: o.ModelName(), storage: o.StorageModel(), scope: o.Scope(), recorded: o.RecordedModels(), id: o.definition.id, validate: o.Validate, subject: func(identity model.Identity) (Subject, error) {
+	return Declaration{name: o.Name(), model: ORMIdentity(o).ModelName(), storage: o.StorageModel(), scope: o.Scope(), recorded: o.RecordedModels(), id: o.definition.id, validate: o.Validate, subject: func(identity model.Identity) (Subject, error) {
 		ref, err := o.Parse(identity)
 		if err != nil {
 			return Subject{}, err
@@ -50,7 +50,7 @@ func (o Owner[M, K]) Registration() Declaration {
 		}
 		return o.SubjectKey(ref)
 	}, adopt: func(identity model.Identity) (Subject, error) {
-		renamed, err := identity.WithModelName(o.ModelName())
+		renamed, err := identity.WithModelName(ORMIdentity(o).ModelName())
 		if err != nil {
 			return Subject{}, err
 		}
@@ -77,7 +77,7 @@ func (o Owner[M, K]) Registration() Declaration {
 		}
 		result := make(map[string]bool, len(found))
 		for _, key := range found {
-			subject, err := o.SubjectKey(o.Reference(key))
+			subject, err := o.SubjectKey(ORMIdentity(o).Reference(key))
 			if err != nil {
 				return nil, err
 			}

@@ -30,7 +30,7 @@ func TestPostgresInnerJoinsAndGrouping(t *testing.T) {
 			rows.Map(reports.OrderBuyerRows.BuyerID, expr.At(buyer, models.Users.ID)),
 			rows.Map(reports.OrderBuyerRows.BuyerEmail, expr.At(buyer, models.Users.Email)),
 			rows.Map(reports.OrderBuyerRows.TotalCents, expr.At(order, models.Orders.TotalCents))), expr.At(order, models.Orders.TotalCents).Asc())
-		orders, err := orderReport.All(t.Context(), counter)
+		orders, err := rows.Read(orderReport).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}
@@ -44,7 +44,7 @@ func TestPostgresInnerJoinsAndGrouping(t *testing.T) {
 			rows.MapSelected(reports.BuyerTotalRows.Total, total.Value()),
 			rows.MapSelected(reports.BuyerTotalRows.Orders, count.Value()),
 			rows.MapSelected(reports.BuyerTotalRows.Average, expr.AvgAt(order, models.Orders.TotalCents).Value())), expr.Group(expr.At(buyer, models.Users.ID))), count.Gt(1)), total.Desc())
-		groups, err := totals.All(t.Context(), counter)
+		groups, err := rows.Read(totals).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}

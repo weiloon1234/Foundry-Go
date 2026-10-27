@@ -228,7 +228,7 @@ func TestRelationPredicatesNestWithoutAliasCapture(t *testing.T) {
 	for range 5 {
 		r = base.Where(Has(r))
 	}
-	q := d.Query().Where(Has(r), DoesntHave(base.Where(d.Key().Eq(9))))
+	q := d.Query().Where(Has(r), Not(Has(base.Where(d.Key().Eq(9)))))
 	s, e := Compile(q)
 	if e != nil || strings.Count(s.SQL(), "EXISTS(") != 7 || !strings.Contains(s.SQL(), `AS "foundry_related_6"`) || !reflect.DeepEqual(s.Arguments(), []any{int64(7), int64(9)}) {
 		t.Fatal(s.SQL(), s.Arguments(), e)
@@ -268,7 +268,7 @@ func TestRelationPredicatesUseOnlyFilterScopes(t *testing.T) {
 	unknown.plan = copyRelationPlan(base.plan)
 	unknown.plan.query.ast.Predicates = []querycore.Expression{querycore.Comparison{Operand: querycore.FieldRef{Table: "scope_records", Column: "missing"}, Operator: querycore.IsNull}}
 	var missing *HasMany[scopeTransferRow, scopeTransferRow]
-	for _, p := range []Predicate[scopeTransferRow]{Has(missing), DoesntHave[scopeTransferRow, scopeTransferRow](nil), Has(HasMany[scopeTransferRow, scopeTransferRow]{}), Has(ThroughRelation[scopeTransferRow, scopeTransferRow, scopeTransferRow]{}), Has(window), Has(unknown)} {
+	for _, p := range []Predicate[scopeTransferRow]{Has(missing), Not(Has[scopeTransferRow, scopeTransferRow](nil)), Has(HasMany[scopeTransferRow, scopeTransferRow]{}), Has(ThroughRelation[scopeTransferRow, scopeTransferRow, scopeTransferRow]{}), Has(window), Has(unknown)} {
 		s, e := Compile(d.Query().Where(p))
 		if !errors.Is(e, fault.Invalid) || s.SQL() != "" {
 			t.Fatal("invalid relation compiled", e)

@@ -30,4 +30,4 @@ type fields struct {
 var schema = rows.Define(func(b rows.Builder[result], r *result) fields {
 	return fields{b.Row(), rows.FieldOf(b, &r.ID, orm.Codec(codec.ID[models.User]()))}
 })
-var _ = rows.Select(outer, schema, rows.MapSelected(schema.ID, rows.ScalarQuery(outer, inner)))
+var _ = rows.Select(outer, schema, rows.MapSelected(schema.ID, rows.ScalarRowQuery(outer, inner).Value()))

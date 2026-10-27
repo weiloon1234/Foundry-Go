@@ -256,7 +256,7 @@ The SDK's bounded parser and encoder preserve existing Go numeric wire formats
 without passing complete payloads through JavaScript's `JSON.parse` or
 `JSON.stringify`. Do not preparse transport responses: a rounded integer cannot
 be recovered. `encodeContract` and `decodeContract` expose the same codecs for
-standalone DTOs. Explicit dynamic JSON uses `JSONNumber` for exact numeric tokens
+standalone DTOs. Explicit dynamic JSON uses `import("./generated/contracts_foundry.gen.js").JSONNumber` for exact numeric tokens
 and `JSONValue` for its tree. String-keyed maps use owned objects without inherited
 properties; typed map keys retain their canonical domain syntax. An explicit map
 schema without a key descriptor accepts arbitrary string names while retaining its
@@ -495,7 +495,7 @@ when no issues were found. The server always remains the validation authority.
 `contractMetadata()` returns an owned lossless JSON tree containing locale IDs,
 message argument definitions, enum case labels, permission labels, validation
 trees, rendered notification payload references and datatable columns/filters.
-Numeric metadata tokens use `JSONNumber`. Locale metadata describes contracts;
+Numeric metadata tokens use `import("./generated/contracts_foundry.gen.js").JSONNumber`. Locale metadata describes contracts;
 it does not bundle translations. The runtime's `catalogTranslations`,
 `formatMessage` and `formatText` format an application's own JSON catalogs; see
 [browser catalogs](localization.md#browser-catalogs). Permission labels and table

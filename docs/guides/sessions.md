@@ -159,7 +159,7 @@ backend's clock rather than the scope's cached metadata.
 `web.WithObserver(observer)` returns a binding sharing the same guard that reports
 `auth.EventLogin` after full issuance or MFA completion, `auth.EventLogout` for
 `Logout` and `RevokeCurrent`, and `auth.EventOtherDevicesLoggedOut` (with
-`Count`). Observers run after the backend returned and cannot undo the change; see
+`.Count`). Observers run after the backend returned and cannot undo the change; see
 [authentication events](authentication.md#lifecycle-events).
 
 `RevokeAll` serializes with issuance for that subject/address. A new session

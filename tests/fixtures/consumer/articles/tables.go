@@ -74,7 +74,7 @@ var ArticleIdentity = orm.IdentityOf(Articles.Table, Articles.Key())
 // AuthorIdentity preserves the concrete stored identity. Example: AuthorIdentity.ReferenceOf(author).
 var AuthorIdentity = orm.IdentityOf(Authors.Table, Authors.Key())
 
-// ArticleOwner pins the historical extension owner scope. Example: ArticleOwner.Reference(id).
+// ArticleOwner pins the historical extension owner scope. Example: extensions.ORMIdentity(ArticleOwner).Reference(id).
 var ArticleOwner = extensions.DefineORMOwner("articles", ArticleIdentity, extensions.OwnerOptions{StorageModel: "articles"})
 
 // ArticleSlotHandles groups the thin external-store handles. Example: ArticleSlots.From(runtime).

@@ -1,6 +1,6 @@
 # Filter models through relationships
 
-`orm.Has` and `orm.DoesntHave` use [declared relationships](model-relations.md) to filter parent models. They compile to correlated EXISTS/NOT EXISTS through the shared query compiler. Applications supply typed descriptors and field predicates; Foundry supplies SQL aliases, key comparisons and parameter binding. The [independent consumer fixture](../../tests/fixtures/consumer/relationshipfilters/filters_postgres_test.go) demonstrates the public API.
+`orm.Has` and `orm.Not(orm.Has(...))` use [declared relationships](model-relations.md) to filter parent models. They compile to correlated EXISTS/NOT EXISTS through the shared query compiler. Applications supply typed descriptors and field predicates; Foundry supplies SQL aliases, key comparisons and parameter binding. The [independent consumer fixture](../../tests/fixtures/consumer/relationshipfilters/filters_postgres_test.go) demonstrates the public API.
 
 ## Matching and missing relations
 
@@ -9,10 +9,10 @@ orders := models.UserLinks.Orders.
     Where(models.Orders.TotalCents.Gte(1000))
 
 buyers, err := models.Users.Query().Where(orm.Has(orders)).All(ctx, db)
-others, err := models.Users.Query().Where(orm.DoesntHave(orders)).All(ctx, db)
+others, err := models.Users.Query().Where(orm.Not(orm.Has(orders))).All(ctx, db)
 ```
 
-This selects users with, or without, an order satisfying the filter. It uses one parent SQL statement, without loading related models or collecting IDs first. Several matching children do not multiply the parent rows. An absent nullable relationship key does not match SQL equality, so its parent qualifies for `WhereDoesntHave`.
+This selects users with, or without, an order satisfying the filter. It uses one parent SQL statement, without loading related models or collecting IDs first. Several matching children do not multiply the parent rows. An absent nullable relationship key does not match SQL equality, so its parent qualifies for `orm.Not(orm.Has(...))`.
 
 The same predicate functions accept belongs-to, has-one, has-many and many-to-many descriptors. They preserve the model query: pagination and scoped model writes remain available after filtering. A relationship owned by another parent model fails Go compilation.
 

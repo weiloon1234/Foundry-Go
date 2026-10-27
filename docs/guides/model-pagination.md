@@ -37,7 +37,7 @@ Model simple and cursor pages load requested relations only for returned models.
 
 For typed result queries, use the [row pagination APIs](result-cursor-pagination.md).
 
-`rows.Paginate` and `rows.SimplePaginate` page declared result queries. `PageResult[Result]`/`SimplePage[Result]` retain the complete declared result or selected value, including nullable wrappers and exact decimal codecs. A page of summaries cannot be assigned to a page of persisted users.
+`rows.Read(query).Paginate` and `rows.Read(query).SimplePaginate` page declared result queries. `PageResult[Result]`/`SimplePage[Result]` retain the complete declared result or selected value, including nullable wrappers and exact decimal codecs. A page of summaries cannot be assigned to a page of persisted users.
 
 These read-only queries require an explicit ordering at the level being paginated. Foundry cannot infer a unique key for arbitrary grouped rows, joins or reports. Supply all keys needed for a deterministic order; ordering presence can be validated, but uniqueness remains the query/schema contract. Complete-model projections and distinct model selections follow this same rule. Ordering a nested input alone does not order its outer result. [PostgreSQL LIMIT/OFFSET](https://www.postgresql.org/docs/18/queries-limit.html)
 

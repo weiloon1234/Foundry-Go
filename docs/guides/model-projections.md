@@ -102,7 +102,7 @@ grouping. [Filtered aggregates](model-aggregate-filters.md) retain these rules.
 | Complete record selection | `rows.ReadRecord(q)` | Same `*Read` functions |
 | Record / value set | `rows.ReadSet(q)` / `rows.ReadValues(q)` | Same `*Read` functions |
 
-Read handles expose `All`, `First`, `RequireFirst`, `Count` and `Exists`. `First`
+Read handles expose `All`, `First`, `RequireFirst`, `Result.Count` and `Exists`. `First`
 returns `value.Optional[R]`; `RequireFirst` reports `database.NotFound`. Count
 observes grouping, HAVING, DISTINCT and the selected window. `Limit(0)` stays empty.
 Use `rows.Read(q).Count` for projection counts.
@@ -114,7 +114,7 @@ bounded batches after closing rows. DTO/scalar streams decode one result at a ti
 Transactions remain caller-owned; avoid another operation on an open transaction
 cursor. Compile/preflight do no I/O and preserve validation errors.
 
-`rows.Paginate` and `rows.SimplePaginate` require explicit ordering and reject an
+`rows.Read(query).Paginate` and `rows.Read(query).SimplePaginate` require explicit ordering and reject an
 existing outer LIMIT or nonzero OFFSET. The same rule applies to common result
 read handles; nested input windows remain intact. Simple pages use one lookahead
 row without a count.

@@ -24,7 +24,7 @@ slots with `Users.Query().With(UserValues.OrderCount, UserValues.OrderTotal)`;
 
 | `expr` constructor | Result | Empty/all-NULL input |
 | --- | --- | --- |
-| `Count[S]()` | `int64` | Zero; counts rows |
+| `expr.Count[S]()` | `int64` | Zero; counts rows |
 | `CountField(column)` | `int64` | Zero; counts non-NULL values |
 | `CountDistinctField(column)` | `int64` | Zero; counts distinct non-NULL values |
 | `Exists[S]()` | `bool` | False |

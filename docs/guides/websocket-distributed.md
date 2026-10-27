@@ -144,7 +144,7 @@ leave removes that subject; missed process cleanup expires by TTL. Heartbeat ren
 live leases; renewal touches only the connection's own entries and restores a
 missing entry from the connection record. The presence worker reconciles locally
 observed scopes. Revisions prevent an older response from overwriting newer counts. DTOs refresh on new joins, not on every
-authorization refresh. `Presence.Members` and `Count` query the authority and return
+authorization refresh. `Presence.Members` and `Presence.Count` query the authority and return
 errors during failure instead of inventing local authoritative counts.
 
 Trusted server code calls `DisconnectSubject(ctx, publisher, guard, user.FoundryReference())`

@@ -117,7 +117,7 @@ func TestTransactionCorrelationAndLateralLocks(t *testing.T) {
 		t.Fatal("foreign lateral parent")
 	}
 	scalar := SelectTransactionCorrelatedScalar(c, expr.Row(y).Value()).Limit(1).ForShare().NoWait()
-	out := SelectTransactionValue(a, TransactionCorrelatedScalarQuery(scalar)).Where(scalar.Exists(), TransactionInCorrelatedQuery(expr.At(TransactionScope(a), m.ID), scalar))
+	out := SelectTransactionValue(a, TransactionCorrelatedScalarRowQuery(scalar).Value()).Where(scalar.Exists(), TransactionInCorrelatedQuery(expr.At(TransactionScope(a), m.ID), scalar))
 	sql = compileTransaction(t, out.core.Source)
 	if !strings.Contains(sql, `FOR SHARE NOWAIT`) || !strings.Contains(sql, `EXISTS(SELECT`) {
 		t.Fatal(sql)
@@ -144,7 +144,7 @@ func TestTransactionSubqueriesUseCallerTransaction(t *testing.T) {
 	id := expr.At(TransactionScope(a), m.ID)
 	selected := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), m.ID)).Value()).Limit(1)
 	scalar := TransactionScalarOf(selected).ForShare().SkipLocked()
-	q := SelectTransactionValue(a, TransactionScalarQuery(a, scalar)).Where(TransactionInQuery(id, scalar), TransactionExistsQuery(a, scalar))
+	q := SelectTransactionValue(a, TransactionScalarRowQuery(a, scalar).Value()).Where(TransactionInQuery(id, scalar), TransactionExistsQuery(a, scalar))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {int64(7)}}}
 	db, err := database.Open(t.Context(), database.Adapter{Connector: recordConnector{state}}, database.DefaultPoolConfig())
 	if err != nil {
@@ -165,7 +165,7 @@ func TestTransactionSubqueriesUseCallerTransaction(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	nullable := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), m.Nickname)).Value())
-	compileTransaction(t, SelectTransactionValue(a, TransactionScalarNullableQuery(a, nullable)).core.Source)
+	compileTransaction(t, SelectTransactionValue(a, TransactionScalarNullableRowQuery(a, nullable).Value()).core.Source)
 	_ = TransactionScalarNullableRowQuery(a, nullable)
 	_ = TransactionScalarRowQuery(a, selected)
 	empty := TransactionScalarOf(TransactionValue[TransactionAlias[right, member], int64]{})

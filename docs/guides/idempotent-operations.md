@@ -51,7 +51,7 @@ route := operation.Handle(
 Names in this short example are application declarations. The complete
 [independent consumer](../../tests/fixtures/consumer/idempotenthttp/application.go)
 uses required authentication, a bound workspace, its current resource policy,
-generated drafts, typed DTOs and the existing outbox. The authenticated adapter
+typed ORM assignments, typed DTOs and the existing outbox. The authenticated adapter
 passes the concrete actor to both callbacks. The model-binding adapter additionally
 passes its concrete bound request. `Prepare` is the lower-level composition point
 for resolving current resources and returning a transaction callback; it runs on

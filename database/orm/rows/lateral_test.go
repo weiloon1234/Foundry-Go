@@ -38,7 +38,7 @@ func TestLateralModelNullabilityAndWindows(t *testing.T) {
 	schema := outerSchema()
 	q := Select(j, schema, Map(schema.ID, expr.AtNullable(nullable, m.ID)), Map(schema.Nickname, expr.AtNullableValue(nullable, m.Nickname)))
 	state := &driverState{columns: []string{"id", "nickname"}, rows: [][]driver.Value{{nil, nil}, {int64(3), "name"}}}
-	got, err := q.All(t.Context(), openTest(t, state))
+	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].ID.IsNull() || got[1].ID.IsNull() {
 		t.Fatal(got, err)
 	}
@@ -60,7 +60,7 @@ func TestLateralModelNullabilityAndWindows(t *testing.T) {
 		node.Joins[0].Kind = source
 		q2 := q
 		q2.source.Node = node
-		if _, err := q2.All(t.Context(), openTest(t, &driverState{columns: []string{"id", "nickname"}})); err != nil {
+		if _, err := Read(q2).All(t.Context(), openTest(t, &driverState{columns: []string{"id", "nickname"}})); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -77,7 +77,7 @@ func TestLateralProjectionFieldsAndOwnership(t *testing.T) {
 	field := AtNullable(NullableRightScope(j, LateralScope(latest)), totals.Count)
 	schema := correlationCountSchema()
 	state := &driverState{columns: []string{"count"}, rows: [][]driver.Value{{nil}, {int64(2)}}}
-	got, err := Select(j, schema, MapSelected(schema.Count, expr.Row(field).Value())).All(t.Context(), openTest(t, state))
+	got, err := Read(Select(j, schema, MapSelected(schema.Count, expr.Row(field).Value()))).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].Count.IsNull() {
 		t.Fatal(got, err)
 	}
@@ -132,7 +132,7 @@ func TestLateralSharedCompilerRejectsMissingForwardAndUnsupportedJoins(t *testin
 				join.Source.Query = nil
 			}
 			state := &driverState{}
-			if _, err := q.All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
+			if _, err := Read(q).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal(err, state.sql)
 			}
 		})

@@ -25,7 +25,7 @@ Nullable arithmetic requires nullable operands: explicitly widen required values
 with `NullableRow`. Nullable calculations keep one nullable result layer; their
 literal comparisons take present values. Bound parameters use a column's existing
 codec and are captured when constructed; zero, false and empty values remain supplied
-values. `Param` on a nullable column takes the present value; `NullFor` constructs
+values. `Param` on a nullable column takes the present value; `expr.NullableRow(v).Param(value.Null[T]())` constructs
 an explicitly typed SQL NULL. Computed/selected `Param` methods take their exact
 result type.
 
@@ -35,7 +35,7 @@ comparisons return `HavingPredicate`, never a row predicate. `OrderRow` and
 `OrderValue` expose literal range comparisons only on ordered types. Stored enum
 handles do not satisfy `GreaterColumn`'s ordered-column capability.
 
-`Count[S]()` counts rows, including NULL fields, returning required `int64` with
+`expr.Count[S]()` counts rows, including NULL fields, returning required `int64` with
 zero for empty input. `Exists[S]()` returns required `bool`, false for empty input,
 and exposes no range comparisons. Both use the existing aggregate compiler and
 preserve the source query's scopes, executor and transaction.
@@ -98,7 +98,7 @@ with the same name.
 `NullableOrderedAggregate.Param(v)` accepts a present value and returns a required
 row expression, for example `expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())`.
 It preserves the result codec, scope and existing errors. `CountField` and `CountDistinctField` skip NULLs and return
-required `int64`, zero on empty input. `Count` includes NULL rows; `Exists` returns
+required `int64`, zero on empty input. `expr.Count` includes NULL rows; `Exists` returns
 false on empty input. There is no general aggregate DISTINCT operation.
 
 Each field aggregate also has an `At` constructor, such as
@@ -133,9 +133,9 @@ and `rows.DistinctOnValues(q, selectedKeys...)` select one result per key combin
 Order by the DISTINCT ON keys first, then precedence and a unique tie breaker;
 without ordering the chosen row is unspecified. These operations replace earlier
 DISTINCT clauses, preserve result types and remain read-only. PostgreSQL grouping
-and DISTINCT/order validation still apply. Existing `rows.Query.OrderBy` accepts
-row orders; the package function additionally accepts selected ordering, including
-aggregate results. General subquery and window entry points belong to later slices.
+and DISTINCT/order validation still apply. `rows.OrderBy` accepts row and selected orders, including aggregate results.
+Use the [composition APIs](../rows/README.md) for subqueries and the window
+functions in this package for typed partitions, ordering and frames.
 
 Relation slots reuse these descriptors through `Related(source, computation)`.
 Bind the result with `Users.OrdersCount.Using(...)`, then load it through the existing
@@ -358,9 +358,9 @@ Declared property names are escaped SQL literals for expression indexes; runtime
 keys and indices use the statement's normal bind parameters.
 
 `JSONOptional`, `JSONNullable`, `JSONPointer` and `JSONDocument` explicitly unwrap
-payload wrappers for traversal. `JSONScalar`, `JSONOrderedScalar` and
-`JSONTextScalar` require a codec for the exact resulting payload type. They cannot
-change the payload type. All path predicates retain the original query owner.
+payload wrappers for traversal. `expr.JSONScalar` and `expr.JSONTextScalar` require a codec for the exact resulting payload type. They cannot
+change the payload type. Compose `expr.OrderNullableRow(expr.JSONScalar(...))`
+for ordered payload comparisons. All path predicates retain the original query owner.
 
 | Operation | Missing path or SQL-null ancestor | Present JSON null |
 | --- | --- | --- |

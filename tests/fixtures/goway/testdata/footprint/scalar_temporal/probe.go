@@ -36,5 +36,5 @@ func Run(ctx context.Context, db database.Executor) ([]result, error) {
 	local := expr.LocalAt(at, expr.UTCZone())
 	period := expr.InstantDifference(expr.TransactionTime(rows.ModelScope(models.Orders.Query())), at)
 	distance := expr.SphericalDistance(n, n, expr.GeographicPoint{})
-	return rows.Select(rows.FromModel(models.Orders.Query()), schema, rows.MapSelected(schema.Day, expr.DateOf(local).Value()), rows.MapSelected(schema.Seconds, expr.Second(local).Value()), rows.MapSelected(schema.Period, expr.NegateInterval(period).Value()), rows.MapSelected(schema.Distance, distance.Value())).All(ctx, db)
+	return rows.Read(rows.Select(rows.FromModel(models.Orders.Query()), schema, rows.MapSelected(schema.Day, expr.DateOf(local).Value()), rows.MapSelected(schema.Seconds, expr.Second(local).Value()), rows.MapSelected(schema.Period, expr.NegateInterval(period).Value()), rows.MapSelected(schema.Distance, distance.Value()))).All(ctx, db)
 }

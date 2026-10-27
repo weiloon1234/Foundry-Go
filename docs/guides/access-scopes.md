@@ -25,7 +25,7 @@ Construction sorts and snapshots names. `Names()` returns a copy; `Contains` and
 for `AccessScopes[Admin]`. Its zero value grants nothing.
 
 The [independent consumer](../../tests/fixtures/consumer/authenticating/access_scopes.go)
-compiles these APIs against generated models. A static semantic name is the
+compiles these APIs against handwritten ORM declarations. A static semantic name is the
 persistence/contract identifier; a scope does not register a permission or policy.
 
 ## Verify a credential, then enforce its grant

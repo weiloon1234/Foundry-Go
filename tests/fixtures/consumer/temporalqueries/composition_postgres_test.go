@@ -47,7 +47,7 @@ func TestPostgresTemporalComposition(t *testing.T) {
 			b := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)
 			want = append(want, value.Of((a.Unix()-b.Unix())/86400))
 		}
-		temporalValues(t, tx, rows.CorrelatedScalarQuery(selected), want)
+		temporalValues(t, tx, rows.CorrelatedScalarRowQuery(selected).Value(), want)
 		window := expr.WindowFor(rows.ModelScope(q)).OrderBy(expr.Value(f.ID).Asc())
 		roundtrip := expr.UnixMillisecondsValue(expr.FromUnixMillisValue(expr.RowNumber(window)))
 		temporalValues(t, tx, roundtrip, []int64{1, 2, 3, 4})

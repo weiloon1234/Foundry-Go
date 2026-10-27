@@ -49,11 +49,11 @@ func TestPostgresRetrievalCompositionAndProjectionBoundaries(t *testing.T) {
 			{"find", 1, func(ctx context.Context) error { _, err := retrievalqueries.Members.Find(ctx, tx, root.ID); return err }},
 			{"count", 0, func(ctx context.Context) error { _, err := q.Count(ctx, tx); return err }},
 			{"scalar", 0, func(ctx context.Context) error {
-				_, err := rows.SelectValue(q, f.Name).All(ctx, tx)
+				_, err := rows.Read(rows.SelectValue(q, f.Name)).All(ctx, tx)
 				return err
 			}},
 			{"declared-dto", 0, func(ctx context.Context) error {
-				labels, err := projection.OrderBy(expr.Value(f.Name).Asc()).All(ctx, tx)
+				labels, err := rows.Read(rows.OrderBy(projection, expr.Value(f.Name).Asc())).All(ctx, tx)
 				if err == nil && (len(labels) != 2 || labels[0].Name != "child" || labels[1].Name != "root") {
 					return errors.New("DTO selection silently evaluated getters or changed stored fields")
 				}

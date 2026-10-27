@@ -240,7 +240,7 @@ func identity(user models.User) (model.Identity, error) {
 
 // migration:scalar-after
 func scalar(ctx context.Context, db database.Executor) error {
-	_, err := rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents).All(ctx, db)
+	_, err := rows.Read(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)).All(ctx, db)
 	return err
 }
 

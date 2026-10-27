@@ -65,7 +65,7 @@ func (o Owner[M, K]) Validate() error {
 		return invalid("too many previous model extension owner models")
 	}
 	for i, previous := range o.definition.previous {
-		if !sqlname.Table(previous) || previous == o.ModelName() || previous == o.StorageModel() || slices.Contains(o.definition.previous[:i], previous) {
+		if !sqlname.Table(previous) || previous == ORMIdentity(o).ModelName() || previous == o.StorageModel() || slices.Contains(o.definition.previous[:i], previous) {
 			return invalid("invalid previous model extension owner model")
 		}
 	}
@@ -80,7 +80,7 @@ func (o Owner[M, K]) RecordedModels() []string {
 	if o.definition == nil {
 		return nil
 	}
-	models := []string{o.ModelName()}
+	models := []string{ORMIdentity(o).ModelName()}
 	if storage := o.StorageModel(); storage != models[0] {
 		models = append(models, storage)
 	}
@@ -92,15 +92,9 @@ func (o Owner[M, K]) Name() OwnerName {
 	}
 	return o.definition.name
 }
-func (o Owner[M, K]) ModelName() string {
-	if o.definition == nil {
-		return ""
-	}
-	return o.definition.source.ModelName()
-}
 
 // StorageModel is the declared model name of the persisted owner scope. It
-// equals ModelName unless OwnerOptions declared a stable storage identity.
+// equals the ORM identity's model name unless OwnerOptions pins a storage identity.
 func (o Owner[M, K]) StorageModel() string {
 	if o.definition == nil {
 		return ""
@@ -114,12 +108,6 @@ func (o Owner[M, K]) StorageModel() string {
 // Scope is the opaque persisted owner namespace. It depends only on the owner
 // name and declared storage model, so a pinned storage model survives renames.
 func (o Owner[M, K]) Scope() string { return Digest(string(o.Name()), o.StorageModel()) }
-func (o Owner[M, K]) Reference(key K) model.Reference[M, K] {
-	if o.definition == nil {
-		return model.Reference[M, K]{}
-	}
-	return o.definition.source.Reference(key)
-}
 
 // Parse restores a typed reference from a serialized identity. An identity
 // attributed to the declared storage model is accepted as this owner's model:
@@ -129,7 +117,7 @@ func (o Owner[M, K]) Parse(identity model.Identity) (model.Reference[M, K], erro
 	if err := o.Validate(); err != nil {
 		return model.Reference[M, K]{}, err
 	}
-	if current := o.ModelName(); identity.ModelName() != current && identity.ModelName() == o.StorageModel() {
+	if current := ORMIdentity(o).ModelName(); identity.ModelName() != current && identity.ModelName() == o.StorageModel() {
 		renamed, err := identity.WithModelName(current)
 		if err != nil {
 			return model.Reference[M, K]{}, err
@@ -227,18 +215,9 @@ func (o Owner[M, K]) Lock(ctx context.Context, tx *database.Tx, registry *Regist
 	return subject, nil
 }
 
-// Active performs one primary-key-only query for a bounded batch and returns
-// the subject keys of owners still visible under the declared soft-delete
-// policy, as RetainedSubjects does for maintenance. The keys are opaque
-// Subject.Key values, not application IDs; match a reference with SubjectKey.
-func (o Owner[M, K]) Active(ctx context.Context, executor database.Executor, registry *Registry, references []model.Reference[M, K]) (map[string]bool, error) {
-	active, _, err := o.ActiveSubjects(ctx, executor, registry, references)
-	return active, err
-}
-
-// ActiveSubjects is Active that also returns each reference's subject key, in
-// order, as SubjectKey derives it. A batch reader matches its own owners with
-// them instead of deriving every key again.
+// ActiveSubjects performs one bounded primary-key query for owners visible under
+// the declared soft-delete policy. It returns active opaque Subject.Key values
+// and each reference's subject key in input order, as SubjectKey derives it.
 func (o Owner[M, K]) ActiveSubjects(ctx context.Context, executor database.Executor, registry *Registry, references []model.Reference[M, K]) (map[string]bool, []string, error) {
 	if err := o.Check(registry); err != nil {
 		return nil, nil, err
@@ -274,7 +253,7 @@ func (o Owner[M, K]) ActiveSubjects(ctx context.Context, executor database.Execu
 		// only then is its subject derived again.
 		subject, ok := subjects[key]
 		if !ok {
-			if subject, err = o.SubjectKey(o.Reference(key)); err != nil {
+			if subject, err = o.SubjectKey(ORMIdentity(o).Reference(key)); err != nil {
 				return nil, nil, err
 			}
 		}

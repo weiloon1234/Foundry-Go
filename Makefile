@@ -23,8 +23,8 @@ test -n "$$task_packages"; \
 printf '%s\n' "$$task_packages" | xargs -n $(TEST_PACKAGE_BATCH_SIZE) sh -c '$(GO) test -timeout=$(TEST_TIMEOUT) $(1) "$$@" || exit 255' foundry-tests
 endef
 
-# Framework-owned generated models precede consumer generation so a fresh
-# checkout can bootstrap their metadata without relying on existing output.
+# Framework-owned DTO and configuration outputs precede consumer generation so
+# a fresh checkout can bootstrap metadata without relying on existing output.
 # The repository opts into managed field notes, which its editor tests inspect.
 define generate_packages
 set -eu; for task_generate_dir in $(GENERATION_DIRS); do \
@@ -88,7 +88,11 @@ release-tools-check:
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p '*_test.py'
 
 datatable-contracts:
-	cd tests/fixtures/consumer && $(GO) test -timeout=$(TEST_TIMEOUT) -v ./clientcontracts -run '^(TestDatatableContractBytes|TestReportingContractCoverage)$$'
+	cd tests/fixtures/consumer && $(GO) test -timeout=$(TEST_TIMEOUT) -v ./clientcontracts -run '^(TestDatatableContractBytes|TestReportingContractCoverage|TestCursorContractPublication)$$'
+
+.PHONY: publish-cursor-contracts
+publish-cursor-contracts:
+	cd tests/fixtures/consumer && FOUNDRY_PUBLISH_CURSOR_CONTRACTS=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^TestPublishCursorContracts$$'
 
 typescript-check:
 	@test -n "$$FOUNDRY_TEST_NODE" -a -n "$$FOUNDRY_TEST_TYPESCRIPT" || { printf 'Set FOUNDRY_TEST_NODE and FOUNDRY_TEST_TYPESCRIPT to existing native tool paths.\n'; exit 1; }

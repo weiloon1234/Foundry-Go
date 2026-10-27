@@ -35,7 +35,7 @@ func (e *pageExecutor) Query(ctx context.Context, sql string, args ...any) (*dat
 
 func summaries() rows.Query[models.User, reports.UserSummary] {
 	u, r := models.Users, reports.UserSummaries
-	return rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.Row(expr.Value(u.Key())).Value()), rows.MapSelected(r.Email, expr.Row(expr.Value(u.Email)).Value()), rows.MapSelected(r.Nickname, expr.Row(expr.Value(u.Nickname)).Value()), rows.MapSelected(r.Status, expr.Row(expr.Value(u.Status)).Value())).OrderBy(expr.Value(u.Email).Asc(), expr.Value(u.Key()).Asc())
+	return rows.OrderBy(rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.Row(expr.Value(u.Key())).Value()), rows.MapSelected(r.Email, expr.Row(expr.Value(u.Email)).Value()), rows.MapSelected(r.Nickname, expr.Row(expr.Value(u.Nickname)).Value()), rows.MapSelected(r.Status, expr.Row(expr.Value(u.Status)).Value())), expr.Value(u.Email).Asc(), expr.Value(u.Key()).Asc())
 }
 
 func TestPostgresSimpleModelsAndEagerLookahead(t *testing.T) {

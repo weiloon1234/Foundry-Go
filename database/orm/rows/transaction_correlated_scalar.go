@@ -53,25 +53,15 @@ func (s TransactionCorrelatedScalar[O, I, V]) Exists() expr.Predicate[O] {
 	return expr.FoundryPredicateValue[O](ormcore.CorrelatedExists(s.core), sqlowner.Expressions())
 }
 
-// TransactionCorrelatedScalarQuery widens a missing scalar result to NULL. Example: rows.TransactionCorrelatedScalarQuery(selected.Limit(1)).
-func TransactionCorrelatedScalarQuery[O, I TransactionScopeType, V any](s TransactionCorrelatedScalar[O, I, V]) expr.Selected[O, value.Nullable[V]] {
-	return expr.Nullable(expr.FoundrySelectedValue[O](ormcore.CorrelatedScalarExpression(s.core), s.column, sqlowner.Expressions()))
-}
-
-// TransactionCorrelatedScalarNullableQuery keeps one nullable result layer. Example: rows.TransactionCorrelatedScalarNullableQuery(nullableSelection).
-func TransactionCorrelatedScalarNullableQuery[O, I TransactionScopeType, V any](s TransactionCorrelatedScalar[O, I, value.Nullable[V]]) expr.Selected[O, value.Nullable[V]] {
-	return expr.FoundrySelectedValue[O](ormcore.CorrelatedScalarExpression(s.core), s.column, sqlowner.Expressions())
-}
-
 // TransactionCorrelatedScalarRowQuery exposes a correlated scalar in row expressions. Example: expr.GreaterNullable(age,rows.TransactionCorrelatedScalarRowQuery(selected)).
 func TransactionCorrelatedScalarRowQuery[O, I TransactionScopeType, V any](s TransactionCorrelatedScalar[O, I, V]) expr.RowExpression[O, value.Nullable[V]] {
-	v := TransactionCorrelatedScalarQuery(s)
+	v := expr.Nullable(expr.FoundrySelectedValue[O](ormcore.CorrelatedScalarExpression(s.core), s.column, sqlowner.Expressions()))
 	return expr.FoundryRowExpression[O](expr.FoundrySelected(v, sqlowner.Expressions()), expr.FoundrySelectedColumn(v, sqlowner.Expressions()), sqlowner.Expressions())
 }
 
 // TransactionCorrelatedScalarNullableRowQuery preserves nullable row-expression results. Example: rows.TransactionCorrelatedScalarNullableRowQuery(selected).
 func TransactionCorrelatedScalarNullableRowQuery[O, I TransactionScopeType, V any](s TransactionCorrelatedScalar[O, I, value.Nullable[V]]) expr.RowExpression[O, value.Nullable[V]] {
-	v := TransactionCorrelatedScalarNullableQuery(s)
+	v := expr.FoundrySelectedValue[O](ormcore.CorrelatedScalarExpression(s.core), s.column, sqlowner.Expressions())
 	return expr.FoundryRowExpression[O](expr.FoundrySelected(v, sqlowner.Expressions()), expr.FoundrySelectedColumn(v, sqlowner.Expressions()), sqlowner.Expressions())
 }
 

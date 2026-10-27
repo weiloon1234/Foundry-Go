@@ -317,7 +317,7 @@ func TestJoinedExistenceSQLMatchesOldAPI(t *testing.T) {
 				case "pivot":
 					_, err = j.Parents.Query().Where(orm.Has(j.Peers.WherePivot(j.Pivots.Role.Eq("admin")), j.Targets.Rank.Gt(1))).Count(ctx, db)
 				case "hop":
-					_, err = j.Parents.Query().Where(orm.DoesntHave(j.TargetsThrough, j.Targets.Rank.Gt(1))).Count(ctx, db)
+					_, err = j.Parents.Query().Where(orm.Not(orm.Has(j.TargetsThrough, j.Targets.Rank.Gt(1)))).Count(ctx, db)
 				case "morph_pivot":
 					_, err = j.Parents.Query().Where(orm.Has(j.MorphPeers)).Count(ctx, db)
 				case "morph_to":

@@ -39,7 +39,7 @@ runtime.
 method. `operation(name).metadata` exposes route identity, access, media types,
 statuses and declared endpoint limits. These are the exported endpoint limits;
 inherited server/proxy limits and file MIME detection remain server policy.
-Unsafe-size metadata numbers remain `JSONNumber` values instead of being rounded
+Unsafe-size metadata numbers remain `import("./generated/contracts_foundry.gen.js").JSONNumber` values instead of being rounded
 or clamped. Enum `choices` use the existing codec's client values, including wide
 integers as strings; each type's choices are decoded once and shared. Metadata
 and descriptors are immutable snapshots checked against the manifest version. Unknown

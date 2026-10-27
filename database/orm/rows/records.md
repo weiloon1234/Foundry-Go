@@ -17,13 +17,13 @@ summary := rows.Select(rows.From(Orders.Query()), Summary,
 a := rows.AsRecord[summarySide](rows.RecordOf(rows.Limit(summary, 10)), "summary")
 result := rows.SelectRecord(a, rows.Scope(a)).
     OrderBy(rows.At(rows.Scope(a), Summary.Amount).Asc())
-items, err := result.All(ctx, db)
+items, err := rows.ReadRecord(result).All(ctx, db)
 ```
 
 `SelectRecord(source, scope)` selects every field from one preserved source. Its
-result retains the input scope, and exposes `Where`, `OrderBy`, `Limit`, `Offset`
-and `All`. A nullable join side requires an explicitly nullable row declaration
-and `rows.Select`. Both the type boundary and shared compiler reject selecting a
+result retains the input scope, and exposes `Where`, `OrderBy`, `Limit`
+and `Offset`; use `rows.ReadRecord(result).All` for collection. A nullable join side
+requires an explicitly nullable row declaration and `rows.Select`. Both the type boundary and shared compiler reject selecting a
 nullable side as a complete record. Foreign declarations with the same Go type
 or alias fail validation.
 
@@ -70,7 +70,7 @@ A model can carry an ad-hoc relation aggregate without adding a model slot:
 count := expr.RelatedValue(UserRelations.Orders, expr.Count[Order]())
 query := expr.OrderBy(expr.Where(Users.Query(), expr.OrderRow(count).Gte(2)), count.Desc())
 annotated := rows.WithValue(query, count)
-items, err := annotated.All(ctx, db) // []rows.Annotated[User, int64]
+items, err := rows.ReadRecord(annotated).All(ctx, db) // []rows.Annotated[User, int64]
 ```
 
 Each item has the complete `Model` and its computed `Value`. Retrieval hooks run

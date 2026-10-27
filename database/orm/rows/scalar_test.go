@@ -16,7 +16,7 @@ import (
 func rejectScalar[S, V any](t *testing.T, source SelectionSource[S], v expr.Selected[S, V], c codec.Codec[V]) {
 	t.Helper()
 	state := &driverState{}
-	_, err := expressionQuery(source, v, c).All(t.Context(), openTest(t, state))
+	_, err := Read(expressionQuery(source, v, c)).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatalf("invalid scalar reached executor: %v, %s", err, state.sql)
 	}
@@ -68,7 +68,7 @@ func TestScalarRuntimeOwnershipAndPhase(t *testing.T) {
 	windowTime := expr.FromUnixMillisValue(expr.RowNumber(w))
 	q := Having(expressionQuery(source, expr.Count[aggregateRecord]().Value(), codec.Signed[int64]()), expr.OrderValue(expr.UnixMillisecondsValue(windowTime)).Gt(0))
 	state := &driverState{}
-	if _, err := q.All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
+	if _, err := Read(q).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal("window hidden in HAVING", err, state.sql)
 	}
 	// Nullable aggregate input is still legal in a selected calculation.

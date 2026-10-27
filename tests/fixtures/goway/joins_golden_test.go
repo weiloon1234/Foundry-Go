@@ -59,7 +59,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		lf := expr.At(ls, models.Users.Email)
 		rf := expr.At(rs, models.Users.Email)
 		nick := expr.At(rs, models.Users.Nickname)
-		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
+		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Left":
 		j := rowset.LeftJoin(a, b, on)
@@ -68,7 +68,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		lf := expr.At(ls, models.Users.Email)
 		rf := expr.AtNullable(rs, models.Users.Email)
 		nick := expr.AtNullableValue(rs, models.Users.Nickname)
-		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Row(rf).Value()), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
+		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Row(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Right":
 		j := rowset.RightJoin(a, b, on)
@@ -77,7 +77,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		lf := expr.AtNullable(ls, models.Users.Email)
 		rf := expr.At(rs, models.Users.Email)
 		nick := expr.At(rs, models.Users.Nickname)
-		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.Row(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
+		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.Row(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Full":
 		j := rowset.FullJoin(a, b, on)
@@ -86,7 +86,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		lf := expr.AtNullable(ls, models.Users.Email)
 		rf := expr.AtNullable(rs, models.Users.Email)
 		nick := expr.AtNullableValue(rs, models.Users.Nickname)
-		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.Row(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Row(rf).Value()), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
+		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.Row(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Row(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Cross":
 		j := rowset.CrossJoin(a, b)
@@ -95,7 +95,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		lf := expr.At(ls, models.Users.Email)
 		rf := expr.At(rs, models.Users.Email)
 		nick := expr.At(rs, models.Users.Nickname)
-		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
+		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Chain":
 		base := rowset.LeftJoin(a, b, on)
@@ -106,7 +106,7 @@ func runJoinNew(g *goldenCapture, kind string) {
 		lf := expr.At(ls, models.Users.Email)
 		rf := expr.AtNullable(rs, models.Users.Email)
 		nick := expr.AtNullableValue(rs, models.Users.Nickname)
-		got := must(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Row(rf).Value()), rowset.Map(schema.Nickname, nick)).OrderBy(lf.Asc()).All(ctx, db))
+		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Row(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	}
 }

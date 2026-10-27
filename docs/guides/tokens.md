@@ -318,7 +318,7 @@ grants, so a token minted from it can only narrow them, unlike `auth.NewProof`.
 
 `api.WithObserver(observer)` returns a binding sharing the same guard that reports
 `auth.EventLogin` after full issuance or MFA completion, `auth.EventLogout` and
-`auth.EventOtherDevicesLoggedOut` (with `Count`). Observers run after the backend
+`auth.EventOtherDevicesLoggedOut` (with `auth.EventOtherDevicesLoggedOut.Count`). Observers run after the backend
 returned, in process, and cannot undo the change; see
 [authentication events](authentication.md#lifecycle-events).
 

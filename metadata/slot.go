@@ -99,7 +99,7 @@ func (s valueSlot[M, K, V]) From(m *Manager) valueSlot[M, K, V] {
 		Unbound: s.unbound(),
 	}
 	if s.key.definition != nil {
-		binding.Table = s.key.definition.owner.ModelName()
+		binding.Table = extensions.ORMIdentity(s.key.definition.owner).ModelName()
 	}
 	if m != nil {
 		binding.Fetch = s.fetch

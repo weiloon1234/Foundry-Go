@@ -56,7 +56,7 @@ manager, err := settings.New(store,
     SiteName.RegistrationWith(settings.Options[string]{Cache: 30 * time.Second}))
 ```
 
-`Get`, `GetOr`, `Find` and `Load` then serve a validated snapshot without a
+`Get`, `GetOr`, `Find` and `settings.Load` then serve a validated snapshot without a
 database query until the entry is older than `Cache` (at most `MaxCacheTTL`, one
 hour), and decode a fresh value on every call. Every write through the same
 manager (`Create`, `Ensure`, `Set`, `Upsert`, `Configure`, `ResetPresentation`,

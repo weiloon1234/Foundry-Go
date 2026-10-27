@@ -16,4 +16,4 @@ var ids = rows.SelectScalar(source, expr.Row(expr.At(rows.Scope(source), models.
 var nullable = rows.SelectScalar(source, expr.Row(expr.At(rows.Scope(source), models.Users.Nickname)).Value())
 var combined = rows.Union(record, record)
 var tx = rows.TransactionCTE("claimed", rows.LockedRecord(models.Users.Query().ForUpdate()))
-var invalid = rows.ScalarQuery(source, combined)
+var invalid = rows.ScalarRowQuery(source, combined).Value()

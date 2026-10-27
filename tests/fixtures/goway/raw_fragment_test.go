@@ -46,7 +46,7 @@ func TestStage6a4RawFragmentsOpaque(t *testing.T) {
 	})
 	q := ormrows.Select(ormrows.FromModel(models.Orders.Query()), schema, ormrows.MapSelected(schema.Count, expr.Raw[models.Order, int64]("COUNT(*)")))
 	for range 2 {
-		if _, err := q.All(ctx, db); err != nil {
+		if _, err := ormrows.Read(q).All(ctx, db); err != nil {
 			t.Fatal(err)
 		}
 	}

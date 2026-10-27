@@ -10,5 +10,5 @@ func root() expr.JSONPath[jsonpaths.Document, jsonpaths.Preferences] {
 	return expr.JSONRoot(expr.Value(jsonpaths.Documents.Settings))
 }
 func invalid() {
-	_ = expr.JSONOrderedScalar(expr.JSONOptional(expr.JSONProperty(root(), jsonpaths.Quota)), codec.Decimal()).Like("%")
+	_ = expr.OrderNullableRow(expr.JSONScalar(expr.JSONOptional(expr.JSONProperty(root(), jsonpaths.Quota)), codec.Decimal())).Like("%")
 }

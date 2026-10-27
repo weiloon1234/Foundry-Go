@@ -8,6 +8,6 @@ import (
 )
 
 func wrong(q rows.Query[models.User, reports.UserSummary]) {
-	p, _ := rows.Paginate(nil, nil, q, orm.PageRequest{})
+	p, _ := rows.Read(q).Paginate(nil, nil, orm.PageRequest{})
 	var _ orm.PageResult[models.User] = p
 }

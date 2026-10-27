@@ -43,14 +43,14 @@ func TestStage6a2Conditionals(t *testing.T) {
 		return conditionalRecordFields{b.Row(), rows.NumberOf(b, &r.Required), rows.NumberOf(b, &r.Choice), rows.NullableNumberOf(b, &r.NullChoice), rows.NullableNumberOf(b, &r.Equal), rows.NullableNumberOf(b, &r.Missing)}
 	})
 	choice := expr.When(amount.Gt(5), amount).When(amount.Eq(0), zero).Else(expr.OrderRow(amount).Param(10))
-	q := rows.Select(source, fields,
+	q := rows.OrderBy(rows.Select(source, fields,
 		rows.MapSelected(fields.Required, expr.Coalesce(missing, amount).Value()),
 		rows.MapSelected(fields.Choice, choice.Value()),
 		rows.MapSelected(fields.NullChoice, expr.When(amount.Gt(5), amount).ElseNull().Value()),
 		rows.MapSelected(fields.Equal, expr.NullIf(choice, zero).Value()),
-		rows.MapSelected(fields.Missing, expr.NullIfNullable(expr.CoalesceNullable(missing, expr.NullFor(amount)), expr.NullableRow(zero)).Value()),
-	).OrderBy(expr.At(rows.Scope(source), table.Key()).Asc())
-	got, err := q.All(ctx, db)
+		rows.MapSelected(fields.Missing, expr.NullIfNullable(expr.CoalesceNullable(missing, expr.NullableRow(amount).Param(value.Null[int64]())), expr.NullableRow(zero)).Value()),
+	), expr.At(rows.Scope(source), table.Key()).Asc())
+	got, err := rows.Read(q).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 || got[0].Required != 7 || got[0].Choice != 7 || !got[0].Missing.IsNull() || got[1].Required != 0 || got[1].Choice != 0 || !got[1].NullChoice.IsNull() || !got[1].Equal.IsNull() || !got[1].Missing.IsNull() {
 		t.Fatal("conditional values/scopes", got)
@@ -84,7 +84,7 @@ func TestStage6a2Conditionals(t *testing.T) {
 		selected := expr.WhenValue(count.Gt(0), count.Value()).Else(count.Param(0).Value())
 		result := expr.CoalesceValue(expr.NullIfValue(selected, count.Param(0).Value()), count.Param(0).Value())
 		nullable := expr.CoalesceNullableValue(expr.WhenValue(count.Gt(0), count.Value()).ElseNull())
-		out, e := rows.Select(a, summaryRows, rows.MapSelected(summaryRows.Count, result), rows.MapSelected(summaryRows.Missing, expr.NullIfNullableValue(nullable, nullable))).All(ctx, ex)
+		out, e := rows.Read(rows.Select(a, summaryRows, rows.MapSelected(summaryRows.Count, result), rows.MapSelected(summaryRows.Missing, expr.NullIfNullableValue(nullable, nullable)))).All(ctx, ex)
 		must(t, e)
 		if len(out) != 1 || !out[0].Missing.IsNull() {
 			t.Fatal(out)

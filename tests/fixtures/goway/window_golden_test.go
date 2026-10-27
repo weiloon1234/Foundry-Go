@@ -36,7 +36,7 @@ func windowGolden[V any](t *testing.T, newValue expr.Selected[rowset.Alias[expre
 	fields := rowset.Define(func(b rowset.Builder[windowGoldenRow[V]], r *windowGoldenRow[V]) windowGoldenFields[V] {
 		return windowGoldenFields[V]{b.Row(), rowset.FieldOf(b, &r.Value, orm.Codec(c))}
 	})
-	got := must(rowset.Select(rowset.As[expressionSide](models.Orders.Query(), "o"), fields, rowset.MapSelected(fields.Value, newValue)).All(ctx, newDB))
+	got := must(rowset.Read(rowset.Select(rowset.As[expressionSide](models.Orders.Query(), "o"), fields, rowset.MapSelected(fields.Value, newValue))).All(ctx, newDB))
 	normalized := make([]V, len(got))
 	for i, r := range got {
 		normalized[i] = r.Value

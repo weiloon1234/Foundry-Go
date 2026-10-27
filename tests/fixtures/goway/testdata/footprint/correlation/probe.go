@@ -33,5 +33,5 @@ func F() rows.Query[models.User, result] {
 	c = c.Where(nested.Where(expr.Equal(nparent, nchild)).Limit(1).Exists())
 	count := rows.SelectCorrelatedScalar(c, expr.Count[rows.Correlation[models.User, models.Order]]().Value())
 	ids := rows.SelectCorrelatedScalar(c, expr.Row(buyer).Value())
-	return rows.Select(outer, schema, rows.MapSelected(schema.Count, rows.CorrelatedScalarQuery(count))).Where(c.Exists(), rows.InCorrelatedQuery(expr.Value(models.Users.ID), ids))
+	return rows.Select(outer, schema, rows.MapSelected(schema.Count, rows.CorrelatedScalarRowQuery(count).Value())).Where(c.Exists(), rows.InCorrelatedQuery(expr.Value(models.Users.ID), ids))
 }

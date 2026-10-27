@@ -59,10 +59,10 @@ func TestStage6a1Expressions(t *testing.T) {
 	fields := rows.Define(func(b rows.Builder[arithmeticResult], r *arithmeticResult) arithmeticFields {
 		return arithmeticFields{b.Row(), rows.NumberOf(b, &r.Add), rows.NumberOf(b, &r.Subtract), rows.NumberOf(b, &r.Multiply), rows.NumberOf(b, &r.Divide), rows.NumberOf(b, &r.Remainder), rows.NumberOf(b, &r.Negate), rows.NumberOf(b, &r.Abs), rows.NumberOf(b, &r.Exact), rows.NumberOf(b, &r.Approx), rows.NullableNumberOf(b, &r.Missing)}
 	})
-	q := rows.Select(source, fields,
+	q := rows.OrderBy(rows.Select(source, fields,
 		rows.MapSelected(fields.Add, expr.Add(v, two).Value()), rows.MapSelected(fields.Subtract, expr.Subtract(v, two).Value()), rows.MapSelected(fields.Multiply, expr.Multiply(v, two).Value()), rows.MapSelected(fields.Divide, expr.Divide(v, two).Value()), rows.MapSelected(fields.Remainder, expr.Remainder(v, two).Value()), rows.MapSelected(fields.Negate, expr.Negate(v).Value()), rows.MapSelected(fields.Abs, expr.Abs(expr.Negate(v)).Value()), rows.MapSelected(fields.Exact, expr.DecimalOf(v).Value()), rows.MapSelected(fields.Approx, expr.FloatOf(v).Value()), rows.MapSelected(fields.Missing, expr.AddNullable(n, expr.NullableRow(two)).Value()),
-	).Where(expr.Greater(v, two), expr.LessOrEqual(two, v), expr.DistinctFrom(n, expr.NullableRow(v))).OrderBy(expr.Negate(v).Asc())
-	got, err := q.All(ctx, db)
+	).Where(expr.Greater(v, two), expr.LessOrEqual(two, v), expr.DistinctFrom(n, expr.NullableRow(v))), expr.Negate(v).Asc())
+	got, err := rows.Read(q).All(ctx, db)
 	must(t, err)
 	if len(got) != 1 {
 		t.Fatal(got)
@@ -96,7 +96,7 @@ func TestStage6a1Expressions(t *testing.T) {
 			input = input.Where(table.Amount.Lt(0))
 		}
 		a := rows.As[arithmeticSide](input, "r")
-		out, e := rows.Select(a, summaryRows, rows.MapSelected(summaryRows.Count, expr.Count[rows.Alias[arithmeticSide, arithmeticRecord]]().Value()), rows.MapSelected(summaryRows.Exists, expr.Exists[rows.Alias[arithmeticSide, arithmeticRecord]]().Value())).All(ctx, ex)
+		out, e := rows.Read(rows.Select(a, summaryRows, rows.MapSelected(summaryRows.Count, expr.Count[rows.Alias[arithmeticSide, arithmeticRecord]]().Value()), rows.MapSelected(summaryRows.Exists, expr.Exists[rows.Alias[arithmeticSide, arithmeticRecord]]().Value()))).All(ctx, ex)
 		must(t, e)
 		if len(out) != 1 {
 			t.Fatal(out)

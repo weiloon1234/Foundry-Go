@@ -61,9 +61,9 @@ migration guide. This document does not choose a tag or publish any version.
 
 Pin the framework version in each application and plugin. Run generation with
 that same version and keep generated outputs together with their ownership
-manifests. Changes to generated binary ownership, field capabilities, query
+manifests. Changes to binary ownership, native field capabilities, query
 scopes or method signatures require regeneration and consumer compilation. A
-successful runtime codec test alone does not establish generated-model support.
+successful runtime codec test alone does not establish declaration support.
 Do not combine a newer generator with an older runtime by accident. Enum cases
 are the exported typed constants declared as values; aliases of another case are
 not cases. An unexported constant with its own value was a case in earlier
@@ -91,8 +91,8 @@ not inferred from a synthetic packaging candidate version.
 | Redis job queue storage layout | Layout 2 is written only after an explicit `jobs migrate-layout` per queue; a layout-1 queue otherwise returns `jobs.ErrLegacyLayout` unchanged. Stop or drain the previous release before migrating; rollback needs a pre-migration Redis snapshot or a fully drained queue. See [the upgrade procedure](guides/jobs-operations.md#redis-queue-layout-upgrade). |
 | Outbox records | Preserve captured bytes, IDs and destinations across retries. An ambiguous publish is reconciled using the same captured pending operation. |
 | Application/database schema | Use reviewed forward migrations with compatible expansion/backfill before contraction. No automatic destructive synchronization or reset. Framework-owned migrations (sessions, tokens, outbox, idempotency, audit, settings/extensions, translations, countries, notifications, attachments, job archive, outbound webhooks, MFA) must be applied before the release that reads them serves traffic; application boot never applies them. Down migrations are optional and run only through `migrate rollback --step N --confirm`. `app.RunDatabaseCommand` keeps each schema target's history in `<schema>.schema_migrations`, as the PostgreSQL testkit does; it does not read history that a hand-built `DefaultPostgresConfig` runner wrote to `foundry_ops.schema_migrations`, so keep that runner for such a deployment. |
-| Model extension slots | A slot's stored name is its snake_case Go field name unless `foundry:"name=..."` pins it, and a generated owner's name and storage model are its table unless `extension_owner=` pins them. Pin both before renaming a Go field or a table; otherwise existing translations, metadata and files are hidden, not deleted. `translations`, `metadata` and `attachments` `undeclared` commands report stored names no slot declares. |
-| Encrypted model fields | Opt-in field types; existing fields and generated code are unchanged. Generated `query.Column` declarations gain `Encrypted` for these fields. Keep every key that encrypted stored values in `Encryption.Previous`: removing it makes those rows unreadable. Values are bound to table, column and primary key, so renaming either or rewriting a key needs re-encryption. |
+| Model extension slots | Native handles declare slot names explicitly; `DefineORMOwner` takes an owner name and `OwnerOptions.StorageModel`. Preserve both names before renaming a Go field or a table; otherwise existing translations, metadata and files are hidden, not deleted. `translations`, `metadata` and `attachments` `undeclared` commands report stored names no slot declares. |
+| Encrypted model fields | Opt-in native encrypted-column declarations retain their concrete plaintext and ciphertext types. Keep every key that encrypted stored values in `Encryption.Previous`: removing it makes those rows unreadable. Values are bound to table, column and primary key, so renaming either or rewriting a key needs re-encryption. |
 | Browser refresh cookies | Opt-in: `TokenCookieResponse`, `RefreshTokenCookie`, `RefreshTokenCookieLogout` and `ClearRefreshCookie` add a cookie transport beside the unchanged JSON transport for the same guard. Endpoint metadata, the manifest and OpenAPI gain an optional `refresh_cookie` description (with `optional` for a cookie logout); existing operations export as before. `Tokens.LogoutRefresh` requires the backend to implement `token.RefreshRevocationBackend`, which the PostgreSQL backend does; a custom backend without it fails with `fault.Invalid`. |
 | Client message formatting | Additive: entries export `catalogTranslations`, `formatText`, `formatMessage`, `CatalogMessageKey` and `CatalogMessageArguments`. The last two names are now reserved, so a schema with exactly that name receives a qualified TypeScript name. |
 | Generated TypeScript layout | `contracts.export` now also publishes `<prefix>_runtime_foundry.gen.ts` and `<prefix>_runtime_realtime_foundry.gen.ts`, which the client entry imports; commit and serve them with the entry. The entry's exported API is unchanged. `manifestJSON` holds compact JSON of the same document, so code comparing its text must compare parsed values. `typescript.Render` still returns one self-contained module. Surfaces are additive; `typescript.ExportCommand` gains a variadic `Surface` parameter, so existing calls compile. |
@@ -113,19 +113,17 @@ must preserve a reader capable of consuming formats already written.
 
 ## Typed query compilation footprint
 
-Stored fields use typed functions for optional expression/aggregate construction:
-`query.Value(f)`, `query.Param(f, v)`, `query.CountField(f)`,
-`query.CountDistinctField(f)`, `query.Min(f)`, `query.Max(f)`, `query.Sum(f)` and
-`query.Avg(f)` replace the corresponding stored-field methods. Update handwritten
-calls with the framework version; see [typed field computations](guides/typed-field-computations.md).
-Computed expressions/aggregates retain their methods, and query filtering,
-execution, generated declarations and database schemas are unchanged. The
-[build measurements](guides/query-build-resources.md) distinguish shared-core
-extraction from field method-set reduction and accumulated cache storage.
+Handwritten typed tables use `orm/expr` for expressions and `orm/rows` for
+projections, sets and CTEs. Row carriers expose `.Value()` for selection. Shared
+lowering preserves bindings, hydration and lifecycle behavior without a parallel
+query runtime. See [typed field computations](guides/typed-field-computations.md)
+and the [migration guide](guides/orm-migration.md#removed-api-spellings).
+The [build measurements](guides/query-build-resources.md) retain historical cost
+evidence; they do not describe a second supported runtime.
 
-Further shared upsert and source-write planning preserves public query signatures
-and generated declarations. Updating the framework pin needs no additional source,
-database or wire migration; no deprecated compatibility methods are retained.
+Cursor request contract IDs now use the native ORM owner. Regenerate manifests,
+OpenAPI and TypeScript together; cursor token encoding and model identity stay
+unchanged. See the [publication evidence](evidence/goway-stage8d3c-report.md).
 
 ## Operational behavior
 

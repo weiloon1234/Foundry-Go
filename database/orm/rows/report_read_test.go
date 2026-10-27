@@ -80,10 +80,10 @@ func TestReportPreflightRejectsBeforeIO(t *testing.T) {
 		}
 	}
 	for _, q := range []Query[member, int64]{base, Limit(ordered, 1), Offset(ordered, 1), {}} {
-		if _, err := Paginate(t.Context(), db, q, orm.Page(1, 1)); !errors.Is(err, fault.Invalid) {
+		if _, err := Read(q).Paginate(t.Context(), db, orm.Page(1, 1)); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
-		if _, err := SimplePaginate(t.Context(), db, q, orm.Page(1, 1)); !errors.Is(err, fault.Invalid) {
+		if _, err := Read(q).SimplePaginate(t.Context(), db, orm.Page(1, 1)); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
@@ -111,7 +111,7 @@ func TestReportSimplePageAndCount(t *testing.T) {
 	m := declareMembers()
 	q := OrderBy(SelectValue(m.Query(), m.ID), expr.Value(m.ID).Asc())
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(1)}, {int64(2)}}}
-	page, err := SimplePaginate(t.Context(), openTest(t, state), q, orm.Page(1, 1))
+	page, err := Read(q).SimplePaginate(t.Context(), openTest(t, state), orm.Page(1, 1))
 	if err != nil || len(page.Items) != 1 || !page.HasMore || cap(page.Items) != 1 {
 		t.Fatal(page, err)
 	}

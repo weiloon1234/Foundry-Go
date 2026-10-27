@@ -27,15 +27,15 @@ func TestScopePropagationProjectionJoinsAggregatesAndRelationBypasses(t *testing
 	db := capture.open(ctx)
 	defer db.Close(context.Background())
 	// Projection and scalar results carry model source predicates, never retrieval.
-	_, err := rowset.SelectValue(n.Members.Query(), n.Members.Name).All(ctx, db)
+	_, err := rowset.Read(rowset.SelectValue(n.Members.Query(), n.Members.Name)).All(ctx, db)
 	check(err)
 	left := rowset.As[readSide](orm.WithScopeContext(n.Members.Query(), coremodels.TenantContext(ctx, 99)), "m")
 	right := rowset.As[groupSide](n.Groups.Query(), "g")
 	joined := rowset.InnerJoin(left, right, rowset.On(expr.At(rowset.Scope(left), n.Members.ID), expr.At(rowset.Scope(right), n.Groups.ID)))
 	name := expr.At(rowset.LeftScope(joined, rowset.Scope(left)), n.Members.Name)
-	_, err = rowset.Select(joined, readNames, rowset.Map(readNames.Name, name)).All(ctx, db)
+	_, err = rowset.Read(rowset.Select(joined, readNames, rowset.Map(readNames.Name, name))).All(ctx, db)
 	check(err)
-	_, err = rowset.Select(left, readCounts, rowset.MapSelected(readCounts.Count, expr.Count[rowset.Alias[readSide, n.Member]]().Value())).All(ctx, db)
+	_, err = rowset.Read(rowset.Select(left, readCounts, rowset.MapSelected(readCounts.Count, expr.Count[rowset.Alias[readSide, n.Member]]().Value()))).All(ctx, db)
 	check(err)
 	if len(trace) != 0 || strings.Contains(capture.output.String(), "99") || strings.Count(capture.sql.String(), `"tenant_id" =`) != 4 {
 		t.Fatal("projection lost scope or retrieved", trace, capture.output.String())

@@ -13,15 +13,6 @@ func DefineORMOwner[M any, K comparable](name OwnerName, source orm.ModelIdentit
 	return Owner[M, K]{definition: &ownerDefinition[M, K]{name: name, source: source, storage: options.StorageModel, previous: slices.Clone(options.PreviousModels), id: &declarationID{}}}
 }
 
-// Scope returns an ORM predicate from the owner's concrete primary keys.
-// Example: Articles.Query().Where(extensions.Scope(owner,ids...)).
-func Scope[M any, K comparable](owner Owner[M, K], keys ...K) orm.Predicate[M] {
-	if owner.definition == nil {
-		return orm.Predicate[M]{}
-	}
-	return owner.definition.source.Scope(keys...)
-}
-
 // BindSlot connects a validated declaration offset and primary key to an extension.
 // Example: extensions.BindSlot(Articles.Key(),Articles.Title).
 func BindSlot[M any, K comparable, S any](key orm.Key[M, K], slot orm.Slot[M, S]) SlotBinding[M, K, S] {

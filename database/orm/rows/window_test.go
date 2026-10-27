@@ -85,7 +85,7 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			q := expressionQuery(source, expr.RowNumber(window), codec.Signed[int64]())
 			state := &driverState{}
-			_, err := q.All(t.Context(), openTest(t, state))
+			_, err := Read(q).All(t.Context(), openTest(t, state))
 			if !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal("invalid window executed", err, state.sql)
 			}
@@ -100,7 +100,7 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			q := expressionQuery(source, e, codec.Signed[int64]())
 			state := &driverState{}
-			_, err := q.All(t.Context(), openTest(t, state))
+			_, err := Read(q).All(t.Context(), openTest(t, state))
 			if !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal(err, state.sql)
 			}
@@ -129,7 +129,7 @@ func TestWindowsResultFamiliesAndHydration(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			q := expressionQuery(source, e, codec.Nullable(codec.Signed[int64]()))
 			state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {int64(3)}}}
-			got, err := q.All(t.Context(), openTest(t, state))
+			got, err := Read(q).All(t.Context(), openTest(t, state))
 			if err != nil || len(got) != 2 || !got[0].Value.IsNull() {
 				t.Fatal(got, err)
 			}

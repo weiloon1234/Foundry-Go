@@ -58,7 +58,7 @@ func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 
 		// Declared projections retain their aliases, nullable fields and codecs.
 		report := rows.Distinct(rows.Select(joined, reports.UserSummaries, rows.MapSelected(reports.UserSummaries.ID, expr.Row(expr.At(fields, models.Users.ID)).Value()), rows.MapSelected(reports.UserSummaries.Email, expr.Row(expr.At(fields, models.Users.Email)).Value()), rows.MapSelected(reports.UserSummaries.Nickname, expr.Row(expr.At(fields, models.Users.Nickname)).Value()), rows.MapSelected(reports.UserSummaries.Status, expr.Row(expr.At(fields, models.Users.Status)).Value())))
-		if items, err := report.All(t.Context(), tx); err != nil || len(items) != 2 {
+		if items, err := rows.Read(report).All(t.Context(), tx); err != nil || len(items) != 2 {
 			t.Fatal("projection distinct failed", err)
 		}
 		u := models.Users
@@ -85,7 +85,7 @@ func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 
 		// Reusing a parameterized scalar in ORDER BY must refer to its selected value.
 		last := rows.LimitScalar(rows.OrderScalar(rows.SelectScalar(rows.From(u.Query().Where(u.Age.Gte(21))), expr.Row(expr.Value(u.Email)).Value()), expr.Value(u.Age).Desc()), 1)
-		scalar := rows.ScalarQuery(rows.From(u.Query()), last)
+		scalar := rows.ScalarRowQuery(rows.From(u.Query()), last).Value()
 		constant := rows.OrderScalar(rows.DistinctScalar(rows.SelectScalar(rows.From(u.Query()), scalar)), scalar.Asc())
 		if items, err := rows.ReadScalar(constant).All(t.Context(), tx); err != nil || !reflect.DeepEqual(items, []value.Nullable[string]{value.Of(users[2].Email)}) {
 			t.Fatal("parameterized selected ordering failed", err)
@@ -115,7 +115,7 @@ func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 func TestPostgresDistinctOnSelectsOrderedCompleteRecords(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		u := models.Users
-		chosen := rows.DistinctOn(rows.FromModel(u.Query()), expr.Group(expr.Value(u.Status))).OrderBy(expr.Value(u.Status).Asc(), expr.Value(u.Age).Desc(), expr.Value(u.ID).Asc())
+		chosen := rows.OrderBy(rows.DistinctOn(rows.FromModel(u.Query()), expr.Group(expr.Value(u.Status))), expr.Value(u.Status).Asc(), expr.Value(u.Age).Desc(), expr.Value(u.ID).Asc())
 		if row, err := rows.Read(chosen).RequireFirst(t.Context(), tx); err != nil || !reflect.DeepEqual(row, users[2]) {
 			t.Fatal("distinct on did not choose ordered complete model", err)
 		}
@@ -123,8 +123,8 @@ func TestPostgresDistinctOnSelectsOrderedCompleteRecords(t *testing.T) {
 			t.Fatal("distinct on count failed", err)
 		}
 		o := models.Orders
-		latest := rows.DistinctOn(rows.FromModel(o.Query()), expr.Group(expr.Value(o.BuyerID))).OrderBy(expr.Value(o.BuyerID).Asc(), expr.Value(o.TotalCents).Desc(), expr.Value(o.ID).Asc())
-		items, err := latest.All(t.Context(), tx)
+		latest := rows.OrderBy(rows.DistinctOn(rows.FromModel(o.Query()), expr.Group(expr.Value(o.BuyerID))), expr.Value(o.BuyerID).Asc(), expr.Value(o.TotalCents).Desc(), expr.Value(o.ID).Asc())
+		items, err := rows.Read(latest).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -146,7 +146,7 @@ func TestPostgresDistinctOnSelectsOrderedCompleteRecords(t *testing.T) {
 			t.Fatal("unselected distinct key rejected", err)
 		}
 		// A shortened/permuted leftmost key prefix is accepted by PostgreSQL.
-		if n, err := rows.Read(rows.DistinctOn(rows.FromModel(u.Query()), expr.Group(expr.Value(u.Status)), expr.Group(expr.Value(u.Level))).OrderBy(expr.Value(u.Level).Asc())).Count(t.Context(), tx); err != nil || n != 1 {
+		if n, err := rows.Read(rows.OrderBy(rows.DistinctOn(rows.FromModel(u.Query()), expr.Group(expr.Value(u.Status)), expr.Group(expr.Value(u.Level))), expr.Value(u.Level).Asc())).Count(t.Context(), tx); err != nil || n != 1 {
 			t.Fatal("short prefix mismatch with PostgreSQL", err)
 		}
 
@@ -158,11 +158,11 @@ func TestInvalidDistinctNeverExecutes(t *testing.T) {
 	u := models.Users
 	for _, q := range []rows.Query[models.User, models.User]{
 		rows.DistinctOn(rows.FromModel(u.Query())),
-		rows.DistinctOn(rows.FromModel(u.Query()), expr.Group(expr.Value(u.Status))).OrderBy(expr.Value(u.Age).Asc()),
+		rows.OrderBy(rows.DistinctOn(rows.FromModel(u.Query()), expr.Group(expr.Value(u.Status))), expr.Value(u.Age).Asc()),
 		rows.Distinct(rows.FromModel(u.Query().With(models.UserLinks.Orders))),
 		rows.DistinctOn(rows.FromModel(u.Query()), expr.Group(expr.Value(u.ID)), expr.Group(expr.Value(u.ID))),
 	} {
-		if items, err := q.All(t.Context(), queryfixture.NoQueries(t)); items != nil || !errors.Is(err, fault.Invalid) {
+		if items, err := rows.Read(q).All(t.Context(), queryfixture.NoQueries(t)); items != nil || !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid distinct reached executor", err)
 		}
 	}
@@ -172,7 +172,7 @@ func TestInvalidDistinctNeverExecutes(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if items, err := rows.Distinct(rows.FromModel(u.Query())).All(ctx, queryfixture.NoQueries(t)); items != nil || !errors.Is(err, context.Canceled) {
+	if items, err := rows.Read(rows.Distinct(rows.FromModel(u.Query()))).All(ctx, queryfixture.NoQueries(t)); items != nil || !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled distinct reached executor", err)
 	}
 }

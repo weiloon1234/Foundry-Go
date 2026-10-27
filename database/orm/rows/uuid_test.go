@@ -35,7 +35,7 @@ func TestUUIDExpressionAliasAndNullable(t *testing.T) {
 	bad := expr.At(Scope(a), foreign.Key())
 	q := expressionQuery(a, expr.Row(id).Value(), codec.ID[uuidRow]()).Where(expr.UUIDGreater(bad, model.ID[uuidRow]{}))
 	state := &driverState{}
-	if _, err := q.All(t.Context(), openTest(t, state)); err == nil || state.sql != "" {
+	if _, err := Read(q).All(t.Context(), openTest(t, state)); err == nil || state.sql != "" {
 		t.Fatal(err, state.sql)
 	}
 }

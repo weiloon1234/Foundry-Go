@@ -25,7 +25,7 @@ Read and implement in order:
   Generated descriptors derive from those declarations; TOML and environment
   supply deployment values, not Go type declarations or executable callbacks.
 - Reuse the existing generator, configuration loader, service graph, registries,
-  feature modules, owned runtime, database/query engine and adapters.
+  feature modules, owned runtime, shared SQL engine and adapters.
 - PostgreSQL is the only database adapter. Required additional cache adapters
   are PostgreSQL and file; these do not imply a second database engine.
 - Configurable services expose a default and typed named alternatives. A default

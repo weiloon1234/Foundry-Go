@@ -41,9 +41,9 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		joined := rows.LeftJoinLateral(outer, latest)
 		u := rows.LeftScope(joined, rows.Scope(outer))
 		r := rows.NullableRightScope(joined, rows.LateralScope(latest))
-		results := rows.Select(joined, lateralqueries.UserOrders, rows.MapSelected(lateralqueries.UserOrders.UserID, expr.Row(expr.At(u, models.Users.ID)).Value()), rows.MapSelected(lateralqueries.UserOrders.OrderID, expr.Row(expr.AtNullable(r, models.Orders.ID)).Value()), rows.MapSelected(lateralqueries.UserOrders.Total, expr.Row(expr.AtNullable(r, models.Orders.TotalCents)).Value())).OrderBy(expr.At(u, models.Users.Age).Asc())
+		results := rows.OrderBy(rows.Select(joined, lateralqueries.UserOrders, rows.MapSelected(lateralqueries.UserOrders.UserID, expr.Row(expr.At(u, models.Users.ID)).Value()), rows.MapSelected(lateralqueries.UserOrders.OrderID, expr.Row(expr.AtNullable(r, models.Orders.ID)).Value()), rows.MapSelected(lateralqueries.UserOrders.Total, expr.Row(expr.AtNullable(r, models.Orders.TotalCents)).Value())), expr.At(u, models.Users.Age).Asc())
 		counter := &queryfixture.QueryCounter{Executor: tx}
-		items, err := results.All(t.Context(), counter)
+		items, err := rows.Read(results).All(t.Context(), counter)
 		if err != nil || len(items) != 4 || counter.Queries.Load() != 1 {
 			t.Fatal(items, err, counter.Queries.Load())
 		}
@@ -100,7 +100,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 			t.Fatal(count, err)
 		}
 		// Existing result pagination, CTE/set composition and transaction locks retain the join.
-		page, err := rows.Paginate(t.Context(), tx, results, orm.PageRequest{Number: 1, Size: 2})
+		page, err := rows.Read(results).Paginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 2})
 		if err != nil || len(page.Items) != 2 || page.Total != 4 {
 			t.Fatal(page, err)
 		}

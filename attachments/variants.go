@@ -278,7 +278,7 @@ func (m *Manager) variantSource(ctx context.Context, id model.ID[store.File], re
 			return nil
 		}
 		v := store.Variants
-		names, err := rows.SelectValue(store.Variants.Query().Where(v.FileID.Eq(id), v.State.Eq(string(VariantReady))).Limit(MaxVariants*2), v.Name).All(ctx, tx)
+		names, err := rows.Read(rows.SelectValue(store.Variants.Query().Where(v.FileID.Eq(id), v.State.Eq(string(VariantReady))).Limit(MaxVariants*2), v.Name)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -860,7 +860,7 @@ func (m *Manager) RegenerateVariants(ctx context.Context, owner extensions.Owner
 				q = q.Where(orm.UUIDGreater(f.ID, options.Cursor.after))
 			}
 			var err error
-			ids, err = rows.SelectValue(q.OrderBy(f.ID.Asc()).Limit(options.Limit+1), f.ID).All(ctx, tx)
+			ids, err = rows.Read(rows.SelectValue(q.OrderBy(f.ID.Asc()).Limit(options.Limit+1), f.ID)).All(ctx, tx)
 			return err
 		})
 		if err != nil {

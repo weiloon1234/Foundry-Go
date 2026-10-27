@@ -153,7 +153,7 @@ A [failing-child-test acceptance](../../testkit/cleanup_test.go) checks this bou
 `testkit/http.New` serves the supplied production handler on an owned local
 server. Its embedded production `httpclient.Client` uses bounded requests and no
 retries or redirect following. Each request is limited to `DefaultTimeout` (five
-seconds); pass `WithTimeout` to `New`/`Connect` for slow handlers, and
+seconds); pass `WithTimeout` to `testkit/http.New`/`testkit/http.Connect` for slow handlers, and
 `WithHeaders` for headers on every request. On a derived client each named
 header replaces the inherited value rather than adding a second one. `client.With(t, options...)` derives
 an independent client for the same server. `JSON`, `DecodeJSON` and

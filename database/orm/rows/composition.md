@@ -7,7 +7,7 @@ alias for each reference:
 ```go
 eligible := rows.CTE("eligible", rows.ModelRecord(Users.Query().Where(Users.Age.Gte(18))))
 a := rows.AsRecord[adult](eligible.Materialized(), "adult")
-users, err := rows.SelectRecord(a, rows.Scope(a)).All(ctx, db)
+users, err := rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a))).All(ctx, db)
 ```
 
 Dependencies are emitted before their consumers, and references to the same
@@ -53,7 +53,7 @@ stay inside the set operands; result Where/OrderBy/Limit/Offset apply afterward:
 ```go
 combined := rows.Union(rows.ModelRecord(first), rows.ModelRecord(second))
 id := expr.At(combined.Scope(), Users.ID)
-users, err := combined.OrderBy(id.Asc()).Limit(20).All(ctx, db)
+users, err := rows.ReadSet(combined.OrderBy(id.Asc()).Limit(20)).All(ctx, db)
 ```
 
 Declared projection fields use `rows.At(combined.Scope(), Fields.Name)`. Sets also
@@ -69,12 +69,11 @@ including model-owned identifiers and nullability:
 ```go
 ids := rows.Values(rows.SelectScalar(rows.From(Users.Query()), expr.Row(expr.Value(Users.ID)).Value()))
 combined := rows.UnionValues(ids, ids)
-values, err := combined.OrderBy(combined.Value().Asc()).All(ctx, db)
+values, err := rows.ReadValues(combined.OrderBy(combined.Value().Asc())).All(ctx, db)
 inner := rows.SelectScalar(combined, expr.Row(combined.Value()).Value())
 condition := rows.InQuery(expr.Value(Users.ID), inner)
 ```
 
 A scalar set also provides its complete single-column record for CTE composition.
 Ordinary record sets cannot be passed to scalar subqueries without selecting one
-value explicitly. Transaction inputs cannot enter ordinary sets. Result cursors
-and remaining read/page/transaction terminals are the next slice.
+value explicitly. Transaction inputs cannot enter ordinary sets. Use the [read terminals](results.md) for collection, pagination and locking.

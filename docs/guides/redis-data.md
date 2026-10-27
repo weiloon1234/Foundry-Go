@@ -134,8 +134,8 @@ count, err := rankings.CountByScore(ctx, group.ID, data.AllScores())
 
 Members use canonical JSON identity, as in sets; each carries a `float64` score.
 Order follows Redis: by score, then by encoded member bytes (`Descending` reverses
-both). `data.Window` selects `Count` members after `Offset` (`First(n)`/`Last(n)`
-are shortcuts); `Count` must be within `Limits.Entries`. `data.ScoreRange` bounds
+both). `data.Window` selects `data.Window.Count` members after `Offset` (`First(n)`/`Last(n)`
+are shortcuts); `data.Window.Count` must be within `Limits.Entries`. `data.ScoreRange` bounds
 are inclusive unless `ExcludeMin`/`ExcludeMax` is set; use `math.Inf` for open
 ends. NaN scores, NaN increment results and invalid ranges fail with
 `fault.Invalid`. `Add` reports whether the member is new; a full sorted set can
@@ -166,7 +166,7 @@ an element that then fails JSON decoding is reported as an error and stays remov
 
 ## Existence, expiry and deletion
 
-Every handle exposes `Exists`, `Expire`, `Count`, `Delete` and `DeleteMany` while
+Every handle exposes `Exists`, `Expire`, `.Count`, `Delete` and `DeleteMany` while
 retaining the declaration's resource key type:
 
 ```go

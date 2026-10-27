@@ -114,7 +114,7 @@ func TestPostgresTransactionNestedCorrelatedLocks(t *testing.T) {
 	condition := rows.SelectTransactionCorrelatedScalar(nested, expr.Row(grand.ID).Value()).ForUpdate().Exists()
 	selected := rows.SelectTransactionCorrelatedScalar(c.Where(expr.Greater(f.ID, p.ID), condition), expr.Row(f.ID).Value()).ForShare()
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		items, err := rows.SelectTransactionValue(parent, rows.TransactionCorrelatedScalarQuery(selected)).All(ctx, tx)
+		items, err := rows.SelectTransactionValue(parent, rows.TransactionCorrelatedScalarRowQuery(selected).Value()).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -142,7 +142,7 @@ func TestPostgresTransactionCorrelatedScalarFailuresAndMembership(t *testing.T) 
 	p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))
 	base := rows.SelectTransactionCorrelatedScalar(c.Where(expr.Greater(f.ID, p.ID)), expr.Row(f.ID).Value())
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		scalar := rows.TransactionCorrelatedScalarQuery(base.ForUpdate())
+		scalar := rows.TransactionCorrelatedScalarRowQuery(base.ForUpdate()).Value()
 		err := tx.Transaction(ctx, func(nested *database.Tx) error {
 			_, err := rows.SelectTransactionValue(parent, scalar).All(ctx, nested)
 			return err
@@ -168,7 +168,7 @@ func TestPostgresTransactionCorrelatedScalarFailuresAndMembership(t *testing.T) 
 			return errors.New("correlated lock accepted outer target")
 		}
 		grouped := rows.SelectTransactionCorrelatedScalar(c, expr.CountFieldAt(f.scope, Records.ID).Value()).ForUpdate()
-		if _, err := rows.SelectTransactionValue(parent, rows.TransactionCorrelatedScalarQuery(grouped)).All(ctx, tx); !errors.Is(err, fault.Invalid) {
+		if _, err := rows.SelectTransactionValue(parent, rows.TransactionCorrelatedScalarRowQuery(grouped).Value()).All(ctx, tx); !errors.Is(err, fault.Invalid) {
 			return errors.New("correlated aggregate lock reached SQL")
 		}
 		_, err = Records.Query().Where(Records.ID.Eq(1)).Require(ctx, tx)
@@ -193,7 +193,7 @@ func TestPostgresTransactionCorrelationFromNullableLateral(t *testing.T) {
 	previous := nullableSummaryAt(rows.TransactionOuterNullableScope(follow, rows.NullableRightScope(joined, rows.TransactionLateralScope(lateral))))
 	candidate := recordAt(rows.TransactionInnerScope(follow, rows.TransactionScope(next)))
 	follow = follow.Where(expr.Equal(expr.NullableRow(expr.Subtract(candidate.ID, expr.Row(candidate.ID).Value().Param(1))), previous.ID))
-	scalar := rows.TransactionCorrelatedScalarQuery(rows.SelectTransactionCorrelatedScalar(follow, expr.Row(candidate.ID).Value()).ForKeyShare())
+	scalar := rows.TransactionCorrelatedScalarRowQuery(rows.SelectTransactionCorrelatedScalar(follow, expr.Row(candidate.ID).Value()).ForKeyShare()).Value()
 	order := recordAt(rows.LeftScope(joined, rows.TransactionScope(parent))).ID.Asc()
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		items, err := rows.SelectTransactionValue(joined, scalar).OrderBy(order).All(ctx, tx)

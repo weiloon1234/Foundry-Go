@@ -15,7 +15,7 @@ ordered := cursor.OrderBy(rows.At(cursor.Scope(), r.Nickname).Asc()).
 page, err := ordered.Paginate(ctx, db, orm.CursorRequest[reports.UserSummary]{Size: 20})
 ```
 
-`Scope()` identifies the completed output as `CursorScope[Result]`. `rows.At` on declared row columns retain each field's result owner, value type and nullability. Input model predicates and ordering descriptors cannot be used as output descriptors. Select a computed sort expression into a declared result field first, then order that output field.
+`rows.CursorQuery.Scope()` identifies the completed output as `CursorScope[Result]`. `rows.At` on declared row columns retain each field's result owner, value type and nullability. Input model predicates and ordering descriptors cannot be used as output descriptors. Select a computed sort expression into a declared result field first, then order that output field.
 
 `UniqueBy` is required. Its nonempty combination of output fields must identify every result row under the database's equality/collation semantics, treating NULLs as equal. It is an application assertion: Foundry does not deduplicate rows, create a unique constraint or query the whole dataset to prove it. In particular, a nullable SQL unique constraint that allows repeated NULLs is insufficient by itself. Missing, repeated, unknown or unavailable fields fail validation before execution.
 

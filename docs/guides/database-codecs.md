@@ -40,7 +40,7 @@ When a custom encoder returns `[]byte(nil)`, `Bind` canonicalizes it to SQL NULL
 
 Integers accept driver `int64` or decimal integer text/bytes. Floats accept driver `float64`; they do not silently convert exact integers or numeric text to an approximation. Ordinary float32 rounding is allowed. Incoming bytes are never retained by the built-in decoders.
 
-`Nullable` returns `Codec[value.Nullable[T]]`: SQL NULL becomes `value.Null[T]()`, and present zero remains `value.Of(zero)`. An omitted mutation field is separate and stays in `value.Optional`, as used by generated drafts. `codec.ID[User]().Scan(&orderID)` and binding an integer through a named string codec fail compilation. Runtime validation still checks incoming bytes, enum casts and physical database constraints.
+`Nullable` returns `Codec[value.Nullable[T]]`: SQL NULL becomes `value.Null[T]()`, and present zero remains `value.Of(zero)`. An omitted mutation field is separate: typed assignment lists omit the field, while DTOs can retain presence with `value.Optional`. Those states are not SQL NULL. `codec.ID[User]().Scan(&orderID)` and binding an integer through a named string codec fail compilation. Runtime validation still checks incoming bytes, enum casts and physical database constraints.
 
 ## Exact decimals
 
@@ -62,7 +62,7 @@ These codecs accept years 1–9999 and microsecond precision. Sub-microsecond ti
 
 Unit tests check width/representation failures, nullable states, enum validation, failed-scan destination preservation, buffer ownership and temporal meaning. Decimal arithmetic is compared with `math/big.Rat`, including a targeted fuzz run. Independent consumer tests require compiler failures for wrong ID owners, wrong codec values, float decimal mutations and text operators on decimals.
 
-`make test-postgres` verifies exact round trips for every built-in family, including high-precision numeric, UUIDs, all temporal values, named scalar values, SQL NULL and present zero. It also rejects stored overflow, invalid generated enums and unsupported numeric representations without replacing destinations. The independent consumer additionally exercises these codecs through complete generated model reads.
+`make test-postgres` verifies exact round trips for every built-in family, including high-precision numeric, UUIDs, all temporal values, named scalar values, SQL NULL and present zero. It also rejects stored overflow, invalid generated enums and unsupported numeric representations without replacing destinations. The independent consumer additionally exercises these codecs through complete native ORM model reads.
 
 ## Binary ownership
 

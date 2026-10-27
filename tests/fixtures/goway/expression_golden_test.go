@@ -56,7 +56,7 @@ func runExpressionNew(g *goldenCapture) {
 	x := expr.Add(f, f)
 	result := expr.Divide(x, x.Param(2))
 	s := expressionRows
-	q := rowset.Select(a, s, rowset.MapSelected(s.Number, result.Value()), rowset.MapSelected(s.Exact, expr.DecimalOf(result).Value()), rowset.MapSelected(s.Approx, expr.FloatOf(result).Value()), rowset.MapSelected(s.Missing, expr.AddNullable(expr.NullableRow(result), expr.NullFor(result)).Value())).Where(expr.And(result.Gt(0), expr.Less(result, result.Param(100)))).OrderBy(expr.Negate(f).Asc())
-	resultRows := must(q.All(ctx, db))
+	q := rowset.OrderBy(rowset.Select(a, s, rowset.MapSelected(s.Number, result.Value()), rowset.MapSelected(s.Exact, expr.DecimalOf(result).Value()), rowset.MapSelected(s.Approx, expr.FloatOf(result).Value()), rowset.MapSelected(s.Missing, expr.AddNullable(expr.NullableRow(result), expr.NullableRow(result).Param(value.Null[int64]())).Value())).Where(expr.And(result.Gt(0), expr.Less(result, result.Param(100)))), expr.Negate(f).Asc())
+	resultRows := must(rowset.Read(q).All(ctx, db))
 	fmt.Fprintln(&g.output, oracleSnapshot([]any{resultRows}))
 }

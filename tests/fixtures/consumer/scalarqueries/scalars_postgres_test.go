@@ -136,7 +136,7 @@ func TestPostgresTextCalculations(t *testing.T) {
 		scalarValues(t, tx, expr.SubstringNullable(expr.Value(f.Note), 2, 2).Value(), []value.Nullable[string]{value.Null[string](), value.Of("ch"), value.Of("")})
 		scalarValues(t, tx, expr.ConcatNullable(expr.NullableRow(expr.Value(f.Name)), expr.Value(f.Note)).Value(), []value.Nullable[string]{value.Null[string](), value.Of("BetaÉcho"), value.Of("")})
 		scalarValues(t, tx, expr.ConcatWSNullable("|", expr.NullableRow(expr.Value(f.Name)), expr.Value(f.Note)).Value(), []string{" Élan_20% ", "Beta|Écho", "|"})
-		scalarValues(t, tx, expr.ConcatWSNullable("|", expr.NullFor(expr.Value(f.Name)), expr.NullFor(expr.Value(f.Name))).Value(), []string{"", "", ""})
+		scalarValues(t, tx, expr.ConcatWSNullable("|", expr.NullableRow(expr.Value(f.Name)).Param(value.Null[scalarqueries.Label]()), expr.NullableRow(expr.Value(f.Name)).Param(value.Null[scalarqueries.Label]())).Value(), []string{"", "", ""})
 		parts := make([]expr.RowValue[scalarqueries.Sample, string], 140)
 		for i := range parts {
 			parts[i] = trimmed.Param("x")
@@ -183,7 +183,7 @@ func TestPostgresComputedModelOrderAndGroupedResults(t *testing.T) {
 		window := expr.WindowFor(rowset.ModelScope(q)).OrderBy(expr.Value(f.ID).Asc()).Named("calculation_rows")
 		shifted := expr.AddValue(expr.RowNumber(window), count.Param(10).Value())
 		scalarValues(t, tx, shifted, []int64{11, 12, 13})
-		if got, err := rowset.DistinctOnValues(rowset.FromModel(q), magnitude.Value().Key()).OrderBy(magnitude.Asc(), expr.Value(f.ID).Asc()).All(t.Context(), tx); err != nil || len(got) != 2 || got[0].ID != 1 || got[1].ID != 2 {
+		if got, err := rowset.Read(rowset.OrderBy(rowset.DistinctOnValues(rowset.FromModel(q), magnitude.Value().Key()), magnitude.Asc(), expr.Value(f.ID).Asc())).All(t.Context(), tx); err != nil || len(got) != 2 || got[0].ID != 1 || got[1].ID != 2 {
 			t.Fatal("computed distinct winners", got, err)
 		}
 		return nil

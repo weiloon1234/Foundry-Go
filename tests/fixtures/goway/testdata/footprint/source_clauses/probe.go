@@ -34,7 +34,7 @@ func Correlated() orm.Query[models.User] {
 	scope := rows.InnerScope(c, rows.Scope(inner))
 	age := expr.At(scope, models.Users.Age)
 	scalar := rows.DistinctOnCorrelatedScalar(rows.SelectCorrelatedScalar(c, expr.Row(age).Value()), expr.Group(age)).OrderBy(age.Asc())
-	return expr.Where(q, rows.ExistsQuery(rows.From(q), rows.SelectScalar(outer, rows.CorrelatedScalarQuery(scalar))))
+	return expr.Where(q, rows.ExistsQuery(rows.From(q), rows.SelectScalar(outer, rows.CorrelatedScalarRowQuery(scalar).Value())))
 }
 func Record() orm.Query[models.User] {
 	q := models.Users.Query()

@@ -2,7 +2,7 @@
 
 <!-- compiled-examples -->
 
-Use `All` for a bounded collection, `Each` for iteration or explicit model chunks
+Use `All` for a bounded collection, `Query.Each` for iteration or explicit model chunks
 when callbacks must run after the current row stream closes. The
 [consumer examples](../../tests/fixtures/consumer/chunkqueries/chunks_postgres_test.go)
 exercise typed callbacks, windows, eager loading and failure boundaries.
@@ -37,7 +37,7 @@ processing. Use an appropriate transaction/isolation level for one snapshot.
 
 Each batch is fully decoded and its parent rows closed before relations/aggregate
 slots load and callbacks run. The same transaction can then do sequential work in
-the callback. A direct `Each` stream still owns its connection during callbacks;
+the callback. A direct `Query.Each` stream still owns its connection during callbacks;
 use chunks for callbacks that need that connection.
 
 Relation budgets apply per batch, including attached/nested results. A total query

@@ -52,25 +52,15 @@ func (s CorrelatedScalar[O, I, V]) Exists() expr.Predicate[O] {
 	return expr.FoundryPredicateValue[O](ormcore.CorrelatedExists(s.core), sqlowner.Expressions())
 }
 
-// CorrelatedScalarQuery widens a missing scalar result to NULL. Example: rows.CorrelatedScalarQuery(selected.Limit(1)).
-func CorrelatedScalarQuery[O, I, V any](s CorrelatedScalar[O, I, V]) expr.Selected[O, value.Nullable[V]] {
-	return expr.Nullable(expr.FoundrySelectedValue[O](ormcore.CorrelatedScalarExpression(s.core), s.column, sqlowner.Expressions()))
-}
-
-// CorrelatedScalarNullableQuery keeps one nullable result layer. Example: rows.CorrelatedScalarNullableQuery(nullableSelection).
-func CorrelatedScalarNullableQuery[O, I, V any](s CorrelatedScalar[O, I, value.Nullable[V]]) expr.Selected[O, value.Nullable[V]] {
-	return expr.FoundrySelectedValue[O](ormcore.CorrelatedScalarExpression(s.core), s.column, sqlowner.Expressions())
-}
-
 // CorrelatedScalarRowQuery exposes a correlated scalar in row expressions. Example: expr.GreaterNullable(age,rows.CorrelatedScalarRowQuery(selected)).
 func CorrelatedScalarRowQuery[O, I, V any](s CorrelatedScalar[O, I, V]) expr.RowExpression[O, value.Nullable[V]] {
-	v := CorrelatedScalarQuery(s)
+	v := expr.Nullable(expr.FoundrySelectedValue[O](ormcore.CorrelatedScalarExpression(s.core), s.column, sqlowner.Expressions()))
 	return expr.FoundryRowExpression[O](expr.FoundrySelected(v, sqlowner.Expressions()), expr.FoundrySelectedColumn(v, sqlowner.Expressions()), sqlowner.Expressions())
 }
 
 // CorrelatedScalarNullableRowQuery preserves nullable row-expression results. Example: rows.CorrelatedScalarNullableRowQuery(selected).
 func CorrelatedScalarNullableRowQuery[O, I, V any](s CorrelatedScalar[O, I, value.Nullable[V]]) expr.RowExpression[O, value.Nullable[V]] {
-	v := CorrelatedScalarNullableQuery(s)
+	v := expr.FoundrySelectedValue[O](ormcore.CorrelatedScalarExpression(s.core), s.column, sqlowner.Expressions())
 	return expr.FoundryRowExpression[O](expr.FoundrySelected(v, sqlowner.Expressions()), expr.FoundrySelectedColumn(v, sqlowner.Expressions()), sqlowner.Expressions())
 }
 

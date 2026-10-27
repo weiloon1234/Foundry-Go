@@ -76,12 +76,12 @@ func projection() Query[Inner[Alias[left, member], Alias[right, order]], record]
 	schema := declareRows()
 	id := expr.At(RightScope(j, Scope(b)), o.ID)
 	name := expr.At(LeftScope(j, Scope(a)), m.Name)
-	return Select(j, schema, Map(schema.Name, name), Map(schema.ID, id)).Where(name.Eq("Ada")).OrderBy(id.Asc())
+	return OrderBy(Select(j, schema, Map(schema.Name, name), Map(schema.ID, id)).Where(name.Eq("Ada")), id.Asc())
 }
 func TestJoinProjectionAllUsesDeclaredFieldOrder(t *testing.T) {
 	state := &driverState{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(9), "Ada"}}}
 	db := openTest(t, state)
-	got, err := projection().All(t.Context(), db)
+	got, err := Read(projection()).All(t.Context(), db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestProjectionDiscardsPartialRowsAndCloseFailure(t *testing.T) {
 		{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(9), "Ada"}, {"bad integer", "Bad"}}},
 		{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(9), "Ada"}}, closeErr: errors.New("close failure")},
 	} {
-		got, err := projection().All(t.Context(), openTest(t, state))
+		got, err := Read(projection()).All(t.Context(), openTest(t, state))
 		if got != nil || err == nil || !state.closed {
 			t.Fatal(got, err, state.closed)
 		}
@@ -107,7 +107,7 @@ func TestProjectionDiscardsPartialRowsAndCloseFailure(t *testing.T) {
 func TestSelectValuePreservesNullableCodec(t *testing.T) {
 	m := declareMembers()
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"nick"}}}
-	got, err := SelectValue(m.Query(), m.Nickname).All(t.Context(), openTest(t, state))
+	got, err := Read(SelectValue(m.Query(), m.Nickname)).All(t.Context(), openTest(t, state))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestRowStartupAndMappingErrors(t *testing.T) {
 		Select(a, s, Map(s.ID, expr.At(Scope(a), m.ID)), Map(foreign.Name, expr.At(Scope(a), m.Name))),
 		Select(a, s, Map(s.ID, expr.At(Scope(a), other.ID)), Map(s.Name, expr.At(Scope(a), m.Name))),
 	} {
-		if _, err := q.All(t.Context(), db); err == nil {
+		if _, err := Read(q).All(t.Context(), db); err == nil {
 			t.Fatal("invalid mapping accepted")
 		}
 	}
@@ -254,7 +254,7 @@ func TestNullableJoinComparisonAndProjection(t *testing.T) {
 	parent := expr.At(LeftScope(joined, Scope(a)), people.Parent)
 	q := Select(joined, schema, Map(schema.Parent, parent)).Where(parent.Eq(3), parent.Ne(4), parent.IsNotNull())
 	state := &driverState{columns: []string{"parent"}, rows: [][]driver.Value{{int64(3)}}}
-	got, err := q.All(t.Context(), openTest(t, state))
+	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 1 {
 		t.Fatal(got, err)
 	}

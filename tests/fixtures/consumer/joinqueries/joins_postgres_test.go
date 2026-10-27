@@ -31,7 +31,7 @@ func TestPostgresTypedJoins(t *testing.T) {
 		referral := referralScope
 		sponsor := sponsorScope
 		report := rows.OrderBy(rows.Select(joined, reports.ReferralRows, rows.MapSelected(reports.ReferralRows.ID, expr.Row(expr.At(referral, models.Users.ID)).Value()), rows.MapSelected(reports.ReferralRows.Email, expr.Row(expr.At(referral, models.Users.Email)).Value()), rows.MapSelected(reports.ReferralRows.IntroducerID, expr.Row(expr.AtNullable(sponsor, models.Users.ID)).Value()), rows.MapSelected(reports.ReferralRows.IntroducerEmail, expr.Row(expr.AtNullable(sponsor, models.Users.Email)).Value()), rows.MapSelected(reports.ReferralRows.IntroducerNickname, expr.Row(expr.AtNullableValue(sponsor, models.Users.Nickname)).Value()), rows.MapSelected(reports.ReferralRows.IntroducerStatus, expr.Row(expr.AtNullable(sponsor, models.Users.Status)).Value())), expr.At(referral, models.Users.Email).Asc())
-		items, err := report.All(t.Context(), counter)
+		items, err := rows.Read(report).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}
@@ -66,7 +66,7 @@ func TestPostgresTypedJoins(t *testing.T) {
 		fr := rows.LeftScope(filteredJoin, rows.Scope(referrals))
 		fs := rows.NullableRightScope(filteredJoin, rows.Scope(filtered))
 		filteredReport := rows.Select(filteredJoin, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(fr, models.Users.ID)).Value())), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(fs, models.Users.ID)).Value()))
-		filteredRows, err := filteredReport.All(t.Context(), counter)
+		filteredRows, err := rows.Read(filteredReport).All(t.Context(), counter)
 		if err != nil {
 			return err
 		}
@@ -115,10 +115,10 @@ func TestPostgresTypedJoins(t *testing.T) {
 		counter.Queries.Store(0)
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		if items, err := report.All(ctx, counter); !errors.Is(err, context.Canceled) || items != nil || counter.Queries.Load() != 0 {
+		if items, err := rows.Read(report).All(ctx, counter); !errors.Is(err, context.Canceled) || items != nil || counter.Queries.Load() != 0 {
 			t.Error("canceled join performed SQL")
 		}
-		if items, err := rows.Select(joined, reports.ReferralRows).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || items != nil || counter.Queries.Load() != 0 {
+		if items, err := rows.Read(rows.Select(joined, reports.ReferralRows)).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || items != nil || counter.Queries.Load() != 0 {
 			t.Error("incomplete joined selection executed SQL")
 		}
 		stop := errors.New("stop joined stream")
@@ -131,7 +131,7 @@ func TestPostgresTypedJoins(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `UPDATE users SET status='invalid' WHERE id=$1`, users[1].ID.String()); err != nil {
 			return err
 		}
-		if items, err := report.All(t.Context(), counter); err == nil || items != nil {
+		if items, err := rows.Read(report).All(t.Context(), counter); err == nil || items != nil {
 			t.Error("malformed joined enum published partial results")
 		}
 		return nil

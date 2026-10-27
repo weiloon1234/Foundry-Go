@@ -60,7 +60,7 @@ func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit in
 			return err
 		}
 		fields := challengestore.Entries
-		candidates, err := rows.Select(rows.From(entries(scope, "").Where(fields.ExpiresAt.Lte(now)).OrderBy(fields.SubjectKey.Asc(), fields.ID.Asc()).Limit(limit)), challengestore.PruneCandidateRows, rows.Map(challengestore.PruneCandidateRows.ID, expr.Value(fields.ID)), rows.Map(challengestore.PruneCandidateRows.SubjectKey, expr.Value(fields.SubjectKey))).All(ctx, tx)
+		candidates, err := rows.Read(rows.Select(rows.From(entries(scope, "").Where(fields.ExpiresAt.Lte(now)).OrderBy(fields.SubjectKey.Asc(), fields.ID.Asc()).Limit(limit)), challengestore.PruneCandidateRows, rows.Map(challengestore.PruneCandidateRows.ID, expr.Value(fields.ID)), rows.Map(challengestore.PruneCandidateRows.SubjectKey, expr.Value(fields.SubjectKey)))).All(ctx, tx)
 		if err != nil {
 			return err
 		}

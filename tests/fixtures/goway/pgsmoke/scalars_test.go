@@ -19,7 +19,7 @@ func readScalar[V any](t *testing.T, ex database.Executor, v expr.Selected[scala
 	s := rows.Define(func(b rows.Builder[windowResult[V]], r *windowResult[V]) windowFields[V] {
 		return windowFields[V]{b.Row(), rows.FieldOf(b, &r.Value, orm.Codec(c))}
 	})
-	out, err := rows.Select(rows.FromModel(scalars.Records.Query().Where(scalars.Records.Millis.Eq(0))), s, rows.MapSelected(s.Value, v)).All(t.Context(), ex)
+	out, err := rows.Read(rows.Select(rows.FromModel(scalars.Records.Query().Where(scalars.Records.Millis.Eq(0))), s, rows.MapSelected(s.Value, v))).All(t.Context(), ex)
 	must(t, err)
 	if len(out) != 1 {
 		t.Fatalf("scope lost: %d rows", len(out))

@@ -46,7 +46,7 @@ var Articles = orm.Define("extension_articles", func(b orm.Builder[Article], m *
 // Authors is the unrelated declaration. Example: Authors.Find(ctx,db,1).
 var Authors = orm.Define("extension_authors", func(b orm.Builder[Author], m *Author) orm.Table[Author, int64] { return orm.TableOf(b, &m.ID) })
 
-// Owner pins storage identity independently of future table renames. Example: Owner.Reference(1).
+// Owner pins storage identity independently of future table renames. Example: extensions.ORMIdentity(Owner).Reference(1).
 var Owner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()), extensions.OwnerOptions{StorageModel: "extension_articles"})
 
 // Descriptors groups concrete extension capabilities. Example: ArticleExtensions.From(runtime).

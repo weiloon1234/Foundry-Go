@@ -43,7 +43,7 @@ The release measurement profiles remain the following three, as in format 2.
 Historical format-1 candidates have ordinary/full only and remain supported:
 
 - **Ordinary:** one persisted model with named ID, scalar, nullable and binary
-  fields, generated drafts, typed predicates/aggregate and a small linked command.
+  fields, typed assignments, predicates/aggregate and a small linked command.
   Its command compiles query ASTs and opens no service.
 - **Configured:** one typed model plus `application.New` startup, two named memory
   caches and HTTP, with no external database or cloud account required. It uses

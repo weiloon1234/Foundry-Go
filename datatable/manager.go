@@ -339,7 +339,7 @@ func (t Table[S, R, A]) Query(ctx context.Context, m *Manager, subject A, reques
 				return err
 			}
 			page := prepared.page
-			items, err := rows.Offset(rows.Limit(source.rows, page.Size), (page.Number-1)*page.Size).All(ctx, tx)
+			items, err := rows.Read(rows.Offset(rows.Limit(source.rows, page.Size), (page.Number-1)*page.Size)).All(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -376,7 +376,7 @@ func (t Table[S, R, A]) SimpleQuery(ctx context.Context, m *Manager, subject A, 
 		}
 		err = m.read(ctx, func(tx *database.Tx) error {
 			var err error
-			result, err = rows.SimplePaginate(ctx, tx, source.rows, prepared.page)
+			result, err = rows.Read(source.rows).SimplePaginate(ctx, tx, prepared.page)
 			return err
 		})
 		if err != nil {

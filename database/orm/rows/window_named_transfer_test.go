@@ -72,12 +72,12 @@ func TestNamedWindowQueryIsolationAndQualification(t *testing.T) {
 	f := expr.Value(recursionTable.Key())
 	w := expr.WindowFor(ModelScope(recursionTable.Query()))
 	inner := LimitScalar(SelectScalar(q, expr.RowNumber(w.OrderBy(f.Asc()).Named("same"))), 1)
-	outer := OrderScalar(SelectScalar(q, ScalarQuery(q, inner)), expr.RowNumber(w.OrderBy(f.Desc()).Named("same")).Asc())
+	outer := OrderScalar(SelectScalar(q, ScalarRowQuery(q, inner).Value()), expr.RowNumber(w.OrderBy(f.Desc()).Named("same")).Asc())
 	s, err := CompileRead(ReadScalar(outer))
 	if err != nil || strings.Count(s.SQL(), `WINDOW "same" AS (`) != 2 {
 		t.Fatal("named definitions escaped SELECT", s.SQL(), err)
 	}
-	if _, err := CompileRead(ReadScalar(SelectScalar(q, expr.RowNumber(w.OrderBy(ScalarQuery(q, inner).Asc()).Named("nested_scope"))))); err != nil {
+	if _, err := CompileRead(ReadScalar(SelectScalar(q, expr.RowNumber(w.OrderBy(ScalarRowQuery(q, inner).Value().Asc()).Named("nested_scope"))))); err != nil {
 		t.Fatal("independent scalar window rejected", err)
 	}
 }

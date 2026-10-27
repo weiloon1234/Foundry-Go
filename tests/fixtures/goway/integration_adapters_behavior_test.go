@@ -31,7 +31,7 @@ func TestORMExtensionDeclaration(t *testing.T) {
 	}
 	other := orm.IdentityOf(e.Articles.Table, e.Articles.Key())
 	pinned := extensions.DefineORMOwner("articles", other, extensions.OwnerOptions{StorageModel: "extension_articles"})
-	a, err := e.Owner.Subject(e.Owner.Reference(1))
+	a, err := e.Owner.Subject(extensions.ORMIdentity(e.Owner).Reference(1))
 	if err != nil {
 		t.Fatal(err)
 	}

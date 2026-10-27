@@ -34,14 +34,14 @@ func TestStage7ReportProjectionReads(t *testing.T) {
 		if count != 3 {
 			t.Fatal(count)
 		}
-		page, err := rows.Paginate(ctx, tx, q, orm.Page(2, 2))
+		page, err := rows.Read(q).Paginate(ctx, tx, orm.Page(2, 2))
 		if err != nil {
 			return err
 		}
 		if page.Total != 3 || len(page.Items) != 1 || page.Items[0] != 2 {
 			t.Fatal(page)
 		}
-		simple, err := rows.SimplePaginate(ctx, tx, q, orm.Page(1, 2))
+		simple, err := rows.Read(q).SimplePaginate(ctx, tx, orm.Page(1, 2))
 		if err != nil {
 			return err
 		}

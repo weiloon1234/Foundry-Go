@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/extensionrow"
@@ -67,7 +68,7 @@ func All[M any, K comparable](ctx context.Context, m *Manager, owner extensions.
 		if err != nil {
 			return err
 		}
-		active, err := owner.Active(ctx, tx, m.store.Registry(), []model.Reference[M, K]{reference})
+		active, _, err := owner.ActiveSubjects(ctx, tx, m.store.Registry(), []model.Reference[M, K]{reference})
 		if err != nil {
 			return err
 		}
@@ -120,7 +121,7 @@ func (k Key[M, K, V]) matchingKeys(ctx context.Context, m *Manager, input V) ([]
 			return err
 		}
 		f := store.Metadata
-		rows, err := store.MetadataIndex(store.Metadata.Query().Where(f.Scope.Eq(k.definition.owner.Scope()), f.Name.Eq(string(k.Name())), f.Version.Eq(uint32(k.Version())), f.Value.Eq(snapshot)).OrderBy(f.KeyColumn.Asc()).Limit(querycore.MaxIdentityBatch+1)).All(ctx, tx)
+		rows, err := rows.Read(store.MetadataIndex(store.Metadata.Query().Where(f.Scope.Eq(k.definition.owner.Scope()), f.Name.Eq(string(k.Name())), f.Version.Eq(uint32(k.Version())), f.Value.Eq(snapshot)).OrderBy(f.KeyColumn.Asc()).Limit(querycore.MaxIdentityBatch+1))).All(ctx, tx)
 		if err != nil {
 			return err
 		}

@@ -50,9 +50,9 @@ an automatic complement. Filter NULLs explicitly if the set should exclude them.
 outer scope. It asks whether the inner selected window has a row. An ungrouped
 COUNT over empty input still has one row unless HAVING or a window removes it.
 
-`rows.ScalarQuery(outer, inner)` returns a selected nullable value. An empty inner result
+`rows.ScalarRowQuery(outer, inner).Value()` returns a selected nullable value. An empty inner result
 becomes NULL; multiple rows produce PostgreSQL's scalar cardinality error. No
-implicit limit is added. `ScalarNullableQuery` keeps one nullable layer.
+implicit limit is added. `rows.ScalarNullableRowQuery(outer, inner).Value()` keeps one nullable layer.
 `ScalarRowQuery`/`ScalarNullableRowQuery` create row operands for outer comparisons;
 the inner SELECT retains its own aggregate/window phase.
 

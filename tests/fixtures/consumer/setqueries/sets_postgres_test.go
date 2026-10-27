@@ -72,7 +72,7 @@ func checkValueSets(t *testing.T, tx *database.Tx) error {
 	if rows, err := rowset.ReadScalar(rowset.SelectScalar(window, window.Value().Value())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []int{22, 21}) {
 		t.Error("projection of combined value failed", rows, err)
 	}
-	scalars, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.ScalarQuery(rowset.From(models.Users.Query()), rowset.SelectScalar(window.Limit(1), window.Value().Value())))).All(t.Context(), tx)
+	scalars, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(models.Users.Query()), rowset.ScalarRowQuery(rowset.From(models.Users.Query()), rowset.SelectScalar(window.Limit(1), window.Value().Value())).Value())).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}

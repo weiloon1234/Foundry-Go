@@ -125,7 +125,7 @@ Historical synthetic models/projections require their historical checkout's gene
 Pass `--style both --old-repo` explicitly; default generation is native only.
 New sources have handwritten ORM/rows declarations and generate only the retained
 enum. The seed fixes the same model graph, CRUD/read/loading handler operations
-and join reports on both sides. Each generated model also has a SQL compilation
+and join reports on both sides. Each synthetic model also has a SQL compilation
 test. No synthetic test connects to a database.
 
 ```sh

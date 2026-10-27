@@ -35,7 +35,7 @@ func TestStage6a4RawFragments(t *testing.T) {
 		return fields{b.Row(), rows.NumberOf(b, &r.Amount), rows.FieldOf(b, &r.Has, orm.Codec(codec.Bool[bool]()))}
 	})
 	q := rows.Select(rows.FromModel(table.Query().Where(orm.WhereRaw[arithmeticRecord]("amount > ? OR amount = ?", 0, 0))), schema, rows.MapSelected(schema.Amount, expr.Raw[arithmeticRecord, int64]("amount + ?", 1)), rows.MapSelected(schema.Has, expr.Raw[arithmeticRecord, bool](`'{"key":1}'::jsonb ?? ?`, "key")))
-	got, err := q.All(ctx, db)
+	got, err := rows.Read(q).All(ctx, db)
 	must(t, err)
 	if len(got) != 1 || got[0].Amount != 8 || !got[0].Has {
 		t.Fatal(got)
@@ -46,7 +46,7 @@ func TestStage6a4RawFragments(t *testing.T) {
 		if e != nil {
 			return e
 		}
-		got, e = q.All(ctx, tx)
+		got, e = rows.Read(q).All(ctx, tx)
 		if e != nil {
 			return e
 		}
@@ -58,7 +58,7 @@ func TestStage6a4RawFragments(t *testing.T) {
 	if !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	got, err = q.All(ctx, db)
+	got, err = rows.Read(q).All(ctx, db)
 	must(t, err)
 	if got[0].Amount != 8 {
 		t.Fatal(got)

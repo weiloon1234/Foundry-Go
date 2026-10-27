@@ -17,4 +17,4 @@ var selected = rows.SelectTransactionValue(source, expr.Row(expr.At(fields, f.Re
 var _ context.Context
 var _ *database.Tx
 
-var _ = rows.TransactionScalarQuery(rows.From(f.Records.Query()), selected)
+var _ = rows.TransactionScalarRowQuery(rows.From(f.Records.Query()), selected).Value()

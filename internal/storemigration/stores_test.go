@@ -204,7 +204,7 @@ func TestStoreMigrationParity(t *testing.T) {
 			at, _ := temporal.NewDateTime(instant)
 			f := challengestore.Entries
 			q := f.Query().Where(f.Scope.Eq("scope"), f.ExpiresAt.Lte(at)).OrderBy(f.SubjectKey.Asc(), f.ID.Asc()).Limit(10)
-			r, e := rows.Select(rows.From(q), challengestore.PruneCandidateRows, rows.Map(challengestore.PruneCandidateRows.ID, expr.Value(f.ID)), rows.Map(challengestore.PruneCandidateRows.SubjectKey, expr.Value(f.SubjectKey))).All(ctx, tx)
+			r, e := rows.Read(rows.Select(rows.From(q), challengestore.PruneCandidateRows, rows.Map(challengestore.PruneCandidateRows.ID, expr.Value(f.ID)), rows.Map(challengestore.PruneCandidateRows.SubjectKey, expr.Value(f.SubjectKey)))).All(ctx, tx)
 			return fingerprint(r, e)
 		}},
 	}

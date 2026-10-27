@@ -328,7 +328,7 @@ func TestRelationExistenceCompilesNestedScopesWithoutRoundTrips(t *testing.T) {
 	for _, negative := range []bool{false, true} {
 		predicate := Has(r, Has(r, p.Name.Eq("great")))
 		if negative {
-			predicate = DoesntHave(r, Has(r, p.Name.Eq("great")))
+			predicate = Not(Has(r, Has(r, p.Name.Eq("great"))))
 		}
 		o := treeOracle()
 		db := testDB(t, o.connector())
