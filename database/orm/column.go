@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/enum"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -22,13 +23,14 @@ type Column[M, V any] struct {
 
 // columnData has no methods: each public capability owns only its own shells.
 type columnData[V any] struct {
-	core      *columnCore
-	policy    lifecycle.FieldPolicy[V]
-	bind      func(V) (driver.Value, error)
-	decode    func(any) (V, error)
-	scanValue func(*V) any
-	clone     func(V) V
-	assign    func(V) querycore.AssignmentValue
+	core        *columnCore
+	policy      lifecycle.FieldPolicy[V]
+	bind        func(V) (driver.Value, error)
+	literalBind func(any) (driver.Value, error)
+	decode      func(any) (V, error)
+	scanValue   func(*V) any
+	clone       func(V) V
+	assign      func(V) querycore.AssignmentValue
 }
 
 // Key identifies a table's primary column. Example: Orders.Key().Eq(id).
@@ -121,7 +123,15 @@ func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, o
 	return columnWithCodec(core, c)
 }
 func columnWithCodec[V any](core *columnCore, c codec.Codec[V]) columnData[V] {
-	return columnData[V]{core: core, policy: lifecycle.FieldPolicyOf(c), bind: c.Bind, decode: c.Decode, scanValue: func(v *V) any { return c.Scan(v) }, clone: c.Clone, assign: func(v V) querycore.AssignmentValue { return capture(c, v) }}
+	return columnData[V]{core: core, policy: lifecycle.FieldPolicyOf(c), bind: c.Bind, literalBind: func(v any) (driver.Value, error) {
+		typed, ok := v.(V)
+		// A nil interface has no dynamic type to assert, but is a valid zero
+		// value for an interface-valued column. Let its codec own NULL semantics.
+		if !ok && (v != nil || reflect.TypeFor[V]().Kind() != reflect.Interface) {
+			return nil, safeerror.NewFault(fault.Panicked, "query comparison binding panicked")
+		}
+		return c.Bind(typed)
+	}, decode: c.Decode, scanValue: func(v *V) any { return c.Scan(v) }, clone: c.Clone, assign: func(v V) querycore.AssignmentValue { return capture(c, v) }}
 }
 func capture[V any](c codec.Codec[V], v V) querycore.AssignmentValue {
 	return querycore.CaptureAssignment(c, v)
@@ -130,11 +140,12 @@ func comparison[M, V any](c columnData[V], op querycore.Operator, vs []V, text .
 	if c.core == nil || c.core.owner == nil || c.bind == nil {
 		return Predicate[M]{err: invalid("uninitialized column")}
 	}
-	values := make([]any, len(vs))
+	node := querycore.CodecComparison(querycore.Comparison{Operand: c.core.operand, Operator: op, Text: len(text) == 1 && text[0], Kind: c.core.kind}, c.literalBind)
+	state, values := querycore.RetainComparison(node, len(vs))
 	for i, v := range vs {
 		values[i] = c.clone(v)
 	}
-	return Predicate[M]{owner: c.core.owner, expression: querycore.RetainPredicate(querycore.Comparison{Operand: querycore.FieldRef{Table: c.core.owner.model.Table, Column: c.core.metadata.Name}, Operator: op, Values: querycore.RetainComparisonValues(values), Text: len(text) == 1 && text[0], Kind: c.core.kind, Bind: func(v any) (driver.Value, error) { return c.bind(v.(V)) }})}
+	return Predicate[M]{owner: c.core.owner, expression: state}
 }
 
 func columnOrder[M, V any](c columnData[V], descending bool) Order[M] {

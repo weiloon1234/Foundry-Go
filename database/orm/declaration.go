@@ -61,6 +61,7 @@ type columnCore struct {
 	owner            *tableCore
 	field            reflect.StructField
 	metadata         querycore.Column
+	operand          querycore.ValueExpression
 	offset           uintptr
 	scan             func(unsafe.Pointer) any
 	get              func(unsafe.Pointer) (driver.Value, error)
@@ -205,6 +206,7 @@ func bindField(d *declaration, ptr unsafe.Pointer, typ reflect.Type, nullable bo
 	c.uuid = typ.PkgPath() == "github.com/weiloon1234/Foundry-Go/model" && strings.HasPrefix(typ.Name(), "ID[")
 	c.metadata = querycore.Column{Name: modelmeta.Snake(f.Name), Nullable: nullable}
 	parseTag(d, c)
+	c.operand = querycore.FieldRef{Table: d.core.model.Table, Column: c.metadata.Name}
 	d.fields[index] = c
 	return c
 }

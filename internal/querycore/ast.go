@@ -70,18 +70,28 @@ type RowComparison struct {
 func (RowComparison) ExpressionNode() {}
 
 type Comparison struct {
+	Operand ValueExpression
+	Values  *ComparisonValuesState
+	Bind    func(any) (driver.Value, error)
+	// codecBind is issued only by framework builders delegating to Codec.Bind,
+	// which already owns application callback containment. Bind stays untrusted.
+	codecBind func(any) (driver.Value, error)
 	// Text is supplied by text-capable builders, never inferred from a string codec.
 	Text     bool
-	Operand  ValueExpression
 	Operator Operator
-	Values   *ComparisonValuesState
-	Bind     func(any) (driver.Value, error)
-	// kind is the operand codec's scalar representation. Membership tests over
+	// Kind is the operand codec's scalar representation. Membership tests over
 	// supported scalar kinds bind one array parameter instead of one per value.
 	Kind codec.ParameterType
 }
 
 func (Comparison) ExpressionNode() {}
+
+// CodecComparison installs a binding adapter owned by the framework codec path.
+// Application callbacks belong in Codec.New or Comparison.Bind, never here.
+func CodecComparison(node Comparison, bind func(any) (driver.Value, error)) Comparison {
+	node.codecBind = bind
+	return node
+}
 
 // binaryComparison compares SQL operands without treating either as a literal binding.
 type BinaryComparison struct {
@@ -147,11 +157,11 @@ func ValidateExpressionValues(e Expression, operand func(ValueExpression) error,
 				return nil
 			}
 		case In, NotIn:
-			if len(ComparisonValues(e.Values)) <= MaxMembershipValues && e.Bind != nil {
+			if len(ComparisonValues(e.Values)) <= MaxMembershipValues && e.hasBinding() {
 				return nil
 			}
 		case Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Like, Contains, InsensitiveContains, StartsWith, EndsWith, InsensitiveStartsWith, InsensitiveEndsWith, InsensitiveLike:
-			if len(ComparisonValues(e.Values)) == 1 && e.Bind != nil {
+			if len(ComparisonValues(e.Values)) == 1 && e.hasBinding() {
 				return nil
 			}
 		}

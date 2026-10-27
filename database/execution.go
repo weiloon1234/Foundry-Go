@@ -65,7 +65,8 @@ func queryStatement(ctx context.Context, executor sqlExecutor, classify classifi
 	}()
 	instrument = instrument.locate(ctx)
 	started := instrument.start()
-	rows, err := executor.QueryContext(ctx, statement, arguments...)
+	driverCtx, batch := sqlcallback.WithRowBatch(ctx)
+	rows, err := executor.QueryContext(driverCtx, statement, arguments...)
 	if err != nil {
 		failure := classify.wrap("query", err)
 		if autocommit {
@@ -75,7 +76,7 @@ func queryStatement(ctx context.Context, executor sqlExecutor, classify classifi
 		instrument.finish(ctx, "query", statement, started, -1, failure)
 		return nil, failure
 	}
-	result = &Rows{raw: rows, classify: classify, observers: observers, observerOwner: owner, release: release, autocommit: autocommit, probe: instrument, started: started, statement: statement, ctx: ctx}
+	result = &Rows{raw: rows, batch: batch, classify: classify, observers: observers, observerOwner: owner, release: release, autocommit: autocommit, probe: instrument, started: started, statement: statement, ctx: ctx}
 	// A query can finish as its context ends. Publish the stop hook while
 	// holding the same mutex as Close, before the cancellation callback reads it.
 	result.mu.Lock()
@@ -155,6 +156,8 @@ type Row interface{ Scan(...any) error }
 type Rows struct {
 	mu             sync.Mutex
 	raw            *sql.Rows
+	batch          *sqlcallback.RowBatch
+	scanBuffer     sqlcallback.ScanBuffer
 	classify       classifier
 	observers      lifecycle.Observers
 	observerOwner  observerOwner
@@ -194,6 +197,10 @@ func (r *Rows) Observers() lifecycle.Observers { return r.observers }
 func (r *Rows) Next() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.next()
+}
+
+func (r *Rows) next() bool {
 	if r.closed {
 		return false
 	}
@@ -208,10 +215,14 @@ func (r *Rows) Next() bool {
 func (r *Rows) Scan(destinations ...any) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.scan(destinations)
+}
+
+func (r *Rows) scan(destinations []any) error {
 	if r.closed {
 		return failure("scan", Closed)
 	}
-	if err := r.raw.Scan(sqlcallback.Destinations(destinations)...); err != nil {
+	if err := r.raw.Scan(r.scanBuffer.Prepare(destinations)...); err != nil {
 		r.err = safeerror.Join("operation failed", r.err, r.wrap("scan", err))
 		_ = r.close()
 		return r.err
@@ -251,6 +262,7 @@ func (r *Rows) close() error {
 		return r.err
 	}
 	r.closed = true
+	defer r.scanBuffer.Reset()
 	if r.stop != nil {
 		r.stop()
 	}

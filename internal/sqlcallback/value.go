@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"reflect"
-	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
@@ -51,9 +50,29 @@ func (v valuer) Value() (value driver.Value, err error) {
 
 // Destinations intercepts Scanner callbacks, including database/sql's pointer allocation path.
 func Destinations(values []any) []any {
+	var buffer ScanBuffer
+	return buffer.Prepare(values)
+}
+
+// ScanBuffer owns adapter scratch for one sequential stream. It never mutates
+// or retains the caller's slice; Reset drops retained destinations on closure.
+type ScanBuffer struct{ values []any }
+
+func (b *ScanBuffer) Reset() { clear(b.values); b.values = nil }
+
+func (b *ScanBuffer) Prepare(values []any) []any {
+	clear(b.values)
 	var result []any
 	for i, v := range values {
 		t := reflect.TypeOf(v)
+		if s, ok := v.(*codecScanner); ok && s != nil {
+			if result == nil {
+				b.values = append(b.values[:0], values...)
+				result = b.values
+			}
+			result[i] = &s.native
+			continue
+		}
 		found := false
 		for n := 0; t != nil && n < pointerLimit; n++ {
 			if t.Implements(reflect.TypeFor[sql.Scanner]()) {
@@ -72,7 +91,8 @@ func Destinations(values []any) []any {
 			continue
 		}
 		if result == nil {
-			result = slices.Clone(values)
+			b.values = append(b.values[:0], values...)
+			result = b.values
 		}
 		result[i] = scanner{reflect.ValueOf(v)}
 	}

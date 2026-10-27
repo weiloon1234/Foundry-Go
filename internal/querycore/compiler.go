@@ -2,14 +2,11 @@ package querycore
 
 import (
 	"context"
-	"database/sql/driver"
-	"fmt"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -220,28 +217,9 @@ func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping 
 			return "", safeerror.NewFault(fault.Invalid, "membership list exceeds its value bound")
 		}
 	}
-	bound := make([]driver.Value, len(ComparisonValues(e.Values)))
-	for i, value := range ComparisonValues(e.Values) {
-		var v driver.Value
-		err := callback.Isolated("query comparison binding", func() error {
-			var err error
-			v, err = e.Bind(value)
-			return err
-		})
-		if err != nil {
-			return "", safeerror.Wrap("query comparison binding failed", err)
-		}
-		if v == nil {
-			return "", safeerror.NewFault(fault.Invalid, "NULL comparison requires IsNull or IsNotNull")
-		}
-		if EscapedPattern(e.Operator) {
-			text, ok := v.(string)
-			if !ok {
-				return "", safeerror.NewFault(fault.Invalid, "text pattern operations require a text database representation")
-			}
-			v = LikePattern(e.Operator, text)
-		}
-		bound[i] = v
+	bound, err := e.bindValues()
+	if err != nil {
+		return "", err
 	}
 	if _, column := UnwrapSensitivity(e.Operand).(FieldRef); column && !c.IndexTarget && (e.Operator == In || e.Operator == NotIn) {
 		// One array parameter keeps statement text independent of list length,
@@ -278,7 +256,7 @@ func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping 
 	if !ok || len(parameters) != 1 {
 		return "", safeerror.NewFault(fault.Invalid, "unsupported query comparison")
 	}
-	result := fmt.Sprintf("(%s %s %s", field, op, parameters[0])
+	result := "(" + field + " " + op + " " + parameters[0]
 	if EscapedPattern(e.Operator) {
 		result += " ESCAPE '!'"
 	}

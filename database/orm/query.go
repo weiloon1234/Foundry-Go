@@ -275,9 +275,19 @@ func all[M any](ctx context.Context, ex database.Executor, q queryState) ([]M, e
 func allRows[M any](ctx context.Context, ex database.Executor, q queryState) ([]M, error) {
 	items := make([]M, 0)
 	batch := retrievalBatch{table: q.table}
+	var item M
+	var destinations []any
 	err := readModels(ctx, ex, q, func(row database.Row) error {
-		var item M
-		if err := hydrate(q.table, row, unsafe.Pointer(&item)); err != nil {
+		// Each successful row is copied into the owned result slice. Scanners
+		// retain only this scratch row, which is zeroed before every decode.
+		item = *new(M)
+		if destinations == nil {
+			if err := tableError(q.table); err != nil {
+				return err
+			}
+			destinations = modelDestinations(q.table, unsafe.Pointer(&item))
+		}
+		if err := hydrateInto(q.table, row, unsafe.Pointer(&item), destinations); err != nil {
 			return err
 		}
 		items = append(items, item)
@@ -293,10 +303,18 @@ func hydrate(t *tableCore, row database.Row, base unsafe.Pointer) error {
 	if err := tableError(t); err != nil {
 		return err
 	}
+	return hydrateInto(t, row, base, modelDestinations(t, base))
+}
+
+func modelDestinations(t *tableCore, base unsafe.Pointer) []any {
 	destinations := make([]any, len(t.columns))
 	for i, c := range t.columns {
 		destinations[i] = c.scan(base)
 	}
+	return destinations
+}
+
+func hydrateInto(t *tableCore, row database.Row, base unsafe.Pointer, destinations []any) error {
 	if err := row.Scan(destinations...); err != nil {
 		return err
 	}

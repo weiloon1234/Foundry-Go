@@ -2,8 +2,8 @@ package ormcore
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
@@ -24,20 +24,13 @@ func Collect(ctx context.Context, rows *database.Rows, scan func(database.Row) e
 	defer func() { err = safeerror.Join("operation failed", err, rows.Close()) }()
 	count := 0
 	collect := func(work context.Context) error {
-		for rows.Next() {
-			if err := work.Err(); err != nil {
-				return err
-			}
-			if err := scan(rows); err != nil {
-				return err
-			}
-			count++
-		}
-		return safeerror.Join("operation failed", rows.Err(), rows.Close(), work.Err())
+		var err error
+		count, err = rows.FoundryCollect(sqlowner.Collections(), work, scan)
+		return err
 	}
 	set := rows.Observers()
 	if callbacks == nil || !callbacks.Needed(set) {
-		return callback.Isolated("decode model rows", func() error { return collect(ctx) })
+		return collect(ctx)
 	}
 	return rows.WithObserverScope(ctx, func(work context.Context) error {
 		if err := collect(work); err != nil || count == 0 {

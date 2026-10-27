@@ -1,0 +1,3449 @@
+{
+  "after_runtime": {
+    "baseline_ref": "b8816902",
+    "benchtime": "1s",
+    "complete": true,
+    "cpu_count": 16,
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-perf-gocache",
+      "GODEBUG": "",
+      "GOENV": "off",
+      "GOFLAGS": "-p=4",
+      "GOGC": "100",
+      "GOMAXPROCS": "4",
+      "GOMEMLIMIT": "off",
+      "GOTOOLCHAIN": "local",
+      "GOWORK": "off"
+    },
+    "load_average": [
+      3.26708984375,
+      4.890625,
+      4.6796875
+    ],
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "raw_report": "/private/tmp/foundry-perf-after-orm-final/comparison.json",
+    "samples": [
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 12699.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 9659.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24271.0,
+            "allocs/op": 466.0,
+            "ns/op": 106632.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40222.0,
+            "allocs/op": 799.0,
+            "ns/op": 140923.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48154.0,
+            "allocs/op": 947.0,
+            "ns/op": 160179.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1609067.0,
+            "allocs/op": 27781.0,
+            "ns/op": 2707582.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664762.0,
+            "allocs/op": 50097.0,
+            "ns/op": 4602299.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672722.0,
+            "allocs/op": 50245.0,
+            "ns/op": 4530912.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322649.0,
+            "allocs/op": 276524.0,
+            "ns/op": 23966026.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26827969.0,
+            "allocs/op": 498665.0,
+            "ns/op": 43124987.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835762.0,
+            "allocs/op": 498813.0,
+            "ns/op": 42111838.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "01-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 5921.0,
+            "allocs/op": 99.0,
+            "ns/op": 4324.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 4280.0,
+            "allocs/op": 69.0,
+            "ns/op": 4590.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 12345.0,
+            "allocs/op": 224.0,
+            "ns/op": 97138.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 18207.0,
+            "allocs/op": 344.0,
+            "ns/op": 107936.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 22718.0,
+            "allocs/op": 417.0,
+            "ns/op": 115756.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 683355.0,
+            "allocs/op": 8950.0,
+            "ns/op": 1788258.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 934934.0,
+            "allocs/op": 14417.0,
+            "ns/op": 2275395.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 782528.0,
+            "allocs/op": 12114.0,
+            "ns/op": 2167118.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 7109075.0,
+            "allocs/op": 88907.0,
+            "ns/op": 14797194.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 9592491.0,
+            "allocs/op": 142973.0,
+            "ns/op": 19228161.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 8014547.0,
+            "allocs/op": 119071.0,
+            "ns/op": 18362352.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "01-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 12460.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 9474.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24271.0,
+            "allocs/op": 466.0,
+            "ns/op": 109203.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40218.0,
+            "allocs/op": 799.0,
+            "ns/op": 136534.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48156.0,
+            "allocs/op": 947.0,
+            "ns/op": 158489.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1609044.0,
+            "allocs/op": 27780.0,
+            "ns/op": 2744479.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664746.0,
+            "allocs/op": 50096.0,
+            "ns/op": 4772581.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672656.0,
+            "allocs/op": 50244.0,
+            "ns/op": 4804547.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322474.0,
+            "allocs/op": 276522.0,
+            "ns/op": 25142354.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26828103.0,
+            "allocs/op": 498667.0,
+            "ns/op": 42973732.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835784.0,
+            "allocs/op": 498812.0,
+            "ns/op": 43133080.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "02-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 5921.0,
+            "allocs/op": 99.0,
+            "ns/op": 4251.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 4280.0,
+            "allocs/op": 69.0,
+            "ns/op": 4414.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 12343.0,
+            "allocs/op": 224.0,
+            "ns/op": 96854.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 18207.0,
+            "allocs/op": 344.0,
+            "ns/op": 112101.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 22719.0,
+            "allocs/op": 417.0,
+            "ns/op": 116496.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 683357.0,
+            "allocs/op": 8950.0,
+            "ns/op": 1878002.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 934927.0,
+            "allocs/op": 14417.0,
+            "ns/op": 2417334.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 782524.0,
+            "allocs/op": 12114.0,
+            "ns/op": 2352841.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 7109081.0,
+            "allocs/op": 88907.0,
+            "ns/op": 15845299.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 9592548.0,
+            "allocs/op": 142973.0,
+            "ns/op": 23134509.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 8014576.0,
+            "allocs/op": 119071.0,
+            "ns/op": 17987209.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "02-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 12277.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 9605.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24270.0,
+            "allocs/op": 466.0,
+            "ns/op": 111613.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40221.0,
+            "allocs/op": 799.0,
+            "ns/op": 146396.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48157.0,
+            "allocs/op": 947.0,
+            "ns/op": 160249.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1609065.0,
+            "allocs/op": 27781.0,
+            "ns/op": 2761870.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664817.0,
+            "allocs/op": 50097.0,
+            "ns/op": 4839904.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672662.0,
+            "allocs/op": 50244.0,
+            "ns/op": 4883332.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322672.0,
+            "allocs/op": 276525.0,
+            "ns/op": 24673492.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26827858.0,
+            "allocs/op": 498663.0,
+            "ns/op": 43202089.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835864.0,
+            "allocs/op": 498813.0,
+            "ns/op": 44124902.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "03-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 5921.0,
+            "allocs/op": 99.0,
+            "ns/op": 4312.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 4280.0,
+            "allocs/op": 69.0,
+            "ns/op": 4424.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 12343.0,
+            "allocs/op": 224.0,
+            "ns/op": 94235.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 18208.0,
+            "allocs/op": 344.0,
+            "ns/op": 107798.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 22718.0,
+            "allocs/op": 417.0,
+            "ns/op": 115893.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 683361.0,
+            "allocs/op": 8950.0,
+            "ns/op": 1777524.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 934932.0,
+            "allocs/op": 14417.0,
+            "ns/op": 2181062.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 782520.0,
+            "allocs/op": 12114.0,
+            "ns/op": 2103555.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 7109109.0,
+            "allocs/op": 88907.0,
+            "ns/op": 14913181.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 9592504.0,
+            "allocs/op": 142973.0,
+            "ns/op": 18890951.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 8014632.0,
+            "allocs/op": 119071.0,
+            "ns/op": 18045807.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "03-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 11813.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 9494.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24269.0,
+            "allocs/op": 466.0,
+            "ns/op": 110063.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40220.0,
+            "allocs/op": 799.0,
+            "ns/op": 144437.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48156.0,
+            "allocs/op": 947.0,
+            "ns/op": 165994.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1608961.0,
+            "allocs/op": 27780.0,
+            "ns/op": 3240253.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664791.0,
+            "allocs/op": 50097.0,
+            "ns/op": 4601022.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672727.0,
+            "allocs/op": 50245.0,
+            "ns/op": 4554774.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322397.0,
+            "allocs/op": 276522.0,
+            "ns/op": 23662092.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26827951.0,
+            "allocs/op": 498665.0,
+            "ns/op": 41697807.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835845.0,
+            "allocs/op": 498814.0,
+            "ns/op": 42049589.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "04-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 5921.0,
+            "allocs/op": 99.0,
+            "ns/op": 4298.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 4280.0,
+            "allocs/op": 69.0,
+            "ns/op": 4605.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 12344.0,
+            "allocs/op": 224.0,
+            "ns/op": 97822.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 18206.0,
+            "allocs/op": 344.0,
+            "ns/op": 111833.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 22715.0,
+            "allocs/op": 417.0,
+            "ns/op": 116991.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 683366.0,
+            "allocs/op": 8950.0,
+            "ns/op": 1771094.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 934936.0,
+            "allocs/op": 14417.0,
+            "ns/op": 2280216.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 782538.0,
+            "allocs/op": 12114.0,
+            "ns/op": 2148843.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 7109076.0,
+            "allocs/op": 88907.0,
+            "ns/op": 14736316.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 9592569.0,
+            "allocs/op": 142973.0,
+            "ns/op": 18869434.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 8014623.0,
+            "allocs/op": 119071.0,
+            "ns/op": 18199314.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "04-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 12364.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 12185.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24270.0,
+            "allocs/op": 466.0,
+            "ns/op": 105962.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40221.0,
+            "allocs/op": 799.0,
+            "ns/op": 142521.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48154.0,
+            "allocs/op": 947.0,
+            "ns/op": 159595.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1609025.0,
+            "allocs/op": 27780.0,
+            "ns/op": 2681020.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664768.0,
+            "allocs/op": 50097.0,
+            "ns/op": 4501989.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672677.0,
+            "allocs/op": 50245.0,
+            "ns/op": 4662412.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322410.0,
+            "allocs/op": 276522.0,
+            "ns/op": 23818519.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26827931.0,
+            "allocs/op": 498665.0,
+            "ns/op": 41522902.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835836.0,
+            "allocs/op": 498814.0,
+            "ns/op": 42538060.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "05-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 5921.0,
+            "allocs/op": 99.0,
+            "ns/op": 4219.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 4280.0,
+            "allocs/op": 69.0,
+            "ns/op": 4515.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 12343.0,
+            "allocs/op": 224.0,
+            "ns/op": 93725.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 18209.0,
+            "allocs/op": 344.0,
+            "ns/op": 106978.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 22722.0,
+            "allocs/op": 417.0,
+            "ns/op": 112743.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 683377.0,
+            "allocs/op": 8950.0,
+            "ns/op": 1767119.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 934936.0,
+            "allocs/op": 14417.0,
+            "ns/op": 2215428.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 782512.0,
+            "allocs/op": 12114.0,
+            "ns/op": 2134742.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 7109126.0,
+            "allocs/op": 88907.0,
+            "ns/op": 14760319.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 9592522.0,
+            "allocs/op": 142973.0,
+            "ns/op": 18632069.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 8014563.0,
+            "allocs/op": 119071.0,
+            "ns/op": 17953641.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "05-branch",
+        "side": "branch"
+      }
+    ],
+    "source_fingerprints": {
+      "baseline": {
+        "commit": "b8816902b0137efab4f0ea09ba64d4979d06ba1e",
+        "files": 4737,
+        "sha256": "8a02e50af6c8035e37788b5a387348293f47acea8ca18063807fbdd66c5c8bb5"
+      },
+      "branch": {
+        "commit": "9c2a8309d2adb52fbf6d9b46f7f32ffd3c20b012",
+        "files": 6109,
+        "sha256": "181f1efa7a838554f57e4e485c64b9def43d26566d62841278ffb95dfbd0bbcd"
+      }
+    },
+    "summary": {
+      "BenchmarkORMCompile/filters": {
+        "baseline": {
+          "B/op": {
+            "max": 12357.0,
+            "median": 12357.0,
+            "min": 12357.0
+          },
+          "allocs/op": {
+            "max": 228.0,
+            "median": 228.0,
+            "min": 228.0
+          },
+          "ns/op": {
+            "max": 12699.0,
+            "median": 12364.0,
+            "min": 11813.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 5921.0,
+            "median": 5921.0,
+            "min": 5921.0
+          },
+          "allocs/op": {
+            "max": 99.0,
+            "median": 99.0,
+            "min": 99.0
+          },
+          "ns/op": {
+            "max": 4324.0,
+            "median": 4298.0,
+            "min": 4219.0
+          }
+        },
+        "median_change_percent": -65.23778712390812,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMCompile/list": {
+        "baseline": {
+          "B/op": {
+            "max": 7259.0,
+            "median": 7259.0,
+            "min": 7259.0
+          },
+          "allocs/op": {
+            "max": 133.0,
+            "median": 133.0,
+            "min": 133.0
+          },
+          "ns/op": {
+            "max": 12185.0,
+            "median": 9605.0,
+            "min": 9474.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 4280.0,
+            "median": 4280.0,
+            "min": 4280.0
+          },
+          "allocs/op": {
+            "max": 69.0,
+            "median": 69.0,
+            "min": 69.0
+          },
+          "ns/op": {
+            "max": 4605.0,
+            "median": 4515.0,
+            "min": 4414.0
+          }
+        },
+        "median_change_percent": -52.993232691306616,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1/direct-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 24271.0,
+            "median": 24270.0,
+            "min": 24269.0
+          },
+          "allocs/op": {
+            "max": 466.0,
+            "median": 466.0,
+            "min": 466.0
+          },
+          "ns/op": {
+            "max": 111613.0,
+            "median": 109203.0,
+            "min": 105962.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 12345.0,
+            "median": 12343.0,
+            "min": 12343.0
+          },
+          "allocs/op": {
+            "max": 224.0,
+            "median": 224.0,
+            "min": 224.0
+          },
+          "ns/op": {
+            "max": 97822.0,
+            "median": 96854.0,
+            "min": 93725.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "median_change_percent": -11.30829739109731,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1/framework-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 40222.0,
+            "median": 40221.0,
+            "min": 40218.0
+          },
+          "allocs/op": {
+            "max": 799.0,
+            "median": 799.0,
+            "min": 799.0
+          },
+          "ns/op": {
+            "max": 146396.0,
+            "median": 142521.0,
+            "min": 136534.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 18209.0,
+            "median": 18207.0,
+            "min": 18206.0
+          },
+          "allocs/op": {
+            "max": 344.0,
+            "median": 344.0,
+            "min": 344.0
+          },
+          "ns/op": {
+            "max": 112101.0,
+            "median": 107936.0,
+            "min": 106978.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "median_change_percent": -24.266599308172133,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1/typed-orm": {
+        "baseline": {
+          "B/op": {
+            "max": 48157.0,
+            "median": 48156.0,
+            "min": 48154.0
+          },
+          "allocs/op": {
+            "max": 947.0,
+            "median": 947.0,
+            "min": 947.0
+          },
+          "ns/op": {
+            "max": 165994.0,
+            "median": 160179.0,
+            "min": 158489.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 22722.0,
+            "median": 22718.0,
+            "min": 22715.0
+          },
+          "allocs/op": {
+            "max": 417.0,
+            "median": 417.0,
+            "min": 417.0
+          },
+          "ns/op": {
+            "max": 116991.0,
+            "median": 115893.0,
+            "min": 112743.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "median_change_percent": -27.64781900249096,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/100/direct-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 1609067.0,
+            "median": 1609044.0,
+            "min": 1608961.0
+          },
+          "allocs/op": {
+            "max": 27781.0,
+            "median": 27780.0,
+            "min": 27780.0
+          },
+          "ns/op": {
+            "max": 3240253.0,
+            "median": 2744479.0,
+            "min": 2681020.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 683377.0,
+            "median": 683361.0,
+            "min": 683355.0
+          },
+          "allocs/op": {
+            "max": 8950.0,
+            "median": 8950.0,
+            "min": 8950.0
+          },
+          "ns/op": {
+            "max": 1878002.0,
+            "median": 1777524.0,
+            "min": 1767119.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "median_change_percent": -35.23273451901071,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/100/framework-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 2664817.0,
+            "median": 2664768.0,
+            "min": 2664746.0
+          },
+          "allocs/op": {
+            "max": 50097.0,
+            "median": 50097.0,
+            "min": 50096.0
+          },
+          "ns/op": {
+            "max": 4839904.0,
+            "median": 4602299.0,
+            "min": 4501989.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 934936.0,
+            "median": 934934.0,
+            "min": 934927.0
+          },
+          "allocs/op": {
+            "max": 14417.0,
+            "median": 14417.0,
+            "min": 14417.0
+          },
+          "ns/op": {
+            "max": 2417334.0,
+            "median": 2275395.0,
+            "min": 2181062.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "median_change_percent": -50.55960075605692,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/100/typed-orm": {
+        "baseline": {
+          "B/op": {
+            "max": 2672727.0,
+            "median": 2672677.0,
+            "min": 2672656.0
+          },
+          "allocs/op": {
+            "max": 50245.0,
+            "median": 50245.0,
+            "min": 50244.0
+          },
+          "ns/op": {
+            "max": 4883332.0,
+            "median": 4662412.0,
+            "min": 4530912.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 782538.0,
+            "median": 782524.0,
+            "min": 782512.0
+          },
+          "allocs/op": {
+            "max": 12114.0,
+            "median": 12114.0,
+            "min": 12114.0
+          },
+          "ns/op": {
+            "max": 2352841.0,
+            "median": 2148843.0,
+            "min": 2103555.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "median_change_percent": -53.9113446001769,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1000/direct-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 16322672.0,
+            "median": 16322474.0,
+            "min": 16322397.0
+          },
+          "allocs/op": {
+            "max": 276525.0,
+            "median": 276522.0,
+            "min": 276522.0
+          },
+          "ns/op": {
+            "max": 25142354.0,
+            "median": 23966026.0,
+            "min": 23662092.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 7109126.0,
+            "median": 7109081.0,
+            "min": 7109075.0
+          },
+          "allocs/op": {
+            "max": 88907.0,
+            "median": 88907.0,
+            "min": 88907.0
+          },
+          "ns/op": {
+            "max": 15845299.0,
+            "median": 14797194.0,
+            "min": 14736316.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "median_change_percent": -38.25762352089579,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1000/framework-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 26828103.0,
+            "median": 26827951.0,
+            "min": 26827858.0
+          },
+          "allocs/op": {
+            "max": 498667.0,
+            "median": 498665.0,
+            "min": 498663.0
+          },
+          "ns/op": {
+            "max": 43202089.0,
+            "median": 42973732.0,
+            "min": 41522902.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 9592569.0,
+            "median": 9592522.0,
+            "min": 9592491.0
+          },
+          "allocs/op": {
+            "max": 142973.0,
+            "median": 142973.0,
+            "min": 142973.0
+          },
+          "ns/op": {
+            "max": 23134509.0,
+            "median": 18890951.0,
+            "min": 18632069.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "median_change_percent": -56.0407017942961,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1000/typed-orm": {
+        "baseline": {
+          "B/op": {
+            "max": 26835864.0,
+            "median": 26835836.0,
+            "min": 26835762.0
+          },
+          "allocs/op": {
+            "max": 498814.0,
+            "median": 498813.0,
+            "min": 498812.0
+          },
+          "ns/op": {
+            "max": 44124902.0,
+            "median": 42538060.0,
+            "min": 42049589.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 8014632.0,
+            "median": 8014576.0,
+            "min": 8014547.0
+          },
+          "allocs/op": {
+            "max": 119071.0,
+            "median": 119071.0,
+            "min": 119071.0
+          },
+          "ns/op": {
+            "max": 18362352.0,
+            "median": 18045807.0,
+            "min": 17953641.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "median_change_percent": -57.577268450888454,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      }
+    },
+    "toolchain": "go version go1.27.1 darwin/arm64",
+    "trials": 5
+  },
+  "after_stage6": {
+    "baseline_ref": "35f8d45",
+    "benchtime": "1s",
+    "complete": true,
+    "cpu_count": 16,
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-perf-gocache",
+      "GODEBUG": "",
+      "GOENV": "off",
+      "GOFLAGS": "-p=4",
+      "GOGC": "100",
+      "GOMAXPROCS": "4",
+      "GOMEMLIMIT": "off",
+      "GOTOOLCHAIN": "local",
+      "GOWORK": "off"
+    },
+    "load_average": [
+      4.27490234375,
+      5.2724609375,
+      4.79931640625
+    ],
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "raw_report": "/private/tmp/foundry-perf-after-stage6-final/comparison.json",
+    "samples": [
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 184.8
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 1889.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286474.0,
+            "allocs/op": 5065.0,
+            "ns/op": 201656.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "01-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 176.0,
+            "allocs/op": 4.0,
+            "ns/op": 150.7
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3456.0,
+            "allocs/op": 52.0,
+            "ns/op": 1775.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 128417.0,
+            "allocs/op": 109.0,
+            "ns/op": 180917.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "01-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 140.7
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 1775.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286473.0,
+            "allocs/op": 5065.0,
+            "ns/op": 197297.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "02-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 176.0,
+            "allocs/op": 4.0,
+            "ns/op": 153.3
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3456.0,
+            "allocs/op": 52.0,
+            "ns/op": 1921.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 128417.0,
+            "allocs/op": 109.0,
+            "ns/op": 174189.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "02-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 145.3
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 1805.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286473.0,
+            "allocs/op": 5065.0,
+            "ns/op": 192120.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "03-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 176.0,
+            "allocs/op": 4.0,
+            "ns/op": 147.6
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3456.0,
+            "allocs/op": 52.0,
+            "ns/op": 1753.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 128417.0,
+            "allocs/op": 109.0,
+            "ns/op": 176858.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "03-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 140.1
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 1831.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286472.0,
+            "allocs/op": 5065.0,
+            "ns/op": 187406.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "04-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 176.0,
+            "allocs/op": 4.0,
+            "ns/op": 150.4
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3456.0,
+            "allocs/op": 52.0,
+            "ns/op": 1845.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 128417.0,
+            "allocs/op": 109.0,
+            "ns/op": 175671.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "04-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 149.3
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 1822.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286472.0,
+            "allocs/op": 5065.0,
+            "ns/op": 195620.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "05-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 176.0,
+            "allocs/op": 4.0,
+            "ns/op": 187.6
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3456.0,
+            "allocs/op": 52.0,
+            "ns/op": 1878.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 128418.0,
+            "allocs/op": 109.0,
+            "ns/op": 189545.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "05-branch",
+        "side": "branch"
+      }
+    ],
+    "source_fingerprints": {
+      "baseline": {
+        "commit": "35f8d45377ba84aaebe0f7d9615d7eae17dc5e51",
+        "files": 4824,
+        "sha256": "16e671b33d228da4146f89315e8eeca57f6f4bf90de86b0de41387eb6dadcae7"
+      },
+      "branch": {
+        "commit": "9c2a8309d2adb52fbf6d9b46f7f32ffd3c20b012",
+        "files": 6109,
+        "sha256": "181f1efa7a838554f57e4e485c64b9def43d26566d62841278ffb95dfbd0bbcd"
+      }
+    },
+    "summary": {
+      "BenchmarkChainBuild": {
+        "baseline": {
+          "B/op": {
+            "max": 240.0,
+            "median": 240.0,
+            "min": 240.0
+          },
+          "allocs/op": {
+            "max": 6.0,
+            "median": 6.0,
+            "min": 6.0
+          },
+          "ns/op": {
+            "max": 184.8,
+            "median": 145.3,
+            "min": 140.1
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 176.0,
+            "median": 176.0,
+            "min": 176.0
+          },
+          "allocs/op": {
+            "max": 4.0,
+            "median": 4.0,
+            "min": 4.0
+          },
+          "ns/op": {
+            "max": 187.6,
+            "median": 150.7,
+            "min": 147.6
+          }
+        },
+        "median_change_percent": 3.71644872677217,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkChainCompile": {
+        "baseline": {
+          "B/op": {
+            "max": 3504.0,
+            "median": 3504.0,
+            "min": 3504.0
+          },
+          "allocs/op": {
+            "max": 56.0,
+            "median": 56.0,
+            "min": 56.0
+          },
+          "ns/op": {
+            "max": 1889.0,
+            "median": 1822.0,
+            "min": 1775.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 3456.0,
+            "median": 3456.0,
+            "min": 3456.0
+          },
+          "allocs/op": {
+            "max": 52.0,
+            "median": 52.0,
+            "min": 52.0
+          },
+          "ns/op": {
+            "max": 1921.0,
+            "median": 1845.0,
+            "min": 1753.0
+          }
+        },
+        "median_change_percent": 1.2623490669593895,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkHydrate1000": {
+        "baseline": {
+          "B/op": {
+            "max": 286474.0,
+            "median": 286473.0,
+            "min": 286472.0
+          },
+          "allocs/op": {
+            "max": 5065.0,
+            "median": 5065.0,
+            "min": 5065.0
+          },
+          "ns/op": {
+            "max": 201656.0,
+            "median": 195620.0,
+            "min": 187406.0
+          },
+          "queries/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 128418.0,
+            "median": 128417.0,
+            "min": 128417.0
+          },
+          "allocs/op": {
+            "max": 109.0,
+            "median": 109.0,
+            "min": 109.0
+          },
+          "ns/op": {
+            "max": 189545.0,
+            "median": 176858.0,
+            "min": 174189.0
+          },
+          "queries/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "median_change_percent": -9.591043860545955,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      }
+    },
+    "toolchain": "go version go1.27.1 darwin/arm64",
+    "trials": 5
+  },
+  "before_runtime": {
+    "baseline_ref": "b8816902",
+    "benchtime": "1s",
+    "complete": true,
+    "cpu_count": 16,
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-perf-gocache",
+      "GODEBUG": "",
+      "GOENV": "off",
+      "GOFLAGS": "-p=4",
+      "GOGC": "100",
+      "GOMAXPROCS": "4",
+      "GOMEMLIMIT": "off",
+      "GOTOOLCHAIN": "local",
+      "GOWORK": "off"
+    },
+    "load_average": [
+      12.08447265625,
+      8.59814453125,
+      6.65771484375
+    ],
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "raw_report": "/private/tmp/foundry-perf-before-orm/comparison.json",
+    "samples": [
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 12186.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 9517.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24272.0,
+            "allocs/op": 466.0,
+            "ns/op": 109948.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40220.0,
+            "allocs/op": 799.0,
+            "ns/op": 142445.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48154.0,
+            "allocs/op": 947.0,
+            "ns/op": 161906.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1609027.0,
+            "allocs/op": 27780.0,
+            "ns/op": 2842467.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664736.0,
+            "allocs/op": 50096.0,
+            "ns/op": 4792055.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672691.0,
+            "allocs/op": 50245.0,
+            "ns/op": 4702374.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322419.0,
+            "allocs/op": 276522.0,
+            "ns/op": 25002494.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26827941.0,
+            "allocs/op": 498664.0,
+            "ns/op": 46180564.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835984.0,
+            "allocs/op": 498816.0,
+            "ns/op": 43653612.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "01-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12804.0,
+            "allocs/op": 239.0,
+            "ns/op": 17086.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7498.0,
+            "allocs/op": 138.0,
+            "ns/op": 9963.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24535.0,
+            "allocs/op": 468.0,
+            "ns/op": 109470.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40492.0,
+            "allocs/op": 801.0,
+            "ns/op": 140046.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48924.0,
+            "allocs/op": 958.0,
+            "ns/op": 155048.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1636496.0,
+            "allocs/op": 28078.0,
+            "ns/op": 2797312.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2692512.0,
+            "allocs/op": 50394.0,
+            "ns/op": 4907267.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2700919.0,
+            "allocs/op": 50551.0,
+            "ns/op": 4867004.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16601504.0,
+            "allocs/op": 279514.0,
+            "ns/op": 24761823.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 27106018.0,
+            "allocs/op": 501649.0,
+            "ns/op": 44940472.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 27114715.0,
+            "allocs/op": 501811.0,
+            "ns/op": 44928324.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "01-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 12184.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 9466.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24271.0,
+            "allocs/op": 466.0,
+            "ns/op": 107070.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40222.0,
+            "allocs/op": 799.0,
+            "ns/op": 140946.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48158.0,
+            "allocs/op": 947.0,
+            "ns/op": 159816.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1609065.0,
+            "allocs/op": 27781.0,
+            "ns/op": 2751778.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664795.0,
+            "allocs/op": 50097.0,
+            "ns/op": 6271002.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672698.0,
+            "allocs/op": 50245.0,
+            "ns/op": 4725884.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322429.0,
+            "allocs/op": 276522.0,
+            "ns/op": 23496450.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26827881.0,
+            "allocs/op": 498663.0,
+            "ns/op": 41259509.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835869.0,
+            "allocs/op": 498813.0,
+            "ns/op": 43769341.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "02-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12805.0,
+            "allocs/op": 239.0,
+            "ns/op": 17207.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7498.0,
+            "allocs/op": 138.0,
+            "ns/op": 9926.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24536.0,
+            "allocs/op": 468.0,
+            "ns/op": 110598.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40490.0,
+            "allocs/op": 801.0,
+            "ns/op": 145371.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48929.0,
+            "allocs/op": 958.0,
+            "ns/op": 160945.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1636493.0,
+            "allocs/op": 28078.0,
+            "ns/op": 2852507.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2692497.0,
+            "allocs/op": 50394.0,
+            "ns/op": 4721829.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2700929.0,
+            "allocs/op": 50551.0,
+            "ns/op": 4798087.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16601545.0,
+            "allocs/op": 279515.0,
+            "ns/op": 25390194.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 27106333.0,
+            "allocs/op": 501651.0,
+            "ns/op": 44248043.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 27114767.0,
+            "allocs/op": 501809.0,
+            "ns/op": 45883708.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "02-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 12280.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 14409.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24269.0,
+            "allocs/op": 466.0,
+            "ns/op": 112850.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40222.0,
+            "allocs/op": 799.0,
+            "ns/op": 148139.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48152.0,
+            "allocs/op": 947.0,
+            "ns/op": 161529.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1609056.0,
+            "allocs/op": 27781.0,
+            "ns/op": 2736567.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664782.0,
+            "allocs/op": 50097.0,
+            "ns/op": 4783185.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672665.0,
+            "allocs/op": 50244.0,
+            "ns/op": 4835825.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322252.0,
+            "allocs/op": 276520.0,
+            "ns/op": 24844346.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26827836.0,
+            "allocs/op": 498665.0,
+            "ns/op": 43271189.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835889.0,
+            "allocs/op": 498815.0,
+            "ns/op": 43945338.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "03-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12804.0,
+            "allocs/op": 239.0,
+            "ns/op": 17126.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7498.0,
+            "allocs/op": 138.0,
+            "ns/op": 9710.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24535.0,
+            "allocs/op": 468.0,
+            "ns/op": 103498.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40489.0,
+            "allocs/op": 801.0,
+            "ns/op": 143170.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48922.0,
+            "allocs/op": 958.0,
+            "ns/op": 159655.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1636493.0,
+            "allocs/op": 28077.0,
+            "ns/op": 2765363.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2692509.0,
+            "allocs/op": 50394.0,
+            "ns/op": 4662290.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2700914.0,
+            "allocs/op": 50551.0,
+            "ns/op": 4682492.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16601631.0,
+            "allocs/op": 279516.0,
+            "ns/op": 24586770.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 27106541.0,
+            "allocs/op": 501654.0,
+            "ns/op": 42926216.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 27114661.0,
+            "allocs/op": 501809.0,
+            "ns/op": 43103380.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "03-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 12033.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 9625.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24272.0,
+            "allocs/op": 466.0,
+            "ns/op": 111183.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40221.0,
+            "allocs/op": 799.0,
+            "ns/op": 144772.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48157.0,
+            "allocs/op": 947.0,
+            "ns/op": 159798.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1609020.0,
+            "allocs/op": 27780.0,
+            "ns/op": 2663328.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664775.0,
+            "allocs/op": 50097.0,
+            "ns/op": 4637910.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672708.0,
+            "allocs/op": 50245.0,
+            "ns/op": 4706712.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322483.0,
+            "allocs/op": 276522.0,
+            "ns/op": 24309294.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26828011.0,
+            "allocs/op": 498667.0,
+            "ns/op": 41422610.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835701.0,
+            "allocs/op": 498811.0,
+            "ns/op": 41487740.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "04-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12804.0,
+            "allocs/op": 239.0,
+            "ns/op": 17140.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7498.0,
+            "allocs/op": 138.0,
+            "ns/op": 9653.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24533.0,
+            "allocs/op": 468.0,
+            "ns/op": 111136.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40492.0,
+            "allocs/op": 801.0,
+            "ns/op": 150113.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48918.0,
+            "allocs/op": 958.0,
+            "ns/op": 224346.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1636525.0,
+            "allocs/op": 28078.0,
+            "ns/op": 2881924.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2692501.0,
+            "allocs/op": 50394.0,
+            "ns/op": 4600367.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2700909.0,
+            "allocs/op": 50551.0,
+            "ns/op": 4771119.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16601402.0,
+            "allocs/op": 279513.0,
+            "ns/op": 25062918.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 27106415.0,
+            "allocs/op": 501654.0,
+            "ns/op": 43362587.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 27114892.0,
+            "allocs/op": 501812.0,
+            "ns/op": 43105415.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "04-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12357.0,
+            "allocs/op": 228.0,
+            "ns/op": 12330.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7259.0,
+            "allocs/op": 133.0,
+            "ns/op": 9625.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24271.0,
+            "allocs/op": 466.0,
+            "ns/op": 110837.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40219.0,
+            "allocs/op": 799.0,
+            "ns/op": 144701.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48155.0,
+            "allocs/op": 947.0,
+            "ns/op": 158714.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1609055.0,
+            "allocs/op": 27781.0,
+            "ns/op": 2742992.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2664751.0,
+            "allocs/op": 50096.0,
+            "ns/op": 4647167.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2672668.0,
+            "allocs/op": 50244.0,
+            "ns/op": 4744639.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16322429.0,
+            "allocs/op": 276522.0,
+            "ns/op": 23773996.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 26827710.0,
+            "allocs/op": 498663.0,
+            "ns/op": 41109814.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 26835748.0,
+            "allocs/op": 498814.0,
+            "ns/op": 42319640.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "05-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkORMCompile/filters": {
+            "B/op": 12804.0,
+            "allocs/op": 239.0,
+            "ns/op": 16969.0
+          },
+          "BenchmarkORMCompile/list": {
+            "B/op": 7498.0,
+            "allocs/op": 138.0,
+            "ns/op": 10050.0
+          },
+          "BenchmarkORMPostgresReads/1/direct-sql": {
+            "B/op": 24534.0,
+            "allocs/op": 468.0,
+            "ns/op": 108434.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/framework-sql": {
+            "B/op": 40489.0,
+            "allocs/op": 801.0,
+            "ns/op": 144996.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/1/typed-orm": {
+            "B/op": 48924.0,
+            "allocs/op": 958.0,
+            "ns/op": 160453.0,
+            "rows/op": 1.0
+          },
+          "BenchmarkORMPostgresReads/100/direct-sql": {
+            "B/op": 1636515.0,
+            "allocs/op": 28078.0,
+            "ns/op": 2806585.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/framework-sql": {
+            "B/op": 2692473.0,
+            "allocs/op": 50394.0,
+            "ns/op": 4749113.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/100/typed-orm": {
+            "B/op": 2700922.0,
+            "allocs/op": 50551.0,
+            "ns/op": 4945109.0,
+            "rows/op": 100.0
+          },
+          "BenchmarkORMPostgresReads/1000/direct-sql": {
+            "B/op": 16601445.0,
+            "allocs/op": 279511.0,
+            "ns/op": 31317330.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/framework-sql": {
+            "B/op": 27106280.0,
+            "allocs/op": 501652.0,
+            "ns/op": 43335444.0,
+            "rows/op": 1000.0
+          },
+          "BenchmarkORMPostgresReads/1000/typed-orm": {
+            "B/op": 27114482.0,
+            "allocs/op": 501807.0,
+            "ns/op": 43365848.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "05-branch",
+        "side": "branch"
+      }
+    ],
+    "source_fingerprints": {
+      "baseline": {
+        "commit": "b8816902b0137efab4f0ea09ba64d4979d06ba1e",
+        "files": 4737,
+        "sha256": "8a02e50af6c8035e37788b5a387348293f47acea8ca18063807fbdd66c5c8bb5"
+      },
+      "branch": {
+        "commit": "9c2a8309d2adb52fbf6d9b46f7f32ffd3c20b012",
+        "files": 6099,
+        "sha256": "beb2cac244e4eeca6f1902873f5d2ce1d34045c2d207fe9f3d8232c03ee77957"
+      }
+    },
+    "summary": {
+      "BenchmarkORMCompile/filters": {
+        "baseline": {
+          "B/op": {
+            "max": 12357.0,
+            "median": 12357.0,
+            "min": 12357.0
+          },
+          "allocs/op": {
+            "max": 228.0,
+            "median": 228.0,
+            "min": 228.0
+          },
+          "ns/op": {
+            "max": 12330.0,
+            "median": 12186.0,
+            "min": 12033.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 12805.0,
+            "median": 12804.0,
+            "min": 12804.0
+          },
+          "allocs/op": {
+            "max": 239.0,
+            "median": 239.0,
+            "min": 239.0
+          },
+          "ns/op": {
+            "max": 17207.0,
+            "median": 17126.0,
+            "min": 16969.0
+          }
+        },
+        "median_change_percent": 40.53832266535369,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMCompile/list": {
+        "baseline": {
+          "B/op": {
+            "max": 7259.0,
+            "median": 7259.0,
+            "min": 7259.0
+          },
+          "allocs/op": {
+            "max": 133.0,
+            "median": 133.0,
+            "min": 133.0
+          },
+          "ns/op": {
+            "max": 14409.0,
+            "median": 9625.0,
+            "min": 9466.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 7498.0,
+            "median": 7498.0,
+            "min": 7498.0
+          },
+          "allocs/op": {
+            "max": 138.0,
+            "median": 138.0,
+            "min": 138.0
+          },
+          "ns/op": {
+            "max": 10050.0,
+            "median": 9926.0,
+            "min": 9653.0
+          }
+        },
+        "median_change_percent": 3.127272727272734,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1/direct-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 24272.0,
+            "median": 24271.0,
+            "min": 24269.0
+          },
+          "allocs/op": {
+            "max": 466.0,
+            "median": 466.0,
+            "min": 466.0
+          },
+          "ns/op": {
+            "max": 112850.0,
+            "median": 110837.0,
+            "min": 107070.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 24536.0,
+            "median": 24535.0,
+            "min": 24533.0
+          },
+          "allocs/op": {
+            "max": 468.0,
+            "median": 468.0,
+            "min": 468.0
+          },
+          "ns/op": {
+            "max": 111136.0,
+            "median": 109470.0,
+            "min": 103498.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "median_change_percent": -1.2333426563331695,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1/framework-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 40222.0,
+            "median": 40221.0,
+            "min": 40219.0
+          },
+          "allocs/op": {
+            "max": 799.0,
+            "median": 799.0,
+            "min": 799.0
+          },
+          "ns/op": {
+            "max": 148139.0,
+            "median": 144701.0,
+            "min": 140946.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 40492.0,
+            "median": 40490.0,
+            "min": 40489.0
+          },
+          "allocs/op": {
+            "max": 801.0,
+            "median": 801.0,
+            "min": 801.0
+          },
+          "ns/op": {
+            "max": 150113.0,
+            "median": 144996.0,
+            "min": 140046.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "median_change_percent": 0.20386866711357143,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1/typed-orm": {
+        "baseline": {
+          "B/op": {
+            "max": 48158.0,
+            "median": 48155.0,
+            "min": 48152.0
+          },
+          "allocs/op": {
+            "max": 947.0,
+            "median": 947.0,
+            "min": 947.0
+          },
+          "ns/op": {
+            "max": 161906.0,
+            "median": 159816.0,
+            "min": 158714.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 48929.0,
+            "median": 48924.0,
+            "min": 48918.0
+          },
+          "allocs/op": {
+            "max": 958.0,
+            "median": 958.0,
+            "min": 958.0
+          },
+          "ns/op": {
+            "max": 224346.0,
+            "median": 160453.0,
+            "min": 155048.0
+          },
+          "rows/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          }
+        },
+        "median_change_percent": 0.3985833708765041,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/100/direct-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 1609065.0,
+            "median": 1609055.0,
+            "min": 1609020.0
+          },
+          "allocs/op": {
+            "max": 27781.0,
+            "median": 27781.0,
+            "min": 27780.0
+          },
+          "ns/op": {
+            "max": 2842467.0,
+            "median": 2742992.0,
+            "min": 2663328.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 1636525.0,
+            "median": 1636496.0,
+            "min": 1636493.0
+          },
+          "allocs/op": {
+            "max": 28078.0,
+            "median": 28078.0,
+            "min": 28077.0
+          },
+          "ns/op": {
+            "max": 2881924.0,
+            "median": 2806585.0,
+            "min": 2765363.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "median_change_percent": 2.3183808046104426,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/100/framework-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 2664795.0,
+            "median": 2664775.0,
+            "min": 2664736.0
+          },
+          "allocs/op": {
+            "max": 50097.0,
+            "median": 50097.0,
+            "min": 50096.0
+          },
+          "ns/op": {
+            "max": 6271002.0,
+            "median": 4783185.0,
+            "min": 4637910.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 2692512.0,
+            "median": 2692501.0,
+            "min": 2692473.0
+          },
+          "allocs/op": {
+            "max": 50394.0,
+            "median": 50394.0,
+            "min": 50394.0
+          },
+          "ns/op": {
+            "max": 4907267.0,
+            "median": 4721829.0,
+            "min": 4600367.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "median_change_percent": -1.282743611213033,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/100/typed-orm": {
+        "baseline": {
+          "B/op": {
+            "max": 2672708.0,
+            "median": 2672691.0,
+            "min": 2672665.0
+          },
+          "allocs/op": {
+            "max": 50245.0,
+            "median": 50245.0,
+            "min": 50244.0
+          },
+          "ns/op": {
+            "max": 4835825.0,
+            "median": 4725884.0,
+            "min": 4702374.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 2700929.0,
+            "median": 2700919.0,
+            "min": 2700909.0
+          },
+          "allocs/op": {
+            "max": 50551.0,
+            "median": 50551.0,
+            "min": 50551.0
+          },
+          "ns/op": {
+            "max": 4945109.0,
+            "median": 4798087.0,
+            "min": 4682492.0
+          },
+          "rows/op": {
+            "max": 100.0,
+            "median": 100.0,
+            "min": 100.0
+          }
+        },
+        "median_change_percent": 1.527819980346523,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1000/direct-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 16322483.0,
+            "median": 16322429.0,
+            "min": 16322252.0
+          },
+          "allocs/op": {
+            "max": 276522.0,
+            "median": 276522.0,
+            "min": 276520.0
+          },
+          "ns/op": {
+            "max": 25002494.0,
+            "median": 24309294.0,
+            "min": 23496450.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 16601631.0,
+            "median": 16601504.0,
+            "min": 16601402.0
+          },
+          "allocs/op": {
+            "max": 279516.0,
+            "median": 279514.0,
+            "min": 279511.0
+          },
+          "ns/op": {
+            "max": 31317330.0,
+            "median": 25062918.0,
+            "min": 24586770.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "median_change_percent": 3.100147622551286,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1000/framework-sql": {
+        "baseline": {
+          "B/op": {
+            "max": 26828011.0,
+            "median": 26827881.0,
+            "min": 26827710.0
+          },
+          "allocs/op": {
+            "max": 498667.0,
+            "median": 498664.0,
+            "min": 498663.0
+          },
+          "ns/op": {
+            "max": 46180564.0,
+            "median": 41422610.0,
+            "min": 41109814.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 27106541.0,
+            "median": 27106333.0,
+            "min": 27106018.0
+          },
+          "allocs/op": {
+            "max": 501654.0,
+            "median": 501652.0,
+            "min": 501649.0
+          },
+          "ns/op": {
+            "max": 44940472.0,
+            "median": 43362587.0,
+            "min": 42926216.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "median_change_percent": 4.683377025252633,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkORMPostgresReads/1000/typed-orm": {
+        "baseline": {
+          "B/op": {
+            "max": 26835984.0,
+            "median": 26835869.0,
+            "min": 26835701.0
+          },
+          "allocs/op": {
+            "max": 498816.0,
+            "median": 498814.0,
+            "min": 498811.0
+          },
+          "ns/op": {
+            "max": 43945338.0,
+            "median": 43653612.0,
+            "min": 41487740.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 27114892.0,
+            "median": 27114715.0,
+            "min": 27114482.0
+          },
+          "allocs/op": {
+            "max": 501812.0,
+            "median": 501809.0,
+            "min": 501807.0
+          },
+          "ns/op": {
+            "max": 45883708.0,
+            "median": 43365848.0,
+            "min": 43103380.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "median_change_percent": -0.6591986019392815,
+        "ranges_overlap": true,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      }
+    },
+    "toolchain": "go version go1.27.1 darwin/arm64",
+    "trials": 5
+  },
+  "before_stage6": {
+    "baseline_ref": "35f8d45",
+    "benchtime": "1s",
+    "complete": true,
+    "cpu_count": 16,
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-perf-gocache",
+      "GODEBUG": "",
+      "GOENV": "off",
+      "GOFLAGS": "-p=4",
+      "GOGC": "100",
+      "GOMAXPROCS": "4",
+      "GOMEMLIMIT": "off",
+      "GOTOOLCHAIN": "local",
+      "GOWORK": "off"
+    },
+    "load_average": [
+      15.9306640625,
+      7.4150390625,
+      6.06494140625
+    ],
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "raw_report": "/private/tmp/foundry-perf-before-stage6/comparison.json",
+    "samples": [
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 153.0
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 1917.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286473.0,
+            "allocs/op": 5065.0,
+            "ns/op": 208734.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "01-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 312.0,
+            "allocs/op": 8.0,
+            "ns/op": 193.7
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 4905.0,
+            "allocs/op": 83.0,
+            "ns/op": 4582.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 4626673.0,
+            "allocs/op": 94135.0,
+            "ns/op": 4131404.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "01-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 153.6
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 1961.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286473.0,
+            "allocs/op": 5065.0,
+            "ns/op": 205866.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "02-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 312.0,
+            "allocs/op": 8.0,
+            "ns/op": 197.1
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 4905.0,
+            "allocs/op": 83.0,
+            "ns/op": 4643.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 4626643.0,
+            "allocs/op": 94134.0,
+            "ns/op": 4365138.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "02-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 153.9
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 2693.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286473.0,
+            "allocs/op": 5065.0,
+            "ns/op": 206078.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "03-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 312.0,
+            "allocs/op": 8.0,
+            "ns/op": 197.8
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 4905.0,
+            "allocs/op": 83.0,
+            "ns/op": 4557.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 4626654.0,
+            "allocs/op": 94135.0,
+            "ns/op": 4182962.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "03-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 157.6
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 1945.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286473.0,
+            "allocs/op": 5065.0,
+            "ns/op": 211361.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "04-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 312.0,
+            "allocs/op": 8.0,
+            "ns/op": 197.3
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 4905.0,
+            "allocs/op": 83.0,
+            "ns/op": 4706.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 4626596.0,
+            "allocs/op": 94134.0,
+            "ns/op": 4341197.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "04-branch",
+        "side": "branch"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 240.0,
+            "allocs/op": 6.0,
+            "ns/op": 155.3
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 3504.0,
+            "allocs/op": 56.0,
+            "ns/op": 1983.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 286472.0,
+            "allocs/op": 5065.0,
+            "ns/op": 200130.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "05-baseline",
+        "side": "baseline"
+      },
+      {
+        "benchmarks": {
+          "BenchmarkChainBuild": {
+            "B/op": 312.0,
+            "allocs/op": 8.0,
+            "ns/op": 187.8
+          },
+          "BenchmarkChainCompile": {
+            "B/op": 4905.0,
+            "allocs/op": 83.0,
+            "ns/op": 4472.0
+          },
+          "BenchmarkHydrate1000": {
+            "B/op": 4626631.0,
+            "allocs/op": 94135.0,
+            "ns/op": 3868300.0,
+            "queries/op": 1.0,
+            "rows/op": 1000.0
+          }
+        },
+        "name": "05-branch",
+        "side": "branch"
+      }
+    ],
+    "source_fingerprints": {
+      "baseline": {
+        "commit": "35f8d45377ba84aaebe0f7d9615d7eae17dc5e51",
+        "files": 4824,
+        "sha256": "16e671b33d228da4146f89315e8eeca57f6f4bf90de86b0de41387eb6dadcae7"
+      },
+      "branch": {
+        "commit": "9c2a8309d2adb52fbf6d9b46f7f32ffd3c20b012",
+        "files": 6099,
+        "sha256": "beb2cac244e4eeca6f1902873f5d2ce1d34045c2d207fe9f3d8232c03ee77957"
+      }
+    },
+    "summary": {
+      "BenchmarkChainBuild": {
+        "baseline": {
+          "B/op": {
+            "max": 240.0,
+            "median": 240.0,
+            "min": 240.0
+          },
+          "allocs/op": {
+            "max": 6.0,
+            "median": 6.0,
+            "min": 6.0
+          },
+          "ns/op": {
+            "max": 157.6,
+            "median": 153.9,
+            "min": 153.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 312.0,
+            "median": 312.0,
+            "min": 312.0
+          },
+          "allocs/op": {
+            "max": 8.0,
+            "median": 8.0,
+            "min": 8.0
+          },
+          "ns/op": {
+            "max": 197.8,
+            "median": 197.1,
+            "min": 187.8
+          }
+        },
+        "median_change_percent": 28.07017543859649,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkChainCompile": {
+        "baseline": {
+          "B/op": {
+            "max": 3504.0,
+            "median": 3504.0,
+            "min": 3504.0
+          },
+          "allocs/op": {
+            "max": 56.0,
+            "median": 56.0,
+            "min": 56.0
+          },
+          "ns/op": {
+            "max": 2693.0,
+            "median": 1961.0,
+            "min": 1917.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 4905.0,
+            "median": 4905.0,
+            "min": 4905.0
+          },
+          "allocs/op": {
+            "max": 83.0,
+            "median": 83.0,
+            "min": 83.0
+          },
+          "ns/op": {
+            "max": 4706.0,
+            "median": 4582.0,
+            "min": 4472.0
+          }
+        },
+        "median_change_percent": 133.65629780724123,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      },
+      "BenchmarkHydrate1000": {
+        "baseline": {
+          "B/op": {
+            "max": 286473.0,
+            "median": 286473.0,
+            "min": 286472.0
+          },
+          "allocs/op": {
+            "max": 5065.0,
+            "median": 5065.0,
+            "min": 5065.0
+          },
+          "ns/op": {
+            "max": 211361.0,
+            "median": 206078.0,
+            "min": 200130.0
+          },
+          "queries/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "branch": {
+          "B/op": {
+            "max": 4626673.0,
+            "median": 4626643.0,
+            "min": 4626596.0
+          },
+          "allocs/op": {
+            "max": 94135.0,
+            "median": 94135.0,
+            "min": 94134.0
+          },
+          "ns/op": {
+            "max": 4365138.0,
+            "median": 4182962.0,
+            "min": 3868300.0
+          },
+          "queries/op": {
+            "max": 1.0,
+            "median": 1.0,
+            "min": 1.0
+          },
+          "rows/op": {
+            "max": 1000.0,
+            "median": 1000.0,
+            "min": 1000.0
+          }
+        },
+        "median_change_percent": 1929.7955143198205,
+        "ranges_overlap": false,
+        "timing_verdict": "review load, dispersion and work equivalence; median alone is not a \u00b15% gate"
+      }
+    },
+    "toolchain": "go version go1.27.1 darwin/arm64",
+    "trials": 5
+  },
+  "footprint": {
+    "baseline_ref": "b8816902",
+    "benchtime": null,
+    "complete": true,
+    "cpu_count": 16,
+    "environment": {
+      "GOCACHE": "/private/tmp/foundry-perf-gocache",
+      "GODEBUG": "",
+      "GOENV": "off",
+      "GOFLAGS": "-p=4",
+      "GOGC": "100",
+      "GOMAXPROCS": "4",
+      "GOMEMLIMIT": "off",
+      "GOTOOLCHAIN": "local",
+      "GOWORK": "off"
+    },
+    "load_average": [
+      4.15625,
+      5.36572265625,
+      4.810546875
+    ],
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "raw_report": "/private/tmp/foundry-perf-footprint-final/comparison.json",
+    "source_fingerprints": {
+      "baseline": {
+        "commit": "b8816902b0137efab4f0ea09ba64d4979d06ba1e",
+        "files": 4737,
+        "sha256": "8a02e50af6c8035e37788b5a387348293f47acea8ca18063807fbdd66c5c8bb5"
+      },
+      "branch": {
+        "commit": "9c2a8309d2adb52fbf6d9b46f7f32ffd3c20b012",
+        "files": 6109,
+        "sha256": "181f1efa7a838554f57e4e485c64b9def43d26566d62841278ffb95dfbd0bbcd"
+      }
+    },
+    "summary": {
+      "consumer": {
+        "endpoint_plain": {
+          "baseline": {
+            "archive_bytes": 4743556,
+            "defined_symbols": 7313,
+            "functions": 1068
+          },
+          "baseline_probe": "endpoint_plain",
+          "branch": {
+            "archive_bytes": 4741338,
+            "defined_symbols": 7313,
+            "functions": 1068
+          },
+          "branch_probe": "endpoint_plain",
+          "same_probe_name": true
+        },
+        "model_assignments": {
+          "baseline": {
+            "archive_bytes": 984324,
+            "defined_symbols": 1561,
+            "functions": 225
+          },
+          "baseline_probe": "model_draft",
+          "branch": {
+            "archive_bytes": 882952,
+            "defined_symbols": 1398,
+            "functions": 200
+          },
+          "branch_probe": "model_assignments",
+          "same_probe_name": false
+        },
+        "model_isolated": {
+          "baseline": {
+            "archive_bytes": 623514,
+            "defined_symbols": 1047,
+            "functions": 139
+          },
+          "baseline_probe": "model_isolated",
+          "branch": {
+            "archive_bytes": 454760,
+            "defined_symbols": 799,
+            "functions": 106
+          },
+          "branch_probe": "model_isolated",
+          "same_probe_name": true
+        },
+        "model_type": {
+          "baseline": {
+            "archive_bytes": 4715944,
+            "defined_symbols": 7249,
+            "functions": 1159
+          },
+          "baseline_probe": "model_type",
+          "branch": {
+            "archive_bytes": 3720962,
+            "defined_symbols": 5846,
+            "functions": 915
+          },
+          "branch_probe": "model_type",
+          "same_probe_name": true
+        }
+      },
+      "goway_aggregate_families": {
+        "archive_bytes": 19258928,
+        "functions": 4352
+      },
+      "goway_probe_count": 148
+    },
+    "toolchain": "go version go1.27.1 darwin/arm64",
+    "trials": 1
+  }
+}

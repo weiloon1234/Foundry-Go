@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlcallback"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlvalue"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -23,6 +24,8 @@ type Codec[T any] struct {
 	clone         func(T) T
 	parameterType ParameterType
 	sensitive     bool
+	// Only typed, the private framework constructor, issues this capability.
+	trusted bool
 	// equal compares decoded values for change detection when binding is not
 	// deterministic, such as randomized encryption (see WithEquality).
 	equal func(T, T) bool
@@ -56,12 +59,23 @@ func (c Codec[T]) Bind(value T) (driver.Value, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
+	if c.trusted {
+		encoded, err := c.encode(value)
+		if err != nil {
+			err = callback.Returned("database value binding", err)
+		}
+		return boundValue(encoded, err)
+	}
 	var encoded driver.Value
 	err := callback.Isolated("database value binding", func() error {
-		var err error
-		encoded, err = c.encode(value)
-		return err
+		var failure error
+		encoded, failure = c.encode(value)
+		return failure
 	})
+	return boundValue(encoded, err)
+}
+
+func boundValue(encoded driver.Value, err error) (driver.Value, error) {
 	if err != nil {
 		return nil, safeerror.Wrap("database value binding failed", err)
 	}
@@ -80,9 +94,7 @@ func (c Codec[T]) Decode(source any) (T, error) {
 	if err := c.Validate(); err != nil {
 		return *new(T), err
 	}
-	var decoded T
-	err := (scanner[T]{decode: c.decode, destination: &decoded, operation: "database value decoding"}).Scan(source)
-	return decoded, err
+	return sqlcallback.Decode("database value decoding", c.decode, source, c.trusted)
 }
 
 // Scan creates a standard SQL scanner. It changes the destination only after a
@@ -94,40 +106,13 @@ func (c Codec[T]) Scan(destination *T) sql.Scanner {
 	if c.encode == nil {
 		decode = nil
 	}
-	return scanner[T]{decode: decode, destination: destination}
-}
-
-type scanner[T any] struct {
-	decode      func(any) (T, error)
-	destination *T
-	operation   string
-}
-
-func (s scanner[T]) Scan(source any) error {
-	if s.destination == nil || s.decode == nil {
-		return invalid()
-	}
-	operation := s.operation
-	if operation == "" {
-		operation = "database value scanning"
-	}
-	var decoded T
-	err := callback.Isolated(operation, func() error {
-		var err error
-		decoded, err = s.decode(source)
-		return err
-	})
-	if err != nil {
-		return safeerror.Wrap(operation+" failed", err)
-	}
-	*s.destination = decoded
-	return nil
+	return sqlcallback.NewScanner(decode, destination, c.trusted)
 }
 
 // Validated applies one typed rule at both persistence boundaries. Generated
 // enums use their own Validate method as the single source of membership rules.
 func (c Codec[T]) Validated(validate func(T) error) Codec[T] {
-	return typed(c.parameterType, func(v T) (driver.Value, error) {
+	return New(func(v T) (driver.Value, error) {
 		if validate == nil {
 			return nil, invalid()
 		}
@@ -144,7 +129,7 @@ func (c Codec[T]) Validated(validate func(T) error) Codec[T] {
 			return *new(T), err
 		}
 		return v, validate(v)
-	}).withSensitivity(c.sensitive).withClone(c.clone).withEquality(c.equal)
+	}).WithParameterType(c.parameterType).withSensitivity(c.sensitive).withClone(c.clone).withEquality(c.equal)
 }
 
 // Nullable adds explicit SQL NULL without conflating it with T's zero value.

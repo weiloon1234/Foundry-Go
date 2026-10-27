@@ -36,5 +36,5 @@ func (c Codec[T]) WithParameterType(kind ParameterType) Codec[T] {
 }
 
 func typed[T any](kind ParameterType, encode func(T) (driver.Value, error), decode func(any) (T, error)) Codec[T] {
-	return New(encode, decode).WithParameterType(kind)
+	return Codec[T]{encode: encode, decode: decode, parameterType: kind, trusted: true}
 }

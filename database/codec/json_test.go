@@ -1,6 +1,11 @@
 package codec_test
 
 import (
+	"errors"
+	"fmt"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -45,5 +50,29 @@ func TestJSONCodecSeparatesNullAndOwnsScan(t *testing.T) {
 	}
 	if got, err := nullable.Decode("null"); err != nil || got.IsNull() {
 		t.Fatal("JSON null became SQL NULL", err)
+	}
+}
+
+type exitingJSONDecode struct{}
+
+func (*exitingJSONDecode) UnmarshalJSON([]byte) error { runtime.Goexit(); return nil }
+
+type panickingJSONDecode struct{}
+
+func (*panickingJSONDecode) UnmarshalJSON([]byte) error { panic("private JSON callback") }
+
+func TestTrustedJSONCodecStillContainsApplicationMethods(t *testing.T) {
+	c1, c2 := codec.JSON[exitingJSONDecode](), codec.JSON[panickingJSONDecode]()
+	var a value.JSON[exitingJSONDecode]
+	var b value.JSON[panickingJSONDecode]
+	_, decode1 := c1.Decode("{}")
+	_, decode2 := c2.Decode("{}")
+	for _, err := range []error{decode1, decode2, c1.Scan(&a).Scan("{}"), c2.Scan(&b).Scan("{}")} {
+		if !errors.Is(err, fault.Panicked) || strings.Contains(fmt.Sprint(err), "private") {
+			t.Fatal("JSON callback escaped the trusted codec")
+		}
+	}
+	if a != (value.JSON[exitingJSONDecode]{}) || b != (value.JSON[panickingJSONDecode]{}) {
+		t.Fatal("JSON failure published a value")
 	}
 }

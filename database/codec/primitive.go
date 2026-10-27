@@ -182,8 +182,8 @@ func decodePrimitive(k reflect.Kind, raw any, p unsafe.Pointer) error {
 }
 
 // FoundryPrimitive supplies the native ORM representation adapter. Each concrete
-// primitive encoder is shared; the returned codec owns the single callback
-// isolation boundary, just as Adapt does for an explicit representation.
+// primitive encoder is shared. These representation conversions call no methods
+// on the named application value and can use the private framework capability.
 func FoundryPrimitive[V any](seal sqlowner.MetadataSeal) Codec[V] {
 	if !seal.Valid() {
 		return Codec[V]{}
@@ -193,5 +193,5 @@ func FoundryPrimitive[V any](seal sqlowner.MetadataSeal) Codec[V] {
 	if parameter == 0 {
 		return Codec[V]{}
 	}
-	return New(func(v V) (driver.Value, error) { return bindPrimitive(kind, unsafe.Pointer(&v)) }, func(raw any) (v V, err error) { err = decodePrimitive(kind, raw, unsafe.Pointer(&v)); return }).WithParameterType(parameter)
+	return typed(parameter, func(v V) (driver.Value, error) { return bindPrimitive(kind, unsafe.Pointer(&v)) }, func(raw any) (v V, err error) { err = decodePrimitive(kind, raw, unsafe.Pointer(&v)); return })
 }

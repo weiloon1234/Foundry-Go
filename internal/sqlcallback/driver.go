@@ -18,7 +18,7 @@ type connector struct{ source driver.Connector }
 
 func (c connector) Driver() driver.Driver { return c.source.Driver() }
 func (c connector) Connect(ctx context.Context) (result driver.Conn, err error) {
-	err = call("connect SQL driver", func() error { var e error; result, e = c.source.Connect(ctx); return e })
+	err = call("connect SQL driver", func() error { var e error; result, e = c.source.Connect(driverContext(ctx)); return e })
 	if result != nil {
 		result = &connection{source: result}
 	}
@@ -27,6 +27,10 @@ func (c connector) Connect(ctx context.Context) (result driver.Conn, err error) 
 func call(operation string, fn func() error) error {
 	var original error
 	contained := callback.Isolated(operation, func() error { original = fn(); return nil })
+	return driverError(operation, original, contained)
+}
+
+func driverError(operation string, original, contained error) error {
 	if contained != nil {
 		return safeerror.Seal(operation+" failed", contained)
 	}
@@ -37,10 +41,14 @@ func call(operation string, fn func() error) error {
 	case driver.ErrSkip, driver.ErrBadConn, io.EOF, driver.ErrRemoveArgument:
 		return original
 	}
+	return inspectDriverError(operation, original)
+}
+
+func inspectDriverError(operation string, original error) error {
 	// Only ErrBadConn uses native errors.Is matching. Skip/remove/EOF use
 	// equality in database/sql; wrapping any of those must remain a failure.
 	retry := false
-	contained = callback.Isolated("inspect SQL driver retry", func() error { retry = errorgraph.Is(original, driver.ErrBadConn); return nil })
+	contained := callback.Isolated("inspect SQL driver retry", func() error { retry = errorgraph.Is(original, driver.ErrBadConn); return nil })
 	original = Retain(original, original)
 	if contained == nil && retry {
 		return safeerror.SealMatching(operation+" failed", original, driver.ErrBadConn)
@@ -60,7 +68,7 @@ func (c *connection) Prepare(query string) (result driver.Stmt, err error) {
 }
 func (c *connection) PrepareContext(ctx context.Context, q string) (result driver.Stmt, err error) {
 	if s, ok := c.source.(driver.ConnPrepareContext); ok {
-		err = call("prepare SQL", func() error { var e error; result, e = s.PrepareContext(ctx, q); return e })
+		err = call("prepare SQL", func() error { var e error; result, e = s.PrepareContext(driverContext(ctx), q); return e })
 		if result != nil {
 			result = &statement{source: result, check: c.CheckNamedValue}
 		}
@@ -87,7 +95,7 @@ func (c *connection) Begin() (result driver.Tx, err error) {
 }
 func (c *connection) BeginTx(ctx context.Context, opts driver.TxOptions) (result driver.Tx, err error) {
 	if s, ok := c.source.(driver.ConnBeginTx); ok {
-		err = call("begin SQL transaction", func() error { var e error; result, e = s.BeginTx(ctx, opts); return e })
+		err = call("begin SQL transaction", func() error { var e error; result, e = s.BeginTx(driverContext(ctx), opts); return e })
 		if result != nil {
 			result = transaction{result}
 		}
@@ -119,7 +127,7 @@ func (c *connection) CheckNamedValue(value *driver.NamedValue) error {
 }
 func (c *connection) ExecContext(ctx context.Context, q string, args []driver.NamedValue) (result driver.Result, err error) {
 	if s, ok := c.source.(driver.ExecerContext); ok {
-		err = call("execute SQL driver", func() error { var e error; result, e = s.ExecContext(ctx, q, args); return e })
+		err = call("execute SQL driver", func() error { var e error; result, e = s.ExecContext(driverContext(ctx), q, args); return e })
 	} else if s, ok := c.source.(driver.Execer); ok {
 		values, e := unnamed(args)
 		if e != nil {
@@ -140,6 +148,8 @@ func (c *connection) ExecContext(ctx context.Context, q string, args []driver.Na
 	return
 }
 func (c *connection) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (result driver.Rows, err error) {
+	batch := rowBatch(ctx)
+	ctx = driverContext(ctx)
 	if s, ok := c.source.(driver.QueryerContext); ok {
 		err = call("query SQL driver", func() error { var e error; result, e = s.QueryContext(ctx, q, args); return e })
 	} else if s, ok := c.source.(driver.Queryer); ok {
@@ -157,19 +167,19 @@ func (c *connection) QueryContext(ctx context.Context, q string, args []driver.N
 		return nil, driver.ErrSkip
 	}
 	if result != nil {
-		result = protectRows(result)
+		result = protectRows(result, batch)
 	}
 	return
 }
 func (c *connection) Ping(ctx context.Context) error {
 	if s, ok := c.source.(driver.Pinger); ok {
-		return call("ping SQL driver", func() error { return s.Ping(ctx) })
+		return call("ping SQL driver", func() error { return s.Ping(driverContext(ctx)) })
 	}
 	return nil
 }
 func (c *connection) ResetSession(ctx context.Context) error {
 	if s, ok := c.source.(driver.SessionResetter); ok {
-		return call("reset SQL session", func() error { return s.ResetSession(ctx) })
+		return call("reset SQL session", func() error { return s.ResetSession(driverContext(ctx)) })
 	}
 	return nil
 }
@@ -231,7 +241,7 @@ func (s *statement) Query(args []driver.Value) (result driver.Rows, err error) {
 }
 func (s *statement) ExecContext(ctx context.Context, args []driver.NamedValue) (result driver.Result, err error) {
 	if native, ok := s.source.(driver.StmtExecContext); ok {
-		err = call("execute SQL statement", func() error { var e error; result, e = native.ExecContext(ctx, args); return e })
+		err = call("execute SQL statement", func() error { var e error; result, e = native.ExecContext(driverContext(ctx), args); return e })
 		if result != nil {
 			result = resultValue{result}
 		}
@@ -250,9 +260,9 @@ func (s *statement) ExecContext(ctx context.Context, args []driver.NamedValue) (
 }
 func (s *statement) QueryContext(ctx context.Context, args []driver.NamedValue) (result driver.Rows, err error) {
 	if native, ok := s.source.(driver.StmtQueryContext); ok {
-		err = call("query SQL statement", func() error { var e error; result, e = native.QueryContext(ctx, args); return e })
+		err = call("query SQL statement", func() error { var e error; result, e = native.QueryContext(driverContext(ctx), args); return e })
 		if result != nil {
-			result = protectRows(result)
+			result = protectRows(result, rowBatch(ctx))
 		}
 		return
 	}
@@ -293,10 +303,16 @@ func (c converter) ConvertValue(v any) (value driver.Value, err error) {
 	return
 }
 
-type rows struct{ source driver.Rows }
+type rows struct {
+	source driver.Rows
+	batch  *RowBatch
+}
 
-func protectRows(source driver.Rows) driver.Rows {
-	base := &rows{source}
+func protectRows(source driver.Rows, batch ...*RowBatch) driver.Rows {
+	base := &rows{source: source}
+	if len(batch) != 0 {
+		base.batch = batch[0]
+	}
 	if native, ok := source.(driver.RowsColumnScanner); ok {
 		return &columnRows{rows: base, native: native}
 	}
@@ -305,6 +321,9 @@ func protectRows(source driver.Rows) driver.Rows {
 func (r *rows) Columns() []string { return r.source.Columns() }
 func (r *rows) Close() error      { return call("close SQL rows", r.source.Close) }
 func (r *rows) Next(values []driver.Value) error {
+	if r.batch != nil && r.batch.active.Load() {
+		return r.batch.call("iterate SQL rows", func() error { return r.source.Next(values) })
+	}
 	return call("iterate SQL rows", func() error { return r.source.Next(values) })
 }
 func (r *rows) HasNextResultSet() bool {
@@ -355,7 +374,12 @@ type columnRows struct {
 	native driver.RowsColumnScanner
 }
 
-func (r *columnRows) NextRow() error { return call("iterate SQL native rows", r.native.NextRow) }
+func (r *columnRows) NextRow() error {
+	if r.batch != nil && r.batch.active.Load() {
+		return r.batch.call("iterate SQL native rows", r.native.NextRow)
+	}
+	return call("iterate SQL native rows", r.native.NextRow)
+}
 func (r *columnRows) ScanColumn(ctx driver.ScanContext, i int, dst any) error {
 	return call("scan SQL native column", func() error { return r.native.ScanColumn(ctx, i, dst) })
 }

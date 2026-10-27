@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/relation"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -21,22 +22,20 @@ func TestJoinedHasCompilesEachLevelOnce(t *testing.T) {
 		Table[node, int64]
 		Links Through[node, node, node]
 	}
-	nodes := Define("joined_nodes", func(b Builder[node], n *node) fields {
-		return fields{TableOf(b, &n.ID), ThroughOf(b, &n.Links)}
-	})
-	links := ManyToManyOf(nodes.Links, nodes.Key(), nodes.Key(), nodes.Key(), nodes.Key())
 	const depth = 6
 	calls := make([]int, depth)
+	base := codec.Signed[int64]()
+	counted := codec.New(func(v int64) (driver.Value, error) {
+		calls[v-1]++
+		return base.Bind(v)
+	}, base.Decode)
+	nodes := Define("joined_nodes", func(b Builder[node], n *node) fields {
+		return fields{TableOf(b, &n.ID, Codec(counted)), ThroughOf(b, &n.Links)}
+	})
+	links := ManyToManyOf(nodes.Links, nodes.Key(), nodes.Key(), nodes.Key(), nodes.Key())
 	var nested Predicate[node]
 	for i := depth - 1; i >= 0; i-- {
 		p := nodes.Key().Eq(int64(i + 1))
-		comparison := querycore.PredicateNode(p.expression).(querycore.Comparison)
-		bind := comparison.Bind
-		comparison.Bind = func(v any) (driver.Value, error) {
-			calls[i]++
-			return bind(v)
-		}
-		p.expression = querycore.RetainPredicate(comparison)
 		if i == depth-1 {
 			nested = Has(links, p)
 		} else {

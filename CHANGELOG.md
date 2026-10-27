@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Preserve custom codec handling of nil interface comparison values without
+  escaping compiler containment; cached adapter type mismatches retain their
+  existing typed panic diagnostic without per-value isolation.
+
+- Reduce database codec and query overhead while retaining H1 containment:
+  private framework codecs use a direct path; custom codecs, validators and
+  scanners retain panic/Goexit isolation. Native SQL receives sealed scanner
+  errors, and model collection reuses scratch storage without publishing partial
+  rows. Collection owns sequential driver iteration; native SQL scanning and
+  closing keep their own isolation. Comparison binding isolates a bounded
+  application batch and keeps earlier validation failures authoritative. Retained predicate literals stay opaque.
+
 ### Breaking data-layer changes
 
 - Remove generated persistence models, drafts, query/projection wrappers and their

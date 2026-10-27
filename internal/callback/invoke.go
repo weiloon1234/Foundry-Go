@@ -21,7 +21,14 @@ func Invoke(operation string, fn func() error) (err error) {
 			err = safeerror.Panic(operation+" panicked", panicFrames())
 		}
 	}()
-	if err = fn(); err != nil {
+	return Returned(operation, fn())
+}
+
+// Returned applies Invoke's error policy after a trusted framework callback.
+// It never inspects or formats application causes. Fast paths call it only when
+// a failure occurs, retaining the same diagnostic and classification as Invoke.
+func Returned(operation string, err error) error {
+	if err != nil {
 		// An inner owned callback already contained this failure. Keep its
 		// concrete classification so an outer boundary need not inspect
 		// arbitrary application error methods to discover the panic/Goexit.
@@ -39,9 +46,16 @@ func Invoke(operation string, fn func() error) (err error) {
 func Isolated(operation string, fn func() error) error {
 	result := make(chan error, 1)
 	go func() {
-		var err error = safeerror.NewFault(fault.Panicked, operation+" exited without returning")
-		defer func() { result <- err }()
+		var err error
+		returned := false
+		defer func() {
+			if !returned {
+				err = safeerror.NewFault(fault.Panicked, operation+" exited without returning")
+			}
+			result <- err
+		}()
 		err = Invoke(operation, fn)
+		returned = true
 	}()
 	return <-result
 }

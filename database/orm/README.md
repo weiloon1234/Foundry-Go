@@ -59,6 +59,13 @@ Relation fields are slots and do not become columns in this prototype.
 Use `EnumOf` for a generated enum descriptor and `BytesOf` for owned byte
 buffers. Use `ColumnOf(b, &p.Field, orm.Codec(custom))` for a custom codec.
 
+Built-in codecs carry a private framework capability and avoid per-value callback
+isolation. Custom codecs, validators, scanners and JSON methods remain contained:
+panic or `runtime.Goexit` fails the read, preserves safe classification and closes
+the result stream after the callback exits. Applications cannot grant that
+capability with `WithParameterType` or by embedding a framework scanner. A failed
+collection returns no partial model slice; successful rows retain independent values.
+
 A persisted `CreatedAt` and `UpdatedAt` pair uses the existing timestamp
 convention. Both fields must be `time.Time` or `temporal.DateTime`.
 `orm.NoTimestamps()` disables that convention. A nullable instant named

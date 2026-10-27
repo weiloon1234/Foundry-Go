@@ -36,13 +36,17 @@ func RawComplete(ctx context.Context, ex database.Executor, columns []string, st
 		return safeerror.Join("operation failed", err, rows.Close())
 	}
 	mapped := &rawRow{Rows: rows, order: order, destinations: make([]any, len(order))}
-	return Collect(ctx, rows, func(database.Row) error { return scan(mapped) }, callbacks)
+	return Collect(ctx, rows, func(row database.Row) error {
+		mapped.row = row
+		return scan(mapped)
+	}, callbacks)
 }
 
 // rawRow preserves the stream's FieldEncryption scope while ordering scanner
 // destinations by the actual result columns instead of declaration order.
 type rawRow struct {
 	*database.Rows
+	row          database.Row
 	order        []int
 	destinations []any
 }
@@ -54,7 +58,7 @@ func (r *rawRow) Scan(dest ...any) error {
 	for i, declared := range r.order {
 		r.destinations[i] = dest[declared]
 	}
-	return r.Rows.Scan(r.destinations...)
+	return r.row.Scan(r.destinations...)
 }
 
 func rawColumnOrder(declared, actual []string) ([]int, error) {
