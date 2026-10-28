@@ -169,6 +169,18 @@ source/test/documentation batches first, then run the consolidated acceptance
 and fix loop. The full compiler/editor/framework suite is a separate workload;
 its 739.5-second post-audit gate is not the cost of one ordinary model edit.
 
+A cold per-compile measurement on 2026-10-28 (Go 1.27.3, `-toolexec` with
+`/usr/bin/time -l` on this host) found the largest compiler processes in the
+`database/orm` and `database/orm/rows` internal test variants: about 5.3 GB and
+5.2 GB peak RSS, 18 s and 14 s. The packages themselves compile in under 1 s and
+150 MB. The cost follows the generic method sets instantiated for each distinct
+model: a probe of 32 two-field `orm.Define` models generated about 24,000
+functions and peaked at 1.26 GB, and the consumer fixture's model packages
+peak at 0.8–0.9 GB. GitHub's macOS runners have 7 GB RAM, so CI sets
+`GOFLAGS=-p=1`; with parallel compilation those test variants swapped, and the
+cold `go vet` phase took up to 65 minutes. Reducing the per-model compile cost
+is open framework work, not a consumer configuration step.
+
 ## Consumer startup C05 native results
 
 [Recorded C05 evidence](../evidence/consumer-startup-c05-native.json) uses private

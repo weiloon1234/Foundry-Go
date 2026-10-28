@@ -287,8 +287,11 @@ and `security` runs `make security-check` and uploads its evidence. The first tw
 jobs start isolated runner-local PostgreSQL/Redis; security needs no services.
 The shared setup action (`.github/actions/setup-foundry/action.yml`) installs the
 root `go.mod` toolchain and each job's required tools. Required backend, real gopls
-and TypeScript checks remain enabled. Each successful job can save its Go cache
-without waiting for the other gates. Dependency update configuration (`.github/dependabot.yml`)
+and TypeScript checks remain enabled. Each profile restores and saves its own Go
+build and module cache without waiting for the other gates. The workflow sets
+`GOFLAGS=-p=1` because the runners have 7 GB RAM and the largest ORM test
+compiles peak near 5.3 GB; see the [CI budget](developer-resource-measurements.md#developer-and-ci-budgets).
+Dependency update configuration (`.github/dependabot.yml`)
 keeps proposals reviewable; it does not automatically merge or publish them.
 
 The root `go` directive remains the consumer minimum. Its `toolchain` directive
