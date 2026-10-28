@@ -103,7 +103,7 @@ func TestInspectBoundsUnresponsiveShutdown(t *testing.T) {
 			defer cancel()
 			started := time.Now()
 			result, err := inspect(ctx, options, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", mode})
-			if err == nil || !json.Valid(result.Payload) || !strings.Contains(err.Error(), "wait for gopls exit") {
+			if !errors.Is(err, context.DeadlineExceeded) || !json.Valid(result.Payload) || !strings.Contains(err.Error(), "wait for gopls exit") {
 				t.Fatalf("unresponsive cleanup lost its phase or result: %s, %v", result.Payload, err)
 			}
 			if ctx.Err() != nil || time.Since(started) > shutdownGrace+3*time.Second {
@@ -322,6 +322,9 @@ func serveFixture(mode string) error {
 	}
 	if mode == "slow-shutdown" {
 		time.Sleep(2100 * time.Millisecond)
+	}
+	if mode == "batch-slow-shutdown" {
+		time.Sleep(6 * time.Second)
 	}
 	if mode == "hang-shutdown" {
 		time.Sleep(time.Minute)

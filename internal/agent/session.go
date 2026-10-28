@@ -15,9 +15,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-// A cold workspace may still be canceling background analysis when shutdown
-// arrives. Allow it to finish while bounding cleanup independently of requests.
-const shutdownGrace = 5 * time.Second
+// Shutdown waits for gopls background snapshots, even after requests finish.
+// Cold CI workspaces exceed five seconds; allow bounded cleanup headroom while
+// preserving immediate caller cancellation and ownership until process exit.
+const shutdownGrace = 30 * time.Second
 
 type session struct {
 	ctx         context.Context
@@ -157,40 +158,40 @@ func (s *session) answer(request message) error {
 }
 
 func (s *session) close() error {
-	// Shutdown itself is bounded even if gopls stops answering. Cancellation kills
-	// only this owned process; WaitDelay bounds inherited-pipe cleanup afterward.
-	timer := time.AfterFunc(shutdownGrace, s.cancel)
-	defer timer.Stop()
-	var shutdownErr error
-	if s.initialized && s.ctx.Err() == nil {
-		if _, err := s.request("shutdown", nil); err != nil {
-			shutdownErr = fmt.Errorf("gopls shutdown request: %w", err)
-		} else if err := s.notify("exit", nil); err != nil {
-			shutdownErr = fmt.Errorf("gopls exit notification: %w", err)
+	defer s.cancel()
+	// Reuse the phase deadline so timeout errors retain DeadlineExceeded and
+	// its cancellation callback finishes before cleanup returns.
+	return s.phase(shutdownGrace, func() error {
+		var shutdownErr error
+		if s.initialized && s.ctx.Err() == nil {
+			if _, err := s.request("shutdown", nil); err != nil {
+				shutdownErr = fmt.Errorf("gopls shutdown request: %w", err)
+			} else if err := s.notify("exit", nil); err != nil {
+				shutdownErr = fmt.Errorf("gopls exit notification: %w", err)
+			}
 		}
-	}
-	_ = s.writer.Close()
-	if !s.initialized || shutdownErr != nil {
-		s.cancel()
-	}
-	// Final diagnostics may still be queued after the shutdown response. Keep
-	// draining stdout while waiting for exit: a full pipe must not prevent this
-	// responsive server from finishing. No protocol request remains in flight.
-	drained := make(chan struct{})
-	go func() {
-		_, _ = io.Copy(io.Discard, s.reader)
-		close(drained)
-	}()
-	<-s.done
-	s.stopRead()
-	s.output.Close() // Also releases a drain if another process retained stdout.
-	<-drained
-	s.cancel()
-	var exitErr error
-	if s.exitErr != nil {
-		exitErr = fmt.Errorf("wait for gopls exit: %w", s.exitErr)
-	}
-	return safeerror.Join("operation failed", shutdownErr, exitErr)
+		_ = s.writer.Close()
+		if !s.initialized || shutdownErr != nil {
+			s.cancel()
+		}
+		// Final diagnostics may still be queued after the shutdown response. Keep
+		// draining stdout while waiting for exit: a full pipe must not prevent this
+		// responsive server from finishing. No protocol request remains in flight.
+		drained := make(chan struct{})
+		go func() {
+			_, _ = io.Copy(io.Discard, s.reader)
+			close(drained)
+		}()
+		<-s.done
+		s.stopRead()
+		s.output.Close() // Also releases a drain if another process retained stdout.
+		<-drained
+		var exitErr error
+		if s.exitErr != nil {
+			exitErr = fmt.Errorf("wait for gopls exit: %w", s.exitErr)
+		}
+		return safeerror.Join("operation failed", shutdownErr, exitErr)
+	})
 }
 
 type ServerInfo struct {

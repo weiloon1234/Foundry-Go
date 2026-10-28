@@ -1,0 +1,70 @@
+name: Set up Foundry verification
+description: Install the root Go toolchain and the tools and services needed by each gate.
+inputs:
+  profile:
+    description: Required gate profile (verify, backends, or security).
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Validate profile
+      shell: bash
+      env:
+        FOUNDRY_SETUP_PROFILE: ${{ inputs.profile }}
+      run: |
+        case "$FOUNDRY_SETUP_PROFILE" in
+          verify|backends|security) ;;
+          *) echo 'Unknown Foundry setup profile' >&2; exit 1 ;;
+        esac
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      env:
+        GOTOOLCHAIN: auto
+      with:
+        go-version-file: go.mod
+        cache-dependency-path: '**/go.sum'
+    - name: Check installed Go toolchain
+      shell: bash
+      run: |
+        set -euo pipefail
+        expected="$(awk '$1 == "toolchain" { print $2 }' go.mod)"
+        test -n "$expected"
+        test "$(GOTOOLCHAIN=local go env GOVERSION)" = "$expected"
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: '24'
+        cache: npm
+        cache-dependency-path: tools/typescript/package-lock.json
+    - name: Prepare isolated runner services
+      if: ${{ inputs.profile != 'security' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        brew list postgresql@16 >/dev/null 2>&1 || brew install postgresql@16
+        brew list redis >/dev/null 2>&1 || brew install redis
+        brew services start postgresql@16
+        brew services start redis
+        pg_bin="$(brew --prefix postgresql@16)/bin"
+        for attempt in {1..30}; do "$pg_bin/pg_isready" -h 127.0.0.1 && break; sleep 1; done
+        "$pg_bin/pg_isready" -h 127.0.0.1
+        "$pg_bin/createdb" -h 127.0.0.1 foundry_ci
+        redis-cli -h 127.0.0.1 ping
+        echo "FOUNDRY_TEST_POSTGRES_URL=postgres://$(whoami)@127.0.0.1:5432/foundry_ci?sslmode=disable" >> "$GITHUB_ENV"
+    - name: Prepare editor and TypeScript tools
+      shell: bash
+      run: |
+        set -euo pipefail
+        npm ci --prefix tools/typescript --ignore-scripts
+        make gopls-install
+        {
+          echo "FOUNDRY_TEST_GOPLS=$PWD/bin/gopls"
+          echo "FOUNDRY_TEST_NODE=$(command -v node)"
+          echo "FOUNDRY_TEST_NPM=$(command -v npm)"
+          echo "FOUNDRY_TEST_TYPESCRIPT=$PWD/tools/typescript/node_modules/typescript/lib/tsc.js"
+        } >> "$GITHUB_ENV"
+    - name: Prepare vulnerability scanner
+      if: ${{ inputs.profile == 'security' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        GOBIN="$PWD/bin" go install "golang.org/x/vuln/cmd/govulncheck@$(cat tools/govulncheck.version)"
+        echo "FOUNDRY_TEST_GOVULNCHECK=$PWD/bin/govulncheck" >> "$GITHUB_ENV"

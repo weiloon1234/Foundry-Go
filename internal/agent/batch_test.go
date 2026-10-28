@@ -72,6 +72,19 @@ func TestBatchInitializationHasItsOwnDeadline(t *testing.T) {
 	}
 }
 
+func TestBatchShutdownWaitsForBackgroundWork(t *testing.T) {
+	options, _ := batchFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	// All operations finish promptly, but the server must finish background
+	// work before acknowledging shutdown. This exceeded the old five-second
+	// cleanup timer despite remaining inside the caller's deadline.
+	results, err := inspectBatch(ctx, options, time.Second, os.Args[0], []string{"-test.run=^TestLanguageServerHelper$", "--", "batch-slow-shutdown"})
+	if err != nil || len(results) != len(options) {
+		t.Fatalf("completed batch failed during responsive shutdown: %d results, %v", len(results), err)
+	}
+}
+
 func TestBatchValidatesAllRequestsBeforeStartingServer(t *testing.T) {
 	options, _ := batchFixture(t)
 	executable := filepath.Join(t.TempDir(), "absent")

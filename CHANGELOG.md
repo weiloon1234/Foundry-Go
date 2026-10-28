@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Allow gopls shutdown to finish pending workspace analysis within a separate
+  30-second cleanup budget. Preserve caller cancellation, report cleanup deadlines,
+  and retain process/output ownership until exit; cover shutdown beyond the former
+  five-second limit with a deterministic batch regression.
+- Select Go 1.27.3 through the root toolchain directive while retaining the Go
+  1.27.1 consumer minimum. Update `golang.org/x/net` to v0.62.0, gopls to v0.24.0,
+  govulncheck to v1.9.0 and TypeScript tooling's `source-map-js` to 1.2.2 for
+  security fixes. Preserve module-only vulnerability findings for review under
+  the existing policy, without exceptions.
+- Run verification, backend races and security analysis as parallel macOS CI
+  jobs with shared setup, independent time budgets and security evidence upload.
+  Preserve required tools, services and acceptance gates.
+
 ## v0.1.0 — 2026-10-27
 
 **Highlights:** The native typed ORM replaces generated models and `database/query`.

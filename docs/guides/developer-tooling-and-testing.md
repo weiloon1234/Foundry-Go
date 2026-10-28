@@ -281,10 +281,24 @@ checks and unexecuted tests are not acceptance evidence.
 
 ## Continuous verification and security
 
-The repository workflow (`.github/workflows/verify.yml`) reuses Makefile gates
-on native macOS with isolated runner-local PostgreSQL/Redis. It requires backend,
-real gopls and TypeScript evidence. Dependency update configuration (`.github/dependabot.yml`)
+The repository workflow (`.github/workflows/verify.yml`) runs three independent
+macOS jobs: `verify` runs `make verify`, `backends` runs `make test-postgres test-redis`,
+and `security` runs `make security-check` and uploads its evidence. The first two
+jobs start isolated runner-local PostgreSQL/Redis; security needs no services.
+The shared setup action (`.github/actions/setup-foundry/action.yml`) installs the
+root `go.mod` toolchain and each job's required tools. Required backend, real gopls
+and TypeScript checks remain enabled. Each successful job can save its Go cache
+without waiting for the other gates. Dependency update configuration (`.github/dependabot.yml`)
 keeps proposals reviewable; it does not automatically merge or publish them.
+
+The root `go` directive remains the consumer minimum. Its `toolchain` directive
+selects the patched development SDK; Makefile exports that selection to nested
+fixture and release-tool modules without duplicating the SDK pin. For direct
+commands in nested modules, export `GOTOOLCHAIN` from the root first:
+
+```sh
+export GOTOOLCHAIN="$(awk '$1 == "toolchain" { print $2 }' go.mod)"
+```
 
 `make security-check` is independent of cold package measurements. Select existing
 `FOUNDRY_TEST_GOVULNCHECK`, `FOUNDRY_TEST_GOPLS`, `FOUNDRY_TEST_NODE` and

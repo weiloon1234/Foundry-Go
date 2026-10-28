@@ -64,7 +64,7 @@ JSON is the default format. Its wrapper identifies the operation, workspace, sou
 
 Each invocation owns one server process, negotiates the protocol, opens and closes the unsaved document, then shuts the server down. `--timeout` defaults to 30 seconds. Cancellation terminates the owned process; shutdown has a separate bounded cleanup window. Server-requested workspace edits are refused. The command does not control another editor's gopls session.
 
-Cleanup allows time for pending workspace analysis to stop. A caller deadline still interrupts that grace immediately. An unresponsive server is terminated, and errors identify shutdown-request, exit-notification or process-exit failures instead of presenting them as an API lookup failure. A successful LSP response does not hide unsuccessful cleanup.
+Cleanup allows up to 30 seconds for pending workspace analysis to stop, independently of the per-operation batch budget. The client waits for actual process exit and drains final output before returning; a cleanup deadline remains an error. A caller deadline still interrupts that grace immediately. An unresponsive server is terminated, and errors identify shutdown-request, exit-notification or process-exit failures instead of presenting them as an API lookup failure. A successful LSP response does not hide unsuccessful cleanup.
 
 An empty result is not an invented API answer. If generated code is stale, run generation first. If Go module resolution or the context is invalid, correct the consumer workspace and retry. Use the returned signature before calling an API, then use the consumer's compiler and tests as the final authority.
 
