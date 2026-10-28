@@ -384,7 +384,7 @@ func (h lostFillAcknowledgement) ProcessHook(next driver.ProcessHook) driver.Pro
 			matches = h.operation == "write" && (runsScript(args, cacheLeasedScript) || runsScript(args, taggedLeasedScript)) || h.operation == "release" && runsScript(args, leaseScript) && args[4] == "release"
 		}
 		err := next(ctx, cmd)
-		if matches {
+		if matches && !scriptDidNotRun(err) {
 			h.calls.Add(1)
 			if err == nil {
 				return h.failure

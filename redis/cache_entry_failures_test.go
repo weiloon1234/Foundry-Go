@@ -30,7 +30,7 @@ func (h lostEntryAcknowledgement) ProcessHook(next driver.ProcessHook) driver.Pr
 		args := cmd.Args()
 		matched := runsScript(args, h.script)
 		err := next(ctx, cmd)
-		if matched {
+		if matched && !scriptDidNotRun(err) {
 			h.calls.Add(1)
 			if err == nil {
 				return h.failure
@@ -39,6 +39,25 @@ func (h lostEntryAcknowledgement) ProcessHook(next driver.ProcessHook) driver.Pr
 		return err
 	}
 }
+
+type coldScriptCache struct {
+	script string
+	misses atomic.Int32
+}
+
+func (h *coldScriptCache) DialHook(next driver.DialHook) driver.DialHook { return next }
+func (h *coldScriptCache) ProcessPipelineHook(next driver.ProcessPipelineHook) driver.ProcessPipelineHook {
+	return next
+}
+func (h *coldScriptCache) ProcessHook(next driver.ProcessHook) driver.ProcessHook {
+	return func(ctx context.Context, cmd driver.Cmder) error {
+		if cmd.Name() == "evalsha" && runsScript(cmd.Args(), h.script) && h.misses.CompareAndSwap(0, 1) {
+			return scriptReplyError("NOSCRIPT forced cold script cache")
+		}
+		return next(ctx, cmd)
+	}
+}
+
 func TestEntryLostAcknowledgementsDoNotReturnSuccessOrRetry(t *testing.T) {
 	for _, tagged := range []bool{false, true} {
 		mode := "plain"
@@ -74,6 +93,10 @@ func TestEntryLostAcknowledgementsDoNotReturnSuccessOrRetry(t *testing.T) {
 				failure := errors.New("entry acknowledgement lost")
 				var calls atomic.Int32
 				c.raw.AddHook(lostEntryAcknowledgement{script: script, calls: &calls, failure: failure})
+				// Hooks added first are outermost. The lost-ack hook must observe
+				// this unforwarded NOSCRIPT and the real EVAL fallback separately.
+				cold := &coldScriptCache{script: script}
+				c.raw.AddHook(cold)
 				var result bool
 				var count uint64
 				switch operation {
@@ -96,8 +119,8 @@ func TestEntryLostAcknowledgementsDoNotReturnSuccessOrRetry(t *testing.T) {
 						count, err = c.ForgetMany(t.Context(), []cache.EntryKey{base})
 					}
 				}
-				if result || count != 0 || !errors.Is(err, failure) || calls.Load() != 1 {
-					t.Fatal(result, count, err, calls.Load())
+				if result || count != 0 || !errors.Is(err, failure) || calls.Load() != 1 || cold.misses.Load() != 1 {
+					t.Fatal(result, count, err, calls.Load(), cold.misses.Load())
 				}
 				if operation == "expire" && c.raw.PTTL(t.Context(), physical).Val() != -1 {
 					t.Fatal("applied expiry was rolled back")

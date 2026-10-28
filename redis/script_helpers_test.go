@@ -3,8 +3,37 @@ package redis
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"strings"
+	"testing"
+
+	driver "github.com/redis/go-redis/v9"
 )
+
+// Hooks see raw Redis replies before the EVAL wrapper normalizes NOSCRIPT.
+// Match Script.Run's raw-prefix and sentinel handling: neither ran the script.
+func scriptDidNotRun(err error) bool {
+	return errors.Is(err, driver.ErrNoScript) || driver.HasErrorPrefix(err, "NOSCRIPT")
+}
+
+type scriptReplyError string
+
+func (e scriptReplyError) Error() string { return string(e) }
+func (scriptReplyError) RedisError()     {}
+
+func TestScriptDidNotRun(t *testing.T) {
+	for _, err := range []error{driver.ErrNoScript, scriptReplyError("NOSCRIPT uncached digest"), scriptReplyError("ERR NOSCRIPT uncached digest"), fmt.Errorf("wrapped: %w", driver.ErrNoScript)} {
+		if !scriptDidNotRun(err) {
+			t.Fatalf("script miss was counted as execution: %v", err)
+		}
+	}
+	for _, err := range []error{nil, errors.New("acknowledgement lost"), scriptReplyError("WRONGTYPE invalid value")} {
+		if scriptDidNotRun(err) {
+			t.Fatalf("reply did not prove non-execution: %v", err)
+		}
+	}
+}
 
 func scriptDigest(source string) string {
 	sum := sha1.Sum([]byte(source))

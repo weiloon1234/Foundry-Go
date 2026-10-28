@@ -68,7 +68,7 @@ func (h lostNamespaceAcknowledgement) ProcessHook(next driver.ProcessHook) drive
 		args := cmd.Args()
 		matches := len(args) > 6 && runsScript(args, tagVersionsScript) && args[6] == "1"
 		err := next(ctx, cmd)
-		if matches {
+		if matches && !scriptDidNotRun(err) {
 			h.calls.Add(1)
 			if err == nil {
 				return h.failure

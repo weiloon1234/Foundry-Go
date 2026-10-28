@@ -254,8 +254,7 @@ func (h *lostRateAcknowledgement) ProcessHook(next driver.ProcessHook) driver.Pr
 		args := cmd.Args()
 		matches := runsScript(args, rateLimitScript)
 		err := next(ctx, cmd)
-		// A NOSCRIPT reply proves the script did not run; its EVAL fallback is the attempt.
-		if matches && (err == nil || !strings.HasPrefix(err.Error(), "NOSCRIPT")) {
+		if matches && !scriptDidNotRun(err) {
 			h.calls.Add(1)
 			if err == nil {
 				return h.failure
