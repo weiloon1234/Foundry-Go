@@ -284,7 +284,8 @@ checks and unexecuted tests are not acceptance evidence.
 The repository workflow (`.github/workflows/verify.yml`) runs three independent
 macOS jobs: `verify` runs `make verify`, `backends` runs `make test-postgres test-redis`,
 and `security` runs `make security-check` and uploads its evidence. The first two
-jobs start isolated runner-local PostgreSQL/Redis; security needs no services.
+jobs start isolated runner-local PostgreSQL 18 (the tested backend) and Redis;
+security needs no services.
 The shared setup action (`.github/actions/setup-foundry/action.yml`) installs the
 root `go.mod` toolchain and each job's required tools. Required backend, real gopls
 and TypeScript checks remain enabled. Each profile restores and saves its own Go

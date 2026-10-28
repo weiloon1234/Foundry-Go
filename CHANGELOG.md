@@ -13,9 +13,10 @@
   the existing policy, without exceptions.
 - Run verification, backend races and security analysis as parallel macOS CI
   jobs with shared setup, per-profile Go caches, serial package compilation
-  (`GOFLAGS=-p=1`) for the 7 GB runners, independent time budgets and security
-  evidence upload; exclude NOSCRIPT cache misses from Redis test execution counts.
-  Preserve required tools, services and acceptance gates.
+  (`GOFLAGS=-p=1`) for the 7 GB runners, PostgreSQL 18 as the tested backend,
+  independent time budgets and security evidence upload; exclude NOSCRIPT cache
+  misses from Redis test execution counts. Preserve required tools, services and
+  acceptance gates.
 
 ## v0.1.0 — 2026-10-27
 
