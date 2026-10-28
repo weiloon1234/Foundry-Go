@@ -21,6 +21,7 @@ func TestRetirementGuardRejectsReintroduction(t *testing.T) {
 		"test":                        {"sample/a_test.go", `package sample; import alias "` + imported + `"`},
 		"ignored":                     {"sample/a.go", "//go:build ignore\n\npackage sample; import . \"" + imported + "\""},
 		"compile fail":                {"testdata/compilefail/a.go", `package sample; import _ "` + imported + `"`},
+		"nested cache":                {"sample/.cache/a.go", `package sample; import "` + imported + `"`},
 		"escaped":                     {"sample/a.go", `package sample; import "` + strings.Replace(imported, "query", `\x71uery`, 1) + `"`},
 		"tool":                        {"tools/a.go", `package sample; import "` + imported + `/sub"`},
 		"nested module":               {"fixture/a.go", `package sample; import "` + imported + `"`},
@@ -68,6 +69,7 @@ func TestRetirementGuardAcceptsNativeAndHistoricalText(t *testing.T) {
 	root := t.TempDir()
 	writeSource(t, root, "go.mod", "module example\n")
 	writeSource(t, root, "testdata/archive/a.go.txt", `package old; type LegacyType int`)
+	writeSource(t, root, ".cache/x/a.go", `package old; import "`+framework+retiredPath+`"`)
 	writeSource(t, root, "native/a.go", `package native; const Historical = "LegacyName"; type Native int`)
 	if err := Check(root); err != nil {
 		t.Fatal(err)

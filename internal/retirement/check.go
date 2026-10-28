@@ -35,7 +35,7 @@ func declarations() (map[string][]string, error) {
 }
 
 // Check walks source regardless of build selection or module boundaries. Historical
-// text is not Go source; no source file or declaration is exempt from these rules.
+// text and the root local cache are excluded from these rules.
 // The exact public snapshot in database/orm/testdata/public-methods.txt and
 // database/orm/method_surface_test.go backstop changes outside this exposure check.
 // Direct denied members and local alias chains are checked independently of build
@@ -58,6 +58,10 @@ func Check(root string) error {
 			return err
 		}
 		relative = filepath.ToSlash(relative)
+		// Ignore only the repository's local cache, not nested source directories.
+		if relative == ".cache" && d.IsDir() {
+			return filepath.SkipDir
+		}
 		// Reserve the removed path itself, including a symlink to a package.
 		if relative == retiredPath || strings.HasSuffix(relative, "/"+retiredPath) {
 			failures = append(failures, safeerror.New(fmt.Sprintf("%s: retired directory path", relative)))
