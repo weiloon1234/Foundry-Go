@@ -10,6 +10,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -63,14 +64,25 @@ func (i httpTestImporter) Import(path string) (*types.Package, error) {
 
 func rewriteHTTPTest(t *testing.T, source, name string, dependencies map[string]string) ([]byte, []Entry) {
 	t.Helper()
+	return rewriteRulesTest(t, source, name, dependencies, HTTP{})
+}
+
+func rewriteRulesTest(t *testing.T, source, name string, dependencies map[string]string, rules ...RuleSet) ([]byte, []Entry) {
+	t.Helper()
 	fset := token.NewFileSet()
 	importer := httpTestImporter{}
-	for path, source := range dependencies {
+	var paths []string
+	for path := range dependencies {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		source := dependencies[path]
 		file, err := parser.ParseFile(fset, path+".go", source, parser.SkipObjectResolution)
 		if err != nil {
 			t.Fatal(err)
 		}
-		config := types.Config{}
+		config := types.Config{Importer: importer}
 		pkg, err := config.Check(path, fset, []*ast.File{file}, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -91,7 +103,7 @@ func rewriteHTTPTest(t *testing.T, source, name string, dependencies map[string]
 	if err != nil {
 		t.Fatal(err)
 	}
-	output, entries, err := rewriteFile(fset, file, info, pkg, []RuleSet{HTTP{}})
+	output, entries, err := rewriteFile(fset, file, info, pkg, rules)
 	if err != nil {
 		t.Fatal(err)
 	}

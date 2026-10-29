@@ -90,6 +90,11 @@ func (Validation) Rewrite(fc *FileContext, node ast.Node) (ast.Node, string) {
 }
 
 func rewriteSelectedMethod(fc *FileContext, selector *ast.SelectorExpr, call *ast.CallExpr, selection *types.Selection, target, path string) (ast.Node, string) {
+	return rewriteMethodAt(fc, selector, call, selection, target, path, 0)
+}
+
+// receiverIndex is the receiver's position in the destination argument list.
+func rewriteMethodAt(fc *FileContext, selector *ast.SelectorExpr, call *ast.CallExpr, selection *types.Selection, target, path string, receiverIndex int) (ast.Node, string) {
 	message := selection.Obj().Name() + " → " + path[strings.LastIndex(path, "/")+1:] + "." + target
 	if len(selection.Index()) != 1 {
 		return nil, message + ": promoted receiver requires an explicit adapter"
@@ -107,7 +112,7 @@ func rewriteSelectedMethod(fc *FileContext, selector *ast.SelectorExpr, call *as
 		return nil, message + ": missing, dot-imported or shadowed package import"
 	}
 	function := ast.Expr(&ast.SelectorExpr{X: ast.NewIdent(alias), Sel: ast.NewIdent(target)})
-	if selection.Kind() == types.MethodExpr {
+	if selection.Kind() == types.MethodExpr && receiverIndex == 0 {
 		var arguments []ast.Expr
 		for i := 0; i < named.TypeArgs().Len(); i++ {
 			expr, ok := typeExpr(fc, named.TypeArgs().At(i), selector.Pos())
@@ -141,7 +146,7 @@ func rewriteSelectedMethod(fc *FileContext, selector *ast.SelectorExpr, call *as
 		}
 		if len(arguments) == 1 {
 			function = &ast.IndexExpr{X: function, Lbrack: left, Index: arguments[0], Rbrack: right}
-		} else {
+		} else if len(arguments) > 1 {
 			function = &ast.IndexListExpr{X: function, Lbrack: left, Indices: arguments, Rbrack: right}
 		}
 		if call != nil {
@@ -149,14 +154,20 @@ func rewriteSelectedMethod(fc *FileContext, selector *ast.SelectorExpr, call *as
 		}
 		return function, message
 	}
-	if call != nil {
+	if call != nil && selection.Kind() != types.MethodExpr {
 		if len(call.Args) == 1 {
 			if tuple, ok := fc.Info.TypeOf(call.Args[0]).(*types.Tuple); ok && tuple.Len() > 1 {
 				return nil, message + ": multi-result argument requires manual expansion"
 			}
 		}
-		if !effectfulArguments(call.Args) {
-			return &ast.CallExpr{Fun: function, Args: append([]ast.Expr{selector.X}, call.Args...), Ellipsis: call.Ellipsis, Lparen: call.Lparen, Rparen: call.Rparen}, message
+		reorderSafe := true
+		for i := 0; i < receiverIndex; i++ {
+			if !httpReplayStable(fc, call.Args[i]) {
+				reorderSafe = false
+			}
+		}
+		if !effectfulArguments(call.Args) && reorderSafe {
+			return &ast.CallExpr{Fun: function, Args: insertReceiver(call.Args, selector.X, receiverIndex), Ellipsis: call.Ellipsis, Lparen: call.Lparen, Rparen: call.Rparen}, message
 		}
 	}
 
@@ -164,7 +175,7 @@ func rewriteSelectedMethod(fc *FileContext, selector *ast.SelectorExpr, call *as
 	if !ok {
 		return nil, message + ": unsupported callback signature"
 	}
-	receiver, ok := typeExpr(fc, receiverType, selector.Pos())
+	receiver, ok := typeExpr(fc, selection.Recv(), selector.Pos())
 	if !ok {
 		return nil, message + ": receiver type cannot be named safely"
 	}
@@ -197,7 +208,11 @@ func rewriteSelectedMethod(fc *FileContext, selector *ast.SelectorExpr, call *as
 		results.List = append(results.List, &ast.Field{Type: typ})
 	}
 	callbackType := &ast.FuncType{Params: parameters, Results: results}
-	invocation := &ast.CallExpr{Fun: function, Args: append([]ast.Expr{ast.NewIdent(bound)}, args...)}
+	invocationArgs := insertReceiver(args, ast.NewIdent(bound), receiverIndex)
+	if selection.Kind() == types.MethodExpr {
+		invocationArgs = insertReceiver(args[1:], args[0], receiverIndex)
+	}
+	invocation := &ast.CallExpr{Fun: function, Args: invocationArgs}
 	if signature.Variadic() {
 		invocation.Ellipsis = token.Pos(1)
 	}
@@ -206,6 +221,12 @@ func rewriteSelectedMethod(fc *FileContext, selector *ast.SelectorExpr, call *as
 		statement = &ast.ExprStmt{X: invocation}
 	}
 	callback := &ast.FuncLit{Type: callbackType, Body: &ast.BlockStmt{List: []ast.Stmt{statement}}}
+	if selection.Kind() == types.MethodExpr {
+		if call != nil {
+			return &ast.CallExpr{Fun: callback, Args: call.Args, Ellipsis: call.Ellipsis, Lparen: call.Lparen, Rparen: call.Rparen}, message
+		}
+		return callback, message + " (receiver-first forwarding closure)"
+	}
 	capture := &ast.FuncLit{
 		Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(bound)}, Type: receiver}}}, Results: &ast.FieldList{List: []*ast.Field{{Type: callbackType}}}},
 		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{callback}}}},
@@ -590,4 +611,10 @@ func anchorTypePositions(v reflect.Value, pos token.Pos) {
 			anchorTypePositions(v.Index(i), pos)
 		}
 	}
+}
+
+func insertReceiver(args []ast.Expr, receiver ast.Expr, index int) []ast.Expr {
+	result := append([]ast.Expr{}, args[:index]...)
+	result = append(result, receiver)
+	return append(result, args[index:]...)
 }

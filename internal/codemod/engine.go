@@ -61,17 +61,22 @@ type FileContext struct {
 }
 
 func Inventory(ctx context.Context, options Options, rules ...RuleSet) (*Plan, error) {
-	// HTTP is a built-in migration; caller-supplied rule sets extend the inventory.
-	// Keep explicit HTTP registration useful to embedders without duplicate findings.
-	hasHTTP := false
+	// HTTP and ORM are built-in migrations; caller-supplied rules extend them.
+	// Explicit registration remains useful without duplicating findings.
+	hasHTTP, hasORM := false, false
 	for _, rule := range rules {
 		switch rule.(type) {
 		case HTTP, *HTTP:
 			hasHTTP = true
+		case ORM, *ORM:
+			hasORM = true
 		}
 	}
 	if !hasHTTP {
 		rules = append(append([]RuleSet{}, rules...), HTTP{})
+	}
+	if !hasORM {
+		rules = append(append([]RuleSet{}, rules...), ORM{})
 	}
 	dir := options.Dir
 	if dir == "" {

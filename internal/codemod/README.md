@@ -1,6 +1,6 @@
 # Consumer codemod
 
-Type-aware v0.1 to v0.2 validation and HTTP migration provides a dry-run inventory and
+Type-aware v0.1 to v0.2 validation, HTTP, and ORM migration provides a dry-run inventory and
 explicit apply mode, preserves callback receiver capture, and reports manual
 adapters and generated-file regeneration. Release changelog entries belong to
 the integration step.
@@ -161,3 +161,44 @@ unresolved rather than tracing arbitrary assignments or changing control flow.
 New local names avoid source identifiers and other generated names. Shadowing
 that would change a policy or header reference prevents statement expansion.
 
+
+
+## ORM coverage (Design 2)
+
+ORM resolves methods and receiver families from the consumer's v0.1 export data.
+It does not import the framework ORM implementation. The 397 operator mappings
+across 33 families follow the receiver-first table in `fp-orm-proposal.md`.
+Aliases use their declared receiver family, preserving key and input roles.
+Nested rewrites compose without flattening query chains.
+
+| Form | Coverage | Result or reason |
+| --- | --- | --- |
+| Column operators across all 33 mapped families | Handled | Per-family helpers, including bounds and variadic expansion |
+| Query terminals | Handled | Context and executor precede the query; remaining arguments retain order |
+| Query locking | Handled | `Lock`, `ForShare`, `ForNoKeyUpdate`, `ForKeyShare` |
+| Locked query terminals | Handled | `AllLocked`, `FirstLocked`, `RequireLocked`, `EachLocked` |
+| Direct table terminals | Handled | Table follows context and executor; `Require` becomes `RequireKey` |
+| One resolved value embedding of Table | Handled for calls without argument effects | Select the actual embedded field, including aliases; never guess its name |
+| Stable table Update/Delete/ForceDelete calls | Handled | Use the resolved Table's Query and Key; retain the soft-delete argument position |
+| Scoped writes with effectful receivers/arguments or unstable field paths | Unresolved | Require explicit captures before expanding the table into Query and Key |
+| Package-level rows/expr/conflict and other sealed column APIs | Handled | Insert per-family adapters only at parameters with imported sealed column constraints |
+| Concrete-key APIs and column constructors | Unchanged | Concrete parameters do not acquire adapters |
+| Operator and locking method expressions | Handled when type arguments can be named | Explicit generic helper instantiation |
+| Operator and terminal method values; calls with argument effects | Handled when types can be named | Typed closure captures the receiver once before argument effects |
+| Draft helper setter callbacks | Handled when types can be named | Rewrite the method value into a typed captured callback |
+| Terminal method expressions | Handled when types can be named | Typed receiver-first forwarding closure for the changed argument order |
+| Pointer/promoted column receivers and deeper or pointer table embeddings | Unresolved | Resolve field paths and snapshot ownership explicitly |
+| Generic helpers instantiated with affected handles and old method-based interfaces | Unresolved | Supply typed operator callbacks or specialize the column family |
+| Unknown sealed column families/roles, explicit generic arguments fixing a column type, expanded sealed-column slices | Unresolved | Review concrete adapter types and per-element conversion |
+| Dot/shadowed imports, unnameable callback types, multi-result arguments | Unresolved | Make types, imports, or argument expansion explicit |
+| Query chains, locked wait policies, Table.Query/Key, rows/expr methods | Unchanged | These retained methods are outside the removed-method mapping |
+| Unrelated objects with matching spellings | Unchanged | Match imported declaration objects, not selector names |
+| Generated files | Regenerate | Shared engine skips generated headers and `*_foundry.gen.go` |
+
+Frozen v0.1 goldens cover all 397 operator destinations independently of the
+runtime lookup table, plus terminals, locking, table embedding, scoped writes,
+input/stored types, and sealed adapters. Focused tests cover captures, unrelated
+objects, generic/interface boundaries, and generated files. The loader fixture
+also covers ORM registration and adding an import in a consumer file. Simplified
+frozen signatures do not establish v0.2 runtime or signature parity. The lead
+runs verification; this slice was formatted without running tests or builds.
