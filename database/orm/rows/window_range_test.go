@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import (
 	"database/sql/driver"
@@ -41,8 +43,8 @@ func TestWindowRangeTypedDistancesAndCapture(t *testing.T) {
 	d := orm.Define("ranges", func(b orm.Builder[windowRangeRecord], v *windowRangeRecord) windowRangeTable {
 		return windowRangeTable{orm.TableOf(b, &v.ID), orm.ColumnOf(b, &v.Amount, orm.Codec(c)), orm.TimeOf(b, &v.Date), orm.NullableTimeOf(b, &v.MaybeDate), orm.TimeOf(b, &v.Clock)}
 	})
-	source := FromModel(d.Query())
-	w := expr.WindowFor(ModelScope(d.Query()))
+	source := rows.FromModel(d.Query())
+	w := expr.WindowFor(rows.ModelScope(d.Query()))
 	r := expr.NumericRange(w, expr.Row(expr.Value(orm.ColumnExpr(d.Amount))).Value())
 	bound := r.Preceding(decimal.FromInt64(1))
 	encoded[0] = '9'
@@ -65,7 +67,7 @@ func TestWindowRangeTypedDistancesAndCapture(t *testing.T) {
 	cr := expr.TemporalRange(w, expr.Row(expr.Value(orm.TimeExpr(d.Clock))).Value())
 	for _, window := range []expr.Window[windowRangeRecord]{tr.Between(tr.Preceding(temporal.Days(-1)), tr.CurrentRow()), tr.Between(tr.Preceding(temporal.Months(-1)), tr.CurrentRow()), cr.Between(cr.Preceding(temporal.Days(1)), cr.CurrentRow())} {
 		q := expressionQuery(source, expr.RowNumber(window), codec.Signed[int64]())
-		if _, err := querycore.CompileRead(q.source.Node, t.Context(), false, q.source.Err, true); !errors.Is(err, fault.Invalid) {
+		if _, err := querycore.CompileRead(rows.SourceOf(q).Node, t.Context(), false, rows.SourceOf(q).Err, true); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
@@ -75,8 +77,8 @@ func TestTemporalRangeComponentsAndSign(t *testing.T) {
 	d := orm.Define("dates", func(b orm.Builder[windowRangeRecord], v *windowRangeRecord) windowRangeTable {
 		return windowRangeTable{Table: orm.TableOf(b, &v.ID), Amount: orm.ColumnOf(b, &v.Amount, orm.Codec(codec.Decimal())), Date: orm.TimeOf(b, &v.Date), MaybeDate: orm.NullableTimeOf(b, &v.MaybeDate), Clock: orm.TimeOf(b, &v.Clock)}
 	})
-	source := FromModel(d.Query())
-	w := expr.WindowFor(ModelScope(d.Query()))
+	source := rows.FromModel(d.Query())
+	w := expr.WindowFor(rows.ModelScope(d.Query()))
 	r := expr.TemporalRange(w, expr.Row(expr.Value(orm.TimeExpr(d.Date))).Value())
 	mixed, err := temporal.NewInterval(-1, 31, 0)
 	if err != nil {
@@ -96,12 +98,12 @@ func TestTemporalRangeComponentsAndSign(t *testing.T) {
 
 func TestTypedNumericRangeFrames(t *testing.T) {
 	d := declareAggregateRecords()
-	q := From(d.Query())
-	w := expr.WindowFor(ModelScope(d.Query()))
+	q := rows.From(d.Query())
+	w := expr.WindowFor(rows.ModelScope(d.Query()))
 	id := expr.Row(expr.Value(orm.NumberExpr(d.Exact))).Value()
 	r := expr.NumericRange(w, id).Desc()
 	framed := r.Between(r.Preceding(2), r.Following(3))
-	s, err := CompileRead(ReadScalar(SelectScalar(q, expr.Over(expr.Count[aggregateRecord](), framed))))
+	s, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.Over(expr.Count[aggregateRecord](), framed))))
 	if err != nil || !strings.Contains(s.SQL(), `ORDER BY "aggregate_records"."exact" DESC RANGE BETWEEN CAST($1 AS bigint) PRECEDING AND CAST($2 AS bigint) FOLLOWING`) || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(3)}) {
 		t.Fatal(s.SQL(), s.Arguments(), err)
 	}
@@ -110,13 +112,13 @@ func TestTypedNumericRangeFrames(t *testing.T) {
 		expr.NumericRange(w.OrderBy(id.Asc()), id).Between(r.CurrentRow(), r.UnboundedFollowing()),
 		(expr.RangeWindow[aggregateRecord, int64]{}).Between(r.CurrentRow(), r.CurrentRow()),
 	} {
-		if _, err := CompileRead(ReadScalar(SelectScalar(q, expr.Over(expr.Count[aggregateRecord](), bad)))); !errors.Is(err, fault.Invalid) {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.Over(expr.Count[aggregateRecord](), bad)))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid numeric RANGE", err)
 		}
 	}
 	fr := expr.NumericRange(w, expr.Row(expr.Value(orm.NumberExpr(d.Approx))).Value())
 	for _, v := range []float64{-1, math.Inf(1), math.NaN()} {
-		if _, err := CompileRead(ReadScalar(SelectScalar(q, expr.RowNumber(fr.Between(fr.Preceding(v), fr.CurrentRow()))))); !errors.Is(err, fault.Invalid) {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.RowNumber(fr.Between(fr.Preceding(v), fr.CurrentRow()))))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid float distance", err)
 		}
 	}

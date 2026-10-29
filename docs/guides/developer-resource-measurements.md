@@ -170,16 +170,21 @@ and fix loop. The full compiler/editor/framework suite is a separate workload;
 its 739.5-second post-audit gate is not the cost of one ordinary model edit.
 
 A cold per-compile measurement on 2026-10-28 (Go 1.27.3, `-toolexec` with
-`/usr/bin/time -l` on this host) found the largest compiler processes in the
-`database/orm` and `database/orm/rows` internal test variants: about 5.3 GB and
-5.2 GB peak RSS, 18 s and 14 s. The packages themselves compile in under 1 s and
-150 MB. The cost follows the generic method sets instantiated for each distinct
-model: a probe of 32 two-field `orm.Define` models generated about 24,000
-functions and peaked at 1.26 GB, and the consumer fixture's model packages
-peak at 0.8–0.9 GB. GitHub's macOS runners have 7 GB RAM, so CI sets
-`GOFLAGS=-p=1`; with parallel compilation those test variants swapped, and the
-cold `go vet` phase took up to 65 minutes. Reducing the per-model compile cost
-is open framework work, not a consumer configuration step.
+`/usr/bin/time -l` on this host) originally found the largest compiler processes
+in the `database/orm` and `database/orm/rows` internal test variants at about
+5.3 GB and 5.2 GB peak RSS (18 s and 14 s), while the packages themselves
+compiled in under 1 s and 150 MB. After the v0.2 generic-method reduction
+(Design 2), those two internal test variants dropped to 2.38 GB (10.33 s) and
+4.20 GB (13.91 s). Repartitioning the `database/orm` and `database/orm/rows`
+test suites across external `_test` packages and internal test subpackages
+(`database/orm/internal/ormwritetest`, `database/orm/internal/ormquerytest`,
+`database/orm/rows/internal/rowsexprtest`, and
+`database/orm/rows/internal/rowsterminaltest`) further reduced every cold
+`go vet ./...` compile to under 2 GB peak RSS: `database/orm` `[database/orm.test]`
+peaks at 1.82 GB (8.88 s), `database/orm/rows` `[database/orm/rows.test]` at
+1.54 GB (6.76 s), `github.com/redis/go-redis/v9` at 1.23 GB (7.07 s), and
+`http` `[http.test]` at 0.90 GB (5.33 s). With every compile under 2 GB, the
+7 GB macOS CI runners no longer need `GOFLAGS=-p=1`.
 
 ## Consumer startup C05 native results
 

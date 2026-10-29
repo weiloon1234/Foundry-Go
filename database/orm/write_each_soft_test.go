@@ -1,4 +1,6 @@
-package orm
+package orm_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import (
 	"context"
@@ -22,29 +24,29 @@ type eachSoftRow struct {
 	DeletedAt value.Nullable[time.Time]
 }
 type eachSoftTable struct {
-	Table[eachSoftRow, int64]
-	Name Text[eachSoftRow, string]
-	Soft SoftDeletable[eachSoftRow]
+	orm.Table[eachSoftRow, int64]
+	Name orm.Text[eachSoftRow, string]
+	Soft orm.SoftDeletable[eachSoftRow]
 }
 
-func eachSoftFields(factory func() Hooks[eachSoftRow]) eachSoftTable {
-	options := []Option{}
+func eachSoftFields(factory func() orm.Hooks[eachSoftRow]) eachSoftTable {
+	options := []orm.Option{}
 	if factory != nil {
-		options = append(options, WithHooks(factory))
+		options = append(options, orm.WithHooks(factory))
 	}
-	return Define("each_soft", func(b Builder[eachSoftRow], m *eachSoftRow) eachSoftTable {
-		deleted := SoftDeleteOf(b, &m.DeletedAt)
-		return eachSoftTable{TableOf(b, &m.ID), TextOf(b, &m.Name), SoftDeletes(deleted)}
+	return orm.Define("each_soft", func(b orm.Builder[eachSoftRow], m *eachSoftRow) eachSoftTable {
+		deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
+		return eachSoftTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), orm.SoftDeletes(deleted)}
 	}, options...)
 }
 
 var eachSoftOperations = []struct {
 	name      string
 	operation lifecycle.Operation
-	run       func(context.Context, database.Transactor, Query[eachSoftRow], SoftDeletable[eachSoftRow], int) ([]eachSoftRow, error)
+	run       func(context.Context, database.Transactor, orm.Query[eachSoftRow], orm.SoftDeletable[eachSoftRow], int) ([]eachSoftRow, error)
 }{
-	{"restore", lifecycle.Restore, RestoreEach[eachSoftRow]},
-	{"force_delete", lifecycle.ForceDelete, ForceDeleteEach[eachSoftRow]},
+	{"restore", lifecycle.Restore, orm.RestoreEach[eachSoftRow]},
+	{"force_delete", lifecycle.ForceDelete, orm.ForceDeleteEach[eachSoftRow]},
 }
 
 func TestEachSoftPreflight(t *testing.T) {
@@ -52,17 +54,17 @@ func TestEachSoftPreflight(t *testing.T) {
 	for _, op := range eachSoftOperations {
 		t.Run(op.name, func(t *testing.T) {
 			w := &noEachWriter{}
-			for _, token := range []SoftDeletable[eachSoftRow]{{}, foreign.Soft} {
+			for _, token := range []orm.SoftDeletable[eachSoftRow]{{}, foreign.Soft} {
 				if got, err := op.run(t.Context(), w, d.Query(), token, 1); !errors.Is(err, fault.Invalid) || got != nil {
 					t.Fatal(got, err)
 				}
 			}
-			for _, n := range []int{0, -1, MaxPerModelWriteRows + 1} {
+			for _, n := range []int{0, -1, orm.MaxPerModelWriteRows + 1} {
 				if _, err := op.run(t.Context(), w, d.Query(), d.Soft, n); !errors.Is(err, fault.Invalid) {
 					t.Fatal(err)
 				}
 			}
-			for _, q := range []Query[eachSoftRow]{{}, WithoutModelHooks(d.Query()), d.Query().Limit(1), d.Query().OrderBy(KeyAsc(d.Key()))} {
+			for _, q := range []orm.Query[eachSoftRow]{{}, orm.WithoutModelHooks(d.Query()), d.Query().Limit(1), d.Query().OrderBy(orm.KeyAsc(d.Key()))} {
 				if _, err := op.run(t.Context(), w, q, d.Soft, 1); !errors.Is(err, fault.Invalid) {
 					t.Fatal(err)
 				}
@@ -90,7 +92,7 @@ func TestEachSoftLifecycleVisibilityAndOutcomes(t *testing.T) {
 					if op.operation == lifecycle.Restore || visibility != "active" {
 						deleted = instant
 					}
-					makeHooks := func(owner string) Hooks[eachSoftRow] {
+					makeHooks := func(owner string) orm.Hooks[eachSoftRow] {
 						before := func(_ context.Context, _ *database.Tx, m eachSoftRow) error {
 							if closed == 0 || m.ID != int64(writes+1) {
 								t.Error("candidate rows not closed or identity lost")
@@ -98,7 +100,7 @@ func TestEachSoftLifecycleVisibilityAndOutcomes(t *testing.T) {
 							trace = append(trace, owner+".before")
 							return nil
 						}
-						after := func(_ context.Context, _ *database.Tx, c Changes[eachSoftRow]) error {
+						after := func(_ context.Context, _ *database.Tx, c orm.Changes[eachSoftRow]) error {
 							before, ok := c.Before().Get()
 							if !ok || before.ID != int64(writes) {
 								t.Error("missing locked original")
@@ -117,7 +119,7 @@ func TestEachSoftLifecycleVisibilityAndOutcomes(t *testing.T) {
 							trace = append(trace, owner+".after")
 							return nil
 						}
-						h := Hooks[eachSoftRow]{AfterCommit: func(context.Context, lifecycle.Operation, Changes[eachSoftRow]) error {
+						h := orm.Hooks[eachSoftRow]{AfterCommit: func(context.Context, lifecycle.Operation, orm.Changes[eachSoftRow]) error {
 							trace = append(trace, owner+".commit")
 							if outcome == "committed" {
 								return errors.New("commit hook failed")
@@ -131,8 +133,8 @@ func TestEachSoftLifecycleVisibilityAndOutcomes(t *testing.T) {
 						}
 						return h
 					}
-					d := eachSoftFields(func() Hooks[eachSoftRow] { return makeHooks("local") })
-					observer, err := NewObserver[eachSoftRow]("each.soft").Declare(func() Hooks[eachSoftRow] { return makeHooks("observer") })
+					d := eachSoftFields(func() orm.Hooks[eachSoftRow] { return makeHooks("local") })
+					observer, err := orm.NewObserver[eachSoftRow]("each.soft").Declare(func() orm.Hooks[eachSoftRow] { return makeHooks("observer") })
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -156,7 +158,7 @@ func TestEachSoftLifecycleVisibilityAndOutcomes(t *testing.T) {
 						connector.commitErr = errors.New("connection lost")
 					}
 					db := hookDB(t, connector, observer)
-					q := d.Query().Where(TextNe(d.Name, "excluded"))
+					q := d.Query().Where(orm.TextNe(d.Name, "excluded"))
 					if visibility == "trashed" {
 						q = q.OnlyTrashed()
 					}
@@ -169,7 +171,7 @@ func TestEachSoftLifecycleVisibilityAndOutcomes(t *testing.T) {
 							t.Fatal(got, err)
 						}
 					} else {
-						var reconciliation *WriteError[[]eachSoftRow]
+						var reconciliation *orm.WriteError[[]eachSoftRow]
 						var databaseErr *database.Error
 						expected := database.Unknown
 						if outcome == "committed" {
@@ -243,19 +245,19 @@ func TestEachSoftFailuresRemainAtomic(t *testing.T) {
 					}
 					return nil
 				}
-				after := func(context.Context, *database.Tx, Changes[eachSoftRow]) error {
+				after := func(context.Context, *database.Tx, orm.Changes[eachSoftRow]) error {
 					if mode == "after" && writes == 2 {
 						return stop
 					}
 					return nil
 				}
-				h := Hooks[eachSoftRow]{AfterCommit: func(context.Context, lifecycle.Operation, Changes[eachSoftRow]) error { commits++; return nil }}
+				h := orm.Hooks[eachSoftRow]{AfterCommit: func(context.Context, lifecycle.Operation, orm.Changes[eachSoftRow]) error { commits++; return nil }}
 				if op.operation == lifecycle.Restore {
 					h.Restoring, h.Restored = before, after
 				} else {
 					h.ForceDeleting, h.ForceDeleted = before, after
 				}
-				d := eachSoftFields(func() Hooks[eachSoftRow] { return h })
+				d := eachSoftFields(func() orm.Hooks[eachSoftRow] { return h })
 				db := hookDB(t, testConnector{respond: func(s string) ([]string, [][]driver.Value) {
 					cols := []string{"id", "name", "deleted_at"}
 					instant := time.Now().UTC()

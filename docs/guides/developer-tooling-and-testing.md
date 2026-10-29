@@ -292,9 +292,11 @@ security needs no services.
 The shared setup action (`.github/actions/setup-foundry/action.yml`) installs the
 root `go.mod` toolchain and each job's required tools. Required backend, real gopls
 and TypeScript checks remain enabled. Each profile restores and saves its own Go
-build and module cache without waiting for the other gates. The workflow sets
-`GOFLAGS=-p=1` because the runners have 7 GB RAM and the largest ORM test
-compiles peak near 5.3 GB; see the [CI budget](developer-resource-measurements.md#developer-and-ci-budgets).
+build and module cache without waiting for the other gates. After the v0.2
+generic-method reduction and ORM test repartitioning, every cold `go vet ./...`
+compile stays under 2 GB peak RSS (largest: `database/orm` at 1.82 GB and
+`database/orm/rows` at 1.54 GB), so the 7 GB macOS runners use default parallel
+compilation without `GOFLAGS=-p=1`; see the [CI budget](developer-resource-measurements.md#developer-and-ci-budgets).
 Dependency update configuration (`.github/dependabot.yml`)
 keeps proposals reviewable; it does not automatically merge or publish them.
 

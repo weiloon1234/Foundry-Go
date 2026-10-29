@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import (
 	"errors"
@@ -26,22 +28,22 @@ func TestScalarOperationsComposeAndBind(t *testing.T) {
 		t.Fatal(s.SQL(), s.Arguments(), err)
 	}
 	label := expr.Lower(expr.Trim(expr.Concat(text, expr.Param(orm.TextExpr(d.Name), "_%"))))
-	selected := WhereScalar(SelectScalar(From(d.Query()), label.Value()), label.Contains("_%"))
-	s, err = CompileRead(ReadScalar(selected))
+	selected := rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), label.Value()), label.Contains("_%"))
+	s, err = rows.CompileRead(rows.ReadScalar(selected))
 	if err != nil || !strings.Contains(s.SQL(), "LOWER(") || !strings.Contains(s.SQL(), "BTRIM(") || !reflect.DeepEqual(s.Arguments(), []any{"_%", "_%", "%!_!%%"}) {
 		t.Fatal(s.SQL(), s.Arguments(), err)
 	}
-	for _, read := range []Scalar[member, int64]{
-		OrderScalar(GroupByScalar(SelectScalar(From(d.Query()), calculation.Value()), expr.Group(calculation)), calculation.Asc()),
-		OrderScalar(DistinctOnScalarValues(SelectScalar(From(d.Query()), calculation.Value()), calculation.Value().Key()), calculation.Asc()),
+	for _, read := range []rows.Scalar[member, int64]{
+		rows.OrderScalar(rows.GroupByScalar(rows.SelectScalar(rows.From(d.Query()), calculation.Value()), expr.Group(calculation)), calculation.Asc()),
+		rows.OrderScalar(rows.DistinctOnScalarValues(rows.SelectScalar(rows.From(d.Query()), calculation.Value()), calculation.Value().Key()), calculation.Asc()),
 	} {
-		if _, err := CompileRead(ReadScalar(read)); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(read)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	count := expr.Count[member]()
 	divided := expr.DivideValue(expr.DecimalValue(count.Value()), expr.DecimalValue(count.Param(2).Value()))
-	if _, err := CompileRead(ReadScalar(HavingScalar(SelectScalar(From(d.Query()), divided), expr.OrderValue(divided).Gt(decimal.FromInt64(1))))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), divided), expr.OrderValue(divided).Gt(decimal.FromInt64(1))))); err != nil {
 		t.Fatal("selected HAVING", err)
 	}
 }
@@ -49,7 +51,7 @@ func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 	d := declareMembers()
 	id := expr.Value(orm.KeyExpr(d.ID))
 	text := expr.Value(orm.TextExpr(d.Name))
-	source := From(d.Query().Limit(0))
+	source := rows.From(d.Query().Limit(0))
 	for _, v := range []expr.Selected[member, int64]{
 		expr.Add[member, int64](nil, id).Value(),
 		expr.Add(id, expr.Constant[member](codec.Signed[int64]().WithParameterType(codec.TypeText), 1)).Value(),
@@ -59,11 +61,11 @@ func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 	for _, v := range []expr.Selected[member, string]{expr.Substring(text, 1, -1).Value(), expr.ConcatWS("\x00", text).Value()} {
 		rejectScalar(t, source, v, codec.String[string]())
 	}
-	window := expr.AddValue(expr.RowNumber(expr.WindowFor(ModelScope(d.Query()))), expr.Param(orm.KeyExpr(d.ID), 1).Value())
-	if _, err := CompileRead(ReadScalar(HavingScalar(SelectScalar(From(d.Query()), expr.Count[member]().Value()), expr.OrderValue(window).Gt(1)))); !errors.Is(err, fault.Invalid) {
+	window := expr.AddValue(expr.RowNumber(expr.WindowFor(rows.ModelScope(d.Query()))), expr.Param(orm.KeyExpr(d.ID), 1).Value())
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), expr.Count[member]().Value()), expr.OrderValue(window).Gt(1)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("arithmetic hid window in HAVING", err)
 	}
-	if _, err := CompileRead(ReadScalar(SelectScalar(From(d.Query()), expr.RowNumber(expr.WindowFor(ModelScope(d.Query())).OrderBy(window.Asc()))))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(d.Query()), expr.RowNumber(expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(window.Asc()))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("arithmetic hid nested window", err)
 	}
 	deep := expr.Param(orm.KeyExpr(d.ID), 1)
@@ -76,9 +78,9 @@ func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 		"result":  querycore.OperationNode{Kind: querycore.LowerOperation, Result: codec.TypeInteger, Arguments: []querycore.OperationArgument{{Value: querycore.FieldRef{Table: "members", Column: "name"}, Kind: codec.TypeText}}},
 		"unknown": querycore.OperationNode{Kind: 255},
 	} {
-		q := SelectScalar(source, expr.Param(orm.KeyExpr(d.ID), 1).Value())
-		q.source.Node.Selections[0].Expression = node
-		if _, err := CompileRead(ReadScalar(q)); !errors.Is(err, fault.Invalid) {
+		q := rows.SelectScalar(source, expr.Param(orm.KeyExpr(d.ID), 1).Value())
+		rows.ScalarSource(&q).Node.Selections[0].Expression = node
+		if _, err := rows.CompileRead(rows.ReadScalar(q)); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
 		}
 	}

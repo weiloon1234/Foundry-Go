@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import (
 	"errors"
@@ -17,12 +19,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-func rejectComputedSensitiveCursor[S, V any](t *testing.T, q Scalar[S, V]) {
+func rejectComputedSensitiveCursor[S, V any](t *testing.T, q rows.Scalar[S, V]) {
 	t.Helper()
-	if _, err := CompileRead(ReadScalar(q)); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(q)); err != nil {
 		t.Fatal("valid sensitive expression rejected", err)
 	}
-	c := ValueCursorFor(Values(q))
+	c := rows.ValueCursorFor(rows.Values(q))
 	state := &driverState{}
 	if _, err := c.UniqueBy(expr.Group(c.Value())).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[V]{Size: 1}); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "sensitive") || state.sql != "" {
 		t.Fatal("sensitive expression reached cursor execution", err, state.sql)
@@ -31,7 +33,7 @@ func rejectComputedSensitiveCursor[S, V any](t *testing.T, q Scalar[S, V]) {
 
 func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 	m := declareMembers()
-	q := From(m.Query())
+	q := rows.From(m.Query())
 	ordinary := expr.Value(orm.TextExpr(m.Name))
 	// The expression codec alone supplies sensitivity; model metadata stays public.
 	core := expr.FoundryRowValue(ordinary, sqlowner.Expressions())
@@ -44,7 +46,7 @@ func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 	fallback := expr.Param(orm.TextExpr(m.Name), "public")
 	for name, expression := range map[string]expr.Selected[member, string]{
 		"column comparison": expr.When(expr.Equal(field, ordinary), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other")).Value(),
-		"membership":        expr.When(InQuery(field, SelectScalar(q, fallback.Value())), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other")).Value(),
+		"membership":        expr.When(rows.InQuery(field, rows.SelectScalar(q, fallback.Value())), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other")).Value(),
 		"lower":             expr.Lower(field).Value(),
 		"nested operations": expr.Lower(expr.Concat(ordinary, field)).Value(),
 		"coalesce":          expr.Coalesce(optional, fallback).Value(),
@@ -53,7 +55,7 @@ func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 		"selected case":     expr.WhenValue(expr.Grouped(ordinary.Eq("x")), fallback.Value()).Else(field.Value()),
 		"case condition":    expr.When(field.Eq("x"), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other")).Value(),
 	} {
-		t.Run(name, func(t *testing.T) { rejectComputedSensitiveCursor(t, SelectScalar(q, expression)) })
+		t.Run(name, func(t *testing.T) { rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expression)) })
 	}
 	for name, expression := range map[string]expr.Selected[member, value.Nullable[string]]{
 		"nullable coalesce":          expr.CoalesceNullable(expr.NullableRow(fallback), optional).Value(),
@@ -61,24 +63,24 @@ func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 		"nullif right":               expr.NullIf(ordinary, field).Value(),
 		"selected nullif":            expr.NullIfValue(expr.Row(ordinary).Value(), field.Value()),
 	} {
-		t.Run(name, func(t *testing.T) { rejectComputedSensitiveCursor(t, SelectScalar(q, expression)) })
+		t.Run(name, func(t *testing.T) { rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expression)) })
 	}
-	w := expr.WindowFor(ModelScope(m.Query()))
-	rejectComputedSensitiveCursor(t, SelectScalar(q, expr.RowNumber(w.OrderBy(expr.OrderRow(field).Asc()))))
-	rejectComputedSensitiveCursor(t, SelectScalar(q, expr.RowNumber(w.PartitionBy(expr.Group(field)))))
+	w := expr.WindowFor(rows.ModelScope(m.Query()))
+	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.RowNumber(w.OrderBy(expr.OrderRow(field).Asc()))))
+	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.RowNumber(w.PartitionBy(expr.Group(field)))))
 	lower := expr.Lower(field)
-	rejectComputedSensitiveCursor(t, GroupByScalar(SelectScalar(q, lower.Value()), expr.Group(lower)))
+	rejectComputedSensitiveCursor(t, rows.GroupByScalar(rows.SelectScalar(q, lower.Value()), expr.Group(lower)))
 	stored := core
 	stored.Node = querycore.UnwrapSensitivity(stored.Node)
-	rejectComputedSensitiveCursor(t, SelectScalar(q, expr.CountRow(expr.FoundryRowExpression[member](stored, col, sqlowner.Expressions())).Value()))
+	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.CountRow(expr.FoundryRowExpression[member](stored, col, sqlowner.Expressions())).Value()))
 	numeric, numberColumn := expr.FoundryAggregate(expr.Sum(orm.NumberKeyExpr(orm.NumberKey(m.ID))), sqlowner.Expressions())
 	sum := numeric.Node.(querycore.AggregateNode)
 	sum.Sensitive = true
 	numeric.Node = sum
-	rejectComputedSensitiveCursor(t, SelectScalar(q, expr.FoundrySelectedValue[member](numeric, numberColumn, sqlowner.Expressions())))
-	safe := ValueCursorFor(Values(SelectScalar(q, expr.Lower(ordinary).Value())))
+	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.FoundrySelectedValue[member](numeric, numberColumn, sqlowner.Expressions())))
+	safe := rows.ValueCursorFor(rows.Values(rows.SelectScalar(q, expr.Lower(ordinary).Value())))
 	safe = safe.UniqueBy(expr.Group(safe.Value()))
-	if _, err := ormcore.PlanResultCursor(t.Context(), safe.core, 1, "", false, false); err != nil {
+	if _, err := ormcore.PlanResultCursor(t.Context(), rows.ValueCursorQueryCore(safe), 1, "", false, false); err != nil {
 		t.Fatal("public expression rejected", err)
 	}
 
@@ -122,13 +124,13 @@ func TestRelatedAggregateConditionalCursorSensitivity(t *testing.T) {
 				related := orm.FoundryRelatedValue(source, core, col, sqlowner.Expressions())
 				minimum := expr.FoundryRowExpression[sensitivityRelationModel](related, col, sqlowner.Expressions())
 				selected := expr.Coalesce(minimum, expr.Param(orm.KeyExpr(d.Key()), int64(0)))
-				rejectComputedSensitiveCursor(t, SelectScalar(From(d.Query()), selected.Value()))
+				rejectComputedSensitiveCursor(t, rows.SelectScalar(rows.From(d.Query()), selected.Value()))
 			})
 		}
 		safe := expr.Coalesce(expr.RelatedValue(direct, expr.Min(orm.NumberKeyExpr(orm.NumberKey(d.Key())))), expr.Param(orm.KeyExpr(d.Key()), int64(0)))
-		cursor := ValueCursorFor(Values(SelectScalar(From(d.Query()), safe.Value())))
+		cursor := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(d.Query()), safe.Value())))
 		cursor = cursor.UniqueBy(expr.Group(cursor.Value()))
-		if _, err := ormcore.PlanResultCursor(t.Context(), cursor.core, 1, "", false, false); err != nil {
+		if _, err := ormcore.PlanResultCursor(t.Context(), rows.ValueCursorQueryCore(cursor), 1, "", false, false); err != nil {
 			t.Fatal("public relation output rejected", err)
 		}
 	}

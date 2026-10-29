@@ -1,4 +1,6 @@
-package orm
+package orm_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import (
 	"go/ast"
@@ -12,20 +14,20 @@ import (
 
 func TestNativeLimitsShareOwners(t *testing.T) {
 	limits := map[string][2]int{
-		"MaxInsertRows":        {MaxInsertRows, querycore.MaxInsertRows},
-		"MaxPerModelWriteRows": {MaxPerModelWriteRows, querycore.MaxPerModelWriteRows},
-		"MaxRelationWriteRows": {MaxRelationWriteRows, querycore.MaxPerModelWriteRows},
-		"MaxIdentityBatch":     {MaxIdentityBatch, querycore.MaxIdentityBatch},
-		"MaxChunkSize":         {MaxChunkSize, querycore.MaxChunkSize},
-		"DefaultChunkSize":     {DefaultChunkSize, querycore.DefaultChunkSize},
-		"MaxPageSize":          {MaxPageSize, querycore.MaxPageSize},
-		"MaxCursorBytes":       {MaxCursorBytes, querycore.MaxCursorBytes},
-		"MaxCursorFields":      {MaxCursorFields, querycore.MaxCursorFields},
-		"MaxExpressionDepth":   {MaxExpressionDepth, querycore.MaxExpressionDepth},
-		"MaxExpressionNodes":   {MaxExpressionNodes, querycore.MaxExpressionNodes},
-		"MaxParameters":        {MaxParameters, querycore.MaxParameters},
-		"MaxMembershipValues":  {MaxMembershipValues, querycore.MaxMembershipValues},
-		"MaxScalarSQLBytes":    {MaxScalarSQLBytes, querycore.MaxScalarSQLBytes},
+		"MaxInsertRows":        {orm.MaxInsertRows, querycore.MaxInsertRows},
+		"MaxPerModelWriteRows": {orm.MaxPerModelWriteRows, querycore.MaxPerModelWriteRows},
+		"MaxRelationWriteRows": {orm.MaxRelationWriteRows, querycore.MaxPerModelWriteRows},
+		"MaxIdentityBatch":     {orm.MaxIdentityBatch, querycore.MaxIdentityBatch},
+		"MaxChunkSize":         {orm.MaxChunkSize, querycore.MaxChunkSize},
+		"DefaultChunkSize":     {orm.DefaultChunkSize, querycore.DefaultChunkSize},
+		"MaxPageSize":          {orm.MaxPageSize, querycore.MaxPageSize},
+		"MaxCursorBytes":       {orm.MaxCursorBytes, querycore.MaxCursorBytes},
+		"MaxCursorFields":      {orm.MaxCursorFields, querycore.MaxCursorFields},
+		"MaxExpressionDepth":   {orm.MaxExpressionDepth, querycore.MaxExpressionDepth},
+		"MaxExpressionNodes":   {orm.MaxExpressionNodes, querycore.MaxExpressionNodes},
+		"MaxParameters":        {orm.MaxParameters, querycore.MaxParameters},
+		"MaxMembershipValues":  {orm.MaxMembershipValues, querycore.MaxMembershipValues},
+		"MaxScalarSQLBytes":    {orm.MaxScalarSQLBytes, querycore.MaxScalarSQLBytes},
 	}
 	for name, values := range limits {
 		if values[0] != values[1] {

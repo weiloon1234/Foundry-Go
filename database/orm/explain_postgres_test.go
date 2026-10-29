@@ -1,4 +1,4 @@
-package orm
+package orm_test
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -44,13 +45,13 @@ func TestPostgresExplainDoesNotExecuteAndAnalyzeUsesActualTransaction(t *testing
 			}
 		}
 		fields := explainTable(t)
-		q := fields.Query().Where(KeyEq(fields.Key(), 7))
-		statement, err := Compile(q)
+		q := fields.Query().Where(orm.KeyEq(fields.Key(), 7))
+		statement, err := orm.Compile(q)
 		if err != nil {
 			return err
 		}
 		recorder := &recordingPlanExecutor{Executor: tx}
-		plan, err := Explain(t.Context(), recorder, q)
+		plan, err := orm.Explain(t.Context(), recorder, q)
 		if err != nil {
 			return err
 		}
@@ -66,7 +67,7 @@ func TestPostgresExplainDoesNotExecuteAndAnalyzeUsesActualTransaction(t *testing
 		}
 		rollback := errors.New("rollback analyzed work")
 		if err := tx.Transaction(t.Context(), func(child *database.Tx) error {
-			plan, err := ExplainAnalyze(t.Context(), child, q)
+			plan, err := orm.ExplainAnalyze(t.Context(), child, q)
 			if err != nil {
 				return err
 			}
@@ -117,27 +118,27 @@ func TestPostgresAnalyzeRetainsRowLocksAndContextCancellation(t *testing.T) {
 		if err := withPath(holder); err != nil {
 			return err
 		}
-		q := Lock(explainTable(t).Query())
-		if _, err := ExplainLocked(t.Context(), holder, q); err != nil {
+		q := orm.Lock(explainTable(t).Query())
+		if _, err := orm.ExplainLocked(t.Context(), holder, q); err != nil {
 			return err
 		}
 		if err := db.Transaction(t.Context(), func(other *database.Tx) error {
 			if err := withPath(other); err != nil {
 				return err
 			}
-			_, err := ExplainAnalyzeLocked(t.Context(), other, q.NoWait())
+			_, err := orm.ExplainAnalyzeLocked(t.Context(), other, q.NoWait())
 			return err
 		}); err != nil {
 			return errors.New("planning acquired a row lock")
 		}
-		if _, err := ExplainAnalyzeLocked(t.Context(), holder, q); err != nil {
+		if _, err := orm.ExplainAnalyzeLocked(t.Context(), holder, q); err != nil {
 			return err
 		}
 		if err := db.Transaction(t.Context(), func(other *database.Tx) error {
 			if err := withPath(other); err != nil {
 				return err
 			}
-			_, err := ExplainAnalyzeLocked(t.Context(), other, q.NoWait())
+			_, err := orm.ExplainAnalyzeLocked(t.Context(), other, q.NoWait())
 			return err
 		}); err == nil {
 			return errors.New("analysis released its transaction's row lock")
@@ -148,7 +149,7 @@ func TestPostgresAnalyzeRetainsRowLocksAndContextCancellation(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 			defer cancel()
-			_, err := ExplainAnalyzeLocked(ctx, other, q)
+			_, err := orm.ExplainAnalyzeLocked(ctx, other, q)
 			if !errors.Is(err, context.DeadlineExceeded) {
 				return errors.New("waiting analysis lost deadline")
 			}
@@ -168,17 +169,17 @@ type explainRecord struct {
 	Rank value.Nullable[int64]
 }
 
-func explainTable(t *testing.T) Table[explainRecord, int64] {
+func explainTable(t *testing.T) orm.Table[explainRecord, int64] {
 	t.Helper()
 	c := codec.New(func(v int64) (driver.Value, error) { return v, nil }, func(any) (int64, error) {
 		t.Error("plan hydrated a model")
 		return 0, errors.New("unexpected hydration")
 	}).WithParameterType(codec.TypeInteger)
-	return Define("records", func(b Builder[explainRecord], m *explainRecord) Table[explainRecord, int64] {
-		NullableNumberOf(b, &m.Rank, Codec(c))
-		return TableOf(b, &m.ID)
-	}, WithRetrievalHooks(func() RetrievalHooks[explainRecord] {
+	return orm.Define("records", func(b orm.Builder[explainRecord], m *explainRecord) orm.Table[explainRecord, int64] {
+		orm.NullableNumberOf(b, &m.Rank, orm.Codec(c))
+		return orm.TableOf(b, &m.ID)
+	}, orm.WithRetrievalHooks(func() orm.RetrievalHooks[explainRecord] {
 		t.Error("plan dispatched retrieval")
-		return RetrievalHooks[explainRecord]{}
+		return orm.RetrievalHooks[explainRecord]{}
 	}))
 }

@@ -1,4 +1,6 @@
-package orm
+package orm_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import "time"
 
@@ -28,15 +30,15 @@ type secureRecord struct {
 	Backup value.Nullable[encrypted.Text]
 }
 type secureTable struct {
-	Table[secureRecord, model.ID[secureRecord]]
-	Secret Encrypted[secureRecord, encrypted.Text]
-	Backup NullableEncrypted[secureRecord, encrypted.Text]
+	orm.Table[secureRecord, model.ID[secureRecord]]
+	Secret orm.Encrypted[secureRecord, encrypted.Text]
+	Backup orm.NullableEncrypted[secureRecord, encrypted.Text]
 }
 
 func secureRecords() secureTable { return secureRecordsAt("secure_records") }
 func secureRecordsAt(name string) secureTable {
-	return Define(name, func(b Builder[secureRecord], m *secureRecord) secureTable {
-		return secureTable{TableOf(b, &m.ID), EncryptedTextOf(b, &m.Secret), NullableEncryptedTextOf(b, &m.Backup)}
+	return orm.Define(name, func(b orm.Builder[secureRecord], m *secureRecord) secureTable {
+		return secureTable{orm.TableOf(b, &m.ID), orm.EncryptedTextOf(b, &m.Secret), orm.NullableEncryptedTextOf(b, &m.Backup)}
 	})
 }
 func sensitiveKeys(t *testing.T) *encryption.Keyring {
@@ -53,7 +55,7 @@ func sensitiveKeys(t *testing.T) *encryption.Keyring {
 }
 func TestEncryptedWriteBoundaries(t *testing.T) {
 	r := secureRecords()
-	if err := Check(r); err != nil {
+	if err := orm.Check(r); err != nil {
 		t.Fatal(err)
 	}
 	var statements []string
@@ -66,7 +68,7 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 		}
 		return []string{"id", "secret", "backup"}, [][]driver.Value{stored}, nil
 	}}, database.WithEncryption(ring))
-	got, err := Insert(t.Context(), db, r.Table, EncryptedSet(r.Secret, encrypted.NewText("private primary")), NullableEncryptedSet(r.Backup, encrypted.NewText("private backup")))
+	got, err := orm.Insert(t.Context(), db, r.Table, orm.EncryptedSet(r.Secret, encrypted.NewText("private primary")), orm.NullableEncryptedSet(r.Backup, encrypted.NewText("private backup")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +81,8 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 		}
 	}
 	statements = nil
-	for _, as := range []Assignment[secureRecord]{EncryptedSet(r.Secret, encrypted.NewText("change")), NullableEncryptedSetNull(r.Backup)} {
-		if _, err := UpdateAll(t.Context(), db, r.Query().Where(KeyEq(r.Key(), got.ID)), as); !errors.Is(err, fault.Invalid) {
+	for _, as := range []orm.Assignment[secureRecord]{orm.EncryptedSet(r.Secret, encrypted.NewText("change")), orm.NullableEncryptedSetNull(r.Backup)} {
+		if _, err := orm.UpdateAll(t.Context(), db, r.Query().Where(orm.KeyEq(r.Key(), got.ID)), as); !errors.Is(err, fault.Invalid) {
 			t.Fatal("set-based encrypted write accepted")
 		}
 	}
@@ -88,7 +90,7 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 		t.Fatal("set-based rejection acquired transaction or sent SQL")
 	}
 	noKeys := testDB(t, testConnector{statements: &statements})
-	if _, err := Insert(t.Context(), noKeys, r.Table, EncryptedSet(r.Secret, encrypted.NewText("secret"))); !errors.Is(err, fault.Missing) {
+	if _, err := orm.Insert(t.Context(), noKeys, r.Table, orm.EncryptedSet(r.Secret, encrypted.NewText("secret"))); !errors.Is(err, fault.Missing) {
 		t.Fatal("missing keyring accepted")
 	}
 	if len(statements) != 0 {
@@ -96,13 +98,13 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 	}
 	// The declaration's table and column are authenticated, not inferred from ciphertext.
 	wrongTable := testDB(t, testConnector{columns: []string{"id", "secret", "backup"}, values: [][]driver.Value{stored}}, database.WithEncryption(ring))
-	if got, err := All(t.Context(), wrongTable, secureRecordsAt("another_table").Query()); err == nil || got != nil {
+	if got, err := orm.All(t.Context(), wrongTable, secureRecordsAt("another_table").Query()); err == nil || got != nil {
 		t.Fatal("wrong-table hydration accepted")
 	}
 	wrongColumn := append([]driver.Value(nil), stored...)
 	wrongColumn[1] = stored[2]
 	wrongField := testDB(t, testConnector{columns: []string{"id", "secret", "backup"}, values: [][]driver.Value{wrongColumn}}, database.WithEncryption(ring))
-	if got, err := All(t.Context(), wrongField, r.Query()); err == nil || got != nil {
+	if got, err := orm.All(t.Context(), wrongField, r.Query()); err == nil || got != nil {
 		t.Fatal("wrong-column hydration accepted")
 	}
 	// Each row must use its own key; a later failure must discard earlier models.
@@ -113,7 +115,7 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 	copied := append([]driver.Value(nil), stored...)
 	copied[0] = other.String()
 	bad := testDB(t, testConnector{columns: []string{"id", "secret", "backup"}, values: [][]driver.Value{stored, copied}}, database.WithEncryption(ring))
-	if rows, err := All(t.Context(), bad, r.Query()); err == nil || rows != nil {
+	if rows, err := orm.All(t.Context(), bad, r.Query()); err == nil || rows != nil {
 		t.Fatal("wrong-key hydration published partial models")
 	}
 }
@@ -152,15 +154,15 @@ func TestSensitiveDiagnostics(t *testing.T) {
 	_, ringFailure := encryption.NewKeyring("canary-key-material", key)
 	rawCause := errors.New("canary-plaintext canary-key-material")
 	hiddenCause := database.FoundryStatementUnknown(sqlowner.Outcomes(), "write", rawCause)
-	items := []any{sealed, key, ring, binding, EncryptedSet(r.Secret, sealed), failure, keyFailure, ringFailure, hiddenCause,
-		EncryptedSet(r.Secret, plain), NullableEncryptedSet(r.Backup, plain), NullableEncryptedSetNull(r.Backup), NullableEncryptedIsNull(r.Backup), NullableEncryptedIsNotNull(r.Backup), r.Secret, r.Backup,
-		&WriteError[secureRecord]{cause: failure, candidate: secureRecord{Secret: plain, Backup: value.Of(plain)}},
+	items := []any{sealed, key, ring, binding, orm.EncryptedSet(r.Secret, sealed), failure, keyFailure, ringFailure, hiddenCause,
+		orm.EncryptedSet(r.Secret, plain), orm.NullableEncryptedSet(r.Backup, plain), orm.NullableEncryptedSetNull(r.Backup), orm.NullableEncryptedIsNull(r.Backup), orm.NullableEncryptedIsNotNull(r.Backup), r.Secret, r.Backup,
+		orm.NewTestWriteError(failure, secureRecord{Secret: plain, Backup: value.Of(plain)}),
 	}
 	for _, item := range items {
 		// Driver errors may retain arbitrary causes; public formatting must redact them.
 		cause := fmt.Errorf("wrapped: %v", item)
 		wrapped := database.FoundryStatementUnknown(sqlowner.Outcomes(), "write", cause)
-		for _, item := range []any{item, wrapped, &WriteError[secureRecord]{cause: wrapped, candidate: secureRecord{Secret: plain}}} {
+		for _, item := range []any{item, wrapped, orm.NewTestWriteError(wrapped, secureRecord{Secret: plain})} {
 			for name, render := range map[string]func() string{
 				"String": func() string { return fmt.Sprint(item) },
 				"GoString": func() string {
@@ -233,9 +235,9 @@ func TestWriteOutcomeCoverage(t *testing.T) {
 			if tc.callback {
 				writer = afterCommitWriter{db}
 			}
-			got, err := Update(t.Context(), writer, r.Table.Query(), r.Table.Key(), 7, TextSet(r.Name, "new"))
+			got, err := orm.Update(t.Context(), writer, r.Table.Query(), r.Table.Key(), 7, orm.TextSet(r.Name, "new"))
 			var outcome *database.Error
-			var write *WriteError[record]
+			var write *orm.WriteError[record]
 			if err == nil || got.ID != 0 || !errors.As(err, &outcome) || outcome.Outcome() != tc.outcome || errors.As(err, &write) != tc.candidate || begins != 1 {
 				t.Fatalf("wrong write outcome: %v", err)
 			}
@@ -248,7 +250,7 @@ func TestWriteOutcomeCoverage(t *testing.T) {
 		var sql []string
 		db := testDB(t, testConnector{statements: &sql, columns: []string{"id", "display_name", "note", "amount"}, values: [][]driver.Value{}})
 		err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-			if _, err := Update(t.Context(), tx, r.Table.Query(), r.Table.Key(), 7, TextSet(r.Name, "new")); err == nil {
+			if _, err := orm.Update(t.Context(), tx, r.Table.Query(), r.Table.Key(), 7, orm.TextSet(r.Name, "new")); err == nil {
 				t.Fatal("missing RETURNING accepted")
 			}
 			return nil
@@ -270,17 +272,17 @@ func TestBatchDefaultsAndReturningOrder(t *testing.T) {
 		Enabled bool `foundry:"default=database"`
 	}
 	type fields struct {
-		Table[item, int64]
-		Name    Text[item, string]
-		Enabled Column[item, bool]
+		orm.Table[item, int64]
+		Name    orm.Text[item, string]
+		Enabled orm.Column[item, bool]
 	}
-	r := Define("batch_defaults", func(b Builder[item], m *item) fields {
-		return fields{TableOf(b, &m.ID), TextOf(b, &m.Name), ColumnOf(b, &m.Enabled)}
+	r := orm.Define("batch_defaults", func(b orm.Builder[item], m *item) fields {
+		return fields{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), orm.ColumnOf(b, &m.Enabled)}
 	})
 	var sql []string
 	var args [][]any
 	db := testDB(t, testConnector{statements: &sql, bindings: &args, columns: []string{"id", "name", "enabled"}, values: [][]driver.Value{{int64(20), "first", true}, {int64(10), "second", false}}})
-	got, err := InsertMany(t.Context(), db, r.Table, [][]Assignment[item]{{TextSet(r.Name, "first")}, {TextSet(r.Name, "second"), ColumnSet(r.Enabled, false)}})
+	got, err := orm.InsertMany(t.Context(), db, r.Table, [][]orm.Assignment[item]{{orm.TextSet(r.Name, "first")}, {orm.TextSet(r.Name, "second"), orm.ColumnSet(r.Enabled, false)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,16 +299,22 @@ func TestEncryptedDeclarationDefaultsRejected(t *testing.T) {
 		ID    int64 `foundry:"default=database"`
 		Token encrypted.Text
 	}
-	r := Define("invalid_defaults", func(b Builder[m], v *m) Table[m, int64] { EncryptedTextOf(b, &v.Token); return TableOf(b, &v.ID) })
-	if err := Check(r); !errors.Is(err, fault.Invalid) {
+	r := orm.Define("invalid_defaults", func(b orm.Builder[m], v *m) orm.Table[m, int64] {
+		orm.EncryptedTextOf(b, &v.Token)
+		return orm.TableOf(b, &v.ID)
+	})
+	if err := orm.Check(r); !errors.Is(err, fault.Invalid) {
 		t.Fatal("database-generated key accepted for encrypted field")
 	}
 	type n struct {
 		ID    int64
 		Token encrypted.Text `foundry:"default=database"`
 	}
-	r2 := Define("invalid_defaults", func(b Builder[n], v *n) Table[n, int64] { EncryptedTextOf(b, &v.Token); return TableOf(b, &v.ID) })
-	if err := Check(r2); !errors.Is(err, fault.Invalid) {
+	r2 := orm.Define("invalid_defaults", func(b orm.Builder[n], v *n) orm.Table[n, int64] {
+		orm.EncryptedTextOf(b, &v.Token)
+		return orm.TableOf(b, &v.ID)
+	})
+	if err := orm.Check(r2); !errors.Is(err, fault.Invalid) {
 		t.Fatal("encrypted database default accepted")
 	}
 }
@@ -318,31 +326,31 @@ func TestPasswordCodecBoundary(t *testing.T) {
 		Backup value.Nullable[password.Hash]
 	}
 	type fields struct {
-		Table[account, int64]
-		Digest Column[account, password.Hash]
-		Backup NullableColumn[account, password.Hash]
+		orm.Table[account, int64]
+		Digest orm.Column[account, password.Hash]
+		Backup orm.NullableColumn[account, password.Hash]
 	}
-	r := Define("password_records", func(b Builder[account], m *account) fields {
-		return fields{TableOf(b, &m.ID), PasswordOf(b, &m.Digest), NullablePasswordOf(b, &m.Backup)}
+	r := orm.Define("password_records", func(b orm.Builder[account], m *account) fields {
+		return fields{orm.TableOf(b, &m.ID), orm.PasswordOf(b, &m.Digest), orm.NullablePasswordOf(b, &m.Backup)}
 	})
-	if err := Check(r); err != nil {
+	if err := orm.Check(r); err != nil {
 		t.Fatal(err)
 	}
 	db := testDB(t, testConnector{columns: []string{"id", "digest", "backup"}, values: [][]driver.Value{{int64(1), "untrusted-plaintext", nil}}})
-	got, err := All(t.Context(), db, r.Query())
+	got, err := orm.All(t.Context(), db, r.Query())
 	if err == nil || got != nil || strings.Contains(err.Error(), "untrusted-plaintext") {
 		t.Fatal("password codec accepted or disclosed plaintext")
 	}
 	var sent []string
 	writer := testDB(t, testConnector{statements: &sent})
-	if _, err := Update(t.Context(), writer, r.Table.Query(), r.Table.Key(), 1, ColumnSet(r.Digest, password.Hash{})); err == nil || len(sent) != 0 {
+	if _, err := orm.Update(t.Context(), writer, r.Table.Query(), r.Table.Key(), 1, orm.ColumnSet(r.Digest, password.Hash{})); err == nil || len(sent) != 0 {
 		t.Fatal("zero hash sent SQL")
 	}
 	type bad struct{ Digest password.Hash }
-	key := Define("bad_password_key", func(b Builder[bad], m *bad) Table[bad, password.Hash] {
-		return TableOf(b, &m.Digest, Codec(password.Codec()))
+	key := orm.Define("bad_password_key", func(b orm.Builder[bad], m *bad) orm.Table[bad, password.Hash] {
+		return orm.TableOf(b, &m.Digest, orm.Codec(password.Codec()))
 	})
-	if err := Check(key); !errors.Is(err, fault.Invalid) {
+	if err := orm.Check(key); !errors.Is(err, fault.Invalid) {
 		t.Fatal("sensitive password identity accepted")
 	}
 }
@@ -363,9 +371,9 @@ func TestEncryptedBatchUsesEachGeneratedKey(t *testing.T) {
 		}
 		return []string{"id", "secret", "backup"}, data, nil
 	}}, database.WithEncryption(ring))
-	got, err := InsertMany(t.Context(), db, r.Table, [][]Assignment[secureRecord]{
-		{EncryptedSet(r.Secret, encrypted.NewText("first")), NullableEncryptedSetNull(r.Backup)},
-		{EncryptedSet(r.Secret, encrypted.NewText("second")), NullableEncryptedSetNull(r.Backup)},
+	got, err := orm.InsertMany(t.Context(), db, r.Table, [][]orm.Assignment[secureRecord]{
+		{orm.EncryptedSet(r.Secret, encrypted.NewText("first")), orm.NullableEncryptedSetNull(r.Backup)},
+		{orm.EncryptedSet(r.Secret, encrypted.NewText("second")), orm.NullableEncryptedSetNull(r.Backup)},
 	})
 	if err != nil {
 		t.Fatal(err)

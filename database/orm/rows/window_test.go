@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import orm "github.com/weiloon1234/Foundry-Go/database/orm"
 
@@ -19,12 +21,12 @@ import (
 
 func TestWindowsBindingsNamesAndImmutability(t *testing.T) {
 	d := declareAggregateRecords()
-	source := FromModel(d.Query())
+	source := rows.FromModel(d.Query())
 	v := expr.Value(orm.NumberExpr(d.Exact))
-	w := expr.WindowFor(ModelScope(d.Query())).PartitionBy(expr.Group(v)).OrderBy(v.Desc()).RowsBetween(expr.Preceding(2), expr.CurrentRow()).ExcludeTies()
+	w := expr.WindowFor(rows.ModelScope(d.Query())).PartitionBy(expr.Group(v)).OrderBy(v.Desc()).RowsBetween(expr.Preceding(2), expr.CurrentRow()).ExcludeTies()
 	previous := expr.LagOr(expr.Row(v).Value(), 1, int64(99), w)
-	q := OrderBy(Distinct(expressionQuery(source, previous, codec.Signed[int64]()).Where(v.Ne(7))), previous.Asc())
-	q = Limit(q, 4)
+	q := rows.OrderBy(rows.Distinct(expressionQuery(source, previous, codec.Signed[int64]()).Where(v.Ne(7))), previous.Asc())
+	q = rows.Limit(q, 4)
 	s := expressionSQL(t, q)
 	want := `SELECT DISTINCT LAG("aggregate_records"."exact", $1, $2) OVER (PARTITION BY "aggregate_records"."exact" ORDER BY "aggregate_records"."exact" DESC ROWS BETWEEN $3 PRECEDING AND CURRENT ROW EXCLUDE TIES) AS "value" FROM "aggregate_records" WHERE ("aggregate_records"."exact" <> $4) ORDER BY 1 ASC LIMIT $5`
 	if s.SQLText != want || !reflect.DeepEqual(s.Bindings, []any{int64(1), int64(99), int64(2), int64(7), int64(4)}) {
@@ -35,7 +37,7 @@ func TestWindowsBindingsNamesAndImmutability(t *testing.T) {
 	if !reflect.DeepEqual(s, again) {
 		t.Fatal("window derivation mutated its source")
 	}
-	named := expr.WindowFor(ModelScope(d.Query())).OrderBy(v.Asc()).Named("ranked")
+	named := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(v.Asc()).Named("ranked")
 	same := expr.AddValue(expr.RowNumber(named), expr.Rank(named))
 	ns := expressionSQL(t, expressionQuery(source, same, codec.Signed[int64]()))
 	if strings.Count(ns.SQLText, `"ranked" AS (`) != 1 || strings.Count(ns.SQLText, `OVER "ranked"`) != 2 {
@@ -49,15 +51,15 @@ func TestWindowsBindingsNamesAndImmutability(t *testing.T) {
 func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 	d := declareAggregateRecords()
 	other := declareAggregateRecords()
-	source := FromModel(d.Query())
+	source := rows.FromModel(d.Query())
 	v := expr.Value(orm.NumberExpr(d.Exact))
-	base := expr.WindowFor(ModelScope(d.Query()))
+	base := expr.WindowFor(rows.ModelScope(d.Query()))
 	w := base.OrderBy(v.Asc())
 	r := expr.NumericRange(base, expr.Row(v).Value())
 	fr := expr.NumericRange(base, expr.Row(expr.Value(orm.NumberExpr(d.Approx))).Value())
 	invalid := map[string]expr.Window[aggregateRecord]{
 		"missing scope":              expr.WindowFor(expr.Scope[aggregateRecord, aggregateRecord]{}),
-		"foreign declaration":        expr.WindowFor(ModelScope(other.Query())),
+		"foreign declaration":        expr.WindowFor(rows.ModelScope(other.Query())),
 		"foreign partition":          base.PartitionBy(expr.Group(expr.Value(orm.NumberExpr(other.Exact)))),
 		"foreign selected partition": base.PartitionByValues(expr.Sum(orm.NumberExpr(other.Exact)).Value().Key()),
 		"zero partition":             w.PartitionBy(expr.GroupKey[aggregateRecord]{}),
@@ -87,7 +89,7 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			q := expressionQuery(source, expr.RowNumber(window), codec.Signed[int64]())
 			state := &driverState{}
-			_, err := Read(q).All(t.Context(), openTest(t, state))
+			_, err := rows.Read(q).All(t.Context(), openTest(t, state))
 			if !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal("invalid window executed", err, state.sql)
 			}
@@ -102,7 +104,7 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			q := expressionQuery(source, e, codec.Signed[int64]())
 			state := &driverState{}
-			_, err := Read(q).All(t.Context(), openTest(t, state))
+			_, err := rows.Read(q).All(t.Context(), openTest(t, state))
 			if !errors.Is(err, fault.Invalid) || state.sql != "" {
 				t.Fatal(err, state.sql)
 			}
@@ -112,15 +114,15 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 	grouped := base.PartitionByValues(expr.Count[aggregateRecord]().Value().Key()).OrderBy(expr.Count[aggregateRecord]().Desc())
 	expressionSQL(t, expressionQuery(source, expr.RowNumber(grouped), codec.Signed[int64]()))
 	bad := expressionQuery(source, expr.RowNumber(grouped.OrderBy(v.Asc())), codec.Signed[int64]())
-	if _, err := querycore.CompileRead(bad.source.Node, t.Context(), false, bad.source.Err, true); !errors.Is(err, fault.Invalid) {
+	if _, err := querycore.CompileRead(rows.SourceOf(bad).Node, t.Context(), false, rows.SourceOf(bad).Err, true); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 }
 
 func TestWindowsResultFamiliesAndHydration(t *testing.T) {
 	d := declareAggregateRecords()
-	source := FromModel(d.Query())
-	w := expr.WindowFor(ModelScope(d.Query())).OrderBy(expr.Value(orm.NumberExpr(d.Exact)).Asc())
+	source := rows.FromModel(d.Query())
+	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Value(orm.NumberExpr(d.Exact)).Asc())
 	v := expr.Row(expr.Value(orm.NumberExpr(d.Exact))).Value()
 	n := expr.Row(expr.Value(orm.NullableNumberExpr(d.MaybeExact))).Value()
 	for name, e := range map[string]expr.Selected[aggregateRecord, value.Nullable[int64]]{
@@ -131,7 +133,7 @@ func TestWindowsResultFamiliesAndHydration(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			q := expressionQuery(source, e, codec.Nullable(codec.Signed[int64]()))
 			state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {int64(3)}}}
-			got, err := Read(q).All(t.Context(), openTest(t, state))
+			got, err := rows.Read(q).All(t.Context(), openTest(t, state))
 			if err != nil || len(got) != 2 || !got[0].Value.IsNull() {
 				t.Fatal(got, err)
 			}
@@ -150,12 +152,12 @@ func TestWindowsResultFamiliesAndHydration(t *testing.T) {
 	expressionSQL(t, expressionQuery(source, expr.Over(expr.Exists[aggregateRecord](), w), codec.Bool[bool]()))
 	for _, e := range []expr.Selected[aggregateRecord, int32]{expr.NTile(0, w), expr.NTile(-1, w)} {
 		q := expressionQuery(source, e, codec.Signed[int32]())
-		if _, err := querycore.CompileRead(q.source.Node, t.Context(), false, q.source.Err, true); !errors.Is(err, fault.Invalid) {
+		if _, err := querycore.CompileRead(rows.SourceOf(q).Node, t.Context(), false, rows.SourceOf(q).Err, true); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
 	invalid := expressionQuery(source, expr.Lag(n, 1, w), codec.Nullable(codec.Nullable(codec.Signed[int64]())))
-	if _, err := querycore.CompileRead(invalid.source.Node, t.Context(), false, invalid.source.Err, true); !errors.Is(err, fault.Invalid) {
+	if _, err := querycore.CompileRead(rows.SourceOf(invalid).Node, t.Context(), false, rows.SourceOf(invalid).Err, true); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nested nullable accepted", err)
 	}
 }

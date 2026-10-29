@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import orm "github.com/weiloon1234/Foundry-Go/database/orm"
 
@@ -21,9 +23,9 @@ func TestAggregateFilterIsolationAndBindings(t *testing.T) {
 	f := expr.Value(orm.NumberExpr(d.Exact))
 	base := expr.Sum(orm.NumberExpr(d.Exact))
 	filtered := base.Filter(expr.OrderRow(f).Gt(2)).Filter(expr.Or(expr.OrderRow(f).Lt(8), f.Eq(10)))
-	q := SelectScalar(From(d.Query().Where(orm.NumberNe(d.Exact, 4))), filtered.Value())
-	q = OrderScalar(HavingScalar(q, filtered.Gt(decimal.FromInt64(5))), filtered.Desc())
-	s, err := CompileRead(ReadScalar(q))
+	q := rows.SelectScalar(rows.From(d.Query().Where(orm.NumberNe(d.Exact, 4))), filtered.Value())
+	q = rows.OrderScalar(rows.HavingScalar(q, filtered.Gt(decimal.FromInt64(5))), filtered.Desc())
+	s, err := rows.CompileRead(rows.ReadScalar(q))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +42,7 @@ func TestAggregateFilterIsolationAndBindings(t *testing.T) {
 		t.Fatal("aggregate derivation mutated its source or sibling")
 	}
 	count := expr.Count[aggregateRecord]().Filter(expr.OrderRow(f).Gt(0))
-	if _, err := CompileRead(ReadScalar(HavingScalar(SelectScalar(From(d.Query()), count.Value()), count.Gt(0)))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), count.Value()), count.Gt(0)))); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -48,21 +50,21 @@ func TestAggregateFilterIsolationAndBindings(t *testing.T) {
 func TestAggregateFilterWindowAndValidation(t *testing.T) {
 	d := declareAggregateRecords()
 	f := expr.Value(orm.NumberExpr(d.Exact))
-	source := From(d.Query())
-	w := expr.WindowFor(ModelScope(d.Query())).OrderBy(f.Asc()).RowsBetween(expr.Preceding(2), expr.CurrentRow())
-	s, err := CompileRead(ReadScalar(SelectScalar(source, expr.Over(expr.Exists[aggregateRecord]().Filter(expr.OrderRow(f).Gt(1)), w))))
+	source := rows.From(d.Query())
+	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(f.Asc()).RowsBetween(expr.Preceding(2), expr.CurrentRow())
+	s, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.Over(expr.Exists[aggregateRecord]().Filter(expr.OrderRow(f).Gt(1)), w))))
 	if err != nil || !strings.Contains(s.SQL(), `COUNT(*) FILTER (WHERE ("aggregate_records"."exact" > $1)) OVER (`) || !reflect.DeepEqual(s.Arguments(), []any{int64(1), int64(2)}) {
 		t.Fatal(s.SQL(), err)
 	}
-	filtered := SelectScalar(source, expr.Over(expr.Count[aggregateRecord]().Filter(expr.OrderRow(f).Gt(0)), expr.WindowFor(ModelScope(d.Query()))))
-	if _, err := CompileRead(ReadScalar(HavingScalar(filtered, expr.Count[aggregateRecord]().Gt(0)))); !errors.Is(err, fault.Invalid) {
+	filtered := rows.SelectScalar(source, expr.Over(expr.Count[aggregateRecord]().Filter(expr.OrderRow(f).Gt(0)), expr.WindowFor(rows.ModelScope(d.Query()))))
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(filtered, expr.Count[aggregateRecord]().Gt(0)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("ungrouped window filter accepted", err)
 	}
-	if _, err := CompileRead(ReadScalar(GroupByScalar(filtered, expr.Group(f)))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.GroupByScalar(filtered, expr.Group(f)))); err != nil {
 		t.Fatal(err)
 	}
 	for name, p := range map[string]expr.Predicate[aggregateRecord]{"zero": {}, "foreign": expr.Value(orm.NumberExpr(declareAggregateRecords().Exact)).Eq(0)} {
-		if _, err := CompileRead(ReadScalar(SelectScalar(source, expr.Count[aggregateRecord]().Filter(p).Value()))); !errors.Is(err, fault.Invalid) {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.Count[aggregateRecord]().Filter(p).Value()))); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
 		}
 	}
@@ -70,7 +72,7 @@ func TestAggregateFilterWindowAndValidation(t *testing.T) {
 	for i := range ps {
 		ps[i] = f.Eq(1)
 	}
-	if _, err := CompileRead(ReadScalar(SelectScalar(source, expr.Count[aggregateRecord]().Filter(ps...).Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.Count[aggregateRecord]().Filter(ps...).Value()))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unbounded filters accepted", err)
 	}
 	// Phase-typed public filters cannot contain aggregates or windows. The shared
@@ -80,8 +82,8 @@ func TestAggregateFilterWindowAndValidation(t *testing.T) {
 		n := core.Node.(querycore.AggregateNode)
 		n.Filter = &querycore.AggregateFilter{Predicates: []querycore.Expression{querycore.Comparison{Operand: bad, Operator: querycore.IsNull}}}
 		q := expressionQuery(source, expr.Count[aggregateRecord]().Value(), codec.Signed[int64]())
-		q.source.Node.Selections[0].Expression = n
-		if _, err := querycore.CompileRead(q.source.Node, t.Context(), false, nil, true); !errors.Is(err, fault.Invalid) {
+		rows.QuerySource(&q).Node.Selections[0].Expression = n
+		if _, err := querycore.CompileRead(rows.QuerySource(&q).Node, t.Context(), false, nil, true); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid filter phase accepted", err)
 		}
 	}
@@ -89,14 +91,14 @@ func TestAggregateFilterWindowAndValidation(t *testing.T) {
 
 func TestAggregateFilterCorrelationOwnership(t *testing.T) {
 	d := declareAggregateRecords()
-	a, b := As[left](d.Query(), "parent"), As[right](d.Query(), "child")
-	link := Correlate(a, b)
-	x := expr.At(OuterScope(link, Scope(a)), orm.NumberExpr(d.Exact))
-	y := expr.At(InnerScope(link, Scope(b)), orm.NumberExpr(d.Exact))
-	type scope = Correlation[Alias[left, aggregateRecord], Alias[right, aggregateRecord]]
+	a, b := rows.As[left](d.Query(), "parent"), rows.As[right](d.Query(), "child")
+	link := rows.Correlate(a, b)
+	x := expr.At(rows.OuterScope(link, rows.Scope(a)), orm.NumberExpr(d.Exact))
+	y := expr.At(rows.InnerScope(link, rows.Scope(b)), orm.NumberExpr(d.Exact))
+	type scope = rows.Correlation[rows.Alias[left, aggregateRecord], rows.Alias[right, aggregateRecord]]
 	count := expr.Count[scope]()
-	for name, aggregate := range map[string]expr.OrderedAggregate[scope, int64]{"outer only": count.Filter(x.Ne(0)), "local": count.Filter(y.Ne(0)), "mixed": count.Filter(expr.Equal(y, x)), "local argument": expr.CountFieldAt(InnerScope(link, Scope(b)), orm.NumberExpr(d.Exact)).Filter(x.Ne(0))} {
-		_, err := CompileRead(ReadScalar(SelectScalar(a, CorrelatedScalarRowQuery(SelectCorrelatedScalar(link, aggregate.Value())).Value())))
+	for name, aggregate := range map[string]expr.OrderedAggregate[scope, int64]{"outer only": count.Filter(x.Ne(0)), "local": count.Filter(y.Ne(0)), "mixed": count.Filter(expr.Equal(y, x)), "local argument": expr.CountFieldAt(rows.InnerScope(link, rows.Scope(b)), orm.NumberExpr(d.Exact)).Filter(x.Ne(0))} {
+		_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, rows.CorrelatedScalarRowQuery(rows.SelectCorrelatedScalar(link, aggregate.Value())).Value())))
 		if name == "outer only" {
 			if !errors.Is(err, fault.Invalid) {
 				t.Fatal("implicit aggregate ownership change accepted", err)
@@ -106,13 +108,13 @@ func TestAggregateFilterCorrelationOwnership(t *testing.T) {
 		}
 	}
 	type third struct{}
-	child := As[third](d.Query(), "nested")
-	nested := Correlate(link, child)
-	grandparent := expr.At(OuterScope(nested, OuterScope(link, Scope(a))), orm.NumberExpr(d.Exact))
-	parent := expr.At(OuterScope(nested, InnerScope(link, Scope(b))), orm.NumberExpr(d.Exact))
-	inner := expr.At(InnerScope(nested, Scope(child)), orm.NumberExpr(d.Exact))
+	child := rows.As[third](d.Query(), "nested")
+	nested := rows.Correlate(link, child)
+	grandparent := expr.At(rows.OuterScope(nested, rows.OuterScope(link, rows.Scope(a))), orm.NumberExpr(d.Exact))
+	parent := expr.At(rows.OuterScope(nested, rows.InnerScope(link, rows.Scope(b))), orm.NumberExpr(d.Exact))
+	inner := expr.At(rows.InnerScope(nested, rows.Scope(child)), orm.NumberExpr(d.Exact))
 	for name, p := range map[string]expr.Predicate[scope]{"outer only": nested.Where(expr.Equal(inner, grandparent)).Exists(), "local": nested.Where(expr.Equal(inner, parent)).Exists()} {
-		_, err := CompileRead(ReadScalar(SelectScalar(a, CorrelatedScalarRowQuery(SelectCorrelatedScalar(link, count.Filter(p).Value())).Value())))
+		_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, rows.CorrelatedScalarRowQuery(rows.SelectCorrelatedScalar(link, count.Filter(p).Value())).Value())))
 		if name == "outer only" && !errors.Is(err, fault.Invalid) {
 			t.Fatal("nested outer capture changed ownership", err)
 		}
