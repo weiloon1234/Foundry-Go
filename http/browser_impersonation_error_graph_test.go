@@ -39,7 +39,7 @@ func TestStopImpersonatingContainsBackendErrorMatching(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			login := browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public).WithMiddleware(s.web.Middleware()).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
+			login := foundryhttp.ConfigureEndpoint(browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public), foundryhttp.Use(s.web.Middleware())).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
 				_, err := s.web.Login(ctx, browserProof(t), session.IssueOptions{})
 				return foundryhttp.NoContent{}, err
 			})

@@ -2,6 +2,7 @@ package invalid
 
 import (
 	"context"
+
 	a "foundry.test/goway/models/identity"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
@@ -12,7 +13,7 @@ import (
 
 func invalid(ex database.Executor, transport h.AuthenticatedEndpoint[h.NoPath, h.NoQuery, h.NoBody, a.Member, h.NoContent]) {
 	resolver := modelbinding.ByKey(ex, orm.Keyed(a.Others.Query(), a.Others.Key()), func(h.NoPath) model.ID[a.Other] { return model.ID[a.Other]{} })
-	_ = modelbinding.BindAuthenticated(transport, resolver).Handle(func(context.Context, a.Other, modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Other]) (h.NoContent, error) {
+	_ = modelbinding.BindAuthenticated(h.ForAuthenticatedBinding(transport), resolver).Handle(func(context.Context, a.Other, modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, a.Other]) (h.NoContent, error) {
 		return h.NoContent{}, nil
 	})
 }

@@ -3,6 +3,10 @@ package configuredprofile
 import (
 	"context"
 	"errors"
+	stdhttp "net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/audit"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -10,9 +14,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
-	stdhttp "net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 type auditPayload struct {
@@ -43,7 +44,7 @@ func TestAuditScopeSurvivesConstructorAndKeepsBusinessTransaction(t *testing.T) 
 			return nil, err
 		}
 		route := http.DefineRoute(http.RouteSpec{ID: "profile.audit", Method: http.POST, Access: http.Public}, http.StaticPath("/audit"))
-		return []http.RouteRegistration{route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
+		return []http.RouteRegistration{http.HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
 			err := db.Transaction(r.Context(), func(tx *database.Tx) error {
 				return scope.Within(r.Context(), tx, func(child *database.Tx, recorder *audit.Recorder) error {
 					var err error

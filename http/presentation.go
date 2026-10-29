@@ -50,7 +50,7 @@ func urlPresentation(p contract.Presentation) error {
 
 // urlPresentation checks this declaration as an endpoint's URL query. The same
 // parameters remain valid urlencoded form body fields.
-func (d Query[Q]) urlPresentation() error {
+func queryUrlPresentation[Q any](d Query[Q]) error {
 	for _, parameter := range d.parameters {
 		if err := urlPresentation(parameter.info.Presentation); err != nil {
 			return err
@@ -62,17 +62,11 @@ func (d Query[Q]) urlPresentation() error {
 // outputPresentation rejects a JSON or event-stream payload whose graph reaches
 // a password hint. Password hints are input-only; a response declares an
 // explicit view. Route registration checks it once; link generation does not.
-func (r Response[R]) outputPresentation() error {
-	var describe func() (contract.Schema, error)
-	switch r.kind {
-	case payloadJSON:
-		describe = r.json.Description
-	case payloadEvents:
-		describe = r.events.Description
-	default:
+func responseOutputPresentation[R any](r Response[R]) error {
+	if r.schema == nil {
 		return nil
 	}
-	schema, err := describe()
+	schema, err := r.schema()
 	if err != nil {
 		return err
 	}

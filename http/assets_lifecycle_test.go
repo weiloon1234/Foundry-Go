@@ -28,7 +28,7 @@ func (f *countingAssetFS) Open(name string) (fs.File, error) { f.opens++; return
 
 func TestAssetCloseWaitsForBodyAndCanBeRetried(t *testing.T) {
 	assets := assetsForTest(t, DefaultAssetsConfig(FilesystemAssets(assetFixture())))
-	prepared, err := DownloadResponse("text/css; charset=utf-8").prepare(t.Context(), assets.Download("site.css"), DefaultEndpointLimits())
+	prepared, err := responsePrepare(DownloadResponse("text/css; charset=utf-8"), t.Context(), assets.Download("site.css"), DefaultEndpointLimits())
 	if err != nil {
 		t.Fatal(err)
 	}

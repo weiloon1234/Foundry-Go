@@ -4,11 +4,12 @@ package requestflow
 
 import (
 	"context"
+	"strings"
+
 	"github.com/weiloon1234/Foundry-Go/auth"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
-	"strings"
 )
 
 //foundry:form
@@ -51,9 +52,7 @@ func endpoint(access foundryhttp.Access) foundryhttp.Endpoint[foundryhttp.NoPath
 	// Deliberately tiny unused JSON-body allowance proves form budget independence.
 	limits.Body.Bytes = 1
 	limits.Form = foundryhttp.QueryLimits{Bytes: 512, Pairs: 16, Issues: 4}
-	return foundryhttp.DefineEndpoint(route, search, foundryhttp.FormBody(SubmissionDescriptor()), foundryhttp.JSONResponse(201, ReplyJSON())).WithLimits(limits).WithBodyValidation(
-		validation.Rules(fields.Name, NameRules), validation.Rules(fields.Title, validation.Required(validation.MinLength[string](2))), validation.Rules(fields.Blocked, validation.Absent[string]()),
-	)
+	return foundryhttp.ValidateBody(foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route, search, foundryhttp.FormBody(SubmissionDescriptor()), foundryhttp.JSONResponse(201, ReplyJSON())), foundryhttp.Limits(limits)), validation.Rules(fields.Name, NameRules), validation.Rules(fields.Title, validation.Required(validation.MinLength[string](2))), validation.Rules(fields.Blocked, validation.Absent[string]()))
 }
 
 func Prepare(_ context.Context, input Request) (Search, Submission, error) {
@@ -65,7 +64,7 @@ func Prepare(_ context.Context, input Request) (Search, Submission, error) {
 	return input.Query, body, nil
 }
 
-var Submit = endpoint(foundryhttp.Public).WithPreparation(Prepare).WithAuthorization(func(_ context.Context, input Request) error {
+var Submit = foundryhttp.AuthorizeEndpoint(foundryhttp.PrepareEndpoint(endpoint(foundryhttp.Public), Prepare), func(_ context.Context, input Request) error {
 	if input.Body.Name == "denied" {
 		return foundryhttp.Forbidden
 	}
@@ -86,7 +85,7 @@ type Account struct {
 }
 
 func AccountEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Account]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
-	return foundryhttp.RequireAuthentication(endpoint(foundryhttp.Guarded), transport, guard).WithPreparation(Prepare).WithAuthorization(func(_ context.Context, actor Account, input Request) error {
+	return foundryhttp.AuthorizeActor(foundryhttp.PrepareAuthenticated(foundryhttp.RequireAuthentication(endpoint(foundryhttp.Guarded), transport, guard), Prepare), func(_ context.Context, actor Account, input Request) error {
 		if !actor.Enabled || input.Body.Name == "denied" {
 			return foundryhttp.Forbidden
 		}
@@ -94,7 +93,7 @@ func AccountEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Acc
 	})
 }
 func GuestEndpoint(transport *foundryhttp.Authentication, guard auth.Guard[Account]) foundryhttp.OptionalAuthenticationEndpoint[foundryhttp.NoPath, Search, Submission, Account, Reply] {
-	return foundryhttp.OptionalAuthentication(endpoint(foundryhttp.Public), transport, guard).WithPreparation(Prepare).WithAuthorization(func(_ context.Context, actor value.Optional[Account], input Request) error {
+	return foundryhttp.AuthorizeOptionalActor(foundryhttp.PrepareOptional(foundryhttp.OptionalAuthentication(endpoint(foundryhttp.Public), transport, guard), Prepare), func(_ context.Context, actor value.Optional[Account], input Request) error {
 		if selected, ok := actor.Get(); ok && !selected.Enabled {
 			return foundryhttp.Forbidden
 		}
@@ -106,10 +105,10 @@ func RuleSourceRouter() (*foundryhttp.Router, error) {
 	route := func(id foundryhttp.RouteID, path string, method foundryhttp.Method) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
 	}
-	json := foundryhttp.DefineEndpoint(route("rules.json", "/json", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(JSONSubmissionJSON()), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.Rules(JSONSubmissionValidationFields().Name, NameRules))
-	multi := foundryhttp.DefineEndpoint(route("rules.multipart", "/multipart", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(MultipartSubmissionDescriptor()), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.Rules(MultipartSubmissionValidationFields().Name, NameRules))
-	query := foundryhttp.DefineEndpoint(route("rules.query", "/query", foundryhttp.GET), SubmissionDescriptor(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204)).WithQueryValidation(validation.Rules(SubmissionValidationFields().Name, NameRules))
-	form := foundryhttp.DefineEndpoint(route("rules.form", "/form", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.FormBody(SubmissionDescriptor()), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.Rules(SubmissionValidationFields().Name, NameRules))
+	json := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(route("rules.json", "/json", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(JSONSubmissionJSON()), foundryhttp.EmptyResponse(204)), validation.Rules(JSONSubmissionValidationFields().Name, NameRules))
+	multi := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(route("rules.multipart", "/multipart", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(MultipartSubmissionDescriptor()), foundryhttp.EmptyResponse(204)), validation.Rules(MultipartSubmissionValidationFields().Name, NameRules))
+	query := foundryhttp.ValidateQuery(foundryhttp.DefineEndpoint(route("rules.query", "/query", foundryhttp.GET), SubmissionDescriptor(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204)), validation.Rules(SubmissionValidationFields().Name, NameRules))
+	form := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(route("rules.form", "/form", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.FormBody(SubmissionDescriptor()), foundryhttp.EmptyResponse(204)), validation.Rules(SubmissionValidationFields().Name, NameRules))
 	return foundryhttp.NewRouter(
 		json.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, JSONSubmission]) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil

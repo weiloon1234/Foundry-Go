@@ -14,8 +14,10 @@ import (
 // credentialResponse shares the explicit disclosure boundary for opaque auth
 // results. Only a framework adapter can opt into secure POST/no-store handling.
 func credentialResponse[T, W any](status int, wire contract.JSON[W], validate func() error, prepare func(context.Context, T) (W, error)) Response[T] {
-	return Response[T]{kind: payloadJSON, status: status, credentials: true,
-		json: credentialResponseJSON[T, W]{wire: wire, validate: validate, prepare: prepare}}
+	descriptor := credentialResponseJSON[T, W]{wire: wire, validate: validate, prepare: prepare}
+	return Response[T]{prepare: prepareJSONResponse[T], kind: payloadJSON, status: status, credentials: true, validateJSON: func() error { return validateCredentialResponse(descriptor) }, schema: func() (contract.Schema, error) { return describeCredentialResponse(descriptor) }, describe: schemaPayloadInfo("application/json", func() (contract.Schema, error) { return describeCredentialResponse(descriptor) }), encodeJSON: func(ctx context.Context, result T, limits contract.JSONLimits) ([]byte, error) {
+		return encodeCredentialResponse(descriptor, ctx, result, limits)
+	}}
 }
 
 type credentialResponseJSON[T, W any] struct {
@@ -24,7 +26,7 @@ type credentialResponseJSON[T, W any] struct {
 	prepare  func(context.Context, T) (W, error)
 }
 
-func (d credentialResponseJSON[T, W]) Validate() error {
+func validateCredentialResponse[T, W any](d credentialResponseJSON[T, W]) error {
 	if d.prepare == nil {
 		return safeerror.NewFault(fault.Invalid, "credential response requires a preparation callback")
 	}
@@ -35,14 +37,14 @@ func (d credentialResponseJSON[T, W]) Validate() error {
 	}
 	return d.wire.Validate()
 }
-func (d credentialResponseJSON[T, W]) Description() (contract.Schema, error) {
-	if err := d.Validate(); err != nil {
+func describeCredentialResponse[T, W any](d credentialResponseJSON[T, W]) (contract.Schema, error) {
+	if err := validateCredentialResponse(d); err != nil {
 		return contract.Schema{}, err
 	}
 	return d.wire.Description()
 }
-func (d credentialResponseJSON[T, W]) Encode(ctx context.Context, result T, limits contract.JSONLimits) ([]byte, error) {
-	if err := d.Validate(); err != nil {
+func encodeCredentialResponse[T, W any](d credentialResponseJSON[T, W], ctx context.Context, result T, limits contract.JSONLimits) ([]byte, error) {
+	if err := validateCredentialResponse(d); err != nil {
 		return nil, err
 	}
 	if ctx == nil {

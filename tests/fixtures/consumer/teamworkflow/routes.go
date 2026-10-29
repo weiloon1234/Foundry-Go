@@ -2,6 +2,8 @@ package teamworkflow
 
 import (
 	"context"
+	"strings"
+
 	"foundry.test/consumer/genericdto"
 	"foundry.test/consumer/internal/authfixture"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -12,7 +14,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
-	"strings"
 )
 
 var Rejected = http.DefineError("workflow_rejected", 422, "The submission was rejected.")
@@ -31,25 +32,22 @@ func authorized(actor Actor, resources Resources) error {
 func PatchEndpoint() http.Endpoint[ProjectPath, http.NoQuery, Patch, ActionEnvelope] {
 	route := http.DefineRoute(http.RouteSpec{ID: "workflow.patch", Method: http.PATCH, Access: http.Guarded}, ProjectPathDescriptor())
 	fields := PatchValidationFields()
-	return http.DefineEndpoint(route, http.EmptyQuery(), http.JSONBody(PatchJSON()), http.JSONResponse(200, genericdto.EnvelopeJSON(ActionJSON()))).
-		WithBodyValidation(validation.Rules(fields.Title, validation.Optional(validation.Nullable(validation.MaxLength[string](64)))), validation.Rules(fields.Budget, validation.Optional(validation.Min(int64(0))))).
-		WithPreparation(func(_ context.Context, in http.Input[ProjectPath, http.NoQuery, Patch]) (http.NoQuery, Patch, error) {
-			if title, set := in.Body.Title.Get(); set {
-				if text, present := title.Get(); present {
-					in.Body.Title = value.Set(value.Of(strings.TrimSpace(text)))
-				}
+	return http.PrepareEndpoint(http.ValidateBody(http.DefineEndpoint(route, http.EmptyQuery(), http.JSONBody(PatchJSON()), http.JSONResponse(200, genericdto.EnvelopeJSON(ActionJSON()))),
+		validation.Rules(fields.Title, validation.Optional(validation.Nullable(validation.MaxLength[string](64)))), validation.Rules(fields.Budget, validation.Optional(validation.Min(int64(0))))), func(_ context.Context, in http.Input[ProjectPath, http.NoQuery, Patch]) (http.NoQuery, Patch, error) {
+		if title, set := in.Body.Title.Get(); set {
+			if text, present := title.Get(); present {
+				in.Body.Title = value.Set(value.Of(strings.TrimSpace(text)))
 			}
-			return in.Query, in.Body, nil
-		})
+		}
+		return in.Query, in.Body, nil
+	})
 }
 func SubmitEndpoint() http.Endpoint[SubmissionPath, http.NoQuery, SubmissionInput, ActionEnvelope] {
 	route := http.DefineRoute(http.RouteSpec{ID: "workflow.submit", Method: http.POST, Access: http.Guarded}, SubmissionPathDescriptor())
-	return http.DefineEndpoint(route, http.EmptyQuery(), http.JSONBody(SubmissionInputJSON()), http.JSONResponse(202, genericdto.EnvelopeJSON(ActionJSON()))).
-		WithErrors(Rejected).WithBodyValidation(validation.Rules(SubmissionInputValidationFields().Name, NameRules)).
-		WithPreparation(func(_ context.Context, in http.Input[SubmissionPath, http.NoQuery, SubmissionInput]) (http.NoQuery, SubmissionInput, error) {
-			in.Body.Name = strings.TrimSpace(in.Body.Name)
-			return in.Query, in.Body, nil
-		})
+	return http.PrepareEndpoint(http.ValidateBody(http.ConfigureEndpoint(http.DefineEndpoint(route, http.EmptyQuery(), http.JSONBody(SubmissionInputJSON()), http.JSONResponse(202, genericdto.EnvelopeJSON(ActionJSON()))), http.Errors(Rejected)), validation.Rules(SubmissionInputValidationFields().Name, NameRules)), func(_ context.Context, in http.Input[SubmissionPath, http.NoQuery, SubmissionInput]) (http.NoQuery, SubmissionInput, error) {
+		in.Body.Name = strings.TrimSpace(in.Body.Name)
+		return in.Query, in.Body, nil
+	})
 }
 func (s *Service) Routes() ([]http.RouteRegistration, error) {
 	transport, guard, err := authfixture.Authentication()
@@ -57,26 +55,21 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 		return nil, err
 	}
 	resolver := projectResolver(s.db, func(p ProjectPath) int64 { return p.Team }, func(p ProjectPath) Slug { return p.Project })
-	patch := modelbinding.BindAuthenticated(http.RequireAuthentication(PatchEndpoint(), transport, guard), resolver).
-		WithAuthorization(func(_ context.Context, actor Actor, in PatchRequest) error { return authorized(actor, in.Model) })
+	patch := modelbinding.AuthorizeAuthenticatedResource(modelbinding.BindAuthenticated(http.ForAuthenticatedBinding(http.RequireAuthentication(PatchEndpoint(), transport, guard)), resolver),
+		func(_ context.Context, actor Actor, in PatchRequest) error { return authorized(actor, in.Model) })
 	show := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "workflow.show", Method: http.GET, Access: http.Guarded}, ProjectPathDescriptor()), http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, genericdto.EnvelopeJSON(ProjectViewJSON())))
-	boundShow := modelbinding.BindAuthenticated(http.RequireAuthentication(show, transport, guard), resolver).
-		WithAuthorization(func(_ context.Context, actor Actor, in modelbinding.Input[ProjectPath, http.NoQuery, http.NoBody, Resources]) error {
+	boundShow := modelbinding.AuthorizeAuthenticatedResource(modelbinding.BindAuthenticated(http.ForAuthenticatedBinding(http.RequireAuthentication(show, transport, guard)), resolver),
+		func(_ context.Context, actor Actor, in modelbinding.Input[ProjectPath, http.NoQuery, http.NoBody, Resources]) error {
 			return authorized(actor, in.Model)
 		})
 	submissions := projectResolver(s.db, func(p SubmissionPath) int64 { return p.Team }, func(p SubmissionPath) Slug { return p.Project })
-	required := http.RequireAuthentication(SubmitEndpoint(), transport, guard).WithAuthorization(func(_ context.Context, _ Actor, in http.Input[SubmissionPath, http.NoQuery, SubmissionInput]) error {
+	required := http.AuthorizeActor(http.RequireAuthentication(SubmitEndpoint(), transport, guard), func(_ context.Context, _ Actor, in http.Input[SubmissionPath, http.NoQuery, SubmissionInput]) error {
 		if in.Body.Name == "request-denied" {
 			return http.Forbidden
 		}
 		return nil
 	})
-	submit := modelbinding.IdempotentAuthenticated(
-		modelbinding.BindAuthenticated(required, submissions).
-			WithAuthorization(func(_ context.Context, actor Actor, in SubmissionRequest) error { return authorized(actor, in.Model) }),
-		s.store,
-		idempotency.Definition{ID: "workflow.submit", Version: 1},
-	)
+	submit := modelbinding.AuthorizeAuthenticatedIdempotentResource(modelbinding.BindAuthenticatedIdempotent(http.IdempotentAuthenticated(required, s.store, idempotency.Definition{ID: "workflow.submit", Version: 1}), submissions), func(_ context.Context, actor Actor, in SubmissionRequest) error { return authorized(actor, in.Model) })
 	catalogue := pagination.DefineNumbered(http.DefineRoute(http.RouteSpec{ID: "workflow.catalogue", Method: http.GET, Access: http.Public}, http.StaticPath("/catalogue")), CatalogueFiltersDescriptor(), CatalogueItemJSON(), pagination.DefaultConfig())
 	routes := []http.RouteRegistration{
 		patch.Handle(s.Patch), submit.Handle(submissionScope, s.Submit),

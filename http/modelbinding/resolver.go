@@ -34,7 +34,7 @@ func Define[P, M any](lookup func(context.Context, P) (value.Optional[M], error)
 // callback receives the decoded path and returns the error to report, such as a
 // declared application error; returning nil still reports NotFound. It runs in
 // an owned callback and is never invoked for lookup failures.
-func (r Resolver[P, M]) WithMissing(missing func(context.Context, P) error) Resolver[P, M] {
+func WithMissing[P, M any](r Resolver[P, M], missing func(context.Context, P) error) Resolver[P, M] {
 	if missing == nil {
 		r.err = safeerror.NewFault(fault.Invalid, "model binding missing handler is nil")
 		return r
@@ -43,11 +43,11 @@ func (r Resolver[P, M]) WithMissing(missing func(context.Context, P) error) Reso
 	return r
 }
 
-// Validate checks the declaration without resolving a model or opening a
+// ValidateResolver checks the declaration without resolving a model or opening a
 // transaction. Custom declaration callbacks remain owned until they return.
 // Endpoints validate once at registration; nested resolvers validate each
 // ancestor once through their composed check.
-func (r Resolver[P, M]) Validate() error {
+func ValidateResolver[P, M any](r Resolver[P, M]) error {
 	if r.err != nil {
 		return r.err
 	}
@@ -65,22 +65,22 @@ func (r Resolver[P, M]) Validate() error {
 // lookup publishes no partial model. Panic and Goexit remain internal failures;
 // cancellation never abandons a running callback. Resolving a route model does
 // not authorize access or lock the row.
-func (r Resolver[P, M]) Resolve(ctx context.Context, path P) (M, error) {
+func Resolve[P, M any](r Resolver[P, M], ctx context.Context, path P) (M, error) {
 	if ctx == nil {
 		return *new(M), safeerror.NewFault(fault.Invalid, "model binding requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return *new(M), err
 	}
-	if err := r.Validate(); err != nil {
+	if err := ValidateResolver(r); err != nil {
 		return *new(M), err
 	}
-	return r.resolve(ctx, path)
+	return resolverResolve(r, ctx, path)
 }
 
 // resolve performs the lookup of an already validated declaration. Registered
 // endpoints and nested parents use it so request paths never revalidate.
-func (r Resolver[P, M]) resolve(ctx context.Context, path P) (M, error) {
+func resolverResolve[P, M any](r Resolver[P, M], ctx context.Context, path P) (M, error) {
 	if err := ctx.Err(); err != nil {
 		return *new(M), err
 	}
@@ -101,12 +101,12 @@ func (r Resolver[P, M]) resolve(ctx context.Context, path P) (M, error) {
 	}
 	model, present := result.Get()
 	if !present {
-		return *new(M), r.absent(ctx, path)
+		return *new(M), resolverAbsent(r, ctx, path)
 	}
 	return model, nil
 }
 
-func (r Resolver[P, M]) absent(ctx context.Context, path P) error {
+func resolverAbsent[P, M any](r Resolver[P, M], ctx context.Context, path P) error {
 	if r.missing == nil {
 		return foundryhttp.NotFound.WithCause(nil)
 	}

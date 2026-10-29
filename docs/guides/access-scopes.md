@@ -67,17 +67,17 @@ operations intended to enforce token capabilities.
 ## Require scopes at the HTTP boundary
 
 ```go
-endpoint := http.RequireAuthentication(declaration, transport, api).WithScopes(required)
+endpoint := http.RequireAuthentication(declaration, transport, api, http.Scopes(required))
 ```
 
 The scope check runs before request decoding and supplies the same concrete model
-to the ordinary authenticated handler. `WithScopes` takes a nonempty immutable
+to the ordinary authenticated handler. `Scopes` takes a nonempty immutable
 set and may be attached once; a repeated attachment returns a validation error
 rather than replacing an earlier requirement. The endpoint's inspection metadata
 includes `Authentication.RequiredScopes`; returned metadata is a detached copy.
 This metadata is also available for later client-contract generation.
 
-Optional anonymous endpoints do not expose `WithScopes`. Session routes normally
+Optional anonymous endpoints do not accept `Scopes`. Session routes normally
 use their model policies: an unscoped session proof cannot satisfy this token
 requirement. Likewise, session issuance rejects a scoped proof so it cannot discard
 credential restrictions while converting the proof to an unscoped browser session.

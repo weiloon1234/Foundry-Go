@@ -46,7 +46,7 @@ func TestEndpointResponseHeadersFromResult(t *testing.T) {
 		}, 500},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			endpoint := patchEndpoint().WithHeaders(func(_ context.Context, reply EndpointReply) ([]ResponseHeader, error) { return tc.headers(reply) })
+			endpoint := EndpointHeaders(patchEndpoint(), func(_ context.Context, reply EndpointReply) ([]ResponseHeader, error) { return tc.headers(reply) })
 			router, err := NewRouter(endpoint.Handle(func(_ context.Context, in endpointRequest) (EndpointReply, error) {
 				return EndpointReply{ID: in.Path.User.String(), Name: in.Body.Name}, nil
 			}))
@@ -80,15 +80,15 @@ func TestEndpointResponseHeadersFromResult(t *testing.T) {
 
 func TestEndpointResponseHeadersValidation(t *testing.T) {
 	t.Parallel()
-	if err := patchEndpoint().WithHeaders(nil).Validate(); !errors.Is(err, fault.Invalid) {
+	if err := ValidateEndpoint(EndpointHeaders(patchEndpoint(), nil)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil header callback accepted", err)
 	}
 	download := DefineEndpoint(DefineRoute(RouteSpec{ID: "report", Method: GET, Access: Public}, StaticPath("/report")), EmptyQuery(), EmptyBody(), DownloadResponse("text/plain"))
-	if err := download.WithHeaders(func(context.Context, Download) ([]ResponseHeader, error) { return nil, nil }).Validate(); !errors.Is(err, fault.Invalid) {
+	if err := ValidateEndpoint(EndpointHeaders(download, func(context.Context, Download) ([]ResponseHeader, error) { return nil, nil })); !errors.Is(err, fault.Invalid) {
 		t.Fatal("file response headers accepted", err)
 	}
-	endpoint := patchEndpoint().WithHeaders(func(context.Context, EndpointReply) ([]ResponseHeader, error) { return nil, nil })
-	if err := Idempotent(endpoint, nil, idempotency.Definition{}).Validate(); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "IdempotentEndpoint.WithHeaders") {
+	endpoint := EndpointHeaders(patchEndpoint(), func(context.Context, EndpointReply) ([]ResponseHeader, error) { return nil, nil })
+	if err := ValidateIdempotent(Idempotent(endpoint, nil, idempotency.Definition{})); !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "IdempotentHeaders") {
 		t.Fatal("idempotent endpoint accepted non-replayable headers", err)
 	}
 	if _, err := EndpointLocation(t.Context(), patchEndpoint(), userPath{}, endpointParameters{}); err == nil {

@@ -36,14 +36,14 @@ func Route[M any](runtime *Runtime, route foundryhttp.AuthenticatedRoute[foundry
 	if endpoint == Profile && !runtime.profiling {
 		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "diagnostics profiling is not enabled"))
 	}
-	description, err := route.Description()
+	description, err := foundryhttp.InspectAuthenticatedRoute(route)
 	if err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if description.Method != foundryhttp.GET {
 		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "diagnostics requires a GET route"))
 	}
-	return route.HandleRaw(func(writer stdhttp.ResponseWriter, request *stdhttp.Request, _ M, _ foundryhttp.NoPath) {
+	return foundryhttp.HandleAuthenticatedRaw(route, func(writer stdhttp.ResponseWriter, request *stdhttp.Request, _ M, _ foundryhttp.NoPath) {
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("X-Content-Type-Options", "nosniff")
 		select {

@@ -25,7 +25,7 @@ func TestEndpointValidationKeepsSourcesAndStopsInvalidHandlers(t *testing.T) {
 	t.Parallel()
 	term := validation.DefineField("q", func(query endpointParameters) value.Optional[string] { return query.Term })
 	base := patchEndpoint()
-	endpoint := base.WithQueryValidation(validation.Rules(term, validation.Optional(validation.MinLength[string](2)))).WithBodyValidation(endpointNameRules())
+	endpoint := ValidateBody(ValidateQuery(base, validation.Rules(term, validation.Optional(validation.MinLength[string](2)))), endpointNameRules())
 	var called atomic.Int32
 	router, err := NewRouter(endpoint.Handle(func(_ context.Context, input endpointRequest) (EndpointReply, error) {
 		called.Add(1)
@@ -49,7 +49,7 @@ func TestEndpointValidationKeepsSourcesAndStopsInvalidHandlers(t *testing.T) {
 	if response.Code != 201 || called.Load() != 1 {
 		t.Fatal("valid request did not reach handler")
 	}
-	before, err := base.Description()
+	before, err := InspectEndpoint(base)
 	if err != nil || before.Validation != nil {
 		t.Fatal("adding validation changed base endpoint")
 	}
@@ -66,12 +66,12 @@ func TestEndpointValidationKeepsSourcesAndStopsInvalidHandlers(t *testing.T) {
 func TestEndpointValidationDeclarationAndResourceFailures(t *testing.T) {
 	t.Parallel()
 	var zero validation.Rule[EndpointPatch]
-	if patchEndpoint().WithBodyValidation(zero).Validate() == nil || patchEndpoint().WithBodyValidation().Validate() == nil {
+	if ValidateEndpoint(ValidateBody(patchEndpoint(), zero)) == nil || ValidateEndpoint(ValidateBody(patchEndpoint())) == nil {
 		t.Fatal("undefined validation accepted")
 	}
 	limits := DefaultEndpointLimits()
 	limits.Validation.Checks = 1
-	endpoint := patchEndpoint().WithBodyValidation(endpointNameRules()).WithLimits(limits)
+	endpoint := ConfigureEndpoint(ValidateBody(patchEndpoint(), endpointNameRules()), Limits(limits))
 	router, err := NewRouter(endpoint.Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
 		t.Error("incomplete validation reached handler")
 		return EndpointReply{}, nil
@@ -88,7 +88,7 @@ func TestEndpointValidationDeclarationAndResourceFailures(t *testing.T) {
 	}
 	limits = DefaultEndpointLimits()
 	limits.Validation.Issues = 1
-	endpoint = patchEndpoint().WithBodyValidation(endpointNameRules(), endpointNameRules()).WithLimits(limits)
+	endpoint = ConfigureEndpoint(ValidateBody(patchEndpoint(), endpointNameRules(), endpointNameRules()), Limits(limits))
 	router, err = NewRouter(endpoint.Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
 		t.Error("invalid input reached handler")
 		return EndpointReply{}, nil
@@ -123,7 +123,7 @@ func TestEndpointValidationFailureOwnership(t *testing.T) {
 				}
 				panic("private panic text")
 			})
-			router, err := NewRouter(patchEndpoint().WithBodyValidation(rule).Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
+			router, err := NewRouter(ValidateBody(patchEndpoint(), rule).Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
 				t.Error("failed rule reached handler")
 				return EndpointReply{}, nil
 			}))
@@ -147,7 +147,7 @@ func TestEndpointValidationCancellationWaitsForRule(t *testing.T) {
 	defer cancel()
 	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	rule := validation.Custom(validation.Spec{ID: "app.waiting", Message: "Wait."}, func(context.Context, EndpointPatch) (bool, error) { close(entered); <-release; return true, nil })
-	router, err := NewRouter(patchEndpoint().WithBodyValidation(rule).Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
+	router, err := NewRouter(ValidateBody(patchEndpoint(), rule).Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
 		t.Error("canceled rule reached handler")
 		return EndpointReply{}, nil
 	}))

@@ -61,8 +61,8 @@ import (
  foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 func TestComponentScaffolds(t *testing.T){
- if err:=CreateNoteEndpoint().Validate();err!=nil{t.Fatal(err)}
- if err:=ListNotesEndpoint().Validate();err!=nil{t.Fatal(err)}
+ if err:=foundryhttp.ValidateEndpoint(CreateNoteEndpoint());err!=nil{t.Fatal(err)}
+ if err:=foundryhttp.ValidateEndpoint(ListNotesEndpoint());err!=nil{t.Fatal(err)}
  if _,err:=HandleCreateNote(context.Background(),foundryhttp.Input[foundryhttp.NoPath,foundryhttp.NoQuery,CreateNoteRequest]{});!errors.Is(err,fault.Invalid){t.Fatal("unfinished endpoint succeeded",err)}
  if NoteStateDraft!="draft"||NoteStatePublished!="published"{t.Fatal("enum cases")}
  if err:=AuditMiddleware().Validate();err!=nil{t.Fatal(err)}

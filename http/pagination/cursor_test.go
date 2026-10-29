@@ -43,7 +43,7 @@ func TestCursorEndpointOwnsDefaultsDirectionsAndFilterLinks(t *testing.T) {
 	config.AfterParam = "next"
 	config.BeforeParam = "previous"
 	config.SizeParam = "limit"
-	endpoint := cursorEndpoint(config).Within(foundryhttp.DefineScope("/api", "api"))
+	endpoint := pagination.Configure(cursorEndpoint(config), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 	for _, direction := range []string{"", "next", "previous"} {
 		target := "/api/items?q=a%2Bb+%2F"
 		if direction != "" {
@@ -87,7 +87,7 @@ func TestCursorEndpointOwnsDefaultsDirectionsAndFilterLinks(t *testing.T) {
 			t.Fatal("cursor invented offset metadata")
 		}
 	}
-	info, err := endpoint.Description()
+	info, err := pagination.Inspect(endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,14 +202,14 @@ func TestCursorLinksRequireApprovedPublicOrigins(t *testing.T) {
 		t.Fatal("unapproved origin trusted")
 	}
 	middleware := foundryhttp.PublicURLs(foundryhttp.PublicURLConfig{AllowedOrigins: []foundryhttp.Origin{"https://app.example"}})
-	response = serve(t, endpoint.WithMiddleware(middleware).Handle(handler), "https://app.example/items")
+	response = serve(t, pagination.Configure(endpoint, foundryhttp.Use(middleware)).Handle(handler), "https://app.example/items")
 	if response.Code != 200 || !strings.Contains(response.Body.String(), "https://app.example/items?") {
 		t.Fatalf("approved link: %d %s", response.Code, response.Body)
 	}
 }
 
 func TestCursorQueryCodecPreservesTypedPosition(t *testing.T) {
-	info, err := cursorEndpoint(pagination.DefaultCursorConfig()).Description()
+	info, err := pagination.Inspect(cursorEndpoint(pagination.DefaultCursorConfig()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestCursorSizeChangesAndInvalidDeclarations(t *testing.T) {
 	configs[2].MaximumSize = orm.MaxPageSize + 1
 	configs[3].BeforeParam = ""
 	for _, config := range configs {
-		if cursorEndpoint(config).Validate() == nil {
+		if pagination.Validate(cursorEndpoint(config)) == nil {
 			t.Fatal("invalid cursor configuration accepted")
 		}
 	}

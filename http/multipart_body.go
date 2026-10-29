@@ -43,7 +43,7 @@ func (r *multipartSource) failure(err error) error {
 	return BadRequest.WithCause(err)
 }
 
-func (d Multipart[B]) read(w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
+func multipartRead[B any](d Multipart[B], w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
 	ctx := r.Context()
 	if err := ctx.Err(); err != nil {
 		return *new(B), nil, RequestTimeout.WithCause(err)
@@ -70,7 +70,7 @@ func (d Multipart[B]) read(w stdhttp.ResponseWriter, r *stdhttp.Request, limits 
 	input := multipartInput{text: make(url.Values), values: make(map[string][]multipartValue), counts: make([]int, len(d.parts))}
 	var returned error
 	owned := callback.Isolated("read multipart form", func() error {
-		returned = d.readParts(r, multipart.NewReader(source, boundary), source, batch, limits, &input)
+		returned = multipartReadParts(d, r, multipart.NewReader(source, boundary), source, batch, limits, &input)
 		return nil
 	})
 	if owned != nil {
@@ -85,14 +85,14 @@ func (d Multipart[B]) read(w stdhttp.ResponseWriter, r *stdhttp.Request, limits 
 		rejectUnreadBody(w, r)
 		return *new(B), close, returned
 	}
-	result, err := d.bind(ctx, input, limits)
+	result, err := multipartBind(d, ctx, input, limits)
 	if err != nil {
 		return *new(B), close, endpointInputError(ctx, "body", err)
 	}
 	return result, close, nil
 }
 
-func (d Multipart[B]) readParts(r *stdhttp.Request, reader *multipart.Reader, source *multipartSource, batch *upload.Batch, limits EndpointLimits, input *multipartInput) error {
+func multipartReadParts[B any](d Multipart[B], r *stdhttp.Request, reader *multipart.Reader, source *multipartSource, batch *upload.Batch, limits EndpointLimits, input *multipartInput) error {
 	remainingFields := limits.Multipart.FieldsBytes
 	count := 0
 	for {
@@ -233,29 +233,8 @@ func multipartTextMedia(header stdhttp.Header) bool {
 	return !ok || strings.EqualFold(charset, "utf-8")
 }
 
-func (b Body[B]) readOwned(w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
-	if b.kind == payloadForm {
-		result, err := b.readForm(w, r, limits.Form)
-		return result, nil, err
-	}
-
-	if b.kind == payloadMultipart {
-		return b.multipart.read(w, r, limits)
-	}
-	if b.kind == payloadRaw {
-		// The handler streams a raw body; only its framing is checked here.
-		return b.raw.open(w, r, limits.Raw)
-	}
-	if b.kind == payloadRefreshCookie {
-		// The credential comes only from the cookie; any body is rejected.
-		if _, err := readEndpointBody(w, r, int64(limits.Body.Bytes), true, jsonRequestMedia); err != nil {
-			return *new(B), nil, err
-		}
-		result, err := b.fromCookie(r)
-		return result, nil, err
-	}
-	body, err := b.read(w, r, limits.Body)
-	return body, nil, err
+func bodyReadOwned[B any](body Body[B], w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
+	return body.read(w, r, limits)
 }
 
 // Count canonical header lines including colon/space and CRLF. Native multipart

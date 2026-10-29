@@ -34,16 +34,14 @@ func TestBrowserSessionsFollowRouteBudgetThroughGlobalWrappers(t *testing.T) {
 	}
 	proof := browserProof(t)
 	pause := func() { time.Sleep(150 * time.Millisecond) } // Past the 50ms kernel deadline.
-	router, err := foundryhttp.NewRouter(
-		browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public).WithTimeout(5*time.Second).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
-			pause()
-			_, err := web.Login(ctx, proof, session.IssueOptions{})
-			return foundryhttp.NoContent{}, err
-		}),
-		browserEndpoint("/late", foundryhttp.POST, foundryhttp.Public).Handle(func(context.Context, authInput) (foundryhttp.NoContent, error) {
-			pause()
-			return foundryhttp.NoContent{}, nil
-		}),
+	router, err := foundryhttp.NewRouter(foundryhttp.ConfigureEndpoint(browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public), foundryhttp.Timeout(5*time.Second)).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
+		pause()
+		_, err := web.Login(ctx, proof, session.IssueOptions{})
+		return foundryhttp.NoContent{}, err
+	}), browserEndpoint("/late", foundryhttp.POST, foundryhttp.Public).Handle(func(context.Context, authInput) (foundryhttp.NoContent, error) {
+		pause()
+		return foundryhttp.NoContent{}, nil
+	}),
 		browserEndpoint("/withheld", foundryhttp.POST, foundryhttp.Public).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
 			_, err := web.Login(ctx, proof, session.IssueOptions{})
 			pause()

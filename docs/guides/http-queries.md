@@ -23,7 +23,7 @@ type SearchInput struct {
 parameters := SearchInputDescriptor()
 limits := foundryhttp.QueryLimits{Bytes: 4096, Pairs: 64, Issues: 8}
 
-input, err := parameters.Decode(ctx, request.URL.RawQuery, limits)
+input, err := foundryhttp.DecodeQuery(parameters, ctx, request.URL.RawQuery, limits)
 if err != nil {
     return err
 }
@@ -31,7 +31,7 @@ if err != nil {
 // input.User retains model.ID[models.User].
 // input.Search distinguishes omission from an explicitly empty string.
 // input.Statuses is an ordinary []models.Status.
-encoded, err := parameters.Encode(ctx, input, limits)
+encoded, err := foundryhttp.EncodeQuery(parameters, ctx, input, limits)
 ```
 
 Here `model`, `value` and `foundryhttp` are framework imports; `models` is the
@@ -90,7 +90,7 @@ fail before publication. No handwritten registration table duplicates the tags.
 
 For explicit runtime construction, `DefineQuery`, `QueryParam`,
 `OptionalQueryParam` and `RepeatedQueryParam` bind concrete field selectors to
-typed codecs. Generated descriptors use those same constructors. `Parameters()`
+typed codecs. Generated descriptors use those same constructors. `QueryParameters(query)`
 returns an owned, sorted snapshot of names, cardinality and codec-owned scalar
 metadata; see [parameter contracts](http-parameter-contracts.md). Undescribed
 custom codecs remain explicit rather than acquiring an invented schema.
@@ -124,4 +124,4 @@ until encoding returns.
 
 [Typed endpoints](http-endpoints.md), [validation](validation.md),
 [HTTP pagination](http-pagination.md) and endpoint metadata build on this boundary.
-Calling `Decode` alone does not perform model lookup or authorization. [Client exporters](client-contracts.md) consume the registered transport declarations.
+Calling `DecodeQuery` alone does not perform model lookup or authorization. [Client exporters](client-contracts.md) consume the registered transport declarations.

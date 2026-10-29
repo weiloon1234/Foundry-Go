@@ -34,7 +34,7 @@ policy owns expiry. Browser configuration cannot override MaxAge or Expires.
 ## Typed handlers
 
 Public login/logout endpoints add `web.Middleware()` using ordinary
-`Endpoint.WithMiddleware`. Guarded endpoints use
+`http.ConfigureEndpoint(endpoint, http.Use(web.Middleware()))`. Guarded endpoints use
 `http.RequireAuthentication(endpoint, web.Authentication(), web.Guard())`; that
 transport automatically establishes browser-session policy before authentication.
 A scope-level browser middleware and its matching authenticated routes safely reuse

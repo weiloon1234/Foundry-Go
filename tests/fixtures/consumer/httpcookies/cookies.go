@@ -4,14 +4,15 @@ package httpcookies
 
 import (
 	"encoding/json"
+	stdhttp "net/http"
+	"time"
+
 	"foundry.test/consumer/httpkernel"
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
-	stdhttp "net/http"
-	"time"
 )
 
 type Locale string
@@ -44,49 +45,46 @@ func Handler(keys foundryhttp.SigningKeys, applicationClock clock.Clock) (stdhtt
 	if err := selected.Validate(); err != nil {
 		return nil, err
 	}
-	return foundryhttp.NewRouter(
-		Select.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, path httpkernel.UserPath) {
-			if err := selected.Set(r.Context(), w, path.User); err != nil {
-				_ = foundryhttp.WriteError(w, r, err)
-				return
-			}
-			if err := Language.Set(r.Context(), w, Locale("en-MY")); err != nil {
-				_ = foundryhttp.WriteError(w, r, err)
-				return
-			}
-			if err := State.Set(r.Context(), w, models.StatusActive); err != nil {
-				_ = foundryhttp.WriteError(w, r, err)
-				return
-			}
-			w.WriteHeader(stdhttp.StatusNoContent)
-		}),
-		Read.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
-			user, err := selected.Read(r)
+	return foundryhttp.NewRouter(foundryhttp.HandleRaw(Select, func(w stdhttp.ResponseWriter, r *stdhttp.Request, path httpkernel.UserPath) {
+		if err := selected.Set(r.Context(), w, path.User); err != nil {
+			_ = foundryhttp.WriteError(w, r, err)
+			return
+		}
+		if err := Language.Set(r.Context(), w, Locale("en-MY")); err != nil {
+			_ = foundryhttp.WriteError(w, r, err)
+			return
+		}
+		if err := State.Set(r.Context(), w, models.StatusActive); err != nil {
+			_ = foundryhttp.WriteError(w, r, err)
+			return
+		}
+		w.WriteHeader(stdhttp.StatusNoContent)
+	}), foundryhttp.HandleRaw(Read, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
+		user, err := selected.Read(r)
+		if err != nil {
+			_ = foundryhttp.WriteError(w, r, err)
+			return
+		}
+		locale, err := Language.Read(r)
+		if err != nil {
+			_ = foundryhttp.WriteError(w, r, err)
+			return
+		}
+		state, err := State.Read(r)
+		if err != nil {
+			_ = foundryhttp.WriteError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(Preferences{User: user, Locale: locale, State: state})
+	}), foundryhttp.HandleRaw(Clear, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
+		for _, err := range []error{selected.Clear(w), Language.Clear(w), State.Clear(w)} {
 			if err != nil {
 				_ = foundryhttp.WriteError(w, r, err)
 				return
 			}
-			locale, err := Language.Read(r)
-			if err != nil {
-				_ = foundryhttp.WriteError(w, r, err)
-				return
-			}
-			state, err := State.Read(r)
-			if err != nil {
-				_ = foundryhttp.WriteError(w, r, err)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(Preferences{User: user, Locale: locale, State: state})
-		}),
-		Clear.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
-			for _, err := range []error{selected.Clear(w), Language.Clear(w), State.Clear(w)} {
-				if err != nil {
-					_ = foundryhttp.WriteError(w, r, err)
-					return
-				}
-			}
-			w.WriteHeader(stdhttp.StatusNoContent)
-		}),
+		}
+		w.WriteHeader(stdhttp.StatusNoContent)
+	}),
 	)
 }

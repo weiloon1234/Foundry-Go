@@ -63,7 +63,7 @@ func TestTypedEndpointRespectsOuterBodyCeiling(t *testing.T) {
 func TestTypedEndpointRegistryKeepsMetadataAligned(t *testing.T) {
 	t.Parallel()
 	typed := patchEndpoint().Handle(func(context.Context, endpointRequest) (EndpointReply, error) { return EndpointReply{}, nil })
-	raw := DefineRoute(RouteSpec{ID: "a.raw", Method: GET, Access: Public}, StaticPath("/raw")).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) })
+	raw := HandleRaw(DefineRoute(RouteSpec{ID: "a.raw", Method: GET, Access: Public}, StaticPath("/raw")), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) })
 	router, err := NewRouter(typed, raw)
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestTypedEndpointRegistryKeepsMetadataAligned(t *testing.T) {
 	if len(router.Endpoints()) != 1 {
 		t.Fatal("failed registry changed a previous router")
 	}
-	description, err := patchEndpoint().Description()
+	description, err := InspectEndpoint(patchEndpoint())
 	if err != nil {
 		t.Fatal(err)
 	}

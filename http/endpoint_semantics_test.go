@@ -64,7 +64,7 @@ func TestRequestDeadlineClassificationFollowsLifecyclePhase(t *testing.T) {
 		{"declared-error-wins", func(context.Context) error { return locked }, 409},
 		{"unclassified-deadline", func(ctx context.Context) error { return ctx.Err() }, 503},
 	} {
-		router, err := NewRouter(patchEndpoint().WithErrors(locked).Handle(func(ctx context.Context, _ endpointRequest) (EndpointReply, error) {
+		router, err := NewRouter(ConfigureEndpoint(patchEndpoint(), Errors(locked)).Handle(func(ctx context.Context, _ endpointRequest) (EndpointReply, error) {
 			<-ctx.Done()
 			return EndpointReply{}, test.result(ctx)
 		}))
@@ -97,7 +97,7 @@ func TestRequestAuthorizationRunsBeforeValidationRules(t *testing.T) {
 	for _, allow := range []bool{false, true} {
 		lookup := &countingLookup{}
 		var authorized atomic.Int32
-		endpoint := patchEndpoint().WithBodyValidation(validation.Rules(name, validation.Unique[string](lookup))).WithAuthorization(func(context.Context, endpointRequest) error {
+		endpoint := AuthorizeEndpoint(ValidateBody(patchEndpoint(), validation.Rules(name, validation.Unique[string](lookup))), func(context.Context, endpointRequest) error {
 			authorized.Add(1)
 			if !allow {
 				return Forbidden
@@ -126,9 +126,9 @@ func TestRequestAuthorizationRunsBeforeValidationRules(t *testing.T) {
 func timeoutRoute(id RouteID, timeout time.Duration, handler func(stdhttp.ResponseWriter, *stdhttp.Request)) RouteRegistration {
 	route := DefineRoute(RouteSpec{ID: id, Method: GET, Access: Public}, StaticPath("/"+string(id)))
 	if timeout > 0 {
-		route = route.WithTimeout(timeout)
+		route = ConfigureRoute(route, Timeout(timeout))
 	}
-	return route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) { handler(w, r) })
+	return HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) { handler(w, r) })
 }
 
 // A route's declared timeout replaces the kernel RequestTimeout after routing,
@@ -189,7 +189,7 @@ func TestRouteTimeoutReplacesKernelRequestTimeout(t *testing.T) {
 		t.Fatal("standalone route timeout", standalone.Code)
 	}
 	for _, invalid := range []time.Duration{0, -time.Second, MaxRouteTimeout + 1} {
-		if DefineRoute(RouteSpec{ID: "bad", Method: GET, Access: Public}, StaticPath("/bad")).WithTimeout(invalid).Validate() == nil {
+		if ValidateRoute(ConfigureRoute(DefineRoute(RouteSpec{ID: "bad", Method: GET, Access: Public}, StaticPath("/bad")), Timeout(invalid))) == nil {
 			t.Fatal("invalid route timeout accepted", invalid)
 		}
 	}
@@ -214,8 +214,8 @@ func TestRouteBodyLimitReplacesKernelDefault(t *testing.T) {
 		w.Header().Set("X-Read", strconv.Itoa(len(data)))
 		w.WriteHeader(204)
 	}
-	upload := DefineRoute(RouteSpec{ID: "upload", Method: POST, Access: Public}, StaticPath("/upload")).WithBodyLimit(64).HandleRaw(read)
-	ordinary := DefineRoute(RouteSpec{ID: "ordinary", Method: POST, Access: Public}, StaticPath("/ordinary")).HandleRaw(read)
+	upload := HandleRaw(ConfigureRoute(DefineRoute(RouteSpec{ID: "upload", Method: POST, Access: Public}, StaticPath("/upload")), BodyLimit(64)), read)
+	ordinary := HandleRaw(DefineRoute(RouteSpec{ID: "ordinary", Method: POST, Access: Public}, StaticPath("/ordinary")), read)
 	router, err := NewRouter(upload, ordinary)
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +252,7 @@ func TestRouteBodyLimitReplacesKernelDefault(t *testing.T) {
 	if response.Code != 413 {
 		t.Fatal("route ceiling was not enforced", response.Code)
 	}
-	if DefineRoute(RouteSpec{ID: "bad", Method: POST, Access: Public}, StaticPath("/bad")).WithBodyLimit(0).Validate() == nil {
+	if ValidateRoute(ConfigureRoute(DefineRoute(RouteSpec{ID: "bad", Method: POST, Access: Public}, StaticPath("/bad")), BodyLimit(0))) == nil {
 		t.Fatal("invalid route body limit accepted")
 	}
 }
@@ -271,8 +271,8 @@ func TestTypedEndpointServerFailuresAreReported(t *testing.T) {
 		endpoint Endpoint[userPath, endpointParameters, EndpointPatch, EndpointReply]
 		note     string
 	}{
-		{"response-limit", patchEndpoint().WithLimits(limits), "node bound"},
-		{"validation-infrastructure", patchEndpoint().WithBodyValidation(failing), "HTTP request failed"},
+		{"response-limit", ConfigureEndpoint(patchEndpoint(), Limits(limits)), "node bound"},
+		{"validation-infrastructure", ValidateBody(patchEndpoint(), failing), "HTTP request failed"},
 	} {
 		var output bytes.Buffer
 		router, err := NewRouter(test.endpoint.Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
@@ -325,15 +325,15 @@ func TestDefaultResponseLimitsServeLargeLists(t *testing.T) {
 func TestScopeRootRouteHasNoForcedTrailingSlash(t *testing.T) {
 	t.Parallel()
 	scope := DefineScope("/api", "api")
-	root := DefineRoute(RouteSpec{ID: "index", Method: GET, Access: Public}, StaticPath("")).Within(scope)
-	slash := DefineRoute(RouteSpec{ID: "slash", Method: GET, Access: Public}, StaticPath("/")).Within(scope)
-	if root.Pattern() != "/api" || slash.Pattern() != "/api/" || root.ID() != "api.index" {
-		t.Fatal("scope root patterns", root.Pattern(), slash.Pattern(), root.ID())
+	root := ConfigureRoute(DefineRoute(RouteSpec{ID: "index", Method: GET, Access: Public}, StaticPath("")), Within(scope))
+	slash := ConfigureRoute(DefineRoute(RouteSpec{ID: "slash", Method: GET, Access: Public}, StaticPath("/")), Within(scope))
+	if RoutePattern(root) != "/api" || RoutePattern(slash) != "/api/" || RouteIDOf(root) != "api.index" {
+		t.Fatal("scope root patterns", RoutePattern(root), RoutePattern(slash), RouteIDOf(root))
 	}
-	if location, err := root.URL(NoPath{}); err != nil || location != "/api" {
+	if location, err := RouteURL(root, NoPath{}); err != nil || location != "/api" {
 		t.Fatal("scope root URL", location, err)
 	}
-	router, err := NewRouter(root.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }))
+	router, err := NewRouter(HandleRaw(root, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,10 +344,10 @@ func TestScopeRootRouteHasNoForcedTrailingSlash(t *testing.T) {
 			t.Fatal(path, response.Code)
 		}
 	}
-	if DefineRoute(RouteSpec{ID: "empty", Method: GET, Access: Public}, StaticPath("")).Validate() == nil {
+	if ValidateRoute(DefineRoute(RouteSpec{ID: "empty", Method: GET, Access: Public}, StaticPath(""))) == nil {
 		t.Fatal("unscoped empty pattern accepted")
 	}
-	if DefineRoute(RouteSpec{ID: "empty", Method: GET, Access: Public}, StaticPath("")).Within(DefineScope("", "api")).Validate() == nil {
+	if ValidateRoute(ConfigureRoute(DefineRoute(RouteSpec{ID: "empty", Method: GET, Access: Public}, StaticPath("")), Within(DefineScope("", "api")))) == nil {
 		t.Fatal("empty pattern accepted within an empty path scope")
 	}
 }
@@ -357,7 +357,7 @@ func TestScopeRootRouteHasNoForcedTrailingSlash(t *testing.T) {
 func TestRouterMatchesOnceAndKeepsNativeRedirects(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
-	router, err := NewRouter(DefineRoute(RouteSpec{ID: "nested", Method: GET, Access: Public}, StaticPath("/a/b")).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {
+	router, err := NewRouter(HandleRaw(DefineRoute(RouteSpec{ID: "nested", Method: GET, Access: Public}, StaticPath("/a/b")), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {
 		calls.Add(1)
 		w.WriteHeader(204)
 	}))

@@ -45,7 +45,7 @@ func TestDeclarationIdentityBindingAndFactory(t *testing.T) {
 		t.Fatal("identity cardinality")
 	}
 	resolver := modelbinding.ByKey(db, orm.Keyed(records.Query().Where(orm.TextEq(records.Tenant, "allowed")), records.Key()), func(id int64) int64 { return id })
-	found, err := resolver.Resolve(ctx, 2)
+	found, err := modelbinding.Resolve(resolver, ctx, 2)
 	must(t, err)
 	if found.ID != 2 {
 		t.Fatal("key lookup")

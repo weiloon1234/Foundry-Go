@@ -20,7 +20,7 @@ func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, m
 }
 
 func Router(db database.Executor, service Service) (*foundryhttp.Router, error) {
-	bound := modelbinding.Bind(Show, UserByID(db))
+	bound := modelbinding.Bind(foundryhttp.ForBinding(Show), UserByID(db))
 	return foundryhttp.NewRouter(bound.Handle(service.Show))
 }
 ```
@@ -46,17 +46,17 @@ appears absent. Database failures and failed retrieval hooks remain errors and
 never become an absent model. Framework endpoints resolve the model at their
 binding stage (`HandleBound`): after request authorization and before
 validation, as Laravel resolves route bindings before a FormRequest's rules. A
-missing model is therefore 404, and a `WithAuthorization` resource denial 403,
+missing model is therefore 404, and a `modelbinding.AuthorizeResource` resource denial 403,
 even when the body would also fail validation (422). The handler receives the
-model from that single lookup. A custom transport without `HandleBound` resolves
-after validation instead. Idempotent model-bound endpoints resolve inside their
+model from that single lookup. A custom handler transport opts into resolution after validation with
+`http.AfterValidation(custom)`; an undeclared binding stage is not inferred. Idempotent model-bound endpoints resolve inside their
 preparation, after validation. Signature checks on a `SignedEndpoint` still
 happen before any path decoding or model resolution.
 
 `WithMissing` replaces the default 404 for an omitted result, for example with a
 declared application error or a 410 for archived resources:
 
-Use `UserByID(db).WithMissing(handler)`, where `handler` has type
+Use `modelbinding.WithMissing(UserByID(db), handler)`, where `handler` has type
 `func(context.Context, httpkernel.UserPath) error` and returns a declared
 application error.
 
@@ -125,7 +125,22 @@ response classification follows the endpoint's existing error declarations.
 authentication transport with a distinct bound resource. Its handler receives
 `(context.Context, Subject, Input[P,Q,B,Resource])`. Required transports retain
 their concrete authenticated model; optional transports retain `value.Optional[M]`.
-Both ordinary and signed auth endpoints satisfy `http.AuthenticatedTransport`.
+Pass the explicit capability for the transport family:
+
+| Endpoint | Binding capability |
+| --- | --- |
+| Ordinary | `http.ForBinding(endpoint)` |
+| Signed | `http.ForSignedBinding(endpoint)` |
+| Required actor | `http.ForAuthenticatedBinding(endpoint)` |
+| Optional actor | `http.ForOptionalBinding(endpoint)` |
+| Signed required actor | `http.ForSignedAuthenticatedBinding(endpoint)` |
+| Signed optional actor | `http.ForSignedOptionalBinding(endpoint)` |
+
+`modelbinding.Transport` and `modelbinding.AuthenticatedTransport` require
+`Validate`, `Description` and `HandleBound`. A custom staged transport implements
+these methods directly. A custom handler transport explicitly selects
+`http.AfterValidation(custom)` or `http.AfterAuthenticatedValidation(custom)`;
+its handler position determines when the resource resolves.
 
 Authentication, token scopes, permissions and signatures execute before decoding
 or model resolution. The shared resolver still runs once per request, at the
@@ -133,3 +148,19 @@ binding stage before validation; resource policies remain explicit. See [authent
 and the [consumer](../../tests/fixtures/consumer/authenticating/composed_routes.go).
 
 For the old-to-new API mapping, see [ORM migration](orm-migration.md).
+
+Replay binding is explicit. Construct the HTTP replay descriptor with
+`http.Idempotent`, `http.IdempotentSigned`, or `http.IdempotentAuthenticated`, then
+pass it and the resolver to `modelbinding.BindIdempotent` or
+`modelbinding.BindAuthenticatedIdempotent`. Configure a resource policy with
+`modelbinding.AuthorizeIdempotentResource` or
+`modelbinding.AuthorizeAuthenticatedIdempotentResource`. Ordinary bound endpoints
+carry no replay capability. Optional actors, signed authenticated endpoints, and
+custom handler transports do not supply these concrete replay descriptors.
+
+Resource resolution and policy checks still run on every replay attempt before
+claiming or replaying an outcome. Replay binding retains its existing position
+after input validation. Ordinary binding runs before validation. Custom handler
+transports explicitly select late binding through `http.AfterValidation` or
+`http.AfterAuthenticatedValidation`; custom staged transports implement the
+required `HandleBound` capability directly.

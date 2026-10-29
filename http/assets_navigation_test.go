@@ -99,8 +99,7 @@ func TestAssetNavigationFallbackRetainsSPAAndRoutePrecedence(t *testing.T) {
 	})
 	for _, prefix := range []string{"/", "/app"} {
 		t.Run(prefix, func(t *testing.T) {
-			base, err := NewRouter(assets.Mount("public", "/").WithNavigationFallback(fallback).Register(),
-				DefineRoute(RouteSpec{ID: "present", Method: GET, Access: Public}, StaticPath("/app/present")).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }))
+			base, err := NewRouter(assets.Mount("public", "/").WithNavigationFallback(fallback).Register(), HandleRaw(DefineRoute(RouteSpec{ID: "present", Method: GET, Access: Public}, StaticPath("/app/present")), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }))
 			if err != nil {
 				t.Fatal(err)
 			}

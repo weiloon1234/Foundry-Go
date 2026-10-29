@@ -65,7 +65,7 @@ func TestTypedTransportDiagnosticsSurviveContainment(t *testing.T) {
 							input = multipartInput{values: map[string][]multipartValue{"details": {{data: []byte(`{}`)}}}, counts: []int{1}}
 							issuePath = "/details/name"
 						}
-						value, err := declaration.bind(t.Context(), input, limits)
+						value, err := multipartBind(declaration, t.Context(), input, limits)
 						if value.Text != "" || value.Details.Name != "" || value.Details.Note.IsSet() {
 							t.Error("failed multipart binding exposed a partial result")
 						}
@@ -73,7 +73,7 @@ func TestTypedTransportDiagnosticsSurviveContainment(t *testing.T) {
 						return err
 					}
 					if stage == "query encode" {
-						text, err := query.Encode(t.Context(), diagnosticTransportInput{Text: "private value"}, limits.Query)
+						text, err := EncodeQuery(query, t.Context(), diagnosticTransportInput{Text: "private value"}, limits.Query)
 						if text != "" {
 							t.Error("failed query encoding exposed output")
 						}
@@ -87,7 +87,7 @@ func TestTypedTransportDiagnosticsSurviveContainment(t *testing.T) {
 					case "query missing":
 						raw = ""
 					}
-					value, err := query.Decode(t.Context(), raw, limits.Query)
+					value, err := DecodeQuery(query, t.Context(), raw, limits.Query)
 					if value.Text != "" {
 						t.Error("failed query binding exposed a partial result")
 					}

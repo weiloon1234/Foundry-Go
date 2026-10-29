@@ -219,7 +219,7 @@ func TestProxyDependentMiddlewareMustRunInsideTrustedProxy(t *testing.T) {
 		}
 	}
 	// A route-level TrustedProxy cannot sit inside a global policy that needs it.
-	route := staticRoute("proxied", stdhttp.MethodGet, "/proxied").WithMiddleware(proxy).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) })
+	route := HandleRaw(ConfigureRoute(staticRoute("proxied", stdhttp.MethodGet, "/proxied"), Use(proxy)), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) })
 	router, err := NewRouter(route)
 	if err != nil {
 		t.Fatal(err)
@@ -227,7 +227,7 @@ func TestProxyDependentMiddlewareMustRunInsideTrustedProxy(t *testing.T) {
 	if _, err := ApplyMiddleware(router, CSRF(CSRFConfig{})); err == nil {
 		t.Fatal("global CSRF outside route TrustedProxy assembled")
 	}
-	misordered := staticRoute("misordered", stdhttp.MethodGet, "/misordered").WithMiddleware(CSRF(CSRFConfig{}), proxy).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {})
+	misordered := HandleRaw(ConfigureRoute(staticRoute("misordered", stdhttp.MethodGet, "/misordered"), Use(CSRF(CSRFConfig{}), proxy)), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {})
 	if _, err := NewRouter(misordered); err == nil {
 		t.Fatal("route chain with CSRF before TrustedProxy registered")
 	}

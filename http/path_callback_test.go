@@ -42,7 +42,7 @@ func TestPathCallbackPanicAndGoexitAreInternal(t *testing.T) {
 				panic("private-path-callback-detail")
 			}
 			route := callbackPathRoute(pathCallbackCodec{parse: method, format: method})
-			router, err := NewRouter(route.HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("failed path reached handler") }))
+			router, err := NewRouter(HandleRaw(route, func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("failed path reached handler") }))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -53,7 +53,7 @@ func TestPathCallbackPanicAndGoexitAreInternal(t *testing.T) {
 				if !exitsGoroutine(func() { router.ServeHTTP(response, httptest.NewRequestWithContext(ctx, "GET", "/value", nil)) }) {
 					t.Fatal("path codec Goexit was converted into a response")
 				}
-				if !exitsGoroutine(func() { _, _ = route.URL(textPath{Text: "value"}) }) {
+				if !exitsGoroutine(func() { _, _ = RouteURL(route, textPath{Text: "value"}) }) {
 					t.Fatal("URL codec Goexit was converted into a return")
 				}
 				return
@@ -62,7 +62,7 @@ func TestPathCallbackPanicAndGoexitAreInternal(t *testing.T) {
 			if failure := decodeFailure(t, response); failure.Code != InternalError || strings.Contains(response.Body.String(), "private") {
 				t.Fatalf("path callback response: %+v", failure)
 			}
-			location, err := route.URL(textPath{Text: "value"})
+			location, err := RouteURL(route, textPath{Text: "value"})
 			if location != "" || !errors.Is(err, fault.Internal) || strings.Contains(fmt.Sprintf("%v %+v %#v", err, err, err), "private") {
 				t.Fatalf("path callback URL: %q, %v", location, err)
 			}
@@ -97,14 +97,14 @@ func TestPathCallbackDoesNotInvokeArbitraryErrorMethods(t *testing.T) {
 	cause := new(pathHostileError)
 	method := func(string) (string, error) { return "partial", cause }
 	route := callbackPathRoute(pathCallbackCodec{parse: method, format: method})
-	location, err := route.URL(textPath{Text: "value"})
+	location, err := RouteURL(route, textPath{Text: "value"})
 	if location != "" || !errors.Is(err, fault.Invalid) || !errors.Is(err, cause) {
 		t.Fatal("URL error lost its private cause or retained partial output")
 	}
 	if strings.Contains(fmt.Sprintf("%v %+v %#v", err, err, err), "private") {
 		t.Fatal("URL error exposed private data")
 	}
-	router, err := NewRouter(route.HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("failed path reached handler") }))
+	router, err := NewRouter(HandleRaw(route, func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("failed path reached handler") }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestPathCallbackCancellationRetainsOwnership(t *testing.T) {
 		Param("second", pathCallbackCodec{parse: func(text string) (string, error) { laterCalls.Add(1); return text, nil }, format: func(text string) (string, error) { return text, nil }}, func(p *fields) *string { return &p.Second }),
 	)
 	route := DefineRoute(RouteSpec{ID: "callback.cancel", Method: GET, Access: Public}, path)
-	router, err := NewRouter(route.HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, fields) { t.Error("canceled path reached handler") }))
+	router, err := NewRouter(HandleRaw(route, func(stdhttp.ResponseWriter, *stdhttp.Request, fields) { t.Error("canceled path reached handler") }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestPathCallbackSkipsCanceledRequest(t *testing.T) {
 	cancel()
 	var calls atomic.Int32
 	method := func(text string) (string, error) { calls.Add(1); return text, nil }
-	router, err := NewRouter(callbackPathRoute(pathCallbackCodec{parse: method, format: method}).HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("canceled request reached handler") }))
+	router, err := NewRouter(HandleRaw(callbackPathRoute(pathCallbackCodec{parse: method, format: method}), func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("canceled request reached handler") }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestPathCallbackSkipsCanceledRequest(t *testing.T) {
 func TestPathNilSelectorURLIsInternal(t *testing.T) {
 	t.Parallel()
 	path := DefinePath("/{text}", Param("text", StringPath[string](), func(*textPath) *string { return nil }))
-	if location, err := path.URL(textPath{Text: "value"}); location != "" || !errors.Is(err, fault.Internal) {
+	if location, err := PathURL(path, textPath{Text: "value"}); location != "" || !errors.Is(err, fault.Internal) {
 		t.Fatalf("nil selector: %q, %v", location, err)
 	}
 }

@@ -69,7 +69,7 @@ func PublicProbe(runtime *Runtime, id foundryhttp.RouteID, path string, endpoint
 	}
 	cache := &readinessCache{runtime: runtime, ttl: settings.cache}
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
-	return route.HandleRaw(func(writer stdhttp.ResponseWriter, request *stdhttp.Request, _ foundryhttp.NoPath) {
+	return foundryhttp.HandleRaw(route, func(writer stdhttp.ResponseWriter, request *stdhttp.Request, _ foundryhttp.NoPath) {
 		header := writer.Header()
 		header.Set("Cache-Control", "no-store")
 		header.Set("X-Content-Type-Options", "nosniff")

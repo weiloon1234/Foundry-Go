@@ -11,14 +11,12 @@ public pagination signatures and response formats remain compatible.
 Configure a `Guarded` page declaration, then bind its concrete actor:
 
 ```go
-secured := pagination.Authenticated(list, binding).
-    WithScopes(readScopes).
-    WithPermissions(readPermission).
-    WithAuthorization(service.AuthorizeList)
+secured := pagination.Authenticated(list, binding, http.Scopes(readScopes), http.Permissions(readPermission))
+secured = pagination.AuthorizeActor(secured, service.AuthorizeList)
 registration := secured.Handle(service.List)
 ```
 
-`WithAuthorization` is optional. Numbered/simple callbacks receive
+`pagination.AuthorizeActor` is optional. Numbered/simple callbacks receive
 `(context.Context, Actor, pagination.Request[Path, Filters])`; cursor callbacks
 receive `pagination.CursorRequest[Path, Filters, Source]`. Their page return types
 are unchanged. Exported `AuthenticatedNumberedEndpoint`,

@@ -64,7 +64,7 @@ Streams use ordinary net/http buffering and are finite byte responses. For
 incremental output, such as a long export or a log tail, `StreamFrom(source).Progressive()`
 flushes each chunk once it has been accepted against the declared length and
 byte limit; a flushed prefix can still be aborted by a later failure, never
-completed early. Declare the route's `WithTimeout` (see
+completed early. Declare the route's `Timeout` (see
 [typed endpoints](http-endpoints.md)) for streams that outlive the kernel
 `RequestTimeout`. [Storage-backed adapters](storage.md) use owned readers and explicitly selected disks. [Realtime protocols](websocket.md) have separate connection and delivery contracts.
 
@@ -75,11 +75,11 @@ A raw route can publish typed server-sent events (`text/event-stream`) with
 so the payload type and wire checks match typed responses:
 
 ```go
-route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
+route := foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(foundryhttp.RouteSpec{
     ID: "orders.events", Method: foundryhttp.GET, Access: foundryhttp.Public,
-}, foundryhttp.StaticPath("/orders/events")).WithTimeout(time.Hour)
+}, foundryhttp.StaticPath("/orders/events")), foundryhttp.Timeout(time.Hour))
 
-registration := route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
+registration := foundryhttp.HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
     err := foundryhttp.ServeEvents(w, r, OrderEventJSON(), foundryhttp.DefaultEventStreamConfig(),
         func(ctx context.Context, sink *foundryhttp.EventSink[OrderEvent]) error {
             for update := range orders.Watch(ctx, r.Header.Get("Last-Event-ID")) {
@@ -104,7 +104,7 @@ actual return and contains its panics and Goexit. Events accepted before a
 producer returns normally are all written. An event whose data violates its
 contract or `EventStreamConfig.Data` ends the stream without a partial event.
 Compression and automatic ETags pass event streams through. Declare the route's
-`WithTimeout` for the longest stream lifetime; the kernel `RequestTimeout` and
+`Timeout` for the longest stream lifetime; the kernel `RequestTimeout` and
 `WriteTimeout` otherwise end it. Raw-route event streams appear in route
 inspection, not in generated clients.
 
@@ -117,8 +117,8 @@ request as usual and returns `EventsFrom(producer)`; the stream starts only afte
 the handler succeeded:
 
 ```go
-var OrderEvents = foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
-    foundryhttp.EventStreamResponse(OrderEventJSON())).WithTimeout(time.Hour)
+var OrderEvents = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
+    foundryhttp.EventStreamResponse(OrderEventJSON())), foundryhttp.Timeout(time.Hour))
 
 registration := OrderEvents.Handle(func(ctx context.Context, in Request) (foundryhttp.Events[OrderEvent], error) {
     return foundryhttp.EventsFrom(func(ctx context.Context, sink *foundryhttp.EventSink[OrderEvent]) error {

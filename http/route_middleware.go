@@ -13,16 +13,9 @@ func (s Scope) WithMiddleware(middlewares ...Middleware) Scope {
 // after native route matching and before path/query/body decoding. MatchedRoute
 // is available, including for short-circuited requests. Middleware must not
 // replace framework request identity or bypass the declared access contract.
-func (r Route[P]) WithMiddleware(middlewares ...Middleware) Route[P] {
+func routeWithMiddleware[P any](r Route[P], middlewares ...Middleware) Route[P] {
 	if r.err == nil {
 		r.middlewares, r.err = appendMiddlewares(r.middlewares, middlewares)
 	}
 	return r
-}
-
-// WithMiddleware preserves the endpoint's concrete request and response types.
-// Standard wrappers own only the native HTTP transport boundary.
-func (e Endpoint[P, Q, B, R]) WithMiddleware(middlewares ...Middleware) Endpoint[P, Q, B, R] {
-	e.route = e.route.WithMiddleware(middlewares...)
-	return e
 }

@@ -50,15 +50,15 @@ func DefineMultipart[B any](parts ...MultipartPart[B]) Multipart[B] {
 	return d
 }
 
-// WithTempDirectory configures a server-owned absolute directory. Empty uses
+// MultipartDirectory configures a server-owned absolute directory. Empty uses
 // the operating system's temporary directory. Assembly performs no file I/O;
 // each request lazily creates a private directory inside this configured root.
-func (d Multipart[B]) WithTempDirectory(directory string) Multipart[B] {
+func MultipartDirectory[B any](d Multipart[B], directory string) Multipart[B] {
 	d.directory = directory
 	return d
 }
 
-func (d Multipart[B]) Validate() error {
+func ValidateMultipart[B any](d Multipart[B]) error {
 	if d.err != nil {
 		return d.err
 	}
@@ -68,17 +68,17 @@ func (d Multipart[B]) Validate() error {
 	if strings.IndexByte(d.directory, 0) >= 0 || d.directory != "" && !filepath.IsAbs(d.directory) {
 		return safeerror.NewFault(fault.Invalid, "upload temporary directory must be an absolute server path")
 	}
-	return d.text.Validate()
+	return ValidateQueryDescriptor(d.text)
 }
 
-// Description returns owned metadata from the codecs used for actual decoding.
+// InspectMultipart returns owned metadata from the codecs used for actual decoding.
 // Files are explicit multipart values and do not acquire a JSON model schema.
-func (d Multipart[B]) Description() (MultipartInfo, error) {
-	if err := d.Validate(); err != nil {
+func InspectMultipart[B any](d Multipart[B]) (MultipartInfo, error) {
+	if err := ValidateMultipart(d); err != nil {
 		return MultipartInfo{}, err
 	}
 	info := MultipartInfo{Parts: make([]MultipartPartInfo, len(d.parts))}
-	text, err := d.text.Parameters()
+	text, err := QueryParameters(d.text)
 	if err != nil {
 		return MultipartInfo{}, err
 	}
@@ -144,7 +144,7 @@ func multipartIssue(path string, code contract.IssueCode) error {
 	return multipartFailure([]contract.Issue{{Path: path, Code: code}}, nil)
 }
 
-func (d Multipart[B]) bind(ctx context.Context, input multipartInput, limits EndpointLimits) (B, error) {
+func multipartBind[B any](d Multipart[B], ctx context.Context, input multipartInput, limits EndpointLimits) (B, error) {
 	var issues []contract.Issue
 	for i, part := range d.parts {
 		if code := parameterCardinalityIssue(part.info, input.counts[i]); code != "" && len(issues) < limits.Multipart.Issues {
@@ -154,7 +154,7 @@ func (d Multipart[B]) bind(ctx context.Context, input multipartInput, limits End
 	if len(issues) != 0 {
 		return *new(B), multipartFailure(issues, nil)
 	}
-	result, err := d.text.decodeValues(ctx, input.text, limits.Multipart.Issues)
+	result, err := queryDecodeValues(d.text, ctx, input.text, limits.Multipart.Issues)
 	if err != nil {
 		if failure, ok := safeerror.UnwrapOwned(err).(*QueryError); ok {
 			return *new(B), multipartFailure(failure.Issues(), err)

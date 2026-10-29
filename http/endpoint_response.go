@@ -17,32 +17,11 @@ import (
 // disclosed after the request context ended. A file source opens and transfers under the live
 // request context; after an expired server deadline it is detached like JSON,
 // but a client that already disconnected never causes a source to open.
-func (r Response[R]) prepare(ctx context.Context, input R, limits EndpointLimits) (preparedResponse, error) {
-	if r.kind == payloadDownload || r.kind == payloadStream {
-		// After an expired deadline the source opens and transfers without it,
-		// still ending on client disconnect or forced shutdown.
-		source, release := completedContext(ctx)
-		file, err := r.prepareFile(source, input, limits.Files)
-		return preparedResponse{file: file, release: release}, err
-	}
-	if r.kind == payloadEmpty {
-		return preparedResponse{}, nil
-	}
-	if r.kind == payloadEvents {
-		events, err := r.events.prepare(input, limits.Response)
-		if err != nil {
-			return preparedResponse{}, InternalError.WithCause(safeerror.WrapFault(fault.Internal, "event stream is invalid", err))
-		}
-		return preparedResponse{events: events}, nil
-	}
-	if r.kind == payloadRedirect {
-		location, err := r.redirectTarget(input)
-		if err != nil {
-			return preparedResponse{}, InternalError.WithCause(safeerror.WrapFault(fault.Internal, "redirect target is invalid", err))
-		}
-		return preparedResponse{location: location}, nil
-	}
-	status, err := r.selectedStatus(input)
+func responsePrepare[R any](response Response[R], ctx context.Context, input R, limits EndpointLimits) (preparedResponse, error) {
+	return response.prepare(response, ctx, input, limits)
+}
+func prepareJSONResponse[R any](r Response[R], ctx context.Context, input R, limits EndpointLimits) (preparedResponse, error) {
+	status, err := responseSelectedStatus(r, input)
 	if err != nil {
 		return preparedResponse{}, err
 	}
@@ -53,7 +32,7 @@ func (r Response[R]) prepare(ctx context.Context, input R, limits EndpointLimits
 		// issuing handler completed; the client obtains a fresh credential.
 		encoding = ctx
 	}
-	data, err := r.json.Encode(encoding, input, limits.Response)
+	data, err := r.encodeJSON(encoding, input, limits.Response)
 	if err != nil {
 		cause := err
 		if encoded, ok := safeerror.UnwrapOwned(err).(*contract.EncodeError); ok {
@@ -73,6 +52,28 @@ func (r Response[R]) prepare(ctx context.Context, input R, limits EndpointLimits
 		}
 	}
 	return prepared, nil
+}
+func prepareFileResponse[R any](r Response[R], ctx context.Context, input R, limits EndpointLimits) (preparedResponse, error) {
+	source, release := completedContext(ctx)
+	file, err := r.prepareFile(source, input, limits.Files)
+	return preparedResponse{file: file, release: release}, err
+}
+func prepareEmptyResponse(r Response[NoContent], ctx context.Context, input NoContent, limits EndpointLimits) (preparedResponse, error) {
+	return preparedResponse{}, nil
+}
+func prepareEventResponse[R any](r Response[R], ctx context.Context, input R, limits EndpointLimits) (preparedResponse, error) {
+	events, err := r.prepareEvents(input, limits.Response)
+	if err != nil {
+		return preparedResponse{}, InternalError.WithCause(safeerror.WrapFault(fault.Internal, "event stream is invalid", err))
+	}
+	return preparedResponse{events: events}, nil
+}
+func prepareRedirectResponse(r Response[Redirect], ctx context.Context, input Redirect, limits EndpointLimits) (preparedResponse, error) {
+	location, err := r.redirectTarget(input)
+	if err != nil {
+		return preparedResponse{}, InternalError.WithCause(safeerror.WrapFault(fault.Internal, "redirect target is invalid", err))
+	}
+	return preparedResponse{location: location}, nil
 }
 
 func writePreparedResponse(w stdhttp.ResponseWriter, request *stdhttp.Request, prepared preparedResponse, kind payloadKind, status int) error {

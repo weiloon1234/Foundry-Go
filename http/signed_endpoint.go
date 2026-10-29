@@ -23,14 +23,20 @@ type SignedEndpoint[P, Q, B, R any] struct {
 func Signed[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], signer URLSigner) SignedEndpoint[P, Q, B, R] {
 	return SignedEndpoint[P, Q, B, R]{endpoint: endpoint, signer: signer}
 }
-func (e SignedEndpoint[P, Q, B, R]) ID() RouteID     { return e.endpoint.ID() }
-func (e SignedEndpoint[P, Q, B, R]) Method() Method  { return e.endpoint.Method() }
-func (e SignedEndpoint[P, Q, B, R]) Pattern() string { return e.endpoint.Pattern() }
-func (e SignedEndpoint[P, Q, B, R]) Validate() error {
+func SignedEndpointID[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) RouteID {
+	return EndpointID(e.endpoint)
+}
+func SignedEndpointMethod[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) Method {
+	return EndpointMethod(e.endpoint)
+}
+func SignedEndpointPattern[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) string {
+	return EndpointPattern(e.endpoint)
+}
+func ValidateSigned[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) error {
 	if e.err != nil {
 		return e.err
 	}
-	if err := e.endpoint.Validate(); err != nil {
+	if err := ValidateEndpoint(e.endpoint); err != nil {
 		return err
 	}
 	if err := e.signer.Validate(); err != nil {
@@ -48,14 +54,14 @@ func (e SignedEndpoint[P, Q, B, R]) Validate() error {
 }
 
 // WithPermanentLinks explicitly permits links without expiry; see SignedRoute.
-func (e SignedEndpoint[P, Q, B, R]) WithPermanentLinks() SignedEndpoint[P, Q, B, R] {
+func signedEndpointWithPermanentLinks[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) SignedEndpoint[P, Q, B, R] {
 	e.signer.policy.permanent = true
 	return e
 }
 
 // WithIgnoredParameters declares unauthenticated query parameters removed before
 // verification. They cannot collide with the endpoint's declared query fields.
-func (e SignedEndpoint[P, Q, B, R]) WithIgnoredParameters(names ...string) SignedEndpoint[P, Q, B, R] {
+func signedEndpointWithIgnoredParameters[P, Q, B, R any](e SignedEndpoint[P, Q, B, R], names ...string) SignedEndpoint[P, Q, B, R] {
 	policy, err := e.signer.policy.withIgnored(names)
 	if err != nil && e.err == nil {
 		e.err = err
@@ -64,21 +70,21 @@ func (e SignedEndpoint[P, Q, B, R]) WithIgnoredParameters(names ...string) Signe
 	return e
 }
 
-// PermanentURL signs a link without expiry; the endpoint must opt in.
-func (e SignedEndpoint[P, Q, B, R]) PermanentURL(ctx context.Context, origin Origin, path P, query Q) (string, error) {
-	return e.link(ctx, origin, path, query, time.Time{}, signedURLForm{permanent: true})
+// PermanentEndpointURL signs a link without expiry; the endpoint must opt in.
+func PermanentEndpointURL[P, Q, B, R any](e SignedEndpoint[P, Q, B, R], ctx context.Context, origin Origin, path P, query Q) (string, error) {
+	return signedEndpointLink(e, ctx, origin, path, query, time.Time{}, signedURLForm{permanent: true})
 }
 
-// RelativeURL signs an origin-relative link, valid on every admitted origin.
-func (e SignedEndpoint[P, Q, B, R]) RelativeURL(ctx context.Context, path P, query Q, expires time.Time) (string, error) {
-	return e.link(ctx, "", path, query, expires, signedURLForm{relative: true})
+// RelativeEndpointURL signs an origin-relative link, valid on every admitted origin.
+func RelativeEndpointURL[P, Q, B, R any](e SignedEndpoint[P, Q, B, R], ctx context.Context, path P, query Q, expires time.Time) (string, error) {
+	return signedEndpointLink(e, ctx, "", path, query, expires, signedURLForm{relative: true})
 }
 func (e SignedEndpoint[P, Q, B, R]) URL(ctx context.Context, origin Origin, path P, query Q, expires time.Time) (string, error) {
-	return e.link(ctx, origin, path, query, expires, signedURLForm{})
+	return signedEndpointLink(e, ctx, origin, path, query, expires, signedURLForm{})
 }
 
-func (e SignedEndpoint[P, Q, B, R]) link(ctx context.Context, origin Origin, path P, query Q, expires time.Time, form signedURLForm) (string, error) {
-	if err := e.Validate(); err != nil {
+func signedEndpointLink[P, Q, B, R any](e SignedEndpoint[P, Q, B, R], ctx context.Context, origin Origin, path P, query Q, expires time.Time, form signedURLForm) (string, error) {
+	if err := ValidateSigned(e); err != nil {
 		return "", err
 	}
 	if err := e.signer.prepare(ctx); err != nil {
@@ -88,30 +94,30 @@ func (e SignedEndpoint[P, Q, B, R]) link(ctx context.Context, origin Origin, pat
 	if err != nil {
 		return "", err
 	}
-	return e.signer.sealForm(ctx, e.endpoint.route.spec, e.endpoint.Pattern(), origin, relative, expires, form)
+	return e.signer.sealForm(ctx, e.endpoint.route.spec, EndpointPattern(e.endpoint), origin, relative, expires, form)
 }
 
 // Handle verifies the URL before any path/query/body codec, validation or domain
 // handler. The existing endpoint decoder receives only its original typed query.
 func (e SignedEndpoint[P, Q, B, R]) Handle(handler Handler[P, Q, B, R]) RouteRegistration {
-	if err := e.Validate(); err != nil {
+	if err := ValidateSigned(e); err != nil {
 		return RouteRegistration{err: err}
 	}
-	return signedRegistration(e.endpoint.Handle(handler), e.signer, e.endpoint.route.spec, e.endpoint.Pattern(), true)
+	return signedRegistration(e.endpoint.Handle(handler), e.signer, e.endpoint.route.spec, EndpointPattern(e.endpoint), true)
 }
 
-// HandleBound verifies the URL like Handle, then runs the binding stage.
-func (e SignedEndpoint[P, Q, B, R]) HandleBound(bind Binding[P, Q, B, R]) RouteRegistration {
-	if err := e.Validate(); err != nil {
+// HandleSignedBound verifies the URL like Handle, then runs the binding stage.
+func HandleSignedBound[P, Q, B, R any](e SignedEndpoint[P, Q, B, R], bind Binding[P, Q, B, R]) RouteRegistration {
+	if err := ValidateSigned(e); err != nil {
 		return RouteRegistration{err: err}
 	}
-	return signedRegistration(e.endpoint.HandleBound(bind), e.signer, e.endpoint.route.spec, e.endpoint.Pattern(), true)
+	return signedRegistration(HandleBound(e.endpoint, bind), e.signer, e.endpoint.route.spec, EndpointPattern(e.endpoint), true)
 }
-func (e SignedEndpoint[P, Q, B, R]) Description() (EndpointInfo, error) {
-	if err := e.Validate(); err != nil {
+func InspectSigned[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) (EndpointInfo, error) {
+	if err := ValidateSigned(e); err != nil {
 		return EndpointInfo{}, err
 	}
-	info, err := e.endpoint.Description()
+	info, err := InspectEndpoint(e.endpoint)
 	if err != nil {
 		return EndpointInfo{}, err
 	}

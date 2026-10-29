@@ -33,7 +33,7 @@ type multipartRequest struct {
 type multipartRequestInput = Input[NoPath, NoQuery, multipartRequest]
 
 func multipartForm(directory string) Multipart[multipartRequest] {
-	return DefineMultipart(
+	return MultipartDirectory(DefineMultipart(
 		TextPart(OptionalQueryParam("name", StringQuery[string](), func(b *multipartRequest) *value.Optional[string] { return &b.Name })),
 		TextPart(DefaultQueryParam("count", IntegerQuery[int](), 9, func(b *multipartRequest) *int { return &b.Count })),
 		TextPart(DefaultQueryParam("active", BoolQuery[bool](), true, func(b *multipartRequest) *bool { return &b.Active })),
@@ -42,7 +42,7 @@ func multipartForm(directory string) Multipart[multipartRequest] {
 		OptionalFilePart("avatar", func(b *multipartRequest) *value.Optional[UploadedFile] { return &b.Avatar }),
 		RepeatedFilePart("photos", func(b *multipartRequest) *[]UploadedFile { return &b.Photos }),
 		OptionalJSONPart("details", endpointPatchJSON(), func(b *multipartRequest) *value.Optional[EndpointPatch] { return &b.Details }),
-	).WithTempDirectory(directory)
+	), directory)
 }
 
 func multipartEndpoint(directory string) Endpoint[NoPath, NoQuery, multipartRequest, NoContent] {
@@ -270,7 +270,7 @@ func TestMultipartBodyAndFieldResourceLimits(t *testing.T) {
 			limits := DefaultEndpointLimits()
 			test.change(&limits)
 			called := false
-			router, err := NewRouter(multipartEndpoint(directory).WithLimits(limits).Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
+			router, err := NewRouter(ConfigureEndpoint(multipartEndpoint(directory), Limits(limits)).Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
 				called = true
 				return NoContent{}, nil
 			}))
@@ -309,7 +309,7 @@ func TestMultipartEndpointFailuresCleanCapturedFiles(t *testing.T) {
 			directory := t.TempDir()
 			endpoint := multipartEndpoint(directory)
 			if test.validate {
-				endpoint = endpoint.WithBodyValidation(validation.Custom(validation.Spec{ID: "test.reject_upload", Message: "Rejected upload"}, func(context.Context, multipartRequest) (bool, error) { return false, nil }))
+				endpoint = ValidateBody(endpoint, validation.Custom(validation.Spec{ID: "test.reject_upload", Message: "Rejected upload"}, func(context.Context, multipartRequest) (bool, error) { return false, nil }))
 			}
 			called := false
 			router, err := NewRouter(endpoint.Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
@@ -331,7 +331,7 @@ func TestMultipartEndpointFailuresCleanCapturedFiles(t *testing.T) {
 
 func TestMultipartMetadataAndInvalidDeclarations(t *testing.T) {
 	endpoint := multipartEndpoint(t.TempDir())
-	info, err := endpoint.Description()
+	info, err := InspectEndpoint(endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,22 +365,22 @@ func TestMultipartMetadataAndInvalidDeclarations(t *testing.T) {
 		t.Fatal("multipart kinds missing")
 	}
 	info.Body.Multipart.Parts[0].Name = "changed"
-	again, err := endpoint.Description()
+	again, err := InspectEndpoint(endpoint)
 	if err != nil || again.Body.Multipart.Parts[0].Name == "changed" {
 		t.Fatal("multipart metadata was not owned")
 	}
-	if err := (Multipart[multipartRequest]{}).Validate(); err == nil {
+	if err := ValidateMultipart((Multipart[multipartRequest]{})); err == nil {
 		t.Fatal("zero multipart declaration accepted")
 	}
-	if err := DefineMultipart(FilePart[multipartRequest]("primary", nil)).Validate(); err == nil {
+	if err := ValidateMultipart(DefineMultipart(FilePart[multipartRequest]("primary", nil))); err == nil {
 		t.Fatal("nil file selector accepted")
 	}
 	field := FilePart("same", func(b *multipartRequest) *UploadedFile { return &b.Primary })
 	textPart := TextPart(QueryParam("same", StringQuery[string](), func(b *multipartRequest) *string { return new(string) }))
-	if err := DefineMultipart(field, textPart).Validate(); err == nil {
+	if err := ValidateMultipart(DefineMultipart(field, textPart)); err == nil {
 		t.Fatal("cross-kind duplicate accepted")
 	}
-	if err := multipartForm("relative/directory").Validate(); err == nil {
+	if err := ValidateMultipart(multipartForm("relative/directory")); err == nil {
 		t.Fatal("relative temporary directory accepted")
 	}
 }
@@ -388,12 +388,12 @@ func TestMultipartMetadataAndInvalidDeclarations(t *testing.T) {
 func TestMultipartSelectorFailureStaysInternal(t *testing.T) {
 	for _, exit := range []bool{false, true} {
 		directory := t.TempDir()
-		form := DefineMultipart(FilePart("primary", func(b *multipartRequest) *UploadedFile {
+		form := MultipartDirectory(DefineMultipart(FilePart("primary", func(b *multipartRequest) *UploadedFile {
 			if exit {
 				runtime.Goexit()
 			}
 			return nil
-		})).WithTempDirectory(directory)
+		})), directory)
 		endpoint := DefineEndpoint(DefineRoute(RouteSpec{ID: "uploads.store", Method: POST, Access: Public}, StaticPath("/uploads")), EmptyQuery(), MultipartBody(form), EmptyResponse(204))
 		router, err := NewRouter(endpoint.Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
 			t.Error("handler ran after selector failure")
@@ -540,7 +540,7 @@ func TestMultipartJSONDiagnosticsRespectFormLimit(t *testing.T) {
 	directory := t.TempDir()
 	limits := DefaultEndpointLimits()
 	limits.Multipart.Issues = 1
-	router, err := NewRouter(multipartEndpoint(directory).WithLimits(limits).Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
+	router, err := NewRouter(ConfigureEndpoint(multipartEndpoint(directory), Limits(limits)).Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
 		t.Error("handler received invalid JSON")
 		return NoContent{}, nil
 	}))
@@ -559,7 +559,7 @@ func TestMultipartPartHeaderLimitCleansEarlierFiles(t *testing.T) {
 	directory := t.TempDir()
 	limits := DefaultEndpointLimits()
 	limits.Multipart.HeaderBytes = 512
-	router, err := NewRouter(multipartEndpoint(directory).WithLimits(limits).Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
+	router, err := NewRouter(ConfigureEndpoint(multipartEndpoint(directory), Limits(limits)).Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
 		t.Error("handler ran after header limit")
 		return NoContent{}, nil
 	}))

@@ -91,7 +91,7 @@ after that success, the source still opens and transfers without the expired
 deadline, bounded by the native write deadline; client disconnect and forced
 shutdown still end it, and if the client already disconnected no source opens. A deadline reached
 while a source opens or transfers is the server's budget (503 before commit).
-Use a route `WithTimeout` for long transfers.
+Use a route `Timeout` for long transfers.
 
 Endpoint metadata includes owned `FileResponseInfo` with declared media and
 seekability. It has no invented JSON schema. Files and deferred downloads reject

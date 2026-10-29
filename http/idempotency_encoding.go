@@ -9,16 +9,11 @@ import (
 	"io"
 	"slices"
 
-	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-type replayJSON[R any] interface {
-	responseJSON[R]
-	Decode(context.Context, []byte, contract.JSONLimits) (R, error)
-}
 type fingerprintRequest struct {
 	Path  string          `json:"path"`
 	Query string          `json:"query"`
@@ -60,8 +55,8 @@ func wireDigest(v any) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
-func (e IdempotentEndpoint[P, Q, B, R]) inputEncoding() idempotency.Input[Input[P, Q, B]] {
-	info, _ := e.endpoint.Description()
+func idempotentEndpointInputEncoding[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) idempotency.Input[Input[P, Q, B]] {
+	info, _ := InspectEndpoint(e.endpoint)
 	identity := wireDigest(struct {
 		Path        []PathParameterInfo
 		Query       []QueryParameterInfo
@@ -69,11 +64,11 @@ func (e IdempotentEndpoint[P, Q, B, R]) inputEncoding() idempotency.Input[Input[
 		Preparation bool
 	}{info.Path, info.Query, info.Body, info.Preparation})
 	return idempotency.DefineInput(identity, func(ctx context.Context, in Input[P, Q, B], limit int) ([]byte, error) {
-		path, err := e.endpoint.route.URL(in.Path)
+		path, err := RouteURL(e.endpoint.route, in.Path)
 		if err != nil {
 			return nil, err
 		}
-		query, err := e.endpoint.query.Encode(ctx, in.Query, e.endpoint.limits.Query)
+		query, err := EncodeQuery(e.endpoint.query, ctx, in.Query, e.endpoint.limits.Query)
 		if err != nil {
 			return nil, err
 		}
@@ -82,10 +77,10 @@ func (e IdempotentEndpoint[P, Q, B, R]) inputEncoding() idempotency.Input[Input[
 		case payloadJSON:
 			limits := e.endpoint.limits.Body
 			limits.Bytes = min(limits.Bytes, limit)
-			body, err = e.endpoint.body.json.Encode(ctx, in.Body, limits)
+			body, err = e.endpoint.body.encodeJSON(ctx, in.Body, limits)
 		case payloadForm:
 			var form string
-			form, err = e.endpoint.body.form.Encode(ctx, in.Body, e.endpoint.limits.Form)
+			form, err = EncodeQuery(e.endpoint.body.form, ctx, in.Body, e.endpoint.limits.Form)
 			if err == nil {
 				body, err = json.Marshal(form)
 			}
@@ -100,8 +95,8 @@ func (e IdempotentEndpoint[P, Q, B, R]) inputEncoding() idempotency.Input[Input[
 		return data, err
 	})
 }
-func (e IdempotentEndpoint[P, Q, B, R]) outputEncoding() idempotency.Encoding[R] {
-	info, _ := e.endpoint.Description()
+func idempotentEndpointOutputEncoding[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) idempotency.Encoding[R] {
+	info, _ := InspectEndpoint(e.endpoint)
 	identity := wireDigest(struct {
 		Format   string
 		Response *PayloadInfo
@@ -111,7 +106,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) outputEncoding() idempotency.Encoding[R]
 	return idempotency.DefineEncoding(identity, func(ctx context.Context, result R, limit int) ([]byte, error) {
 		limits := e.endpoint.limits
 		limits.Response.Bytes = min(limits.Response.Bytes, limit)
-		response, err := e.endpoint.response.prepare(ctx, result, limits)
+		response, err := responsePrepare(e.endpoint.response, ctx, result, limits)
 		if err != nil {
 			return nil, err
 		}
@@ -140,7 +135,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) outputEncoding() idempotency.Encoding[R]
 		}
 		limits := e.endpoint.limits.Response
 		limits.Bytes = min(limits.Bytes, limit)
-		return e.endpoint.response.json.(replayJSON[R]).Decode(ctx, stored.Body, limits)
+		return e.endpoint.response.decodeJSON(ctx, stored.Body, limits)
 	})
 }
 func decodeStoredResponse(data []byte, status int, allowHeaders bool) (storedResponse, error) {

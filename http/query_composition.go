@@ -14,7 +14,7 @@ import (
 func MergeQueries[Q any](queries ...Query[Q]) Query[Q] {
 	var parameters []QueryParameter[Q]
 	for _, query := range queries {
-		if err := query.Validate(); err != nil {
+		if err := ValidateQueryDescriptor(query); err != nil {
 			return Query[Q]{err: err}
 		}
 		parameters = append(parameters, query.parameters...)
@@ -29,7 +29,7 @@ func MergeQueries[Q any](queries ...Query[Q]) Query[Q] {
 // for concurrent calls on independent arguments. It executes inside the same
 // owned callback boundary as ordinary query field selectors.
 func EmbedQuery[Outer, Inner any](query Query[Inner], field func(*Outer) *Inner) Query[Outer] {
-	if err := query.Validate(); err != nil {
+	if err := ValidateQueryDescriptor(query); err != nil {
 		return Query[Outer]{err: err}
 	}
 	if field == nil {

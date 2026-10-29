@@ -6,14 +6,14 @@ import stdhttp "net/http"
 // literal declared names, never instructions to create nested dynamic objects.
 // The query owner supplies strict percent/UTF-8 decoding, omission, scalar
 // cardinality, repeated values, owned callbacks and redacted field diagnostics.
-func (b Body[B]) readForm(w stdhttp.ResponseWriter, r *stdhttp.Request, limits QueryLimits) (B, error) {
+func bodyReadForm[B any](b Body[B], w stdhttp.ResponseWriter, r *stdhttp.Request, limits QueryLimits) (B, error) {
 	data, err := readEndpointBody(w, r, int64(limits.Bytes), false, func(header stdhttp.Header) bool {
 		return requestMedia(header, func(media string) bool { return media == "application/x-www-form-urlencoded" })
 	})
 	if err != nil {
 		return *new(B), err
 	}
-	result, err := b.form.Decode(r.Context(), string(data), limits)
+	result, err := DecodeQuery(b.form, r.Context(), string(data), limits)
 	if err != nil {
 		return *new(B), endpointInputError(r.Context(), "body", err)
 	}

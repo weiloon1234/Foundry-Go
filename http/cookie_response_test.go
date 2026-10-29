@@ -23,7 +23,7 @@ func TestCookieAuthenticationPreventsPersonalizedCaching(t *testing.T) {
 	}
 	route := http.DefineRoute(http.RouteSpec{ID: "profile", Method: http.GET, Access: http.Guarded}, http.StaticPath("/profile"))
 	typed := http.DefineEndpoint(route, http.EmptyQuery(), http.EmptyBody(), http.JSONResponse(200, contract.StringJSON[string]()))
-	raw := http.RequireRouteAuthentication(route, transport, guard).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, a authAccount, _ http.NoPath) {
+	raw := http.HandleAuthenticatedRaw(http.RequireRouteAuthentication(route, transport, guard), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, a authAccount, _ http.NoPath) {
 		w.Header().Set("Last-Modified", "Tue, 01 Sep 2026 00:00:00 GMT")
 		fmt.Fprintf(w, "account-%d", a.ID)
 	})

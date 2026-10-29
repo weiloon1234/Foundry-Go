@@ -31,7 +31,7 @@ var reservedApplicationHeaders = []string{
 	"X-Csrf-", "X-Xsrf-", "X-Permitted-Cross-Domain-Policies", "X-Dns-Prefetch-Control",
 }
 
-// WithHeaders derives response headers from the handler's successful result,
+// EndpointHeaders derives response headers from the handler's successful result,
 // for example Location for a created resource (see RouteLocation) or
 // Cache-Control for a read. prepare runs after the handler succeeded and before
 // the response is encoded; a returned error or an invalid header is an internal
@@ -45,13 +45,13 @@ var reservedApplicationHeaders = []string{
 // other names appear at most once. At most 16 headers apply per response.
 // JSON and empty responses support it; credential responses and file or stream
 // responses do not. Idempotent endpoints declare replayable headers with
-// IdempotentEndpoint.WithHeaders instead.
-func (e Endpoint[P, Q, B, R]) WithHeaders(prepare ResponseHeaders[R]) Endpoint[P, Q, B, R] {
+// IdempotentHeaders instead.
+func EndpointHeaders[P, Q, B, R any](e Endpoint[P, Q, B, R], prepare ResponseHeaders[R]) Endpoint[P, Q, B, R] {
 	e.headers = &prepare
 	return e
 }
 
-func (e Endpoint[P, Q, B, R]) validateHeaders() error {
+func endpointValidateHeaders[P, Q, B, R any](e Endpoint[P, Q, B, R]) error {
 	if e.headers == nil {
 		return nil
 	}
@@ -65,7 +65,7 @@ func (e Endpoint[P, Q, B, R]) validateHeaders() error {
 }
 
 // responseHeaders runs after the handler succeeded; see completedContext.
-func (e Endpoint[P, Q, B, R]) responseHeaders(ctx context.Context, result R) ([]ResponseHeader, error) {
+func endpointResponseHeaders[P, Q, B, R any](e Endpoint[P, Q, B, R], ctx context.Context, result R) ([]ResponseHeader, error) {
 	if e.headers == nil {
 		return nil, nil
 	}
@@ -147,7 +147,7 @@ func applyResponseHeaders(header stdhttp.Header, headers []ResponseHeader) {
 // RouteLocation returns a Location header for a named route's relative URL,
 // generated from its concrete path type, for use with WithHeaders.
 func RouteLocation[P any](route Route[P], path P) (ResponseHeader, error) {
-	location, err := route.URL(path)
+	location, err := RouteURL(route, path)
 	if err != nil {
 		return ResponseHeader{}, err
 	}

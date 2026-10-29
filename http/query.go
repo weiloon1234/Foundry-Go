@@ -45,8 +45,8 @@ func DefineQuery[Q any](parameters ...QueryParameter[Q]) Query[Q] {
 	return d
 }
 
-// Validate checks immutable binding declarations without calling user methods.
-func (d Query[Q]) Validate() error {
+// ValidateQueryDescriptor checks immutable binding declarations without calling user methods.
+func ValidateQueryDescriptor[Q any](d Query[Q]) error {
 	if d.err != nil {
 		return d.err
 	}
@@ -56,9 +56,9 @@ func (d Query[Q]) Validate() error {
 	return nil
 }
 
-// Parameters returns an owned, deterministic snapshot of cardinality and scalar metadata.
-func (d Query[Q]) Parameters() ([]QueryParameterInfo, error) {
-	if err := d.Validate(); err != nil {
+// QueryParameters returns an owned, deterministic snapshot of cardinality and scalar metadata.
+func QueryParameters[Q any](d Query[Q]) ([]QueryParameterInfo, error) {
+	if err := ValidateQueryDescriptor(d); err != nil {
 		return nil, err
 	}
 	parameters := make([]QueryParameterInfo, len(d.parameters))
@@ -112,8 +112,8 @@ func queryFailure(issues []contract.Issue, cause error) error {
 	return safeerror.Owned(failure.Error(), failure)
 }
 
-func (d Query[Q]) prepare(ctx context.Context, limits QueryLimits) error {
-	if err := d.Validate(); err != nil {
+func queryPrepare[Q any](d Query[Q], ctx context.Context, limits QueryLimits) error {
+	if err := ValidateQueryDescriptor(d); err != nil {
 		return err
 	}
 	if err := limits.Validate(); err != nil {
@@ -125,7 +125,7 @@ func (d Query[Q]) prepare(ctx context.Context, limits QueryLimits) error {
 	return ctx.Err()
 }
 
-// Decode rejects unknown names, duplicate scalar values, missing required fields
+// DecodeQuery rejects unknown names, duplicate scalar values, missing required fields
 // and malformed wire input before invoking any codec. Repeated values retain
 // their order. No body or path values are merged into the query.
 //
@@ -134,8 +134,8 @@ func (d Query[Q]) prepare(ctx context.Context, limits QueryLimits) error {
 // failures, and runtime.Goexit ends the goroutine as any Go call does. Custom codecs must
 // be deterministic and concurrency-safe and must not retain input references
 // that they can mutate. Every failure discards the partially constructed Q.
-func (d Query[Q]) Decode(ctx context.Context, raw string, limits QueryLimits) (Q, error) {
-	if err := d.prepare(ctx, limits); err != nil {
+func DecodeQuery[Q any](d Query[Q], ctx context.Context, raw string, limits QueryLimits) (Q, error) {
+	if err := queryPrepare(d, ctx, limits); err != nil {
 		return *new(Q), err
 	}
 	values, err := httpquery.Parse(ctx, raw, limits.wire())
@@ -145,12 +145,12 @@ func (d Query[Q]) Decode(ctx context.Context, raw string, limits QueryLimits) (Q
 		}
 		return *new(Q), queryFailure([]contract.Issue{{Code: contract.ValueIssue}}, err)
 	}
-	return d.decodeValues(ctx, values, limits.Issues)
+	return queryDecodeValues(d, ctx, values, limits.Issues)
 }
 
 // decodeValues hydrates already bounded, decoded scalar values. URL and multipart
 // framing both reuse these cardinality, codec, selector and failure rules.
-func (d Query[Q]) decodeValues(ctx context.Context, values url.Values, issueLimit int) (Q, error) {
+func queryDecodeValues[Q any](d Query[Q], ctx context.Context, values url.Values, issueLimit int) (Q, error) {
 	var issues []contract.Issue
 	add := func(path string, code contract.IssueCode) {
 		if len(issues) < issueLimit {
@@ -197,13 +197,13 @@ func (d Query[Q]) decodeValues(ctx context.Context, values url.Values, issueLimi
 	return result, nil
 }
 
-// Encode produces a relative query without a question mark. Nil and empty
+// EncodeQuery produces a relative query without a question mark. Nil and empty
 // slices are omitted; Optional zero values are omitted. Parameter and value
 // types remain concrete at the call site. Query escaping is applied exactly
 // once by the shared wire layer. The caller must keep input unchanged until
 // return; custom formatters own their internal work and allocation.
-func (d Query[Q]) Encode(ctx context.Context, input Q, limits QueryLimits) (string, error) {
-	if err := d.prepare(ctx, limits); err != nil {
+func EncodeQuery[Q any](d Query[Q], ctx context.Context, input Q, limits QueryLimits) (string, error) {
+	if err := queryPrepare(d, ctx, limits); err != nil {
 		return "", err
 	}
 	values := make(url.Values)

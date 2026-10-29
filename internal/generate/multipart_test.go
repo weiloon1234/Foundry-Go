@@ -124,8 +124,8 @@ import (
 var _ validation.Field[sample.UploadForm,sample.FileAlias] = sample.UploadFormValidationFields().Primary
 var _ validation.Field[sample.UploadForm,value.Optional[sample.Details]] = sample.UploadFormValidationFields().Details
 func TestGeneratedForm(t *testing.T){
- directory:=t.TempDir();descriptor:=sample.UploadFormDescriptor().WithTempDirectory(directory)
- metadata,err:=descriptor.Description();if err!=nil{t.Fatal(err)}
+ directory:=t.TempDir();descriptor:=foundryhttp.MultipartDirectory(sample.UploadFormDescriptor(),directory)
+ metadata,err:=foundryhttp.InspectMultipart(descriptor);if err!=nil{t.Fatal(err)}
  kinds:=map[foundryhttp.MultipartKind]int{}
  for _,part:=range metadata.Parts{kinds[part.Kind]++;if part.Kind==foundryhttp.MultipartFile&&(part.Scalar!=nil||part.Schema!=nil){t.Fatal("file acquired an implicit JSON/scalar shape")}}
  if kinds[foundryhttp.MultipartFile]!=3||kinds[foundryhttp.MultipartJSON]!=5||kinds[foundryhttp.MultipartText]!=7{t.Fatalf("part kinds: %v",kinds)}
@@ -169,7 +169,7 @@ func TestGeneratedForm(t *testing.T){
  if response.Code!=204||!called{t.Fatalf("response %d: %s",response.Code,response.Body)}
  entries,err:=os.ReadDir(directory);if err!=nil||len(entries)!=0{t.Fatal("temporary uploads remained")}
  if _,err:=retained.Open(context.Background());!errors.Is(err,fs.ErrClosed){t.Fatal("file escaped request lifetime")}
- empty:=sample.EmptyFormDescriptor();if err:=empty.Validate();err!=nil{t.Fatal(err)}
+ empty:=sample.EmptyFormDescriptor();if err:=foundryhttp.ValidateMultipart(empty);err!=nil{t.Fatal(err)}
 }
 `
 

@@ -79,14 +79,14 @@ func TestURLFloatPathAndQueryTransport(t *testing.T) {
 	path := foundryhttp.DefinePath("/positions/{coordinate}", foundryhttp.Param("coordinate", foundryhttp.FloatPath[floatCoordinate](), func(p *position) *floatCoordinate { return &p.Coordinate }))
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "position.show", Method: foundryhttp.GET, Access: foundryhttp.Public}, path)
 	var seen floatCoordinate
-	router, err := foundryhttp.NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p position) {
+	router, err := foundryhttp.NewRouter(foundryhttp.HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p position) {
 		seen = p.Coordinate
 		w.WriteHeader(204)
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	location, err := route.URL(position{Coordinate: 1e20})
+	location, err := foundryhttp.RouteURL(route, position{Coordinate: 1e20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,16 +104,16 @@ func TestURLFloatPathAndQueryTransport(t *testing.T) {
 		foundryhttp.RepeatedQueryParam("point", foundryhttp.FloatQuery[floatCoordinate](), func(q *filter) *[]floatCoordinate { return &q.Points }),
 	)
 	limits := foundryhttp.QueryLimits{Bytes: 1024, Pairs: 8, Issues: 4}
-	text, err := query.Encode(context.Background(), filter{Minimum: value.Set(floatMeasurement(1e20)), Points: []floatCoordinate{.1, -2}}, limits)
+	text, err := foundryhttp.EncodeQuery(query, context.Background(), filter{Minimum: value.Set(floatMeasurement(1e20)), Points: []floatCoordinate{.1, -2}}, limits)
 	if err != nil || text != "minimum=1e%2B20&point=0.1&point=-2" {
 		t.Fatalf("query float escaping: %q, %v", text, err)
 	}
-	got, err := query.Decode(context.Background(), text, limits)
+	got, err := foundryhttp.DecodeQuery(query, context.Background(), text, limits)
 	minimum, present := got.Minimum.Get()
 	if err != nil || !present || minimum != 1e20 || len(got.Points) != 2 || got.Points[0] != .1 || got.Points[1] != -2 {
 		t.Fatalf("query float round trip: %+v, %v", got, err)
 	}
-	if _, err := query.Decode(context.Background(), "minimum=1e+20", limits); err == nil {
+	if _, err := foundryhttp.DecodeQuery(query, context.Background(), "minimum=1e+20", limits); err == nil {
 		t.Fatal("unescaped query plus was treated as an exponent sign")
 	}
 }

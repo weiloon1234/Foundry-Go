@@ -125,7 +125,7 @@ func TestHTTPAuthenticationSuppliesModelOnceAndIsolatesRequests(t *testing.T) {
 			t.Fatal("handler retained authority after request")
 		}
 	}
-	info, err := endpoint.Description()
+	info, err := foundryhttp.InspectAuthenticated(endpoint)
 	if err != nil || info.Route.Authentication == nil || info.Route.Access != foundryhttp.Guarded {
 		t.Fatal(info, err)
 	}
@@ -236,7 +236,7 @@ func TestHTTPGuardedRegistrationCannotBypassTypedAdapter(t *testing.T) {
 		t.Fatal("unbound endpoint served", err)
 	}
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "raw", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/raw"))
-	if _, err := foundryhttp.NewRouter(route.HandleRaw(func(http.ResponseWriter, *http.Request, foundryhttp.NoPath) {})); !errors.Is(err, fault.Invalid) {
+	if _, err := foundryhttp.NewRouter(foundryhttp.HandleRaw(route, func(http.ResponseWriter, *http.Request, foundryhttp.NoPath) {})); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unbound raw route served", err)
 	}
 	if _, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, foundryhttp.NoQuery{}); err != nil {
@@ -252,12 +252,7 @@ func TestHTTPGuardedRegistrationCannotBypassTypedAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, err := range []error{
-		foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Public), transport, guard).Validate(),
-		foundryhttp.OptionalAuthentication(endpoint, transport, guard).Validate(),
-		foundryhttp.RequireAuthentication(endpoint, wrong, guard).Validate(),
-		foundryhttp.RequireAuthentication(endpoint, nil, guard).Validate(),
-	} {
+	for _, err := range []error{foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Public), transport, guard)), foundryhttp.ValidateOptional(foundryhttp.OptionalAuthentication(endpoint, transport, guard)), foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(endpoint, wrong, guard)), foundryhttp.ValidateAuthenticated(foundryhttp.RequireAuthentication(endpoint, nil, guard))} {
 		if err == nil {
 			t.Fatal("invalid authentication binding accepted")
 		}
@@ -382,7 +377,7 @@ func TestAuthenticationPreservesExplicitDomainError(t *testing.T) {
 		t.Fatal(err)
 	}
 	declaration := foundryhttp.DefineError("account.suspended", 423, "Account suspended")
-	endpoint := authEndpoint(foundryhttp.Guarded).WithErrors(declaration)
+	endpoint := foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Errors(declaration))
 	route := foundryhttp.RequireAuthentication(endpoint, transport, guard).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, declaration.WithCause(auth.Forbidden)
 	})

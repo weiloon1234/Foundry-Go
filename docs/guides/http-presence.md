@@ -27,11 +27,11 @@ reuse generated JSON/validation declarations:
 ```go
 fields := PresenceInputValidationFields()
 rules := validation.All(
-    fields.Count.Rules(validation.Required[int]()),
-    fields.Active.Rules(validation.Required[bool]()),
-    fields.Nickname.Rules(validation.ProhibitedNullable[string]()),
+    validation.Rules(fields.Count, validation.Required[int]()),
+    validation.Rules(fields.Active, validation.Required[bool]()),
+    validation.Rules(fields.Nickname, validation.ProhibitedNullable[string]()),
 )
-endpoint = endpoint.WithBodyValidation(rules)
+endpoint = foundryhttp.ValidateBody(endpoint, rules)
 ```
 
 These are compositional fragments; the [HTTP acceptance fixture](../../tests/fixtures/consumer/validationrules/presence_http_test.go)

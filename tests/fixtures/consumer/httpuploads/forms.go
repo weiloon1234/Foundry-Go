@@ -41,7 +41,7 @@ type Service interface {
 }
 
 func Router(directory string, service Service) (*foundryhttp.Router, error) {
-	form := ProfileInputDescriptor().WithTempDirectory(directory)
+	form := foundryhttp.MultipartDirectory(ProfileInputDescriptor(), directory)
 	fields := ProfileInputValidationFields()
 	rules := validation.All(
 		validation.Rules(fields.Title, validation.Optional(validation.MaxLength[string](80))),
@@ -54,7 +54,7 @@ func Router(directory string, service Service) (*foundryhttp.Router, error) {
 		validation.Rules(fields.Photos, validation.Each[Gallery](validation.FileMaxSize[foundryhttp.UploadedFile](1<<20))),
 	)
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "uploads.profile", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/profile"))
-	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.JSONResponse(201, UploadReplyJSON())).WithBodyValidation(rules)
+	endpoint := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.JSONResponse(201, UploadReplyJSON())), rules)
 	return foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ProfileInput]) (UploadReply, error) {
 		return service.Save(ctx, input.Body)
 	}))

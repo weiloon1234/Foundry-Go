@@ -42,30 +42,30 @@ func TestIdempotencyRejectsUnsupportedAssembly(t *testing.T) {
 	definition := idempotency.Definition{ID: "empty", Version: 1}
 	route := DefineRoute(RouteSpec{ID: "empty", Method: POST, Access: Public}, StaticPath("/empty"))
 	empty := DefineEndpoint(route, EmptyQuery(), EmptyBody(), EmptyResponse(204))
-	if err := Idempotent(empty, store, definition).Validate(); err != nil {
+	if err := ValidateIdempotent(Idempotent(empty, store, definition)); err != nil {
 		t.Fatal(err)
 	}
-	if err := Idempotent(DefineEndpoint(route, EmptyQuery(), EmptyBody(), DownloadResponse("text/plain")), store, definition).Validate(); err == nil {
+	if err := ValidateIdempotent(Idempotent(DefineEndpoint(route, EmptyQuery(), EmptyBody(), DownloadResponse("text/plain")), store, definition)); err == nil {
 		t.Fatal("download replay accepted")
 	}
-	if err := Idempotent(DefineEndpoint(route, EmptyQuery(), EmptyBody(), StreamResponse("text/plain")), store, definition).Validate(); err == nil {
+	if err := ValidateIdempotent(Idempotent(DefineEndpoint(route, EmptyQuery(), EmptyBody(), StreamResponse("text/plain")), store, definition)); err == nil {
 		t.Fatal("stream replay accepted")
 	}
 	credential := empty
 	credential.response.credentials = true
-	if Idempotent(credential, store, definition).Validate() == nil {
+	if ValidateIdempotent(Idempotent(credential, store, definition)) == nil {
 		t.Fatal("credential issuance replay accepted")
 	}
 	safe := empty
 	safe.route.spec.Method = GET
-	if Idempotent(safe, store, definition).Validate() == nil {
+	if ValidateIdempotent(Idempotent(safe, store, definition)) == nil {
 		t.Fatal("safe-method idempotency accepted")
 	}
 	unknown := DefineMiddleware("custom", func(next stdhttp.Handler) (stdhttp.Handler, error) { return next, nil })
-	if Idempotent(empty.WithMiddleware(unknown), store, definition).Validate() == nil {
+	if ValidateIdempotent(Idempotent(ConfigureEndpoint(empty, Use(unknown)), store, definition)) == nil {
 		t.Fatal("unclassified response mutation accepted")
 	}
-	adapted := Idempotent(empty.WithMiddleware(unknown.PreservesIdempotentResponses()), store, definition)
+	adapted := Idempotent(ConfigureEndpoint(empty, Use(unknown.PreservesIdempotentResponses())), store, definition)
 	identity, _ := idempotency.NewScope("trusted", "caller")
 	router, err := NewRouter(adapted.Handle(func(context.Context, Input[NoPath, NoQuery, NoBody]) (idempotency.Scope, error) { return identity, nil }, func(context.Context, *database.Tx, Input[NoPath, NoQuery, NoBody]) (NoContent, error) {
 		t.Error("declaration-only handler ran")
@@ -91,9 +91,9 @@ func TestIdempotencyRejectsUnsupportedAssembly(t *testing.T) {
 			t.Fatal("invalid key reached database", response.Code)
 		}
 	}
-	info, _ := adapted.Description()
+	info, _ := InspectIdempotent(adapted)
 	info.Idempotency.ApplicationHeaders = append(info.Idempotency.ApplicationHeaders, "Set-Cookie")
-	next, _ := adapted.Description()
+	next, _ := InspectIdempotent(adapted)
 	if len(next.Idempotency.ApplicationHeaders) != 0 {
 		t.Fatal("metadata mutation changed descriptor")
 	}

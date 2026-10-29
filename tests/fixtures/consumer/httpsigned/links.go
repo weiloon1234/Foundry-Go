@@ -32,11 +32,11 @@ type Links struct {
 }
 
 func NewLinks(signer foundryhttp.URLSigner) (Links, error) {
-	links := Links{Preview: foundryhttp.Signed(Preview, signer), Asset: Asset.Signed(signer)}
-	if err := links.Preview.Validate(); err != nil {
+	links := Links{Preview: foundryhttp.Signed(Preview, signer), Asset: foundryhttp.SignRoute(Asset, signer)}
+	if err := foundryhttp.ValidateSigned(links.Preview); err != nil {
 		return Links{}, err
 	}
-	if err := links.Asset.Validate(); err != nil {
+	if err := foundryhttp.ValidateSignedRoute(links.Asset); err != nil {
 		return Links{}, err
 	}
 	return links, nil
@@ -45,7 +45,7 @@ func (links Links) PreviewURL(ctx context.Context, origin foundryhttp.Origin, pa
 	return links.Preview.URL(ctx, origin, path, query, expires)
 }
 func (links Links) AssetURL(ctx context.Context, origin foundryhttp.Origin, path httpkernel.AssetPath, expires time.Time) (string, error) {
-	return links.Asset.URL(ctx, origin, path, expires)
+	return foundryhttp.SignedRouteURL(links.Asset, ctx, origin, path, expires)
 }
 
 type Service interface {
@@ -54,8 +54,7 @@ type Service interface {
 
 func (links Links) Handler(service Service, public foundryhttp.PublicURLConfig) (http.Handler, error) {
 	router, err := foundryhttp.NewRouter(
-		links.Preview.Handle(service.Preview),
-		links.Asset.HandleRaw(func(w http.ResponseWriter, r *http.Request, path httpkernel.AssetPath) {
+		links.Preview.Handle(service.Preview), foundryhttp.HandleSignedRaw(links.Asset, func(w http.ResponseWriter, r *http.Request, path httpkernel.AssetPath) {
 			// This fixture asserts path delivery, not a filesystem/storage adapter.
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			_, _ = w.Write([]byte(path.File))

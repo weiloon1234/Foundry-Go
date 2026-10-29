@@ -51,16 +51,16 @@ func TestJSONResponsesPublishTheSelectedDeclaredStatus(t *testing.T) {
 			}
 		})
 	}
-	info, err := upsertEndpoint().Description()
+	info, err := InspectEndpoint(upsertEndpoint())
 	if err != nil || info.Status != 200 || len(info.Statuses) != 2 || info.Statuses[1] != 201 || info.Response == nil {
 		t.Fatal("status metadata", info.Statuses, err)
 	}
 	for _, statuses := range [][]int{{200}, {200, 200}, {200, 204}, {200, 302}, {200, 201, 202, 203, 206, 207, 208, 226, 299}} {
-		if err := JSONResponses(endpointReplyJSON(), statuses[0], statuses[1:]...).Validate(); !errors.Is(err, fault.Invalid) {
+		if err := ValidateResponse(JSONResponses(endpointReplyJSON(), statuses[0], statuses[1:]...)); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid status set accepted", statuses)
 		}
 	}
-	if err := Idempotent(upsertEndpoint(), nil, idempotency.Definition{}).Validate(); err == nil {
+	if err := ValidateIdempotent(Idempotent(upsertEndpoint(), nil, idempotency.Definition{})); err == nil {
 		t.Fatal("idempotent endpoint accepted several statuses")
 	}
 }
@@ -107,12 +107,12 @@ func TestRedirectResponsesAcceptOnlyRelativeTargets(t *testing.T) {
 			}
 		})
 	}
-	info, err := redirectEndpoint().Description()
+	info, err := InspectEndpoint(redirectEndpoint())
 	if err != nil || !info.Redirect || info.Status != 303 || info.Response != nil {
 		t.Fatal("redirect metadata", info, err)
 	}
 	for _, status := range []int{200, 300, 304, 305, 399} {
-		if err := RedirectResponse(status).Validate(); !errors.Is(err, fault.Invalid) {
+		if err := ValidateResponse(RedirectResponse(status)); !errors.Is(err, fault.Invalid) {
 			t.Fatal("non-redirect status accepted", status)
 		}
 	}
@@ -128,7 +128,7 @@ func rawEndpoint(limit int64) Endpoint[NoPath, NoQuery, RawBody, EndpointReply] 
 	limits := DefaultEndpointLimits()
 	limits.Raw.Bytes = limit
 	route := DefineRoute(RouteSpec{ID: "files.raw", Method: POST, Access: Public}, StaticPath("/raw"))
-	return DefineEndpoint(route, EmptyQuery(), RawRequestBody("application/octet-stream", "text/plain"), JSONResponse(201, endpointReplyJSON())).WithLimits(limits)
+	return ConfigureEndpoint(DefineEndpoint(route, EmptyQuery(), RawRequestBody("application/octet-stream", "text/plain"), JSONResponse(201, endpointReplyJSON())), Limits(limits))
 }
 
 // A raw body streams to the handler with declared media and bounded reads.
@@ -183,18 +183,18 @@ func TestRawRequestBodyStreamsBoundedDeclaredMedia(t *testing.T) {
 	if _, err := retained.Read(make([]byte, 1)); !errors.Is(err, fault.Closed) {
 		t.Fatal("raw body was readable after the handler returned", err)
 	}
-	info, err := rawEndpoint(16).Description()
+	info, err := InspectEndpoint(rawEndpoint(16))
 	if err != nil || info.Body == nil || info.Body.Raw == nil || len(info.Body.Raw.MediaTypes) != 2 || info.Body.MediaType != "" || info.Limits.Raw.Bytes != 16 {
 		t.Fatal("raw metadata", info.Body, err)
 	}
-	if err := rawEndpoint(0).Validate(); !errors.Is(err, fault.Invalid) {
+	if err := ValidateEndpoint(rawEndpoint(0)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("raw endpoint without a raw limit accepted", err)
 	}
-	if err := RawRequestBody("text/plain", "text/plain; charset=utf-8").Validate(); err == nil {
+	if err := ValidateBodyDescriptor(RawRequestBody("text/plain", "text/plain; charset=utf-8")); err == nil {
 		t.Fatal("repeated raw media accepted")
 	}
 	get := DefineEndpoint(DefineRoute(RouteSpec{ID: "files.get", Method: GET, Access: Public}, StaticPath("/get")), EmptyQuery(), RawRequestBody("application/octet-stream"), JSONResponse(200, endpointReplyJSON()))
-	if err := get.Validate(); err == nil {
+	if err := ValidateEndpoint(get); err == nil {
 		t.Fatal("GET accepted a raw body")
 	}
 	if _, err := json.Marshal(RawBody{}); err == nil {
@@ -205,7 +205,7 @@ func TestRawRequestBodyStreamsBoundedDeclaredMedia(t *testing.T) {
 // Raw bodies are opaque to contract descriptors and never enter JSON schemas.
 func TestRawBodyMetadataHasNoSchema(t *testing.T) {
 	t.Parallel()
-	info, err := rawEndpoint(8).Description()
+	info, err := InspectEndpoint(rawEndpoint(8))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -177,7 +177,7 @@ func TestRefreshTokenCookieReadsOnlyTheCookieAndClearsItOnAuthenticationFailure(
 	if w := serveBrowser(router, cross); w.Code != 403 || len(w.Header().Values("Set-Cookie")) != 0 {
 		t.Fatal("cross-site refresh was not rejected without clearing", w.Code)
 	}
-	description, err := refresh.Description()
+	description, err := foundryhttp.InspectEndpoint(refresh)
 	if err != nil || description.Body != nil || description.RefreshCookie == nil || *description.RefreshCookie != (foundryhttp.RefreshCookieInfo{Name: refreshCookieName, Reads: true, Sets: true}) {
 		t.Fatal("refresh cookie metadata", description.RefreshCookie, err)
 	}
@@ -197,11 +197,11 @@ func TestClearRefreshCookieOnLogoutAndRejectsMisuse(t *testing.T) {
 	for name, err := range map[string]error{
 		"plain name":  foundryhttp.DefineRefreshCookie("refresh", foundryhttp.CSRFConfig{}).Validate(),
 		"bad origin":  foundryhttp.DefineRefreshCookie(refreshCookieName, foundryhttp.CSRFConfig{TrustedOrigins: []foundryhttp.Origin{"null"}}).Validate(),
-		"two uses":    foundryhttp.ClearRefreshCookie(cookie, foundryhttp.TokenCookieResponse[authAccount, int64](cookie, 200, testkitClock())).Validate(),
-		"get":         foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "web.get", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204))).Validate(),
-		"two cookies": foundryhttp.DefineEndpoint(refreshRoute("web.mixed", "/mixed"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), foundryhttp.TokenCookieResponse[authAccount, int64](foundryhttp.DefineRefreshCookie("__Host-refresh-admin", foundryhttp.CSRFConfig{}), 200, testkitClock())).Validate(),
+		"two uses":    foundryhttp.ValidateResponse(foundryhttp.ClearRefreshCookie(cookie, foundryhttp.TokenCookieResponse[authAccount, int64](cookie, 200, testkitClock()))),
+		"get":         foundryhttp.ValidateEndpoint(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "web.get", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204)))),
+		"two cookies": foundryhttp.ValidateEndpoint(foundryhttp.DefineEndpoint(refreshRoute("web.mixed", "/mixed"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), foundryhttp.TokenCookieResponse[authAccount, int64](foundryhttp.DefineRefreshCookie("__Host-refresh-admin", foundryhttp.CSRFConfig{}), 200, testkitClock()))),
 		// The consumed cookie must be replaced or cleared, never left for a replay.
-		"read without set": foundryhttp.DefineEndpoint(refreshRoute("web.json", "/json"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), foundryhttp.TokenResponse[authAccount, int64](200, testkitClock())).Validate(),
+		"read without set": foundryhttp.ValidateEndpoint(foundryhttp.DefineEndpoint(refreshRoute("web.json", "/json"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), foundryhttp.TokenResponse[authAccount, int64](200, testkitClock()))),
 	} {
 		if !errors.Is(err, fault.Invalid) {
 			t.Fatalf("%s accepted: %v", name, err)
@@ -262,13 +262,13 @@ func TestRefreshTokenCookieLogoutIsIdempotentAndKeepsTheCookieOnFailure(t *testi
 	if len(received) != 5 {
 		t.Fatal("rejected requests reached the handler", len(received))
 	}
-	description, err := logout.Description()
+	description, err := foundryhttp.InspectEndpoint(logout)
 	if err != nil || description.Body != nil || description.RefreshCookie == nil || *description.RefreshCookie != (foundryhttp.RefreshCookieInfo{Name: refreshCookieName, Reads: true, Clears: true, Optional: true}) {
 		t.Fatal("cookie logout metadata", description.RefreshCookie, err)
 	}
 	for name, err := range map[string]error{
-		"sets":         foundryhttp.DefineEndpoint(refreshRoute("web.logout.sets", "/sets"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie), foundryhttp.TokenCookieResponse[authAccount, int64](cookie, 200, testkitClock())).Validate(),
-		"keeps":        foundryhttp.DefineEndpoint(refreshRoute("web.logout.keeps", "/keeps"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie), foundryhttp.EmptyResponse(204)).Validate(),
+		"sets":         foundryhttp.ValidateEndpoint(foundryhttp.DefineEndpoint(refreshRoute("web.logout.sets", "/sets"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie), foundryhttp.TokenCookieResponse[authAccount, int64](cookie, 200, testkitClock()))),
+		"keeps":        foundryhttp.ValidateEndpoint(foundryhttp.DefineEndpoint(refreshRoute("web.logout.keeps", "/keeps"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie), foundryhttp.EmptyResponse(204))),
 		"optional set": foundryhttp.RefreshCookieInfo{Name: refreshCookieName, Reads: true, Sets: true, Optional: true}.Validate(),
 		"optional off": foundryhttp.RefreshCookieInfo{Name: refreshCookieName, Clears: true, Optional: true}.Validate(),
 	} {

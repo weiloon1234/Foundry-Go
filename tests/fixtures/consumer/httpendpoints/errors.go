@@ -2,6 +2,7 @@ package httpendpoints
 
 import (
 	"context"
+
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
@@ -9,10 +10,10 @@ import (
 // domain behavior. Internal causes remain ordinary Go errors.
 var SeatUnavailable = foundryhttp.DefineError("seats.unavailable", 409, "The selected seat is no longer available.")
 
-var Reserve = foundryhttp.DefineEndpoint(
+var Reserve = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(
 	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "seats.reserve", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/seats/reserve")),
 	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
-).WithErrors(SeatUnavailable)
+), foundryhttp.Errors(SeatUnavailable))
 
 // ReservationService defines only the domain operation.
 type ReservationService interface{ Reserve(context.Context) error }

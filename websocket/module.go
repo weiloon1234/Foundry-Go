@@ -25,7 +25,7 @@ func (c ServerConfig) Validate() error {
 	if err := c.HTTP.Validate(); err != nil {
 		return err
 	}
-	if _, err := foundryhttp.StaticPath(c.Path).URL(foundryhttp.NoPath{}); err != nil {
+	if _, err := foundryhttp.PathURL(foundryhttp.StaticPath(c.Path), foundryhttp.NoPath{}); err != nil {
 		return err
 	}
 	for _, middleware := range c.Middleware {
@@ -76,7 +76,7 @@ func DeclaredModule(name foundation.ProviderID, key foundation.Key[*Hub], config
 				return declaredHub{}, safeerror.NewFault(fault.Invalid, "WebSocket factory returned no hub")
 			}
 			route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "foundry.websocket", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath(config.Path))
-			router, err := foundryhttp.NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, request *stdhttp.Request, _ foundryhttp.NoPath) {
+			router, err := foundryhttp.NewRouter(foundryhttp.HandleRaw(route, func(w stdhttp.ResponseWriter, request *stdhttp.Request, _ foundryhttp.NoPath) {
 				hub.ServeHTTP(w, request)
 			}))
 			if err != nil {
@@ -217,7 +217,7 @@ func Route(hub *Hub, path string, middleware ...foundryhttp.Middleware) foundryh
 		}
 		handler = wrapped
 	}
-	return route.HandleRaw(func(w stdhttp.ResponseWriter, request *stdhttp.Request, _ foundryhttp.NoPath) {
+	return foundryhttp.HandleRaw(route, func(w stdhttp.ResponseWriter, request *stdhttp.Request, _ foundryhttp.NoPath) {
 		handler.ServeHTTP(w, request)
 	})
 }

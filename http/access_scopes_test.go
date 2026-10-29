@@ -50,14 +50,14 @@ func TestHTTPAccessScopesRunBeforeDecodingAndKeepMetadataImmutable(t *testing.T)
 		t.Fatal(err)
 	}
 	base := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard)
-	endpoint := base.WithScopes(required)
-	if err := base.Validate(); err != nil {
+	endpoint := foundryhttp.ConfigureAuthenticated(base, foundryhttp.Scopes(required))
+	if err := foundryhttp.ValidateAuthenticated(base); err != nil {
 		t.Fatal("base was mutated", err)
 	}
-	if err := base.WithScopes(auth.AccessScopes[authAccount]{}).Validate(); !errors.Is(err, fault.Invalid) {
+	if err := foundryhttp.ValidateAuthenticated(foundryhttp.ConfigureAuthenticated(base, foundryhttp.Scopes(auth.AccessScopes[authAccount]{}))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty requirement", err)
 	}
-	if err := endpoint.WithScopes(required).Validate(); !errors.Is(err, fault.Duplicate) {
+	if err := foundryhttp.ValidateAuthenticated(foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Scopes(required))); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("replaced scope requirement", err)
 	}
 	router := newAuthRouter(t, endpoint.Handle(func(ctx context.Context, subject authAccount, _ authInput) (foundryhttp.NoContent, error) {
@@ -75,7 +75,7 @@ func TestHTTPAccessScopesRunBeforeDecodingAndKeepMetadataImmutable(t *testing.T)
 		route.Authentication.RequiredScopes[0] = "changed"
 		return foundryhttp.NoContent{}, nil
 	}))
-	description, err := endpoint.Description()
+	description, err := foundryhttp.InspectAuthenticated(endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}

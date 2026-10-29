@@ -122,7 +122,7 @@ func TestTicketDeliveryUsesTheCredentialBoundary(t *testing.T) {
 		t.Fatal("expired ticket delivered", w.Code)
 	}
 	get := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "unsafe", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.TicketResponse[authAccount, int64](200, now))
-	if get.Validate() == nil {
+	if foundryhttp.ValidateEndpoint(get) == nil {
 		t.Fatal("ticket delivery accepted GET")
 	}
 }

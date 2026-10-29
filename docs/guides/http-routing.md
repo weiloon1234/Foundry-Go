@@ -14,7 +14,7 @@ type MemberPath struct {
     Member model.ID[Member]
 }
 
-var MemberShow = foundryhttp.DefineRoute(
+var MemberShow = foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
     foundryhttp.RouteSpec{
         ID: "members.show",
         Method: foundryhttp.GET,
@@ -24,9 +24,9 @@ var MemberShow = foundryhttp.DefineRoute(
         foundryhttp.Param("member", foundryhttp.ModelIDPath[Member](),
             func(path *MemberPath) *model.ID[Member] { return &path.Member }),
     ),
-).Within(foundryhttp.DefineScope("/api", "api"))
+), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 
-location, err := MemberShow.URL(MemberPath{Member: member.ID})
+location, err := foundryhttp.RouteURL(MemberShow, MemberPath{Member: member.ID})
 // /api/members/<member UUID>
 ```
 
@@ -38,7 +38,7 @@ decoding an ID does not fetch its model or authorize access.
 
 ## Explicit registration
 
-`MemberShow.HandleRaw(handler)` requires a
+`foundryhttp.HandleRaw(MemberShow, handler)` requires a
 `func(http.ResponseWriter, *http.Request, MemberPath)` callback. The native
 transport objects remain available while the path is already decoded and typed.
 Pass its registration to `foundryhttp.NewRouter`. The returned router is a
@@ -131,3 +131,13 @@ the selected route's metadata inside its handler. Both return independent
 snapshots, including parameter-name slices. Route metadata comes from the same
 declaration used by runtime matching and URL generation. `Router.Endpoints()` exposes the registered typed payload, validation and error
 metadata; see [endpoint inspection](http-endpoints.md). [OpenAPI and TypeScript exporters](client-contracts.md) consume the registered metadata.
+
+
+## Foundation contributions
+
+Use `RegisterRoute` for a raw route declaration and `RegisterEndpoint` for a
+typed endpoint. Signed declarations use `RegisterSignedRoute` or
+`RegisterSignedEndpoint`; replay declarations use `RegisterIdempotentEndpoint`.
+Each function retains the declaration's concrete types and checks that the
+factory returns the same route identity, wire types, signing policy and replay
+contract. The declarations themselves have no contribution-interface methods.

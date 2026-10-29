@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"io"
 	"mime"
 	stdhttp "net/http"
@@ -10,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -56,9 +56,9 @@ type RawBody struct {
 // Metadata, OpenAPI and generated clients describe it as binary content.
 func RawRequestBody(media MediaType, additional ...MediaType) Body[RawBody] {
 	declared := append([]MediaType{media}, additional...)
-	return Body[RawBody]{kind: payloadRaw, raw: &rawBodyDescriptor[RawBody]{media: declared, open: func(w stdhttp.ResponseWriter, r *stdhttp.Request, limits RawBodyLimits) (RawBody, func() error, error) {
+	return rawBodyOperations(Body[RawBody]{kind: payloadRaw, raw: &rawBodyDescriptor[RawBody]{media: declared, open: func(w stdhttp.ResponseWriter, r *stdhttp.Request, limits RawBodyLimits) (RawBody, func() error, error) {
 		return openRawBody(w, r, declared, limits)
-	}}}
+	}}})
 }
 
 type rawBodyDescriptor[B any] struct {

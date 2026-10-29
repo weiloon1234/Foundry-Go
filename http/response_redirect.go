@@ -24,7 +24,7 @@ type Redirect struct {
 // returns a Redirect. Metadata and OpenAPI describe the Location header, and
 // the TypeScript client returns the location instead of following it.
 func RedirectResponse(status int) Response[Redirect] {
-	return Response[Redirect]{kind: payloadRedirect, status: status, redirectTarget: Redirect.Location}
+	return Response[Redirect]{prepare: prepareRedirectResponse, kind: payloadRedirect, status: status, redirectTarget: Redirect.Location}
 }
 
 // RedirectTo accepts a relative URL on this origin: a path starting with one
@@ -41,7 +41,7 @@ func RedirectTo(location string) Redirect {
 
 // RedirectToRoute redirects to a named route's URL generated from its concrete path.
 func RedirectToRoute[P any](route Route[P], path P) Redirect {
-	location, err := route.URL(path)
+	location, err := RouteURL(route, path)
 	if err != nil {
 		return Redirect{err: err}
 	}

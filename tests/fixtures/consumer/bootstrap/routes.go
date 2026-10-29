@@ -2,13 +2,14 @@ package bootstrap
 
 import (
 	"context"
+	"image/color"
+
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/validation"
-	"image/color"
 )
 
 //foundry:dto
@@ -73,7 +74,7 @@ func Routes(settings Settings, services application.Services) ([]http.RouteRegis
 	operator := http.Authenticated(profileEndpoint("bootstrap.operator", "/api/operator", http.POST), operators).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
 		return Profile{Name: actor.Department, Kind: "operator"}, nil
 	})
-	upload := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "bootstrap.avatar", Method: http.POST, Access: http.Guarded}, http.StaticPath("/api/avatar")), http.EmptyQuery(), http.MultipartBody(UploadInputDescriptor()), http.JSONResponse(201, UploadResultJSON())).WithBodyValidation(validation.Rules(UploadInputValidationFields().Image, validation.FileMaxSize[http.UploadedFile](1<<20), validation.FileContentTypes[http.UploadedFile]("image/png")))
+	upload := http.ValidateBody(http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "bootstrap.avatar", Method: http.POST, Access: http.Guarded}, http.StaticPath("/api/avatar")), http.EmptyQuery(), http.MultipartBody(UploadInputDescriptor()), http.JSONResponse(201, UploadResultJSON())), validation.Rules(UploadInputValidationFields().Image, validation.FileMaxSize[http.UploadedFile](1<<20), validation.FileContentTypes[http.UploadedFile]("image/png")))
 	saved := http.Authenticated(upload, members).Handle(func(ctx context.Context, actor Member, input http.Input[http.NoPath, http.NoQuery, UploadInput]) (UploadResult, error) {
 		reader, err := input.Body.Image.Open(ctx)
 		if err != nil {

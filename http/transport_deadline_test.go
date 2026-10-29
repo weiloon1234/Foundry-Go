@@ -53,8 +53,8 @@ func (b *lockedBuffer) String() string { b.mu.Lock(); defer b.mu.Unlock(); retur
 // completed success is delivered after the deadline.
 func TestGlobalWrappersHonorRouteBudgetAndCompletedResponses(t *testing.T) {
 	t.Parallel()
-	events := DefineEndpoint(DefineRoute(RouteSpec{ID: "events", Method: GET, Access: Public}, StaticPath("/events")), EmptyQuery(), EmptyBody(), EventStreamResponse(streamEventPayloadJSON())).WithTimeout(5 * time.Second)
-	export := DefineEndpoint(DefineRoute(RouteSpec{ID: "export", Method: GET, Access: Public}, StaticPath("/export")), EmptyQuery(), EmptyBody(), StreamResponse("text/plain; charset=utf-8")).WithTimeout(5 * time.Second)
+	events := ConfigureEndpoint(DefineEndpoint(DefineRoute(RouteSpec{ID: "events", Method: GET, Access: Public}, StaticPath("/events")), EmptyQuery(), EmptyBody(), EventStreamResponse(streamEventPayloadJSON())), Timeout(5*time.Second))
+	export := ConfigureEndpoint(DefineEndpoint(DefineRoute(RouteSpec{ID: "export", Method: GET, Access: Public}, StaticPath("/export")), EmptyQuery(), EmptyBody(), StreamResponse("text/plain; charset=utf-8")), Timeout(5*time.Second))
 	late := DefineEndpoint(DefineRoute(RouteSpec{ID: "late", Method: GET, Access: Public}, StaticPath("/late")), EmptyQuery(), EmptyBody(), JSONResponse(200, streamEventPayloadJSON()))
 	failed := DefineEndpoint(DefineRoute(RouteSpec{ID: "failed", Method: GET, Access: Public}, StaticPath("/failed")), EmptyQuery(), EmptyBody(), JSONResponse(200, streamEventPayloadJSON()))
 	kernel, _ := deadlineKernel(t, 50*time.Millisecond,

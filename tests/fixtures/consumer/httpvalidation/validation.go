@@ -8,7 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var Update = httpendpoints.Update.WithBodyValidation(
+var Update = foundryhttp.ValidateBody(httpendpoints.Update,
 	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Email, "Email address"), validation.Optional(validation.NonBlank[string]())),
 	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Nickname, "Display name"), validation.Optional(validation.Nullable(validation.MinLength[string](2)))),
 )

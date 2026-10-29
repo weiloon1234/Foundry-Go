@@ -197,7 +197,7 @@ func TestDownloadEndpointFailureClosesTransferredBodiesBeforeCommit(t *testing.T
 			if mode == "growing-size" {
 				limits.Files.Bytes = 10
 			}
-			endpoint = endpoint.WithLimits(limits)
+			endpoint = ConfigureEndpoint(endpoint, Limits(limits))
 			router := downloadRouter(t, endpoint, func(context.Context, downloadRequest) (Download, error) { return download, nil })
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, httptest.NewRequest("GET", "/file", nil))
@@ -282,7 +282,7 @@ func TestDownloadEndpointBoundsRangesBeforeHandlerOrSource(t *testing.T) {
 		limits := DefaultEndpointLimits()
 		limits.Files.Ranges = 2
 		limits.Files.RangeBytes = 32
-		endpoint = endpoint.WithLimits(limits)
+		endpoint = ConfigureEndpoint(endpoint, Limits(limits))
 		router := downloadRouter(t, endpoint, func(context.Context, downloadRequest) (Download, error) {
 			t.Error("oversized range reached handler")
 			return Download{}, nil
@@ -302,16 +302,16 @@ func TestDownloadResponseDeclarationAndMetadataRemainTypedAndOwned(t *testing.T)
 	extra := []MediaType{"application/pdf"}
 	response := DownloadResponse("text/plain", extra...)
 	extra[0] = "bad"
-	if err := response.Validate(); err != nil {
+	if err := ValidateResponse(response); err != nil {
 		t.Fatal("caller mutated response declaration", err)
 	}
 	for _, invalid := range []Response[Download]{DownloadResponse("image/*"), DownloadResponse("text/plain", "TEXT/PLAIN"), {}} {
-		if err := invalid.Validate(); err == nil {
+		if err := ValidateResponse(invalid); err == nil {
 			t.Fatal("invalid download declaration accepted")
 		}
 	}
 	endpoint := DefineEndpoint(DefineRoute(RouteSpec{ID: "files.multi", Method: GET, Access: Public}, StaticPath("/file")), EmptyQuery(), EmptyBody(), response)
-	info, err := endpoint.Description()
+	info, err := InspectEndpoint(endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestDownloadResponseDeclarationAndMetadataRemainTypedAndOwned(t *testing.T)
 		t.Fatal("file response acquired a false schema", info.Response)
 	}
 	info.Response.File.MediaTypes[0] = "changed"
-	again, err := endpoint.Description()
+	again, err := InspectEndpoint(endpoint)
 	if err != nil || again.Response.File.MediaTypes[0] != "text/plain" {
 		t.Fatal("metadata mutation changed declaration")
 	}

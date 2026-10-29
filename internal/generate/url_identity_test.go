@@ -32,8 +32,8 @@ func main(){
  for _,typ:=range schema.Types{
   if typ.ID==schema.Root{for _,field:=range typ.Properties{expected[field.Name]=field.Type}}
  }
- path,err:=LookupPathDescriptor().Parameters();if err!=nil{panic(err)}
- query,err:=LookupQueryDescriptor().Parameters();if err!=nil{panic(err)}
+ path,err:=foundryhttp.PathParameters(LookupPathDescriptor());if err!=nil{panic(err)}
+ query,err:=foundryhttp.QueryParameters(LookupQueryDescriptor());if err!=nil{panic(err)}
  names:=map[string]string{"code":"Code","rank":"Rank","id":"ID"}
  check:=func(name string,scalar *foundryhttp.URLScalarInfo){
   if scalar==nil || scalar.Value.ID!=expected[names[name]]{
@@ -46,9 +46,9 @@ func main(){
   if typ.Key!=nil && typ.Key.Value.ID!=expected["Code"]{panic("map key source identity mismatch")}
  }
  ctx:=context.Background()
- input,err:=LookupQueryDescriptor().Decode(ctx,"code=example&rank=42&id=0193fd8c-2075-7000-8000-000000000001",foundryhttp.QueryLimits{Bytes:512,Pairs:10,Issues:10})
+ input,err:=foundryhttp.DecodeQuery(LookupQueryDescriptor(),ctx,"code=example&rank=42&id=0193fd8c-2075-7000-8000-000000000001",foundryhttp.QueryLimits{Bytes:512,Pairs:10,Issues:10})
  if err!=nil || input.Code!="example" || input.Rank!=42{panic("query value contract changed")}
- if _,err:=LookupPathDescriptor().URL(LookupPath{Code:input.Code,Rank:input.Rank,ID:input.ID});err!=nil{panic(err)}
+ if _,err:=foundryhttp.PathURL(LookupPathDescriptor(),LookupPath{Code:input.Code,Rank:input.Rank,ID:input.ID});err!=nil{panic(err)}
  if _,err:=LookupResponseJSON().Encode(ctx,LookupResponse{Code:input.Code,Rank:input.Rank,ID:input.ID,ByCode:map[Code]string{"example":"value"}},contract.JSONLimits{Bytes:1024,Depth:8,Nodes:30,Steps:100,Issues:10});err!=nil{panic(err)}
 }
 `)

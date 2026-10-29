@@ -27,7 +27,7 @@ func TestTypedEndpointPreparesResponseBeforeCommit(t *testing.T) {
 			if mode == "limit" {
 				limits := DefaultEndpointLimits()
 				limits.Response.Bytes = 8
-				e = e.WithLimits(limits)
+				e = ConfigureEndpoint(e, Limits(limits))
 			}
 			w := httptest.NewRecorder()
 			router, err := NewRouter(e.Handle(func(context.Context, Input[NoPath, NoQuery, NoBody]) (EndpointCodecReply, error) {

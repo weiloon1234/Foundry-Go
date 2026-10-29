@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
 
@@ -18,24 +19,24 @@ type Preparation[P, Q, B any] func(context.Context, Input[P, Q, B]) (Q, B, error
 // checked. Return a declared HTTP error to deny the request safely.
 type RequestAuthorization[P, Q, B any] func(context.Context, Input[P, Q, B]) error
 
-// WithPreparation replaces the optional preparation callback on an independent
+// PrepareEndpoint replaces the optional preparation callback on an independent
 // endpoint. An explicitly nil callback is invalid at registration. Prohibited and
 // Absent rules also check original input before this callback can transform it.
-func (e Endpoint[P, Q, B, R]) WithPreparation(prepare Preparation[P, Q, B]) Endpoint[P, Q, B, R] {
+func PrepareEndpoint[P, Q, B, R any](e Endpoint[P, Q, B, R], prepare Preparation[P, Q, B]) Endpoint[P, Q, B, R] {
 	e.preparation = &prepare
 	return e
 }
 
-// WithAuthorization replaces the optional request authorization callback. Use an
+// AuthorizeEndpoint replaces the optional request authorization callback. Use an
 // authenticated endpoint's version when authorization needs a concrete actor.
-func (e Endpoint[P, Q, B, R]) WithAuthorization(authorize RequestAuthorization[P, Q, B]) Endpoint[P, Q, B, R] {
+func AuthorizeEndpoint[P, Q, B, R any](e Endpoint[P, Q, B, R], authorize RequestAuthorization[P, Q, B]) Endpoint[P, Q, B, R] {
 	e.authorization = &authorize
 	return e
 }
 
 // appendAuthorization adds a request authorization stage after any endpoint
 // authorization already configured. Both run before validation, in order.
-func (e Endpoint[P, Q, B, R]) appendAuthorization(next RequestAuthorization[P, Q, B]) Endpoint[P, Q, B, R] {
+func endpointAppendAuthorization[P, Q, B, R any](e Endpoint[P, Q, B, R], next RequestAuthorization[P, Q, B]) Endpoint[P, Q, B, R] {
 	if e.authorization == nil {
 		e.authorization = &next
 		return e

@@ -44,7 +44,7 @@ const queryUserID = "0192f915-3cf3-7000-8000-000000000001"
 func TestTypedQueryRoundTrip(t *testing.T) {
 	t.Parallel()
 	d := searchQuery()
-	decoded, err := d.Decode(context.Background(), "q=Jane+Doe%2B&page=0&active=false&label=a%2Cb&label=%E6%9D%8E&user="+queryUserID, queryLimits)
+	decoded, err := foundryhttp.DecodeQuery(d, context.Background(), "q=Jane+Doe%2B&page=0&active=false&label=a%2Cb&label=%E6%9D%8E&user="+queryUserID, queryLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,12 +63,12 @@ func TestTypedQueryRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(decoded.Labels, queryLabels{"a,b", "李"}) {
 		t.Fatalf("list expanded implicitly or changed: %v", decoded.Labels)
 	}
-	encoded, err := d.Encode(context.Background(), decoded, queryLimits)
+	encoded, err := foundryhttp.EncodeQuery(d, context.Background(), decoded, queryLimits)
 	want := "active=false&label=a%2Cb&label=%E6%9D%8E&page=0&q=Jane+Doe%2B&user=" + queryUserID
 	if err != nil || encoded != want {
 		t.Fatalf("got %q, %v; want %q", encoded, err, want)
 	}
-	roundTrip, err := d.Decode(context.Background(), encoded, queryLimits)
+	roundTrip, err := foundryhttp.DecodeQuery(d, context.Background(), encoded, queryLimits)
 	if err != nil || !reflect.DeepEqual(decoded, roundTrip) {
 		t.Fatalf("round trip: %v", err)
 	}
@@ -77,11 +77,11 @@ func TestTypedQueryRoundTrip(t *testing.T) {
 func TestTypedQueryOmissionAndEmpty(t *testing.T) {
 	t.Parallel()
 	d := searchQuery()
-	decoded, err := d.Decode(context.Background(), "user="+queryUserID, queryLimits)
+	decoded, err := foundryhttp.DecodeQuery(d, context.Background(), "user="+queryUserID, queryLimits)
 	if err != nil || decoded.Search.IsSet() || decoded.Labels != nil {
 		t.Fatalf("omission: %+v, %v", decoded, err)
 	}
-	decoded, err = d.Decode(context.Background(), "q&label=&user="+queryUserID, queryLimits)
+	decoded, err = foundryhttp.DecodeQuery(d, context.Background(), "q&label=&user="+queryUserID, queryLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestTypedQueryOmissionAndEmpty(t *testing.T) {
 		t.Fatal("empty list element lost")
 	}
 	decoded.Labels = queryLabels{}
-	encoded, err := d.Encode(context.Background(), decoded, queryLimits)
+	encoded, err := foundryhttp.EncodeQuery(d, context.Background(), decoded, queryLimits)
 	if err != nil || encoded != "q=&user="+queryUserID {
 		t.Fatalf("empty slice encoding: %q, %v", encoded, err)
 	}
@@ -114,7 +114,7 @@ func TestTypedQueryFieldIssues(t *testing.T) {
 		{"empty-id", "user=00000000-0000-0000-0000-000000000000", "/user", contract.ValueIssue},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := searchQuery().Decode(context.Background(), tc.raw, queryLimits)
+			got, err := foundryhttp.DecodeQuery(searchQuery(), context.Background(), tc.raw, queryLimits)
 			if !reflect.DeepEqual(got, querySearch{}) {
 				t.Fatal("partial decoded value escaped")
 			}
@@ -137,7 +137,7 @@ func TestTypedQueryFieldIssues(t *testing.T) {
 	}
 	limits := queryLimits
 	limits.Issues = 1
-	_, err := searchQuery().Decode(context.Background(), "secret=x&page=1&page=2", limits)
+	_, err := foundryhttp.DecodeQuery(searchQuery(), context.Background(), "secret=x&page=1&page=2", limits)
 	var failure *foundryhttp.QueryError
 	if !errors.As(err, &failure) || len(failure.Issues()) != 1 {
 		t.Fatal("issue limit not enforced")
@@ -173,7 +173,7 @@ func TestTypedQueryValidatesStructureBeforeCodecs(t *testing.T) {
 	var calls atomic.Int32
 	d := customQuery(&queryFuncCodec{parse: func(text string) (string, error) { calls.Add(1); return text, nil }})
 	for _, raw := range []string{"", "text=a&text=b", "text=a&unknown=b", "text=%GG"} {
-		if _, err := d.Decode(context.Background(), raw, queryLimits); err == nil {
+		if _, err := foundryhttp.DecodeQuery(d, context.Background(), raw, queryLimits); err == nil {
 			t.Fatal("invalid structure accepted")
 		}
 	}
@@ -211,9 +211,9 @@ func TestTypedQueryCodecFailuresAreOwned(t *testing.T) {
 						completed := false
 						defer func() { returned <- completed }()
 						if direction == "decode" {
-							_, _ = d.Decode(ctx, "text=x", queryLimits)
+							_, _ = foundryhttp.DecodeQuery(d, ctx, "text=x", queryLimits)
 						} else {
-							_, _ = d.Encode(ctx, queryCustom{Text: "x"}, queryLimits)
+							_, _ = foundryhttp.EncodeQuery(d, ctx, queryCustom{Text: "x"}, queryLimits)
 						}
 						completed = true
 					}()
@@ -225,13 +225,13 @@ func TestTypedQueryCodecFailuresAreOwned(t *testing.T) {
 				var err error
 				if direction == "decode" {
 					var got queryCustom
-					got, err = d.Decode(ctx, "text=x", queryLimits)
+					got, err = foundryhttp.DecodeQuery(d, ctx, "text=x", queryLimits)
 					if got.Text != "" {
 						t.Fatal("partial model")
 					}
 				} else {
 					var got string
-					got, err = d.Encode(ctx, queryCustom{Text: "x"}, queryLimits)
+					got, err = foundryhttp.EncodeQuery(d, ctx, queryCustom{Text: "x"}, queryLimits)
 					if got != "" {
 						t.Fatal("partial output")
 					}
@@ -262,7 +262,7 @@ func TestTypedQueryCancellationWaitsForCodecOwnership(t *testing.T) {
 		return "finished", nil
 	}})
 	done := make(chan error, 1)
-	go func() { _, err := d.Decode(ctx, "text=x", queryLimits); done <- err }()
+	go func() { _, err := foundryhttp.DecodeQuery(d, ctx, "text=x", queryLimits); done <- err }()
 	<-entered
 	cancel()
 	select {
@@ -280,7 +280,7 @@ func TestTypedQueryDeclarationAndSelectorFailures(t *testing.T) {
 	t.Parallel()
 	var nilCodec *queryFuncCodec
 	var zero foundryhttp.Query[queryCustom]
-	if zero.Validate() == nil {
+	if foundryhttp.ValidateQueryDescriptor(zero) == nil {
 		t.Fatal("undefined query accepted")
 	}
 	for _, d := range []foundryhttp.Query[queryCustom]{
@@ -289,27 +289,27 @@ func TestTypedQueryDeclarationAndSelectorFailures(t *testing.T) {
 		foundryhttp.DefineQuery(foundryhttp.QueryParameter[queryCustom]{}),
 		foundryhttp.DefineQuery(foundryhttp.QueryParam("bad name", foundryhttp.StringQuery[string](), func(q *queryCustom) *string { return &q.Text })),
 	} {
-		if d.Validate() == nil {
+		if foundryhttp.ValidateQueryDescriptor(d) == nil {
 			t.Fatal("invalid declaration accepted")
 		}
 	}
 	parameter := foundryhttp.QueryParam("text", foundryhttp.StringQuery[string](), func(q *queryCustom) *string { return &q.Text })
-	if foundryhttp.DefineQuery(parameter, parameter).Validate() == nil {
+	if foundryhttp.ValidateQueryDescriptor(foundryhttp.DefineQuery(parameter, parameter)) == nil {
 		t.Fatal("duplicate declaration accepted")
 	}
 	d := foundryhttp.DefineQuery(foundryhttp.QueryParam("text", foundryhttp.StringQuery[string](), func(*queryCustom) *string { return nil }))
-	if _, err := d.Decode(context.Background(), "text=x", queryLimits); !errors.Is(err, fault.Internal) {
+	if _, err := foundryhttp.DecodeQuery(d, context.Background(), "text=x", queryLimits); !errors.Is(err, fault.Internal) {
 		t.Fatalf("nil decode destination: %v", err)
 	}
-	if _, err := d.Encode(context.Background(), queryCustom{}, queryLimits); !errors.Is(err, fault.Internal) {
+	if _, err := foundryhttp.EncodeQuery(d, context.Background(), queryCustom{}, queryLimits); !errors.Is(err, fault.Internal) {
 		t.Fatalf("nil encode source: %v", err)
 	}
-	parameters, err := searchQuery().Parameters()
+	parameters, err := foundryhttp.QueryParameters(searchQuery())
 	if err != nil || parameters[0].Name != "active" {
 		t.Fatal("parameter metadata is not deterministic")
 	}
 	parameters[0].Name = "changed"
-	parameters, _ = searchQuery().Parameters()
+	parameters, _ = foundryhttp.QueryParameters(searchQuery())
 	if parameters[0].Name != "active" {
 		t.Fatal("metadata shares mutable storage")
 	}

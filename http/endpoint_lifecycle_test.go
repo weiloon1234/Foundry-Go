@@ -3,13 +3,14 @@ package http
 import (
 	"bytes"
 	"context"
-	"github.com/weiloon1234/Foundry-Go/validation"
-	"github.com/weiloon1234/Foundry-Go/value"
 	"net/http/httptest"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/validation"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 func TestRequestLifecycleOrderAndOriginalProhibitions(t *testing.T) {
@@ -29,11 +30,11 @@ func TestRequestLifecycleOrderAndOriginalProhibitions(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var stages []string
-			endpoint := patchEndpoint().WithBodyValidation(validation.Rules(name, validation.MinLength[string](2)))
+			endpoint := ValidateBody(patchEndpoint(), validation.Rules(name, validation.MinLength[string](2)))
 			if tc.prohibited {
-				endpoint = endpoint.WithBodyValidation(validation.Rules(note, validation.Absent[value.Nullable[string]]()))
+				endpoint = ValidateBody(endpoint, validation.Rules(note, validation.Absent[value.Nullable[string]]()))
 			}
-			endpoint = endpoint.WithPreparation(func(_ context.Context, in endpointRequest) (endpointParameters, EndpointPatch, error) {
+			endpoint = AuthorizeEndpoint(PrepareEndpoint(endpoint, func(_ context.Context, in endpointRequest) (endpointParameters, EndpointPatch, error) {
 				stages = append(stages, "prepare")
 				in.Body.Name = strings.TrimSpace(in.Body.Name)
 				if tc.prohibited {
@@ -43,7 +44,7 @@ func TestRequestLifecycleOrderAndOriginalProhibitions(t *testing.T) {
 					in.Query.Term = value.Set("default")
 				}
 				return in.Query, in.Body, nil
-			}).WithAuthorization(func(_ context.Context, in endpointRequest) error {
+			}), func(_ context.Context, in endpointRequest) error {
 				stages = append(stages, "authorize")
 				q, _ := in.Query.Term.Get()
 				// Authorization precedes validation: it sees prepared input
@@ -101,11 +102,11 @@ func TestRequestLifecycleContainmentAndDeclarations(t *testing.T) {
 				}
 				endpoint := patchEndpoint()
 				if stage == "prepare" {
-					endpoint = endpoint.WithPreparation(func(_ context.Context, in endpointRequest) (endpointParameters, EndpointPatch, error) {
+					endpoint = PrepareEndpoint(endpoint, func(_ context.Context, in endpointRequest) (endpointParameters, EndpointPatch, error) {
 						return in.Query, in.Body, fail()
 					})
 				} else {
-					endpoint = endpoint.WithAuthorization(func(context.Context, endpointRequest) error { return fail() })
+					endpoint = AuthorizeEndpoint(endpoint, func(context.Context, endpointRequest) error { return fail() })
 				}
 				router, err := NewRouter(endpoint.Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
 					t.Error("failed hook reached handler")
@@ -128,10 +129,10 @@ func TestRequestLifecycleContainmentAndDeclarations(t *testing.T) {
 			})
 		}
 	}
-	if patchEndpoint().WithPreparation(nil).Validate() == nil || patchEndpoint().WithAuthorization(nil).Validate() == nil {
+	if ValidateEndpoint(PrepareEndpoint(patchEndpoint(), nil)) == nil || ValidateEndpoint(AuthorizeEndpoint(patchEndpoint(), nil)) == nil {
 		t.Fatal("nil callback accepted")
 	}
-	if err := patchEndpoint().Validate(); err != nil {
+	if err := ValidateEndpoint(patchEndpoint()); err != nil {
 		t.Fatal("fluent copy changed original", err)
 	}
 }
@@ -153,11 +154,11 @@ func TestRequestLifecycleMultipartCleanupAndCancellation(t *testing.T) {
 				}
 				endpoint := multipartEndpoint(directory)
 				if stage == "prepare" {
-					endpoint = endpoint.WithPreparation(func(_ context.Context, in multipartRequestInput) (NoQuery, multipartRequest, error) {
+					endpoint = PrepareEndpoint(endpoint, func(_ context.Context, in multipartRequestInput) (NoQuery, multipartRequest, error) {
 						return in.Query, in.Body, hook(in)
 					})
 				} else {
-					endpoint = endpoint.WithAuthorization(func(_ context.Context, in multipartRequestInput) error { return hook(in) })
+					endpoint = AuthorizeEndpoint(endpoint, func(_ context.Context, in multipartRequestInput) error { return hook(in) })
 				}
 				router, err := NewRouter(endpoint.Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
 					t.Error("hook failure reached handler")
@@ -205,9 +206,9 @@ func BenchmarkRequestLifecycle(b *testing.B) {
 		b.Run(map[bool]string{false: "NoHooks", true: "PreparationAndAuthorization"}[hooks], func(b *testing.B) {
 			endpoint := formEndpoint()
 			if hooks {
-				endpoint = endpoint.WithPreparation(func(_ context.Context, in formRequest) (endpointParameters, formInput, error) {
+				endpoint = AuthorizeEndpoint(PrepareEndpoint(endpoint, func(_ context.Context, in formRequest) (endpointParameters, formInput, error) {
 					return in.Query, in.Body, nil
-				}).WithAuthorization(func(context.Context, formRequest) error { return nil })
+				}), func(context.Context, formRequest) error { return nil })
 			}
 			router, err := NewRouter(endpoint.Handle(func(context.Context, formRequest) (NoContent, error) { return NoContent{}, nil }))
 			if err != nil {

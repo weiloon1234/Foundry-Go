@@ -29,16 +29,16 @@ func signedTestHandler(t *testing.T, registrations ...RouteRegistration) http.Ha
 
 func TestSignedRawRoutePreservesNativeRequestAndWriter(t *testing.T) {
 	signer := urlTestSigner(t, testkit.NewClock(urlTestTime))
-	signed := textRoute("/files/{text}").Signed(signer)
+	signed := SignRoute(textRoute("/files/{text}"), signer)
 	var called int
 	for _, text := range []string{"a/b", "中文 + %", "email@example.test"} {
-		location, err := signed.URL(t.Context(), urlTestOrigin, textPath{Text: text}, urlTestTime.Add(time.Minute))
+		location, err := SignedRouteURL(signed, t.Context(), urlTestOrigin, textPath{Text: text}, urlTestTime.Add(time.Minute))
 		if err != nil {
 			t.Fatal(err)
 		}
 		var original *http.Request
 		recorder := httptest.NewRecorder()
-		handler := signedTestHandler(t, signed.HandleRaw(func(w http.ResponseWriter, r *http.Request, p textPath) {
+		handler := signedTestHandler(t, HandleSignedRaw(signed, func(w http.ResponseWriter, r *http.Request, p textPath) {
 			called++
 			if w != recorder || r.URL != original.URL || r.URL.RawQuery != original.URL.RawQuery || r.RequestURI != original.RequestURI {
 				t.Error("native transport was rewritten")
@@ -70,12 +70,12 @@ func TestSignedRouteRejectsBeforePathAndHandler(t *testing.T) {
 	signer := urlTestSigner(t, testkit.NewClock(urlTestTime))
 	var decoded, handled atomic.Int32
 	codec := cookieCallbacks{format: func(s string) (string, error) { return s, nil }, parse: func(s string) (string, error) { decoded.Add(1); return s, nil }}
-	route := DefineRoute(RouteSpec{ID: "files.signed", Method: GET, Access: Public}, DefinePath("/files/{text}", Param("text", codec, func(p *textPath) *string { return &p.Text }))).Signed(signer)
-	location, err := route.URL(t.Context(), urlTestOrigin, textPath{Text: "original"}, urlTestTime.Add(time.Minute))
+	route := SignRoute(DefineRoute(RouteSpec{ID: "files.signed", Method: GET, Access: Public}, DefinePath("/files/{text}", Param("text", codec, func(p *textPath) *string { return &p.Text }))), signer)
+	location, err := SignedRouteURL(route, t.Context(), urlTestOrigin, textPath{Text: "original"}, urlTestTime.Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
-	registration := route.HandleRaw(func(w http.ResponseWriter, r *http.Request, p textPath) { handled.Add(1); w.WriteHeader(204) })
+	registration := HandleSignedRaw(route, func(w http.ResponseWriter, r *http.Request, p textPath) { handled.Add(1); w.WriteHeader(204) })
 	handler := signedTestHandler(t, registration)
 	for _, bad := range []string{strings.Replace(location, "/original?", "/tampered?", 1), location + "&extra=1", strings.Replace(location, string(urlTestOrigin), "https://alias.example.test", 1)} {
 		w := httptest.NewRecorder()
@@ -127,7 +127,7 @@ func TestSignedEndpointUsesOnlyVerifiedDomainQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	info, err := signed.Description()
+	info, err := InspectSigned(signed)
 	if err != nil || info.Route.SignedURL == nil || len(info.Query) != 1 {
 		t.Fatal("signed endpoint description missing")
 	}
@@ -159,7 +159,7 @@ func TestSignedEndpointUsesOnlyVerifiedDomainQuery(t *testing.T) {
 		type reserved struct{ Value string }
 		q := DefineQuery(QueryParam(name, StringQuery[string](), func(q *reserved) *string { return &q.Value }))
 		invalid := Signed(DefineEndpoint(textRoute("/search/{text}"), q, EmptyBody(), EmptyResponse(204)), signer)
-		if invalid.Validate() == nil {
+		if ValidateSigned(invalid) == nil {
 			t.Fatal("reserved query declaration accepted")
 		}
 		if _, err := NewRouter(invalid.Handle(func(context.Context, Input[textPath, reserved, NoBody]) (NoContent, error) { return NoContent{}, nil })); err == nil {
@@ -169,12 +169,12 @@ func TestSignedEndpointUsesOnlyVerifiedDomainQuery(t *testing.T) {
 }
 
 func TestSignedURLUsesTrustedPublicOriginBehindProxy(t *testing.T) {
-	signed := textRoute("/files/{text}").Signed(urlTestSigner(t, testkit.NewClock(urlTestTime)))
-	location, err := signed.URL(t.Context(), urlTestOrigin, textPath{Text: "document"}, urlTestTime.Add(time.Minute))
+	signed := SignRoute(textRoute("/files/{text}"), urlTestSigner(t, testkit.NewClock(urlTestTime)))
+	location, err := SignedRouteURL(signed, t.Context(), urlTestOrigin, textPath{Text: "document"}, urlTestTime.Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := NewRouter(signed.HandleRaw(func(w http.ResponseWriter, r *http.Request, p textPath) { w.WriteHeader(204) }))
+	router, err := NewRouter(HandleSignedRaw(signed, func(w http.ResponseWriter, r *http.Request, p textPath) { w.WriteHeader(204) }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,13 +208,13 @@ func TestSignedURLUsesTrustedPublicOriginBehindProxy(t *testing.T) {
 
 func TestSignedRouteLinkFormsThroughTransport(t *testing.T) {
 	now := testkit.NewClock(urlTestTime)
-	signed := textRoute("/files/{text}").Signed(urlTestSigner(t, now)).WithPermanentLinks().WithIgnoredParameters("utm_source")
-	handler := signedTestHandler(t, signed.HandleRaw(func(w http.ResponseWriter, r *http.Request, p textPath) { w.WriteHeader(204) }))
-	permanent, err := signed.PermanentURL(t.Context(), urlTestOrigin, textPath{Text: "a"})
+	signed := ConfigureSignedRoute(ConfigureSignedRoute(SignRoute(textRoute("/files/{text}"), urlTestSigner(t, now)), PermanentLinks()), IgnoredParameters("utm_source"))
+	handler := signedTestHandler(t, HandleSignedRaw(signed, func(w http.ResponseWriter, r *http.Request, p textPath) { w.WriteHeader(204) }))
+	permanent, err := PermanentRouteURL(signed, t.Context(), urlTestOrigin, textPath{Text: "a"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	relative, err := signed.RelativeURL(t.Context(), textPath{Text: "b"}, urlTestTime.Add(time.Minute))
+	relative, err := RelativeRouteURL(signed, t.Context(), textPath{Text: "b"}, urlTestTime.Add(time.Minute))
 	if err != nil || !strings.HasPrefix(relative, "/files/b?") {
 		t.Fatalf("relative=%q %v", relative, err)
 	}
@@ -226,11 +226,11 @@ func TestSignedRouteLinkFormsThroughTransport(t *testing.T) {
 			t.Fatalf("%s: %d", location, w.Code)
 		}
 	}
-	plain := textRoute("/files/{text}").Signed(urlTestSigner(t, now))
-	if _, err := plain.PermanentURL(t.Context(), urlTestOrigin, textPath{Text: "a"}); err == nil {
+	plain := SignRoute(textRoute("/files/{text}"), urlTestSigner(t, now))
+	if _, err := PermanentRouteURL(plain, t.Context(), urlTestOrigin, textPath{Text: "a"}); err == nil {
 		t.Fatal("permanent URL generated without opt-in")
 	}
-	if textRoute("/files/{text}").Signed(urlTestSigner(t, now)).WithIgnoredParameters("expires").Validate() == nil {
+	if ValidateSignedRoute(ConfigureSignedRoute(SignRoute(textRoute("/files/{text}"), urlTestSigner(t, now)), IgnoredParameters("expires"))) == nil {
 		t.Fatal("reserved ignored parameter accepted")
 	}
 }
@@ -239,8 +239,8 @@ func TestSignedRouteLinkFormsThroughTransport(t *testing.T) {
 // relative and decorated links; decoded metadata is validated.
 func TestSignedURLInfoExportsLinkPolicy(t *testing.T) {
 	now := testkit.NewClock(urlTestTime)
-	signed := textRoute("/files/{text}").Signed(urlTestSigner(t, now)).WithPermanentLinks().WithIgnoredParameters("utm_source", "fbclid")
-	router, err := NewRouter(signed.HandleRaw(func(w http.ResponseWriter, _ *http.Request, _ textPath) { w.WriteHeader(204) }))
+	signed := ConfigureSignedRoute(ConfigureSignedRoute(SignRoute(textRoute("/files/{text}"), urlTestSigner(t, now)), PermanentLinks()), IgnoredParameters("utm_source", "fbclid"))
+	router, err := NewRouter(HandleSignedRaw(signed, func(w http.ResponseWriter, _ *http.Request, _ textPath) { w.WriteHeader(204) }))
 	if err != nil {
 		t.Fatal(err)
 	}

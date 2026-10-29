@@ -6,6 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+
 	"foundry.test/consumer/httpdto"
 	"foundry.test/consumer/httpendpoints"
 	"foundry.test/consumer/httpkernel"
@@ -16,10 +21,6 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/validation"
-	"net/http/httptest"
-	"strings"
-	"sync/atomic"
-	"testing"
 )
 
 type remoteAddresses struct{ calls atomic.Int32 }
@@ -167,7 +168,7 @@ func TestSlotProvidesRouteKeyToOneDeclaredRule(t *testing.T) {
 	}
 	// A slot reader without its provider fails registration, not each request.
 	fields := httpdto.UpdateUserValidationFields()
-	missing := httpendpoints.Update.WithBodyValidation(validation.Rules(fields.Email, validation.Optional(validation.Requires(current, validation.Unique[string](&ownedAddresses{current: current})))))
+	missing := foundryhttp.ValidateBody(httpendpoints.Update, validation.Rules(fields.Email, validation.Optional(validation.Requires(current, validation.Unique[string](&ownedAddresses{current: current})))))
 	if _, err := foundryhttp.NewRouter(missing.Handle(domain.Update)); err == nil {
 		t.Fatal("slot reader registered without its provider")
 	}

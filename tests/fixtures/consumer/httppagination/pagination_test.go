@@ -67,7 +67,7 @@ func TestGeneratedPageEndpointPreservesGettersAndContracts(t *testing.T) {
 	if target.Query().Get("email") != "member+filter@example.test" || target.Query().Get("page") != "2" {
 		t.Fatal("generated filter link lost")
 	}
-	info, err := httppagination.List.Description()
+	info, err := pagination.Inspect(httppagination.List)
 	if err != nil || info.Response == nil {
 		t.Fatal("page contract missing", err)
 	}

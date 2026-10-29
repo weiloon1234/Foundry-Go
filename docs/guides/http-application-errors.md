@@ -11,7 +11,7 @@ var SeatUnavailable = foundryhttp.DefineError(
     "seats.unavailable", 409, "The selected seat is no longer available.",
 )
 
-var Reserve = foundryhttp.DefineEndpoint(
+var Reserve = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(
     foundryhttp.DefineRoute(
         foundryhttp.RouteSpec{ID: "seats.reserve", Method: foundryhttp.POST, Access: foundryhttp.Public},
         foundryhttp.StaticPath("/seats/reserve"),
@@ -19,7 +19,7 @@ var Reserve = foundryhttp.DefineEndpoint(
     foundryhttp.EmptyQuery(),
     foundryhttp.EmptyBody(),
     foundryhttp.EmptyResponse(204),
-).WithErrors(SeatUnavailable)
+), foundryhttp.Errors(SeatUnavailable))
 ```
 
 The [consumer example](../../tests/fixtures/consumer/httpendpoints/errors.go)
@@ -35,10 +35,10 @@ A typed endpoint exposes only its declared application errors. An undeclared
 custom error, including the same code with different metadata, becomes a safe
 internal failure and is diagnosed in the request logger. The same check covers
 middleware registered on that route. Built-in errors remain available through
-[the shared error catalog](http-requests.md); they need no `WithErrors` entry.
+[the shared error catalog](http-requests.md); they need no `Errors` entry.
 `ErrorCode("seats.unavailable")` alone does not create a declaration.
 
-`Endpoint.Description()` and `Router.Endpoints()` include application error
+`foundryhttp.InspectEndpoint(endpoint)` and `Router.Endpoints()` include application error
 metadata. `Router.ErrorDefinitions()` returns a deterministic catalog containing
 built-in and endpoint-declared errors. Returned metadata is owned; editing a
 snapshot cannot change runtime behavior. Duplicate codes in one endpoint and

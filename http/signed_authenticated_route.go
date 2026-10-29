@@ -10,78 +10,78 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-type authenticatedRawTransport[P, S any] interface {
-	Validate() error
-	Description() (RouteInfo, error)
-	HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, S, P)) RouteRegistration
-}
-
 // SignedAuthenticatedRoute adds URL signatures without discarding the raw
 // handler's concrete required/optional subject or its native writer capabilities.
 type SignedAuthenticatedRoute[P, S any] struct {
-	transport authenticatedRawTransport[P, S]
-	signed    SignedRoute[P]
+	validate func() error
+	describe func() (RouteInfo, error)
+	handle   func(func(stdhttp.ResponseWriter, *stdhttp.Request, S, P)) RouteRegistration
+	signed   SignedRoute[P]
 }
 
-func (r AuthenticatedRoute[P, M]) Signed(signer URLSigner) SignedAuthenticatedRoute[P, M] {
-	return SignedAuthenticatedRoute[P, M]{transport: r, signed: r.route.Signed(signer)}
+func SignAuthenticatedRoute[P, M any](r AuthenticatedRoute[P, M], signer URLSigner) SignedAuthenticatedRoute[P, M] {
+	return SignedAuthenticatedRoute[P, M]{validate: func() error { return ValidateAuthenticatedRoute(r) }, describe: func() (RouteInfo, error) { return InspectAuthenticatedRoute(r) }, handle: func(handler func(stdhttp.ResponseWriter, *stdhttp.Request, M, P)) RouteRegistration {
+		return HandleAuthenticatedRaw(r, handler)
+	}, signed: SignRoute(r.route, signer)}
 }
-func (r OptionalAuthenticationRoute[P, M]) Signed(signer URLSigner) SignedAuthenticatedRoute[P, value.Optional[M]] {
-	return SignedAuthenticatedRoute[P, value.Optional[M]]{transport: r, signed: r.required.route.Signed(signer)}
+func SignOptionalRoute[P, M any](r OptionalAuthenticationRoute[P, M], signer URLSigner) SignedAuthenticatedRoute[P, value.Optional[M]] {
+	return SignedAuthenticatedRoute[P, value.Optional[M]]{validate: func() error { return ValidateOptionalRoute(r) }, describe: func() (RouteInfo, error) { return InspectOptionalRoute(r) }, handle: func(handler func(stdhttp.ResponseWriter, *stdhttp.Request, value.Optional[M], P)) RouteRegistration {
+		return HandleOptionalRaw(r, handler)
+	}, signed: SignRoute(r.required.route, signer)}
 }
-func (r SignedAuthenticatedRoute[P, S]) Validate() error {
-	if r.transport == nil {
+func ValidateSignedAuthenticatedRoute[P, S any](r SignedAuthenticatedRoute[P, S]) error {
+	if r.validate == nil || r.describe == nil || r.handle == nil {
 		return safeerror.NewFault(fault.Invalid, "signed raw authentication requires a transport")
 	}
-	if err := r.transport.Validate(); err != nil {
+	if err := r.validate(); err != nil {
 		return err
 	}
-	return r.signed.Validate()
+	return ValidateSignedRoute(r.signed)
 }
-func (r SignedAuthenticatedRoute[P, S]) URL(ctx context.Context, origin Origin, path P, expires time.Time) (string, error) {
-	if err := r.Validate(); err != nil {
+func SignedAuthenticatedRouteURL[P, S any](r SignedAuthenticatedRoute[P, S], ctx context.Context, origin Origin, path P, expires time.Time) (string, error) {
+	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return "", err
 	}
-	return r.signed.URL(ctx, origin, path, expires)
+	return SignedRouteURL(r.signed, ctx, origin, path, expires)
 }
 
 // WithPermanentLinks explicitly permits links without expiry; see SignedRoute.
-func (r SignedAuthenticatedRoute[P, S]) WithPermanentLinks() SignedAuthenticatedRoute[P, S] {
-	r.signed = r.signed.WithPermanentLinks()
+func signedAuthenticatedRouteWithPermanentLinks[P, S any](r SignedAuthenticatedRoute[P, S]) SignedAuthenticatedRoute[P, S] {
+	r.signed = ConfigureSignedRoute(r.signed, PermanentLinks())
 	return r
 }
 
 // WithIgnoredParameters declares unauthenticated query parameters; see SignedRoute.
-func (r SignedAuthenticatedRoute[P, S]) WithIgnoredParameters(names ...string) SignedAuthenticatedRoute[P, S] {
-	r.signed = r.signed.WithIgnoredParameters(names...)
+func signedAuthenticatedRouteWithIgnoredParameters[P, S any](r SignedAuthenticatedRoute[P, S], names ...string) SignedAuthenticatedRoute[P, S] {
+	r.signed = ConfigureSignedRoute(r.signed, IgnoredParameters(names...))
 	return r
 }
-func (r SignedAuthenticatedRoute[P, S]) PermanentURL(ctx context.Context, origin Origin, path P) (string, error) {
-	if err := r.Validate(); err != nil {
+func PermanentAuthenticatedRouteURL[P, S any](r SignedAuthenticatedRoute[P, S], ctx context.Context, origin Origin, path P) (string, error) {
+	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return "", err
 	}
-	return r.signed.PermanentURL(ctx, origin, path)
+	return PermanentRouteURL(r.signed, ctx, origin, path)
 }
-func (r SignedAuthenticatedRoute[P, S]) RelativeURL(ctx context.Context, path P, expires time.Time) (string, error) {
-	if err := r.Validate(); err != nil {
+func RelativeAuthenticatedRouteURL[P, S any](r SignedAuthenticatedRoute[P, S], ctx context.Context, path P, expires time.Time) (string, error) {
+	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return "", err
 	}
-	return r.signed.RelativeURL(ctx, path, expires)
+	return RelativeRouteURL(r.signed, ctx, path, expires)
 }
-func (r SignedAuthenticatedRoute[P, S]) Description() (RouteInfo, error) {
-	if err := r.Validate(); err != nil {
+func InspectSignedAuthenticatedRoute[P, S any](r SignedAuthenticatedRoute[P, S]) (RouteInfo, error) {
+	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return RouteInfo{}, err
 	}
-	info, err := r.transport.Description()
+	info, err := r.describe()
 	if err != nil {
 		return RouteInfo{}, err
 	}
 	info.SignedURL = signedURLInfo(r.signed.signer.policy)
 	return info, nil
 }
-func (r SignedAuthenticatedRoute[P, S]) HandleRaw(handler func(stdhttp.ResponseWriter, *stdhttp.Request, S, P)) RouteRegistration {
-	if err := r.Validate(); err != nil {
+func HandleSignedAuthenticatedRaw[P, S any](r SignedAuthenticatedRoute[P, S], handler func(stdhttp.ResponseWriter, *stdhttp.Request, S, P)) RouteRegistration {
+	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return InvalidRouteRegistration(err)
 	}
-	return signedRegistration(r.transport.HandleRaw(handler), r.signed.signer, r.signed.route.spec, r.signed.Pattern(), false)
+	return signedRegistration(r.handle(handler), r.signed.signer, r.signed.route.spec, SignedRoutePattern(r.signed), false)
 }

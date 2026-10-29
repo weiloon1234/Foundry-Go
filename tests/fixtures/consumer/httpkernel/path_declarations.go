@@ -28,7 +28,7 @@ type AssetPath struct {
 
 // ShowUser is intentionally handwritten and references a generated descriptor.
 // A fresh checkout must generate successfully before this symbol can compile.
-var ShowUser = foundryhttp.DefineRoute(
+var ShowUser = foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
 	foundryhttp.RouteSpec{ID: "users.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
 	UserPathDescriptor(),
-).Within(foundryhttp.DefineScope("/api", "api"))
+), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))

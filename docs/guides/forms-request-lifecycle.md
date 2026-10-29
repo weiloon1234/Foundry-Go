@@ -57,11 +57,11 @@ func prepare(ctx context.Context, input Request) (Search, Submission, error) {
     return input.Query, body, nil
 }
 
-endpoint = endpoint.WithPreparation(prepare).
-    WithBodyValidation(fields.Name.Rules(nameRules)).
-    WithAuthorization(func(ctx context.Context, input Request) error {
-        return authorizeSubmission(ctx, input.Body)
-    })
+endpoint = http.PrepareEndpoint(endpoint, prepare)
+endpoint = http.ValidateBody(endpoint, validation.Rules(fields.Name, nameRules))
+endpoint = http.AuthorizeEndpoint(endpoint, func(ctx context.Context, input Request) error {
+    return authorizeSubmission(ctx, input.Body)
+})
 ```
 
 Existing credential, signature, CSRF and transport admission runs first, then
@@ -75,8 +75,9 @@ it as structurally decoded but unvalidated. Validation uses the prepared values.
 Preparation cannot repair invalid syntax or a missing codec-required field.
 Declare a field Optional if preparation supplies its default.
 
-`Endpoint.HandleBound(bind)` exposes the binding stage directly (authenticated
-and signed endpoints provide the same method with their subject). `bind`
+`http.HandleBound(endpoint, bind)` exposes the binding stage directly.
+Authenticated and signed forms use their corresponding typed functions.
+For model binding, pass `http.ForBinding(endpoint)` to `modelbinding.Bind`. `bind`
 receives the prepared, authorized input, resolves request state such as a model,
 and returns the handler that completes the request, closing over that state so
 no second lookup is needed. Its error is published as returned (for example 404),
@@ -107,11 +108,10 @@ is unchanged. Configure hooks before applying signing or resource-binding adapte
 ## Concrete guard actors
 
 ```go
-secured := http.RequireAuthentication(endpoint, transport, accountGuard).
-    WithPreparation(prepare).
-    WithAuthorization(func(ctx context.Context, actor Account, input Request) error {
-        return accountPolicy(ctx, actor, input.Body)
-    })
+secured := http.RequireAuthentication(http.PrepareEndpoint(endpoint, prepare), transport, accountGuard)
+secured = http.AuthorizeActor(secured, func(ctx context.Context, actor Account, input Request) error {
+    return accountPolicy(ctx, actor, input.Body)
+})
 ```
 
 The route must declare Guarded access. A named guard chooses its concrete model

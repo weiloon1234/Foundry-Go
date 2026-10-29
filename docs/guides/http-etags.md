@@ -95,5 +95,5 @@ session's `no-store`); a handler may still override it, and shared error
 responses replace it with `no-store`. A public policy is downgraded to private
 for requests that carry an `Authorization` header, so shared caches never store
 credentialed responses. Other methods are unchanged, and 304 responses keep the
-declared policy. Install it per route or scope with `WithMiddleware` when
+declared policy. Install it per route with `Use`, or per scope with `Scope.WithMiddleware` when
 different endpoints need different lifetimes.

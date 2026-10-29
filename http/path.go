@@ -38,21 +38,21 @@ type compiledPath struct {
 // package variables. The pattern is parsed once, here.
 func DefinePath[P any](pattern string, parameters ...PathParameter[P]) Path[P] {
 	path := Path[P]{pattern: pattern, parameters: slices.Clone(parameters)}
-	path.compiled = path.compile()
+	path.compiled = pathCompile(path)
 	return path
 }
 
 // prefixed returns an independent path under a literal scope prefix.
-func (p Path[P]) prefixed(prefix string) Path[P] {
+func pathPrefixed[P any](p Path[P], prefix string) Path[P] {
 	p.pattern = prefix + p.pattern
-	p.compiled = p.compile()
+	p.compiled = pathCompile(p)
 	return p
 }
 
 // StaticPath declares an exact path with no parameters.
 func StaticPath(pattern string) Path[NoPath] { return DefinePath[NoPath](pattern) }
 
-func (p Path[P]) Pattern() string { return p.pattern }
+func PathPattern[P any](p Path[P]) string { return p.pattern }
 
 type pathSegment = httppath.Segment
 
@@ -85,20 +85,20 @@ func ambiguousEncodedPath(path string) bool {
 	return false
 }
 
-func (p Path[P]) validate() ([]pathSegment, error) {
+func pathValidate[P any](p Path[P]) ([]pathSegment, error) {
 	compiled := p.compiled
 	if compiled == nil {
-		compiled = p.compile()
+		compiled = pathCompile(p)
 	}
 	return compiled.segments, compiled.err
 }
 
-func (p Path[P]) compile() *compiledPath {
-	segments, err := p.parse()
+func pathCompile[P any](p Path[P]) *compiledPath {
+	segments, err := pathParse(p)
 	return &compiledPath{segments: segments, err: err}
 }
 
-func (p Path[P]) parse() ([]pathSegment, error) {
+func pathParse[P any](p Path[P]) ([]pathSegment, error) {
 	segments, err := httppath.Parse(p.pattern)
 	if err != nil {
 		return nil, err
@@ -128,13 +128,13 @@ func (p Path[P]) parse() ([]pathSegment, error) {
 	return segments, nil
 }
 
-// URL renders a relative path, escaping each value once. No incoming host or
+// PathURL renders a relative path, escaping each value once. No incoming host or
 // forwarded header participates. The concrete P prevents unrelated model IDs or
 // path DTOs from being supplied to this route. Codec and selector callbacks run
 // on the caller's goroutine; a panic becomes an internal failure. Custom
 // codec errors remain private causes without invoking their error methods.
-func (p Path[P]) URL(parameters P) (string, error) {
-	segments, err := p.validate()
+func PathURL[P any](p Path[P], parameters P) (string, error) {
+	segments, err := pathValidate(p)
 	if err != nil {
 		return "", err
 	}
@@ -195,7 +195,7 @@ func (p Path[P]) URL(parameters P) (string, error) {
 	return out.String(), nil
 }
 
-func (p Path[P]) decode(r *stdhttp.Request, segments []pathSegment) (P, error) {
+func pathDecode[P any](p Path[P], r *stdhttp.Request, segments []pathSegment) (P, error) {
 	ctx := r.Context()
 	if err := ctx.Err(); err != nil {
 		return *new(P), RequestTimeout.WithCause(err)

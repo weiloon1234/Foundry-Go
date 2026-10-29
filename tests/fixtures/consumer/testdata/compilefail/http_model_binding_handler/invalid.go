@@ -2,6 +2,7 @@ package invalid
 
 import (
 	"context"
+
 	"foundry.test/consumer/httpdto"
 	"foundry.test/consumer/httpkernel"
 	"foundry.test/consumer/httpmodels"
@@ -20,6 +21,6 @@ var _ httpkernel.UserPath
 var _ foundryhttp.NoQuery
 var _ = httpmodels.Show
 
-var _ = modelbinding.Bind(httpmodels.Show, modelbinding.Resolver[httpkernel.UserPath, models.User]{}).Handle(func(context.Context, modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Order]) (httpdto.UserResponse, error) {
+var _ = modelbinding.Bind(foundryhttp.ForBinding(httpmodels.Show), modelbinding.Resolver[httpkernel.UserPath, models.User]{}).Handle(func(context.Context, modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Order]) (httpdto.UserResponse, error) {
 	return httpdto.UserResponse{}, nil
 })

@@ -25,7 +25,7 @@ func TestEndpointScalarDescriptionsAreOwned(t *testing.T) {
 	if len(first) != 1 || len(first[0].Path) != 1 || first[0].Path[0].Scalar.Value.Kind != contract.StringKind || first[0].Query[0].Scalar.Value.Bits != 16 {
 		t.Fatalf("endpoint scalar metadata: %+v", first)
 	}
-	direct, err := endpoint.Description()
+	direct, err := InspectEndpoint(endpoint)
 	if err != nil || !reflect.DeepEqual(first[0], direct) {
 		t.Fatal("registered and direct descriptions disagree", err)
 	}

@@ -2,12 +2,13 @@ package http_test
 
 import (
 	"context"
-	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
-	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
-	"github.com/weiloon1234/Foundry-Go/value"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 func TestSignedTypedResourceAuthorization(t *testing.T) {
@@ -19,7 +20,7 @@ func TestSignedTypedResourceAuthorization(t *testing.T) {
 	}
 	signer, now := compositionSigner(t)
 	base := foundryhttp.DefineEndpoint(compositionRoute(foundryhttp.Guarded, &parses), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-	signed := foundryhttp.SignedAuthenticated(foundryhttp.RequireAuthentication(base, transport, guard).WithAuthorization(func(_ context.Context, _ authAccount, in foundryhttp.Input[compositionPath, foundryhttp.NoQuery, foundryhttp.NoBody]) error {
+	signed := foundryhttp.SignedAuthenticated(foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(base, transport, guard), func(_ context.Context, _ authAccount, in foundryhttp.Input[compositionPath, foundryhttp.NoQuery, foundryhttp.NoBody]) error {
 		if in.Path.Order == 13 {
 			return foundryhttp.Forbidden
 		}
@@ -29,13 +30,13 @@ func TestSignedTypedResourceAuthorization(t *testing.T) {
 		lookups.Add(1)
 		return value.Set(compositionOrder{ID: p.Order, Owner: 1}), nil
 	})
-	bound := modelbinding.BindAuthenticated(signed, resolver).WithAuthorization(func(_ context.Context, actor authAccount, in compositionInput) error {
+	bound := modelbinding.AuthorizeAuthenticatedResource(modelbinding.BindAuthenticated(foundryhttp.ForSignedAuthenticatedBinding(signed), resolver), func(_ context.Context, actor authAccount, in compositionInput) error {
 		if actor.ID != in.Model.Owner {
 			return foundryhttp.Forbidden
 		}
 		return nil
 	})
-	if bound.WithAuthorization(nil).Validate() == nil {
+	if modelbinding.ValidateAuthenticatedEndpoint(modelbinding.AuthorizeAuthenticatedResource(bound, nil)) == nil {
 		t.Fatal("nil typed resource authorization accepted")
 	}
 	handled := 0

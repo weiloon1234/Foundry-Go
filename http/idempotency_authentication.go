@@ -15,32 +15,32 @@ type AuthenticatedIdempotentEndpoint[P, Q, B, M, R any] struct {
 }
 
 func IdempotentAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R], store *idempotency.Store, definition idempotency.Definition) AuthenticatedIdempotentEndpoint[P, Q, B, M, R] {
-	if err := endpoint.Validate(); err != nil {
+	if err := ValidateAuthenticated(endpoint); err != nil {
 		return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: endpoint, endpoint: IdempotentEndpoint[P, Q, B, R]{err: err}}
 	}
-	return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: endpoint, endpoint: Idempotent(endpoint.authorized(), store, definition)}
+	return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: endpoint, endpoint: Idempotent(authenticatedEndpointAuthorized(endpoint), store, definition)}
 }
-func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Validate() error {
-	if err := e.source.Validate(); err != nil {
+func ValidateAuthenticatedIdempotent[P, Q, B, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) error {
+	if err := ValidateAuthenticated(e.source); err != nil {
 		return err
 	}
-	return e.endpoint.Validate()
+	return ValidateIdempotent(e.endpoint)
 }
-func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Description() (EndpointInfo, error) {
-	if err := e.Validate(); err != nil {
+func InspectAuthenticatedIdempotent[P, Q, B, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) (EndpointInfo, error) {
+	if err := ValidateAuthenticatedIdempotent(e); err != nil {
 		return EndpointInfo{}, err
 	}
-	return e.endpoint.Description()
+	return InspectIdempotent(e.endpoint)
 }
-func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) WithHeaders(fn func(context.Context, R) ([]ResponseHeader, error)) AuthenticatedIdempotentEndpoint[P, Q, B, M, R] {
-	e.endpoint = e.endpoint.WithHeaders(fn)
+func AuthenticatedIdempotentHeaders[P, Q, B, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, M, R], fn func(context.Context, R) ([]ResponseHeader, error)) AuthenticatedIdempotentEndpoint[P, Q, B, M, R] {
+	e.endpoint = IdempotentHeaders(e.endpoint, fn)
 	return e
 }
 func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Handle(scope func(context.Context, M, Input[P, Q, B]) (idempotency.Scope, error), handler func(context.Context, *database.Tx, M, Input[P, Q, B]) (R, error)) RouteRegistration {
 	if scope == nil || handler == nil {
 		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated idempotency requires scope and transaction callbacks"))
 	}
-	return e.Prepare(func(ctx context.Context, actor M, in Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error) {
+	return PrepareAuthenticatedIdempotent(e, func(ctx context.Context, actor M, in Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error) {
 		identity, err := scope(ctx, actor, in)
 		return identity, func(ctx context.Context, tx *database.Tx, in Input[P, Q, B]) (R, error) {
 			value, err := handler(ctx, tx, actor, in)
@@ -52,16 +52,16 @@ func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Handle(scope func(contex
 	})
 }
 
-// Prepare preserves concrete authenticated identity for model-binding adapters.
-func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Prepare(prepare func(context.Context, M, Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error)) RouteRegistration {
-	if err := e.Validate(); err != nil {
+// PrepareAuthenticatedIdempotent preserves concrete authenticated identity for model-binding adapters.
+func PrepareAuthenticatedIdempotent[P, Q, B, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, M, R], prepare func(context.Context, M, Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error)) RouteRegistration {
+	if err := ValidateAuthenticatedIdempotent(e); err != nil {
 		return InvalidRouteRegistration(err)
 	}
 	if prepare == nil {
 		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated idempotency preparation is missing"))
 	}
-	return e.endpoint.Prepare(func(ctx context.Context, in Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error) {
-		actor, err := e.source.guard.Require(ctx)
+	return PrepareIdempotent(e.endpoint, func(ctx context.Context, in Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error) {
+		actor, err := e.source.binding.guard.Require(ctx)
 		if err != nil {
 			return idempotency.Scope{}, nil, authenticationError(err)
 		}

@@ -7,4 +7,4 @@ import (
 )
 
 var route h.AuthenticatedRoute[h.NoPath, models.User]
-var _ = route.WithScopes(auth.AccessScopes[models.Order]{})
+var _ = h.ConfigureAuthenticatedRoute[h.NoPath, models.User](route, h.Scopes(auth.AccessScopes[models.Order]{}))

@@ -32,11 +32,11 @@ func (b GuardBinding[M]) Select(guard auth.Guard[M]) (GuardBinding[M], error) {
 	return BindGuard(b.authentication, guard)
 }
 func (b GuardBinding[M]) Guard() auth.Guard[M] { return b.guard }
-func Authenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
-	return RequireAuthentication(endpoint, binding.authentication, binding.guard)
+func Authenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], options ...GuardOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
+	return ConfigureAuthenticated(RequireAuthentication(endpoint, binding.authentication, binding.guard), options...)
 }
-func OptionallyAuthenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
-	return OptionalAuthentication(endpoint, binding.authentication, binding.guard)
+func OptionallyAuthenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], options ...ActorOption[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
+	return ConfigureOptional(OptionalAuthentication(endpoint, binding.authentication, binding.guard), options...)
 }
 
 // NewCookieAuthentication protects every selected cookie guard with the same

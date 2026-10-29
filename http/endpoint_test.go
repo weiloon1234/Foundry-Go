@@ -58,7 +58,7 @@ const endpointUserID = "0193fd8c-2075-7000-8000-000000000001"
 
 func TestTypedEndpointInputAndMetadata(t *testing.T) {
 	t.Parallel()
-	endpoint := patchEndpoint().Within(DefineScope("/api", "api"))
+	endpoint := ConfigureEndpoint(patchEndpoint(), Within(DefineScope("/api", "api")))
 	var called atomic.Int32
 	router, err := NewRouter(endpoint.Handle(func(ctx context.Context, input endpointRequest) (EndpointReply, error) {
 		called.Add(1)
@@ -171,7 +171,7 @@ func TestTypedEndpointBoundsKnownAndStreamedBodies(t *testing.T) {
 		t.Run(map[bool]string{true: "known", false: "streamed"}[known], func(t *testing.T) {
 			limits := DefaultEndpointLimits()
 			limits.Body.Bytes = 16
-			router, err := NewRouter(patchEndpoint().WithLimits(limits).Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
+			router, err := NewRouter(ConfigureEndpoint(patchEndpoint(), Limits(limits)).Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
 				t.Error("oversized input reached handler")
 				return EndpointReply{}, nil
 			}))
@@ -315,27 +315,27 @@ func TestTypedEndpointEmptyBodyAndHead(t *testing.T) {
 func TestTypedEndpointRejectsInvalidDeclarations(t *testing.T) {
 	t.Parallel()
 	var undefined Endpoint[NoPath, NoQuery, NoBody, NoContent]
-	if undefined.Validate() == nil {
+	if ValidateEndpoint(undefined) == nil {
 		t.Fatal("zero endpoint accepted")
 	}
 	if _, err := NewRouter(patchEndpoint().Handle(nil)); err == nil {
 		t.Fatal("nil handler accepted")
 	}
-	if patchEndpoint().WithLimits(EndpointLimits{}).Validate() == nil {
+	if ValidateEndpoint(ConfigureEndpoint(patchEndpoint(), Limits(EndpointLimits{}))) == nil {
 		t.Fatal("zero limits accepted")
 	}
 	for _, status := range []int{0, 101, 204, 205, 400, 600} {
-		if JSONResponse(status, endpointReplyJSON()).Validate() == nil {
+		if ValidateResponse(JSONResponse(status, endpointReplyJSON())) == nil {
 			t.Fatal("invalid JSON response status accepted")
 		}
 	}
 	for _, status := range []int{0, 200, 304, 500} {
-		if EmptyResponse(status).Validate() == nil {
+		if ValidateResponse(EmptyResponse(status)) == nil {
 			t.Fatal("invalid empty status accepted")
 		}
 	}
 	get := DefineEndpoint(DefineRoute(RouteSpec{ID: "get", Method: GET, Access: Public}, StaticPath("/")), EmptyQuery(), JSONBody(endpointPatchJSON()), JSONResponse(200, endpointReplyJSON()))
-	if get.Validate() == nil {
+	if ValidateEndpoint(get) == nil {
 		t.Fatal("typed GET body accepted")
 	}
 }

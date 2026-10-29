@@ -124,7 +124,7 @@ func TestBrowserSessionLoginRotateLogoutWithConcreteModel(t *testing.T) {
 	s := browserPrepare(t)
 	proof := browserProof(t)
 	var held context.Context
-	login := browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public).WithMiddleware(s.web.Middleware()).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
+	login := foundryhttp.ConfigureEndpoint(browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public), foundryhttp.Use(s.web.Middleware())).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
 		held = ctx
 		_, err := s.web.Login(ctx, proof, session.IssueOptions{})
 		return foundryhttp.NoContent{}, err
@@ -140,7 +140,7 @@ func TestBrowserSessionLoginRotateLogoutWithConcreteModel(t *testing.T) {
 		_, err := s.web.Rotate(ctx)
 		return foundryhttp.NoContent{}, err
 	})
-	logout := browserEndpoint("/logout", foundryhttp.POST, foundryhttp.Public).WithMiddleware(s.web.Middleware()).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
+	logout := foundryhttp.ConfigureEndpoint(browserEndpoint("/logout", foundryhttp.POST, foundryhttp.Public), foundryhttp.Use(s.web.Middleware())).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, s.web.Logout(ctx)
 	})
 	router, err := foundryhttp.NewRouter(login, profile, rotate, logout)
@@ -185,7 +185,7 @@ func TestBrowserSessionLoginRotateLogoutWithConcreteModel(t *testing.T) {
 func TestBrowserSessionRememberAndLoginInvalidatePreviousCookie(t *testing.T) {
 	s := browserPrepare(t)
 	proof := browserProof(t)
-	route := browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public).WithMiddleware(s.web.Middleware()).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
+	route := foundryhttp.ConfigureEndpoint(browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public), foundryhttp.Use(s.web.Middleware())).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
 		_, err := s.web.Login(ctx, proof, session.IssueOptions{Remember: true})
 		return foundryhttp.NoContent{}, err
 	})
@@ -210,7 +210,7 @@ func TestBrowserSessionFailuresNeverPublishCookie(t *testing.T) {
 			proof := browserProof(t)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			route := browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public).WithMiddleware(s.web.Middleware()).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
+			route := foundryhttp.ConfigureEndpoint(browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public), foundryhttp.Use(s.web.Middleware())).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
 				if _, err := s.web.Login(ctx, proof, session.IssueOptions{}); err != nil {
 					return foundryhttp.NoContent{}, err
 				}
@@ -243,7 +243,7 @@ func TestBrowserSessionFailuresNeverPublishCookie(t *testing.T) {
 func TestBrowserSessionCSRFAndCookieParsingRunBeforeHandler(t *testing.T) {
 	s := browserPrepare(t)
 	var calls atomic.Int32
-	route := browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public).WithMiddleware(s.web.Middleware()).Handle(func(context.Context, authInput) (foundryhttp.NoContent, error) {
+	route := foundryhttp.ConfigureEndpoint(browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public), foundryhttp.Use(s.web.Middleware())).Handle(func(context.Context, authInput) (foundryhttp.NoContent, error) {
 		calls.Add(1)
 		return foundryhttp.NoContent{}, nil
 	})
@@ -277,7 +277,7 @@ func TestBrowserSessionCSRFAndCookieParsingRunBeforeHandler(t *testing.T) {
 func TestBrowserSessionRejectsSafeAndRawMutation(t *testing.T) {
 	s := browserPrepare(t)
 	proof := browserProof(t)
-	route := browserEndpoint("/login", foundryhttp.GET, foundryhttp.Public).WithMiddleware(s.web.Middleware()).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
+	route := foundryhttp.ConfigureEndpoint(browserEndpoint("/login", foundryhttp.GET, foundryhttp.Public), foundryhttp.Use(s.web.Middleware())).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
 		_, err := s.web.Login(ctx, proof, session.IssueOptions{})
 		if err == nil {
 			t.Error("GET login accepted")
@@ -319,7 +319,7 @@ func TestBrowserSessionResponseEncodingFailureWithholdsCookie(t *testing.T) {
 	root := contract.TypeID(typ.PkgPath() + "." + typ.Name())
 	dto := contract.DefineJSON[BrowserSessionReply](contract.Schema{Root: root, Types: []contract.Type{{ID: root, Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "amount", Type: "number", Required: true}}}, {ID: "number", Kind: contract.NumberKind, Bits: 64}}})
 	endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "login", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/login")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, dto))
-	route := endpoint.WithMiddleware(s.web.Middleware()).Handle(func(ctx context.Context, _ authInput) (BrowserSessionReply, error) {
+	route := foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Use(s.web.Middleware())).Handle(func(ctx context.Context, _ authInput) (BrowserSessionReply, error) {
 		_, err := s.web.Login(ctx, proof, session.IssueOptions{})
 		return BrowserSessionReply{Amount: math.NaN()}, err
 	})
@@ -330,7 +330,7 @@ func TestBrowserSessionResponseEncodingFailureWithholdsCookie(t *testing.T) {
 }
 func TestBrowserSessionMiddlewareCompositionAndConfig(t *testing.T) {
 	s := browserPrepare(t)
-	profile := foundryhttp.RequireAuthentication(browserEndpoint("/profile", foundryhttp.GET, foundryhttp.Guarded).WithMiddleware(s.web.Middleware()), s.web.Authentication(), s.web.Guard()).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	profile := foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(browserEndpoint("/profile", foundryhttp.GET, foundryhttp.Guarded), foundryhttp.Use(s.web.Middleware())), s.web.Authentication(), s.web.Guard()).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	})
 	if w := browserServe(newAuthRouter(t, profile), "GET", "/profile", nil); w.Code != 401 {

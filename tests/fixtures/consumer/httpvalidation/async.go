@@ -15,7 +15,7 @@ import (
 // The lookup may be a scoped database query or an application API adapter.
 func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]) (*foundryhttp.Router, error) {
 	fields := httpdto.UpdateUserValidationFields()
-	endpoint := httpendpoints.Update.WithBodyValidation(validation.Parallel(
+	endpoint := foundryhttp.ValidateBody(httpendpoints.Update, validation.Parallel(
 		validation.Rules(validation.WithLabel(fields.Email, "Email address"), validation.Optional(validation.Bail(validation.Email[string](), validation.Unique(lookup)))),
 		validation.Rules(fields.Nickname, validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
 	))
@@ -28,7 +28,7 @@ func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]
 func OwnEmailRouter(service httpendpoints.Service, current validation.Slot[model.ID[models.User]], emails validation.Lookup[string]) (*foundryhttp.Router, error) {
 	body := validation.DefineField("body", func(input httpendpoints.UpdateRequest) httpdto.UpdateUser { return input.Body })
 	fields := httpdto.UpdateUserValidationFields()
-	endpoint := httpendpoints.Update.WithValidation(validation.Provide(current,
+	endpoint := foundryhttp.ValidateInput(httpendpoints.Update, validation.Provide(current,
 		func(_ context.Context, input httpendpoints.UpdateRequest) (model.ID[models.User], error) {
 			return input.Path.User, nil
 		},

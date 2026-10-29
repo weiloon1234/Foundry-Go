@@ -2,13 +2,14 @@ package http
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/observability"
 	"io"
 	"log/slog"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
 func BenchmarkRequestMetricsObserve(b *testing.B) {
@@ -41,7 +42,7 @@ func BenchmarkRequestMetricsObserveParallel(b *testing.B) {
 }
 func BenchmarkRequestCompletionMetrics(b *testing.B) {
 	route := DefineRoute(RouteSpec{ID: "benchmark.ok", Method: GET, Access: Public}, StaticPath("/ok"))
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }))
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }))
 	if err != nil {
 		b.Fatal(err)
 	}

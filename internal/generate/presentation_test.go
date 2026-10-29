@@ -56,13 +56,13 @@ func TestPresentationGenerationAndTransportOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, dir, "presentation_runtime_test.go", `package sample
-import "testing"
+import ("testing";foundryhttp "github.com/weiloon1234/Foundry-Go/http")
 func TestDescriptors(t *testing.T) {
  if err:=InputJSON().Validate();err!=nil{t.Fatal(err)}
- if err:=SearchDescriptor().Validate();err!=nil{t.Fatal(err)}
- if _,err:=PathDescriptor().Parameters();err!=nil{t.Fatal(err)}
- if err:=FormDescriptor().Validate();err!=nil{t.Fatal(err)}
- if _,err:=UploadDescriptor().Description();err!=nil{t.Fatal(err)}
+ if err:=foundryhttp.ValidateQueryDescriptor(SearchDescriptor());err!=nil{t.Fatal(err)}
+ if _,err:=foundryhttp.PathParameters(PathDescriptor());err!=nil{t.Fatal(err)}
+ if err:=foundryhttp.ValidateQueryDescriptor(FormDescriptor());err!=nil{t.Fatal(err)}
+ if _,err:=foundryhttp.InspectMultipart(UploadDescriptor());err!=nil{t.Fatal(err)}
 }
 `)
 	command := exec.CommandContext(t.Context(), "go", "test", "-mod=mod", "./...")

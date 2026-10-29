@@ -78,11 +78,11 @@ func TestMFAResponseDescriptorsRequireSecurePostContract(t *testing.T) {
 		route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "mfa.disclosure", Method: method, Access: foundryhttp.Public}, foundryhttp.StaticPath("/mfa"))
 		enrollment := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.MFAEnrollmentResponse[authAccount](200, clock.System{}))
 		recovery := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.MFARecoveryResponse[authAccount](200))
-		if enrollment.Validate() == nil || recovery.Validate() == nil {
+		if foundryhttp.ValidateEndpoint(enrollment) == nil || foundryhttp.ValidateEndpoint(recovery) == nil {
 			t.Fatal("disclosure method accepted", method)
 		}
 	}
-	if foundryhttp.MFAEnrollmentResponse[authAccount](200, nil).Validate() == nil || foundryhttp.MFARecoveryResponse[authAccount](204).Validate() == nil {
+	if foundryhttp.ValidateResponse(foundryhttp.MFAEnrollmentResponse[authAccount](200, nil)) == nil || foundryhttp.ValidateResponse(foundryhttp.MFARecoveryResponse[authAccount](204)) == nil {
 		t.Fatal("invalid MFA response configuration")
 	}
 }

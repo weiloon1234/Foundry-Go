@@ -636,7 +636,7 @@ func TestPostgresDownloadRunsUnderItsRouteDeadlineAndReleasesOnCancel(t *testing
 		return table.Download(ctx, manager, actor, Request{}, ExportOptions{Format: CSV})
 	}
 	kernel := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.kernel", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/kernel.csv")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8"))
-	routed := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.routed", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/routed.csv")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8")).WithTimeout(manager.DownloadTimeout())
+	routed := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.routed", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/routed.csv")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("text/csv; charset=utf-8")), foundryhttp.Timeout(manager.DownloadTimeout()))
 	base := serveReports(t, 150*time.Millisecond, kernel.Handle(download), routed.Handle(download))
 	transport := &stdhttp.Transport{}
 	defer transport.CloseIdleConnections()

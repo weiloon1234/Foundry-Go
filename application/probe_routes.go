@@ -51,7 +51,7 @@ func (s ProbeSettings) paths() []string {
 func (s ProbeSettings) validate() error {
 	paths := s.paths()
 	for _, path := range paths {
-		if canonical, err := http.StaticPath(path).URL(http.NoPath{}); err != nil || canonical != path {
+		if canonical, err := http.PathURL(http.StaticPath(path), http.NoPath{}); err != nil || canonical != path {
 			return safeerror.NewFault(fault.Invalid, "probe paths must be canonical static paths")
 		}
 	}

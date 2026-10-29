@@ -260,7 +260,7 @@ func TestPostgresMFASecretResponsesNeverDiscloseOnFailures(t *testing.T) {
 			if mode == "limit" {
 				limits := foundryhttp.DefaultEndpointLimits()
 				limits.Response.Bytes = 8
-				endpoint = endpoint.WithLimits(limits)
+				endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Limits(limits))
 			}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -302,7 +302,7 @@ func TestPostgresMFASecretResponsesNeverDiscloseOnFailures(t *testing.T) {
 		if mode == "limit" {
 			limits := foundryhttp.DefaultEndpointLimits()
 			limits.Response.Bytes = 8
-			endpoint = endpoint.WithLimits(limits)
+			endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Limits(limits))
 		}
 		router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (mfa.RecoveryCodes[multifactor.Account], error) {
 			if mode == "zero" {
@@ -332,7 +332,7 @@ func TestPostgresMFAHTTPWithholdsCompletedCookieAfterResponseFailure(t *testing.
 			kernel := s.kernel(t, "session")
 			pending := pendingCredential(t, kernel)
 			browser := s.browser(t)
-			endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "mfa.fail", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/mfa/fail")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204)).WithMiddleware(browser.Middleware())
+			endpoint := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "mfa.fail", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/mfa/fail")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204)), foundryhttp.Use(browser.Middleware()))
 			factor := verifier(t, s, codes.Codes()[0])
 			router, err := foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 				_, err := browser.CompleteMFA(ctx, factor, session.IssueOptions{})

@@ -54,7 +54,7 @@ func New() (plugin.Module, error) {
 			if err != nil {
 				return foundryhttp.RouteRegistration{}, err
 			}
-			return Route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ foundryhttp.NoPath) {
+			return foundryhttp.HandleRaw(Route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ foundryhttp.NoPath) {
 				_, _ = fmt.Fprint(w, title+" reports")
 			}), nil
 		}); err != nil {

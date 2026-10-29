@@ -33,11 +33,11 @@ func TestMiddlewareScopeOrderAndMatchedMetadata(t *testing.T) {
 	parent := DefineScope("/api", "api").WithMiddleware(wrapper("parent"))
 	child := DefineScope("/v1", "v1").WithMiddleware(wrapper("child")).Within(parent)
 	plain := staticRoute("read", GET, "/item")
-	route := plain.WithMiddleware(wrapper("route")).Within(child)
-	if err := route.Validate(); err != nil || constructs != 0 {
+	route := ConfigureRoute(ConfigureRoute(plain, Use(wrapper("route"))), Within(child))
+	if err := ValidateRoute(route); err != nil || constructs != 0 {
 		t.Fatalf("declaration started middleware: %v", err)
 	}
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {
 		trace = append(trace, "handler")
 		w.WriteHeader(204)
 	}))
@@ -63,7 +63,7 @@ func TestMiddlewareScopeOrderAndMatchedMetadata(t *testing.T) {
 		t.Fatalf("inspection order: %+v", info)
 	}
 	info.Middlewares[0] = "changed"
-	if router.Routes()[0].Middlewares[0] != "parent" || plain.ID() != "read" || plain.Pattern() != "/item" {
+	if router.Routes()[0].Middlewares[0] != "parent" || RouteIDOf(plain) != "read" || RoutePattern(plain) != "/item" {
 		t.Fatal("descriptor snapshots share mutable state")
 	}
 }
@@ -78,8 +78,8 @@ func TestRouteMiddlewareCanRejectBeforePathDecoding(t *testing.T) {
 			w.WriteHeader(403)
 		}), nil
 	})
-	route := DefineRoute(RouteSpec{ID: "integer", Method: GET, Access: Public}, DefinePath("/{id}", Param("id", IntegerPath[int](), func(p *input) *int { return &p.ID }))).WithMiddleware(deny)
-	router, err := NewRouter(route.HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, input) { t.Error("denied handler executed") }))
+	route := ConfigureRoute(DefineRoute(RouteSpec{ID: "integer", Method: GET, Access: Public}, DefinePath("/{id}", Param("id", IntegerPath[int](), func(p *input) *int { return &p.ID }))), Use(deny))
+	router, err := NewRouter(HandleRaw(route, func(stdhttp.ResponseWriter, *stdhttp.Request, input) { t.Error("denied handler executed") }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestGlobalMiddlewareCoversFallbacksAndPreservesNativeWriter(t *testing.T) {
 			next.ServeHTTP(w, r)
 		}), nil
 	})
-	router, err := NewRouter(staticRoute("read", GET, "/item").HandleRaw(noContent))
+	router, err := NewRouter(HandleRaw(staticRoute("read", GET, "/item"), noContent))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,8 +138,8 @@ func TestMiddlewareRejectsInvalidChainsBeforeConstruction(t *testing.T) {
 		t.Fatal("unbounded declaration accepted")
 	}
 	parent := DefineScope("/api", "api").WithMiddleware(middleware)
-	duplicate := staticRoute("read", GET, "/item").WithMiddleware(middleware).Within(parent)
-	if err := duplicate.Validate(); !errors.Is(err, fault.Duplicate) {
+	duplicate := ConfigureRoute(ConfigureRoute(staticRoute("read", GET, "/item"), Use(middleware)), Within(parent))
+	if err := ValidateRoute(duplicate); !errors.Is(err, fault.Duplicate) {
 		t.Fatalf("scope duplicate: %v", err)
 	}
 }

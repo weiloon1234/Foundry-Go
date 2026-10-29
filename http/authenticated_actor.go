@@ -11,36 +11,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
-// WithActorMiddleware appends middleware that runs after authentication, access
-// scopes and permissions, inside the authenticated request scope. Such
-// middleware reads the concrete actor with guard.Require(r.Context()) (resolved
-// once per scope, no second lookup), for example RateLimitByActor or tenant
-// resolution. Middleware added with WithMiddleware runs before authentication.
-func (e AuthenticatedEndpoint[P, Q, B, M, R]) WithActorMiddleware(middlewares ...Middleware) AuthenticatedEndpoint[P, Q, B, M, R] {
-	e.authenticationBinding = e.authenticationBinding.withActorMiddleware(middlewares...)
-	return e
-}
-
-// WithActorMiddleware appends middleware that runs after optional
-// authentication; it reads the actor with guard.Optional(r.Context()).
-func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) WithActorMiddleware(middlewares ...Middleware) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
-	e.required.authenticationBinding = e.required.authenticationBinding.withActorMiddleware(middlewares...)
-	return e
-}
-
-// WithActorMiddleware appends middleware that runs after authentication and its
-// requirements, before the native handler.
-func (r AuthenticatedRoute[P, M]) WithActorMiddleware(middlewares ...Middleware) AuthenticatedRoute[P, M] {
-	r.authenticationBinding = r.authenticationBinding.withActorMiddleware(middlewares...)
-	return r
-}
-
-// WithActorMiddleware appends middleware that runs after optional authentication.
-func (r OptionalAuthenticationRoute[P, M]) WithActorMiddleware(middlewares ...Middleware) OptionalAuthenticationRoute[P, M] {
-	r.required.authenticationBinding = r.required.authenticationBinding.withActorMiddleware(middlewares...)
-	return r
-}
-
 // ActorKey is a bounded quota key: a digest of the authenticated model identity,
 // or the masked client network for anonymous requests. Declare actor limiters
 // with ActorKeys().

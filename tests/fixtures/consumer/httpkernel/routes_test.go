@@ -15,12 +15,12 @@ import (
 type routeMember struct{}
 type memberPath struct{ Member model.ID[routeMember] }
 
-var memberShow = foundryhttp.DefineRoute(
+var memberShow = foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
 	foundryhttp.RouteSpec{ID: "members.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
 	foundryhttp.DefinePath("/members/{member}",
 		foundryhttp.Param("member", foundryhttp.ModelIDPath[routeMember](), func(path *memberPath) *model.ID[routeMember] { return &path.Member }),
 	),
-).Within(foundryhttp.DefineScope("/api", "api"))
+), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 
 // This fixture explicitly uses the raw payload adapter. Typed request/response
 // DTO discovery is the next HTTP slice; path identity is already compiler checked.
@@ -29,9 +29,9 @@ func TestTypedNamedRoutesFromIndependentConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := foundryhttp.NewRouter(memberShow.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, path memberPath) {
+	router, err := foundryhttp.NewRouter(foundryhttp.HandleRaw(memberShow, func(w stdhttp.ResponseWriter, r *stdhttp.Request, path memberPath) {
 		info, ok := foundryhttp.MatchedRoute(r.Context())
-		if !ok || info.ID != memberShow.ID() || !info.Raw {
+		if !ok || info.ID != foundryhttp.RouteIDOf(memberShow) || !info.Raw {
 			t.Error("route metadata did not match its declaration")
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -46,7 +46,7 @@ func TestTypedNamedRoutesFromIndependentConsumer(t *testing.T) {
 	}
 	server := httptest.NewServer(router)
 	defer server.Close()
-	location, err := memberShow.URL(memberPath{Member: id})
+	location, err := foundryhttp.RouteURL(memberShow, memberPath{Member: id})
 	if err != nil || location != "/api/members/"+id.String() {
 		t.Fatalf("typed URL: %q %v", location, err)
 	}

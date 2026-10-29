@@ -89,7 +89,7 @@ func TestInvalidApplicationErrorsNeverBecomePublic(t *testing.T) {
 				t.Fatal("invalid declaration classified as public")
 			}
 		}
-		if router, err := NewRouter(errorEndpoint("bad", "/bad").WithErrors(declaration).Handle(returnHTTPError(nil))); err == nil || router != nil {
+		if router, err := NewRouter(ConfigureEndpoint(errorEndpoint("bad", "/bad"), Errors(declaration)).Handle(returnHTTPError(nil))); err == nil || router != nil {
 			t.Fatal("invalid endpoint partially assembled")
 		}
 	}
@@ -106,9 +106,9 @@ func TestEndpointErrorsConstrainResponsesAndOwnMetadata(t *testing.T) {
 	other := DefineError("seats.unavailable", 403, "different meaning")
 	input := []ErrorDeclaration{expected}
 	base := errorEndpoint("seats.reserve", "/seats")
-	declared := base.WithErrors(input...)
+	declared := ConfigureEndpoint(base, Errors(input...))
 	input[0] = other
-	plain, _ := base.Description()
+	plain, _ := InspectEndpoint(base)
 	if len(plain.Errors) != 0 {
 		t.Fatal("WithErrors mutated base")
 	}
@@ -165,7 +165,7 @@ func TestRouterErrorCatalogRejectsConflictsAndAllowsReuse(t *testing.T) {
 	unavailable := DefineError("seats.unavailable", 409, "Unavailable")
 	gone := DefineError("seats.gone", 410, "Gone")
 	register := func(id RouteID, path string, declarations ...ErrorDeclaration) RouteRegistration {
-		return errorEndpoint(id, path).WithErrors(declarations...).Handle(returnHTTPError(nil))
+		return ConfigureEndpoint(errorEndpoint(id, path), Errors(declarations...)).Handle(returnHTTPError(nil))
 	}
 	if router, err := NewRouter(register("a", "/a", unavailable, unavailable)); !errors.Is(err, fault.Duplicate) || router != nil {
 		t.Fatal("duplicate declaration accepted")
@@ -206,10 +206,10 @@ func TestDeclaredErrorsApplyBeforeRouteMiddleware(t *testing.T) {
 		}), nil
 	})
 	for _, declared := range []bool{false, true} {
-		endpoint := errorEndpoint("seats.reserve", "/reserve").WithMiddleware(middleware)
+		endpoint := ConfigureEndpoint(errorEndpoint("seats.reserve", "/reserve"), Use(middleware))
 		expected := InternalError
 		if declared {
-			endpoint = endpoint.WithErrors(failure)
+			endpoint = ConfigureEndpoint(endpoint, Errors(failure))
 			expected = "seats.closed"
 		}
 		router, err := NewRouter(endpoint.Handle(func(context.Context, Input[NoPath, NoQuery, NoBody]) (NoContent, error) {

@@ -23,15 +23,15 @@ func noContent(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.Write
 
 func TestRouterRejectsConflictsAndIncompleteDeclarations(t *testing.T) {
 	for name, registrations := range map[string][]RouteRegistration{
-		"duplicate ID":       {staticRoute("same", GET, "/a").HandleRaw(noContent), staticRoute("same", GET, "/b").HandleRaw(noContent)},
-		"duplicate pattern":  {staticRoute("a", GET, "/a").HandleRaw(noContent), staticRoute("b", GET, "/a").HandleRaw(noContent)},
-		"ambiguous patterns": {textRoute("/a/{text}").HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) {}), DefineRoute(RouteSpec{ID: "other", Method: GET, Access: Public}, DefinePath("/{text}/b", Param("text", StringPath[string](), func(p *textPath) *string { return &p.Text }))).HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) {})},
+		"duplicate ID":       {HandleRaw(staticRoute("same", GET, "/a"), noContent), HandleRaw(staticRoute("same", GET, "/b"), noContent)},
+		"duplicate pattern":  {HandleRaw(staticRoute("a", GET, "/a"), noContent), HandleRaw(staticRoute("b", GET, "/a"), noContent)},
+		"ambiguous patterns": {HandleRaw(textRoute("/a/{text}"), func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) {}), HandleRaw(DefineRoute(RouteSpec{ID: "other", Method: GET, Access: Public}, DefinePath("/{text}/b", Param("text", StringPath[string](), func(p *textPath) *string { return &p.Text }))), func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) {})},
 		"empty registration": {{}},
-		"nil callback":       {staticRoute("a", GET, "/a").HandleRaw(nil)},
-		"implicit public":    {DefineRoute(RouteSpec{ID: "a", Method: GET}, StaticPath("/a")).HandleRaw(noContent)},
-		"invalid access":     {DefineRoute(RouteSpec{ID: "a", Method: GET, Access: Access("unknown")}, StaticPath("/a")).HandleRaw(noContent)},
-		"invalid method":     {staticRoute("a", Method("CONNECT"), "/a").HandleRaw(noContent)},
-		"invalid identity":   {staticRoute("bad ID", GET, "/a").HandleRaw(noContent)},
+		"nil callback":       {HandleRaw(staticRoute("a", GET, "/a"), nil)},
+		"implicit public":    {HandleRaw(DefineRoute(RouteSpec{ID: "a", Method: GET}, StaticPath("/a")), noContent)},
+		"invalid access":     {HandleRaw(DefineRoute(RouteSpec{ID: "a", Method: GET, Access: Access("unknown")}, StaticPath("/a")), noContent)},
+		"invalid method":     {HandleRaw(staticRoute("a", Method("CONNECT"), "/a"), noContent)},
+		"invalid identity":   {HandleRaw(staticRoute("bad ID", GET, "/a"), noContent)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			router, err := NewRouter(registrations...)
@@ -54,8 +54,8 @@ func TestRouterNativePrecedenceAndHEAD(t *testing.T) {
 	fixed := staticRoute("users.new", GET, "/users/new")
 	head := staticRoute("users.head", HEAD, "/users/new")
 	for _, order := range [][]RouteRegistration{
-		{variable.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) { called = p.Text; w.WriteHeader(204) }), fixed.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { called = "fixed"; w.WriteHeader(204) }), head.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { called = "head"; w.WriteHeader(204) })},
-		{head.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { called = "head"; w.WriteHeader(204) }), fixed.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { called = "fixed"; w.WriteHeader(204) }), variable.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) { called = p.Text; w.WriteHeader(204) })},
+		{HandleRaw(variable, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) { called = p.Text; w.WriteHeader(204) }), HandleRaw(fixed, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { called = "fixed"; w.WriteHeader(204) }), HandleRaw(head, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { called = "head"; w.WriteHeader(204) })},
+		{HandleRaw(head, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { called = "head"; w.WriteHeader(204) }), HandleRaw(fixed, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { called = "fixed"; w.WriteHeader(204) }), HandleRaw(variable, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) { called = p.Text; w.WriteHeader(204) })},
 	} {
 		router, err := NewRouter(order...)
 		if err != nil {
@@ -73,7 +73,7 @@ func TestRouterNativePrecedenceAndHEAD(t *testing.T) {
 }
 
 func TestRouterUsesSharedFailuresAndNativeAllow(t *testing.T) {
-	router, err := NewRouter(staticRoute("read", GET, "/item").HandleRaw(noContent), staticRoute("write", POST, "/item").HandleRaw(noContent))
+	router, err := NewRouter(HandleRaw(staticRoute("read", GET, "/item"), noContent), HandleRaw(staticRoute("write", POST, "/item"), noContent))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestRouterUsesSharedFailuresAndNativeAllow(t *testing.T) {
 }
 
 func TestRouterExactTrailingSlashAndRelativeRedirect(t *testing.T) {
-	router, err := NewRouter(staticRoute("root", GET, "/").HandleRaw(noContent), staticRoute("folder", POST, "/folder/").HandleRaw(noContent))
+	router, err := NewRouter(HandleRaw(staticRoute("root", GET, "/"), noContent), HandleRaw(staticRoute("folder", POST, "/folder/"), noContent))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,13 +127,11 @@ func TestRouterExactTrailingSlashAndRelativeRedirect(t *testing.T) {
 }
 
 func TestEncodedSlashOnlyCannotSelectAnotherRoute(t *testing.T) {
-	router, err := NewRouter(
-		staticRoute("trailing", GET, "/prefix/").HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, NoPath) {
-			t.Error("encoded separator selected trailing-slash route")
-		}),
-		textRoute("/prefix/{text}").HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) {
-			t.Error("ambiguous separator reached wildcard handler")
-		}),
+	router, err := NewRouter(HandleRaw(staticRoute("trailing", GET, "/prefix/"), func(stdhttp.ResponseWriter, *stdhttp.Request, NoPath) {
+		t.Error("encoded separator selected trailing-slash route")
+	}), HandleRaw(textRoute("/prefix/{text}"), func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) {
+		t.Error("ambiguous separator reached wildcard handler")
+	}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -150,18 +148,18 @@ func TestEncodedSlashOnlyCannotSelectAnotherRoute(t *testing.T) {
 func TestScopedRouteURLMetadataAndSnapshotOwnership(t *testing.T) {
 	original := textRoute("/users/{text}")
 	scope := DefineScope("/v1", "v1").Within(DefineScope("/api", "api"))
-	route := original.Within(scope)
-	location, err := route.URL(textPath{Text: "a/b"})
-	if err != nil || location != "/api/v1/users/a%2Fb" || route.ID() != "api.v1.text.show" {
-		t.Fatalf("scoped descriptor: %q %v %s", location, err, route.ID())
+	route := ConfigureRoute(original, Within(scope))
+	location, err := RouteURL(route, textPath{Text: "a/b"})
+	if err != nil || location != "/api/v1/users/a%2Fb" || RouteIDOf(route) != "api.v1.text.show" {
+		t.Fatalf("scoped descriptor: %q %v %s", location, err, RouteIDOf(route))
 	}
-	if original.Pattern() != "/users/{text}" || original.ID() != "text.show" {
+	if RoutePattern(original) != "/users/{text}" || RouteIDOf(original) != "text.show" {
 		t.Fatal("scope mutated the original route")
 	}
 	var count int
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, p textPath) {
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, p textPath) {
 		info, ok := MatchedRoute(r.Context())
-		if !ok || info.ID != route.ID() || info.Path != route.Pattern() || !info.Raw || p.Text != "a/b" {
+		if !ok || info.ID != RouteIDOf(route) || info.Path != RoutePattern(route) || !info.Raw || p.Text != "a/b" {
 			t.Error("matched route metadata or typed value disagrees")
 		}
 		info.Parameters[0] = "mutated"
@@ -171,12 +169,12 @@ func TestScopedRouteURLMetadataAndSnapshotOwnership(t *testing.T) {
 		}
 		count++
 		w.WriteHeader(204)
-	}), staticRoute("z", GET, "/z").HandleRaw(noContent))
+	}), HandleRaw(staticRoute("z", GET, "/z"), noContent))
 	if err != nil {
 		t.Fatal(err)
 	}
 	info := router.Routes()
-	if info[0].ID != route.ID() || info[1].ID != "z" {
+	if info[0].ID != RouteIDOf(route) || info[1].ID != "z" {
 		t.Fatal("route inspection is not deterministic")
 	}
 	info[0].Parameters[0] = "mutated"
@@ -188,7 +186,7 @@ func TestScopedRouteURLMetadataAndSnapshotOwnership(t *testing.T) {
 			t.Fatal("inspection mutated live routes")
 		}
 	}
-	if count != 2 || router.Routes()[0].Path != route.Pattern() {
+	if count != 2 || router.Routes()[0].Path != RoutePattern(route) {
 		t.Fatal("registration snapshot changed")
 	}
 	if _, ok := MatchedRoute(t.Context()); ok {
@@ -198,12 +196,12 @@ func TestScopedRouteURLMetadataAndSnapshotOwnership(t *testing.T) {
 
 func TestScopeRejectsInvalidPrefixesAndCannotRepairInvalidRoutes(t *testing.T) {
 	for _, scope := range []Scope{DefineScope("/api/", "api"), DefineScope("/{tenant}", "tenant"), DefineScope("api", "api"), DefineScope("/api", "bad name")} {
-		if err := textRoute("/{text}").Within(scope).Validate(); err == nil {
+		if err := ValidateRoute(ConfigureRoute(textRoute("/{text}"), Within(scope))); err == nil {
 			t.Fatal("invalid scope accepted")
 		}
 	}
 	for _, route := range []Route[NoPath]{staticRoute("", GET, "/users"), staticRoute("users", GET, "users")} {
-		if err := route.Within(DefineScope("/api", "api")).Validate(); err == nil {
+		if err := ValidateRoute(ConfigureRoute(route, Within(DefineScope("/api", "api")))); err == nil {
 			t.Fatal("scope turned invalid route into a valid one")
 		}
 	}
@@ -212,7 +210,7 @@ func TestScopeRejectsInvalidPrefixesAndCannotRepairInvalidRoutes(t *testing.T) {
 func TestRouterKeepsNativeWriterAndConcurrentIsolation(t *testing.T) {
 	var calls atomic.Int64
 	route := textRoute("/{text}")
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, p textPath) {
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, p textPath) {
 		if p.Text != r.Header.Get("Expected") {
 			t.Error("path values crossed concurrent requests")
 		}
@@ -231,7 +229,7 @@ func TestRouterKeepsNativeWriterAndConcurrentIsolation(t *testing.T) {
 	for i := range 32 {
 		group.Go(func() {
 			value := strings.Repeat("x", i+1)
-			location, err := route.URL(textPath{Text: value})
+			location, err := RouteURL(route, textPath{Text: value})
 			if err != nil {
 				t.Error(err)
 				return

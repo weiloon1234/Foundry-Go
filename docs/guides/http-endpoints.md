@@ -114,13 +114,13 @@ the route body limit; read errors are framework errors the handler can return
 as-is (413 oversized, 408 too slow, 400 broken transfer). The body closes when
 the handler returns. Preparation, authorization and validation receive it but
 must not read it. For large uploads raise `EndpointLimits.Raw.Bytes`, the route's
-`WithBodyLimit` and `WithTimeout` together. OpenAPI publishes binary content per
+`BodyLimit` and `Timeout` together. OpenAPI publishes binary content per
 media type, and the TypeScript client sends a `Blob`, `ArrayBuffer`, typed array
 or `ReadableStream`.
 
 ```go
 location, err := Update.URL(ctx, path, foundryhttp.NoQuery{})
-scoped := Update.Within(foundryhttp.DefineScope("/api", "api"))
+scoped := foundryhttp.ConfigureEndpoint(Update, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 ```
 
 `URL` combines the existing path and query codecs, escaping each source using its
@@ -129,7 +129,7 @@ shares route scope naming and path-prefix behavior.
 
 ## Bounds, failure and ownership
 
-`DefaultEndpointLimits()` supplies query and JSON budgets; `WithLimits` returns
+`DefaultEndpointLimits()` supplies query and JSON budgets; `Limits` returns
 an independent endpoint declaration. Query limits bound bytes, pairs and issues.
 Body and response JSON limits bound bytes, depth, wire nodes, traversal steps and
 issues. Request bodies default to the kernel's 2 MiB body size. Responses default
@@ -138,7 +138,7 @@ enough for ordinary list pages. A response over its limits is a 500 whose
 redacted diagnostic names `EndpointLimits.Response` and the exceeded byte, depth
 or node bound. The HTTP kernel's body ceiling remains an additional input bound.
 
-`WithHeaders(func(ctx, result R) ([]ResponseHeader, error))` derives response
+`EndpointHeaders(func(ctx, result R) ([]ResponseHeader, error))` derives response
 metadata from the handler's successful result before the response is encoded,
 for example a `Location` for a created resource with `RouteLocation(route, path)`
 or `EndpointLocation(ctx, endpoint, path, query)`, which reuse typed URL
@@ -149,20 +149,20 @@ and security headers such as `X-Accel-*`, `X-Sendfile`, `X-Forwarded-*`,
 `X-Request-Id` and `X-Frame-Options`. Values must be valid `HeaderValue`s; only
 `Link` and `Vary` may repeat, and at most 16 headers apply. A returned error or a
 rejected header is a 500 and no success is published. JSON and empty responses
-support it; idempotent endpoints use `IdempotentEndpoint.WithHeaders`, whose
+support it; idempotent endpoints use `IdempotentHeaders`, whose
 headers are replayed exactly. Headers never change the status; declare
 alternatives with `JSONResponses`.
 
 ```go
-created := endpoint.WithHeaders(func(_ context.Context, order OrderReply) ([]foundryhttp.ResponseHeader, error) {
+created := foundryhttp.EndpointHeaders(endpoint, func(_ context.Context, order OrderReply) ([]foundryhttp.ResponseHeader, error) {
     location, err := foundryhttp.RouteLocation(ShowOrder, OrderPath{Order: order.ID})
     return []foundryhttp.ResponseHeader{location}, err
 })
 ```
 
-`WithTimeout(d)` replaces the kernel `RequestTimeout` for one endpoint's route,
+`Timeout(d)` replaces the kernel `RequestTimeout` for one endpoint's route,
 for example a long report or upload; a longer timeout also extends the native
-connection read/write deadlines for that request. `WithBodyLimit(n)` replaces the
+connection read/write deadlines for that request. `BodyLimit(n)` replaces the
 kernel `MaxBodyBytes` for that route only, so an upload endpoint can accept large
 files without raising the server-wide default. Raise the matching endpoint payload
 limit too (for example `EndpointLimits.Multipart.Bytes`). Both are applied after
@@ -171,10 +171,12 @@ and are reported by `RouteInfo.Timeout` and `RouteInfo.MaxBodyBytes`. They are
 server policy and are not exported to client manifests.
 
 ```go
-upload := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.EmptyResponse(204)).
-    WithLimits(uploadLimits). // Multipart.Bytes/FileBytes: 512 MiB
-    WithBodyLimit(512 << 20).
-    WithTimeout(10 * time.Minute)
+upload := foundryhttp.DefineEndpoint(
+    route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.EmptyResponse(204),
+    foundryhttp.Limits(uploadLimits), // Multipart.Bytes/FileBytes: 512 MiB
+    foundryhttp.BodyLimit(512 << 20),
+    foundryhttp.Timeout(10 * time.Minute),
+)
 ```
 
 JSON input requires one Content-Type declaration: `application/json` or an
@@ -221,7 +223,7 @@ attempting a second response.
 
 ## Inspection
 
-`Endpoint.Description()` and `Router.Endpoints()` expose owned snapshots of the
+`foundryhttp.InspectEndpoint(endpoint)` and `Router.Endpoints()` expose owned snapshots of the
 same JSON graphs used at runtime. Router snapshots are ordered by route ID. Raw
 handlers remain in `Routes()` without acquiring guessed payload schemas.
 
@@ -230,11 +232,11 @@ Path/query scalar schemas reuse their typed codecs; the [normalized client manif
 
 ## Documentation and examples
 
-`WithDocumentation(RouteDocumentation{Summary, Description, Tags, Deprecated})`
-on a route or endpoint adds bounded, human-facing documentation to
+`Documentation(RouteDocumentation{Summary, Description, Tags, Deprecated})`
+in a route or endpoint constructor (or `ConfigureRoute`/`ConfigureEndpoint`) adds bounded, human-facing documentation to
 `RouteInfo.Documentation`. It never changes matching, access or limits.
-`WithBodyExample(value)` and `WithResponseExample(value)` encode a typed example
+`BodyExample(endpoint, value)` and `ResponseExample(endpoint, value)` encode a typed example
 through the endpoint's own JSON contracts when declared; an example that fails
-its contract, or an example for a non-JSON payload, makes `Validate` fail. The
+its contract, or an example for a non-JSON payload, makes `ValidateEndpoint` fail. The
 encoded bytes appear as `PayloadInfo.Example`. Client exports publish both, as
 described in [client contracts](client-contracts.md#operation-documentation-examples-and-servers).

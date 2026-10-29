@@ -13,16 +13,16 @@ type UserPath struct {
     User model.ID[models.User]
 }
 
-var ShowUser = foundryhttp.DefineRoute(
+var ShowUser = foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
     foundryhttp.RouteSpec{
         ID: "users.show",
         Method: foundryhttp.GET,
         Access: foundryhttp.Public,
     },
     UserPathDescriptor(),
-).Within(foundryhttp.DefineScope("/api", "api"))
+), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 
-location, err := ShowUser.URL(UserPath{User: user.ID})
+location, err := foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
 ```
 
 Here `models.User` is the application's model, `model` is Foundry's model package,
@@ -32,7 +32,7 @@ and `foundryhttp` aliases Foundry's HTTP package. Use the existing
 in the same manifest used by model and enum generation. Handwritten route variables
 and methods can refer to generated descriptors on a fresh checkout.
 
-Registration uses `ShowUser.HandleRaw`, whose handler receives a concrete
+Registration uses `foundryhttp.HandleRaw(ShowUser, handler)`, whose handler receives a concrete
 `UserPath`. It cannot accept a path struct for another route. URL generation
 cannot accept an ID belonging to a different model. ID parsing does not fetch a
 model or establish authorization; those are separate boundaries.
@@ -90,7 +90,7 @@ Generated bindings use these same contracts. There is no second URL encoder or
 router in the generator.
 
 `DefinePath` parses and validates the pattern once; route and endpoint copies,
-`Within` and every `URL` call reuse that parsed grammar. `Route.URL` validates
+`Within` and every `URL` call reuse that parsed grammar. `RouteURL(route, path)` validates
 the route identity and path, and `Endpoint.URL` additionally the query
 declaration it encodes; handler registration still validates the complete
 declaration, including middleware. Path and query codecs run on the caller's

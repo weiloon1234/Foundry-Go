@@ -66,18 +66,18 @@ import (
 )
 func TestFloatConsumer(t *testing.T) {
  limits:=foundryhttp.QueryLimits{Bytes:4096,Pairs:32,Issues:8}
- input,err:=Parameters.Decode(t.Context(),"latitude=1.000000059604644775390626&distances=0.1&distances=1e%2B20&minimum=-0&fraction=half",limits)
+ input,err:=foundryhttp.DecodeQuery(Parameters, t.Context(),"latitude=1.000000059604644775390626&distances=0.1&distances=1e%2B20&minimum=-0&fraction=half",limits)
  if err!=nil{t.Fatal(err)}
  if float32(input.Latitude)!=math.Nextafter32(1,2) || len(input.Distances)!=2 || input.Distances[0]!=0.1 || input.Distances[1]!=1e20{t.Fatal("float precision changed")}
  minimum,present:=input.Minimum.Get();if !present || !math.Signbit(float64(minimum)){t.Fatal("signed optional zero lost")}
  if input.Fraction!=0.5{t.Fatal("custom codec lost precedence")}
- text,err:=Parameters.Encode(t.Context(),input,limits);if err!=nil || !strings.Contains(text,"fraction=half"){t.Fatalf("encode: %q, %v",text,err)}
- if _,err:=Parameters.Decode(t.Context(),"latitude=3.5e38&fraction=half",limits);err==nil{t.Fatal("float32 overflow accepted")}
- if _,err:=Parameters.Decode(t.Context(),"latitude=1&fraction=0.5",limits);err==nil{t.Fatal("custom text codec bypassed")}
- location,err:=Location.URL(MeasurementPath{Latitude:0.1,Distance:1e20,Fraction:0.5});if err!=nil{t.Fatal(err)}
+ text,err:=foundryhttp.EncodeQuery(Parameters, t.Context(),input,limits);if err!=nil || !strings.Contains(text,"fraction=half"){t.Fatalf("encode: %q, %v",text,err)}
+ if _,err:=foundryhttp.DecodeQuery(Parameters, t.Context(),"latitude=3.5e38&fraction=half",limits);err==nil{t.Fatal("float32 overflow accepted")}
+ if _,err:=foundryhttp.DecodeQuery(Parameters, t.Context(),"latitude=1&fraction=0.5",limits);err==nil{t.Fatal("custom text codec bypassed")}
+ location,err:=foundryhttp.PathURL(Location, MeasurementPath{Latitude:0.1,Distance:1e20,Fraction:0.5});if err!=nil{t.Fatal(err)}
  route:=foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID:"measurements.show",Method:foundryhttp.GET,Access:foundryhttp.Public},Location)
  var received MeasurementPath
- router,err:=foundryhttp.NewRouter(route.HandleRaw(func(w http.ResponseWriter,_ *http.Request,p MeasurementPath){received=p;w.WriteHeader(204)}));if err!=nil{t.Fatal(err)}
+ router,err:=foundryhttp.NewRouter(foundryhttp.HandleRaw(route, func(w http.ResponseWriter,_ *http.Request,p MeasurementPath){received=p;w.WriteHeader(204)}));if err!=nil{t.Fatal(err)}
  response:=httptest.NewRecorder();router.ServeHTTP(response,httptest.NewRequest("GET",location,nil))
  if response.Code!=204 || received.Latitude!=0.1 || received.Distance!=1e20 || received.Fraction!=0.5{t.Fatal("generated float path changed values")}
 }

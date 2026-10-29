@@ -2,6 +2,7 @@ package modelbinding
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -23,8 +24,8 @@ func Then[P, A, B any](parent Resolver[P, A], child func(context.Context, P, A) 
 	}
 	// The composed check validates the parent once at registration; request
 	// lookups reuse the validated parent without revalidating every ancestor.
-	return Resolver[P, Models[A, B]]{check: parent.Validate, lookup: func(ctx context.Context, path P) (value.Optional[Models[A, B]], error) {
-		a, err := parent.resolve(ctx, path)
+	return Resolver[P, Models[A, B]]{check: func() error { return ValidateResolver(parent) }, lookup: func(ctx context.Context, path P) (value.Optional[Models[A, B]], error) {
+		a, err := resolverResolve(parent, ctx, path)
 		if err != nil {
 			return value.Optional[Models[A, B]]{}, err
 		}

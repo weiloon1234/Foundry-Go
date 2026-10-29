@@ -13,7 +13,7 @@ func FuzzMultipartEndpointBoundsAndCleanup(f *testing.F) {
 	limits := DefaultEndpointLimits()
 	limits.Multipart = MultipartLimits{Bytes: 4096, FileBytes: 1024, Parts: 8, Files: 2, Readers: 2, HeaderBytes: 512, FieldBytes: 256, FieldsBytes: 512, Issues: 4}
 	limits.Body.Bytes = 256
-	endpoint := multipartEndpoint(directory).WithLimits(limits)
+	endpoint := ConfigureEndpoint(multipartEndpoint(directory), Limits(limits))
 	router, err := NewRouter(endpoint.Handle(func(context.Context, multipartRequestInput) (NoContent, error) { return NoContent{}, nil }))
 	if err != nil {
 		f.Fatal(err)

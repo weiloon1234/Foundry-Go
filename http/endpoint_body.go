@@ -10,7 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
 
-func (b Body[B]) read(w stdhttp.ResponseWriter, r *stdhttp.Request, limits contract.JSONLimits) (B, error) {
+func bodyRead[B any](b Body[B], w stdhttp.ResponseWriter, r *stdhttp.Request, limits contract.JSONLimits) (B, error) {
 	data, err := readEndpointBody(w, r, int64(limits.Bytes), b.kind == payloadEmpty, jsonRequestMedia)
 	if err != nil {
 		return *new(B), err
@@ -18,7 +18,7 @@ func (b Body[B]) read(w stdhttp.ResponseWriter, r *stdhttp.Request, limits contr
 	if b.kind == payloadEmpty {
 		return *new(B), nil
 	}
-	result, err := b.json.Decode(r.Context(), data, limits)
+	result, err := b.decodeJSON(r.Context(), data, limits)
 	if err != nil {
 		return *new(B), endpointInputError(r.Context(), "body", err)
 	}

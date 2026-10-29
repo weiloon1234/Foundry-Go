@@ -5,6 +5,11 @@ import "time"
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
 	"foundry.test/consumer/internal/queryfixture"
 	"foundry.test/consumer/models"
 	n "foundry.test/consumer/nestedbindings"
@@ -16,10 +21,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
 )
 
 type fixture struct {
@@ -76,7 +77,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		handled := 0
 		endpoint := n.Transport(foundryhttp.Public)
-		bound := modelbinding.Bind(endpoint, n.Resolve(counter)).WithAuthorization(func(_ context.Context, in n.Request) error {
+		bound := modelbinding.AuthorizeResource(modelbinding.Bind(foundryhttp.ForBinding(endpoint), n.Resolve(counter)), func(_ context.Context, in n.Request) error {
 			if in.Model.Parent.Parent.Name == "Beta" {
 				return foundryhttp.Forbidden
 			}
@@ -126,7 +127,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		}
 		// Same slug under another team succeeds independently; no global slug fallback.
 		for i, team := range f.teams {
-			resources, err := n.Resolve(counter).Resolve(ctx, n.Path{Team: team.ID, Project: "shared", Task: "same"})
+			resources, err := modelbinding.Resolve(n.Resolve(counter), ctx, n.Path{Team: team.ID, Project: "shared", Task: "same"})
 			if err != nil || resources.Parent.Child.ID != f.projects[i].ID || resources.Child.ID != f.tasks[i].ID {
 				return errors.New("nested key escaped its parent")
 			}
@@ -135,16 +136,16 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = n.Projects(counter).Resolve(ctx, n.Path{Team: f.teams[0].ID, Project: onlyBeta.Slug})
+		_, err = modelbinding.Resolve(n.Projects(counter), ctx, n.Path{Team: f.teams[0].ID, Project: onlyBeta.Slug})
 		if !errors.Is(err, foundryhttp.NotFound) {
 			return errors.New("global child fallback")
 		}
 		// Global alternate slug is ambiguous, scoped alternate slug is unique.
-		if _, err := n.ProjectBySlug(counter).Resolve(ctx, n.Path{Project: "shared"}); err == nil || errors.Is(err, foundryhttp.NotFound) {
+		if _, err := modelbinding.Resolve(n.ProjectBySlug(counter), ctx, n.Path{Project: "shared"}); err == nil || errors.Is(err, foundryhttp.NotFound) {
 			return errors.New("duplicate global slug selected a row")
 		}
 		trace := &n.Trace{}
-		if _, err := n.Resolve(counter).Resolve(n.WithTrace(ctx, trace), n.Path{Team: f.teams[0].ID, Project: "shared", Task: "same"}); err != nil || trace.Projects != 1 {
+		if _, err := modelbinding.Resolve(n.Resolve(counter), n.WithTrace(ctx, trace), n.Path{Team: f.teams[0].ID, Project: "shared", Task: "same"}); err != nil || trace.Projects != 1 {
 			return errors.New("project retrieval hook lost or duplicated")
 		}
 		veto := &n.Trace{Fail: true}
@@ -215,13 +216,13 @@ func TestPostgresTypedRequestAndResourcePolicyStages(t *testing.T) {
 			return err
 		}
 		base := n.Transport(foundryhttp.Guarded)
-		secured := foundryhttp.RequireAuthentication(base, transport, guard).WithAuthorization(func(_ context.Context, _ n.Team, in n.TransportRequest) error {
+		secured := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(base, transport, guard), func(_ context.Context, _ n.Team, in n.TransportRequest) error {
 			if in.Path.Project == "request-denied" {
 				return foundryhttp.Forbidden
 			}
 			return nil
 		})
-		bound := modelbinding.BindAuthenticated(secured, n.Resolve(counter)).WithAuthorization(func(_ context.Context, actor n.Team, in n.Request) error {
+		bound := modelbinding.AuthorizeAuthenticatedResource(modelbinding.BindAuthenticated(foundryhttp.ForAuthenticatedBinding(secured), n.Resolve(counter)), func(_ context.Context, actor n.Team, in n.Request) error {
 			if actor.ID != in.Model.Parent.Parent.ID {
 				return foundryhttp.Forbidden
 			}
@@ -250,11 +251,11 @@ func TestPostgresTypedRequestAndResourcePolicyStages(t *testing.T) {
 				return errors.New("request/resource authorization crossed lookup boundary")
 			}
 		}
-		before, err := base.Description()
+		before, err := foundryhttp.InspectEndpoint(base)
 		if err != nil {
 			return err
 		}
-		after, err := bound.Description()
+		after, err := modelbinding.DescribeAuthenticatedEndpoint(bound)
 		if err != nil {
 			return err
 		}

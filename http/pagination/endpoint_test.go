@@ -71,7 +71,7 @@ func decodeNumbered(t *testing.T, response *httptest.ResponseRecorder) paginatio
 }
 func TestNumberedDefaultsScopedLinksAndEmptyPages(t *testing.T) {
 	t.Parallel()
-	endpoint := numbered(pagination.DefaultConfig()).Within(foundryhttp.DefineScope("/api", "api"))
+	endpoint := pagination.Configure(numbered(pagination.DefaultConfig()), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 	got := decodeNumbered(t, serve(t, endpoint.Handle(func(_ context.Context, in pageInput) (orm.PageResult[Item], error) {
 		if in.Page != (orm.PageRequest{Number: 1, Size: 20}) {
 			t.Error("default ORM request lost")
@@ -131,7 +131,7 @@ func TestCustomNamesAndFilterValidationCompose(t *testing.T) {
 	config := pagination.DefaultConfig()
 	config.NumberParam = "p"
 	config.SizeParam = "limit"
-	endpoint := numbered(config).WithFiltersValidation(validation.Rules(validation.DefineField("q", func(f filters) value.Optional[string] { return f.Term }), validation.Optional(validation.MinLength[string](3))))
+	endpoint := pagination.ValidateFilters(numbered(config), validation.Rules(validation.DefineField("q", func(f filters) value.Optional[string] { return f.Term }), validation.Optional(validation.MinLength[string](3))))
 	response := serve(t, endpoint.Handle(func(context.Context, pageInput) (orm.PageResult[Item], error) {
 		t.Error("bad filter accepted")
 		return orm.PageResult[Item]{}, nil
@@ -150,7 +150,7 @@ func TestCustomNamesAndFilterValidationCompose(t *testing.T) {
 	if err != nil || location != "/items?limit=7&p=2" {
 		t.Fatalf("URL=%q err=%v", location, err)
 	}
-	info, err := endpoint.Description()
+	info, err := pagination.Inspect(endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,12 +224,12 @@ func TestPaginationPublicLinksUseApprovedOrigin(t *testing.T) {
 		t.Fatal("unapproved origin used")
 	}
 	middleware := foundryhttp.PublicURLs(foundryhttp.PublicURLConfig{AllowedOrigins: []foundryhttp.Origin{"http://app.example", "https://app.example"}, Canonical: value.Set(foundryhttp.Origin("https://app.example"))})
-	got := decodeNumbered(t, serve(t, endpoint.WithMiddleware(middleware).Handle(handler), "http://app.example/items"))
+	got := decodeNumbered(t, serve(t, pagination.Configure(endpoint, foundryhttp.Use(middleware)).Handle(handler), "http://app.example/items"))
 	next, _ := got.Links.Next.Get()
 	if !strings.HasPrefix(next, "https://app.example/items?") {
 		t.Fatalf("unapproved link=%s", next)
 	}
-	router, err := foundryhttp.NewRouter(endpoint.WithMiddleware(middleware).Handle(handler))
+	router, err := foundryhttp.NewRouter(pagination.Configure(endpoint, foundryhttp.Use(middleware)).Handle(handler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +402,7 @@ func TestInvalidPaginationDeclarationsFailAssembly(t *testing.T) {
 	configurations[3].DefaultSize = 101
 	for _, config := range configurations {
 		endpoint := numbered(config)
-		if endpoint.Validate() == nil {
+		if pagination.Validate(endpoint) == nil {
 			t.Fatal("invalid config accepted")
 		}
 		if _, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, pageInput) (orm.PageResult[Item], error) { return orm.PageResult[Item]{}, nil })); err == nil {
@@ -413,10 +413,10 @@ func TestInvalidPaginationDeclarationsFailAssembly(t *testing.T) {
 		t.Fatal("nil handler accepted")
 	}
 	overlap := foundryhttp.DefineQuery(foundryhttp.QueryParam("page", foundryhttp.StringQuery[string](), func(f *Item) *string { return &f.Label }))
-	if pagination.DefineNumbered(route(), overlap, itemJSON(), pagination.DefaultConfig()).Validate() == nil {
+	if pagination.Validate(pagination.DefineNumbered(route(), overlap, itemJSON(), pagination.DefaultConfig())) == nil {
 		t.Fatal("overlapping filter/pagination name accepted")
 	}
-	if pagination.DefineNumbered(route(), filterQuery(), contract.JSON[Item]{}, pagination.DefaultConfig()).Validate() == nil {
+	if pagination.Validate(pagination.DefineNumbered(route(), filterQuery(), contract.JSON[Item]{}, pagination.DefaultConfig())) == nil {
 		t.Fatal("invalid item contract accepted")
 	}
 }

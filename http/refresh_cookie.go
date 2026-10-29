@@ -136,7 +136,7 @@ func TokenCookieResponse[M, K any](cookie RefreshCookie, status int, source cloc
 // response of the endpoint, including a revoked or replayed family, clears the
 // cookie. Pair it with TokenCookieResponse so the rotated secret is set again.
 func RefreshTokenCookie(cookie RefreshCookie) Body[RefreshTokenRequest] {
-	return Body[RefreshTokenRequest]{kind: payloadRefreshCookie, refreshCookie: &cookie, fromCookie: func(r *stdhttp.Request) (RefreshTokenRequest, error) {
+	return refreshBodyOperations(Body[RefreshTokenRequest]{kind: payloadRefreshCookie, refreshCookie: &cookie, fromCookie: func(r *stdhttp.Request) (RefreshTokenRequest, error) {
 		value, err := cookie.cookie.Read(r)
 		if err != nil {
 			return RefreshTokenRequest{}, auth.Unauthenticated.WithCause(err)
@@ -150,7 +150,7 @@ func RefreshTokenCookie(cookie RefreshCookie) Body[RefreshTokenRequest] {
 			return RefreshTokenRequest{}, auth.Unauthenticated.WithCause(err)
 		}
 		return RefreshTokenRequest{RefreshToken: credential}, nil
-	}}
+	}})
 }
 
 // RefreshCookieLogoutRequest is a cookie-authenticated logout's input: the
@@ -174,7 +174,7 @@ type RefreshCookieLogoutRequest struct {
 //
 // Success clears the cookie; a transient failure keeps it so the client retries.
 func RefreshTokenCookieLogout(cookie RefreshCookie) Body[RefreshCookieLogoutRequest] {
-	return Body[RefreshCookieLogoutRequest]{kind: payloadRefreshCookie, refreshCookie: &cookie, refreshLogout: true, fromCookie: func(r *stdhttp.Request) (RefreshCookieLogoutRequest, error) {
+	return refreshBodyOperations(Body[RefreshCookieLogoutRequest]{kind: payloadRefreshCookie, refreshCookie: &cookie, refreshLogout: true, fromCookie: func(r *stdhttp.Request) (RefreshCookieLogoutRequest, error) {
 		raw, err := cookie.cookie.Read(r)
 		if err != nil {
 			// A malformed cookie has no family to revoke; success still clears it.
@@ -189,7 +189,7 @@ func RefreshTokenCookieLogout(cookie RefreshCookie) Body[RefreshCookieLogoutRequ
 			return RefreshCookieLogoutRequest{}, nil
 		}
 		return RefreshCookieLogoutRequest{RefreshToken: value.Set(credential)}, nil
-	}}
+	}})
 }
 
 // ClearRefreshCookie returns response extended to clear the refresh cookie on
@@ -232,7 +232,7 @@ func (w *refreshClearingWriter) Write(data []byte) (int, error) {
 func (w *refreshClearingWriter) Unwrap() stdhttp.ResponseWriter { return w.ResponseWriter }
 
 // refreshCookie is the endpoint's refresh cookie, from its body or response.
-func (e Endpoint[P, Q, B, R]) refreshCookie() *RefreshCookie {
+func endpointRefreshCookie[P, Q, B, R any](e Endpoint[P, Q, B, R]) *RefreshCookie {
 	if e.body.refreshCookie != nil {
 		return e.body.refreshCookie
 	}
@@ -243,25 +243,25 @@ func (e Endpoint[P, Q, B, R]) refreshCookie() *RefreshCookie {
 // request: a refresh credential is consumed once and never idempotently replayed.
 // Reading the cookie also requires a response that sets (TokenCookieResponse) or
 // clears (ClearRefreshCookie) it, so the refresh secret never reaches JSON.
-func (e Endpoint[P, Q, B, R]) validateRefreshCookie() error {
-	cookie := e.refreshCookie()
+func endpointValidateRefreshCookie[P, Q, B, R any](e Endpoint[P, Q, B, R]) error {
+	cookie := endpointRefreshCookie(e)
 	if cookie == nil {
 		return nil
 	}
 	if e.body.refreshCookie != nil && e.response.refreshCookie != nil && e.body.refreshCookie.Name() != e.response.refreshCookie.Name() {
 		return safeerror.NewFault(fault.Invalid, "endpoint uses two refresh cookies")
 	}
-	if e.route.Method() != POST || e.idempotency != nil {
+	if RouteMethod(e.route) != POST || e.idempotency != nil {
 		return safeerror.NewFault(fault.Invalid, "refresh cookie endpoints require POST without idempotent replay")
 	}
 	if e.body.refreshLogout && !e.response.refreshCookieClears {
 		return safeerror.NewFault(fault.Invalid, "a refresh-cookie logout must clear the cookie")
 	}
-	return e.refreshCookieInfo().Validate()
+	return endpointRefreshCookieInfo(e).Validate()
 }
 
-func (e Endpoint[P, Q, B, R]) refreshCookieInfo() *RefreshCookieInfo {
-	cookie := e.refreshCookie()
+func endpointRefreshCookieInfo[P, Q, B, R any](e Endpoint[P, Q, B, R]) *RefreshCookieInfo {
+	cookie := endpointRefreshCookie(e)
 	if cookie == nil {
 		return nil
 	}

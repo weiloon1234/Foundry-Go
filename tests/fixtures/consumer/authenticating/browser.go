@@ -27,7 +27,7 @@ func BrowserRoutes(web *Browser, verify VerifiedLogin) (*foundryhttp.Router, err
 	endpoint := func(id foundryhttp.RouteID, method foundryhttp.Method, path string, access foundryhttp.Access) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent] {
 		return foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path)), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
 	}
-	login := endpoint("browser.login", foundryhttp.POST, "/login", foundryhttp.Public).WithMiddleware(web.Middleware()).Handle(func(ctx context.Context, _ ProfileInput) (foundryhttp.NoContent, error) {
+	login := foundryhttp.ConfigureEndpoint(endpoint("browser.login", foundryhttp.POST, "/login", foundryhttp.Public), foundryhttp.Use(web.Middleware())).Handle(func(ctx context.Context, _ ProfileInput) (foundryhttp.NoContent, error) {
 		proof, err := verify(ctx)
 		if err != nil {
 			return foundryhttp.NoContent{}, err
@@ -44,7 +44,7 @@ func BrowserRoutes(web *Browser, verify VerifiedLogin) (*foundryhttp.Router, err
 		_, err := BrowserRotate(ctx, web)
 		return foundryhttp.NoContent{}, err
 	})
-	logout := endpoint("browser.logout", foundryhttp.POST, "/logout", foundryhttp.Public).WithMiddleware(web.Middleware()).Handle(func(ctx context.Context, _ ProfileInput) (foundryhttp.NoContent, error) {
+	logout := foundryhttp.ConfigureEndpoint(endpoint("browser.logout", foundryhttp.POST, "/logout", foundryhttp.Public), foundryhttp.Use(web.Middleware())).Handle(func(ctx context.Context, _ ProfileInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, BrowserLogout(ctx, web)
 	})
 	return foundryhttp.NewRouter(login, profile, rotate, logout)

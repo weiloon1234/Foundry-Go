@@ -15,7 +15,7 @@ The [consumer HTTP validation fixture](../../tests/fixtures/consumer/httpvalidat
 adds rules to an existing typed endpoint:
 
 ```go
-var Update = httpendpoints.Update.WithBodyValidation(
+var Update = http.ValidateBody(httpendpoints.Update,
     validation.Rules(httpdto.UpdateUserValidationFields().Email,
         validation.Optional(validation.NonBlank[string]()),
     ),
@@ -32,9 +32,9 @@ Models remain separate from request/response DTOs.
 
 ## Execution and HTTP responses
 
-`WithBodyValidation`, `WithQueryValidation` and `WithPathValidation` add rules
-in declaration order. `WithValidation` accepts a rule for the complete concrete
-`http.Input[P, Q, B]`, including request-level custom checks. These methods return
+`ValidateBody`, `ValidateQuery` and `ValidatePath` add rules
+in declaration order. `ValidateInput` accepts a rule for the complete concrete
+`http.Input[P, Q, B]`, including request-level custom checks. These functions return
 independent endpoint declarations. Empty or invalid rule declarations fail
 registration; they do not silently disable validation.
 

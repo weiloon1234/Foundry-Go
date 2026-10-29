@@ -107,7 +107,7 @@ func TestTokenDeliveryUsesTypedWireContract(t *testing.T) {
 			if err != nil || strings.Contains(string(raw), wire.Tokens.AccessToken) || strings.Contains(fmt.Sprintf("%#v", issued), wire.Tokens.AccessToken) {
 				t.Fatal("ordinary serialization disclosed credential")
 			}
-			metadata, err := endpoint.Description()
+			metadata, err := foundryhttp.InspectEndpoint(endpoint)
 			if err != nil || metadata.Response == nil || !reflect.DeepEqual(metadata, router.Endpoints()[0]) {
 				t.Fatal("response metadata", err)
 			}
@@ -122,7 +122,7 @@ func TestTokenDeliveryRequiresSecurePOSTBeforeHandler(t *testing.T) {
 	response := foundryhttp.TokenResponse[authAccount, int64](200, now)
 	for _, method := range []foundryhttp.Method{foundryhttp.GET, foundryhttp.HEAD, foundryhttp.PUT, foundryhttp.DELETE} {
 		endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "unsafe", Method: method, Access: foundryhttp.Public}, foundryhttp.StaticPath("/")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response)
-		if endpoint.Validate() == nil {
+		if foundryhttp.ValidateEndpoint(endpoint) == nil {
 			t.Fatal("accepted token delivery method", method)
 		}
 	}
@@ -132,9 +132,9 @@ func TestTokenDeliveryRequiresSecurePOSTBeforeHandler(t *testing.T) {
 	for _, trusted := range []bool{false, true} {
 		route := endpoint
 		if trusted {
-			route = route.WithMiddleware(foundryhttp.TrustedProxy(foundryhttp.TrustedProxyConfig{
+			route = foundryhttp.ConfigureEndpoint(route, foundryhttp.Use(foundryhttp.TrustedProxy(foundryhttp.TrustedProxyConfig{
 				Proxies: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}, OriginHeaders: []foundryhttp.ProxyOriginHeader{foundryhttp.ProxySchemeHeader("X-Forwarded-Proto")},
-			}))
+			})))
 		}
 		router := newAuthRouter(t, route.Handle(handler))
 		request := httptest.NewRequest("POST", "http://app.test/token", nil)
@@ -154,7 +154,7 @@ func TestTokenDeliveryRequiresSecurePOSTBeforeHandler(t *testing.T) {
 		t.Fatal("untrusted plaintext invoked handler")
 	}
 	var missing *testkit.Clock
-	if foundryhttp.TokenResponse[authAccount, int64](200, missing).Validate() == nil || foundryhttp.TokenResponse[authAccount, int64](204, now).Validate() == nil {
+	if foundryhttp.ValidateResponse(foundryhttp.TokenResponse[authAccount, int64](200, missing)) == nil || foundryhttp.ValidateResponse(foundryhttp.TokenResponse[authAccount, int64](204, now)) == nil {
 		t.Fatal("invalid descriptor accepted")
 	}
 }
@@ -175,7 +175,7 @@ func TestTokenDeliveryDoesNotDiscloseOnFailure(t *testing.T) {
 			if mode == "limit" {
 				limits := foundryhttp.DefaultEndpointLimits()
 				limits.Response.Bytes = 8
-				endpoint = endpoint.WithLimits(limits)
+				endpoint = foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Limits(limits))
 			}
 			router := newAuthRouter(t, endpoint.Handle(func(context.Context, authInput) (tokenWireIssued, error) {
 				switch mode {

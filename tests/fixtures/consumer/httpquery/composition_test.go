@@ -14,7 +14,7 @@ func TestGeneratedQueryCompositionAndDefaults(t *testing.T) {
 	limits := foundryhttp.QueryLimits{Bytes: 4096, Pairs: 128, Issues: 10}
 	const user = "0192f915-3cf3-7000-8000-000000000001"
 	descriptor := httpquery.SearchWindowParameters
-	input, err := descriptor.Decode(t.Context(), "user="+user+"&q=hello%2Bworld", limits)
+	input, err := foundryhttp.DecodeQuery(descriptor, t.Context(), "user="+user+"&q=hello%2Bworld", limits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,15 +24,15 @@ func TestGeneratedQueryCompositionAndDefaults(t *testing.T) {
 	if term, _ := input.Filters.Search.Get(); term != "hello+world" {
 		t.Fatal("filter escaping changed")
 	}
-	encoded, err := descriptor.Encode(t.Context(), input, limits)
+	encoded, err := foundryhttp.EncodeQuery(descriptor, t.Context(), input, limits)
 	if err != nil || !strings.Contains(encoded, "size=20") {
 		t.Fatalf("bad encoding: %q %v", encoded, err)
 	}
-	roundtrip, err := descriptor.Decode(t.Context(), encoded, limits)
+	roundtrip, err := foundryhttp.DecodeQuery(descriptor, t.Context(), encoded, limits)
 	if err != nil || !reflect.DeepEqual(input, roundtrip) {
 		t.Fatal("composed consumer query lost round trip")
 	}
-	metadata, err := descriptor.Parameters()
+	metadata, err := foundryhttp.QueryParameters(descriptor)
 	if err != nil {
 		t.Fatal(err)
 	}

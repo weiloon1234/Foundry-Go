@@ -2,6 +2,11 @@ package http_test
 
 import (
 	"context"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
@@ -9,10 +14,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
-	"net/http/httptest"
-	"strings"
-	"sync/atomic"
-	"testing"
 )
 
 type actorForm struct{ Name string }
@@ -31,7 +32,7 @@ func TestTypedActorRequestLifecycle(t *testing.T) {
 			if optional {
 				access = foundryhttp.Public
 			}
-			base := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "actor.form", Method: foundryhttp.POST, Access: access}, foundryhttp.StaticPath("/form")), foundryhttp.EmptyQuery(), foundryhttp.FormBody(foundryhttp.DefineQuery(foundryhttp.QueryParam("name", foundryhttp.StringQuery[string](), func(b *actorForm) *string { return &b.Name }))), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.Rules(validation.DefineField("name", func(b actorForm) string { return b.Name }), validation.NonBlank[string]()))
+			base := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "actor.form", Method: foundryhttp.POST, Access: access}, foundryhttp.StaticPath("/form")), foundryhttp.EmptyQuery(), foundryhttp.FormBody(foundryhttp.DefineQuery(foundryhttp.QueryParam("name", foundryhttp.StringQuery[string](), func(b *actorForm) *string { return &b.Name }))), foundryhttp.EmptyResponse(204)), validation.Rules(validation.DefineField("name", func(b actorForm) string { return b.Name }), validation.NonBlank[string]()))
 			var stages []string
 			prepare := func(_ context.Context, in actorFormRequest) (foundryhttp.NoQuery, actorForm, error) {
 				stages = append(stages, "prepare")
@@ -50,22 +51,22 @@ func TestTypedActorRequestLifecycle(t *testing.T) {
 			}
 			var registration foundryhttp.RouteRegistration
 			if optional {
-				endpoint := foundryhttp.OptionalAuthentication(base, transport, guard).WithPreparation(prepare)
-				if endpoint.WithAuthorization(nil).Validate() == nil {
+				endpoint := foundryhttp.PrepareOptional(foundryhttp.OptionalAuthentication(base, transport, guard), prepare)
+				if foundryhttp.ValidateOptional(foundryhttp.AuthorizeOptionalActor(endpoint, nil)) == nil {
 					t.Fatal("nil optional callback accepted")
 				}
-				registration = endpoint.WithAuthorization(func(_ context.Context, a value.Optional[authAccount], in actorFormRequest) error {
+				registration = foundryhttp.AuthorizeOptionalActor(endpoint, func(_ context.Context, a value.Optional[authAccount], in actorFormRequest) error {
 					return authorize(a, in)
 				}).Handle(func(context.Context, value.Optional[authAccount], actorFormRequest) (foundryhttp.NoContent, error) {
 					stages = append(stages, "handler")
 					return foundryhttp.NoContent{}, nil
 				})
 			} else {
-				endpoint := foundryhttp.RequireAuthentication(base, transport, guard).WithPreparation(prepare)
-				if endpoint.WithAuthorization(nil).Validate() == nil {
+				endpoint := foundryhttp.PrepareAuthenticated(foundryhttp.RequireAuthentication(base, transport, guard), prepare)
+				if foundryhttp.ValidateAuthenticated(foundryhttp.AuthorizeActor(endpoint, nil)) == nil {
 					t.Fatal("nil actor callback accepted")
 				}
-				registration = endpoint.WithAuthorization(func(_ context.Context, a authAccount, in actorFormRequest) error { return authorize(value.Set(a), in) }).Handle(func(context.Context, authAccount, actorFormRequest) (foundryhttp.NoContent, error) {
+				registration = foundryhttp.AuthorizeActor(endpoint, func(_ context.Context, a authAccount, in actorFormRequest) error { return authorize(value.Set(a), in) }).Handle(func(context.Context, authAccount, actorFormRequest) (foundryhttp.NoContent, error) {
 					stages = append(stages, "handler")
 					return foundryhttp.NoContent{}, nil
 				})
@@ -138,14 +139,14 @@ func TestTypedRequestAuthorizationMultipleGuards(t *testing.T) {
 		t.Fatal(err)
 	}
 	memberCalls, staffCalls := 0, 0
-	members := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded).Within(foundryhttp.DefineScope("/members", "members")), transport, member).WithAuthorization(func(_ context.Context, actor authAccount, _ authInput) error {
+	members := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/members", "members"))), transport, member), func(_ context.Context, actor authAccount, _ authInput) error {
 		memberCalls++
 		if actor.ID != 1 || !actor.Enabled {
 			t.Error("member actor changed")
 		}
 		return nil
 	})
-	staffRoute := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded).Within(foundryhttp.DefineScope("/staff", "staff")), transport, staff).WithAuthorization(func(_ context.Context, actor lifecycleStaff, _ authInput) error {
+	staffRoute := foundryhttp.AuthorizeActor(foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Within(foundryhttp.DefineScope("/staff", "staff"))), transport, staff), func(_ context.Context, actor lifecycleStaff, _ authInput) error {
 		staffCalls++
 		if actor.ID != 8 || actor.Department != "operations" {
 			t.Error("staff actor changed")

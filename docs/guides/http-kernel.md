@@ -70,7 +70,7 @@ not undo committed domain work.
 apply independently of the context deadline.
 
 The kernel applies `RequestTimeout` and `MaxBodyBytes` as defaults. A route
-declared with `WithTimeout` or `WithBodyLimit` replaces them after route matching:
+declared with `Timeout` or `BodyLimit` replaces them after route matching:
 a longer route deadline starts at admission, keeps request values, client
 disconnect and forced-shutdown cancellation, and extends the native connection
 read/write deadlines by the same slack the kernel configuration has. A router
@@ -80,7 +80,7 @@ before its handler runs. `ApplyMiddleware` retains this router ceiling.
 
 Global response wrappers such as `Compression`, `ETags` and `BrowserSessions` run
 outside the router but observe the matched route's effective budget: while the
-route runs, its own deadline (for example a `WithTimeout` event stream or long
+route runs, its own deadline (for example a `Timeout` event stream or long
 download) applies instead of the kernel `RequestTimeout`; once a typed handler
 succeeded, an error response is being written (`WriteError`) or a route's
 handler returned, only client disconnect and forced shutdown end the delivery. Work after an expired deadline, such as opening a

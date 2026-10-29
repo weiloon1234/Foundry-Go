@@ -20,7 +20,7 @@ var trace = foundryhttp.DefineMiddleware(RouteTrace, func(next http.Handler) (ht
 })
 
 var API = foundryhttp.DefineScope("/api", "api").WithMiddleware(trace)
-var Update = httpendpoints.Update.Within(API)
+var Update = foundryhttp.ConfigureEndpoint(httpendpoints.Update, foundryhttp.Within(API))
 
 func Router(service httpendpoints.Service) (*foundryhttp.Router, error) {
 	return foundryhttp.NewRouter(Update.Handle(service.Update))

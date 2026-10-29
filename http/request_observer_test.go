@@ -3,8 +3,6 @@ package http
 import (
 	"bytes"
 	"context"
-	"github.com/weiloon1234/Foundry-Go/logging"
-	"github.com/weiloon1234/Foundry-Go/observability"
 	"io"
 	"log/slog"
 	stdhttp "net/http"
@@ -14,11 +12,14 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/logging"
+	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
 func TestRequestCompletionCoversRoutingAndEarlyFailures(t *testing.T) {
 	route := DefineRoute(RouteSpec{ID: "observed.ok", Method: POST, Access: Public}, StaticPath("/ok"))
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
 		w.WriteHeader(201)
 		_, _ = w.Write([]byte("ok"))
 	}))

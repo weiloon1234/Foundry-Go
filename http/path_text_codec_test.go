@@ -94,12 +94,12 @@ func TestTextPathKeepsDecimalTemporalAndCustomValues(t *testing.T) {
 	)
 	route := DefineRoute(RouteSpec{ID: "reports.show", Method: GET, Access: Public}, path)
 	input := codecPath{Date: date, Amount: amount, Code: "a/b"}
-	location, err := route.URL(input)
+	location, err := RouteURL(route, input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var received codecPath
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p codecPath) { received = p; w.WriteHeader(204) }))
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p codecPath) { received = p; w.WriteHeader(204) }))
 	if err != nil {
 		t.Fatal(err)
 	}

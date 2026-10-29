@@ -52,10 +52,10 @@ There is no global model registry or cross-request result cache.
 
 ## Authorization order and transactions
 
-Configure request-only `WithAuthorization` on the original HTTP endpoint first;
+Configure request-only `http.AuthorizeEndpoint` on the original HTTP endpoint first;
 it runs before the binding stage. Resource authorization follows resolution,
 before ordinary body validation. Configure
-`bound.WithAuthorization` for a resource policy. It receives the complete loaded
+`modelbinding.AuthorizeResource(bound, policy)` for a resource policy. It receives the complete loaded
 bundle, and for `BindAuthenticated`, the concrete actor (or Optional actor).
 Denial stops domain work. A matching relationship alone is never authorization.
 

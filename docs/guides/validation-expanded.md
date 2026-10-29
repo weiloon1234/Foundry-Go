@@ -47,7 +47,7 @@ Password strength does not verify an existing credential or contact a breach API
 ```go
 func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]) (*foundryhttp.Router, error) {
 	fields := httpdto.UpdateUserValidationFields()
-	endpoint := httpendpoints.Update.WithBodyValidation(validation.Parallel(
+	endpoint := foundryhttp.ValidateBody(httpendpoints.Update, validation.Parallel(
 		validation.Rules(validation.WithLabel(fields.Email, "Email address"), validation.Optional(validation.Bail(validation.Email[string](), validation.Unique(lookup)))),
 		validation.Rules(fields.Nickname, validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
 	))

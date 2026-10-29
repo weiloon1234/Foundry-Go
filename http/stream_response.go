@@ -13,7 +13,7 @@ import (
 // Ranges are ignored and Accept-Ranges is none; no validator is fabricated.
 func StreamResponse(media MediaType, additional ...MediaType) Response[Stream] {
 	descriptor := &fileResponse{media: append([]MediaType{media}, additional...), stream: true}
-	return Response[Stream]{kind: payloadStream, status: 200, file: descriptor, prepareFile: descriptor.prepareStream}
+	return Response[Stream]{prepare: prepareFileResponse[Stream], kind: payloadStream, status: 200, file: descriptor, describe: filePayloadInfo(descriptor), prepareFile: descriptor.prepareStream}
 }
 func (f *fileResponse) prepareStream(ctx context.Context, stream Stream, limits FileResponseLimits) (*preparedFile, error) {
 	if err := stream.Validate(); err != nil {

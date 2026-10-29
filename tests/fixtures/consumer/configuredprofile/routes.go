@@ -2,11 +2,12 @@ package configuredprofile
 
 import (
 	"context"
+	"io"
+	stdhttp "net/http"
+
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/http"
-	"io"
-	stdhttp "net/http"
 )
 
 var Greetings = cache.Define("profile.greetings", cache.StringKeys[string](), cache.JSON[string]())
@@ -23,7 +24,7 @@ func Routes(services application.Services) ([]http.RouteRegistration, error) {
 		return nil, err
 	}
 	route := http.DefineRoute(http.RouteSpec{ID: "profile.greeting", Method: http.GET, Access: http.Public}, http.StaticPath("/profile"))
-	return []http.RouteRegistration{route.HandleRaw(func(w stdhttp.ResponseWriter, request *stdhttp.Request, _ http.NoPath) {
+	return []http.RouteRegistration{http.HandleRaw(route, func(w stdhttp.ResponseWriter, request *stdhttp.Request, _ http.NoPath) {
 		value, err := values.Remember(request.Context(), "message", cache.Forever(), func(context.Context) (string, error) { return "profile", nil })
 		if err != nil {
 			w.WriteHeader(500)

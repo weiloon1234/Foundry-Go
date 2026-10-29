@@ -76,13 +76,13 @@ func (s Scope) Within(parent Scope) Scope {
 // An empty route pattern, such as StaticPath(""), denotes the scope root itself:
 // within /api it matches exactly /api, while "/" matches exactly /api/. An empty
 // pattern is invalid outside a nonempty path scope.
-func (r Route[P]) Within(scope Scope) Route[P] {
+func routeWithin[P any](r Route[P], scope Scope) Route[P] {
 	if r.err != nil {
 		return r
 	}
 	root := r.path.pattern == "" && scope.prefix != ""
 	if !root {
-		if err := r.Validate(); err != nil {
+		if err := ValidateRoute(r); err != nil {
 			r.err = err
 			return r
 		}
@@ -92,10 +92,10 @@ func (r Route[P]) Within(scope Scope) Route[P] {
 		return r
 	}
 	r.spec.ID = scopedName(scope.name, r.spec.ID)
-	r.path = r.path.prefixed(scope.prefix)
+	r.path = pathPrefixed(r.path, scope.prefix)
 	r.middlewares, r.err = appendMiddlewares(scope.middlewares, r.middlewares)
 	if r.err == nil && root {
-		r.err = r.Validate()
+		r.err = ValidateRoute(r)
 	}
 	return r
 }

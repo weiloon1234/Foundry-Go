@@ -11,7 +11,7 @@ import (
 func TestMatchedRouteIsAttributedWithoutTheRawURL(t *testing.T) {
 	var seen attribution.Route
 	var present bool
-	router, err := NewRouter(staticRoute("accounts.update", PATCH, "/accounts/current").HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
+	router, err := NewRouter(HandleRaw(staticRoute("accounts.update", PATCH, "/accounts/current"), func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
 		seen, present = attribution.RouteFromContext(r.Context())
 		w.WriteHeader(204)
 	}))

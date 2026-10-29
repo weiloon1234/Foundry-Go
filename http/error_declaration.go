@@ -93,17 +93,7 @@ type declaredResponseError struct {
 func (e *declaredResponseError) Unwrap() error        { return e.cause }
 func (e *declaredResponseError) Is(target error) bool { return target == e.ErrorDeclaration }
 
-// WithErrors adds application errors this endpoint may expose. Built-in errors
-// remain available through the shared ErrorDefinitions catalog. Reuse the same
-// declaration in the handler and here; duplicate codes reject assembly.
-// Returning an undeclared or differently described custom error produces a safe
-// internal failure, so the public response agrees with the declared contract.
-func (e Endpoint[P, Q, B, R]) WithErrors(declarations ...ErrorDeclaration) Endpoint[P, Q, B, R] {
-	e.errors = append(slices.Clone(e.errors), declarations...)
-	return e
-}
-
-func (e Endpoint[P, Q, B, R]) errorDefinitions() ([]ErrorDefinition, error) {
+func endpointErrorDefinitions[P, Q, B, R any](e Endpoint[P, Q, B, R]) ([]ErrorDefinition, error) {
 	definitions := make([]ErrorDefinition, 0, len(e.errors))
 	seen := make(map[ErrorCode]bool, len(e.errors))
 	for _, declaration := range e.errors {
