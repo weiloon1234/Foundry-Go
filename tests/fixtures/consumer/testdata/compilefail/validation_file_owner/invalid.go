@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var _ = uploads.ProfileInputValidationFields().Attachment.Rules(validation.MaxLength[string](10))
+var _ = validation.Rules(uploads.ProfileInputValidationFields().Attachment, validation.MaxLength[string](10))

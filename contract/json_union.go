@@ -84,33 +84,8 @@ func DecodeUnion[T any](descriptor JSON[T], data []byte) (UnionValue[T], error) 
 	if err := descriptor.Validate(); err != nil {
 		return UnionValue[T]{}, err
 	}
-	root := descriptor.schema.types[descriptor.schema.description.Root]
-	if root.Kind != UnionKind {
-		return UnionValue[T]{}, invalidUnion()
-	}
-	limits := unionLimits()
-	node, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: limits.Bytes, Depth: limits.Depth, Nodes: limits.Nodes})
-	if err != nil {
-		return UnionValue[T]{}, decodeFailure(nil, err)
-	}
-	issues, err := descriptor.schema.check(context.Background(), node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
-	if err != nil || len(issues) != 0 {
-		return UnionValue[T]{}, decodeFailure(issues, err)
-	}
-	object, ok := node.(map[string]any)
-	if !ok {
-		return UnionValue[T]{}, invalidUnion()
-	}
-	tag, ok := object[root.Discriminator].(string)
-	if !ok {
-		return UnionValue[T]{}, invalidUnion()
-	}
-	delete(object, root.Discriminator)
-	payload, err := json.Marshal(object)
-	if err != nil || len(payload) > limits.Bytes {
-		return UnionValue[T]{}, invalidUnion()
-	}
-	return UnionValue[T]{wire: string(data), payload: string(payload), tag: tag}, nil
+	snapshot, err := decodeUnionSnapshot(descriptor.schema, data)
+	return UnionValue[T]{wire: snapshot.wire, payload: snapshot.payload, tag: snapshot.tag}, err
 }
 
 // UnionVariant returns a fresh concrete payload. It does not expose or share the
@@ -130,4 +105,37 @@ func UnionVariant[T, P any](stored UnionValue[T], tag string) (P, error) {
 		return *new(P), invalidUnionCause(err)
 	}
 	return result, nil
+}
+
+// unionSnapshot is validated and immutable before entering a typed union shell.
+type unionSnapshot struct{ wire, payload, tag string }
+
+func decodeUnionSnapshot(schema *compiledSchema, data []byte) (unionSnapshot, error) {
+	root := schema.types[schema.description.Root]
+	if root.Kind != UnionKind {
+		return unionSnapshot{}, invalidUnion()
+	}
+	limits := unionLimits()
+	node, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: limits.Bytes, Depth: limits.Depth, Nodes: limits.Nodes})
+	if err != nil {
+		return unionSnapshot{}, decodeFailure(nil, err)
+	}
+	issues, err := schema.check(context.Background(), node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
+	if err != nil || len(issues) != 0 {
+		return unionSnapshot{}, decodeFailure(issues, err)
+	}
+	object, ok := node.(map[string]any)
+	if !ok {
+		return unionSnapshot{}, invalidUnion()
+	}
+	tag, ok := object[root.Discriminator].(string)
+	if !ok {
+		return unionSnapshot{}, invalidUnion()
+	}
+	delete(object, root.Discriminator)
+	payload, err := json.Marshal(object)
+	if err != nil || len(payload) > limits.Bytes {
+		return unionSnapshot{}, invalidUnion()
+	}
+	return unionSnapshot{wire: string(data), payload: string(payload), tag: tag}, nil
 }

@@ -13,10 +13,10 @@ func TestLocalizedLabelsPreserveWirePathsAndStaticFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	type input struct{ Name, Confirm string }
-	name := validation.DefineField("name", func(v input) string { return v.Name }).WithLabel("Name").WithLabelKey("fields.name")
-	confirm := validation.DefineField("confirm", func(v input) string { return v.Confirm }).WithLabel("Confirmation").WithLabelKey("fields.confirm")
-	rule := validation.All(name.Rules(validation.NonBlank[string]()), validation.Compare(confirm, name, validation.Same[string]()))
-	issues := rejection(t, rule.Check(t.Context(), input{Confirm: "private"}, validation.DefaultLimits()))
+	name := validation.WithLabelKey(validation.WithLabel(validation.DefineField("name", func(v input) string { return v.Name }), "Name"), "fields.name")
+	confirm := validation.WithLabelKey(validation.WithLabel(validation.DefineField("confirm", func(v input) string { return v.Confirm }), "Confirmation"), "fields.confirm")
+	rule := validation.All(validation.Rules(name, validation.NonBlank[string]()), validation.Compare(confirm, name, validation.Same[string]()))
+	issues := rejection(t, validation.Check(rule, t.Context(), input{Confirm: "private"}, validation.DefaultLimits()))
 	localized, err := issues.LocalizeLabels(t.Context(), catalog, "ms")
 	if err != nil {
 		t.Fatal(err)
@@ -28,11 +28,11 @@ func TestLocalizedLabelsPreserveWirePathsAndStaticFallback(t *testing.T) {
 	if issues.Issues()[0].Label != "Name" || got[0].Message != issues.Issues()[0].Message {
 		t.Fatal("localization mutated original issue or approved message")
 	}
-	description, err := rule.Description()
+	description, err := validation.DescribeRule(rule)
 	if err != nil || description.Children[0].LabelKey != "fields.name" || description.Children[1].OtherLabelKey != "fields.name" {
 		t.Fatal(description, err)
 	}
-	if name.WithLabelKey("bad key").Validate() == nil {
+	if validation.ValidateField(validation.WithLabelKey(name, "bad key")) == nil {
 		t.Fatal("invalid label key")
 	}
 }

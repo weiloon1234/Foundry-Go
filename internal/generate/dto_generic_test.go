@@ -44,7 +44,7 @@ var byteWire = EnvelopeJSON(contract.IntegerJSON[byte]())
 var nestedWire = EnvelopeJSON(EnvelopeJSON(LeafJSON()))
 var pairWire = PairJSON(LeafJSON(),contract.StringJSON[string]())
 var lookupWire = LookupJSON(contract.StringJSON[string](),contract.StringJSONKey[string](),LeafJSON())
-func Rules() validation.Rule[Envelope[int]] {return EnvelopeValidationFields[int]().Data.Rules(validation.Min[int](1))}
+func Rules() validation.Rule[Envelope[int]] {return validation.Rules(EnvelopeValidationFields[int]().Data, validation.Min[int](1))}
 `
 
 func TestGenericDTOGenerationAndRuntime(t *testing.T) {
@@ -111,7 +111,7 @@ func TestGenericRoundTrips(t *testing.T){
  round(t,sample.LookupJSON(contract.StringJSON[string](),contract.StringJSONKey[string](),sample.LeafJSON()),"{\"Entries\":{\"key\":{\"Name\":\"value\"}}}")
  round(t,sample.PairJSON(contract.StringJSON[string](),contract.StringJSON[string]()),"{\"First\":\"a\",\"Second\":\"b\"}")
  round(t,sample.EnvelopeJSON(sample.EnvelopeJSON(sample.LeafJSON())),"{\"data\":{\"data\":{\"Name\":\"nested\"}}}")
- if err:=sample.Rules().Check(t.Context(),sample.Envelope[int]{Data:0},validation.DefaultLimits());err==nil{t.Fatal("typed rule omitted")}
+ if err:=validation.Check(sample.Rules(), t.Context(),sample.Envelope[int]{Data:0},validation.DefaultLimits());err==nil{t.Fatal("typed rule omitted")}
  _=sample.CollisionJSON(contract.StringJSON[string](),contract.IntegerJSON[int](),sample.LeafJSON())
  _=sample.CollisionValidationFields[string,int,sample.Leaf]()
 }
@@ -161,7 +161,7 @@ func TestGenericDTORejectsInvalidDeclarationsAndUsage(t *testing.T) {
 		"wrong_argument": `var invalid = EnvelopeJSON[int](contract.StringJSON[string]())`,
 		"constraint":     `var invalid = TaggedJSON(contract.IntegerJSON[int]())`,
 		"wrong_key":      `var invalid = LookupJSON(contract.StringJSON[string](),contract.IntegerJSONKey[int](),LeafJSON())`,
-		"wrong_rule":     `var invalid = EnvelopeValidationFields[string]().Data.Rules(validation.Min[int](1))`,
+		"wrong_rule":     `var invalid = validation.Rules(EnvelopeValidationFields[string]().Data, validation.Min[int](1))`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := fixture(t, genericDTOSource+"\n"+extra)

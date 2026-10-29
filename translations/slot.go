@@ -305,7 +305,7 @@ func (s textSlot[M, K]) Clear(ctx context.Context, owner M) (int, error) {
 // Rule validates complete translated input, written with SyncIn, with one
 // catalog snapshot per check: keys must be supported locales, Options.Require
 // locales need nonempty text and each text is bounded by MaxBytes. Attach it
-// to the request field, for example fields.Title.Rules(x.Title.Rule()). An
+// to the request field, for example validation.Rules(fields.Title, x.Title.Rule()). An
 // unbound slot yields a rule that fails endpoint registration.
 func (s textSlot[M, K]) Rule() validation.Rule[map[i18n.LocaleID]string] {
 	return s.rule(s.Options().Require)

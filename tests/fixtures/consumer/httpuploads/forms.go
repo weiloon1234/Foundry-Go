@@ -44,14 +44,14 @@ func Router(directory string, service Service) (*foundryhttp.Router, error) {
 	form := ProfileInputDescriptor().WithTempDirectory(directory)
 	fields := ProfileInputValidationFields()
 	rules := validation.All(
-		fields.Title.Rules(validation.Optional(validation.MaxLength[string](80))),
-		fields.Attachment.Rules(
+		validation.Rules(fields.Title, validation.Optional(validation.MaxLength[string](80))),
+		validation.Rules(fields.Attachment,
 			validation.FileMinSize[foundryhttp.UploadedFile](1),
 			validation.FileMaxSize[foundryhttp.UploadedFile](1<<20),
 			validation.FileContentTypes[foundryhttp.UploadedFile]("text/plain", "image/png"),
 			validation.FileExtensions[foundryhttp.UploadedFile]("txt", "png"),
 		),
-		fields.Photos.Rules(validation.Each[Gallery](validation.FileMaxSize[foundryhttp.UploadedFile](1<<20))),
+		validation.Rules(fields.Photos, validation.Each[Gallery](validation.FileMaxSize[foundryhttp.UploadedFile](1<<20))),
 	)
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "uploads.profile", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/profile"))
 	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.JSONResponse(201, UploadReplyJSON())).WithBodyValidation(rules)

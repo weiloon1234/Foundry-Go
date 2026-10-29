@@ -18,18 +18,18 @@ func TestTemporalBoundsPreserveInstantsCalendarAndNanoseconds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rejection(t, validation.Before(at).Check(t.Context(), same, validation.DefaultLimits()))
-	if err := validation.BeforeOrEqual(at).Check(t.Context(), same, validation.DefaultLimits()); err != nil {
+	rejection(t, validation.Check(validation.Before(at), t.Context(), same, validation.DefaultLimits()))
+	if err := validation.Check(validation.BeforeOrEqual(at), t.Context(), same, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	later, err := at.Add(time.Microsecond)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := validation.After(at).Check(t.Context(), later, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.After(at), t.Context(), later, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	info, err := validation.Before(at).Description()
+	info, err := validation.DescribeRule(validation.Before(at))
 	if err != nil || string(info.Spec.Parameters[1].Value) != `"2026-01-02T00:00:00Z"` {
 		t.Fatal("instant metadata differs from runtime", info, err)
 	}
@@ -42,31 +42,31 @@ func TestTemporalBoundsPreserveInstantsCalendarAndNanoseconds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := validation.Before(next).Check(t.Context(), date, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.Before(next), t.Context(), date, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	rejection(t, validation.Before(next).Check(t.Context(), temporal.Date{}, validation.DefaultLimits()))
-	if validation.Before(temporal.Date{}).Validate() == nil {
+	rejection(t, validation.Check(validation.Before(next), t.Context(), temporal.Date{}, validation.DefaultLimits()))
+	if validation.ValidateRule(validation.Before(temporal.Date{})) == nil {
 		t.Fatal("absent date bound accepted")
 	}
 	clock, err := temporal.ParseTime("00:00:00.000001")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := validation.Before(clock).Check(t.Context(), temporal.Time{}, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.Before(clock), t.Context(), temporal.Time{}, validation.DefaultLimits()); err != nil {
 		t.Fatal("midnight treated as absence", err)
 	}
 	local, err := temporal.NewLocalDateTime(date, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := validation.AfterOrEqual(local).Check(t.Context(), local, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.AfterOrEqual(local), t.Context(), local, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	if validation.After(temporal.LocalDateTime{}).Validate() == nil {
+	if validation.ValidateRule(validation.After(temporal.LocalDateTime{})) == nil {
 		t.Fatal("absent wall date-time bound accepted")
 	}
-	if err := validation.AfterOrEqual(temporal.DateTime{}).Check(t.Context(), temporal.DateTime{}, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.AfterOrEqual(temporal.DateTime{}), t.Context(), temporal.DateTime{}, validation.DefaultLimits()); err != nil {
 		t.Fatal("zero instant treated as absence", err)
 	}
 }
@@ -79,24 +79,24 @@ func TestTemporalFieldComparisonsKeepPathsAndUseExplicitInstants(t *testing.T) {
 	rule := validation.BeforeField(start, end)
 	first := time.Date(2026, 1, 2, 0, 0, 0, 0, time.FixedZone("east", 8*3600))
 	input := window{first, first.Add(time.Nanosecond).UTC()}
-	if err := rule.Check(t.Context(), input, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rule, t.Context(), input, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	input.End = first.UTC()
-	issues := rejection(t, rule.Check(t.Context(), input, validation.DefaultLimits())).Issues()
+	issues := rejection(t, validation.Check(rule, t.Context(), input, validation.DefaultLimits())).Issues()
 	if len(issues) != 1 || issues[0].Path != "/start" {
 		t.Fatal("temporal field path", issues)
 	}
-	info, err := rule.Description()
+	info, err := validation.DescribeRule(rule)
 	if err != nil || info.Field != "start" || info.OtherField != "end" {
 		t.Fatal("temporal field metadata", info, err)
 	}
-	if err := validation.AfterOrEqualField(end, start).Check(t.Context(), input, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.AfterOrEqualField(end, start), t.Context(), input, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	if validation.Before(time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)).Validate() == nil {
+	if validation.ValidateRule(validation.Before(time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC))) == nil {
 		t.Fatal("out-of-range instant bound accepted")
 	}
 	input.Start = time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC)
-	rejection(t, rule.Check(t.Context(), input, validation.DefaultLimits()))
+	rejection(t, validation.Check(rule, t.Context(), input, validation.DefaultLimits()))
 }

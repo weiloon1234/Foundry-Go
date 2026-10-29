@@ -21,7 +21,7 @@ func TestGeneratedWindowRulesCompareInstantsAcrossOffsets(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = validationrules.WindowRules().Check(t.Context(), input, validation.DefaultLimits())
+		err = validation.Check(validationrules.WindowRules(), t.Context(), input, validation.DefaultLimits())
 		if tc.valid {
 			if err != nil {
 				t.Fatal(err)

@@ -121,7 +121,7 @@ func fileMembership(allowed []string, normalize func(string) (string, bool)) (Ru
 		values[i] = normalized
 	}
 	rule := OneOf(values...)
-	return rule, rule.Validate()
+	return rule, ValidateRule(rule)
 }
 
 func fileMediaType(text string, parameters bool) (string, bool) {

@@ -91,7 +91,7 @@ func TestPostgresParallelValidationKeepsNamedConnections(t *testing.T) {
 		databasevalidation.Exists(heldValidationExecutor{legacy, "legacy", entered, release}, modelvalidation.Countries.Query(), field),
 	)
 	done := make(chan error, 1)
-	go func() { done <- rules.Check(ctx, models.CountryCode("SG"), validation.DefaultLimits()) }()
+	go func() { done <- validation.Check(rules, ctx, models.CountryCode("SG"), validation.DefaultLimits()) }()
 	seen := make(map[database.ConnectionName]bool)
 	for range 2 {
 		select {
@@ -118,7 +118,7 @@ func TestPostgresParallelValidationKeepsNamedConnections(t *testing.T) {
 	})
 	batch := databasevalidation.ExistsAll(legacy, modelvalidation.Countries.Query(), field)
 	for _, code := range []models.CountryCode{"SG", "MY"} {
-		for _, err := range []error{custom.Check(t.Context(), code, validation.DefaultLimits()), batch.Check(t.Context(), []models.CountryCode{code, code}, validation.DefaultLimits())} {
+		for _, err := range []error{validation.Check(custom, t.Context(), code, validation.DefaultLimits()), validation.Check(batch, t.Context(), []models.CountryCode{code, code}, validation.DefaultLimits())} {
 			if code == "SG" && err != nil {
 				t.Fatal(err)
 			}
@@ -129,7 +129,7 @@ func TestPostgresParallelValidationKeepsNamedConnections(t *testing.T) {
 		}
 	}
 	combined := validation.Parallel(custom, databasevalidation.Unique(accounts, modelvalidation.Countries.Query(), field), databasevalidation.Exists(legacy, modelvalidation.Countries.Query(), field))
-	if err := combined.Check(t.Context(), "SG", validation.DefaultLimits()); err != nil {
+	if err := validation.Check(combined, t.Context(), "SG", validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	// A failed selected pool must never fall back to another connection or turn
@@ -138,10 +138,10 @@ func TestPostgresParallelValidationKeepsNamedConnections(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rejected *validation.Errors
-	if err := combined.Check(t.Context(), "SG", validation.DefaultLimits()); !errors.Is(err, fault.Internal) || errors.As(err, &rejected) {
+	if err := validation.Check(combined, t.Context(), "SG", validation.DefaultLimits()); !errors.Is(err, fault.Internal) || errors.As(err, &rejected) {
 		t.Fatal("database failure was treated as a validation observation", err)
 	}
-	if err := databasevalidation.Exists(accounts, modelvalidation.Countries.Query(), field).Check(t.Context(), "MY", validation.DefaultLimits()); err != nil {
+	if err := validation.Check(databasevalidation.Exists(accounts, modelvalidation.Countries.Query(), field), t.Context(), "MY", validation.DefaultLimits()); err != nil {
 		t.Fatal("failure affected the independent connection", err)
 	}
 }
@@ -159,7 +159,7 @@ func TestPostgresParallelValidationCancellationReleasesNamedPools(t *testing.T) 
 		databasevalidation.Exists(heldValidationExecutor{legacy, "legacy", entered, release}, modelvalidation.Countries.Query(), field),
 	)
 	done := make(chan error, 1)
-	go func() { done <- rules.Check(ctx, models.CountryCode("SG"), validation.DefaultLimits()) }()
+	go func() { done <- validation.Check(rules, ctx, models.CountryCode("SG"), validation.DefaultLimits()) }()
 	for range 2 {
 		select {
 		case <-entered:
@@ -174,7 +174,7 @@ func TestPostgresParallelValidationCancellationReleasesNamedPools(t *testing.T) 
 	}
 	close(release)
 	// Both original rule values and both pools remain usable after cancellation.
-	if err := rules.Check(t.Context(), "SG", validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rules, t.Context(), "SG", validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -17,8 +17,8 @@ func TestOriginalInputProhibitionsPreserveConditions(t *testing.T) {
 	}
 	hidden := validation.DefineField("hidden", func(v input) value.Optional[string] { return v.Hidden })
 	admin := validation.DefineField("admin", func(v input) bool { return v.Admin })
-	condition := admin.Rules(validation.OneOf(true))
-	rule := validation.All(validation.When(condition, hidden.Rules(validation.Absent[string]())), hidden.Rules(validation.Required[string]()))
+	condition := validation.Rules(admin, validation.OneOf(true))
+	rule := validation.All(validation.When(condition, validation.Rules(hidden, validation.Absent[string]())), validation.Rules(hidden, validation.Required[string]()))
 	for _, tc := range []struct {
 		in     input
 		reject bool
@@ -28,14 +28,14 @@ func TestOriginalInputProhibitionsPreserveConditions(t *testing.T) {
 		{input{true, value.Set("")}, true},
 		{input{true, value.Optional[string]{}}, false},
 	} {
-		err := rule.CheckProhibitions(t.Context(), tc.in, validation.DefaultLimits())
+		err := validation.CheckProhibitions(rule, t.Context(), tc.in, validation.DefaultLimits())
 		if (err != nil) != tc.reject {
 			t.Fatalf("%+v: %v", tc.in, err)
 		}
 	}
 	// Prohibitions inside a predicate select a branch; they do not reject directly.
-	predicate := validation.When(hidden.Rules(validation.Absent[string]()), admin.Rules(validation.OneOf(true)))
-	if err := predicate.CheckProhibitions(t.Context(), input{}, validation.DefaultLimits()); err != nil {
+	predicate := validation.When(validation.Rules(hidden, validation.Absent[string]()), validation.Rules(admin, validation.OneOf(true)))
+	if err := validation.CheckProhibitions(predicate, t.Context(), input{}, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -60,7 +60,7 @@ func TestProhibitionSkipStillChecksLimitsAndContext(t *testing.T) {
 		{"limits-before-cancellation", ctx, validation.Limits{}, fault.Invalid},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := rule.CheckProhibitions(tc.ctx, "input", tc.limits)
+			err := validation.CheckProhibitions(rule, tc.ctx, "input", tc.limits)
 			if !errors.Is(err, tc.want) {
 				t.Fatal("prohibition skip changed validation preconditions", err)
 			}

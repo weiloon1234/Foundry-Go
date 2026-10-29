@@ -32,7 +32,7 @@ func PatchEndpoint() http.Endpoint[ProjectPath, http.NoQuery, Patch, ActionEnvel
 	route := http.DefineRoute(http.RouteSpec{ID: "workflow.patch", Method: http.PATCH, Access: http.Guarded}, ProjectPathDescriptor())
 	fields := PatchValidationFields()
 	return http.DefineEndpoint(route, http.EmptyQuery(), http.JSONBody(PatchJSON()), http.JSONResponse(200, genericdto.EnvelopeJSON(ActionJSON()))).
-		WithBodyValidation(fields.Title.Rules(validation.Optional(validation.Nullable(validation.MaxLength[string](64)))), fields.Budget.Rules(validation.Optional(validation.Min(int64(0))))).
+		WithBodyValidation(validation.Rules(fields.Title, validation.Optional(validation.Nullable(validation.MaxLength[string](64)))), validation.Rules(fields.Budget, validation.Optional(validation.Min(int64(0))))).
 		WithPreparation(func(_ context.Context, in http.Input[ProjectPath, http.NoQuery, Patch]) (http.NoQuery, Patch, error) {
 			if title, set := in.Body.Title.Get(); set {
 				if text, present := title.Get(); present {
@@ -45,7 +45,7 @@ func PatchEndpoint() http.Endpoint[ProjectPath, http.NoQuery, Patch, ActionEnvel
 func SubmitEndpoint() http.Endpoint[SubmissionPath, http.NoQuery, SubmissionInput, ActionEnvelope] {
 	route := http.DefineRoute(http.RouteSpec{ID: "workflow.submit", Method: http.POST, Access: http.Guarded}, SubmissionPathDescriptor())
 	return http.DefineEndpoint(route, http.EmptyQuery(), http.JSONBody(SubmissionInputJSON()), http.JSONResponse(202, genericdto.EnvelopeJSON(ActionJSON()))).
-		WithErrors(Rejected).WithBodyValidation(SubmissionInputValidationFields().Name.Rules(NameRules)).
+		WithErrors(Rejected).WithBodyValidation(validation.Rules(SubmissionInputValidationFields().Name, NameRules)).
 		WithPreparation(func(_ context.Context, in http.Input[SubmissionPath, http.NoQuery, SubmissionInput]) (http.NoQuery, SubmissionInput, error) {
 			in.Body.Name = strings.TrimSpace(in.Body.Name)
 			return in.Query, in.Body, nil

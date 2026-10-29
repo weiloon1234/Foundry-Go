@@ -42,10 +42,10 @@ type Rule[T any] struct {
 	message *i18n.PreparedMessage
 }
 
-// Validate checks the declaration without executing selectors or callbacks.
+// ValidateRule checks the declaration without executing selectors or callbacks.
 // A rule reading a Slot is complete only inside a Provide for that slot.
-func (r Rule[T]) Validate() error {
-	if err := r.validateStructure(); err != nil {
+func ValidateRule[T any](r Rule[T]) error {
+	if err := validateStructure(r); err != nil {
 		return err
 	}
 	if len(r.slots) != 0 {
@@ -54,7 +54,7 @@ func (r Rule[T]) Validate() error {
 	return nil
 }
 
-func (r Rule[T]) validateStructure() error {
+func validateStructure[T any](r Rule[T]) error {
 	if r.err != nil {
 		return r.err
 	}
@@ -64,10 +64,10 @@ func (r Rule[T]) validateStructure() error {
 	return nil
 }
 
-// Description returns an independent snapshot of the same rule tree Check uses.
+// DescribeRule returns an independent snapshot of the same rule tree Check uses.
 // A subtree awaiting its enclosing Provide can still be described.
-func (r Rule[T]) Description() (Description, error) {
-	if err := r.validateStructure(); err != nil {
+func DescribeRule[T any](r Rule[T]) (Description, error) {
+	if err := validateStructure(r); err != nil {
 		return Description{}, err
 	}
 	return cloneDescription(r.info), nil
@@ -95,19 +95,19 @@ func (e *Errors) Truncated() bool          { return e.truncated }
 // method ends the caller like any Go function. Cancellation never abandons a
 // selector or custom rule that still owns work. Valid input allocates no issue
 // storage or JSON Pointer paths.
-func (r Rule[T]) Check(ctx context.Context, input T, limits Limits) error {
-	return r.check(ctx, input, limits, false)
+func Check[T any](r Rule[T], ctx context.Context, input T, limits Limits) error {
+	return check(r, ctx, input, limits, false)
 }
 
 // CheckProhibitions checks only built-in Prohibited/Absent rules on original
 // decoded input before preparation. Conditions retain their original-input
 // semantics. It does not substitute for Check on the prepared value.
-func (r Rule[T]) CheckProhibitions(ctx context.Context, input T, limits Limits) error {
-	return r.check(ctx, input, limits, true)
+func CheckProhibitions[T any](r Rule[T], ctx context.Context, input T, limits Limits) error {
+	return check(r, ctx, input, limits, true)
 }
 
-func (r Rule[T]) check(ctx context.Context, input T, limits Limits, prohibitionsOnly bool) error {
-	if err := r.Validate(); err != nil {
+func check[T any](r Rule[T], ctx context.Context, input T, limits Limits, prohibitionsOnly bool) error {
+	if err := ValidateRule(r); err != nil {
 		return err
 	}
 	if err := validateExecution(ctx, limits); err != nil {
@@ -121,9 +121,9 @@ func (r Rule[T]) check(ctx context.Context, input T, limits Limits, prohibitions
 	state.segments = state.segmentBuffer[:0]
 	var err error
 	if r.callbacks {
-		err = r.runIsolated(&state, input)
+		err = runIsolated(r, &state, input)
 	} else {
-		err = callback.Invoke("validation", func() error { r.run(&state, input, 0); return nil })
+		err = callback.Invoke("validation", func() error { run(r, &state, input, 0); return nil })
 	}
 	return state.complete(err)
 }
@@ -160,8 +160,8 @@ func (s *execution) complete(err error) error {
 
 // runIsolated keeps the goroutine-capturing closure out of check's frame, so
 // inline checks do not move the rule to the heap.
-func (r Rule[T]) runIsolated(s *execution, input T) error {
-	return callback.Isolated("validation", func() error { r.run(s, input, 0); return nil })
+func runIsolated[T any](r Rule[T], s *execution, input T) error {
+	return callback.Isolated("validation", func() error { run(r, s, input, 0); return nil })
 }
 
 type execution struct {
@@ -254,7 +254,7 @@ func (s *execution) branch() execution {
 	return child
 }
 
-func (r Rule[T]) run(s *execution, input T, depth int) {
+func run[T any](r Rule[T], s *execution, input T, depth int) {
 	if s.prohibitionsOnly && !r.prohibitions {
 		return
 	}
@@ -362,8 +362,8 @@ func failed[T any](err error) Rule[T] { return Rule[T]{ruleNode: ruleNode{err: e
 
 // WithMessage replaces only the public message of one leaf. Composite trees
 // retain their individual messages; overriding a composite is rejected.
-func (r Rule[T]) WithMessage(message string) Rule[T] {
-	if err := r.validateStructure(); err != nil {
+func WithMessage[T any](r Rule[T], message string) Rule[T] {
+	if err := validateStructure(r); err != nil {
 		return r
 	}
 	if r.info.Kind != LeafKind || !validText(message, false) {

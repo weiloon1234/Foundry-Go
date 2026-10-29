@@ -16,7 +16,7 @@ import (
 // The rule's current message is the English fallback. WithMessage restores a
 // literal override; it is not parsed as a template.
 func WithTranslation[T, A any](rule Rule[T], translated message.Message[A], args A) Rule[T] {
-	if rule.validateStructure() != nil {
+	if validateStructure(rule) != nil {
 		return rule
 	}
 	if rule.info.Kind != LeafKind {

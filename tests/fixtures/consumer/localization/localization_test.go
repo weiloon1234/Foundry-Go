@@ -85,8 +85,8 @@ func TestGeneratedLabelsComposeWithValidationEnumsAndPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	field := localization.WelcomeArgsValidationFields().Name.WithLabel("Name").WithLabelKey(localization.NameLabelMessage().Key())
-	err = field.Rules(validation.NonBlank[string]()).Check(t.Context(), localization.WelcomeArgs{}, validation.DefaultLimits())
+	field := validation.WithLabelKey(validation.WithLabel(localization.WelcomeArgsValidationFields().Name, "Name"), localization.NameLabelMessage().Key())
+	err = validation.Check(validation.Rules(field, validation.NonBlank[string]()), t.Context(), localization.WelcomeArgs{}, validation.DefaultLimits())
 	var issues *validation.Errors
 	if !errors.As(err, &issues) {
 		t.Fatal(err)

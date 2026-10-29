@@ -24,14 +24,14 @@ func conditional[T any](kind Kind, condition Rule[T], rules []Rule[T]) Rule[T] {
 		// The probe borrows path steps; this branch is sequential.
 		probe := execution{ctx: s.ctx, limits: s.limits, work: s.work, parallel: s.parallel, segments: s.segments}
 		probe.limits.Issues = 1
-		condition.run(&probe, input, depth+1)
+		run(condition, &probe, input, depth+1)
 		if probe.err != nil {
 			s.err = probe.err
 			return
 		}
 		matched := len(probe.issues) == 0
 		if matched == (kind == WhenKind) {
-			branch.run(s, input, depth+1)
+			run(branch, s, input, depth+1)
 		}
 	}}
 }

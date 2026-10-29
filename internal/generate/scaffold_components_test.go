@@ -57,6 +57,7 @@ import (
  "errors"
  "testing"
  "github.com/weiloon1234/Foundry-Go/fault"
+ "github.com/weiloon1234/Foundry-Go/validation"
  foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 func TestComponentScaffolds(t *testing.T){
@@ -65,7 +66,7 @@ func TestComponentScaffolds(t *testing.T){
  if _,err:=HandleCreateNote(context.Background(),foundryhttp.Input[foundryhttp.NoPath,foundryhttp.NoQuery,CreateNoteRequest]{});!errors.Is(err,fault.Invalid){t.Fatal("unfinished endpoint succeeded",err)}
  if NoteStateDraft!="draft"||NoteStatePublished!="published"{t.Fatal("enum cases")}
  if err:=AuditMiddleware().Validate();err!=nil{t.Fatal(err)}
- if err:=SlugRule().Validate();err!=nil{t.Fatal(err)}
+ if err:=validation.ValidateRule(SlugRule());err!=nil{t.Fatal(err)}
  if err:=NotePublishedTopic().Validate();err!=nil{t.Fatal(err)}
  if _,err:=NotePublishedTopic().Declare(IndexNoteListener());err!=nil{t.Fatal(err)}
  if err:=UpdateNotePolicy().Validate();err!=nil{t.Fatal(err)}

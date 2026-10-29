@@ -49,7 +49,7 @@ func Provide[T, P any](slot Slot[P], derive func(context.Context, T) (P, error),
 		return failed[T](invalid("validation slot provider requires a declared slot and derive callback"))
 	}
 	child := All(rules...)
-	rule := lift(Description{Kind: AllKind}, child, func(s *execution, input T, depth int) {
+	rule := lift(Description{Kind: AllKind}, child.ruleNode, func(s *execution, input T, depth int) {
 		value, err := derive(s.ctx, input)
 		if canceled := s.ctx.Err(); canceled != nil {
 			s.err = canceled
@@ -61,7 +61,7 @@ func Provide[T, P any](slot Slot[P], derive func(context.Context, T) (P, error),
 		}
 		previous := s.ctx
 		s.ctx = context.WithValue(previous, slot.key, provided[P]{value: value})
-		child.run(s, input, depth+1)
+		run(child, s, input, depth+1)
 		s.ctx = previous
 	})
 	if rule.err != nil {
@@ -79,7 +79,7 @@ func Requires[T, P any](slot Slot[P], rule Rule[T]) Rule[T] {
 	if slot.key == nil {
 		return failed[T](invalid("validation slot is not defined"))
 	}
-	if err := rule.validateStructure(); err != nil {
+	if err := validateStructure(rule); err != nil {
 		return rule
 	}
 	if !slices.Contains(rule.slots, slot.key) {

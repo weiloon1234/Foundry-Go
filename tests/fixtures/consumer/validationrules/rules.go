@@ -25,13 +25,13 @@ type Registration struct {
 
 func Rules() validation.Rule[Registration] {
 	fields := RegistrationValidationFields()
-	business := fields.Kind.Rules(validation.OneOf(Business))
+	business := validation.Rules(fields.Kind, validation.OneOf(Business))
 	return validation.All(
-		fields.Kind.Rules(validation.Enum(Business.EnumDescriptor())),
-		fields.Email.Rules(validation.Email[string]()),
-		validation.When(business, fields.Company.Rules(validation.Bail(validation.Present[string](), validation.Optional(validation.NonBlank[string]())))),
-		validation.Unless(business, fields.Company.Rules(validation.Absent[string]())),
-		fields.Tags.Rules(validation.MinItems[[]string](1), validation.MaxItems[[]string](8), validation.Distinct[[]string](), validation.Each[[]string](validation.NonBlank[string]())),
-		fields.Website.Rules(validation.Optional(validation.URL[string]())),
+		validation.Rules(fields.Kind, validation.Enum(Business.EnumDescriptor())),
+		validation.Rules(fields.Email, validation.Email[string]()),
+		validation.When(business, validation.Rules(fields.Company, validation.Bail(validation.Present[string](), validation.Optional(validation.NonBlank[string]())))),
+		validation.Unless(business, validation.Rules(fields.Company, validation.Absent[string]())),
+		validation.Rules(fields.Tags, validation.MinItems[[]string](1), validation.MaxItems[[]string](8), validation.Distinct[[]string](), validation.Each[[]string](validation.NonBlank[string]())),
+		validation.Rules(fields.Website, validation.Optional(validation.URL[string]())),
 	)
 }

@@ -6,4 +6,4 @@ import (
 )
 
 var fields = validationrules.RegistrationValidationFields()
-var _ = fields.Email.Rules(validation.Enum(validationrules.Business.EnumDescriptor()))
+var _ = validation.Rules(fields.Email, validation.Enum(validationrules.Business.EnumDescriptor()))

@@ -69,7 +69,7 @@ Use the same safe error-classification path; infrastructure faults never become
 translated field rejections. If response locale varies by `Accept-Language`, set
 the appropriate response language/cache metadata at the response boundary.
 
-Direct `Rule.Check` remains usable without an HTTP request or catalog, returning
+Direct `validation.Check` remains usable without an HTTP request or catalog, returning
 English fallback diagnostics. Add explicit localization/presentation for CLI,
 workers and other callers, extending the current `Errors.LocalizeLabels` path.
 Configured application assembly should connect its locale/catalog service to the

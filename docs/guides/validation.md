@@ -16,10 +16,10 @@ adds rules to an existing typed endpoint:
 
 ```go
 var Update = httpendpoints.Update.WithBodyValidation(
-    httpdto.UpdateUserValidationFields().Email.Rules(
+    validation.Rules(httpdto.UpdateUserValidationFields().Email,
         validation.Optional(validation.NonBlank[string]()),
     ),
-    httpdto.UpdateUserValidationFields().Nickname.Rules(
+    validation.Rules(httpdto.UpdateUserValidationFields().Nickname,
         validation.Optional(validation.Nullable(validation.MinLength[string](2))),
     ),
 )
@@ -56,9 +56,41 @@ An explicitly classified internal error keeps its cause private, even when the
 cause contains validation errors. Neither arbitrary error text nor submitted
 values become public messages.
 
+## Descriptor functions
+
+`Field[T, V]` and `Rule[T]` are immutable, methodless handles. Pass the
+handle first to validation functions:
+
+| Former method | Function |
+| --- | --- |
+| `field.Rules(rules...)` | `validation.Rules(field, rules...)` |
+| `field.Validate()` | `validation.ValidateField(field)` |
+| `field.Name()` | `validation.FieldName(field)` |
+| `field.Select(input)` | `validation.Select(field, input)` |
+| `field.WithLabel(label)` | `validation.WithLabel(field, label)` |
+| `field.WithLabelKey(key)` | `validation.WithLabelKey(field, key)` |
+| `rule.Validate()` | `validation.ValidateRule(rule)` |
+| `rule.Description()` | `validation.DescribeRule(rule)` |
+| `rule.Check(ctx, input, limits)` | `validation.Check(rule, ctx, input, limits)` |
+| `rule.CheckProhibitions(ctx, input, limits)` | `validation.CheckProhibitions(rule, ctx, input, limits)` |
+| `rule.WithMessage(message)` | `validation.WithMessage(rule, message)` |
+
+Use `validation.Rules[Request, string]` or `validation.Check[Request]` as
+function values. To replace a bound method value, capture the descriptor once:
+
+```go
+bound := rule
+check := func(ctx context.Context, input Request, limits validation.Limits) error {
+    return validation.Check(bound, ctx, input, limits)
+}
+```
+
+Interfaces that required these methods need an explicit application adapter.
+Generated field sets and the public `contract.JSON[T]` API are unchanged.
+
 ## Using rules outside HTTP
 
-`Rule[T].Check(ctx, input, limits)` is usable from services, commands and jobs.
+`validation.Check(rule, ctx, input, limits)` is usable from services, commands and jobs.
 It returns nil only after every applicable check passes. Inspect
 `*validation.Errors` with `errors.As`; `Issues()` returns an independent slice
 and `Truncated()` describes the issue cap. `LimitError`, cancellation and internal
@@ -150,17 +182,17 @@ The independent `validationrules` consumer composes generated fields:
 
 ```go
 fields := RegistrationValidationFields()
-business := fields.Kind.Rules(validation.OneOf(Business))
+business := validation.Rules(fields.Kind, validation.OneOf(Business))
 
 rules := validation.All(
-    fields.Kind.Rules(validation.Enum(Business.EnumDescriptor())),
-    fields.Email.Rules(validation.Email[string]()),
-    validation.When(business, fields.Company.Rules(validation.Bail(
+    validation.Rules(fields.Kind, validation.Enum(Business.EnumDescriptor())),
+    validation.Rules(fields.Email, validation.Email[string]()),
+    validation.When(business, validation.Rules(fields.Company, validation.Bail(
         validation.Present[string](),
         validation.Optional(validation.NonBlank[string]()),
     ))),
-    validation.Unless(business, fields.Company.Rules(validation.Absent[string]())),
-    fields.Tags.Rules(
+    validation.Unless(business, validation.Rules(fields.Company, validation.Absent[string]())),
+    validation.Rules(fields.Tags,
         validation.MinItems[[]string](1),
         validation.MaxItems[[]string](8),
         validation.Distinct[[]string](),
@@ -273,11 +305,11 @@ types. The rule retains those types and distinguishes their states:
 fields := PresenceInputValidationFields()
 
 rules := validation.All(
-    fields.Label.Rules(validation.Required(validation.MaxLength[string](40))),
-    fields.Nickname.Rules(validation.RequiredNullable(validation.MinLength[string](2))),
-    fields.Count.Rules(validation.Required(validation.Min(0))),
-    fields.Active.Rules(validation.Required[bool]()),
-    fields.Forbidden.Rules(validation.ProhibitedNullable[string]()),
+    validation.Rules(fields.Label, validation.Required(validation.MaxLength[string](40))),
+    validation.Rules(fields.Nickname, validation.RequiredNullable(validation.MinLength[string](2))),
+    validation.Rules(fields.Count, validation.Required(validation.Min(0))),
+    validation.Rules(fields.Active, validation.Required[bool]()),
+    validation.Rules(fields.Forbidden, validation.ProhibitedNullable[string]()),
 )
 ```
 
@@ -290,7 +322,7 @@ identity are separate. Native values are inspected without invoking custom codec
 
 Optional additional T rules run only after the presence/nonempty check succeeds
 and bail at their first rejection. To override just the required message, use
-`Required[T]().WithMessage(...)` or the nullable equivalent as a leaf and compose
+`validation.WithMessage(validation.Required[T](), message)` or the nullable equivalent as a leaf and compose
 subsequent checks with `Bail`/`Optional`/`Nullable`.
 
 `Prohibited` accepts omission or empty content. `ProhibitedNullable` also accepts
@@ -324,7 +356,7 @@ differs from its JSON name:
 
 ```go
 fields := httpdto.UpdateUserValidationFields()
-rule := fields.Email.WithLabel("Email address").Rules(
+rule := validation.Rules(validation.WithLabel(fields.Email, "Email address"),
     validation.Optional(validation.NonBlank[string]()),
 )
 ```
@@ -447,7 +479,7 @@ func updateRules(db database.Executor) validation.Rule[EmailChange] {
 	field := validation.DefineField("email", func(in EmailChange) string { return in.Email })
 	return validation.Provide(current,
 		func(_ context.Context, in EmailChange) (model.ID[models.User], error) { return in.ID, nil },
-		field.Rules(email))
+		validation.Rules(field, email))
 }
 ```
 

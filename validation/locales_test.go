@@ -30,8 +30,8 @@ func TestLocalesReportsUnsupportedAndRequiredEntries(t *testing.T) {
 		"complete":                              {i18n.AllLocales, translated{"en": "Hello", "ms": "Helo"}, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			rule := title.Rules(validation.Locales[translated](catalog, test.require))
-			err := rule.Check(t.Context(), test.input, validation.DefaultLimits())
+			rule := validation.Rules(title, validation.Locales[translated](catalog, test.require))
+			err := validation.Check(rule, t.Context(), test.input, validation.DefaultLimits())
 			if test.want == "" {
 				if err != nil {
 					t.Fatal(err)
@@ -49,22 +49,22 @@ func TestLocalesReportsUnsupportedAndRequiredEntries(t *testing.T) {
 	}
 	// A key that cannot be a path segment is still a rejection at the map,
 	// never an execution failure.
-	issues := rejection(t, title.Rules(validation.Locales[translated](catalog, i18n.OptionalLocales)).Check(t.Context(), translated{"\x00": "x"}, validation.DefaultLimits())).Issues()
+	issues := rejection(t, validation.Check(validation.Rules(title, validation.Locales[translated](catalog, i18n.OptionalLocales)), t.Context(), translated{"\x00": "x"}, validation.DefaultLimits())).Issues()
 	if len(issues) != 1 || issues[0].Path != "/title" || issues[0].Code != "foundry.supported_locale" {
 		t.Fatalf("unrepresentable locale key: %+v", issues)
 	}
-	rule := title.Rules(validation.Locales[translated](catalog, i18n.DefaultLocale))
-	info, err := rule.Description()
+	rule := validation.Rules(title, validation.Locales[translated](catalog, i18n.DefaultLocale))
+	info, err := validation.DescribeRule(rule)
 	if err != nil || !info.ServerOnly {
 		t.Fatal("catalog-dependent locale rules must be server-only", err)
 	}
 	// Built-in IDs carry no application definition, so two fields' locale
 	// rules compose in one tree.
 	summary := validation.DefineField("summary", func(input translated) translated { return input })
-	if err := validation.All(rule, summary.Rules(validation.Locales[translated](catalog, i18n.AllLocales))).Validate(); err != nil {
+	if err := validation.ValidateRule(validation.All(rule, validation.Rules(summary, validation.Locales[translated](catalog, i18n.AllLocales)))); err != nil {
 		t.Fatal("locale rules of two fields did not compose", err)
 	}
-	if validation.Locales[translated](nil, i18n.OptionalLocales).Validate() == nil || validation.Locales[translated](catalog, i18n.LocaleRequirement(9)).Validate() == nil {
+	if validation.ValidateRule(validation.Locales[translated](nil, i18n.OptionalLocales)) == nil || validation.ValidateRule(validation.Locales[translated](catalog, i18n.LocaleRequirement(9))) == nil {
 		t.Fatal("invalid locale rule declarations were accepted")
 	}
 }
@@ -72,13 +72,13 @@ func TestLocalesReportsUnsupportedAndRequiredEntries(t *testing.T) {
 func TestMaxBytesCountsEncodedBytes(t *testing.T) {
 	t.Parallel()
 	rule := validation.MaxBytes[string](4)
-	if err := rule.Check(t.Context(), "abcd", validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rule, t.Context(), "abcd", validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	if issues := rejection(t, rule.Check(t.Context(), "ééé", validation.DefaultLimits())).Issues(); len(issues) != 1 || issues[0].Code != "foundry.max_bytes" {
+	if issues := rejection(t, validation.Check(rule, t.Context(), "ééé", validation.DefaultLimits())).Issues(); len(issues) != 1 || issues[0].Code != "foundry.max_bytes" {
 		t.Fatalf("multibyte text beyond the byte bound: %+v", issues)
 	}
-	if validation.MaxBytes[string](-1).Validate() == nil {
+	if validation.ValidateRule(validation.MaxBytes[string](-1)) == nil {
 		t.Fatal("negative byte bound was accepted")
 	}
 }

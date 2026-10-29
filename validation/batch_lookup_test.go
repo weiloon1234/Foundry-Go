@@ -23,18 +23,18 @@ func TestBatchLookupOwnsInputAndFailsClosed(t *testing.T) {
 	source := &batchSource{}
 	rule := validation.ExistsAll[[]string](source)
 	input := []string{"original"}
-	rejection(t, rule.Check(t.Context(), input, validation.DefaultLimits()))
+	rejection(t, validation.Check(rule, t.Context(), input, validation.DefaultLimits()))
 	if input[0] != "original" {
 		t.Fatal("lookup mutated caller slice")
 	}
 	source.fail = errors.New("private")
-	if err := rule.Check(t.Context(), input, validation.DefaultLimits()); !errors.Is(err, fault.Internal) {
+	if err := validation.Check(rule, t.Context(), input, validation.DefaultLimits()); !errors.Is(err, fault.Internal) {
 		t.Fatal(err)
 	}
-	if err := rule.Check(t.Context(), nil, validation.DefaultLimits()); err != nil || source.calls != 2 {
+	if err := validation.Check(rule, t.Context(), nil, validation.DefaultLimits()); err != nil || source.calls != 2 {
 		t.Fatal("empty input performed IO", err)
 	}
-	if validation.ExistsAll[[]string](nil).Validate() == nil {
+	if validation.ValidateRule(validation.ExistsAll[[]string](nil)) == nil {
 		t.Fatal("nil batch lookup accepted")
 	}
 }

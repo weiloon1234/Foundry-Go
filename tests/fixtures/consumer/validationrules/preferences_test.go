@@ -16,7 +16,7 @@ func TestGeneratedTextRulesKeepReferenceCodesAndExplicitZones(t *testing.T) {
 		t.Fatal(err)
 	}
 	rules := validationrules.PreferencesRules()
-	if err := rules.Check(t.Context(), input, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rules, t.Context(), input, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	if input.Reference != validationrules.ReferenceCode("000123") {
@@ -24,7 +24,7 @@ func TestGeneratedTextRulesKeepReferenceCodesAndExplicitZones(t *testing.T) {
 	}
 	input.Timezone = "Local"
 	var failure *validation.Errors
-	if err := rules.Check(t.Context(), input, validation.DefaultLimits()); !errors.As(err, &failure) {
+	if err := validation.Check(rules, t.Context(), input, validation.DefaultLimits()); !errors.As(err, &failure) {
 		t.Fatal(err)
 	}
 	issues := failure.Issues()

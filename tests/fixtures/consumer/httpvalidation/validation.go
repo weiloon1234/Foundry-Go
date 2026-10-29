@@ -9,8 +9,8 @@ import (
 )
 
 var Update = httpendpoints.Update.WithBodyValidation(
-	httpdto.UpdateUserValidationFields().Email.WithLabel("Email address").Rules(validation.Optional(validation.NonBlank[string]())),
-	httpdto.UpdateUserValidationFields().Nickname.WithLabel("Display name").Rules(validation.Optional(validation.Nullable(validation.MinLength[string](2)))),
+	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Email, "Email address"), validation.Optional(validation.NonBlank[string]())),
+	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Nickname, "Display name"), validation.Optional(validation.Nullable(validation.MinLength[string](2)))),
 )
 
 func Router(service httpendpoints.Service) (*foundryhttp.Router, error) {

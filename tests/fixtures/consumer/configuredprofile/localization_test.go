@@ -25,7 +25,7 @@ func TestConfiguredLocaleAutomaticallyPresentsValidation(t *testing.T) {
 	app, err := application.New(settings, quiet()).Features(func(application.Services) (application.FeatureDeclarations, error) {
 		return application.FeatureDeclarations{Catalog: map[i18n.LocaleID]map[i18n.MessageKey]i18n.Template{"ms": {"validation.non_blank": {Text: "{{attribute}} diperlukan."}, "http.error.validation_failed": {Text: "Pengesahan gagal"}}}}, nil
 	}).HTTP(func(application.Services) ([]foundryhttp.RouteRegistration, error) {
-		endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "locale.name", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/name")), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(localization.WelcomeArgsJSON()), foundryhttp.EmptyResponse(204)).WithBodyValidation(localization.WelcomeArgsValidationFields().Name.WithLabel("Nama").Rules(validation.NonBlank[string]()))
+		endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "locale.name", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/name")), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(localization.WelcomeArgsJSON()), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.Rules(validation.WithLabel(localization.WelcomeArgsValidationFields().Name, "Nama"), validation.NonBlank[string]()))
 		return []foundryhttp.RouteRegistration{endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, localization.WelcomeArgs]) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil
 		})}, nil

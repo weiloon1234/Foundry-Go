@@ -27,7 +27,7 @@ func TestConditionalValidationAfterGeneratedJSONDecoding(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = rules.Check(t.Context(), input, validation.DefaultLimits())
+		err = validation.Check(rules, t.Context(), input, validation.DefaultLimits())
 		if tc.issue == "" {
 			if err != nil {
 				t.Fatal(err)
@@ -48,7 +48,7 @@ func TestConditionalValidationAfterGeneratedJSONDecoding(t *testing.T) {
 func TestGeneratedConditionalConsumerRules(t *testing.T) {
 	rules := validationrules.Rules()
 	base := validationrules.Registration{Kind: validationrules.Business, Email: "Member@Example.test", Company: value.Set("Example"), Tags: []string{"one"}, Website: value.Set("https://example.test")}
-	if err := rules.Check(t.Context(), base, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rules, t.Context(), base, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	if base.Email != "Member@Example.test" {
@@ -68,7 +68,7 @@ func TestGeneratedConditionalConsumerRules(t *testing.T) {
 			input := base
 			tc.change(&input)
 			var failure *validation.Errors
-			if err := rules.Check(t.Context(), input, validation.DefaultLimits()); !errors.As(err, &failure) {
+			if err := validation.Check(rules, t.Context(), input, validation.DefaultLimits()); !errors.As(err, &failure) {
 				t.Fatal(err)
 			}
 			issues := failure.Issues()
@@ -79,10 +79,10 @@ func TestGeneratedConditionalConsumerRules(t *testing.T) {
 	}
 	base.Kind = validationrules.Personal
 	base.Company = value.Optional[string]{}
-	if err := rules.Check(t.Context(), base, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rules, t.Context(), base, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	info, err := rules.Description()
+	info, err := validation.DescribeRule(rules)
 	if err != nil || !info.ServerOnly {
 		t.Fatal("consumer metadata lost server checks")
 	}

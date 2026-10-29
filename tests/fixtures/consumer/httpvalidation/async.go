@@ -16,8 +16,8 @@ import (
 func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]) (*foundryhttp.Router, error) {
 	fields := httpdto.UpdateUserValidationFields()
 	endpoint := httpendpoints.Update.WithBodyValidation(validation.Parallel(
-		fields.Email.WithLabel("Email address").Rules(validation.Optional(validation.Bail(validation.Email[string](), validation.Unique(lookup)))),
-		fields.Nickname.Rules(validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
+		validation.Rules(validation.WithLabel(fields.Email, "Email address"), validation.Optional(validation.Bail(validation.Email[string](), validation.Unique(lookup)))),
+		validation.Rules(fields.Nickname, validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
 	))
 	return foundryhttp.NewRouter(endpoint.Handle(service.Update))
 }
@@ -32,7 +32,7 @@ func OwnEmailRouter(service httpendpoints.Service, current validation.Slot[model
 		func(_ context.Context, input httpendpoints.UpdateRequest) (model.ID[models.User], error) {
 			return input.Path.User, nil
 		},
-		body.Rules(fields.Email.Rules(validation.Optional(validation.Requires(current, validation.Unique(emails))))),
+		validation.Rules(body, validation.Rules(fields.Email, validation.Optional(validation.Requires(current, validation.Unique(emails))))),
 	))
 	return foundryhttp.NewRouter(endpoint.Handle(service.Update))
 }

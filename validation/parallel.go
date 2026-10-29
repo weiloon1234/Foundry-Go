@@ -28,7 +28,7 @@ func ParallelLimit[T any](concurrency int, rules ...Rule[T]) Rule[T] {
 	if concurrency < 1 || concurrency > maxConcurrency {
 		return failed[T](invalid("validation concurrency must be between 1 and 64"))
 	}
-	if base.validateStructure() != nil {
+	if validateStructure(base) != nil {
 		return base
 	}
 	owned := slices.Clone(rules)
@@ -69,7 +69,7 @@ func ParallelLimit[T any](concurrency int, rules ...Rule[T]) Rule[T] {
 						}
 					}()
 					if err := callback.Invoke("parallel validation", func() error {
-						owned[start+i].run(child, input, depth+1)
+						run(owned[start+i], child, input, depth+1)
 						return nil
 					}); err != nil {
 						child.err = safeerror.WrapFailure(fault.Internal, "validation callback failed", err)

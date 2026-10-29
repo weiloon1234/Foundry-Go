@@ -13,4 +13,4 @@ import (
 var executor database.Executor
 var _ = context.Background
 var _ model.ID[models.Order]
-var _ = databasevalidation.Unique(executor, modelvalidation.Users.Query(), modelvalidation.Users.Email).Check(context.Background(), 123, validation.DefaultLimits())
+var _ = validation.Check(databasevalidation.Unique(executor, modelvalidation.Users.Query(), modelvalidation.Users.Email), context.Background(), 123, validation.DefaultLimits())

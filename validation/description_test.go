@@ -10,7 +10,7 @@ import (
 
 func TestSerializedValidationPreservesCompositionAndOwnsParameters(t *testing.T) {
 	rule := validation.When(validation.Min(1), validation.Bail(validation.Max(9), validation.OneOf(2, 4, 6)))
-	info, err := rule.Description()
+	info, err := validation.DescribeRule(rule)
 	if err != nil {
 		t.Fatal(err)
 	}

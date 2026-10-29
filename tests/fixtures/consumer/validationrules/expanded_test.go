@@ -21,20 +21,20 @@ func TestExpandedRegistrationChecks(t *testing.T) {
 	lookup := &addresses{}
 	rule := validationrules.RegistrationChecks(lookup)
 	input := validationrules.Registration{Kind: validationrules.Business, Email: "free@example.test", Company: value.Set("Team"), Tags: []string{"go-team"}}
-	if err := rule.Check(t.Context(), input, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rule, t.Context(), input, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	input.Email = "invalid"
 	input.Tags = []string{"bad tag"}
 	input.Company = value.Optional[string]{}
 	var rejected *validation.Errors
-	if !errors.As(rule.Check(t.Context(), input, validation.DefaultLimits()), &rejected) || len(rejected.Issues()) != 3 {
+	if !errors.As(validation.Check(rule, t.Context(), input, validation.DefaultLimits()), &rejected) || len(rejected.Issues()) != 3 {
 		t.Fatal("missing field rejections")
 	}
 	if lookup.calls.Load() != 1 {
 		t.Fatal("syntax failure reached remote lookup")
 	}
-	info, err := rule.Description()
+	info, err := validation.DescribeRule(rule)
 	if err != nil {
 		t.Fatal(err)
 	}

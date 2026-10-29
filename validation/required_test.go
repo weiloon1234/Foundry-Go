@@ -33,7 +33,7 @@ func TestNullablePresenceMatrixPreservesOmissionNullAndEmpty(t *testing.T) {
 				{validation.ProhibitedNullable[string](), tc.prohibited},
 				{validation.Absent[value.Nullable[string]](), tc.absent},
 			} {
-				err := check.rule.Check(t.Context(), tc.input, validation.DefaultLimits())
+				err := validation.Check(check.rule, t.Context(), tc.input, validation.DefaultLimits())
 				if check.valid {
 					if err != nil {
 						t.Fatal(err)
@@ -48,14 +48,14 @@ func TestNullablePresenceMatrixPreservesOmissionNullAndEmpty(t *testing.T) {
 
 func requirePresenceZero[T any](t *testing.T, input T) {
 	t.Helper()
-	if err := validation.Required[T]().Check(t.Context(), value.Set(input), validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.Required[T](), t.Context(), value.Set(input), validation.DefaultLimits()); err != nil {
 		t.Fatal("supplied zero became empty", err)
 	}
-	if err := validation.RequiredNullable[T]().Check(t.Context(), value.Set(value.Of(input)), validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.RequiredNullable[T](), t.Context(), value.Set(value.Of(input)), validation.DefaultLimits()); err != nil {
 		t.Fatal("nullable supplied zero became null", err)
 	}
-	rejection(t, validation.Prohibited[T]().Check(t.Context(), value.Set(input), validation.DefaultLimits()))
-	rejection(t, validation.ProhibitedNullable[T]().Check(t.Context(), value.Set(value.Of(input)), validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.Prohibited[T](), t.Context(), value.Set(input), validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.ProhibitedNullable[T](), t.Context(), value.Set(value.Of(input)), validation.DefaultLimits()))
 }
 
 func TestRequiredPreservesZeroFalseAndStructValues(t *testing.T) {
@@ -65,15 +65,15 @@ func TestRequiredPreservesZeroFalseAndStructValues(t *testing.T) {
 	requirePresenceZero(t, struct{}{})
 	requirePresenceZero(t, Amount(0))
 	for _, input := range [][]string{nil, {}} {
-		rejection(t, validation.Required[[]string]().Check(t.Context(), value.Set(input), validation.DefaultLimits()))
-		if err := validation.Prohibited[[]string]().Check(t.Context(), value.Set(input), validation.DefaultLimits()); err != nil {
+		rejection(t, validation.Check(validation.Required[[]string](), t.Context(), value.Set(input), validation.DefaultLimits()))
+		if err := validation.Check(validation.Prohibited[[]string](), t.Context(), value.Set(input), validation.DefaultLimits()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := validation.Required[map[string]int]().Check(t.Context(), value.Set(map[string]int{"count": 0}), validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.Required[map[string]int](), t.Context(), value.Set(map[string]int{"count": 0}), validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	rejection(t, validation.Required[map[string]int]().Check(t.Context(), value.Set(map[string]int{}), validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.Required[map[string]int](), t.Context(), value.Set(map[string]int{}), validation.DefaultLimits()))
 }
 
 func TestRequiredRulesBailBeforeDependentChecks(t *testing.T) {
@@ -83,7 +83,7 @@ func TestRequiredRulesBailBeforeDependentChecks(t *testing.T) {
 	last := validation.Custom(validation.Spec{ID: "app.last_presence", Message: "Last check."}, func(context.Context, string) (bool, error) { t.Error("ran after rejection"); return true, nil })
 	rule := validation.Required(first, last)
 	for _, input := range []value.Optional[string]{{}, value.Set(" ")} {
-		issues := rejection(t, rule.Check(t.Context(), input, validation.DefaultLimits())).Issues()
+		issues := rejection(t, validation.Check(rule, t.Context(), input, validation.DefaultLimits())).Issues()
 		if len(issues) != 1 || issues[0].Code != "foundry.required" {
 			t.Fatal(issues)
 		}
@@ -91,11 +91,11 @@ func TestRequiredRulesBailBeforeDependentChecks(t *testing.T) {
 	if calls != 0 {
 		t.Fatal("empty inputs ran dependent checks")
 	}
-	rejection(t, rule.Check(t.Context(), value.Set("value"), validation.DefaultLimits()))
+	rejection(t, validation.Check(rule, t.Context(), value.Set("value"), validation.DefaultLimits()))
 	if calls != 1 {
 		t.Fatal("first check was not called once")
 	}
-	if err := validation.RequiredNullable(validation.Min(0)).Check(t.Context(), value.Set(value.Of(0)), validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.RequiredNullable(validation.Min(0)), t.Context(), value.Set(value.Of(0)), validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -105,26 +105,26 @@ func TestEmptyContentRulesKeepBoundsAndRejectUnwrappedStateMistakes(t *testing.T
 	limits := validation.DefaultLimits()
 	limits.ValueBytes = 3
 	var bound *validation.LimitError
-	if err := validation.Required[string]().Check(t.Context(), value.Set("word"), limits); !errors.As(err, &bound) {
+	if err := validation.Check(validation.Required[string](), t.Context(), value.Set("word"), limits); !errors.As(err, &bound) {
 		t.Fatal("required ignored text bound", err)
 	}
-	rejection(t, validation.Prohibited[string]().Check(t.Context(), value.Set(string([]byte{0xff})), validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.Prohibited[string](), t.Context(), value.Set(string([]byte{0xff})), validation.DefaultLimits()))
 	for _, err := range []error{
-		validation.Required[value.Nullable[string]]().Validate(),
-		validation.Prohibited[value.Optional[string]]().Validate(),
-		validation.Empty[value.Nullable[string]]().Validate(),
-		validation.NonEmpty[*string]().Validate(),
-		validation.NonEmpty[any]().Validate(),
+		validation.ValidateRule(validation.Required[value.Nullable[string]]()),
+		validation.ValidateRule(validation.Prohibited[value.Optional[string]]()),
+		validation.ValidateRule(validation.Empty[value.Nullable[string]]()),
+		validation.ValidateRule(validation.NonEmpty[*string]()),
+		validation.ValidateRule(validation.NonEmpty[any]()),
 	} {
 		if !errors.Is(err, fault.Invalid) {
 			t.Fatal("ambiguous state declaration accepted", err)
 		}
 	}
-	if err := validation.Empty[string]().Check(t.Context(), " \n", validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.Empty[string](), t.Context(), " \n", validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	rejection(t, validation.Empty[int]().Check(t.Context(), 0, validation.DefaultLimits()))
-	if err := validation.NonEmpty[bool]().Check(t.Context(), false, validation.DefaultLimits()); err != nil {
+	rejection(t, validation.Check(validation.Empty[int](), t.Context(), 0, validation.DefaultLimits()))
+	if err := validation.Check(validation.NonEmpty[bool](), t.Context(), false, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	requireServerOnly(t, validation.Required[WireState](), true)

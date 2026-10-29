@@ -11,8 +11,8 @@ import (
 // Pointer path and carry the label separately; built-in messages use this name.
 // Nested fields select their own labels, while scalar collection items use
 // their containing field's label. Localization produces an owned copy.
-func (f Field[T, V]) WithLabel(label string) Field[T, V] {
-	if err := f.Validate(); err != nil {
+func WithLabel[T, V any](f Field[T, V], label string) Field[T, V] {
+	if err := ValidateField(f); err != nil {
 		f.err = err
 		return f
 	}
@@ -26,8 +26,8 @@ func (f Field[T, V]) WithLabel(label string) Field[T, V] {
 
 // WithLabelKey attaches a parameter-free UI message while preserving the static
 // label as the missing-translation fallback. It never changes the wire path.
-func (f Field[T, V]) WithLabelKey(key i18n.MessageKey) Field[T, V] {
-	if err := f.Validate(); err != nil {
+func WithLabelKey[T, V any](f Field[T, V], key i18n.MessageKey) Field[T, V] {
+	if err := ValidateField(f); err != nil {
 		f.err = err
 		return f
 	}

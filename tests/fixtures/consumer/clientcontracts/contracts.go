@@ -54,7 +54,7 @@ var Relay = websocket.DefineIncoming(Updates, "relay", PayloadJSON()).Acknowledg
 var Echo = foundryhttp.DefineEndpoint(
 	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "items.echo", Method: foundryhttp.POST, Access: foundryhttp.Public}, ItemPathDescriptor()),
 	FiltersDescriptor(), foundryhttp.JSONBody(PayloadJSON()), foundryhttp.JSONResponse(201, PayloadJSON()),
-).WithBodyValidation(validation.Parallel(PayloadValidationFields().Natural.WithLabel("Country").WithLabelKey("fields.country").Rules(validation.NonBlank[models.CountryCode](), validation.MaxLength[models.CountryCode](64), validation.Uppercase[models.CountryCode]())))
+).WithBodyValidation(validation.Parallel(validation.Rules(validation.WithLabelKey(validation.WithLabel(PayloadValidationFields().Natural, "Country"), "fields.country"), validation.NonBlank[models.CountryCode](), validation.MaxLength[models.CountryCode](64), validation.Uppercase[models.CountryCode]())))
 
 type Fixture struct {
 	Router         *foundryhttp.Router

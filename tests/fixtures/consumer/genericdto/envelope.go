@@ -74,5 +74,5 @@ func Router() (*http.Router, error) {
 func DisplayName(in Envelope[UserDTO]) string { return in.Data.Name }
 
 func ValidateUserEnvelope(rule validation.Rule[UserDTO]) validation.Rule[Envelope[UserDTO]] {
-	return EnvelopeValidationFields[UserDTO]().Data.Rules(rule)
+	return validation.Rules(EnvelopeValidationFields[UserDTO]().Data, rule)
 }

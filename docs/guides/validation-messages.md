@@ -76,10 +76,10 @@ The rule's current English message remains the literal fallback. Call
 
 See the executable [typed override](../../tests/fixtures/consumer/localization/validation.go)
 and [configured HTTP acceptance](../../tests/fixtures/consumer/configuredprofile/localization_test.go).
-Apply an override to a generated field's `.Rules(...)` for field-specific wording.
+Apply an override to `validation.Rules(field, ...)` for field-specific wording.
 Custom rules use exactly the same `WithTranslation` function.
 
-Direct `Rule.Check` returns English diagnostics. CLI/worker callers can explicitly
+Direct `validation.Check` returns English diagnostics. CLI/worker callers can explicitly
 use `rejected.Localize(ctx, catalog, locale)` to obtain an owned translated copy;
 `LocalizeLabels` continues to change labels only. Rules, errors and catalogs can
 be shared across concurrent locale requests without mutation.

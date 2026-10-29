@@ -13,4 +13,4 @@ import (
 var executor database.Executor
 var _ = context.Background
 var _ model.ID[models.Order]
-var _ = databasevalidation.Exists(executor, modelvalidation.Users.Query(), modelvalidation.Users.ID).Check(context.Background(), model.ID[models.Order]{}, validation.DefaultLimits())
+var _ = validation.Check(databasevalidation.Exists(executor, modelvalidation.Users.Query(), modelvalidation.Users.ID), context.Background(), model.ID[models.Order]{}, validation.DefaultLimits())

@@ -34,9 +34,9 @@ type Empty struct{}
 func RequestRules() validation.Rule[Request] {
  fields:=RequestValidationFields()
  return validation.All(
-  fields.Email.Rules(validation.Optional(validation.NonBlank[Contact]())),
-  fields.Label.Rules(validation.Optional(validation.MinLength[string](2))),
-  fields.Shadow.Rules(validation.NonBlank[string]()),
+  validation.Rules(fields.Email, validation.Optional(validation.NonBlank[Contact]())),
+  validation.Rules(fields.Label, validation.Optional(validation.MinLength[string](2))),
+  validation.Rules(fields.Shadow, validation.NonBlank[string]()),
   validation.Compare(fields.Field_Left_Name,fields.Field_Right_Name,validation.Same[string]()),
  )
 }
@@ -74,14 +74,14 @@ import (
 func TestGeneratedValidation(t *testing.T) {
  rules:=sample.RequestRules()
  input:=sample.Request{Base:sample.Base{Shadow:"stored"},Left:sample.Left{Name:"same"},Right:sample.Right{Name:"same"}}
- if err:=rules.Check(t.Context(),input,validation.DefaultLimits());err!=nil{t.Fatal("nil embedded pointer was not absent",err)}
+ if err:=validation.Check(rules, t.Context(),input,validation.DefaultLimits());err!=nil{t.Fatal("nil embedded pointer was not absent",err)}
  input.Embedded=&sample.Embedded{Label:"x"}
  input.Email=value.Set(sample.Contact(" "))
  input.Shadow="ignored shadow"
  input.Base.Shadow=""
  input.Right.Name="different"
  var failure *validation.Errors
- if err:=rules.Check(t.Context(),input,validation.DefaultLimits());!errors.As(err,&failure){t.Fatal(err)}
+ if err:=validation.Check(rules, t.Context(),input,validation.DefaultLimits());!errors.As(err,&failure){t.Fatal(err)}
  issues:=failure.Issues()
  if len(issues)!=4 || issues[0].Path!="/email" || issues[1].Path!="/label" || issues[2].Path!="/kept" || issues[3].Path!="/left" {t.Fatalf("generated field selection: %+v",issues)}
  if _,err:=sample.EmptyJSON().Description();err!=nil{t.Fatal(err)}
@@ -134,8 +134,8 @@ import (
  "github.com/weiloon1234/Foundry-Go/validation"
 )
 func TestImportedPromotion(t *testing.T){
- rule:=RequestValidationFields().Label.Rules(validation.MinLength[string](2))
- if err:=rule.Check(t.Context(),Request{Payload:helper.New("ok")},validation.DefaultLimits());err!=nil{t.Fatal(err)}
+ rule:=validation.Rules(RequestValidationFields().Label, validation.MinLength[string](2))
+ if err:=validation.Check(rule, t.Context(),Request{Payload:helper.New("ok")},validation.DefaultLimits());err!=nil{t.Fatal(err)}
 }
 `)
 	command := exec.CommandContext(t.Context(), "go", "test", "-race", ".")

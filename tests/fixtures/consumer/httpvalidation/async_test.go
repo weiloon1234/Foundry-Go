@@ -167,7 +167,7 @@ func TestSlotProvidesRouteKeyToOneDeclaredRule(t *testing.T) {
 	}
 	// A slot reader without its provider fails registration, not each request.
 	fields := httpdto.UpdateUserValidationFields()
-	missing := httpendpoints.Update.WithBodyValidation(fields.Email.Rules(validation.Optional(validation.Requires(current, validation.Unique[string](&ownedAddresses{current: current})))))
+	missing := httpendpoints.Update.WithBodyValidation(validation.Rules(fields.Email, validation.Optional(validation.Requires(current, validation.Unique[string](&ownedAddresses{current: current})))))
 	if _, err := foundryhttp.NewRouter(missing.Handle(domain.Update)); err == nil {
 		t.Fatal("slot reader registered without its provider")
 	}

@@ -10,9 +10,9 @@ import (
 func RegistrationChecks(addresses validation.Lookup[string]) validation.Rule[Registration] {
 	fields := RegistrationValidationFields()
 	return validation.Parallel(
-		fields.Email.Rules(validation.Bail(validation.Email[string](), validation.MaxLength[string](254), validation.Unique(addresses))),
-		fields.Tags.Rules(validation.Bail(validation.ItemsBetween[[]string](1, 8), validation.Distinct[[]string](), validation.Each[[]string](validation.AlphaDash[string]()))),
-		validation.When(fields.Kind.Rules(validation.OneOf(Business)), fields.Company.Rules(validation.Required(validation.LengthBetween[string](2, 100)))),
+		validation.Rules(fields.Email, validation.Bail(validation.Email[string](), validation.MaxLength[string](254), validation.Unique(addresses))),
+		validation.Rules(fields.Tags, validation.Bail(validation.ItemsBetween[[]string](1, 8), validation.Distinct[[]string](), validation.Each[[]string](validation.AlphaDash[string]()))),
+		validation.When(validation.Rules(fields.Kind, validation.OneOf(Business)), validation.Rules(fields.Company, validation.Required(validation.LengthBetween[string](2, 100)))),
 	)
 }
 

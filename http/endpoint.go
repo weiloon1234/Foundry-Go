@@ -101,7 +101,7 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 		return err
 	}
 	if e.validation != nil {
-		if err := e.validation.Validate(); err != nil {
+		if err := validation.ValidateRule(*e.validation); err != nil {
 			return err
 		}
 	}
@@ -281,7 +281,7 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 	if e.preparation != nil {
 		// Prohibitions on decoded input cannot be erased by normalization.
 		if e.validation != nil {
-			if err := e.validation.CheckProhibitions(ctx, input, e.limits.Validation); err != nil {
+			if err := validation.CheckProhibitions(*e.validation, ctx, input, e.limits.Validation); err != nil {
 				writeRoutingError(w, r, endpointValidationError(ctx, err))
 				return
 			}
@@ -319,7 +319,7 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 		}
 	}
 	if e.validation != nil {
-		if err := e.validation.Check(ctx, input, e.limits.Validation); err != nil {
+		if err := validation.Check(*e.validation, ctx, input, e.limits.Validation); err != nil {
 			writeRoutingError(w, r, endpointValidationError(ctx, err))
 			return
 		}

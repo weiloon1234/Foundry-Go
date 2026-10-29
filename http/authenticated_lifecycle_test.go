@@ -31,7 +31,7 @@ func TestTypedActorRequestLifecycle(t *testing.T) {
 			if optional {
 				access = foundryhttp.Public
 			}
-			base := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "actor.form", Method: foundryhttp.POST, Access: access}, foundryhttp.StaticPath("/form")), foundryhttp.EmptyQuery(), foundryhttp.FormBody(foundryhttp.DefineQuery(foundryhttp.QueryParam("name", foundryhttp.StringQuery[string](), func(b *actorForm) *string { return &b.Name }))), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.DefineField("name", func(b actorForm) string { return b.Name }).Rules(validation.NonBlank[string]()))
+			base := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "actor.form", Method: foundryhttp.POST, Access: access}, foundryhttp.StaticPath("/form")), foundryhttp.EmptyQuery(), foundryhttp.FormBody(foundryhttp.DefineQuery(foundryhttp.QueryParam("name", foundryhttp.StringQuery[string](), func(b *actorForm) *string { return &b.Name }))), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.Rules(validation.DefineField("name", func(b actorForm) string { return b.Name }), validation.NonBlank[string]()))
 			var stages []string
 			prepare := func(_ context.Context, in actorFormRequest) (foundryhttp.NoQuery, actorForm, error) {
 				stages = append(stages, "prepare")

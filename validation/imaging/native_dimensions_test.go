@@ -32,14 +32,14 @@ func TestNativeDimensionsBorrowConfiguredEngine(t *testing.T) {
 	file := capturedFile{data: result.Bytes()} // MIME and extension deliberately claim PNG.
 	constraints := validation.DimensionConstraints{Width: 32, Height: 16}
 	rule := imagingvalidation.DimensionsWithEngine[capturedFile](engine, constraints)
-	if err := rule.Check(t.Context(), file, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rule, t.Context(), file, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	var rejected *validation.Errors
-	if err := imagingvalidation.Dimensions[capturedFile](config.Limits, constraints).Check(t.Context(), file, validation.DefaultLimits()); !errors.As(err, &rejected) {
+	if err := validation.Check(imagingvalidation.Dimensions[capturedFile](config.Limits, constraints), t.Context(), file, validation.DefaultLimits()); !errors.As(err, &rejected) {
 		t.Fatal("portable inspection unexpectedly decoded native input", err)
 	}
-	if err := imagingvalidation.DimensionsWithEngine[capturedFile](nil, constraints).Validate(); err == nil {
+	if err := validation.ValidateRule(imagingvalidation.DimensionsWithEngine[capturedFile](nil, constraints)); err == nil {
 		t.Fatal("nil engine accepted")
 	}
 	if err := engine.Close(t.Context()); err != nil {

@@ -10,4 +10,4 @@ import (
 )
 
 var executor database.Executor
-var _ = databasevalidation.ExistsAll(executor, models.Users.Query(), models.Users.ID).Check(context.Background(), []model.ID[models.Order]{}, validation.DefaultLimits())
+var _ = validation.Check(databasevalidation.ExistsAll(executor, models.Users.Query(), models.Users.ID), context.Background(), []model.ID[models.Order]{}, validation.DefaultLimits())

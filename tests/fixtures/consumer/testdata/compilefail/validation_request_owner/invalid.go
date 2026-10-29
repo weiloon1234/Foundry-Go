@@ -8,4 +8,4 @@ import (
 type Other struct{ Name string }
 
 var field = validation.DefineField("name", func(p Other) string { return p.Name })
-var _ = validation.All[validationinput.Request](field.Rules(validation.NonBlank[string]()))
+var _ = validation.All[validationinput.Request](validation.Rules(field, validation.NonBlank[string]()))

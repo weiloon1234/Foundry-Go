@@ -18,12 +18,12 @@ type PresenceInput struct {
 func PresenceRules() validation.Rule[PresenceInput] {
 	fields := PresenceInputValidationFields()
 	return validation.All(
-		fields.Label.Rules(validation.Required(validation.MaxLength[string](40))),
-		fields.Nickname.Rules(validation.RequiredNullable(validation.MinLength[string](2))),
-		fields.Count.Rules(validation.Required(validation.Min(0))),
-		fields.Active.Rules(validation.Required[bool]()),
-		fields.Forbidden.Rules(validation.ProhibitedNullable[string]()),
-		fields.Tags.Rules(validation.Required(validation.Each[[]string](validation.NonBlank[string]()))),
+		validation.Rules(fields.Label, validation.Required(validation.MaxLength[string](40))),
+		validation.Rules(fields.Nickname, validation.RequiredNullable(validation.MinLength[string](2))),
+		validation.Rules(fields.Count, validation.Required(validation.Min(0))),
+		validation.Rules(fields.Active, validation.Required[bool]()),
+		validation.Rules(fields.Forbidden, validation.ProhibitedNullable[string]()),
+		validation.Rules(fields.Tags, validation.Required(validation.Each[[]string](validation.NonBlank[string]()))),
 	)
 }
 
@@ -32,8 +32,8 @@ func PresenceRules() validation.Rule[PresenceInput] {
 func RequiredWithRules() validation.Rule[PresenceInput] {
 	fields := PresenceInputValidationFields()
 	noTriggers := validation.All(
-		fields.Count.Rules(validation.Prohibited[int]()),
-		fields.Active.Rules(validation.Prohibited[bool]()),
+		validation.Rules(fields.Count, validation.Prohibited[int]()),
+		validation.Rules(fields.Active, validation.Prohibited[bool]()),
 	)
-	return validation.Unless(noTriggers, fields.Label.Rules(validation.Required[string]()))
+	return validation.Unless(noTriggers, validation.Rules(fields.Label, validation.Required[string]()))
 }

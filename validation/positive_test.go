@@ -10,18 +10,18 @@ import (
 
 func TestPositive(t *testing.T) {
 	for _, v := range []float64{0, math.Copysign(0, -1), -1, math.NaN(), math.Inf(1), math.Inf(-1)} {
-		rejection(t, validation.Positive[float64]().Check(t.Context(), v, validation.DefaultLimits()))
+		rejection(t, validation.Check(validation.Positive[float64](), t.Context(), v, validation.DefaultLimits()))
 	}
 	for _, v := range []int{-1, 0} {
-		rejection(t, validation.Positive[int]().Check(t.Context(), v, validation.DefaultLimits()))
+		rejection(t, validation.Check(validation.Positive[int](), t.Context(), v, validation.DefaultLimits()))
 	}
-	rejection(t, validation.Positive[uint64]().Check(t.Context(), 0, validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.Positive[uint64](), t.Context(), 0, validation.DefaultLimits()))
 	for _, v := range []float64{math.SmallestNonzeroFloat64, 1, math.MaxFloat64} {
-		if err := validation.Positive[float64]().Check(t.Context(), v, validation.DefaultLimits()); err != nil {
+		if err := validation.Check(validation.Positive[float64](), t.Context(), v, validation.DefaultLimits()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := validation.Positive[uint64]().Check(t.Context(), math.MaxUint64, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.Positive[uint64](), t.Context(), math.MaxUint64, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -40,7 +40,7 @@ func TestDecimalPositive(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = validation.DecimalPositive().Check(t.Context(), d, validation.DefaultLimits())
+			err = validation.Check(validation.DecimalPositive(), t.Context(), d, validation.DefaultLimits())
 			if input[0] == '-' || input == "0" {
 				rejection(t, err)
 			} else if err != nil {
@@ -48,5 +48,5 @@ func TestDecimalPositive(t *testing.T) {
 			}
 		})
 	}
-	rejection(t, validation.DecimalPositive().Check(t.Context(), decimal.Decimal{}, validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.DecimalPositive(), t.Context(), decimal.Decimal{}, validation.DefaultLimits()))
 }

@@ -13,4 +13,4 @@ type Input struct {
 }
 
 var field = validation.DefineField("user", func(v Input) value.Optional[model.ID[User]] { return v.User })
-var _ = field.Rules(validation.Required[model.ID[Order]]())
+var _ = validation.Rules(field, validation.Required[model.ID[Order]]())

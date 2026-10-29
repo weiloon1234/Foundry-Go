@@ -9,10 +9,10 @@ import (
 )
 
 func TestTypedConsumerValidation(t *testing.T) {
-	if err := validationinput.Rules.Check(t.Context(), validationinput.Request{Name: "Member", Age: 35}, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validationinput.Rules, t.Context(), validationinput.Request{Name: "Member", Age: 35}, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	err := validationinput.Rules.Check(t.Context(), validationinput.Request{Name: " ", Age: 12}, validation.DefaultLimits())
+	err := validation.Check(validationinput.Rules, t.Context(), validationinput.Request{Name: " ", Age: 12}, validation.DefaultLimits())
 	var rejected *validation.Errors
 	if !errors.As(err, &rejected) {
 		t.Fatal(err)
@@ -21,7 +21,7 @@ func TestTypedConsumerValidation(t *testing.T) {
 	if len(issues) != 2 || issues[0].Path != "/displayName" || issues[1].Path != "/age" {
 		t.Fatalf("consumer diagnostics: %+v", issues)
 	}
-	description, err := validationinput.Rules.Description()
+	description, err := validation.DescribeRule(validationinput.Rules)
 	if err != nil {
 		t.Fatal(err)
 	}

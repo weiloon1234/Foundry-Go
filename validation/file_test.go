@@ -62,10 +62,10 @@ func TestFileValidationBytesPresenceAndMetadata(t *testing.T) {
 		{"extension-is-not-media", FileExtensions[fileMetadata]("jpg"), fileMetadata{media: "image/jpeg", extension: "txt"}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if err := test.rule.Validate(); err != nil {
+			if err := ValidateRule(test.rule); err != nil {
 				t.Fatal(err)
 			}
-			err := test.rule.Check(t.Context(), test.input, DefaultLimits())
+			err := Check(test.rule, t.Context(), test.input, DefaultLimits())
 			if (err == nil) != test.valid {
 				t.Fatalf("valid=%v: %v", test.valid, err)
 			}
@@ -81,21 +81,21 @@ func TestFileValidationBytesPresenceAndMetadata(t *testing.T) {
 
 func TestFileRulesComposeWithOptionalAndCollections(t *testing.T) {
 	optional := Optional(FileMaxSize[fileMetadata](5))
-	if err := optional.Check(t.Context(), value.Optional[fileMetadata]{}, DefaultLimits()); err != nil {
+	if err := Check(optional, t.Context(), value.Optional[fileMetadata]{}, DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	required := Required(FilePresent[fileMetadata](), FileMaxSize[fileMetadata](5))
-	if err := required.Check(t.Context(), value.Optional[fileMetadata]{}, DefaultLimits()); err == nil {
+	if err := Check(required, t.Context(), value.Optional[fileMetadata]{}, DefaultLimits()); err == nil {
 		t.Fatal("omitted file passed required")
 	}
-	if err := required.Check(t.Context(), value.Set(fileMetadata{}), DefaultLimits()); err != nil {
+	if err := Check(required, t.Context(), value.Set(fileMetadata{}), DefaultLimits()); err != nil {
 		t.Fatal("empty captured file became absent", err)
 	}
-	if err := required.Check(t.Context(), value.Set(fileMetadata{absent: true}), DefaultLimits()); err == nil {
+	if err := Check(required, t.Context(), value.Set(fileMetadata{absent: true}), DefaultLimits()); err == nil {
 		t.Fatal("absent handle passed a file rule")
 	}
 	each := Each[[]fileMetadata](FileMaxSize[fileMetadata](5))
-	err := each.Check(t.Context(), []fileMetadata{{bytes: 2}, {bytes: 6}}, DefaultLimits())
+	err := Check(each, t.Context(), []fileMetadata{{bytes: 2}, {bytes: 6}}, DefaultLimits())
 	var rejected *Errors
 	if !errors.As(err, &rejected) || len(rejected.Issues()) != 1 || rejected.Issues()[0].Path != "/1" {
 		t.Fatalf("indexed file rule failed: %v", err)
@@ -106,7 +106,7 @@ func TestFileDeclarationMetadataIsBoundedOwnedAndDeterministic(t *testing.T) {
 	supplied := []string{"IMAGE/PNG", "text/plain"}
 	rule := FileContentTypes[fileMetadata](supplied...)
 	supplied[0] = "application/changed"
-	info, err := rule.Description()
+	info, err := DescribeRule(rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,10 +121,10 @@ func TestFileDeclarationMetadataIsBoundedOwnedAndDeterministic(t *testing.T) {
 		t.Fatalf("normalized owned types: %v", values)
 	}
 	info.Spec.Parameters[0].Value[0] = '!'
-	if err := rule.Check(t.Context(), fileMetadata{media: "image/png"}, DefaultLimits()); err != nil {
+	if err := Check(rule, t.Context(), fileMetadata{media: "image/png"}, DefaultLimits()); err != nil {
 		t.Fatal("mutated metadata changed execution")
 	}
-	again, err := rule.Description()
+	again, err := DescribeRule(rule)
 	if err != nil || !json.Valid(again.Spec.Parameters[0].Value) {
 		t.Fatal("returned metadata shared storage")
 	}
@@ -133,7 +133,7 @@ func TestFileDeclarationMetadataIsBoundedOwnedAndDeterministic(t *testing.T) {
 		FileContentTypes[fileMetadata]("text/plain", "TEXT/PLAIN"), FileContentTypes[fileMetadata]("text/plain;charset=utf-8"), FileContentTypes[fileMetadata]("*/plain"), FileContentTypes[fileMetadata]("im*ge/png"),
 		FileExtensions[fileMetadata](), FileExtensions[fileMetadata]("jpg", "JPG"), FileExtensions[fileMetadata](".jpg"), FileExtensions[fileMetadata]("../jpg"), FileExtensions[fileMetadata](strings.Repeat("x", 33)),
 	} {
-		if err := invalid.Validate(); err == nil {
+		if err := ValidateRule(invalid); err == nil {
 			t.Fatal("invalid file rule declaration accepted")
 		}
 	}
@@ -148,7 +148,7 @@ func TestFileMetadataFailureAndCancellationStayOwned(t *testing.T) {
 		rule  Rule[fileMetadata]
 		input fileMetadata
 	}{{rule, fileMetadata{panicMethod: true}}, {All(owned, rule), fileMetadata{exitMethod: true}}} {
-		err := tc.rule.Check(t.Context(), tc.input, DefaultLimits())
+		err := Check(tc.rule, t.Context(), tc.input, DefaultLimits())
 		if !errors.Is(err, fault.Internal) {
 			t.Fatalf("metadata callback escaped ownership: %v", err)
 		}
@@ -159,12 +159,12 @@ func TestFileMetadataFailureAndCancellationStayOwned(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := rule.Check(ctx, fileMetadata{}, DefaultLimits()); !errors.Is(err, context.Canceled) {
+	if err := Check(rule, ctx, fileMetadata{}, DefaultLimits()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation ignored: %v", err)
 	}
 	limits := DefaultLimits()
 	limits.ValueBytes = 3
-	if err := FileContentTypes[fileMetadata]("text/plain").Check(t.Context(), fileMetadata{media: "text/plain"}, limits); err == nil {
+	if err := Check(FileContentTypes[fileMetadata]("text/plain"), t.Context(), fileMetadata{media: "text/plain"}, limits); err == nil {
 		t.Fatal("metadata value byte limit ignored")
 	}
 }

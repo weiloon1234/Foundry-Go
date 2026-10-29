@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var _ = validation.DefineField("slug", func(a.Article) string { return "" }).Rules(a.ArticleExtensions.Title.Rule())
+var _ = validation.Rules(validation.DefineField("slug", func(a.Article) string { return "" }), a.ArticleExtensions.Title.Rule())

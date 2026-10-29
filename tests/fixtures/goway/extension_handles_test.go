@@ -1,5 +1,7 @@
 package goway_test
 
+import "github.com/weiloon1234/Foundry-Go/validation"
+
 import (
 	"context"
 	"errors"
@@ -58,7 +60,7 @@ func TestThinExtensionHandlesPreserveLegacyPoliciesAndUnboundBehavior(t *testing
 	if newErr == nil {
 		t.Fatal("unbound write accepted")
 	}
-	if current.Title.Rule().Validate() == nil || current.Title.MergeRule().Validate() == nil {
+	if validation.ValidateRule(current.Title.Rule()) == nil || validation.ValidateRule(current.Title.MergeRule()) == nil {
 		t.Fatal("unbound rules accepted")
 	}
 	for _, relation := range current.All() {

@@ -42,11 +42,11 @@ func pageQuery[F any](filters foundryhttp.Query[F], config Config) foundryhttp.Q
 	)
 }
 func pageRules[F any](config Config) validation.Rule[Parameters[F]] {
-	number := validation.DefineField(config.NumberParam, func(request orm.PageRequest) int { return request.Number }).WithLabel(numberLabel).WithLabelKey(NumberLabelKey)
-	size := validation.DefineField(config.SizeParam, func(request orm.PageRequest) int { return request.Size }).WithLabel(sizeLabel).WithLabelKey(SizeLabelKey)
+	number := validation.WithLabelKey(validation.WithLabel(validation.DefineField(config.NumberParam, func(request orm.PageRequest) int { return request.Number }), numberLabel), NumberLabelKey)
+	size := validation.WithLabelKey(validation.WithLabel(validation.DefineField(config.SizeParam, func(request orm.PageRequest) int { return request.Size }), sizeLabel), SizeLabelKey)
 	rule := validation.Bail(
-		number.Rules(validation.Min(1), validation.Max(config.maximumPage())),
-		size.Rules(validation.Min(1), validation.Max(config.MaximumSize)),
+		validation.Rules(number, validation.Min(1), validation.Max(config.maximumPage())),
+		validation.Rules(size, validation.Min(1), validation.Max(config.MaximumSize)),
 		validPageRequest,
 	)
 	return validation.Embed(rule, func(input Parameters[F]) orm.PageRequest { return input.Page })

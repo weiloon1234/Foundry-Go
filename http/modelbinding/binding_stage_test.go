@@ -30,7 +30,7 @@ func renameEndpoint() foundryhttp.Endpoint[path, foundryhttp.NoQuery, Rename, fo
 		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.rename", Method: foundryhttp.PATCH, Access: foundryhttp.Public},
 			foundryhttp.DefinePath("/members/{member}", foundryhttp.Param("member", foundryhttp.IntegerPath[memberKey](), func(p *path) *memberKey { return &p.Member }))),
 		foundryhttp.EmptyQuery(), foundryhttp.JSONBody(body), foundryhttp.EmptyResponse(204),
-	).WithBodyValidation(validation.DefineField("name", func(b Rename) string { return b.Name }).Rules(validation.NonBlank[string]()))
+	).WithBodyValidation(validation.Rules(validation.DefineField("name", func(b Rename) string { return b.Name }), validation.NonBlank[string]()))
 }
 
 // A missing bound model is 404 and a resource denial 403 before body

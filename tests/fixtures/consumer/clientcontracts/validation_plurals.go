@@ -25,7 +25,7 @@ func pluralValidationRoutes() ([]foundryhttp.RouteRegistration, error) {
 		}
 		route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: foundryhttp.RouteID("plural." + item.name), Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/plural/"+item.name))
 		endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.JSONBody(contract.StringJSON[string]()), foundryhttp.JSONResponse(200, contract.StringJSON[string]())).WithBodyValidation(validation.WithTranslation(
-			validation.NonBlank[string]().WithMessage("Enter a value."), localization.CartArgsMessage(), localization.CartArgs{Name: "Value", Count: count},
+			validation.WithMessage(validation.NonBlank[string](), "Enter a value."), localization.CartArgsMessage(), localization.CartArgs{Name: "Value", Count: count},
 		))
 		routes = append(routes, endpoint.Handle(func(_ context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, string]) (string, error) {
 			return input.Body, nil

@@ -40,33 +40,33 @@ func TestSlotsParameterizeOneDeclarationPerCheck(t *testing.T) {
 	lookup := &ownedNames{current: current, rows: map[string]int{"alpha": 1, "beta": 2}}
 	name := validation.DefineField("name", func(input renameRequest) string { return input.Name })
 	unique := validation.Requires(current, validation.Unique[string](lookup))
-	if validation.All(name.Rules(unique)).Validate() == nil {
+	if validation.ValidateRule(validation.All(validation.Rules(name, unique))) == nil {
 		t.Fatal("slot reader accepted without a provider")
 	}
-	if _, err := name.Rules(unique).Description(); err != nil {
+	if _, err := validation.DescribeRule(validation.Rules(name, unique)); err != nil {
 		t.Fatal("partial tree could not be described", err)
 	}
-	rule := validation.Provide(current, func(_ context.Context, input renameRequest) (int, error) { return input.ID, nil }, name.Rules(unique))
-	if err := rule.Validate(); err != nil {
+	rule := validation.Provide(current, func(_ context.Context, input renameRequest) (int, error) { return input.ID, nil }, validation.Rules(name, unique))
+	if err := validation.ValidateRule(rule); err != nil {
 		t.Fatal(err)
 	}
 	// The same declaration keeps the current row's own name and rejects another row's.
-	if err := rule.Check(t.Context(), renameRequest{ID: 1, Name: "alpha"}, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rule, t.Context(), renameRequest{ID: 1, Name: "alpha"}, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	issues := rejection(t, rule.Check(t.Context(), renameRequest{ID: 2, Name: "alpha"}, validation.DefaultLimits())).Issues()
+	issues := rejection(t, validation.Check(rule, t.Context(), renameRequest{ID: 2, Name: "alpha"}, validation.DefaultLimits())).Issues()
 	if len(issues) != 1 || issues[0].Path != "/name" || issues[0].Code != "foundry.unique" {
 		t.Fatalf("slot-scoped rejection: %+v", issues)
 	}
 	// Parallel branches and conditions observe the provided value.
 	parallel := validation.Provide(current, func(_ context.Context, input renameRequest) (int, error) { return input.ID, nil },
-		validation.Parallel(name.Rules(unique), validation.When(name.Rules(unique), name.Rules(unique))))
-	if err := parallel.Check(t.Context(), renameRequest{ID: 2, Name: "beta"}, validation.DefaultLimits()); err != nil {
+		validation.Parallel(validation.Rules(name, unique), validation.When(validation.Rules(name, unique), validation.Rules(name, unique))))
+	if err := validation.Check(parallel, t.Context(), renameRequest{ID: 2, Name: "beta"}, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	// Reading the slot outside Provide fails execution instead of widening the scope.
 	unprovided := validation.Unique[string](lookup)
-	if err := unprovided.Check(t.Context(), "alpha", validation.DefaultLimits()); !errors.Is(err, fault.Internal) {
+	if err := validation.Check(unprovided, t.Context(), "alpha", validation.DefaultLimits()); !errors.Is(err, fault.Internal) {
 		t.Fatal("missing slot did not fail execution", err)
 	}
 	if _, err := current.Value(t.Context()); err == nil {
@@ -83,7 +83,7 @@ func TestSlotProviderFailuresAndDeclarations(t *testing.T) {
 	}))
 	private := errors.New("private provider failure")
 	failing := validation.Provide(current, func(context.Context, string) (int, error) { return 0, private }, reader)
-	err := failing.Check(t.Context(), "input", validation.DefaultLimits())
+	err := validation.Check(failing, t.Context(), "input", validation.DefaultLimits())
 	if !errors.Is(err, fault.Internal) {
 		t.Fatal("provider failure was not an execution failure", err)
 	}
@@ -93,7 +93,7 @@ func TestSlotProviderFailuresAndDeclarations(t *testing.T) {
 	}
 	nested := validation.Provide(current, func(context.Context, string) (int, error) { return 1, nil },
 		validation.Provide(current, func(context.Context, string) (int, error) { return 7, nil }, reader))
-	if err := nested.Check(t.Context(), "input", validation.DefaultLimits()); err != nil {
+	if err := validation.Check(nested, t.Context(), "input", validation.DefaultLimits()); err != nil {
 		t.Fatal("inner provider did not win", err)
 	}
 	var zero validation.Slot[int]
@@ -102,13 +102,13 @@ func TestSlotProviderFailuresAndDeclarations(t *testing.T) {
 		validation.Provide[string](current, nil, reader),
 		validation.Requires(zero, validation.NonBlank[string]()),
 	} {
-		if bad.Validate() == nil {
+		if validation.ValidateRule(bad) == nil {
 			t.Fatal("invalid slot declaration accepted")
 		}
 	}
 	other := validation.NewSlot[int]()
 	wrong := validation.Provide(other, func(context.Context, string) (int, error) { return 7, nil }, reader)
-	if wrong.Validate() == nil {
+	if validation.ValidateRule(wrong) == nil {
 		t.Fatal("a different slot satisfied the requirement")
 	}
 }

@@ -36,7 +36,7 @@ func endpoint() foundryhttp.Endpoint[path, foundryhttp.NoQuery, foundryhttp.NoBo
 		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
 			foundryhttp.DefinePath("/members/{member}", foundryhttp.Param("member", foundryhttp.IntegerPath[memberKey](), func(p *path) *memberKey { return &p.Member }))),
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
-	).WithPathValidation(validation.DefineField("member", func(p path) memberKey { return p.Member }).Rules(validation.Min(memberKey(1))))
+	).WithPathValidation(validation.Rules(validation.DefineField("member", func(p path) memberKey { return p.Member }), validation.Min(memberKey(1))))
 }
 func router(t *testing.T, registration foundryhttp.RouteRegistration) *foundryhttp.Router {
 	t.Helper()

@@ -84,7 +84,11 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 		e.line("func %s%s()%s%s{return %s%s{", fieldNames, params, setName, args, setName, args)
 	}
 	for _, field := range fields {
-		e.line("%s:%s.DefineField(%q,func(%s %s)%s{", field.name, validation, field.wire, input, rootName, field.typ)
+		prefix := ""
+		if field.labelKey != "" {
+			prefix = validation + ".WithLabelKey("
+		}
+		e.line("%s:%s%s.DefineField(%q,func(%s %s)%s{", field.name, prefix, validation, field.wire, input, rootName, field.typ)
 		for _, guard := range field.guards {
 			e.line("if %s.%s==nil{return %s{}}", input, guard, field.typ)
 		}
@@ -94,7 +98,7 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 			e.line("return %s.%s", input, field.selection)
 		}
 		if field.labelKey != "" {
-			e.line("}).WithLabelKey(%q),", field.labelKey)
+			e.line("}),%q),", field.labelKey)
 		} else {
 			e.line("}),")
 		}

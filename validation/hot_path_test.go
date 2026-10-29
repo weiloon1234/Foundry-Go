@@ -21,7 +21,7 @@ func TestValidInputAvoidsIssueAndPathAllocations(t *testing.T) {
 	rules := patchRules()
 	ctx, input, limits := t.Context(), validPatch(), validation.DefaultLimits()
 	allocations := testing.AllocsPerRun(200, func() {
-		if err := rules.Check(ctx, input, limits); err != nil {
+		if err := validation.Check(rules, ctx, input, limits); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -29,7 +29,7 @@ func TestValidInputAvoidsIssueAndPathAllocations(t *testing.T) {
 		t.Fatalf("valid check allocated %.1f times", allocations)
 	}
 	// Rejections still materialize escaped paths.
-	issues := rejection(t, rules.Check(ctx, Patch{Name: " ", Tags: []string{"ok", " "}}, limits)).Issues()
+	issues := rejection(t, validation.Check(rules, ctx, Patch{Name: " ", Tags: []string{"ok", " "}}, limits)).Issues()
 	if issues[0].Path != "/display~0~1name" || issues[len(issues)-1].Path != "/tags/1" {
 		t.Fatalf("materialized paths: %+v", issues)
 	}
@@ -50,14 +50,16 @@ func exitsCaller(check func() error) bool {
 
 func TestGoexitContainmentFollowsApplicationCallbacks(t *testing.T) {
 	selector := validation.DefineField("name", func(Patch) string { runtime.Goexit(); return "" })
-	inline := selector.Rules(validation.NonBlank[string]())
+	inline := validation.Rules(selector, validation.NonBlank[string]())
 	// Selectors and value methods run inline like any Go call; panics are still
 	// contained, but Goexit ends the caller.
-	if !exitsCaller(func() error { return inline.Check(context.Background(), Patch{}, validation.DefaultLimits()) }) {
+	if !exitsCaller(func() error {
+		return validation.Check(inline, context.Background(), Patch{}, validation.DefaultLimits())
+	}) {
 		t.Fatal("inline selector Goexit was unexpectedly contained")
 	}
-	panicking := validation.DefineField("name", func(Patch) string { panic("private") }).Rules(validation.NonBlank[string]())
-	if err := panicking.Check(t.Context(), Patch{}, validation.DefaultLimits()); !errors.Is(err, fault.Internal) {
+	panicking := validation.Rules(validation.DefineField("name", func(Patch) string { panic("private") }), validation.NonBlank[string]())
+	if err := validation.Check(panicking, t.Context(), Patch{}, validation.DefaultLimits()); !errors.Is(err, fault.Internal) {
 		t.Fatal("inline panic escaped", err)
 	}
 	// A tree with an application callback runs in one owned goroutine, so the
@@ -65,7 +67,10 @@ func TestGoexitContainmentFollowsApplicationCallbacks(t *testing.T) {
 	custom := validation.Custom(validation.Spec{ID: "app.any", Message: "Any."}, func(context.Context, Patch) (bool, error) { return true, nil })
 	owned := validation.All(custom, inline)
 	var err error
-	if exitsCaller(func() error { err = owned.Check(context.Background(), Patch{}, validation.DefaultLimits()); return err }) || !errors.Is(err, fault.Internal) {
+	if exitsCaller(func() error {
+		err = validation.Check(owned, context.Background(), Patch{}, validation.DefaultLimits())
+		return err
+	}) || !errors.Is(err, fault.Internal) {
 		t.Fatal("callback tree did not contain Goexit", err)
 	}
 }
@@ -75,7 +80,7 @@ func BenchmarkValidCheck(b *testing.B) {
 	ctx, input, limits := b.Context(), validPatch(), validation.DefaultLimits()
 	b.ReportAllocs()
 	for b.Loop() {
-		if err := rules.Check(ctx, input, limits); err != nil {
+		if err := validation.Check(rules, ctx, input, limits); err != nil {
 			b.Fatal(err)
 		}
 	}

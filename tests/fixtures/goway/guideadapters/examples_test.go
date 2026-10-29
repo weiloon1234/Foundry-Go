@@ -124,7 +124,7 @@ func updateRules(db database.Executor) validation.Rule[EmailChange] {
 	field := validation.DefineField("email", func(in EmailChange) string { return in.Email })
 	return validation.Provide(current,
 		func(_ context.Context, in EmailChange) (model.ID[models.User], error) { return in.ID, nil },
-		field.Rules(email))
+		validation.Rules(field, email))
 }
 
 // guide:end

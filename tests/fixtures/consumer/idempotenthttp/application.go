@@ -52,7 +52,7 @@ func Endpoint() http.Endpoint[Path, http.NoQuery, Submission, Receipt] {
 	return http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "orders.create", Method: http.POST, Access: http.Guarded}, PathDescriptor()), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.JSONResponse(201, ReceiptJSON())).WithErrors(Rejected).WithPreparation(func(_ context.Context, in Request) (http.NoQuery, Submission, error) {
 		in.Body.Name = strings.TrimSpace(in.Body.Name)
 		return in.Query, in.Body, nil
-	}).WithBodyValidation(validation.DefineField("name", func(in Submission) string { return in.Name }).Rules(validation.NonBlank[string]()))
+	}).WithBodyValidation(validation.Rules(validation.DefineField("name", func(in Submission) string { return in.Name }), validation.NonBlank[string]()))
 }
 
 // Build uses ordinary configured infrastructure. Only the idempotent callback's

@@ -12,7 +12,7 @@ import (
 
 func TestHTTPPresenceRejectsInvalidRepresentationBeforeRules(t *testing.T) {
 	fields := validationrules.PresenceInputValidationFields()
-	server, calls := presenceServer(t, presenceEndpoint().WithBodyValidation(fields.Label.Rules(validation.Prohibited[string]())))
+	server, calls := presenceServer(t, presenceEndpoint().WithBodyValidation(validation.Rules(fields.Label, validation.Prohibited[string]())))
 	for _, tc := range []struct{ name, query, body, path string }{
 		{"null_text_without_nullable", "", "{\"label\":null}", "/body/label"},
 		{"null_integer_without_nullable", "", "{\"count\":null}", "/body/count"},
@@ -78,7 +78,7 @@ func TestHTTPPresenceConditionalTriggersUseTheirDeclaredSource(t *testing.T) {
 
 func TestHTTPPresenceSameNameSourcesKeepIndependentDiagnostics(t *testing.T) {
 	fields := validationrules.PresenceInputValidationFields()
-	rule := fields.Label.Rules(validation.Required[string]())
+	rule := validation.Rules(fields.Label, validation.Required[string]())
 	server, calls := presenceServer(t, presenceEndpoint().WithQueryValidation(rule).WithBodyValidation(rule))
 	status, failure := sendPresence(t, server, "", "{}")
 	if status != 422 || len(failure.Issues) != 2 || failure.Issues[0].Path != "/query/label" || failure.Issues[1].Path != "/body/label" {
@@ -103,7 +103,7 @@ func TestHTTPPresenceSameNameSourcesKeepIndependentDiagnostics(t *testing.T) {
 
 func TestHTTPPresenceCollectionContentRulesKeepItemPaths(t *testing.T) {
 	fields := validationrules.PresenceInputValidationFields()
-	rule := fields.Tags.Rules(validation.Required(validation.Each[[]string](validation.NonBlank[string]())))
+	rule := validation.Rules(fields.Tags, validation.Required(validation.Each[[]string](validation.NonBlank[string]())))
 	server, calls := presenceServer(t, presenceEndpoint().WithBodyValidation(rule))
 	status, failure := sendPresence(t, server, "", "{\"tags\":[\"one\",\" \"]}")
 	if status != 422 || len(failure.Issues) != 1 || failure.Issues[0].Path != "/body/tags/1" {

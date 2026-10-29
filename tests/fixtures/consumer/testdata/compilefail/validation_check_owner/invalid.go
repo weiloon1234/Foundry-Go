@@ -11,4 +11,4 @@ type Other struct {
 	Age  uint16
 }
 
-var _ = validationinput.Rules.Check(context.Background(), Other{}, validation.DefaultLimits())
+var _ = validation.Check(validationinput.Rules, context.Background(), Other{}, validation.DefaultLimits())

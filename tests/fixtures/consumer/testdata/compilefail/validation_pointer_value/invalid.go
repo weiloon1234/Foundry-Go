@@ -6,4 +6,4 @@ import (
 )
 
 var text string
-var _ = validation.Pointer(validation.Min(1)).Check(context.Background(), &text, validation.DefaultLimits())
+var _ = validation.Check(validation.Pointer(validation.Min(1)), context.Background(), &text, validation.DefaultLimits())

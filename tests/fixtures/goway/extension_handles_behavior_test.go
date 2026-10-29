@@ -1,5 +1,7 @@
 package goway_test
 
+import "github.com/weiloon1234/Foundry-Go/validation"
+
 import (
 	"errors"
 	e "foundry.test/goway/models/extensions"
@@ -55,7 +57,7 @@ func TestZeroExtensionHandlesFailClosed(t *testing.T) {
 	cover := attachments.OneHandle[e.Article, int64]{}
 	gallery := attachments.ManyHandle[e.Article, int64]{}
 	seo := metadata.ValueHandle[e.Article, int64, string]{}
-	for _, err := range []error{title.Validate(), cover.Validate(), gallery.Validate(), seo.Validate(), title.Rule().Validate(), title.MergeRule().Validate()} {
+	for _, err := range []error{title.Validate(), cover.Validate(), gallery.Validate(), seo.Validate(), validation.ValidateRule(title.Rule()), validation.ValidateRule(title.MergeRule())} {
 		if err == nil {
 			t.Fatal("zero handle accepted")
 		}

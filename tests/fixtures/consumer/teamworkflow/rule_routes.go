@@ -1,5 +1,7 @@
 package teamworkflow
 
+import "github.com/weiloon1234/Foundry-Go/validation"
+
 import (
 	"context"
 	"github.com/weiloon1234/Foundry-Go/http"
@@ -26,10 +28,10 @@ func RuleRoutes() []http.RouteRegistration {
 	route := func(id http.RouteID, path string, method http.Method) http.Route[http.NoPath] {
 		return http.DefineRoute(http.RouteSpec{ID: id, Method: method, Access: http.Public}, http.StaticPath(path))
 	}
-	json := http.DefineEndpoint(route("workflow.rules.json", "/rules/json", http.POST), http.EmptyQuery(), http.JSONBody(SubmissionInputJSON()), http.JSONResponse(200, RuleReplyJSON())).WithBodyValidation(SubmissionInputValidationFields().Name.Rules(NameRules))
-	form := http.DefineEndpoint(route("workflow.rules.form", "/rules/form", http.POST), http.EmptyQuery(), http.FormBody(FormInputDescriptor()), http.JSONResponse(200, RuleReplyJSON())).WithBodyValidation(FormInputValidationFields().Name.Rules(NameRules))
-	query := http.DefineEndpoint(route("workflow.rules.query", "/rules/query", http.GET), FormInputDescriptor(), http.EmptyBody(), http.JSONResponse(200, RuleReplyJSON())).WithQueryValidation(FormInputValidationFields().Name.Rules(NameRules))
-	multipart := http.DefineEndpoint(route("workflow.rules.multipart", "/rules/multipart", http.POST), http.EmptyQuery(), http.MultipartBody(MultipartInputDescriptor()), http.JSONResponse(200, RuleReplyJSON())).WithBodyValidation(MultipartInputValidationFields().Name.Rules(NameRules))
+	json := http.DefineEndpoint(route("workflow.rules.json", "/rules/json", http.POST), http.EmptyQuery(), http.JSONBody(SubmissionInputJSON()), http.JSONResponse(200, RuleReplyJSON())).WithBodyValidation(validation.Rules(SubmissionInputValidationFields().Name, NameRules))
+	form := http.DefineEndpoint(route("workflow.rules.form", "/rules/form", http.POST), http.EmptyQuery(), http.FormBody(FormInputDescriptor()), http.JSONResponse(200, RuleReplyJSON())).WithBodyValidation(validation.Rules(FormInputValidationFields().Name, NameRules))
+	query := http.DefineEndpoint(route("workflow.rules.query", "/rules/query", http.GET), FormInputDescriptor(), http.EmptyBody(), http.JSONResponse(200, RuleReplyJSON())).WithQueryValidation(validation.Rules(FormInputValidationFields().Name, NameRules))
+	multipart := http.DefineEndpoint(route("workflow.rules.multipart", "/rules/multipart", http.POST), http.EmptyQuery(), http.MultipartBody(MultipartInputDescriptor()), http.JSONResponse(200, RuleReplyJSON())).WithBodyValidation(validation.Rules(MultipartInputValidationFields().Name, NameRules))
 	return []http.RouteRegistration{
 		json.Handle(func(_ context.Context, in http.Input[http.NoPath, http.NoQuery, SubmissionInput]) (RuleReply, error) {
 			return RuleReply{Name: in.Body.Name}, nil

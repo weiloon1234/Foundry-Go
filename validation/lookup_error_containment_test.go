@@ -56,12 +56,16 @@ type lookupRecord struct{ Code string }
 func TestLookupDeclarationsDoNotFormatApplicationErrors(t *testing.T) {
 	field := validation.DefineField("code", func(item lookupRecord) string { return item.Code })
 	declarations := map[string]func(hostileLookup) error{
-		"exists":      func(l hostileLookup) error { return validation.Exists[string](l).Validate() },
-		"unique":      func(l hostileLookup) error { return validation.Unique[string](l).Validate() },
-		"exists-all":  func(l hostileLookup) error { return validation.ExistsAll[[]string](l).Validate() },
-		"unique-all":  func(l hostileLookup) error { return validation.UniqueAll[[]string](l).Validate() },
-		"exists-each": func(l hostileLookup) error { return validation.ExistsEach[[]lookupRecord](field, l).Validate() },
-		"unique-each": func(l hostileLookup) error { return validation.UniqueEach[[]lookupRecord](field, l).Validate() },
+		"exists":     func(l hostileLookup) error { return validation.ValidateRule(validation.Exists[string](l)) },
+		"unique":     func(l hostileLookup) error { return validation.ValidateRule(validation.Unique[string](l)) },
+		"exists-all": func(l hostileLookup) error { return validation.ValidateRule(validation.ExistsAll[[]string](l)) },
+		"unique-all": func(l hostileLookup) error { return validation.ValidateRule(validation.UniqueAll[[]string](l)) },
+		"exists-each": func(l hostileLookup) error {
+			return validation.ValidateRule(validation.ExistsEach[[]lookupRecord](field, l))
+		},
+		"unique-each": func(l hostileLookup) error {
+			return validation.ValidateRule(validation.UniqueEach[[]lookupRecord](field, l))
+		},
 	}
 	for name, declare := range declarations {
 		for _, method := range []string{"Error", "Format"} {
@@ -85,16 +89,16 @@ func TestBatchLookupFailuresDoNotInspectOrSuppressApplicationErrors(t *testing.T
 	field := validation.DefineField("code", func(item lookupRecord) string { return item.Code })
 	checks := map[string]func(hostileLookup) error{
 		"exists-all": func(l hostileLookup) error {
-			return validation.ExistsAll[[]string](l).Check(t.Context(), []string{"input"}, validation.DefaultLimits())
+			return validation.Check(validation.ExistsAll[[]string](l), t.Context(), []string{"input"}, validation.DefaultLimits())
 		},
 		"unique-all": func(l hostileLookup) error {
-			return validation.UniqueAll[[]string](l).Check(t.Context(), []string{"input"}, validation.DefaultLimits())
+			return validation.Check(validation.UniqueAll[[]string](l), t.Context(), []string{"input"}, validation.DefaultLimits())
 		},
 		"exists-each": func(l hostileLookup) error {
-			return validation.ExistsEach[[]lookupRecord](field, l).Check(t.Context(), []lookupRecord{{"input"}}, validation.DefaultLimits())
+			return validation.Check(validation.ExistsEach[[]lookupRecord](field, l), t.Context(), []lookupRecord{{"input"}}, validation.DefaultLimits())
 		},
 		"unique-each": func(l hostileLookup) error {
-			return validation.UniqueEach[[]lookupRecord](field, l).Check(t.Context(), []lookupRecord{{"input"}}, validation.DefaultLimits())
+			return validation.Check(validation.UniqueEach[[]lookupRecord](field, l), t.Context(), []lookupRecord{{"input"}}, validation.DefaultLimits())
 		},
 	}
 	for name, check := range checks {

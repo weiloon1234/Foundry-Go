@@ -7,4 +7,4 @@ import (
 )
 
 var wrong validation.Rule[value.Optional[int]]
-var _ = httpdto.UpdateUserValidationFields().Email.Rules(wrong)
+var _ = validation.Rules(httpdto.UpdateUserValidationFields().Email, wrong)

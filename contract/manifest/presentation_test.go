@@ -48,11 +48,11 @@ func credentialManifest(t testing.TB) *manifest.Manifest {
 
 func TestPresentationRejectsConflictingNestedValidation(t *testing.T) {
 	source := credentialManifest(t)
-	email, err := validation.Email[string]().Description()
+	email, err := validation.DescribeRule(validation.Email[string]())
 	if err != nil {
 		t.Fatal(err)
 	}
-	url, err := validation.URL[string]().Description()
+	url, err := validation.DescribeRule(validation.URL[string]())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,15 +154,15 @@ func TestPresentationManifestVersionPrivacyAndAdapters(t *testing.T) {
 
 func TestPresentationKeepsURLCredentialsOutAndChecksElements(t *testing.T) {
 	source := credentialManifest(t)
-	email, err := validation.Email[string]().Description()
+	email, err := validation.DescribeRule(validation.Email[string]())
 	if err != nil {
 		t.Fatal(err)
 	}
-	url, err := validation.URL[string]().Description()
+	url, err := validation.DescribeRule(validation.URL[string]())
 	if err != nil {
 		t.Fatal(err)
 	}
-	same, err := validation.Same[string]().Description()
+	same, err := validation.DescribeRule(validation.Same[string]())
 	if err != nil {
 		t.Fatal(err)
 	}

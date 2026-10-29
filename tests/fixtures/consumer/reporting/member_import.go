@@ -31,6 +31,6 @@ func memberImports() importer.Definition[MemberImport] {
 			importer.Field("State", foundryhttp.EnumQuery[State, *State](Active.EnumDescriptor()), func(row *MemberImport, v State) { row.State = v }),
 			importer.Field("Balance", foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), func(row *MemberImport, v decimal.Decimal) { row.Balance = v }),
 		},
-		Rules: []validation.Rule[MemberImport]{name.Rules(validation.NonBlank[string](), validation.MaxLength[string](80))},
+		Rules: []validation.Rule[MemberImport]{validation.Rules(name, validation.NonBlank[string](), validation.MaxLength[string](80))},
 	})
 }

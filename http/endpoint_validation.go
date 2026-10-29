@@ -24,20 +24,20 @@ func (e Endpoint[P, Q, B, R]) WithValidation(rules ...validation.Rule[Input[P, Q
 // metadata retain the path source prefix, including declared nested fields.
 func (e Endpoint[P, Q, B, R]) WithPathValidation(rules ...validation.Rule[P]) Endpoint[P, Q, B, R] {
 	field := validation.DefineField("path", func(input Input[P, Q, B]) P { return input.Path })
-	return e.WithValidation(field.Rules(rules...))
+	return e.WithValidation(validation.Rules(field, rules...))
 }
 
 // WithQueryValidation adds rules for the concrete query value.
 func (e Endpoint[P, Q, B, R]) WithQueryValidation(rules ...validation.Rule[Q]) Endpoint[P, Q, B, R] {
 	field := validation.DefineField("query", func(input Input[P, Q, B]) Q { return input.Query })
-	return e.WithValidation(field.Rules(rules...))
+	return e.WithValidation(validation.Rules(field, rules...))
 }
 
 // WithBodyValidation adds rules for the decoded body. Use generated field
 // declarations and Optional/Nullable rules to retain wire names and presence.
 func (e Endpoint[P, Q, B, R]) WithBodyValidation(rules ...validation.Rule[B]) Endpoint[P, Q, B, R] {
 	field := validation.DefineField("body", func(input Input[P, Q, B]) B { return input.Body })
-	return e.WithValidation(field.Rules(rules...))
+	return e.WithValidation(validation.Rules(field, rules...))
 }
 
 // Validation runs after decoding: an expired deadline is the server's own

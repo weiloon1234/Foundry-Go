@@ -28,12 +28,12 @@ func TestFormatRulesUseDeclaredParserSemantics(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, input := range tc.valid {
-				if err := tc.rule.Check(t.Context(), input, validation.DefaultLimits()); err != nil {
+				if err := validation.Check(tc.rule, t.Context(), input, validation.DefaultLimits()); err != nil {
 					t.Fatalf("valid input %q: %v", input, err)
 				}
 			}
 			for _, input := range tc.invalid {
-				rejection(t, tc.rule.Check(t.Context(), input, validation.DefaultLimits()))
+				rejection(t, validation.Check(tc.rule, t.Context(), input, validation.DefaultLimits()))
 			}
 		})
 	}
@@ -44,11 +44,11 @@ func TestFormatRulesKeepTextBoundsAndServerMetadata(t *testing.T) {
 	limits := validation.DefaultLimits()
 	limits.ValueBytes = 4
 	var bound *validation.LimitError
-	if err := validation.Email[string]().Check(t.Context(), "a@example.test", limits); !errors.As(err, &bound) {
+	if err := validation.Check(validation.Email[string](), t.Context(), "a@example.test", limits); !errors.As(err, &bound) {
 		t.Fatal("format bypassed text bound", err)
 	}
 	for _, rule := range []validation.Rule[string]{validation.Email[string](), validation.URL[string](), validation.JSON[string]()} {
-		info, err := rule.Description()
+		info, err := validation.DescribeRule(rule)
 		if err != nil || !info.ServerOnly {
 			t.Fatal("parser behavior was promised to browsers")
 		}

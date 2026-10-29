@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-var _ = validation.Optional(validation.Min[int](1)).Check(context.Background(), value.Set("wrong"), validation.DefaultLimits())
+var _ = validation.Check(validation.Optional(validation.Min[int](1)), context.Background(), value.Set("wrong"), validation.DefaultLimits())

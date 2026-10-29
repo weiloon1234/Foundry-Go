@@ -52,7 +52,7 @@ func endpoint(access foundryhttp.Access) foundryhttp.Endpoint[foundryhttp.NoPath
 	limits.Body.Bytes = 1
 	limits.Form = foundryhttp.QueryLimits{Bytes: 512, Pairs: 16, Issues: 4}
 	return foundryhttp.DefineEndpoint(route, search, foundryhttp.FormBody(SubmissionDescriptor()), foundryhttp.JSONResponse(201, ReplyJSON())).WithLimits(limits).WithBodyValidation(
-		fields.Name.Rules(NameRules), fields.Title.Rules(validation.Required(validation.MinLength[string](2))), fields.Blocked.Rules(validation.Absent[string]()),
+		validation.Rules(fields.Name, NameRules), validation.Rules(fields.Title, validation.Required(validation.MinLength[string](2))), validation.Rules(fields.Blocked, validation.Absent[string]()),
 	)
 }
 
@@ -106,10 +106,10 @@ func RuleSourceRouter() (*foundryhttp.Router, error) {
 	route := func(id foundryhttp.RouteID, path string, method foundryhttp.Method) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
 	}
-	json := foundryhttp.DefineEndpoint(route("rules.json", "/json", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(JSONSubmissionJSON()), foundryhttp.EmptyResponse(204)).WithBodyValidation(JSONSubmissionValidationFields().Name.Rules(NameRules))
-	multi := foundryhttp.DefineEndpoint(route("rules.multipart", "/multipart", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(MultipartSubmissionDescriptor()), foundryhttp.EmptyResponse(204)).WithBodyValidation(MultipartSubmissionValidationFields().Name.Rules(NameRules))
-	query := foundryhttp.DefineEndpoint(route("rules.query", "/query", foundryhttp.GET), SubmissionDescriptor(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204)).WithQueryValidation(SubmissionValidationFields().Name.Rules(NameRules))
-	form := foundryhttp.DefineEndpoint(route("rules.form", "/form", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.FormBody(SubmissionDescriptor()), foundryhttp.EmptyResponse(204)).WithBodyValidation(SubmissionValidationFields().Name.Rules(NameRules))
+	json := foundryhttp.DefineEndpoint(route("rules.json", "/json", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(JSONSubmissionJSON()), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.Rules(JSONSubmissionValidationFields().Name, NameRules))
+	multi := foundryhttp.DefineEndpoint(route("rules.multipart", "/multipart", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(MultipartSubmissionDescriptor()), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.Rules(MultipartSubmissionValidationFields().Name, NameRules))
+	query := foundryhttp.DefineEndpoint(route("rules.query", "/query", foundryhttp.GET), SubmissionDescriptor(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204)).WithQueryValidation(validation.Rules(SubmissionValidationFields().Name, NameRules))
+	form := foundryhttp.DefineEndpoint(route("rules.form", "/form", foundryhttp.POST), foundryhttp.EmptyQuery(), foundryhttp.FormBody(SubmissionDescriptor()), foundryhttp.EmptyResponse(204)).WithBodyValidation(validation.Rules(SubmissionValidationFields().Name, NameRules))
 	return foundryhttp.NewRouter(
 		json.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, JSONSubmission]) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil

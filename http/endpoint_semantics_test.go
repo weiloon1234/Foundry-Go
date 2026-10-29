@@ -97,7 +97,7 @@ func TestRequestAuthorizationRunsBeforeValidationRules(t *testing.T) {
 	for _, allow := range []bool{false, true} {
 		lookup := &countingLookup{}
 		var authorized atomic.Int32
-		endpoint := patchEndpoint().WithBodyValidation(name.Rules(validation.Unique[string](lookup))).WithAuthorization(func(context.Context, endpointRequest) error {
+		endpoint := patchEndpoint().WithBodyValidation(validation.Rules(name, validation.Unique[string](lookup))).WithAuthorization(func(context.Context, endpointRequest) error {
 			authorized.Add(1)
 			if !allow {
 				return Forbidden

@@ -24,12 +24,12 @@ func TestTextFormatRulesPreserveRustCharacterSemantics(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, input := range tc.valid {
-				if err := tc.rule.Check(t.Context(), input, validation.DefaultLimits()); err != nil {
+				if err := validation.Check(tc.rule, t.Context(), input, validation.DefaultLimits()); err != nil {
 					t.Fatalf("valid input %q: %v", input, err)
 				}
 			}
 			for _, input := range tc.invalid {
-				rejection(t, tc.rule.Check(t.Context(), input, validation.DefaultLimits()))
+				rejection(t, validation.Check(tc.rule, t.Context(), input, validation.DefaultLimits()))
 			}
 		})
 	}
@@ -39,19 +39,19 @@ func TestTextFormatsKeepTypesBoundsAndCodecMetadata(t *testing.T) {
 	t.Parallel()
 	type Code string
 	rule := validation.All(validation.StartsWith[Code]("00"), validation.Digits[Code]())
-	if err := rule.Check(t.Context(), Code("0001"), validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rule, t.Context(), Code("0001"), validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	limits := validation.DefaultLimits()
 	limits.ValueBytes = 3
 	var bound *validation.LimitError
-	if err := rule.Check(t.Context(), Code("0001"), limits); !errors.As(err, &bound) {
+	if err := validation.Check(rule, t.Context(), Code("0001"), limits); !errors.As(err, &bound) {
 		t.Fatal("text format ignored byte bound", err)
 	}
-	if validation.StartsWith(strings.Repeat("x", 16385)).Validate() == nil {
+	if validation.ValidateRule(validation.StartsWith(strings.Repeat("x", 16385))) == nil {
 		t.Fatal("unbounded prefix declaration accepted")
 	}
-	if validation.EndsWith(string([]byte{0xff})).Validate() == nil {
+	if validation.ValidateRule(validation.EndsWith(string([]byte{0xff}))) == nil {
 		t.Fatal("invalid UTF-8 suffix accepted")
 	}
 	requireServerOnly(t, validation.StartsWith(WireState("YES")), true)

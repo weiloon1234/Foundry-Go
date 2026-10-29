@@ -159,9 +159,9 @@ func PayloadValidationFields() PayloadValidationFieldSet { return foundryPayload
 
 var foundryPayloadValidationFields = sync.OnceValue(func() PayloadValidationFieldSet {
 	return PayloadValidationFieldSet{
-		Amount: foundryvalidation.DefineField("amount", func(input Payload) decimal.Decimal {
+		Amount: foundryvalidation.WithLabelKey(foundryvalidation.DefineField("amount", func(input Payload) decimal.Decimal {
 			return input.Amount
-		}).WithLabelKey("fields.amount"),
+		}), "fields.amount"),
 		BuyerID: foundryvalidation.DefineField("buyer_id", func(input Payload) model.ID[models.User] {
 			return input.BuyerID
 		}),

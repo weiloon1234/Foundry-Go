@@ -21,7 +21,7 @@ func TestValidationDatabaseRejectsBadSourcesAndRedacts(t *testing.T) {
 	db := g.open(t.Context())
 	defer db.Close(t.Context())
 	for _, q := range []orm.Query[models.User]{{}, models.Users.Query().Limit(1), models.Users.Query().Offset(1), models.Users.Query().OrderBy(models.Users.ID.Asc()), orm.WithRelationLimits(models.Users.Query(), orm.DefaultRelationLimits())} {
-		if dbvalidation.Unique(db, q, models.Users.Email).Validate() == nil {
+		if validation.ValidateRule(dbvalidation.Unique(db, q, models.Users.Email)) == nil {
 			t.Fatal("invalid source accepted")
 		}
 	}
@@ -29,7 +29,7 @@ func TestValidationDatabaseRejectsBadSourcesAndRedacts(t *testing.T) {
 		orm.KeyColumn[models.User, string]
 	}
 	for _, column := range []orm.KeyColumn[models.User, string]{nil, orm.Text[models.User, string]{}, fake{}, fake{models.Users.Email}} {
-		if dbvalidation.Exists(db, models.Users.Query(), column).Validate() == nil {
+		if validation.ValidateRule(dbvalidation.Exists(db, models.Users.Query(), column)) == nil {
 			t.Fatal("invalid column accepted")
 		}
 	}
@@ -77,7 +77,7 @@ func TestValidationDatabaseCheckTimeScopesAndExclusions(t *testing.T) {
 	slot := validation.NewSlot[int64]()
 	// Both the retained scope and the request-specific key exclusion must survive.
 	ignored := dbvalidation.UniqueIgnoring(db, reads.Members.Query().Where(reads.Members.Name.Ne("tenant-private")), reads.Members.Name, reads.Members.ID, slot)
-	if ignored.Validate() == nil {
+	if validation.ValidateRule(ignored) == nil {
 		t.Fatal("missing provider accepted")
 	}
 	type rename struct {
@@ -85,11 +85,11 @@ func TestValidationDatabaseCheckTimeScopesAndExclusions(t *testing.T) {
 		Name string
 	}
 	name := validation.DefineField("name", func(v rename) string { return v.Name })
-	rule := validation.Provide(slot, func(_ context.Context, v rename) (int64, error) { return v.Key, nil }, name.Rules(ignored))
+	rule := validation.Provide(slot, func(_ context.Context, v rename) (int64, error) { return v.Key, nil }, validation.Rules(name, ignored))
 	for _, key := range []int64{17, 29} {
 		g.output.Reset()
 		g.sql.Reset()
-		if err := rule.Check(coremodels.TenantContext(t.Context(), key), rename{key, "candidate"}, validation.DefaultLimits()); err != nil {
+		if err := validation.Check(rule, coremodels.TenantContext(t.Context(), key), rename{key, "candidate"}, validation.DefaultLimits()); err != nil {
 			t.Fatal(err)
 		}
 		sql := g.sql.String()

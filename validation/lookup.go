@@ -69,7 +69,7 @@ func UniqueAll[S ~[]T, T any](lookup AnyLookup[T]) Rule[S] {
 // Missing values are reported at the element's field path, for example
 // /items/3/product_id, using that field's label.
 func ExistsEach[S ~[]E, E, V any](field Field[E, V], lookup BatchLookup[V]) Rule[S] {
-	if err := field.Validate(); err != nil {
+	if err := ValidateField(field); err != nil {
 		return failed[S](err)
 	}
 	if lookup == nil {
@@ -86,7 +86,7 @@ func ExistsEach[S ~[]E, E, V any](field Field[E, V], lookup BatchLookup[V]) Rule
 // element's field path. It is advisory and does not reserve values; combine it
 // with DistinctBy for duplicates inside the request.
 func UniqueEach[S ~[]E, E, V any](field Field[E, V], lookup AnyLookup[V]) Rule[S] {
-	if err := field.Validate(); err != nil {
+	if err := ValidateField(field); err != nil {
 		return failed[S](err)
 	}
 	if lookup == nil {

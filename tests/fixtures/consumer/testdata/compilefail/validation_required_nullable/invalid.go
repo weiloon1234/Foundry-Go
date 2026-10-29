@@ -10,4 +10,4 @@ type Input struct {
 }
 
 var field = validation.DefineField("text", func(v Input) value.Optional[value.Nullable[string]] { return v.Text })
-var _ = field.Rules(validation.Required[string]())
+var _ = validation.Rules(field, validation.Required[string]())

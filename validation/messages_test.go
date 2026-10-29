@@ -36,13 +36,13 @@ func TestLocalizedMessagesKeepNestedPathsLabelsOrderAndTruncation(t *testing.T) 
 		Names              []string
 		Name, Confirmation string
 	}
-	names := validation.DefineField("names/~", func(v input) []string { return v.Names }).WithLabel("Names").WithLabelKey("fields.name")
-	name := validation.DefineField("name", func(v input) string { return v.Name }).WithLabel("Name").WithLabelKey("fields.name")
-	confirmation := validation.DefineField("confirmation", func(v input) string { return v.Confirmation }).WithLabel("Confirmation").WithLabelKey("fields.confirmation")
-	rule := validation.Parallel(names.Rules(validation.Each[[]string](validation.MinLength[string](2))), validation.Compare(confirmation, name, validation.Same[string]()), name.Rules(validation.NonBlank[string]()))
+	names := validation.WithLabelKey(validation.WithLabel(validation.DefineField("names/~", func(v input) []string { return v.Names }), "Names"), "fields.name")
+	name := validation.WithLabelKey(validation.WithLabel(validation.DefineField("name", func(v input) string { return v.Name }), "Name"), "fields.name")
+	confirmation := validation.WithLabelKey(validation.WithLabel(validation.DefineField("confirmation", func(v input) string { return v.Confirmation }), "Confirmation"), "fields.confirmation")
+	rule := validation.Parallel(validation.Rules(names, validation.Each[[]string](validation.MinLength[string](2))), validation.Compare(confirmation, name, validation.Same[string]()), validation.Rules(name, validation.NonBlank[string]()))
 	limits := validation.DefaultLimits()
 	limits.Issues = 2
-	original := rejection(t, rule.Check(t.Context(), input{Names: []string{"x"}, Confirmation: "private-password"}, limits))
+	original := rejection(t, validation.Check(rule, t.Context(), input{Names: []string{"x"}, Confirmation: "private-password"}, limits))
 	if !original.Truncated() {
 		t.Fatal("truncation lost")
 	}
@@ -88,24 +88,24 @@ func TestMessageFallbackLiteralAndOwnedMetadata(t *testing.T) {
 	t.Parallel()
 	catalog := messageCatalog(t)
 	rule := validation.MinLength[string](1)
-	rejected := rejection(t, rule.Check(t.Context(), "", validation.DefaultLimits()))
+	rejected := rejection(t, validation.Check(rule, t.Context(), "", validation.DefaultLimits()))
 	if rejected.Issues()[0].Message != "This field must contain at least 1 character." {
 		t.Fatal(rejected.Issues())
 	}
-	fallback := rejection(t, validation.MaxLength[string](1).Check(t.Context(), "xx", validation.DefaultLimits()))
+	fallback := rejection(t, validation.Check(validation.MaxLength[string](1), t.Context(), "xx", validation.DefaultLimits()))
 	localized, err := fallback.Localize(t.Context(), catalog, "ms")
 	if err != nil || localized.Issues()[0].Message != "This field must contain at most 1 character." {
 		t.Fatal(localized, err)
 	}
-	literal := rule.WithMessage("literal {{attribute}} {{unknown}}")
-	result, err := rejection(t, literal.Check(t.Context(), "", validation.DefaultLimits())).Localize(t.Context(), catalog, "ms")
+	literal := validation.WithMessage(rule, "literal {{attribute}} {{unknown}}")
+	result, err := rejection(t, validation.Check(literal, t.Context(), "", validation.DefaultLimits())).Localize(t.Context(), catalog, "ms")
 	if err != nil || result.Issues()[0].Message != "literal {{attribute}} {{unknown}}" {
 		t.Fatal(result, err)
 	}
-	description, _ := rule.Description()
+	description, _ := validation.DescribeRule(rule)
 	description.Spec.Translation.Fallback[i18n.Other] = "changed"
 	description.Spec.Translation.Arguments[0].Value = "changed"
-	again, _ := rule.Description()
+	again, _ := validation.DescribeRule(rule)
 	if again.Spec.Translation.Fallback[i18n.Other] == "changed" || again.Spec.Translation.Arguments[0].Value == "changed" {
 		t.Fatal("shared recipe")
 	}
@@ -121,7 +121,7 @@ func TestMessageCatalogRejectsConflictingSignatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	description, _ := validation.MinLength[string](2).Description()
+	description, _ := validation.DescribeRule(validation.MinLength[string](2))
 	if validation.ValidateMessages(description, catalog) == nil {
 		t.Fatal("mismatch accepted")
 	}

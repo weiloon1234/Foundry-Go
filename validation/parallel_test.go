@@ -31,12 +31,12 @@ func TestParallelOverlapsAndPreservesOrderAndLabels(t *testing.T) {
 			<-release
 			return false, nil
 		})
-		field := validation.DefineField("f"+strconv.Itoa(i), func(v string) string { return v }).WithLabel("Field " + strconv.Itoa(i))
-		branches = append(branches, field.Rules(validation.Parallel(rule)))
+		field := validation.WithLabel(validation.DefineField("f"+strconv.Itoa(i), func(v string) string { return v }), "Field "+strconv.Itoa(i))
+		branches = append(branches, validation.Rules(field, validation.Parallel(rule)))
 	}
 	done := make(chan error, 1)
 	go func() {
-		done <- validation.Parallel(branches...).Check(t.Context(), "input", validation.DefaultLimits())
+		done <- validation.Check(validation.Parallel(branches...), t.Context(), "input", validation.DefaultLimits())
 	}()
 	for range 4 {
 		select {
@@ -73,7 +73,7 @@ func TestParallelCancellationWaitsForCallbackExitAndCanReuse(t *testing.T) {
 	})
 	rule := validation.Parallel(slow, validation.NonBlank[string]())
 	done := make(chan error, 1)
-	go func() { done <- rule.Check(ctx, "value", validation.DefaultLimits()) }()
+	go func() { done <- validation.Check(rule, ctx, "value", validation.DefaultLimits()) }()
 	<-entered
 	cancel()
 	select {
@@ -85,7 +85,7 @@ func TestParallelCancellationWaitsForCallbackExitAndCanReuse(t *testing.T) {
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	if err := rule.Check(t.Context(), "value", validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rule, t.Context(), "value", validation.DefaultLimits()); err != nil {
 		t.Fatal("capacity not reusable", err)
 	}
 }
@@ -99,7 +99,7 @@ func TestParallelFaultsLimitsConditionsAndPreflight(t *testing.T) {
 		bad := validation.Custom(validation.Spec{ID: "app.fail", Message: "Invalid."}, check)
 		limits := validation.DefaultLimits()
 		limits.Issues = 1
-		err := validation.Parallel(validation.NonBlank[string](), bad).Check(t.Context(), "", limits)
+		err := validation.Check(validation.Parallel(validation.NonBlank[string](), bad), t.Context(), "", limits)
 		if !errors.Is(err, fault.Internal) {
 			t.Fatal("fault lost behind issue cap", err)
 		}
@@ -112,23 +112,23 @@ func TestParallelFaultsLimitsConditionsAndPreflight(t *testing.T) {
 	limits := validation.DefaultLimits()
 	limits.Checks = 10
 	var exceeded *validation.LimitError
-	if !errors.As(rule.Check(t.Context(), "ok", limits), &exceeded) {
+	if !errors.As(validation.Check(rule, t.Context(), "ok", limits), &exceeded) {
 		t.Fatal("parallel multiplied budget")
 	}
 	limits = validation.DefaultLimits()
 	limits.Issues = 2
-	errs := rejection(t, rule.Check(t.Context(), "", limits))
+	errs := rejection(t, validation.Check(rule, t.Context(), "", limits))
 	if len(errs.Issues()) != 2 || !errs.Truncated() {
 		t.Fatal("issue cap lost")
 	}
 	condition := validation.When(validation.OneOf("ok"), validation.NonBlank[string]())
-	if err := validation.Parallel(condition, condition).Check(t.Context(), "ok", validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.Parallel(condition, condition), t.Context(), "ok", validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	prohibited := validation.Parallel(validation.Prohibited[string](), validation.Optional(validation.NonBlank[string]()))
-	rejection(t, prohibited.CheckProhibitions(t.Context(), value.Set("supplied"), validation.DefaultLimits()))
+	rejection(t, validation.CheckProhibitions(prohibited, t.Context(), value.Set("supplied"), validation.DefaultLimits()))
 	for _, limit := range []int{0, 65} {
-		if validation.ParallelLimit(limit, validation.NonBlank[string]()).Validate() == nil {
+		if validation.ValidateRule(validation.ParallelLimit(limit, validation.NonBlank[string]())) == nil {
 			t.Fatal("invalid concurrency accepted")
 		}
 	}
@@ -138,7 +138,7 @@ func TestParallelBailAvoidsIOAfterCheapFailure(t *testing.T) {
 	var calls atomic.Int32
 	remote := validation.Custom(validation.Spec{ID: "app.remote", Message: "Invalid."}, func(context.Context, string) (bool, error) { calls.Add(1); return true, nil })
 	rule := validation.Parallel(validation.Bail(validation.Email[string](), remote), validation.Bail(validation.Email[string](), remote))
-	rejection(t, rule.Check(t.Context(), "bad", validation.DefaultLimits()))
+	rejection(t, validation.Check(rule, t.Context(), "bad", validation.DefaultLimits()))
 	if calls.Load() != 0 {
 		t.Fatal("bail performed remote work")
 	}

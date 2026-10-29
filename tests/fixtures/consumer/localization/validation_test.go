@@ -13,7 +13,7 @@ func TestGeneratedValidationMessageOverrideAndNonHTTPPresentation(t *testing.T) 
 		t.Fatal(err)
 	}
 	rule := NameRule()
-	description, err := rule.Description()
+	description, err := validation.DescribeRule(rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func TestGeneratedValidationMessageOverrideAndNonHTTPPresentation(t *testing.T) 
 		t.Fatal(err)
 	}
 	var rejected *validation.Errors
-	if err := rule.Check(t.Context(), WelcomeArgs{}, validation.DefaultLimits()); !errors.As(err, &rejected) {
+	if err := validation.Check(rule, t.Context(), WelcomeArgs{}, validation.DefaultLimits()); !errors.As(err, &rejected) {
 		t.Fatal(err)
 	}
 	result, err := rejected.Localize(t.Context(), catalog, "ms")
@@ -35,8 +35,8 @@ func TestGeneratedValidationMessageOverrideAndNonHTTPPresentation(t *testing.T) 
 	if err != nil || fallback.Issues()[0].Message != "Enter your name." {
 		t.Fatal(fallback, err)
 	}
-	override := validation.WithTranslation(validation.NonBlank[string](), RuleArgsMessage(), RuleArgs{Team: "team"}).WithMessage("literal {{team}}")
-	if err := override.Check(t.Context(), "", validation.DefaultLimits()); !errors.As(err, &rejected) {
+	override := validation.WithMessage(validation.WithTranslation(validation.NonBlank[string](), RuleArgsMessage(), RuleArgs{Team: "team"}), "literal {{team}}")
+	if err := validation.Check(override, t.Context(), "", validation.DefaultLimits()); !errors.As(err, &rejected) {
 		t.Fatal(err)
 	}
 	result, err = rejected.Localize(t.Context(), catalog, "ms")
@@ -63,7 +63,7 @@ func TestUnboundTypedMessageKeepsExplicitAttribute(t *testing.T) {
 	}
 	rule := validation.WithTranslation(validation.Custom(validation.Spec{ID: "profile.name", Message: "Enter a name."}, func(context.Context, string) (bool, error) { return false, nil }), RuleArgsMessage(), RuleArgs{Attribute: "Alias", Team: "Team"})
 	var rejected *validation.Errors
-	if err := rule.Check(t.Context(), "private rejected input", validation.DefaultLimits()); !errors.As(err, &rejected) {
+	if err := validation.Check(rule, t.Context(), "private rejected input", validation.DefaultLimits()); !errors.As(err, &rejected) {
 		t.Fatal(err)
 	}
 	result, err := rejected.Localize(t.Context(), catalog, "ms")

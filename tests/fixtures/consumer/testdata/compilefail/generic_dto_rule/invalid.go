@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var _ = genericdto.EnvelopeValidationFields[genericdto.UserDTO]().Data.Rules(validation.Rule[genericdto.ProjectDTO]{})
+var _ = validation.Rules(genericdto.EnvelopeValidationFields[genericdto.UserDTO]().Data, validation.Rule[genericdto.ProjectDTO]{})

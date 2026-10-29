@@ -18,14 +18,14 @@ import (
 
 func endpointNameRules() validation.Rule[EndpointPatch] {
 	name := validation.DefineField("name", func(body EndpointPatch) string { return body.Name })
-	return name.Rules(validation.MinLength[string](3).WithMessage("Use at least three characters."))
+	return validation.Rules(name, validation.WithMessage(validation.MinLength[string](3), "Use at least three characters."))
 }
 
 func TestEndpointValidationKeepsSourcesAndStopsInvalidHandlers(t *testing.T) {
 	t.Parallel()
 	term := validation.DefineField("q", func(query endpointParameters) value.Optional[string] { return query.Term })
 	base := patchEndpoint()
-	endpoint := base.WithQueryValidation(term.Rules(validation.Optional(validation.MinLength[string](2)))).WithBodyValidation(endpointNameRules())
+	endpoint := base.WithQueryValidation(validation.Rules(term, validation.Optional(validation.MinLength[string](2)))).WithBodyValidation(endpointNameRules())
 	var called atomic.Int32
 	router, err := NewRouter(endpoint.Handle(func(_ context.Context, input endpointRequest) (EndpointReply, error) {
 		called.Add(1)
@@ -180,7 +180,7 @@ func TestEndpointValidationCancellationWaitsForRule(t *testing.T) {
 
 func TestWrappedValidationErrorsUseSharedResponseContract(t *testing.T) {
 	t.Parallel()
-	rejected := validation.NonBlank[string]().Check(t.Context(), " ", validation.DefaultLimits())
+	rejected := validation.Check(validation.NonBlank[string](), t.Context(), " ", validation.DefaultLimits())
 	for _, internal := range []bool{false, true} {
 		var err error = fmt.Errorf("private wrapping detail: %w", rejected)
 		if internal {

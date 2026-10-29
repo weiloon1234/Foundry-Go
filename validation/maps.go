@@ -22,10 +22,10 @@ func EachKey[M ~map[K]V, K MapKey, V any](rules ...Rule[K]) Rule[M] {
 		return failed[M](invalid("map validation requires native string or integer keys"))
 	}
 	child := All(rules...)
-	return lift(Description{Kind: EachKeyKind, ServerOnly: true}, child, func(s *execution, input M, depth int) {
+	return lift(Description{Kind: EachKeyKind, ServerOnly: true}, child.ruleNode, func(s *execution, input M, depth int) {
 		for _, key := range sortedKeys(s, input) {
 			s.enter(mapKeyText(key))
-			child.run(s, key, depth+1)
+			run(child, s, key, depth+1)
 			s.leave()
 			if s.err != nil || s.truncated {
 				return
@@ -41,10 +41,10 @@ func EachValue[M ~map[K]V, K MapKey, V any](rules ...Rule[V]) Rule[M] {
 		return failed[M](invalid("map validation requires native string or integer keys"))
 	}
 	child := All(rules...)
-	return lift(Description{Kind: EachValueKind, ServerOnly: true}, child, func(s *execution, input M, depth int) {
+	return lift(Description{Kind: EachValueKind, ServerOnly: true}, child.ruleNode, func(s *execution, input M, depth int) {
 		for _, key := range sortedKeys(s, input) {
 			s.enter(mapKeyText(key))
-			child.run(s, input[key], depth+1)
+			run(child, s, input[key], depth+1)
 			s.leave()
 			if s.err != nil || s.truncated {
 				return

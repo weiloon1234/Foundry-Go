@@ -50,7 +50,7 @@ func cursorParameters[F, M any](filters foundryhttp.Query[F], config CursorConfi
 	)
 }
 func cursorRules[F, M any](config CursorConfig) validation.Rule[parameters[F, orm.CursorRequest[M]]] {
-	size := validation.DefineField(config.SizeParam, func(in orm.CursorRequest[M]) int { return in.Size }).WithLabel(sizeLabel).WithLabelKey(SizeLabelKey)
+	size := validation.WithLabelKey(validation.WithLabel(validation.DefineField(config.SizeParam, func(in orm.CursorRequest[M]) int { return in.Size }), sizeLabel), SizeLabelKey)
 	valid := validation.Custom[orm.CursorRequest[M]](validation.Spec{ID: "pagination.cursor_request", Message: "Supply at most one valid cursor direction."}, func(_ context.Context, in orm.CursorRequest[M]) (bool, error) { return in.Validate() == nil, nil })
-	return validation.Embed(validation.Bail(size.Rules(validation.Min(1), validation.Max(config.MaximumSize)), valid), func(in parameters[F, orm.CursorRequest[M]]) orm.CursorRequest[M] { return in.Page })
+	return validation.Embed(validation.Bail(validation.Rules(size, validation.Min(1), validation.Max(config.MaximumSize)), valid), func(in parameters[F, orm.CursorRequest[M]]) orm.CursorRequest[M] { return in.Page })
 }

@@ -204,10 +204,10 @@ consumer binds its complete input to the handle's rule:
 ```go
 input := ArticleInputValidationFields()
 	textRules := validation.All(
-		input.Slug.Rules(validation.NonBlank[string]()),
-		input.Author.Rules(validation.NonBlank[string]()),
-		input.Title.Rules(s.x.Title.Rule()),
-		input.Summary.Rules(s.x.Summary.Rule()),
+		validation.Rules(input.Slug, validation.NonBlank[string]()),
+		validation.Rules(input.Author, validation.NonBlank[string]()),
+		validation.Rules(input.Title, s.x.Title.Rule()),
+		validation.Rules(input.Summary, s.x.Summary.Rule()),
 	)
 ```
 

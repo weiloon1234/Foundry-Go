@@ -1,5 +1,7 @@
 package reporting
 
+import "github.com/weiloon1234/Foundry-Go/validation"
+
 import (
 	"context"
 
@@ -42,7 +44,7 @@ func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
 				return expr.Has(MemberModelRelations.Orders, predicate)
 			})),
 		},
-		DefaultSort: []datatable.Sort{{Column: wire.Name.Name(), Direction: datatable.Ascending}},
+		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.Name), Direction: datatable.Ascending}},
 		Stable:      []expr.ProjectionOrder[Member]{expr.Value(fields.ID).Asc()},
 		Authorize:   authorize,
 		Source: func(ctx context.Context, authority Authority) (rows.Query[Member, MemberRow], error) {

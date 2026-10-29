@@ -40,7 +40,7 @@ func TestConfiguredNativeImageService(t *testing.T) {
 		t.Skip("libvips runtime unavailable")
 	}
 	rule := imagingvalidation.DimensionsWithEngine[foundryhttp.UploadedFile](engine, validation.DimensionConstraints{MaxWidth: 1024, MaxHeight: 1024})
-	if err := rule.Validate(); err != nil {
+	if err := validation.ValidateRule(rule); err != nil {
 		t.Fatal(err)
 	}
 	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#0080ff"/></svg>`)

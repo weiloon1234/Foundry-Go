@@ -47,7 +47,7 @@ func memberSpec() Spec[memberImport] {
 	age := validation.DefineField("age", func(row memberImport) int64 { return row.Age })
 	return Spec[memberImport]{
 		Columns: memberColumns(),
-		Rules:   []validation.Rule[memberImport]{name.Rules(validation.MinLength[string](2)), age.Rules(validation.Between[int64](0, 150))},
+		Rules:   []validation.Rule[memberImport]{validation.Rules(name, validation.MinLength[string](2)), validation.Rules(age, validation.Between[int64](0, 150))},
 	}
 }
 

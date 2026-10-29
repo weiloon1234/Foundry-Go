@@ -67,7 +67,7 @@ func (e Endpoint[P, Q, B, R]) snapshot(route RouteInfo) EndpointInfo {
 	info.Preparation = e.preparation != nil
 	info.Errors, _ = e.errorDefinitions()
 	if e.validation != nil {
-		description, _ := e.validation.Description()
+		description, _ := validation.DescribeRule(*e.validation)
 		info.Validation = &description
 	}
 	if e.body.kind == payloadJSON {

@@ -14,8 +14,8 @@ type ProfilePreferences struct {
 func PreferencesRules() validation.Rule[ProfilePreferences] {
 	fields := ProfilePreferencesValidationFields()
 	return validation.All(
-		fields.Alias.Rules(validation.NonBlank[string](), validation.AlphaNumeric[string]()),
-		fields.Timezone.Rules(validation.Timezone[string]()),
-		fields.Reference.Rules(validation.StartsWith[ReferenceCode]("00"), validation.Digits[ReferenceCode](), validation.MinLength[ReferenceCode](6), validation.MaxLength[ReferenceCode](6)),
+		validation.Rules(fields.Alias, validation.NonBlank[string](), validation.AlphaNumeric[string]()),
+		validation.Rules(fields.Timezone, validation.Timezone[string]()),
+		validation.Rules(fields.Reference, validation.StartsWith[ReferenceCode]("00"), validation.Digits[ReferenceCode](), validation.MinLength[ReferenceCode](6), validation.MaxLength[ReferenceCode](6)),
 	)
 }

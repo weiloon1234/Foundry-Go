@@ -106,10 +106,10 @@ func NewService(store *extensions.Store, runtime slots.Runtime) *Service {
 func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 	input := ArticleInputValidationFields()
 	textRules := validation.All(
-		input.Slug.Rules(validation.NonBlank[string]()),
-		input.Author.Rules(validation.NonBlank[string]()),
-		input.Title.Rules(s.x.Title.Rule()),
-		input.Summary.Rules(s.x.Summary.Rule()),
+		validation.Rules(input.Slug, validation.NonBlank[string]()),
+		validation.Rules(input.Author, validation.NonBlank[string]()),
+		validation.Rules(input.Title, s.x.Title.Rule()),
+		validation.Rules(input.Summary, s.x.Summary.Rule()),
 	)
 	media := ArticleMediaValidationFields()
 	logo := validation.Custom(validation.Spec{ID: "articles.logo", Message: "The logo is not an accepted image."}, func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) {
@@ -119,9 +119,9 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 		return s.x.Galleries.Accepts(ctx, file)
 	})
 	mediaRules := validation.All(
-		media.Title.Rules(validation.Optional(s.x.Title.MergeRule())),
-		media.Logo.Rules(validation.Optional(logo)),
-		media.Galleries.Rules(validation.MaxItems[Gallery](s.x.Galleries.Describe().MaxFiles), validation.Each[Gallery](gallery)),
+		validation.Rules(media.Title, validation.Optional(s.x.Title.MergeRule())),
+		validation.Rules(media.Logo, validation.Optional(logo)),
+		validation.Rules(media.Galleries, validation.MaxItems[Gallery](s.x.Galleries.Describe().MaxFiles), validation.Each[Gallery](gallery)),
 	)
 	create := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/articles")), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ArticleInputJSON()), foundryhttp.JSONResponse(201, ArticleViewJSON())).WithBodyValidation(textRules)
 	update := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.update", Method: foundryhttp.PUT, Access: foundryhttp.Public}, ArticlePathDescriptor()), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ArticleInputJSON()), foundryhttp.JSONResponse(200, ArticleViewJSON())).WithBodyValidation(textRules)

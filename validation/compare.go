@@ -26,13 +26,13 @@ func Different[V Scalar]() Rule[Pair[V]] {
 // value types. Failures use the first field's wire path; metadata retains both
 // names. Custom comparators use Custom[Pair[V]] and remain server-only.
 func Compare[T, V any](field, other Field[T, V], comparator Rule[Pair[V]]) Rule[T] {
-	if err := field.Validate(); err != nil {
+	if err := ValidateField(field); err != nil {
 		return failed[T](err)
 	}
-	if err := other.Validate(); err != nil {
+	if err := ValidateField(other); err != nil {
 		return failed[T](err)
 	}
-	return lift(Description{Kind: CompareKind, Field: field.name, OtherField: other.name, Label: field.label, OtherLabel: other.label, LabelKey: field.labelKey, OtherLabelKey: other.labelKey}, comparator, func(s *execution, input T, depth int) {
+	return lift(Description{Kind: CompareKind, Field: field.name, OtherField: other.name, Label: field.label, OtherLabel: other.label, LabelKey: field.labelKey, OtherLabelKey: other.labelKey}, comparator.ruleNode, func(s *execution, input T, depth int) {
 		left := field.selectValue(input)
 		if !s.take(depth + 1) {
 			return
@@ -45,6 +45,6 @@ func Compare[T, V any](field, other Field[T, V], comparator Rule[Pair[V]]) Rule[
 		s.label, s.labelKey, s.field = field.label, field.labelKey, field.name
 		s.enter(field.name)
 		defer func() { s.leave(); s.label, s.labelKey, s.field = previous, previousKey, previousField }()
-		comparator.run(s, Pair[V]{Left: left, Right: right}, depth+1)
+		run(comparator, s, Pair[V]{Left: left, Right: right}, depth+1)
 	})
 }

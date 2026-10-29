@@ -113,22 +113,22 @@ func TestValidationDatabaseRulesAndDescriptions(t *testing.T) {
 		current := dbvalidation.Lookup(db, models.Users.Query(), models.Users.Email)
 		for _, rule := range []validation.Rule[string]{dbvalidation.Exists(db, models.Users.Query(), models.Users.Email), dbvalidation.Unique(db, models.Users.Query(), models.Users.Email)} {
 			before := g.statements
-			if !oracleEqual(t, "validation_database/value1", oracleSnapshot(must(rule.Description()))) {
+			if !oracleEqual(t, "validation_database/value1", oracleSnapshot(must(validation.DescribeRule(rule)))) {
 				t.Fatal("rule metadata changed")
 			}
 			if g.statements != before {
 				t.Fatal("description performed IO")
 			}
-			checked := rule.Check(t.Context(), "secret", validation.DefaultLimits())
+			checked := validation.Check(rule, t.Context(), "secret", validation.DefaultLimits())
 			if !oracleEqual(t, "validation_database/value2", oracleSnapshot(validationIssues(checked))) {
 				t.Fatal("rule errors changed")
 			}
 		}
 		for _, rule := range []validation.Rule[[]string]{validation.ExistsAll[[]string](current), validation.UniqueAll[[]string](current)} {
-			if !oracleEqual(t, "validation_database/value1_later", oracleSnapshot(must(rule.Description()))) {
+			if !oracleEqual(t, "validation_database/value1_later", oracleSnapshot(must(validation.DescribeRule(rule)))) {
 				t.Fatal("batch metadata changed")
 			}
-			checked := rule.Check(t.Context(), []string{"secret", "secret"}, validation.DefaultLimits())
+			checked := validation.Check(rule, t.Context(), []string{"secret", "secret"}, validation.DefaultLimits())
 			if !oracleEqual(t, "validation_database/value2_later", oracleSnapshot(validationIssues(checked))) {
 				t.Fatal("batch errors changed")
 			}

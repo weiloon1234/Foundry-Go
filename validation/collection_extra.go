@@ -12,7 +12,7 @@ func ItemsBetween[S ~[]T, T any](minimum, maximum int) Rule[S] {
 // DistinctBy checks a concrete field of each object without serializing objects.
 // Failures belong to the collection; use Each for per-object value constraints.
 func DistinctBy[S ~[]T, T any, K Scalar](field Field[T, K]) Rule[S] {
-	if err := field.Validate(); err != nil {
+	if err := ValidateField(field); err != nil {
 		return failed[S](err)
 	}
 	return valueRule(Spec{ID: "foundry.distinct_by", Parameters: []Parameter{parameter("field", field.name)}}, true, func(s *execution, input S) (bool, error) {
@@ -40,7 +40,7 @@ func ContainsItems[S ~[]T, T Scalar](members ...T) Rule[S] { return itemsMembers
 func ExcludesItems[S ~[]T, T Scalar](members ...T) Rule[S] { return itemsMembership[S](false, members) }
 func itemsMembership[S ~[]T, T Scalar](contains bool, members []T) Rule[S] {
 	allowed := OneOf(members...)
-	if err := allowed.Validate(); err != nil {
+	if err := ValidateRule(allowed); err != nil {
 		return failed[S](err)
 	}
 	owned := make(map[T]struct{}, len(members))

@@ -8,4 +8,4 @@ import (
 type Input struct{ Count value.Optional[int] }
 
 var field = validation.DefineField("count", func(v Input) value.Optional[int] { return v.Count })
-var _ = field.Rules(validation.Required[string]())
+var _ = validation.Rules(field, validation.Required[string]())

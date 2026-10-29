@@ -200,7 +200,7 @@ func (d *definition[R]) initialize(spec Spec[R]) error {
 	}
 	if len(spec.Rules) != 0 {
 		d.rule, d.rules = validation.All(spec.Rules...), true
-		if err := d.rule.Validate(); err != nil {
+		if err := validation.ValidateRule(d.rule); err != nil {
 			return err
 		}
 	}
@@ -412,7 +412,7 @@ func (d *definition[R]) parse(ctx context.Context, mapping []int, cells []rawCel
 	if len(issues) != 0 || !d.rules {
 		return row, issues, nil
 	}
-	err := d.rule.Check(ctx, row, d.limits.Validation)
+	err := validation.Check(d.rule, ctx, row, d.limits.Validation)
 	var failed *validation.Errors
 	if callback.ErrorAs(err, &failed) {
 		return row, failed.Issues(), nil

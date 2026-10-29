@@ -21,7 +21,7 @@ func TestLabelLocalizationFailureDiagnosticsSurviveContainment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rejected := rejection(t, validation.NonBlank[string]().Check(t.Context(), "", validation.DefaultLimits()))
+	rejected := rejection(t, validation.Check(validation.NonBlank[string](), t.Context(), "", validation.DefaultLimits()))
 	for _, test := range []struct {
 		name     string
 		receiver *validation.Errors

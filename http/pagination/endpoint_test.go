@@ -131,7 +131,7 @@ func TestCustomNamesAndFilterValidationCompose(t *testing.T) {
 	config := pagination.DefaultConfig()
 	config.NumberParam = "p"
 	config.SizeParam = "limit"
-	endpoint := numbered(config).WithFiltersValidation(validation.DefineField("q", func(f filters) value.Optional[string] { return f.Term }).Rules(validation.Optional(validation.MinLength[string](3))))
+	endpoint := numbered(config).WithFiltersValidation(validation.Rules(validation.DefineField("q", func(f filters) value.Optional[string] { return f.Term }), validation.Optional(validation.MinLength[string](3))))
 	response := serve(t, endpoint.Handle(func(context.Context, pageInput) (orm.PageResult[Item], error) {
 		t.Error("bad filter accepted")
 		return orm.PageResult[Item]{}, nil

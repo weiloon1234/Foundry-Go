@@ -96,8 +96,8 @@ type Column[S, R, V any] struct {
 }
 
 func DefineColumn[S, R, V any](field validation.Field[R, V], label i18n.MessageKey) Column[S, R, V] {
-	c := Column[S, R, V]{field: field, declaration: columnDeclaration[S, R]{name: field.Name(), label: label}}
-	c.declaration.err = field.Validate()
+	c := Column[S, R, V]{field: field, declaration: columnDeclaration[S, R]{name: validation.FieldName(field), label: label}}
+	c.declaration.err = validation.ValidateField(field)
 	if err := label.Validate(); err != nil {
 		c.declaration.err = err
 	}
@@ -130,7 +130,7 @@ func (c Column[S, R, V]) ExportAs(cell Cell[V]) Column[S, R, V] {
 	c.declaration.cellInfo = &FilterInfo{Scalar: cell.scalar, Nullable: cell.nullable}
 	field, kind := c.field, cell.kind
 	c.declaration.cell = func(ctx context.Context, row R, p Presentation) (exportCell, error) {
-		v, err := field.Select(row)
+		v, err := validation.Select(field, row)
 		if err != nil {
 			return exportCell{}, err
 		}

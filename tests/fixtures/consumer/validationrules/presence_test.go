@@ -24,7 +24,7 @@ func TestGeneratedRequiredRulesRetainDecodedPresenceStates(t *testing.T) {
 	}
 	input := decode(body)
 	rules := validationrules.PresenceRules()
-	if err := rules.Check(t.Context(), input, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rules, t.Context(), input, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	count, supplied := input.Count.Get()
@@ -43,7 +43,7 @@ func TestGeneratedRequiredRulesRetainDecodedPresenceStates(t *testing.T) {
 		{`"tags":["one"]`, `"tags":[]`, "/tags"},
 	} {
 		var failure *validation.Errors
-		err := rules.Check(t.Context(), decode(strings.Replace(body, tc.from, tc.to, 1)), validation.DefaultLimits())
+		err := validation.Check(rules, t.Context(), decode(strings.Replace(body, tc.from, tc.to, 1)), validation.DefaultLimits())
 		if !errors.As(err, &failure) {
 			t.Fatal(err)
 		}
@@ -52,19 +52,19 @@ func TestGeneratedRequiredRulesRetainDecodedPresenceStates(t *testing.T) {
 			t.Fatalf("presence diagnostics: %+v", issues)
 		}
 	}
-	if err := rules.Check(t.Context(), decode(strings.Replace(body, `"forbidden":null`, `"forbidden":" "`, 1)), validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rules, t.Context(), decode(strings.Replace(body, `"forbidden":null`, `"forbidden":" "`, 1)), validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestRelatedRequiredRulesTreatZeroAndFalseAsTriggers(t *testing.T) {
 	rules := validationrules.RequiredWithRules()
-	if err := rules.Check(t.Context(), validationrules.PresenceInput{}, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rules, t.Context(), validationrules.PresenceInput{}, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	for _, input := range []validationrules.PresenceInput{{Count: value.Set(0)}, {Active: value.Set(false)}} {
 		var failure *validation.Errors
-		err := rules.Check(t.Context(), input, validation.DefaultLimits())
+		err := validation.Check(rules, t.Context(), input, validation.DefaultLimits())
 		if !errors.As(err, &failure) {
 			t.Fatal(err)
 		}
@@ -73,7 +73,7 @@ func TestRelatedRequiredRulesTreatZeroAndFalseAsTriggers(t *testing.T) {
 			t.Fatal(issues)
 		}
 		input.Label = value.Set("Member")
-		if err := rules.Check(t.Context(), input, validation.DefaultLimits()); err != nil {
+		if err := validation.Check(rules, t.Context(), input, validation.DefaultLimits()); err != nil {
 			t.Fatal(err)
 		}
 	}

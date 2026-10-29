@@ -26,7 +26,7 @@ func sequence[T any](kind Kind, bail bool, rules []Rule[T]) Rule[T] {
 	return Rule[T]{ruleNode: composeNode(Description{Kind: kind}, nodes), apply: func(s *execution, input T, depth int) {
 		for _, child := range owned {
 			before := len(s.issues)
-			child.run(s, input, depth+1)
+			run(child, s, input, depth+1)
 			if s.err != nil || s.truncated || bail && len(s.issues) > before {
 				return
 			}
@@ -34,8 +34,8 @@ func sequence[T any](kind Kind, bail bool, rules []Rule[T]) Rule[T] {
 	}}
 }
 
-func lift[O, I any](info Description, child Rule[I], apply func(*execution, O, int)) Rule[O] {
-	return Rule[O]{ruleNode: composeNode(info, []ruleNode{child.ruleNode}), apply: apply}
+func lift[O any](info Description, child ruleNode, apply func(*execution, O, int)) Rule[O] {
+	return Rule[O]{ruleNode: composeNode(info, []ruleNode{child}), apply: apply}
 }
 
 // Field retains both the containing request and concrete field value types.
@@ -56,7 +56,8 @@ func DefineField[T, V any](name string, selector func(T) V) Field[T, V] {
 	return field
 }
 
-func (f Field[T, V]) Validate() error {
+// ValidateField checks the name and selector without executing it.
+func ValidateField[T, V any](f Field[T, V]) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -66,15 +67,15 @@ func (f Field[T, V]) Validate() error {
 	return nil
 }
 
-// Name returns the generated transport property name, shared by validation and
-// other typed field consumers. Validate rejects an undefined descriptor.
-func (f Field[T, V]) Name() string { return f.name }
+// FieldName returns the generated transport property name, shared by validation and
+// other typed field consumers. ValidateField rejects an undefined descriptor.
+func FieldName[T, V any](f Field[T, V]) string { return f.name }
 
 // Select reads this exact field without reflection or a second getter map.
 // Like a direct application getter, it executes synchronously; services using
 // custom selectors own callback isolation, cancellation and input lifetime.
-func (f Field[T, V]) Select(input T) (V, error) {
-	if err := f.Validate(); err != nil {
+func Select[T, V any](f Field[T, V], input T) (V, error) {
+	if err := ValidateField(f); err != nil {
 		return *new(V), err
 	}
 	return f.selectValue(input), nil
@@ -82,18 +83,18 @@ func (f Field[T, V]) Select(input T) (V, error) {
 
 // Rules binds value rules to this field without dynamic field lookups. The
 // selector runs once for this binding and must not mutate the input.
-func (f Field[T, V]) Rules(rules ...Rule[V]) Rule[T] {
-	if err := f.Validate(); err != nil {
+func Rules[T, V any](f Field[T, V], rules ...Rule[V]) Rule[T] {
+	if err := ValidateField(f); err != nil {
 		return failed[T](err)
 	}
 	child := All(rules...)
-	return lift(Description{Kind: FieldKind, Field: f.name, Label: f.label, LabelKey: f.labelKey}, child, func(s *execution, input T, depth int) {
+	return lift(Description{Kind: FieldKind, Field: f.name, Label: f.label, LabelKey: f.labelKey}, child.ruleNode, func(s *execution, input T, depth int) {
 		selected := f.selectValue(input)
 		previous, previousKey, previousField := s.label, s.labelKey, s.field
 		s.label, s.labelKey, s.field = f.label, f.labelKey, f.name
 		s.enter(f.name)
 		defer func() { s.leave(); s.label, s.labelKey, s.field = previous, previousKey, previousField }()
-		child.run(s, selected, depth+1)
+		run(child, s, selected, depth+1)
 	})
 }
 
@@ -101,9 +102,9 @@ func (f Field[T, V]) Rules(rules ...Rule[V]) Rule[T] {
 // It does not infer wire presence from an ordinary Go field's zero value.
 func Optional[T any](rules ...Rule[T]) Rule[value.Optional[T]] {
 	child := All(rules...)
-	return lift(Description{Kind: OptionalKind}, child, func(s *execution, input value.Optional[T], depth int) {
+	return lift(Description{Kind: OptionalKind}, child.ruleNode, func(s *execution, input value.Optional[T], depth int) {
 		if selected, set := input.Get(); set {
-			child.run(s, selected, depth+1)
+			run(child, s, selected, depth+1)
 		}
 	})
 }
@@ -112,9 +113,9 @@ func Optional[T any](rules ...Rule[T]) Rule[value.Optional[T]] {
 // Optional for a patch that distinguishes omitted, null and replacement values.
 func Nullable[T any](rules ...Rule[T]) Rule[value.Nullable[T]] {
 	child := All(rules...)
-	return lift(Description{Kind: NullableKind}, child, func(s *execution, input value.Nullable[T], depth int) {
+	return lift(Description{Kind: NullableKind}, child.ruleNode, func(s *execution, input value.Nullable[T], depth int) {
 		if selected, set := input.Get(); set {
-			child.run(s, selected, depth+1)
+			run(child, s, selected, depth+1)
 		}
 	})
 }
@@ -134,10 +135,10 @@ func NotNull[T any]() Rule[value.Nullable[T]] {
 // Empty slices have no elements; collection-size rules are separate.
 func Each[S ~[]T, T any](rules ...Rule[T]) Rule[S] {
 	child := All(rules...)
-	return lift(Description{Kind: EachKind, ServerOnly: collectionWireTransform[S, T]()}, child, func(s *execution, input S, depth int) {
+	return lift(Description{Kind: EachKind, ServerOnly: collectionWireTransform[S, T]()}, child.ruleNode, func(s *execution, input S, depth int) {
 		for i, item := range input {
 			s.enterIndex(i)
-			child.run(s, item, depth+1)
+			run(child, s, item, depth+1)
 			s.leave()
 			if s.err != nil || s.truncated {
 				return

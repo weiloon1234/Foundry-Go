@@ -29,9 +29,9 @@ func TestRequestLifecycleOrderAndOriginalProhibitions(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var stages []string
-			endpoint := patchEndpoint().WithBodyValidation(name.Rules(validation.MinLength[string](2)))
+			endpoint := patchEndpoint().WithBodyValidation(validation.Rules(name, validation.MinLength[string](2)))
 			if tc.prohibited {
-				endpoint = endpoint.WithBodyValidation(note.Rules(validation.Absent[value.Nullable[string]]()))
+				endpoint = endpoint.WithBodyValidation(validation.Rules(note, validation.Absent[value.Nullable[string]]()))
 			}
 			endpoint = endpoint.WithPreparation(func(_ context.Context, in endpointRequest) (endpointParameters, EndpointPatch, error) {
 				stages = append(stages, "prepare")

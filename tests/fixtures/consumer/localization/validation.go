@@ -9,8 +9,8 @@ import (
 // NameRule attaches a generated message to a concrete field-owned rule. The
 // generated argument owner is checked by Go; field labels supply attribute.
 func NameRule() validation.Rule[WelcomeArgs] {
-	return WelcomeArgsValidationFields().Name.WithLabel("Name").WithLabelKey("fields.name").Rules(validation.WithTranslation(
-		validation.NonBlank[string]().WithMessage("Enter your name."),
+	return validation.Rules(validation.WithLabelKey(validation.WithLabel(WelcomeArgsValidationFields().Name, "Name"), "fields.name"), validation.WithTranslation(
+		validation.WithMessage(validation.NonBlank[string](), "Enter your name."),
 		RuleArgsMessage(), RuleArgs{Team: "Foundry team"},
 	))
 }

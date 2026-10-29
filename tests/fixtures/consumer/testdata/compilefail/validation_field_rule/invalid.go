@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var _ = validationinput.Name.Rules(validation.Min[int](1))
+var _ = validation.Rules(validationinput.Name, validation.Min[int](1))

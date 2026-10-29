@@ -122,10 +122,10 @@ func TestHTTPJSONPresenceMatrix(t *testing.T) {
 		cases []presenceCase
 	}{
 		{"nickname", []presenceRule{
-			{"present", fields.Nickname.Rules(validation.Present[value.Nullable[string]]())},
-			{"required", fields.Nickname.Rules(validation.RequiredNullable[string]())},
-			{"prohibited", fields.Nickname.Rules(validation.ProhibitedNullable[string]())},
-			{"absent", fields.Nickname.Rules(validation.Absent[value.Nullable[string]]())},
+			{"present", validation.Rules(fields.Nickname, validation.Present[value.Nullable[string]]())},
+			{"required", validation.Rules(fields.Nickname, validation.RequiredNullable[string]())},
+			{"prohibited", validation.Rules(fields.Nickname, validation.ProhibitedNullable[string]())},
+			{"absent", validation.Rules(fields.Nickname, validation.Absent[value.Nullable[string]]())},
 		}, []presenceCase{
 			{"omitted", "{}", presenceBody{}, [4]bool{false, false, true, true}},
 			{"null", "{\"nickname\":null}", presenceBody{Nickname: value.Set(value.Nullable[string]{})}, [4]bool{true, false, true, false}},
@@ -135,10 +135,10 @@ func TestHTTPJSONPresenceMatrix(t *testing.T) {
 			{"value", "{\"nickname\":\" Ada \"}", presenceBody{Nickname: value.Set(value.Of(" Ada "))}, [4]bool{true, true, false, false}},
 		}},
 		{"tags", []presenceRule{
-			{"present", fields.Tags.Rules(validation.Present[[]string]())},
-			{"required", fields.Tags.Rules(validation.Required[[]string]())},
-			{"prohibited", fields.Tags.Rules(validation.Prohibited[[]string]())},
-			{"absent", fields.Tags.Rules(validation.Absent[[]string]())},
+			{"present", validation.Rules(fields.Tags, validation.Present[[]string]())},
+			{"required", validation.Rules(fields.Tags, validation.Required[[]string]())},
+			{"prohibited", validation.Rules(fields.Tags, validation.Prohibited[[]string]())},
+			{"absent", validation.Rules(fields.Tags, validation.Absent[[]string]())},
 		}, []presenceCase{
 			{"omitted", "{}", presenceBody{}, [4]bool{false, false, true, true}},
 			{"empty", "{\"tags\":[]}", presenceBody{Tags: value.Set([]string{})}, [4]bool{true, false, true, false}},
@@ -146,20 +146,20 @@ func TestHTTPJSONPresenceMatrix(t *testing.T) {
 			{"value", "{\"tags\":[\"one\",\"two\"]}", presenceBody{Tags: value.Set([]string{"one", "two"})}, [4]bool{true, true, false, false}},
 		}},
 		{"count", []presenceRule{
-			{"present", fields.Count.Rules(validation.Present[int]())},
-			{"required", fields.Count.Rules(validation.Required[int]())},
-			{"prohibited", fields.Count.Rules(validation.Prohibited[int]())},
-			{"absent", fields.Count.Rules(validation.Absent[int]())},
+			{"present", validation.Rules(fields.Count, validation.Present[int]())},
+			{"required", validation.Rules(fields.Count, validation.Required[int]())},
+			{"prohibited", validation.Rules(fields.Count, validation.Prohibited[int]())},
+			{"absent", validation.Rules(fields.Count, validation.Absent[int]())},
 		}, []presenceCase{
 			{"omitted", "{}", presenceBody{}, [4]bool{false, false, true, true}},
 			{"zero", "{\"count\":0}", presenceBody{Count: value.Set(0)}, [4]bool{true, true, false, false}},
 			{"value", "{\"count\":7}", presenceBody{Count: value.Set(7)}, [4]bool{true, true, false, false}},
 		}},
 		{"active", []presenceRule{
-			{"present", fields.Active.Rules(validation.Present[bool]())},
-			{"required", fields.Active.Rules(validation.Required[bool]())},
-			{"prohibited", fields.Active.Rules(validation.Prohibited[bool]())},
-			{"absent", fields.Active.Rules(validation.Absent[bool]())},
+			{"present", validation.Rules(fields.Active, validation.Present[bool]())},
+			{"required", validation.Rules(fields.Active, validation.Required[bool]())},
+			{"prohibited", validation.Rules(fields.Active, validation.Prohibited[bool]())},
+			{"absent", validation.Rules(fields.Active, validation.Absent[bool]())},
 		}, []presenceCase{
 			{"omitted", "{}", presenceBody{}, [4]bool{false, false, true, true}},
 			{"false", "{\"active\":false}", presenceBody{Active: value.Set(false)}, [4]bool{true, true, false, false}},
@@ -211,10 +211,10 @@ func TestHTTPQueryPresenceMatrix(t *testing.T) {
 		cases []presenceCase
 	}{
 		{"label", []presenceRule{
-			{"present", fields.Label.Rules(validation.Present[string]())},
-			{"required", fields.Label.Rules(validation.Required[string]())},
-			{"prohibited", fields.Label.Rules(validation.Prohibited[string]())},
-			{"absent", fields.Label.Rules(validation.Absent[string]())},
+			{"present", validation.Rules(fields.Label, validation.Present[string]())},
+			{"required", validation.Rules(fields.Label, validation.Required[string]())},
+			{"prohibited", validation.Rules(fields.Label, validation.Prohibited[string]())},
+			{"absent", validation.Rules(fields.Label, validation.Absent[string]())},
 		}, []presenceCase{
 			{"omitted", "", presenceBody{}, [4]bool{false, false, true, true}},
 			{"bare", "label", presenceBody{Label: value.Set("")}, [4]bool{true, false, true, false}},
@@ -225,20 +225,20 @@ func TestHTTPQueryPresenceMatrix(t *testing.T) {
 			{"value", "label=+Ada+", presenceBody{Label: value.Set(" Ada ")}, [4]bool{true, true, false, false}},
 		}},
 		{"count", []presenceRule{
-			{"present", fields.Count.Rules(validation.Present[int]())},
-			{"required", fields.Count.Rules(validation.Required[int]())},
-			{"prohibited", fields.Count.Rules(validation.Prohibited[int]())},
-			{"absent", fields.Count.Rules(validation.Absent[int]())},
+			{"present", validation.Rules(fields.Count, validation.Present[int]())},
+			{"required", validation.Rules(fields.Count, validation.Required[int]())},
+			{"prohibited", validation.Rules(fields.Count, validation.Prohibited[int]())},
+			{"absent", validation.Rules(fields.Count, validation.Absent[int]())},
 		}, []presenceCase{
 			{"omitted", "", presenceBody{}, [4]bool{false, false, true, true}},
 			{"zero", "count=0", presenceBody{Count: value.Set(0)}, [4]bool{true, true, false, false}},
 			{"value", "count=7", presenceBody{Count: value.Set(7)}, [4]bool{true, true, false, false}},
 		}},
 		{"active", []presenceRule{
-			{"present", fields.Active.Rules(validation.Present[bool]())},
-			{"required", fields.Active.Rules(validation.Required[bool]())},
-			{"prohibited", fields.Active.Rules(validation.Prohibited[bool]())},
-			{"absent", fields.Active.Rules(validation.Absent[bool]())},
+			{"present", validation.Rules(fields.Active, validation.Present[bool]())},
+			{"required", validation.Rules(fields.Active, validation.Required[bool]())},
+			{"prohibited", validation.Rules(fields.Active, validation.Prohibited[bool]())},
+			{"absent", validation.Rules(fields.Active, validation.Absent[bool]())},
 		}, []presenceCase{
 			{"omitted", "", presenceBody{}, [4]bool{false, false, true, true}},
 			{"false", "active=false", presenceBody{Active: value.Set(false)}, [4]bool{true, true, false, false}},

@@ -27,7 +27,7 @@ base execution contract.
 | Files | Existing `FilePresent`, size, content type and extension rules; `imagingvalidation.Dimensions` inspects image size through [imaging](imaging.md) |
 
 Go DTO types already enforce boolean/integer/string/list shape. `Optional` retains
-wire presence; zero and false are values. `When(condition, field.Rules(Required...))`
+wire presence; zero and false are values. `When(condition, validation.Rules(field, Required...))`
 expresses required-if; `Unless` expresses required-unless. Conditions themselves
 use typed fields and rules. Validation never removes fields or normalizes input;
 use the existing request preparation hook for explicit normalization.
@@ -48,8 +48,8 @@ Password strength does not verify an existing credential or contact a breach API
 func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]) (*foundryhttp.Router, error) {
 	fields := httpdto.UpdateUserValidationFields()
 	endpoint := httpendpoints.Update.WithBodyValidation(validation.Parallel(
-		fields.Email.WithLabel("Email address").Rules(validation.Optional(validation.Bail(validation.Email[string](), validation.Unique(lookup)))),
-		fields.Nickname.Rules(validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
+		validation.Rules(validation.WithLabel(fields.Email, "Email address"), validation.Optional(validation.Bail(validation.Email[string](), validation.Unique(lookup)))),
+		validation.Rules(fields.Nickname, validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
 	))
 	return foundryhttp.NewRouter(endpoint.Handle(service.Update))
 }

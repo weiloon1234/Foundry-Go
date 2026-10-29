@@ -8,4 +8,4 @@ import (
 type Input struct{ Flag value.Optional[bool] }
 
 var field = validation.DefineField("flag", func(v Input) value.Optional[bool] { return v.Flag })
-var _ = field.Rules(validation.Prohibited[int]())
+var _ = validation.Rules(field, validation.Prohibited[int]())

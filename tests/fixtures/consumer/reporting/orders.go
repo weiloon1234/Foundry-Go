@@ -1,5 +1,7 @@
 package reporting
 
+import "github.com/weiloon1234/Foundry-Go/validation"
+
 import (
 	"context"
 
@@ -47,7 +49,7 @@ func orderSpec() datatable.Spec[OrderScope, OrderRow, Authority] {
 			datatable.DefineColumn[OrderScope](wire.Label, OrderLabel).FilterBy(datatable.Where(text, expr.TextRowAt(order, OrderModels.Label))).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
 			datatable.DefineColumn[OrderScope](wire.Amount, AmountLabel).SortBy(expr.Row(expr.At(order, OrderModels.Amount)).Value()).FilterBy(datatable.Where(amount, expr.OrderRow(expr.At(order, OrderModels.Amount)))).ExportAs(datatable.ScalarCell(amount)).Registration(),
 		},
-		DefaultSort: []datatable.Sort{{Column: wire.MemberName.Name(), Direction: datatable.Ascending}},
+		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.MemberName), Direction: datatable.Ascending}},
 		Stable:      []expr.ProjectionOrder[OrderScope]{expr.At(order, OrderModels.ID).Asc()}, Authorize: authorize,
 		Source: func(ctx context.Context, authority Authority) (rows.Query[OrderScope, OrderRow], error) {
 			actor, err := authority.subject(ctx)
@@ -71,7 +73,7 @@ func totalSpec() datatable.Spec[Order, MemberTotal, Authority] {
 			datatable.DefineColumn[Order](wire.Count, CountLabel).SortBy(count.Value()).FilterBy(datatable.Having(foundryhttp.IntegerQuery[int64](), count)).ExportAs(datatable.ScalarCell(foundryhttp.IntegerQuery[int64]())).Registration(),
 			datatable.DefineColumn[Order](wire.Total, TotalLabel).SortBy(total.Value()).FilterBy(datatable.NullableHaving(amount, total)).ExportAs(datatable.NullableCell(amount)).Registration(),
 		},
-		DefaultSort: []datatable.Sort{{Column: wire.Total.Name(), Direction: datatable.Descending}},
+		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.Total), Direction: datatable.Descending}},
 		Stable:      []expr.ProjectionOrder[Order]{expr.Value(fields.MemberID).Asc()}, Authorize: authorize,
 		Source: func(ctx context.Context, authority Authority) (rows.Query[Order, MemberTotal], error) {
 			actor, err := authority.subject(ctx)

@@ -40,7 +40,7 @@ func TestTypedLookupsShareSafeAdvisoryRuleBehavior(t *testing.T) {
 		{"available", unique, "free", true}, {"taken", unique, "taken", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.rule.Check(t.Context(), tc.input, validation.DefaultLimits())
+			err := validation.Check(tc.rule, t.Context(), tc.input, validation.DefaultLimits())
 			if tc.accepted {
 				if err != nil {
 					t.Fatal(err)
@@ -53,13 +53,13 @@ func TestTypedLookupsShareSafeAdvisoryRuleBehavior(t *testing.T) {
 			}
 		})
 	}
-	info, err := unique.Description()
+	info, err := validation.DescribeRule(unique)
 	if err != nil || !info.ServerOnly || info.Spec.ID != "foundry.unique" || len(info.Spec.Parameters) != 0 {
 		t.Fatalf("lookup metadata: %+v, %v", info, err)
 	}
 	// Separate lookup instances are the same built-in rule, not conflicting
 	// custom definitions. Both may be used in one request.
-	if err := validation.All(unique, validation.Unique[string](&textLookup{find: lookup.find})).Validate(); err != nil {
+	if err := validation.ValidateRule(validation.All(unique, validation.Unique[string](&textLookup{find: lookup.find}))); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -73,7 +73,7 @@ func TestLookupFailuresNeverMeanAvailable(t *testing.T) {
 		func(context.Context, string) (bool, error) { runtime.Goexit(); return false, nil },
 	} {
 		rule := validation.Unique[string](&textLookup{find: check})
-		err := rule.Check(t.Context(), "secret-input", validation.DefaultLimits())
+		err := validation.Check(rule, t.Context(), "secret-input", validation.DefaultLimits())
 		var rejected *validation.Errors
 		if !errors.Is(err, fault.Internal) || errors.As(err, &rejected) || strings.Contains(err.Error(), "private") || strings.Contains(err.Error(), "secret-input") {
 			t.Fatalf("lookup failure was not safe: %v", err)
@@ -81,7 +81,7 @@ func TestLookupFailuresNeverMeanAvailable(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	rule := validation.Exists[string](&textLookup{find: func(received context.Context, _ string) (bool, error) { cancel(); return false, received.Err() }})
-	if err := rule.Check(ctx, "value", validation.DefaultLimits()); !errors.Is(err, context.Canceled) {
+	if err := validation.Check(rule, ctx, "value", validation.DefaultLimits()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation lost: %v", err)
 	}
 }
@@ -95,7 +95,7 @@ func TestLookupDeclarationsFailBeforeChecks(t *testing.T) {
 		&textLookup{validate: func() error { panic("invalid") }},
 		&textLookup{validate: func() error { runtime.Goexit(); return nil }},
 	} {
-		if validation.Exists(lookup).Validate() == nil {
+		if validation.ValidateRule(validation.Exists(lookup)) == nil {
 			t.Fatal("invalid lookup declaration accepted")
 		}
 	}

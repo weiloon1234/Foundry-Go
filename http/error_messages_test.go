@@ -32,9 +32,9 @@ func errorMessageCatalog(t testing.TB) *i18n.Catalog {
 	return catalog
 }
 func TestRequestMessagesLocaleConcurrencyFallbackAndSafeErrors(t *testing.T) {
-	name := validation.DefineField("name", func(v EndpointPatch) string { return v.Name }).WithLabel("Name").WithLabelKey("fields.name")
-	term := validation.DefineField("q", func(v endpointParameters) value.Optional[string] { return v.Term }).WithLabel("Query")
-	endpoint := patchEndpoint().WithBodyValidation(name.Rules(validation.MinLength[string](2))).WithQueryValidation(term.Rules(validation.Optional(validation.MinLength[string](2))))
+	name := validation.WithLabelKey(validation.WithLabel(validation.DefineField("name", func(v EndpointPatch) string { return v.Name }), "Name"), "fields.name")
+	term := validation.WithLabel(validation.DefineField("q", func(v endpointParameters) value.Optional[string] { return v.Term }), "Query")
+	endpoint := patchEndpoint().WithBodyValidation(validation.Rules(name, validation.MinLength[string](2))).WithQueryValidation(validation.Rules(term, validation.Optional(validation.MinLength[string](2))))
 	router, err := NewRouter(endpoint.Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
 		return EndpointReply{}, errors.New("private upstream password")
 	}))
@@ -95,8 +95,8 @@ func TestRequestMessagesLocaleConcurrencyFallbackAndSafeErrors(t *testing.T) {
 }
 func TestFormAndUploadMessagesPreserveCleanup(t *testing.T) {
 	catalog := errorMessageCatalog(t)
-	name := validation.DefineField("name", func(v formInput) string { return v.Name }).WithLabelKey("fields.name")
-	form, err := NewRouter(formEndpoint().WithBodyValidation(name.Rules(validation.NonBlank[string]())).Handle(func(context.Context, formRequest) (NoContent, error) { return NoContent{}, nil }))
+	name := validation.WithLabelKey(validation.DefineField("name", func(v formInput) string { return v.Name }), "fields.name")
+	form, err := NewRouter(formEndpoint().WithBodyValidation(validation.Rules(name, validation.NonBlank[string]())).Handle(func(context.Context, formRequest) (NoContent, error) { return NoContent{}, nil }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,8 +120,8 @@ func TestFormAndUploadMessagesPreserveCleanup(t *testing.T) {
 		}
 	}
 	directory := t.TempDir()
-	file := validation.DefineField("primary", func(v multipartRequest) UploadedFile { return v.Primary }).WithLabel("Fail")
-	upload, err := NewRouter(multipartEndpoint(directory).WithBodyValidation(file.Rules(validation.FileMaxSize[UploadedFile](1))).Handle(func(context.Context, multipartRequestInput) (NoContent, error) { return NoContent{}, nil }))
+	file := validation.WithLabel(validation.DefineField("primary", func(v multipartRequest) UploadedFile { return v.Primary }), "Fail")
+	upload, err := NewRouter(multipartEndpoint(directory).WithBodyValidation(validation.Rules(file, validation.FileMaxSize[UploadedFile](1))).Handle(func(context.Context, multipartRequestInput) (NoContent, error) { return NoContent{}, nil }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,8 +179,8 @@ func TestLocaleRetainsNativeWriterCapabilitiesAndFindsBufferOwners(t *testing.T)
 }
 
 func TestPathValidationLocalePreferenceAndStartupMismatch(t *testing.T) {
-	field := validation.DefineField("user", func(v userPath) string { return v.User.String() }).WithLabel("User")
-	router, err := NewRouter(patchEndpoint().WithPathValidation(field.Rules(validation.MinLength[string](100))).Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
+	field := validation.WithLabel(validation.DefineField("user", func(v userPath) string { return v.User.String() }), "User")
+	router, err := NewRouter(patchEndpoint().WithPathValidation(validation.Rules(field, validation.MinLength[string](100))).Handle(func(context.Context, endpointRequest) (EndpointReply, error) {
 		t.Error("invalid path reached handler")
 		return EndpointReply{}, nil
 	}))

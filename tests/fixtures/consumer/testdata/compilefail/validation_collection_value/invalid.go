@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var _ = validation.Distinct[[]int]().Check(context.Background(), []string{"one"}, validation.DefaultLimits())
+var _ = validation.Check(validation.Distinct[[]int](), context.Background(), []string{"one"}, validation.DefaultLimits())

@@ -21,7 +21,7 @@ func LinkRoutes(reset *ResetRequests, verification *VerificationRequests, ingres
 		route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath(path))
 		return foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.JSONBody(LinkRequestJSON()), foundryhttp.EmptyResponse(204)).
 			WithMiddleware(foundryhttp.CredentialRequests(), foundryhttp.CSRF(foundryhttp.CSRFConfig{}), foundryhttp.RateLimitByIP(ingress)).
-			WithBodyValidation(LinkRequestValidationFields().Email.Rules(validation.Email[string]()))
+			WithBodyValidation(validation.Rules(LinkRequestValidationFields().Email, validation.Email[string]()))
 	}
 	return foundryhttp.NewRouter(
 		endpoint("recovery.request-reset", "/recovery/request-reset").Handle(func(ctx context.Context, input LinkInput) (foundryhttp.NoContent, error) {

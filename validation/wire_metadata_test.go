@@ -24,7 +24,7 @@ func (encodedByte) MarshalJSON() ([]byte, error) { panic("metadata invoked eleme
 
 func requireServerOnly[T any](t *testing.T, rule validation.Rule[T], expected bool) {
 	t.Helper()
-	info, err := rule.Description()
+	info, err := validation.DescribeRule(rule)
 	if err != nil || info.ServerOnly != expected {
 		t.Fatalf("server-only metadata: got %v, want %v, error %v", info.ServerOnly, expected, err)
 	}
@@ -69,10 +69,10 @@ func TestScalarComparisonsRejectUnboundedTextAndNonFiniteValues(t *testing.T) {
 	limits := validation.DefaultLimits()
 	limits.ValueBytes = 3
 	var bound *validation.LimitError
-	err := validation.Same[string]().Check(t.Context(), validation.Pair[string]{Left: "long", Right: "long"}, limits)
+	err := validation.Check(validation.Same[string](), t.Context(), validation.Pair[string]{Left: "long", Right: "long"}, limits)
 	if !errors.As(err, &bound) {
 		t.Fatal("comparison ignored text bound", err)
 	}
-	rejection(t, validation.Same[float64]().Check(t.Context(), validation.Pair[float64]{Left: math.Inf(1), Right: math.Inf(1)}, validation.DefaultLimits()))
-	rejection(t, validation.Different[float64]().Check(t.Context(), validation.Pair[float64]{Left: math.NaN(), Right: 0}, validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.Same[float64](), t.Context(), validation.Pair[float64]{Left: math.Inf(1), Right: math.Inf(1)}, validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.Different[float64](), t.Context(), validation.Pair[float64]{Left: math.NaN(), Right: 0}, validation.DefaultLimits()))
 }

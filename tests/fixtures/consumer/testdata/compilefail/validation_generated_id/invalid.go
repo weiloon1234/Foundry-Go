@@ -8,4 +8,4 @@ import (
 )
 
 var wrong validation.Rule[model.ID[models.Order]]
-var _ = httpdto.UserResponseValidationFields().ID.Rules(wrong)
+var _ = validation.Rules(httpdto.UserResponseValidationFields().ID, wrong)

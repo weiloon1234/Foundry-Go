@@ -38,18 +38,18 @@ func TestExpandedTextRules(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := tc.rule.Check(t.Context(), tc.good, validation.DefaultLimits()); err != nil {
+			if err := validation.Check(tc.rule, t.Context(), tc.good, validation.DefaultLimits()); err != nil {
 				t.Fatal(err)
 			}
-			rejection(t, tc.rule.Check(t.Context(), tc.bad, validation.DefaultLimits()))
-			rejection(t, tc.rule.Check(t.Context(), string([]byte{255}), validation.DefaultLimits()))
+			rejection(t, validation.Check(tc.rule, t.Context(), tc.bad, validation.DefaultLimits()))
+			rejection(t, validation.Check(tc.rule, t.Context(), string([]byte{255}), validation.DefaultLimits()))
 			limits := validation.DefaultLimits()
 			limits.ValueBytes = 1
 			var exceeded *validation.LimitError
-			if !errors.As(tc.rule.Check(t.Context(), "long", limits), &exceeded) {
+			if !errors.As(validation.Check(tc.rule, t.Context(), "long", limits), &exceeded) {
 				t.Fatal("byte limit not enforced")
 			}
-			desc, err := tc.rule.Description()
+			desc, err := validation.DescribeRule(tc.rule)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -59,7 +59,7 @@ func TestExpandedTextRules(t *testing.T) {
 		})
 	}
 	for _, rule := range []validation.Rule[string]{validation.LengthBetween[string](5, 1), validation.Length[string](-1), validation.NotMatches[string]("["), validation.DoesntContain(strings.Repeat("x", 20000))} {
-		if rule.Validate() == nil {
+		if validation.ValidateRule(rule) == nil {
 			t.Fatal("invalid declaration accepted")
 		}
 	}
@@ -68,16 +68,16 @@ func TestExpandedTextRules(t *testing.T) {
 func TestExpandedNumbersConsentAndComparisons(t *testing.T) {
 	type units uint64
 	rule := validation.Between(units(9007199254740993), units(math.MaxUint64))
-	if err := rule.Check(t.Context(), math.MaxUint64, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(rule, t.Context(), math.MaxUint64, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	rejection(t, rule.Check(t.Context(), 9007199254740992, validation.DefaultLimits()))
+	rejection(t, validation.Check(rule, t.Context(), 9007199254740992, validation.DefaultLimits()))
 	exact := validation.MultipleOf(units(3))
-	if err := exact.Check(t.Context(), math.MaxUint64, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(exact, t.Context(), math.MaxUint64, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	rejection(t, exact.Check(t.Context(), math.MaxUint64-1, validation.DefaultLimits()))
-	if validation.MultipleOf(0).Validate() == nil || validation.MultipleOf(-1).Validate() == nil || validation.Between(2, 1).Validate() == nil || validation.Between(math.NaN(), 1.0).Validate() == nil {
+	rejection(t, validation.Check(exact, t.Context(), math.MaxUint64-1, validation.DefaultLimits()))
+	if validation.ValidateRule(validation.MultipleOf(0)) == nil || validation.ValidateRule(validation.MultipleOf(-1)) == nil || validation.ValidateRule(validation.Between(2, 1)) == nil || validation.ValidateRule(validation.Between(math.NaN(), 1.0)) == nil {
 		t.Fatal("invalid numeric bounds accepted")
 	}
 	for _, tc := range []struct {
@@ -89,27 +89,27 @@ func TestExpandedNumbersConsentAndComparisons(t *testing.T) {
 		{validation.LessThan[uint64](), 9007199254740992, 9007199254740993},
 		{validation.LessOrEqual[uint64](), 0, 0},
 	} {
-		if err := tc.rule.Check(t.Context(), validation.Pair[uint64]{Left: tc.left, Right: tc.right}, validation.DefaultLimits()); err != nil {
+		if err := validation.Check(tc.rule, t.Context(), validation.Pair[uint64]{Left: tc.left, Right: tc.right}, validation.DefaultLimits()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	rejection(t, validation.GreaterThan[float64]().Check(t.Context(), validation.Pair[float64]{Left: math.Inf(1)}, validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.GreaterThan[float64](), t.Context(), validation.Pair[float64]{Left: math.Inf(1)}, validation.DefaultLimits()))
 	for _, accepted := range []bool{true, false} {
 		rule := validation.Accepted[bool]()
 		if !accepted {
 			rule = validation.Declined[bool]()
 		}
-		if err := rule.Check(t.Context(), accepted, validation.DefaultLimits()); err != nil {
+		if err := validation.Check(rule, t.Context(), accepted, validation.DefaultLimits()); err != nil {
 			t.Fatal(err)
 		}
-		rejection(t, rule.Check(t.Context(), !accepted, validation.DefaultLimits()))
+		rejection(t, validation.Check(rule, t.Context(), !accepted, validation.DefaultLimits()))
 	}
 	a, _ := decimal.Parse("9007199254740993.001")
 	b, _ := decimal.Parse("9007199254740993.002")
-	if err := validation.DecimalBetween(a, b).Check(t.Context(), a, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.DecimalBetween(a, b), t.Context(), a, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	if validation.DecimalBetween(b, a).Validate() == nil {
+	if validation.ValidateRule(validation.DecimalBetween(b, a)) == nil {
 		t.Fatal("reversed decimal range accepted")
 	}
 }
@@ -118,29 +118,29 @@ func TestCollectionRulesOwnMembersAndBudget(t *testing.T) {
 	members := []string{"a", "b"}
 	contains := validation.ContainsItems[[]string](members...)
 	members[0] = "changed"
-	if err := contains.Check(t.Context(), []string{"b", "a", "a"}, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(contains, t.Context(), []string{"b", "a", "a"}, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	rejection(t, contains.Check(t.Context(), []string{"a"}, validation.DefaultLimits()))
-	rejection(t, validation.ExcludesItems[[]string]("a").Check(t.Context(), []string{"b", "a"}, validation.DefaultLimits()))
-	if err := validation.ExcludesItems[[]string]("a").Check(t.Context(), nil, validation.DefaultLimits()); err != nil {
+	rejection(t, validation.Check(contains, t.Context(), []string{"a"}, validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.ExcludesItems[[]string]("a"), t.Context(), []string{"b", "a"}, validation.DefaultLimits()))
+	if err := validation.Check(validation.ExcludesItems[[]string]("a"), t.Context(), nil, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	if err := validation.Items[[]int](2).Check(t.Context(), []int{1, 2}, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(validation.Items[[]int](2), t.Context(), []int{1, 2}, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	rejection(t, validation.ItemsBetween[[]int](1, 2).Check(t.Context(), nil, validation.DefaultLimits()))
+	rejection(t, validation.Check(validation.ItemsBetween[[]int](1, 2), t.Context(), nil, validation.DefaultLimits()))
 	type item struct{ SKU string }
 	key := validation.DefineField("sku", func(v item) string { return v.SKU })
 	unique := validation.DistinctBy[[]item](key)
-	if err := unique.Check(t.Context(), []item{{"a"}, {"b"}}, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(unique, t.Context(), []item{{"a"}, {"b"}}, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	rejection(t, unique.Check(t.Context(), []item{{"a"}, {"a"}}, validation.DefaultLimits()))
+	rejection(t, validation.Check(unique, t.Context(), []item{{"a"}, {"a"}}, validation.DefaultLimits()))
 	limits := validation.DefaultLimits()
 	limits.Checks = 2
 	var exceeded *validation.LimitError
-	if !errors.As(contains.Check(t.Context(), []string{"a", "b"}, limits), &exceeded) {
+	if !errors.As(validation.Check(contains, t.Context(), []string{"a", "b"}, limits), &exceeded) {
 		t.Fatal("collection escaped work cap")
 	}
 }
@@ -153,10 +153,10 @@ func TestPasswordRulesPreserveSecretsAndPolicy(t *testing.T) {
 	options.Symbols = true
 	plain := validation.Password[string](options)
 	for _, bad := range []string{"shortA1!", "long lowercase 1!", "LONG UPPERCASE 1!", "Long No Numbers!", "Long No Symbols1"} {
-		rejection(t, plain.Check(t.Context(), bad, validation.DefaultLimits()))
+		rejection(t, validation.Check(plain, t.Context(), bad, validation.DefaultLimits()))
 	}
 	input := "Long Password 1!"
-	if err := plain.Check(t.Context(), input, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(plain, t.Context(), input, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
 	redacted, err := password.NewPlaintext(secret.New(input))
@@ -164,14 +164,14 @@ func TestPasswordRulesPreserveSecretsAndPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	protected := validation.PasswordValue[password.Plaintext](options)
-	if err := protected.Check(t.Context(), redacted, validation.DefaultLimits()); err != nil {
+	if err := validation.Check(protected, t.Context(), redacted, validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
-	info, err := protected.Description()
+	info, err := validation.DescribeRule(protected)
 	if err != nil || !info.ServerOnly || strings.Contains(info.Spec.Message, input) {
 		t.Fatal("unsafe password metadata", err)
 	}
-	if validation.Password[string](validation.PasswordOptions{}).Validate() == nil {
+	if validation.ValidateRule(validation.Password[string](validation.PasswordOptions{})) == nil {
 		t.Fatal("invalid password declaration accepted")
 	}
 }
