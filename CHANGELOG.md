@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+- **Breaking (v0.2 compile footprint):** Validation `Field[T,V]` and `Rule[T]`
+  handles are now methodless structs, and their operations become descriptor-first
+  package functions (`validation.Rules(field, ...)`, `validation.Check(rule, ...)`,
+  `validation.WithLabel`, `validation.ValidateField`). Inline field and leaf rule
+  execution and concrete DTO types are preserved without value boxing. In probe
+  measurements, the 16-DTO declaration archive fell 58.08% in defined functions
+  (6,302 → 2,642) and 39.94% in peak compiler RSS (347.17 → 208.52 MiB); its importing
+  archive fell 85.70% in functions (4,182 → 598) and 60.87% in peak compiler RSS
+  (249.88 → 97.77 MiB). Validation alone fell 278 → 72 marginal functions/DTO
+  (−74.10%). Former methods on `Field` and `Rule` are removed, with no shims.
+  See the [migration guide](docs/guides/v0.2-migration.md).
+- **Breaking (v0.2 compile footprint):** HTTP endpoint and route configuration
+  moves to trailing options (`http.Within`, `http.Timeout`, `http.Use`, `http.Errors`)
+  and typed package functions. Route and payload descriptors (`Path`, `Query`,
+  `Body`, `Response`, `Multipart`) are methodless, and idempotent replay binding
+  is explicit via `modelbinding.BindIdempotent`. In probe measurements (including
+  methodless validation), 16 endpoints (8 authenticated) fell 70.51% in defined
+  functions (17,346 → 5,116) and 56.33% in peak compiler RSS (908.25 → 396.67 MiB);
+  1 public endpoint fell 1,683 → 897 functions (−46.70%) and 147.42 → 126.09 MiB
+  (−14.47%), and 1 authenticated endpoint fell 1,824 → 972 functions (−46.71%)
+  and 158.88 → 131.58 MiB (−17.18%). Ordinary endpoint core fell 176.5 → 36
+  functions/endpoint, and authenticated core fell 79 → 14 functions/authenticated
+  endpoint. Former descriptor and fluent configuration methods are removed, with no shims.
+- **Breaking (v0.2 compile footprint):** ORM Design 2 replaces column handle
+  methods with methodless column handles and per-kind package functions
+  (`orm.TextEq`, `orm.NumberGt`, `orm.KeyAsc`, `orm.EnumEq`, etc.). Query terminals
+  and locking become package functions (`orm.All`, `orm.First`, `orm.Require`,
+  `orm.Count`, `orm.Exists`, `orm.Lock`, `orm.AllLocked`), direct table operations
+  become package functions (`orm.Find`, `orm.RequireKey`, `orm.Insert`, `orm.Update`,
+  `orm.Delete`), and expression/rows arguments require explicit sealed adapters
+  (`orm.TextExpr`, `orm.NumberExpr`). In probe measurements, 32 models fell
+  77.93% in defined functions (24,236 → 5,349) and 74.90% in peak compiler RSS
+  (1,353.6 → 339.7 MB); 1 model fell 1,327 → 730 functions (−44.99%) and 133.6 →
+  99.0 MB (−25.90%), and marginal model cost fell 739 → 149 functions/model
+  (−79.84%) and 39.35 → 7.93 MB (−79.85%). Replaced column, query, locking, and
+  table methods are removed, with no shims.
+- Add `go tool foundry codemod`, a type-aware AST and `go/types` migration tool
+  that automatically rewrites v0.1 validation, HTTP, and ORM call sites to v0.2.
+  It provides a dry-run inventory by default (`go tool foundry codemod ./...`) and
+  refuses `--apply` if unresolved findings remain, preserving callback receiver
+  capture order before running `go tool foundry generate`.
+
 - Allow gopls shutdown to finish pending workspace analysis within a separate
   30-second cleanup budget. Preserve caller cancellation, report cleanup deadlines,
   and retain process/output ownership until exit; cover shutdown beyond the former

@@ -26,51 +26,68 @@ type footprintBudget struct {
 
 const footprintFailureAdvice = "a method or field on a model or endpoint type probably reaches a framework generic (query engine, signed/idempotent endpoint) again; see docs/guides/query-build-resources.md#model-and-endpoint-edges"
 
-// Legacy measurements below are historical, not relabelled ORM measurements.
-// D4 froze them in docs/evidence/goway-stage9-d4-legacy-footprint.json before
-// replacing model_draft with model_assignments. The replacement measured 233
-// functions, 1647 symbols and 1060408 bytes; its ceilings use ceil(measured * 1.15).
-// The other three probe bodies and ceilings remain unchanged.
-// Measured values on the original branch versus pre-change baseline (closure-free Tier A).
-// Baseline measurements are taken from Foundry-Go commit dd188a7 with the same probe bodies.
+// Budgets remeasured for v0.2 Compile Footprint on 2026-10-30 (Go 1.27.3 darwin/arm64).
+// Ceilings use ceil(measured * 1.15) calculated with integer arithmetic.
+// Pre-change baselines reflect commit dd188a7 where recorded.
 //
-// Probe case       Pre-change baseline         This branch (measured)      Committed budget (ceil 1.25x)
-// ------------------------------------------------------------------------------------------------------
-// model_type       14,910 fn, ~70.9 MB         1,159 fn,  7,267 syms, 4.55 MB   1,449 fn,  9,084 syms, 5,959,555 B (~5.68 MB)
-// model_isolated    2,546 fn, ~12.2 MB           139 fn,  1,051 syms, 0.60 MB     174 fn,  1,314 syms,   786,148 B (~0.75 MB)
-// model_draft       2,612 fn, ~12.4 MB           225 fn,  1,566 syms, 0.95 MB     282 fn,  1,958 syms, 1,239,298 B (~1.18 MB)
-// endpoint_plain    3,734 fn, ~16.4 MB         1,065 fn,  7,314 syms, 4.62 MB   1,332 fn,  9,143 syms, 6,059,643 B (~5.78 MB)
+// Probe case              Pre-change baseline         v0.2 (measured)              Committed budget (ceil 1.15x)
+// ------------------------------------------------------------------------------------------------------------------
+// model_type              14,910 fn, ~70.9 MB           915 fn,  5,846 syms, 3.55 MB    1,053 fn,  6,723 syms, 4,279,107 B (~4.08 MB)
+// model_isolated           2,546 fn, ~12.2 MB           106 fn,    799 syms, 0.43 MB      122 fn,    919 syms,   522,974 B (~0.50 MB)
+// model_assignments        2,612 fn, ~12.4 MB           200 fn,  1,398 syms, 0.84 MB      230 fn,  1,608 syms, 1,015,395 B (~0.97 MB)
+// endpoint_plain           3,734 fn, ~16.4 MB           454 fn,  3,669 syms, 2.02 MB      523 fn,  4,220 syms, 2,440,908 B (~2.33 MB)
+// endpoint_ordinary        —                            695 fn,  5,321 syms, 3.11 MB      800 fn,  6,120 syms, 3,755,093 B (~3.58 MB)
+// endpoint_authenticated   —                            982 fn,  7,198 syms, 4.36 MB    1,130 fn,  8,278 syms, 5,254,902 B (~5.01 MB)
+// dto_validated            —                            376 fn,  2,744 syms, 1.80 MB      433 fn,  3,156 syms, 2,172,424 B (~2.07 MB)
 var footprintBudgets = map[string]footprintBudget{
 	"model_type": {
 		pkg:          "./testdata/footprint/model_type",
-		maxFunctions: 1449,
-		maxSymbols:   9084,
-		maxBytes:     5959555,
+		maxFunctions: 1053,
+		maxSymbols:   6723,
+		maxBytes:     4279107,
 	},
 	"model_isolated": {
 		pkg:          "./testdata/footprint/model_isolated",
-		maxFunctions: 174,
-		maxSymbols:   1314,
-		maxBytes:     786148,
+		maxFunctions: 122,
+		maxSymbols:   919,
+		maxBytes:     522974,
 	},
 	"model_assignments": {
 		pkg:          "./testdata/footprint/model_draft",
-		maxFunctions: 268,
-		maxSymbols:   1895,
-		maxBytes:     1219470,
+		maxFunctions: 230,
+		maxSymbols:   1608,
+		maxBytes:     1015395,
 	},
 	"endpoint_plain": {
 		pkg:          "./testdata/footprint/endpoint_plain",
-		maxFunctions: 1332,
-		maxSymbols:   9143,
-		maxBytes:     6059643,
+		maxFunctions: 523,
+		maxSymbols:   4220,
+		maxBytes:     2440908,
+	},
+	"endpoint_ordinary": {
+		pkg:          "./testdata/footprint/endpoint_ordinary",
+		maxFunctions: 800,
+		maxSymbols:   6120,
+		maxBytes:     3755093,
+	},
+	"endpoint_authenticated": {
+		pkg:          "./testdata/footprint/endpoint_authenticated",
+		maxFunctions: 1130,
+		maxSymbols:   8278,
+		maxBytes:     5254902,
+	},
+	"dto_validated": {
+		pkg:          "./testdata/footprint/dto_validated",
+		maxFunctions: 433,
+		maxSymbols:   3156,
+		maxBytes:     2172424,
 	},
 }
 
 func TestFootprintBudgets(t *testing.T) {
 	testkit.TrackExternalInputs(t)
 
-	probeOrder := []string{"model_type", "model_isolated", "model_assignments", "endpoint_plain"}
+	probeOrder := []string{"model_type", "model_isolated", "model_assignments", "endpoint_plain", "endpoint_ordinary", "endpoint_authenticated", "dto_validated"}
 	pkgArgs := make([]string, 0, len(probeOrder))
 	for _, name := range probeOrder {
 		pkgArgs = append(pkgArgs, footprintBudgets[name].pkg)
