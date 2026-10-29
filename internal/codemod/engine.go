@@ -51,14 +51,28 @@ type RuleSet interface {
 	Rewrite(*FileContext, ast.Node) (ast.Node, string)
 }
 type FileContext struct {
-	File         *ast.File
-	Info         *types.Info
-	Package      *types.Package
-	Parents      map[ast.Node]ast.Node
-	AddedImports map[string]string
+	File            *ast.File
+	Info            *types.Info
+	Package         *types.Package
+	Parents         map[ast.Node]ast.Node
+	AddedImports    map[string]string
+	httpReplay      map[ast.Node]httpReplayEdit
+	httpReplayNames map[string]bool
 }
 
 func Inventory(ctx context.Context, options Options, rules ...RuleSet) (*Plan, error) {
+	// HTTP is a built-in migration; caller-supplied rule sets extend the inventory.
+	// Keep explicit HTTP registration useful to embedders without duplicate findings.
+	hasHTTP := false
+	for _, rule := range rules {
+		switch rule.(type) {
+		case HTTP, *HTTP:
+			hasHTTP = true
+		}
+	}
+	if !hasHTTP {
+		rules = append(append([]RuleSet{}, rules...), HTTP{})
+	}
 	dir := options.Dir
 	if dir == "" {
 		dir = "."
@@ -190,6 +204,7 @@ func rewriteFile(fset *token.FileSet, file *ast.File, info *types.Info, pkg *typ
 	}
 	// Replacements retain original child nodes so nested edits compose.
 	replaceNodes(reflect.ValueOf(file), replacements)
+	removeUnusedImports(fc)
 	var output bytes.Buffer
 	if err := format.Node(&output, fset, file); err != nil {
 		return nil, nil, err
@@ -197,10 +212,80 @@ func rewriteFile(fset *token.FileSet, file *ast.File, info *types.Info, pkg *typ
 	return output.Bytes(), entries, nil
 }
 
+// Reordered generic constructors can infer type arguments that were the only
+// use of an import. Original references use object identity; synthesized package
+// selectors use the aliases selected by packageAlias.
+func removeUnusedImports(fc *FileContext) {
+	used := map[string]bool{}
+	ast.Inspect(fc.File, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		id, ok := selector.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		object := fc.Info.Uses[id]
+		if object == nil {
+			used[id.Name] = true
+		} else if _, ok := object.(*types.PkgName); ok {
+			used[id.Name] = true
+		}
+		return true
+	})
+	keep := map[*ast.ImportSpec]bool{}
+	imports := make([]*ast.ImportSpec, 0, len(fc.File.Imports))
+	for _, spec := range fc.File.Imports {
+		name := ""
+		if spec.Name != nil {
+			name = spec.Name.Name
+		} else if object, ok := fc.Info.Implicits[spec].(*types.PkgName); ok {
+			name = object.Name()
+		}
+		if name == "_" || name == "." || name == "C" || used[name] {
+			keep[spec] = true
+			imports = append(imports, spec)
+		}
+	}
+	fc.File.Imports = imports
+	declarations := make([]ast.Decl, 0, len(fc.File.Decls))
+	for _, declaration := range fc.File.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if !ok || group.Tok != token.IMPORT {
+			declarations = append(declarations, declaration)
+			continue
+		}
+		specs := make([]ast.Spec, 0, len(group.Specs))
+		for _, spec := range group.Specs {
+			if keep[spec.(*ast.ImportSpec)] {
+				specs = append(specs, spec)
+			}
+		}
+		if len(specs) != 0 {
+			group.Specs = specs
+			declarations = append(declarations, group)
+		}
+	}
+	fc.File.Decls = declarations
+}
+
 // Reflection only walks AST fields, never consumer values or runtime types.
 func replaceNodes(v reflect.Value, replacements map[ast.Node]ast.Node) {
 	if !v.IsValid() {
 		return
+	}
+	// Function bodies and some other AST children use concrete pointer fields,
+	// rather than ast.Node interfaces. Statement-level rules replace them too.
+	if v.Kind() == reflect.Pointer && !v.IsNil() && v.CanSet() {
+		if node, ok := v.Interface().(ast.Node); ok {
+			if replacement := replacements[node]; replacement != nil {
+				value := reflect.ValueOf(replacement)
+				if value.Type().AssignableTo(v.Type()) {
+					v.Set(value)
+				}
+			}
+		}
 	}
 	if v.Kind() == reflect.Interface {
 		if v.IsNil() {

@@ -86,7 +86,11 @@ func (Validation) Rewrite(fc *FileContext, node ast.Node) (ast.Node, string) {
 	if !ok {
 		return nil, ""
 	}
-	message := selection.Obj().Name() + " → validation." + target
+	return rewriteSelectedMethod(fc, selector, call, selection, target, validationPath)
+}
+
+func rewriteSelectedMethod(fc *FileContext, selector *ast.SelectorExpr, call *ast.CallExpr, selection *types.Selection, target, path string) (ast.Node, string) {
+	message := selection.Obj().Name() + " → " + path[strings.LastIndex(path, "/")+1:] + "." + target
 	if len(selection.Index()) != 1 {
 		return nil, message + ": promoted receiver requires an explicit adapter"
 	}
@@ -98,9 +102,9 @@ func (Validation) Rewrite(fc *FileContext, node ast.Node) (ast.Node, string) {
 	if !ok {
 		return nil, message + ": unsupported receiver type"
 	}
-	alias, ok := packageAlias(fc, validationPath, selector.Pos())
+	alias, ok := packageAlias(fc, path, selector.Pos())
 	if !ok {
-		return nil, message + ": missing, dot-imported or shadowed validation import"
+		return nil, message + ": missing, dot-imported or shadowed package import"
 	}
 	function := ast.Expr(&ast.SelectorExpr{X: ast.NewIdent(alias), Sel: ast.NewIdent(target)})
 	if selection.Kind() == types.MethodExpr {
@@ -223,6 +227,9 @@ func unparen(e ast.Expr) ast.Expr {
 }
 func freshName(fc *FileContext, base string) string {
 	used := map[string]bool{}
+	for name := range fc.httpReplayNames {
+		used[name] = true
+	}
 	for _, alias := range fc.AddedImports {
 		used[alias] = true
 	}
@@ -316,6 +323,10 @@ func typeExpr(fc *FileContext, typ types.Type, pos token.Pos) (ast.Expr, bool) {
 }
 
 func interfaceBoundary(fc *FileContext, node ast.Node) string {
+	return methodInterfaceBoundary(fc, node, validationMethod, "validation")
+}
+
+func methodInterfaceBoundary(fc *FileContext, node ast.Node, match func(*types.Selection) (string, bool), family string) string {
 	affectedType := func(source types.Type, target types.Type) bool {
 		if target == nil {
 			return false
@@ -331,7 +342,7 @@ func interfaceBoundary(fc *FileContext, node ast.Node) string {
 		for i := 0; i < iface.NumMethods(); i++ {
 			method := iface.Method(i)
 			selection := methods.Lookup(method.Pkg(), method.Name())
-			if _, ok := validationMethod(selection); ok {
+			if _, ok := match(selection); ok {
 				return true
 			}
 		}
@@ -362,7 +373,7 @@ func interfaceBoundary(fc *FileContext, node ast.Node) string {
 		}
 		return false
 	}
-	message := "validation interface satisfaction requires an explicit consumer adapter"
+	message := family + " interface satisfaction requires an explicit consumer adapter"
 	switch n := node.(type) {
 	case *ast.Ident:
 		instance, ok := fc.Info.Instances[n]
