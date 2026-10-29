@@ -5,9 +5,10 @@ uncommitted Stage 9 delta through LoadFrom/LoadMissingFrom. Batch 7e and lane D'
 nestedbindings migration have not landed in this checkout. This document is the
 only edit for this planning turn; no generation or verification was run.
 
-Authority: [PLAN §4.9 and Stage 8](../../../proposals/foundry-go-goway-data-layer/PLAN.md),
-[lane D's inventory](../../../proposals/foundry-go-goway-data-layer/patches/stage8-inventory.md),
-and [Stage 9 decisions](../../../proposals/foundry-go-goway-data-layer/patches/stage9-decisions.md).
+Authority: PLAN §4.9 and Stage 8 in `proposals/foundry-go-goway-data-layer/PLAN.md`,
+lane D's inventory in `proposals/foundry-go-goway-data-layer/patches/stage8-inventory.md`,
+and Stage 9 decisions in `proposals/foundry-go-goway-data-layer/patches/stage9-decisions.md`
+(maintainer workspace, outside this repository).
 The inventory describes an older checkout. In this tree the framework stores
 already have ordinary declarations, the model scaffold already renders ORM, and
 the shared runtime contracts have been extracted. Do not repeat those migrations.

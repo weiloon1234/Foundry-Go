@@ -62,6 +62,14 @@ func TestRepositoryChecks(t *testing.T) {
 			wantError: `local link "missing.md"`,
 		},
 		{
+			name: "existing link outside repository",
+			change: func(t *testing.T, root string) {
+				writeTestFile(t, filepath.Dir(root), "outside.md", "# Outside\n")
+				writeTestFile(t, root, "README.md", "[Inside](blueprint/01-next.md)\n[Outside](../outside.md)\n")
+			},
+			wantError: `local link "../outside.md": target is outside repository root`,
+		},
+		{
 			name: "gap in blueprint sequence",
 			change: func(t *testing.T, root string) {
 				if err := os.Rename(filepath.Join(root, "blueprint/01-next.md"), filepath.Join(root, "blueprint/02-next.md")); err != nil {

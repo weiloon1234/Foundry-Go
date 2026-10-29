@@ -69,7 +69,7 @@ func checkRepository(root string) error {
 					failures = append(failures, err)
 				}
 			}
-			if err := checkDocument(path, currentGuide(root, path), completed); err != nil {
+			if err := checkDocument(root, path, currentGuide(root, path), completed); err != nil {
 				failures = append(failures, err)
 			}
 		}
@@ -129,7 +129,7 @@ func goRequirement(path string) (string, error) {
 	return "", fmt.Errorf("%s: missing Go requirement", path)
 }
 
-func checkDocument(path string, current bool, completed map[string]bool) error {
+func checkDocument(root, path string, current bool, completed map[string]bool) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -196,8 +196,24 @@ func checkDocument(path string, current bool, completed map[string]bool) error {
 				continue
 			}
 			local := filepath.Join(filepath.Dir(path), filepath.FromSlash(link.Path))
+			relative, err := filepath.Rel(root, local)
+			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root", path, lineNumber, target))
+				continue
+			}
 			if _, err := os.Stat(local); err != nil {
 				failures = append(failures, fmt.Errorf("%s:%d: local link %q: %w", path, lineNumber, target, err))
+				continue
+			}
+			resolvedRoot, rootErr := filepath.EvalSymlinks(root)
+			resolvedLocal, localErr := filepath.EvalSymlinks(local)
+			if rootErr != nil || localErr != nil {
+				failures = append(failures, fmt.Errorf("%s:%d: local link %q: %w", path, lineNumber, target, errors.Join(rootErr, localErr)))
+				continue
+			}
+			relative, err = filepath.Rel(resolvedRoot, resolvedLocal)
+			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root", path, lineNumber, target))
 			}
 		}
 	}
