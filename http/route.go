@@ -68,25 +68,25 @@ type Route[P any] struct {
 	err            error
 }
 
-func DefineRoute[P any](spec RouteSpec, path Path[P]) Route[P] {
-	return Route[P]{spec: spec, path: path}
+func DefineRoute[P any](spec RouteSpec, path Path[P], options ...RouteOption) Route[P] {
+	return ConfigureRoute(Route[P]{spec: spec, path: path}, options...)
 }
 
-func (r Route[P]) ID() RouteID     { return r.spec.ID }
-func (r Route[P]) Method() Method  { return r.spec.Method }
-func (r Route[P]) Pattern() string { return r.path.Pattern() }
+func RouteIDOf[P any](r Route[P]) RouteID   { return r.spec.ID }
+func RouteMethod[P any](r Route[P]) Method  { return r.spec.Method }
+func RoutePattern[P any](r Route[P]) string { return PathPattern(r.path) }
 
-func (r Route[P]) validate() ([]pathSegment, error) {
-	if err := r.validateIdentity(); err != nil {
+func routeValidate[P any](r Route[P]) ([]pathSegment, error) {
+	if err := routeValidateIdentity(r); err != nil {
 		return nil, err
 	}
 	if err := validateMiddlewares(r.middlewares); err != nil {
 		return nil, err
 	}
-	return r.path.validate()
+	return pathValidate(r.path)
 }
 
-func (r Route[P]) validateIdentity() error {
+func routeValidateIdentity[P any](r Route[P]) error {
 	if r.err != nil {
 		return r.err
 	}
@@ -96,18 +96,18 @@ func (r Route[P]) validateIdentity() error {
 	return nil
 }
 
-// Validate checks the declaration without starting I/O or running a handler.
-func (r Route[P]) Validate() error { _, err := r.validate(); return err }
+// ValidateRoute checks the declaration without starting I/O or running a handler.
+func ValidateRoute[P any](r Route[P]) error { _, err := routeValidate(r); return err }
 
-// URL generates this route's relative URL from its concrete path type. It
+// RouteURL generates this route's relative URL from its concrete path type. It
 // validates the route identity and reuses the path grammar parsed once by
 // DefinePath; middleware declarations do not affect URLs and are validated at
 // registration.
-func (r Route[P]) URL(parameters P) (string, error) {
-	if err := r.validateIdentity(); err != nil {
+func RouteURL[P any](r Route[P], parameters P) (string, error) {
+	if err := routeValidateIdentity(r); err != nil {
 		return "", err
 	}
-	return r.path.URL(parameters)
+	return PathURL(r.path, parameters)
 }
 
 // RawHandler receives decoded, concrete path parameters and native transport
@@ -119,12 +119,12 @@ type RawHandler[P any] func(stdhttp.ResponseWriter, *stdhttp.Request, P)
 // HandleRaw binds a handler with the same concrete path type. Its raw payload
 // boundary is retained in route inspection; client generators must not infer a
 // response DTO from arbitrary writes to ResponseWriter.
-func (r Route[P]) HandleRaw(handler RawHandler[P]) RouteRegistration {
-	return r.handle(handler, true)
+func HandleRaw[P any](r Route[P], handler RawHandler[P]) RouteRegistration {
+	return routeHandle(r, handler, true)
 }
 
-func (r Route[P]) handle(handler RawHandler[P], raw bool) RouteRegistration {
-	segments, err := r.validate()
+func routeHandle[P any](r Route[P], handler RawHandler[P], raw bool) RouteRegistration {
+	segments, err := routeValidate(r)
 	if err != nil {
 		return RouteRegistration{err: err}
 	}
@@ -134,9 +134,9 @@ func (r Route[P]) handle(handler RawHandler[P], raw bool) RouteRegistration {
 	if r.spec.Access == Guarded && (r.authentication == nil || r.authentication.Optional) {
 		return RouteRegistration{err: safeerror.NewFault(fault.Invalid, "guarded route requires a typed authentication adapter")}
 	}
-	info := r.info(segments, raw)
-	return RouteRegistration{contract: r.contributionContract(), info: info, middlewares: slices.Clone(r.middlewares), pattern: string(r.spec.Method) + " " + nativePath(segments), handler: stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, request *stdhttp.Request) {
-		parameters, err := r.path.decode(request, segments)
+	info := routeInfo(r, segments, raw)
+	return RouteRegistration{contract: routeContributionContract(r), info: info, middlewares: slices.Clone(r.middlewares), pattern: string(r.spec.Method) + " " + nativePath(segments), handler: stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, request *stdhttp.Request) {
+		parameters, err := pathDecode(r.path, request, segments)
 		if err != nil {
 			writeRoutingError(w, request, err)
 			return
@@ -225,7 +225,7 @@ type RouteRegistration struct {
 	err     error
 }
 
-func (r Route[P]) info(segments []pathSegment, raw bool) RouteInfo {
+func routeInfo[P any](r Route[P], segments []pathSegment, raw bool) RouteInfo {
 	parameters := make([]string, 0, len(r.path.parameters))
 	for _, segment := range segments {
 		if segment.Name != "" {

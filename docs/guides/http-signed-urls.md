@@ -28,7 +28,7 @@ link, err := preview.URL(ctx, publicOrigin,
 
 This excerpt uses the consumer's imports and declarations. `preview.Handle`
 requires the same concrete path, query, body and response types as `Preview.Handle`.
-Raw routes use `route.Signed(signer).URL(ctx, origin, path, expiresAt)` and
+Raw routes use `foundryhttp.SignedRouteURL(foundryhttp.SignRoute(route, signer), ctx, origin, path, expiresAt)` and
 `HandleRaw`. Neither API accepts an arbitrary untyped query map.
 
 The same signed descriptor generates links and registers verification. Reusing
@@ -70,8 +70,8 @@ when a link must stay on one host or tenant.
 Links without expiry require an explicit opt-in on the signed descriptor:
 
 ```go
-avatar := AvatarRoute.Signed(signer).WithPermanentLinks()
-link, err := avatar.PermanentURL(ctx, publicOrigin, path)
+avatar := foundryhttp.ConfigureSignedRoute(foundryhttp.SignRoute(AvatarRoute, signer), foundryhttp.PermanentLinks())
+link, err := foundryhttp.PermanentRouteURL(avatar, ctx, publicOrigin, path)
 ```
 
 A permanent link omits `expires` and uses its own MAC purpose, so removing the
@@ -79,7 +79,7 @@ expiry from an expiring link invalidates it. It stays valid until its signing
 key leaves the rotation set; prefer expiring links. A descriptor without the
 opt-in rejects permanent links during both generation and verification.
 
-`WithIgnoredParameters("utm_source", "fbclid")` declares query parameters that
+`IgnoredParameters("utm_source", "fbclid")` in `ConfigureSigned` declares query parameters that
 mail clients or trackers may append. Verification removes them (including
 percent-encoded name aliases) before authenticating; they never reach typed query
 decoding, cannot be signed into a link, and cannot collide with a signed

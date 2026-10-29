@@ -32,11 +32,11 @@ type path struct{ Member memberKey }
 type input = modelbinding.Input[path, foundryhttp.NoQuery, foundryhttp.NoBody, member]
 
 func endpoint() foundryhttp.Endpoint[path, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent] {
-	return foundryhttp.DefineEndpoint(
+	return foundryhttp.ValidatePath(foundryhttp.DefineEndpoint(
 		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.show", Method: foundryhttp.GET, Access: foundryhttp.Public},
 			foundryhttp.DefinePath("/members/{member}", foundryhttp.Param("member", foundryhttp.IntegerPath[memberKey](), func(p *path) *memberKey { return &p.Member }))),
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204),
-	).WithPathValidation(validation.Rules(validation.DefineField("member", func(p path) memberKey { return p.Member }), validation.Min(memberKey(1))))
+	), validation.Rules(validation.DefineField("member", func(p path) memberKey { return p.Member }), validation.Min(memberKey(1))))
 }
 func router(t *testing.T, registration foundryhttp.RouteRegistration) *foundryhttp.Router {
 	t.Helper()
@@ -61,12 +61,12 @@ func TestBoundEndpointResolvesOncePerAcceptedPath(t *testing.T) {
 		}
 		return value.Set(member{ID: p.Member, StoredEmail: "private"}), nil
 	})
-	bound := modelbinding.Bind(endpoint(), resolver)
-	before, err := endpoint().Description()
+	bound := modelbinding.Bind(foundryhttp.ForBinding(endpoint()), resolver)
+	before, err := foundryhttp.InspectEndpoint(endpoint())
 	if err != nil {
 		t.Fatal(err)
 	}
-	after, err := bound.Description()
+	after, err := modelbinding.DescribeEndpoint(bound)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestModelLookupFailureNeverPublishesPartialModels(t *testing.T) {
 				}
 				return value.Optional[member]{}, cause
 			})
-			r := router(t, modelbinding.Bind(endpoint(), resolver).Handle(func(context.Context, input) (foundryhttp.NoContent, error) {
+			r := router(t, modelbinding.Bind(foundryhttp.ForBinding(endpoint()), resolver).Handle(func(context.Context, input) (foundryhttp.NoContent, error) {
 				t.Error("handler ran after failed lookup")
 				return foundryhttp.NoContent{}, nil
 			}))
@@ -128,7 +128,7 @@ func TestModelLookupFailureNeverPublishesPartialModels(t *testing.T) {
 			if w.Code != want || strings.Contains(w.Body.String(), "private") {
 				t.Fatalf("unsafe failure %d %s", w.Code, w.Body.String())
 			}
-			result, err := resolver.Resolve(t.Context(), path{42})
+			result, err := modelbinding.Resolve(resolver, t.Context(), path{42})
 			if result.ID != 0 || err == nil {
 				t.Fatal("failed resolver exposed model")
 			}
@@ -151,7 +151,7 @@ func TestModelResolverOwnsCanceledLookupUntilReturn(t *testing.T) {
 		return value.Set(member{ID: 42}), nil
 	})
 	go func() {
-		m, err := resolver.Resolve(ctx, path{42})
+		m, err := modelbinding.Resolve(resolver, ctx, path{42})
 		if m.ID != 0 {
 			err = errors.New("published canceled model")
 		}
@@ -173,7 +173,7 @@ func TestModelResolverOwnsCanceledLookupUntilReturn(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("lookup did not finish")
 	}
-	if _, err := resolver.Resolve(nil, path{42}); !errors.Is(err, fault.Invalid) {
+	if _, err := modelbinding.Resolve(resolver, nil, path{42}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil context accepted")
 	}
 }
@@ -214,10 +214,10 @@ func TestKeyBindingRetainsQueryAndKeyOwnership(t *testing.T) {
 	}}
 	key := func(p path) memberKey { return p.Member }
 	resolver := modelbinding.ByKey(executor, query, key)
-	if err := resolver.Validate(); err != nil || calls != 0 {
+	if err := modelbinding.ValidateResolver(resolver); err != nil || calls != 0 {
 		t.Fatal("assembly resolved a model", err)
 	}
-	got, err := resolver.Resolve(t.Context(), path{42})
+	got, err := modelbinding.Resolve(resolver, t.Context(), path{42})
 	if err != nil || got.ID != 42 || calls != 1 {
 		t.Fatal(got, err, calls)
 	}
@@ -227,18 +227,18 @@ func TestKeyBindingRetainsQueryAndKeyOwnership(t *testing.T) {
 		{}, modelbinding.Define[path, member](nil), modelbinding.ByKey(nilExecutor, query, key), modelbinding.ByKey(executor, nilQuery, key),
 		modelbinding.ByKey[path](executor, query, nil), modelbinding.ByKey(executor, keyedQuery{invalid: true}, key),
 	} {
-		if invalid.Validate() == nil {
+		if modelbinding.ValidateResolver(invalid) == nil {
 			t.Fatal("invalid binding accepted")
 		}
-		if _, err := foundryhttp.NewRouter(modelbinding.Bind(endpoint(), invalid).Handle(func(context.Context, input) (foundryhttp.NoContent, error) { return foundryhttp.NoContent{}, nil })); err == nil {
+		if _, err := foundryhttp.NewRouter(modelbinding.Bind(foundryhttp.ForBinding(endpoint()), invalid).Handle(func(context.Context, input) (foundryhttp.NoContent, error) { return foundryhttp.NoContent{}, nil })); err == nil {
 			t.Fatal("invalid binding registered")
 		}
 	}
-	if _, err := foundryhttp.NewRouter(modelbinding.Bind(endpoint(), resolver).Handle(nil)); err == nil {
+	if _, err := foundryhttp.NewRouter(modelbinding.Bind(foundryhttp.ForBinding(endpoint()), resolver).Handle(nil)); err == nil {
 		t.Fatal("nil handler registered")
 	}
 	badSelector := modelbinding.ByKey(executor, query, func(path) memberKey { panic("private selector") })
-	if _, err := badSelector.Resolve(t.Context(), path{42}); !errors.Is(err, foundryhttp.InternalError) {
+	if _, err := modelbinding.Resolve(badSelector, t.Context(), path{42}); !errors.Is(err, foundryhttp.InternalError) {
 		t.Fatal("selector panic escaped", err)
 	}
 }
@@ -249,7 +249,7 @@ func TestBoundModelResultsAreRequestLocal(t *testing.T) {
 		resolved.Add(1)
 		return value.Set(member{ID: p.Member}), nil
 	})
-	r := router(t, modelbinding.Bind(endpoint(), resolver).Handle(func(_ context.Context, in input) (foundryhttp.NoContent, error) {
+	r := router(t, modelbinding.Bind(foundryhttp.ForBinding(endpoint()), resolver).Handle(func(_ context.Context, in input) (foundryhttp.NoContent, error) {
 		if in.Model.ID != in.Request.Path.Member {
 			t.Error("another request's model")
 		}
@@ -293,8 +293,8 @@ func TestSignedModelEndpointVerifiesBeforeLookup(t *testing.T) {
 		calls++
 		return value.Set(member{ID: p.Member}), nil
 	})
-	bound := modelbinding.Bind(signed, resolver)
-	info, err := bound.Description()
+	bound := modelbinding.Bind(foundryhttp.ForSignedBinding(signed), resolver)
+	info, err := modelbinding.DescribeEndpoint(bound)
 	if err != nil || info.Route.SignedURL == nil {
 		t.Fatal("signed metadata lost", err)
 	}

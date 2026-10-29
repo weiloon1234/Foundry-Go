@@ -7,11 +7,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-// WithValidation adds request rules in declaration order, including comparisons
+// ValidateInput adds request rules in declaration order, including comparisons
 // across parameter sources. It returns an independent endpoint. Rules execute
 // after decoding, preparation and request authorization, before the handler;
 // they must not mutate input values.
-func (e Endpoint[P, Q, B, R]) WithValidation(rules ...validation.Rule[Input[P, Q, B]]) Endpoint[P, Q, B, R] {
+func ValidateInput[P, Q, B, R any](e Endpoint[P, Q, B, R], rules ...validation.Rule[Input[P, Q, B]]) Endpoint[P, Q, B, R] {
 	rule := validation.All(rules...)
 	if e.validation != nil {
 		rule = validation.All(*e.validation, rule)
@@ -20,24 +20,24 @@ func (e Endpoint[P, Q, B, R]) WithValidation(rules ...validation.Rule[Input[P, Q
 	return e
 }
 
-// WithPathValidation adds rules for the concrete path value. Diagnostics and
+// ValidatePath adds rules for the concrete path value. Diagnostics and
 // metadata retain the path source prefix, including declared nested fields.
-func (e Endpoint[P, Q, B, R]) WithPathValidation(rules ...validation.Rule[P]) Endpoint[P, Q, B, R] {
+func ValidatePath[P, Q, B, R any](e Endpoint[P, Q, B, R], rules ...validation.Rule[P]) Endpoint[P, Q, B, R] {
 	field := validation.DefineField("path", func(input Input[P, Q, B]) P { return input.Path })
-	return e.WithValidation(validation.Rules(field, rules...))
+	return ValidateInput(e, validation.Rules(field, rules...))
 }
 
-// WithQueryValidation adds rules for the concrete query value.
-func (e Endpoint[P, Q, B, R]) WithQueryValidation(rules ...validation.Rule[Q]) Endpoint[P, Q, B, R] {
+// ValidateQuery adds rules for the concrete query value.
+func ValidateQuery[P, Q, B, R any](e Endpoint[P, Q, B, R], rules ...validation.Rule[Q]) Endpoint[P, Q, B, R] {
 	field := validation.DefineField("query", func(input Input[P, Q, B]) Q { return input.Query })
-	return e.WithValidation(validation.Rules(field, rules...))
+	return ValidateInput(e, validation.Rules(field, rules...))
 }
 
-// WithBodyValidation adds rules for the decoded body. Use generated field
+// ValidateBody adds rules for the decoded body. Use generated field
 // declarations and Optional/Nullable rules to retain wire names and presence.
-func (e Endpoint[P, Q, B, R]) WithBodyValidation(rules ...validation.Rule[B]) Endpoint[P, Q, B, R] {
+func ValidateBody[P, Q, B, R any](e Endpoint[P, Q, B, R], rules ...validation.Rule[B]) Endpoint[P, Q, B, R] {
 	field := validation.DefineField("body", func(input Input[P, Q, B]) B { return input.Body })
-	return e.WithValidation(validation.Rules(field, rules...))
+	return ValidateInput(e, validation.Rules(field, rules...))
 }
 
 // Validation runs after decoding: an expired deadline is the server's own

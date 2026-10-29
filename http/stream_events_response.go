@@ -2,13 +2,13 @@ package http
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	stdhttp "net/http"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -51,24 +51,14 @@ func (Events[T]) MarshalJSON() ([]byte, error) {
 // aborts the connection. Metadata, OpenAPI and the TypeScript client describe
 // the stream and its data type; the client iterates the decoded events.
 func EventStreamResponse[T any](descriptor contract.JSON[T]) Response[Events[T]] {
-	return Response[Events[T]]{kind: payloadEvents, status: 200, events: eventsDescriptor[T]{descriptor: descriptor}}
-}
-
-// eventResponse is a typed event stream contract behind a Response[R].
-type eventResponse[R any] interface {
-	Validate() error
-	Description() (contract.Schema, error)
-	prepare(R, contract.JSONLimits) (func(stdhttp.ResponseWriter, *stdhttp.Request) error, error)
+	return Response[Events[T]]{prepare: prepareEventResponse[Events[T]], kind: payloadEvents, status: 200, validateEvents: descriptor.Validate, schema: descriptor.Description, describe: schemaPayloadInfo(EventStreamMediaType, descriptor.Description), prepareEvents: func(events Events[T], limits contract.JSONLimits) (func(stdhttp.ResponseWriter, *stdhttp.Request) error, error) {
+		return prepareEventsDescriptor(eventsDescriptor[T]{descriptor: descriptor}, events, limits)
+	}}
 }
 
 type eventsDescriptor[T any] struct{ descriptor contract.JSON[T] }
 
-func (d eventsDescriptor[T]) Validate() error { return d.descriptor.Validate() }
-func (d eventsDescriptor[T]) Description() (contract.Schema, error) {
-	return d.descriptor.Description()
-}
-
-func (d eventsDescriptor[T]) prepare(events Events[T], limits contract.JSONLimits) (func(stdhttp.ResponseWriter, *stdhttp.Request) error, error) {
+func prepareEventsDescriptor[T any](d eventsDescriptor[T], events Events[T], limits contract.JSONLimits) (func(stdhttp.ResponseWriter, *stdhttp.Request) error, error) {
 	if events.produce == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "event stream has no producer")
 	}

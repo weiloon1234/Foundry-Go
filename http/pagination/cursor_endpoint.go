@@ -17,9 +17,9 @@ type CursorEndpoint[P, F, M, T any] = pageEndpoint[P, F, orm.CursorRequest[M], C
 // the route, generated filters and item descriptor infer the other concrete types.
 // Query execution still validates each token's query scope and authorization must
 // run for every request. Tokens are positions, not signed/encrypted credentials.
-func DefineCursor[M, P, F, T any](route foundryhttp.Route[P], filters foundryhttp.Query[F], item contract.JSON[T], config CursorConfig) CursorEndpoint[P, F, M, T] {
+func DefineCursor[M, P, F, T any](route foundryhttp.Route[P], filters foundryhttp.Query[F], item contract.JSON[T], config CursorConfig, options ...foundryhttp.EndpointOption) CursorEndpoint[P, F, M, T] {
 	if err := config.Validate(); err != nil {
-		return CursorEndpoint[P, F, M, T]{err: err}
+		return CursorEndpoint[P, F, M, T]{pageCore: pageCore{err: err}}
 	}
 	validate := func(page orm.CursorRequest[M]) error {
 		if err := page.Validate(); err != nil {
@@ -37,7 +37,7 @@ func DefineCursor[M, P, F, T any](route foundryhttp.Route[P], filters foundryhtt
 		}
 		return err
 	}
-	return result
+	return Configure(result, options...)
 }
 func cursorResponse[P, F, M, T any](in CursorRequest[P, F, M], page CursorResult[M, T], build func(orm.CursorRequest[M]) (string, error)) (CursorResponse[T], error) {
 	if !page.defined || page.size != in.Page.Size {

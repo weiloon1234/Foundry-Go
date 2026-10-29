@@ -27,7 +27,7 @@ func consumedQueryParameters(ctx context.Context) []string {
 
 // withoutConsumed removes consumed parameters this declaration does not itself
 // declare; a declared parameter of the same name keeps its value.
-func (d Query[Q]) withoutConsumed(ctx context.Context, raw string) string {
+func queryWithoutConsumed[Q any](d Query[Q], ctx context.Context, raw string) string {
 	names := consumedQueryParameters(ctx)
 	if len(names) == 0 || raw == "" {
 		return raw

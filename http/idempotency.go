@@ -39,31 +39,33 @@ func Idempotent[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], store *idempotenc
 
 func IdempotentSigned[P, Q, B, R any](endpoint SignedEndpoint[P, Q, B, R], store *idempotency.Store, definition idempotency.Definition) IdempotentEndpoint[P, Q, B, R] {
 	bound := Idempotent(endpoint.endpoint, store, definition)
-	bound.err = endpoint.Validate()
+	bound.err = ValidateSigned(endpoint)
 	bound.signedURL = signedURLInfo(endpoint.signer.policy)
 	bound.wrap = func(r RouteRegistration) RouteRegistration {
-		return signedRegistration(r, endpoint.signer, endpoint.endpoint.route.spec, endpoint.endpoint.Pattern(), true)
+		return signedRegistration(r, endpoint.signer, endpoint.endpoint.route.spec, EndpointPattern(endpoint.endpoint), true)
 	}
 	return bound
 }
-func (e IdempotentEndpoint[P, Q, B, R]) ID() RouteID { return e.endpoint.ID() }
+func IdempotentEndpointID[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) RouteID {
+	return EndpointID(e.endpoint)
+}
 
-// WithHeaders prepares bounded application headers inside the transaction.
+// IdempotentHeaders prepares bounded application headers inside the transaction.
 // Only Location, Content-Language and ETag are replayable. Cookies, credentials,
 // security, framing and request/trace headers never enter the stored outcome.
-func (e IdempotentEndpoint[P, Q, B, R]) WithHeaders(prepare func(context.Context, R) ([]ResponseHeader, error)) IdempotentEndpoint[P, Q, B, R] {
+func IdempotentHeaders[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R], prepare func(context.Context, R) ([]ResponseHeader, error)) IdempotentEndpoint[P, Q, B, R] {
 	if prepare == nil || e.headers != nil {
 		e.err = safeerror.NewFault(fault.Invalid, "idempotent response headers need one callback")
 	}
 	e.headers = prepare
 	return e
 }
-func (e IdempotentEndpoint[P, Q, B, R]) Validate() error {
+func ValidateIdempotent[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) error {
 	if e.endpoint.headers != nil {
 		// Replays must reproduce the stored outcome exactly.
-		return safeerror.NewFault(fault.Invalid, "idempotent endpoints declare replayable headers with IdempotentEndpoint.WithHeaders")
+		return safeerror.NewFault(fault.Invalid, "idempotent endpoints declare replayable headers with IdempotentHeaders")
 	}
-	for _, err := range []error{e.err, e.endpoint.Validate(), e.store.Validate(), e.definition.Validate()} {
+	for _, err := range []error{e.err, ValidateEndpoint(e.endpoint), e.store.Validate(), e.definition.Validate()} {
 		if err != nil {
 			return err
 		}
@@ -74,7 +76,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) Validate() error {
 	if e.endpoint.response.credentials || e.endpoint.response.kind != payloadJSON && e.endpoint.response.kind != payloadEmpty {
 		return safeerror.NewFault(fault.Invalid, "idempotent endpoints require a non-credential JSON or empty response")
 	}
-	switch e.endpoint.Method() {
+	switch EndpointMethod(e.endpoint) {
 	case POST, PUT, PATCH, DELETE:
 	default:
 		return safeerror.NewFault(fault.Invalid, "idempotency requires an unsafe operation method")
@@ -82,14 +84,13 @@ func (e IdempotentEndpoint[P, Q, B, R]) Validate() error {
 	if err := validateIdempotentMiddlewares(e.endpoint.route.middlewares); err != nil {
 		return err
 	}
-	if e.endpoint.response.kind == payloadJSON {
-		if _, ok := e.endpoint.response.json.(replayJSON[R]); !ok {
-			return safeerror.NewFault(fault.Invalid, "idempotent response codec cannot restore its concrete result")
-		}
+	if e.endpoint.response.kind == payloadJSON && e.endpoint.response.decodeJSON == nil {
+		return safeerror.NewFault(fault.Invalid, "idempotent response codec cannot restore its concrete result")
 	}
+
 	return nil
 }
-func (e IdempotentEndpoint[P, Q, B, R]) described() Endpoint[P, Q, B, R] {
+func idempotentEndpointDescribed[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) Endpoint[P, Q, B, R] {
 	endpoint := e.endpoint
 	info := idempotencyInfo(e.definition, e.store.Config(), e.headers != nil)
 	endpoint.idempotency = &info
@@ -97,20 +98,20 @@ func (e IdempotentEndpoint[P, Q, B, R]) described() Endpoint[P, Q, B, R] {
 	if endpoint.body.kind == payloadForm {
 		endpoint.limits.Form.Bytes = min(endpoint.limits.Form.Bytes, e.store.Config().MaxInputBytes)
 	}
-	return endpoint.WithErrors(idempotencyErrors()...)
+	return ConfigureEndpoint(endpoint, Errors(idempotencyErrors()...))
 }
-func (e IdempotentEndpoint[P, Q, B, R]) Description() (EndpointInfo, error) {
-	if err := e.Validate(); err != nil {
+func InspectIdempotent[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) (EndpointInfo, error) {
+	if err := ValidateIdempotent(e); err != nil {
 		return EndpointInfo{}, err
 	}
-	info, err := e.described().Description()
+	info, err := InspectEndpoint(idempotentEndpointDescribed(e))
 	if e.signedURL != nil {
 		info.Route.SignedURL = e.signedURL
 	}
 	return info, err
 }
-func (e IdempotentEndpoint[P, Q, B, R]) contributionContract() contributionContract {
-	result := e.endpoint.contributionContract()
+func idempotentEndpointContributionContract[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) contributionContract {
+	result := endpointContributionContract(e.endpoint)
 	result.idempotency = e.definition
 	result.signed = e.wrap != nil
 	return result
@@ -122,27 +123,27 @@ func (e IdempotentEndpoint[P, Q, B, R]) Handle(scope func(context.Context, Input
 	if scope == nil || handler == nil {
 		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "idempotent endpoint requires scope and transaction callbacks"))
 	}
-	return e.Prepare(func(ctx context.Context, in Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error) {
+	return PrepareIdempotent(e, func(ctx context.Context, in Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error) {
 		identity, err := scope(ctx, in)
 		return identity, handler, err
 	})
 }
 
-// Prepare is the typed composition boundary for authenticated/model-bound
+// PrepareIdempotent is the typed composition boundary for authenticated/model-bound
 // adapters. Policy and binding run before Run on both new requests and replays.
-func (e IdempotentEndpoint[P, Q, B, R]) Prepare(prepare TransactionPreparation[P, Q, B, R]) RouteRegistration {
-	if err := e.Validate(); err != nil {
+func PrepareIdempotent[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R], prepare TransactionPreparation[P, Q, B, R]) RouteRegistration {
+	if err := ValidateIdempotent(e); err != nil {
 		return InvalidRouteRegistration(err)
 	}
 	if prepare == nil {
 		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "idempotent endpoint requires request preparation"))
 	}
-	operation, err := idempotency.Define(e.store, e.definition, e.inputEncoding(), e.outputEncoding())
+	operation, err := idempotency.Define(e.store, e.definition, idempotentEndpointInputEncoding(e), idempotentEndpointOutputEncoding(e))
 	if err != nil {
 		return InvalidRouteRegistration(err)
 	}
-	endpoint := e.described()
-	registration := endpoint.handlePrepared(func(ctx context.Context, in Input[P, Q, B]) (preparedResponse, error) {
+	endpoint := idempotentEndpointDescribed(e)
+	registration := endpointHandlePrepared(endpoint, func(ctx context.Context, in Input[P, Q, B]) (preparedResponse, error) {
 		identity, handler, err := prepare(ctx, in)
 		if err != nil {
 			return preparedResponse{}, err
@@ -164,7 +165,7 @@ func (e IdempotentEndpoint[P, Q, B, R]) Prepare(prepare TransactionPreparation[P
 		}
 		return preparedResponse{data: stored.Body, headers: stored.Headers, operational: err}, nil
 	})
-	registration.contract = e.contributionContract()
+	registration.contract = idempotentEndpointContributionContract(e)
 	if e.wrap != nil {
 		registration = e.wrap(registration)
 		registration.handler = idempotentHTTPHandler{registration.handler}

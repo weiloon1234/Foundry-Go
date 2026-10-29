@@ -34,7 +34,7 @@ func TestComposedQueriesPreserveDefaultsAndTypedBindings(t *testing.T) {
 	t.Parallel()
 	descriptor := composedDescriptor()
 	input := "user=" + queryUserID + "&q=a%2Bb&label=first&label=second"
-	decoded, err := descriptor.Decode(t.Context(), input, queryLimits)
+	decoded, err := foundryhttp.DecodeQuery(descriptor, t.Context(), input, queryLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,32 +44,32 @@ func TestComposedQueriesPreserveDefaultsAndTypedBindings(t *testing.T) {
 	if text, _ := decoded.Search.Search.Get(); text != "a+b" {
 		t.Fatal("filter escaping changed")
 	}
-	wire, err := descriptor.Encode(t.Context(), decoded, queryLimits)
+	wire, err := foundryhttp.EncodeQuery(descriptor, t.Context(), decoded, queryLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := descriptor.Decode(t.Context(), wire, queryLimits)
+	again, err := foundryhttp.DecodeQuery(descriptor, t.Context(), wire, queryLimits)
 	if err != nil || !reflect.DeepEqual(decoded, again) {
 		t.Fatal("composed query lost round trip")
 	}
 	if !strings.Contains(wire, "size=20") || !strings.Contains(wire, "enabled=true") || !strings.Contains(wire, "fallback=") {
 		t.Fatal("encoding silently omitted concrete defaults")
 	}
-	explicit, err := descriptor.Decode(t.Context(), input+"&size=0&enabled=false&fallback=", queryLimits)
+	explicit, err := foundryhttp.DecodeQuery(descriptor, t.Context(), input+"&size=0&enabled=false&fallback=", queryLimits)
 	if err != nil || explicit.Size != 0 || explicit.Enabled || explicit.Fallback != "" {
 		t.Fatalf("explicit zero/false/empty replaced: %+v %v", explicit, err)
 	}
 	for _, raw := range []string{input + "&size=1&size=2", input + "&size=", input + "&unknown=private", "size=20"} {
-		zero, err := descriptor.Decode(t.Context(), raw, queryLimits)
+		zero, err := foundryhttp.DecodeQuery(descriptor, t.Context(), raw, queryLimits)
 		if err == nil || !reflect.DeepEqual(zero, composedSearch{}) {
 			t.Fatalf("invalid query returned partial values: %+v %v", zero, err)
 		}
 	}
-	metadata, err := descriptor.Parameters()
+	metadata, err := foundryhttp.QueryParameters(descriptor)
 	if err != nil {
 		t.Fatal(err)
 	}
-	inner, _ := searchQuery().Parameters()
+	inner, _ := foundryhttp.QueryParameters(searchQuery())
 	for _, original := range inner {
 		found := false
 		for _, field := range metadata {
@@ -98,7 +98,7 @@ func TestComposedQueriesPreserveDefaultsAndTypedBindings(t *testing.T) {
 		}
 	}
 	metadata[0].Name = "changed"
-	after, _ := descriptor.Parameters()
+	after, _ := foundryhttp.QueryParameters(descriptor)
 	if after[0].Name == "changed" {
 		t.Fatal("metadata aliases descriptor")
 	}
@@ -113,12 +113,12 @@ func TestQueryCompositionRejectsInvalidAndAmbiguousDeclarations(t *testing.T) {
 		foundryhttp.EmbedQuery[composedSearch](searchQuery(), nil),
 		foundryhttp.EmbedQuery(foundryhttp.Query[querySearch]{}, func(q *composedSearch) *querySearch { return &q.Search }),
 	} {
-		if descriptor.Validate() == nil {
+		if foundryhttp.ValidateQueryDescriptor(descriptor) == nil {
 			t.Fatal("invalid or overlapping declaration accepted")
 		}
 	}
 	empty := foundryhttp.MergeQueries[composedSearch]()
-	if _, err := empty.Decode(t.Context(), "", queryLimits); err != nil {
+	if _, err := foundryhttp.DecodeQuery(empty, t.Context(), "", queryLimits); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -142,7 +142,7 @@ func TestEmbeddedQuerySelectorsRetainFailureOwnership(t *testing.T) {
 				go func() {
 					completed := false
 					defer func() { returned <- completed }()
-					_, _ = descriptor.Decode(context.Background(), "user="+queryUserID, queryLimits)
+					_, _ = foundryhttp.DecodeQuery(descriptor, context.Background(), "user="+queryUserID, queryLimits)
 					completed = true
 				}()
 				if <-returned {
@@ -150,11 +150,11 @@ func TestEmbeddedQuerySelectorsRetainFailureOwnership(t *testing.T) {
 				}
 				return
 			}
-			result, err := descriptor.Decode(context.Background(), "user="+queryUserID, queryLimits)
+			result, err := foundryhttp.DecodeQuery(descriptor, context.Background(), "user="+queryUserID, queryLimits)
 			if !errors.Is(err, fault.Internal) || !reflect.DeepEqual(result, composedSearch{}) {
 				t.Fatalf("selector failure escaped: %+v %v", result, err)
 			}
-			if output, err := descriptor.Encode(context.Background(), composedSearch{}, queryLimits); !errors.Is(err, fault.Internal) || output != "" {
+			if output, err := foundryhttp.EncodeQuery(descriptor, context.Background(), composedSearch{}, queryLimits); !errors.Is(err, fault.Internal) || output != "" {
 				t.Fatal("selector returned partial encoded values")
 			}
 		})

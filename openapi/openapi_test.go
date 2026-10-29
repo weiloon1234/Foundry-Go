@@ -131,10 +131,7 @@ func TestHeadOpenAPIHasNoPayloadForSuccessOrFailure(t *testing.T) {
 
 func TestOpenAPIExportsRouteDocumentationExamplesAndServers(t *testing.T) {
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "notes.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/notes"))
-	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.JSONBody(contract.StringJSON[string]()), foundryhttp.JSONResponse(201, contract.StringJSON[string]())).
-		WithDocumentation(foundryhttp.RouteDocumentation{Summary: "Create a note", Description: "Stores a note.\nReturns its text.", Tags: []string{"notes", "writes"}, Deprecated: true}).
-		WithBodyExample("draft").
-		WithResponseExample("stored")
+	endpoint := foundryhttp.ResponseExample(foundryhttp.BodyExample(foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.JSONBody(contract.StringJSON[string]()), foundryhttp.JSONResponse(201, contract.StringJSON[string]())), foundryhttp.Documentation(foundryhttp.RouteDocumentation{Summary: "Create a note", Description: "Stores a note.\nReturns its text.", Tags: []string{"notes", "writes"}, Deprecated: true})), "draft"), "stored")
 	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, string]) (string, error) {
 		t.Fatal("export invoked handler")
 		return "", nil

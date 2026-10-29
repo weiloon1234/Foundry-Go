@@ -2,11 +2,12 @@ package http
 
 import (
 	"context"
-	"github.com/weiloon1234/Foundry-Go/value"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type formInput struct {
@@ -135,7 +136,7 @@ func TestFormBodyBoundsAndCompatibility(t *testing.T) {
 			limits.Body.Bytes = 1
 			limits.Form = QueryLimits{Bytes: tc.bytes, Pairs: tc.pairs, Issues: 1}
 			calls := 0
-			router, err := NewRouter(formEndpoint().WithLimits(limits).Handle(func(context.Context, formRequest) (NoContent, error) { calls++; return NoContent{}, nil }))
+			router, err := NewRouter(ConfigureEndpoint(formEndpoint(), Limits(limits)).Handle(func(context.Context, formRequest) (NoContent, error) { calls++; return NoContent{}, nil }))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -153,10 +154,10 @@ func TestFormBodyBoundsAndCompatibility(t *testing.T) {
 	}
 	limits := DefaultEndpointLimits()
 	limits.Form = QueryLimits{}
-	if err := patchEndpoint().WithLimits(limits).Validate(); err != nil {
+	if err := ValidateEndpoint(ConfigureEndpoint(patchEndpoint(), Limits(limits))); err != nil {
 		t.Fatal("old non-form limits invalid", err)
 	}
-	if err := formEndpoint().WithLimits(limits).Validate(); err == nil {
+	if err := ValidateEndpoint(ConfigureEndpoint(formEndpoint(), Limits(limits))); err == nil {
 		t.Fatal("form with no budget accepted")
 	}
 }
@@ -166,7 +167,7 @@ func FuzzFormEndpointBounds(f *testing.F) {
 	}
 	limits := DefaultEndpointLimits()
 	limits.Form = QueryLimits{Bytes: 1024, Pairs: 16, Issues: 3}
-	router, err := NewRouter(formEndpoint().WithLimits(limits).Handle(func(context.Context, formRequest) (NoContent, error) { return NoContent{}, nil }))
+	router, err := NewRouter(ConfigureEndpoint(formEndpoint(), Limits(limits)).Handle(func(context.Context, formRequest) (NoContent, error) { return NoContent{}, nil }))
 	if err != nil {
 		f.Fatal(err)
 	}
@@ -196,7 +197,7 @@ func TestFormExplicitCompositionAndBoundedDiagnostics(t *testing.T) {
 	limits := DefaultEndpointLimits()
 	limits.Form.Issues = 1
 	called := false
-	router, err := NewRouter(endpoint.WithLimits(limits).Handle(func(_ context.Context, in Input[NoPath, NoQuery, outer]) (NoContent, error) {
+	router, err := NewRouter(ConfigureEndpoint(endpoint, Limits(limits)).Handle(func(_ context.Context, in Input[NoPath, NoQuery, outer]) (NoContent, error) {
 		called = true
 		if in.Body.Contact.Name != "Jane" {
 			t.Error("lost concrete nested value")

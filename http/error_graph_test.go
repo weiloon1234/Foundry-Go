@@ -40,11 +40,11 @@ func TestCyclicHTTPFailuresFinishAndPermitTheNextRequest(t *testing.T) {
 			handler := returnHTTPError(nil)
 			switch site {
 			case "preparation":
-				endpoint = endpoint.WithPreparation(func(context.Context, Input[NoPath, NoQuery, NoBody]) (NoQuery, NoBody, error) {
+				endpoint = PrepareEndpoint(endpoint, func(context.Context, Input[NoPath, NoQuery, NoBody]) (NoQuery, NoBody, error) {
 					return NoQuery{}, NoBody{}, failure()
 				})
 			case "authorization":
-				endpoint = endpoint.WithAuthorization(func(context.Context, Input[NoPath, NoQuery, NoBody]) error { return failure() })
+				endpoint = AuthorizeEndpoint(endpoint, func(context.Context, Input[NoPath, NoQuery, NoBody]) error { return failure() })
 			case "handler":
 				handler = func(context.Context, Input[NoPath, NoQuery, NoBody]) (NoContent, error) {
 					return NoContent{}, failure()

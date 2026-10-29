@@ -10,11 +10,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-type routeDeclaration interface {
-	ID() RouteID
-	Validate() error
-	contributionContract() contributionContract
-}
 type routerRegistration struct{}
 
 func routerRegistrationKey(key foundation.Key[*Router]) foundation.Key[routerRegistration] {
@@ -39,20 +34,18 @@ func spaContributions(key foundation.Key[*Router]) foundation.Collection[spaDecl
 	return foundation.NewCollection[spaDeclaration](fmt.Sprintf("http.spas.%q", key.Name()))
 }
 
-// RegisterRoute preserves the concrete route/endpoint descriptor through the
+// registerRoute preserves the concrete route/endpoint descriptor through the
 // contribution boundary. Its factory uses the existing typed Handle methods;
 // returning a different ID, method, path, access or Go wire type fails Build.
 // Signing required by the descriptor must also be retained. Constructors can
 // resolve domain services but must not resolve the router being constructed.
-func RegisterRoute[D routeDeclaration](r *foundation.Registrar, key foundation.Key[*Router], declaration D, construct func(foundation.Resolver) (RouteRegistration, error)) error {
+func registerRoute[D any](r *foundation.Registrar, key foundation.Key[*Router], id RouteID, contract contributionContract, validate func() error, construct func(foundation.Resolver) (RouteRegistration, error)) error {
 	if key.Name() == "" || construct == nil {
 		return safeerror.NewFault(fault.Invalid, "route contribution requires a router and constructor")
 	}
-	if err := declaration.Validate(); err != nil {
+	if err := validate(); err != nil {
 		return err
 	}
-	id := declaration.ID()
-	contract := declaration.contributionContract()
 	return foundation.ContributeAs[D](r, routeContributions(key), string(id), func(resolver foundation.Resolver) (RouteRegistration, error) {
 		if _, err := foundation.Resolve(resolver, routerRegistrationKey(key)); err != nil {
 			return RouteRegistration{}, err
@@ -181,4 +174,29 @@ func registerRouter(r *foundation.Registrar, key foundation.Key[*Router], constr
 		}
 		return router, nil
 	})
+}
+
+// RegisterRoute registers the concrete declaration and validates the factory's transport contract.
+func RegisterRoute[P any](r *foundation.Registrar, key foundation.Key[*Router], declaration Route[P], construct func(foundation.Resolver) (RouteRegistration, error)) error {
+	return registerRoute[Route[P]](r, key, RouteIDOf(declaration), routeContributionContract(declaration), func() error { return ValidateRoute(declaration) }, construct)
+}
+
+// RegisterEndpoint registers the concrete declaration and validates the factory's transport contract.
+func RegisterEndpoint[P, Q, B, R any](r *foundation.Registrar, key foundation.Key[*Router], declaration Endpoint[P, Q, B, R], construct func(foundation.Resolver) (RouteRegistration, error)) error {
+	return registerRoute[Endpoint[P, Q, B, R]](r, key, EndpointID(declaration), endpointContributionContract(declaration), func() error { return ValidateEndpoint(declaration) }, construct)
+}
+
+// RegisterSignedRoute registers the concrete declaration and validates the factory's transport contract.
+func RegisterSignedRoute[P any](r *foundation.Registrar, key foundation.Key[*Router], declaration SignedRoute[P], construct func(foundation.Resolver) (RouteRegistration, error)) error {
+	return registerRoute[SignedRoute[P]](r, key, SignedRouteID(declaration), signedRouteContributionContract(declaration), func() error { return ValidateSignedRoute(declaration) }, construct)
+}
+
+// RegisterSignedEndpoint registers the concrete declaration and validates the factory's transport contract.
+func RegisterSignedEndpoint[P, Q, B, R any](r *foundation.Registrar, key foundation.Key[*Router], declaration SignedEndpoint[P, Q, B, R], construct func(foundation.Resolver) (RouteRegistration, error)) error {
+	return registerRoute[SignedEndpoint[P, Q, B, R]](r, key, SignedEndpointID(declaration), signedEndpointContributionContract(declaration), func() error { return ValidateSigned(declaration) }, construct)
+}
+
+// RegisterIdempotentEndpoint registers the concrete declaration and validates the factory's transport contract.
+func RegisterIdempotentEndpoint[P, Q, B, R any](r *foundation.Registrar, key foundation.Key[*Router], declaration IdempotentEndpoint[P, Q, B, R], construct func(foundation.Resolver) (RouteRegistration, error)) error {
+	return registerRoute[IdempotentEndpoint[P, Q, B, R]](r, key, IdempotentEndpointID(declaration), idempotentEndpointContributionContract(declaration), func() error { return ValidateIdempotent(declaration) }, construct)
 }

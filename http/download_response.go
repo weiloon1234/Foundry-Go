@@ -30,7 +30,7 @@ type fileResponse struct {
 // The normal status is 200; native conditions and ranges can produce 206 or 304.
 func DownloadResponse(media MediaType, additional ...MediaType) Response[Download] {
 	descriptor := &fileResponse{media: append([]MediaType{media}, additional...)}
-	return Response[Download]{kind: payloadDownload, status: 200, file: descriptor, prepareFile: descriptor.prepareDownload}
+	return Response[Download]{prepare: prepareFileResponse[Download], kind: payloadDownload, status: 200, file: descriptor, describe: filePayloadInfo(descriptor), prepareFile: descriptor.prepareDownload}
 }
 
 func (f *fileResponse) Validate() error {

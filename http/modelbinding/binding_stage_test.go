@@ -26,11 +26,11 @@ func renameEndpoint() foundryhttp.Endpoint[path, foundryhttp.NoQuery, Rename, fo
 		{ID: root, Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "name", Type: "string", Required: true}}},
 		{ID: "string", Kind: contract.StringKind},
 	}})
-	return foundryhttp.DefineEndpoint(
+	return foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(
 		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.rename", Method: foundryhttp.PATCH, Access: foundryhttp.Public},
 			foundryhttp.DefinePath("/members/{member}", foundryhttp.Param("member", foundryhttp.IntegerPath[memberKey](), func(p *path) *memberKey { return &p.Member }))),
 		foundryhttp.EmptyQuery(), foundryhttp.JSONBody(body), foundryhttp.EmptyResponse(204),
-	).WithBodyValidation(validation.Rules(validation.DefineField("name", func(b Rename) string { return b.Name }), validation.NonBlank[string]()))
+	), validation.Rules(validation.DefineField("name", func(b Rename) string { return b.Name }), validation.NonBlank[string]()))
 }
 
 // A missing bound model is 404 and a resource denial 403 before body
@@ -45,7 +45,7 @@ func TestBindingStageResolvesBeforeBodyValidation(t *testing.T) {
 		}
 		return value.Set(member{ID: p.Member}), nil
 	})
-	bound := modelbinding.Bind(renameEndpoint(), resolver).WithAuthorization(func(_ context.Context, in renameInput) error {
+	bound := modelbinding.AuthorizeResource(modelbinding.Bind(foundryhttp.ForBinding(renameEndpoint()), resolver), func(_ context.Context, in renameInput) error {
 		if in.Model.ID == 403 {
 			return foundryhttp.Forbidden
 		}
@@ -77,7 +77,7 @@ func TestBindingStageResolvesBeforeBodyValidation(t *testing.T) {
 }
 
 // customTransport lacks the binding capability; resolution keeps its
-// handler-position fallback after validation.
+// explicit handler position after validation.
 type customTransport struct {
 	foundryhttp.Endpoint[path, foundryhttp.NoQuery, Rename, foundryhttp.NoContent]
 }
@@ -85,15 +85,18 @@ type customTransport struct {
 func (c customTransport) Handle(handler foundryhttp.Handler[path, foundryhttp.NoQuery, Rename, foundryhttp.NoContent]) foundryhttp.RouteRegistration {
 	return c.Endpoint.Handle(handler)
 }
-func (c customTransport) HandleBound() {}
+func (c customTransport) Validate() error { return foundryhttp.ValidateEndpoint(c.Endpoint) }
+func (c customTransport) Description() (foundryhttp.EndpointInfo, error) {
+	return foundryhttp.InspectEndpoint(c.Endpoint)
+}
 
-func TestBindingWithoutStageFallsBackAfterValidation(t *testing.T) {
+func TestExplicitBindingAfterValidation(t *testing.T) {
 	var lookups atomic.Int32
 	resolver := modelbinding.Define(func(context.Context, path) (value.Optional[member], error) {
 		lookups.Add(1)
 		return value.Optional[member]{}, nil
 	})
-	r := router(t, modelbinding.Bind[path, foundryhttp.NoQuery, Rename, member, foundryhttp.NoContent](customTransport{renameEndpoint()}, resolver).Handle(func(context.Context, renameInput) (foundryhttp.NoContent, error) {
+	r := router(t, modelbinding.Bind[path, foundryhttp.NoQuery, Rename, member, foundryhttp.NoContent](foundryhttp.AfterValidation(customTransport{renameEndpoint()}), resolver).Handle(func(context.Context, renameInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	}))
 	request := httptest.NewRequest("PATCH", "/members/404", strings.NewReader(`{"name":" "}`))

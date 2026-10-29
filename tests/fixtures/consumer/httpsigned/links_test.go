@@ -126,7 +126,7 @@ func TestTemporaryTypedLinksOverNativeHTTP(t *testing.T) {
 	if response.StatusCode != 403 || service.calls.Load() != 2 {
 		t.Fatal("expired or tampered link reached domain service")
 	}
-	description, err := links.Preview.Description()
+	description, err := foundryhttp.InspectSigned(links.Preview)
 	if err != nil || description.Route.SignedURL == nil || len(description.Query) != 3 || description.Response.Schema.Root != "foundry.test/consumer/httpdto.UserResponse" {
 		t.Fatal("runtime signing and DTO metadata diverged")
 	}

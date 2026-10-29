@@ -1,8 +1,9 @@
 package http
 
 import (
-	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"reflect"
+
+	"github.com/weiloon1234/Foundry-Go/idempotency"
 )
 
 // Keep concrete wire types across the heterogeneous factory boundary. Auth and
@@ -29,21 +30,21 @@ func (c contributionContract) accepts(actual contributionContract) bool {
 	return c == actual
 }
 
-func (r Route[P]) contributionContract() contributionContract {
-	return contributionContract{wire: reflect.TypeFor[Route[P]](), method: r.Method(), path: r.Pattern(), access: r.spec.Access}
+func routeContributionContract[P any](r Route[P]) contributionContract {
+	return contributionContract{wire: reflect.TypeFor[Route[P]](), method: RouteMethod(r), path: RoutePattern(r), access: r.spec.Access}
 }
-func (e Endpoint[P, Q, B, R]) contributionContract() contributionContract {
-	result := e.route.contributionContract()
+func endpointContributionContract[P, Q, B, R any](e Endpoint[P, Q, B, R]) contributionContract {
+	result := routeContributionContract(e.route)
 	result.wire = reflect.TypeFor[Endpoint[P, Q, B, R]]()
 	return result
 }
-func (r SignedRoute[P]) contributionContract() contributionContract {
-	result := r.route.contributionContract()
+func signedRouteContributionContract[P any](r SignedRoute[P]) contributionContract {
+	result := routeContributionContract(r.route)
 	result.signed = true
 	return result
 }
-func (e SignedEndpoint[P, Q, B, R]) contributionContract() contributionContract {
-	result := e.endpoint.contributionContract()
+func signedEndpointContributionContract[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) contributionContract {
+	result := endpointContributionContract(e.endpoint)
 	result.signed = true
 	return result
 }

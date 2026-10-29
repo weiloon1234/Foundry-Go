@@ -46,61 +46,40 @@ type EndpointInfo struct {
 	RefreshCookie *RefreshCookieInfo `json:"refresh_cookie,omitempty"`
 }
 
-// Description validates before returning owned metadata for inspection.
-func (e Endpoint[P, Q, B, R]) Description() (EndpointInfo, error) {
-	if err := e.Validate(); err != nil {
+// InspectEndpoint validates before returning owned metadata for inspection.
+func InspectEndpoint[P, Q, B, R any](e Endpoint[P, Q, B, R]) (EndpointInfo, error) {
+	if err := ValidateEndpoint(e); err != nil {
 		return EndpointInfo{}, err
 	}
-	segments, _ := e.route.validate()
-	return e.snapshot(e.route.info(segments, false)), nil
+	segments, _ := routeValidate(e.route)
+	return endpointSnapshot(e, routeInfo(e.route, segments, false)), nil
 }
 
 // snapshot is called only for validated immutable descriptors. Description
 // owns schema cloning, including nested enum cases; no second clone algorithm
 // or schema inference lives in HTTP.
-func (e Endpoint[P, Q, B, R]) snapshot(route RouteInfo) EndpointInfo {
-	query, _ := e.query.Parameters()
-	path, _ := e.route.path.Parameters()
+func endpointSnapshot[P, Q, B, R any](e Endpoint[P, Q, B, R], route RouteInfo) EndpointInfo {
+	query, _ := QueryParameters(e.query)
+	path, _ := PathParameters(e.route.path)
 	info := EndpointInfo{Path: path, Route: route.clone(), Query: query, Status: e.response.status, Statuses: slices.Clone(e.response.statuses), Redirect: e.response.kind == payloadRedirect, Limits: e.limits}
 	info.Idempotency = e.idempotency.clone()
-	info.RefreshCookie = e.refreshCookieInfo()
+	info.RefreshCookie = endpointRefreshCookieInfo(e)
 	info.Preparation = e.preparation != nil
-	info.Errors, _ = e.errorDefinitions()
+	info.Errors, _ = endpointErrorDefinitions(e)
 	if e.validation != nil {
 		description, _ := validation.DescribeRule(*e.validation)
 		info.Validation = &description
 	}
-	if e.body.kind == payloadJSON {
-		schema, _ := e.body.json.Description()
-		info.Body = &PayloadInfo{MediaType: "application/json", Schema: schema, Example: slices.Clone(e.examples.body)}
-	}
-	if e.body.kind == payloadForm {
-		fields, _ := e.body.form.Parameters()
-		info.Body = &PayloadInfo{MediaType: "application/x-www-form-urlencoded", Form: fields}
-	}
-	if e.body.kind == payloadMultipart {
-		form, _ := e.body.multipart.Description()
-		info.Body = &PayloadInfo{MediaType: "multipart/form-data", Multipart: &form}
-	}
-	if e.body.kind == payloadRaw {
-		info.Body = &PayloadInfo{Raw: &RawBodyInfo{MediaTypes: slices.Clone(e.body.raw.media)}}
-		if len(e.body.raw.media) == 1 {
-			info.Body.MediaType = string(e.body.raw.media[0])
+	if e.body.describe != nil {
+		info.Body = e.body.describe()
+		if e.body.kind == payloadJSON {
+			info.Body.Example = slices.Clone(e.examples.body)
 		}
 	}
-	if e.response.kind == payloadJSON {
-		schema, _ := e.response.json.Description()
-		info.Response = &PayloadInfo{MediaType: "application/json", Schema: schema, Example: slices.Clone(e.examples.response)}
-	}
-	if e.response.kind == payloadEvents {
-		schema, _ := e.response.events.Description()
-		info.Response = &PayloadInfo{MediaType: EventStreamMediaType, Schema: schema}
-	}
-	if e.response.kind == payloadDownload || e.response.kind == payloadStream {
-		file := e.response.file.description()
-		info.Response = &PayloadInfo{File: &file}
-		if len(file.MediaTypes) == 1 {
-			info.Response.MediaType = string(file.MediaTypes[0])
+	if e.response.describe != nil {
+		info.Response = e.response.describe()
+		if e.response.kind == payloadJSON {
+			info.Response.Example = slices.Clone(e.examples.response)
 		}
 	}
 	return info
@@ -119,4 +98,23 @@ func (r *Router) Endpoints() []EndpointInfo {
 		}
 	}
 	return result
+}
+
+// schemaPayloadInfo delegates schema ownership to the selected codec.
+func schemaPayloadInfo(media string, describe func() (contract.Schema, error)) func() *PayloadInfo {
+	return func() *PayloadInfo {
+		schema, _ := describe()
+		return &PayloadInfo{MediaType: media, Schema: schema}
+	}
+}
+
+func filePayloadInfo(descriptor *fileResponse) func() *PayloadInfo {
+	return func() *PayloadInfo {
+		file := descriptor.description()
+		info := &PayloadInfo{File: &file}
+		if len(file.MediaTypes) == 1 {
+			info.MediaType = string(file.MediaTypes[0])
+		}
+		return info
+	}
 }

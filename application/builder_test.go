@@ -4,15 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/weiloon1234/Foundry-Go/application"
-	"github.com/weiloon1234/Foundry-Go/cache"
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/foundation"
-	"github.com/weiloon1234/Foundry-Go/http"
-	"github.com/weiloon1234/Foundry-Go/infrastructure"
-	"github.com/weiloon1234/Foundry-Go/logging"
-	"github.com/weiloon1234/Foundry-Go/plugin"
-	"github.com/weiloon1234/Foundry-Go/secret"
 	"io"
 	"log/slog"
 	stdhttp "net/http"
@@ -22,6 +13,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/application"
+	"github.com/weiloon1234/Foundry-Go/cache"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/foundation"
+	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/logging"
+	"github.com/weiloon1234/Foundry-Go/plugin"
+	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
 func settings() application.Settings {
@@ -34,7 +35,7 @@ func quiet() application.Option {
 	return application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 func plainRoutes(application.Services) ([]http.RouteRegistration, error) {
-	return []http.RouteRegistration{http.DefineRoute(http.RouteSpec{ID: "fixture.ok", Method: http.GET, Access: http.Public}, http.StaticPath("/ok")).HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) { w.WriteHeader(204) })}, nil
+	return []http.RouteRegistration{http.HandleRaw(http.DefineRoute(http.RouteSpec{ID: "fixture.ok", Method: http.GET, Access: http.Public}, http.StaticPath("/ok")), func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) { w.WriteHeader(204) })}, nil
 }
 func stop(t *testing.T, app *application.App) {
 	t.Helper()
@@ -297,7 +298,7 @@ func TestApplicationCombinesOrdinaryAndPluginRoutes(t *testing.T) {
 			route := http.DefineRoute(http.RouteSpec{ID: id, Method: http.GET, Access: http.Public}, http.StaticPath(path))
 			extension := plugin.Module{Declaration: plugin.Manifest{ID: "fixture.routes", Version: "1.0.0", Framework: "*"}, OnRegister: func(r *plugin.Registrar) error {
 				if err := http.RegisterRoute(r, application.RouterKey, route, func(foundation.Resolver) (http.RouteRegistration, error) {
-					return route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ http.NoPath) { w.WriteHeader(204) }), nil
+					return http.HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ http.NoPath) { w.WriteHeader(204) }), nil
 				}); err != nil {
 					return err
 				}

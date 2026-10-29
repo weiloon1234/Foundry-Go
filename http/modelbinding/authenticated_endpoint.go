@@ -12,31 +12,31 @@ import (
 // subject S and the bound resource M. For an optional transport S is Optional[A].
 // A resource lookup is not authorization; apply a concrete resource policy too.
 type AuthenticatedEndpoint[P, Q, B, S, M, R any] struct {
-	transport     foundryhttp.AuthenticatedTransport[P, Q, B, S, R]
+	transport     AuthenticatedTransport[P, Q, B, S, R]
 	resolver      Resolver[P, M]
 	authorization *func(context.Context, S, Input[P, Q, B, M]) error
 }
 
-func BindAuthenticated[P, Q, B, S, M, R any](transport foundryhttp.AuthenticatedTransport[P, Q, B, S, R], resolver Resolver[P, M]) AuthenticatedEndpoint[P, Q, B, S, M, R] {
+func BindAuthenticated[P, Q, B, S, M, R any](transport AuthenticatedTransport[P, Q, B, S, R], resolver Resolver[P, M]) AuthenticatedEndpoint[P, Q, B, S, M, R] {
 	return AuthenticatedEndpoint[P, Q, B, S, M, R]{transport: transport, resolver: resolver}
 }
-func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Validate() error {
+func ValidateAuthenticatedEndpoint[P, Q, B, S, M, R any](e AuthenticatedEndpoint[P, Q, B, S, M, R]) error {
 	if e.authorization != nil && *e.authorization == nil {
 		return safeerror.NewFault(fault.Invalid, "resource authorization callback is missing")
 	}
 	if err := validateTransport(e.transport); err != nil {
 		return err
 	}
-	return e.resolver.Validate()
+	return ValidateResolver(e.resolver)
 }
-func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Description() (foundryhttp.EndpointInfo, error) {
-	if err := e.Validate(); err != nil {
+func DescribeAuthenticatedEndpoint[P, Q, B, S, M, R any](e AuthenticatedEndpoint[P, Q, B, S, M, R]) (foundryhttp.EndpointInfo, error) {
+	if err := ValidateAuthenticatedEndpoint(e); err != nil {
 		return foundryhttp.EndpointInfo{}, err
 	}
 	return e.transport.Description()
 }
 func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Handle(handler func(context.Context, S, Input[P, Q, B, M]) (R, error)) foundryhttp.RouteRegistration {
-	if err := e.Validate(); err != nil {
+	if err := ValidateAuthenticatedEndpoint(e); err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if handler == nil {
@@ -56,28 +56,20 @@ func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Handle(handler func(context.Con
 	}
 	// Framework transports resolve at their binding stage, before validation;
 	// see Bind.
-	if staged, ok := e.transport.(boundAuthenticatedTransport[P, Q, B, S, R]); ok {
-		return staged.HandleBound(func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (func(context.Context, S, foundryhttp.Input[P, Q, B]) (R, error), error) {
-			bound, err := resolve(ctx, subject, in)
-			if err != nil {
-				return nil, err
-			}
-			return func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (R, error) {
-				return handler(ctx, subject, Input[P, Q, B, M]{Request: in, Model: bound.Model})
-			}, nil
-		})
-	}
-	return e.transport.Handle(func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (R, error) {
+	return e.transport.HandleBound(func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (func(context.Context, S, foundryhttp.Input[P, Q, B]) (R, error), error) {
 		bound, err := resolve(ctx, subject, in)
 		if err != nil {
-			return *new(R), err
+			return nil, err
 		}
-		return handler(ctx, subject, bound)
+		return func(ctx context.Context, subject S, in foundryhttp.Input[P, Q, B]) (R, error) {
+			return handler(ctx, subject, Input[P, Q, B, M]{Request: in, Model: bound.Model})
+		}, nil
 	})
 }
 
-// boundAuthenticatedTransport is the optional binding capability of framework
-// authenticated endpoints.
-type boundAuthenticatedTransport[P, Q, B, S, R any] interface {
+// AuthenticatedTransport requires explicit binding-stage ownership.
+type AuthenticatedTransport[P, Q, B, S, R any] interface {
+	Validate() error
+	Description() (foundryhttp.EndpointInfo, error)
 	HandleBound(foundryhttp.AuthenticatedBinding[P, Q, B, S, R]) foundryhttp.RouteRegistration
 }

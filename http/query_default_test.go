@@ -24,16 +24,16 @@ func TestQueryDefaultsSnapshotMutableValues(t *testing.T) {
 	initial := defaultBytes("initial")
 	descriptor := foundryhttp.DefineQuery(foundryhttp.DefaultQueryParam("v", defaultBytesCodec{}, initial, func(q *defaultBytesInput) *defaultBytes { return &q.Value }))
 	initial[0] = 'X'
-	first, err := descriptor.Decode(t.Context(), "", queryLimits)
+	first, err := foundryhttp.DecodeQuery(descriptor, t.Context(), "", queryLimits)
 	if err != nil || string(first.Value) != "initial" {
 		t.Fatalf("default aliases caller: %q %v", first.Value, err)
 	}
 	first.Value[0] = 'Y'
-	second, err := descriptor.Decode(t.Context(), "", queryLimits)
+	second, err := foundryhttp.DecodeQuery(descriptor, t.Context(), "", queryLimits)
 	if err != nil || string(second.Value) != "initial" {
 		t.Fatal("default shared mutable state across requests")
 	}
-	metadata, err := descriptor.Parameters()
+	metadata, err := foundryhttp.QueryParameters(descriptor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,17 +77,17 @@ func TestQueryDefaultDeclarationOwnsCodecFailures(t *testing.T) {
 		defaultStringCodec{parse: func(string) (string, error) { runtime.Goexit(); return "", nil }},
 	} {
 		descriptor := stringDefault(codec, "initial")
-		if descriptor.Validate() == nil {
+		if foundryhttp.ValidateQueryDescriptor(descriptor) == nil {
 			t.Fatal("invalid default declaration accepted")
 		}
 	}
-	if stringDefault(defaultStringCodec{}, string([]byte{255})).Validate() == nil {
+	if foundryhttp.ValidateQueryDescriptor(stringDefault(defaultStringCodec{}, string([]byte{255}))) == nil {
 		t.Fatal("invalid UTF-8 default cannot be represented faithfully in metadata")
 	}
-	if stringDefault(defaultStringCodec{}, strings.Repeat("x", (16<<10)+1)).Validate() == nil {
+	if foundryhttp.ValidateQueryDescriptor(stringDefault(defaultStringCodec{}, strings.Repeat("x", (16<<10)+1))) == nil {
 		t.Fatal("unbounded default accepted")
 	}
-	if foundryhttp.DefineQuery(foundryhttp.DefaultQueryParam[defaultStringInput]("v", foundryhttp.StringQuery[string](), "", nil)).Validate() == nil {
+	if foundryhttp.ValidateQueryDescriptor(foundryhttp.DefineQuery(foundryhttp.DefaultQueryParam[defaultStringInput]("v", foundryhttp.StringQuery[string](), "", nil))) == nil {
 		t.Fatal("missing default field selector accepted")
 	}
 }
@@ -103,13 +103,13 @@ func TestDefaultQueryFailureIsNotAttributedToClientInput(t *testing.T) {
 		}
 		return raw, nil
 	}}, "initial")
-	if descriptor.Validate() != nil {
+	if foundryhttp.ValidateQueryDescriptor(descriptor) != nil {
 		t.Fatal("valid declaration rejected")
 	}
 	priorCalls := calls
 	// Shared structural validation still precedes every default/field callback.
 	for _, input := range []string{"v=a&v=b", "unknown=bad"} {
-		if _, err := descriptor.Decode(t.Context(), input, queryLimits); err == nil {
+		if _, err := foundryhttp.DecodeQuery(descriptor, t.Context(), input, queryLimits); err == nil {
 			t.Fatal("ambiguous input accepted")
 		}
 	}
@@ -117,11 +117,11 @@ func TestDefaultQueryFailureIsNotAttributedToClientInput(t *testing.T) {
 		t.Fatal("default codec ran before transport validation")
 	}
 	broken = true
-	empty, err := descriptor.Decode(t.Context(), "", queryLimits)
+	empty, err := foundryhttp.DecodeQuery(descriptor, t.Context(), "", queryLimits)
 	if !errors.Is(err, fault.Internal) || !reflect.DeepEqual(empty, defaultStringInput{}) {
 		t.Fatal("broken server default blamed on client")
 	}
-	_, err = descriptor.Decode(t.Context(), "v=provided", queryLimits)
+	_, err = foundryhttp.DecodeQuery(descriptor, t.Context(), "v=provided", queryLimits)
 	var invalid *foundryhttp.QueryError
 	if !errors.As(err, &invalid) || errors.Is(err, fault.Internal) || strings.Contains(err.Error(), "private-codec") {
 		t.Fatal("client codec rejection lost safe classification")

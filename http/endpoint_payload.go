@@ -33,11 +33,14 @@ type NoContent struct{}
 
 // Body is a typed request payload contract. Its zero value is invalid.
 type Body[B any] struct {
-	kind      payloadKind
-	json      contract.JSON[B]
-	multipart Multipart[B]
-	form      Query[B]
-	raw       *rawBodyDescriptor[B]
+	validate   func() error
+	read       func(stdhttp.ResponseWriter, *stdhttp.Request, EndpointLimits) (B, func() error, error)
+	describe   func() *PayloadInfo
+	kind       payloadKind
+	encodeJSON func(context.Context, B, contract.JSONLimits) ([]byte, error)
+	decodeJSON func(context.Context, []byte, contract.JSONLimits) (B, error)
+	form       Query[B]
+	raw        *rawBodyDescriptor[B]
 	// refreshCookie reads a refresh credential from its cookie instead of a body.
 	refreshCookie *RefreshCookie
 	fromCookie    func(*stdhttp.Request) (B, error)
@@ -46,63 +49,74 @@ type Body[B any] struct {
 }
 
 func JSONBody[B any](descriptor contract.JSON[B]) Body[B] {
-	return Body[B]{kind: payloadJSON, json: descriptor}
+	b := Body[B]{kind: payloadJSON, encodeJSON: descriptor.Encode, decodeJSON: descriptor.Decode, validate: descriptor.Validate, describe: func() *PayloadInfo {
+		schema, _ := descriptor.Description()
+		return &PayloadInfo{MediaType: "application/json", Schema: schema}
+	}}
+	source := b
+	b.read = func(w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
+		v, err := bodyRead(source, w, r, limits.Body)
+		return v, nil, err
+	}
+	return b
 }
 
 // MultipartBody declares a generated or handwritten typed multipart form.
 func MultipartBody[B any](descriptor Multipart[B]) Body[B] {
-	return Body[B]{kind: payloadMultipart, multipart: descriptor}
+	return Body[B]{kind: payloadMultipart, validate: func() error { return ValidateMultipart(descriptor) }, read: func(w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
+		return multipartRead(descriptor, w, r, limits)
+	}, describe: func() *PayloadInfo {
+		form, _ := InspectMultipart(descriptor)
+		return &PayloadInfo{MediaType: "multipart/form-data", Multipart: &form}
+	}}
 }
 
 // FormBody uses the existing typed URL bindings as an independent URL-encoded
 // request body. Query parameters never satisfy these body fields. Reuse generated
 // form/query descriptors and MergeQueries/EmbedQuery for explicit composition.
-func FormBody[B any](fields Query[B]) Body[B] { return Body[B]{kind: payloadForm, form: fields} }
-
-func EmptyBody() Body[NoBody] { return Body[NoBody]{kind: payloadEmpty} }
-
-func (b Body[B]) Validate() error {
-	switch b.kind {
-	case payloadJSON:
-		return b.json.Validate()
-	case payloadMultipart:
-		return b.multipart.Validate()
-	case payloadForm:
-		return b.form.Validate()
-	case payloadRaw:
-		if b.raw == nil || b.raw.open == nil {
-			return safeerror.NewFault(fault.Invalid, "raw request body is not defined")
-		}
-		return validateRawMedia(b.raw.media)
-	case payloadEmpty:
-		return nil
-	case payloadRefreshCookie:
-		if b.refreshCookie == nil || b.fromCookie == nil {
-			return safeerror.NewFault(fault.Invalid, "refresh cookie body is not defined")
-		}
-		return b.refreshCookie.Validate()
-	default:
-		return safeerror.NewFault(fault.Invalid, "request body contract is not defined")
+func FormBody[B any](fields Query[B]) Body[B] {
+	b := Body[B]{kind: payloadForm, form: fields, validate: func() error { return ValidateQueryDescriptor(fields) }, describe: func() *PayloadInfo {
+		form, _ := QueryParameters(fields)
+		return &PayloadInfo{MediaType: "application/x-www-form-urlencoded", Form: form}
+	}}
+	source := b
+	b.read = func(w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
+		v, err := bodyReadForm(source, w, r, limits.Form)
+		return v, nil, err
 	}
+	return b
 }
 
-// responseJSON allows framework-owned credential delivery to describe its wire
-// DTO while retaining a non-serializable, model-owned handler result.
-type responseJSON[R any] interface {
-	Validate() error
-	Description() (contract.Schema, error)
-	Encode(context.Context, R, contract.JSONLimits) ([]byte, error)
+func EmptyBody() Body[NoBody] {
+	b := Body[NoBody]{kind: payloadEmpty, validate: func() error { return nil }}
+	b.read = func(w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (NoBody, func() error, error) {
+		_, err := readEndpointBody(w, r, int64(limits.Body.Bytes), true, jsonRequestMedia)
+		return NoBody{}, nil, err
+	}
+	return b
+}
+
+func ValidateBodyDescriptor[B any](body Body[B]) error {
+	if body.validate == nil || body.read == nil {
+		return safeerror.NewFault(fault.Invalid, "request body contract is not defined")
+	}
+	return body.validate()
 }
 
 // Response is a declared success payload and status. It retains the response
 // DTO type at handler registration; its zero value is invalid.
 type Response[R any] struct {
-	kind        payloadKind
-	status      int
-	json        responseJSON[R]
-	credentials bool
-	file        *fileResponse
-	prepareFile func(context.Context, R, FileResponseLimits) (*preparedFile, error)
+	schema       func() (contract.Schema, error)
+	describe     func() *PayloadInfo
+	prepare      func(Response[R], context.Context, R, EndpointLimits) (preparedResponse, error)
+	kind         payloadKind
+	status       int
+	validateJSON func() error
+	encodeJSON   func(context.Context, R, contract.JSONLimits) ([]byte, error)
+	decodeJSON   func(context.Context, []byte, contract.JSONLimits) (R, error)
+	credentials  bool
+	file         *fileResponse
+	prepareFile  func(context.Context, R, FileResponseLimits) (*preparedFile, error)
 	// statuses lists every declared success status, primary first, when a
 	// JSON response declares alternatives; selectStatus reads the handler's choice.
 	statuses     []int
@@ -110,7 +124,8 @@ type Response[R any] struct {
 	// redirectTarget reads a redirect result's validated location.
 	redirectTarget func(R) (string, error)
 	// events is a typed server-sent event stream contract.
-	events eventResponse[R]
+	validateEvents func() error
+	prepareEvents  func(R, contract.JSONLimits) (func(stdhttp.ResponseWriter, *stdhttp.Request) error, error)
 	// refreshCookie is set by TokenCookieResponse (sets) or ClearRefreshCookie
 	// (clears); setRefreshCookie formats the cookie for a prepared result.
 	refreshCookie       *RefreshCookie
@@ -122,15 +137,15 @@ type Response[R any] struct {
 
 // JSONResponse declares a success status with a schema-checked JSON payload.
 func JSONResponse[R any](status int, descriptor contract.JSON[R]) Response[R] {
-	return Response[R]{kind: payloadJSON, status: status, json: descriptor}
+	return Response[R]{prepare: prepareJSONResponse[R], kind: payloadJSON, status: status, validateJSON: descriptor.Validate, schema: descriptor.Description, describe: schemaPayloadInfo("application/json", descriptor.Description), encodeJSON: descriptor.Encode, decodeJSON: descriptor.Decode}
 }
 
 // EmptyResponse supports 204 No Content and 205 Reset Content.
 func EmptyResponse(status int) Response[NoContent] {
-	return Response[NoContent]{kind: payloadEmpty, status: status}
+	return Response[NoContent]{prepare: prepareEmptyResponse, kind: payloadEmpty, status: status}
 }
 
-func (r Response[R]) Validate() error {
+func ValidateResponse[R any](r Response[R]) error {
 	if r.refreshCookieErr != nil {
 		return r.refreshCookieErr
 	}
@@ -139,6 +154,9 @@ func (r Response[R]) Validate() error {
 			return err
 		}
 	}
+	if r.prepare == nil {
+		return safeerror.NewFault(fault.Invalid, "response contract is not defined or has an invalid status")
+	}
 	switch r.kind {
 	case payloadDownload, payloadStream:
 		if r.status != 200 || r.file == nil || r.prepareFile == nil {
@@ -146,7 +164,7 @@ func (r Response[R]) Validate() error {
 		}
 		return r.file.Validate()
 	case payloadJSON:
-		if r.json == nil || !bodySuccessStatus(r.status) {
+		if r.encodeJSON == nil || r.validateJSON == nil || r.describe == nil || !bodySuccessStatus(r.status) {
 			return safeerror.NewFault(fault.Invalid, "JSON response requires a body-bearing success status")
 		}
 		if r.statuses != nil {
@@ -154,17 +172,17 @@ func (r Response[R]) Validate() error {
 				return safeerror.NewFault(fault.Invalid, "JSON response alternatives require two to eight unique body-bearing success statuses")
 			}
 		}
-		return r.json.Validate()
+		return r.validateJSON()
 	case payloadRedirect:
 		if !redirectStatus(r.status) || r.redirectTarget == nil {
 			return safeerror.NewFault(fault.Invalid, "redirect response requires status 301, 302, 303, 307 or 308")
 		}
 		return nil
 	case payloadEvents:
-		if r.status != 200 || r.events == nil {
+		if r.status != 200 || r.prepareEvents == nil || r.validateEvents == nil || r.describe == nil {
 			return safeerror.NewFault(fault.Invalid, "event stream response is not defined")
 		}
-		return r.events.Validate()
+		return r.validateEvents()
 	case payloadEmpty:
 		if r.status == 204 || r.status == 205 {
 			return nil

@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/weiloon1234/Foundry-Go/database"
 	"log/slog"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -23,7 +23,7 @@ func TestServerFailuresAreReportedWithRedactedDiagnostics(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))
 	route := DefineRoute(RouteSpec{ID: "members.fail", Method: GET, Access: Public}, DefinePath[NoPath]("/fail"))
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
 		_ = WriteError(w, r, errors.Join(safeerror.WrapFault(fault.Internal, "database lookup failed", privateCause{})))
 	}))
 	if err != nil {
@@ -60,7 +60,7 @@ func TestApplicationFaultMessagesAreNotLogDiagnosticAuthority(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))
 	route := DefineRoute(RouteSpec{ID: "members.private", Method: GET, Access: Public}, DefinePath[NoPath]("/private"))
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
 		_ = WriteError(w, r, fault.Wrap(fault.Internal, "password=hunter2", privateCause{}))
 	}))
 	if err != nil {
@@ -91,7 +91,7 @@ func TestAssetAdmissionAndPrivateCodesReporting(t *testing.T) {
 			var output bytes.Buffer
 			logger := slog.New(slog.NewJSONHandler(&output, nil))
 			route := DefineRoute(RouteSpec{ID: "report.test", Method: GET, Access: Public}, DefinePath[NoPath]("/"))
-			router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) { _ = WriteError(w, r, test.err) }))
+			router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) { _ = WriteError(w, r, test.err) }))
 			if err != nil {
 				t.Fatal(err)
 			}

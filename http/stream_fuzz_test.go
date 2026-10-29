@@ -23,7 +23,7 @@ func FuzzStreamLengthAndCleanup(f *testing.F) {
 		limits := DefaultEndpointLimits()
 		limits.Files.Bytes = limit
 		var closes atomic.Int32
-		router := streamRouter(t, streamEndpoint().WithLimits(limits), func(context.Context) (StreamContent, error) {
+		router := streamRouter(t, ConfigureEndpoint(streamEndpoint(), Limits(limits)), func(context.Context) (StreamContent, error) {
 			source := bytes.NewReader(payload)
 			c := StreamContent{Body: fileReaderCallbacks{read: func(p []byte) (int, error) { return source.Read(p[:min(len(p), int(chunk)+1)]) }, close: func() error { closes.Add(1); return nil }}, MediaType: "text/plain; charset=utf-8"}
 			if known {

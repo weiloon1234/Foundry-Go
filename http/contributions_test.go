@@ -21,7 +21,7 @@ func TestPluginRoutesAndMiddlewareUseNativeRouter(t *testing.T) {
 	register := func(message string) func(*foundation.Registrar) error {
 		return func(r *foundation.Registrar) error {
 			return foundryhttp.RegisterRoute(r, key, route, func(foundation.Resolver) (foundryhttp.RouteRegistration, error) {
-				return route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ foundryhttp.NoPath) {
+				return foundryhttp.HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ foundryhttp.NoPath) {
 					_, _ = w.Write([]byte(message))
 				}), nil
 			})

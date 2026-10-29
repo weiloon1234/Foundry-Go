@@ -292,8 +292,8 @@ func TestPublicURLsExemptProbesAndWildcardTenantHosts(t *testing.T) {
 }
 
 func TestSignedURLsWorkOnWildcardTenantHosts(t *testing.T) {
-	signed := textRoute("/files/{text}").Signed(urlTestSigner(t, testkit.NewClock(urlTestTime)))
-	router, err := NewRouter(signed.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, p textPath) {
+	signed := SignRoute(textRoute("/files/{text}"), urlTestSigner(t, testkit.NewClock(urlTestTime)))
+	router, err := NewRouter(HandleSignedRaw(signed, func(w stdhttp.ResponseWriter, r *stdhttp.Request, p textPath) {
 		origin, ok := PublicOrigin(r.Context())
 		if !ok || origin != "https://acme.tenants.example.test" {
 			t.Errorf("tenant origin=%q", origin)
@@ -310,7 +310,7 @@ func TestSignedURLsWorkOnWildcardTenantHosts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	location, err := signed.URL(t.Context(), "https://acme.tenants.example.test", textPath{Text: "report"}, urlTestTime.Add(time.Minute))
+	location, err := SignedRouteURL(signed, t.Context(), "https://acme.tenants.example.test", textPath{Text: "report"}, urlTestTime.Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}

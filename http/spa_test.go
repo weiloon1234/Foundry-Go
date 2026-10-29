@@ -10,10 +10,7 @@ import (
 
 func TestSPAFallbackPreservesAPIsMethodsAndMissingAssets(t *testing.T) {
 	assets := assetsForTest(t, DefaultAssetsConfig(FilesystemAssets(assetFixture())))
-	original, err := NewRouter(
-		DefineRoute(RouteSpec{ID: "api.missing", Method: GET, Access: Public}, StaticPath("/api/missing")).HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) { writeRoutingError(w, r, NotFound) }),
-		DefineRoute(RouteSpec{ID: "api.present", Method: POST, Access: Public}, StaticPath("/api/present")).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }),
-	)
+	original, err := NewRouter(HandleRaw(DefineRoute(RouteSpec{ID: "api.missing", Method: GET, Access: Public}, StaticPath("/api/missing")), func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) { writeRoutingError(w, r, NotFound) }), HandleRaw(DefineRoute(RouteSpec{ID: "api.present", Method: POST, Access: Public}, StaticPath("/api/present")), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }))
 	if err != nil {
 		t.Fatal(err)
 	}

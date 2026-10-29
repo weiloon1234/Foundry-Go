@@ -6,6 +6,7 @@ import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	http "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
@@ -35,7 +36,7 @@ func ReadScopedOrder(ctx context.Context, guard auth.Guard[models.User], require
 }
 
 func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
-	return endpoint.WithScopes(required)
+	return http.ConfigureAuthenticated(endpoint, http.Scopes(required))
 }
 
 func GrantedScopeNames(grants auth.AccessScopes[models.User]) []auth.AccessScopeName {

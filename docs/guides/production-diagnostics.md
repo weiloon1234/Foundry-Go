@@ -16,7 +16,7 @@ actual application lifecycle during boot; a view resolved during Build reports
 `Prepared`. See the [consumer composition](../../tests/fixtures/consumer/tooling/production.go).
 
 `diagnostics.Route` accepts only a concrete authenticated GET route with no path
-parameters. Apply `WithPermissions` and any required token scopes using the normal
+parameters. Apply `Permissions` and any required token scopes using the normal
 typed authentication API before binding. Anonymous/public/optional-auth route
 types cannot be substituted. Authentication and permission checks run before any
 readiness probe or diagnostics capacity acquisition. HEAD uses the same policy

@@ -19,7 +19,7 @@ func TestBrowserImpersonationSwapsAndRestoresTheSessionCookie(t *testing.T) {
 		t.Fatal(err)
 	}
 	proof := browserProof(t)
-	login := browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public).WithMiddleware(s.web.Middleware()).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
+	login := foundryhttp.ConfigureEndpoint(browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public), foundryhttp.Use(s.web.Middleware())).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
 		_, err := s.web.Login(ctx, proof, session.IssueOptions{})
 		return foundryhttp.NoContent{}, err
 	})
@@ -39,7 +39,7 @@ func TestBrowserImpersonationSwapsAndRestoresTheSessionCookie(t *testing.T) {
 		seen = account.ID
 		return foundryhttp.NoContent{}, nil
 	})
-	password := guarded("/password").WithActorMiddleware(s.web.RefuseImpersonation()).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	password := foundryhttp.ConfigureAuthenticated(guarded("/password"), foundryhttp.ActorMiddleware[authAccount](s.web.RefuseImpersonation())).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	})
 	router, err := foundryhttp.NewRouter(login, start, stop, whoami, password)

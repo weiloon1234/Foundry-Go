@@ -50,10 +50,10 @@ func TestURLSourceTypeRejectsMissingOrInvalidMetadata(t *testing.T) {
 		URLType("", StringPath[string]()),
 		URLType("bad\nidentity", StringPath[string]()),
 	} {
-		if _, err := DefinePath("/{v}", Param("v", codec, field)).Parameters(); err == nil {
+		if _, err := PathParameters(DefinePath("/{v}", Param("v", codec, field))); err == nil {
 			t.Fatal("invalid source path accepted")
 		}
-		if err := DefineQuery(QueryParam("v", codec, field)).Validate(); err == nil {
+		if err := ValidateQueryDescriptor(DefineQuery(QueryParam("v", codec, field))); err == nil {
 			t.Fatal("invalid source query accepted")
 		}
 		if _, err := codec.Parse("private"); err == nil {

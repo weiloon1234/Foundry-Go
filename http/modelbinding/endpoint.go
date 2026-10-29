@@ -17,12 +17,12 @@ type Input[P, Q, B, M any] struct {
 }
 
 // Transport is the endpoint capability used by the binding adapter. Ordinary
-// Endpoint and SignedEndpoint both satisfy it, preserving signature checks and
+// ForBinding and ForSignedBinding construct it, preserving signature checks and
 // all existing middleware, decoding, validation, errors and response contracts.
 type Transport[P, Q, B, R any] interface {
 	Validate() error
 	Description() (foundryhttp.EndpointInfo, error)
-	Handle(foundryhttp.Handler[P, Q, B, R]) foundryhttp.RouteRegistration
+	HandleBound(foundryhttp.Binding[P, Q, B, R]) foundryhttp.RouteRegistration
 }
 
 // Endpoint binds one concrete model to a transport declaration. Configure the
@@ -34,30 +34,30 @@ type Endpoint[P, Q, B, M, R any] struct {
 }
 
 // Bind composes model resolution with a transport. Framework endpoints resolve
-// the model (and apply WithAuthorization) at their binding stage: after request
+// the model (and apply AuthorizeResource) at their binding stage: after request
 // authorization, before validation. A missing model is therefore 404 and a
 // resource denial 403 before body validation reports 422, and the resolved model
-// reaches the handler without a second lookup. A custom transport without
-// HandleBound resolves after validation, before the handler. No database I/O
-// occurs during construction/registration.
+// reaches the handler without a second lookup. Custom transports implement this
+// stage explicitly, or opt into http.AfterValidation to resolve before their
+// handler. No database I/O occurs during construction/registration.
 func Bind[P, Q, B, M, R any](transport Transport[P, Q, B, R], resolver Resolver[P, M]) Endpoint[P, Q, B, M, R] {
 	return Endpoint[P, Q, B, M, R]{transport: transport, resolver: resolver}
 }
 
-func (e Endpoint[P, Q, B, M, R]) Validate() error {
+func ValidateEndpoint[P, Q, B, M, R any](e Endpoint[P, Q, B, M, R]) error {
 	if e.authorization != nil && *e.authorization == nil {
 		return safeerror.NewFault(fault.Invalid, "resource authorization callback is missing")
 	}
 	if err := validateTransport(e.transport); err != nil {
 		return err
 	}
-	return e.resolver.Validate()
+	return ValidateResolver(e.resolver)
 }
 
-// Description retains transport metadata without treating the stored model as
+// DescribeEndpoint retains transport metadata without treating the stored model as
 // a public request or response DTO. Model lookup does not change wire types.
-func (e Endpoint[P, Q, B, M, R]) Description() (foundryhttp.EndpointInfo, error) {
-	if err := e.Validate(); err != nil {
+func DescribeEndpoint[P, Q, B, M, R any](e Endpoint[P, Q, B, M, R]) (foundryhttp.EndpointInfo, error) {
+	if err := ValidateEndpoint(e); err != nil {
 		return foundryhttp.EndpointInfo{}, err
 	}
 	return e.transport.Description()
@@ -67,7 +67,7 @@ func (e Endpoint[P, Q, B, M, R]) Description() (foundryhttp.EndpointInfo, error)
 // The resolver runs once per accepted request. It does not start a transaction
 // or cache a model across requests; the handler owns business transactions.
 func (e Endpoint[P, Q, B, M, R]) Handle(handler func(context.Context, Input[P, Q, B, M]) (R, error)) foundryhttp.RouteRegistration {
-	if err := e.Validate(); err != nil {
+	if err := ValidateEndpoint(e); err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if handler == nil {
@@ -85,41 +85,31 @@ func (e Endpoint[P, Q, B, M, R]) Handle(handler func(context.Context, Input[P, Q
 		}
 		return bound, nil
 	}
-	if staged, ok := e.transport.(boundTransport[P, Q, B, R]); ok {
-		return staged.HandleBound(func(ctx context.Context, in foundryhttp.Input[P, Q, B]) (foundryhttp.Handler[P, Q, B, R], error) {
-			bound, err := resolve(ctx, in)
-			if err != nil {
-				return nil, err
-			}
-			return func(ctx context.Context, in foundryhttp.Input[P, Q, B]) (R, error) {
-				return handler(ctx, Input[P, Q, B, M]{Request: in, Model: bound.Model})
-			}, nil
-		})
-	}
-	return e.transport.Handle(func(ctx context.Context, in foundryhttp.Input[P, Q, B]) (R, error) {
+	return e.transport.HandleBound(func(ctx context.Context, in foundryhttp.Input[P, Q, B]) (foundryhttp.Handler[P, Q, B, R], error) {
 		bound, err := resolve(ctx, in)
 		if err != nil {
-			return *new(R), err
+			return nil, err
 		}
-		return handler(ctx, bound)
+		return func(ctx context.Context, in foundryhttp.Input[P, Q, B]) (R, error) {
+			return handler(ctx, Input[P, Q, B, M]{Request: in, Model: bound.Model})
+		}, nil
 	})
-}
-
-// boundTransport is the optional binding capability of framework endpoints.
-type boundTransport[P, Q, B, R any] interface {
-	HandleBound(foundryhttp.Binding[P, Q, B, R]) foundryhttp.RouteRegistration
 }
 
 func validateTransport(transport interface{ Validate() error }) error {
 	if nilValue(transport) {
 		return safeerror.NewFault(fault.Invalid, "model binding requires an endpoint")
 	}
-	return callback.Isolated("validate model-bound endpoint", transport.Validate)
+	return validateEndpointDeclaration(transport.Validate)
+}
+
+func validateEndpointDeclaration(validate func() error) error {
+	return callback.Isolated("validate model-bound endpoint", validate)
 }
 
 // resolveInput runs after registration validated the resolver declaration.
 func resolveInput[P, Q, B, M any](ctx context.Context, resolver Resolver[P, M], in foundryhttp.Input[P, Q, B]) (Input[P, Q, B, M], error) {
-	model, err := resolver.resolve(ctx, in.Path)
+	model, err := resolverResolve(resolver, ctx, in.Path)
 	if err != nil {
 		return Input[P, Q, B, M]{}, err
 	}

@@ -31,7 +31,7 @@ func (c ServerConfig) validateMaintenancePaths() error {
 		if path == "" || len(path) > 1024 {
 			return safeerror.NewFault(fault.Invalid, "invalid maintenance read path")
 		}
-		canonical, err := StaticPath(path).URL(NoPath{})
+		canonical, err := PathURL(StaticPath(path), NoPath{})
 		if err != nil {
 			return err
 		}

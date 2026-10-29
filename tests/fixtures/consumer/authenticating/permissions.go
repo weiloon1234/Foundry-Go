@@ -2,8 +2,10 @@ package authenticating
 
 import (
 	"context"
+
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	http "github.com/weiloon1234/Foundry-Go/http"
 )
 
 // ViewAccount is a current model capability. A real domain may query its typed
@@ -16,5 +18,5 @@ func CheckAccountPermission(ctx context.Context, guard auth.Guard[models.User]) 
 	return ViewAccount.Authorize(ctx, guard)
 }
 func PermissionProfile(endpoint ProfileEndpoint) ProfileEndpoint {
-	return endpoint.WithPermissions(ViewAccount)
+	return http.ConfigureAuthenticated(endpoint, http.Permissions(ViewAccount))
 }

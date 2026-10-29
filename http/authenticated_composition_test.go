@@ -85,7 +85,7 @@ func TestSignedAuthenticatedModelBindingPreservesAllBoundaries(t *testing.T) {
 	}
 	signer, now := compositionSigner(t)
 	endpoint := foundryhttp.DefineEndpoint(compositionRoute(foundryhttp.Guarded, &parses), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
-	signed := foundryhttp.SignedAuthenticated(foundryhttp.RequireAuthentication(endpoint, transport, guard).WithPermissions(permission), signer)
+	signed := foundryhttp.SignedAuthenticated(foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(endpoint, transport, guard), foundryhttp.Permissions(permission)), signer)
 	resolver := modelbinding.Define(func(ctx context.Context, path compositionPath) (value.Optional[compositionOrder], error) {
 		lookups.Add(1)
 		if origin := attribution.FromContext(ctx); origin.Guard() != "api" {
@@ -99,7 +99,7 @@ func TestSignedAuthenticatedModelBindingPreservesAllBoundaries(t *testing.T) {
 		}
 		return value.Set(compositionOrder{ID: path.Order, Owner: 1}), nil
 	})
-	bound := modelbinding.BindAuthenticated(signed, resolver)
+	bound := modelbinding.BindAuthenticated(foundryhttp.ForSignedAuthenticatedBinding(signed), resolver)
 	var retained []context.Context
 	handled := 0
 	handler, router := compositionHandler(t, bound.Handle(func(ctx context.Context, subject authAccount, in compositionInput) (foundryhttp.NoContent, error) {
@@ -178,7 +178,7 @@ func TestSignedAuthenticatedModelBindingPreservesAllBoundaries(t *testing.T) {
 			t.Fatal("composed handler retained auth scope")
 		}
 	}
-	info, err := bound.Description()
+	info, err := modelbinding.DescribeAuthenticatedEndpoint(bound)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestOptionalSignedModelBindingRetainsOptionalSubject(t *testing.T) {
 	resolver := modelbinding.Define(func(_ context.Context, p compositionPath) (value.Optional[compositionOrder], error) {
 		return value.Set(compositionOrder{ID: p.Order}), nil
 	})
-	bound := modelbinding.BindAuthenticated(signed, resolver)
+	bound := modelbinding.BindAuthenticated(foundryhttp.ForSignedOptionalBinding(signed), resolver)
 	var present []bool
 	handler, _ := compositionHandler(t, bound.Handle(func(ctx context.Context, subject value.Optional[authAccount], in compositionInput) (foundryhttp.NoContent, error) {
 		present = append(present, subject.IsSet())
@@ -227,7 +227,7 @@ func TestOptionalSignedModelBindingRetainsOptionalSubject(t *testing.T) {
 	if len(present) != 2 || present[0] || !present[1] || loads.Load() != 1 || parses.Load() != 2 {
 		t.Fatal("optional composition hydrated incorrectly")
 	}
-	info, err := bound.Description()
+	info, err := modelbinding.DescribeAuthenticatedEndpoint(bound)
 	if err != nil || !info.Route.Authentication.Optional || info.Route.Access != foundryhttp.Public {
 		t.Fatal("optional metadata lost", err)
 	}

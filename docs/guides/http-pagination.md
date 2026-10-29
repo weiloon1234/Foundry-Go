@@ -64,14 +64,22 @@ remain separate. The [independent consumer](../../tests/fixtures/consumer/httppa
 also names the three exported `Authenticated*Endpoint` aliases in return types.
 
 Authentication, required scopes and current-model permissions run before input
-decoding. `WithAuthorization` receives the actor and the decoded page request
+decoding. `pagination.AuthorizeActor` receives the actor and the decoded page request
 before validation and the read (the HTTP request lifecycle authorizes before
 validating), using the ordinary HTTP hook isolation and error mapping. Apply resource
 or tenant policy on every request; cursor tokens confer no authority. Configure
 `Within`, middleware, limits, errors and path/filter validation before binding.
-`Description`, actual route registration and exported client/OpenAPI security use
+`pagination.InspectAuthenticated`, actual route registration and exported client/OpenAPI security use
 the same guard binding. URL building, defaults, links, DTO privacy, cancellation
 and invalid-result handling share the existing pagination implementation.
+
+Common options follow the HTTP endpoint forms. Pass `foundryhttp.Within(scope)`,
+`foundryhttp.Use(middleware...)`, `foundryhttp.Limits(limits)` and
+`foundryhttp.Errors(declarations...)` after the config argument to `DefineNumbered`,
+`DefineSimple` or `DefineCursor`. Use `pagination.Configure(page, options...)`
+for a saved declaration. `pagination.ValidateFilters(page, rules...)` retains
+unprefixed filter names in validation metadata. Pass actor options to
+`pagination.Authenticated`, or use `pagination.ConfigureAuthenticated` afterward.
 
 ## Inputs and limits
 
@@ -89,7 +97,7 @@ clamped. The ORM validates page number, size and offset representability without
 database I/O.
 
 The existing [query codecs](http-query-composition.md) own parsing, duplicate and
-unknown-name checks. `WithFiltersValidation` reuses typed generated filter fields;
+unknown-name checks. `ValidateFilters` reuses typed generated filter fields;
 errors retain their actual `/query/<name>` path. Pagination bounds remain active
 when additional filter rules are registered. Defaults and validation rules appear
 in the same endpoint metadata used by later contract export.
@@ -148,7 +156,7 @@ pages on each side.
 `NumberedJSON(item)` and `SimpleJSON(item)` expose typed response contracts. The
 framework response fields/tags own the envelope; the supplied generated DTO owns
 its item fields and codecs. Models do not automatically become public DTOs.
-`Description()` exposes the assembled query, validation and JSON metadata used
+`pagination.Inspect(endpoint)` exposes the assembled query, validation and JSON metadata used
 by the shared [client contract exporters](client-contracts.md).
 
 [Cursor HTTP pagination](http-cursor-pagination.md) uses the same transport composition while preserving model/projection ownership in navigation positions after DTO mapping.

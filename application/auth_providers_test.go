@@ -98,7 +98,7 @@ func TestConfiguredGuardSharesApplicationAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	endpoint := http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "fixture.reports", Method: http.GET, Access: http.Guarded}, http.StaticPath("/reports")), http.EmptyQuery(), http.EmptyBody(), http.EmptyResponse(204))
-	route := http.Authenticated(endpoint, operators.Binding).WithPermissions(viewReports).Handle(func(ctx context.Context, operator reportOperator, _ http.Input[http.NoPath, http.NoQuery, http.NoBody]) (http.NoContent, error) {
+	route := http.ConfigureAuthenticated(http.Authenticated(endpoint, operators.Binding), http.Permissions(viewReports)).Handle(func(ctx context.Context, operator reportOperator, _ http.Input[http.NoPath, http.NoQuery, http.NoBody]) (http.NoContent, error) {
 		return http.NoContent{}, readReport.Authorize(ctx, operators.Tokens.Guard(), operatorReport{Owner: 7})
 	})
 	router, err := http.NewRouter(route)

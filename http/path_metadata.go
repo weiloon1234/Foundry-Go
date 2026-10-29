@@ -12,10 +12,10 @@ type PathParameterInfo struct {
 	Scalar       *URLScalarInfo        `json:"scalar,omitempty"`
 }
 
-// Parameters returns an owned description from the same path and field bindings
+// PathParameters returns an owned description from the same path and field bindings
 // used at execution. It does not inspect a request or call Parse/Format.
-func (p Path[P]) Parameters() ([]PathParameterInfo, error) {
-	segments, err := p.validate()
+func PathParameters[P any](p Path[P]) ([]PathParameterInfo, error) {
+	segments, err := pathValidate(p)
 	if err != nil {
 		return nil, err
 	}
@@ -41,11 +41,11 @@ func (p Path[P]) Parameters() ([]PathParameterInfo, error) {
 	return parameters, nil
 }
 
-// Parameters exposes typed path metadata for either typed or raw routes.
+// RouteParameters exposes typed path metadata for either typed or raw routes.
 // Raw payloads do not acquire inferred request/response DTOs.
-func (r Route[P]) Parameters() ([]PathParameterInfo, error) {
-	if err := r.Validate(); err != nil {
+func RouteParameters[P any](r Route[P]) ([]PathParameterInfo, error) {
+	if err := ValidateRoute(r); err != nil {
 		return nil, err
 	}
-	return r.path.Parameters()
+	return PathParameters(r.path)
 }

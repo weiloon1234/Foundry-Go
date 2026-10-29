@@ -76,7 +76,7 @@ func TestConsumerSignedOrderAndNativeRoutesKeepConcreteModels(t *testing.T) {
 		return value.Set(order), nil
 	})
 	calls := 0
-	bound := authenticating.BoundOrder(signed, resolver, guard, func(ctx context.Context, subject models.User, resource models.Order) error {
+	bound := authenticating.BoundOrder(foundryhttp.ForSignedAuthenticatedBinding(signed), resolver, guard, func(ctx context.Context, subject models.User, resource models.Order) error {
 		calls++
 		identity, present := attribution.FromContext(ctx).Model()
 		expected, _ := orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(subject).Identity()

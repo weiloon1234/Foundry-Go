@@ -22,7 +22,7 @@ func FuzzDownloadRangeBudgetsAndCleanup(f *testing.F) {
 		limits.Files.Bytes = 64
 		limits.Files.Ranges = 4
 		limits.Files.RangeBytes = 256
-		endpoint = endpoint.WithLimits(limits)
+		endpoint = ConfigureEndpoint(endpoint, Limits(limits))
 		router := downloadRouter(t, endpoint, func(context.Context, downloadRequest) (Download, error) {
 			return DownloadFrom(func(context.Context) (DownloadContent, error) {
 				opened.Add(1)

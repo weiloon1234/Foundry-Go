@@ -29,27 +29,27 @@ var Continue = foundryhttp.DefineEndpoint(
 )
 
 // RawUpload streams a raw body of a declared media type, bounded to 64 KiB.
-var RawUpload = foundryhttp.DefineEndpoint(
+var RawUpload = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(
 	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "files.raw", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/raw")),
 	foundryhttp.EmptyQuery(), foundryhttp.RawRequestBody("application/octet-stream", "text/plain"), foundryhttp.JSONResponse(201, httpuploads.UploadReplyJSON()),
-).WithLimits(rawLimits())
+), foundryhttp.Limits(rawLimits()))
 
 // MemberEvents streams typed server-sent events and resumes after Last-Event-ID.
-var MemberEvents = foundryhttp.DefineEndpoint(
+var MemberEvents = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(
 	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.events", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/events")),
 	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EventStreamResponse(MemberJSON()),
-).WithTimeout(time.Minute)
+), foundryhttp.Timeout(time.Minute))
 
 // signedMember accepts expiring, permanent and origin-relative signed links; a
 // mail client's utm_source decoration is ignored.
 func signedMember(signer foundryhttp.URLSigner) foundryhttp.SignedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, Member] {
-	return foundryhttp.Signed(
+	return foundryhttp.ConfigureSigned(foundryhttp.ConfigureSigned(foundryhttp.Signed(
 		foundryhttp.DefineEndpoint(
 			foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.signed", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members/signed")),
 			foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, MemberJSON()),
 		),
 		signer,
-	).WithPermanentLinks().WithIgnoredParameters("utm_source")
+	), foundryhttp.PermanentLinks()), foundryhttp.IgnoredParameters("utm_source"))
 }
 
 // SignedLinks are the link forms a client receives from the server.
@@ -69,11 +69,11 @@ func (f Fixture) Links(ctx context.Context, origin foundryhttp.Origin) (SignedLi
 	if err != nil {
 		return SignedLinks{}, err
 	}
-	relative, err := endpoint.RelativeURL(ctx, none, noQuery, expires)
+	relative, err := foundryhttp.RelativeEndpointURL(endpoint, ctx, none, noQuery, expires)
 	if err != nil {
 		return SignedLinks{}, err
 	}
-	permanent, err := endpoint.PermanentURL(ctx, origin, none, noQuery)
+	permanent, err := foundryhttp.PermanentEndpointURL(endpoint, ctx, origin, none, noQuery)
 	if err != nil {
 		return SignedLinks{}, err
 	}

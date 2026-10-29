@@ -5,11 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/weiloon1234/Foundry-Go/clock"
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/keyspace"
-	"github.com/weiloon1234/Foundry-Go/ratelimit"
-	"github.com/weiloon1234/Foundry-Go/ratelimit/memory"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -17,6 +12,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/clock"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
+	"github.com/weiloon1234/Foundry-Go/ratelimit"
+	"github.com/weiloon1234/Foundry-Go/ratelimit/memory"
 )
 
 type rateTestClock struct{}
@@ -208,12 +209,12 @@ func TestRateLimitRouteScopes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		registrations = append(registrations, staticRoute(RouteID(name), stdhttp.MethodGet, "/"+name).WithMiddleware(RateLimit(l, func(r *stdhttp.Request) (string, error) {
+		registrations = append(registrations, HandleRaw(ConfigureRoute(staticRoute(RouteID(name), stdhttp.MethodGet, "/"+name), Use(RateLimit(l, func(r *stdhttp.Request) (string, error) {
 			if info, ok := MatchedRoute(r.Context()); !ok || info.ID != RouteID(name) {
 				t.Error("route metadata missing")
 			}
 			return "same", nil
-		})).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }))
+		}))), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) { w.WriteHeader(204) }))
 	}
 	router, err := NewRouter(registrations...)
 	if err != nil {

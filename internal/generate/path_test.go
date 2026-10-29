@@ -37,7 +37,7 @@ type HealthPath struct{}
 //foundry:path pattern=/assets/{remaining...}
 type AssetPath struct { Remaining string }
 var ShowMember = foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID:"members.show",Method:foundryhttp.GET,Access:foundryhttp.Public},MemberPathDescriptor())
-func URL(input MemberPath)(string,error) { return ShowMember.URL(input) }
+func URL(input MemberPath)(string,error) { return foundryhttp.RouteURL(ShowMember,input) }
 `
 
 func TestFreshPathGenerationAndRuntime(t *testing.T) {
@@ -82,7 +82,7 @@ import (
  "github.com/weiloon1234/Foundry-Go/temporal"
 )
 func TestGeneratedRoute(t *testing.T) {
- metadata,err:=MemberPathDescriptor().Parameters();if err!=nil{t.Fatal(err)}
+ metadata,err:=foundryhttp.PathParameters(MemberPathDescriptor());if err!=nil{t.Fatal(err)}
  if len(metadata)!=7{t.Fatal("fresh path metadata missing")}
  for _,parameter:=range metadata {if parameter.Scalar==nil{t.Fatal("fresh path scalar missing",parameter.Name)}}
  if metadata[4].Scalar.Syntax!=foundryhttp.EnumURLSyntax || len(metadata[4].Scalar.Value.Cases)!=1{t.Fatal("fresh enum metadata missing")}
@@ -92,12 +92,12 @@ func TestGeneratedRoute(t *testing.T) {
  input:=MemberPath{Member:id,Code:"a/b",Revision:17,Active:true,State:Active,Date:date,Amount:amount}
  location,err:=URL(input);if err!=nil{t.Fatal(err)}
  var got MemberPath
- router,err:=foundryhttp.NewRouter(ShowMember.HandleRaw(func(w http.ResponseWriter,_ *http.Request,p MemberPath){got=p;w.WriteHeader(204)}));if err!=nil{t.Fatal(err)}
+ router,err:=foundryhttp.NewRouter(foundryhttp.HandleRaw(ShowMember,func(w http.ResponseWriter,_ *http.Request,p MemberPath){got=p;w.WriteHeader(204)}));if err!=nil{t.Fatal(err)}
  recorder:=httptest.NewRecorder();router.ServeHTTP(recorder,httptest.NewRequest("GET",location,nil))
  if recorder.Code!=204 || got.Member!=id || got.Code!=input.Code || got.Revision!=17 || !got.Active || got.State!=Active || got.Date.String()!=date.String() || got.Amount.String()!=amount.String(){t.Fatal("generated route lost typed values")}
  input.State=State("undeclared");if _,err:=URL(input);err==nil{t.Fatal("generated enum path bypassed membership")}
- if location,err:=HealthPathDescriptor().URL(HealthPath{});err!=nil||location!="/health"{t.Fatalf("static generated path: %q %v",location,err)}
- if location,err:=AssetPathDescriptor().URL(AssetPath{Remaining:"images/a b.png"});err!=nil||location!="/assets/images/a%20b.png"{t.Fatalf("catch-all generated path: %q %v",location,err)}
+ if location,err:=foundryhttp.PathURL(HealthPathDescriptor(),HealthPath{});err!=nil||location!="/health"{t.Fatalf("static generated path: %q %v",location,err)}
+ if location,err:=foundryhttp.PathURL(AssetPathDescriptor(),AssetPath{Remaining:"images/a b.png"});err!=nil||location!="/assets/images/a%20b.png"{t.Fatalf("catch-all generated path: %q %v",location,err)}
 }
 `)
 	command := exec.CommandContext(t.Context(), "go", "test", "-race", ".")

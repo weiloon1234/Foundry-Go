@@ -57,7 +57,7 @@ func TestDiagnosticsUseNormalPermissionsAndSeparateLiveFromReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "operations", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile"))
-	protected := foundryhttp.RequireRouteAuthentication(base, authentication, guard).WithPermissions(permission)
+	protected := foundryhttp.ConfigureAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(base, authentication, guard), foundryhttp.Permissions(permission))
 	for _, endpoint := range []diagnostics.Endpoint{diagnostics.Liveness, diagnostics.Readiness, diagnostics.Status, diagnostics.Metrics} {
 		router := newAuthRouter(t, diagnostics.Route(runtime, protected, endpoint))
 		before := checks.Load()
@@ -100,7 +100,7 @@ func TestDiagnosticsUseNormalPermissionsAndSeparateLiveFromReady(t *testing.T) {
 	// protected descriptor: bypassing maintenance must not bypass authorization.
 	config := foundryhttp.DefaultServerConfig()
 	config.Address = "127.0.0.1:0"
-	path, err := protected.URL(foundryhttp.NoPath{})
+	path, err := foundryhttp.AuthenticatedRouteURL(protected, foundryhttp.NoPath{})
 	if err != nil {
 		t.Fatal(err)
 	}

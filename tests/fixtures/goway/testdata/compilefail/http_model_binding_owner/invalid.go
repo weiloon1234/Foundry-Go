@@ -11,5 +11,5 @@ import (
 
 func invalid(ex database.Executor, transport h.Endpoint[h.NoPath, h.NoQuery, h.NoBody, h.NoContent]) {
 	resolver := modelbinding.ByKey(ex, orm.Keyed(a.Members.Query(), a.Members.Key()), func(h.NoPath) model.ID[a.Member] { return model.ID[a.Member]{} })
-	_ = modelbinding.Bind[h.NoPath, h.NoQuery, h.NoBody, a.Other, h.NoContent](transport, resolver)
+	_ = modelbinding.Bind[h.NoPath, h.NoQuery, h.NoBody, a.Other, h.NoContent](h.ForBinding(transport), resolver)
 }

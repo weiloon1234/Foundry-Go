@@ -109,7 +109,7 @@ app, err := application.New(settings).Register(application.Authorization("app.au
 `application.NewBrowserGuard` and `application.NewTokenGuard` derive their
 registry from `application.AuthorizationKey` with `Registry.With`, so every
 contributed declaration (including `auth.RegisterAuthorization` contributions
-from plugins) is available to their routes, `WithPermissions` and handlers. A
+from plugins) is available to their routes, `Permissions` and handlers. A
 derived registry shares its parent's configuration and callback capacity, rejects
 duplicate names, and never modifies the parent. `Services.Authorization()`
 returns the shared registry.
@@ -283,8 +283,8 @@ running a callback. Ordinary `Authorize` still verifies the selected guard, and
 an error from the authority never becomes an allow decision.
 
 ```go
-endpoint = endpoint.WithPermissions(ViewAccount)
-// Compose WithScopes(...) as well when this route requires token scopes.
+endpoint = foundryhttp.ConfigureAuthenticated(endpoint, http.Permissions(ViewAccount))
+// Compose Scopes(...) as well when this route requires token scopes.
 ```
 
 The HTTP adapter accepts a nonempty list once, takes an owned copy, validates all
@@ -360,10 +360,9 @@ uses the helpers alongside its existing guard and permission declarations. The t
 Configure scopes, permissions and ordinary endpoint options, then call `SignedAuthenticated`:
 
 ```go
-secured := http.RequireAuthentication(endpoint, authentication, api).
-    WithPermissions(ViewAccount)
+secured := http.ConfigureAuthenticated(http.RequireAuthentication(endpoint, authentication, api), http.Permissions(ViewAccount))
 signed := http.SignedAuthenticated(secured, signer)
-bound := modelbinding.BindAuthenticated(signed, orders)
+bound := modelbinding.BindAuthenticated(http.ForSignedAuthenticatedBinding(signed), orders)
 registration := bound.Handle(func(ctx context.Context, user User,
     in modelbinding.Input[OrderPath, http.NoQuery, http.NoBody, Order],
 ) (http.NoContent, error) {
@@ -396,9 +395,8 @@ resources never produce partially populated models for a handler.
 For native `net/http` integration, bind authentication to the typed route itself:
 
 ```go
-secured := http.RequireRouteAuthentication(route, authentication, api).
-    WithPermissions(ViewAccount)
-registration := secured.HandleRaw(func(w stdhttp.ResponseWriter,
+secured := http.ConfigureAuthenticated(http.RequireRouteAuthentication(route, authentication, api), http.Permissions(ViewAccount))
+registration := http.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
     r *stdhttp.Request, user User, path OrderPath,
 ) {
     // Native request/response handling; user and path remain concrete.
@@ -410,8 +408,8 @@ route declaration. Required authentication requires Guarded. Unbound guarded
 routes remain rejected. Native adapters reuse the same credential, scope,
 permission, attribution and cleanup implementation as DTO endpoints.
 
-Call `secured.Signed(signer)` to combine native handlers with signed links.
-`SignedAuthenticatedRoute[P,S].URL(ctx, origin, path, expires)` uses the existing
+Call `http.SignAuthenticatedRoute(secured, signer)` to combine native handlers with signed links.
+`SignedAuthenticatedRouteURL(route, ctx, origin, path, expires)` uses the existing
 signer. Native handlers retain their response writer capabilities, URL, RequestURI,
 headers and body; signing query parameters remain visible in the native request.
 Raw payloads do not acquire an inferred client schema. Model ownership and typed
@@ -425,8 +423,8 @@ authentication. The composition examples and tests passed milestone 10 acceptanc
 
 ## Middleware after authentication
 
-Middleware added with `WithMiddleware` runs before authentication. Use
-`WithActorMiddleware` on `RequireAuthentication`, `OptionalAuthentication` and
+Middleware added with `Use` runs before authentication. Use
+`ActorMiddleware[User](middleware...)` on `RequireAuthentication`, `OptionalAuthentication` and
 their native route forms for middleware that needs the actor. It runs after the
 guard, access scopes and permissions, inside the request's auth scope, and reads
 the concrete model with `guard.Require(r.Context())` (or `Optional`) from the
@@ -445,14 +443,14 @@ tenant := http.DefineMiddleware("app.tenant", func(next stdhttp.Handler) (stdhtt
 })
 limiter, err := ratelimit.Define("api.users", http.ActorKeys(), ratelimit.PerMinute(120)).Bind(store)
 // Check err.
-route := http.RequireAuthentication(endpoint, transport, api).
-    WithActorMiddleware(http.RateLimitByActor(limiter, api), tenant)
+route := http.RequireAuthentication(endpoint, transport, api,
+    http.ActorMiddleware[User](http.RateLimitByActor(limiter, api), tenant))
 ```
 
 `RateLimitByActor` keys a quota by a digest of the authenticated model identity,
 so users behind one address do not share a budget. On optional routes, anonymous
 requests fall back to the client IP (IPv4 per address, IPv6 per /64;
-`RateLimitByActorWith` changes the grouping). Installed with `WithMiddleware`,
+`RateLimitByActorWith` changes the grouping). Installed with `Use`,
 before authentication, it fails the request instead of silently limiting by IP.
 `tenancy.With` above stands for the application's typed request metadata.
 

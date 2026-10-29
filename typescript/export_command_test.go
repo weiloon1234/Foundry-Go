@@ -21,8 +21,7 @@ import (
 
 func TestExportCommandPublishesFromApplicationSources(t *testing.T) {
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "notes.read", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/notes"))
-	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]())).
-		WithDocumentation(foundryhttp.RouteDocumentation{Summary: "Read notes */ safely", Deprecated: true})
+	endpoint := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]())), foundryhttp.Documentation(foundryhttp.RouteDocumentation{Summary: "Read notes */ safely", Deprecated: true}))
 	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {
 		t.Fatal("export ran a handler")
 		return "", nil

@@ -31,12 +31,12 @@ func TestTypedPathModelIdentityRoundTrip(t *testing.T) {
 	route := DefineRoute(RouteSpec{ID: "users.show", Method: GET, Access: Public}, DefinePath("/users/{user}",
 		Param("user", ModelIDPath[routeUser](), func(p *userPath) *model.ID[routeUser] { return &p.User }),
 	))
-	url, err := route.URL(userPath{User: id})
+	url, err := RouteURL(route, userPath{User: id})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var received model.ID[routeUser]
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, path userPath) {
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, path userPath) {
 		received = path.User
 		if r.Pattern != "GET /users/{user}" || r.PathValue("user") != id.String() {
 			t.Error("native request pattern or path binding is missing")
@@ -58,7 +58,7 @@ func TestTypedPathModelIdentityRoundTrip(t *testing.T) {
 			t.Fatalf("invalid ID: %+v", failure)
 		}
 	}
-	if _, err := route.URL(userPath{}); err == nil {
+	if _, err := RouteURL(route, userPath{}); err == nil {
 		t.Fatal("nil identity generated a URL")
 	}
 }
@@ -67,12 +67,12 @@ func TestPathEscapingRoundTripsExactlyOnce(t *testing.T) {
 	route := textRoute("/literal space/{text}")
 	for _, value := range []string{"hello world", "a/b", "a%2Fb", "a?b#c", "中文", "+:;@&=", "..value"} {
 		t.Run(value, func(t *testing.T) {
-			location, err := route.URL(textPath{Text: value})
+			location, err := RouteURL(route, textPath{Text: value})
 			if err != nil {
 				t.Fatal(err)
 			}
 			var got string
-			router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) { got = p.Text; w.WriteHeader(204) }))
+			router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) { got = p.Text; w.WriteHeader(204) }))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -84,7 +84,7 @@ func TestPathEscapingRoundTripsExactlyOnce(t *testing.T) {
 		})
 	}
 	for _, invalid := range []string{"", ".", "..", "/", "\x00", "\r\n", string([]byte{0xff})} {
-		if _, err := route.URL(textPath{Text: invalid}); err == nil {
+		if _, err := RouteURL(route, textPath{Text: invalid}); err == nil {
 			t.Fatalf("invalid path value accepted: %q", invalid)
 		}
 	}
@@ -93,12 +93,12 @@ func TestPathEscapingRoundTripsExactlyOnce(t *testing.T) {
 func TestCatchAllEscapingAndEmptyTail(t *testing.T) {
 	route := textRoute("/assets/{text...}")
 	for _, value := range []string{"", "images/a b.png", "a/%2F/b", "中文/a"} {
-		url, err := route.URL(textPath{Text: value})
+		url, err := RouteURL(route, textPath{Text: value})
 		if err != nil {
 			t.Fatal(err)
 		}
 		var got string
-		router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) { got = p.Text; w.WriteHeader(204) }))
+		router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) { got = p.Text; w.WriteHeader(204) }))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,7 +109,7 @@ func TestCatchAllEscapingAndEmptyTail(t *testing.T) {
 		}
 	}
 	for _, value := range []string{"a/../b", "/a", "a/", "a//b", "."} {
-		if _, err := route.URL(textPath{Text: value}); err == nil {
+		if _, err := RouteURL(route, textPath{Text: value}); err == nil {
 			t.Fatalf("noncanonical tail accepted: %q", value)
 		}
 	}
@@ -126,12 +126,12 @@ func TestNamedStringPathPreservesNaturalKeyType(t *testing.T) {
 		Param("code", StringPath[naturalMemberCode](), func(p *naturalMemberPath) *naturalMemberCode { return &p.Code }),
 	))
 	const code naturalMemberCode = "member/42"
-	location, err := route.URL(naturalMemberPath{Code: code})
+	location, err := RouteURL(route, naturalMemberPath{Code: code})
 	if err != nil || location != "/members/member%2F42" {
 		t.Fatalf("natural key URL: %q %v", location, err)
 	}
 	var received naturalMemberCode
-	router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, path naturalMemberPath) {
+	router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, path naturalMemberPath) {
 		received = path.Code
 		w.WriteHeader(204)
 	}))
@@ -180,7 +180,7 @@ func TestPathIntegerWidthAndCanonicalFormat(t *testing.T) {
 
 func TestInvalidPathDeclarationsFailBeforeServing(t *testing.T) {
 	for _, pattern := range []string{"", "relative", "//users", "/a//b", "/a/../b", "/{text}/{text}", "/{text...}/last", "/{1bad}", "/{text", "/x%2Fy", "/x?query", "/x#fragment", "/x\\y"} {
-		if err := textRoute(pattern).Validate(); err == nil {
+		if err := ValidateRoute(textRoute(pattern)); err == nil {
 			t.Errorf("invalid pattern accepted: %q", pattern)
 		}
 	}
@@ -191,7 +191,7 @@ func TestInvalidPathDeclarationsFailBeforeServing(t *testing.T) {
 		DefinePath("/{text}", Param[textPath, string]("text", nil, func(p *textPath) *string { return &p.Text })),
 		DefinePath("/{text}", Param[textPath, string]("text", StringPath[string](), nil)),
 	} {
-		if _, err := path.URL(textPath{}); !errors.Is(err, fault.Invalid) {
+		if _, err := PathURL(path, textPath{}); !errors.Is(err, fault.Invalid) {
 			t.Fatalf("invalid binding: %v", err)
 		}
 	}
@@ -201,7 +201,7 @@ func TestPathDeclarationOwnsItsBindings(t *testing.T) {
 	bindings := []PathParameter[textPath]{Param("text", StringPath[string](), func(p *textPath) *string { return &p.Text })}
 	path := DefinePath("/{text}", bindings...)
 	bindings[0] = PathParameter[textPath]{}
-	if url, err := path.URL(textPath{Text: "kept"}); err != nil || url != "/kept" {
+	if url, err := PathURL(path, textPath{Text: "kept"}); err != nil || url != "/kept" {
 		t.Fatalf("declaration was mutated: %q %v", url, err)
 	}
 }
@@ -212,7 +212,7 @@ func TestBrokenPathSelectorIsPrivateServerFailure(t *testing.T) {
 		func(*textPath) *string { panic("private-path-panic") },
 	} {
 		route := DefineRoute(RouteSpec{ID: "broken", Method: GET, Access: Public}, DefinePath("/{text}", Param("text", StringPath[string](), selector)))
-		router, err := NewRouter(route.HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("broken decoder reached handler") }))
+		router, err := NewRouter(HandleRaw(route, func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("broken decoder reached handler") }))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -221,7 +221,7 @@ func TestBrokenPathSelectorIsPrivateServerFailure(t *testing.T) {
 		if failure := decodeFailure(t, recorder); failure.Code != InternalError || strings.Contains(recorder.Body.String(), "private-path-panic") {
 			t.Fatalf("unsafe decoder failure: %+v", failure)
 		}
-		if _, err := route.URL(textPath{}); err == nil || strings.Contains(err.Error(), "private-path-panic") {
+		if _, err := RouteURL(route, textPath{}); err == nil || strings.Contains(err.Error(), "private-path-panic") {
 			t.Fatalf("unsafe URL failure: %v", err)
 		}
 	}
@@ -241,13 +241,13 @@ func FuzzTypedPathRoundTrip(f *testing.F) {
 			pattern = "/prefix/{text...}"
 		}
 		route := textRoute(pattern)
-		location, err := route.URL(textPath{Text: value})
+		location, err := RouteURL(route, textPath{Text: value})
 		if err != nil {
 			return
 		}
 		var decoded string
 		called := false
-		router, err := NewRouter(route.HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) {
+		router, err := NewRouter(HandleRaw(route, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, p textPath) {
 			decoded = p.Text
 			called = true
 			w.WriteHeader(204)

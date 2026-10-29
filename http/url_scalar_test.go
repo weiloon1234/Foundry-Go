@@ -20,12 +20,12 @@ func codecMetadata[V any](t *testing.T, codec PathCodec[V]) URLScalarInfo {
 	t.Helper()
 	selectValue := func(value *V) *V { return value }
 	path := DefinePath("/{v}", Param("v", codec, selectValue))
-	paths, err := path.Parameters()
+	paths, err := PathParameters(path)
 	if err != nil || len(paths) != 1 || paths[0].Scalar == nil {
 		t.Fatalf("path metadata: %+v %v", paths, err)
 	}
 	query := DefineQuery(QueryParam("v", codec, selectValue))
-	parameters, err := query.Parameters()
+	parameters, err := QueryParameters(query)
 	if err != nil || len(parameters) != 1 || parameters[0].Scalar == nil {
 		t.Fatalf("query metadata: %+v %v", parameters, err)
 	}
@@ -99,7 +99,7 @@ func TestURLScalarMetadataOwnsEnumAndParameterSnapshots(t *testing.T) {
 	path := DefinePath("/{right}/{left...}",
 		Param("left", codec, func(p *parameters) *scalarMetadataEnum { return &p.Left }),
 		Param("right", codec, func(p *parameters) *scalarMetadataEnum { return &p.Right }))
-	first, err := path.Parameters()
+	first, err := PathParameters(path)
 	if err != nil || len(first) != 2 || first[0].Name != "right" || first[0].CatchAll || first[1].Name != "left" || !first[1].CatchAll {
 		t.Fatalf("path pattern metadata: %+v %v", first, err)
 	}
@@ -108,17 +108,17 @@ func TestURLScalarMetadataOwnsEnumAndParameterSnapshots(t *testing.T) {
 	}
 	first[0].Scalar.Value.Cases[0][1] = 'x'
 	first[0].Name = "changed"
-	second, err := path.Parameters()
+	second, err := PathParameters(path)
 	if err != nil || second[0].Name != "right" || string(second[0].Scalar.Value.Cases[0]) != "\"one\"" || string(second[1].Scalar.Value.Cases[0]) != "\"one\"" {
 		t.Fatal("path metadata snapshots shared enum bytes", err)
 	}
 	query := DefineQuery(RepeatedQueryParam("values", codec, func(p *[]scalarMetadataEnum) *[]scalarMetadataEnum { return p }))
-	values, err := query.Parameters()
+	values, err := QueryParameters(query)
 	if err != nil || len(values) != 1 || !values[0].Repeated || values[0].Required || values[0].Scalar.Value.Kind != contract.StringKind {
 		t.Fatalf("repeated element contract: %+v %v", values, err)
 	}
 	values[0].Scalar.Value.Cases[0][1] = 'x'
-	again, _ := query.Parameters()
+	again, _ := QueryParameters(query)
 	if string(again[0].Scalar.Value.Cases[0]) != "\"one\"" {
 		t.Fatal("query metadata was shared")
 	}
@@ -140,7 +140,7 @@ func TestCustomURLScalarMetadataIsExplicitAndTyped(t *testing.T) {
 	codec := &scalarMetadataCustomCodec{calls: &calls}
 	field := func(value *string) *string { return value }
 	opaque := DefinePath("/{v}", Param("v", codec, field))
-	parameters, err := opaque.Parameters()
+	parameters, err := PathParameters(opaque)
 	if err != nil || parameters[0].Scalar != nil || calls != 0 {
 		t.Fatal("custom codec metadata was inferred or invoked")
 	}
@@ -156,10 +156,10 @@ func TestCustomURLScalarMetadataIsExplicitAndTyped(t *testing.T) {
 		DescribeURL((*scalarMetadataCustomCodec)(nil), contract.DefineScalar[string](contract.Type{ID: "v", Kind: contract.StringKind})),
 		DescribeURL(codec, contract.Scalar[string]{}),
 	} {
-		if _, err := DefinePath("/{v}", Param("v", invalid, field)).Parameters(); err == nil {
+		if _, err := PathParameters(DefinePath("/{v}", Param("v", invalid, field))); err == nil {
 			t.Fatal("invalid metadata codec bound to path")
 		}
-		if err := DefineQuery(QueryParam("v", invalid, field)).Validate(); err == nil {
+		if err := ValidateQueryDescriptor(DefineQuery(QueryParam("v", invalid, field))); err == nil {
 			t.Fatal("invalid metadata codec bound to query")
 		}
 		if _, err := invalid.Parse("one"); err == nil {

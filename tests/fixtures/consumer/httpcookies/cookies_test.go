@@ -2,13 +2,6 @@ package httpcookies_test
 
 import (
 	"encoding/json"
-	"foundry.test/consumer/httpcookies"
-	"foundry.test/consumer/httpkernel"
-	"foundry.test/consumer/models"
-	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
-	"github.com/weiloon1234/Foundry-Go/model"
-	"github.com/weiloon1234/Foundry-Go/secret"
-	"github.com/weiloon1234/Foundry-Go/testkit"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -16,6 +9,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"foundry.test/consumer/httpcookies"
+	"foundry.test/consumer/httpkernel"
+	"foundry.test/consumer/models"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/secret"
+	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
 func TestTypedCookiesWithNativeTLSClientJar(t *testing.T) {
@@ -40,7 +41,7 @@ func TestTypedCookiesWithNativeTLSClientJar(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	selectedPath, err := httpcookies.Select.URL(httpkernel.UserPath{User: id})
+	selectedPath, err := foundryhttp.RouteURL(httpcookies.Select, httpkernel.UserPath{User: id})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,11 @@ package idempotenthttp
 
 import (
 	"context"
+	"math"
+	"strconv"
+	"strings"
+	"sync/atomic"
+
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
@@ -13,10 +18,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
 	"github.com/weiloon1234/Foundry-Go/validation"
-	"math"
-	"strconv"
-	"strings"
-	"sync/atomic"
 )
 
 var Created = events.Define[Receipt]("idempotent.order", 1)
@@ -49,10 +50,10 @@ func Migrations() []migrate.Definition {
 	}}}
 }
 func Endpoint() http.Endpoint[Path, http.NoQuery, Submission, Receipt] {
-	return http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "orders.create", Method: http.POST, Access: http.Guarded}, PathDescriptor()), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.JSONResponse(201, ReceiptJSON())).WithErrors(Rejected).WithPreparation(func(_ context.Context, in Request) (http.NoQuery, Submission, error) {
+	return http.ValidateBody(http.PrepareEndpoint(http.ConfigureEndpoint(http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "orders.create", Method: http.POST, Access: http.Guarded}, PathDescriptor()), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.JSONResponse(201, ReceiptJSON())), http.Errors(Rejected)), func(_ context.Context, in Request) (http.NoQuery, Submission, error) {
 		in.Body.Name = strings.TrimSpace(in.Body.Name)
 		return in.Query, in.Body, nil
-	}).WithBodyValidation(validation.Rules(validation.DefineField("name", func(in Submission) string { return in.Name }), validation.NonBlank[string]()))
+	}), validation.Rules(validation.DefineField("name", func(in Submission) string { return in.Name }), validation.NonBlank[string]()))
 }
 
 // Build uses ordinary configured infrastructure. Only the idempotent callback's
@@ -92,20 +93,20 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 		if err != nil {
 			return nil, err
 		}
-		required := http.RequireAuthentication(Endpoint(), transport, guard).WithAuthorization(func(_ context.Context, _ Actor, in Request) error {
+		required := http.AuthorizeActor(http.RequireAuthentication(Endpoint(), transport, guard), func(_ context.Context, _ Actor, in Request) error {
 			if in.Body.Name == "request-denied" {
 				return http.Forbidden
 			}
 			return nil
 		})
 		resolver := modelbinding.ByKey(db, orm.Keyed(Workspaces.Query(), Workspaces.Key()), func(path Path) int64 { return path.Workspace })
-		bound := modelbinding.BindAuthenticated(required, resolver).WithAuthorization(func(_ context.Context, actor Actor, in BoundRequest) error {
+		operation := modelbinding.AuthorizeAuthenticatedIdempotentResource(modelbinding.BindAuthenticatedIdempotent(http.IdempotentAuthenticated(required, store, idempotency.Definition{ID: "orders.create", Version: 1}), resolver), func(_ context.Context, actor Actor, in BoundRequest) error {
 			if !in.Model.Enabled || in.Model.Tenant != actor.Tenant || hooks.Deny != nil && hooks.Deny.Load() {
 				return http.Forbidden
 			}
 			return nil
 		})
-		operation := modelbinding.IdempotentAuthenticated(bound, store, idempotency.Definition{ID: "orders.create", Version: 1}).WithHeaders(func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
+		operation = modelbinding.AuthenticatedIdempotentHeaders(operation, func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
 			return []http.ResponseHeader{{Name: "Location", Value: http.HeaderValue("/orders/" + result.ID.String())}}, nil
 		})
 		return []http.RouteRegistration{operation.Handle(func(_ context.Context, actor Actor, _ BoundRequest) (idempotency.Scope, error) {

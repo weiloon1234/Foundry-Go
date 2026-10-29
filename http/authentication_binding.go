@@ -21,9 +21,9 @@ type authenticationBinding[M any] struct {
 	requirementError    error
 }
 
-// withActorMiddleware appends middleware that runs after authentication and its
+// authenticationWithActorMiddleware appends middleware that runs after authentication and its
 // scope/permission requirements, inside the authenticated request scope.
-func (b authenticationBinding[M]) withActorMiddleware(middlewares ...Middleware) authenticationBinding[M] {
+func authenticationWithActorMiddleware[M any](b authenticationBinding[M], middlewares ...Middleware) authenticationBinding[M] {
 	if len(middlewares) == 0 {
 		b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP actor middleware requires a declaration")
 		return b
@@ -32,12 +32,12 @@ func (b authenticationBinding[M]) withActorMiddleware(middlewares ...Middleware)
 	return b
 }
 
-// chain is the authentication middleware followed by the actor stage.
-func (b authenticationBinding[M]) chain(optional bool) []Middleware {
-	return append([]Middleware{b.middleware(optional)}, b.actorMiddleware...)
+// authenticationChain is the authentication middleware followed by the actor stage.
+func authenticationChain[M any](b authenticationBinding[M], optional bool) []Middleware {
+	return append([]Middleware{authenticationMiddleware(b, optional)}, b.actorMiddleware...)
 }
 
-func (b authenticationBinding[M]) withScopes(required auth.AccessScopes[M]) authenticationBinding[M] {
+func authenticationWithScopes[M any](b authenticationBinding[M], required auth.AccessScopes[M]) authenticationBinding[M] {
 	if b.requiredScopes != nil {
 		b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP access scopes are already declared")
 		return b
@@ -45,7 +45,7 @@ func (b authenticationBinding[M]) withScopes(required auth.AccessScopes[M]) auth
 	b.requiredScopes = &required
 	return b
 }
-func (b authenticationBinding[M]) withPermissions(required ...auth.Permission[M]) authenticationBinding[M] {
+func authenticationWithPermissions[M any](b authenticationBinding[M], required ...auth.Permission[M]) authenticationBinding[M] {
 	if b.requiredPermissions != nil {
 		b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP permissions are already declared")
 		return b
@@ -57,7 +57,7 @@ func (b authenticationBinding[M]) withPermissions(required ...auth.Permission[M]
 	b.requiredPermissions = slices.Clone(required)
 	return b
 }
-func (b authenticationBinding[M]) validate(access Access, optional bool) error {
+func authenticationValidate[M any](b authenticationBinding[M], access Access, optional bool) error {
 	if b.requirementError != nil {
 		return b.requirementError
 	}
@@ -95,7 +95,7 @@ func (b authenticationBinding[M]) validate(access Access, optional bool) error {
 	}
 	return nil
 }
-func (b authenticationBinding[M]) info(optional bool) *AuthenticationInfo {
+func authenticationInfo[M any](b authenticationBinding[M], optional bool) *AuthenticationInfo {
 	info := &AuthenticationInfo{Guard: b.guard.Name(), Provider: b.guard.ProviderName(), Optional: optional}
 	for _, source := range b.authentication.sources {
 		if source.name == b.guard.Source() {
@@ -111,7 +111,7 @@ func (b authenticationBinding[M]) info(optional bool) *AuthenticationInfo {
 	}
 	return info
 }
-func (b authenticationBinding[M]) middleware(optional bool) Middleware {
+func authenticationMiddleware[M any](b authenticationBinding[M], optional bool) Middleware {
 	return b.authentication.middleware(b.guard.Source(), func(ctx context.Context) (context.Context, error) {
 		if optional {
 			subject, err := b.guard.Optional(ctx)

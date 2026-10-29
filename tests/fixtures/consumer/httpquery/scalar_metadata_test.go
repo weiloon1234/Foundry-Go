@@ -11,7 +11,7 @@ import (
 )
 
 func TestGeneratedURLScalarMetadataReusesTypedEnumAndModelDeclarations(t *testing.T) {
-	parameters, err := httpquery.SearchParameters.Parameters()
+	parameters, err := foundryhttp.QueryParameters(httpquery.SearchParameters)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestGeneratedURLScalarMetadataReusesTypedEnumAndModelDeclarations(t *testin
 	if found["q"].Required || found["q"].Scalar.Value.Kind != contract.StringKind {
 		t.Fatal("optional string metadata missing")
 	}
-	path, err := httpkernel.UserFeedPathDescriptor().Parameters()
+	path, err := foundryhttp.PathParameters(httpkernel.UserFeedPathDescriptor())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestGeneratedURLScalarMetadataReusesTypedEnumAndModelDeclarations(t *testin
 	if !seenEnum {
 		t.Fatal("generated path enum descriptor missing")
 	}
-	endpoint, err := httpendpoints.Update.Description()
+	endpoint, err := foundryhttp.InspectEndpoint(httpendpoints.Update)
 	if err != nil || len(endpoint.Path) != 1 || endpoint.Path[0].Scalar == nil || endpoint.Body == nil || endpoint.Response == nil {
 		t.Fatalf("complete endpoint input metadata: %+v %v", endpoint, err)
 	}
@@ -56,13 +56,13 @@ func TestGeneratedURLScalarMetadataReusesTypedEnumAndModelDeclarations(t *testin
 
 func TestCustomTrackingScalarRetainsDomainParsingAndTypedMetadata(t *testing.T) {
 	parameters := httpquery.TrackingParameters()
-	metadata, err := parameters.Parameters()
+	metadata, err := foundryhttp.QueryParameters(parameters)
 	if err != nil || len(metadata) != 1 || metadata[0].Required || metadata[0].Scalar == nil ||
 		metadata[0].Scalar.Syntax != foundryhttp.CustomURLSyntax || metadata[0].Scalar.Value.Kind != contract.StringKind {
 		t.Fatalf("custom typed scalar metadata: %+v %v", metadata, err)
 	}
 	limits := foundryhttp.QueryLimits{Bytes: 1024, Pairs: 8, Issues: 8}
-	input, err := parameters.Decode(t.Context(), "tracking=track_123", limits)
+	input, err := foundryhttp.DecodeQuery(parameters, t.Context(), "tracking=track_123", limits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,11 +70,11 @@ func TestCustomTrackingScalarRetainsDomainParsingAndTypedMetadata(t *testing.T) 
 	if !present || code != httpquery.TrackingCode("track_123") {
 		t.Fatal("custom value type or presence was lost")
 	}
-	encoded, err := parameters.Encode(t.Context(), input, limits)
+	encoded, err := foundryhttp.EncodeQuery(parameters, t.Context(), input, limits)
 	if err != nil || encoded != "tracking=track_123" {
 		t.Fatal("custom scalar did not round trip", encoded, err)
 	}
-	if invalid, err := parameters.Decode(t.Context(), "tracking=not-tracking", limits); err == nil || invalid.Code.IsSet() {
+	if invalid, err := foundryhttp.DecodeQuery(parameters, t.Context(), "tracking=not-tracking", limits); err == nil || invalid.Code.IsSet() {
 		t.Fatal("metadata replaced the domain parser or returned partial input")
 	}
 }

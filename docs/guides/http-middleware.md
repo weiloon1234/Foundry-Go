@@ -19,13 +19,13 @@ trace := foundryhttp.DefineMiddleware(RouteTrace,
 )
 
 api := foundryhttp.DefineScope("/api", "api").WithMiddleware(trace)
-update := Update.Within(api)
+update := foundryhttp.ConfigureEndpoint(Update, foundryhttp.Within(api))
 router, err := foundryhttp.NewRouter(update.Handle(service.Update))
 ```
 
 The returned endpoint retains the same concrete path/query/body/response types.
 Use it for named URLs as well as registration, so prefixes have one source of
-truth. `Route.WithMiddleware` and `Endpoint.WithMiddleware` append to the route's
+truth. `Use(...)` in `ConfigureRoute` or `ConfigureEndpoint` appends to the route's
 chain; nested scopes compose parent, child and route chains in that order.
 
 The first middleware is outermost: request execution follows declaration order

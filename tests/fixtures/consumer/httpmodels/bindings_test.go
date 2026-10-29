@@ -30,7 +30,7 @@ func TestDeclaredModelBindingKeepsStoredModelOutOfResponse(t *testing.T) {
 		}
 		return value.Set(models.User{ID: id, Email: "member@example.test", Status: models.StatusActive, Age: 37, Scratch: []string{"private"}}), nil
 	})
-	bound := modelbinding.Bind(httpmodels.Show, resolver)
+	bound := modelbinding.Bind(foundryhttp.ForBinding(httpmodels.Show), resolver)
 	r, err := foundryhttp.NewRouter(bound.Handle(httpmodels.Presenter{}.Show))
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestDeclaredModelBindingKeepsStoredModelOutOfResponse(t *testing.T) {
 	if w.Code != 200 || calls != 1 || !strings.Contains(w.Body.String(), id.String()) || !strings.Contains(w.Body.String(), "member@example.test") || strings.Contains(w.Body.String(), "private") || strings.Contains(w.Body.String(), "age") {
 		t.Fatal(w.Code, w.Body.String(), calls)
 	}
-	expected, err := httpmodels.Show.Description()
+	expected, err := foundryhttp.InspectEndpoint(httpmodels.Show)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,17 +78,17 @@ func TestDeclaredKeyBindingsUseScopedParameterizedQueries(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolver := httpmodels.UserByID(db)
-	if err := resolver.Validate(); err != nil || db.calls != 0 {
+	if err := modelbinding.ValidateResolver(resolver); err != nil || db.calls != 0 {
 		t.Fatal("query ran at assembly", err)
 	}
-	if _, err := resolver.Resolve(t.Context(), httpkernel.UserPath{User: id}); !errors.Is(err, cause) {
+	if _, err := modelbinding.Resolve(resolver, t.Context(), httpkernel.UserPath{User: id}); !errors.Is(err, cause) {
 		t.Fatal("query failure changed", err)
 	}
 	if db.calls != 1 || !strings.Contains(db.statement, `"status"`) || !strings.Contains(db.statement, `"id"`) || strings.Contains(db.statement, id.String()) || len(db.arguments) < 2 {
 		t.Fatal("query scope/parameters lost", db.statement)
 	}
 	db.calls = 0
-	if _, err := httpmodels.CountryByCode(db).Resolve(t.Context(), httpmodels.CountryPath{Country: models.CountryCode("private-country")}); !errors.Is(err, cause) {
+	if _, err := modelbinding.Resolve(httpmodels.CountryByCode(db), t.Context(), httpmodels.CountryPath{Country: models.CountryCode("private-country")}); !errors.Is(err, cause) {
 		t.Fatal(err)
 	}
 	if db.calls != 1 || !strings.Contains(db.statement, `"code"`) || strings.Contains(db.statement, "private-country") {
@@ -99,7 +99,7 @@ func TestDeclaredKeyBindingsUseScopedParameterizedQueries(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.calls = 0
-	if _, err := httpmodels.OrderWithinUser(db).Resolve(t.Context(), httpmodels.OrderPath{User: id, Order: order}); !errors.Is(err, cause) {
+	if _, err := modelbinding.Resolve(httpmodels.OrderWithinUser(db), t.Context(), httpmodels.OrderPath{User: id, Order: order}); !errors.Is(err, cause) {
 		t.Fatal(err)
 	}
 	if db.calls != 1 || !strings.Contains(db.statement, `"buyer_id"`) || len(db.arguments) < 2 {

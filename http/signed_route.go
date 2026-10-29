@@ -58,36 +58,36 @@ type SignedRoute[P any] struct {
 	err    error
 }
 
-func (r Route[P]) Signed(signer URLSigner) SignedRoute[P] {
+func SignRoute[P any](r Route[P], signer URLSigner) SignedRoute[P] {
 	return SignedRoute[P]{route: r, signer: signer}
 }
-func (r SignedRoute[P]) ID() RouteID     { return r.route.ID() }
-func (r SignedRoute[P]) Method() Method  { return r.route.Method() }
-func (r SignedRoute[P]) Pattern() string { return r.route.Pattern() }
-func (r SignedRoute[P]) Validate() error {
+func SignedRouteID[P any](r SignedRoute[P]) RouteID     { return RouteIDOf(r.route) }
+func SignedRouteMethod[P any](r SignedRoute[P]) Method  { return RouteMethod(r.route) }
+func SignedRoutePattern[P any](r SignedRoute[P]) string { return RoutePattern(r.route) }
+func ValidateSignedRoute[P any](r SignedRoute[P]) error {
 	if r.err != nil {
 		return r.err
 	}
-	if err := r.route.Validate(); err != nil {
+	if err := ValidateRoute(r.route); err != nil {
 		return err
 	}
-	if r.route.Method() == TRACE {
+	if RouteMethod(r.route) == TRACE {
 		return safeerror.NewFault(fault.Invalid, "TRACE cannot carry a signed URL")
 	}
 	return r.signer.Validate()
 }
 
-// URL uses an explicitly approved origin in background kernels. Request handlers
+// SignedRouteURL uses an explicitly approved origin in background kernels. Request handlers
 // can obtain one through PublicOrigin after PublicURLs middleware. Expiry is
 // mandatory, measured in whole Unix seconds, and must be in the future.
-func (r SignedRoute[P]) URL(ctx context.Context, origin Origin, path P, expires time.Time) (string, error) {
-	return r.link(ctx, origin, path, expires, signedURLForm{})
+func SignedRouteURL[P any](r SignedRoute[P], ctx context.Context, origin Origin, path P, expires time.Time) (string, error) {
+	return signedRouteLink(r, ctx, origin, path, expires, signedURLForm{})
 }
 
 // WithPermanentLinks explicitly permits links without expiry for this route;
 // verification then accepts both expiring and permanent links. A permanent link
 // stays valid until its signing key leaves the rotation set, so prefer expiry.
-func (r SignedRoute[P]) WithPermanentLinks() SignedRoute[P] {
+func signedRouteWithPermanentLinks[P any](r SignedRoute[P]) SignedRoute[P] {
 	r.signer.policy.permanent = true
 	return r
 }
@@ -95,7 +95,7 @@ func (r SignedRoute[P]) WithPermanentLinks() SignedRoute[P] {
 // WithIgnoredParameters declares query parameters removed before verification,
 // such as analytics parameters appended by mail clients. They are not
 // authenticated, never reach typed query decoding and cannot be signed.
-func (r SignedRoute[P]) WithIgnoredParameters(names ...string) SignedRoute[P] {
+func signedRouteWithIgnoredParameters[P any](r SignedRoute[P], names ...string) SignedRoute[P] {
 	policy, err := r.signer.policy.withIgnored(names)
 	if err != nil && r.err == nil {
 		r.err = err
@@ -104,41 +104,41 @@ func (r SignedRoute[P]) WithIgnoredParameters(names ...string) SignedRoute[P] {
 	return r
 }
 
-// PermanentURL signs a link without expiry; the route must opt in with
+// PermanentRouteURL signs a link without expiry; the route must opt in with
 // WithPermanentLinks. Origin binding and every other rule are unchanged.
-func (r SignedRoute[P]) PermanentURL(ctx context.Context, origin Origin, path P) (string, error) {
-	return r.link(ctx, origin, path, time.Time{}, signedURLForm{permanent: true})
+func PermanentRouteURL[P any](r SignedRoute[P], ctx context.Context, origin Origin, path P) (string, error) {
+	return signedRouteLink(r, ctx, origin, path, time.Time{}, signedURLForm{permanent: true})
 }
 
-// RelativeURL signs an origin-relative link. It is not bound to an origin, so
+// RelativeRouteURL signs an origin-relative link. It is not bound to an origin, so
 // it verifies on every origin PublicURLs admits for this route; use URL when a
 // link must stay on one host or tenant.
-func (r SignedRoute[P]) RelativeURL(ctx context.Context, path P, expires time.Time) (string, error) {
-	return r.link(ctx, "", path, expires, signedURLForm{relative: true})
+func RelativeRouteURL[P any](r SignedRoute[P], ctx context.Context, path P, expires time.Time) (string, error) {
+	return signedRouteLink(r, ctx, "", path, expires, signedURLForm{relative: true})
 }
 
-func (r SignedRoute[P]) link(ctx context.Context, origin Origin, path P, expires time.Time, form signedURLForm) (string, error) {
-	if err := r.Validate(); err != nil {
+func signedRouteLink[P any](r SignedRoute[P], ctx context.Context, origin Origin, path P, expires time.Time, form signedURLForm) (string, error) {
+	if err := ValidateSignedRoute(r); err != nil {
 		return "", err
 	}
 	if err := r.signer.prepare(ctx); err != nil {
 		return "", err
 	}
-	relative, err := r.route.URL(path)
+	relative, err := RouteURL(r.route, path)
 	if err != nil {
 		return "", err
 	}
-	return r.signer.sealForm(ctx, r.route.spec, r.route.Pattern(), origin, relative, expires, form)
+	return r.signer.sealForm(ctx, r.route.spec, RoutePattern(r.route), origin, relative, expires, form)
 }
 
-// HandleRaw verifies before path decoding or handler execution. PublicURLs must
+// HandleSignedRaw verifies before path decoding or handler execution. PublicURLs must
 // run outside the router; TrustedProxy must precede it behind a trusted edge.
 // Raw handlers retain the original native request and signing query parameters.
-func (r SignedRoute[P]) HandleRaw(handler RawHandler[P]) RouteRegistration {
-	if err := r.Validate(); err != nil {
+func HandleSignedRaw[P any](r SignedRoute[P], handler RawHandler[P]) RouteRegistration {
+	if err := ValidateSignedRoute(r); err != nil {
 		return RouteRegistration{err: err}
 	}
-	return signedRegistration(r.route.HandleRaw(handler), r.signer, r.route.spec, r.route.Pattern(), false)
+	return signedRegistration(HandleRaw(r.route, handler), r.signer, r.route.spec, RoutePattern(r.route), false)
 }
 
 type signedEndpointQueryKey struct{}

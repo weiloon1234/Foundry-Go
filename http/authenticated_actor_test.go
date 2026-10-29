@@ -64,7 +64,7 @@ func TestActorMiddlewareRunsAfterAuthenticationWithConcreteModel(t *testing.T) {
 			next.ServeHTTP(w, r)
 		}), nil
 	})
-	route := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded).WithMiddleware(before), transport, guard).WithActorMiddleware(tenant).Handle(func(_ context.Context, actor authAccount, _ authInput) (foundryhttp.NoContent, error) {
+	route := foundryhttp.RequireAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Guarded), foundryhttp.Use(before)), transport, guard, foundryhttp.ActorMiddleware[authAccount](tenant)).Handle(func(_ context.Context, actor authAccount, _ authInput) (foundryhttp.NoContent, error) {
 		order = append(order, "handler")
 		return foundryhttp.NoContent{}, nil
 	})
@@ -79,7 +79,7 @@ func TestActorMiddlewareRunsAfterAuthenticationWithConcreteModel(t *testing.T) {
 	if w := authServe(router, nil); w.Code != 401 || len(order) != 1 {
 		t.Fatal("actor stage ran without authentication", w.Code, order)
 	}
-	if registration := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard).WithActorMiddleware().Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	if registration := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard, foundryhttp.ActorMiddleware[authAccount]()).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	}); func() error { _, err := foundryhttp.NewRouter(registration); return err }() == nil {
 		t.Fatal("empty actor middleware declaration accepted")
@@ -100,7 +100,7 @@ func TestRateLimitByActorKeysAuthenticatedModels(t *testing.T) {
 	handler := func(context.Context, value.Optional[authAccount], authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	}
-	router := newAuthRouter(t, foundryhttp.OptionalAuthentication(authEndpoint(foundryhttp.Public), transport, guard).WithActorMiddleware(foundryhttp.RateLimitByActor(limiter, guard)).Handle(handler))
+	router := newAuthRouter(t, foundryhttp.OptionalAuthentication(authEndpoint(foundryhttp.Public), transport, guard, foundryhttp.ActorMiddleware[authAccount](foundryhttp.RateLimitByActor(limiter, guard))).Handle(handler))
 	for _, step := range []struct {
 		header string
 		status int
@@ -114,7 +114,7 @@ func TestRateLimitByActorKeysAuthenticatedModels(t *testing.T) {
 		}
 	}
 	misplaced := actorLimiter(t, "misplaced", ratelimit.PerMinute(10))
-	router = newAuthRouter(t, foundryhttp.OptionalAuthentication(authEndpoint(foundryhttp.Public).WithMiddleware(foundryhttp.RateLimitByActor(misplaced, guard)), transport, guard).Handle(handler))
+	router = newAuthRouter(t, foundryhttp.OptionalAuthentication(foundryhttp.ConfigureEndpoint(authEndpoint(foundryhttp.Public), foundryhttp.Use(foundryhttp.RateLimitByActor(misplaced, guard))), transport, guard).Handle(handler))
 	if w := authServe(router, []string{"Bearer valid"}); w.Code < 500 {
 		t.Fatal("pre-authentication actor limit fell back to another key", w.Code)
 	}
@@ -125,7 +125,7 @@ func TestRateLimitByActorKeysAuthenticatedModels(t *testing.T) {
 func TestBrowserRouteRequiresRecentPasswordConfirmation(t *testing.T) {
 	s := browserPrepare(t)
 	proof := browserProof(t)
-	login := browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public).WithMiddleware(s.web.Middleware()).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
+	login := foundryhttp.ConfigureEndpoint(browserEndpoint("/login", foundryhttp.POST, foundryhttp.Public), foundryhttp.Use(s.web.Middleware())).Handle(func(ctx context.Context, _ authInput) (foundryhttp.NoContent, error) {
 		_, err := s.web.Login(ctx, proof, session.IssueOptions{})
 		return foundryhttp.NoContent{}, err
 	})
@@ -134,7 +134,7 @@ func TestBrowserRouteRequiresRecentPasswordConfirmation(t *testing.T) {
 		_, err := s.sessions.ConfirmCurrent(ctx)
 		return foundryhttp.NoContent{}, err
 	})
-	sensitive := foundryhttp.RequireAuthentication(browserEndpoint("/sensitive", foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard()).WithActorMiddleware(s.web.RequirePasswordConfirmation(15 * time.Minute)).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
+	sensitive := foundryhttp.RequireAuthentication(browserEndpoint("/sensitive", foundryhttp.POST, foundryhttp.Guarded), s.web.Authentication(), s.web.Guard(), foundryhttp.ActorMiddleware[authAccount](s.web.RequirePasswordConfirmation(15*time.Minute))).Handle(func(context.Context, authAccount, authInput) (foundryhttp.NoContent, error) {
 		return foundryhttp.NoContent{}, nil
 	})
 	router, err := foundryhttp.NewRouter(login, confirm, sensitive)

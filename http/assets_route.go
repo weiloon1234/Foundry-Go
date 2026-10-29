@@ -42,7 +42,7 @@ func assetPrefix(prefix string) (string, error) {
 	if !strings.HasPrefix(prefix, "/") || strings.HasSuffix(prefix, "/") {
 		return "", safeerror.NewFault(fault.Invalid, "asset prefix requires an absolute path without a trailing slash")
 	}
-	if _, err := StaticPath(prefix).validate(); err != nil {
+	if _, err := pathValidate(StaticPath(prefix)); err != nil {
 		return "", err
 	}
 	return prefix, nil
@@ -51,10 +51,10 @@ func (m AssetMount) Validate() error {
 	if m.assets == nil || m.assets.done == nil {
 		return safeerror.NewFault(fault.Invalid, "asset mount requires constructed assets")
 	}
-	return m.route.Validate()
+	return ValidateRoute(m.route)
 }
 func (m AssetMount) WithMiddleware(middleware ...Middleware) AssetMount {
-	m.route = m.route.WithMiddleware(middleware...)
+	m.route = ConfigureRoute(m.route, Use(middleware...))
 	return m
 }
 
@@ -73,7 +73,7 @@ func (m AssetMount) URL(name AssetPath) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	location, err := m.route.URL(assetRoutePath{Value: AssetPath(plain)})
+	location, err := RouteURL(m.route, assetRoutePath{Value: AssetPath(plain)})
 	if err != nil {
 		return "", err
 	}
@@ -86,8 +86,8 @@ func (m AssetMount) Register() RouteRegistration {
 	if err := m.Validate(); err != nil {
 		return RouteRegistration{err: err}
 	}
-	segments, _ := m.route.validate()
-	info := m.route.info(segments, true)
+	segments, _ := routeValidate(m.route)
+	info := routeInfo(m.route, segments, true)
 	metadata := m.assets.description(m.prefix)
 	info.Assets = &metadata
 	// Static paths allow a final directory slash. All other structural path
@@ -207,7 +207,7 @@ func (a *Assets) serveSelection(w stdhttp.ResponseWriter, r *stdhttp.Request, se
 	response := DownloadResponse(a.config.media(selection.name))
 	limits := DefaultEndpointLimits()
 	limits.Files = a.config.Limits
-	prepared, err := response.prepare(r.Context(), a.Download(AssetPath(selection.name)), limits)
+	prepared, err := responsePrepare(response, r.Context(), a.Download(AssetPath(selection.name)), limits)
 	defer cleanupEndpointResource(r, "asset response", prepared.cleanup())
 	if err != nil {
 		writeRoutingError(w, r, err)

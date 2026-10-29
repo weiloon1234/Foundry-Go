@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraphtest"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraphtest"
 )
 
 type StreamEventPayload struct {
@@ -29,7 +29,7 @@ func streamEventPayloadJSON() contract.JSON[StreamEventPayload] {
 func serveEventRoute(t *testing.T, config EventStreamConfig, produce func(context.Context, *EventSink[StreamEventPayload]) error, w stdhttp.ResponseWriter, request *stdhttp.Request) error {
 	t.Helper()
 	var result error
-	router, err := NewRouter(DefineRoute(RouteSpec{ID: "events", Method: GET, Access: Public}, StaticPath("/events")).HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
+	router, err := NewRouter(HandleRaw(DefineRoute(RouteSpec{ID: "events", Method: GET, Access: Public}, StaticPath("/events")), func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ NoPath) {
 		result = ServeEvents(w, r, streamEventPayloadJSON(), config, produce)
 	}))
 	if err != nil {
@@ -250,7 +250,7 @@ func TestEventStreamResponseStreamsTypedEvents(t *testing.T) {
 	if resumedFrom != "" {
 		t.Fatal("repeated Last-Event-ID was accepted", resumedFrom)
 	}
-	info, err := eventsEndpoint().Description()
+	info, err := InspectEndpoint(eventsEndpoint())
 	if err != nil || info.Response == nil || info.Response.MediaType != EventStreamMediaType || info.Response.Schema.Root == "" || info.Status != 200 {
 		t.Fatal("event stream metadata", info.Response, err)
 	}

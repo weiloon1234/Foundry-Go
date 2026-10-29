@@ -28,19 +28,12 @@ type Statused[R any] struct {
 // TypeScript client returns the received status with the decoded value.
 // Idempotent endpoints require a single status, because a replay reproduces it.
 func JSONResponses[R any](descriptor contract.JSON[R], status int, alternatives ...int) Response[Statused[R]] {
-	return Response[Statused[R]]{
-		kind: payloadJSON, status: status, json: statusedJSON[R]{descriptor: descriptor},
+	return Response[Statused[R]]{prepare: prepareJSONResponse[Statused[R]],
+		kind: payloadJSON, status: status, validateJSON: descriptor.Validate, schema: descriptor.Description, describe: schemaPayloadInfo("application/json", descriptor.Description), encodeJSON: func(ctx context.Context, result Statused[R], limits contract.JSONLimits) ([]byte, error) {
+			return descriptor.Encode(ctx, result.Value, limits)
+		},
 		statuses: append([]int{status}, alternatives...), selectStatus: func(result Statused[R]) int { return result.Status },
 	}
-}
-
-// statusedJSON encodes the selected value with the declared descriptor.
-type statusedJSON[R any] struct{ descriptor contract.JSON[R] }
-
-func (j statusedJSON[R]) Validate() error                       { return j.descriptor.Validate() }
-func (j statusedJSON[R]) Description() (contract.Schema, error) { return j.descriptor.Description() }
-func (j statusedJSON[R]) Encode(ctx context.Context, result Statused[R], limits contract.JSONLimits) ([]byte, error) {
-	return j.descriptor.Encode(ctx, result.Value, limits)
 }
 
 func validateResponseStatuses(statuses []int, primary int) error {
@@ -56,7 +49,7 @@ func validateResponseStatuses(statuses []int, primary int) error {
 }
 
 // selectedStatus returns the declared status a handler chose for its result.
-func (r Response[R]) selectedStatus(result R) (int, error) {
+func responseSelectedStatus[R any](r Response[R], result R) (int, error) {
 	if r.selectStatus == nil {
 		return r.status, nil
 	}

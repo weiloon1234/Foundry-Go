@@ -18,31 +18,35 @@ type NumberedEndpoint[P, F, T any] = pageEndpoint[P, F, orm.PageRequest, orm.Pag
 // SimpleEndpoint is the corresponding count-free transport contract.
 type SimpleEndpoint[P, F, T any] = pageEndpoint[P, F, orm.PageRequest, orm.SimplePage[T], SimpleResponse[T]]
 
+type pageCore struct {
+	links LinkMode
+	err   error
+}
+
 type pageEndpoint[P, F, W, Page, Response any] struct {
+	pageCore
 	transport      foundryhttp.Endpoint[P, parameters[F, W], foundryhttp.NoBody, Response]
-	links          LinkMode
 	validateWindow func(W) error
 	classify       func(error) error
 	finish         func(pageRequest[P, F, W], Page, func(W) (string, error)) (Response, error)
-	err            error
 }
 
 // DefineNumbered composes generated filters, defaulted pagination and a declared
 // item DTO. The endpoint accepts no request body; ordinary route/method rules
 // apply. Config.Links=PublicLinks requires PublicURLs; ApplyMiddleware rejects a
 // router whose PublicLinks routes are not covered by it.
-func DefineNumbered[P, F, T any](route foundryhttp.Route[P], filters foundryhttp.Query[F], item contract.JSON[T], config Config) NumberedEndpoint[P, F, T] {
-	return newOffsetEndpoint(route, filters, NumberedJSON(item), config, numberedResponse[P, F, T](config.navigation()))
+func DefineNumbered[P, F, T any](route foundryhttp.Route[P], filters foundryhttp.Query[F], item contract.JSON[T], config Config, options ...foundryhttp.EndpointOption) NumberedEndpoint[P, F, T] {
+	return Configure(newOffsetEndpoint(route, filters, NumberedJSON(item), config, numberedResponse[P, F, T](config.navigation())), options...)
 }
 
 // DefineSimple creates the same thin handler boundary without a count query or
 // fabricated total metadata. Handlers return orm.SimplePage[T].
-func DefineSimple[P, F, T any](route foundryhttp.Route[P], filters foundryhttp.Query[F], item contract.JSON[T], config Config) SimpleEndpoint[P, F, T] {
-	return newOffsetEndpoint(route, filters, SimpleJSON(item), config, simpleResponse[P, F, T](config.navigation()))
+func DefineSimple[P, F, T any](route foundryhttp.Route[P], filters foundryhttp.Query[F], item contract.JSON[T], config Config, options ...foundryhttp.EndpointOption) SimpleEndpoint[P, F, T] {
+	return Configure(newOffsetEndpoint(route, filters, SimpleJSON(item), config, simpleResponse[P, F, T](config.navigation())), options...)
 }
 func newOffsetEndpoint[P, F, Page, Response any](route foundryhttp.Route[P], filters foundryhttp.Query[F], response contract.JSON[Response], config Config, finish func(Request[P, F], Page, func(orm.PageRequest) (string, error)) (Response, error)) pageEndpoint[P, F, orm.PageRequest, Page, Response] {
 	if err := config.Validate(); err != nil {
-		return pageEndpoint[P, F, orm.PageRequest, Page, Response]{err: err}
+		return pageEndpoint[P, F, orm.PageRequest, Page, Response]{pageCore: pageCore{err: err}}
 	}
 	maximumPage := config.maximumPage()
 	validate := func(page orm.PageRequest) error {
@@ -65,55 +69,43 @@ var errBeyondMaximumPage = safeerror.NewFault(fault.Invalid, "page exceeds endpo
 
 func newPageEndpoint[P, F, W, Page, Response any](route foundryhttp.Route[P], parameters foundryhttp.Query[parameters[F, W]], rules validation.Rule[parameters[F, W]], response contract.JSON[Response], links LinkMode, validate func(W) error, finish func(pageRequest[P, F, W], Page, func(W) (string, error)) (Response, error)) pageEndpoint[P, F, W, Page, Response] {
 	return pageEndpoint[P, F, W, Page, Response]{
-		transport: foundryhttp.DefineEndpoint(route, parameters, foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, response)).WithQueryValidation(rules),
-		links:     links, validateWindow: validate, finish: finish,
+		transport: foundryhttp.ValidateQuery(foundryhttp.DefineEndpoint(route, parameters, foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, response)), rules),
+		pageCore:  pageCore{links: links}, validateWindow: validate, finish: finish,
 	}
 }
-func (e pageEndpoint[P, F, W, Page, Response]) Validate() error {
+func Validate[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) error {
 	if e.err != nil {
 		return e.err
 	}
 	if e.finish == nil || e.validateWindow == nil || e.links != RelativeLinks && e.links != PublicLinks {
 		return safeerror.NewFault(fault.Invalid, "pagination endpoint is not defined")
 	}
-	return e.transport.Validate()
+	return foundryhttp.ValidateEndpoint(e.transport)
 }
-func (e pageEndpoint[P, F, W, Page, Response]) ID() foundryhttp.RouteID { return e.transport.ID() }
-func (e pageEndpoint[P, F, W, Page, Response]) Method() foundryhttp.Method {
-	return e.transport.Method()
+func EndpointID[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) foundryhttp.RouteID {
+	return foundryhttp.EndpointID(e.transport)
 }
-func (e pageEndpoint[P, F, W, Page, Response]) Pattern() string { return e.transport.Pattern() }
-func (e pageEndpoint[P, F, W, Page, Response]) Description() (foundryhttp.EndpointInfo, error) {
-	if err := e.Validate(); err != nil {
+func EndpointMethod[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) foundryhttp.Method {
+	return foundryhttp.EndpointMethod(e.transport)
+}
+func EndpointPattern[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) string {
+	return foundryhttp.EndpointPattern(e.transport)
+}
+func Inspect[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) (foundryhttp.EndpointInfo, error) {
+	if err := Validate(e); err != nil {
 		return foundryhttp.EndpointInfo{}, err
 	}
-	return e.transport.Description()
+	return foundryhttp.InspectEndpoint(e.transport)
 }
-func (e pageEndpoint[P, F, W, Page, Response]) Within(scope foundryhttp.Scope) pageEndpoint[P, F, W, Page, Response] {
-	e.transport = e.transport.Within(scope)
-	return e
-}
-func (e pageEndpoint[P, F, W, Page, Response]) WithMiddleware(middleware ...foundryhttp.Middleware) pageEndpoint[P, F, W, Page, Response] {
-	e.transport = e.transport.WithMiddleware(middleware...)
-	return e
-}
-func (e pageEndpoint[P, F, W, Page, Response]) WithLimits(limits foundryhttp.EndpointLimits) pageEndpoint[P, F, W, Page, Response] {
-	e.transport = e.transport.WithLimits(limits)
-	return e
-}
-func (e pageEndpoint[P, F, W, Page, Response]) WithErrors(declarations ...foundryhttp.ErrorDeclaration) pageEndpoint[P, F, W, Page, Response] {
-	e.transport = e.transport.WithErrors(declarations...)
-	return e
-}
-func (e pageEndpoint[P, F, W, Page, Response]) WithPathValidation(rules ...validation.Rule[P]) pageEndpoint[P, F, W, Page, Response] {
-	e.transport = e.transport.WithPathValidation(rules...)
+func ValidatePath[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response], rules ...validation.Rule[P]) pageEndpoint[P, F, W, Page, Response] {
+	e.transport = foundryhttp.ValidatePath(e.transport, rules...)
 	return e
 }
 
-// WithFiltersValidation reuses generated field rules without adding a synthetic
+// ValidateFilters reuses generated field rules without adding a synthetic
 // 'filters' prefix to actual query names or exported validation metadata.
-func (e pageEndpoint[P, F, W, Page, Response]) WithFiltersValidation(rules ...validation.Rule[F]) pageEndpoint[P, F, W, Page, Response] {
-	e.transport = e.transport.WithQueryValidation(validation.Embed(validation.All(rules...), func(input parameters[F, W]) F { return input.Filters }))
+func ValidateFilters[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response], rules ...validation.Rule[F]) pageEndpoint[P, F, W, Page, Response] {
+	e.transport = foundryhttp.ValidateQuery(e.transport, validation.Embed(validation.All(rules...), func(input parameters[F, W]) F { return input.Filters }))
 	return e
 }
 
@@ -121,7 +113,7 @@ func (e pageEndpoint[P, F, W, Page, Response]) WithFiltersValidation(rules ...va
 // uses the same query codecs/default declarations as the handler boundary and
 // never derives an origin from an arbitrary incoming request Host.
 func (e pageEndpoint[P, F, W, Page, Response]) URL(ctx context.Context, path P, filters F, page W) (string, error) {
-	if err := e.Validate(); err != nil {
+	if err := Validate(e); err != nil {
 		return "", err
 	}
 	if err := e.validateWindow(page); err != nil {
@@ -140,31 +132,31 @@ func (e pageEndpoint[P, F, W, Page, Response]) URL(ctx context.Context, path P, 
 // Handle binds a domain page read. Input validation completes first; response
 // metadata and links are completed before native JSON commits any success bytes.
 func (e pageEndpoint[P, F, W, Page, Response]) Handle(handler func(context.Context, pageRequest[P, F, W]) (Page, error)) foundryhttp.RouteRegistration {
-	if err := e.Validate(); err != nil {
+	if err := Validate(e); err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
 	if handler == nil {
 		return foundryhttp.InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "pagination endpoint requires a handler"))
 	}
-	return e.withLinkRequirements().transport.Handle(func(ctx context.Context, input foundryhttp.Input[P, parameters[F, W], foundryhttp.NoBody]) (Response, error) {
+	return pageEndpointWithLinkRequirements(e).transport.Handle(func(ctx context.Context, input foundryhttp.Input[P, parameters[F, W], foundryhttp.NoBody]) (Response, error) {
 		request := request(input)
 		page, err := handler(ctx, request)
-		return e.complete(ctx, request, page, err)
+		return pageEndpointComplete(e, ctx, request, page, err)
 	})
 }
 
 // withLinkRequirements declares, innermost on the route, that PublicLinks
 // generate absolute URLs. Router assembly then rejects a missing PublicURLs
 // policy instead of failing each request with a 500.
-func (e pageEndpoint[P, F, W, Page, Response]) withLinkRequirements() pageEndpoint[P, F, W, Page, Response] {
+func pageEndpointWithLinkRequirements[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) pageEndpoint[P, F, W, Page, Response] {
 	if e.links == PublicLinks {
-		e.transport = e.transport.WithMiddleware(foundryhttp.RequirePublicURLs())
+		e.transport = foundryhttp.ConfigureEndpoint(e.transport, foundryhttp.Use(foundryhttp.RequirePublicURLs()))
 	}
 	return e
 }
 
 // complete is the shared post-handler boundary for public and authenticated pages.
-func (e pageEndpoint[P, F, W, Page, Response]) complete(ctx context.Context, request pageRequest[P, F, W], page Page, err error) (Response, error) {
+func pageEndpointComplete[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response], ctx context.Context, request pageRequest[P, F, W], page Page, err error) (Response, error) {
 	if err != nil {
 		if e.classify != nil {
 			err = e.classify(err)

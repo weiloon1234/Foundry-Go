@@ -59,15 +59,15 @@ illustrates descriptor assembly, validation and an injected domain service.
 
 ```go
 fields := ProfileInputValidationFields()
-form := ProfileInputDescriptor().WithTempDirectory(uploadDirectory)
+form := foundryhttp.MultipartDirectory(ProfileInputDescriptor(), uploadDirectory)
 
-endpoint := foundryhttp.DefineEndpoint(
+endpoint := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(
     route,
     foundryhttp.EmptyQuery(),
     foundryhttp.MultipartBody(form),
     foundryhttp.JSONResponse(201, UploadReplyJSON()),
-).WithBodyValidation(
-    fields.Attachment.Rules(
+), 
+    validation.Rules(fields.Attachment,
         validation.FileMinSize[foundryhttp.UploadedFile](1),
         validation.FileMaxSize[foundryhttp.UploadedFile](1 << 20),
         validation.FileContentTypes[foundryhttp.UploadedFile]("image/*"),
@@ -106,7 +106,7 @@ never become local paths. UploadedFile cannot be implicitly JSON-serialized or
 retained for a job after the request ends. A domain operation must stream it to
 persistent storage before returning. Use the [storage upload adapter](storage.md) to persist the request-owned file through an explicitly selected disk.
 
-WithTempDirectory accepts an absolute server-owned directory; an empty value
+MultipartDirectory accepts an absolute server-owned directory; an empty value
 uses the operating system's temporary directory. Declaration/route assembly
 performs no filesystem I/O. Foundry creates a private per-request directory
 lazily when the first file arrives. Cleanup removes owned entries and reports
@@ -117,13 +117,12 @@ unexpected filesystem failures without recursively deleting unrelated entries.
 Use DefaultEndpointLimits and modify its Multipart limits for the route. The
 HTTP kernel's `MaxBodyBytes` remains an additional ceiling; to accept files larger
 than that server-wide default on one upload route only, declare the route's own
-ceiling with `WithBodyLimit` and a matching `WithTimeout` for slow transfers:
+ceiling with `BodyLimit` and a matching `Timeout` for slow transfers:
 
 ```go
 limits := foundryhttp.DefaultEndpointLimits()
 limits.Multipart.Bytes, limits.Multipart.FileBytes = 512<<20, 512<<20
-upload := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.EmptyResponse(204)).
-    WithLimits(limits).WithBodyLimit(512 << 20).WithTimeout(10 * time.Minute)
+upload := foundryhttp.ConfigureEndpoint(foundryhttp.ConfigureEndpoint(foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.EmptyResponse(204)), foundryhttp.Limits(limits)), foundryhttp.BodyLimit(512 << 20)), foundryhttp.Timeout(10 * time.Minute))
 ```
 
 Other routes keep the kernel default. Multipart Bytes

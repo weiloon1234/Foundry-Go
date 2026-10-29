@@ -2,13 +2,14 @@ package httpmodels_test
 
 import (
 	"errors"
-	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 	"testing"
 
 	"foundry.test/consumer/httpkernel"
 	"foundry.test/consumer/httpmodels"
 	"foundry.test/consumer/models"
+	modelbinding "github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 )
 
 func TestDeclaredBindingsPreserveLegacySQL(t *testing.T) {
@@ -27,16 +28,16 @@ func TestDeclaredBindingsPreserveLegacySQL(t *testing.T) {
 	}{
 		{"UUID and scope",
 			func() error {
-				_, err := httpmodels.UserByID(db).Resolve(t.Context(), httpkernel.UserPath{User: user})
+				_, err := modelbinding.Resolve(httpmodels.UserByID(db), t.Context(), httpkernel.UserPath{User: user})
 				return err
 			}},
 		{"natural key", func() error {
-			_, err := httpmodels.CountryByCode(db).Resolve(t.Context(), httpmodels.CountryPath{Country: "a/b + %"})
+			_, err := modelbinding.Resolve(httpmodels.CountryByCode(db), t.Context(), httpmodels.CountryPath{Country: "a/b + %"})
 			return err
 		}},
 		{"parent scope",
 			func() error {
-				_, err := httpmodels.OrderWithinUser(db).Resolve(t.Context(), httpmodels.OrderPath{User: user, Order: order})
+				_, err := modelbinding.Resolve(httpmodels.OrderWithinUser(db), t.Context(), httpmodels.OrderPath{User: user, Order: order})
 				return err
 			}},
 	} {

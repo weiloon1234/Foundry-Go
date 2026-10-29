@@ -87,7 +87,7 @@ import (
 func TestPublicQuery(t *testing.T) {
  limits:=foundryhttp.QueryLimits{Bytes:4096,Pairs:64,Issues:8}
  descriptor:=sample.SearchInputDescriptor()
- metadata,metadataErr:=descriptor.Parameters();if metadataErr!=nil{t.Fatal(metadataErr)}
+ metadata,metadataErr:=foundryhttp.QueryParameters(descriptor);if metadataErr!=nil{t.Fatal(metadataErr)}
  seenEnum:=false
  for _,parameter:=range metadata {
   if parameter.Scalar==nil{t.Fatal("fresh query scalar missing",parameter.Name)}
@@ -95,21 +95,21 @@ func TestPublicQuery(t *testing.T) {
  }
  if !seenEnum{t.Fatal("fresh enum field missing")}
  raw:="user=0193fd8c-2075-7000-8000-000000000001&q=Jane+Doe%2B&page=0&active=false&state=active&state=active&date=2024-02-29&amount=12345678901234567890.001"
- input,err:=descriptor.Decode(context.Background(),raw,limits);if err!=nil{t.Fatal(err)}
+ input,err:=foundryhttp.DecodeQuery(descriptor,context.Background(),raw,limits);if err!=nil{t.Fatal(err)}
  text,present:=input.Term.Get();if !present || text!="Jane Doe+"{t.Fatal("query text lost")}
  page,present:=input.Page.Get();if !present || page!=0{t.Fatal("present zero lost")}
  active,present:=input.Active.Get();if !present || bool(active){t.Fatal("present false lost")}
  amount,present:=input.Amount.Get();if !present || amount.String()!="12345678901234567890.001"{t.Fatal("decimal lost precision")}
  date,present:=input.Date.Get();if !present || date.String()!="2024-02-29"{t.Fatal("date changed")}
  if len(input.States)!=2 || input.States[0]!=sample.Active || input.States[1]!=sample.Active{t.Fatal("typed list changed")}
- encoded,err:=descriptor.Encode(context.Background(),input,limits);if err!=nil{t.Fatal(err)}
- again,err:=descriptor.Decode(context.Background(),encoded,limits);if err!=nil || again.Member!=input.Member{t.Fatal("query round trip failed")}
- input.States=sample.States{sample.State("undeclared")};if _,err:=descriptor.Encode(context.Background(),input,limits);err==nil{t.Fatal("enum output bypassed membership")}
- _,err=descriptor.Decode(context.Background(),"state=undeclared&user="+input.Member.String(),limits)
+ encoded,err:=foundryhttp.EncodeQuery(descriptor,context.Background(),input,limits);if err!=nil{t.Fatal(err)}
+ again,err:=foundryhttp.DecodeQuery(descriptor,context.Background(),encoded,limits);if err!=nil || again.Member!=input.Member{t.Fatal("query round trip failed")}
+ input.States=sample.States{sample.State("undeclared")};if _,err:=foundryhttp.EncodeQuery(descriptor,context.Background(),input,limits);err==nil{t.Fatal("enum output bypassed membership")}
+ _,err=foundryhttp.DecodeQuery(descriptor,context.Background(),"state=undeclared&user="+input.Member.String(),limits)
  var failure *foundryhttp.QueryError
  if !errors.As(err,&failure) || failure.Issues()[0].Path!="/state/0"{t.Fatalf("enum input issue: %v",err)}
- empty:=sample.EmptyInputDescriptor();if _,err:=empty.Decode(context.Background(),"",limits);err!=nil{t.Fatal(err)}
- if _,err:=empty.Decode(context.Background(),"unknown=value",limits);err==nil{t.Fatal("empty query accepted undeclared field")}
+ empty:=sample.EmptyInputDescriptor();if _,err:=foundryhttp.DecodeQuery(empty,context.Background(),"",limits);err!=nil{t.Fatal(err)}
+ if _,err:=foundryhttp.DecodeQuery(empty,context.Background(),"unknown=value",limits);err==nil{t.Fatal("empty query accepted undeclared field")}
 }
 `)
 	command := exec.CommandContext(t.Context(), "go", "test", "-race", ".")

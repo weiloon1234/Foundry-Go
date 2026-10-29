@@ -100,7 +100,7 @@ binding with an explicit model-owned access-scope ceiling. Both guards extend th
 application-owned `application.AuthorizationKey` registry, so policies,
 permissions and hooks contributed with `application.Authorization(id,
 application.Authorize(...))` or `auth.RegisterAuthorization` are available to
-their routes and `WithPermissions`.
+their routes and `Permissions`.
 
 Apply `browser.Browser.Middleware()` to the browser endpoint/group and pass
 `browser.Binding` to `http.Authenticated`. Separate actor models receive separate

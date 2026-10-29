@@ -89,9 +89,9 @@ func pageResponse(t *testing.T, registration foundryhttp.RouteRegistration, targ
 
 func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 	binding, scopes, permission := pageBinding(t)
-	base := pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()).Within(foundryhttp.DefineScope("/api", "api"))
+	base := pagination.Configure(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 	policies, reads := 0, 0
-	endpoint := pagination.Authenticated(base, binding).WithScopes(scopes).WithPermissions(permission).WithAuthorization(func(ctx context.Context, actor pageActor, in pageInput) error {
+	endpoint := pagination.AuthorizeActor(pagination.ConfigureAuthenticated(pagination.ConfigureAuthenticated(pagination.Authenticated(base, binding), foundryhttp.Scopes(scopes)), foundryhttp.Permissions(permission)), func(ctx context.Context, actor pageActor, in pageInput) error {
 		policies++
 		if actor.ID == 3 {
 			return auth.Forbidden
@@ -139,7 +139,7 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 	if err != nil || location != "/api/items?page=2&per_page=20" {
 		t.Fatal(location, err)
 	}
-	info, err := endpoint.Description()
+	info, err := pagination.InspectAuthenticated(endpoint)
 	if err != nil || info.Route.Authentication == nil {
 		t.Fatal("missing authentication metadata", err)
 	}
@@ -147,7 +147,7 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 		t.Fatal("authority metadata lost")
 	}
 	info.Route.Authentication.RequiredScopes[0] = "mutated"
-	again, err := endpoint.Description()
+	again, err := pagination.InspectAuthenticated(endpoint)
 	if err != nil || again.Route.Authentication.RequiredScopes[0] != "pages.read" {
 		t.Fatal("metadata aliases caller", err)
 	}
@@ -212,7 +212,7 @@ func TestAuthenticatedSimpleAndCursorKeepNavigationAndValidation(t *testing.T) {
 func TestAuthenticatedPageCompletionKeepsErrorsCancellationAndInvalidDeclarations(t *testing.T) {
 	binding, _, _ := pageBinding(t)
 	declared := foundryhttp.DefineError("pages.unavailable", 409, "Page changed.")
-	base := pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()).WithErrors(declared)
+	base := pagination.Configure(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()), foundryhttp.Errors(declared))
 	endpoint := pagination.Authenticated(base, binding)
 	for _, tc := range []struct {
 		page   orm.PageResult[Item]
@@ -245,11 +245,9 @@ func TestAuthenticatedPageCompletionKeepsErrorsCancellationAndInvalidDeclaration
 		t.Fatal("cancellation published a page")
 	}
 	for _, registration := range []foundryhttp.RouteRegistration{
-		endpoint.Handle(nil),
-		endpoint.WithAuthorization(nil).Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
+		endpoint.Handle(nil), pagination.AuthorizeActor(endpoint, nil).Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
 			return orm.PageResult[Item]{}, nil
-		}),
-		pagination.Authenticated(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.Config{}), binding).Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
+		}), pagination.Authenticated(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.Config{}), binding).Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
 			return orm.PageResult[Item]{}, nil
 		}),
 		pagination.Authenticated(base, foundryhttp.GuardBinding[pageActor]{}).Handle(func(context.Context, pageActor, pageInput) (orm.PageResult[Item], error) {
@@ -260,7 +258,7 @@ func TestAuthenticatedPageCompletionKeepsErrorsCancellationAndInvalidDeclaration
 			t.Fatal("invalid authenticated page assembled")
 		}
 	}
-	if endpoint.WithAuthorization(nil).Validate() == nil || endpoint.Validate() != nil {
+	if pagination.ValidateAuthenticated(pagination.AuthorizeActor(endpoint, nil)) == nil || pagination.ValidateAuthenticated(endpoint) != nil {
 		t.Fatal("authorization mutation changed original")
 	}
 }

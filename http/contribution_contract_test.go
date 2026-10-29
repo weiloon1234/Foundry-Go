@@ -19,26 +19,35 @@ func TestRouteFactoriesCannotSubstituteDeclaredTransport(t *testing.T) {
 	wrongBody := DefineEndpoint(route, EmptyQuery(), JSONBody(endpointPatchJSON()), EmptyResponse(204))
 	wrongResponse := DefineEndpoint(route, EmptyQuery(), EmptyBody(), JSONResponse(200, endpointReplyJSON()))
 	signed := Signed(endpoint, urlTestSigner(t, testkit.NewClock(urlTestTime)))
+	registerEndpoint := func(r *foundation.Registrar, key foundation.Key[*Router], result RouteRegistration) error {
+		return RegisterEndpoint(r, key, endpoint, func(foundation.Resolver) (RouteRegistration, error) { return result, nil })
+	}
+	registerSigned := func(r *foundation.Registrar, key foundation.Key[*Router], result RouteRegistration) error {
+		return RegisterSignedEndpoint(r, key, signed, func(foundation.Resolver) (RouteRegistration, error) { return result, nil })
+	}
+	registerRaw := func(r *foundation.Registrar, key foundation.Key[*Router], result RouteRegistration) error {
+		return RegisterRoute(r, key, route, func(foundation.Resolver) (RouteRegistration, error) { return result, nil })
+	}
 	cases := []struct {
-		name        string
-		declaration routeDeclaration
-		result      RouteRegistration
-		valid       bool
+		name     string
+		register func(*foundation.Registrar, foundation.Key[*Router], RouteRegistration) error
+		result   RouteRegistration
+		valid    bool
 	}{
-		{"same", endpoint, endpoint.Handle(handler), true},
-		{"added-signing", endpoint, signed.Handle(handler), true},
-		{"signed", signed, signed.Handle(handler), true},
-		{"missing-signing", signed, endpoint.Handle(handler), false},
-		{"raw-for-typed", endpoint, route.HandleRaw(raw), false},
-		{"typed-for-raw", route, endpoint.Handle(handler), false},
-		{"body", endpoint, wrongBody.Handle(func(context.Context, Input[NoPath, NoQuery, EndpointPatch]) (NoContent, error) {
+		{"same", registerEndpoint, endpoint.Handle(handler), true},
+		{"added-signing", registerEndpoint, signed.Handle(handler), true},
+		{"signed", registerSigned, signed.Handle(handler), true},
+		{"missing-signing", registerSigned, endpoint.Handle(handler), false},
+		{"raw-for-typed", registerEndpoint, HandleRaw(route, raw), false},
+		{"typed-for-raw", registerRaw, endpoint.Handle(handler), false},
+		{"body", registerEndpoint, wrongBody.Handle(func(context.Context, Input[NoPath, NoQuery, EndpointPatch]) (NoContent, error) {
 			return NoContent{}, nil
 		}), false},
-		{"response", endpoint, wrongResponse.Handle(func(context.Context, Input[NoPath, NoQuery, NoBody]) (EndpointReply, error) {
+		{"response", registerEndpoint, wrongResponse.Handle(func(context.Context, Input[NoPath, NoQuery, NoBody]) (EndpointReply, error) {
 			return EndpointReply{}, nil
 		}), false},
-		{"method", route, DefineRoute(RouteSpec{ID: "contract", Method: GET, Access: Public}, StaticPath("/contract")).HandleRaw(raw), false},
-		{"path", route, DefineRoute(RouteSpec{ID: "contract", Method: POST, Access: Public}, StaticPath("/elsewhere")).HandleRaw(raw), false},
+		{"method", registerRaw, HandleRaw(DefineRoute(RouteSpec{ID: "contract", Method: GET, Access: Public}, StaticPath("/contract")), raw), false},
+		{"path", registerRaw, HandleRaw(DefineRoute(RouteSpec{ID: "contract", Method: POST, Access: Public}, StaticPath("/elsewhere")), raw), false},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -47,7 +56,7 @@ func TestRouteFactoriesCannotSubstituteDeclaredTransport(t *testing.T) {
 				if err := RegisterRouter(r, key); err != nil {
 					return err
 				}
-				return RegisterRoute(r, key, test.declaration, func(foundation.Resolver) (RouteRegistration, error) { return test.result, nil })
+				return test.register(r, key, test.result)
 			}}).Build(t.Context())
 			if test.valid && err != nil || !test.valid && !errors.Is(err, fault.Invalid) {
 				t.Fatal("incorrect contribution result", err)

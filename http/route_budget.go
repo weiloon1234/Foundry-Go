@@ -30,7 +30,7 @@ type routeBudget struct {
 // middleware counts. A longer timeout also extends the native connection read
 // and write deadlines for this request. It must be positive and at most
 // MaxRouteTimeout. Client disconnect and forced shutdown still cancel the request.
-func (r Route[P]) WithTimeout(timeout time.Duration) Route[P] {
+func routeWithTimeout[P any](r Route[P], timeout time.Duration) Route[P] {
 	if r.err == nil {
 		if timeout <= 0 || timeout > MaxRouteTimeout {
 			r.err = safeerror.NewFault(fault.Invalid, "route timeout must be positive and at most MaxRouteTimeout")
@@ -45,7 +45,7 @@ func (r Route[P]) WithTimeout(timeout time.Duration) Route[P] {
 // for example to accept large uploads without raising the server-wide default.
 // It must be positive and at most MaxRouteBodyBytes. Typed endpoints still apply
 // their own payload limits, such as EndpointLimits.Multipart.Bytes.
-func (r Route[P]) WithBodyLimit(bytes int64) Route[P] {
+func routeWithBodyLimit[P any](r Route[P], bytes int64) Route[P] {
 	if r.err == nil {
 		if bytes <= 0 || bytes > MaxRouteBodyBytes {
 			r.err = safeerror.NewFault(fault.Invalid, "route body limit must be positive and at most MaxRouteBodyBytes")
@@ -54,19 +54,6 @@ func (r Route[P]) WithBodyLimit(bytes int64) Route[P] {
 		}
 	}
 	return r
-}
-
-// WithTimeout replaces the kernel RequestTimeout for this endpoint's route.
-func (e Endpoint[P, Q, B, R]) WithTimeout(timeout time.Duration) Endpoint[P, Q, B, R] {
-	e.route = e.route.WithTimeout(timeout)
-	return e
-}
-
-// WithBodyLimit replaces the kernel MaxBodyBytes ceiling for this endpoint's route.
-// Raise the matching EndpointLimits payload budget for the endpoint's body kind too.
-func (e Endpoint[P, Q, B, R]) WithBodyLimit(bytes int64) Endpoint[P, Q, B, R] {
-	e.route = e.route.WithBodyLimit(bytes)
-	return e
 }
 
 // requestBudget is the kernel's per-request deadline and body configuration.

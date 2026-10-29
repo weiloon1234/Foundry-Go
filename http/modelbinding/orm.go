@@ -2,6 +2,7 @@ package modelbinding
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -33,7 +34,7 @@ func ThroughSelectedRelation[P, A, M, B any, K comparable, R orm.DirectRelation[
 		return lookup.Find(ctx, executor, selectParent(previous), key(path))
 	})
 	result.check = func() error {
-		if err := parent.Validate(); err != nil {
+		if err := ValidateResolver(parent); err != nil {
 			return err
 		}
 		return lookup.Validate()

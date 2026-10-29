@@ -95,7 +95,7 @@ func TestStreamRejectsBeforeCommitAndCloses(t *testing.T) {
 			endpoint := streamEndpoint()
 			limits := DefaultEndpointLimits()
 			limits.Files.Bytes = 10
-			endpoint = endpoint.WithLimits(limits)
+			endpoint = ConfigureEndpoint(endpoint, Limits(limits))
 			router := streamRouter(t, endpoint, func(context.Context) (StreamContent, error) {
 				text := "payload"
 				if mode == "limit" {
@@ -173,7 +173,7 @@ func TestStreamMetadataIsOwnedAndTypeIsNotJSON(t *testing.T) {
 	response := StreamResponse("application/pdf", media...)
 	media[0] = "invalid"
 	endpoint := DefineEndpoint(DefineRoute(RouteSpec{ID: "metadata", Method: GET, Access: Public}, StaticPath("/meta")), EmptyQuery(), EmptyBody(), response)
-	info, err := endpoint.Description()
+	info, err := InspectEndpoint(endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestStreamMetadataIsOwnedAndTypeIsNotJSON(t *testing.T) {
 		t.Fatal(info)
 	}
 	info.Response.File.MediaTypes[0] = "changed"
-	next, err := endpoint.Description()
+	next, err := InspectEndpoint(endpoint)
 	if err != nil || next.Response.File.MediaTypes[0] != "application/pdf" {
 		t.Fatal("metadata leaked", err)
 	}
@@ -191,7 +191,7 @@ func TestStreamMetadataIsOwnedAndTypeIsNotJSON(t *testing.T) {
 	})); err == nil {
 		t.Fatal("stream serialized as DTO")
 	}
-	if StreamResponse("text/*").Validate() == nil || StreamResponse("text/plain", "TEXT/PLAIN").Validate() == nil || (Stream{}).Validate() == nil {
+	if ValidateResponse(StreamResponse("text/*")) == nil || ValidateResponse(StreamResponse("text/plain", "TEXT/PLAIN")) == nil || (Stream{}).Validate() == nil {
 		t.Fatal("invalid declaration accepted")
 	}
 	var closes atomic.Int32
@@ -318,7 +318,7 @@ func (w streamFailingWriter) Write([]byte) (int, error) { return 0, w.cause }
 func TestStreamPreservesTransportFailureCause(t *testing.T) {
 	cause := errors.New("private-native-writer-cause")
 	response := StreamResponse("text/plain")
-	prepared, err := response.prepare(t.Context(), StreamFrom(func(context.Context) (StreamContent, error) {
+	prepared, err := responsePrepare(response, t.Context(), StreamFrom(func(context.Context) (StreamContent, error) {
 		return StreamContent{Body: io.NopCloser(strings.NewReader("content")), MediaType: "text/plain"}, nil
 	}), DefaultEndpointLimits())
 	if err != nil {

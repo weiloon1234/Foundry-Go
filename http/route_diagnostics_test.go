@@ -16,7 +16,7 @@ func TestPathFailureKeepsInjectedLoggerAndCorrelation(t *testing.T) {
 	route := DefineRoute(RouteSpec{ID: "members.show", Method: GET, Access: Public}, DefinePath("/members/{text}",
 		Param("text", StringPath[string](), func(*textPath) *string { panic("private-selector-payload") }),
 	))
-	router, err := NewRouter(route.HandleRaw(func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("broken selector reached handler") }))
+	router, err := NewRouter(HandleRaw(route, func(stdhttp.ResponseWriter, *stdhttp.Request, textPath) { t.Error("broken selector reached handler") }))
 	if err != nil {
 		t.Fatal(err)
 	}

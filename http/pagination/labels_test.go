@@ -55,7 +55,7 @@ func TestPaginationParametersCarryTranslatableLabels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := foundryhttp.NewRouter(endpoint.WithMiddleware(foundryhttp.Locale(catalog)).Handle(handler))
+	router, err := foundryhttp.NewRouter(pagination.Configure(endpoint, foundryhttp.Use(foundryhttp.Locale(catalog))).Handle(handler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestPaginationParametersCarryTranslatableLabels(t *testing.T) {
 	}
 
 	// Exported query metadata carries the same keys.
-	info, err := endpoint.Description()
+	info, err := pagination.Inspect(endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestCursorPageSizeCarriesItsLabel(t *testing.T) {
 	if len(found) != 1 || found[0].Label != "Page size" || found[0].LabelKey != pagination.SizeLabelKey {
 		t.Fatal("cursor size label", found)
 	}
-	info, err := endpoint.Description()
+	info, err := pagination.Inspect(endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}

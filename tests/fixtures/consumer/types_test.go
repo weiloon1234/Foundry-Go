@@ -23,6 +23,12 @@ func compilerCases() []compilerCase {
 		{"workflow_transaction", "cannot use"},
 		{"workflow_envelope", "cannot use"},
 
+		{"http_replay_binding_ordinary", "cannot use"},
+		{"http_replay_binding_optional", "cannot use"},
+		{"http_replay_binding_signed_actor", "cannot use"},
+		{"http_replay_binding_custom", "cannot use"},
+		{"http_replay_binding_model", "cannot use"},
+
 		{"idempotency_transaction", "cannot use"},
 		{"idempotency_result", "cannot use"},
 		{"idempotency_key", "cannot use"},

@@ -10,11 +10,11 @@ import (
 
 func TestGeneratedURLAndDTOShareScalarIdentity(t *testing.T) {
 	const expected contract.TypeID = "foundry.test/consumer/httpquery.Priority"
-	path, err := httpquery.PriorityPathDescriptor().Parameters()
+	path, err := foundryhttp.PathParameters(httpquery.PriorityPathDescriptor())
 	if err != nil || len(path) != 1 || path[0].Scalar == nil || path[0].Scalar.Value.ID != expected {
 		t.Fatal("path source identity", err)
 	}
-	query, err := httpquery.PriorityQueryDescriptor().Parameters()
+	query, err := foundryhttp.QueryParameters(httpquery.PriorityQueryDescriptor())
 	if err != nil || len(query) != 1 || query[0].Scalar == nil || query[0].Scalar.Value.ID != expected {
 		t.Fatal("query source identity", err)
 	}
@@ -34,11 +34,11 @@ func TestGeneratedURLAndDTOShareScalarIdentity(t *testing.T) {
 	if !found {
 		t.Fatal("DTO scalar source missing")
 	}
-	request, err := httpquery.PriorityQueryDescriptor().Decode(t.Context(), "priority=255", foundryhttp.QueryLimits{Bytes: 128, Pairs: 4, Issues: 4})
+	request, err := foundryhttp.DecodeQuery(httpquery.PriorityQueryDescriptor(), t.Context(), "priority=255", foundryhttp.QueryLimits{Bytes: 128, Pairs: 4, Issues: 4})
 	if err != nil || request.Priority != 255 {
 		t.Fatal("priority decode", err)
 	}
-	if _, err := httpquery.PriorityQueryDescriptor().Decode(t.Context(), "priority=256", foundryhttp.QueryLimits{Bytes: 128, Pairs: 4, Issues: 4}); err == nil {
+	if _, err := foundryhttp.DecodeQuery(httpquery.PriorityQueryDescriptor(), t.Context(), "priority=256", foundryhttp.QueryLimits{Bytes: 128, Pairs: 4, Issues: 4}); err == nil {
 		t.Fatal("priority width not preserved")
 	}
 }

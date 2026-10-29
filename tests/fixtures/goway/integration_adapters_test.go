@@ -4,16 +4,16 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"testing"
+	"time"
+
 	"foundry.test/goway/coremodels"
 	n "foundry.test/goway/models/hooks"
-
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
 	"github.com/weiloon1234/Foundry-Go/testkit/factory"
-	"testing"
-	"time"
 )
 
 func TestFactoryORMAndGeneratedParity(t *testing.T) {
@@ -95,7 +95,7 @@ func TestORMModelBindingScopeAndDuplicateParity(t *testing.T) {
 			var err error
 
 			r := modelbinding.ByColumn(db, n.Members.Query().Where(n.Members.Key().Eq(1)), n.Members.Name, func(string) string { return "visible" })
-			_, err = r.Resolve(t.Context(), "visible")
+			_, err = modelbinding.Resolve(r, t.Context(), "visible")
 
 			transcripts = append(transcripts, g.output.String())
 			failures = append(failures, errors.Is(err, fault.Internal))

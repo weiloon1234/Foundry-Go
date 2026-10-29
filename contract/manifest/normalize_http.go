@@ -308,7 +308,7 @@ func (types typeIndex) parameter(p Parameter) error {
 // the status sets themselves.
 func operationStatus(op *Operation) error {
 	if op.Redirect {
-		if foundryhttp.RedirectResponse(op.Status).Validate() != nil || op.Response != nil || op.Statuses != nil || op.Idempotency != nil {
+		if foundryhttp.ValidateResponse(foundryhttp.RedirectResponse(op.Status)) != nil || op.Response != nil || op.Statuses != nil || op.Idempotency != nil {
 			return invalid("invalid redirect response")
 		}
 		return nil
@@ -322,7 +322,7 @@ func operationStatus(op *Operation) error {
 	if op.Response == nil || op.Response.MediaType != "application/json" || op.Idempotency != nil || len(op.Statuses) == 0 || op.Statuses[0] != op.Status {
 		return invalid("alternative statuses require a JSON response and the primary status first")
 	}
-	if err := foundryhttp.JSONResponses(contract.StringJSON[string](), op.Statuses[0], op.Statuses[1:]...).Validate(); err != nil {
+	if err := foundryhttp.ValidateResponse(foundryhttp.JSONResponses(contract.StringJSON[string](), op.Statuses[0], op.Statuses[1:]...)); err != nil {
 		return invalid("invalid alternative response statuses")
 	}
 	return nil
@@ -337,7 +337,7 @@ func (types typeIndex) payload(payload *Payload, input bool) error {
 		if !input || payload.File != nil || payload.Type != "" || len(payload.Parts) != 0 || len(payload.Fields) != 0 || len(payload.Example) != 0 || len(media) == 0 {
 			return invalid("invalid raw request body")
 		}
-		if err := foundryhttp.RawRequestBody(media[0], media[1:]...).Validate(); err != nil {
+		if err := foundryhttp.ValidateBodyDescriptor(foundryhttp.RawRequestBody(media[0], media[1:]...)); err != nil {
 			return err
 		}
 		if payload.MediaType != "" && (len(media) != 1 || payload.MediaType != string(media[0])) {

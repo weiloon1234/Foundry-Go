@@ -14,7 +14,7 @@ import (
 // and other methods keep their ordinary responses.
 func TestRouterFallbackServesUnmatchedNavigationOnly(t *testing.T) {
 	t.Parallel()
-	router, err := NewRouter(DefineRoute(RouteSpec{ID: "home", Method: GET, Access: Public}, StaticPath("/home")).HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {
+	router, err := NewRouter(HandleRaw(DefineRoute(RouteSpec{ID: "home", Method: GET, Access: Public}, StaticPath("/home")), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {
 		w.WriteHeader(204)
 	}))
 	if err != nil {

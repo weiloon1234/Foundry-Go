@@ -32,7 +32,7 @@ func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, m
 }
 
 func Router(db database.Executor, service Service) (*foundryhttp.Router, error) {
-	bound := modelbinding.Bind(Show, UserByID(db))
+	bound := modelbinding.Bind(foundryhttp.ForBinding(Show), UserByID(db))
 	return foundryhttp.NewRouter(bound.Handle(service.Show))
 }
 

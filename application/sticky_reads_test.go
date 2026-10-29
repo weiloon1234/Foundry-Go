@@ -27,7 +27,7 @@ func TestConfiguredStickyReadsScopeEveryRequest(t *testing.T) {
 			connection.StickyReadWindow = window
 			s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": connection}
 			scoped := func(application.Services) ([]http.RouteRegistration, error) {
-				return []http.RouteRegistration{http.DefineRoute(http.RouteSpec{ID: "fixture.sticky", Method: http.GET, Access: http.Public}, http.StaticPath("/sticky")).HandleRaw(func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
+				return []http.RouteRegistration{http.HandleRaw(http.DefineRoute(http.RouteSpec{ID: "fixture.sticky", Method: http.GET, Access: http.Public}, http.StaticPath("/sticky")), func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
 					// StickyReads returns a scoped context unchanged.
 					if database.StickyReads(r.Context()) == r.Context() {
 						_, _ = io.WriteString(w, "scoped")

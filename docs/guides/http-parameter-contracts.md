@@ -3,8 +3,8 @@
 **Status: focused runtime, generation, consumer, compiler and editor acceptance passed.**
 
 Path and query descriptions now include the scalar codec that actually performs
-parsing and formatting. Inspect a path with `Parameters()`, a query with
-`Parameters()`, or the complete endpoint with `Description()`.
+parsing and formatting. Inspect a path with `PathParameters(path)`, a query with
+`QueryParameters(query)`, or the complete endpoint with `InspectEndpoint(endpoint)`.
 `EndpointInfo.Path` preserves pattern order and catch-all semantics.
 `EndpointInfo.Query` preserves required/optional and repeated-key cardinality.
 

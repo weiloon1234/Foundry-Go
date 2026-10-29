@@ -38,44 +38,36 @@ type NoQuery struct{}
 // EmptyQuery rejects any undeclared query key through the ordinary query codec.
 func EmptyQuery() Query[NoQuery] { return DefineQuery[NoQuery]() }
 
+type endpointCore struct {
+	limits      EndpointLimits
+	errors      []ErrorDeclaration
+	idempotency *IdempotencyInfo
+	examples    endpointExamples
+}
+
 // Endpoint composes the existing route, query and payload descriptors. Assembly
 // performs no I/O. Handle validates the complete declaration before registration.
 type Endpoint[P, Q, B, R any] struct {
+	endpointCore
 	route         Route[P]
 	query         Query[Q]
 	body          Body[B]
 	response      Response[R]
-	limits        EndpointLimits
 	validation    *validation.Rule[Input[P, Q, B]]
-	errors        []ErrorDeclaration
 	preparation   *Preparation[P, Q, B]
 	authorization *RequestAuthorization[P, Q, B]
 	headers       *ResponseHeaders[R]
-	idempotency   *IdempotencyInfo
-	examples      endpointExamples
 }
 
-func DefineEndpoint[P, Q, B, R any](route Route[P], query Query[Q], body Body[B], response Response[R]) Endpoint[P, Q, B, R] {
-	return Endpoint[P, Q, B, R]{route: route, query: query, body: body, response: response, limits: DefaultEndpointLimits()}
+func DefineEndpoint[P, Q, B, R any](route Route[P], query Query[Q], body Body[B], response Response[R], options ...EndpointOption) Endpoint[P, Q, B, R] {
+	return ConfigureEndpoint(Endpoint[P, Q, B, R]{route: route, query: query, body: body, response: response, endpointCore: endpointCore{limits: DefaultEndpointLimits()}}, options...)
 }
 
-func (e Endpoint[P, Q, B, R]) ID() RouteID     { return e.route.ID() }
-func (e Endpoint[P, Q, B, R]) Method() Method  { return e.route.Method() }
-func (e Endpoint[P, Q, B, R]) Pattern() string { return e.route.Pattern() }
+func EndpointID[P, Q, B, R any](e Endpoint[P, Q, B, R]) RouteID     { return RouteIDOf(e.route) }
+func EndpointMethod[P, Q, B, R any](e Endpoint[P, Q, B, R]) Method  { return RouteMethod(e.route) }
+func EndpointPattern[P, Q, B, R any](e Endpoint[P, Q, B, R]) string { return RoutePattern(e.route) }
 
-// WithLimits returns an independent declaration with explicit resource limits.
-func (e Endpoint[P, Q, B, R]) WithLimits(limits EndpointLimits) Endpoint[P, Q, B, R] {
-	e.limits = limits
-	return e
-}
-
-// Within reuses route scope naming and path-prefix rules.
-func (e Endpoint[P, Q, B, R]) Within(scope Scope) Endpoint[P, Q, B, R] {
-	e.route = e.route.Within(scope)
-	return e
-}
-
-func (e Endpoint[P, Q, B, R]) Validate() error {
+func ValidateEndpoint[P, Q, B, R any](e Endpoint[P, Q, B, R]) error {
 	if e.body.kind == payloadForm {
 		if err := e.limits.Form.Validate(); err != nil {
 			return err
@@ -92,12 +84,12 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 	if e.examples.err != nil {
 		return e.examples.err
 	}
-	for _, err := range []error{e.route.Validate(), e.query.Validate(), e.body.Validate(), e.response.Validate(), e.limits.Validate()} {
+	for _, err := range []error{ValidateRoute(e.route), ValidateQueryDescriptor(e.query), ValidateBodyDescriptor(e.body), ValidateResponse(e.response), e.limits.Validate()} {
 		if err != nil {
 			return err
 		}
 	}
-	if err := e.query.urlPresentation(); err != nil {
+	if err := queryUrlPresentation(e.query); err != nil {
 		return err
 	}
 	if e.validation != nil {
@@ -105,22 +97,22 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 			return err
 		}
 	}
-	if _, err := e.errorDefinitions(); err != nil {
+	if _, err := endpointErrorDefinitions(e); err != nil {
 		return err
 	}
-	if err := e.validateHeaders(); err != nil {
+	if err := endpointValidateHeaders(e); err != nil {
 		return err
 	}
-	if e.response.credentials && e.route.Method() != POST {
+	if e.response.credentials && RouteMethod(e.route) != POST {
 		return safeerror.NewFault(fault.Invalid, "credential delivery requires a POST endpoint")
 	}
-	if err := e.validateRefreshCookie(); err != nil {
+	if err := endpointValidateRefreshCookie(e); err != nil {
 		return err
 	}
-	if e.route.Method() == TRACE {
+	if RouteMethod(e.route) == TRACE {
 		return safeerror.NewFault(fault.Invalid, "TRACE requires a raw HTTP handler")
 	}
-	if (e.route.Method() == GET || e.route.Method() == HEAD) && e.body.kind != payloadEmpty {
+	if (RouteMethod(e.route) == GET || RouteMethod(e.route) == HEAD) && e.body.kind != payloadEmpty {
 		return safeerror.NewFault(fault.Invalid, "typed GET and HEAD endpoints require an empty request body")
 	}
 	return nil
@@ -131,17 +123,17 @@ func (e Endpoint[P, Q, B, R]) Validate() error {
 // the route and query declarations it uses are validated here, so link
 // generation stays cheap; Handle validates the complete endpoint.
 func (e Endpoint[P, Q, B, R]) URL(ctx context.Context, path P, query Q) (string, error) {
-	if err := e.query.Validate(); err != nil {
+	if err := ValidateQueryDescriptor(e.query); err != nil {
 		return "", err
 	}
 	if err := e.limits.Query.Validate(); err != nil {
 		return "", err
 	}
-	location, err := e.route.URL(path)
+	location, err := RouteURL(e.route, path)
 	if err != nil {
 		return "", err
 	}
-	parameters, err := e.query.Encode(ctx, query, e.limits.Query)
+	parameters, err := EncodeQuery(e.query, ctx, query, e.limits.Query)
 	if err != nil {
 		return "", err
 	}
@@ -163,18 +155,18 @@ func (e Endpoint[P, Q, B, R]) Handle(handler Handler[P, Q, B, R]) RouteRegistrat
 	if handler == nil {
 		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "endpoint requires a handler"))
 	}
-	return e.handlePrepared(e.complete(handler))
+	return endpointHandlePrepared(e, endpointComplete(e, handler))
 }
 
 // HandleBound runs bind after request authorization and before validation, then
 // the handler it returned. The lifecycle is otherwise that of Handle: decode,
 // prohibited-input check, preparation, request authorization, binding,
 // validation, handler.
-func (e Endpoint[P, Q, B, R]) HandleBound(bind Binding[P, Q, B, R]) RouteRegistration {
+func HandleBound[P, Q, B, R any](e Endpoint[P, Q, B, R], bind Binding[P, Q, B, R]) RouteRegistration {
 	if bind == nil {
 		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "endpoint requires a binding"))
 	}
-	return e.handleStaged(func(ctx context.Context, input Input[P, Q, B]) (func(context.Context, Input[P, Q, B]) (preparedResponse, error), error) {
+	return endpointHandleStaged(e, func(ctx context.Context, input Input[P, Q, B]) (func(context.Context, Input[P, Q, B]) (preparedResponse, error), error) {
 		handler, err := bind(ctx, input)
 		if err != nil {
 			return nil, err
@@ -182,23 +174,23 @@ func (e Endpoint[P, Q, B, R]) HandleBound(bind Binding[P, Q, B, R]) RouteRegistr
 		if handler == nil {
 			return nil, InternalError.WithCause(safeerror.NewFault(fault.Internal, "endpoint binding returned no handler"))
 		}
-		return e.complete(handler), nil
+		return endpointComplete(e, handler), nil
 	})
 }
 
 // complete runs a typed handler and prepares its response.
-func (e Endpoint[P, Q, B, R]) complete(handler Handler[P, Q, B, R]) func(context.Context, Input[P, Q, B]) (preparedResponse, error) {
+func endpointComplete[P, Q, B, R any](e Endpoint[P, Q, B, R], handler Handler[P, Q, B, R]) func(context.Context, Input[P, Q, B]) (preparedResponse, error) {
 	return func(ctx context.Context, input Input[P, Q, B]) (preparedResponse, error) {
 		result, err := handler(ctx, input)
 		if err != nil {
 			return preparedResponse{}, err
 		}
 		// Headers are derived before encoding, so a failure opens no source.
-		headers, err := e.responseHeaders(ctx, result)
+		headers, err := endpointResponseHeaders(e, ctx, result)
 		if err != nil {
 			return preparedResponse{}, err
 		}
-		prepared, err := e.response.prepare(ctx, result, e.limits)
+		prepared, err := responsePrepare(e.response, ctx, result, e.limits)
 		prepared.headers = headers
 		return prepared, err
 	}
@@ -206,22 +198,22 @@ func (e Endpoint[P, Q, B, R]) complete(handler Handler[P, Q, B, R]) func(context
 
 // handlePrepared shares all decoding, lifecycle, callback ownership and response
 // publication. Transaction adapters prepare their result before outer commit.
-func (e Endpoint[P, Q, B, R]) handlePrepared(handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) RouteRegistration {
-	return e.register(nil, handler)
+func endpointHandlePrepared[P, Q, B, R any](e Endpoint[P, Q, B, R], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) RouteRegistration {
+	return endpointRegister(e, nil, handler)
 }
 
 // handleStaged selects the completing handler at the binding stage.
-func (e Endpoint[P, Q, B, R]) handleStaged(stage preparedStage[P, Q, B]) RouteRegistration {
-	return e.register(stage, nil)
+func endpointHandleStaged[P, Q, B, R any](e Endpoint[P, Q, B, R], stage preparedStage[P, Q, B]) RouteRegistration {
+	return endpointRegister(e, stage, nil)
 }
 
 type preparedStage[P, Q, B any] func(context.Context, Input[P, Q, B]) (func(context.Context, Input[P, Q, B]) (preparedResponse, error), error)
 
-func (e Endpoint[P, Q, B, R]) register(stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) RouteRegistration {
-	if err := e.Validate(); err != nil {
+func endpointRegister[P, Q, B, R any](e Endpoint[P, Q, B, R], stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error)) RouteRegistration {
+	if err := ValidateEndpoint(e); err != nil {
 		return InvalidRouteRegistration(err)
 	}
-	if err := e.response.outputPresentation(); err != nil {
+	if err := responseOutputPresentation(e.response); err != nil {
 		return InvalidRouteRegistration(err)
 	}
 	transport := endpointTransport{
@@ -230,24 +222,24 @@ func (e Endpoint[P, Q, B, R]) register(stage preparedStage[P, Q, B], handler fun
 		credentials:         e.response.credentials,
 		clearsRefreshCookie: e.response.refreshCookieClears,
 		readsRefreshCookie:  e.body.kind == payloadRefreshCookie,
-		cookie:              e.refreshCookie(),
+		cookie:              endpointRefreshCookie(e),
 		files:               e.limits.Files,
 		browserResponse:     e.idempotency == nil && (e.response.kind == payloadJSON || e.response.kind == payloadEmpty || e.response.kind == payloadRedirect),
 	}
-	registration := e.route.handle(func(w stdhttp.ResponseWriter, r *stdhttp.Request, path P) {
-		e.serve(w, r, path, stage, handler, transport)
+	registration := routeHandle(e.route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, path P) {
+		endpointServe(e, w, r, path, stage, handler, transport)
 	}, false)
-	registration.contract = e.contributionContract()
+	registration.contract = endpointContributionContract(e)
 	info := registration.info.clone()
-	registration.endpoint = func() EndpointInfo { return e.snapshot(info) }
-	registration.errors, _ = e.errorDefinitions()
+	registration.endpoint = func() EndpointInfo { return endpointSnapshot(e, info) }
+	registration.errors, _ = endpointErrorDefinitions(e)
 	if e.idempotency != nil {
 		registration.handler = idempotentHTTPHandler{registration.handler}
 	}
 	return registration
 }
 
-func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request, path P, stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error), transport endpointTransport) {
+func endpointServe[P, Q, B, R any](e Endpoint[P, Q, B, R], w stdhttp.ResponseWriter, r *stdhttp.Request, path P, stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error), transport endpointTransport) {
 	var ready bool
 	w, r, ready = transport.preflight(w, r)
 	if !ready {
@@ -258,12 +250,12 @@ func (e Endpoint[P, Q, B, R]) serve(w stdhttp.ResponseWriter, r *stdhttp.Request
 	if verified, ok := ctx.Value(signedEndpointQueryKey{}).(string); ok {
 		rawQuery = verified
 	}
-	query, err := e.query.Decode(ctx, e.query.withoutConsumed(ctx, rawQuery), e.limits.Query)
+	query, err := DecodeQuery(e.query, ctx, queryWithoutConsumed(e.query, ctx, rawQuery), e.limits.Query)
 	if err != nil {
 		writeRoutingError(w, r, endpointInputError(ctx, "query", err))
 		return
 	}
-	body, cleanup, err := e.body.readOwned(w, r, e.limits)
+	body, cleanup, err := bodyReadOwned(e.body, w, r, e.limits)
 	defer cleanupEndpointResource(r, "body", cleanup)
 	if err != nil {
 		writeRoutingError(w, r, err)

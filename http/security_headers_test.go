@@ -15,7 +15,7 @@ import (
 
 func TestSecurityHeaderDefaultsPreserveNativeWriterAndRouting(t *testing.T) {
 	original := httptest.NewRecorder()
-	router, err := NewRouter(staticRoute("read", GET, "/item").HandleRaw(func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {
+	router, err := NewRouter(HandleRaw(staticRoute("read", GET, "/item"), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ NoPath) {
 		if w != original {
 			t.Error("security headers replaced native writer")
 		}
