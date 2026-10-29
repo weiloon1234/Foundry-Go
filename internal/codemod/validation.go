@@ -166,7 +166,7 @@ func rewriteMethodAt(fc *FileContext, selector *ast.SelectorExpr, call *ast.Call
 				reorderSafe = false
 			}
 		}
-		if !effectfulArguments(call.Args) && reorderSafe {
+		if (receiverIndex == 0 || !effectfulArguments([]ast.Expr{selector.X})) && reorderSafe && !effectfulArguments(call.Args) {
 			return &ast.CallExpr{Fun: function, Args: insertReceiver(call.Args, selector.X, receiverIndex), Ellipsis: call.Ellipsis, Lparen: call.Lparen, Rparen: call.Rparen}, message
 		}
 	}

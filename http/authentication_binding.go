@@ -25,7 +25,9 @@ type authenticationBinding[M any] struct {
 // scope/permission requirements, inside the authenticated request scope.
 func authenticationWithActorMiddleware[M any](b authenticationBinding[M], middlewares ...Middleware) authenticationBinding[M] {
 	if len(middlewares) == 0 {
-		b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP actor middleware requires a declaration")
+		if b.requirementError == nil {
+			b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP actor middleware requires a declaration")
+		}
 		return b
 	}
 	b.actorMiddleware = append(slices.Clone(b.actorMiddleware), middlewares...)
@@ -39,7 +41,9 @@ func authenticationChain[M any](b authenticationBinding[M], optional bool) []Mid
 
 func authenticationWithScopes[M any](b authenticationBinding[M], required auth.AccessScopes[M]) authenticationBinding[M] {
 	if b.requiredScopes != nil {
-		b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP access scopes are already declared")
+		if b.requirementError == nil {
+			b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP access scopes are already declared")
+		}
 		return b
 	}
 	b.requiredScopes = &required
@@ -47,11 +51,15 @@ func authenticationWithScopes[M any](b authenticationBinding[M], required auth.A
 }
 func authenticationWithPermissions[M any](b authenticationBinding[M], required ...auth.Permission[M]) authenticationBinding[M] {
 	if b.requiredPermissions != nil {
-		b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP permissions are already declared")
+		if b.requirementError == nil {
+			b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP permissions are already declared")
+		}
 		return b
 	}
 	if len(required) == 0 || len(required) > auth.MaxRegistrations {
-		b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP permissions require a bounded nonempty declaration")
+		if b.requirementError == nil {
+			b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP permissions require a bounded nonempty declaration")
+		}
 		return b
 	}
 	b.requiredPermissions = slices.Clone(required)

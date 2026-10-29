@@ -69,7 +69,7 @@ are unresolved.
 
 Interface inventory is static, not a whole-program proof. Dynamic assertions from
 `any`, reflection, inactive build configurations, and downstream modules require
-review. ORM migrations are not registered yet. No dependency is added.
+review. Validation, HTTP, and ORM migrations are registered by default. No dependency is added.
 
 Tests use a frozen synthetic v0.1 validation package so removal of framework methods
 does not invalidate the migration oracle. Golden pairs cover all 11 methods,

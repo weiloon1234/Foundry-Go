@@ -21,7 +21,9 @@ func ConflictKey[M, V any](c ExpressionColumn[M, V]) int { return 0 }
 func ConflictSet[M, I, V any, C interface {
 	ExpressionColumn[M, V]
 	Set(I) int
-}](c C, input I) int                                 { return 0 }
+}](c C, input I) int {
+	return 0
+}
 func Concrete[M, V any](c Text[M, V]) int            { return 0 }
 func WriteGet[M, I any](m M, setter func(I) int) int { return 0 }
 

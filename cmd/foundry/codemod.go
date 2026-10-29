@@ -14,7 +14,7 @@ func runCodemod(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	flags := flag.NewFlagSet("codemod", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	dir := flags.String("dir", ".", "consumer directory with the current v0.1 dependency")
-	apply := flags.Bool("apply", false, "apply resolved validation edits; refuse if unresolved cases remain")
+	apply := flags.Bool("apply", false, "apply resolved v0.2 migration edits; refuse if unresolved cases remain")
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "usage: foundry codemod [--dir directory] [--apply] [./...]")
 		flags.PrintDefaults()

@@ -17,7 +17,7 @@ import (
 
 // Exists requires a stored value in the supplied model scope. The declared
 // source and field must share a model owner, and input retains the field type.
-// Example: databasevalidation.Exists(db, Users.Query(), Users.Key()).
+// Example: databasevalidation.Exists(db, Users.Query(), orm.KeyExpr(Users.Key())).
 func Exists[M any, V comparable](executor database.Executor, source orm.Query[M], field orm.KeyColumn[M, V]) validation.Rule[V] {
 	return validation.Exists(Lookup(executor, source, field))
 }
@@ -27,7 +27,7 @@ func Exists[M any, V comparable](executor database.Executor, source orm.Query[M]
 // predicate before passing the source. Include trashed rows when the database
 // unique constraint does. This read does not reserve a value or replace the
 // database constraint.
-// Example: databasevalidation.Unique(db, Users.Query(), Users.Email).
+// Example: databasevalidation.Unique(db, Users.Query(), orm.TextExpr(Users.Email)).
 func Unique[M any, V comparable](executor database.Executor, source orm.Query[M], field orm.KeyColumn[M, V]) validation.Rule[V] {
 	return validation.Unique(Lookup(executor, source, field))
 }
@@ -36,14 +36,14 @@ func Unique[M any, V comparable](executor database.Executor, source orm.Query[M]
 // model scope and concrete field type. Missing values are reported at their
 // index paths. Duplicate input values are allowed; combine with Distinct when
 // the application prohibits duplicates.
-// Example: databasevalidation.ExistsAll(db, Users.Query(), Users.Key()).
+// Example: databasevalidation.ExistsAll(db, Users.Query(), orm.KeyExpr(Users.Key())).
 func ExistsAll[M any, V comparable](executor database.Executor, source orm.Query[M], field orm.KeyColumn[M, V]) validation.Rule[[]V] {
 	return validation.ExistsAll[[]V](Lookup(executor, source, field))
 }
 
 // UniqueAll requires that no listed value is stored in the scope, reporting
 // each conflict at its index path with batched IN observations.
-// Example: databasevalidation.UniqueAll(db, Users.Query(), Users.Email).
+// Example: databasevalidation.UniqueAll(db, Users.Query(), orm.TextExpr(Users.Email)).
 func UniqueAll[M any, V comparable](executor database.Executor, source orm.Query[M], field orm.KeyColumn[M, V]) validation.Rule[[]V] {
 	return validation.UniqueAll[[]V](Lookup(executor, source, field))
 }
@@ -51,14 +51,14 @@ func UniqueAll[M any, V comparable](executor database.Executor, source orm.Query
 // ExistsEach selects item from every element, for example each order line's
 // product ID, and checks all selected values with batched statements. Missing
 // values are reported at paths such as /items/3/product_id.
-// Example: databasevalidation.ExistsEach(db, Users.Query(), Users.Key(), assignee).
+// Example: databasevalidation.ExistsEach(db, Users.Query(), orm.KeyExpr(Users.Key()), assignee).
 func ExistsEach[E, M any, V comparable](executor database.Executor, source orm.Query[M], column orm.KeyColumn[M, V], item validation.Field[E, V]) validation.Rule[[]E] {
 	return validation.ExistsEach[[]E](item, Lookup(executor, source, column))
 }
 
 // UniqueEach requires that no element's selected value is stored in the scope,
 // reporting conflicts at each element's field path.
-// Example: databasevalidation.UniqueEach(db, Users.Query(), Users.Email, email).
+// Example: databasevalidation.UniqueEach(db, Users.Query(), orm.TextExpr(Users.Email), email).
 func UniqueEach[E, M any, V comparable](executor database.Executor, source orm.Query[M], column orm.KeyColumn[M, V], item validation.Field[E, V]) validation.Rule[[]E] {
 	return validation.UniqueEach[[]E](item, Lookup(executor, source, column))
 }
@@ -66,13 +66,13 @@ func UniqueEach[E, M any, V comparable](executor database.Executor, source orm.Q
 // UniqueIgnoring requires no other stored row with the value, excluding the row
 // whose key the enclosing validation.Provide supplies through current, such as
 // the route key of the record being updated. The exclusion is derived at check
-// time, so one declaration serves every request. Validate rejects the rule
+// time, so one declaration serves every request. validation.ValidateRule rejects the rule
 // until an enclosing Provide supplies current. Derive that key from trusted
 // route or actor data, never from an untrusted body field alone.
-// Example: databasevalidation.UniqueIgnoring(db, Users.Query(), orm.TextExpr(Users.Email), orm.KeyExpr(Users.Key()), func(id model.ID[User]) orm.Predicate[User] { return orm.KeyNe(Users.Key(), id) }, current).
-func UniqueIgnoring[M any, V, K comparable](executor database.Executor, source orm.Query[M], field orm.KeyColumn[M, V], key orm.KeyColumn[M, K], exclude func(K) orm.Predicate[M], current validation.Slot[K]) validation.Rule[V] {
-	if isNil(key) || exclude == nil {
-		return validation.Requires(current, validation.Unique(newLookup(lookupState[M, V]{err: safeerror.NewFault(fault.Invalid, "database validation requires a key field and exclusion predicate")})))
+// Example: databasevalidation.UniqueIgnoring(db, Users.Query(), orm.TextExpr(Users.Email), orm.KeyExpr(Users.Key()), current).
+func UniqueIgnoring[M any, V, K comparable](executor database.Executor, source orm.Query[M], field orm.KeyColumn[M, V], key orm.KeyColumn[M, K], current validation.Slot[K]) validation.Rule[V] {
+	if isNil(key) {
+		return validation.Requires(current, validation.Unique(newLookup(lookupState[M, V]{err: safeerror.NewFault(fault.Invalid, "database validation requires a key field")})))
 	}
 	if err := orm.Lookup(source, key).Validate(); err != nil {
 		return validation.Requires(current, validation.Unique(newLookup(lookupState[M, V]{err: err})))
@@ -87,14 +87,14 @@ func UniqueIgnoring[M any, V, K comparable](executor database.Executor, source o
 		if err != nil {
 			return source, err
 		}
-		return source.Where(exclude(ignored)), nil
+		return source.Where(orm.KeyColumnNe(key, ignored)), nil
 	}, field)))
 }
 
 // ModelLookup observes one stored model field for the base validation rules:
 // it implements validation.Lookup, BatchLookup and AnyLookup. Construct it with
 // Lookup for a fixed scope or Scoped for a scope derived at check time.
-// Example: lookup := databasevalidation.Lookup(db, Users.Query(), Users.Email).
+// Example: lookup := databasevalidation.Lookup(db, Users.Query(), orm.TextExpr(Users.Email)).
 type ModelLookup[M any, V comparable] struct {
 	_    [0]*M
 	core *lookupState[M, V]
@@ -108,7 +108,7 @@ type lookupState[M any, V comparable] struct {
 }
 
 // Lookup binds a fixed declared model scope and field.
-// Example: databasevalidation.Lookup(db, Users.Query(), Users.Email).
+// Example: databasevalidation.Lookup(db, Users.Query(), orm.TextExpr(Users.Email)).
 func Lookup[M any, V comparable](executor database.Executor, source orm.Query[M], field orm.KeyColumn[M, V]) ModelLookup[M, V] {
 	return newLookup(lookupState[M, V]{executor: executor, lookup: orm.Lookup(source, field)})
 }
@@ -119,7 +119,7 @@ func Lookup[M any, V comparable](executor database.Executor, source orm.Query[M]
 // eager loading; an invalid scope or a scope error fails execution and is never
 // treated as a missing or available value. Declaration validation checks the
 // executor and callback only; each check validates the returned scope.
-// Example: databasevalidation.Scoped(db, tenantUsers, Users.Email).
+// Example: databasevalidation.Scoped(db, tenantUsers, orm.TextExpr(Users.Email)).
 func Scoped[M any, V comparable](executor database.Executor, scope func(context.Context) (orm.Query[M], error), field orm.KeyColumn[M, V]) ModelLookup[M, V] {
 	if scope == nil || isNil(field) {
 		return newLookup(lookupState[M, V]{err: safeerror.NewFault(fault.Invalid, "database validation requires a scope and field")})

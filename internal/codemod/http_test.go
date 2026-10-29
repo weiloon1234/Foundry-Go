@@ -313,3 +313,61 @@ func TestHTTPStoredBindingConstructor(t *testing.T) {
 		t.Fatal(entries)
 	}
 }
+
+const oldHTTPRegister = `
+ type SignedRoute[P any] struct{}
+ func (r SignedRoute[P]) Validate() error { return nil }
+ type IdempotentEndpoint[P,Q,B,R any] struct{}
+ func (e IdempotentEndpoint[P,Q,B,R]) Validate() error { return nil }
+ func RegisterRoute[D any](r int, key int, declaration D, construct int) int { return 0 }
+`
+
+func TestHTTPRegisterRoute(t *testing.T) {
+	source := `package consumer
+import h "github.com/weiloon1234/Foundry-Go/http"
+var endpoint h.Endpoint[int, int, int, int]
+var signedRoute h.SignedRoute[int]
+var signedEndpoint h.SignedEndpoint[int, int, int, int]
+var idempotentEndpoint h.IdempotentEndpoint[int, int, int, int]
+var route h.Route[int]
+var _ = h.RegisterRoute(1, 2, endpoint, 3)
+var _ = h.RegisterRoute(1, 2, signedRoute, 3)
+var _ = h.RegisterRoute(1, 2, signedEndpoint, 3)
+var _ = h.RegisterRoute(1, 2, idempotentEndpoint, 3)
+var _ = h.RegisterRoute(1, 2, route, 3)
+`
+	output, entries := rewriteHTTPTest(t, source, "consumer.go", map[string]string{httpPath: oldHTTP + oldHTTPSpecialized + oldHTTPRegister})
+	if len(entries) != 4 {
+		t.Fatalf("expected 4 resolved entries, got %d: %v", len(entries), entries)
+	}
+	for _, entry := range entries {
+		if entry.Status != Resolved {
+			t.Fatal(entry)
+		}
+	}
+	wantSubstrings := []string{
+		"h.RegisterEndpoint(1, 2, endpoint, 3)",
+		"h.RegisterSignedRoute(1, 2, signedRoute, 3)",
+		"h.RegisterSignedEndpoint(1, 2, signedEndpoint, 3)",
+		"h.RegisterIdempotentEndpoint(1, 2, idempotentEndpoint, 3)",
+		"h.RegisterRoute(1, 2, route, 3)",
+	}
+	for _, want := range wantSubstrings {
+		if !strings.Contains(string(output), want) {
+			t.Fatalf("missing %q in output:\n%s", want, string(output))
+		}
+	}
+}
+
+func TestHTTPRegisterRouteGenericUnresolved(t *testing.T) {
+	source := `package consumer
+import h "github.com/weiloon1234/Foundry-Go/http"
+func registerGeneric[D any](d D) {
+	h.RegisterRoute(1, 2, d, 3)
+}
+`
+	_, entries := rewriteHTTPTest(t, source, "consumer.go", map[string]string{httpPath: oldHTTP + oldHTTPSpecialized + oldHTTPRegister})
+	if len(entries) != 1 || entries[0].Status != Unresolved {
+		t.Fatalf("expected 1 unresolved entry, got: %v", entries)
+	}
+}

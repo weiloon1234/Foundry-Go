@@ -475,7 +475,7 @@ type EmailChange struct {
 
 func updateRules(db database.Executor) validation.Rule[EmailChange] {
 	current := validation.NewSlot[model.ID[models.User]]()
-	email := databasevalidation.UniqueIgnoring(db, models.Users.Query(), orm.TextExpr(models.Users.Email), orm.KeyExpr(models.Users.Key()), func(id model.ID[models.User]) orm.Predicate[models.User] { return orm.KeyNe(models.Users.Key(), id) }, current)
+	email := databasevalidation.UniqueIgnoring(db, models.Users.Query(), orm.TextExpr(models.Users.Email), orm.KeyExpr(models.Users.Key()), current)
 	field := validation.DefineField("email", func(in EmailChange) string { return in.Email })
 	return validation.Provide(current,
 		func(_ context.Context, in EmailChange) (model.ID[models.User], error) { return in.ID, nil },

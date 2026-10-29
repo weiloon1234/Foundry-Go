@@ -37,7 +37,7 @@ func ActiveUsers(executor database.Executor) validation.Rule[[]model.ID[models.U
 // supplies the trusted key of the user being updated at check time.
 func AvailableEmailExceptCurrent(executor database.Executor, current validation.Slot[model.ID[models.User]]) validation.Rule[string] {
 	fields := Users
-	return databasevalidation.UniqueIgnoring(executor, Users.Query(), orm.TextExpr(fields.Email), orm.KeyExpr(fields.ID), func(id model.ID[models.User]) orm.Predicate[models.User] { return orm.KeyNe(fields.ID, id) }, current)
+	return databasevalidation.UniqueIgnoring(executor, Users.Query(), orm.TextExpr(fields.Email), orm.KeyExpr(fields.ID), current)
 }
 
 // UserInStatus derives its model scope from a slot at every check, the shape of

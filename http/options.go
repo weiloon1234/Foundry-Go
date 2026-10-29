@@ -157,7 +157,9 @@ func ActorMiddleware[M any](middleware ...Middleware) ActorOption[M] {
 func ConfigureAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R], options ...GuardOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
 	for _, option := range options {
 		if option == nil {
-			endpoint.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
+			if endpoint.binding.requirementError == nil {
+				endpoint.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
+			}
 		} else {
 			endpoint.binding = option.applyGuard(endpoint.binding)
 		}
@@ -167,7 +169,9 @@ func ConfigureAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P,
 func ConfigureOptional[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoint[P, Q, B, M, R], options ...ActorOption[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
 	for _, option := range options {
 		if option == nil {
-			endpoint.required.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
+			if endpoint.required.binding.requirementError == nil {
+				endpoint.required.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
+			}
 		} else {
 			endpoint.required.binding = option.applyGuard(endpoint.required.binding)
 		}
@@ -178,7 +182,9 @@ func ConfigureOptional[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoin
 func ConfigureAuthenticatedRoute[P, M any](route AuthenticatedRoute[P, M], options ...GuardOption[M]) AuthenticatedRoute[P, M] {
 	for _, option := range options {
 		if option == nil {
-			route.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
+			if route.binding.requirementError == nil {
+				route.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
+			}
 		} else {
 			route.binding = option.applyGuard(route.binding)
 		}
@@ -188,7 +194,9 @@ func ConfigureAuthenticatedRoute[P, M any](route AuthenticatedRoute[P, M], optio
 func ConfigureOptionalRoute[P, M any](route OptionalAuthenticationRoute[P, M], options ...ActorOption[M]) OptionalAuthenticationRoute[P, M] {
 	for _, option := range options {
 		if option == nil {
-			route.required.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
+			if route.required.binding.requirementError == nil {
+				route.required.binding.requirementError = safeerror.NewFault(fault.Invalid, "authentication option is missing")
+			}
 		} else {
 			route.required.binding = option.applyGuard(route.required.binding)
 		}

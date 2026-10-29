@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -110,5 +111,46 @@ func TestHTTPAccessScopesRunBeforeDecodingAndKeepMetadataImmutable(t *testing.T)
 	}
 	if router.Routes()[0].Authentication.RequiredScopes[0] != "profile.read" {
 		t.Fatal("route scope metadata mutated")
+	}
+}
+
+func TestConfigureAuthenticatedPreservesFirstOptionError(t *testing.T) {
+	provider := auth.DefineProvider("accounts", (authAccount{}).reference(), func(_ context.Context, id int64) (value.Optional[authAccount], error) {
+		return value.Set(authAccount{ID: id, Enabled: true}), nil
+	}, func(context.Context, authAccount) (bool, error) { return true, nil })
+	strategy := auth.DefineStrategy("bearer", func(_ context.Context, s secret.String) (value.Optional[auth.Proof[authAccount, int64]], error) {
+		return value.Set(auth.Proof[authAccount, int64]{}), nil
+	})
+	guard := auth.DefineGuard("api", provider, strategy)
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.BearerCredential("bearer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := foundryhttp.RequireAuthentication(authEndpoint(foundryhttp.Guarded), transport, guard)
+
+	// First option is invalid (empty permissions), second option is nil.
+	// The first error ("HTTP permissions require a bounded nonempty declaration") must be preserved.
+	configured := foundryhttp.ConfigureAuthenticated(base, foundryhttp.Permissions[authAccount](), nil)
+	err = foundryhttp.ValidateAuthenticated(configured)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "HTTP permissions require a bounded nonempty declaration") {
+		t.Fatalf("expected first error preserved, got: %v", err)
+	}
+
+	// First option is nil, second option is invalid permissions.
+	// The first error ("authentication option is missing") must be preserved.
+	configuredSecond := foundryhttp.ConfigureAuthenticated(base, nil, foundryhttp.Permissions[authAccount]())
+	errSecond := foundryhttp.ValidateAuthenticated(configuredSecond)
+	if errSecond == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(errSecond.Error(), "authentication option is missing") {
+		t.Fatalf("expected first error preserved, got: %v", errSecond)
 	}
 }

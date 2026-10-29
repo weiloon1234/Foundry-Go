@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const validationDatabasePath = validationPath + "/database"
+
 // Inspect the original generic signature: an instantiated C parameter would
 // hide its sealed constraint behind the concrete v0.1 column type.
 func ormSealedFunction(fc *FileContext, call *ast.CallExpr) *types.Func {
@@ -14,7 +16,7 @@ func ormSealedFunction(fc *FileContext, call *ast.CallExpr) *types.Func {
 		return nil
 	}
 	path := function.Pkg().Path()
-	if path != ormPath && path != ormPath+"/rows" && path != ormPath+"/expr" {
+	if path != ormPath && path != ormPath+"/rows" && path != ormPath+"/expr" && path != validationDatabasePath {
 		return nil
 	}
 	signature := function.Type().(*types.Signature)
@@ -47,6 +49,75 @@ func ormSealedParameter(typ types.Type) bool {
 	return false
 }
 
+func isORMAdapterType(typ types.Type) bool {
+	named := ormNamed(typ)
+	if named == nil || named.Obj() == nil || named.Obj().Pkg() == nil {
+		return false
+	}
+	if named.Obj().Pkg().Path() != ormPath {
+		return false
+	}
+	return strings.HasSuffix(named.Obj().Name(), "Adapter")
+}
+
+func isSafeUniqueIgnoringExclude(fc *FileContext, exclude ast.Expr, key ast.Expr) bool {
+	fn, ok := unparen(exclude).(*ast.FuncLit)
+	if !ok {
+		return false
+	}
+	if fn.Type.Params == nil || len(fn.Type.Params.List) != 1 {
+		return false
+	}
+	paramName := ""
+	if len(fn.Type.Params.List[0].Names) == 1 {
+		paramName = fn.Type.Params.List[0].Names[0].Name
+	}
+	if fn.Body == nil || len(fn.Body.List) != 1 {
+		return false
+	}
+	ret, ok := fn.Body.List[0].(*ast.ReturnStmt)
+	if !ok || len(ret.Results) != 1 {
+		return false
+	}
+	call, ok := unparen(ret.Results[0]).(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	calledFunc := httpPackageFunction(fc, call.Fun)
+	if calledFunc == nil || calledFunc.Pkg() == nil || calledFunc.Pkg().Path() != ormPath {
+		return false
+	}
+	if calledFunc.Name() != "KeyNe" && calledFunc.Name() != "KeyColumnNe" {
+		return false
+	}
+	if len(call.Args) != 2 {
+		return false
+	}
+	if !sameExpressionNode(call.Args[0], key) {
+		return false
+	}
+	idArg, ok := unparen(call.Args[1]).(*ast.Ident)
+	if !ok || (paramName != "" && idArg.Name != paramName) {
+		return false
+	}
+	return true
+}
+
+func sameExpressionNode(a, b ast.Expr) bool {
+	a = unparen(a)
+	b = unparen(b)
+	switch aTyped := a.(type) {
+	case *ast.Ident:
+		bTyped, ok := b.(*ast.Ident)
+		return ok && aTyped.Name == bTyped.Name
+	case *ast.SelectorExpr:
+		bTyped, ok := b.(*ast.SelectorExpr)
+		return ok && aTyped.Sel.Name == bTyped.Sel.Name && sameExpressionNode(aTyped.X, bTyped.X)
+	default:
+		return false
+	}
+}
+
 func rewriteORMAdapters(fc *FileContext, call *ast.CallExpr) (ast.Node, string) {
 	function := ormSealedFunction(fc, call)
 	if function == nil {
@@ -55,6 +126,16 @@ func rewriteORMAdapters(fc *FileContext, call *ast.CallExpr) (ast.Node, string) 
 	signature := function.Type().(*types.Signature)
 	args := append([]ast.Expr{}, call.Args...)
 	changed := false
+
+	isUniqueIgnoring := function.Pkg().Path() == validationDatabasePath && function.Name() == "UniqueIgnoring"
+	if isUniqueIgnoring && len(args) == 6 {
+		if !isSafeUniqueIgnoringExclude(fc, args[4], args[3]) {
+			return nil, "UniqueIgnoring call with custom exclusion callback cannot be rewritten safely"
+		}
+		args = append(args[:4], args[5])
+		changed = true
+	}
+
 	for i, arg := range args {
 		index := i
 		if signature.Variadic() && index >= signature.Params().Len()-1 {
@@ -69,6 +150,9 @@ func rewriteORMAdapters(fc *FileContext, call *ast.CallExpr) (ast.Node, string) 
 			typ = typ.(*types.Slice).Elem()
 		}
 		if !ormSealedParameter(typ) {
+			continue
+		}
+		if isORMAdapterType(fc.Info.TypeOf(arg)) {
 			continue
 		}
 		if variadic && call.Ellipsis.IsValid() {

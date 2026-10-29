@@ -228,3 +228,161 @@ var _ = query().All(values[0],2)
 		t.Fatal(entries, string(output))
 	}
 }
+
+func TestORMReceiverSideEffectCaptures(t *testing.T) {
+	source := `package consumer
+import o "` + ormPath + `"
+func scopedQuery(ctx, db *int) o.Query[int] { return o.Query[int]{} }
+func run(ctx, db int) {
+	_ = scopedQuery(&ctx, &db).All(ctx, db)
+}
+`
+	output, entries := rewriteRulesTest(t, source, "consumer.go", map[string]string{ormPath: ormFixture(t, "orm_v01.go")}, ORM{})
+	if len(entries) != 1 || entries[0].Status != Resolved {
+		t.Fatal(entries)
+	}
+	if !strings.Contains(string(output), "}(scopedQuery(&ctx, &db))(ctx, db)") {
+		t.Fatalf("evaluation order lost, got:\n%s", string(output))
+	}
+}
+
+func TestORMReceiverStableNoCapture(t *testing.T) {
+	source := `package consumer
+import o "` + ormPath + `"
+func run(q o.Query[int], ctx, db int) {
+	_ = q.All(ctx, db)
+}
+`
+	output, entries := rewriteRulesTest(t, source, "consumer.go", map[string]string{ormPath: ormFixture(t, "orm_v01.go")}, ORM{})
+	if len(entries) != 1 || entries[0].Status != Resolved {
+		t.Fatal(entries)
+	}
+	if strings.Contains(string(output), "}(q)") {
+		t.Fatalf("unnecessary capture for stable receiver:\n%s", string(output))
+	}
+	if !strings.Contains(string(output), "o.All(ctx, db, q)") {
+		t.Fatalf("missing direct rewrite:\n%s", string(output))
+	}
+}
+
+const validationDBV01 = `package database
+import o "github.com/weiloon1234/Foundry-Go/database/orm"
+type Slot[T any] struct{}
+func Unique[M, V any](executor int, source o.Query[M], field o.ExpressionColumn[M, V]) int { return 0 }
+func Exists[M, V any](executor int, source o.Query[M], field o.ExpressionColumn[M, V]) int { return 0 }
+func Scoped[M, V any](executor int, scope int, field o.ExpressionColumn[M, V]) int { return 0 }
+func UniqueIgnoring[M, V, K any](executor int, source o.Query[M], field o.ExpressionColumn[M, V], key o.ExpressionColumn[M, K], current Slot[K]) int { return 0 }
+`
+
+const validationDBV01WithExclude = `package database
+import o "github.com/weiloon1234/Foundry-Go/database/orm"
+type Slot[T any] struct{}
+func UniqueIgnoring[M, V, K any](executor int, source o.Query[M], field o.ExpressionColumn[M, V], key o.ExpressionColumn[M, K], exclude func(K) int, current Slot[K]) int { return 0 }
+`
+
+const ormWithKeyNe = `
+func KeyNe[M, K any](c ExpressionColumn[M, K], v K) int { return 0 }
+func KeyEq[M, K any](c ExpressionColumn[M, K], v K) int { return 0 }
+`
+
+func TestORMValidationDatabaseAdapters(t *testing.T) {
+	dependencies := map[string]string{
+		ormPath:                ormFixture(t, "orm_v01.go") + ormWithKeyNe,
+		validationDatabasePath: validationDBV01,
+	}
+	source := `package consumer
+import o "` + ormPath + `"
+import v "` + validationDatabasePath + `"
+var c o.Text[int, string]
+var k o.Text[int, int]
+var q o.Query[int]
+var slot v.Slot[int]
+var _ = v.Unique(1, q, c)
+var _ = v.Exists(1, q, c)
+var _ = v.Scoped(1, 2, c)
+var _ = v.UniqueIgnoring(1, q, c, k, slot)
+`
+	output, entries := rewriteRulesTest(t, source, "consumer.go", dependencies, ORM{})
+	if len(entries) != 4 {
+		t.Fatalf("expected 4 entries, got %d: %v", len(entries), entries)
+	}
+	for _, entry := range entries {
+		if entry.Status != Resolved {
+			t.Fatal(entry)
+		}
+	}
+	wantSubstrings := []string{
+		"v.Unique(1, q, o.TextExpr(c))",
+		"v.Exists(1, q, o.TextExpr(c))",
+		"v.Scoped(1, 2, o.TextExpr(c))",
+		"v.UniqueIgnoring(1, q, o.TextExpr(c), o.TextExpr(k), slot)",
+	}
+	for _, want := range wantSubstrings {
+		if !strings.Contains(string(output), want) {
+			t.Fatalf("missing %q in output:\n%s", want, string(output))
+		}
+	}
+}
+
+func TestORMValidationDatabaseUniqueIgnoring6Args(t *testing.T) {
+	dependencies := map[string]string{
+		ormPath:                ormFixture(t, "orm_v01.go") + ormWithKeyNe,
+		validationDatabasePath: validationDBV01WithExclude,
+	}
+	source := `package consumer
+import o "` + ormPath + `"
+import v "` + validationDatabasePath + `"
+var c o.Text[int, string]
+var k o.Text[int, int]
+var q o.Query[int]
+var slot v.Slot[int]
+var _ = v.UniqueIgnoring(1, q, c, k, func(id int) int { return o.KeyNe(k, id) }, slot)
+`
+	output, entries := rewriteRulesTest(t, source, "consumer.go", dependencies, ORM{})
+	if len(entries) == 0 {
+		t.Fatalf("expected entries, got none")
+	}
+	for _, entry := range entries {
+		if entry.Status != Resolved {
+			t.Fatalf("expected resolved entry, got: %v", entry)
+		}
+	}
+	if !strings.Contains(string(output), "v.UniqueIgnoring(1, q, o.TextExpr(c), o.TextExpr(k), slot)") {
+		t.Fatalf("expected 5-arg rewritten UniqueIgnoring, got:\n%s", string(output))
+	}
+
+	unsafeSource := `package consumer
+import o "` + ormPath + `"
+import v "` + validationDatabasePath + `"
+var c o.Text[int, string]
+var k o.Text[int, int]
+var q o.Query[int]
+var slot v.Slot[int]
+var _ = v.UniqueIgnoring(1, q, c, k, func(id int) int { return id + 1 }, slot)
+`
+	_, unsafeEntries := rewriteRulesTest(t, unsafeSource, "consumer.go", dependencies, ORM{})
+	if len(unsafeEntries) != 1 || unsafeEntries[0].Status != Unresolved {
+		t.Fatalf("expected 1 unresolved entry for unsafe exclude, got: %v", unsafeEntries)
+	}
+
+	mismatchedColumnSource := `package consumer
+import o "` + ormPath + `"
+import v "` + validationDatabasePath + `"
+var c o.Text[int, string]
+var k o.Text[int, int]
+var other o.Text[int, int]
+var q o.Query[int]
+var slot v.Slot[int]
+var _ = v.UniqueIgnoring(1, q, c, k, func(id int) int { return o.KeyNe(other, id) }, slot)
+`
+	_, mismatchedEntries := rewriteRulesTest(t, mismatchedColumnSource, "consumer.go", dependencies, ORM{})
+	hasUnresolved := false
+	for _, entry := range mismatchedEntries {
+		if entry.Status == Unresolved && strings.Contains(entry.Message, "custom exclusion callback") {
+			hasUnresolved = true
+		}
+	}
+	if !hasUnresolved {
+		t.Fatalf("expected unresolved entry for mismatched column exclude, got: %v", mismatchedEntries)
+	}
+}

@@ -61,16 +61,21 @@ type FileContext struct {
 }
 
 func Inventory(ctx context.Context, options Options, rules ...RuleSet) (*Plan, error) {
-	// HTTP and ORM are built-in migrations; caller-supplied rules extend them.
+	// Validation, HTTP and ORM are built-in migrations; caller-supplied rules extend them.
 	// Explicit registration remains useful without duplicating findings.
-	hasHTTP, hasORM := false, false
+	hasValidation, hasHTTP, hasORM := false, false, false
 	for _, rule := range rules {
 		switch rule.(type) {
+		case Validation, *Validation:
+			hasValidation = true
 		case HTTP, *HTTP:
 			hasHTTP = true
 		case ORM, *ORM:
 			hasORM = true
 		}
+	}
+	if !hasValidation {
+		rules = append(append([]RuleSet{}, rules...), Validation{})
 	}
 	if !hasHTTP {
 		rules = append(append([]RuleSet{}, rules...), HTTP{})

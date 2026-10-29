@@ -45,6 +45,22 @@ func KeyNe[M any, K comparable, R columnRole](c keyColumn[M, K, R], v K) Predica
 	return comparison[M](c.key, querycore.NotEqual, []K{v})
 }
 
+// KeyColumnEq compares a concrete value from a key column handle. Example: KeyColumnEq(Users.Key(), id).
+func KeyColumnEq[M any, K comparable](c KeyColumn[M, K], v K) Predicate[M] {
+	if !lookupColumn(c) {
+		return Predicate[M]{err: invalid("key column is required")}
+	}
+	return comparison[M](c.ormColumn(nil), querycore.Equal, []K{v})
+}
+
+// KeyColumnNe excludes a concrete value from a key column handle. Example: KeyColumnNe(Users.Key(), id).
+func KeyColumnNe[M any, K comparable](c KeyColumn[M, K], v K) Predicate[M] {
+	if !lookupColumn(c) {
+		return Predicate[M]{err: invalid("key column is required")}
+	}
+	return comparison[M](c.ormColumn(nil), querycore.NotEqual, []K{v})
+}
+
 // KeyIn tests membership. Example: KeyIn(Orders.ID, a, b).
 func KeyIn[M any, K comparable, R columnRole](c keyColumn[M, K, R], v ...K) Predicate[M] {
 	return comparison[M](c.key, querycore.In, v)

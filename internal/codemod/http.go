@@ -70,12 +70,19 @@ func (HTTP) Rewrite(fc *FileContext, node ast.Node) (ast.Node, string) {
 		return rewriteHTTPReplayBlock(fc, block)
 	}
 	if call, ok := node.(*ast.CallExpr); ok {
-		if function := httpPackageFunction(fc, call.Fun); function != nil && function.Pkg().Path() == modelbindingPath {
-			switch function.Name() {
-			case "Bind", "BindAuthenticated":
-				return rewriteHTTPBinding(fc, call, function.Name())
-			case "Idempotent", "IdempotentAuthenticated":
-				return rewriteHTTPReplay(fc, call)
+		if function := httpPackageFunction(fc, call.Fun); function != nil {
+			if function.Pkg().Path() == modelbindingPath {
+				switch function.Name() {
+				case "Bind", "BindAuthenticated":
+					return rewriteHTTPBinding(fc, call, function.Name())
+				case "Idempotent", "IdempotentAuthenticated":
+					return rewriteHTTPReplay(fc, call)
+				}
+			}
+			if function.Pkg().Path() == httpPath && function.Name() == "RegisterRoute" {
+				if replacement, message := rewriteHTTPRegisterRoute(fc, call); message != "" {
+					return replacement, message
+				}
 			}
 		}
 	}
@@ -353,4 +360,80 @@ func rewriteHTTPBinding(fc *FileContext, call *ast.CallExpr, name string) (ast.N
 	result.Args = append([]ast.Expr{}, call.Args...)
 	result.Args[0] = &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(alias), Sel: ast.NewIdent(adapter)}, Args: []ast.Expr{call.Args[0]}}
 	return &result, "modelbinding." + name + " → http." + adapter
+}
+
+func httpNamed(typ types.Type) *types.Named {
+	if typ == nil {
+		return nil
+	}
+	named, _ := types.Unalias(typ).(*types.Named)
+	if named == nil || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() != httpPath || named.Obj().Pkg().Scope().Lookup(named.Obj().Name()) != named.Obj() {
+		return nil
+	}
+	return named
+}
+
+func rewriteHTTPRegisterRoute(fc *FileContext, call *ast.CallExpr) (ast.Node, string) {
+	if len(call.Args) < 3 {
+		return nil, "http.RegisterRoute requires at least 3 arguments"
+	}
+	declType := fc.Info.TypeOf(call.Args[2])
+	if declType == nil {
+		return nil, "http.RegisterRoute declaration type cannot be resolved"
+	}
+	if _, ok := declType.(*types.TypeParam); ok {
+		return nil, "generic route registration helper requires explicit registration per declaration kind"
+	}
+	if _, ok := declType.Underlying().(*types.Interface); ok {
+		return nil, "route registration through interface requires explicit registration per declaration kind"
+	}
+	named := httpNamed(declType)
+	if named == nil {
+		return nil, "http.RegisterRoute declaration type requires a concrete HTTP declaration"
+	}
+	target := ""
+	switch named.Obj().Name() {
+	case "Route":
+		return nil, ""
+	case "Endpoint":
+		target = "RegisterEndpoint"
+	case "SignedRoute":
+		target = "RegisterSignedRoute"
+	case "SignedEndpoint":
+		target = "RegisterSignedEndpoint"
+	case "IdempotentEndpoint":
+		target = "RegisterIdempotentEndpoint"
+	default:
+		return nil, "http.RegisterRoute with unsupported declaration type: " + named.Obj().Name()
+	}
+
+	fun := call.Fun
+	for {
+		if idx, ok := fun.(*ast.IndexExpr); ok {
+			fun = idx.X
+			continue
+		}
+		if idx, ok := fun.(*ast.IndexListExpr); ok {
+			fun = idx.X
+			continue
+		}
+		if paren, ok := fun.(*ast.ParenExpr); ok {
+			fun = paren.X
+			continue
+		}
+		break
+	}
+
+	var newFun ast.Expr
+	if sel, ok := fun.(*ast.SelectorExpr); ok {
+		newFun = &ast.SelectorExpr{X: sel.X, Sel: ast.NewIdent(target)}
+	} else if _, ok := fun.(*ast.Ident); ok {
+		newFun = ast.NewIdent(target)
+	} else {
+		return nil, "http.RegisterRoute unsupported callee expression"
+	}
+
+	result := *call
+	result.Fun = newFun
+	return &result, "http.RegisterRoute → http." + target
 }

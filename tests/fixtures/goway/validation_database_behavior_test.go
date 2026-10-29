@@ -76,7 +76,7 @@ func TestValidationDatabaseCheckTimeScopesAndExclusions(t *testing.T) {
 	defer db.Close(t.Context())
 	slot := validation.NewSlot[int64]()
 	// Both the retained scope and the request-specific key exclusion must survive.
-	ignored := dbvalidation.UniqueIgnoring(db, reads.Members.Query().Where(orm.TextNe(reads.Members.Name, "tenant-private")), orm.TextExpr(reads.Members.Name), orm.KeyExpr(reads.Members.ID), func(id int64) orm.Predicate[reads.Member] { return orm.KeyNe(reads.Members.ID, id) }, slot)
+	ignored := dbvalidation.UniqueIgnoring(db, reads.Members.Query().Where(orm.TextNe(reads.Members.Name, "tenant-private")), orm.TextExpr(reads.Members.Name), orm.KeyExpr(reads.Members.ID), slot)
 	if validation.ValidateRule(ignored) == nil {
 		t.Fatal("missing provider accepted")
 	}
