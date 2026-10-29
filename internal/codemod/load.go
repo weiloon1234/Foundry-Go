@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"go/ast"
 	"go/importer"
 	"go/parser"
@@ -16,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type listedPackage struct {
@@ -40,7 +41,7 @@ type limitedOutput struct {
 
 func (b *limitedOutput) Write(p []byte) (int, error) {
 	if len(p) > b.remaining {
-		return 0, fmt.Errorf("codemod: package metadata exceeds limit")
+		return 0, safeerror.New("codemod: package metadata exceeds limit")
 	}
 	b.remaining -= len(p)
 	return b.Buffer.Write(p)
@@ -66,7 +67,7 @@ func load(ctx context.Context, dir string, patterns []string, fset *token.FileSe
 	}
 	for _, p := range patterns {
 		if strings.HasPrefix(p, "-") {
-			return nil, fmt.Errorf("codemod: package patterns cannot be flags")
+			return nil, safeerror.New("codemod: package patterns cannot be flags")
 		}
 	}
 	args := append([]string{"list", "-deps", "-export", "-compiled", "-test", "-json"}, patterns...)
@@ -77,7 +78,7 @@ func load(ctx context.Context, dir string, patterns []string, fset *token.FileSe
 	cmd.Stdout = out
 	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("codemod: package loading failed; resolve current dependency build errors first")
+		return nil, safeerror.New("codemod: package loading failed; resolve current dependency build errors first")
 	}
 	var selected []listedPackage
 	exports := map[string]string{}
@@ -89,10 +90,10 @@ func load(ctx context.Context, dir string, patterns []string, fset *token.FileSe
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("codemod: invalid package metadata")
+			return nil, safeerror.New("codemod: invalid package metadata")
 		}
 		if p.Incomplete || p.Error != nil || len(p.DepsErrors) > 0 {
-			return nil, fmt.Errorf("codemod: incomplete package metadata")
+			return nil, safeerror.New("codemod: incomplete package metadata")
 		}
 		if p.Export != "" {
 			exports[p.ImportPath] = p.Export
@@ -102,12 +103,12 @@ func load(ctx context.Context, dir string, patterns []string, fset *token.FileSe
 		}
 	}
 	if len(selected) == 0 {
-		return nil, fmt.Errorf("codemod: no packages matched")
+		return nil, safeerror.New("codemod: no packages matched")
 	}
 	imp := importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
 		name := exports[path]
 		if name == "" {
-			return nil, fmt.Errorf("codemod: missing export data")
+			return nil, safeerror.New("codemod: missing export data")
 		}
 		return os.Open(name)
 	})
@@ -120,7 +121,7 @@ func load(ctx context.Context, dir string, patterns []string, fset *token.FileSe
 			}
 			file, err := parser.ParseFile(fset, name, nil, parser.ParseComments|parser.SkipObjectResolution)
 			if err != nil {
-				return nil, fmt.Errorf("codemod: cannot parse selected source")
+				return nil, safeerror.New("codemod: cannot parse selected source")
 			}
 			files = append(files, file)
 		}
@@ -128,7 +129,7 @@ func load(ctx context.Context, dir string, patterns []string, fset *token.FileSe
 		config := types.Config{Importer: mappedImporter{imp, p.ImportMap}}
 		pkg, err := config.Check(p.ImportPath, fset, files, info)
 		if err != nil {
-			return nil, fmt.Errorf("codemod: cannot type-check selected source against current dependency")
+			return nil, safeerror.New("codemod: cannot type-check selected source against current dependency")
 		}
 		result = append(result, sourcePackage{files, info, pkg})
 	}

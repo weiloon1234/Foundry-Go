@@ -74,3 +74,44 @@ func TestInventoryLoadsConsumerDependencyAndTestVariants(t *testing.T) {
 		t.Fatalf("apply: %d %v", count, err)
 	}
 }
+
+func TestInventoryPatternFlagsRejected(t *testing.T) {
+	_, err := Inventory(t.Context(), Options{Dir: ".", Patterns: []string{"-flag"}}, Validation{})
+	if err == nil || err.Error() != "codemod: package patterns cannot be flags" {
+		t.Fatalf("expected flag rejection error, got %v", err)
+	}
+}
+
+func TestPlanApplyRejectsUnresolvedEntries(t *testing.T) {
+	plan := Plan{
+		Entries: []Entry{{Status: Unresolved, Message: "manual action required"}},
+	}
+	count, err := plan.Apply()
+	if count != 0 || err == nil || err.Error() != "codemod: resolve inventory findings before applying" {
+		t.Fatalf("expected unresolved error, got count=%d, err=%v", count, err)
+	}
+}
+
+func TestPlanApplyRejectsNonRegularFiles(t *testing.T) {
+	plan := Plan{
+		Changes: []Change{{File: t.TempDir()}},
+	}
+	count, err := plan.Apply()
+	if count != 0 || err == nil || err.Error() != "codemod: source is not a regular file" {
+		t.Fatalf("expected non-regular error, got count=%d, err=%v", count, err)
+	}
+}
+
+func TestPlanApplyRejectsModifiedFiles(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "source.go")
+	if err := os.WriteFile(file, []byte("package test\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	plan := Plan{
+		Changes: []Change{{File: file, Before: []byte("different")}},
+	}
+	count, err := plan.Apply()
+	if count != 0 || err == nil || !strings.Contains(err.Error(), "codemod: source changed since inventory") {
+		t.Fatalf("expected modified file error, got count=%d, err=%v", count, err)
+	}
+}

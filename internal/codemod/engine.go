@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 type Status string
@@ -108,7 +110,7 @@ func Inventory(ctx context.Context, options Options, rules ...RuleSet) (*Plan, e
 				return nil, err
 			}
 			if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				return nil, fmt.Errorf("codemod: selected source lies outside --dir")
+				return nil, safeerror.New("codemod: selected source lies outside --dir")
 			}
 			before, err := os.ReadFile(name)
 			if err != nil {
@@ -127,7 +129,7 @@ func Inventory(ctx context.Context, options Options, rules ...RuleSet) (*Plan, e
 			}
 			change := Change{name, before, after}
 			if previous, ok := seen[name]; ok && !bytes.Equal(previous.After, after) {
-				return nil, fmt.Errorf("codemod: conflicting package variants for %s", name)
+				return nil, safeerror.New(fmt.Sprintf("codemod: conflicting package variants for %s", name))
 			}
 			seen[name] = change
 		}
@@ -331,7 +333,7 @@ func replaceNodes(v reflect.Value, replacements map[ast.Node]ast.Node) {
 func (p *Plan) Apply() (int, error) {
 	for _, e := range p.Entries {
 		if e.Status == Unresolved {
-			return 0, fmt.Errorf("codemod: resolve inventory findings before applying")
+			return 0, safeerror.New("codemod: resolve inventory findings before applying")
 		}
 	}
 	for _, c := range p.Changes {
@@ -340,14 +342,14 @@ func (p *Plan) Apply() (int, error) {
 			return 0, err
 		}
 		if !info.Mode().IsRegular() {
-			return 0, fmt.Errorf("codemod: source is not a regular file")
+			return 0, safeerror.New("codemod: source is not a regular file")
 		}
 		current, err := os.ReadFile(c.File)
 		if err != nil {
 			return 0, err
 		}
 		if !bytes.Equal(current, c.Before) {
-			return 0, fmt.Errorf("codemod: source changed since inventory: %s", c.File)
+			return 0, safeerror.New(fmt.Sprintf("codemod: source changed since inventory: %s", c.File))
 		}
 	}
 	for i, c := range p.Changes {

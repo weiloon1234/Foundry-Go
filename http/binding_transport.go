@@ -128,7 +128,7 @@ func AfterValidation[P, Q, B, R any](transport HandlerTransport[P, Q, B, R]) Bin
 					return *new(R), err
 				}
 				if next == nil {
-					return *new(R), InternalError
+					return *new(R), InternalError.WithCause(safeerror.NewFault(fault.Internal, "endpoint binding returned no handler"))
 				}
 				return next(ctx, input)
 			})
@@ -147,7 +147,7 @@ func AfterAuthenticatedValidation[P, Q, B, S, R any](transport AuthenticatedHand
 					return *new(R), err
 				}
 				if next == nil {
-					return *new(R), InternalError
+					return *new(R), InternalError.WithCause(safeerror.NewFault(fault.Internal, "authenticated binding returned no handler"))
 				}
 				return next(ctx, actor, input)
 			})

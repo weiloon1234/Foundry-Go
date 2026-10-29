@@ -262,7 +262,7 @@ func allowedPlainDiagnostic(path, owner, pkg, name string) bool {
 	// CLI tooling presents subprocess/tool diagnostics to the invoking operator;
 	// these are not application callback errors or runtime reports.
 	switch path {
-	case "internal/agent/wire.go", "internal/agent/document.go", "internal/agent/session.go", "internal/agent/batch.go", "internal/frameworkinfo/build.go", "cmd/foundry/contracts.go", "cmd/foundry/scaffold.go":
+	case "internal/agent/wire.go", "internal/agent/document.go", "internal/agent/session.go", "internal/agent/batch.go", "internal/frameworkinfo/build.go", "cmd/foundry/contracts.go", "cmd/foundry/scaffold.go", "cmd/foundry/codemod.go":
 		return true
 	}
 	return false
