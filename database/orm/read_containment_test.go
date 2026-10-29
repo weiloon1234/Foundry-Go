@@ -1,4 +1,4 @@
-package orm
+package orm_test
 
 import (
 	"database/sql/driver"
@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
@@ -18,8 +19,8 @@ type containedReadRow struct {
 	Name string
 }
 type containedReadTable struct {
-	Table[containedReadRow, int64]
-	Name Text[containedReadRow, string]
+	orm.Table[containedReadRow, int64]
+	Name orm.Text[containedReadRow, string]
 }
 
 func TestAllDiscardsBatchAndClosesRowsAfterApplicationDecodeFailure(t *testing.T) {
@@ -48,15 +49,15 @@ func TestAllDiscardsBatchAndClosesRowsAfterApplicationDecodeFailure(t *testing.T
 				}
 				return v, nil
 			})
-			table := Define("contained_reads", func(b Builder[containedReadRow], row *containedReadRow) containedReadTable {
-				return containedReadTable{Table: TableOf(b, &row.ID), Name: TextOf(b, &row.Name, Codec(c))}
+			table := orm.Define("contained_reads", func(b orm.Builder[containedReadRow], row *containedReadRow) containedReadTable {
+				return containedReadTable{Table: orm.TableOf(b, &row.ID), Name: orm.TextOf(b, &row.Name, orm.Codec(c))}
 			})
 			closed := 0
 			db := testDB(t, testConnector{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "first"}, {int64(2), "second"}, {int64(3), "third"}}, onClose: func() { closed++ }})
 			for range 10 {
 				calls = 0
 				before := closed
-				items, err := All(t.Context(), db, table.Query())
+				items, err := orm.All(t.Context(), db, table.Query())
 				if err == nil || items != nil || calls != 2 || active.Load() != 0 || closed != before+1 {
 					t.Fatal("partial batch escaped or callback/rows ownership leaked")
 				}
@@ -74,7 +75,7 @@ func TestAllDiscardsBatchAndClosesRowsAfterApplicationDecodeFailure(t *testing.T
 				}
 			}
 			failed = false
-			items, err := All(t.Context(), db, table.Query())
+			items, err := orm.All(t.Context(), db, table.Query())
 			if err != nil || len(items) != 3 || items[0].ID != 1 || items[0].Name != "first" || items[1].Name != "second" || items[2].Name != "third" {
 				t.Fatal("scratch row alias or unhealthy pool after failure")
 			}

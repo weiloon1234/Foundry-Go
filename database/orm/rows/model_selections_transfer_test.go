@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import (
 	"errors"
@@ -21,13 +23,13 @@ func TestModelSelectionsRemainOwnedThroughDerivedSources(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 16 {
 		wg.Go(func() {
-			record := ModelRecord(base)
-			if _, err := CompileRead(ReadSet(Union(record, record))); err != nil {
+			record := rows.ModelRecord(base)
+			if _, err := rows.CompileRead(rows.ReadSet(rows.Union(record, record))); err != nil {
 				t.Error(err)
 			}
-			cursor := CursorFor(record)
-			if cursor.core.Record.Source.Err != nil {
-				t.Error(cursor.core.Record.Source.Err)
+			cursor := rows.CursorFor(record)
+			if rows.CursorQueryCore(cursor).Record.Source.Err != nil {
+				t.Error(rows.CursorQueryCore(cursor).Record.Source.Err)
 			}
 			got, err := orm.Compile(base)
 			if err != nil || got.SQL() != want.SQL() {

@@ -1,4 +1,6 @@
-package orm
+package orm_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import (
 	"context"
@@ -40,15 +42,15 @@ func TestLifecycleHookErrorsRedactModelValues(t *testing.T) {
 		for _, source := range []string{"local", "observer"} {
 			t.Run(stage+"/"+source, func(t *testing.T) {
 				cause := &privateLifecycleError{modelValue: modelValue}
-				factory := func() Hooks[hookedRow] {
-					h := Hooks[hookedRow]{}
+				factory := func() orm.Hooks[hookedRow] {
+					h := orm.Hooks[hookedRow]{}
 					switch stage {
 					case "before":
-						h.Creating = func(context.Context, *database.Tx, *Write[hookedRow]) error { return cause }
+						h.Creating = func(context.Context, *database.Tx, *orm.Write[hookedRow]) error { return cause }
 					case "after":
-						h.Created = func(context.Context, *database.Tx, Changes[hookedRow]) error { return cause }
+						h.Created = func(context.Context, *database.Tx, orm.Changes[hookedRow]) error { return cause }
 					case "after_commit":
-						h.AfterCommit = func(context.Context, lifecycle.Operation, Changes[hookedRow]) error { return cause }
+						h.AfterCommit = func(context.Context, lifecycle.Operation, orm.Changes[hookedRow]) error { return cause }
 					}
 					return h
 				}
@@ -58,14 +60,14 @@ func TestLifecycleHookErrorsRedactModelValues(t *testing.T) {
 					q = hookedFields(factory)
 				} else {
 					q = hookedFields(nil)
-					declaration, err := NewObserver[hookedRow]("redaction").Declare(factory)
+					declaration, err := orm.NewObserver[hookedRow]("redaction").Declare(factory)
 					if err != nil {
 						t.Fatal(err)
 					}
 					declarations = append(declarations, declaration)
 				}
 				db := hookDB(t, testConnector{columns: hookColumns, values: hookValues(modelValue, nil, nil)}, declarations...)
-				got, err := Insert(t.Context(), db, q.Table, KeySet(q.Key(), 1), InputTextSet(q.Name, modelValue), ColumnSet(q.Body, []byte{1, 2}))
+				got, err := orm.Insert(t.Context(), db, q.Table, orm.KeySet(q.Key(), 1), orm.InputTextSet(q.Name, modelValue), orm.ColumnSet(q.Body, []byte{1, 2}))
 				requireSafeLifecycleError(t, err, cause)
 				if got.ID != 0 {
 					t.Fatal("failed hook published a model")
@@ -80,8 +82,8 @@ func TestORMComparisonErrorsRedactOriginalAndResultingValues(t *testing.T) {
 		Name string
 	}
 	type table struct {
-		Table[row, int64]
-		Name Text[row, string]
+		orm.Table[row, int64]
+		Name orm.Text[row, string]
 	}
 	const modelValue = "private-comparison-model-value"
 	cause := &privateLifecycleError{modelValue: modelValue}
@@ -92,7 +94,9 @@ func TestORMComparisonErrorsRedactOriginalAndResultingValues(t *testing.T) {
 		}
 		return v, nil
 	}, func(raw any) (string, error) { return raw.(string), nil })
-	q := Define("comparison_redaction", func(b Builder[row], m *row) table { return table{TableOf(b, &m.ID), TextOf(b, &m.Name, Codec(c))} })
+	q := orm.Define("comparison_redaction", func(b orm.Builder[row], m *row) table {
+		return table{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name, orm.Codec(c))}
+	})
 	for _, side := range []string{"original", "resulting"} {
 		t.Run(side, func(t *testing.T) {
 			before, after := row{ID: 1, Name: "ordinary"}, row{ID: 1, Name: "ordinary"}
@@ -102,15 +106,15 @@ func TestORMComparisonErrorsRedactOriginalAndResultingValues(t *testing.T) {
 				after.Name = modelValue
 			}
 			reject = true
-			_, err := Compare(q.Table, value.Set(before), value.Set(after))
+			_, err := orm.Compare(q.Table, value.Set(before), value.Set(after))
 			requireSafeLifecycleError(t, err, cause)
 			reject = false
-			changes, err := Compare(q.Table, value.Set(before), value.Set(after))
+			changes, err := orm.Compare(q.Table, value.Set(before), value.Set(after))
 			if err != nil {
 				t.Fatal(err)
 			}
 			reject = true
-			_, err = ChangeOf(changes, TextExpr(q.Name))
+			_, err = orm.ChangeOf(changes, orm.TextExpr(q.Name))
 			requireSafeLifecycleError(t, err, cause)
 		})
 	}
@@ -121,8 +125,8 @@ func TestWriteChangeCaptureErrorsAreRedactedAndAbortBeforeAfterHooks(t *testing.
 		Name string
 	}
 	type table struct {
-		Table[row, int64]
-		Name Text[row, string]
+		orm.Table[row, int64]
+		Name orm.Text[row, string]
 	}
 	const modelValue = "private-returning-model-value"
 	cause := &privateLifecycleError{modelValue: modelValue}
@@ -133,11 +137,13 @@ func TestWriteChangeCaptureErrorsAreRedactedAndAbortBeforeAfterHooks(t *testing.
 		}
 		return v, nil
 	}, func(raw any) (string, error) { return raw.(string), nil })
-	q := Define("capture_redaction", func(b Builder[row], m *row) table { return table{TableOf(b, &m.ID), TextOf(b, &m.Name, Codec(c))} }, WithHooks(func() Hooks[row] {
-		return Hooks[row]{Created: func(context.Context, *database.Tx, Changes[row]) error { afterCalled = true; return nil }}
+	q := orm.Define("capture_redaction", func(b orm.Builder[row], m *row) table {
+		return table{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name, orm.Codec(c))}
+	}, orm.WithHooks(func() orm.Hooks[row] {
+		return orm.Hooks[row]{Created: func(context.Context, *database.Tx, orm.Changes[row]) error { afterCalled = true; return nil }}
 	}))
 	db := hookDB(t, testConnector{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), modelValue}}})
-	got, err := Insert(t.Context(), db, q.Table, KeySet(q.Key(), 1), TextSet(q.Name, "ordinary"))
+	got, err := orm.Insert(t.Context(), db, q.Table, orm.KeySet(q.Key(), 1), orm.TextSet(q.Name, "ordinary"))
 	requireSafeLifecycleError(t, err, cause)
 	if got.ID != 0 || afterCalled {
 		t.Fatal("failed change capture published state or ran after hooks")
@@ -151,24 +157,24 @@ func TestHookModifiedPrimaryKeyRejectedBeforeMutatorsAndMutationSQL(t *testing.T
 		UpdatedAt time.Time
 	}
 	type table struct {
-		Table[row, int64]
-		Name InputText[row, string, string]
+		orm.Table[row, int64]
+		Name orm.InputText[row, string, string]
 	}
 	mutatorCalls := 0
 	var q table
-	q = Define("hook_shape", func(b Builder[row], m *row) table {
-		CreatedAtOf(b, &m.CreatedAt)
-		UpdatedAtOf(b, &m.UpdatedAt)
-		return table{TableOf(b, &m.ID), InputTextOf(b, &m.Name, func(v string) (string, error) { mutatorCalls++; return v, nil })}
-	}, WithHooks(func() Hooks[row] {
-		return Hooks[row]{Updating: func(ctx context.Context, tx *database.Tx, before row, w *Write[row]) error {
-			return WriteSet(w, KeySet(q.Key(), 2), InputTextSet(q.Name, "hook value"))
+	q = orm.Define("hook_shape", func(b orm.Builder[row], m *row) table {
+		orm.CreatedAtOf(b, &m.CreatedAt)
+		orm.UpdatedAtOf(b, &m.UpdatedAt)
+		return table{orm.TableOf(b, &m.ID), orm.InputTextOf(b, &m.Name, func(v string) (string, error) { mutatorCalls++; return v, nil })}
+	}, orm.WithHooks(func() orm.Hooks[row] {
+		return orm.Hooks[row]{Updating: func(ctx context.Context, tx *database.Tx, before row, w *orm.Write[row]) error {
+			return orm.WriteSet(w, orm.KeySet(q.Key(), 2), orm.InputTextSet(q.Name, "hook value"))
 		}}
 	}))
 	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
 	var statements []string
 	db := hookDB(t, testConnector{statements: &statements, columns: []string{"id", "name", "created_at", "updated_at"}, values: [][]driver.Value{{int64(1), "original", now, now}}})
-	got, err := Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, InputTextSet(q.Name, "input"))
+	got, err := orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, "input"))
 	if !errors.Is(err, fault.Invalid) || got.ID != 0 {
 		t.Fatal("invalid effective draft accepted", err)
 	}

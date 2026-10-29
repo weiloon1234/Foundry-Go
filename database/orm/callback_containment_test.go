@@ -1,4 +1,6 @@
-package orm
+package orm_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import (
 	"context"
@@ -31,12 +33,12 @@ func TestScopeAndExplainNeverFormatReturnedErrors(t *testing.T) {
 	for _, mode := range []string{"private", "panic", "exit"} {
 		t.Run(mode, func(t *testing.T) {
 			cause := &hostileQueryCallbackError{mode: mode}
-			table := hookedFields(nil, WithGlobalScopes(func(t hookedTable) []GlobalScope[hookedRow] {
-				return []GlobalScope[hookedRow]{Scope(t.Table, "private", func(context.Context) (Predicate[hookedRow], error) { return Predicate[hookedRow]{}, cause })}
+			table := hookedFields(nil, orm.WithGlobalScopes(func(t hookedTable) []orm.GlobalScope[hookedRow] {
+				return []orm.GlobalScope[hookedRow]{orm.Scope(t.Table, "private", func(context.Context) (orm.Predicate[hookedRow], error) { return orm.Predicate[hookedRow]{}, cause })}
 			}))
-			_, scopeErr := Compile(WithScopeContext(table.Query(), t.Context()))
+			_, scopeErr := orm.Compile(orm.WithScopeContext(table.Query(), t.Context()))
 			executor := &diagnosticPlanExecutor{failure: cause}
-			_, explainErr := Explain(t.Context(), executor, hookedFields(nil).Query())
+			_, explainErr := orm.Explain(t.Context(), executor, hookedFields(nil).Query())
 			for _, err := range []error{scopeErr, explainErr} {
 				var retained *hostileQueryCallbackError
 				if !errors.Is(err, cause) || !errors.As(err, &retained) || retained != cause {
@@ -51,13 +53,13 @@ func TestScopeAndExplainNeverFormatReturnedErrors(t *testing.T) {
 	}
 }
 func TestContextScopeGoexitContained(t *testing.T) {
-	table := hookedFields(nil, WithGlobalScopes(func(t hookedTable) []GlobalScope[hookedRow] {
-		return []GlobalScope[hookedRow]{Scope(t.Table, "exit", func(context.Context) (Predicate[hookedRow], error) {
+	table := hookedFields(nil, orm.WithGlobalScopes(func(t hookedTable) []orm.GlobalScope[hookedRow] {
+		return []orm.GlobalScope[hookedRow]{orm.Scope(t.Table, "exit", func(context.Context) (orm.Predicate[hookedRow], error) {
 			runtime.Goexit()
-			return Predicate[hookedRow]{}, nil
+			return orm.Predicate[hookedRow]{}, nil
 		})}
 	}))
-	_, err := Compile(WithScopeContext(table.Query(), t.Context()))
+	_, err := orm.Compile(orm.WithScopeContext(table.Query(), t.Context()))
 	if !errors.Is(err, fault.Panicked) {
 		t.Fatal("scope Goexit not contained")
 	}

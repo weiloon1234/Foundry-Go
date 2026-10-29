@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import (
 	"errors"
@@ -53,7 +55,7 @@ func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 		"wrong result":           querycore.OperationNode{Kind: querycore.ExtractYearOperation, Result: codec.TypeText, Arguments: []querycore.OperationArgument{{Value: querycore.FieldRef{Table: "temporal_records", Column: "day"}, Kind: codec.TypeDate}}},
 		"wrong extraction input": querycore.OperationNode{Kind: querycore.ExtractYearOperation, Result: codec.TypeInteger, Arguments: []querycore.OperationArgument{{Value: querycore.FieldRef{Table: "temporal_records", Column: "at"}, Kind: codec.TypeDateTime}}}, "missing arguments": querycore.OperationNode{Kind: querycore.TruncateInstantOperation, Result: codec.TypeDateTime},
 	} {
-		n := From(d.Query().Limit(0)).source.Node
+		n := rows.SourceOf(rows.From(d.Query().Limit(0))).Node
 		n.Selections = []querycore.SelectItem{{Expression: v}}
 		if _, e := querycore.CompileRead(n, t.Context(), false, nil, true); !errors.Is(e, fault.Invalid) {
 			t.Fatal(name, e)
@@ -72,8 +74,8 @@ func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 	d := temporalTransferFields()
 	year := expr.Year(expr.LocalAt(expr.Value(orm.TimeExpr(d.At)), expr.UTCZone()))
-	q := OrderScalar(GroupByScalar(SelectScalar(From(d.Query()), year.Value()), expr.Group(year)), year.Asc())
-	s, e := CompileRead(ReadScalar(q))
+	q := rows.OrderScalar(rows.GroupByScalar(rows.SelectScalar(rows.From(d.Query()), year.Value()), expr.Group(year)), year.Asc())
+	s, e := rows.CompileRead(rows.ReadScalar(q))
 	if e != nil || !strings.Contains(s.SQL(), "EXTRACT(year FROM") || !strings.Contains(s.SQL(), "TIMEZONE(") {
 		t.Fatal(s.SQL(), e)
 	}
@@ -87,20 +89,20 @@ func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 	if renamed.Arguments[0].Value.(querycore.OperationNode).Arguments[1].Value.(querycore.FieldRef).Table != "qualified" || original.(querycore.OperationNode).Arguments[0].Value.(querycore.OperationNode).Arguments[1].Value.(querycore.FieldRef).Table != "temporal_records" {
 		t.Fatal("temporal qualifier mutation")
 	}
-	window := expr.FromUnixMillisValue(expr.RowNumber(expr.WindowFor(ModelScope(d.Query()))))
+	window := expr.FromUnixMillisValue(expr.RowNumber(expr.WindowFor(rows.ModelScope(d.Query()))))
 	p := expr.OrderValue(expr.UnixMillisecondsValue(window)).Gt(0)
-	if _, e := CompileRead(ReadScalar(HavingScalar(SelectScalar(From(d.Query()), expr.Count[temporalTransferRow]().Value()), p))); !errors.Is(e, fault.Invalid) {
+	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), expr.Count[temporalTransferRow]().Value()), p))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("window hidden in HAVING", e)
 	}
 	v := expr.UnixMillisecondsNullableValue(expr.Min(orm.TimeExpr(d.At)).Value())
-	if _, e := CompileRead(ReadScalar(HavingScalar(SelectScalar(From(d.Query()), v), expr.OrderNullableValue(v).Gt(0)))); e != nil {
+	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), v), expr.OrderNullableValue(v).Gt(0)))); e != nil {
 		t.Fatal("aggregate phase lost", e)
 	}
 }
 
 func rejectTemporalTransfer[V any](t *testing.T, d temporalTransferTable, name string, v expr.Selected[temporalTransferRow, V]) {
 	t.Helper()
-	s, e := CompileRead(ReadScalar(SelectScalar(From(d.Query().Limit(0)), v)))
+	s, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(d.Query().Limit(0)), v)))
 	if !errors.Is(e, fault.Invalid) || s.SQL() != "" {
 		t.Fatal(name, s.SQL(), e)
 	}

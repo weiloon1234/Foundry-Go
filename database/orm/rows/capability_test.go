@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import (
 	"errors"
@@ -12,10 +14,10 @@ import (
 
 func TestScopeBridgeRejectsZeroCapabilityWithValidMetadata(t *testing.T) {
 	m := declareMembers()
-	source := As[left](m.Query(), "m")
-	metadata := expr.FoundryScopeData(Scope(source), sqlowner.Expressions())
+	source := rows.As[left](m.Query(), "m")
+	metadata := expr.FoundryScopeData(rows.Scope(source), sqlowner.Expressions())
 	var zero sqlowner.ExpressionSeal
-	rejected := expr.FoundryScope[Alias[left, member], member](metadata, zero)
+	rejected := expr.FoundryScope[rows.Alias[left, member], member](metadata, zero)
 	actual := expr.FoundryScopeData(rejected, sqlowner.Expressions())
 	if !errors.Is(actual.Err, fault.Invalid) || actual.Owner != nil || actual.Table != "" {
 		t.Fatal("zero seal adopted scope", actual)
@@ -39,12 +41,12 @@ func TestModelBridgesRejectZeroCapabilityWithValidMetadata(t *testing.T) {
 
 func TestNullableScopeBridgesRejectZeroCapability(t *testing.T) {
 	m := declareMembers()
-	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
-	j := LeftJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))))
-	scope := NullableRightScope(j, Scope(b))
+	a, b := rows.As[left](m.Query(), "a"), rows.As[right](m.Query(), "b")
+	j := rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(m.ID)), expr.At(rows.Scope(b), orm.KeyExpr(m.ID))))
+	scope := rows.NullableRightScope(j, rows.Scope(b))
 	metadata := expr.FoundryNullableScopeData(scope, sqlowner.Expressions())
 	var zero sqlowner.ExpressionSeal
-	rejected := expr.FoundryNullableScope[Left[Alias[left, member], Alias[right, member]], member](metadata, zero)
+	rejected := expr.FoundryNullableScope[rows.Left[rows.Alias[left, member], rows.Alias[right, member]], member](metadata, zero)
 	actual := expr.FoundryNullableScopeData(rejected, sqlowner.Expressions())
 	if !errors.Is(actual.Err, fault.Invalid) || actual.Owner != nil {
 		t.Fatal("zero capability adopted metadata", actual)

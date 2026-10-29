@@ -1,4 +1,4 @@
-package orm
+package orm_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
@@ -115,10 +116,10 @@ func TestCollectedDriverFailuresKeepContainmentAndReleaseSQLLocks(t *testing.T) 
 						t.Error(err)
 					}
 				})
-				table := Define("batch_driver_records", func(b Builder[containedReadRow], v *containedReadRow) containedReadTable {
-					return containedReadTable{Table: TableOf(b, &v.ID), Name: TextOf(b, &v.Name)}
+				table := orm.Define("batch_driver_records", func(b orm.Builder[containedReadRow], v *containedReadRow) containedReadTable {
+					return containedReadTable{Table: orm.TableOf(b, &v.ID), Name: orm.TextOf(b, &v.Name)}
 				})
-				items, err := All(t.Context(), db, table.Query())
+				items, err := orm.All(t.Context(), db, table.Query())
 				if err == nil || items != nil || source.active.Load() != 0 || source.exited.Load() == 0 || closed != 1 || db.Stats().InUse != 0 {
 					t.Fatal("failed batch retained partial rows or SQL ownership")
 				}
@@ -135,7 +136,7 @@ func TestCollectedDriverFailuresKeepContainmentAndReleaseSQLLocks(t *testing.T) 
 					t.Fatal("driver error formatted")
 				}
 				source.failed.Store(true)
-				items, err = All(t.Context(), db, table.Query())
+				items, err = orm.All(t.Context(), db, table.Query())
 				if err != nil || len(items) != 3 || items[0].Name != "first" || items[2].Name != "third" || db.Stats().InUse != 0 {
 					t.Fatal("subsequent read could not reuse released capacity")
 				}

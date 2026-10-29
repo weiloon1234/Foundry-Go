@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import (
 	"context"
@@ -21,22 +23,22 @@ import (
 
 type expressionRow[V any] struct{ Value V }
 type expressionFields[V any] struct {
-	Row[expressionRow[V]]
-	Value Field[expressionRow[V], V]
+	rows.Row[expressionRow[V]]
+	Value rows.Field[expressionRow[V], V]
 }
 
 func expressionSchema[V any](c codec.Codec[V]) expressionFields[V] {
-	return Define(func(b Builder[expressionRow[V]], r *expressionRow[V]) expressionFields[V] {
-		return expressionFields[V]{b.Row(), FieldOf(b, &r.Value, orm.Codec(c))}
+	return rows.Define(func(b rows.Builder[expressionRow[V]], r *expressionRow[V]) expressionFields[V] {
+		return expressionFields[V]{b.Row(), rows.FieldOf(b, &r.Value, orm.Codec(c))}
 	})
 }
-func expressionQuery[S, V any](source SelectionSource[S], v expr.Selected[S, V], c codec.Codec[V]) Query[S, expressionRow[V]] {
+func expressionQuery[S, V any](source rows.SelectionSource[S], v expr.Selected[S, V], c codec.Codec[V]) rows.Query[S, expressionRow[V]] {
 	schema := expressionSchema(c)
-	return Select(source, schema, MapSelected(schema.Value, v))
+	return rows.Select(source, schema, rows.MapSelected(schema.Value, v))
 }
-func expressionSQL[S, R any](t *testing.T, q Query[S, R]) querycore.Statement {
+func expressionSQL[S, R any](t *testing.T, q rows.Query[S, R]) querycore.Statement {
 	t.Helper()
-	s, err := querycore.CompileRead(q.source.Node, context.Background(), false, q.source.Err, true)
+	s, err := querycore.CompileRead(rows.SourceOf(q).Node, context.Background(), false, rows.SourceOf(q).Err, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,12 +46,12 @@ func expressionSQL[S, R any](t *testing.T, q Query[S, R]) querycore.Statement {
 }
 func TestExpressionParametersAndNullableProjection(t *testing.T) {
 	m := declareMembers()
-	a := As[left](m.Query(), "m")
-	n := expr.At(Scope(a), orm.NullableTextExpr(m.Nickname))
+	a := rows.As[left](m.Query(), "m")
+	n := expr.At(rows.Scope(a), orm.NullableTextExpr(m.Nickname))
 	s := expressionSchema(codec.Nullable(codec.String[string]()))
-	q := Select(a, s, MapSelected(s.Value, expr.Row(n).Value()))
+	q := rows.Select(a, s, rows.MapSelected(s.Value, expr.Row(n).Value()))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"Ada"}}}
-	got, err := Read(q).All(t.Context(), openTest(t, state))
+	got, err := rows.Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].Value.IsNull() {
 		t.Fatal(got, err)
 	}
@@ -60,16 +62,16 @@ func TestExpressionParametersAndNullableProjection(t *testing.T) {
 }
 func TestExpressionArithmeticAndParameters(t *testing.T) {
 	o := declareOrders()
-	a := As[right](o.Query(), "o")
-	id := expr.At(Scope(a), orm.NumberExpr(o.MemberID))
+	a := rows.As[right](o.Query(), "o")
+	id := expr.At(rows.Scope(a), orm.NumberExpr(o.MemberID))
 	input := expr.Add(id, id)
-	q := OrderBy(expressionQuery(a, expr.Divide(input, input.Param(2)).Value(), codec.Signed[int64]()).Where(input.Gt(0)), expr.Negate(id).Asc())
+	q := rows.OrderBy(expressionQuery(a, expr.Divide(input, input.Param(2)).Value(), codec.Signed[int64]()).Where(input.Gt(0)), expr.Negate(id).Asc())
 	s := expressionSQL(t, q)
 	if !strings.Contains(s.SQLText, " / ") || !strings.Contains(s.SQLText, "ORDER BY") || !reflect.DeepEqual(s.Bindings, []any{int64(2), int64(0)}) {
 		t.Fatal(s.SQLText, s.Bindings)
 	}
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(3)}}}
-	got, err := Read(q).All(t.Context(), openTest(t, state))
+	got, err := rows.Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 1 || got[0].Value != 3 {
 		t.Fatal(got, err)
 	}
@@ -80,35 +82,35 @@ func TestExpressionArithmeticAndParameters(t *testing.T) {
 		t.Fatal(statement.Bindings)
 	}
 	state = &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}}}
-	result, err := Read(nullable).All(t.Context(), openTest(t, state))
+	result, err := rows.Read(nullable).All(t.Context(), openTest(t, state))
 	if err != nil || len(result) != 1 || !result[0].Value.IsNull() {
 		t.Fatal(result, err)
 	}
 }
 func TestReferenceFreeCountAndExists(t *testing.T) {
 	o := declareOrders()
-	a := As[right](o.Query(), "o")
-	count := expressionQuery(a, expr.Count[Alias[right, order]]().Value(), codec.Signed[int64]())
+	a := rows.As[right](o.Query(), "o")
+	count := expressionQuery(a, expr.Count[rows.Alias[right, order]]().Value(), codec.Signed[int64]())
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(0)}}}
-	got, err := Read(count).All(t.Context(), openTest(t, state))
+	got, err := rows.Read(count).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 1 || got[0].Value != 0 || !strings.Contains(state.sql, "COUNT(*)") {
 		t.Fatal(got, err, state.sql)
 	}
-	exists := expressionQuery(a, expr.Exists[Alias[right, order]]().Value(), codec.Bool[bool]())
+	exists := expressionQuery(a, expr.Exists[rows.Alias[right, order]]().Value(), codec.Bool[bool]())
 	state = &driverState{columns: []string{"value"}, rows: [][]driver.Value{{false}}}
-	result, err := Read(exists).All(t.Context(), openTest(t, state))
+	result, err := rows.Read(exists).All(t.Context(), openTest(t, state))
 	if err != nil || len(result) != 1 || result[0].Value || !strings.Contains(state.sql, "COUNT(*) > 0") {
 		t.Fatal(result, err, state.sql)
 	}
 }
 func TestExpressionRejectsZeroAndForeignDeclarations(t *testing.T) {
 	o, other := declareOrders(), declareOrders()
-	a := As[right](o.Query(), "o")
-	own, foreign := expr.At(Scope(a), orm.NumberExpr(o.MemberID)), expr.At(Scope(a), orm.NumberExpr(other.MemberID))
-	var missing expr.RowExpression[Alias[right, order], int64]
-	for _, v := range []expr.Selected[Alias[right, order], int64]{expr.Add(own, foreign).Value(), expr.Add(own, missing).Value(), {}} {
+	a := rows.As[right](o.Query(), "o")
+	own, foreign := expr.At(rows.Scope(a), orm.NumberExpr(o.MemberID)), expr.At(rows.Scope(a), orm.NumberExpr(other.MemberID))
+	var missing expr.RowExpression[rows.Alias[right, order], int64]
+	for _, v := range []expr.Selected[rows.Alias[right, order], int64]{expr.Add(own, foreign).Value(), expr.Add(own, missing).Value(), {}} {
 		state := &driverState{}
-		got, err := Read(expressionQuery(a, v, codec.Signed[int64]())).All(t.Context(), openTest(t, state))
+		got, err := rows.Read(expressionQuery(a, v, codec.Signed[int64]())).All(t.Context(), openTest(t, state))
 		if err == nil || got != nil || state.sql != "" {
 			t.Fatal(got, err, state.sql)
 		}
@@ -136,8 +138,8 @@ func TestParameterSnapshotsAndCasts(t *testing.T) {
 		t.Fatal(sql, err, c.Arguments)
 	}
 	o := declareOrders()
-	source := As[right](o.Query(), "o")
-	v := expr.At(Scope(source), orm.NumberExpr(o.MemberID))
+	source := rows.As[right](o.Query(), "o")
+	v := expr.At(rows.Scope(source), orm.NumberExpr(o.MemberID))
 	exact := expressionQuery(source, expr.DecimalOf(v).Value(), codec.Decimal())
 	s := expressionSQL(t, exact)
 	if !strings.Contains(s.SQLText, " AS numeric)") {
@@ -213,9 +215,9 @@ func TestExpressionReferencesStayBoundedAfter64SelfDoublings(t *testing.T) {
 
 func TestParamPreservesInvalidScopedExemplar(t *testing.T) {
 	o, other := declareOrders(), declareOrders()
-	source := As[right](o.Query(), "o")
-	foreign := expr.At(Scope(source), orm.NumberExpr(other.MemberID))
-	for name, selected := range map[string]expr.Selected[Alias[right, order], int64]{
+	source := rows.As[right](o.Query(), "o")
+	foreign := expr.At(rows.Scope(source), orm.NumberExpr(other.MemberID))
+	for name, selected := range map[string]expr.Selected[rows.Alias[right, order], int64]{
 		"row":      expr.Add(foreign, foreign).Param(1).Value(),
 		"selected": expr.Row(foreign).Value().Param(1).Value(),
 		"ordered":  expr.OrderRow(foreign).Param(1).Value(),
@@ -223,7 +225,7 @@ func TestParamPreservesInvalidScopedExemplar(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			state := &driverState{}
-			got, err := Read(expressionQuery(source, selected, codec.Signed[int64]())).All(t.Context(), openTest(t, state))
+			got, err := rows.Read(expressionQuery(source, selected, codec.Signed[int64]())).All(t.Context(), openTest(t, state))
 			if !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 				t.Fatal("Param laundered foreign scope", got, err, state.sql)
 			}
@@ -231,13 +233,13 @@ func TestParamPreservesInvalidScopedExemplar(t *testing.T) {
 	}
 	nullable := expr.OrderNullableRow(expr.NullableRow(foreign)).Param(value.Of(int64(1)))
 	state := &driverState{}
-	got, err := Read(expressionQuery(source, nullable.Value(), codec.Nullable(codec.Signed[int64]()))).All(t.Context(), openTest(t, state))
+	got, err := rows.Read(expressionQuery(source, nullable.Value(), codec.Nullable(codec.Signed[int64]()))).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 		t.Fatal("nullable Param laundered foreign scope", got, err, state.sql)
 	}
 	cast := expr.DecimalOf(foreign).Param(decimal.FromInt64(1))
 	state = &driverState{}
-	exact, err := Read(expressionQuery(source, cast.Value(), codec.Decimal())).All(t.Context(), openTest(t, state))
+	exact, err := rows.Read(expressionQuery(source, cast.Value(), codec.Decimal())).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || exact != nil || state.sql != "" {
 		t.Fatal("cast Param laundered foreign scope", exact, err, state.sql)
 	}

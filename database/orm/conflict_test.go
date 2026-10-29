@@ -1,4 +1,6 @@
-package orm
+package orm_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import (
 	"context"
@@ -23,21 +25,21 @@ func TestUpsertMutatorsNormalizeRowsAndPolicyOnce(t *testing.T) {
 		return func(s string) (string, error) { calls = append(calls, label+":"+s); return strings.TrimSpace(s), nil }
 	}
 	fields := transformFields(transform("first"), transform("last"), transform("maybe"))
-	policy := OnConflict(ConflictKey(KeyExpr(fields.Key()))).DoUpdate(ConflictIncoming(InputTextExpr(fields.First)), ConflictSet(NullableInputTextExpr(fields.Maybe), " literal "), ConflictNull(NullableInputTextExpr(fields.Maybe)))
+	policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(fields.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(fields.First)), orm.ConflictSet(orm.NullableInputTextExpr(fields.Maybe), " literal "), orm.ConflictNull(orm.NullableInputTextExpr(fields.Maybe)))
 	// Duplicate targets are rejected before any callback or SQL.
 	begun := 0
 	var sqls []string
 	var binds [][]any
 	closed := 0
 	db := testDB(t, testConnector{onBegin: func() { begun++ }, statements: &sqls, bindings: &binds, onClose: func() { closed++ }, columns: []string{"id", "first", "maybe", "last"}, values: [][]driver.Value{{int64(1), "stored", nil, "last"}}})
-	rows := [][]Assignment[transformRow]{{KeySet(fields.Key(), 1), InputTextSet(fields.First, " a "), InputTextSet(fields.Last, " b ")}, {KeySet(fields.Key(), 2), InputTextSet(fields.First, " c "), InputTextSet(fields.Last, " d ")}}
-	if _, err := UpsertMany(t.Context(), db, fields.Query(), policy, rows); err == nil || begun != 0 || len(calls) != 0 {
+	rows := [][]orm.Assignment[transformRow]{{orm.KeySet(fields.Key(), 1), orm.InputTextSet(fields.First, " a "), orm.InputTextSet(fields.Last, " b ")}, {orm.KeySet(fields.Key(), 2), orm.InputTextSet(fields.First, " c "), orm.InputTextSet(fields.Last, " d ")}}
+	if _, err := orm.UpsertMany(t.Context(), db, fields.Query(), policy, rows); err == nil || begun != 0 || len(calls) != 0 {
 		t.Fatal("duplicate preflight", err, begun, calls)
 	}
-	policy = OnConflict(ConflictKey(KeyExpr(fields.Key()))).DoUpdate(ConflictIncoming(InputTextExpr(fields.First)), ConflictSet(NullableInputTextExpr(fields.Maybe), " literal "))
+	policy = orm.OnConflict(orm.ConflictKey(orm.KeyExpr(fields.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(fields.First)), orm.ConflictSet(orm.NullableInputTextExpr(fields.Maybe), " literal "))
 	for range 2 {
 		calls = nil
-		got, err := UpsertMany(t.Context(), db, fields.Query(), policy, rows)
+		got, err := orm.UpsertMany(t.Context(), db, fields.Query(), policy, rows)
 		if err != nil || len(got) != 1 || got[0].First != "stored" {
 			t.Fatal("returning", got, err)
 		}
@@ -52,7 +54,7 @@ func TestUpsertMutatorsNormalizeRowsAndPolicyOnce(t *testing.T) {
 		t.Fatal(binds)
 	}
 	calls = nil
-	_, err := Upsert(t.Context(), db, fields.Query(), policy.DoUpdate(ConflictNull(NullableInputTextExpr(fields.Maybe))), rows[0]...)
+	_, err := orm.Upsert(t.Context(), db, fields.Query(), policy.DoUpdate(orm.ConflictNull(orm.NullableInputTextExpr(fields.Maybe))), rows[0]...)
 	if err != nil || !reflect.DeepEqual(calls, []string{"first: a ", "last: b "}) {
 		t.Fatal("NULL invoked mutator", calls, err)
 	}
@@ -60,16 +62,16 @@ func TestUpsertMutatorsNormalizeRowsAndPolicyOnce(t *testing.T) {
 
 func TestUpsertSkipsLifecycleButKeepsConventionsAndDistinctInputs(t *testing.T) {
 	called := 0
-	table := hookedFields(func() Hooks[hookedRow] { called++; return Hooks[hookedRow]{} })
-	observer, err := NewObserver[hookedRow]("upsert").Declare(func() Hooks[hookedRow] { called++; return Hooks[hookedRow]{} })
+	table := hookedFields(func() orm.Hooks[hookedRow] { called++; return orm.Hooks[hookedRow]{} })
+	observer, err := orm.NewObserver[hookedRow]("upsert").Declare(func() orm.Hooks[hookedRow] { called++; return orm.Hooks[hookedRow]{} })
 	if err != nil {
 		t.Fatal(err)
 	}
 	var sqls []string
 	var binds [][]any
 	db := hookDB(t, testConnector{statements: &sqls, bindings: &binds, columns: hookColumns, values: hookValues("stored", "note", nil)}, observer)
-	policy := OnConflict(ConflictKey(KeyExpr(table.Key()))).DoUpdate(ConflictSet(NullableInputTextExpr(table.Note), hookedInput{" policy "}), ConflictSet(TimeExpr(table.Updated), time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
-	got, err := Upsert(t.Context(), db, table.Query(), policy, KeySet(table.Key(), 1), InputTextSet(table.Name, " proposed "), ColumnSet(table.Body, []byte{1}), NullableInputTextSet(table.Note, hookedInput{" input "}))
+	policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(table.Key()))).DoUpdate(orm.ConflictSet(orm.NullableInputTextExpr(table.Note), hookedInput{" policy "}), orm.ConflictSet(orm.TimeExpr(table.Updated), time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+	got, err := orm.Upsert(t.Context(), db, table.Query(), policy, orm.KeySet(table.Key(), 1), orm.InputTextSet(table.Name, " proposed "), orm.ColumnSet(table.Body, []byte{1}), orm.NullableInputTextSet(table.Note, hookedInput{" input "}))
 	if err != nil || !got.IsSet() || called != 0 {
 		t.Fatal("lifecycle dispatch", err, called)
 	}
@@ -86,59 +88,61 @@ func TestUpsertPoliciesRejectBeforeCallbacks(t *testing.T) {
 	transform := func(s string) (string, error) { called++; return s, nil }
 	a := transformFields(transform, transform, transform)
 	b := transformFields(transform, transform, transform)
-	policies := []Conflict[transformRow]{
-		{}, OnConflict[transformRow]().DoUpdate(ConflictIncoming(InputTextExpr(a.First))),
-		OnConflictConstraint[transformRow]("not a constraint").DoNothing(),
-		OnConflict(ConflictKey(KeyExpr(a.Key()))).DoUpdate(ConflictIncoming(KeyExpr(a.Key()))),
-		OnConflict(ConflictKey(KeyExpr(a.Key()))).DoUpdate(ConflictIncoming(InputTextExpr(b.First))),
-		OnConflict(ConflictKey(KeyExpr(a.Key()))).DoNothing().Where(InputTextEq(a.First, "condition")),
-		OnConflict(ConflictKey(KeyExpr(a.Key()))).DoUpdate(ConflictIncoming(InputTextExpr(a.First))).Where(InputTextEq(b.First, "other")),
+	policies := []orm.Conflict[transformRow]{
+		{}, orm.OnConflict[transformRow]().DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(a.First))),
+		orm.OnConflictConstraint[transformRow]("not a constraint").DoNothing(),
+		orm.OnConflict(orm.ConflictKey(orm.KeyExpr(a.Key()))).DoUpdate(orm.ConflictIncoming(orm.KeyExpr(a.Key()))),
+		orm.OnConflict(orm.ConflictKey(orm.KeyExpr(a.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(b.First))),
+		orm.OnConflict(orm.ConflictKey(orm.KeyExpr(a.Key()))).DoNothing().Where(orm.InputTextEq(a.First, "condition")),
+		orm.OnConflict(orm.ConflictKey(orm.KeyExpr(a.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(a.First))).Where(orm.InputTextEq(b.First, "other")),
 	}
 	begun := 0
 	var sqls []string
 	db := testDB(t, testConnector{onBegin: func() { begun++ }, statements: &sqls})
 	for i, p := range policies {
-		_, err := Upsert(t.Context(), db, a.Query(), p, KeySet(a.Key(), 1), InputTextSet(a.First, "a"), InputTextSet(a.Last, "b"))
+		_, err := orm.Upsert(t.Context(), db, a.Query(), p, orm.KeySet(a.Key(), 1), orm.InputTextSet(a.First, "a"), orm.InputTextSet(a.Last, "b"))
 		if err == nil || called != 0 || begun != 0 || len(sqls) != 0 {
 			t.Fatalf("policy %d: err=%v called=%d begin=%d", i, err, called, begun)
 		}
 	}
-	p := OnConflict(ConflictKey(KeyExpr(a.Key()))).DoNothing()
-	_, err := Upsert(t.Context(), db, a.Query().Where(InputTextEq(a.First, "filter")), p, KeySet(a.Key(), 1), InputTextSet(a.First, "a"), InputTextSet(a.Last, "b"))
+	p := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(a.Key()))).DoNothing()
+	_, err := orm.Upsert(t.Context(), db, a.Query().Where(orm.InputTextEq(a.First, "filter")), p, orm.KeySet(a.Key(), 1), orm.InputTextSet(a.First, "a"), orm.InputTextSet(a.Last, "b"))
 	if err == nil || called != 0 || begun != 0 {
 		t.Fatal("query predicates dropped", err)
 	}
-	rows := make([][]Assignment[transformRow], 1001)
-	if _, err := UpsertMany(t.Context(), db, a.Query(), p, rows); err == nil || begun != 0 {
+	rows := make([][]orm.Assignment[transformRow], 1001)
+	if _, err := orm.UpsertMany(t.Context(), db, a.Query(), p, rows); err == nil || begun != 0 {
 		t.Fatal("batch bound", err)
 	}
-	if _, err := UpsertMany(t.Context(), db, a.Query(), p, nil); err != nil || begun != 0 {
+	if _, err := orm.UpsertMany(t.Context(), db, a.Query(), p, nil); err != nil || begun != 0 {
 		t.Fatal("empty batch", err)
 	}
 }
 
 func TestUpsertScopesAndSkippedResults(t *testing.T) {
 	var table hookedTable
-	table = hookedFields(nil, WithGlobalScopes(func(t hookedTable) []GlobalScope[hookedRow] {
-		return []GlobalScope[hookedRow]{Scope(t.Table, "tenant", func(ctx context.Context) (Predicate[hookedRow], error) { return InputTextEq(t.Name, "tenant"), nil })}
+	table = hookedFields(nil, orm.WithGlobalScopes(func(t hookedTable) []orm.GlobalScope[hookedRow] {
+		return []orm.GlobalScope[hookedRow]{orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[hookedRow], error) {
+			return orm.InputTextEq(t.Name, "tenant"), nil
+		})}
 	}))
 	var sqls []string
 	db := hookDB(t, testConnector{statements: &sqls, columns: hookColumns})
-	assignments := []Assignment[hookedRow]{KeySet(table.Key(), 1), ColumnSet(table.Body, []byte{1})}
-	p := OnConflict(ConflictKey(KeyExpr(table.Key()))).DoUpdate(ConflictIncoming(InputTextExpr(table.Name)))
-	got, err := Upsert(t.Context(), db, table.Query(), p, assignments...)
+	assignments := []orm.Assignment[hookedRow]{orm.KeySet(table.Key(), 1), orm.ColumnSet(table.Body, []byte{1})}
+	p := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(table.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(table.Name)))
+	got, err := orm.Upsert(t.Context(), db, table.Query(), p, assignments...)
 	if !errors.Is(err, fault.Conflict) || got.IsSet() || len(sqls) != 1 || !strings.Contains(sqls[0], `"foundry_upsert"."name" =`) {
 		t.Fatal("tenant update", err, sqls)
 	}
-	got, err = Upsert(t.Context(), db, table.Query(), p.Where(InputTextEq(table.Name, "condition")), assignments...)
+	got, err = orm.Upsert(t.Context(), db, table.Query(), p.Where(orm.InputTextEq(table.Name, "condition")), assignments...)
 	if err != nil || got.IsSet() {
 		t.Fatal("conditional skip", err)
 	}
-	got, err = Upsert(t.Context(), db, table.Query(), p.DoNothing(), assignments...)
+	got, err = orm.Upsert(t.Context(), db, table.Query(), p.DoNothing(), assignments...)
 	if err != nil || got.IsSet() {
 		t.Fatal("nothing skip", err)
 	}
-	got, err = Upsert(t.Context(), db, WithoutGlobalScopes(table.Query()), p, assignments...)
+	got, err = orm.Upsert(t.Context(), db, orm.WithoutGlobalScopes(table.Query()), p, assignments...)
 	if err != nil || got.IsSet() {
 		t.Fatal("explicit bypass", err)
 	}
@@ -148,8 +152,8 @@ func TestUpsertOutcomeAndRowsClosed(t *testing.T) {
 	table := hookedFields(nil)
 	closed := false
 	db := hookDB(t, testConnector{columns: hookColumns, values: hookValues("stored", nil, nil), onClose: func() { closed = true }, commitErr: errors.New("commit failed")})
-	_, err := Upsert(t.Context(), db, table.Query(), OnConflict[hookedRow]().DoNothing(), KeySet(table.Key(), 1), ColumnSet(table.Body, []byte{1}))
-	var failure *WriteError[value.Optional[hookedRow]]
+	_, err := orm.Upsert(t.Context(), db, table.Query(), orm.OnConflict[hookedRow]().DoNothing(), orm.KeySet(table.Key(), 1), orm.ColumnSet(table.Body, []byte{1}))
+	var failure *orm.WriteError[value.Optional[hookedRow]]
 	if !closed || !errors.As(err, &failure) || !failure.Candidate().IsSet() {
 		t.Fatal("reconciliation", err, closed)
 	}
@@ -157,8 +161,8 @@ func TestUpsertOutcomeAndRowsClosed(t *testing.T) {
 
 func TestConflictFormattingRedactsValues(t *testing.T) {
 	table := hookedFields(nil)
-	u := ConflictSet(NullableInputTextExpr(table.Note), hookedInput{"private input"})
-	p := OnConflict(ConflictKey(KeyExpr(table.Key()))).DoUpdate(u)
+	u := orm.ConflictSet(orm.NullableInputTextExpr(table.Note), hookedInput{"private input"})
+	p := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(table.Key()))).DoUpdate(u)
 	for _, v := range []any{u, p} {
 		for _, format := range []string{"%v", "%+v", "%#v"} {
 			if strings.Contains(fmt.Sprintf(format, v), "private input") {
@@ -174,7 +178,7 @@ func TestUpsertFinalShapeBeforeMutators(t *testing.T) {
 	table := transformFields(transform, transform, transform)
 	var sqls []string
 	db := testDB(t, testConnector{statements: &sqls})
-	_, err := Upsert(t.Context(), db, table.Query(), OnConflict[transformRow]().DoNothing(), KeySet(table.Key(), 1), InputTextSet(table.First, "private"))
+	_, err := orm.Upsert(t.Context(), db, table.Query(), orm.OnConflict[transformRow]().DoNothing(), orm.KeySet(table.Key(), 1), orm.InputTextSet(table.First, "private"))
 	if err == nil || calls != 0 || len(sqls) != 0 {
 		t.Fatal("required field preflight", err, calls, sqls)
 	}
@@ -189,7 +193,7 @@ func TestUpsertSealsProposedValuesWithGeneratedIdentity(t *testing.T) {
 		}
 		return []string{"id", "secret", "backup"}, [][]driver.Value{{args[0].Value, args[1].Value, args[2].Value}}, nil
 	}}, database.WithEncryption(sensitiveKeys(t)))
-	got, err := Upsert(t.Context(), db, table.Query(), OnConflict(ConflictKey(KeyExpr(table.Key()))).DoNothing(), EncryptedSet(table.Secret, encrypted.NewText("private proposed value")), NullableEncryptedSetNull(table.Backup))
+	got, err := orm.Upsert(t.Context(), db, table.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(table.Key()))).DoNothing(), orm.EncryptedSet(table.Secret, encrypted.NewText("private proposed value")), orm.NullableEncryptedSetNull(table.Backup))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,54 +206,54 @@ func TestUpsertSealsProposedValuesWithGeneratedIdentity(t *testing.T) {
 // Every assignment family must remain available through the closed capture
 // constraint. Zero declarations must still fail safely without invoking a codec.
 func TestConflictCaptureFamilies(t *testing.T) {
-	updates := []ConflictUpdate[transformRow]{
-		ConflictSet(ColumnExpr(Column[transformRow, bool]{}), false),
-		ConflictSet(NullableColumnExpr(NullableColumn[transformRow, bool]{}), false),
-		ConflictNull(NullableColumnExpr(NullableColumn[transformRow, bool]{})),
-		ConflictSet(KeyExpr(Key[transformRow, int64]{}), int64(1)),
-		ConflictSet(NumberExpr(Number[transformRow, int]{}), 1),
-		ConflictSet(NullableNumberExpr(NullableNumber[transformRow, int]{}), 1),
-		ConflictNull(NullableNumberExpr(NullableNumber[transformRow, int]{})),
-		ConflictSet(TextExpr(Text[transformRow, keyStatus]{}), "name"),
-		ConflictSet(NullableTextExpr(NullableText[transformRow, keyStatus]{}), "name"),
-		ConflictNull(NullableTextExpr(NullableText[transformRow, keyStatus]{})),
-		ConflictSet(TimeExpr(Time[transformRow, time.Time]{}), time.Time{}),
-		ConflictSet(NullableTimeExpr(NullableTime[transformRow, time.Time]{}), time.Time{}),
-		ConflictNull(NullableTimeExpr(NullableTime[transformRow, time.Time]{})),
-		ConflictSet(EnumExpr(Enum[transformRow, keyStatus]{}), keyStatus("name")),
-		ConflictSet(NullableEnumExpr(NullableEnum[transformRow, keyStatus]{}), keyStatus("name")),
-		ConflictNull(NullableEnumExpr(NullableEnum[transformRow, keyStatus]{})),
-		ConflictSet(JSONExpr(JSON[transformRow, string]{}), value.JSON[string]{}),
-		ConflictSet(NullableJSONExpr(NullableJSON[transformRow, string]{}), value.JSON[string]{}),
-		ConflictNull(NullableJSONExpr(NullableJSON[transformRow, string]{})),
-		ConflictSet(IntervalExpr(Interval[transformRow]{}), temporal.Interval{}),
-		ConflictSet(NullableIntervalExpr(NullableInterval[transformRow]{}), temporal.Interval{}),
-		ConflictNull(NullableIntervalExpr(NullableInterval[transformRow]{})),
-		ConflictSet(InputColumnExpr(InputColumn[transformRow, string, bool]{}), "fresh"),
-		ConflictSet(NullableInputColumnExpr(NullableInputColumn[transformRow, string, bool]{}), "fresh"),
-		ConflictNull(NullableInputColumnExpr(NullableInputColumn[transformRow, string, bool]{})),
-		ConflictSet(InputTextExpr(InputText[transformRow, string, keyStatus]{}), "fresh"),
-		ConflictSet(NullableInputTextExpr(NullableInputText[transformRow, string, keyStatus]{}), "fresh"),
-		ConflictNull(NullableInputTextExpr(NullableInputText[transformRow, string, keyStatus]{})),
-		ConflictSet(InputNumberExpr(InputNumber[transformRow, string, int64]{}), "fresh"),
-		ConflictSet(NullableInputNumberExpr(NullableInputNumber[transformRow, string, int64]{}), "fresh"),
-		ConflictNull(NullableInputNumberExpr(NullableInputNumber[transformRow, string, int64]{})),
-		ConflictSet(InputTimeExpr(InputTime[transformRow, string, time.Time]{}), "fresh"),
-		ConflictSet(NullableInputTimeExpr(NullableInputTime[transformRow, string, time.Time]{}), "fresh"),
-		ConflictNull(NullableInputTimeExpr(NullableInputTime[transformRow, string, time.Time]{})),
-		ConflictSet(InputEnumExpr(InputEnum[transformRow, string, keyStatus]{}), "fresh"),
-		ConflictSet(NullableInputEnumExpr(NullableInputEnum[transformRow, string, keyStatus]{}), "fresh"),
-		ConflictNull(NullableInputEnumExpr(NullableInputEnum[transformRow, string, keyStatus]{})),
-		ConflictSet(InputJSONExpr(InputJSON[transformRow, string, string]{}), "fresh"),
-		ConflictSet(NullableInputJSONExpr(NullableInputJSON[transformRow, string, string]{}), "fresh"),
-		ConflictNull(NullableInputJSONExpr(NullableInputJSON[transformRow, string, string]{})),
-		ConflictSet(InputIntervalExpr(InputInterval[transformRow, string]{}), "fresh"),
-		ConflictSet(NullableInputIntervalExpr(NullableInputInterval[transformRow, string]{}), "fresh"),
-		ConflictNull(NullableInputIntervalExpr(NullableInputInterval[transformRow, string]{})),
-		ConflictSet(InputKeyExpr(InputKey[transformRow, string, int64]{}), "fresh"),
+	updates := []orm.ConflictUpdate[transformRow]{
+		orm.ConflictSet(orm.ColumnExpr(orm.Column[transformRow, bool]{}), false),
+		orm.ConflictSet(orm.NullableColumnExpr(orm.NullableColumn[transformRow, bool]{}), false),
+		orm.ConflictNull(orm.NullableColumnExpr(orm.NullableColumn[transformRow, bool]{})),
+		orm.ConflictSet(orm.KeyExpr(orm.Key[transformRow, int64]{}), int64(1)),
+		orm.ConflictSet(orm.NumberExpr(orm.Number[transformRow, int]{}), 1),
+		orm.ConflictSet(orm.NullableNumberExpr(orm.NullableNumber[transformRow, int]{}), 1),
+		orm.ConflictNull(orm.NullableNumberExpr(orm.NullableNumber[transformRow, int]{})),
+		orm.ConflictSet(orm.TextExpr(orm.Text[transformRow, keyStatus]{}), "name"),
+		orm.ConflictSet(orm.NullableTextExpr(orm.NullableText[transformRow, keyStatus]{}), "name"),
+		orm.ConflictNull(orm.NullableTextExpr(orm.NullableText[transformRow, keyStatus]{})),
+		orm.ConflictSet(orm.TimeExpr(orm.Time[transformRow, time.Time]{}), time.Time{}),
+		orm.ConflictSet(orm.NullableTimeExpr(orm.NullableTime[transformRow, time.Time]{}), time.Time{}),
+		orm.ConflictNull(orm.NullableTimeExpr(orm.NullableTime[transformRow, time.Time]{})),
+		orm.ConflictSet(orm.EnumExpr(orm.Enum[transformRow, keyStatus]{}), keyStatus("name")),
+		orm.ConflictSet(orm.NullableEnumExpr(orm.NullableEnum[transformRow, keyStatus]{}), keyStatus("name")),
+		orm.ConflictNull(orm.NullableEnumExpr(orm.NullableEnum[transformRow, keyStatus]{})),
+		orm.ConflictSet(orm.JSONExpr(orm.JSON[transformRow, string]{}), value.JSON[string]{}),
+		orm.ConflictSet(orm.NullableJSONExpr(orm.NullableJSON[transformRow, string]{}), value.JSON[string]{}),
+		orm.ConflictNull(orm.NullableJSONExpr(orm.NullableJSON[transformRow, string]{})),
+		orm.ConflictSet(orm.IntervalExpr(orm.Interval[transformRow]{}), temporal.Interval{}),
+		orm.ConflictSet(orm.NullableIntervalExpr(orm.NullableInterval[transformRow]{}), temporal.Interval{}),
+		orm.ConflictNull(orm.NullableIntervalExpr(orm.NullableInterval[transformRow]{})),
+		orm.ConflictSet(orm.InputColumnExpr(orm.InputColumn[transformRow, string, bool]{}), "fresh"),
+		orm.ConflictSet(orm.NullableInputColumnExpr(orm.NullableInputColumn[transformRow, string, bool]{}), "fresh"),
+		orm.ConflictNull(orm.NullableInputColumnExpr(orm.NullableInputColumn[transformRow, string, bool]{})),
+		orm.ConflictSet(orm.InputTextExpr(orm.InputText[transformRow, string, keyStatus]{}), "fresh"),
+		orm.ConflictSet(orm.NullableInputTextExpr(orm.NullableInputText[transformRow, string, keyStatus]{}), "fresh"),
+		orm.ConflictNull(orm.NullableInputTextExpr(orm.NullableInputText[transformRow, string, keyStatus]{})),
+		orm.ConflictSet(orm.InputNumberExpr(orm.InputNumber[transformRow, string, int64]{}), "fresh"),
+		orm.ConflictSet(orm.NullableInputNumberExpr(orm.NullableInputNumber[transformRow, string, int64]{}), "fresh"),
+		orm.ConflictNull(orm.NullableInputNumberExpr(orm.NullableInputNumber[transformRow, string, int64]{})),
+		orm.ConflictSet(orm.InputTimeExpr(orm.InputTime[transformRow, string, time.Time]{}), "fresh"),
+		orm.ConflictSet(orm.NullableInputTimeExpr(orm.NullableInputTime[transformRow, string, time.Time]{}), "fresh"),
+		orm.ConflictNull(orm.NullableInputTimeExpr(orm.NullableInputTime[transformRow, string, time.Time]{})),
+		orm.ConflictSet(orm.InputEnumExpr(orm.InputEnum[transformRow, string, keyStatus]{}), "fresh"),
+		orm.ConflictSet(orm.NullableInputEnumExpr(orm.NullableInputEnum[transformRow, string, keyStatus]{}), "fresh"),
+		orm.ConflictNull(orm.NullableInputEnumExpr(orm.NullableInputEnum[transformRow, string, keyStatus]{})),
+		orm.ConflictSet(orm.InputJSONExpr(orm.InputJSON[transformRow, string, string]{}), "fresh"),
+		orm.ConflictSet(orm.NullableInputJSONExpr(orm.NullableInputJSON[transformRow, string, string]{}), "fresh"),
+		orm.ConflictNull(orm.NullableInputJSONExpr(orm.NullableInputJSON[transformRow, string, string]{})),
+		orm.ConflictSet(orm.InputIntervalExpr(orm.InputInterval[transformRow, string]{}), "fresh"),
+		orm.ConflictSet(orm.NullableInputIntervalExpr(orm.NullableInputInterval[transformRow, string]{}), "fresh"),
+		orm.ConflictNull(orm.NullableInputIntervalExpr(orm.NullableInputInterval[transformRow, string]{})),
+		orm.ConflictSet(orm.InputKeyExpr(orm.InputKey[transformRow, string, int64]{}), "fresh"),
 	}
 	for i, update := range updates {
-		if update.state.err == nil {
+		if orm.ConflictUpdateError(update) == nil {
 			t.Errorf("uninitialized family %d was accepted", i)
 		}
 	}
@@ -264,13 +268,13 @@ func TestConflictMutatorsNormalizeLiteralAssignmentsOnce(t *testing.T) {
 		}
 	}
 	d := transformFields(transform("first"), transform("last"), transform("maybe"))
-	policy := OnConflict(ConflictKey(KeyExpr(d.Key()))).DoUpdate(ConflictSet(InputTextExpr(d.Last), " LAST "), ConflictSet(InputTextExpr(d.First), " FIRST "))
-	input := [][]Assignment[transformRow]{{KeySet(d.Key(), 1), InputTextSet(d.First, " A "), InputTextSet(d.Last, " B ")}, {KeySet(d.Key(), 2), InputTextSet(d.First, " C "), InputTextSet(d.Last, " D ")}}
+	policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(d.Key()))).DoUpdate(orm.ConflictSet(orm.InputTextExpr(d.Last), " LAST "), orm.ConflictSet(orm.InputTextExpr(d.First), " FIRST "))
+	input := [][]orm.Assignment[transformRow]{{orm.KeySet(d.Key(), 1), orm.InputTextSet(d.First, " A "), orm.InputTextSet(d.Last, " B ")}, {orm.KeySet(d.Key(), 2), orm.InputTextSet(d.First, " C "), orm.InputTextSet(d.Last, " D ")}}
 	var args [][]any
 	db := testDB(t, testConnector{bindings: &args, columns: []string{"id", "first", "maybe", "last"}, values: [][]driver.Value{{int64(1), "first", nil, "last"}}})
 	for range 2 {
 		calls = nil
-		if _, e := UpsertMany(t.Context(), db, d.Query(), policy, input); e != nil {
+		if _, e := orm.UpsertMany(t.Context(), db, d.Query(), policy, input); e != nil {
 			t.Fatal(e)
 		}
 		if !reflect.DeepEqual(calls, []string{"first: A ", "last: B ", "first: C ", "last: D ", "first: FIRST ", "last: LAST "}) {
@@ -280,9 +284,9 @@ func TestConflictMutatorsNormalizeLiteralAssignmentsOnce(t *testing.T) {
 	if !reflect.DeepEqual(args[0], []any{int64(1), "a", "b", int64(2), "c", "d", "first", "last"}) || !reflect.DeepEqual(args[0], args[1]) {
 		t.Fatal("reusable policy inputs", args)
 	}
-	for _, u := range []ConflictUpdate[transformRow]{ConflictNull(NullableInputTextExpr(d.Maybe)), ConflictIncoming(NullableInputTextExpr(d.Maybe))} {
+	for _, u := range []orm.ConflictUpdate[transformRow]{orm.ConflictNull(orm.NullableInputTextExpr(d.Maybe)), orm.ConflictIncoming(orm.NullableInputTextExpr(d.Maybe))} {
 		calls = nil
-		if _, e := UpsertMany(t.Context(), db, d.Query(), policy.DoUpdate(u), input); e != nil || len(calls) != 4 {
+		if _, e := orm.UpsertMany(t.Context(), db, d.Query(), policy.DoUpdate(u), input); e != nil || len(calls) != 4 {
 			t.Fatal("NULL/incoming invoked mutator", calls, e)
 		}
 	}
@@ -295,11 +299,11 @@ func TestConflictMutatorsPreserveErrorsAndPrivateInputs(t *testing.T) {
 		}
 		return s, nil
 	}, func(s string) (string, error) { return s, nil }, func(s string) (string, error) { return s, nil })
-	update := ConflictSet(InputTextExpr(d.First), "private-input")
-	policy := OnConflict(ConflictKey(KeyExpr(d.Key()))).DoUpdate(update)
+	update := orm.ConflictSet(orm.InputTextExpr(d.First), "private-input")
+	policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(d.Key()))).DoUpdate(update)
 	var sql []string
 	db := testDB(t, testConnector{statements: &sql})
-	if _, e := Upsert(t.Context(), db, d.Query(), policy, KeySet(d.Key(), 1), InputTextSet(d.First, "input"), InputTextSet(d.Last, "input")); !errors.Is(e, stop) || len(sql) != 0 {
+	if _, e := orm.Upsert(t.Context(), db, d.Query(), policy, orm.KeySet(d.Key(), 1), orm.InputTextSet(d.First, "input"), orm.InputTextSet(d.Last, "input")); !errors.Is(e, stop) || len(sql) != 0 {
 		t.Fatal("policy-only failure lost identity or reached SQL", e, sql)
 	}
 	for _, v := range []any{update, policy} {

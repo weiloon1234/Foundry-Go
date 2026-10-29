@@ -1,4 +1,6 @@
-package orm
+package orm_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import (
 	"context"
@@ -14,31 +16,31 @@ import (
 )
 
 func TestTerminalWritesPreflight(t *testing.T) {
-	f := eachFields(Hooks[eachRow]{})
+	f := eachFields(orm.Hooks[eachRow]{})
 	writer := &noEachWriter{}
-	if got, err := CreateEach(t.Context(), writer, f.Query(), nil); err != nil || len(got) != 0 {
+	if got, err := orm.CreateEach(t.Context(), writer, f.Query(), nil); err != nil || len(got) != 0 {
 		t.Fatal(got, err)
 	}
-	for _, q := range []Query[eachRow]{f.Query().Limit(1), f.Query().OrderBy(KeyAsc(f.Key())), WithoutModelHooks(f.Query())} {
-		if _, err := FirstOrCreate(t.Context(), writer, q); !errors.Is(err, fault.Invalid) {
+	for _, q := range []orm.Query[eachRow]{f.Query().Limit(1), f.Query().OrderBy(orm.KeyAsc(f.Key())), orm.WithoutModelHooks(f.Query())} {
+		if _, err := orm.FirstOrCreate(t.Context(), writer, q); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
-		if _, err := PruneBatch(t.Context(), writer, q, 1, false); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.PruneBatch(t.Context(), writer, q, 1, false); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := CreateEach(t.Context(), writer, f.Query(), make([][]Assignment[eachRow], MaxPerModelWriteRows+1)); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.CreateEach(t.Context(), writer, f.Query(), make([][]orm.Assignment[eachRow], orm.MaxPerModelWriteRows+1)); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
-	foreign := eachFields(Hooks[eachRow]{})
-	if _, err := CreateEach(t.Context(), writer, f.Query(), [][]Assignment[eachRow]{{TextSet(foreign.Name, "wrong")}}); !errors.Is(err, fault.Invalid) {
+	foreign := eachFields(orm.Hooks[eachRow]{})
+	if _, err := orm.CreateEach(t.Context(), writer, f.Query(), [][]orm.Assignment[eachRow]{{orm.TextSet(foreign.Name, "wrong")}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	soft := timedRecords()
-	if _, err := PruneBatch(t.Context(), writer, soft.Query(), 1, true); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.PruneBatch(t.Context(), writer, soft.Query(), 1, true); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
-	if _, err := ForcePruneBatch(t.Context(), writer, soft.Query(), SoftDeletable[timed]{}, 1, true); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.ForcePruneBatch(t.Context(), writer, soft.Query(), orm.SoftDeletable[timed]{}, 1, true); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	if writer.calls != 0 {
@@ -49,7 +51,7 @@ func TestCreateEachRollbackAndDraftIsolation(t *testing.T) {
 	for _, exit := range []bool{false, true} {
 		calls, commits := 0, 0
 		failure := errors.New("stop")
-		f := eachFields(Hooks[eachRow]{Creating: func(context.Context, *database.Tx, *Write[eachRow]) error {
+		f := eachFields(orm.Hooks[eachRow]{Creating: func(context.Context, *database.Tx, *orm.Write[eachRow]) error {
 			calls++
 			if calls == 2 {
 				if exit {
@@ -58,17 +60,17 @@ func TestCreateEachRollbackAndDraftIsolation(t *testing.T) {
 				return failure
 			}
 			return nil
-		}, AfterCommit: func(context.Context, lifecycle.Operation, Changes[eachRow]) error { commits++; return nil }})
+		}, AfterCommit: func(context.Context, lifecycle.Operation, orm.Changes[eachRow]) error { commits++; return nil }})
 		var statements []string
 		db := testDB(t, testConnector{statements: &statements, columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "stored"}}})
-		got, err := CreateEach(t.Context(), db, f.Query(), [][]Assignment[eachRow]{{KeySet(f.Key(), 1), TextSet(f.Name, "one")}, {KeySet(f.Key(), 2), TextSet(f.Name, "two")}})
+		got, err := orm.CreateEach(t.Context(), db, f.Query(), [][]orm.Assignment[eachRow]{{orm.KeySet(f.Key(), 1), orm.TextSet(f.Name, "one")}, {orm.KeySet(f.Key(), 2), orm.TextSet(f.Name, "two")}})
 		if err == nil || len(got) != 0 || calls != 2 || commits != 0 {
 			t.Fatal(got, err, calls, commits)
 		}
 	}
 }
 func TestLookupDefaultsAndStoredMatch(t *testing.T) {
-	f := eachFields(Hooks[eachRow]{})
+	f := eachFields(orm.Hooks[eachRow]{})
 	for _, matches := range []bool{true, false} {
 		var bindings [][]any
 		db := testDB(t, testConnector{bindings: &bindings, respondBound: func(sql string, args []driver.NamedValue) ([]string, [][]driver.Value, error) {
@@ -80,7 +82,7 @@ func TestLookupDefaultsAndStoredMatch(t *testing.T) {
 			}
 			return []string{"id", "name"}, [][]driver.Value{{int64(1), "Ada"}}, nil
 		}})
-		got, err := FirstOrCreate(t.Context(), db, f.Query().Where(TextEq(f.Name, "Ada")), KeySet(f.Key(), 1))
+		got, err := orm.FirstOrCreate(t.Context(), db, f.Query().Where(orm.TextEq(f.Name, "Ada")), orm.KeySet(f.Key(), 1))
 		if matches {
 			if err != nil || got.Name != "Ada" {
 				t.Fatal(got, err)
@@ -103,20 +105,20 @@ func TestLookupDefaultsAndStoredMatch(t *testing.T) {
 }
 func TestLookupExistingSkipsUnchosenDraftAndRetrieval(t *testing.T) {
 	calls := 0
-	f := Define("lookup_existing", func(b Builder[eachRow], m *eachRow) eachTable {
-		return eachTable{TableOf(b, &m.ID), TextOf(b, &m.Name)}
-	}, WithRetrievalHooks(func() RetrievalHooks[eachRow] { calls++; return RetrievalHooks[eachRow]{} }))
+	f := orm.Define("lookup_existing", func(b orm.Builder[eachRow], m *eachRow) eachTable {
+		return eachTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
+	}, orm.WithRetrievalHooks(func() orm.RetrievalHooks[eachRow] { calls++; return orm.RetrievalHooks[eachRow]{} }))
 	db := testDB(t, testConnector{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "Ada"}}})
-	got, err := FirstOrCreate(t.Context(), db, f.Query(), Assignment[eachRow]{err: errors.New("unused")})
+	got, err := orm.FirstOrCreate(t.Context(), db, f.Query(), orm.NewTestAssignment[eachRow](errors.New("unused")))
 	if err != nil || got.Name != "Ada" || calls != 0 {
 		t.Fatal(got, err, calls)
 	}
 }
 func TestExplainBoundsRedactionAndNoRetrieval(t *testing.T) {
 	calls := 0
-	f := Define("explain_records", func(b Builder[eachRow], m *eachRow) eachTable {
-		return eachTable{TableOf(b, &m.ID), TextOf(b, &m.Name)}
-	}, WithRetrievalHooks(func() RetrievalHooks[eachRow] { calls++; return RetrievalHooks[eachRow]{} }))
+	f := orm.Define("explain_records", func(b orm.Builder[eachRow], m *eachRow) eachTable {
+		return eachTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
+	}, orm.WithRetrievalHooks(func() orm.RetrievalHooks[eachRow] { calls++; return orm.RetrievalHooks[eachRow]{} }))
 	defer func() {
 		if calls != 0 {
 			t.Fatal("explain dispatched retrieval")
@@ -124,7 +126,7 @@ func TestExplainBoundsRedactionAndNoRetrieval(t *testing.T) {
 	}()
 	for _, document := range []string{`[{"Plan":{"Node Type":"Seq Scan","Filter":"secret-value","Startup Cost":0,"Total Cost":2,"Plan Rows":1,"Plan Width":8}}]`, strings.Repeat("x", (4<<20)+1), `[]`} {
 		db := testDB(t, testConnector{columns: []string{"QUERY PLAN"}, values: [][]driver.Value{{document}}})
-		plan, err := Explain(t.Context(), db, f.Query().Where(TextEq(f.Name, "secret-value")))
+		plan, err := orm.Explain(t.Context(), db, f.Query().Where(orm.TextEq(f.Name, "secret-value")))
 		if strings.HasPrefix(document, "[{") {
 			if err != nil {
 				t.Fatal(err)

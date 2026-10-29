@@ -1,4 +1,6 @@
-package rows
+package rows_test
+
+import "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 
 import (
 	"errors"
@@ -38,30 +40,30 @@ func TestValueComparisonsShareSQLAndBindings(t *testing.T) {
 }
 func TestValueComparisonPhasesAndInvalidOperands(t *testing.T) {
 	m := declareMembers()
-	base := From(m.Query())
+	base := rows.From(m.Query())
 	id := expr.Value(orm.KeyExpr(m.ID))
 	count := expr.Count[member]()
 	for _, p := range []expr.HavingPredicate[member]{expr.GreaterValue(count.Value(), count.Param(1).Value()), expr.EqualValue(count.Value(), count.Value()), expr.LessNullableValue(expr.Min(orm.NullableTextExpr(m.Nickname)).Value(), expr.Min(orm.NullableTextExpr(m.Nickname)).Value())} {
-		if _, e := CompileRead(ReadScalar(HavingScalar(SelectScalar(base, count.Value()), p))); e != nil {
+		if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, count.Value()), p))); e != nil {
 			t.Fatal(e)
 		}
 	}
-	if _, e := CompileRead(ReadScalar(HavingScalar(SelectScalar(base, expr.Row(id).Value()), expr.GreaterValue(count.Value(), count.Param(1).Value())))); !errors.Is(e, fault.Invalid) {
+	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, expr.Row(id).Value()), expr.GreaterValue(count.Value(), count.Param(1).Value())))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("binary HAVING did not group", e)
 	}
-	window := expr.RowNumber(expr.WindowFor(ModelScope(m.Query())))
+	window := expr.RowNumber(expr.WindowFor(rows.ModelScope(m.Query())))
 	for _, p := range []expr.HavingPredicate[member]{expr.EqualValue(window, count.Value()), expr.EqualValue(count.Value(), window)} {
-		if _, e := CompileRead(ReadScalar(HavingScalar(SelectScalar(base, count.Value()), p))); !errors.Is(e, fault.Invalid) {
+		if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, count.Value()), p))); !errors.Is(e, fault.Invalid) {
 			t.Fatal("window HAVING", e)
 		}
 	}
-	for _, p := range []expr.Predicate[member]{expr.Equal[member, int64](nil, id), expr.Equal[member, int64](id, nil), expr.Equal(id, expr.Value(orm.KeyExpr(declareMembers().ID))), expr.Equal(ScalarRowQuery(base, Scalar[member, int64]{}), expr.NullableRow(id))} {
+	for _, p := range []expr.Predicate[member]{expr.Equal[member, int64](nil, id), expr.Equal[member, int64](id, nil), expr.Equal(id, expr.Value(orm.KeyExpr(declareMembers().ID))), expr.Equal(rows.ScalarRowQuery(base, rows.Scalar[member, int64]{}), expr.NullableRow(id))} {
 		if _, e := orm.Compile(expr.Where(m.Query().Limit(0), p)); !errors.Is(e, fault.Invalid) {
 			t.Fatal("invalid operand", e)
 		}
 	}
 	field := querycore.FieldRef{Table: "members", Column: "id"}
-	node := base.source.Node
+	node := rows.SourceOf(base).Node
 	for _, p := range []querycore.Expression{
 		querycore.BinaryComparison{Left: field, Right: field, Operator: querycore.Contains}, querycore.BinaryComparison{Left: field, Right: field, Operator: querycore.InsensitiveContains}, querycore.BinaryComparison{Left: field, Right: field, Operator: 255},
 		querycore.BinaryComparison{Left: field, Right: querycore.AggregateNode{Kind: querycore.CountAll}, Operator: querycore.Equal}, querycore.BinaryComparison{Right: field, Left: querycore.AggregateNode{Kind: querycore.CountAll}, Operator: querycore.Equal},
