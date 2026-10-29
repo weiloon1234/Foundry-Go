@@ -32,7 +32,7 @@ func TestExplainRetainsBindingsFailuresAndTransactionCapability(t *testing.T) {
 	sentinel := errors.New("selected executor failed")
 	executor := &planExecutor{failure: sentinel}
 	fields := records()
-	query := fields.Query().Where(fields.ID.Eq(42))
+	query := fields.Query().Where(KeyEq(fields.ID, 42))
 	compiled, err := Compile(query)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestExplainRetainsBindingsFailuresAndTransactionCapability(t *testing.T) {
 	if _, err := Explain(ctx, executor, query); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	if _, err := ExplainLocked(t.Context(), nil, query.ForUpdate()); !errors.Is(err, fault.Invalid) {
+	if _, err := ExplainLocked(t.Context(), nil, Lock(query)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("locked plan accepted no transaction", err)
 	}
 	if _, err := Explain(t.Context(), executor, Query[record]{}); !errors.Is(err, fault.Invalid) {

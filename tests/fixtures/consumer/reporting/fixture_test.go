@@ -1,5 +1,7 @@
 package reporting_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"testing"
@@ -74,7 +76,7 @@ func openFixture(t *testing.T) *fixture {
 		var found value.Optional[reporting.Operator]
 		err := f.transaction(ctx, func(tx *database.Tx) error {
 			var err error
-			found, err = reporting.OperatorModels.Find(ctx, tx, id)
+			found, err = orm.Find(ctx, tx, reporting.OperatorModels.Table, id)
 			return err
 		})
 		return found, err

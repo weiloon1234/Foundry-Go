@@ -13,7 +13,7 @@ import (
 // Append requires already validated, captured input. Normal declaration writes
 // retain savepoint behavior and never commit the supplied outer transaction.
 func Append(ctx context.Context, tx *database.Tx, draft []orm.Assignment[Entry]) (Entry, error) {
-	return Entries.Insert(ctx, tx, draft...)
+	return orm.Insert(ctx, tx, Entries.Table, draft...)
 }
 
 // Prune selects a bounded oldest window and removes only that window through
@@ -21,16 +21,16 @@ func Append(ctx context.Context, tx *database.Tx, draft []orm.Assignment[Entry])
 // per-model observers run. A concurrent pruner may remove fewer rows.
 func Prune(ctx context.Context, tx *database.Tx, area string, cutoff temporal.DateTime, limit int) (int64, error) {
 	f := Entries
-	destination := Entries.Query().Where(f.Area.Eq(area), f.CreatedAt.Lt(cutoff))
-	source := destination.OrderBy(f.CreatedAt.Asc(), f.Sequence.Asc()).Limit(limit)
-	return rows.DeleteUsing(destination, rows.From(source)).Match(rows.MatchSource(f.ID, expr.Value(f.ID))).Exec(ctx, tx)
+	destination := Entries.Query().Where(orm.TextEq(f.Area, area), orm.TimeLt(f.CreatedAt, cutoff))
+	source := destination.OrderBy(orm.TimeAsc(f.CreatedAt), orm.NumberAsc(f.Sequence)).Limit(limit)
+	return rows.DeleteUsing(destination, rows.From(source)).Match(rows.MatchSource(orm.KeyExpr(f.ID), expr.Value(orm.KeyExpr(f.ID)))).Exec(ctx, tx)
 }
 
 // CountBefore counts the entries Prune would remove for area and cutoff without
 // reading payloads. It uses the same predicate as Prune.
 func CountBefore(ctx context.Context, executor database.Executor, area string, cutoff temporal.DateTime) (int64, error) {
 	f := Entries
-	return Entries.Query().Where(f.Area.Eq(area), f.CreatedAt.Lt(cutoff)).Count(ctx, executor)
+	return orm.Count(ctx, executor, Entries.Query().Where(orm.TextEq(f.Area, area), orm.TimeLt(f.CreatedAt, cutoff)))
 }
 
 // Page retains the ordinary query layer's count/snapshot and row-limit contract.
@@ -38,7 +38,7 @@ func CountBefore(ctx context.Context, executor database.Executor, area string, c
 // transaction keep their actual order despite sharing a transaction timestamp.
 func Page(ctx context.Context, executor database.Executor, q orm.Query[Entry], request orm.PageRequest) (orm.PageResult[Entry], error) {
 	f := Entries
-	return q.OrderBy(f.Sequence.Desc()).Paginate(ctx, executor, request)
+	return orm.Paginate(ctx, executor, q.OrderBy(orm.NumberDesc(f.Sequence)), request)
 }
 
 // Recent reads at most limit complete rows newest first, strictly before the
@@ -46,16 +46,16 @@ func Page(ctx context.Context, executor database.Executor, q orm.Query[Entry], r
 func Recent(ctx context.Context, executor database.Executor, q orm.Query[Entry], before int64, limit int) ([]Entry, error) {
 	f := Entries
 	if before > 0 {
-		q = q.Where(f.Sequence.Lt(before))
+		q = q.Where(orm.NumberLt(f.Sequence, before))
 	}
-	return q.OrderBy(f.Sequence.Desc()).Limit(limit).All(ctx, executor)
+	return orm.All(ctx, executor, q.OrderBy(orm.NumberDesc(f.Sequence)).Limit(limit))
 }
 
 // RecentActivity is Recent without selecting or decoding stored payloads.
 func RecentActivity(ctx context.Context, executor database.Executor, q orm.Query[Entry], before int64, limit int) ([]Activity, error) {
 	f := Entries
 	if before > 0 {
-		q = q.Where(f.Sequence.Lt(before))
+		q = q.Where(orm.NumberLt(f.Sequence, before))
 	}
-	return rows.Read(Activities(q.OrderBy(f.Sequence.Desc()).Limit(limit))).All(ctx, executor)
+	return rows.Read(Activities(q.OrderBy(orm.NumberDesc(f.Sequence)).Limit(limit))).All(ctx, executor)
 }

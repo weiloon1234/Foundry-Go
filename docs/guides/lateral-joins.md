@@ -18,7 +18,7 @@ func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.Use
 	c := rows.Correlate(outer, orders)
 	inner := rows.InnerScope(c, rows.Scope(orders))
 	u, o := rows.OuterScope(c, scope), inner
-	return c.Where(expr.Equal(expr.At(o, models.Orders.BuyerID), expr.At(u, models.Users.ID))), inner
+	return c.Where(expr.Equal(expr.At(o, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(u, orm.KeyExpr(models.Users.ID)))), inner
 }
 ```
 

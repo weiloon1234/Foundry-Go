@@ -22,7 +22,7 @@ func TestLoadFromQueryBudgetsPostgres(t *testing.T) {
 	_, err = db.Exec(t.Context(), `INSERT INTO relation_nodes VALUES(1,NULL,'parent',NULL),(2,NULL,'parent',NULL),(10,1,'child',NULL),(11,1,'child',NULL),(12,2,'child',NULL),(20,10,'grand',NULL)`)
 	must(t, err)
 	n := eagerTable()
-	rel := orm.HasManyOf(n.Children, n.ID, n.ParentID)
+	rel := orm.HasManyOf(n.Children, orm.KeyExpr(n.ID), orm.NullableNumberExpr(n.ParentID))
 	parents := []eagerNode{{ID: 1}, {ID: 2}}
 	for _, missing := range []bool{false, true} {
 		run := orm.LoadFrom[eagerNode]

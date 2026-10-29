@@ -39,7 +39,7 @@ func TestRelationAggregateSourceProvenance(t *testing.T) {
 			}
 			g := &goldenCapture{reply: aggregateReply}
 			db := aggregateDB(t, g)
-			if _, err := j.Parents.Query().With(slot).All(t.Context(), db); !errors.Is(err, fault.Invalid) {
+			if _, err := orm.All(t.Context(), db, j.Parents.Query().With(slot)); !errors.Is(err, fault.Invalid) {
 				t.Fatalf("invalid query: %v", err)
 			}
 			if g.statements != 0 {

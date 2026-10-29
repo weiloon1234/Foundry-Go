@@ -19,12 +19,12 @@ const MaxChunkSize = querycore.MaxChunkSize
 // Chunk reads stable, bounded batches, closing rows before each callback.
 // It preserves the query window and advances by keyset when ordering permits;
 // explicit NULL placement falls back to offsets. It does not create a snapshot.
-func (q Query[M]) Chunk(ctx context.Context, ex database.Executor, size int, yield func([]M) error) error {
+func Chunk[M any](ctx context.Context, ex database.Executor, q Query[M], size int, yield func([]M) error) error {
 	return chunks(ctx, ex, q.state, size, yield)
 }
 
 // EachChunked yields individual models from fully read and closed batches.
-func (q Query[M]) EachChunked(ctx context.Context, ex database.Executor, size int, yield func(M) error) error {
+func EachChunked[M any](ctx context.Context, ex database.Executor, q Query[M], size int, yield func(M) error) error {
 	if yield == nil {
 		return invalid("model iteration requires a callback")
 	}

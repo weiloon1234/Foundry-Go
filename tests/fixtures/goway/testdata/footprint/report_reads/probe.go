@@ -10,7 +10,7 @@ import (
 )
 
 func Read(ctx context.Context, ex database.Executor, yield func(int64) error) error {
-	q := rows.ReorderUnwindowed(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents), expr.Value(models.Orders.ID).Asc())
+	q := rows.ReorderUnwindowed(rows.SelectValue(models.Orders.Query(), orm.NumberExpr(models.Orders.TotalCents)), expr.Value(orm.KeyExpr(models.Orders.ID)).Asc())
 	if _, err := rows.CompileRead(rows.Read(q)); err != nil {
 		return err
 	}

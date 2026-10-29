@@ -12,10 +12,10 @@ func TestCoreDeclarations(t *testing.T) {
 	if err := orm.Check(coremodels.Records, coremodels.Durations); err != nil {
 		t.Fatal(err)
 	}
-	_ = coremodels.Records.Query().OrderBy(coremodels.Records.Settings.Asc(), coremodels.Records.Settings.Desc(), coremodels.Records.MaybeSettings.Asc(), coremodels.Records.MaybeSettings.Desc())
-	_ = ormrows.SelectValue(coremodels.Records.Query(), coremodels.Records.Settings)
-	_ = ormrows.SelectValue(coremodels.Records.Query(), coremodels.Records.MaybeSettings)
-	_ = ormrows.SelectValue(coremodels.Records.Query(), coremodels.Records.Period)
-	_ = ormrows.SelectValue(coremodels.Records.Query(), coremodels.Records.MaybePeriod)
-	_ = models.Users.Query().Where(models.Users.ID.Eq(models.User{}.ID)).ForUpdate()
+	_ = coremodels.Records.Query().OrderBy(orm.JSONAsc(coremodels.Records.Settings), orm.JSONDesc(coremodels.Records.Settings), orm.NullableJSONAsc(coremodels.Records.MaybeSettings), orm.NullableJSONDesc(coremodels.Records.MaybeSettings))
+	_ = ormrows.SelectValue(coremodels.Records.Query(), orm.JSONExpr(coremodels.Records.Settings))
+	_ = ormrows.SelectValue(coremodels.Records.Query(), orm.NullableJSONExpr(coremodels.Records.MaybeSettings))
+	_ = ormrows.SelectValue(coremodels.Records.Query(), orm.IntervalExpr(coremodels.Records.Period))
+	_ = ormrows.SelectValue(coremodels.Records.Query(), orm.NullableIntervalExpr(coremodels.Records.MaybePeriod))
+	_ = orm.Lock(models.Users.Query().Where(orm.KeyEq(models.Users.ID, models.User{}.ID)))
 }

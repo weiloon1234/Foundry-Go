@@ -1,5 +1,7 @@
 package attachments
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"crypto/sha256"
@@ -113,13 +115,13 @@ func (c Collection[M, K]) scanRows(ctx context.Context, tx *database.Tx, m *Mana
 	}
 	slices.Sort(keys)
 	f := store.Files
-	q := store.Files.Query().Where(f.Scope.Eq(c.definition.owner.Scope()), f.SubjectKey.In(keys...), f.Collection.Eq(string(c.Name())), f.Locale.In(locales...), f.State.Eq(string(Ready)))
+	q := store.Files.Query().Where(orm.TextEq(f.Scope, c.definition.owner.Scope()), orm.TextIn(f.SubjectKey, keys...), orm.TextEq(f.Collection, string(c.Name())), orm.TextIn(f.Locale, locales...), orm.TextEq(f.State, string(Ready)))
 	if id, ok := only.Get(); ok {
-		q = q.Where(f.ID.Eq(model.IDFromBytes[store.File](id.Bytes())))
+		q = q.Where(orm.KeyEq(f.ID, model.IDFromBytes[store.File](id.Bytes())))
 	}
 	count, bytes := 0, 0
 	counts := make(map[string]map[string]int, len(active))
-	err = q.OrderBy(f.SubjectKey.Asc(), f.Locale.Asc(), f.SortOrder.Asc(), f.ID.Asc()).Limit(MaxBatchFiles+1).Each(ctx, tx, func(row store.File) error {
+	err = orm.Each(ctx, tx, q.OrderBy(orm.TextAsc(f.SubjectKey), orm.TextAsc(f.Locale), orm.NumberAsc(f.SortOrder), orm.KeyAsc(f.ID)).Limit(MaxBatchFiles+1), func(row store.File) error {
 		count++
 		properties, err := row.Properties.Text()
 		if err != nil {

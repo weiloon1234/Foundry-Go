@@ -12,7 +12,7 @@ These APIs extend the [window-function contracts](model-windows.md), using the s
 ```go
 q := framequeries.Samples.Query()
 f := framequeries.Samples
-r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.Row(expr.Value(f.ID)).Value())
+r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.Row(expr.Value(orm.NumberKeyExpr(f.ID))).Value())
 frameCounts(t, tx, r.Between(r.Preceding(1), r.CurrentRow()), []int64{1, 2, 2, 2})
 ```
 
@@ -30,7 +30,7 @@ Distances are encoded once, bound as parameters and explicitly cast using the co
 
 <!-- go-source: tests/fixtures/consumer/framequeries/ranges_postgres_test.go -->
 ```go
-r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.Row(expr.Value(f.At)).Value())
+r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.Row(expr.Value(orm.TimeExpr(f.At))).Value())
 day, _ := temporal.Elapsed(24 * time.Hour)
 frameCounts(t, tx, r.Between(r.Preceding(temporal.Days(1)), r.CurrentRow()), []int64{1, 1, 2, 2})
 frameCounts(t, tx, r.Between(r.Preceding(day), r.CurrentRow()), []int64{1, 2, 2, 2})
@@ -52,8 +52,8 @@ For time-of-day ordering, calendar months/days are rejected because PostgreSQL o
 
 <!-- go-source: tests/fixtures/consumer/framequeries/named_postgres_test.go -->
 ```go
-base := expr.WindowFor(rowset.ModelScope(q)).PartitionBy(expr.Group(expr.Param(f.ID, 1))).Named("all_samples")
-ordered := base.OrderBy(expr.Value(f.ID).Asc()).Named("ordered")
+base := expr.WindowFor(rowset.ModelScope(q)).PartitionBy(expr.Group(expr.Param(orm.NumberKeyExpr(f.ID), 1))).Named("all_samples")
+ordered := base.OrderBy(expr.Value(orm.NumberKeyExpr(f.ID)).Asc()).Named("ordered")
 framed := ordered.RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
 count := expr.Over(expr.Count[framequeries.Sample](), framed)
 result := rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), count), expr.RowNumber(framed).Asc())

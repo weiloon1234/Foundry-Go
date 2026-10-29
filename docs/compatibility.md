@@ -204,6 +204,14 @@ and the [migration guide](guides/orm-migration.md#removed-api-spellings).
 The [build measurements](guides/query-build-resources.md) retain historical cost
 evidence; they do not describe a second supported runtime.
 
+ORM columns are methodless. Per-kind package functions replace their operators,
+for example `orm.TextEq(column, value)`. Query terminals and table operations are
+also package functions, such as `orm.All(ctx, db, query)` and
+`orm.Find(ctx, db, table, key)`. Expression and source APIs require explicit sealed
+adapters, such as `expr.Value(orm.TextExpr(column))`. The old methods have no
+compatibility aliases; migrate callers together. Model, value, input and role
+constraints remain concrete. Query chains and expression/result methods remain.
+
 Cursor request contract IDs now use the native ORM owner. Regenerate manifests,
 OpenAPI and TypeScript together; cursor token encoding and model identity stay
 unchanged. See the [publication evidence](evidence/goway-stage8d3c-report.md).

@@ -7,7 +7,7 @@
 func pruneMembers(ctx context.Context, db database.Transactor, cutoff time.Time) (prune.Result, error) {
 	f := hooks.Members
 	registry, err := prune.New(prune.ORMSoftModel("app.old_members",
-		f.Query().OnlyTrashed().Where(f.UpdatedAt.Lt(cutoff)), f.Soft, prune.Lifecycle))
+		f.Query().OnlyTrashed().Where(orm.TimeLt(f.UpdatedAt, cutoff)), f.Soft, prune.Lifecycle))
 	if err != nil {
 		return prune.Result{}, err
 	}

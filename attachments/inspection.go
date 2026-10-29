@@ -1,5 +1,7 @@
 package attachments
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"time"
@@ -25,7 +27,7 @@ func (m *Manager) Inspect(ctx context.Context, id OperationID) (ReconcileResult,
 	var result ReconcileResult
 	err := m.reads.Run(ctx, "attachment intent inspection", func(ctx context.Context) error {
 		return m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.Files.Query().Where(store.Files.Key().Eq(fileID(id))).Require(ctx, tx)
+			row, err := orm.Require(ctx, tx, store.Files.Query().Where(orm.KeyEq(store.Files.Key(), fileID(id))))
 			if err != nil {
 				return err
 			}
@@ -130,7 +132,7 @@ func (m *Manager) InspectStorage(ctx context.Context, options StorageInspection)
 		if len(keys) > 0 {
 			if err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 				f := store.Files
-				rows, err := rows.Read(rows.SelectValue(store.Files.Query().Where(f.Disk.Eq(string(options.Disk.ID())), f.ObjectKey.In(keys...)).Limit(storage.MaxPageSize+1), f.ObjectKey)).All(ctx, tx)
+				rows, err := rows.Read(rows.SelectValue(store.Files.Query().Where(orm.TextEq(f.Disk, string(options.Disk.ID())), orm.TextIn(f.ObjectKey, keys...)).Limit(storage.MaxPageSize+1), orm.TextExpr(f.ObjectKey))).All(ctx, tx)
 				if err != nil {
 					return err
 				}

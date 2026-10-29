@@ -1,5 +1,5 @@
 // Package expr provides thin, typed SQL expressions in explicit source scopes.
-// Example: expr.At(rows.Scope(members), Members.Name).
+// Example: expr.At(rows.Scope(members), orm.TextExpr(Members.Name)).
 package expr
 
 import (
@@ -19,7 +19,7 @@ type Scope[S, M any] struct {
 	core ormcore.Scope
 }
 
-// Expression keeps a scoped SQL value and its codec closures. Example: expr.At(scope,Orders.ID).
+// Expression keeps a scoped SQL value and its codec closures. Example: expr.At(scope, orm.KeyExpr(Orders.ID)).
 type Expression[S, V, P any] struct {
 	_          [0]*S
 	_          [0]*P
@@ -41,7 +41,7 @@ type Order[S any] struct {
 	core ormcore.Order
 }
 
-// At re-scopes a model column without erasing its value type. Example: expr.At(rows.Scope(members),Members.Name).
+// At re-scopes a model column without erasing its value type. Example: expr.At(rows.Scope(members),orm.TextExpr(Members.Name)).
 func At[S, M, V, P any](scope Scope[S, M], column orm.ExpressionColumn[M, V, P]) Expression[S, V, P] {
 	c, projected := orm.FoundryColumn(column, sqlowner.Metadata())
 	err := safeerror.Join("operation failed", c.Err, scope.core.Err)
@@ -54,7 +54,7 @@ func At[S, M, V, P any](scope Scope[S, M], column orm.ExpressionColumn[M, V, P])
 	return Expression[S, V, P]{column: c, projection: func() ormcore.Column[P] { return projected }, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: err}}
 }
 
-// Value uses a column in its unaliased model scope. Example: expr.Value(Orders.TotalCents).
+// Value uses a column in its unaliased model scope. Example: expr.Value(orm.NumberExpr(Orders.TotalCents)).
 func Value[M, V, P any](column orm.ExpressionColumn[M, V, P]) Expression[M, V, P] {
 	c, projected := orm.FoundryColumn(column, sqlowner.Metadata())
 	return Expression[M, V, P]{column: c, projection: func() ormcore.Column[P] { return projected }, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: c.Err}}

@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.MapUpdate(orm.NumberKey(h.Members.ID), expr.Value(h.Members.ID))
+var _ = rows.MapUpdate(orm.NumberKeyExpr(orm.NumberKey(h.Members.ID)), expr.Value(orm.KeyExpr(h.Members.ID)))

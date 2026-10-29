@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -17,4 +19,4 @@ var c = rows.Correlate(a, b)
 var scope = rows.InnerScope(c, rows.Scope(b))
 var selected = rows.SelectCorrelatedRecord(c, scope)
 var lateral = rows.AsLateral[named](selected, "lateral")
-var _ = selected.Where(expr.ModelPredicate(models.Orders.TotalCents.Gt(1)))
+var _ = selected.Where(expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 1)))

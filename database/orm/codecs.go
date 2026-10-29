@@ -85,8 +85,8 @@ func keyCodec[M any, K comparable](opts []ColumnOption[K]) (codec.Codec[K], func
 	if len(opts) != 0 {
 		return selectedCodec(opts), nil
 	}
-	if c, ok := any(codec.ID[M]()).(codec.Codec[K]); ok {
-		return c, nil
+	if reflect.TypeFor[K]() == reflect.TypeFor[model.ID[M]]() {
+		return codec.FoundryID[M, K](sqlowner.Metadata()), nil
 	}
 	typ := reflect.TypeFor[K]()
 	if typ.PkgPath() == "github.com/weiloon1234/Foundry-Go/model" && strings.HasPrefix(typ.Name(), "ID[") {

@@ -36,7 +36,7 @@ func transferSoftFields() transferSoftTable {
 }
 func TestSoftDeleteScopesPreserveExplicitFilters(t *testing.T) {
 	d := transferSoftFields()
-	base := d.Query().Where(Or(d.Key().Eq(1), d.Key().Eq(2)))
+	base := d.Query().Where(Or(KeyEq(d.Key(), 1), KeyEq(d.Key(), 2)))
 	for _, test := range []struct {
 		q      Query[transferSoft]
 		suffix string
@@ -50,7 +50,7 @@ func TestSoftDeleteScopesPreserveExplicitFilters(t *testing.T) {
 			t.Fatal(where)
 		}
 	}
-	s, e := Compile(base.Where(d.DeletedAt.IsNotNull()).WithTrashed())
+	s, e := Compile(base.Where(NullableTimeIsNotNull(d.DeletedAt)).WithTrashed())
 	if e != nil || !strings.Contains(s.SQL(), `("soft_records"."deleted_at" IS NOT NULL)`) {
 		t.Fatal(s.SQL(), e)
 	}
@@ -60,8 +60,8 @@ func TestSoftDeleteScopesPreserveExplicitFilters(t *testing.T) {
 }
 func TestSoftDeleteRelationsScopeTargetsAndPivotsIndependently(t *testing.T) {
 	d := transferSoftFields()
-	one := HasOneOf(d.Child, d.Key(), d.Key())
-	through := ManyToManyOf(d.Links, d.Key(), d.Key(), d.Key(), d.Key())
+	one := HasOneOf(d.Child, KeyExpr(d.Key()), KeyExpr(d.Key()))
+	through := ManyToManyOf(d.Links, KeyExpr(d.Key()), KeyExpr(d.Key()), KeyExpr(d.Key()), KeyExpr(d.Key()))
 	for _, test := range []struct {
 		p               Predicate[transferSoft]
 		active, trashed int

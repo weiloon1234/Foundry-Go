@@ -66,7 +66,7 @@ func (Changes[M]) String() string { return "orm changes" }
 // GoString redacts snapshots. Example: fmt.Sprintf("%#v",changes).
 func (Changes[M]) GoString() string { return "orm changes" }
 
-// ChangeOf selects a required persisted field with its stored type. Example: ChangeOf(changes, Orders.TotalCents).
+// ChangeOf selects a required persisted field with its stored type. Example: ChangeOf(changes, NumberExpr(Orders.TotalCents)).
 func ChangeOf[M, V any](changes Changes[M], field interface{ ormColumn(*M) columnData[V] }) (lifecycle.FieldChange[V], error) {
 	c := field.ormColumn(nil)
 	if err := changeField(changes.state, c.core, false); err != nil {
@@ -75,7 +75,7 @@ func ChangeOf[M, V any](changes Changes[M], field interface{ ormColumn(*M) colum
 	return compareTypedField(c.core, c.policy, changes.state)
 }
 
-// NullableChangeOf retains SQL NULL independently of model existence. Example: NullableChangeOf(changes, Members.Note).
+// NullableChangeOf retains SQL NULL independently of model existence. Example: NullableChangeOf(changes, NullableInputTextExpr(Members.Note)).
 func NullableChangeOf[M, V any](changes Changes[M], field interface{ ormColumn(*M) columnData[V] }) (lifecycle.FieldChange[value.Nullable[V]], error) {
 	c := field.ormColumn(nil)
 	if err := changeField(changes.state, c.core, true); err != nil {
@@ -141,7 +141,7 @@ func compareStoredField(c *columnCore, before, after unsafe.Pointer, assigned bo
 }
 
 // Compare compares stored snapshots without running hooks, accessors or mutators.
-// Example: Compare(Orders.Table, value.Set(before), value.Set(after), Orders.TotalCents.Set(0)).
+// Example: Compare(Orders.Table, value.Set(before), value.Set(after), orm.NumberSet(Orders.TotalCents, 0)).
 func Compare[M any, K comparable](table Table[M, K], before, after value.Optional[M], assigned ...Assignment[M]) (Changes[M], error) {
 	if err := tableError(table.core); err != nil {
 		return Changes[M]{}, err

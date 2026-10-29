@@ -46,6 +46,6 @@ var Rows = rows.Define(func(b rows.Builder[DTO], r *DTO) RowFields {
 type Side struct{}
 
 var Alias = rows.As[Side](Models.Query(), "e")
-var State = expr.At(rows.Scope(Alias), Models.State)
-var Projection = rows.Select(Alias, Rows, rows.Map(Rows.State, State), rows.Map(Rows.Nullable, expr.At(rows.Scope(Alias), Models.Nullable)))
-var Values = rows.SelectValue(Models.Query(), Models.State)
+var State = expr.At(rows.Scope(Alias), orm.EnumExpr(Models.State))
+var Projection = rows.Select(Alias, Rows, rows.Map(Rows.State, State), rows.Map(Rows.Nullable, expr.At(rows.Scope(Alias), orm.NullableEnumExpr(Models.Nullable))))
+var Values = rows.SelectValue(Models.Query(), orm.EnumExpr(Models.State))

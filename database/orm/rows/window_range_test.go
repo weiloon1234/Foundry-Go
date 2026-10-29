@@ -43,7 +43,7 @@ func TestWindowRangeTypedDistancesAndCapture(t *testing.T) {
 	})
 	source := FromModel(d.Query())
 	w := expr.WindowFor(ModelScope(d.Query()))
-	r := expr.NumericRange(w, expr.Row(expr.Value(d.Amount)).Value())
+	r := expr.NumericRange(w, expr.Row(expr.Value(orm.ColumnExpr(d.Amount))).Value())
 	bound := r.Preceding(decimal.FromInt64(1))
 	encoded[0] = '9'
 	q := expressionQuery(source, expr.RowNumber(r.Desc().Between(bound, r.CurrentRow())), codec.Signed[int64]())
@@ -54,15 +54,15 @@ func TestWindowRangeTypedDistancesAndCapture(t *testing.T) {
 		}
 		s.Bindings[0].([]byte)[0] = '7'
 	}
-	tr := expr.TemporalRange(w, expr.Row(expr.Value(d.Date)).Value())
-	nr := expr.NullableTemporalRange(w, expr.Row(expr.Value(d.MaybeDate)).Value())
+	tr := expr.TemporalRange(w, expr.Row(expr.Value(orm.TimeExpr(d.Date))).Value())
+	nr := expr.NullableTemporalRange(w, expr.Row(expr.Value(orm.NullableTimeExpr(d.MaybeDate))).Value())
 	for _, window := range []expr.Window[windowRangeRecord]{tr.Between(tr.Preceding(temporal.Days(2)), tr.CurrentRow()), nr.Between(nr.Preceding(temporal.Days(2)), nr.CurrentRow())} {
 		s := expressionSQL(t, expressionQuery(source, expr.RowNumber(window), codec.Signed[int64]()))
 		if !strings.Contains(s.SQLText, "CAST($1 AS interval) PRECEDING") || !reflect.DeepEqual(s.Bindings, []any{temporal.Days(2).String()}) {
 			t.Fatal(s.SQLText, s.Bindings)
 		}
 	}
-	cr := expr.TemporalRange(w, expr.Row(expr.Value(d.Clock)).Value())
+	cr := expr.TemporalRange(w, expr.Row(expr.Value(orm.TimeExpr(d.Clock))).Value())
 	for _, window := range []expr.Window[windowRangeRecord]{tr.Between(tr.Preceding(temporal.Days(-1)), tr.CurrentRow()), tr.Between(tr.Preceding(temporal.Months(-1)), tr.CurrentRow()), cr.Between(cr.Preceding(temporal.Days(1)), cr.CurrentRow())} {
 		q := expressionQuery(source, expr.RowNumber(window), codec.Signed[int64]())
 		if _, err := querycore.CompileRead(q.source.Node, t.Context(), false, q.source.Err, true); !errors.Is(err, fault.Invalid) {
@@ -77,7 +77,7 @@ func TestTemporalRangeComponentsAndSign(t *testing.T) {
 	})
 	source := FromModel(d.Query())
 	w := expr.WindowFor(ModelScope(d.Query()))
-	r := expr.TemporalRange(w, expr.Row(expr.Value(d.Date)).Value())
+	r := expr.TemporalRange(w, expr.Row(expr.Value(orm.TimeExpr(d.Date))).Value())
 	mixed, err := temporal.NewInterval(-1, 31, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func TestTemporalRangeComponentsAndSign(t *testing.T) {
 	if !strings.Contains(s.SQLText, "CAST($1 AS interval) PRECEDING") || !reflect.DeepEqual(s.Bindings, []any{mixed.String()}) {
 		t.Fatal(s.SQLText, s.Bindings)
 	}
-	clock := expr.TemporalRange(w, expr.Row(expr.Value(d.Clock)).Value())
+	clock := expr.TemporalRange(w, expr.Row(expr.Value(orm.TimeExpr(d.Clock))).Value())
 	hour, err := temporal.Elapsed(time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestTypedNumericRangeFrames(t *testing.T) {
 	d := declareAggregateRecords()
 	q := From(d.Query())
 	w := expr.WindowFor(ModelScope(d.Query()))
-	id := expr.Row(expr.Value(d.Exact)).Value()
+	id := expr.Row(expr.Value(orm.NumberExpr(d.Exact))).Value()
 	r := expr.NumericRange(w, id).Desc()
 	framed := r.Between(r.Preceding(2), r.Following(3))
 	s, err := CompileRead(ReadScalar(SelectScalar(q, expr.Over(expr.Count[aggregateRecord](), framed))))
@@ -114,7 +114,7 @@ func TestTypedNumericRangeFrames(t *testing.T) {
 			t.Fatal("invalid numeric RANGE", err)
 		}
 	}
-	fr := expr.NumericRange(w, expr.Row(expr.Value(d.Approx)).Value())
+	fr := expr.NumericRange(w, expr.Row(expr.Value(orm.NumberExpr(d.Approx))).Value())
 	for _, v := range []float64{-1, math.Inf(1), math.NaN()} {
 		if _, err := CompileRead(ReadScalar(SelectScalar(q, expr.RowNumber(fr.Between(fr.Preceding(v), fr.CurrentRow()))))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid float distance", err)

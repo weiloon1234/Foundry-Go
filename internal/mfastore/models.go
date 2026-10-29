@@ -33,35 +33,35 @@ type FactorTable struct {
 	// Table provides Factor queries and writes. Example: Factors.Query().Limit(10).
 	orm.Table[Factor, string]
 	// Scope binds the persisted Factor.Scope column.
-	// Example: Factors.Scope.Set(scope).
+	// Example: orm.TextSet(Factors.Scope, scope).
 	Scope orm.Text[Factor, string]
 	// Identity binds the persisted Factor.Identity column.
-	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = Factors.Identity.Set(encoded) }.
+	// Example: encoded, err := value.NewJSON(identity); if err == nil { _ = orm.JSONSet(Factors.Identity, encoded) }.
 	Identity orm.JSON[Factor, model.Identity]
 	// Generation binds the persisted Factor.Generation column.
-	// Example: Factors.Generation.Set(generation).
+	// Example: orm.ColumnSet(Factors.Generation, generation).
 	Generation orm.Column[Factor, model.ID[Factor]]
 	// Ciphertext binds the persisted Factor.Ciphertext column.
-	// Example: Factors.Ciphertext.Set(ciphertext).
+	// Example: orm.TextSet(Factors.Ciphertext, ciphertext).
 	Ciphertext orm.Text[Factor, string]
 	// CreatedAt binds the caller-supplied creation time; the ORM does not automatically populate or refresh it.
-	// Example: Factors.CreatedAt.Set(createdAt).
+	// Example: orm.TimeSet(Factors.CreatedAt, createdAt).
 	CreatedAt orm.Time[Factor, temporal.DateTime]
 	// PendingUntil binds the persisted Factor.PendingUntil column.
-	// Example: Factors.PendingUntil.SetNull().
+	// Example: orm.NullableTimeSetNull(Factors.PendingUntil).
 	PendingUntil orm.NullableTime[Factor, temporal.DateTime]
 	// ConfirmedAt binds the persisted Factor.ConfirmedAt column.
-	// Example: Factors.ConfirmedAt.SetNull().
+	// Example: orm.NullableTimeSetNull(Factors.ConfirmedAt).
 	ConfirmedAt orm.NullableTime[Factor, temporal.DateTime]
 	// LastStep binds the persisted Factor.LastStep column.
-	// Example: Factors.LastStep.SetNull().
+	// Example: orm.NullableNumberSetNull(Factors.LastStep).
 	LastStep orm.NullableNumber[Factor, int64]
 	// RecoveryHashes binds the persisted Factor.RecoveryHashes column.
-	// Example: encoded, err := value.NewJSON(recoveryHashes); if err == nil { _ = Factors.RecoveryHashes.Set(encoded) }.
+	// Example: encoded, err := value.NewJSON(recoveryHashes); if err == nil { _ = orm.JSONSet(Factors.RecoveryHashes, encoded) }.
 	RecoveryHashes orm.JSON[Factor, []string]
 }
 
-// Factors owns the immutable Factor declaration. Example: Factors.Query().First(ctx, tx).
+// Factors owns the immutable Factor declaration. Example: orm.First(ctx, tx, Factors.Query()).
 var Factors = orm.Define("foundry_mfa_factors", func(b orm.Builder[Factor], m *Factor) FactorTable {
 	table := orm.TableOf(b, &m.Key)
 	return FactorTable{Table: table,

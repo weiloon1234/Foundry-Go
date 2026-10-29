@@ -12,7 +12,7 @@ func TestORMActorDeclarationParity(t *testing.T) {
 	if err := orm.Check(Tables()...); err != nil {
 		t.Fatal(err)
 	}
-	got, err := orm.Compile(Members.Query().Where(Members.Name.Eq("Ada")))
+	got, err := orm.Compile(Members.Query().Where(orm.TextEq(Members.Name, "Ada")))
 	if err != nil {
 		t.Fatal(err)
 	}

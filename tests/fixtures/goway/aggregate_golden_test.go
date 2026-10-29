@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -61,7 +63,7 @@ func TestStage6a3AggregateGolden(t *testing.T) {
 
 	defer newDB.Close(ctx)
 
-	newBuyer, newAmount := expr.Value(models.Orders.BuyerID), expr.Value(models.Orders.TotalCents)
+	newBuyer, newAmount := expr.Value(orm.ColumnExpr(models.Orders.BuyerID)), expr.Value(orm.NumberExpr(models.Orders.TotalCents))
 	newQ := rowset.OrderBy(rowset.DistinctOn(rowset.FromModel(models.Orders.Query()), expr.Group(newBuyer)), newBuyer.Asc(), newAmount.Desc())
 
 	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(rowset.Read(newQ).All(ctx, newDB))}))
@@ -78,12 +80,12 @@ func runAggregateNew(g *goldenCapture) {
 	defer db.Close(ctx)
 	a := rowset.As[expressionSide](models.Orders.Query(), "o")
 	scope := rowset.Scope(a)
-	amount := expr.OrderRow(expr.At(scope, models.Orders.TotalCents))
-	buyer := expr.At(scope, models.Orders.BuyerID)
+	amount := expr.OrderRow(expr.At(scope, orm.NumberExpr(models.Orders.TotalCents)))
+	buyer := expr.At(scope, orm.ColumnExpr(models.Orders.BuyerID))
 	count := expr.Count[rowset.Alias[expressionSide, models.Order]]().Filter(amount.Gt(0))
-	total := expr.SumAt(scope, models.Orders.TotalCents).Filter(amount.Gt(100))
+	total := expr.SumAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Filter(amount.Gt(100))
 	s := aggregateBuyerRows
-	q := rowset.Select(a, s, rowset.Map(s.Buyer, buyer), rowset.MapSelected(s.Count, count.Value()), rowset.MapSelected(s.Distinct, expr.CountDistinctFieldAt(scope, models.Orders.TotalCents).Value()), rowset.MapSelected(s.Total, total.Value()), rowset.MapSelected(s.Average, expr.AvgAt(scope, models.Orders.TotalCents).Value()), rowset.MapSelected(s.Min, expr.MinAt(scope, models.Orders.TotalCents).Value()), rowset.MapSelected(s.Max, expr.MaxAt(scope, models.Orders.TotalCents).Value()))
+	q := rowset.Select(a, s, rowset.Map(s.Buyer, buyer), rowset.MapSelected(s.Count, count.Value()), rowset.MapSelected(s.Distinct, expr.CountDistinctFieldAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()), rowset.MapSelected(s.Total, total.Value()), rowset.MapSelected(s.Average, expr.AvgAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()), rowset.MapSelected(s.Min, expr.MinAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()), rowset.MapSelected(s.Max, expr.MaxAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()))
 	q = rowset.OrderBy(rowset.Having(rowset.GroupBy(q, expr.Group(buyer)), expr.HavingAnd(count.Gt(0), expr.HavingOr(total.IsNull(), total.Gt(decimal.FromInt64(1))))), count.Desc(), buyer.Asc())
 	got := must(rowset.Read(q).All(ctx, db))
 	// Owners differ between APIs; compare the same concrete printable row shape.

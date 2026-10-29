@@ -9,9 +9,9 @@ import (
 
 func Direct() orm.Query[models.User] {
 	r := models.UserRelations.Orders
-	return models.Users.Query().With(r.OrderBy(expr.RelationOrder(r, expr.Negate(expr.Value(models.Orders.TotalCents)).Asc())))
+	return models.Users.Query().With(r.OrderBy(expr.RelationOrder(r, expr.Negate(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Asc())))
 }
 func Joined() orm.Query[j.Parent] {
 	r := j.Peers
-	return j.Parents.Query().With(r.OrderBy(expr.RelationOrder(r, expr.Negate(expr.Value(j.Targets.Rank)).Asc())).OrderByPivot(expr.RelationPivotOrder(r, expr.Lower(expr.Value(j.Pivots.Role)).Asc())))
+	return j.Parents.Query().With(r.OrderBy(expr.RelationOrder(r, expr.Negate(expr.Value(orm.NumberExpr(j.Targets.Rank))).Asc())).OrderByPivot(expr.RelationPivotOrder(r, expr.Lower(expr.Value(orm.TextExpr(j.Pivots.Role))).Asc())))
 }

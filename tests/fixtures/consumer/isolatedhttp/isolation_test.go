@@ -1,5 +1,7 @@
 package isolatedhttp
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -40,7 +42,7 @@ func TestIsolatedCompleteHTTPApplications(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				found, err := RecordRows.Query().Where(RecordRows.Name.Eq(receipt.Name)).Require(ctx, db)
+				found, err := orm.Require(ctx, db, RecordRows.Query().Where(orm.TextEq(RecordRows.Name, receipt.Name)))
 				if err != nil {
 					return err
 				}
@@ -75,10 +77,10 @@ func TestIsolatedCompleteHTTPApplications(t *testing.T) {
 			if _, err := records.Create(t.Context(), db); err != nil {
 				t.Fatal(err)
 			}
-			if count, err := RecordRows.Query().Count(t.Context(), reporting); err != nil || count != 1 {
+			if count, err := orm.Count(t.Context(), reporting, RecordRows.Query()); err != nil || count != 1 {
 				t.Fatal("shared scope lost fixture", err)
 			}
-			if count, err := RecordRows.Query().Count(t.Context(), separate); err != nil || count != 0 {
+			if count, err := orm.Count(t.Context(), separate, RecordRows.Query()); err != nil || count != 0 {
 				t.Fatal("distinct scope leaked fixture", err)
 			}
 			finished := make(chan error, 1)
@@ -124,7 +126,7 @@ func TestIsolatedCompleteHTTPApplications(t *testing.T) {
 					t.Fatal("parallel app read another scope", err)
 				}
 			}
-			if found, err := RecordRows.Query().Where(RecordRows.Name.Eq("rolled-back")).First(t.Context(), db); err != nil || found.IsSet() {
+			if found, err := orm.First(t.Context(), db, RecordRows.Query().Where(orm.TextEq(RecordRows.Name, "rolled-back"))); err != nil || found.IsSet() {
 				t.Fatal("HTTP rollback persisted", err)
 			}
 			var count int64
@@ -176,7 +178,7 @@ func TestIsolatedCompleteHTTPApplications(t *testing.T) {
 				t.Fatal("application teardown retained connections")
 			}
 			retained := scope.Open(t)
-			if count, err := RecordRows.Query().Count(t.Context(), retained); err != nil || count != 2 {
+			if count, err := orm.Count(t.Context(), retained, RecordRows.Query()); err != nil || count != 2 {
 				t.Fatal("teardown lost retained data", err)
 			}
 		})

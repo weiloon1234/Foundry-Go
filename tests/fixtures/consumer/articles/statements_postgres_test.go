@@ -25,7 +25,7 @@ func TestSlotLoadingStatementsDoNotGrowWithParents(t *testing.T) {
 		statements.Store(0)
 		if err := store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 			var err error
-			loaded, err = orm.WithRelationLimits(articles.Articles.Query(), limits).With(relations...).All(ctx, tx)
+			loaded, err = orm.All(ctx, tx, orm.WithRelationLimits(articles.Articles.Query(), limits).With(relations...))
 			return err
 		}); err != nil {
 			t.Fatal(err)
@@ -75,7 +75,7 @@ func TestSlotLoadingStatementsDoNotGrowWithParents(t *testing.T) {
 	if missing != empty {
 		t.Fatalf("LoadMissing on loaded slots issued %d statements; an empty transaction issues %d", missing, empty)
 	}
-	if _, err := articles.Articles.Query().With(x.Logo.Relation(articles.Articles.Logo)).All(t.Context(), store.Database()); err == nil || !strings.Contains(err.Error(), "not bound") {
+	if _, err := orm.All(t.Context(), store.Database(), articles.Articles.Query().With(x.Logo.Relation(articles.Articles.Logo))); err == nil || !strings.Contains(err.Error(), "not bound") {
 		t.Fatal("an attachment slot without a manager must report that it is unbound", err)
 	}
 }

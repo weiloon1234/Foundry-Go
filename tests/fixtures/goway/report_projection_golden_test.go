@@ -38,8 +38,8 @@ func TestReportProjectionGolden(t *testing.T) {
 					db := g.open(t.Context())
 					defer db.Close(t.Context())
 
-					f := expr.Value(models.Orders.TotalCents)
-					q := rowset.OrderBy(rowset.Select(rowset.From(models.Orders.Query()), reportSchema, rowset.Map(reportSchema.Amount, f)).Where(expr.ModelPredicate(models.Orders.TotalCents.Gt(100))), f.Desc())
+					f := expr.Value(orm.NumberExpr(models.Orders.TotalCents))
+					q := rowset.OrderBy(rowset.Select(rowset.From(models.Orders.Query()), reportSchema, rowset.Map(reportSchema.Amount, f)).Where(expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 100))), f.Desc())
 					switch shape {
 					case "group":
 						q = rowset.Having(rowset.GroupBy(q, expr.Group(f)), expr.Count[models.Order]().Gt(0))
@@ -82,8 +82,8 @@ func TestReportProjectionGolden(t *testing.T) {
 }
 
 func TestReportFilterAdaptersGolden(t *testing.T) {
-	text := expr.TextNullableRow(models.Users.Nickname)
-	enum := expr.CompareRow(expr.Value(models.Users.Status))
+	text := expr.TextNullableRow(orm.NullableTextExpr(models.Users.Nickname))
+	enum := expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status)))
 
 	newPs := []expr.Predicate[models.User]{
 		expr.Or(expr.Not(text.Eq("Ada")), text.IsNull()),
@@ -91,9 +91,9 @@ func TestReportFilterAdaptersGolden(t *testing.T) {
 		expr.Or(expr.Not(text.In("Ada", "Bob")), text.IsNull()),
 		text.Contains(`A%_`), text.IContains(`A%_`), text.Like("A%"),
 		enum.In(models.StatusActive, models.StatusDisabled),
-		expr.CompareNullableRow(expr.Value(models.Users.Nickname)).Eq("Ada"),
-		expr.TextRow(models.Users.Email).Contains("Ada"), expr.TextRow(models.Users.Email).Like("A%"), expr.TextRow(models.Users.Email).Gt("Ada"), text.Gt("Ada"),
-		expr.Has(models.UserRelations.Orders, expr.ModelPredicate(models.Orders.TotalCents.Gt(100))),
+		expr.CompareNullableRow(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Eq("Ada"),
+		expr.TextRow(orm.TextExpr(models.Users.Email)).Contains("Ada"), expr.TextRow(orm.TextExpr(models.Users.Email)).Like("A%"), expr.TextRow(orm.TextExpr(models.Users.Email)).Gt("Ada"), text.Gt("Ada"),
+		expr.Has(models.UserRelations.Orders, expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 100))),
 	}
 
 	for _, p := range newPs {

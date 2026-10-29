@@ -1,5 +1,7 @@
 package mutatorqueries_test
 
+import model "github.com/weiloon1234/Foundry-Go/model"
+
 import (
 	"errors"
 	"testing"
@@ -28,8 +30,8 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 		}
 		q := mutatorqueries.Members
 		f := mutatorqueries.Members
-		draft := []orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set("  ADA@EXAMPLE.TEST  "), mutatorqueries.Members.Attempts.Set(0), mutatorqueries.Members.Nickname.Set(""), mutatorqueries.Members.State.Set(mutatorqueries.State(" ACTIVE "))}
-		member, err := q.Insert(t.Context(), tx, draft...)
+		draft := []orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, "  ADA@EXAMPLE.TEST  "), orm.InputNumberSet(mutatorqueries.Members.Attempts, 0), orm.NullableInputTextSet(mutatorqueries.Members.Nickname, ""), orm.InputEnumSet(mutatorqueries.Members.State, mutatorqueries.State(" ACTIVE "))}
+		member, err := orm.Insert(t.Context(), tx, q.Table, draft...)
 		if err != nil {
 			return err
 		}
@@ -39,28 +41,49 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 		inspectDone := errors.New("fresh inputs inspected")
 		inputChecked := false
 		inspectCtx := mutatorqueries.WithDraftInspection(t.Context(), func(w *orm.Write[mutatorqueries.Member]) error {
-			email, emailOK := orm.WriteGet(w, q.Email.Set).Get()
-			attempts, attemptsOK := orm.WriteGet(w, q.Attempts.Set).Get()
-			nickname, nicknameOK := orm.WriteNullableGet(w, q.Nickname.Set).Get()
+			email, emailOK := orm.WriteGet(w, func() func(arg0 string) orm.Assignment[mutatorqueries.Member] {
+				receiver := q.Email
+				return func(arg0 string) orm.Assignment[mutatorqueries.Member] { return orm.InputTextSet(receiver, arg0) }
+			}()).Get()
+			attempts, attemptsOK := orm.WriteGet(w, func() func(arg0 int) orm.Assignment[mutatorqueries.Member] {
+				receiver := q.Attempts
+				return func(arg0 int) orm.Assignment[mutatorqueries.Member] { return orm.InputNumberSet(receiver, arg0) }
+			}()).Get()
+			nickname, nicknameOK := orm.WriteNullableGet(w, func() func(arg0 string) orm.Assignment[mutatorqueries.Member] {
+				receiver := q.Nickname
+				return func(arg0 string) orm.Assignment[mutatorqueries.Member] {
+					return orm.NullableInputTextSet(receiver, arg0)
+				}
+			}()).Get()
 			name, nonnull := nickname.Get()
-			state, stateOK := orm.WriteGet(w, q.State.Set).Get()
-			if !emailOK || email != "  ADA@EXAMPLE.TEST  " || !attemptsOK || attempts != 0 || !nicknameOK || !nonnull || name != "" || !stateOK || state != mutatorqueries.State(" ACTIVE ") || orm.WriteIsSet(w, q.Key().Set) {
+			state, stateOK := orm.WriteGet(w, func() func(arg0 mutatorqueries.State) orm.Assignment[mutatorqueries.Member] {
+				receiver := q.State
+				return func(arg0 mutatorqueries.State) orm.Assignment[mutatorqueries.Member] {
+					return orm.InputEnumSet(receiver, arg0)
+				}
+			}()).Get()
+			if !emailOK || email != "  ADA@EXAMPLE.TEST  " || !attemptsOK || attempts != 0 || !nicknameOK || !nonnull || name != "" || !stateOK || state != mutatorqueries.State(" ACTIVE ") || orm.WriteIsSet(w, func() func(arg0 model.ID[mutatorqueries.Member]) orm.Assignment[mutatorqueries.Member] {
+				receiver := q.Key()
+				return func(arg0 model.ID[mutatorqueries.Member]) orm.Assignment[mutatorqueries.Member] {
+					return orm.KeySet(receiver, arg0)
+				}
+			}()) {
 				return errors.New("mutator changed original inputs or omitted key")
 			}
 			inputChecked = true
 			return inspectDone
 		})
-		if _, err := q.Insert(inspectCtx, tx, draft...); !inputChecked || !errors.Is(err, inspectDone) {
+		if _, err := orm.Insert(inspectCtx, tx, q.Table, draft...); !inputChecked || !errors.Is(err, inspectDone) {
 			return errors.New("fresh input inspection did not run")
 		}
 		// Reusing the same inputs after a rolled-back replacement must synthesize
 		// a fresh key and invoke each mutator exactly once again.
 		inspected := errors.New("caller inputs inspected")
 		if err := tx.Transaction(t.Context(), func(child *database.Tx) error {
-			if _, err := q.Delete(t.Context(), child, member.ID); err != nil {
+			if _, err := orm.Delete(t.Context(), child, q.Table.Query(), q.Table.Key(), member.ID); err != nil {
 				return err
 			}
-			again, err := q.Insert(t.Context(), child, draft...)
+			again, err := orm.Insert(t.Context(), child, q.Table, draft...)
 			if err != nil {
 				return err
 			}
@@ -72,32 +95,32 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 			return err
 		}
 
-		member, err = q.Update(t.Context(), tx, member.ID, mutatorqueries.Members.Email.Set(" NEXT@EXAMPLE.TEST "), mutatorqueries.Members.Nickname.SetNull())
+		member, err = orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(mutatorqueries.Members.Email, " NEXT@EXAMPLE.TEST "), orm.NullableInputTextSetNull(mutatorqueries.Members.Nickname))
 		if err != nil {
 			return err
 		}
 		if member.Email != "next@example.test" || !member.Nickname.IsNull() || member.Attempts != 1 {
 			t.Fatal("update transformed an omitted field or replaced explicit NULL")
 		}
-		if _, err := orm.Update(t.Context(), tx, q.Query().Where(f.Email.Eq("forbidden")), q.Key(), member.ID, mutatorqueries.Members.Email.Set("scope escape")); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Update(t.Context(), tx, q.Query().Where(orm.InputTextEq(f.Email, "forbidden")), q.Key(), member.ID, orm.InputTextSet(mutatorqueries.Members.Email, "scope escape")); !errors.Is(err, database.NotFound) {
 			t.Fatalf("mutator escaped query scope: %v", err)
 		}
 		for _, failure := range []struct {
 			draft []orm.Assignment[mutatorqueries.Member]
 			want  error
 		}{
-			{[]orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set("reject")}, mutatorqueries.RejectedEmail},
-			{[]orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set("panic")}, fault.Panicked},
-			{[]orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set("bad state"), mutatorqueries.Members.State.Set("unknown")}, fault.Invalid},
+			{[]orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, "reject")}, mutatorqueries.RejectedEmail},
+			{[]orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, "panic")}, fault.Panicked},
+			{[]orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, "bad state"), orm.InputEnumSet(mutatorqueries.Members.State, "unknown")}, fault.Invalid},
 		} {
-			if got, err := q.Insert(t.Context(), tx, failure.draft...); !errors.Is(err, failure.want) || !got.ID.IsZero() {
+			if got, err := orm.Insert(t.Context(), tx, q.Table, failure.draft...); !errors.Is(err, failure.want) || !got.ID.IsZero() {
 				t.Fatalf("failed create published a model or lost its error: %v", err)
 			}
-			if got, err := q.Update(t.Context(), tx, member.ID, failure.draft...); !errors.Is(err, failure.want) || !got.ID.IsZero() {
+			if got, err := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), member.ID, failure.draft...); !errors.Is(err, failure.want) || !got.ID.IsZero() {
 				t.Fatalf("failed update published a model or lost its error: %v", err)
 			}
 		}
-		current, err := q.Require(t.Context(), tx, member.ID)
+		current, err := orm.RequireKey(t.Context(), tx, q.Table, member.ID)
 		if err != nil {
 			return err
 		}
@@ -108,14 +131,14 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 		if err != nil || response.Email != "NEXT@EXAMPLE.TEST" || !response.Nickname.IsNull() || current != member {
 			t.Fatalf("stored read and explicit getter DTO diverged: %+v, %v", response, err)
 		}
-		itemsWithStoredEmail, err := q.Query().Where(f.Email.Eq(current.Email)).All(t.Context(), tx)
+		itemsWithStoredEmail, err := orm.All(t.Context(), tx, q.Query().Where(orm.InputTextEq(f.Email, current.Email)))
 		if err != nil || len(itemsWithStoredEmail) != 1 || itemsWithStoredEmail[0] != current {
 			t.Fatalf("getter evaluation changed query identity or stored hydration: %v", err)
 		}
-		if _, err := q.Insert(t.Context(), tx, mutatorqueries.Members.Email.Set(" NEXT@EXAMPLE.TEST ")); !errors.Is(err, database.UniqueViolation) {
+		if _, err := orm.Insert(t.Context(), tx, q.Table, orm.InputTextSet(mutatorqueries.Members.Email, " NEXT@EXAMPLE.TEST ")); !errors.Is(err, database.UniqueViolation) {
 			t.Fatalf("database uniqueness did not see the normalized value: %v", err)
 		}
-		defaults, err := q.Insert(t.Context(), tx, mutatorqueries.Members.Email.Set(" DEFAULTS@EXAMPLE.TEST "))
+		defaults, err := orm.Insert(t.Context(), tx, q.Table, orm.InputTextSet(mutatorqueries.Members.Email, " DEFAULTS@EXAMPLE.TEST "))
 		if err != nil {
 			return err
 		}
@@ -123,18 +146,18 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 			t.Fatal("omitted fields invoked mutators on database defaults")
 		}
 		batch := [][]orm.Assignment[mutatorqueries.Member]{
-			[]orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set(" BATCH1@EXAMPLE.TEST "), mutatorqueries.Members.Attempts.Set(0)},
-			[]orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set(" BATCH2@EXAMPLE.TEST "), mutatorqueries.Members.Nickname.Set("two")},
+			[]orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, " BATCH1@EXAMPLE.TEST "), orm.InputNumberSet(mutatorqueries.Members.Attempts, 0)},
+			[]orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, " BATCH2@EXAMPLE.TEST "), orm.NullableInputTextSet(mutatorqueries.Members.Nickname, "two")},
 		}
-		items, err := q.InsertMany(t.Context(), tx, batch)
+		items, err := orm.InsertMany(t.Context(), tx, q.Table, batch)
 		if err != nil {
 			return err
 		}
 		if len(items) != 2 || items[0].Email != "batch1@example.test" || items[0].Attempts != 1 || items[1].Nickname != value.Of("two!") {
 			t.Fatal("bulk inputs did not use field mutators once")
 		}
-		policy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictIncoming(f.Attempts), orm.ConflictIncoming(f.Nickname))
-		upserted, err := orm.Upsert(t.Context(), tx, q.Query(), policy, mutatorqueries.Members.Email.Set(" NEXT@EXAMPLE.TEST "), mutatorqueries.Members.Attempts.Set(4), mutatorqueries.Members.Nickname.Set("updated"))
+		policy := orm.OnConflict(orm.ConflictKey(orm.InputTextExpr(f.Email))).DoUpdate(orm.ConflictIncoming(orm.InputNumberExpr(f.Attempts)), orm.ConflictIncoming(orm.NullableInputTextExpr(f.Nickname)))
+		upserted, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.InputTextSet(mutatorqueries.Members.Email, " NEXT@EXAMPLE.TEST "), orm.InputNumberSet(mutatorqueries.Members.Attempts, 4), orm.NullableInputTextSet(mutatorqueries.Members.Nickname, "updated"))
 		if err != nil {
 			return err
 		}
@@ -143,8 +166,8 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 			t.Fatal("conflict did not consume the normalized proposed row")
 		}
 		upserts, err := orm.UpsertMany(t.Context(), tx, q.Query(), policy, [][]orm.Assignment[mutatorqueries.Member]{
-			[]orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set(" BATCH1@EXAMPLE.TEST "), mutatorqueries.Members.Attempts.Set(2), mutatorqueries.Members.Nickname.SetNull()},
-			[]orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set(" BATCH3@EXAMPLE.TEST "), mutatorqueries.Members.Attempts.Set(0), mutatorqueries.Members.Nickname.Set("three")},
+			[]orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, " BATCH1@EXAMPLE.TEST "), orm.InputNumberSet(mutatorqueries.Members.Attempts, 2), orm.NullableInputTextSetNull(mutatorqueries.Members.Nickname)},
+			[]orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, " BATCH3@EXAMPLE.TEST "), orm.InputNumberSet(mutatorqueries.Members.Attempts, 0), orm.NullableInputTextSet(mutatorqueries.Members.Nickname, "three")},
 		})
 		if err != nil {
 			return err
@@ -152,11 +175,11 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 		if len(upserts) != 2 || upserts[0].ID != items[0].ID || upserts[0].Attempts != 3 || !upserts[0].Nickname.IsNull() || upserts[1].Attempts != 1 || upserts[1].Nickname != value.Of("three!") {
 			t.Fatal("upsert batch did not preserve normalized existing/new row inputs")
 		}
-		literalPolicy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(
-			orm.ConflictSet(f.Email, " CONSTANT@EXAMPLE.TEST "), orm.ConflictSet(f.Attempts, 9), orm.ConflictSet(f.Nickname, "constant"), orm.ConflictSet(f.State, " ACTIVE "),
+		literalPolicy := orm.OnConflict(orm.ConflictKey(orm.InputTextExpr(f.Email))).DoUpdate(
+			orm.ConflictSet(orm.InputTextExpr(f.Email), " CONSTANT@EXAMPLE.TEST "), orm.ConflictSet(orm.InputNumberExpr(f.Attempts), 9), orm.ConflictSet(orm.NullableInputTextExpr(f.Nickname), "constant"), orm.ConflictSet(orm.InputEnumExpr(f.State), " ACTIVE "),
 		)
 		for _, email := range []string{" NEXT@EXAMPLE.TEST ", " CONSTANT@EXAMPLE.TEST "} {
-			result, err := orm.Upsert(t.Context(), tx, q.Query(), literalPolicy, mutatorqueries.Members.Email.Set(email))
+			result, err := orm.Upsert(t.Context(), tx, q.Query(), literalPolicy, orm.InputTextSet(mutatorqueries.Members.Email, email))
 			if err != nil {
 				return err
 			}
@@ -169,49 +192,49 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 			update orm.ConflictUpdate[mutatorqueries.Member]
 			want   error
 		}{
-			{orm.ConflictSet(f.Email, "reject"), mutatorqueries.RejectedEmail},
-			{orm.ConflictSet(f.Email, "panic"), fault.Panicked},
-			{orm.ConflictSet(f.State, "unknown"), fault.Invalid},
+			{orm.ConflictSet(orm.InputTextExpr(f.Email), "reject"), mutatorqueries.RejectedEmail},
+			{orm.ConflictSet(orm.InputTextExpr(f.Email), "panic"), fault.Panicked},
+			{orm.ConflictSet(orm.InputEnumExpr(f.State), "unknown"), fault.Invalid},
 		} {
-			policy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(failure.update)
-			if got, err := orm.Upsert(t.Context(), tx, q.Query(), policy, mutatorqueries.Members.Email.Set(" CONSTANT@EXAMPLE.TEST ")); !errors.Is(err, failure.want) || got.IsSet() {
+			policy := orm.OnConflict(orm.ConflictKey(orm.InputTextExpr(f.Email))).DoUpdate(failure.update)
+			if got, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.InputTextSet(mutatorqueries.Members.Email, " CONSTANT@EXAMPLE.TEST ")); !errors.Is(err, failure.want) || got.IsSet() {
 				t.Fatalf("failed conflict mutator published a model or lost its error: %v", err)
 			}
 		}
 		proposed := rows.ConflictRowsOf(q.Query()).Proposed()
-		computedPolicy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(rows.SetConflictValue(f.Attempts, expr.Add(expr.At(proposed, f.Attempts), expr.Row(expr.At(proposed, f.Attempts)).Value().Param(1))))
-		if _, err := orm.Upsert(t.Context(), tx, q.Query(), computedPolicy, mutatorqueries.Members.Email.Set(" CONSTANT@EXAMPLE.TEST ")); !errors.Is(err, fault.Invalid) {
+		computedPolicy := orm.OnConflict(orm.ConflictKey(orm.InputTextExpr(f.Email))).DoUpdate(rows.SetConflictValue(orm.InputNumberExpr(f.Attempts), expr.Add(expr.At(proposed, orm.InputNumberExpr(f.Attempts)), expr.Row(expr.At(proposed, orm.InputNumberExpr(f.Attempts))).Value().Param(1))))
+		if _, err := orm.Upsert(t.Context(), tx, q.Query(), computedPolicy, orm.InputTextSet(mutatorqueries.Members.Email, " CONSTANT@EXAMPLE.TEST ")); !errors.Is(err, fault.Invalid) {
 			t.Fatalf("SQL calculation bypassed a Go field mutator: %v", err)
 		}
-		unchanged, err := q.Require(t.Context(), tx, member.ID)
+		unchanged, err := orm.RequireKey(t.Context(), tx, q.Table, member.ID)
 		if err != nil {
 			return err
 		}
 		if unchanged.Email != "constant@example.test" || unchanged.Attempts != 10 || unchanged.Nickname != value.Of("constant!") {
 			t.Fatal("failed conflict assignment changed the stored model")
 		}
-		incomingPolicy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(rows.SetConflictValue(f.Nickname, expr.At(proposed, f.Nickname)))
-		incomingResult, err := orm.Upsert(t.Context(), tx, q.Query(), incomingPolicy, mutatorqueries.Members.Email.Set(" CONSTANT@EXAMPLE.TEST "), mutatorqueries.Members.Nickname.Set("incoming"))
+		incomingPolicy := orm.OnConflict(orm.ConflictKey(orm.InputTextExpr(f.Email))).DoUpdate(rows.SetConflictValue(orm.NullableInputTextExpr(f.Nickname), expr.At(proposed, orm.NullableInputTextExpr(f.Nickname))))
+		incomingResult, err := orm.Upsert(t.Context(), tx, q.Query(), incomingPolicy, orm.InputTextSet(mutatorqueries.Members.Email, " CONSTANT@EXAMPLE.TEST "), orm.NullableInputTextSet(mutatorqueries.Members.Nickname, "incoming"))
 		if err != nil {
 			return err
 		}
 		if incoming, present := incomingResult.Get(); !present || incoming.Nickname != value.Of("incoming!") {
 			t.Fatal("own proposed field was rejected or transformed twice")
 		}
-		nullPolicy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictNull(f.Nickname))
-		nullResult, err := orm.Upsert(t.Context(), tx, q.Query(), nullPolicy, mutatorqueries.Members.Email.Set(" CONSTANT@EXAMPLE.TEST "))
+		nullPolicy := orm.OnConflict(orm.ConflictKey(orm.InputTextExpr(f.Email))).DoUpdate(orm.ConflictNull(orm.NullableInputTextExpr(f.Nickname)))
+		nullResult, err := orm.Upsert(t.Context(), tx, q.Query(), nullPolicy, orm.InputTextSet(mutatorqueries.Members.Email, " CONSTANT@EXAMPLE.TEST "))
 		if err != nil {
 			return err
 		}
 		if cleared, present := nullResult.Get(); !present || !cleared.Nickname.IsNull() {
 			t.Fatal("NULL conflict literal invoked its scalar mutator")
 		}
-		if _, err := q.InsertMany(t.Context(), tx, [][]orm.Assignment[mutatorqueries.Member]{
-			[]orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set("would insert")}, []orm.Assignment[mutatorqueries.Member]{mutatorqueries.Members.Email.Set("reject")},
+		if _, err := orm.InsertMany(t.Context(), tx, q.Table, [][]orm.Assignment[mutatorqueries.Member]{
+			[]orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, "would insert")}, []orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(mutatorqueries.Members.Email, "reject")},
 		}); !errors.Is(err, mutatorqueries.RejectedEmail) {
 			t.Fatalf("batch did not propagate its mutator veto: %v", err)
 		}
-		count, err := q.Query().Count(t.Context(), tx)
+		count, err := orm.Count(t.Context(), tx, q.Query())
 		if err != nil {
 			return err
 		}
@@ -220,14 +243,14 @@ func TestPostgresAutomaticModelMutators(t *testing.T) {
 		}
 		rollback := errors.New("abort outer savepoint")
 		if err := tx.Transaction(t.Context(), func(child *database.Tx) error {
-			if _, err := q.Insert(t.Context(), child, mutatorqueries.Members.Email.Set("rollback")); err != nil {
+			if _, err := orm.Insert(t.Context(), child, q.Table, orm.InputTextSet(mutatorqueries.Members.Email, "rollback")); err != nil {
 				return err
 			}
 			return rollback
 		}); !errors.Is(err, rollback) {
 			return err
 		}
-		count, err = q.Query().Count(t.Context(), tx)
+		count, err = orm.Count(t.Context(), tx, q.Query())
 		if err == nil && count != 5 {
 			t.Fatal("normalized write escaped its caller's savepoint rollback")
 		}

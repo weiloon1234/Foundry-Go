@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"errors"
 	"math"
@@ -24,7 +26,7 @@ func rejectScalar[S, V any](t *testing.T, source SelectionSource[S], v expr.Sele
 func TestScalarValidationBeforeExecution(t *testing.T) {
 	d := declareAggregateRecords()
 	source := FromModel(d.Query().Limit(0))
-	instant := expr.FromUnixMillis(expr.Value(d.Exact))
+	instant := expr.FromUnixMillis(expr.Value(orm.NumberExpr(d.Exact)))
 	local := expr.LocalAt(instant, expr.UTCZone())
 	date := expr.DateOf(local)
 	clock := expr.TimeOf(local)
@@ -36,8 +38,8 @@ func TestScalarValidationBeforeExecution(t *testing.T) {
 	rejectScalar(t, source, expr.AddClockElapsed(clock, time.Nanosecond).Value(), codec.WallTime())
 	rejectScalar(t, source, expr.Year[aggregateRecord, temporal.Date](nil).Value(), codec.Signed[int64]())
 	rejectScalar(t, source, expr.TransactionTime(expr.Scope[aggregateRecord, aggregateRecord]{}).Value(), codec.DateTime())
-	rejectScalar(t, source, expr.Substring(expr.Value(d.Name), 1, -1).Value(), codec.String[string]())
-	rejectScalar(t, source, expr.SubstringNullable(expr.Value(d.MaybeName), 1, -1).Value(), codec.Nullable(codec.String[string]()))
+	rejectScalar(t, source, expr.Substring(expr.Value(orm.TextExpr(d.Name)), 1, -1).Value(), codec.String[string]())
+	rejectScalar(t, source, expr.SubstringNullable(expr.Value(orm.NullableTextExpr(d.MaybeName)), 1, -1).Value(), codec.Nullable(codec.String[string]()))
 	for _, zone := range []string{"", "Local", "../etc/passwd", "not/a/timezone", strings.Repeat("x", 256)} {
 		if _, err := expr.LoadTimeZone(zone); !errors.Is(err, fault.Invalid) {
 			t.Fatal(zone, err)
@@ -56,13 +58,13 @@ func TestScalarValidationBeforeExecution(t *testing.T) {
 func TestScalarRuntimeOwnershipAndPhase(t *testing.T) {
 	d, foreign := declareAggregateRecords(), declareAggregateRecords()
 	source := FromModel(d.Query())
-	rejectScalar(t, source, expr.Lower(expr.Value(foreign.Name)).Value(), codec.String[string]())
-	rejectScalar(t, source, expr.Year(expr.LocalAt(expr.FromUnixMillis(expr.Value(foreign.Exact)), expr.UTCZone())).Value(), codec.Signed[int64]())
-	rejectScalar(t, source, expr.AddIntervals(expr.Value(d.Period), expr.Value(foreign.Period)).Value(), codec.Interval())
-	rejectScalar(t, source, expr.SphericalDistance(expr.Value(d.Approx), expr.Value(foreign.Approx), expr.GeographicPoint{}).Value(), codec.Float[float64]())
+	rejectScalar(t, source, expr.Lower(expr.Value(orm.TextExpr(foreign.Name))).Value(), codec.String[string]())
+	rejectScalar(t, source, expr.Year(expr.LocalAt(expr.FromUnixMillis(expr.Value(orm.NumberExpr(foreign.Exact))), expr.UTCZone())).Value(), codec.Signed[int64]())
+	rejectScalar(t, source, expr.AddIntervals(expr.Value(orm.IntervalExpr(d.Period)), expr.Value(orm.IntervalExpr(foreign.Period))).Value(), codec.Interval())
+	rejectScalar(t, source, expr.SphericalDistance(expr.Value(orm.NumberExpr(d.Approx)), expr.Value(orm.NumberExpr(foreign.Approx)), expr.GeographicPoint{}).Value(), codec.Float[float64]())
 	rejectScalar(t, source, expr.TransactionTime(ModelScope(foreign.Query())).Value(), codec.DateTime())
 	// A rejected scoped operand must remain rejected after both calculation and Param.
-	bad := expr.At(ModelScope(d.Query()), foreign.Name)
+	bad := expr.At(ModelScope(d.Query()), orm.TextExpr(foreign.Name))
 	rejectScalar(t, source, expr.Lower(bad).Param("x").Value(), codec.String[string]())
 	w := expr.WindowFor(ModelScope(d.Query()))
 	windowTime := expr.FromUnixMillisValue(expr.RowNumber(w))
@@ -72,13 +74,13 @@ func TestScalarRuntimeOwnershipAndPhase(t *testing.T) {
 		t.Fatal("window hidden in HAVING", err, state.sql)
 	}
 	// Nullable aggregate input is still legal in a selected calculation.
-	expressionSQL(t, Having(expressionQuery(source, expr.LowerNullableValue(expr.Min(d.Name).Value()), codec.Nullable(codec.String[string]())), expr.TextNullableValue(expr.LowerNullableValue(expr.Min(d.Name).Value())).IContains("_%")))
+	expressionSQL(t, Having(expressionQuery(source, expr.LowerNullableValue(expr.Min(orm.TextExpr(d.Name)).Value()), codec.Nullable(codec.String[string]())), expr.TextNullableValue(expr.LowerNullableValue(expr.Min(orm.TextExpr(d.Name)).Value())).IContains("_%")))
 }
 func TestScalarTextPredicatesAndComposition(t *testing.T) {
 	d := declareAggregateRecords()
 	source := FromModel(d.Query())
-	name := expr.Lower(expr.Value(d.Name))
-	maybe := expr.LowerNullable(expr.Value(d.MaybeName))
+	name := expr.Lower(expr.Value(orm.TextExpr(d.Name)))
+	maybe := expr.LowerNullable(expr.Value(orm.NullableTextExpr(d.MaybeName)))
 	predicates := []expr.Predicate[aggregateRecord]{name.Like("a%"), name.Contains("a_%"), name.IContains("a_%"), name.StartsWith("a_%"), name.EndsWith("a_%"), name.IStartsWith("a_%"), name.IEndsWith("a_%"), name.ILike("a%"), maybe.Like("a%"), maybe.Contains("a_%"), maybe.IContains("a_%"), maybe.StartsWith("a_%"), maybe.EndsWith("a_%"), maybe.IStartsWith("a_%"), maybe.IEndsWith("a_%"), maybe.ILike("a%")}
 	for _, p := range predicates {
 		s := expressionSQL(t, expressionQuery(source, name.Value(), codec.String[string]()).Where(p))
@@ -90,6 +92,6 @@ func TestScalarTextPredicatesAndComposition(t *testing.T) {
 	q := Having(group, expr.TextValue(name.Value()).Like("a%"))
 	expressionSQL(t, OrderBy(q, name.Value().Asc()))
 	// Selected phase retains windows while text/nullability conversions remain explicit.
-	e := expr.LowerNullableValue(expr.FirstValue(expr.Row(expr.Value(d.Name)).Value(), expr.WindowFor(ModelScope(d.Query()))))
+	e := expr.LowerNullableValue(expr.FirstValue(expr.Row(expr.Value(orm.TextExpr(d.Name))).Value(), expr.WindowFor(ModelScope(d.Query()))))
 	expressionSQL(t, expressionQuery(source, e, codec.Nullable(codec.String[string]())))
 }

@@ -16,7 +16,7 @@ import (
 )
 
 // Hooks declares operation-local write callbacks; nil callbacks are skipped.
-// Example: Hooks[Order]{Creating: func(ctx context.Context, tx *database.Tx, w *Write[Order]) error { return WriteSet(w, Orders.TotalCents.Set(0)) }}.
+// Example: Hooks[Order]{Creating: func(ctx context.Context, tx *database.Tx, w *Write[Order]) error { return WriteSet(w, orm.NumberSet(Orders.TotalCents, 0)) }}.
 type Hooks[M any] struct {
 	// Saving precedes Creating/Updating. Example: Saving: validateOrder.
 	Saving func(context.Context, *database.Tx, value.Optional[M], *Write[M]) error
@@ -346,7 +346,7 @@ func modelCallbacks(table *tableCore, candidate unsafe.Pointer) *writeCallbacks 
 }
 
 // WithoutModelHooks acknowledges set writes skip per-model hooks, observers and changes.
-// Per-model writes reject this flag. Example: WithoutModelHooks(Orders.Query()).UpdateAll(ctx,db,Orders.TotalCents.Set(0)).
+// Per-model writes reject this flag. Example: orm.UpdateAll(ctx, db, WithoutModelHooks(Orders.Query()), orm.NumberSet(Orders.TotalCents, 0)).
 func WithoutModelHooks[M any](q Query[M]) Query[M] { q.state.ast.SkipModelHooks = true; return q }
 
 // ForceDelete physically deletes one key within the query's current visibility.
@@ -359,5 +359,5 @@ func ForceDelete[M any, K comparable](ctx context.Context, writer database.Trans
 	if q.state.table == nil || key.key.core == nil || key.key.core != q.state.table.primary {
 		return *new(M), invalid("force delete requires this table's primary key")
 	}
-	return writeOne[M](ctx, writer, q.Where(key.Eq(id)).state, querycore.ForceDeleteModel, nil)
+	return writeOne[M](ctx, writer, q.Where(KeyEq(key, id)).state, querycore.ForceDeleteModel, nil)
 }

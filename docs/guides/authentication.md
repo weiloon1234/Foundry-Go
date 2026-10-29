@@ -33,7 +33,7 @@ func (a Account) FoundryIdentity() (model.Identity, error) {
 func accountProvider(db database.Executor) auth.Provider[Account, int64] {
 	return auth.DefineProvider("accounts", AccountIdentity.Reference(0),
 		func(ctx context.Context, id int64) (value.Optional[Account], error) {
-			return Accounts.Find(ctx, db, id)
+			return orm.Find(ctx, db, Accounts.Table, id)
 		},
 		func(_ context.Context, account Account) (bool, error) {
 			return account.Enabled, nil

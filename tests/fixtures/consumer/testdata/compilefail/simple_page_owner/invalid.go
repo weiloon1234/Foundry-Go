@@ -6,6 +6,6 @@ import (
 )
 
 func wrong() {
-	p, _ := models.Users.Query().SimplePaginate(nil, nil, orm.PageRequest{})
+	p, _ := orm.SimplePaginate(nil, nil, models.Users.Query(), orm.PageRequest{})
 	var _ orm.SimplePage[models.Order] = p
 }

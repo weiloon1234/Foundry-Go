@@ -15,7 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// AuditRule retains the model owner of a field disclosure. Example: AuditField(Orders.Note, record.Exclude).
+// AuditRule retains the model owner of a field disclosure. Example: AuditField(NullableTextExpr(Orders.Note), record.Exclude).
 type AuditRule[M any] struct {
 	_          [0]*M
 	field      *columnCore
@@ -23,7 +23,7 @@ type AuditRule[M any] struct {
 }
 
 // AuditPolicy is an immutable model-owned disclosure policy; zero means Automatic for every field.
-// Example: AuditPolicyOf(Orders.Table, AuditField(Orders.Note, record.Exclude)).
+// Example: AuditPolicyOf(Orders.Table, AuditField(NullableTextExpr(Orders.Note), record.Exclude)).
 type AuditPolicy[M any] struct {
 	_     [0]*M
 	owner *tableCore
@@ -32,7 +32,7 @@ type AuditPolicy[M any] struct {
 }
 
 // AuditField selects disclosure for a declared stored column, including nullable and distinct-input columns.
-// Example: AuditField(Orders.Note, record.Redact).
+// Example: AuditField(NullableTextExpr(Orders.Note), record.Redact).
 func AuditField[M, V any](field interface{ ormColumn(*M) columnData[V] }, disclosure auditrecord.Disclosure) AuditRule[M] {
 	return AuditRule[M]{field: field.ormColumn(nil).core, disclosure: disclosure}
 }
@@ -50,7 +50,7 @@ func AuditNullableEncryptedField[M any, V encrypted.Value[V]](field NullableEncr
 }
 
 // AuditPolicyOf snapshots field policies; duplicates, foreign fields and hidden primary keys fail registration or capture.
-// Example: AuditPolicyOf(Orders.Table, AuditField(Orders.Note, record.Exclude)).
+// Example: AuditPolicyOf(Orders.Table, AuditField(NullableTextExpr(Orders.Note), record.Exclude)).
 func AuditPolicyOf[M any, K comparable](table Table[M, K], rules ...AuditRule[M]) AuditPolicy[M] {
 	p := AuditPolicy[M]{owner: table.core, rules: make(map[*columnCore]auditrecord.Disclosure), err: tableError(table.core)}
 	for _, rule := range rules {

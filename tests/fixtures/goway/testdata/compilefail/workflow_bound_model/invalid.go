@@ -12,7 +12,7 @@ import (
 
 func invalid(ex database.Executor, transport h.AuthenticatedEndpoint[h.NoPath, h.NoQuery, h.NoBody, models.User, h.NoContent]) {
 	parent := modelbinding.ByKey(ex, orm.Keyed(models.Users.Query(), models.Users.ID), func(h.NoPath) model.ID[models.User] { return model.ID[models.User]{} })
-	resources := modelbinding.ThroughRelation(ex, parent, models.UserRelations.Orders, models.Orders.ID, func(h.NoPath) model.ID[models.Order] { return model.ID[models.Order]{} })
+	resources := modelbinding.ThroughRelation(ex, parent, models.UserRelations.Orders, orm.KeyExpr(models.Orders.ID), func(h.NoPath) model.ID[models.Order] { return model.ID[models.Order]{} })
 	_ = modelbinding.BindAuthenticated(transport, resources).Handle(func(context.Context, models.User, modelbinding.Input[h.NoPath, h.NoQuery, h.NoBody, models.Order]) (h.NoContent, error) {
 		return h.NoContent{}, nil
 	})

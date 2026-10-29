@@ -77,7 +77,9 @@ func TestRetrievalDispatchClosesStoredRowsBeforeCallbackIO(t *testing.T) {
 				var items []retrievalFixtureRecord
 				err := runObserverOwner(t, db, t.Context(), kind, func(executor database.Executor) error {
 					var err error
-					read := q.All
+					read := func(ctx context.Context, ex database.Executor) ([]retrievalFixtureRecord, error) {
+						return orm.All(ctx, ex, q)
+					}
 					if complete {
 						read = rows.Read(rows.FromModel(q)).All
 					}
@@ -143,7 +145,9 @@ func TestRetrievalDispatchFailuresDiscardResults(t *testing.T) {
 						return nil
 					}}
 				})).Query()
-				read := q.All
+				read := func(ctx context.Context, ex database.Executor) ([]retrievalFixtureRecord, error) {
+					return orm.All(ctx, ex, q)
+				}
 				if complete {
 					read = rows.Read(rows.FromModel(q)).All
 				}
@@ -197,10 +201,12 @@ func TestRetrievalDispatchPreservesCompleteRecordSources(t *testing.T) {
 	recursiveAlias := rows.AsRecord[retrievalFixtureAlias](recursive, "r")
 	set := rows.Union(rows.ModelRecord(q), rows.ModelRecord(q))
 	cursor := rows.CursorFor(rows.ModelRecord(q))
-	cursorID := expr.At(cursor.Scope(), table.Key())
+	cursorID := expr.At(cursor.Scope(), orm.KeyExpr(table.Key()))
 	cursor = cursor.UniqueBy(expr.Group(cursorID))
 	for name, read := range map[string]func(context.Context, database.Executor) ([]retrievalFixtureRecord, error){
-		"model":         q.All,
+		"model": func(ctx context.Context, ex database.Executor) ([]retrievalFixtureRecord, error) {
+			return orm.All(ctx, ex, q)
+		},
 		"record":        rows.Read(rows.FromModel(q)).All,
 		"alias":         rows.ReadRecord(rows.SelectRecord(alias, rows.Scope(alias))).All,
 		"cte":           rows.ReadRecord(rows.SelectRecord(cte, rows.Scope(cte))).All,
@@ -221,10 +227,12 @@ func TestRetrievalDispatchPreservesCompleteRecordSources(t *testing.T) {
 		})
 	}
 	if err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-		locked := q.ForUpdate()
+		locked := orm.Lock(q)
 		transactionCTE := rows.AsTransaction[retrievalFixtureAlias](rows.TransactionCTE("locked_retrieval", rows.LockedRecord(locked)), "r")
 		for _, read := range []func(context.Context, *database.Tx) ([]retrievalFixtureRecord, error){
-			locked.All,
+			func(ctx context.Context, ex *database.Tx) ([]retrievalFixtureRecord, error) {
+				return orm.AllLocked(ctx, ex, locked)
+			},
 			rows.SelectTransactionRecord(transactionCTE, rows.TransactionScope(transactionCTE)).All,
 		} {
 			before := callbacks
@@ -251,7 +259,7 @@ func TestRetrievalDispatchUsesActualRowsRegistryAndRejectsStaleAdapters(t *testi
 	}
 	staleDB := rowObserverPool(t, retrievalFixtureDriver([][]driver.Value{{int64(1), "stored"}}), staleSet)
 	q := retrievalTable().Query()
-	if items, err := q.All(t.Context(), rowObserverExecutor{staleDB}); !errors.Is(err, fault.Invalid) || items != nil || called != 0 {
+	if items, err := orm.All(t.Context(), rowObserverExecutor{staleDB}, q); !errors.Is(err, fault.Invalid) || items != nil || called != 0 {
 		t.Fatal("registered read observer was silently bypassed by a stale adapter", items, called, err)
 	}
 	declaration, err := orm.NewRetrievalObserver[retrievalFixtureRecord]("read.fixture").Declare(func() orm.RetrievalHooks[retrievalFixtureRecord] {
@@ -266,11 +274,11 @@ func TestRetrievalDispatchUsesActualRowsRegistryAndRejectsStaleAdapters(t *testi
 		t.Fatal(err)
 	}
 	db := rowObserverPool(t, retrievalFixtureDriver([][]driver.Value{{int64(1), "stored"}}), set)
-	if items, err := q.All(t.Context(), rowObserverExecutor{db}); err != nil || len(items) != 1 || called != 1 {
+	if items, err := orm.All(t.Context(), rowObserverExecutor{db}, q); err != nil || len(items) != 1 || called != 1 {
 		t.Fatal("forwarding reader lost registered-only hooks", items, called, err)
 	}
 	other := open(t, retrievalFixtureDriver([][]driver.Value{{int64(2), "other"}}), nil)
-	if items, err := q.All(t.Context(), rowObserverExecutor{other}); err != nil || len(items) != 1 || called != 1 {
+	if items, err := orm.All(t.Context(), rowObserverExecutor{other}, q); err != nil || len(items) != 1 || called != 1 {
 		t.Fatal("observer registrations leaked between pools", items, called, err)
 	}
 }
@@ -283,11 +291,11 @@ func TestRetrievalDispatchSharesLifecycleDepthAndSkipsWriteHydration(t *testing.
 	q = retrievalTable(orm.WithRetrievalHooks(func() orm.RetrievalHooks[retrievalFixtureRecord] {
 		factories++
 		return orm.RetrievalHooks[retrievalFixtureRecord]{Retrieved: func(ctx context.Context, executor database.Executor, _ retrievalFixtureRecord) error {
-			_, err := q.All(ctx, executor)
+			_, err := orm.All(ctx, executor, q)
 			return err
 		}}
 	})).Query()
-	if items, err := q.All(t.Context(), db); !errors.Is(err, fault.Invalid) || items != nil || factories != lifecore.MaxDepth || db.Stats().Owners != 0 {
+	if items, err := orm.All(t.Context(), db, q); !errors.Is(err, fault.Invalid) || items != nil || factories != lifecore.MaxDepth || db.Stats().Owners != 0 {
 		t.Fatal("recursive retrieval exceeded the shared lifecycle bound or leaked work", factories, err)
 	}
 	writeState := mutationDriver([][]driver.Value{{int64(42), "private record name"}})
@@ -297,10 +305,10 @@ func TestRetrievalDispatchSharesLifecycleDepthAndSkipsWriteHydration(t *testing.
 		reads++
 		return orm.RetrievalHooks[mutationRecord]{}
 	}), orm.WithHooks(func() orm.Hooks[mutationRecord] { writeFactories++; return orm.Hooks[mutationRecord]{} }))
-	if _, err := writes.Insert(t.Context(), writeDB, writes.Name.Set("private record name")); err != nil || reads != 0 {
+	if _, err := orm.Insert(t.Context(), writeDB, writes.Table, orm.TextSet(writes.Name, "private record name")); err != nil || reads != 0 {
 		t.Fatal("write RETURNING invoked retrieval hooks", reads, err)
 	}
-	if _, err := writes.Update(t.Context(), writeDB, 42, writes.Name.Set("private record name")); err != nil || reads != 0 || writeFactories != 2 || writeState.rowsClosed.Load() != 3 {
+	if _, err := orm.Update(t.Context(), writeDB, writes.Table.Query(), writes.Table.Key(), 42, orm.TextSet(writes.Name, "private record name")); err != nil || reads != 0 || writeFactories != 2 || writeState.rowsClosed.Load() != 3 {
 		t.Fatal("write snapshots/RETURNING invoked retrieval or skipped write hooks", reads, writeFactories, err)
 	}
 
@@ -360,7 +368,9 @@ func TestRetrievalDispatchUsesBoundedBatchesForStreaming(t *testing.T) {
 					return err
 				}}
 			})).Query().Offset(3).Limit(205)
-			each := q.Each
+			each := func(ctx context.Context, ex database.Executor, yield func(retrievalFixtureRecord) error) error {
+				return orm.Each(ctx, ex, q, yield)
+			}
 			if kind == "complete-record" {
 				each = func(ctx context.Context, ex database.Executor, yield func(retrievalFixtureRecord) error) error {
 					return rows.EachRead(ctx, ex, rows.Read(rows.FromModel(q)), yield)
@@ -403,17 +413,17 @@ func TestRetrievalDispatchExcludesScalarsAndDeclaredDTOs(t *testing.T) {
 		return orm.RetrievalHooks[retrievalFixtureRecord]{}
 	}))
 	q := table.Query()
-	if n, err := q.Count(t.Context(), db); err != nil || n != 1 {
+	if n, err := orm.Count(t.Context(), db, q); err != nil || n != 1 {
 		t.Fatal(n, err)
 	}
-	if yes, err := q.Exists(t.Context(), db); err != nil || !yes {
+	if yes, err := orm.Exists(t.Context(), db, q); err != nil || !yes {
 		t.Fatal(yes, err)
 	}
 	// Reusing the Go type proves callback semantics follow the declaration.
 	dto := rows.Define(func(b rows.Builder[retrievalFixtureRecord], m *retrievalFixtureRecord) retrievalDTO {
 		return retrievalDTO{b.Row(), rows.NumberOf(b, &m.ID), rows.TextOf(b, &m.Name)}
 	})
-	projection := rows.Select(rows.From(q), dto, rows.Map(dto.ID, expr.Value(table.Key())), rows.Map(dto.Name, expr.Value(table.Name)))
+	projection := rows.Select(rows.From(q), dto, rows.Map(dto.ID, expr.Value(orm.KeyExpr(table.Key()))), rows.Map(dto.Name, expr.Value(orm.TextExpr(table.Name))))
 	if items, err := rows.Read(projection).All(t.Context(), db); err != nil || len(items) != 1 || factories != 0 {
 		t.Fatal("scalar/DTO reads acquired model retrieval callbacks", factories, err)
 	}

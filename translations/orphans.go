@@ -52,15 +52,15 @@ func orphanTable() extensionmaintenance.Table[store.TranslationIndex] {
 		Name: "translations",
 		Scan: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope, after string, limit int) ([]store.TranslationIndex, error) {
 			f := store.Translations
-			q := store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.KeyColumn.Asc()).Limit(limit)
+			q := store.Translations.Query().Where(orm.TextEq(f.Owner, string(owner)), orm.TextEq(f.Scope, scope)).OrderBy(orm.TextAsc(f.KeyColumn)).Limit(limit)
 			if after != "" {
-				q = q.Where(f.KeyColumn.Gt(after))
+				q = q.Where(orm.TextGt(f.KeyColumn, after))
 			}
 			return rows.Read(store.TranslationsIndex(q)).All(ctx, tx)
 		},
 		Lock: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope string, keys []string) ([]store.TranslationIndex, error) {
 			f := store.Translations
-			return rows.ForUpdate(rows.Read(store.TranslationsIndex(store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.KeyColumn.In(keys...)).OrderBy(f.KeyColumn.Asc())))).All(ctx, tx)
+			return rows.ForUpdate(rows.Read(store.TranslationsIndex(store.Translations.Query().Where(orm.TextEq(f.Owner, string(owner)), orm.TextEq(f.Scope, scope), orm.TextIn(f.KeyColumn, keys...)).OrderBy(orm.TextAsc(f.KeyColumn))))).All(ctx, tx)
 		},
 		Identity: func(registry *extensions.Registry, owner extensions.OwnerName, scope string, row store.TranslationIndex) (model.Identity, error) {
 			if !identifier.Semantic(row.Field) || i18n.LocaleID(row.Locale).Validate() != nil {
@@ -88,7 +88,7 @@ func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerNa
 	}
 	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
 		f := store.Translations
-		return rows.Read(rows.Distinct(rows.SelectValue(store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Field.Asc()).Limit(limit), f.Field))).All(ctx, tx)
+		return rows.Read(rows.Distinct(rows.SelectValue(store.Translations.Query().Where(orm.TextEq(f.Owner, string(owner)), orm.TextEq(f.Scope, scope)).OrderBy(orm.TextAsc(f.Field)).Limit(limit), orm.TextExpr(f.Field)))).All(ctx, tx)
 	}, func(scope, name string) bool {
 		_, declared := m.fields[extensions.Digest(scope, name)]
 		return declared

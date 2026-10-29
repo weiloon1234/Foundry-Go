@@ -7,6 +7,6 @@ import (
 )
 
 func invalid(c orm.Changes[mutatorqueries.Member]) {
-	change, _ := orm.NullableChangeOf(c, mutatorqueries.Members.Nickname)
+	change, _ := orm.NullableChangeOf(c, orm.NullableInputTextExpr(mutatorqueries.Members.Nickname))
 	var _ value.Optional[string] = change.After()
 }

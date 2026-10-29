@@ -37,11 +37,11 @@ func TestStage6b2SubqueriesAndOnFilters(t *testing.T) {
 		return subqueryFields{b.Row(), rows.NumberOf(b, &r.ID), rows.NullableNumberOf(b, &r.Missing), rows.NullableTextOf(b, &r.Note)}
 	})
 	source := rows.From(table.Query())
-	ids := expr.Value(table.Key())
-	missing := rows.SelectScalar(rows.From(table.Query().Where(table.Key().Eq(999))), expr.Row(ids).Value())
-	nullable := rows.SelectScalar(rows.From(table.Query().Where(table.Key().Eq(2))), expr.Row(expr.Value(table.Note)).Value())
+	ids := expr.Value(orm.KeyExpr(table.Key()))
+	missing := rows.SelectScalar(rows.From(table.Query().Where(orm.KeyEq(table.Key(), 999))), expr.Row(ids).Value())
+	nullable := rows.SelectScalar(rows.From(table.Query().Where(orm.KeyEq(table.Key(), 2))), expr.Row(expr.Value(orm.NullableTextExpr(table.Note))).Value())
 	project := rows.OrderBy(rows.Select(source, fields, rows.Map(fields.ID, ids), rows.MapSelected(fields.Missing, rows.ScalarRowQuery(source, missing).Value()), rows.MapSelected(fields.Note, rows.ScalarNullableRowQuery(source, nullable).Value())), ids.Asc())
-	parentIDs := rows.SelectScalar(source, expr.Row(expr.Value(table.ParentID)).Value())
+	parentIDs := rows.SelectScalar(source, expr.Row(expr.Value(orm.NullableColumnExpr(table.ParentID))).Value())
 	got, err := rows.Read(project.Where(rows.InNullableQuery(ids, parentIDs))).All(ctx, db)
 	must(t, err)
 	if len(got) != 1 || got[0].ID != 1 || !got[0].Missing.IsNull() || !got[0].Note.IsNull() {
@@ -52,7 +52,7 @@ func TestStage6b2SubqueriesAndOnFilters(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatal("NOT IN discarded NULL semantics", got)
 	}
-	emptyCount := rows.SelectScalar(rows.From(table.Query().Where(table.Key().Eq(999))), expr.Count[joinNode]().Value())
+	emptyCount := rows.SelectScalar(rows.From(table.Query().Where(orm.KeyEq(table.Key(), 999))), expr.Count[joinNode]().Value())
 	got, err = rows.Read(project.Where(rows.ExistsQuery(source, emptyCount), expr.GreaterNullable(expr.NullableRow(ids), rows.ScalarRowQuery(source, emptyCount)))).All(ctx, db)
 	must(t, err)
 	if len(got) != 4 {
@@ -75,11 +75,11 @@ func TestStage6b2SubqueriesAndOnFilters(t *testing.T) {
 	if !errors.As(err, &sqlState) || sqlState.SQLState() != "21000" {
 		t.Fatal("wrong scalar cardinality error", err)
 	}
-	a, b := rows.As[joinLeft](table.Query().Where(table.Key().Ne(5)), "a"), rows.As[joinRight](table.Query(), "b")
-	on := rows.On(expr.At(rows.Scope(a), table.ParentID), expr.At(rows.Scope(b), table.Key()))
-	filtered := rows.LeftJoin(a, b, on.WhereRight(expr.At(rows.Scope(b), table.Note).IsNull()))
+	a, b := rows.As[joinLeft](table.Query().Where(orm.KeyNe(table.Key(), 5)), "a"), rows.As[joinRight](table.Query(), "b")
+	on := rows.On(expr.At(rows.Scope(a), orm.NullableColumnExpr(table.ParentID)), expr.At(rows.Scope(b), orm.KeyExpr(table.Key())))
+	filtered := rows.LeftJoin(a, b, on.WhereRight(expr.At(rows.Scope(b), orm.NullableTextExpr(table.Note)).IsNull()))
 	l, r := rows.LeftScope(filtered, rows.Scope(a)), rows.NullableRightScope(filtered, rows.Scope(b))
-	onQuery := rows.Select(filtered, fields, rows.Map(fields.ID, expr.At(l, table.Key())), rows.Map(fields.Missing, expr.AtNullable(r, table.Key())), rows.Map(fields.Note, expr.AtNullableValue(r, table.Note)))
+	onQuery := rows.Select(filtered, fields, rows.Map(fields.ID, expr.At(l, orm.KeyExpr(table.Key()))), rows.Map(fields.Missing, expr.AtNullable(r, orm.KeyExpr(table.Key()))), rows.Map(fields.Note, expr.AtNullableValue(r, orm.NullableTextExpr(table.Note))))
 	got, err = rows.Read(onQuery).All(ctx, db)
 	must(t, err)
 	if len(got) != 3 {
@@ -92,7 +92,7 @@ func TestStage6b2SubqueriesAndOnFilters(t *testing.T) {
 	}
 	plain := rows.LeftJoin(a, b, on)
 	pl, pr := rows.LeftScope(plain, rows.Scope(a)), rows.NullableRightScope(plain, rows.Scope(b))
-	got, err = rows.Read(rows.Select(plain, fields, rows.Map(fields.ID, expr.At(pl, table.Key())), rows.Map(fields.Missing, expr.AtNullable(pr, table.Key())), rows.Map(fields.Note, expr.AtNullableValue(pr, table.Note))).Where(expr.AtNullableValue(pr, table.Note).IsNull())).All(ctx, db)
+	got, err = rows.Read(rows.Select(plain, fields, rows.Map(fields.ID, expr.At(pl, orm.KeyExpr(table.Key()))), rows.Map(fields.Missing, expr.AtNullable(pr, orm.KeyExpr(table.Key()))), rows.Map(fields.Note, expr.AtNullableValue(pr, orm.NullableTextExpr(table.Note)))).Where(expr.AtNullableValue(pr, orm.NullableTextExpr(table.Note)).IsNull())).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 {
 		t.Fatal("WHERE/ON outer-join distinction lost", got)

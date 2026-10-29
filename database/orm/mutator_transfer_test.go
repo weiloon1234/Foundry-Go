@@ -41,8 +41,8 @@ func TestMutationInputTransformsBeforeBindingAndRemainsReusable(t *testing.T) {
 		calls = append(calls, "note")
 		return transferStored(strings.TrimSpace(v.Text)), nil
 	})
-	name := d.Name.Set(transferInput{" ADA "})
-	assignments := []Assignment[transferMutated]{d.Key().Set(1), name, d.Note.Set(transferInput{" memo "})}
+	name := InputTextSet(d.Name, transferInput{" ADA "})
+	assignments := []Assignment[transferMutated]{KeySet(d.Key(), 1), name, NullableInputTextSet(d.Note, transferInput{" memo "})}
 	if _, e := name.core.Bind(); !errors.Is(e, fault.Invalid) {
 		t.Fatal("untransformed binding", e)
 	}
@@ -73,12 +73,15 @@ func TestMutationInputTransformsBeforeBindingAndRemainsReusable(t *testing.T) {
 		}
 	}
 	draft := &Write[transferMutated]{state: &draftState{table: d.core, assignments: append([]querycore.MutationAssignment(nil), p.assignments...), open: true}}
-	got, ok := WriteGet(draft, d.Name.Set).Get()
+	got, ok := WriteGet(draft, func() func(arg0 transferInput) Assignment[transferMutated] {
+		receiver := d.Name
+		return func(arg0 transferInput) Assignment[transferMutated] { return InputTextSet(receiver, arg0) }
+	}()).Get()
 	if !ok || got.Text != " ADA " {
 		t.Fatal("input type/value lost")
 	}
 	wrong := func(v transferStored) Assignment[transferMutated] {
-		a := d.Name.Set(transferInput{})
+		a := InputTextSet(d.Name, transferInput{})
 		a.core.AssignmentValue = querycore.CaptureAssignment(codec.String[transferStored](), v)
 		return a
 	}
@@ -96,9 +99,9 @@ func TestMutationInputPreservesNullOmissionAndRejectsStoredValues(t *testing.T) 
 	fn := func(v transferInput) (transferStored, error) { calls++; return transferStored(v.Text), nil }
 	d := transferMutatorFields(fn, fn)
 	for _, null := range []bool{false, true} {
-		as := []Assignment[transferMutated]{d.Key().Set(1), d.Name.Set(transferInput{})}
+		as := []Assignment[transferMutated]{KeySet(d.Key(), 1), InputTextSet(d.Name, transferInput{})}
 		if null {
-			as = append(as, d.Note.SetNull())
+			as = append(as, NullableInputTextSetNull(d.Note))
 		}
 		calls = 0
 		p, e := planWrite(d.Query().state, querycore.InsertModel, as, false)
@@ -115,7 +118,7 @@ func TestMutationInputPreservesNullOmissionAndRejectsStoredValues(t *testing.T) 
 		}
 	}
 	calls = 0
-	wrong := d.Name.Set(transferInput{})
+	wrong := InputTextSet(d.Name, transferInput{})
 	wrong.core.AssignmentValue = querycore.CaptureAssignment(codec.String[transferStored](), transferStored("already stored"))
 	p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[transferMutated]{wrong}, false)
 	if e == nil {
@@ -124,7 +127,7 @@ func TestMutationInputPreservesNullOmissionAndRejectsStoredValues(t *testing.T) 
 	if !errors.Is(e, fault.Invalid) || calls != 0 {
 		t.Fatal("stored input bypass", e)
 	}
-	p, e = planWrite(d.Query().state, querycore.InsertModel, []Assignment[transferMutated]{d.Name.Set(transferInput{})}, false)
+	p, e = planWrite(d.Query().state, querycore.InsertModel, []Assignment[transferMutated]{InputTextSet(d.Name, transferInput{})}, false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -143,7 +146,7 @@ func TestFieldMutatorsPreserveAssignmentStateAndOrder(t *testing.T) {
 		calls = append(calls, "note")
 		return transferStored(v.Text + "?"), nil
 	})
-	input := []Assignment[transferMutated]{d.Note.Set(transferInput{}), d.Name.Set(transferInput{})}
+	input := []Assignment[transferMutated]{NullableInputTextSet(d.Note, transferInput{}), InputTextSet(d.Name, transferInput{})}
 	p, e := planWrite(d.Query().state, querycore.InsertModel, input, false)
 	if e != nil {
 		t.Fatal(e)
@@ -177,11 +180,17 @@ func TestFieldMutatorFailureRunsInsideTransaction(t *testing.T) {
 	var statements []string
 	db := testDB(t, testConnector{onBegin: func() { active = true; begins++ }, statements: &statements})
 	for _, run := range []func() error{
-		func() error { _, e := d.Insert(t.Context(), db, d.Name.Set(transferInput{})); return e }, func() error { _, e := d.Update(t.Context(), db, 1, d.Name.Set(transferInput{})); return e }, func() error {
-			_, e := d.InsertMany(t.Context(), db, [][]Assignment[transferMutated]{{d.Name.Set(transferInput{})}})
+		func() error {
+			_, e := Insert(t.Context(), db, d.Table, InputTextSet(d.Name, transferInput{}))
 			return e
 		}, func() error {
-			_, e := Upsert(t.Context(), db, d.Query(), OnConflict[transferMutated]().DoNothing(), d.Name.Set(transferInput{}))
+			_, e := Update(t.Context(), db, d.Table.Query(), d.Table.Key(), 1, InputTextSet(d.Name, transferInput{}))
+			return e
+		}, func() error {
+			_, e := InsertMany(t.Context(), db, d.Table, [][]Assignment[transferMutated]{{InputTextSet(d.Name, transferInput{})}})
+			return e
+		}, func() error {
+			_, e := Upsert(t.Context(), db, d.Query(), OnConflict[transferMutated]().DoNothing(), InputTextSet(d.Name, transferInput{}))
 			return e
 		},
 	} {
@@ -193,7 +202,7 @@ func TestFieldMutatorFailureRunsInsideTransaction(t *testing.T) {
 	if calls != 4 || begins != 4 || len(statements) != 0 {
 		t.Fatal(calls, begins, statements)
 	}
-	if _, e := d.InsertMany(t.Context(), db, nil); e != nil || begins != 4 {
+	if _, e := InsertMany(t.Context(), db, d.Table, nil); e != nil || begins != 4 {
 		t.Fatal("empty batch began transaction", e)
 	}
 }
@@ -202,7 +211,7 @@ func TestFieldMutatorsValidateOutputAndHonorCancellation(t *testing.T) {
 	defer cancel()
 	notes := 0
 	d := transferMutatorFields(func(v transferInput) (transferStored, error) { cancel(); return transferStored(v.Text), nil }, func(v transferInput) (transferStored, error) { notes++; return transferStored(v.Text), nil })
-	p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[transferMutated]{d.Name.Set(transferInput{}), d.Note.Set(transferInput{})}, false)
+	p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[transferMutated]{InputTextSet(d.Name, transferInput{}), NullableInputTextSet(d.Note, transferInput{})}, false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -218,7 +227,7 @@ func TestFieldMutatorsValidateOutputAndHonorCancellation(t *testing.T) {
 	})
 	for _, out := range []transferStored{"valid", "invalid"} {
 		d := transferMutatorFields(func(transferInput) (transferStored, error) { return out, nil }, func(v transferInput) (transferStored, error) { return transferStored(v.Text), nil }, Codec(c))
-		p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[transferMutated]{d.Name.Set(transferInput{"unvalidated"})}, false)
+		p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[transferMutated]{InputTextSet(d.Name, transferInput{"unvalidated"})}, false)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -235,13 +244,13 @@ func TestFieldMutatorsRejectInvalidDeclarationsAndInputs(t *testing.T) {
 	calls := 0
 	fn := func(v transferInput) (transferStored, error) { calls++; return transferStored(v.Text), nil }
 	d := transferMutatorFields(fn, fn)
-	name := d.Name.Set(transferInput{"private-input"})
+	name := InputTextSet(d.Name, transferInput{"private-input"})
 	foreign := transferMutatorFields(fn, fn)
 	wrong := name
 	wrong.core.AssignmentValue = querycore.CaptureAssignment(codec.Signed[int](), 1)
-	wrongNote := d.Note.Set(transferInput{})
+	wrongNote := NullableInputTextSet(d.Note, transferInput{})
 	wrongNote.core.AssignmentValue = querycore.CaptureAssignment(codec.Signed[int](), 1)
-	for _, as := range [][]Assignment[transferMutated]{{name, name}, {foreign.Name.Set(transferInput{})}, {wrong}, {name, wrongNote}} {
+	for _, as := range [][]Assignment[transferMutated]{{name, name}, {InputTextSet(foreign.Name, transferInput{})}, {wrong}, {name, wrongNote}} {
 		p, e := planWrite(d.Query().state, querycore.InsertModel, as, false)
 		if e == nil {
 			_, e = p.mutate(t.Context())
@@ -266,13 +275,13 @@ func TestMutationInputConflictUsesFreshInputAndCopiesProposedOnce(t *testing.T) 
 	var args [][]any
 	db := testDB(t, testConnector{bindings: &args, columns: []string{"id", "name", "note"}, values: [][]driver.Value{{int64(1), "inserted", nil}}})
 	for _, literal := range []bool{false, true} {
-		policy := OnConflict(ConflictKey(d.Name)).DoUpdate(ConflictIncoming(d.Name))
+		policy := OnConflict(ConflictKey(InputTextExpr(d.Name))).DoUpdate(ConflictIncoming(InputTextExpr(d.Name)))
 		if literal {
-			policy = policy.DoUpdate(ConflictSet(d.Name, transferInput{" UPDATED "}))
+			policy = policy.DoUpdate(ConflictSet(InputTextExpr(d.Name), transferInput{" UPDATED "}))
 		}
 		for range 2 {
 			calls = 0
-			if _, e := Upsert(t.Context(), db, d.Query(), policy, d.Key().Set(1), d.Name.Set(transferInput{" INSERTED "})); e != nil {
+			if _, e := Upsert(t.Context(), db, d.Query(), policy, KeySet(d.Key(), 1), InputTextSet(d.Name, transferInput{" INSERTED "})); e != nil {
 				t.Fatal(e)
 			}
 			want := 1
@@ -286,12 +295,12 @@ func TestMutationInputConflictUsesFreshInputAndCopiesProposedOnce(t *testing.T) 
 			}
 		}
 	}
-	bad := ConflictSet(d.Name, transferInput{})
+	bad := ConflictSet(InputTextExpr(d.Name), transferInput{})
 	stored := querycore.CaptureAssignment(codec.String[transferStored](), transferStored("stored"))
 	bad.state.update.Literal = &stored
-	policy := OnConflict(ConflictKey(d.Name)).DoUpdate(bad)
+	policy := OnConflict(ConflictKey(InputTextExpr(d.Name))).DoUpdate(bad)
 	calls = 0
-	if _, e := Upsert(t.Context(), db, d.Query(), policy, d.Key().Set(1), d.Name.Set(transferInput{})); !errors.Is(e, fault.Invalid) || calls != 0 {
+	if _, e := Upsert(t.Context(), db, d.Query(), policy, KeySet(d.Key(), 1), InputTextSet(d.Name, transferInput{})); !errors.Is(e, fault.Invalid) || calls != 0 {
 		t.Fatal("stored conflict literal bypass", e, calls)
 	}
 }
@@ -300,35 +309,53 @@ func TestMutationValuesPreserveTypedInputsWithoutBinding(t *testing.T) {
 	c := codec.String[transferStored]().Validated(func(transferStored) error { calls++; return errors.New("must not bind") })
 	fn := func(v transferInput) (transferStored, error) { t.Fatal("draft read transformed"); return "", nil }
 	d := transferMutatorFields(fn, fn, Codec(c))
-	as := []Assignment[transferMutated]{d.Name.Set(transferInput{"private-input"}), d.Note.SetNull()}
+	as := []Assignment[transferMutated]{InputTextSet(d.Name, transferInput{"private-input"}), NullableInputTextSetNull(d.Note)}
 	p, e := planWrite(d.Query().state, querycore.InsertModel, as, false)
 	if e != nil {
 		t.Fatal(e)
 	}
 	draft := &Write[transferMutated]{state: &draftState{table: d.core, assignments: append([]querycore.MutationAssignment(nil), p.assignments...), open: true}}
-	got, ok := WriteGet(draft, d.Name.Set).Get()
+	got, ok := WriteGet(draft, func() func(arg0 transferInput) Assignment[transferMutated] {
+		receiver := d.Name
+		return func(arg0 transferInput) Assignment[transferMutated] { return InputTextSet(receiver, arg0) }
+	}()).Get()
 	if !ok || got.Text != "private-input" {
 		t.Fatal("input lost")
 	}
-	null, ok := WriteNullableGet(draft, d.Note.Set).Get()
+	null, ok := WriteNullableGet(draft, func() func(arg0 transferInput) Assignment[transferMutated] {
+		receiver := d.Note
+		return func(arg0 transferInput) Assignment[transferMutated] { return NullableInputTextSet(receiver, arg0) }
+	}()).Get()
 	if !ok || !null.IsNull() {
 		t.Fatal("NULL became omitted")
 	}
-	if WriteGet(draft, d.Key().Set).IsSet() || !WriteIsSet(draft, d.Name.Set) {
+	if WriteGet(draft, func() func(arg0 int64) Assignment[transferMutated] {
+		receiver := d.Key()
+		return func(arg0 int64) Assignment[transferMutated] { return KeySet(receiver, arg0) }
+	}()).IsSet() || !WriteIsSet(draft, func() func(arg0 transferInput) Assignment[transferMutated] {
+		receiver := d.Name
+		return func(arg0 transferInput) Assignment[transferMutated] { return InputTextSet(receiver, arg0) }
+	}()) {
 		t.Fatal("presence changed")
 	}
 	foreign := transferMutatorFields(fn, fn)
-	if WriteIsSet(draft, foreign.Name.Set) {
+	if WriteIsSet(draft, func() func(arg0 transferInput) Assignment[transferMutated] {
+		receiver := foreign.Name
+		return func(arg0 transferInput) Assignment[transferMutated] { return InputTextSet(receiver, arg0) }
+	}()) {
 		t.Fatal("foreign presence")
 	}
 	draft.state.err = nil
-	badSetter := func(int) Assignment[transferMutated] { return d.Name.Set(transferInput{}) }
+	badSetter := func(int) Assignment[transferMutated] { return InputTextSet(d.Name, transferInput{}) }
 	if WriteGet(draft, badSetter).IsSet() || !errors.Is(draft.state.err, fault.Invalid) {
 		t.Fatal("wrong typed getter")
 	}
-	as[0] = d.Note.SetNull()
+	as[0] = NullableInputTextSetNull(d.Note)
 	p.assignments[0] = p.assignments[1]
-	if !WriteIsSet(draft, d.Name.Set) || calls != 0 {
+	if !WriteIsSet(draft, func() func(arg0 transferInput) Assignment[transferMutated] {
+		receiver := d.Name
+		return func(arg0 transferInput) Assignment[transferMutated] { return InputTextSet(receiver, arg0) }
+	}()) || calls != 0 {
 		t.Fatal("draft retained caller slice or bound input", calls)
 	}
 	for _, f := range []string{"%v", "%+v", "%#v"} {
@@ -340,7 +367,7 @@ func TestMutationValuesPreserveTypedInputsWithoutBinding(t *testing.T) {
 func TestMutationValuesRejectMalformedAssignments(t *testing.T) {
 	fn := func(v transferInput) (transferStored, error) { t.Fatal("invalid write transformed"); return "", nil }
 	d := transferMutatorFields(fn, fn)
-	a := d.Name.Set(transferInput{"secret"})
+	a := InputTextSet(d.Name, transferInput{"secret"})
 	wrong := a
 	wrong.core.Field.Table = "invalid table"
 	for _, as := range [][]Assignment[transferMutated]{{a, a}, {{}}, {wrong}, make([]Assignment[transferMutated], querycore.MaxExpressionNodes+1)} {

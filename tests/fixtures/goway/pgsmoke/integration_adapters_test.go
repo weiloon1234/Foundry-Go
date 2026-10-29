@@ -30,7 +30,7 @@ func TestDeclarationIdentityBindingAndFactory(t *testing.T) {
 		return adapterTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Tenant)}
 	})
 	f, err := factory.Define(records.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[adapterRecord], error) {
-		return []orm.Assignment[adapterRecord]{records.Key().Set(int64(n)), records.Tenant.Set("allowed")}, nil
+		return []orm.Assignment[adapterRecord]{orm.KeySet(records.Key(), int64(n)), orm.TextSet(records.Tenant, "allowed")}, nil
 	})
 	must(t, err)
 	created, err := f.CreateMany(ctx, db, 3)
@@ -44,7 +44,7 @@ func TestDeclarationIdentityBindingAndFactory(t *testing.T) {
 	if len(keys) != 3 {
 		t.Fatal("identity cardinality")
 	}
-	resolver := modelbinding.ByKey(db, orm.Keyed(records.Query().Where(records.Tenant.Eq("allowed")), records.Key()), func(id int64) int64 { return id })
+	resolver := modelbinding.ByKey(db, orm.Keyed(records.Query().Where(orm.TextEq(records.Tenant, "allowed")), records.Key()), func(id int64) int64 { return id })
 	found, err := resolver.Resolve(ctx, 2)
 	must(t, err)
 	if found.ID != 2 {
@@ -57,7 +57,7 @@ func TestDeclarationIdentityBindingAndFactory(t *testing.T) {
 	if _, err := failing.CreateMany(ctx, db, 2); err == nil {
 		t.Fatal("failed hook committed")
 	}
-	count, err := records.Query().Count(ctx, db)
+	count, err := orm.Count(ctx, db, records.Query())
 	must(t, err)
 	if count != 3 {
 		t.Fatal("partial batch persisted", count)

@@ -40,17 +40,17 @@ func TestORMPruneRegistryRollbackAndMassAcknowledgement(t *testing.T) {
 	_, err := db.Exec(ctx, `CREATE TABLE prune_registry_records(id uuid PRIMARY KEY,name text NOT NULL)`)
 	must(t, err)
 	for _, name := range []string{"expired", "expired", "retained"} {
-		_, err := f.Insert(ctx, db, f.Name.Set(name))
+		_, err := orm.Insert(ctx, db, f.Table, orm.TextSet(f.Name, name))
 		must(t, err)
 	}
-	selection := f.Query().Where(f.Name.Eq("expired"))
+	selection := f.Query().Where(orm.TextEq(f.Name, "expired"))
 	r, err := prune.New(prune.ORMModel("app.records", selection, prune.Lifecycle))
 	must(t, err)
 	result, err := r.Run(ctx, db, prune.Options{BatchSize: 2, MaxBatches: 1})
 	if !errors.Is(err, cause) || len(result.Counts) != 1 || result.Counts[0].Removed != 0 || result.StoppedAt == nil || committed != 0 {
 		t.Fatal("failed batch reported committed deletion", result, committed)
 	}
-	count, err := f.Query().Count(ctx, db)
+	count, err := orm.Count(ctx, db, f.Query())
 	must(t, err)
 	if count != 3 {
 		t.Fatal("failed batch left a partial deletion", count)
@@ -62,7 +62,7 @@ func TestORMPruneRegistryRollbackAndMassAcknowledgement(t *testing.T) {
 	if len(result.Counts) != 1 || result.Counts[0].Removed != 2 || !result.Counts[0].Remaining || deleting != 2 || committed != 0 {
 		t.Fatal("mass acknowledgement dispatched lifecycle or lost its bound", result, deleting, committed)
 	}
-	remaining, err := f.Query().All(ctx, db)
+	remaining, err := orm.All(ctx, db, f.Query())
 	must(t, err)
 	if len(remaining) != 1 || remaining[0].Name != "retained" {
 		t.Fatal("pruning lost its selection")

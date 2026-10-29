@@ -8,4 +8,4 @@ import (
 
 var field orm.NullableEnum[models.User, models.Status]
 
-var _ = expr.TextNullableRow(field).Gt(models.StatusActive)
+var _ = expr.TextNullableRow(orm.NullableEnumExpr(field)).Gt(models.StatusActive)

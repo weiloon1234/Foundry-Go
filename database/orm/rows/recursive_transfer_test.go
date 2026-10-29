@@ -34,7 +34,7 @@ func recursionSource() RecordRead[recursionRecord, recursionRecord] {
 	return SelectRecord(From(q), ModelScope(q))
 }
 func recursionID[S any](scope expr.Scope[S, recursionRecord]) expr.Expression[S, int64, int64] {
-	return expr.At(scope, recursionTable.Key())
+	return expr.At(scope, orm.KeyExpr(recursionTable.Key()))
 }
 func recursionWide[S any](scope expr.Scope[S, recursionRecord], n int) expr.Predicate[S] {
 	// Floating computed values bind separately, exercising the statement-wide budget.
@@ -44,7 +44,7 @@ func recursionWide[S any](scope expr.Scope[S, recursionRecord], n int) expr.Pred
 func recursiveRecordStep(self RecursiveSelf[recursionRecord]) RecordSource[recursionRecord] {
 	parent := AsRecord[recursionParent](self, "parent")
 	child := AsRecord[recursionChild](recursionSource(), "child")
-	rank := expr.At(Scope(child), recursionTable.Rank)
+	rank := expr.At(Scope(child), orm.NullableNumberExpr(recursionTable.Rank))
 	joined := InnerJoin(child, parent, On(rank, recursionID(Scope(parent))))
 	scope := LeftScope(joined, Scope(child))
 	return SelectRecord(joined, scope).Where(recursionID(scope).Ne(8)).Limit(3)
@@ -153,8 +153,8 @@ func TestRecursiveCTERejectsSelfPlacement(t *testing.T) {
 		"direct aggregate": func(self RecursiveSelf[recursionRecord]) RecordSource[recursionRecord] {
 			a := AsRecord[recursionParent](self, "a")
 			id := recursionID(Scope(a))
-			rank := expr.At(Scope(a), recursionTable.Rank)
-			q := SelectRecord(a, Scope(a)).OrderBy(expr.CountFieldAt(Scope(a), recursionTable.Key()).Asc())
+			rank := expr.At(Scope(a), orm.NullableNumberExpr(recursionTable.Rank))
+			q := SelectRecord(a, Scope(a)).OrderBy(expr.CountFieldAt(Scope(a), orm.KeyExpr(recursionTable.Key())).Asc())
 			q.core.Source.Node.GroupBy = []querycore.ValueExpression{querycore.FieldRef{Table: "a", Column: "id"}, querycore.FieldRef{Table: "a", Column: "rank"}}
 			_ = id
 			_ = rank

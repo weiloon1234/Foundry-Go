@@ -1,5 +1,7 @@
 package transactionjoins
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 
@@ -14,13 +16,13 @@ type a struct{}
 type b struct{}
 
 func Read(ctx context.Context, tx *database.Tx) ([]value.Nullable[int64], error) {
-	left := rows.AsTransaction[a](rows.LockedRecord(models.Orders.Query().ForUpdate()), "a")
+	left := rows.AsTransaction[a](rows.LockedRecord(orm.Lock(models.Orders.Query())), "a")
 	right := rows.AsTransaction[b](rows.TransactionOf(rows.ModelRecord(models.Orders.Query())), "b")
 	ls, rs := rows.TransactionScope(left), rows.TransactionScope(right)
-	on := rows.On(expr.At(ls, models.Orders.BuyerID), expr.At(rs, models.Orders.BuyerID))
+	on := rows.On(expr.At(ls, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(rs, orm.ColumnExpr(models.Orders.BuyerID)))
 	j := rows.TransactionFullJoin(left, right, on)
-	x := expr.AtNullable(rows.NullableRightScope(j, rs), models.Orders.TotalCents)
-	scalar := rows.SelectTransactionValue(right, expr.Row(expr.At(rs, models.Orders.TotalCents)).Value()).Limit(1)
+	x := expr.AtNullable(rows.NullableRightScope(j, rs), orm.NumberExpr(models.Orders.TotalCents))
+	scalar := rows.SelectTransactionValue(right, expr.Row(expr.At(rs, orm.NumberExpr(models.Orders.TotalCents))).Value()).Limit(1)
 	return rows.SelectTransactionValue(j, expr.Row(x).Value()).Where(rows.TransactionExistsQuery(j, rows.TransactionScalarOf(scalar).ForShare())).All(ctx, tx)
 }
 func Records(ctx context.Context, tx *database.Tx) ([]models.Order, error) {

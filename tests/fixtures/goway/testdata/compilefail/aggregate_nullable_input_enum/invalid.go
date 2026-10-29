@@ -8,4 +8,4 @@ import (
 
 type input struct{ Text string }
 
-var _ = expr.Min(orm.NullableInputEnum[models.User, input, models.Level]{})
+var _ = expr.Min(orm.NullableInputEnumExpr(orm.NullableInputEnum[models.User, input, models.Level]{}))

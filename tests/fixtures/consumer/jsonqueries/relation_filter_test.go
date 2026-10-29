@@ -20,7 +20,7 @@ func TestJSONNaturalKeyRelationFilterParity(t *testing.T) {
 
 	r := jsonqueries.DocumentLinks.Policy
 	id := jsonqueries.Policies.Key()
-	r = r.Where(expr.RelationFilter(r, expr.JSONContains(expr.Value(id), expr.Param(id, key)).Eq(true)))
+	r = r.Where(expr.RelationFilter(r, expr.JSONContains(expr.Value(orm.KeyExpr(id)), expr.Param(orm.KeyExpr(id), key)).Eq(true)))
 	after, err := rows.CompileRead(rows.Read(rows.FromModel(jsonqueries.Documents.Query().Where(orm.Has(r)))))
 	if err != nil {
 		t.Fatal(err)

@@ -48,7 +48,7 @@ func TestObserverErrorRollsBackBeforeSQL(t *testing.T) {
 	if err := db.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	_, err = mutationFields.Insert(t.Context(), observerTransactor{db}, mutationValues()...)
+	_, err = orm.Insert(t.Context(), observerTransactor{db}, mutationFields.Table, mutationValues()...)
 	if !errors.Is(err, veto) || state.rolledBack.Load() != 1 || state.rowsClosed.Load() != 0 {
 		t.Fatal("registered factory escaped transaction or executed SQL after failure", err)
 	}
@@ -66,7 +66,7 @@ func TestRetrievalErrorDiscardsResults(t *testing.T) {
 		factories++
 		return orm.RetrievalHooks[retrievalFixtureRecord]{Retrieved: func(context.Context, database.Executor, retrievalFixtureRecord) error { return cause }}
 	})).Query()
-	items, err := q.All(t.Context(), db)
+	items, err := orm.All(t.Context(), db, q)
 	if !errors.Is(err, cause) || items != nil || factories != 1 {
 		t.Fatal("failed retrieval published partial models", items, err)
 	}

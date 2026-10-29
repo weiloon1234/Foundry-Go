@@ -44,7 +44,7 @@ func TestPostgresExplainDoesNotExecuteAndAnalyzeUsesActualTransaction(t *testing
 			}
 		}
 		fields := explainTable(t)
-		q := fields.Query().Where(fields.Key().Eq(7))
+		q := fields.Query().Where(KeyEq(fields.Key(), 7))
 		statement, err := Compile(q)
 		if err != nil {
 			return err
@@ -117,7 +117,7 @@ func TestPostgresAnalyzeRetainsRowLocksAndContextCancellation(t *testing.T) {
 		if err := withPath(holder); err != nil {
 			return err
 		}
-		q := explainTable(t).Query().ForUpdate()
+		q := Lock(explainTable(t).Query())
 		if _, err := ExplainLocked(t.Context(), holder, q); err != nil {
 			return err
 		}

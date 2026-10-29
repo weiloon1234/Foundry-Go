@@ -27,7 +27,7 @@ func TestModelHookFactoriesRollbackPanicsAndGoexit(t *testing.T) {
 				runtime.Goexit()
 				return orm.Hooks[mutationRecord]{}
 			}))
-			got, err := q.Insert(t.Context(), db, q.Name.Set("private record name"))
+			got, err := orm.Insert(t.Context(), db, q.Table, orm.TextSet(q.Name, "private record name"))
 			if !errors.Is(err, fault.Panicked) || got != (mutationRecord{}) || state.rolledBack.Load() != 1 || state.rowsClosed.Load() != 0 {
 				t.Fatalf("factory failure escaped transaction isolation: %v", err)
 			}
@@ -53,7 +53,7 @@ func TestModelHooksRejectAmbiguousLockedRowsBeforeCallbacks(t *testing.T) {
 			db := open(t, state, nil)
 			calls := 0
 			q := mutationDefinition(orm.WithHooks(func() orm.Hooks[mutationRecord] { calls++; return orm.Hooks[mutationRecord]{} }))
-			got, err := q.Update(t.Context(), db, 1, q.Name.Set("private record name"))
+			got, err := orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, orm.TextSet(q.Name, "private record name"))
 			if !errors.Is(err, test.want) || got != (mutationRecord{}) || calls != 0 || state.rolledBack.Load() != 1 || state.rowsClosed.Load() != 1 {
 				t.Fatalf("invalid locked row ran factory or escaped rollback: %v", err)
 			}
@@ -99,7 +99,7 @@ func TestModelHooksCloseRowsAndPreserveCommitCandidates(t *testing.T) {
 					},
 				}
 			}))
-			got, err := q.Update(t.Context(), db, 42, q.Name.Set("private record name"))
+			got, err := orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 42, orm.TextSet(q.Name, "private record name"))
 			if outcome == "success" {
 				if err != nil || got.ID != 42 || afterCommits != 1 {
 					t.Fatalf("successful hook write failed: %v", err)
@@ -172,7 +172,7 @@ func TestRegisteredObserversRequireMatchingFamilyAndRunThroughActualTransaction(
 			if err := db.Start(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			_, err = mutationFields.Insert(t.Context(), observerTransactor{db}, mutationValues()...)
+			_, err = orm.Insert(t.Context(), observerTransactor{db}, mutationFields.Table, mutationValues()...)
 			want := veto
 			if mode == "wrong-family" {
 				want = fault.Invalid
@@ -216,7 +216,7 @@ func TestObserverFreeWrapperRetainsSingleMutationStatement(t *testing.T) {
 	_ = rowObserverPool(t, mutationDriver(nil), otherObservers)
 	// Native adapters are installed even without a local factory. The actual
 	// transaction's empty registry must avoid the lifecycle snapshot read.
-	if _, err := mutationFields.Update(t.Context(), observerTransactor{db}, 42, mutationValues()...); err != nil {
+	if _, err := orm.Update(t.Context(), observerTransactor{db}, mutationFields.Table.Query(), mutationFields.Table.Key(), 42, mutationValues()...); err != nil {
 		t.Fatal(err)
 	}
 

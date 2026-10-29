@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.LockedQuery[models.User](models.Orders.Query().ForUpdate())
+var _ = orm.LockedQuery[models.User](orm.Lock(models.Orders.Query()))

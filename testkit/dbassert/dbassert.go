@@ -1,4 +1,4 @@
-// Package dbassert asserts persisted state through typed generated queries.
+// Package dbassert asserts persisted state through typed query callbacks.
 // Assertions only read through the supplied executor, usually the test's own
 // transaction; they never reset, truncate or seed data.
 package dbassert
@@ -10,71 +10,60 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 )
 
-// Query is satisfied by native ORM queries and row results. Its model scopes,
-// including soft-delete visibility,
-// apply exactly as they do in application code.
-type Query interface {
-	Count(context.Context, database.Executor) (int64, error)
-	Exists(context.Context, database.Executor) (bool, error)
-}
-
-// Trashable is a soft-deleting model query deriving its own type.
-type Trashable[Q any] interface {
-	Query
-	OnlyTrashed() Q
-}
-
-// AssertExists requires at least one row matched by query.
-func AssertExists(t testing.TB, ctx context.Context, executor database.Executor, query Query) {
+// AssertExists requires at least one row matched by exists.
+// Pass a typed closure calling orm.Exists, or a row result's Exists method.
+func AssertExists(t testing.TB, ctx context.Context, executor database.Executor, exists func(context.Context, database.Executor) (bool, error)) {
 	t.Helper()
-	exists, err := query.Exists(ctx, executor)
+	found, err := exists(ctx, executor)
 	if err != nil {
 		t.Errorf("database existence query failed: %v", err)
 		return
 	}
-	if !exists {
+	if !found {
 		t.Error("expected a matching database row; none exists")
 	}
 }
 
-// AssertMissing requires that query matches no rows. Soft-deleted rows are
-// invisible to an ordinary generated query; use AssertSoftDeleted for them.
-func AssertMissing(t testing.TB, ctx context.Context, executor database.Executor, query Query) {
+// AssertMissing requires that count matches no rows. Soft-deleted rows are
+// invisible to an ordinary ORM query; use AssertSoftDeleted for them.
+// Pass a typed closure calling orm.Count, or a row result's Count method.
+func AssertMissing(t testing.TB, ctx context.Context, executor database.Executor, count func(context.Context, database.Executor) (int64, error)) {
 	t.Helper()
-	count, err := query.Count(ctx, executor)
+	found, err := count(ctx, executor)
 	if err != nil {
 		t.Errorf("database count query failed: %v", err)
 		return
 	}
-	if count != 0 {
-		t.Errorf("expected no matching database rows; found %d", count)
+	if found != 0 {
+		t.Errorf("expected no matching database rows; found %d", found)
 	}
 }
 
-// AssertCount requires exactly want rows matched by query.
-func AssertCount(t testing.TB, ctx context.Context, executor database.Executor, query Query, want int64) {
+// AssertCount requires exactly want rows matched by count.
+// Pass a typed closure calling orm.Count, or a row result's Count method.
+func AssertCount(t testing.TB, ctx context.Context, executor database.Executor, count func(context.Context, database.Executor) (int64, error), want int64) {
 	t.Helper()
-	count, err := query.Count(ctx, executor)
+	found, err := count(ctx, executor)
 	if err != nil {
 		t.Errorf("database count query failed: %v", err)
 		return
 	}
-	if count != want {
-		t.Errorf("database row count: got %d, want %d", count, want)
+	if found != want {
+		t.Errorf("database row count: got %d, want %d", found, want)
 	}
 }
 
-// AssertSoftDeleted requires that query's rows exist only as soft-deleted
-// rows: the ordinary query matches none and its OnlyTrashed variant matches at
-// least one. Pass an ordinary query, not one derived with WithTrashed.
-func AssertSoftDeleted[Q Trashable[Q]](t testing.TB, ctx context.Context, executor database.Executor, query Q) {
+// AssertSoftDeleted requires that rows exist only as soft-deleted rows.
+// Count must read the ordinary query; existsTrashed must read its OnlyTrashed
+// variant. Both callbacks retain the same model filters and supplied executor.
+func AssertSoftDeleted(t testing.TB, ctx context.Context, executor database.Executor, count func(context.Context, database.Executor) (int64, error), existsTrashed func(context.Context, database.Executor) (bool, error)) {
 	t.Helper()
-	visible, err := query.Count(ctx, executor)
+	visible, err := count(ctx, executor)
 	if err != nil {
 		t.Errorf("database count query failed: %v", err)
 		return
 	}
-	trashed, err := query.OnlyTrashed().Exists(ctx, executor)
+	trashed, err := existsTrashed(ctx, executor)
 	if err != nil {
 		t.Errorf("database trashed query failed: %v", err)
 		return

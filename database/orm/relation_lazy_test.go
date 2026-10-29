@@ -44,14 +44,14 @@ func TestRelationExistenceDefersTargetEnumChecks(t *testing.T) {
 	parents := Define("lazy_parents", func(b Builder[parent], m *parent) parentFields {
 		return parentFields{TableOf(b, &m.ID), ManyOf(b, &m.Children)}
 	})
-	r := HasManyOf(parents.Children, parents.Key(), children.OwnerID)
+	r := HasManyOf(parents.Children, KeyExpr(parents.Key()), NumberExpr(children.OwnerID))
 	q := parents.Query().Where(Has(r))
 	if relationEnumCalls != 0 {
 		t.Fatal("relation construction resolved enum descriptor")
 	}
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	if _, err := q.Count(t.Context(), db); !errors.Is(err, fault.Invalid) {
+	if _, err := Count(t.Context(), db, q); !errors.Is(err, fault.Invalid) {
 		t.Fatal("target codec not checked", err)
 	}
 	if len(statements) != 0 || relationEnumCalls != 1 {

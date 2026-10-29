@@ -115,7 +115,7 @@ func TestPostgresInsertOrFirstResolvesConcurrentCreation(t *testing.T) {
 	if _, e := db.Exec(t.Context(), `CREATE TABLE scope_records(id bigint PRIMARY KEY,rank bigint NOT NULL UNIQUE)`); e != nil {
 		t.Fatal(e)
 	}
-	q := d.Query().Where(d.Rank.Eq(7))
+	q := d.Query().Where(NumberEq(d.Rank, 7))
 	type outcome struct {
 		row scopeTransferRow
 		err error
@@ -123,7 +123,7 @@ func TestPostgresInsertOrFirstResolvesConcurrentCreation(t *testing.T) {
 	out := make(chan outcome, 4)
 	for i := range 4 {
 		go func() {
-			r, e := CreateOrFirst(t.Context(), db, q, d.Key().Set(int64(i+1)), d.Rank.Set(7))
+			r, e := CreateOrFirst(t.Context(), db, q, KeySet(d.Key(), int64(i+1)), NumberSet(d.Rank, 7))
 			out <- outcome{r, e}
 		}()
 	}
@@ -140,11 +140,11 @@ func TestPostgresInsertOrFirstResolvesConcurrentCreation(t *testing.T) {
 			t.Fatal("different winners", v.row, winner)
 		}
 	}
-	if _, e := CreateOrFirst(t.Context(), db, d.Query().Where(d.Rank.Eq(8)), d.Key().Set(winner), d.Rank.Set(8)); !errors.Is(e, database.UniqueViolation) {
+	if _, e := CreateOrFirst(t.Context(), db, d.Query().Where(NumberEq(d.Rank, 8)), KeySet(d.Key(), winner), NumberSet(d.Rank, 8)); !errors.Is(e, database.UniqueViolation) {
 		t.Fatal("unselected conflict hidden", e)
 	}
 	if e := db.Transaction(t.Context(), func(tx *database.Tx) error {
-		r, e := CreateOrFirst(t.Context(), tx, q, d.Key().Set(99), d.Rank.Set(7))
+		r, e := CreateOrFirst(t.Context(), tx, q, KeySet(d.Key(), 99), NumberSet(d.Rank, 7))
 		if e != nil {
 			return e
 		}

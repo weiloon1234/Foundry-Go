@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
-// AccountTable declares stored columns and their write roles. Example: Accounts.Key().Eq(key).
+// AccountTable declares stored columns and their write roles. Example: orm.KeyEq(Accounts.Key(), key).
 type AccountTable struct {
 	orm.Table[Account, model.ID[Account]]
 	Email        orm.InputText[Account, string, string]
@@ -21,7 +21,7 @@ type AccountTable struct {
 	Soft         orm.SoftDeletable[Account]
 }
 
-// Accounts preserves the persisted audited_accounts model. Example: Accounts.Query().All(ctx,db).
+// Accounts preserves the persisted audited_accounts model. Example: orm.All(ctx, db, Accounts.Query()).
 var Accounts = orm.Define("audited_accounts", func(b orm.Builder[Account], m *Account) AccountTable {
 	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
 	return AccountTable{Table: orm.TableOf(b, &m.ID),
@@ -37,13 +37,13 @@ var Accounts = orm.Define("audited_accounts", func(b orm.Builder[Account], m *Ac
 	}
 }, orm.WithHooks(ormAccountHooks))
 
-// LabelTable declares stored columns and their write roles. Example: Labels.Key().Eq(key).
+// LabelTable declares stored columns and their write roles. Example: orm.KeyEq(Labels.Key(), key).
 type LabelTable struct {
 	orm.Table[Label, LabelCode]
 	Name orm.Text[Label, string]
 }
 
-// Labels preserves the persisted audited_labels model. Example: Labels.Query().All(ctx,db).
+// Labels preserves the persisted audited_labels model. Example: orm.All(ctx, db, Labels.Query()).
 var Labels = orm.Define("audited_labels", func(b orm.Builder[Label], m *Label) LabelTable {
 	return LabelTable{Table: orm.TableOf(b, &m.Code),
 		Name: orm.TextOf(b, &m.Name),

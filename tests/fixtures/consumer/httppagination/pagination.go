@@ -46,7 +46,7 @@ type DatabaseService struct{ DB database.Executor }
 
 func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResult[MemberResponse], error) {
 	builder := memberQuery(in.Filters)
-	page, err := builder.Paginate(ctx, s.DB, in.Page)
+	page, err := orm.Paginate(ctx, s.DB, builder, in.Page)
 	if err != nil {
 		return orm.PageResult[MemberResponse]{}, err
 	}
@@ -70,7 +70,7 @@ func PresentMember(member mutatorqueries.Member) (MemberResponse, error) {
 func memberQuery(filters MemberFilters) orm.Query[mutatorqueries.Member] {
 	builder := mutatorqueries.Members.Query()
 	if email, set := filters.Email.Get(); set {
-		builder = builder.Where(mutatorqueries.Members.Email.Eq(email))
+		builder = builder.Where(orm.InputTextEq(mutatorqueries.Members.Email, email))
 	}
 	return builder
 }

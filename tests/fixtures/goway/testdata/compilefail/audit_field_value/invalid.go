@@ -21,6 +21,6 @@ var accounts = orm.Define("accounts", func(b orm.Builder[account], m *account) f
 })
 
 func invalid(history record.Model[account, int]) {
-	field, _ := orm.AuditRead(history, accounts.Email)
+	field, _ := orm.AuditRead(history, orm.TextExpr(accounts.Email))
 	var _ value.Optional[record.FieldChange[int]] = field
 }

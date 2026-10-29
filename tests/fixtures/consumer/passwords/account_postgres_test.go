@@ -54,7 +54,7 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 			return err
 		}
 		q, f := passwords.AccountRecords, passwords.AccountRecords
-		loaded, err := q.Require(ctx, tx, account.ID)
+		loaded, err := orm.RequireKey(ctx, tx, q.Table, account.ID)
 		if err != nil {
 			return err
 		}
@@ -71,7 +71,7 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if strings.Contains(string(encoded), "$argon2id$") || strings.Contains(string(encoded), "exact password") {
 			return errors.New("model JSON disclosed password data")
 		}
-		projectionQuery := rows.Select(rows.From(q.Query()), passwords.CredentialRows, rows.Map(passwords.CredentialRows.Digest, expr.Value(f.Digest)))
+		projectionQuery := rows.Select(rows.From(q.Query()), passwords.CredentialRows, rows.Map(passwords.CredentialRows.Digest, expr.Value(orm.ColumnExpr(f.Digest))))
 		projection, err := rows.Read(projectionQuery).RequireFirst(ctx, tx)
 		if err != nil {
 			return err
@@ -93,7 +93,7 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if _, err := passwords.ReplaceHash(ctx, tx, account, account.Digest); !errors.Is(err, database.NotFound) {
 			return errors.New("stale password replacement overwrote new hash")
 		}
-		updated, err = q.Update(ctx, tx, account.ID, f.Backup.Set(next))
+		updated, err = orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), account.ID, orm.NullableColumnSet(f.Backup, next))
 		if err != nil {
 			return err
 		}
@@ -101,22 +101,22 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if !ok || backup != next {
 			return errors.New("nullable password hydration changed value")
 		}
-		updated, err = q.Update(ctx, tx, account.ID, f.Backup.SetNull())
+		updated, err = orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), account.ID, orm.NullableColumnSetNull(f.Backup))
 		if err != nil {
 			return err
 		}
 		if !updated.Backup.IsNull() {
 			return errors.New("explicit hash NULL lost")
 		}
-		changes, err := orm.Compare(q.Table, value.Set(account), value.Set(updated), f.Digest.Set(next))
+		changes, err := orm.Compare(q.Table, value.Set(account), value.Set(updated), orm.ColumnSet(f.Digest, next))
 		if err != nil {
 			return err
 		}
-		digestChange, err := orm.ChangeOf(changes, f.Digest)
+		digestChange, err := orm.ChangeOf(changes, orm.ColumnExpr(f.Digest))
 		if err != nil {
 			return err
 		}
-		idChange, err := orm.ChangeOf(changes, f.Key())
+		idChange, err := orm.ChangeOf(changes, orm.KeyExpr(f.Key()))
 		if err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if strings.Contains(payload, "$argon2id$") {
 			return errors.New("audit capture disclosed hash")
 		}
-		if _, err := orm.CursorPaginate(ctx, tx, q.Query().OrderBy(f.Digest.Asc()), orm.CursorRequest[passwords.Account]{Size: 1}); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.CursorPaginate(ctx, tx, q.Query().OrderBy(orm.ColumnAsc(f.Digest)), orm.CursorRequest[passwords.Account]{Size: 1}); !errors.Is(err, fault.Invalid) {
 			return errors.New("model cursor accepted sensitive sort key")
 		}
 		result := rows.CursorFor(rows.RecordOf(projectionQuery))
@@ -170,10 +170,10 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		if _, err := rows.CompileCursor(result.OrderBy(rf.Asc()).UniqueBy(expr.Group(rf))); !errors.Is(err, fault.Invalid) {
 			return errors.New("projection cursor accepted sensitive key")
 		}
-		if _, err := q.Update(ctx, tx, account.ID, f.Digest.Set(password.Hash{})); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), account.ID, orm.ColumnSet(f.Digest, password.Hash{})); !errors.Is(err, fault.Invalid) {
 			return errors.New("zero hash accepted")
 		}
-		preserved, err := q.Require(ctx, tx, account.ID)
+		preserved, err := orm.RequireKey(ctx, tx, q.Table, account.ID)
 		if err != nil {
 			return err
 		}

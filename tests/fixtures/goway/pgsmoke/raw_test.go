@@ -30,12 +30,12 @@ func TestTypedRawHydration(t *testing.T) {
 		orm.SoftDeleteOf(b, &m.DeletedAt)
 		return orm.TableOf(b, &m.ID)
 	})
-	got, err := table.Raw(ctx, db, `SELECT deleted_at,name AS name,id FROM raw_records ORDER BY id`)
+	got, err := orm.Raw(ctx, db, table, `SELECT deleted_at,name AS name,id FROM raw_records ORDER BY id`)
 	must(t, err)
 	if len(got) != 2 || got[1].DeletedAt.IsNull() {
 		t.Fatal("raw applied soft-delete scope", got)
 	}
-	ordinary, err := table.Query().All(ctx, db)
+	ordinary, err := orm.All(ctx, db, table.Query())
 	must(t, err)
 	if len(ordinary) != 1 || ordinary[0].ID != 1 {
 		t.Fatal("ordinary soft-delete scope", ordinary)
@@ -55,19 +55,19 @@ func TestTypedRawHydration(t *testing.T) {
 		t.Fatal(projected)
 	}
 	err = db.Transaction(ctx, func(tx *database.Tx) error {
-		updated, e := table.Raw(ctx, tx, `UPDATE raw_records SET name=$1 WHERE id=$2 RETURNING name,deleted_at,id`, "changed", int64(1))
+		updated, e := orm.Raw(ctx, tx, table, `UPDATE raw_records SET name=$1 WHERE id=$2 RETURNING name,deleted_at,id`, "changed", int64(1))
 		if e == nil && (len(updated) != 1 || updated[0].Name != "changed") {
 			t.Fatal(updated)
 		}
 		return e
 	})
 	must(t, err)
-	persisted, err := table.Require(ctx, db, 1)
+	persisted, err := orm.RequireKey(ctx, db, table, 1)
 	must(t, err)
 	if persisted.Name != "changed" {
 		t.Fatal("raw write not persisted")
 	}
-	if got, err := table.Raw(ctx, db, `SELECT id FROM raw_records WHERE false`); !errors.Is(err, fault.Invalid) || got != nil {
+	if got, err := orm.Raw(ctx, db, table, `SELECT id FROM raw_records WHERE false`); !errors.Is(err, fault.Invalid) || got != nil {
 		t.Fatal("missing column accepted", got, err)
 	}
 }

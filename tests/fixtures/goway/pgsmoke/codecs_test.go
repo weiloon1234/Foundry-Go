@@ -38,16 +38,16 @@ func roundTripKind[V any](t *testing.T, db *database.DB, name, sqlType string, i
 	must(t, orm.Check(fields))
 	_, err := db.Exec(t.Context(), "CREATE TABLE codec_"+name+" (id bigint PRIMARY KEY, value "+sqlType+" NOT NULL, maybe "+sqlType+")")
 	must(t, err)
-	_, err = fields.Insert(t.Context(), db, fields.Key().Set(1), fields.Value.Set(input), fields.Maybe.SetNull())
+	_, err = orm.Insert(t.Context(), db, fields.Table, orm.KeySet(fields.Key(), 1), orm.ColumnSet(fields.Value, input), orm.NullableColumnSetNull(fields.Maybe))
 	must(t, err)
-	got, err := fields.Require(t.Context(), db, 1)
+	got, err := orm.RequireKey(t.Context(), db, fields.Table, 1)
 	must(t, err)
 	if !reflect.DeepEqual(got.Value, input) || !got.Maybe.IsNull() {
 		t.Fatalf("%s required/null round trip", name)
 	}
-	_, err = fields.Update(t.Context(), db, 1, fields.Maybe.Set(input))
+	_, err = orm.Update(t.Context(), db, fields.Table.Query(), fields.Table.Key(), 1, orm.NullableColumnSet(fields.Maybe, input))
 	must(t, err)
-	got, err = fields.Require(t.Context(), db, 1)
+	got, err = orm.RequireKey(t.Context(), db, fields.Table, 1)
 	must(t, err)
 	nullable, ok := got.Maybe.Get()
 	if !ok || !reflect.DeepEqual(nullable, input) {
@@ -110,18 +110,18 @@ func TestJSONIntervalBinaryAndNaturalKeys(t *testing.T) {
 	period, err := temporal.NewInterval(2, -3, 4*time.Hour+5*time.Microsecond)
 	must(t, err)
 	input := coremodels.Payload{1, 2, 3}
-	body := r.Body.Set(input)
+	body := orm.ColumnSet(r.Body, input)
 	input[0] = 9 // Pending assignments must own binary buffers.
-	_, err = r.Insert(ctx, db, r.Code.Set("sample"), r.Settings.Set(settings), r.Period.Set(period), body, r.ForeignID.Set(models.User{}.ID), r.Revision.Set(coremodels.Record{}.Revision), r.MessageID.Set(coremodels.Record{}.MessageID), r.Status.Set(models.StatusActive))
+	_, err = orm.Insert(ctx, db, r.Table, orm.KeySet(r.Code, "sample"), orm.JSONSet(r.Settings, settings), orm.IntervalSet(r.Period, period), body, orm.ColumnSet(r.ForeignID, models.User{}.ID), orm.ColumnSet(r.Revision, coremodels.Record{}.Revision), orm.ColumnSet(r.MessageID, coremodels.Record{}.MessageID), orm.EnumSet(r.Status, models.StatusActive))
 	must(t, err)
-	got, err := r.Require(ctx, db, "sample")
+	got, err := orm.RequireKey(ctx, db, r.Table, "sample")
 	must(t, err)
 	if got.Settings != settings || got.Period != period || !bytes.Equal(got.Body, []byte{1, 2, 3}) || !got.MaybeSettings.IsNull() || !got.MaybePeriod.IsNull() || !got.MaybeBody.IsNull() {
 		t.Fatal("new constructor round trip/null/ownership")
 	}
-	_, err = r.Update(ctx, db, "sample", r.MaybeSettings.Set(settings), r.MaybePeriod.Set(period), r.MaybeBody.Set(coremodels.Payload{}))
+	_, err = orm.Update(ctx, db, r.Table.Query(), r.Table.Key(), "sample", orm.NullableJSONSet(r.MaybeSettings, settings), orm.NullableIntervalSet(r.MaybePeriod, period), orm.NullableColumnSet(r.MaybeBody, coremodels.Payload{}))
 	must(t, err)
-	got, err = r.Require(ctx, db, "sample")
+	got, err = orm.RequireKey(ctx, db, r.Table, "sample")
 	must(t, err)
 	js, jok := got.MaybeSettings.Get()
 	iv, iok := got.MaybePeriod.Get()
@@ -129,27 +129,27 @@ func TestJSONIntervalBinaryAndNaturalKeys(t *testing.T) {
 	if !jok || js != settings || !iok || iv != period || !bok || binary == nil || len(binary) != 0 {
 		t.Fatal("nullable value/empty binary round trip")
 	}
-	_, err = coremodels.Durations.Insert(ctx, db, coremodels.Durations.Period.Set(period), coremodels.Durations.Label.Set(`Cal_%\endar`))
+	_, err = orm.Insert(ctx, db, coremodels.Durations.Table, orm.KeySet(coremodels.Durations.Period, period), orm.TextSet(coremodels.Durations.Label, `Cal_%\endar`))
 	must(t, err)
-	duration, err := coremodels.Durations.Require(ctx, db, period)
+	duration, err := orm.RequireKey(ctx, db, coremodels.Durations.Table, period)
 	must(t, err)
 	if duration.Label != `Cal_%\endar` || duration.Period != period {
 		t.Fatal("interval key codec")
 	}
-	matches, err := coremodels.Durations.Query().Where(coremodels.Durations.Label.IContains(`_%\E`)).Count(ctx, db)
+	matches, err := orm.Count(ctx, db, coremodels.Durations.Query().Where(orm.TextIContains(coremodels.Durations.Label, `_%\E`)))
 	must(t, err)
 	if matches != 1 {
 		t.Fatal("literal case-insensitive substring")
 	}
-	matching, err := r.Query().Where(r.Period.Gt(temporal.Days(1)), r.Settings.Eq(settings), r.Settings.Contains(settings), r.MaybeSettings.ContainedBy(settings)).All(ctx, db)
+	matching, err := orm.All(ctx, db, r.Query().Where(orm.IntervalGt(r.Period, temporal.Days(1)), orm.JSONEq(r.Settings, settings), orm.JSONContains(r.Settings, settings), orm.NullableJSONContainedBy(r.MaybeSettings, settings)))
 	must(t, err)
 	if len(matching) != 1 {
 		t.Fatal("interval ordering/JSON equality")
 	}
-	if _, err = r.Update(ctx, db, "sample", r.Status.Set(models.Status("invalid"))); err == nil {
+	if _, err = orm.Update(ctx, db, r.Table.Query(), r.Table.Key(), "sample", orm.EnumSet(r.Status, models.Status("invalid"))); err == nil {
 		t.Fatal("invalid enum accepted")
 	}
-	stored, err := r.Require(ctx, db, "sample")
+	stored, err := orm.RequireKey(ctx, db, r.Table, "sample")
 	must(t, err)
 	if stored.Status != models.StatusActive {
 		t.Fatal("invalid enum changed persisted value")
@@ -161,7 +161,7 @@ func TestJSONIntervalBinaryAndNaturalKeys(t *testing.T) {
 		t.Run(bad.name, func(t *testing.T) {
 			_, err := db.Exec(ctx, bad.sql)
 			must(t, err)
-			got, err := r.Query().Where(r.Code.Eq("sample")).All(ctx, db)
+			got, err := orm.All(ctx, db, r.Query().Where(orm.KeyEq(r.Code, "sample")))
 			if err == nil || got != nil {
 				t.Fatal("malformed stored value published a model")
 			}
@@ -192,17 +192,17 @@ func TestJSONOrderingAndNullPredicate(t *testing.T) {
 	must(t, err)
 	text, err := value.NewJSON(value.Of("text"))
 	must(t, err)
-	_, err = r.Insert(ctx, db, r.Key().Set(1), r.Document.Set(null), r.Maybe.SetNull())
+	_, err = orm.Insert(ctx, db, r.Table, orm.KeySet(r.Key(), 1), orm.JSONSet(r.Document, null), orm.NullableJSONSetNull(r.Maybe))
 	must(t, err)
-	_, err = r.Insert(ctx, db, r.Key().Set(2), r.Document.Set(text), r.Maybe.Set(null))
+	_, err = orm.Insert(ctx, db, r.Table, orm.KeySet(r.Key(), 2), orm.JSONSet(r.Document, text), orm.NullableJSONSet(r.Maybe, null))
 	must(t, err)
 	for _, check := range []struct {
 		predicate orm.Predicate[record]
 		id        int64
 	}{
-		{r.Document.IsJSONNull(), 1}, {r.Maybe.IsJSONNull(), 2}, {r.Maybe.IsNull(), 1},
+		{orm.JSONIsJSONNull(r.Document), 1}, {orm.NullableJSONIsJSONNull(r.Maybe), 2}, {orm.NullableJSONIsNull(r.Maybe), 1},
 	} {
-		got, err := r.Query().Where(check.predicate).Require(ctx, db)
+		got, err := orm.Require(ctx, db, r.Query().Where(check.predicate))
 		must(t, err)
 		if got.ID != check.id {
 			t.Fatalf("JSON null/SQL NULL selected %d, want %d", got.ID, check.id)
@@ -212,9 +212,9 @@ func TestJSONOrderingAndNullPredicate(t *testing.T) {
 		order orm.Order[record]
 		first int64
 	}{
-		{r.Document.Asc(), 1}, {r.Document.Desc(), 2}, {r.Maybe.Asc(), 2}, {r.Maybe.Desc(), 1},
+		{orm.JSONAsc(r.Document), 1}, {orm.JSONDesc(r.Document), 2}, {orm.NullableJSONAsc(r.Maybe), 2}, {orm.NullableJSONDesc(r.Maybe), 1},
 	} {
-		got, err := r.Query().OrderBy(check.order).All(ctx, db)
+		got, err := orm.All(ctx, db, r.Query().OrderBy(check.order))
 		must(t, err)
 		if len(got) != 2 || got[0].ID != check.first {
 			t.Fatal("JSON sort order")
@@ -239,9 +239,9 @@ func TestIntervalComparisonSemantics(t *testing.T) {
 	})
 	_, err := db.Exec(t.Context(), `CREATE TABLE interval_comparison (id bigint PRIMARY KEY, period interval NOT NULL, maybe interval)`)
 	must(t, err)
-	_, err = r.Insert(t.Context(), db, r.Key().Set(1), r.Period.Set(temporal.Days(30)), r.Maybe.Set(temporal.Days(30)))
+	_, err = orm.Insert(t.Context(), db, r.Table, orm.KeySet(r.Key(), 1), orm.IntervalSet(r.Period, temporal.Days(30)), orm.NullableIntervalSet(r.Maybe, temporal.Days(30)))
 	must(t, err)
-	got, err := r.Query().Where(r.Period.Eq(temporal.Months(1)), r.Maybe.Eq(temporal.Months(1))).Require(t.Context(), db)
+	got, err := orm.Require(t.Context(), db, r.Query().Where(orm.IntervalEq(r.Period, temporal.Months(1)), orm.NullableIntervalEq(r.Maybe, temporal.Months(1))))
 	must(t, err)
 	if got.ID != 1 || got.Period != temporal.Days(30) {
 		t.Fatal("month equality must match 30 days without changing hydrated components")

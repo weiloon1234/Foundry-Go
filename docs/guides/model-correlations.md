@@ -15,8 +15,9 @@ its outer row. Lift each side through `rows.OuterScope` and `rows.InnerScope`;
 link := rowset.Correlate(rowset.From(models.Users.Query()), rowset.From(models.Orders.Query()))
 buyer := rowset.OuterScope(link, rowset.ModelScope(models.Users.Query()))
 order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
-matched := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)))
-counts := rowset.SelectCorrelatedScalar(matched, expr.CountFieldAt(order, models.Orders.ID).Value())
+matched := link.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(buyer, orm.KeyExpr(models.Users.ID))))
+counts := rowset.SelectCorrelatedScalar(matched, expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID)).Value())
+totals := rowset.SelectCorrelatedScalar(matched, expr.SumAt(order, orm.NumberExpr(models.Orders.TotalCents)).Value())
 ```
 
 The `rowset` import is `database/orm/rows`. `matched.Exists()` is a predicate of

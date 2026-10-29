@@ -20,26 +20,26 @@ import (
 func TestPostgresRowValueComparisons(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, _ []models.User) error {
 		f := models.Users
-		nextAge := expr.Add(expr.Value(f.Age), expr.Param(f.Age, 1))
+		nextAge := expr.Add(expr.Value(orm.NumberExpr(f.Age)), expr.Param(orm.NumberExpr(f.Age), 1))
 		for _, test := range []struct {
 			name      string
 			condition expr.Predicate[models.User]
 			ages      []int
 		}{
-			{"equal", expr.Equal(nextAge, expr.Param(f.Age, 22)), []int{21}},
-			{"not equal", expr.NotEqual(nextAge, expr.Param(f.Age, 22)), []int{20, 22}},
-			{"less", expr.Less(nextAge, expr.Param(f.Age, 22)), []int{20}},
-			{"less equal", expr.LessOrEqual(nextAge, expr.Param(f.Age, 22)), []int{20, 21}},
-			{"greater", expr.Greater(nextAge, expr.Param(f.Age, 22)), []int{22}},
-			{"greater equal", expr.GreaterOrEqual(nextAge, expr.Param(f.Age, 22)), []int{21, 22}},
-			{"text pattern", expr.Like(expr.Lower(expr.Value(f.Email)), expr.Param(f.Email, "a%@example.test")), []int{20}},
-			{"nullable pattern", expr.LikeNullable(expr.LowerNullable(expr.Value(f.Nickname)), expr.NullableRow(expr.Param(f.Email, "b%"))), []int{21}},
-			{"null equality is unknown", expr.Equal(expr.Value(f.Nickname), expr.NullableRow(expr.Value(f.Email)).Param(value.Null[string]())), []int{}},
-			{"null equal", expr.NotDistinctFrom(expr.Value(f.Nickname), expr.NullableRow(expr.Value(f.Email)).Param(value.Null[string]())), []int{20, 22}},
-			{"null distinct", expr.DistinctFrom(expr.Value(f.Nickname), expr.NullableRow(expr.Value(f.Email)).Param(value.Null[string]())), []int{21}},
-			{"nullable range", expr.LessNullable(expr.NullableRow(expr.Value(f.Age)), expr.NullableRow(expr.Param(f.Age, 22))), []int{20, 21}},
+			{"equal", expr.Equal(nextAge, expr.Param(orm.NumberExpr(f.Age), 22)), []int{21}},
+			{"not equal", expr.NotEqual(nextAge, expr.Param(orm.NumberExpr(f.Age), 22)), []int{20, 22}},
+			{"less", expr.Less(nextAge, expr.Param(orm.NumberExpr(f.Age), 22)), []int{20}},
+			{"less equal", expr.LessOrEqual(nextAge, expr.Param(orm.NumberExpr(f.Age), 22)), []int{20, 21}},
+			{"greater", expr.Greater(nextAge, expr.Param(orm.NumberExpr(f.Age), 22)), []int{22}},
+			{"greater equal", expr.GreaterOrEqual(nextAge, expr.Param(orm.NumberExpr(f.Age), 22)), []int{21, 22}},
+			{"text pattern", expr.Like(expr.Lower(expr.Value(orm.TextExpr(f.Email))), expr.Param(orm.TextExpr(f.Email), "a%@example.test")), []int{20}},
+			{"nullable pattern", expr.LikeNullable(expr.LowerNullable(expr.Value(orm.NullableTextExpr(f.Nickname))), expr.NullableRow(expr.Param(orm.TextExpr(f.Email), "b%"))), []int{21}},
+			{"null equality is unknown", expr.Equal(expr.Value(orm.NullableTextExpr(f.Nickname)), expr.NullableRow(expr.Value(orm.TextExpr(f.Email))).Param(value.Null[string]())), []int{}},
+			{"null equal", expr.NotDistinctFrom(expr.Value(orm.NullableTextExpr(f.Nickname)), expr.NullableRow(expr.Value(orm.TextExpr(f.Email))).Param(value.Null[string]())), []int{20, 22}},
+			{"null distinct", expr.DistinctFrom(expr.Value(orm.NullableTextExpr(f.Nickname)), expr.NullableRow(expr.Value(orm.TextExpr(f.Email))).Param(value.Null[string]())), []int{21}},
+			{"nullable range", expr.LessNullable(expr.NullableRow(expr.Value(orm.NumberExpr(f.Age))), expr.NullableRow(expr.Param(orm.NumberExpr(f.Age), 22))), []int{20, 21}},
 		} {
-			rows, err := expr.Where(models.Users.Query(), test.condition).OrderBy(f.Age.Asc()).All(t.Context(), tx)
+			rows, err := orm.All(t.Context(), tx, expr.Where(models.Users.Query(), test.condition).OrderBy(orm.NumberAsc(f.Age)))
 			if err != nil {
 				t.Fatal(test.name, err)
 			}
@@ -52,11 +52,11 @@ func TestPostgresRowValueComparisons(t *testing.T) {
 			}
 		}
 		// Binary conditions also compose with mutation filters and conditional values.
-		row, err := expr.Where(models.Users.Query(), expr.Equal(nextAge, expr.Param(f.Age, 21))).Require(t.Context(), tx)
+		row, err := orm.Require(t.Context(), tx, expr.Where(models.Users.Query(), expr.Equal(nextAge, expr.Param(orm.NumberExpr(f.Age), 21))))
 		if err != nil {
 			return err
 		}
-		_, err = orm.Update(t.Context(), tx, expr.Where(models.Users.Query(), expr.Equal(nextAge, expr.Param(f.Age, 21))), f.Key(), row.ID, f.Age.Set(25))
+		_, err = orm.Update(t.Context(), tx, expr.Where(models.Users.Query(), expr.Equal(nextAge, expr.Param(orm.NumberExpr(f.Age), 21))), f.Key(), row.ID, orm.NumberSet(f.Age, 25))
 		return err
 	})
 }
@@ -76,20 +76,20 @@ func TestPostgresSelectedValueComparisons(t *testing.T) {
 				t.Fatal(rows, err)
 			}
 		}
-		email := expr.LowerValue(expr.Row(expr.Value(f.Email)).Value())
-		rows, err := rowset.ReadScalar(rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), email), expr.Group(expr.Value(f.Email))), expr.LikeValue(email, expr.Param(f.Email, "a%").Value()))).All(t.Context(), tx)
+		email := expr.LowerValue(expr.Row(expr.Value(orm.TextExpr(f.Email))).Value())
+		rows, err := rowset.ReadScalar(rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), email), expr.Group(expr.Value(orm.TextExpr(f.Email)))), expr.LikeValue(email, expr.Param(orm.TextExpr(f.Email), "a%").Value()))).All(t.Context(), tx)
 		if err != nil || !reflect.DeepEqual(rows, []string{"a@example.test"}) {
 			t.Fatal(rows, err)
 		}
-		nickname := expr.LowerNullableValue(expr.Row(expr.Value(f.Nickname)).Value())
-		nullable, err := rowset.ReadScalar(rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), nickname), expr.Group(expr.Value(f.Nickname))), expr.LikeNullableValue(nickname, expr.Nullable(expr.Param(f.Email, "b%").Value())))).All(t.Context(), tx)
+		nickname := expr.LowerNullableValue(expr.Row(expr.Value(orm.NullableTextExpr(f.Nickname))).Value())
+		nullable, err := rowset.ReadScalar(rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), nickname), expr.Group(expr.Value(orm.NullableTextExpr(f.Nickname)))), expr.LikeNullableValue(nickname, expr.Nullable(expr.Param(orm.TextExpr(f.Email), "b%").Value())))).All(t.Context(), tx)
 		if err != nil || len(nullable) != 1 {
 			t.Fatal(nullable, err)
 		}
 		if got, present := nullable[0].Get(); !present || got != "bee" {
 			t.Fatal(nullable)
 		}
-		sum := expr.Sum(f.Age)
+		sum := expr.Sum(orm.NumberExpr(f.Age))
 		totals, err := rowset.ReadScalar(rowset.HavingScalar(rowset.SelectScalar(rowset.From(q), sum.Value()), expr.GreaterNullableValue(sum.Value(), expr.Nullable(sum.Param(decimal.FromInt64(60)).Value())))).All(t.Context(), tx)
 		if err != nil || len(totals) != 1 {
 			t.Fatal(totals, err)
@@ -107,15 +107,15 @@ func TestComparisonFailuresBeforeExecution(t *testing.T) {
 	orders := models.Orders.Query()
 	link := rowset.Correlate(rowset.From(q), rowset.From(orders))
 	outer := rowset.OuterScope(link, rowset.ModelScope(q))
-	outerOnly := rowset.CorrelatedScalarRowQuery(rowset.SelectCorrelatedScalar(link, expr.CountFieldAt(outer, f.ID).Value()))
+	outerOnly := rowset.CorrelatedScalarRowQuery(rowset.SelectCorrelatedScalar(link, expr.CountFieldAt(outer, orm.KeyExpr(f.ID)).Value()))
 	for _, condition := range []expr.Predicate[models.User]{
-		expr.Equal[models.User, int](nil, expr.Value(f.Age)),
-		expr.Equal(expr.Value(f.Email), expr.Param(f.Email, "\x00")),
-		expr.Equal(expr.NullableRow(expr.Value(f.Age)), rowset.ScalarRowQuery(rowset.From(q), rowset.Scalar[models.User, int]{})),
-		rowset.ScalarRowQuery(rowset.From(q), rowset.SelectScalar(rowset.From(q), expr.Row(expr.Value(f.Nickname)).Value())).IsNull(),
+		expr.Equal[models.User, int](nil, expr.Value(orm.NumberExpr(f.Age))),
+		expr.Equal(expr.Value(orm.TextExpr(f.Email)), expr.Param(orm.TextExpr(f.Email), "\x00")),
+		expr.Equal(expr.NullableRow(expr.Value(orm.NumberExpr(f.Age))), rowset.ScalarRowQuery(rowset.From(q), rowset.Scalar[models.User, int]{})),
+		rowset.ScalarRowQuery(rowset.From(q), rowset.SelectScalar(rowset.From(q), expr.Row(expr.Value(orm.NullableTextExpr(f.Nickname))).Value())).IsNull(),
 		expr.Equal(outerOnly, expr.NullableRow(expr.Count[models.User]().Param(1))),
 	} {
-		if _, err := expr.Where(q.Limit(0), condition).All(t.Context(), queryfixture.NoQueries(t)); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.All(t.Context(), queryfixture.NoQueries(t), expr.Where(q.Limit(0), condition)); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}

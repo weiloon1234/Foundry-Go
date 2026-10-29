@@ -69,13 +69,10 @@ func UniqueEach[E, M any, V comparable](executor database.Executor, source orm.Q
 // time, so one declaration serves every request. Validate rejects the rule
 // until an enclosing Provide supplies current. Derive that key from trusted
 // route or actor data, never from an untrusted body field alone.
-// Example: databasevalidation.UniqueIgnoring(db, Users.Query(), Users.Email, Users.Key(), current).
-func UniqueIgnoring[M any, V, K comparable](executor database.Executor, source orm.Query[M], field orm.KeyColumn[M, V], key interface {
-	orm.KeyColumn[M, K]
-	Ne(K) orm.Predicate[M]
-}, current validation.Slot[K]) validation.Rule[V] {
-	if isNil(key) {
-		return validation.Requires(current, validation.Unique(newLookup(lookupState[M, V]{err: safeerror.NewFault(fault.Invalid, "database validation requires a key field")})))
+// Example: databasevalidation.UniqueIgnoring(db, Users.Query(), orm.TextExpr(Users.Email), orm.KeyExpr(Users.Key()), func(id model.ID[User]) orm.Predicate[User] { return orm.KeyNe(Users.Key(), id) }, current).
+func UniqueIgnoring[M any, V, K comparable](executor database.Executor, source orm.Query[M], field orm.KeyColumn[M, V], key orm.KeyColumn[M, K], exclude func(K) orm.Predicate[M], current validation.Slot[K]) validation.Rule[V] {
+	if isNil(key) || exclude == nil {
+		return validation.Requires(current, validation.Unique(newLookup(lookupState[M, V]{err: safeerror.NewFault(fault.Invalid, "database validation requires a key field and exclusion predicate")})))
 	}
 	if err := orm.Lookup(source, key).Validate(); err != nil {
 		return validation.Requires(current, validation.Unique(newLookup(lookupState[M, V]{err: err})))
@@ -90,7 +87,7 @@ func UniqueIgnoring[M any, V, K comparable](executor database.Executor, source o
 		if err != nil {
 			return source, err
 		}
-		return source.Where(key.Ne(ignored)), nil
+		return source.Where(exclude(ignored)), nil
 	}, field)))
 }
 

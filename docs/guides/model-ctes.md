@@ -11,12 +11,12 @@ a handwritten rows projection. Alias the definition with `rows.AsRecord[Tag]`.
 <!-- go-source: tests/fixtures/consumer/ctes/ctes_postgres_test.go -->
 ```go
 u := models.Users
-eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(u.Age.Gte(21)))).Materialized()
+eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.NumberGte(u.Age, 21)))).Materialized()
 first, second := rowset.AsRecord[eligibleAlias](eligible, "first_user"), rowset.AsRecord[otherAlias](eligible, "second_user")
 a, b := rowset.Scope(first), rowset.Scope(second)
-joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, models.Users.ID), expr.At(b, models.Users.ID)))
+joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, orm.KeyExpr(models.Users.ID)), expr.At(b, orm.KeyExpr(models.Users.ID))))
 fields := rowset.LeftScope(joined, rowset.Scope(first))
-names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.Row(expr.At(fields, models.Users.Email)).Value()), expr.At(fields, models.Users.Email).Asc())
+names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.Row(expr.At(fields, orm.TextExpr(models.Users.Email))).Value()), expr.At(fields, orm.TextExpr(models.Users.Email)).Asc())
 ```
 
 The `rowset` import names `database/orm/rows`; the linked package declares both

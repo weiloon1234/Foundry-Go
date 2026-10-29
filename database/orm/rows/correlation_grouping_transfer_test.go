@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"errors"
 	"strings"
@@ -16,14 +18,14 @@ func TestNestedCorrelationRetainsGrandparentGrouping(t *testing.T) {
 	a, b, child := As[left](m.Query(), "a"), As[right](m.Query(), "b"), As[third](m.Query(), "child")
 	parent := Correlate(a, b)
 	nested := Correlate(parent, child)
-	grandparentID := expr.At(OuterScope(nested, OuterScope(parent, Scope(a))), m.ID)
-	childID := expr.At(InnerScope(nested, Scope(child)), m.ID)
+	grandparentID := expr.At(OuterScope(nested, OuterScope(parent, Scope(a))), orm.KeyExpr(m.ID))
+	childID := expr.At(InnerScope(nested, Scope(child)), orm.KeyExpr(m.ID))
 	exists := parent.Where(nested.Where(expr.Equal(childID, grandparentID)).Exists()).Exists()
 	q := Having(expressionQuery(a, expr.Count[Alias[left, member]]().Value(), codec.Signed[int64]()), expr.Grouped(exists))
 	if _, err := CompileRead(Read(q)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("ungrouped grandparent accepted", err)
 	}
-	grouped := GroupBy(q, expr.Group(expr.At(Scope(a), m.ID)))
+	grouped := GroupBy(q, expr.Group(expr.At(Scope(a), orm.KeyExpr(m.ID))))
 	s, err := CompileRead(Read(grouped))
 	if err != nil {
 		t.Fatal("grouped grandparent rejected", err)

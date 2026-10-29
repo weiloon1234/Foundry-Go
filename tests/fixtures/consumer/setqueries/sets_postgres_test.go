@@ -34,9 +34,9 @@ func TestPostgresTypedSets(t *testing.T) {
 
 func checkValueSets(t *testing.T, tx *database.Tx) error {
 	u := models.Users
-	ages := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(u.Age)).Value())
-	left := rowset.UnionAllValues(rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(u.Age.Lte(21)))), rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(u.Age.Eq(21)))))  // 20,21,21
-	right := rowset.UnionAllValues(rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(u.Age.Gte(21)))), rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(u.Age.Eq(22))))) // 21,22,22
+	ages := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(orm.NumberExpr(u.Age))).Value())
+	left := rowset.UnionAllValues(rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(orm.NumberLte(u.Age, 21)))), rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(orm.NumberEq(u.Age, 21)))))  // 20,21,21
+	right := rowset.UnionAllValues(rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(orm.NumberGte(u.Age, 21)))), rowset.Values(rowset.WhereScalar(ages, expr.ModelPredicate(orm.NumberEq(u.Age, 22))))) // 21,22,22
 	for _, test := range []struct {
 		name string
 		q    rowset.ValueSetQuery[int]
@@ -98,11 +98,11 @@ func checkValueSets(t *testing.T, tx *database.Tx) error {
 	if exists, err := rowset.ReadValues(window.Limit(0)).Exists(t.Context(), tx); err != nil || exists {
 		t.Error("set existence ignored zero window", err)
 	}
-	inputWindows := rowset.UnionAllValues(rowset.Values(rowset.LimitScalar(rowset.OrderScalar(ages, expr.Value(u.Age).Desc()), 1)), rowset.Values(rowset.LimitScalar(rowset.OrderScalar(ages, expr.Value(u.Age).Asc()), 1)))
+	inputWindows := rowset.UnionAllValues(rowset.Values(rowset.LimitScalar(rowset.OrderScalar(ages, expr.Value(orm.NumberExpr(u.Age)).Desc()), 1)), rowset.Values(rowset.LimitScalar(rowset.OrderScalar(ages, expr.Value(orm.NumberExpr(u.Age)).Asc()), 1)))
 	if rows, err := rowset.ReadValues(inputWindows.OrderBy(inputWindows.Value().Asc())).All(t.Context(), tx); err != nil || !reflect.DeepEqual(rows, []int{20, 22}) {
 		t.Error("input windows moved after union", rows, err)
 	}
-	nicknames := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(u.Nickname)).Value())
+	nicknames := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))).Value())
 	for _, test := range []struct {
 		q    rowset.ValueSetQuery[value.Nullable[string]]
 		want int64
@@ -114,7 +114,7 @@ func checkValueSets(t *testing.T, tx *database.Tx) error {
 			t.Error("set NULL multiplicity mismatch", n, err)
 		}
 	}
-	if n, err := expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(u.Age), rowset.SelectScalar(window, window.Value().Value()))).Count(t.Context(), tx); err != nil || n != 2 {
+	if n, err := orm.Count(t.Context(), tx, expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(orm.NumberExpr(u.Age)), rowset.SelectScalar(window, window.Value().Value())))); err != nil || n != 2 {
 		t.Error("single-value set lost membership type", err)
 	}
 	return nil
@@ -122,7 +122,7 @@ func checkValueSets(t *testing.T, tx *database.Tx) error {
 
 func checkSetComposition(t *testing.T, tx *database.Tx, users []models.User) error {
 	u, o := models.Users, models.Orders
-	definition := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(u.Age.Gte(21)))).Materialized()
+	definition := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.NumberGte(u.Age, 21)))).Materialized()
 	combined := rowset.Union(definition, definition)
 	statement, err := rowset.CompileRead(rowset.ReadSet(combined))
 	if err != nil {
@@ -134,18 +134,18 @@ func checkSetComposition(t *testing.T, tx *database.Tx, users []models.User) err
 	result := rowset.CTE("combined_users", combined)
 	a := rowset.AsRecord[resultAlias](result, "combined")
 	b := rowset.As[userAlias](models.Users.Query(), "original")
-	joined := rowset.InnerJoin(a, b, rowset.On(expr.At(rowset.Scope(a), models.Users.ID), expr.At(rowset.Scope(b), models.Users.ID)))
+	joined := rowset.InnerJoin(a, b, rowset.On(expr.At(rowset.Scope(a), orm.KeyExpr(models.Users.ID)), expr.At(rowset.Scope(b), orm.KeyExpr(models.Users.ID))))
 	fields := rowset.LeftScope(joined, rowset.Scope(a))
-	ids := rowset.SelectScalar(joined, expr.Row(expr.At(fields, models.Users.ID)).Value())
+	ids := rowset.SelectScalar(joined, expr.Row(expr.At(fields, orm.KeyExpr(models.Users.ID))).Value())
 	if n, err := rowset.ReadScalar(ids).Count(t.Context(), tx); err != nil || n != 2 {
 		t.Error("CTE/set join mismatch", err)
 	}
-	if n, err := models.Users.Query().Where(orm.Has(models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, rowset.InQuery(expr.Value(u.ID), ids))))).Count(t.Context(), tx); err != nil || n != 1 {
+	if n, err := orm.Count(t.Context(), tx, models.Users.Query().Where(orm.Has(models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, rowset.InQuery(expr.Value(orm.KeyExpr(u.ID)), ids)))))); err != nil || n != 1 {
 		t.Error("relation filter lost nested set/CTE", err)
 	}
-	buyers := rowset.SelectScalar(rowset.From(models.Orders.Query()), expr.Row(expr.Value(o.BuyerID)).Value())
-	filtered := rowset.UnionValues(rowset.Values(rowset.WhereScalar(buyers, expr.ModelPredicate(o.TotalCents.Lt(3)))), rowset.Values(rowset.WhereScalar(buyers, expr.ModelPredicate(o.TotalCents.Gte(3)))))
-	if changed, err := orm.Update(t.Context(), tx, expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(u.ID), rowset.SelectScalar(filtered, filtered.Value().Value()))), u.Key(), users[0].ID, u.Age.Set(30)); err != nil || changed.Age != 30 {
+	buyers := rowset.SelectScalar(rowset.From(models.Orders.Query()), expr.Row(expr.Value(orm.ColumnExpr(o.BuyerID))).Value())
+	filtered := rowset.UnionValues(rowset.Values(rowset.WhereScalar(buyers, expr.ModelPredicate(orm.NumberLt(o.TotalCents, 3)))), rowset.Values(rowset.WhereScalar(buyers, expr.ModelPredicate(orm.NumberGte(o.TotalCents, 3)))))
+	if changed, err := orm.Update(t.Context(), tx, expr.Where(models.Users.Query(), rowset.InQuery(expr.Value(orm.KeyExpr(u.ID)), rowset.SelectScalar(filtered, filtered.Value().Value()))), u.Key(), users[0].ID, orm.NumberSet(u.Age, 30)); err != nil || changed.Age != 30 {
 		t.Error("set subquery failed to constrain typed update", err)
 	}
 	stop := errors.New("stop set stream")
@@ -165,21 +165,21 @@ func checkSetComposition(t *testing.T, tx *database.Tx, users []models.User) err
 		return err
 	}
 	fieldsAt := combined.Scope()
-	if rows, err := rowset.ReadSet(combined.OrderBy(expr.At(fieldsAt, models.Users.Email).Asc())).All(t.Context(), tx); rows != nil || !errors.Is(err, fault.Invalid) {
+	if rows, err := rowset.ReadSet(combined.OrderBy(expr.At(fieldsAt, orm.TextExpr(models.Users.Email)).Asc())).All(t.Context(), tx); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("set exposed partial malformed models", err)
 	}
 	return nil
 }
 
 func TestInvalidSetsNeverExecute(t *testing.T) {
-	ages := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Age)).Value())
+	ages := rowset.SelectScalar(rowset.From(models.Users.Query()), expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value())
 	combined := rowset.UnionValues(rowset.Values(ages), rowset.Values(ages))
 	if rows, err := rowset.ReadScalar(rowset.SelectScalar(combined, (rowset.ValueSetQuery[int]{}).Value().Value())).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
 		t.Error("zero set expression reached executor", err)
 	}
 	for _, q := range []rowset.SetQuery[models.User]{
 		{}, rowset.Union(rowset.ModelRecord(models.Users.Query()), rowset.ModelRecord(models.Users.Query().With(models.UserLinks.Orders))),
-		rowset.Union(rowset.ModelRecord(models.Users.Query()), rowset.ModelRecord(models.Users.Query().Where(models.Users.Status.Eq(models.Status("bad"))))),
+		rowset.Union(rowset.ModelRecord(models.Users.Query()), rowset.ModelRecord(models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.Status("bad"))))),
 		rowset.Union(rowset.ModelRecord(models.Users.Query()), rowset.ModelRecord(models.Users.Query())).Limit(-1),
 	} {
 		if rows, err := rowset.ReadSet(q).All(t.Context(), queryfixture.NoQueries(t)); rows != nil || !errors.Is(err, fault.Invalid) {
@@ -190,16 +190,16 @@ func TestInvalidSetsNeverExecute(t *testing.T) {
 
 func checkRecordSets(t *testing.T, tx *database.Tx, users []models.User) error {
 	u := models.Users
-	combined := rowset.Union(rowset.ModelRecord(models.Users.Query().Where(u.Age.Lte(21))), rowset.ModelRecord(models.Users.Query().Where(u.Age.Gte(21))))
+	combined := rowset.Union(rowset.ModelRecord(models.Users.Query().Where(orm.NumberLte(u.Age, 21))), rowset.ModelRecord(models.Users.Query().Where(orm.NumberGte(u.Age, 21))))
 	f := combined.Scope()
-	rows, err := rowset.ReadSet(combined.Where(expr.At(f, models.Users.Status).Eq(models.StatusActive)).OrderBy(expr.At(f, models.Users.Email).Asc())).All(t.Context(), tx)
+	rows, err := rowset.ReadSet(combined.Where(expr.At(f, orm.EnumExpr(models.Users.Status)).Eq(models.StatusActive)).OrderBy(expr.At(f, orm.TextExpr(models.Users.Email)).Asc())).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
 	if len(rows) != 3 || rows[0].Email != users[0].Email || rows[0].Orders.IsLoaded() {
 		t.Fatal("model set lost complete decoding or hydrated relations implicitly")
 	}
-	if n, err := rowset.ReadSet(combined.Where(expr.OrderRow(expr.At(f, models.Users.Age)).Gte(21))).Count(t.Context(), tx); err != nil || n != 2 {
+	if n, err := rowset.ReadSet(combined.Where(expr.OrderRow(expr.At(f, orm.NumberExpr(models.Users.Age))).Gte(21))).Count(t.Context(), tx); err != nil || n != 2 {
 		t.Error("combined model predicate mismatch", err)
 	}
 	child := rowset.As[resultAlias](models.Orders.Query(), "child")
@@ -207,7 +207,7 @@ func checkRecordSets(t *testing.T, tx *database.Tx, users []models.User) error {
 	correlation := rowset.Correlate(parentSource, child)
 	parent := rowset.OuterScope(correlation, rowset.Scope(parentSource))
 	order := rowset.InnerScope(correlation, rowset.Scope(child))
-	if n, err := rowset.ReadRecord(rowset.SelectRecord(parentSource, rowset.Scope(parentSource)).Where(correlation.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(parent, models.Users.ID))).Exists())).Count(t.Context(), tx); err != nil || n != 2 {
+	if n, err := rowset.ReadRecord(rowset.SelectRecord(parentSource, rowset.Scope(parentSource)).Where(correlation.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(parent, orm.KeyExpr(models.Users.ID)))).Exists())).Count(t.Context(), tx); err != nil || n != 2 {
 		t.Error("correlation over combined records failed", err)
 	}
 	return checkDerivedSetAggregation(t, tx)

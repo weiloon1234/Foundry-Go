@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -42,19 +44,19 @@ func runRecordNew(g *goldenCapture, kind string) {
 	defer db.Close(ctx)
 	q := models.Orders.Query()
 	if kind == "window" {
-		q = q.Where(models.Orders.TotalCents.Gt(10)).OrderBy(models.Orders.TotalCents.Desc()).Limit(3).Offset(1)
+		q = q.Where(orm.NumberGt(models.Orders.TotalCents, 10)).OrderBy(orm.NumberDesc(models.Orders.TotalCents)).Limit(3).Offset(1)
 	}
 	if kind == "projection" {
-		projected := rowset.Offset(rowset.Limit(rowset.OrderBy(rowset.Select(rowset.From(q), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.Value(models.Orders.TotalCents)).Value()))), expr.Value(models.Orders.TotalCents).Desc()), 3), 1)
+		projected := rowset.Offset(rowset.Limit(rowset.OrderBy(rowset.Select(rowset.From(q), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Value()))), expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Desc()), 3), 1)
 		a := rowset.AsRecord[joinA](rowset.RecordOf(projected), "r")
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.ReadRecord(rowset.SelectRecord(a, rowset.Scope(a)).Limit(2)).All(ctx, db))}))
 		return
 	}
 	if kind == "transaction_model" || kind == "transaction_projection" {
 		check(db.Transaction(ctx, func(tx *database.Tx) error {
-			a := rowset.AsTransaction[joinA](rowset.LockedRecord(q.Where(models.Orders.TotalCents.Gt(10)).ForUpdate().SkipLocked()), "r")
+			a := rowset.AsTransaction[joinA](rowset.LockedRecord(orm.Lock(q.Where(orm.NumberGt(models.Orders.TotalCents, 10))).SkipLocked()), "r")
 			if kind == "transaction_projection" {
-				selected := rowset.SelectTransaction(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.At(rowset.TransactionScope(a), models.Orders.TotalCents)).Value())))
+				selected := rowset.SelectTransaction(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.At(rowset.TransactionScope(a), orm.NumberExpr(models.Orders.TotalCents))).Value())))
 				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(selected.Limit(2).All(ctx, tx))}))
 			} else {
 				got := must(rowset.SelectTransactionRecord(a, rowset.TransactionScope(a)).Limit(2).All(ctx, tx))

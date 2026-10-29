@@ -19,7 +19,7 @@ func TestTerminalWritesPreflight(t *testing.T) {
 	if got, err := CreateEach(t.Context(), writer, f.Query(), nil); err != nil || len(got) != 0 {
 		t.Fatal(got, err)
 	}
-	for _, q := range []Query[eachRow]{f.Query().Limit(1), f.Query().OrderBy(f.Key().Asc()), WithoutModelHooks(f.Query())} {
+	for _, q := range []Query[eachRow]{f.Query().Limit(1), f.Query().OrderBy(KeyAsc(f.Key())), WithoutModelHooks(f.Query())} {
 		if _, err := FirstOrCreate(t.Context(), writer, q); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
@@ -31,7 +31,7 @@ func TestTerminalWritesPreflight(t *testing.T) {
 		t.Fatal(err)
 	}
 	foreign := eachFields(Hooks[eachRow]{})
-	if _, err := CreateEach(t.Context(), writer, f.Query(), [][]Assignment[eachRow]{{foreign.Name.Set("wrong")}}); !errors.Is(err, fault.Invalid) {
+	if _, err := CreateEach(t.Context(), writer, f.Query(), [][]Assignment[eachRow]{{TextSet(foreign.Name, "wrong")}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	soft := timedRecords()
@@ -61,7 +61,7 @@ func TestCreateEachRollbackAndDraftIsolation(t *testing.T) {
 		}, AfterCommit: func(context.Context, lifecycle.Operation, Changes[eachRow]) error { commits++; return nil }})
 		var statements []string
 		db := testDB(t, testConnector{statements: &statements, columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "stored"}}})
-		got, err := CreateEach(t.Context(), db, f.Query(), [][]Assignment[eachRow]{{f.Key().Set(1), f.Name.Set("one")}, {f.Key().Set(2), f.Name.Set("two")}})
+		got, err := CreateEach(t.Context(), db, f.Query(), [][]Assignment[eachRow]{{KeySet(f.Key(), 1), TextSet(f.Name, "one")}, {KeySet(f.Key(), 2), TextSet(f.Name, "two")}})
 		if err == nil || len(got) != 0 || calls != 2 || commits != 0 {
 			t.Fatal(got, err, calls, commits)
 		}
@@ -80,7 +80,7 @@ func TestLookupDefaultsAndStoredMatch(t *testing.T) {
 			}
 			return []string{"id", "name"}, [][]driver.Value{{int64(1), "Ada"}}, nil
 		}})
-		got, err := FirstOrCreate(t.Context(), db, f.Query().Where(f.Name.Eq("Ada")), f.Key().Set(1))
+		got, err := FirstOrCreate(t.Context(), db, f.Query().Where(TextEq(f.Name, "Ada")), KeySet(f.Key(), 1))
 		if matches {
 			if err != nil || got.Name != "Ada" {
 				t.Fatal(got, err)
@@ -124,7 +124,7 @@ func TestExplainBoundsRedactionAndNoRetrieval(t *testing.T) {
 	}()
 	for _, document := range []string{`[{"Plan":{"Node Type":"Seq Scan","Filter":"secret-value","Startup Cost":0,"Total Cost":2,"Plan Rows":1,"Plan Width":8}}]`, strings.Repeat("x", (4<<20)+1), `[]`} {
 		db := testDB(t, testConnector{columns: []string{"QUERY PLAN"}, values: [][]driver.Value{{document}}})
-		plan, err := Explain(t.Context(), db, f.Query().Where(f.Name.Eq("secret-value")))
+		plan, err := Explain(t.Context(), db, f.Query().Where(TextEq(f.Name, "secret-value")))
 		if strings.HasPrefix(document, "[{") {
 			if err != nil {
 				t.Fatal(err)

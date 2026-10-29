@@ -1,5 +1,7 @@
 package aggregate_group
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -28,9 +30,9 @@ var schema = rows.Define(func(b rows.Builder[Result], r *Result) fields {
 })
 
 func Query() rows.Query[models.Order, Result] {
-	buyer := expr.Value(models.Orders.BuyerID)
-	total := expr.Sum(models.Orders.TotalCents).Filter(expr.OrderRow(expr.Value(models.Orders.TotalCents)).Gt(0))
-	count := expr.CountField(models.Orders.TotalCents)
-	q := rows.Select(rows.FromModel(models.Orders.Query()), schema, rows.Map(schema.Buyer, buyer), rows.MapSelected(schema.Count, count.Value()), rows.MapSelected(schema.Distinct, expr.CountDistinctField(models.Orders.TotalCents).Value()), rows.MapSelected(schema.Total, total.Value()), rows.MapSelected(schema.Minimum, expr.Min(models.Orders.TotalCents).Value()))
+	buyer := expr.Value(orm.ColumnExpr(models.Orders.BuyerID))
+	total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents)).Filter(expr.OrderRow(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Gt(0))
+	count := expr.CountField(orm.NumberExpr(models.Orders.TotalCents))
+	q := rows.Select(rows.FromModel(models.Orders.Query()), schema, rows.Map(schema.Buyer, buyer), rows.MapSelected(schema.Count, count.Value()), rows.MapSelected(schema.Distinct, expr.CountDistinctField(orm.NumberExpr(models.Orders.TotalCents)).Value()), rows.MapSelected(schema.Total, total.Value()), rows.MapSelected(schema.Minimum, expr.Min(orm.NumberExpr(models.Orders.TotalCents)).Value()))
 	return rows.OrderBy(rows.Having(rows.GroupBy(q, expr.Group(buyer)), expr.HavingAnd(count.Gt(0), total.IsNotNull())), count.Desc(), total.Asc().NullsLast(), buyer.Asc())
 }

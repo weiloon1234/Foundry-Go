@@ -28,7 +28,7 @@ type Article struct {
 
 // ArticleTable holds the model's typed fields. Example: Articles.Query().
 type ArticleTable struct {
-	// Table owns the primary key and operations. Example: Articles.Key().Eq(id).
+	// Table owns the primary key and operations. Example: orm.KeyEq(Articles.Key(), id).
 	orm.Table[Article, model.ID[Article]]
 	// TitleSlot binds the external value. Example: extensions.BindSlot(Articles.Key(),Articles.TitleSlot).
 	TitleSlot orm.Slot[Article, translations.Text]
@@ -40,7 +40,7 @@ type ArticleTable struct {
 	SEOSlot orm.Slot[Article, metadata.Value[ArticleSEO]]
 }
 
-// Articles declares the persisted table. Example: Articles.Find(ctx,db,id).
+// Articles declares the persisted table. Example: orm.Find(ctx, db, Articles.Table, id).
 var Articles = orm.Define("articles", func(b orm.Builder[Article], m *Article) ArticleTable {
 	return ArticleTable{Table: orm.TableOf(b, &m.ID),
 		TitleSlot:   orm.SlotOf(b, &m.Title),

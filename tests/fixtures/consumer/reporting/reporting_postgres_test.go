@@ -1,5 +1,7 @@
 package reporting_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"bytes"
 	"encoding/csv"
@@ -73,7 +75,7 @@ func TestPublicDatatablesUseRowsPoliciesAndRelationScopes(t *testing.T) {
 		t.Fatal("generated decimal metadata changed", err)
 	}
 	if err := f.transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := reporting.OperatorModels.Update(t.Context(), tx, f.operator, reporting.OperatorModels.CanView.Set(false))
+		_, err := orm.Update(t.Context(), tx, reporting.OperatorModels.Table.Query(), reporting.OperatorModels.Table.Key(), f.operator, orm.ColumnSet(reporting.OperatorModels.CanView, false))
 		return err
 	}); err != nil {
 		t.Fatal(err)

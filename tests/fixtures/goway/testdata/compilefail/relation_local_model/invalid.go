@@ -5,4 +5,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func F() { orm.BelongsToOf(models.Orders.Buyer, models.Users.ID, models.Users.ID) }
+func F() {
+	orm.BelongsToOf(models.Orders.Buyer, orm.KeyExpr(models.Users.ID), orm.KeyExpr(models.Users.ID))
+}

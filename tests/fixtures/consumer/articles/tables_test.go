@@ -50,7 +50,7 @@ func TestORMFoundationParity(t *testing.T) {
 		t.Fatal("existing reference rejected", err)
 	}
 	oldStatement := baseline.Statements["read"]
-	nextStatement, err := orm.Compile(articles.Articles.Query().Where(articles.Articles.Slug.Eq("welcome")))
+	nextStatement, err := orm.Compile(articles.Articles.Query().Where(orm.TextEq(articles.Articles.Slug, "welcome")))
 	if err != nil {
 		t.Fatal(err)
 	}

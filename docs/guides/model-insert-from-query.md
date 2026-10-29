@@ -34,10 +34,10 @@ var Archives = orm.Define("member_archives", func(b orm.Builder[ArchivedMember],
 func copyMembers(ctx context.Context, tx *database.Tx) (int64, error) {
 	source, destination := hooks.Members, Archives
 	return rows.InsertFrom(rows.From(source.Query()), destination.Query(),
-		rows.MapInsert(destination.ID, expr.Value(source.Key())),
-		rows.MapInsert(destination.Body, expr.Value(source.Body)),
-		rows.MapInsert(destination.CreatedAt, expr.Value(source.CreatedAt))).
-		Values(destination.Name.Set("copy")).Exec(ctx, tx)
+		rows.MapInsert(orm.KeyExpr(destination.ID), expr.Value(orm.KeyExpr(source.Key()))),
+		rows.MapInsert(orm.ColumnExpr(destination.Body), expr.Value(orm.ColumnExpr(source.Body))),
+		rows.MapInsert(orm.TimeExpr(destination.CreatedAt), expr.Value(orm.TimeExpr(source.CreatedAt)))).
+		Values(orm.InputTextSet(destination.Name, "copy")).Exec(ctx, tx)
 }
 ```
 

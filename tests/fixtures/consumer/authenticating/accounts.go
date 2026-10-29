@@ -23,7 +23,7 @@ type OptionalProfileEndpoint = foundryhttp.OptionalAuthenticationEndpoint[foundr
 // No Actor hydration, key string conversion or custom persistence schema exists.
 func Users(executor database.Executor) UserProvider {
 	return auth.DefineProvider("users", orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})), func(ctx context.Context, id model.ID[models.User]) (value.Optional[models.User], error) {
-		return models.Users.Find(ctx, executor, id)
+		return orm.Find(ctx, executor, models.Users.Table, id)
 	}, func(_ context.Context, user models.User) (bool, error) {
 		return user.Status == models.StatusActive, nil
 	})

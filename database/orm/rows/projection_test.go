@@ -72,10 +72,10 @@ func declareRows() fields {
 func projection() Query[Inner[Alias[left, member], Alias[right, order]], record] {
 	m, o := declareMembers(), declareOrders()
 	a, b := As[left](m.Query(), "m"), As[right](o.Query(), "o")
-	j := InnerJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), o.MemberID)))
+	j := InnerJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.NumberExpr(o.MemberID))))
 	schema := declareRows()
-	id := expr.At(RightScope(j, Scope(b)), o.ID)
-	name := expr.At(LeftScope(j, Scope(a)), m.Name)
+	id := expr.At(RightScope(j, Scope(b)), orm.KeyExpr(o.ID))
+	name := expr.At(LeftScope(j, Scope(a)), orm.TextExpr(m.Name))
 	return OrderBy(Select(j, schema, Map(schema.Name, name), Map(schema.ID, id)).Where(name.Eq("Ada")), id.Asc())
 }
 func TestJoinProjectionAllUsesDeclaredFieldOrder(t *testing.T) {
@@ -107,7 +107,7 @@ func TestProjectionDiscardsPartialRowsAndCloseFailure(t *testing.T) {
 func TestSelectValuePreservesNullableCodec(t *testing.T) {
 	m := declareMembers()
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"nick"}}}
-	got, err := Read(SelectValue(m.Query(), m.Nickname)).All(t.Context(), openTest(t, state))
+	got, err := Read(SelectValue(m.Query(), orm.NullableTextExpr(m.Nickname))).All(t.Context(), openTest(t, state))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,9 +151,9 @@ func TestRowStartupAndMappingErrors(t *testing.T) {
 	state := &driverState{}
 	db := openTest(t, state)
 	for _, q := range []Query[Alias[left, member], record]{
-		Select(a, s, Map(s.ID, expr.At(Scope(a), m.ID))),
-		Select(a, s, Map(s.ID, expr.At(Scope(a), m.ID)), Map(foreign.Name, expr.At(Scope(a), m.Name))),
-		Select(a, s, Map(s.ID, expr.At(Scope(a), other.ID)), Map(s.Name, expr.At(Scope(a), m.Name))),
+		Select(a, s, Map(s.ID, expr.At(Scope(a), orm.KeyExpr(m.ID)))),
+		Select(a, s, Map(s.ID, expr.At(Scope(a), orm.KeyExpr(m.ID))), Map(foreign.Name, expr.At(Scope(a), orm.TextExpr(m.Name)))),
+		Select(a, s, Map(s.ID, expr.At(Scope(a), orm.KeyExpr(other.ID))), Map(s.Name, expr.At(Scope(a), orm.TextExpr(m.Name)))),
 	} {
 		if _, err := Read(q).All(t.Context(), db); err == nil {
 			t.Fatal("invalid mapping accepted")
@@ -244,14 +244,14 @@ func TestNullableJoinComparisonAndProjection(t *testing.T) {
 		return table{orm.TableOf(b, &p.ID), orm.NullableColumnOf(b, &p.Parent)}
 	})
 	a, b := As[left](people.Query(), "child"), As[right](people.Query(), "parent")
-	joined := InnerJoin(a, b, On(expr.At(Scope(a), people.Parent), expr.At(Scope(b), people.Key())))
+	joined := InnerJoin(a, b, On(expr.At(Scope(a), orm.NullableColumnExpr(people.Parent)), expr.At(Scope(b), orm.KeyExpr(people.Key()))))
 	type result struct{ Parent value.Nullable[int64] }
 	type fields struct {
 		Row[result]
 		Parent Field[result, value.Nullable[int64]]
 	}
 	schema := Define(func(b Builder[result], r *result) fields { return fields{b.Row(), NullableNumberOf(b, &r.Parent)} })
-	parent := expr.At(LeftScope(joined, Scope(a)), people.Parent)
+	parent := expr.At(LeftScope(joined, Scope(a)), orm.NullableColumnExpr(people.Parent))
 	q := Select(joined, schema, Map(schema.Parent, parent)).Where(parent.Eq(3), parent.Ne(4), parent.IsNotNull())
 	state := &driverState{columns: []string{"parent"}, rows: [][]driver.Value{{int64(3)}}}
 	got, err := Read(q).All(t.Context(), openTest(t, state))

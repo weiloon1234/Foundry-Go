@@ -23,13 +23,13 @@ func TestPostgresStoredFieldChangesAfterMutators(t *testing.T) {
 			}
 		}
 		q := mutatorqueries.Members
-		createDraft := []orm.Assignment[mutatorqueries.Member]{q.Email.Set(" ADA@EXAMPLE.TEST ")}
-		before, err := q.Insert(t.Context(), tx, createDraft...)
+		createDraft := []orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(q.Email, " ADA@EXAMPLE.TEST ")}
+		before, err := orm.Insert(t.Context(), tx, q.Table, createDraft...)
 		if err != nil {
 			return err
 		}
-		patch := []orm.Assignment[mutatorqueries.Member]{q.Email.Set("  ADA@example.test  "), q.Nickname.Set("")}
-		after, err := q.Update(t.Context(), tx, before.ID, patch...)
+		patch := []orm.Assignment[mutatorqueries.Member]{orm.InputTextSet(q.Email, "  ADA@example.test  "), orm.NullableInputTextSet(q.Nickname, "")}
+		after, err := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), before.ID, patch...)
 		if err != nil {
 			return err
 		}
@@ -38,14 +38,14 @@ func TestPostgresStoredFieldChangesAfterMutators(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		email, err := orm.ChangeOf(changes, q.Email)
+		email, err := orm.ChangeOf(changes, orm.InputTextExpr(q.Email))
 		if err != nil {
 			return err
 		}
 		if !email.Assigned() || email.Changed() {
 			t.Fatal("normalized assignment should not change stored email")
 		}
-		nickname, err := orm.NullableChangeOf(changes, q.Nickname)
+		nickname, err := orm.NullableChangeOf(changes, orm.NullableInputTextExpr(q.Nickname))
 		if err != nil {
 			return err
 		}
@@ -57,27 +57,27 @@ func TestPostgresStoredFieldChangesAfterMutators(t *testing.T) {
 		}
 		// Create supplied an omitted UUID. The comparison boundary accepts the
 		// effective assignment draft; the hook pipeline will reconstruct it.
-		created, err := orm.Compare(q.Table, value.Optional[mutatorqueries.Member]{}, value.Set(before), append(createDraft, q.Key().Set(before.ID))...)
+		created, err := orm.Compare(q.Table, value.Optional[mutatorqueries.Member]{}, value.Set(before), append(createDraft, orm.KeySet(q.Key(), before.ID))...)
 		if err != nil {
 			return err
 		}
-		createdDefault, err := orm.ChangeOf(created, q.Attempts)
+		createdDefault, err := orm.ChangeOf(created, orm.InputNumberExpr(q.Attempts))
 		if err != nil {
 			return err
 		}
-		createdID, err := orm.ChangeOf(created, q.Key())
+		createdID, err := orm.ChangeOf(created, orm.KeyExpr(q.Key()))
 		if err != nil {
 			return err
 		}
 		if createdDefault.Assigned() || !createdDefault.Changed() || !createdID.Assigned() {
 			t.Fatal("database-owned default or generated UUID lost creation state")
 		}
-		removed, err := q.Delete(t.Context(), tx, after.ID)
+		removed, err := orm.Delete(t.Context(), tx, q.Table.Query(), q.Table.Key(), after.ID)
 		if err != nil {
 			return err
 		}
 		deleted, err := orm.Compare(q.Table, value.Set(removed), value.Optional[mutatorqueries.Member]{})
-		deletedID, fieldErr := orm.ChangeOf(deleted, q.Key())
+		deletedID, fieldErr := orm.ChangeOf(deleted, orm.KeyExpr(q.Key()))
 		if err != nil || fieldErr != nil || !deleted.Changed() || deleted.Assigned() || deleted.After().IsSet() || !deletedID.Changed() {
 			t.Fatalf("deletion lost persisted snapshot or existence change: %v", err)
 		}

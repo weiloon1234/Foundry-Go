@@ -26,7 +26,7 @@ func TestCompileInOverridesStoredDiagnosticScope(t *testing.T) {
 		q := WithScopeContext(d.Query(), stored)
 		for _, ctx := range []context.Context{context.Background(), active, context.Background()} {
 			ex := &diagnosticTransferExecutor{cause: sentinel}
-			_, e := q.All(ctx, ex)
+			_, e := All(ctx, ex, q)
 			if !errors.Is(e, sentinel) {
 				t.Fatal(e)
 			}

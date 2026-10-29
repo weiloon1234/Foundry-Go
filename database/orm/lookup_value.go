@@ -9,14 +9,14 @@ import (
 )
 
 // ValueLookup observes a stored field without hydrating models or running retrieval hooks.
-// It is advisory, not a reservation. Example: orm.Lookup(Users.Query(), Users.Email).
+// It is advisory, not a reservation. Example: orm.Lookup(Users.Query(), orm.TextExpr(Users.Email)).
 type ValueLookup[M any, V comparable] struct {
 	_         [0]*M
 	valueCore *keyLookupState[V]
 }
 
 // Lookup binds a stored column's non-null value type to its complete model scope.
-// Ordering, pagination and eager loading are rejected. Example: orm.Lookup(Users.Query(), Users.Nickname).
+// Ordering, pagination and eager loading are rejected. Example: orm.Lookup(Users.Query(), orm.NullableTextExpr(Users.Nickname)).
 func Lookup[M any, V comparable](source Query[M], field KeyColumn[M, V]) ValueLookup[M, V] {
 	if !lookupColumn(field) {
 		return ValueLookup[M, V]{valueCore: &keyLookupState[V]{err: invalid("model lookup requires a source and field")}}
@@ -45,7 +45,7 @@ func (l ValueLookup[M, V]) Exists(ctx context.Context, ex database.Executor, inp
 	if err := l.Validate(); err != nil {
 		return false, err
 	}
-	return (Query[M]{state: l.valueCore.state}).Where(comparison[M](l.valueCore.field, querycore.Equal, []V{input})).Exists(ctx, ex)
+	return Exists(ctx, ex, (Query[M]{state: l.valueCore.state}).Where(comparison[M](l.valueCore.field, querycore.Equal, []V{input})))
 }
 
 // AllExist checks SQL equality in batches of 64, including duplicate representations.
@@ -86,7 +86,7 @@ func (l ValueLookup[M, V]) batch(ctx context.Context, ex database.Executor, inpu
 		} else {
 			q = q.Where(comparison[M](l.valueCore.field, querycore.In, batch))
 		}
-		found, err := q.Exists(ctx, ex)
+		found, err := Exists(ctx, ex, q)
 		if err != nil {
 			return false, err
 		}

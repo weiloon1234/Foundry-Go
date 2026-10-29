@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -12,7 +14,7 @@ import (
 
 func TestSourceWritePlanConcurrentReuse(t *testing.T) {
 	m := declareMembers()
-	p := InsertFrom(From(m.Query().Limit(2)), m.Query(), MapInsert(m.ID, expr.Value(m.ID)), MapInsert(m.Name, expr.Value(m.Name)))
+	p := InsertFrom(From(m.Query().Limit(2)), m.Query(), MapInsert(orm.KeyExpr(m.ID), expr.Value(orm.KeyExpr(m.ID))), MapInsert(orm.TextExpr(m.Name), expr.Value(orm.TextExpr(m.Name))))
 	for _, name := range []string{"a", "b", "c"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -22,7 +24,7 @@ func TestSourceWritePlanConcurrentReuse(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = db.Close(context.Background()) })
-			_ = p.Values(m.Nickname.Set("unused"))
+			_ = p.Values(orm.NullableTextSet(m.Nickname, "unused"))
 			got, err := p.Returning(t.Context(), db, 2)
 			if err != nil || len(got) != 1 || !state.closed || strings.Contains(strings.Split(state.sql, " RETURNING")[0], "nickname") {
 				t.Fatal(got, err, state.closed, state.sql)

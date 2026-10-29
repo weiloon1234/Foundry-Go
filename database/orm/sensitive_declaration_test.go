@@ -31,16 +31,16 @@ func TestEncryptedOrdinaryColumnRejectedBeforeSQL(t *testing.T) {
 			}
 			var statements []string
 			db := testDB(t, testConnector{statements: &statements})
-			if _, err := r.Query().All(t.Context(), db); err == nil {
+			if _, err := All(t.Context(), db, r.Query()); err == nil {
 				t.Fatal("invalid declaration executed")
 			}
-			if _, err := r.Query().Count(t.Context(), db); err == nil {
+			if _, err := Count(t.Context(), db, r.Query()); err == nil {
 				t.Fatal("invalid declaration counted")
 			}
-			if _, err := r.Query().Exists(t.Context(), db); err == nil {
+			if _, err := Exists(t.Context(), db, r.Query()); err == nil {
 				t.Fatal("invalid declaration checked existence")
 			}
-			if _, err := r.Raw(t.Context(), db, "must not execute"); err == nil {
+			if _, err := Raw(t.Context(), db, r, "must not execute"); err == nil {
 				t.Fatal("invalid encrypted declaration executed raw SQL")
 			}
 			if len(statements) != 0 {

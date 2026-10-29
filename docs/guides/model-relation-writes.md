@@ -7,7 +7,7 @@
 ```go
 groups := linkqueries.MemberLinks.Groups
 membership, err := orm.Attach(ctx, db, groups, member, group,
-    linkqueries.Memberships.Role.Set(" ADMIN "))
+    orm.InputTextSet(linkqueries.Memberships.Role, " ADMIN "))
 ```
 
 `membership` is a complete `Membership` model. Foundry refreshes the stored member and group by their typed primary identities, then derives the pivot keys from the relationship metadata. Omitted draft keys receive those defaults before the usual UUID preparation and creating/saving hooks. The pivot's `MutateRole` setter, managed timestamps and local/provider observers run through the same pipeline as ordinary `Create`. The original draft and supplied endpoint structs remain unchanged.
@@ -33,8 +33,8 @@ Both results are `[]Membership`, one complete model for each selected pivot. `De
 ```go
 tags := DocumentLinks.Tags
 changes, err := orm.Sync(ctx, db, tags, document, []Tag{goTag, sqlTag},
-    []orm.Assignment[DocumentTag]{DocumentTags.Weight.Set(1)},
-    []orm.Assignment[DocumentTag]{DocumentTags.Weight.Set(5)})
+    []orm.Assignment[DocumentTag]{orm.NumberSet(DocumentTags.Weight, 1)},
+    []orm.Assignment[DocumentTag]{orm.NumberSet(DocumentTags.Weight, 5)})
 ```
 
 The [tenant consumer](../../tests/fixtures/consumer/tenantqueries/tenant_postgres_test.go) exercises every operation:
@@ -56,8 +56,8 @@ Each call is one transaction (or one savepoint of the caller's). The source and 
 
 ```go
 adminGroups := linkqueries.MemberLinks.Groups.
-    Where(linkqueries.Groups.Name.Eq("staff")).
-    WherePivot(linkqueries.Memberships.Role.Eq("admin"))
+    Where(orm.TextEq(linkqueries.Groups.Name, "staff")).
+    WherePivot(orm.InputTextEq(linkqueries.Memberships.Role, "admin"))
 adminGroups = orm.WithRelationWriteLimit(adminGroups, 50)
 removed, err := orm.Detach(ctx, db, adminGroups, member, group)
 ```

@@ -1,5 +1,7 @@
 package json_paths
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/goway/models/jsonpaths"
@@ -31,7 +33,7 @@ func Run(ctx context.Context, db database.Executor) ([]result, error) {
 		return nil, err
 	}
 	d := jsonpaths.Documents
-	root := expr.JSONRoot(expr.Value(d.Settings))
+	root := expr.JSONRoot(expr.Value(orm.JSONExpr(d.Settings)))
 	theme := expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(root, jsonpaths.Theme)), codec.String[string]())
 	profile := expr.JSONOptional(expr.JSONProperty(root, jsonpaths.UserProfile))
 	age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonpaths.Age), codec.Signed[int64]()))

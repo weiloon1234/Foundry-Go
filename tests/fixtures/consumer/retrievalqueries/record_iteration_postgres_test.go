@@ -21,13 +21,13 @@ func TestPostgresCompleteRecordIterationClosesBoundedBatches(t *testing.T) {
 		q := retrievalqueries.Members.Query()
 		f := retrievalqueries.Members
 		for i := range orm.DefaultChunkSize + 3 {
-			if _, err := retrievalqueries.Members.Insert(t.Context(), tx, f.Name.Set(fmt.Sprintf("stream %03d", i))); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, retrievalqueries.Members.Table, orm.InputTextSet(f.Name, fmt.Sprintf("stream %03d", i))); err != nil {
 				return err
 			}
 		}
-		base := q.Where(f.Name.Like("stream %"))
+		base := q.Where(orm.InputTextLike(f.Name, "stream %"))
 		alias := rows.AsRecord[selectedMember](rows.CTE("iteration_members", rows.ModelRecord(base)), "selected")
-		name := expr.At(rows.Scope(alias), f.Name)
+		name := expr.At(rows.Scope(alias), orm.InputTextExpr(f.Name))
 		record := rows.SelectRecord(alias, rows.Scope(alias)).OrderBy(name.Asc()).Offset(1).Limit(orm.DefaultChunkSize + 1)
 		for _, test := range []struct {
 			name string
@@ -51,7 +51,7 @@ func TestPostgresCompleteRecordIterationClosesBoundedBatches(t *testing.T) {
 					if member.Name != fmt.Sprintf("stream %03d", visits) {
 						return errors.New("iteration changed its stored order or selected window")
 					}
-					if _, err := q.Count(ctx, tx); err != nil {
+					if _, err := orm.Count(ctx, tx, q); err != nil {
 						return err
 					}
 					if stopEarly {

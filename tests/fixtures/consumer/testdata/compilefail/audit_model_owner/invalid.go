@@ -7,5 +7,5 @@ import (
 )
 
 func invalid() {
-	_, _ = orm.AuditRead(record.Model[auditqueries.Label, auditqueries.LabelCode]{}, auditqueries.Accounts.Email)
+	_, _ = orm.AuditRead(record.Model[auditqueries.Label, auditqueries.LabelCode]{}, orm.InputTextExpr(auditqueries.Accounts.Email))
 }

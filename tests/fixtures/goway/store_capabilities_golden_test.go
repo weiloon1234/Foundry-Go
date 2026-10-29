@@ -22,8 +22,8 @@ import (
 func TestStoreUUIDSeekGolden(t *testing.T) {
 	id := must(model.ParseID[models.Order](orderID))
 
-	newPred := []orm.Predicate[models.Order]{orm.UUIDLess(models.Orders.ID, id), orm.UUIDLessOrEqual(models.Orders.ID, id), orm.UUIDGreater(models.Orders.ID, id), orm.UUIDGreaterOrEqual(models.Orders.ID, id)}
-	newExpr := []expr.Predicate[models.Order]{expr.UUIDLess(expr.Value(models.Orders.ID), id), expr.UUIDLessOrEqual(expr.Value(models.Orders.ID), id), expr.UUIDGreater(expr.Value(models.Orders.ID), id), expr.UUIDGreaterOrEqual(expr.Value(models.Orders.ID), id)}
+	newPred := []orm.Predicate[models.Order]{orm.UUIDLess(orm.KeyExpr(models.Orders.ID), id), orm.UUIDLessOrEqual(orm.KeyExpr(models.Orders.ID), id), orm.UUIDGreater(orm.KeyExpr(models.Orders.ID), id), orm.UUIDGreaterOrEqual(orm.KeyExpr(models.Orders.ID), id)}
+	newExpr := []expr.Predicate[models.Order]{expr.UUIDLess(expr.Value(orm.KeyExpr(models.Orders.ID)), id), expr.UUIDLessOrEqual(expr.Value(orm.KeyExpr(models.Orders.ID)), id), expr.UUIDGreater(expr.Value(orm.KeyExpr(models.Orders.ID)), id), expr.UUIDGreaterOrEqual(expr.Value(orm.KeyExpr(models.Orders.ID)), id)}
 
 	for i := range newPred {
 		for _, computed := range []bool{false, true} {
@@ -36,7 +36,7 @@ func TestStoreUUIDSeekGolden(t *testing.T) {
 			} else {
 				q = q.Where(newPred[i])
 			}
-			got := must(q.OrderBy(models.Orders.ID.Asc()).Limit(3).All(t.Context(), db))
+			got := must(orm.All(t.Context(), db, q.OrderBy(orm.KeyAsc(models.Orders.ID)).Limit(3)))
 			fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 			if !oracleEqual(t, "store_capabilities_golden/1", g.output.String()) {
 				t.Fatal("frozen UUID seek differs")
@@ -65,7 +65,7 @@ func TestStoreEachLifecycleGolden(t *testing.T) {
 			db := g.open(ctx)
 			defer db.Close(ctx)
 
-			q := n.Members.Query().Where(n.Members.Name.Ne("omit"))
+			q := n.Members.Query().Where(orm.InputTextNe(n.Members.Name, "omit"))
 			if remove {
 				v, err := orm.DeleteEach(ctx, db, q, 2)
 				if err != nil {
@@ -75,7 +75,7 @@ func TestStoreEachLifecycleGolden(t *testing.T) {
 			} else {
 				v, err := orm.UpdateEach(ctx, db, q, 2, func(ctx context.Context, _ *database.Tx, m n.Member) ([]orm.Assignment[n.Member], error) {
 					coremodels.TraceLifecycle(ctx, "draft")
-					return []orm.Assignment[n.Member]{n.Members.Name.Set(" changed ")}, nil
+					return []orm.Assignment[n.Member]{orm.InputTextSet(n.Members.Name, " changed ")}, nil
 				})
 				if err != nil {
 					t.Fatal(err)

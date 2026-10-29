@@ -1,5 +1,7 @@
 package transactionqueries
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"github.com/weiloon1234/Foundry-Go/value"
 
@@ -25,14 +27,14 @@ func TestPostgresTransactionMembershipAndExists(t *testing.T) {
 		if len(items) != 1 || items[0].ID != 1 {
 			return errors.New("computed membership lost value or scope")
 		}
-		assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, true)
-		assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 1, false)
+		assertIndependentLock(t, ctx, db, path, orm.Lock(Records.Query()), 2, true)
+		assertIndependentLock(t, ctx, db, path, orm.Lock(Records.Query()), 1, false)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		p := rows.TransactionExistsQuery(outer, rows.LockedRecord(Records.Query().Where(Records.ID.Eq(2)).ForShare()))
+		p := rows.TransactionExistsQuery(outer, rows.LockedRecord(orm.ForShare(Records.Query().Where(orm.KeyEq(Records.ID, 2)))))
 		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(a.ID.Eq(1), p).All(ctx, tx)
 		if err != nil {
 			return err
@@ -40,8 +42,8 @@ func TestPostgresTransactionMembershipAndExists(t *testing.T) {
 		if len(items) != 1 || items[0].ID != 1 {
 			return errors.New("transaction EXISTS lost records")
 		}
-		assertIndependentLock(t, ctx, db, path, Records.Query().ForNoKeyUpdate(), 2, true)
-		assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 1, false)
+		assertIndependentLock(t, ctx, db, path, orm.ForNoKeyUpdate(Records.Query()), 2, true)
+		assertIndependentLock(t, ctx, db, path, orm.Lock(Records.Query()), 1, false)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -52,7 +54,7 @@ func TestPostgresTransactionScalarCardinalityAndNulls(t *testing.T) {
 	for _, mode := range []string{"one", "empty", "many", "nullable"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, db, path := transactionFixture(t)
-			outer := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(Records.ID.Eq(1)))), "outer_record")
+			outer := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyEq(Records.ID, 1)))), "outer_record")
 			inner := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "inner_record")
 			fields := recordAt(rows.TransactionScope(inner))
 			predicate := fields.ID.Eq(2)
@@ -86,8 +88,8 @@ func TestPostgresTransactionScalarCardinalityAndNulls(t *testing.T) {
 				if (mode == "nullable" || mode == "empty") && valid {
 					return errors.New("scalar lost SQL NULL")
 				}
-				assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, mode != "empty")
-				assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 1, false)
+				assertIndependentLock(t, ctx, db, path, orm.Lock(Records.Query()), 2, mode != "empty")
+				assertIndependentLock(t, ctx, db, path, orm.Lock(Records.Query()), 1, false)
 				return nil
 			})
 			if mode == "many" {
@@ -95,7 +97,7 @@ func TestPostgresTransactionScalarCardinalityAndNulls(t *testing.T) {
 				if !errors.As(err, &failure) || failure.SQLState() != "21000" {
 					t.Fatal("scalar cardinality error", err)
 				}
-				assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, false)
+				assertIndependentLock(t, ctx, db, path, orm.Lock(Records.Query()), 2, false)
 			} else if err != nil {
 				t.Fatal(err)
 			}
@@ -119,7 +121,7 @@ func TestPostgresTransactionNullableMembershipAndScalarRow(t *testing.T) {
 			if len(items) != 0 {
 				return errors.New("NULL membership stopped using three-valued logic")
 			}
-			assertIndependentLock(t, ctx, db, path, Records.Query().ForNoKeyUpdate(), 2, true)
+			assertIndependentLock(t, ctx, db, path, orm.ForNoKeyUpdate(Records.Query()), 2, true)
 			return nil
 		}); err != nil {
 			t.Fatal(err)
@@ -135,7 +137,7 @@ func TestPostgresTransactionNullableMembershipAndScalarRow(t *testing.T) {
 		if len(items) != 1 || items[0].ID != 2 {
 			return errors.New("scalar row predicate lost inner SELECT phase")
 		}
-		assertIndependentLock(t, ctx, db, path, Records.Query().ForUpdate(), 2, true)
+		assertIndependentLock(t, ctx, db, path, orm.Lock(Records.Query()), 2, true)
 		return nil
 	}); err != nil {
 		t.Fatal(err)

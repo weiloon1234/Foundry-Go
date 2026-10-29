@@ -19,8 +19,18 @@ func TestPostgresMutationInputDraftKeepsTypesAndRedactsDiagnostics(t *testing.T)
 	calls := 0
 	state := &inputqueries.State{Inspect: func(draft *orm.Write[inputqueries.Member]) error {
 		calls++
-		var email value.Optional[inputqueries.EmailInput] = orm.WriteGet(draft, inputqueries.Members.Email.Set)
-		var note value.Optional[value.Nullable[inputqueries.LabelInput]] = orm.WriteNullableGet(draft, inputqueries.Members.Note.Set)
+		var email value.Optional[inputqueries.EmailInput] = orm.WriteGet(draft, func() func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
+			receiver := inputqueries.Members.Email
+			return func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
+				return orm.InputTextSet(receiver, arg0)
+			}
+		}())
+		var note value.Optional[value.Nullable[inputqueries.LabelInput]] = orm.WriteNullableGet(draft, func() func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
+			receiver := inputqueries.Members.Note
+			return func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
+				return orm.NullableInputTextSet(receiver, arg0)
+			}
+		}())
 		if input, ok := email.Get(); !ok || input.Address != private {
 			t.Fatal("draft discarded its typed input")
 		}
@@ -36,19 +46,39 @@ func TestPostgresMutationInputDraftKeepsTypesAndRedactsDiagnostics(t *testing.T)
 		if err != nil || string(encoded) != "{}" {
 			t.Fatal("draft serialized private inputs", err)
 		}
-		if err := orm.WriteUnset(draft, inputqueries.Members.Email.Set); err != nil {
+		if err := orm.WriteUnset(draft, func() func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
+			receiver := inputqueries.Members.Email
+			return func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
+				return orm.InputTextSet(receiver, arg0)
+			}
+		}()); err != nil {
 			return err
 		}
-		if err := orm.WriteUnset(draft, inputqueries.Members.Note.Set); err != nil {
+		if err := orm.WriteUnset(draft, func() func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
+			receiver := inputqueries.Members.Note
+			return func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
+				return orm.NullableInputTextSet(receiver, arg0)
+			}
+		}()); err != nil {
 			return err
 		}
-		if orm.WriteIsSet(draft, inputqueries.Members.Email.Set) || orm.WriteIsSet(draft, inputqueries.Members.Note.Set) {
+		if orm.WriteIsSet(draft, func() func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
+			receiver := inputqueries.Members.Email
+			return func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
+				return orm.InputTextSet(receiver, arg0)
+			}
+		}()) || orm.WriteIsSet(draft, func() func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
+			receiver := inputqueries.Members.Note
+			return func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
+				return orm.NullableInputTextSet(receiver, arg0)
+			}
+		}()) {
 			t.Fatal("input omission changed")
 		}
 		return stop
 	}}
 	runInputs(t, func(tx *database.Tx) error {
-		_, err := inputqueries.Members.Insert(inputqueries.WithState(t.Context(), state), tx, inputqueries.Members.Email.Set(inputqueries.EmailInput{Address: private}), inputqueries.Members.Note.SetNull())
+		_, err := orm.Insert(inputqueries.WithState(t.Context(), state), tx, inputqueries.Members.Table, orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: private}), orm.NullableInputTextSetNull(inputqueries.Members.Note))
 		if !errors.Is(err, stop) || calls != 1 {
 			t.Fatal("draft inspection failed", err, calls)
 		}

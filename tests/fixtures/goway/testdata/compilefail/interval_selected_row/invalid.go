@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models/scalars"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -7,4 +9,6 @@ import (
 
 type other struct{}
 
-func invalid() { _ = expr.NegateInterval(expr.SumInterval(scalars.Records.Period).Value()) }
+func invalid() {
+	_ = expr.NegateInterval(expr.SumInterval(orm.IntervalExpr(scalars.Records.Period)).Value())
+}

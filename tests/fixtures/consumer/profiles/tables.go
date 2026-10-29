@@ -8,9 +8,9 @@ import (
 
 // ProfileTable binds the stored profile fields. Example: Profiles.Query().
 type ProfileTable struct {
-	// Table owns the concrete UUID key. Example: Profiles.Key().Eq(id).
+	// Table owns the concrete UUID key. Example: orm.KeyEq(Profiles.Key(), id).
 	orm.Table[Profile, model.ID[Profile]]
-	// Name is the stored display name. Example: Profiles.Name.Set("Consumer").
+	// Name is the stored display name. Example: orm.TextSet(Profiles.Name, "Consumer").
 	Name orm.Text[Profile, string]
 	// DeletedAt stores soft deletion; Restore clears it. Example: Profiles.DeletedAt.IsNull().
 	DeletedAt orm.SoftDelete[Profile, temporal.DateTime]
@@ -18,7 +18,7 @@ type ProfileTable struct {
 	Soft orm.SoftDeletable[Profile]
 }
 
-// Profiles is the handwritten profile declaration. Example: Profiles.Insert(ctx,tx,Profiles.Name.Set("Consumer")).
+// Profiles is the handwritten profile declaration. Example: orm.Insert(ctx, tx, Profiles.Table,orm.TextSet(Profiles.Name, "Consumer")).
 var Profiles = orm.Define("profiles", func(b orm.Builder[Profile], m *Profile) ProfileTable {
 	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
 	return ProfileTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), deleted, orm.SoftDeletes(deleted)}

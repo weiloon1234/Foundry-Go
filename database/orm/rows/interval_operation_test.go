@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/codec"
@@ -15,7 +17,7 @@ import (
 
 func TestNestedEpochConversionsHaveLinearSQLGrowth(t *testing.T) {
 	f := declareAggregateRecords()
-	var v expr.RowValue[aggregateRecord, int64] = expr.Value(f.Exact)
+	var v expr.RowValue[aggregateRecord, int64] = expr.Value(orm.NumberExpr(f.Exact))
 	for range 30 {
 		v = expr.UnixMilliseconds(expr.FromUnixMillis(v))
 	}
@@ -26,7 +28,7 @@ func TestNestedEpochConversionsHaveLinearSQLGrowth(t *testing.T) {
 }
 func TestIntervalScalarExpansionHasBoundedWork(t *testing.T) {
 	f := declareAggregateRecords()
-	var v expr.RowValue[aggregateRecord, temporal.Interval] = expr.Value(f.Period)
+	var v expr.RowValue[aggregateRecord, temporal.Interval] = expr.Value(orm.IntervalExpr(f.Period))
 	for range 24 {
 		v = expr.InstantDifference(expr.FromUnixMillis(expr.IntervalMonths(v)), expr.TransactionTime(ModelScope(f.Query())))
 	}
@@ -37,7 +39,7 @@ func TestIntervalScalarExpansionHasBoundedWork(t *testing.T) {
 }
 func TestScalarSQLPlanningSharesCompilationBudget(t *testing.T) {
 	f := declareAggregateRecords()
-	node := expr.FoundrySelected(expr.IntervalMonths(expr.Param(f.Period, temporal.Months(1))).Value(), sqlowner.Expressions()).Node
+	node := expr.FoundrySelected(expr.IntervalMonths(expr.Param(orm.IntervalExpr(f.Period), temporal.Months(1))).Value(), sqlowner.Expressions()).Node
 	var bytes int
 	for _, tracked := range []bool{false, true} {
 		var c querycore.Compiler
@@ -60,13 +62,13 @@ func TestScalarSQLPlanningSharesCompilationBudget(t *testing.T) {
 func TestIntervalSQLValidationAndAggregates(t *testing.T) {
 	f := declareAggregateRecords()
 	q := From(f.Query())
-	sum := expr.SumInterval(f.Period)
+	sum := expr.SumInterval(orm.IntervalExpr(f.Period))
 	s, err := CompileRead(ReadScalar(HavingScalar(SelectScalar(q, sum.Value()), sum.Gt(temporal.Interval{}))))
 	if err != nil || !strings.Contains(s.SQL(), "SUM(CAST(") || !strings.Contains(s.SQL(), "AS interval)") {
 		t.Fatal(s.SQL(), err)
 	}
-	window := expr.WindowFor(ModelScope(f.Query())).OrderBy(expr.Value(f.Period).Asc())
-	if _, err := CompileRead(ReadScalar(SelectScalar(q, expr.Over(expr.AvgInterval(f.Period).Filter(expr.ModelPredicate(f.Period.Ne(temporal.Interval{}))), window)))); err != nil {
+	window := expr.WindowFor(ModelScope(f.Query())).OrderBy(expr.Value(orm.IntervalExpr(f.Period)).Asc())
+	if _, err := CompileRead(ReadScalar(SelectScalar(q, expr.Over(expr.AvgInterval(orm.IntervalExpr(f.Period)).Filter(expr.ModelPredicate(orm.IntervalNe(f.Period, temporal.Interval{}))), window)))); err != nil {
 		t.Fatal(err)
 	}
 	// Malformed AST validation is owned by the shared compiler, even with LIMIT 0.

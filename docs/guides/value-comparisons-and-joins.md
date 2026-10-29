@@ -2,7 +2,7 @@
 
 <!-- compiled-examples -->
 
-Column predicates such as `Users.Age.Gte(18)` compare a typed literal. For two SQL
+Column predicates such as `orm.NumberGte(Users.Age, 18)` compare a typed literal. For two SQL
 operands use `expr.Equal`, `NotEqual`, `Less`, `LessOrEqual`, `Greater` or
 `GreaterOrEqual`. Both operands must retain the same scope and exact value type.
 Ordered/text capability comes from the actual declaration, not just a Go underlying
@@ -32,7 +32,7 @@ These are predicates, separate from result DISTINCT clauses.
 q := models.Users.Query()
 younger, older := rowset.As[youngerAlias](q, "younger"), rowset.As[olderAlias](q, "older")
 y, o := rowset.Scope(younger), rowset.Scope(older)
-adjacent := rowset.OnEqual(expr.Add(expr.At(y, models.Users.Age), expr.Row(expr.At(y, models.Users.Age)).Value().Param(1)), expr.At(o, models.Users.Age))
+adjacent := rowset.OnEqual(expr.Add(expr.At(y, orm.NumberExpr(models.Users.Age)), expr.Row(expr.At(y, orm.NumberExpr(models.Users.Age))).Value().Param(1)), expr.At(o, orm.NumberExpr(models.Users.Age)))
 ```
 
 The `rowset` import is `database/orm/rows`; alias tags are in the linked package.

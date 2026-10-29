@@ -44,19 +44,19 @@ func (s *Service) Patch(ctx context.Context, _ Actor, in PatchRequest) (ActionEn
 	var draft []orm.Assignment[Project]
 	if title, supplied := in.Request.Body.Title.Get(); supplied {
 		if text, present := title.Get(); present {
-			draft = append(draft, Projects.Title.Set(text))
+			draft = append(draft, orm.NullableTextSet(Projects.Title, text))
 		} else {
-			draft = append(draft, Projects.Title.SetNull())
+			draft = append(draft, orm.NullableTextSetNull(Projects.Title))
 		}
 	}
 	if budget, supplied := in.Request.Body.Budget.Get(); supplied {
-		draft = append(draft, Projects.Budget.Set(budget))
+		draft = append(draft, orm.NumberSet(Projects.Budget, budget))
 	}
 	project := in.Model.Child
 	if len(draft) != 0 {
 		err := s.db.Transaction(ctx, func(tx *database.Tx) error {
 			var err error
-			project, err = Projects.Update(ctx, tx, project.ID, draft...)
+			project, err = orm.Update(ctx, tx, Projects.Table.Query(), Projects.Table.Key(), project.ID, draft...)
 			return err
 		})
 		if err != nil {
@@ -70,7 +70,7 @@ func (s *Service) Submit(ctx context.Context, tx *database.Tx, _ Actor, in Submi
 	if s.hooks.Calls != nil {
 		s.hooks.Calls.Add(1)
 	}
-	row, err := Submissions.Insert(ctx, tx, Submissions.ProjectID.Set(in.Model.Child.ID), Submissions.Name.Set(in.Request.Body.Name))
+	row, err := orm.Insert(ctx, tx, Submissions.Table, orm.ColumnSet(Submissions.ProjectID, in.Model.Child.ID), orm.TextSet(Submissions.Name, in.Request.Body.Name))
 	if err != nil {
 		return ActionEnvelope{}, err
 	}

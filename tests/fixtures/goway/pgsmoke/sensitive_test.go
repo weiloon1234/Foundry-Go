@@ -31,9 +31,9 @@ func TestSensitivePersistence(t *testing.T) {
 	v := newmodels.Vaults
 	doc, err := encrypted.NewJSON(newmodels.Settings{Region: "west"})
 	must(t, err)
-	inserted, err := v.Insert(ctx, db, v.Token.Set(encrypted.NewText("private")), v.Backup.Set(encrypted.NewText("backup")), v.Settings.Set(doc), v.Optional.Set(doc))
+	inserted, err := orm.Insert(ctx, db, v.Table, orm.EncryptedSet(v.Token, encrypted.NewText("private")), orm.NullableEncryptedSet(v.Backup, encrypted.NewText("backup")), orm.EncryptedSet(v.Settings, doc), orm.NullableEncryptedSet(v.Optional, doc))
 	must(t, err)
-	rawModels, err := v.Raw(ctx, db, `SELECT optional,settings,backup,token,id FROM sensitive_vaults WHERE id=$1`, inserted.ID.String())
+	rawModels, err := orm.Raw(ctx, db, v.Table, `SELECT optional,settings,backup,token,id FROM sensitive_vaults WHERE id=$1`, inserted.ID.String())
 	must(t, err)
 	if len(rawModels) != 1 || rawModels[0].Token.Reveal() != "private" {
 		t.Fatal("encrypted raw hydration")
@@ -63,10 +63,10 @@ func TestSensitivePersistence(t *testing.T) {
 		orm.NullableEncryptedJSONOf(b, &m.Optional)
 		return orm.TableOf(b, &m.ID)
 	})
-	if _, err = copies.Require(ctx, db, inserted.ID); !errors.Is(err, fault.Invalid) {
+	if _, err = orm.RequireKey(ctx, db, copies, inserted.ID); !errors.Is(err, fault.Invalid) {
 		t.Fatalf("wrong-table fault: %v", err)
 	}
-	storedVault, err := v.Require(ctx, db, inserted.ID)
+	storedVault, err := orm.RequireKey(ctx, db, v.Table, inserted.ID)
 	must(t, err)
 	storedSettings, err := storedVault.Settings.Decode()
 	must(t, err)
@@ -81,34 +81,34 @@ func TestSensitivePersistence(t *testing.T) {
 	}
 	secondDoc, err := encrypted.NewJSON(newmodels.Settings{Region: "east"})
 	must(t, err)
-	second, err := v.Insert(ctx, db, v.Token.Set(encrypted.NewText("second private")), v.Settings.Set(secondDoc))
+	second, err := orm.Insert(ctx, db, v.Table, orm.EncryptedSet(v.Token, encrypted.NewText("second private")), orm.EncryptedSet(v.Settings, secondDoc))
 	must(t, err)
 	secondID := second.ID
-	current, err := v.Require(ctx, db, secondID)
+	current, err := orm.RequireKey(ctx, db, v.Table, secondID)
 	must(t, err)
 	if current.Token.Reveal() != "second private" || !current.Backup.IsNull() || !current.Optional.IsNull() {
 		t.Fatal("omitted nullable encrypted fields")
 	}
-	_, err = v.Update(ctx, db, inserted.ID, v.Token.Set(encrypted.NewText("changed first")), v.Backup.SetNull(), v.Optional.SetNull())
+	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), inserted.ID, orm.EncryptedSet(v.Token, encrypted.NewText("changed first")), orm.NullableEncryptedSetNull(v.Backup), orm.NullableEncryptedSetNull(v.Optional))
 	must(t, err)
-	current, err = v.Require(ctx, db, inserted.ID)
+	current, err = orm.RequireKey(ctx, db, v.Table, inserted.ID)
 	must(t, err)
 	if current.Token.Reveal() != "changed first" || !current.Backup.IsNull() || !current.Optional.IsNull() {
 		t.Fatal("encrypted update and explicit null hydration")
 	}
-	_, err = v.Update(ctx, db, secondID, v.Token.Set(encrypted.NewText("changed second")), v.Backup.Set(encrypted.NewText("new backup")), v.Optional.Set(doc))
+	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), secondID, orm.EncryptedSet(v.Token, encrypted.NewText("changed second")), orm.NullableEncryptedSet(v.Backup, encrypted.NewText("new backup")), orm.NullableEncryptedSet(v.Optional, doc))
 	must(t, err)
-	second, err = v.Require(ctx, db, second.ID)
+	second, err = orm.RequireKey(ctx, db, v.Table, second.ID)
 	must(t, err)
 	backup, ok := second.Backup.Get()
 	if !ok || backup.Reveal() != "new backup" || second.Token.Reveal() != "changed second" {
 		t.Fatal("encrypted update hydration")
 	}
-	_, err = v.Update(ctx, db, inserted.ID, v.Backup.Set(encrypted.NewText("clear me")), v.Optional.Set(doc))
+	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), inserted.ID, orm.NullableEncryptedSet(v.Backup, encrypted.NewText("clear me")), orm.NullableEncryptedSet(v.Optional, doc))
 	must(t, err)
-	_, err = v.Update(ctx, db, inserted.ID, v.Backup.SetNull(), v.Optional.SetNull())
+	_, err = orm.Update(ctx, db, v.Table.Query(), v.Table.Key(), inserted.ID, orm.NullableEncryptedSetNull(v.Backup), orm.NullableEncryptedSetNull(v.Optional))
 	must(t, err)
-	current, err = v.Require(ctx, db, inserted.ID)
+	current, err = orm.RequireKey(ctx, db, v.Table, inserted.ID)
 	must(t, err)
 	if !current.Backup.IsNull() || !current.Optional.IsNull() {
 		t.Fatal("new SetNull did not persist")
@@ -127,13 +127,13 @@ func TestSensitivePersistence(t *testing.T) {
 	// Copy one existing envelope to another row. Hydration must reject it.
 	_, err = db.Exec(ctx, `UPDATE sensitive_vaults SET token=(SELECT token FROM sensitive_vaults WHERE id=$1) WHERE id=$2`, inserted.ID.String(), secondID.String())
 	must(t, err)
-	if _, err = v.Require(ctx, db, secondID); !errors.Is(err, fault.Invalid) {
+	if _, err = orm.RequireKey(ctx, db, v.Table, secondID); !errors.Is(err, fault.Invalid) {
 		t.Fatalf("wrong-row fault: %v", err)
 	}
 	// A same-row different-column envelope is equally invalid.
 	_, err = db.Exec(ctx, `UPDATE sensitive_vaults SET token=backup WHERE id=$1`, secondID.String())
 	must(t, err)
-	if _, err = v.Require(ctx, db, secondID); !errors.Is(err, fault.Invalid) {
+	if _, err = orm.RequireKey(ctx, db, v.Table, secondID); !errors.Is(err, fault.Invalid) {
 		t.Fatalf("wrong-column fault: %v", err)
 	}
 	hasher, err := password.New(password.DefaultConfig())
@@ -143,21 +143,21 @@ func TestSensitivePersistence(t *testing.T) {
 	hash, err := hasher.Hash(ctx, plain)
 	must(t, err)
 	a := newmodels.Accounts
-	account, err := a.Insert(ctx, db, a.Digest.Set(hash))
+	account, err := orm.Insert(ctx, db, a.Table, orm.ColumnSet(a.Digest, hash))
 	must(t, err)
 	if !account.Backup.IsNull() {
 		t.Fatal("nullable hash did not retain SQL NULL")
 	}
-	storedAccount, err := a.Require(ctx, db, account.ID)
+	storedAccount, err := orm.RequireKey(ctx, db, a.Table, account.ID)
 	must(t, err)
 	match, err := hasher.Check(ctx, plain, storedAccount.Digest)
 	must(t, err)
 	if !match {
 		t.Fatal("stored password round trip")
 	}
-	_, err = a.Update(ctx, db, account.ID, a.Backup.Set(hash))
+	_, err = orm.Update(ctx, db, a.Table.Query(), a.Table.Key(), account.ID, orm.NullableColumnSet(a.Backup, hash))
 	must(t, err)
-	account, err = a.Query().Where(a.Key().Eq(account.ID), a.Digest.Eq(hash)).OrderBy(a.Digest.Asc()).Require(ctx, db)
+	account, err = orm.Require(ctx, db, a.Query().Where(orm.KeyEq(a.Key(), account.ID), orm.ColumnEq(a.Digest, hash)).OrderBy(orm.ColumnAsc(a.Digest)))
 	must(t, err)
 	stored, ok := account.Backup.Get()
 	if !ok {

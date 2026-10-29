@@ -1,5 +1,7 @@
 package eventqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "github.com/weiloon1234/Foundry-Go"
 
 import (
@@ -60,7 +62,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 			return err
 		}
 		var err error
-		saved, err = observerqueries.Plains.Insert(ctx, tx, observerqueries.Plains.Name.Set("committed"))
+		saved, err = orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "committed"))
 		if err != nil {
 			return err
 		}
@@ -80,7 +82,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 		if _, err := tx.Exec(ctx, path); err != nil {
 			return err
 		}
-		if _, err := observerqueries.Plains.Insert(ctx, tx, observerqueries.Plains.Name.Set("rolled back")); err != nil {
+		if _, err := orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "rolled back")); err != nil {
 			return err
 		}
 		return rollback
@@ -94,7 +96,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 		if _, err := tx.Exec(ctx, path); err != nil {
 			return err
 		}
-		item, err := observerqueries.Plains.Insert(ctx, tx, observerqueries.Plains.Name.Set("retained"))
+		item, err := orm.Insert(ctx, tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "retained"))
 		retained = item.ID
 		return err
 	})
@@ -107,7 +109,7 @@ func TestModelObserverDispatchesTypedEventsOnlyAfterActualCommit(t *testing.T) {
 		if _, err := tx.Exec(ctx, path); err != nil {
 			return err
 		}
-		record, err := observerqueries.Plains.Require(ctx, tx, retained)
+		record, err := orm.RequireKey(ctx, tx, observerqueries.Plains.Table, retained)
 		if err != nil {
 			return err
 		}

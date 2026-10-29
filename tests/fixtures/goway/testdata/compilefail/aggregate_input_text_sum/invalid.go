@@ -8,4 +8,4 @@ import (
 
 type input struct{ Text string }
 
-var _ = expr.Sum(orm.InputText[models.User, input, string]{})
+var _ = expr.Sum(orm.InputTextExpr(orm.InputText[models.User, input, string]{}))

@@ -1,5 +1,7 @@
 package countries
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -38,7 +40,7 @@ func TestPostgresCountrySeedIsExplicitTypedAndPreservesApplicationFields(t *test
 		t.Fatal(err)
 	}
 	if err := fixture.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := Countries.Update(ctx, tx, Code("MY"), Countries.Name.Set("outdated"), Countries.Status.Set(EnabledStatus), Countries.ConversionRate.Set(rate), Countries.IsDefault.Set(true))
+		_, err := orm.Update(ctx, tx, Countries.Table.Query(), Countries.Table.Key(), Code("MY"), orm.TextSet(Countries.Name, "outdated"), orm.EnumSet(Countries.Status, EnabledStatus), orm.NullableColumnSet(Countries.ConversionRate, rate), orm.ColumnSet(Countries.IsDefault, true))
 		return err
 	}); err != nil {
 		t.Fatal(err)

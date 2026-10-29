@@ -7,7 +7,7 @@ import (
 )
 
 // EntryTable exposes plaintext setters and preserves row-bound encryption.
-// Example: Entries.Token.Set(encrypted.NewText("secret")).
+// Example: orm.EncryptedSet(Entries.Token, encrypted.NewText("secret")).
 type EntryTable struct {
 	orm.Table[Entry, model.ID[Entry]]
 	Label    orm.Text[Entry, string]
@@ -15,7 +15,7 @@ type EntryTable struct {
 	Settings orm.NullableEncrypted[Entry, encrypted.JSON[Settings]]
 }
 
-// Entries owns encrypted hydration and persistence. Example: Entries.Require(ctx,db,id).
+// Entries owns encrypted hydration and persistence. Example: orm.RequireKey(ctx, db, Entries.Table,id).
 var Entries = orm.Define("vault_entries", func(b orm.Builder[Entry], m *Entry) EntryTable {
 	return EntryTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Label), orm.EncryptedTextOf(b, &m.Token), orm.NullableEncryptedJSONOf(b, &m.Settings)}
 })

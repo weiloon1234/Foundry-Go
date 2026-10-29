@@ -52,7 +52,7 @@ func (b *Backend) Issue(ctx context.Context, address challenge.Address, identity
 		if err := candidate.Validate(address); err != nil {
 			return err
 		}
-		previous, err := entries(subject.Scope, subject.Key).First(ctx, tx)
+		previous, err := orm.First(ctx, tx, entries(subject.Scope, subject.Key))
 		if err != nil {
 			return err
 		}
@@ -69,15 +69,15 @@ func (b *Backend) Issue(ctx context.Context, address challenge.Address, identity
 			return err
 		}
 		draft := []orm.Assignment[challengestore.Entry]{
-			challengestore.Entries.ID.Set(id),
-			challengestore.Entries.Scope.Set(subject.Scope),
-			challengestore.Entries.SubjectKey.Set(subject.Key),
-			challengestore.Entries.SecretHash.Set(hash.Hex()),
-			challengestore.Entries.BindingHash.Set(binding.Hex()),
-			challengestore.Entries.CreatedAt.Set(now),
-			challengestore.Entries.ExpiresAt.Set(expiry),
+			orm.KeySet(challengestore.Entries.ID, id),
+			orm.TextSet(challengestore.Entries.Scope, subject.Scope),
+			orm.TextSet(challengestore.Entries.SubjectKey, subject.Key),
+			orm.TextSet(challengestore.Entries.SecretHash, hash.Hex()),
+			orm.TextSet(challengestore.Entries.BindingHash, binding.Hex()),
+			orm.TimeSet(challengestore.Entries.CreatedAt, now),
+			orm.TimeSet(challengestore.Entries.ExpiresAt, expiry),
 		}
-		row, err := challengestore.Entries.Insert(ctx, tx, draft...)
+		row, err := orm.Insert(ctx, tx, challengestore.Entries.Table, draft...)
 		if err != nil {
 			return err
 		}

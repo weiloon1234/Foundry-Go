@@ -1,7 +1,11 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 )
 
-func invalid() ([]models.Order, error) { return models.Users.Query().ForUpdate().All(nil, nil) }
+func invalid() ([]models.Order, error) {
+	return orm.AllLocked(nil, nil, orm.Lock(models.Users.Query()))
+}

@@ -1,5 +1,7 @@
 package positive
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/goway/models"
@@ -16,7 +18,7 @@ func Run(ctx context.Context, db database.Executor) error {
 	Raw()
 	service{}.Exec()
 	_ = service{}.Query("ordinary application value")
-	_, err := models.Users.Query().Where(models.Users.Email.Eq("Ada")).All(ctx, db)
+	_, err := orm.All(ctx, db, models.Users.Query().Where(orm.TextEq(models.Users.Email, "Ada")))
 	return err
 }
 

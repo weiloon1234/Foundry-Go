@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var _ = models.Users.Query().Where(orm.UUIDGreater(models.Orders.ID, model.ID[models.Order]{}))
+var _ = models.Users.Query().Where(orm.UUIDGreater(orm.KeyExpr(models.Orders.ID), model.ID[models.Order]{}))

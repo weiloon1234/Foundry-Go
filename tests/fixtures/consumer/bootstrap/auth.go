@@ -1,5 +1,7 @@
 package bootstrap
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"crypto/subtle"
@@ -39,11 +41,11 @@ func withinSchema(ctx context.Context, db *database.DB, schema string, run func(
 }
 func actors(settings Settings, db *database.DB) (http.GuardBinding[Member], http.GuardBinding[Operator], error) {
 	memberProvider := auth.DefineProvider("bootstrap.members", MemberIdentity.ReferenceOf(Member{}), func(ctx context.Context, id model.ID[Member]) (result value.Optional[Member], err error) {
-		err = withinSchema(ctx, db, settings.Schema, func(tx *database.Tx) error { result, err = Members.Find(ctx, tx, id); return err })
+		err = withinSchema(ctx, db, settings.Schema, func(tx *database.Tx) error { result, err = orm.Find(ctx, tx, Members.Table, id); return err })
 		return
 	}, func(context.Context, Member) (bool, error) { return true, nil })
 	operatorProvider := auth.DefineProvider("bootstrap.operators", OperatorIdentity.ReferenceOf(Operator{}), func(ctx context.Context, id model.ID[Operator]) (result value.Optional[Operator], err error) {
-		err = withinSchema(ctx, db, settings.Schema, func(tx *database.Tx) error { result, err = Operators.Find(ctx, tx, id); return err })
+		err = withinSchema(ctx, db, settings.Schema, func(tx *database.Tx) error { result, err = orm.Find(ctx, tx, Operators.Table, id); return err })
 		return
 	}, func(context.Context, Operator) (bool, error) { return true, nil })
 	member := auth.DefineGuard("bootstrap.member", memberProvider, auth.DefineStrategy("member.cookie", staticProof(settings.MemberToken, MemberIdentity.ReferenceOf(Member{ID: settings.MemberID}))))

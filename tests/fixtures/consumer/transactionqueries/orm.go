@@ -56,5 +56,5 @@ type recordExpressions[S any] struct {
 }
 
 func recordAt[S any](scope expr.Scope[S, Record]) recordExpressions[S] {
-	return recordExpressions[S]{scope, expr.At(scope, Records.ID), expr.At(scope, Records.Name)}
+	return recordExpressions[S]{scope, expr.At(scope, orm.KeyExpr(Records.ID)), expr.At(scope, orm.TextExpr(Records.Name))}
 }

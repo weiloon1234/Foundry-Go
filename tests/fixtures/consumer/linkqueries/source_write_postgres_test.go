@@ -19,8 +19,8 @@ type sourceArchiveAlias struct{}
 
 func sourceMembers(t *testing.T, tx *database.Tx) ([]linkqueries.Member, error) {
 	t.Helper()
-	members, err := linkqueries.Members.InsertMany(t.Context(), tx, [][]orm.Assignment[linkqueries.Member]{
-		[]orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("original-a")}, []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("original-b")},
+	members, err := orm.InsertMany(t.Context(), tx, linkqueries.Members.Table, [][]orm.Assignment[linkqueries.Member]{
+		[]orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "original-a")}, []orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "original-b")},
 	})
 	if err != nil {
 		return nil, err
@@ -41,12 +41,12 @@ func sourceArchives(t *testing.T, tx *database.Tx, members []linkqueries.Member,
 	t.Helper()
 	draft := archiveValues(t)
 	for _, member := range members {
-		if _, err := linkqueries.Archives.Insert(t.Context(), tx, append(slices.Clone(draft), linkqueries.Archives.MemberID.Set(member.ID), linkqueries.Archives.Name.Set("copied-"+member.Name))...); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, linkqueries.Archives.Table, append(slices.Clone(draft), orm.ColumnSet(linkqueries.Archives.MemberID, member.ID), orm.TextSet(linkqueries.Archives.Name, "copied-"+member.Name))...); err != nil {
 			return err
 		}
 	}
 	if duplicate {
-		_, err := linkqueries.Archives.Insert(t.Context(), tx, append(slices.Clone(draft), linkqueries.Archives.MemberID.Set(members[0].ID), linkqueries.Archives.Name.Set("ambiguous"))...)
+		_, err := orm.Insert(t.Context(), tx, linkqueries.Archives.Table, append(slices.Clone(draft), orm.ColumnSet(linkqueries.Archives.MemberID, members[0].ID), orm.TextSet(linkqueries.Archives.Name, "ambiguous"))...)
 		return err
 	}
 	return nil
@@ -63,7 +63,7 @@ func TestPostgresSourceUpdateAmbiguityRollsBackBothTerminals(t *testing.T) {
 		}
 		a := linkqueries.Archives
 		m := linkqueries.Members
-		plan := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchSource(linkqueries.Members.Key(), expr.Value(a.MemberID))).Select(sqlrows.MapUpdate(linkqueries.Members.Name, expr.Value(a.Name)))
+		plan := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Members.Key()), expr.Value(orm.ColumnExpr(a.MemberID)))).Select(sqlrows.MapUpdate(orm.TextExpr(linkqueries.Members.Name), expr.Value(orm.TextExpr(a.Name))))
 		if n, err := plan.Exec(t.Context(), wrappedTransactor{tx}); !errors.Is(err, database.TooManyRows) || n != 0 {
 			return errors.New("count-only source update committed an ambiguous source match")
 		}
@@ -71,7 +71,7 @@ func TestPostgresSourceUpdateAmbiguityRollsBackBothTerminals(t *testing.T) {
 			return errors.New("model-returning source update published an ambiguous change")
 		}
 		for _, member := range members {
-			stored, err := linkqueries.Members.Require(t.Context(), tx, member.ID)
+			stored, err := orm.RequireKey(t.Context(), tx, linkqueries.Members.Table, member.ID)
 			if err != nil {
 				return err
 			}
@@ -80,7 +80,7 @@ func TestPostgresSourceUpdateAmbiguityRollsBackBothTerminals(t *testing.T) {
 			}
 		}
 		// An excluded target cannot make the remaining write ambiguous.
-		selected := sqlrows.UpdateFrom(linkqueries.Members.Query().Where(m.ID.Eq(members[1].ID)), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchSource(linkqueries.Members.Key(), expr.Value(a.MemberID))).Select(sqlrows.MapUpdate(linkqueries.Members.Name, expr.Value(a.Name)))
+		selected := sqlrows.UpdateFrom(linkqueries.Members.Query().Where(orm.KeyEq(m.ID, members[1].ID)), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Members.Key()), expr.Value(orm.ColumnExpr(a.MemberID)))).Select(sqlrows.MapUpdate(orm.TextExpr(linkqueries.Members.Name), expr.Value(orm.TextExpr(a.Name))))
 		rows, err := selected.Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
@@ -89,7 +89,7 @@ func TestPostgresSourceUpdateAmbiguityRollsBackBothTerminals(t *testing.T) {
 			return errors.New("destination scope was not preserved")
 		}
 		// Literal-only changes have the same value for every match, so duplicates are valid.
-		fixed := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchSource(linkqueries.Members.Key(), expr.Value(a.MemberID))).Values(linkqueries.Members.Name.Set("fixed"))
+		fixed := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Members.Key()), expr.Value(orm.ColumnExpr(a.MemberID)))).Values(orm.TextSet(linkqueries.Members.Name, "fixed"))
 		n, err := fixed.Exec(t.Context(), tx)
 		if err != nil {
 			return err
@@ -113,8 +113,8 @@ func TestPostgresSourceWriteWindowsNullsAndReturningBounds(t *testing.T) {
 		a := linkqueries.Archives
 		m := linkqueries.Members
 		// The entire duplicate group has two rows, but this explicit window contains one.
-		source := linkqueries.Archives.Query().Where(a.MemberID.Eq(members[0].ID)).OrderBy(a.Name.Asc()).Limit(1)
-		rows, err := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(source)).Match(sqlrows.MatchSource(linkqueries.Members.Key(), expr.Value(a.MemberID))).Select(sqlrows.MapUpdate(linkqueries.Members.Name, expr.Value(a.Name))).Returning(t.Context(), tx, 1)
+		source := linkqueries.Archives.Query().Where(orm.ColumnEq(a.MemberID, members[0].ID)).OrderBy(orm.TextAsc(a.Name)).Limit(1)
+		rows, err := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(source)).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Members.Key()), expr.Value(orm.ColumnExpr(a.MemberID)))).Select(sqlrows.MapUpdate(orm.TextExpr(linkqueries.Members.Name), expr.Value(orm.TextExpr(a.Name)))).Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
 		}
@@ -122,15 +122,15 @@ func TestPostgresSourceWriteWindowsNullsAndReturningBounds(t *testing.T) {
 			return errors.New("source cardinality was counted before its explicit window")
 		}
 		// A bounded terminal never silently limits which selected targets are written.
-		before, err := linkqueries.Members.Query().OrderBy(m.ID.Asc()).All(t.Context(), tx)
+		before, err := orm.All(t.Context(), tx, linkqueries.Members.Query().OrderBy(orm.KeyAsc(m.ID)))
 		if err != nil {
 			return err
 		}
-		fixed := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchNullableSource(linkqueries.Members.Key(), expr.NullableRow(expr.Value(a.MemberID)))).Values(linkqueries.Members.Name.Set("too-many"))
+		fixed := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchNullableSource(orm.KeyExpr(linkqueries.Members.Key()), expr.NullableRow(expr.Value(orm.ColumnExpr(a.MemberID))))).Values(orm.TextSet(linkqueries.Members.Name, "too-many"))
 		if rows, err := fixed.Returning(t.Context(), tx, 1); !errors.Is(err, database.TooManyRows) || rows != nil {
 			return errors.New("source returning silently truncated multiple affected models")
 		}
-		after, err := linkqueries.Members.Query().OrderBy(m.ID.Asc()).All(t.Context(), tx)
+		after, err := orm.All(t.Context(), tx, linkqueries.Members.Query().OrderBy(orm.KeyAsc(m.ID)))
 		if err != nil {
 			return err
 		}
@@ -141,11 +141,11 @@ func TestPostgresSourceWriteWindowsNullsAndReturningBounds(t *testing.T) {
 		}
 		// A nullable source key really is allowed to be NULL, rather than just a widened value.
 		memberSource := sqlrows.As[sourceMemberAlias](linkqueries.Members.Query(), "source_members")
-		archiveSource := sqlrows.As[sourceArchiveAlias](linkqueries.Archives.Query().Where(a.Tag.Eq("missing")), "source_archives")
+		archiveSource := sqlrows.As[sourceArchiveAlias](linkqueries.Archives.Query().Where(orm.InputTextEq(a.Tag, "missing")), "source_archives")
 
-		missing := sqlrows.LeftJoin(memberSource, archiveSource, sqlrows.On(expr.At(sqlrows.Scope(memberSource), linkqueries.Members.ID), expr.At(sqlrows.Scope(archiveSource), linkqueries.Archives.MemberID)))
+		missing := sqlrows.LeftJoin(memberSource, archiveSource, sqlrows.On(expr.At(sqlrows.Scope(memberSource), orm.KeyExpr(linkqueries.Members.ID)), expr.At(sqlrows.Scope(archiveSource), orm.ColumnExpr(linkqueries.Archives.MemberID))))
 
-		n, err := sqlrows.UpdateFrom(linkqueries.Members.Query(), missing).Match(sqlrows.MatchNullableSource(linkqueries.Members.Key(), expr.AtNullable(sqlrows.NullableRightScope(missing, sqlrows.Scope(archiveSource)), linkqueries.Archives.MemberID))).Values(linkqueries.Members.Name.Set("must-not-match")).Exec(t.Context(), tx)
+		n, err := sqlrows.UpdateFrom(linkqueries.Members.Query(), missing).Match(sqlrows.MatchNullableSource(orm.KeyExpr(linkqueries.Members.Key()), expr.AtNullable(sqlrows.NullableRightScope(missing, sqlrows.Scope(archiveSource)), orm.ColumnExpr(linkqueries.Archives.MemberID)))).Values(orm.TextSet(linkqueries.Members.Name, "must-not-match")).Exec(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -163,14 +163,14 @@ func TestPostgresSourceWriteSharesSettersClocksAndDeletionVisibility(t *testing.
 		if err != nil {
 			return err
 		}
-		membership, err := linkqueries.Memberships.Insert(t.Context(), tx, linkqueries.Memberships.MemberID.Set(member.ID), linkqueries.Memberships.GroupCode.Set(group.Code), linkqueries.Memberships.Role.Set("reader"))
+		membership, err := orm.Insert(t.Context(), tx, linkqueries.Memberships.Table, orm.ColumnSet(linkqueries.Memberships.MemberID, member.ID), orm.TextSet(linkqueries.Memberships.GroupCode, group.Code), orm.InputTextSet(linkqueries.Memberships.Role, "reader"))
 		if err != nil {
 			return err
 		}
 		clock.Advance(time.Hour)
 		ctx := linkqueries.WithTrace(t.Context(), trace)
 		fields := linkqueries.Memberships
-		rows, err := sqlrows.UpdateFrom(linkqueries.Memberships.Query(), sqlrows.From(linkqueries.Memberships.Query())).Match(sqlrows.MatchSource(linkqueries.Memberships.Key(), expr.Value(fields.Key()))).Values(linkqueries.Memberships.Role.Set(" EDITOR ")).Returning(ctx, wrappedTransactor{tx}, 1)
+		rows, err := sqlrows.UpdateFrom(linkqueries.Memberships.Query(), sqlrows.From(linkqueries.Memberships.Query())).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Memberships.Key()), expr.Value(orm.KeyExpr(fields.Key())))).Values(orm.InputTextSet(linkqueries.Memberships.Role, " EDITOR ")).Returning(ctx, wrappedTransactor{tx}, 1)
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func TestPostgresSourceWriteSharesSettersClocksAndDeletionVisibility(t *testing.
 			return errors.New("source update bypassed setters/clocks or dispatched per-model observers")
 		}
 		// Natural primary keys retain their named Go type across the source match.
-		n, err := sqlrows.DeleteUsing(linkqueries.Groups.Query(), sqlrows.From(linkqueries.Memberships.Query())).Match(sqlrows.MatchSource(linkqueries.Groups.Key(), expr.Value(fields.GroupCode))).Exec(ctx, tx)
+		n, err := sqlrows.DeleteUsing(linkqueries.Groups.Query(), sqlrows.From(linkqueries.Memberships.Query())).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Groups.Key()), expr.Value(orm.TextExpr(fields.GroupCode)))).Exec(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -186,21 +186,21 @@ func TestPostgresSourceWriteSharesSettersClocksAndDeletionVisibility(t *testing.
 			return errors.New("source deletion did not match natural key")
 		}
 		g := linkqueries.Groups
-		n, err = sqlrows.DeleteUsing(linkqueries.Groups.Query().WithTrashed(), sqlrows.From(linkqueries.Groups.Query().WithTrashed())).Match(sqlrows.MatchSource(linkqueries.Groups.Key(), expr.Value(g.Key()))).Exec(ctx, tx)
+		n, err = sqlrows.DeleteUsing(linkqueries.Groups.Query().WithTrashed(), sqlrows.From(linkqueries.Groups.Query().WithTrashed())).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Groups.Key()), expr.Value(orm.KeyExpr(g.Key())))).Exec(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if n != 0 {
 			return errors.New("ordinary source deletion re-deleted trashed model")
 		}
-		deleted, err := sqlrows.DeleteUsing(linkqueries.Memberships.Query(), sqlrows.From(linkqueries.Memberships.Query())).Match(sqlrows.MatchSource(linkqueries.Memberships.Key(), expr.Value(fields.Key()))).Returning(ctx, tx, 1)
+		deleted, err := sqlrows.DeleteUsing(linkqueries.Memberships.Query(), sqlrows.From(linkqueries.Memberships.Query())).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Memberships.Key()), expr.Value(orm.KeyExpr(fields.Key())))).Returning(ctx, tx, 1)
 		if err != nil {
 			return err
 		}
 		if len(deleted) != 1 || deleted[0].DeletedAt.IsNull() {
 			return errors.New("source soft deletion returned an active model")
 		}
-		n, err = sqlrows.ForceDeleteUsing(linkqueries.Memberships.Query().WithTrashed(), linkqueries.Memberships.Soft, sqlrows.From(linkqueries.Memberships.Query().WithTrashed())).Match(sqlrows.MatchSource(linkqueries.Memberships.Key(), expr.Value(fields.Key()))).Exec(ctx, tx)
+		n, err = sqlrows.ForceDeleteUsing(linkqueries.Memberships.Query().WithTrashed(), linkqueries.Memberships.Soft, sqlrows.From(linkqueries.Memberships.Query().WithTrashed())).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Memberships.Key()), expr.Value(orm.KeyExpr(fields.Key())))).Exec(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -225,26 +225,26 @@ func TestPostgresSourceUpdateJoinsCTEsAndStoredNullableValues(t *testing.T) {
 		}
 		a := linkqueries.Archives
 		m := linkqueries.Members
-		cte := sqlrows.CTE("foundry_write_source", sqlrows.ModelRecord(linkqueries.Archives.Query().Where(a.MemberID.Eq(members[0].ID))))
+		cte := sqlrows.CTE("foundry_write_source", sqlrows.ModelRecord(linkqueries.Archives.Query().Where(orm.ColumnEq(a.MemberID, members[0].ID))))
 		aliased := sqlrows.AsRecord[sourceArchiveAlias](cte, "foundry_selected_rows")
 
-		if _, err := linkqueries.Members.Update(t.Context(), tx, members[0].ID, linkqueries.Members.Alias.Set("old")); err != nil {
+		if _, err := orm.Update(t.Context(), tx, linkqueries.Members.Table.Query(), linkqueries.Members.Table.Key(), members[0].ID, orm.NullableTextSet(linkqueries.Members.Alias, "old")); err != nil {
 			return err
 		}
-		rows, err := sqlrows.UpdateFrom(linkqueries.Members.Query(), aliased).Match(sqlrows.MatchSource(linkqueries.Members.Key(), expr.At(sqlrows.Scope(aliased), linkqueries.Archives.MemberID))).Select(sqlrows.MapUpdate(linkqueries.Members.Name, expr.At(sqlrows.Scope(aliased), linkqueries.Archives.Name))).Select(sqlrows.MapUpdate(linkqueries.Members.Alias, expr.At(sqlrows.Scope(aliased), linkqueries.Archives.Alias))).Returning(t.Context(), tx, 1)
+		rows, err := sqlrows.UpdateFrom(linkqueries.Members.Query(), aliased).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Members.Key()), expr.At(sqlrows.Scope(aliased), orm.ColumnExpr(linkqueries.Archives.MemberID)))).Select(sqlrows.MapUpdate(orm.TextExpr(linkqueries.Members.Name), expr.At(sqlrows.Scope(aliased), orm.TextExpr(linkqueries.Archives.Name)))).Select(sqlrows.MapUpdate(orm.NullableTextExpr(linkqueries.Members.Alias), expr.At(sqlrows.Scope(aliased), orm.NullableTextExpr(linkqueries.Archives.Alias)))).Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
 		}
 		if len(rows) != 1 || rows[0].Name != "copied-original-a" || !rows[0].Alias.IsNull() {
 			return errors.New("CTE source update lost stored nullable fields")
 		}
-		memberSource := sqlrows.As[sourceMemberAlias](linkqueries.Members.Query().Where(m.ID.Eq(members[0].ID)), "members_to_copy")
+		memberSource := sqlrows.As[sourceMemberAlias](linkqueries.Members.Query().Where(orm.KeyEq(m.ID, members[0].ID)), "members_to_copy")
 		archiveSource := sqlrows.As[sourceArchiveAlias](linkqueries.Archives.Query(), "archives_to_change")
 
-		joined := sqlrows.InnerJoin(memberSource, archiveSource, sqlrows.On(expr.At(sqlrows.Scope(memberSource), linkqueries.Members.ID), expr.At(sqlrows.Scope(archiveSource), linkqueries.Archives.MemberID)))
+		joined := sqlrows.InnerJoin(memberSource, archiveSource, sqlrows.On(expr.At(sqlrows.Scope(memberSource), orm.KeyExpr(linkqueries.Members.ID)), expr.At(sqlrows.Scope(archiveSource), orm.ColumnExpr(linkqueries.Archives.MemberID))))
 
 		clock.Advance(time.Hour)
-		archives, err := sqlrows.UpdateFrom(linkqueries.Archives.Query(), joined).Match(sqlrows.MatchSource(linkqueries.Archives.Key(), expr.At(sqlrows.RightScope(joined, sqlrows.Scope(archiveSource)), linkqueries.Archives.ID))).Select(sqlrows.MapUpdate(linkqueries.Archives.Name, expr.At(sqlrows.LeftScope(joined, sqlrows.Scope(memberSource)), linkqueries.Members.Name))).Values(linkqueries.Archives.Tag.Set(linkqueries.ArchiveTagInput{Text: " JOINED "})).Returning(t.Context(), tx, 1)
+		archives, err := sqlrows.UpdateFrom(linkqueries.Archives.Query(), joined).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Archives.Key()), expr.At(sqlrows.RightScope(joined, sqlrows.Scope(archiveSource)), orm.KeyExpr(linkqueries.Archives.ID)))).Select(sqlrows.MapUpdate(orm.TextExpr(linkqueries.Archives.Name), expr.At(sqlrows.LeftScope(joined, sqlrows.Scope(memberSource)), orm.TextExpr(linkqueries.Members.Name)))).Values(orm.InputTextSet(linkqueries.Archives.Tag, linkqueries.ArchiveTagInput{Text: " JOINED "})).Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
 		}
@@ -252,7 +252,7 @@ func TestPostgresSourceUpdateJoinsCTEsAndStoredNullableValues(t *testing.T) {
 			return errors.New("joined source lost model identity, SQL field, distinct setter input or clock")
 		}
 		// A model without soft deletion uses physical DELETE USING and returns old values.
-		removed, err := sqlrows.DeleteUsing(linkqueries.Archives.Query(), sqlrows.From(linkqueries.Archives.Query().Where(a.MemberID.Eq(members[0].ID)))).Match(sqlrows.MatchSource(linkqueries.Archives.Key(), expr.Value(a.ID))).Returning(t.Context(), tx, 1)
+		removed, err := sqlrows.DeleteUsing(linkqueries.Archives.Query(), sqlrows.From(linkqueries.Archives.Query().Where(orm.ColumnEq(a.MemberID, members[0].ID)))).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Archives.Key()), expr.Value(orm.KeyExpr(a.ID)))).Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
 		}
@@ -281,7 +281,7 @@ func TestPostgresSourceUpdateTriggerSuppressionCountsOnlyAffectedModels(t *testi
 			}
 		}
 		a := linkqueries.Archives
-		plan := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchSource(linkqueries.Members.Key(), expr.Value(a.MemberID))).Select(sqlrows.MapUpdate(linkqueries.Members.Name, expr.Value(a.Name)))
+		plan := sqlrows.UpdateFrom(linkqueries.Members.Query(), sqlrows.From(linkqueries.Archives.Query())).Match(sqlrows.MatchSource(orm.KeyExpr(linkqueries.Members.Key()), expr.Value(orm.ColumnExpr(a.MemberID)))).Select(sqlrows.MapUpdate(orm.TextExpr(linkqueries.Members.Name), expr.Value(orm.TextExpr(a.Name))))
 		n, err := plan.Exec(t.Context(), tx)
 		if err != nil {
 			return err
@@ -296,7 +296,7 @@ func TestPostgresSourceUpdateTriggerSuppressionCountsOnlyAffectedModels(t *testi
 		if len(rows) != 1 || rows[0].ID != members[1].ID {
 			return errors.New("returning counted a suppressed ambiguous source group")
 		}
-		untouched, err := linkqueries.Members.Require(t.Context(), tx, members[0].ID)
+		untouched, err := orm.RequireKey(t.Context(), tx, linkqueries.Members.Table, members[0].ID)
 		if err != nil {
 			return err
 		}

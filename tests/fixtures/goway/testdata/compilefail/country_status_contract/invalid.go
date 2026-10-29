@@ -7,4 +7,4 @@ import (
 
 var status orm.Enum[countries.Country, countries.Status]
 
-func F(raw string) { _ = status.Set(raw) }
+func F(raw string) { _ = orm.EnumSet(status, raw) }

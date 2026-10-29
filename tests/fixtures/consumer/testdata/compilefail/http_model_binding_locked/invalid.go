@@ -21,4 +21,4 @@ var _ httpkernel.UserPath
 var _ foundryhttp.NoQuery
 var _ = httpmodels.Show
 
-var _ = modelbinding.ByKey[httpkernel.UserPath, models.User, model.ID[models.User]](database.Executor(nil), orm.Keyed(models.Users.Query().ForUpdate(), models.Users.Key()), func(p httpkernel.UserPath) model.ID[models.User] { return p.User })
+var _ = modelbinding.ByKey[httpkernel.UserPath, models.User, model.ID[models.User]](database.Executor(nil), orm.Keyed(orm.Lock(models.Users.Query()), models.Users.Key()), func(p httpkernel.UserPath) model.ID[models.User] { return p.User })

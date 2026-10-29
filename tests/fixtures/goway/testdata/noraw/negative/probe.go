@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	x "github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 type wrapper struct{ db.Executor }
@@ -32,9 +33,10 @@ func Run(ctx context.Context, ex db.Executor, database *db.DB, tx *db.Tx, sessio
 	_ = db.ScanOne(ctx, ex, "private_sql_canary", nil)                                                                                   // want database.ScanOne
 	_, _ = db.ReadQuery(ctx, ex, "private_sql_canary")                                                                                   // want database.ReadQuery
 	_ = db.ForEach[int](ctx, ex, "private_sql_canary", nil, func(db.Row) (int, error) { return 0, nil }, func(int) error { return nil }) // want database.ForEach
-	_, _ = models.Users.Raw(ctx, ex, "private_sql_canary")                                                                               // want orm.Table.Raw
-	tableRaw := models.Users.Raw
-	_, _ = tableRaw(ctx, ex, "private_sql_canary") // want orm.Table.Raw
+	_, _ = orm.Raw(ctx, ex, models.Users.Table, "private_sql_canary")                                                                    // want orm.Raw
+	tableRaw := orm.Raw[models.User, model.ID[models.User]]
+	_, _ = tableRaw(ctx, ex, models.Users.Table, "private_sql_canary") // want orm.Raw
+
 	var schema rows.Row[models.User]
 	_, _ = rows.Raw(ctx, ex, schema, "private_sql_canary")      // want rows.Raw
 	_ = x.Raw[models.User, int64]("1")                          // want expr.Raw
@@ -46,13 +48,13 @@ func Generic[E db.Executor](ctx context.Context, e E) {
 }
 
 type rawTable interface {
-	Raw(context.Context, db.Executor, string, ...any) ([]models.User, error)
+	Raw(context.Context, db.Executor, orm.Table[models.User, model.ID[models.User]], string, ...any) ([]models.User, error)
 }
 
 func TableInterface(ctx context.Context, ex db.Executor, table rawTable) {
-	_, _ = table.Raw(ctx, ex, "private_sql_canary") // want orm.Table.Raw
+	_, _ = table.Raw(ctx, ex, models.Users.Table, "private_sql_canary") // want orm.Raw
 	call := table.Raw
-	_, _ = call(ctx, ex, "private_sql_canary") // want orm.Table.Raw
+	_, _ = call(ctx, ex, models.Users.Table, "private_sql_canary") // want orm.Raw
 }
 
 var scanFunction = db.ScanOne

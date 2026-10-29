@@ -9,7 +9,7 @@ Global scopes attach typed, additive predicates to a model declaration. A scope 
 func scope(t reads.MemberTable) orm.GlobalScope[reads.Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[reads.Member], error) {
 		id, err := tenantID(ctx)
-		return t.TenantID.Eq(id), err
+		return orm.NumberEq(t.TenantID, id), err
 	})
 }
 ```
@@ -37,7 +37,7 @@ Scopes apply to reads, counts, aggregates, pages, cursors, chunks, relations, jo
 
 Inserts are unfiltered. Lookup creation derives supported equality defaults from active scopes. Upsert update actions include active destination scopes in their conflict condition. An unconditional update that skips a conflict outside those scopes fails rather than silently succeeding. An explicit update condition retains its documented skipped-result behavior.
 
-Raw SQL bypasses automatic scopes, including complete-model `Table.Raw`. Retrieval callbacks on raw models do not restore tenant filtering. Applications own authorization for bypass and raw paths.
+Raw SQL bypasses automatic scopes, including complete-model `orm.Raw`. Retrieval callbacks on raw models do not restore tenant filtering. Applications own authorization for bypass and raw paths.
 
 ## Query-local bypass
 

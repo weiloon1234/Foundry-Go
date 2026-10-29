@@ -31,7 +31,7 @@ var schema = rows.Define(func(b rows.Builder[result], r *result) fields {
 })
 
 func Run(ctx context.Context, db database.Executor) ([]result, error) {
-	n := expr.Value(models.Orders.TotalCents)
+	n := expr.Value(orm.NumberExpr(models.Orders.TotalCents))
 	at := expr.FromUnixMillis(n)
 	local := expr.LocalAt(at, expr.UTCZone())
 	period := expr.InstantDifference(expr.TransactionTime(rows.ModelScope(models.Orders.Query())), at)

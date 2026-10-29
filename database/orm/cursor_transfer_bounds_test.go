@@ -69,7 +69,7 @@ func TestCursorResourceBoundsIncludePrimaryTieBreaker(t *testing.T) {
 	}
 	orders := make([]Order[item], len(d.Sorts))
 	for i, c := range d.Sorts {
-		orders[i] = c.Asc()
+		orders[i] = NumberAsc(c)
 	}
 	if _, err := newCursorPlan(d.Query().OrderBy(orders...).state, 1, "", false, false); !errors.Is(err, fault.Invalid) {
 		t.Fatal("appended key escaped cursor field budget", err)
@@ -113,7 +113,7 @@ func TestCursorInputValidationPreservesQueryOwnership(t *testing.T) {
 	if err == nil || errors.As(err, &input) {
 		t.Fatal("query metadata became client error", err)
 	}
-	_, err = newCursorPlan(d.Query().Where(d.Name.Eq("different")).state, 1, raw, true, false)
+	_, err = newCursorPlan(d.Query().Where(TextEq(d.Name, "different")).state, 1, raw, true, false)
 	if !errors.As(err, &input) {
 		t.Fatal("foreign token is not client error", err)
 	}

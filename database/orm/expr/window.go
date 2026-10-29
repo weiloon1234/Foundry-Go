@@ -9,7 +9,7 @@ import (
 )
 
 // Window is an immutable scope-owned partition, order and frame. Its zero value
-// means OVER (). Example: expr.Window[User]{}.OrderBy(expr.Value(Users.ID).Asc()).
+// means OVER (). Example: expr.Window[User]{}.OrderBy(expr.Value(orm.KeyExpr(Users.ID)).Asc()).
 type Window[S any] struct {
 	_    [0]*S
 	data ormcore.Window

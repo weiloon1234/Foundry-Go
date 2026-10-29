@@ -88,7 +88,7 @@ func draft(t *testing.T, email string) []orm.Assignment[auditqueries.Account] {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return []orm.Assignment[auditqueries.Account]{auditqueries.Accounts.Email.Set(email), auditqueries.Accounts.PasswordHash.Set("private-password-hash"), auditqueries.Accounts.Note.Set("private-note"), auditqueries.Accounts.Balance.Set(balance), auditqueries.Accounts.Preferences.Set(prefs)}
+	return []orm.Assignment[auditqueries.Account]{orm.InputTextSet(auditqueries.Accounts.Email, email), orm.TextSet(auditqueries.Accounts.PasswordHash, "private-password-hash"), orm.NullableTextSet(auditqueries.Accounts.Note, "private-note"), orm.NumberSet(auditqueries.Accounts.Balance, balance), orm.JSONSet(auditqueries.Accounts.Preferences, prefs)}
 }
 
 func history(t *testing.T, c consumer, ctx context.Context, tx *database.Tx, account auditqueries.Account) orm.PageResult[audit.ModelRecord[auditqueries.Account, model.ID[auditqueries.Account]]] {
@@ -114,7 +114,7 @@ func TestAutomaticAuditUsesStoredChangesAndConcreteFields(t *testing.T) {
 	var account auditqueries.Account
 	if err := c.within(ctx, func(tx *database.Tx) error {
 		var err error
-		account, err = auditqueries.Accounts.Insert(ctx, tx, input...)
+		account, err = orm.Insert(ctx, tx, auditqueries.Accounts.Table, input...)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -132,23 +132,23 @@ func TestAutomaticAuditUsesStoredChangesAndConcreteFields(t *testing.T) {
 		if row.Origin() != origin || row.Area() != "accounts" || row.Changes().Operation() != lifecycle.Create {
 			return errors.New("audit lost operation/origin")
 		}
-		auditEmail, err := orm.AuditRead(row.Changes(), auditqueries.Accounts.Email)
+		auditEmail, err := orm.AuditRead(row.Changes(), orm.InputTextExpr(auditqueries.Accounts.Email))
 		if err != nil {
 			return err
 		}
-		auditPasswordHash, err := orm.AuditRead(row.Changes(), auditqueries.Accounts.PasswordHash)
+		auditPasswordHash, err := orm.AuditRead(row.Changes(), orm.TextExpr(auditqueries.Accounts.PasswordHash))
 		if err != nil {
 			return err
 		}
-		auditNote, err := orm.AuditReadNullable(row.Changes(), auditqueries.Accounts.Note)
+		auditNote, err := orm.AuditReadNullable(row.Changes(), orm.NullableTextExpr(auditqueries.Accounts.Note))
 		if err != nil {
 			return err
 		}
-		auditBalance, err := orm.AuditRead(row.Changes(), auditqueries.Accounts.Balance)
+		auditBalance, err := orm.AuditRead(row.Changes(), orm.NumberExpr(auditqueries.Accounts.Balance))
 		if err != nil {
 			return err
 		}
-		auditPreferences, err := orm.AuditRead(row.Changes(), auditqueries.Accounts.Preferences)
+		auditPreferences, err := orm.AuditRead(row.Changes(), orm.JSONExpr(auditqueries.Accounts.Preferences))
 		if err != nil {
 			return err
 		}
@@ -208,7 +208,7 @@ func TestAutomaticAuditUsesStoredChangesAndConcreteFields(t *testing.T) {
 	}
 	if err := c.within(ctx, func(tx *database.Tx) error {
 		var err error
-		account, err = auditqueries.Accounts.Update(ctx, tx, account.ID, auditqueries.Accounts.Email.Set(" MEMBER@EXAMPLE.TEST "), auditqueries.Accounts.Note.SetNull())
+		account, err = orm.Update(ctx, tx, auditqueries.Accounts.Table.Query(), auditqueries.Accounts.Table.Key(), account.ID, orm.InputTextSet(auditqueries.Accounts.Email, " MEMBER@EXAMPLE.TEST "), orm.NullableTextSetNull(auditqueries.Accounts.Note))
 		if err != nil {
 			return err
 		}
@@ -218,15 +218,15 @@ func TestAutomaticAuditUsesStoredChangesAndConcreteFields(t *testing.T) {
 		}
 		for _, row := range page.Items {
 			if row.Changes().Operation() == lifecycle.Update {
-				auditEmail, err := orm.AuditRead(row.Changes(), auditqueries.Accounts.Email)
+				auditEmail, err := orm.AuditRead(row.Changes(), orm.InputTextExpr(auditqueries.Accounts.Email))
 				if err != nil {
 					return err
 				}
-				auditBalance, err := orm.AuditRead(row.Changes(), auditqueries.Accounts.Balance)
+				auditBalance, err := orm.AuditRead(row.Changes(), orm.NumberExpr(auditqueries.Accounts.Balance))
 				if err != nil {
 					return err
 				}
-				auditPreferences, err := orm.AuditRead(row.Changes(), auditqueries.Accounts.Preferences)
+				auditPreferences, err := orm.AuditRead(row.Changes(), orm.JSONExpr(auditqueries.Accounts.Preferences))
 				if err != nil {
 					return err
 				}
@@ -262,14 +262,14 @@ func TestAutomaticAuditDeletionRestorationAndNaturalKeys(t *testing.T) {
 	ctx := t.Context()
 	input := draft(t, "lifecycle@example.test")
 	if err := c.within(ctx, func(tx *database.Tx) error {
-		account, err := auditqueries.Accounts.Insert(ctx, tx, input...)
+		account, err := orm.Insert(ctx, tx, auditqueries.Accounts.Table, input...)
 		if err != nil {
 			return err
 		}
-		if _, err := auditqueries.Accounts.Delete(ctx, tx, account.ID); err != nil {
+		if _, err := orm.Delete(ctx, tx, auditqueries.Accounts.Table.Query(), auditqueries.Accounts.Table.Key(), account.ID); err != nil {
 			return err
 		}
-		if _, err := auditqueries.Accounts.Restore(ctx, tx, account.ID); err != nil {
+		if _, err := orm.Restore(ctx, tx, auditqueries.Accounts.Table, account.ID); err != nil {
 			return err
 		}
 		if _, err := orm.ForceDelete(ctx, tx, auditqueries.Accounts.Query(), auditqueries.Accounts.Soft, auditqueries.Accounts.Key(), account.ID); err != nil {
@@ -283,11 +283,11 @@ func TestAutomaticAuditDeletionRestorationAndNaturalKeys(t *testing.T) {
 		if page.Total != 4 || counts[lifecycle.Create] != 1 || counts[lifecycle.SoftDelete] != 1 || counts[lifecycle.Restore] != 1 || counts[lifecycle.ForceDelete] != 1 {
 			return errors.New("special deletion audit duplicated or omitted")
 		}
-		label, err := auditqueries.Labels.Insert(ctx, tx, auditqueries.Labels.Key().Set("natural-key"), auditqueries.Labels.Name.Set("created"))
+		label, err := orm.Insert(ctx, tx, auditqueries.Labels.Table, orm.KeySet(auditqueries.Labels.Key(), "natural-key"), orm.TextSet(auditqueries.Labels.Name, "created"))
 		if err != nil {
 			return err
 		}
-		if _, err := auditqueries.Labels.Delete(ctx, tx, label.Code); err != nil {
+		if _, err := orm.Delete(ctx, tx, auditqueries.Labels.Table.Query(), auditqueries.Labels.Table.Key(), label.Code); err != nil {
 			return err
 		}
 		labels, err := audit.ModelHistory(ctx, tx, c.recorder, auditqueries.LabelIdentity.ReferenceOf(label), orm.PageRequest{Number: 1, Size: 10})
@@ -317,14 +317,14 @@ func TestModelAndAuditRollbackTogetherAndMissingStorageFails(t *testing.T) {
 			ctx := t.Context()
 			input := draft(t, "reject@example.test")
 			if err := c.within(ctx, func(tx *database.Tx) error {
-				_, err := auditqueries.Accounts.Insert(ctx, tx, input...)
+				_, err := orm.Insert(ctx, tx, auditqueries.Accounts.Table, input...)
 				if err == nil {
 					return errors.New("failed audit/hook write succeeded")
 				}
 				if storage && !errors.Is(err, auditqueries.ErrRejected) {
 					return err
 				}
-				count, err := auditqueries.Accounts.Query().Count(ctx, tx)
+				count, err := orm.Count(ctx, tx, auditqueries.Accounts.Query())
 				if err != nil {
 					return err
 				}
@@ -362,7 +362,7 @@ func TestModelAndAuditRollbackTogetherAndMissingStorageFails(t *testing.T) {
 	var account auditqueries.Account
 	if err := c.within(ctx, func(tx *database.Tx) error {
 		var err error
-		account, err = auditqueries.Accounts.Insert(ctx, tx, input...)
+		account, err = orm.Insert(ctx, tx, auditqueries.Accounts.Table, input...)
 		if err != nil {
 			return err
 		}
@@ -385,13 +385,13 @@ func TestBulkAuditSemanticsAndPerModelAlternative(t *testing.T) {
 	c := prepare(t, true)
 	ctx := t.Context()
 	if err := c.within(ctx, func(tx *database.Tx) error {
-		label, err := auditqueries.Labels.Insert(ctx, tx, auditqueries.Labels.Key().Set("bulk"), auditqueries.Labels.Name.Set("old"))
+		label, err := orm.Insert(ctx, tx, auditqueries.Labels.Table, orm.KeySet(auditqueries.Labels.Key(), "bulk"), orm.TextSet(auditqueries.Labels.Name, "old"))
 		if err != nil {
 			return err
 		}
 		f := auditqueries.Labels
-		q := auditqueries.Labels.Query().Where(f.Key().Eq(label.Code))
-		if _, err := rows.UpdateFrom(orm.WithoutModelHooks(q), rows.From(q)).Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).Values(f.Name.Set("bulk")).Exec(ctx, tx); err != nil {
+		q := auditqueries.Labels.Query().Where(orm.KeyEq(f.Key(), label.Code))
+		if _, err := rows.UpdateFrom(orm.WithoutModelHooks(q), rows.From(q)).Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Values(orm.TextSet(f.Name, "bulk")).Exec(ctx, tx); err != nil {
 			return err
 		}
 		page, err := audit.ModelHistory(ctx, tx, c.recorder, auditqueries.LabelIdentity.ReferenceOf(label), orm.PageRequest{Number: 1, Size: 10})
@@ -402,7 +402,7 @@ func TestBulkAuditSemanticsAndPerModelAlternative(t *testing.T) {
 			return errors.New("set-based write dispatched per-model audit")
 		}
 		if _, err := orm.UpdateEach(ctx, tx, q, 1, func(context.Context, *database.Tx, auditqueries.Label) ([]orm.Assignment[auditqueries.Label], error) {
-			return []orm.Assignment[auditqueries.Label]{auditqueries.Labels.Name.Set("per-row")}, nil
+			return []orm.Assignment[auditqueries.Label]{orm.TextSet(auditqueries.Labels.Name, "per-row")}, nil
 		}); err != nil {
 			return err
 		}

@@ -8,7 +8,7 @@ import (
 )
 
 // DirectTargets binds keys after table initialization, independently of computations.
-var DirectTargets = orm.HasManyOf(Parents.Targets, Parents.ID, Targets.ParentID)
+var DirectTargets = orm.HasManyOf(Parents.Targets, orm.KeyExpr(Parents.ID), orm.NumberExpr(Targets.ParentID))
 
 // ParentAggregates keeps computations out of table and relation initializers.
 var ParentAggregates = struct {
@@ -18,7 +18,7 @@ var ParentAggregates = struct {
 	Pivots orm.AggregateRelation[Parent, int64]
 }{
 	Count:  Parents.Count.Using(expr.Related(DirectTargets, expr.Count[Target]())),
-	Total:  Parents.Total.Using(expr.Related(DirectTargets, expr.Sum(Targets.Rank))),
+	Total:  Parents.Total.Using(expr.Related(DirectTargets, expr.Sum(orm.NumberExpr(Targets.Rank)))),
 	Peers:  Parents.Count.Using(expr.Related(Peers, expr.Count[Target]())),
 	Pivots: Parents.OtherCount.Using(expr.Related(orm.Pivot(Peers), expr.Count[Pivot]())),
 }

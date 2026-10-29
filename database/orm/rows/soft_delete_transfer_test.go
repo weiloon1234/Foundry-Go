@@ -36,7 +36,7 @@ func TestSoftDeleteScopesReachAliasesAndModelMutations(t *testing.T) {
 		if e != nil || strings.Contains(s.SQL(), `"deleted_at" IS `) != (i != 1) {
 			t.Fatal(s.SQL(), e)
 		}
-		core := orm.FoundrySource(q.Where(d.Key().Eq(7)), sqlowner.Metadata()).Node
+		core := orm.FoundrySource(q.Where(orm.KeyEq(d.Key(), 7)), sqlowner.Metadata()).Node
 		for _, kind := range []querycore.MutationKind{querycore.UpdateModel, querycore.DeleteModel} {
 			model := querycore.ModelDefinition{Table: "soft_records", Primary: "id", Columns: core.Source.Columns, SoftDelete: &querycore.SoftDeleteColumn{Name: "deleted_at"}}
 			ast := querycore.QueryCore{Table: "soft_records", Model: &model, SoftDeleteScope: []querycore.SoftDeleteScope{querycore.ActiveRecords, querycore.AllRecords, querycore.TrashedRecords}[i], Predicates: []querycore.Expression{querycore.Comparison{Operand: querycore.FieldRef{Table: "soft_records", Column: "id"}, Operator: querycore.Equal, Values: querycore.RetainComparisonValues([]any{int64(7)}), Bind: func(v any) (driver.Value, error) { return v, nil }}}}
@@ -62,7 +62,7 @@ func TestSoftDeleteScopesReachAliasesAndModelMutations(t *testing.T) {
 		q       orm.LockedQuery[softTransferRow]
 		suffix  string
 		trashed bool
-	}{{d.Query().ForUpdate().WithTrashed(), "FOR UPDATE", false}, {d.Query().ForShare().OnlyTrashed().NoWait(), "FOR SHARE NOWAIT", true}} {
+	}{{orm.Lock(d.Query()).WithTrashed(), "FOR UPDATE", false}, {orm.ForShare(d.Query()).OnlyTrashed().NoWait(), "FOR SHARE NOWAIT", true}} {
 		s, e := orm.CompileLocked(test.q)
 		if e != nil || !strings.HasSuffix(s.SQL(), test.suffix) || strings.Contains(s.SQL(), " IS NOT NULL") != test.trashed || strings.Contains(s.SQL(), " IS NULL") {
 			t.Fatal(s.SQL(), e)
@@ -70,7 +70,7 @@ func TestSoftDeleteScopesReachAliasesAndModelMutations(t *testing.T) {
 	}
 	plain := declareMembers()
 	for _, q := range []orm.Query[member]{plain.Query().WithTrashed(), plain.Query().OnlyTrashed()} {
-		if _, e := CompileRead(ReadScalar(SelectScalar(From(q), expr.Row(expr.Value(plain.ID)).Value()))); !errors.Is(e, fault.Invalid) {
+		if _, e := CompileRead(ReadScalar(SelectScalar(From(q), expr.Row(expr.Value(orm.KeyExpr(plain.ID))).Value()))); !errors.Is(e, fault.Invalid) {
 			t.Fatal("projection lost visibility failure", e)
 		}
 	}

@@ -36,7 +36,7 @@ func tenantDB(t *testing.T) *database.DB {
 
 func seedDocument(t *testing.T, db *database.DB, tenant tenantqueries.TenantID, title string, published bool) tenantqueries.Document {
 	t.Helper()
-	document, err := tenantqueries.Documents.Insert(t.Context(), db, tenantqueries.Documents.TenantID.Set(tenant), tenantqueries.Documents.Title.Set(title), tenantqueries.Documents.Published.Set(published), tenantqueries.Documents.Views.Set(1))
+	document, err := orm.Insert(t.Context(), db, tenantqueries.Documents.Table, orm.TextSet(tenantqueries.Documents.TenantID, tenant), orm.TextSet(tenantqueries.Documents.Title, title), orm.ColumnSet(tenantqueries.Documents.Published, published), orm.NumberSet(tenantqueries.Documents.Views, 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,30 +61,30 @@ func TestGlobalScopesFollowTheRequestTenant(t *testing.T) {
 	ctx := tenantqueries.WithTenant(t.Context(), alpha)
 	q := tenantqueries.Documents.Query()
 
-	documents, err := q.All(ctx, db)
+	documents, err := orm.All(ctx, db, q)
 	if err != nil || !slices.Equal(titles(t, documents), []string{"alpha-live"}) {
 		t.Fatal("tenant and published scopes not applied", titles(t, documents), err)
 	}
-	if _, err := q.All(t.Context(), db); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.All(t.Context(), db, q); !errors.Is(err, fault.Invalid) {
 		t.Fatal("a request without a tenant read documents", err)
 	}
-	drafts, err := orm.WithoutGlobalScope(q, tenantqueries.ORMPublishedScope).All(ctx, db)
+	drafts, err := orm.All(ctx, db, orm.WithoutGlobalScope(q, tenantqueries.ORMPublishedScope))
 	if err != nil || !slices.Equal(titles(t, drafts), []string{"alpha-draft", "alpha-live"}) {
 		t.Fatal("published scope removal", titles(t, drafts), err)
 	}
-	everything, err := orm.WithoutGlobalScopes(q).Count(t.Context(), db)
+	everything, err := orm.Count(t.Context(), db, orm.WithoutGlobalScopes(q))
 	if err != nil || everything != 3 {
 		t.Fatal("removing every scope", everything, err)
 	}
-	if count, err := q.Count(tenantqueries.WithTenant(t.Context(), beta), db); err != nil || count != 1 {
+	if count, err := orm.Count(tenantqueries.WithTenant(t.Context(), beta), db, q); err != nil || count != 1 {
 		t.Fatal("a reused query kept another request's tenant", count, err)
 	}
-	page, err := orm.WithoutGlobalScope(q, tenantqueries.ORMPublishedScope).Paginate(ctx, db, orm.PageRequest{Number: 1, Size: 1})
+	page, err := orm.Paginate(ctx, db, orm.WithoutGlobalScope(q, tenantqueries.ORMPublishedScope), orm.PageRequest{Number: 1, Size: 1})
 	if err != nil || page.Total != 2 || len(page.Items) != 1 {
 		t.Fatal("pagination ignored scopes", page.Total, err)
 	}
 	var chunked []tenantqueries.Document
-	err = orm.WithoutGlobalScope(q, tenantqueries.ORMPublishedScope).Chunk(ctx, db, 1, func(batch []tenantqueries.Document) error {
+	err = orm.Chunk(ctx, db, orm.WithoutGlobalScope(q, tenantqueries.ORMPublishedScope), 1, func(batch []tenantqueries.Document) error {
 		chunked = append(chunked, batch...)
 		return nil
 	})
@@ -93,26 +93,26 @@ func TestGlobalScopesFollowTheRequestTenant(t *testing.T) {
 	}
 
 	// Relation targets keep their own scopes, including in WhereHas subqueries.
-	if _, err := tenantqueries.Tags.Insert(ctx, db, tenantqueries.Tags.Key().Set("go"), tenantqueries.Tags.Name.Set("Go")); err != nil {
+	if _, err := orm.Insert(ctx, db, tenantqueries.Tags.Table, orm.KeySet(tenantqueries.Tags.Key(), "go"), orm.TextSet(tenantqueries.Tags.Name, "Go")); err != nil {
 		t.Fatal(err)
 	}
 	tag := tenantqueries.TagLinks
-	betaDocument, err := q.First(tenantqueries.WithTenant(t.Context(), beta), db)
+	betaDocument, err := orm.First(tenantqueries.WithTenant(t.Context(), beta), db, q)
 	if err != nil {
 		t.Fatal(err)
 	}
 	stored, _ := betaDocument.Get()
-	if _, err := orm.AttachMany(tenantqueries.WithTenant(t.Context(), beta), db, tenantqueries.DocumentLinks, stored, []tenantqueries.Tag{{Code: "go"}}, tenantqueries.DocumentTags.Weight.Set(1)); err != nil {
+	if _, err := orm.AttachMany(tenantqueries.WithTenant(t.Context(), beta), db, tenantqueries.DocumentLinks, stored, []tenantqueries.Tag{{Code: "go"}}, orm.NumberSet(tenantqueries.DocumentTags.Weight, 1)); err != nil {
 		t.Fatal(err)
 	}
-	tagged, err := tenantqueries.Tags.Query().Where(orm.Has(tag)).Count(ctx, db)
+	tagged, err := orm.Count(ctx, db, tenantqueries.Tags.Query().Where(orm.Has(tag)))
 	if err != nil || tagged != 0 {
 		t.Fatal("WhereHas crossed the tenant scope", tagged, err)
 	}
-	if tagged, err := tenantqueries.Tags.Query().Where(orm.Has(tag)).Count(tenantqueries.WithTenant(t.Context(), beta), db); err != nil || tagged != 1 {
+	if tagged, err := orm.Count(tenantqueries.WithTenant(t.Context(), beta), db, tenantqueries.Tags.Query().Where(orm.Has(tag))); err != nil || tagged != 1 {
 		t.Fatal("WhereHas lost the target", tagged, err)
 	}
-	loaded, err := tenantqueries.Tags.Query().With(tag).All(ctx, db)
+	loaded, err := orm.All(ctx, db, tenantqueries.Tags.Query().With(tag))
 	if err != nil || len(loaded) != 1 {
 		t.Fatal(err)
 	}
@@ -131,37 +131,37 @@ func TestSetBasedWritesRespectScopesAndSoftDeletes(t *testing.T) {
 	q := tenantqueries.Documents.Query()
 	f := tenantqueries.Documents
 
-	updated, err := q.UpdateAll(ctx, db, tenantqueries.Documents.Views.Set(10))
+	updated, err := orm.UpdateAll(ctx, db, q, orm.NumberSet(tenantqueries.Documents.Views, 10))
 	if err != nil || updated != 2 {
 		t.Fatal("UpdateAll", updated, err)
 	}
-	adjusted, err := q.Where(f.Title.Eq("a1")).UpdateAll(ctx, db, f.Views.Increment(5), f.Title.Set("a1-hot"))
+	adjusted, err := orm.UpdateAll(ctx, db, q.Where(orm.TextEq(f.Title, "a1")), orm.NumberIncrement(f.Views, 5), orm.TextSet(f.Title, "a1-hot"))
 	if err != nil || adjusted != 1 {
 		t.Fatal("Increment", adjusted, err)
 	}
-	if _, err := q.UpdateAll(ctx, db, f.Views.Decrement(1)); err != nil {
+	if _, err := orm.UpdateAll(ctx, db, q, orm.NumberDecrement(f.Views, 1)); err != nil {
 		t.Fatal(err)
 	}
-	documents, err := q.OrderBy(f.Title.Asc()).All(ctx, db)
+	documents, err := orm.All(ctx, db, q.OrderBy(orm.TextAsc(f.Title)))
 	if err != nil || len(documents) != 2 || documents[0].Title != "a1-hot" || documents[0].Views != 14 || documents[1].Views != 9 || !documents[0].UpdatedAt.After(documents[0].CreatedAt) {
 		t.Fatal("adjusted values or managed timestamps", documents, err)
 	}
-	others, err := orm.WithoutGlobalScopes(q).Where(f.TenantID.Eq(beta)).All(t.Context(), db)
+	others, err := orm.All(t.Context(), db, orm.WithoutGlobalScopes(q).Where(orm.TextEq(f.TenantID, beta)))
 	if err != nil || len(others) != 1 || others[0].Views != 1 {
 		t.Fatal("set-based write crossed the tenant scope", others, err)
 	}
-	deleted, err := q.DeleteAll(ctx, db)
+	deleted, err := orm.DeleteAll(ctx, db, q)
 	if err != nil || deleted != 2 {
 		t.Fatal("DeleteAll", deleted, err)
 	}
-	if trashed, err := q.OnlyTrashed().Count(ctx, db); err != nil || trashed != 2 {
+	if trashed, err := orm.Count(ctx, db, q.OnlyTrashed()); err != nil || trashed != 2 {
 		t.Fatal("DeleteAll did not soft-delete", trashed, err)
 	}
-	removed, err := orm.WithoutGlobalScope(q.WithTrashed(), tenantqueries.ORMPublishedScope).ForceDeleteAll(ctx, db, tenantqueries.Documents.Soft)
+	removed, err := orm.ForceDeleteAll(ctx, db, orm.WithoutGlobalScope(q.WithTrashed(), tenantqueries.ORMPublishedScope), tenantqueries.Documents.Soft)
 	if err != nil || removed != 3 {
 		t.Fatal("ForceDeleteAll", removed, err)
 	}
-	if remaining, err := orm.WithoutGlobalScopes(q).WithTrashed().Count(t.Context(), db); err != nil || remaining != 1 {
+	if remaining, err := orm.Count(t.Context(), db, orm.WithoutGlobalScopes(q).WithTrashed()); err != nil || remaining != 1 {
 		t.Fatal("ForceDeleteAll crossed the tenant scope", remaining, err)
 	}
 }
@@ -170,18 +170,18 @@ func TestLookupDefaultsComeFromFiltersAndScopes(t *testing.T) {
 	db := tenantDB(t)
 	ctx := tenantqueries.WithTenant(t.Context(), alpha)
 	f := tenantqueries.Documents
-	lookup := tenantqueries.Documents.Query().Where(f.Title.Eq("welcome"))
-	created, err := orm.FirstOrCreate(ctx, db, lookup, tenantqueries.Documents.Views.Set(0))
+	lookup := tenantqueries.Documents.Query().Where(orm.TextEq(f.Title, "welcome"))
+	created, err := orm.FirstOrCreate(ctx, db, lookup, orm.NumberSet(tenantqueries.Documents.Views, 0))
 	if err != nil || created.Title != "welcome" || created.TenantID != alpha || !created.Published {
 		t.Fatal("lookup equalities and scopes did not default the draft", created, err)
 	}
-	again, err := orm.CreateOrFirst(ctx, db, lookup, tenantqueries.Documents.Views.Set(0))
+	again, err := orm.CreateOrFirst(ctx, db, lookup, orm.NumberSet(tenantqueries.Documents.Views, 0))
 	if err != nil || again.ID != created.ID {
 		t.Fatal("CreateOrFirst did not resolve the unique conflict", again, err)
 	}
-	updated, err := orm.UpdateOrCreate(ctx, db, lookup, []orm.Assignment[tenantqueries.Document]{tenantqueries.Documents.Views.Set(0)},
+	updated, err := orm.UpdateOrCreate(ctx, db, lookup, []orm.Assignment[tenantqueries.Document]{orm.NumberSet(tenantqueries.Documents.Views, 0)},
 		func(_ context.Context, _ *database.Tx, current tenantqueries.Document) ([]orm.Assignment[tenantqueries.Document], error) {
-			return []orm.Assignment[tenantqueries.Document]{tenantqueries.Documents.Views.Set(current.Views + 1)}, nil
+			return []orm.Assignment[tenantqueries.Document]{orm.NumberSet(tenantqueries.Documents.Views, current.Views+1)}, nil
 		})
 	if err != nil || updated.ID != created.ID || updated.Views != 1 {
 		t.Fatal("UpdateOrCreate", updated, err)
@@ -194,7 +194,7 @@ func TestPivotSynchronizationReportsTypedChanges(t *testing.T) {
 	document := seedDocument(t, db, alpha, "guide", true)
 	tags := make([]tenantqueries.Tag, 0, 4)
 	for _, code := range []tenantqueries.TagCode{"a", "b", "c", "d"} {
-		tag, err := tenantqueries.Tags.Insert(ctx, db, tenantqueries.Tags.Key().Set(code), tenantqueries.Tags.Name.Set(string(code)))
+		tag, err := orm.Insert(ctx, db, tenantqueries.Tags.Table, orm.KeySet(tenantqueries.Tags.Key(), code), orm.TextSet(tenantqueries.Tags.Name, string(code)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -209,13 +209,13 @@ func TestPivotSynchronizationReportsTypedChanges(t *testing.T) {
 		slices.Sort(result)
 		return result
 	}
-	draft := []orm.Assignment[tenantqueries.DocumentTag]{tenantqueries.DocumentTags.Weight.Set(1)}
+	draft := []orm.Assignment[tenantqueries.DocumentTag]{orm.NumberSet(tenantqueries.DocumentTags.Weight, 1)}
 
 	changes, err := orm.Sync(ctx, db, link, document, tags[:2], draft, nil)
 	if err != nil || !slices.Equal(codes(changes.Attached), []tenantqueries.TagCode{"a", "b"}) || len(changes.Detached) != 0 {
 		t.Fatal("initial sync", changes, err)
 	}
-	changes, err = orm.Sync(ctx, db, link, document, tags[1:3], draft, []orm.Assignment[tenantqueries.DocumentTag]{tenantqueries.DocumentTags.Weight.Set(5)})
+	changes, err = orm.Sync(ctx, db, link, document, tags[1:3], draft, []orm.Assignment[tenantqueries.DocumentTag]{orm.NumberSet(tenantqueries.DocumentTags.Weight, 5)})
 	if err != nil || !slices.Equal(codes(changes.Attached), []tenantqueries.TagCode{"c"}) || !slices.Equal(codes(changes.Detached), []tenantqueries.TagCode{"a"}) ||
 		!slices.Equal(codes(changes.Updated), []tenantqueries.TagCode{"b"}) || changes.Updated[0].Weight != 5 {
 		t.Fatal("sync changes", changes, err)
@@ -228,11 +228,11 @@ func TestPivotSynchronizationReportsTypedChanges(t *testing.T) {
 	if err != nil || !slices.Equal(codes(changes.Attached), []tenantqueries.TagCode{"a"}) || !slices.Equal(codes(changes.Detached), []tenantqueries.TagCode{"d"}) {
 		t.Fatal("toggle", changes, err)
 	}
-	updated, err := orm.UpdatePivot(ctx, db, link, document, tags[0], tenantqueries.DocumentTags.Weight.Set(9))
+	updated, err := orm.UpdatePivot(ctx, db, link, document, tags[0], orm.NumberSet(tenantqueries.DocumentTags.Weight, 9))
 	if err != nil || len(updated) != 1 || updated[0].Weight != 9 {
 		t.Fatal("update existing pivot", updated, err)
 	}
-	if _, err := orm.UpdatePivot(ctx, db, link, document, tags[3], tenantqueries.DocumentTags.Weight.Set(9)); !errors.Is(err, database.NotFound) {
+	if _, err := orm.UpdatePivot(ctx, db, link, document, tags[3], orm.NumberSet(tenantqueries.DocumentTags.Weight, 9)); !errors.Is(err, database.NotFound) {
 		t.Fatal("updating an absent link", err)
 	}
 	detached, err := orm.DetachMany(ctx, db, link, document, tags[:2])
@@ -251,7 +251,7 @@ func TestPivotSynchronizationReportsTypedChanges(t *testing.T) {
 	if _, err := orm.AttachMany(ctx, db, link, document, []tenantqueries.Tag{tags[0], missing}, draft...); !errors.Is(err, database.NotFound) {
 		t.Fatal("a missing target attached", err)
 	}
-	if remaining, err := tenantqueries.DocumentTags.Query().Count(ctx, db); err != nil || remaining != 0 {
+	if remaining, err := orm.Count(ctx, db, tenantqueries.DocumentTags.Query()); err != nil || remaining != 0 {
 		t.Fatal("a failed attach was not atomic", remaining, err)
 	}
 	// Another tenant's document cannot be synchronized: its source is outside scope.

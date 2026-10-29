@@ -15,8 +15,8 @@ import (
 func TestCorrelatedRecordClauseSQLParity(t *testing.T) {
 	outer := rows.As[usersAlias](models.Users.Query(), "buyer")
 	c, scope := userOrders(outer, rows.Scope(outer))
-	count := expr.CountFieldAt(scope, models.Orders.ID)
-	record := rows.ProjectCorrelated(c, reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Total, expr.SumAt(scope, models.Orders.TotalCents).Value()), rows.MapSelected(reports.OrderSummaries.Count, count.Value()))
+	count := expr.CountFieldAt(scope, orm.KeyExpr(models.Orders.ID))
+	record := rows.ProjectCorrelated(c, reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Total, expr.SumAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()), rows.MapSelected(reports.OrderSummaries.Count, count.Value()))
 	record = rows.DistinctCorrelatedRecord(rows.HavingCorrelatedRecord(record, count.Gt(0)))
 	lateral := rows.AsLateral[statsAlias](record, "stats")
 	got, err := orm.Compile(expr.Where(models.Users.Query(), rows.ExistsQuery(rows.From(models.Users.Query()), rows.CrossJoinLateral(outer, lateral))))

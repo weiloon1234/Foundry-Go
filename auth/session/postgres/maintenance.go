@@ -26,7 +26,7 @@ func (b *Backend) RevokeID(ctx context.Context, address session.Address, identit
 			return err
 		}
 		key := model.IDFromBytes[sessionstore.Entry](id.Bytes())
-		found, err := entries(subject.Scope, subject.Key).Where(sessionstore.Entries.ID.Eq(key)).ForUpdate().First(ctx, tx)
+		found, err := orm.FirstLocked(ctx, tx, orm.Lock(entries(subject.Scope, subject.Key).Where(orm.KeyEq(sessionstore.Entries.ID, key))))
 		if err != nil {
 			return err
 		}

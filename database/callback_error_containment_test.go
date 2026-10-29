@@ -124,7 +124,7 @@ func TestModelDecodersContainFailuresWithAndWithoutRetrievalHooks(t *testing.T) 
 				definition := orm.Define("retrieved_records", func(b orm.Builder[retrievalFixtureRecord], m *retrievalFixtureRecord) retrievalFixtureTable {
 					return retrievalFixtureTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name, orm.Codec(c))}
 				}, options...)
-				items, err := definition.Query().All(t.Context(), db)
+				items, err := orm.All(t.Context(), db, definition.Query())
 				if err == nil || items != nil || decoded != 2 || observed != 0 {
 					t.Fatal("decoder failure returned partial rows or ran hooks")
 				}

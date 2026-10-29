@@ -1,5 +1,7 @@
 package articles_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"bytes"
 	"context"
@@ -168,7 +170,7 @@ func TestDurableCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 
 	rollback := errors.New("rollback deletion")
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		if _, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID); err != nil {
+		if _, err := orm.ForceDelete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Soft, articles.Articles.Table.Key(), article.ID); err != nil {
 			return err
 		}
 		return rollback
@@ -182,7 +184,7 @@ func TestDurableCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	// No worker or publisher runs yet: the committed deletion leaves exactly one
 	// outbox row, and its data waits for it, as after a crash.
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID)
+		_, err := orm.ForceDelete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Soft, articles.Articles.Table.Key(), article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)

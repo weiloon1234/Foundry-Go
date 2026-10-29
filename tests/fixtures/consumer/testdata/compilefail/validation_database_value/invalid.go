@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/consumer/models"
@@ -13,4 +15,4 @@ import (
 var executor database.Executor
 var _ = context.Background
 var _ model.ID[models.Order]
-var _ = validation.Check(databasevalidation.Unique(executor, modelvalidation.Users.Query(), modelvalidation.Users.Email), context.Background(), 123, validation.DefaultLimits())
+var _ = validation.Check(databasevalidation.Unique(executor, modelvalidation.Users.Query(), orm.TextExpr(modelvalidation.Users.Email)), context.Background(), 123, validation.DefaultLimits())

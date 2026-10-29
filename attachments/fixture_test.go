@@ -1,5 +1,7 @@
 package attachments
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	extensionidentity "github.com/weiloon1234/Foundry-Go/extensions"
 
@@ -173,7 +175,7 @@ func journal(t *testing.T, f attachmentFixture, id OperationID) store.File {
 	var row store.File
 	err := f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		row, err = store.Files.Query().Where(store.Files.Key().Eq(fileID(id))).Require(ctx, tx)
+		row, err = orm.Require(ctx, tx, store.Files.Query().Where(orm.KeyEq(store.Files.Key(), fileID(id))))
 		return err
 	})
 	if err != nil {

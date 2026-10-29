@@ -72,7 +72,7 @@ func TestCustomTransactorErrorInspectionRetainsOnlyReconciliationCandidate(t *te
 			db := testDB(t, testConnector{columns: []string{"id", "display_name", "note", "amount"}, values: [][]driver.Value{{int64(7), "private candidate", nil, "12.5"}}, statements: &statements, onBegin: func() { begins++ }})
 			r := records()
 			writer := outcomeWriter{db, &failure}
-			got, err := r.Update(t.Context(), writer, 7, r.Name.Set("input"))
+			got, err := Update(t.Context(), writer, r.Table.Query(), r.Table.Key(), 7, TextSet(r.Name, "input"))
 			if begins != 1 || len(statements) != 1 {
 				t.Fatal("write retried or skipped", begins, len(statements))
 			}
@@ -98,7 +98,7 @@ func TestCustomTransactorErrorInspectionRetainsOnlyReconciliationCandidate(t *te
 				t.Fatal("unbounded outcome traversal")
 			}
 			failure = nil
-			got, err = r.Update(t.Context(), writer, 7, r.Name.Set("input"))
+			got, err = Update(t.Context(), writer, r.Table.Query(), r.Table.Key(), 7, TextSet(r.Name, "input"))
 			if err != nil || got.ID != 7 || begins != 2 || len(statements) != 2 {
 				t.Fatal("later write did not recover")
 			}

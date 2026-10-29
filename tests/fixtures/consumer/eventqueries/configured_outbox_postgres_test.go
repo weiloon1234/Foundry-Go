@@ -1,5 +1,7 @@
 package eventqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"crypto/rand"
@@ -196,7 +198,7 @@ enabled = true
 		var id outbox.ID[eventqueries.RecordCreated]
 		rollbackErr := errors.New("outer rollback")
 		err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-			item, err := observerqueries.Plains.Insert(t.Context(), tx, observerqueries.Plains.Name.Set("published"))
+			item, err := orm.Insert(t.Context(), tx, observerqueries.Plains.Table, orm.TextSet(observerqueries.Plains.Name, "published"))
 			if err != nil {
 				return err
 			}

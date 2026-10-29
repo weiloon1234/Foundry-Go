@@ -31,7 +31,7 @@ func TestPostgresInsertOrFirstRejectsCrossSchemaIndexCollision(t *testing.T) {
 	}
 	fields := provenanceMembers(nil)
 	rank := fields.Rank
-	got, err := CreateOrFirst(ctx, db, fields.Query().Where(rank.Eq(7)), fields.Key().Set(2), fields.Rank.Set(7))
+	got, err := CreateOrFirst(ctx, db, fields.Query().Where(NumberEq(rank, 7)), KeySet(fields.Key(), 2), NumberSet(fields.Rank, 7))
 	var failure *database.Error
 	if !errors.Is(err, database.UniqueViolation) || !errors.As(err, &failure) || failure.Schema() != foreign.Schema() || failure.Table() != "members" || failure.Constraint() != "same_rank_key" || got.ID != 0 {
 		t.Fatal("foreign-schema index collision resolved as success", err)
@@ -55,7 +55,7 @@ func TestPostgresInsertOrFirstRejectsPartitionChildConflict(t *testing.T) {
 	}
 	fields := provenanceMembers(nil)
 	rank := fields.Rank
-	got, err := CreateOrFirst(ctx, db, fields.Query().Where(rank.Eq(7)), fields.Key().Set(2), fields.Rank.Set(7))
+	got, err := CreateOrFirst(ctx, db, fields.Query().Where(NumberEq(rank, 7)), KeySet(fields.Key(), 2), NumberSet(fields.Rank, 7))
 	var failure *database.Error
 	if !errors.Is(err, database.UniqueViolation) || !errors.As(err, &failure) || failure.Schema() != scope.Schema() || failure.Table() != "members_child" || got.ID != 0 {
 		t.Fatal("partition child conflict resolved as success", err)
@@ -77,7 +77,7 @@ func TestPostgresInsertOrFirstDoesNotRecoverDeferredCommitFailure(t *testing.T) 
 	}
 	scans := 0
 	fields := provenanceMembers(&scans)
-	got, err := CreateOrFirst(ctx, db, fields.Query().Where(fields.Rank.Eq(7)), fields.Key().Set(2), fields.Rank.Set(7))
+	got, err := CreateOrFirst(ctx, db, fields.Query().Where(NumberEq(fields.Rank, 7)), KeySet(fields.Key(), 2), NumberSet(fields.Rank, 7))
 	var failure *database.Error
 	if !errors.Is(err, database.UniqueViolation) || !errors.As(err, &failure) || failure.Outcome() != database.RolledBack || got.ID != 0 {
 		t.Fatal("deferred commit failure resolved as success", err)
@@ -116,7 +116,7 @@ func TestPostgresInsertOrFirstRejectsInheritanceChildConflict(t *testing.T) {
 	}
 	fields := provenanceMembers(nil)
 	rank := fields.Rank
-	got, err := CreateOrFirst(ctx, db, fields.Query().Where(rank.Eq(7)), fields.Key().Set(2), fields.Rank.Set(7))
+	got, err := CreateOrFirst(ctx, db, fields.Query().Where(NumberEq(rank, 7)), KeySet(fields.Key(), 2), NumberSet(fields.Rank, 7))
 	var failure *database.Error
 	if got.ID != 0 || !errors.Is(err, database.UniqueViolation) || !errors.As(err, &failure) || failure.Schema() != scope.Schema() || failure.Table() != "members_child" || failure.Constraint() != "members_child_rank_key" {
 		t.Fatal("inheritance child conflict returned a competitor", err)
@@ -142,13 +142,13 @@ func TestPostgresInsertOrFirstRejectsCompetitorHiddenByTenantScope(t *testing.T)
 		}
 	}
 	fields := provenanceTenantMembers()
-	lookup := fields.Query().Where(fields.Rank.Eq(7))
-	got, err := CreateOrFirst(ctx, db, lookup, fields.Key().Set(2), fields.Rank.Set(7))
+	lookup := fields.Query().Where(NumberEq(fields.Rank, 7))
+	got, err := CreateOrFirst(ctx, db, lookup, KeySet(fields.Key(), 2), NumberSet(fields.Rank, 7))
 	if got.ID != 0 || !errors.Is(err, database.UniqueViolation) {
 		t.Fatal("tenant scope exposed a hidden competitor", err)
 	}
 	// The conflict is recoverable when the caller explicitly removes the scope.
-	visible, err := CreateOrFirst(ctx, db, WithoutGlobalScopes(lookup), fields.Key().Set(2), fields.Rank.Set(7))
+	visible, err := CreateOrFirst(ctx, db, WithoutGlobalScopes(lookup), KeySet(fields.Key(), 2), NumberSet(fields.Rank, 7))
 	if err != nil || visible.ID != 1 || visible.Rank != 7 {
 		t.Fatal("unscoped lookup did not expose the existing competitor", err)
 	}
@@ -172,12 +172,12 @@ func TestPostgresInsertOrFirstRejectsSoftDeletedCompetitor(t *testing.T) {
 		}
 	}
 	fields := provenanceSoftMembers()
-	lookup := fields.Query().Where(fields.Name.Eq("existing"))
-	got, err := CreateOrFirst(ctx, db, lookup, fields.Key().Set(2), fields.Name.Set("existing"))
+	lookup := fields.Query().Where(TextEq(fields.Name, "existing"))
+	got, err := CreateOrFirst(ctx, db, lookup, KeySet(fields.Key(), 2), TextSet(fields.Name, "existing"))
 	if got.ID != 0 || !errors.Is(err, database.UniqueViolation) {
 		t.Fatal("soft-delete scope exposed a hidden competitor", err)
 	}
-	visible, err := CreateOrFirst(ctx, db, lookup.WithTrashed(), fields.Key().Set(2), fields.Name.Set("existing"))
+	visible, err := CreateOrFirst(ctx, db, lookup.WithTrashed(), KeySet(fields.Key(), 2), TextSet(fields.Name, "existing"))
 	if err != nil || visible.ID != 1 || visible.Name != "existing" {
 		t.Fatal("WithTrashed did not expose the existing competitor", err)
 	}
@@ -226,7 +226,7 @@ func provenanceTenantMembers() provenanceTenantTable {
 	return Define("members", func(b Builder[provenanceTenantMember], m *provenanceTenantMember) provenanceTenantTable {
 		return provenanceTenantTable{TableOf(b, &m.ID), NumberOf(b, &m.Rank), NumberOf(b, &m.TenantID)}
 	}, WithGlobalScopes(func(t provenanceTenantTable) []GlobalScope[provenanceTenantMember] {
-		return []GlobalScope[provenanceTenantMember]{Scope(t.Table, "tenant", func(context.Context) (Predicate[provenanceTenantMember], error) { return t.TenantID.Eq(2), nil })}
+		return []GlobalScope[provenanceTenantMember]{Scope(t.Table, "tenant", func(context.Context) (Predicate[provenanceTenantMember], error) { return NumberEq(t.TenantID, 2), nil })}
 	}))
 }
 

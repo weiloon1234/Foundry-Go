@@ -46,7 +46,7 @@ available for advanced composition.
 | Configuration and time | [Generated typed configuration](docs/guides/generated-configuration.md), defaults/TOML/environment/typed overrides, [named services](docs/guides/named-services.md), and [application timezone](docs/guides/application-timezone.md) shared by calendar helpers, schedules, logs and report presentation. |
 | HTTP | [Typed endpoints](docs/guides/http-endpoints.md), request/response DTOs, [middleware](docs/guides/http-middleware.md), route groups, model binding, forms, multipart uploads, raw bodies, downloads, streams, server-sent events, redirects, multiple success statuses, per-route timeouts and body limits, static assets, compression, ETags and typed cache headers. [Pagination](docs/guides/http-pagination.md) includes authenticated numbered, simple and cursor endpoints. |
 | Validation and translation | [Built-in typed rules](docs/guides/validation-expanded.md) for presence, strings, formats, numbers, comparisons, collections, passwords and files; custom rules, database existence/uniqueness and bounded concurrent checks using explicitly selected connections. [Localized validation messages](docs/guides/validation-messages.md), field labels, pluralization and fallback share the catalog system. |
-| PostgreSQL | [Generated models](docs/guides/model-generation.md), typed queries and writes, relations (including through, one-of-many and polymorphic), pivot sync, [global scopes](docs/guides/model-global-scopes.md), set-based writes, projections, joins, aggregates, CTEs, windows, JSON/binary values, transactions with retry, locks, hooks, soft deletes and [pruning](docs/guides/model-pruning.md). [Named connections, read routing and sticky reads](docs/guides/database-routing.md); explicit [migrations and seeding](docs/guides/migrations-and-seeding.md) with optional confirmed rollback. |
+| PostgreSQL | [Handwritten typed tables](docs/guides/model-declarations.md), per-kind column operators, typed queries and writes, relations (including through, one-of-many and polymorphic), pivot sync, [global scopes](docs/guides/model-global-scopes.md), set-based writes, projections, joins, aggregates, CTEs, windows, JSON/binary values, transactions with retry, locks, hooks, soft deletes and [pruning](docs/guides/model-pruning.md). [Named connections, read routing and sticky reads](docs/guides/database-routing.md); explicit [migrations and seeding](docs/guides/migrations-and-seeding.md) with optional confirmed rollback. |
 | Authentication and security | [Model-specific guards and policies](docs/guides/authentication.md), sessions, scoped tokens, password hashing, lockout, account recovery, MFA, impersonation and [social login](docs/guides/social-login.md); CSRF, CORS, signed URLs, encrypted cookies, [encryption key rotation](docs/guides/encryption.md) and [inbound and outbound webhooks](docs/guides/webhooks.md). |
 | Caching and coordination | [Typed caches](docs/guides/caching.md), tags, namespace invalidation and stale-while-revalidate; [Redis data and commands](docs/guides/redis-commands.md), distributed leases and semaphores, [rate limits](docs/guides/rate-limiting.md) and pub/sub. |
 | Background work | [Jobs and workers](docs/guides/jobs.md) with job middleware, workflows and a sync driver, [failure archive and queue commands](docs/guides/jobs-operations.md), events with queued listeners, [scheduling](docs/guides/scheduler.md), [transactional outbox](docs/guides/outbox.md) and [HTTP idempotency](docs/guides/idempotent-operations.md). |
@@ -85,9 +85,9 @@ validation rules are reported as skipped by client validation; the backend remai
 authoritative.
 
 Persistence models are not automatically exposed as DTOs. Declare public fields
-explicitly, or use an explicit
-[public query projection](docs/guides/model-projections.md) with
-`//foundry:projection dto=true`. A database password column therefore does not
+explicitly, or declare a
+[public query projection](docs/guides/model-projections.md) with a handwritten
+`rows` schema and a separate `//foundry:dto` declaration. A database password column therefore does not
 become an API or SDK field merely because it exists on a model. Applications still
 own which data they explicitly place in public DTOs.
 

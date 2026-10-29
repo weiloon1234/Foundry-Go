@@ -5,8 +5,7 @@ Declare creation and update fields with `orm.CreatedAtOf` and `orm.UpdatedAtOf`.
 <!-- orm-example: writes-after -->
 ```go
 func write(ctx context.Context, tx *database.Tx, id int64) error {
-	_, err := hooks.Members.Update(ctx, tx, id,
-		hooks.Members.Name.Set("Ada"), hooks.Members.Note.SetNull())
+	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "Ada"), orm.NullableInputTextSetNull(hooks.Members.Note))
 	return err
 }
 ```

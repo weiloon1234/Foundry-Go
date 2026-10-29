@@ -8,4 +8,4 @@ import (
 )
 
 var db *database.DB
-var _, _ = orm.FirstOrCreate(context.Background(), db, linkqueries.Memberships.Query(), linkqueries.Members.Name.Set("wrong"))
+var _, _ = orm.FirstOrCreate(context.Background(), db, linkqueries.Memberships.Query(), orm.TextSet(linkqueries.Members.Name, "wrong"))

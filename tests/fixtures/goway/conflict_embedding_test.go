@@ -10,26 +10,27 @@ import (
 	n "foundry.test/goway/models/hooks"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type conflictInputWrapper struct {
-	orm.NullableInputText[n.Member, coremodels.LabelInput, coremodels.StoredLabel]
+	orm.NullableInputTextAdapter[n.Member, coremodels.LabelInput, coremodels.StoredLabel]
 	calls *int
 }
 
 func (w conflictInputWrapper) SetNull() orm.Assignment[n.Member] {
 	(*w.calls)++
-	return n.Members.Name.Set("redirected")
+	return orm.InputTextSet(n.Members.Name, "redirected")
 }
 
 type conflictNullableWrapper struct {
-	orm.SoftDelete[n.Member, time.Time]
+	orm.ExpressionColumn[n.Member, time.Time, value.Nullable[time.Time]]
 	calls *int
 }
 
 func (w conflictNullableWrapper) SetNull() orm.Assignment[n.Member] {
 	(*w.calls)++
-	return n.Members.Name.Set("redirected")
+	return orm.InputTextSet(n.Members.Name, "redirected")
 }
 
 // Nullable wrappers inherit sealed metadata but override the public setter.
@@ -37,14 +38,14 @@ func (w conflictNullableWrapper) SetNull() orm.Assignment[n.Member] {
 func TestConflictEmbeddingCannotRedirectAssignments(t *testing.T) {
 	f := n.Members
 	calls := 0
-	input := conflictInputWrapper{f.Note, &calls}
-	nullable := conflictNullableWrapper{f.DeletedAt, &calls}
+	input := conflictInputWrapper{orm.NullableInputTextExpr(f.Note), &calls}
+	nullable := conflictNullableWrapper{orm.NullableTimeExpr(f.DeletedAt), &calls}
 	for _, tc := range []struct {
 		name            string
 		direct, wrapped orm.ConflictUpdate[n.Member]
 	}{
-		{"distinct_null", orm.ConflictNull(f.Note), orm.ConflictNull(input)},
-		{"null", orm.ConflictNull(f.DeletedAt), orm.ConflictNull(nullable)},
+		{"distinct_null", orm.ConflictNull(orm.NullableInputTextExpr(f.Note)), orm.ConflictNull(input)},
+		{"null", orm.ConflictNull(orm.NullableTimeExpr(f.DeletedAt)), orm.ConflictNull(nullable)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var transcripts []string
@@ -59,8 +60,8 @@ func TestConflictEmbeddingCannotRedirectAssignments(t *testing.T) {
 				if err := db.Start(t.Context()); err != nil {
 					t.Fatal(err)
 				}
-				policy := orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(update)
-				got, err := orm.Upsert(t.Context(), db, f.Query(), policy, f.Key().Set(1), f.Name.Set(" proposed "), f.Body.Set([]byte{1}))
+				policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(update)
+				got, err := orm.Upsert(t.Context(), db, f.Query(), policy, orm.KeySet(f.Key(), 1), orm.InputTextSet(f.Name, " proposed "), orm.ColumnSet(f.Body, []byte{1}))
 				if err != nil {
 					t.Fatal(err)
 				}

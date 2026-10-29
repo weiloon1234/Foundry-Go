@@ -25,7 +25,7 @@ func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.Use
 	c := rows.Correlate(outer, orders)
 	inner := rows.InnerScope(c, rows.Scope(orders))
 	u, o := rows.OuterScope(c, scope), inner
-	return c.Where(expr.Equal(expr.At(o, models.Orders.BuyerID), expr.At(u, models.Users.ID))), inner
+	return c.Where(expr.Equal(expr.At(o, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(u, orm.KeyExpr(models.Users.ID)))), inner
 }
 
 func TestPostgresLateralPerParentRecords(t *testing.T) {
@@ -33,7 +33,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		outer := rows.As[usersAlias](models.Users.Query(), "buyer")
 		c, scope := userOrders(outer, rows.Scope(outer))
 		o := scope
-		record := rows.SelectCorrelatedRecord(c, scope).OrderBy(expr.At(o, models.Orders.TotalCents).Desc(), expr.At(o, models.Orders.ID).Asc())
+		record := rows.SelectCorrelatedRecord(c, scope).OrderBy(expr.At(o, orm.NumberExpr(models.Orders.TotalCents)).Desc(), expr.At(o, orm.KeyExpr(models.Orders.ID)).Asc())
 		if n, err := rows.ReadRecord(rows.SelectRecord(outer, rows.Scope(outer)).Where(record.Exists())).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal("correlated complete-record existence", n, err)
 		}
@@ -41,7 +41,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		joined := rows.LeftJoinLateral(outer, latest)
 		u := rows.LeftScope(joined, rows.Scope(outer))
 		r := rows.NullableRightScope(joined, rows.LateralScope(latest))
-		results := rows.OrderBy(rows.Select(joined, lateralqueries.UserOrders, rows.MapSelected(lateralqueries.UserOrders.UserID, expr.Row(expr.At(u, models.Users.ID)).Value()), rows.MapSelected(lateralqueries.UserOrders.OrderID, expr.Row(expr.AtNullable(r, models.Orders.ID)).Value()), rows.MapSelected(lateralqueries.UserOrders.Total, expr.Row(expr.AtNullable(r, models.Orders.TotalCents)).Value())), expr.At(u, models.Users.Age).Asc())
+		results := rows.OrderBy(rows.Select(joined, lateralqueries.UserOrders, rows.MapSelected(lateralqueries.UserOrders.UserID, expr.Row(expr.At(u, orm.KeyExpr(models.Users.ID))).Value()), rows.MapSelected(lateralqueries.UserOrders.OrderID, expr.Row(expr.AtNullable(r, orm.KeyExpr(models.Orders.ID))).Value()), rows.MapSelected(lateralqueries.UserOrders.Total, expr.Row(expr.AtNullable(r, orm.NumberExpr(models.Orders.TotalCents))).Value())), expr.At(u, orm.NumberExpr(models.Users.Age)).Asc())
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		items, err := rows.Read(results).All(t.Context(), counter)
 		if err != nil || len(items) != 4 || counter.Queries.Load() != 1 {
@@ -80,10 +80,10 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 			t.Fatal(secondRows, err)
 		}
 		uf, of := rows.Scope(outer), rows.LateralScope(latest)
-		on := rows.On(expr.At(uf, models.Users.ID), expr.At(of, models.Orders.BuyerID)).WhereRight(expr.OrderRow(expr.At(of, models.Orders.TotalCents)).Gt(2))
+		on := rows.On(expr.At(uf, orm.KeyExpr(models.Users.ID)), expr.At(of, orm.ColumnExpr(models.Orders.BuyerID))).WhereRight(expr.OrderRow(expr.At(of, orm.NumberExpr(models.Orders.TotalCents))).Gt(2))
 		filteredJoin := rows.LeftJoinLateral(outer, latest, on)
 		filtered := rows.NullableRightScope(filteredJoin, rows.LateralScope(latest))
-		values, err := rows.ReadScalar(rows.SelectScalar(filteredJoin, expr.Row(expr.AtNullable(filtered, models.Orders.ID)).Value())).All(t.Context(), tx)
+		values, err := rows.ReadScalar(rows.SelectScalar(filteredJoin, expr.Row(expr.AtNullable(filtered, orm.KeyExpr(models.Orders.ID))).Value())).All(t.Context(), tx)
 		if err != nil || len(values) != 4 {
 			t.Fatal(values, err)
 		}
@@ -96,7 +96,7 @@ func TestPostgresLateralPerParentRecords(t *testing.T) {
 		if nonNull != 1 {
 			t.Fatal(values)
 		}
-		if count, err := rows.Read(results.Where(expr.OrderNullableRow(expr.AtNullable(r, models.Orders.TotalCents)).Gt(2))).Count(t.Context(), tx); err != nil || count != 1 {
+		if count, err := rows.Read(results.Where(expr.OrderNullableRow(expr.AtNullable(r, orm.NumberExpr(models.Orders.TotalCents))).Gt(2))).Count(t.Context(), tx); err != nil || count != 1 {
 			t.Fatal(count, err)
 		}
 		// Existing result pagination, CTE/set composition and transaction locks retain the join.

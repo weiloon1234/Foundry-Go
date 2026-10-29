@@ -1,5 +1,7 @@
 package notifications
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -109,7 +111,7 @@ func TestNotificationOutboxRollbackSavepointAndWorkerRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := writer.Transaction(t.Context(), func(tx *database.Tx) error {
-		count, err := store.Envelopes.Query().Count(t.Context(), tx)
+		count, err := orm.Count(t.Context(), tx, store.Envelopes.Query())
 		if count != 0 {
 			t.Error("partial notification persisted")
 		}

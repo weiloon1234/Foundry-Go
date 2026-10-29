@@ -1,6 +1,6 @@
 # Typed model writes
 
-`orm.Table[M, K]` creates, updates and deletes complete models with concrete key and assignment types. Columns construct `orm.Assignment[M]` values. Writes use the shared mutation compiler, codecs and complete `RETURNING` hydration.
+`orm.Table[M, K]` creates, updates and deletes complete models with concrete key and assignment types. Per-kind functions such as `orm.TextSet` construct `orm.Assignment[M]` values. Writes use the shared mutation compiler, codecs and complete `RETURNING` hydration.
 
 ## Create and update
 
@@ -8,22 +8,21 @@
 ```go
 func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	f := hooks.Members
-	return f.Insert(ctx, tx, f.Key().Set(id), f.Name.Set("Ada"), f.Body.Set([]byte{}))
+	return orm.Insert(ctx, tx, f.Table, orm.KeySet(f.Key(), id), orm.InputTextSet(f.Name, "Ada"), orm.ColumnSet(f.Body, []byte{}))
 }
 ```
 
 <!-- orm-example: writes-after -->
 ```go
 func write(ctx context.Context, tx *database.Tx, id int64) error {
-	_, err := hooks.Members.Update(ctx, tx, id,
-		hooks.Members.Name.Set("Ada"), hooks.Members.Note.SetNull())
+	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "Ada"), orm.NullableInputTextSetNull(hooks.Members.Note))
 	return err
 }
 ```
 
-The examples use the [compiled member declaration](../../tests/fixtures/goway/models/hooks/models.go). A table's `Insert`, `Update` and `Delete` methods retain its declared key type. For additional tenant or authorization predicates, use package `orm.Update` or `orm.Delete` with the query and table key handle. No match returns `database.NotFound`, discoverable through `errors.Is`.
+The examples use the [compiled member declaration](../../tests/fixtures/goway/models/hooks/models.go). `orm.Insert` takes the concrete table. `orm.Update` and `orm.Delete` take its query and key handle, retaining the declared key type and any tenant or authorization predicates. No match returns `database.NotFound`, discoverable through `errors.Is`.
 
-Assignments leave the caller's inputs unchanged. Omission emits no assignment: on insert PostgreSQL supplies its default or NULL; on update the stored value stays unchanged. `Set(0)`, `Set(false)` and `Set("")` are supplied values. A nullable column's `SetNull()` writes SQL NULL. Inside a before-write hook, `orm.WriteUnset` removes an assignment and restores omission.
+Assignments leave the caller's inputs unchanged. Omission emits no assignment: on insert PostgreSQL supplies its default or NULL; on update the stored value stays unchanged. `orm.NumberSet(column, 0)`, `orm.ColumnSet(column, false)` and `orm.TextSet(column, "")` supply values. Nullable family functions such as `orm.NullableTextSetNull(column)` write SQL NULL. Inside a before-write hook, `orm.WriteUnset` removes an assignment and restores omission.
 
 Required fields without defaults must be supplied. `foundry:"default=database"` permits omission but neither creates nor verifies the SQL default. Migrations own the schema. An omitted `model.ID[M]` primary receives a UUIDv7 unless it has a database default or a distinct mutation input. Natural keys require a supplied value or a database default. An explicitly supplied key is never replaced.
 

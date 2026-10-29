@@ -1,5 +1,7 @@
 package productionprofile_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"testing"
 
@@ -17,20 +19,20 @@ func BenchmarkProfileFieldSelection(b *testing.B) {
 	f := productionprofile.Records.Name
 	b.ReportAllocs()
 	for b.Loop() {
-		selectedField = expr.Row(expr.Value(f)).Value()
+		selectedField = expr.Row(expr.Value(orm.TextExpr(f))).Value()
 	}
 }
 func BenchmarkProfileFieldParameter(b *testing.B) {
 	f := productionprofile.Records.Score
 	b.ReportAllocs()
 	for b.Loop() {
-		parameterField = expr.Param(f, int64(1))
+		parameterField = expr.Param(orm.NumberExpr(f), int64(1))
 	}
 }
 func BenchmarkProfileFieldSummary(b *testing.B) {
 	f := productionprofile.Records.Score
 	b.ReportAllocs()
 	for b.Loop() {
-		summarizedField = expr.Sum(f)
+		summarizedField = expr.Sum(orm.NumberExpr(f))
 	}
 }

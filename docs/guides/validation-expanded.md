@@ -108,13 +108,13 @@ pool reuse and isolation after a selected connection closes.
 <!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
 func availableEmail(db database.Executor) validation.Rule[string] {
-	return databasevalidation.Unique(db, models.Users.Query(), models.Users.Email)
+	return databasevalidation.Unique(db, models.Users.Query(), orm.TextExpr(models.Users.Email))
 }
 
 func activeUsers(db database.Executor) validation.Rule[[]model.ID[models.User]] {
 	return databasevalidation.ExistsAll(db,
-		models.Users.Query().Where(models.Users.Status.Eq(models.StatusActive)),
-		models.Users.Key())
+		models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)),
+		orm.KeyExpr(models.Users.Key()))
 }
 ```
 
@@ -144,8 +144,8 @@ type Assignment struct{ Assignee model.ID[models.User] }
 func assignees(db database.Executor) validation.Rule[[]Assignment] {
 	field := validation.DefineField("assignee_id", func(a Assignment) model.ID[models.User] { return a.Assignee })
 	return databasevalidation.ExistsEach(db,
-		models.Users.Query().Where(models.Users.Status.Eq(models.StatusActive)),
-		models.Users.Key(), field)
+		models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)),
+		orm.KeyExpr(models.Users.Key()), field)
 }
 ```
 

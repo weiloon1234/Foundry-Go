@@ -1,5 +1,8 @@
 package invalid
 
-import "foundry.test/consumer/models"
+import (
+	"foundry.test/consumer/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+)
 
-var invalid = models.Users.Age.Contains(42)
+var invalid = orm.TextContains(models.Users.Age, "42")

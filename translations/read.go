@@ -1,5 +1,7 @@
 package translations
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"fmt"
@@ -156,17 +158,17 @@ func (f Field[M, K]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, ow
 		localeNames[i] = string(id)
 	}
 	fields := store.Translations
-	base := store.Translations.Query().Where(fields.Scope.Eq(f.definition.owner.Scope()), fields.SubjectKey.In(keys...), fields.Field.Eq(string(f.Name())), fields.Locale.In(localeNames...))
+	base := store.Translations.Query().Where(orm.TextEq(fields.Scope, f.definition.owner.Scope()), orm.TextIn(fields.SubjectKey, keys...), orm.TextEq(fields.Field, string(f.Name())), orm.TextIn(fields.Locale, localeNames...))
 	// UNIQUE(scope,subject_key,field,locale) bounds the pages structurally.
 	limit := len(keys) * len(ids)
 	rows, bytes, after := 0, 0, ""
 	for {
 		page := base
 		if after != "" {
-			page = page.Where(fields.KeyColumn.Gt(after))
+			page = page.Where(orm.TextGt(fields.KeyColumn, after))
 		}
 		count := 0
-		err := page.OrderBy(fields.KeyColumn.Asc()).Limit(MaxBatchRows).Each(ctx, tx, func(row store.Translation) error {
+		err := orm.Each(ctx, tx, page.OrderBy(orm.TextAsc(fields.KeyColumn)).Limit(MaxBatchRows), func(row store.Translation) error {
 			count++
 			rows++
 			after = row.Key

@@ -56,8 +56,8 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		}
 
 		fields := models.Users
-		base := models.Users.Query().OrderBy(fields.Age.Asc())
-		users, err := base.All(t.Context(), tx)
+		base := models.Users.Query().OrderBy(orm.NumberAsc(fields.Age))
+		users, err := orm.All(t.Context(), tx, base)
 		if err != nil {
 			return err
 		}
@@ -68,7 +68,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if !ok || birthday.String() != "2000-02-29" {
 			t.Error("nullable date hydration failed")
 		}
-		byBirthday := models.Users.Query().OrderBy(fields.Birthday.Asc())
+		byBirthday := models.Users.Query().OrderBy(orm.NullableTimeAsc(fields.Birthday))
 		cursorPage, err := orm.CursorPaginate(t.Context(), tx, byBirthday, orm.CursorRequest[models.User]{Size: 1})
 		if err != nil {
 			return err
@@ -84,39 +84,39 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if len(lastPage.Items) != 1 || lastPage.Items[0].ID != secondID || lastPage.Next.IsSet() {
 			t.Error("temporal/UUID cursor lost its exact boundary")
 		}
-		match, err := base.Where(fields.Email.Contains("_%!'")).Require(t.Context(), tx)
+		match, err := orm.Require(t.Context(), tx, base.Where(orm.TextContains(fields.Email, "_%!'")))
 		if err != nil {
 			return err
 		}
 		if match.ID != firstID {
 			t.Error("Contains treated literal wildcard characters as operators")
 		}
-		matches, err := base.Where(orm.Or(fields.Age.Lt(22), fields.Status.Eq(models.StatusDisabled)), fields.ID.In(firstID, secondID)).All(t.Context(), tx)
+		matches, err := orm.All(t.Context(), tx, base.Where(orm.Or(orm.NumberLt(fields.Age, 22), orm.EnumEq(fields.Status, models.StatusDisabled)), orm.KeyIn(fields.ID, firstID, secondID)))
 		if err != nil {
 			return err
 		}
 		if len(matches) != 2 {
 			t.Error("typed predicate composition changed meaning")
 		}
-		found, err := base.Where(fields.Age.Gte(30), fields.ID.Eq(secondID)).First(t.Context(), tx)
+		found, err := orm.First(t.Context(), tx, base.Where(orm.NumberGte(fields.Age, 30), orm.KeyEq(fields.ID, secondID)))
 		if err != nil {
 			return err
 		}
 		if v, ok := found.Get(); !ok || v.ID != secondID {
 			t.Error("typed Find lost filters or identity")
 		}
-		missing, err := base.Where(fields.Age.Lt(30), fields.ID.Eq(secondID)).First(t.Context(), tx)
+		missing, err := orm.First(t.Context(), tx, base.Where(orm.NumberLt(fields.Age, 30), orm.KeyEq(fields.ID, secondID)))
 		if err != nil {
 			return err
 		}
 		if missing.IsSet() {
 			t.Error("missing model used a zero model sentinel")
 		}
-		if _, err := base.Where(fields.Age.Lt(0)).Require(t.Context(), tx); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Require(t.Context(), tx, base.Where(orm.NumberLt(fields.Age, 0))); !errors.Is(err, database.NotFound) {
 			t.Error("required missing model did not report NotFound")
 		}
 		page := base.Limit(1).Offset(1)
-		pageUsers, err := page.All(t.Context(), tx)
+		pageUsers, err := orm.All(t.Context(), tx, page)
 		if err != nil {
 			return err
 		}
@@ -128,11 +128,11 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 			count  int64
 			exists bool
 		}{{base, 2, true}, {page, 1, true}, {base.Limit(0), 0, false}, {base.Offset(2), 0, false}} {
-			count, err := item.q.Count(t.Context(), tx)
+			count, err := orm.Count(t.Context(), tx, item.q)
 			if err != nil {
 				return err
 			}
-			exists, err := item.q.Exists(t.Context(), tx)
+			exists, err := orm.Exists(t.Context(), tx, item.q)
 			if err != nil {
 				return err
 			}
@@ -140,7 +140,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 				t.Error("aggregate did not honor selected query window")
 			}
 		}
-		country, err := models.Countries.Require(t.Context(), tx, models.CountryCode("MY"))
+		country, err := orm.RequireKey(t.Context(), tx, models.Countries.Table, models.CountryCode("MY"))
 		if err != nil {
 			return err
 		}
@@ -151,7 +151,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		entry, err := models.LedgerEntries.Query().Where(models.LedgerEntries.Amount.Eq(amount), models.LedgerEntries.Key().Eq(entryID)).Require(t.Context(), tx)
+		entry, err := orm.Require(t.Context(), tx, models.LedgerEntries.Query().Where(orm.NumberEq(models.LedgerEntries.Amount, amount), orm.KeyEq(models.LedgerEntries.Key(), entryID)))
 		if err != nil {
 			return err
 		}
@@ -160,24 +160,24 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 		}
 		stop := errors.New("stop streaming")
 		seen := 0
-		if err := base.Each(t.Context(), tx, func(models.User) error { seen++; return stop }); !errors.Is(err, stop) || seen != 1 {
+		if err := orm.Each(t.Context(), tx, base, func(models.User) error { seen++; return stop }); !errors.Is(err, stop) || seen != 1 {
 			t.Error("stream early exit failed")
 		}
-		if _, err := base.Count(t.Context(), tx); err != nil {
+		if _, err := orm.Count(t.Context(), tx, base); err != nil {
 			return err
 		}
-		if _, err := base.Where(fields.Status.Eq(models.Status("unknown"))).All(t.Context(), tx); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.All(t.Context(), tx, base.Where(orm.EnumEq(fields.Status, models.Status("unknown")))); !errors.Is(err, fault.Invalid) {
 			t.Error("invalid enum binding reached execution")
 		}
 		canceled, cancel := context.WithCancel(t.Context())
 		cancel()
-		if _, err := base.All(canceled, tx); !errors.Is(err, context.Canceled) {
+		if _, err := orm.All(canceled, tx, base); !errors.Is(err, context.Canceled) {
 			t.Error("canceled model query executed")
 		}
 		if _, err := tx.Exec(t.Context(), `UPDATE users SET status='unknown' WHERE id=$1`, secondID.String()); err != nil {
 			return err
 		}
-		if partial, err := base.All(t.Context(), tx); err == nil || partial != nil {
+		if partial, err := orm.All(t.Context(), tx, base); err == nil || partial != nil {
 			t.Error("malformed row published a partial model collection")
 		}
 		if partial, err := orm.CursorPaginate(t.Context(), tx, base, orm.CursorRequest[models.User]{Size: 1}); err == nil || partial.Items != nil {
@@ -194,7 +194,7 @@ func TestPostgresGeneratedModelReads(t *testing.T) {
 }
 
 func TestORMModelSQLUsesOnlyDeclaredColumns(t *testing.T) {
-	statement, err := orm.Compile(models.Users.Query().Where(models.Users.Email.Eq("secret'; --")))
+	statement, err := orm.Compile(models.Users.Query().Where(orm.TextEq(models.Users.Email, "secret'; --")))
 	if err != nil {
 		t.Fatal(err)
 	}

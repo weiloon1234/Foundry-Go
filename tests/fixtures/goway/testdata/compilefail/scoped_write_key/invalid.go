@@ -9,5 +9,5 @@ import (
 )
 
 func invalid(ctx context.Context, db *database.DB) {
-	_, _ = orm.Update(ctx, db, models.Users.Query(), models.Users.Key(), "wrong", models.Users.Email.Set("Ada"))
+	_, _ = orm.Update(ctx, db, models.Users.Query(), models.Users.Key(), "wrong", orm.TextSet(models.Users.Email, "Ada"))
 }

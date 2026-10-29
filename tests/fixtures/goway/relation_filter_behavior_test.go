@@ -16,9 +16,9 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 		return j.TargetFields{Table: table, ID: table.Key(), ParentID: orm.NumberOf(b, &m.ParentID), Name: orm.TextOf(b, &m.Name), Rank: orm.NumberOf(b, &m.Rank), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Inverse: orm.ThroughOf(b, &m.Inverse)}
 	})
 	for name, p := range map[string]expr.Predicate[j.Target]{
-		"foreign":       expr.TextRow(foreign.Name).Contains("a"),
+		"foreign":       expr.TextRow(orm.TextExpr(foreign.Name)).Contains("a"),
 		"zero":          {},
-		"foreign-scope": expr.TextRowAt(rowset.ModelScope(foreign.Query()), foreign.Name).Contains("a"),
+		"foreign-scope": expr.TextRowAt(rowset.ModelScope(foreign.Query()), orm.TextExpr(foreign.Name)).Contains("a"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := j.Peers.Where(expr.RelationFilter(j.Peers, p))
@@ -28,7 +28,7 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 			g := &goldenCapture{reply: joinedReply}
 			db := g.open(t.Context())
 			defer db.Close(t.Context())
-			if _, err := j.Parents.Query().With(r).All(t.Context(), db); !errors.Is(err, fault.Invalid) || g.statements != 0 {
+			if _, err := orm.All(t.Context(), db, j.Parents.Query().With(r)); !errors.Is(err, fault.Invalid) || g.statements != 0 {
 				t.Fatal("invalid filter reached SQL", err, g.statements)
 			}
 		})
@@ -37,14 +37,14 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 		orm.ExistenceRelation[j.Target, j.Parent]
 		orm.CheckedTable
 	}{
-		"direct":  orm.BelongsToOf(j.Targets.Parent, foreign.ParentID, j.Parents.ID),
-		"through": orm.ManyToManyOf(j.Targets.Inverse, foreign.ID, j.Pivots.TargetID, j.Pivots.ParentID, j.Parents.ID),
+		"direct":  orm.BelongsToOf(j.Targets.Parent, orm.NumberExpr(foreign.ParentID), orm.KeyExpr(j.Parents.ID)),
+		"through": orm.ManyToManyOf(j.Targets.Inverse, orm.KeyExpr(foreign.ID), orm.NullableNumberExpr(j.Pivots.TargetID), orm.NullableNumberExpr(j.Pivots.ParentID), orm.KeyExpr(j.Parents.ID)),
 	} {
 		t.Run("construction/"+name, func(t *testing.T) {
 			if err := orm.Check(invalidRelation); !errors.Is(err, fault.Invalid) {
 				t.Fatal("expected malformed relation", err)
 			}
-			p := expr.RelationFilter(invalidRelation, expr.TextRow(j.Parents.Name).Contains("one"))
+			p := expr.RelationFilter(invalidRelation, expr.TextRow(orm.TextExpr(j.Parents.Name)).Contains("one"))
 			if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Parents.Query().Where(p)))); !errors.Is(err, fault.Invalid) {
 				t.Fatal("target query lost construction error", err)
 			}
@@ -55,10 +55,10 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 			g := &goldenCapture{reply: joinedReply}
 			db := g.open(t.Context())
 			defer db.Close(t.Context())
-			if _, err := j.Parents.Query().Where(p).All(t.Context(), db); !errors.Is(err, fault.Invalid) {
+			if _, err := orm.All(t.Context(), db, j.Parents.Query().Where(p)); !errors.Is(err, fault.Invalid) {
 				t.Fatal("target query executed invalid adapted predicate", err)
 			}
-			if _, err := j.Targets.Query().With(validRelation).All(t.Context(), db); !errors.Is(err, fault.Invalid) {
+			if _, err := orm.All(t.Context(), db, j.Targets.Query().With(validRelation)); !errors.Is(err, fault.Invalid) {
 				t.Fatal("valid relation executed invalid adapted predicate", err)
 			}
 			for name, predicate := range map[string]orm.Predicate[j.Target]{
@@ -69,7 +69,7 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 					t.Fatal(name+" lost construction error", err)
 				}
 			}
-			if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query()).Where(expr.Has(invalidRelation, expr.TextRow(j.Parents.Name).Contains("one"))))); !errors.Is(err, fault.Invalid) {
+			if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query()).Where(expr.Has(invalidRelation, expr.TextRow(orm.TextExpr(j.Parents.Name)).Contains("one"))))); !errors.Is(err, fault.Invalid) {
 				t.Fatal("expr.Has lost construction error", err)
 			}
 			if g.statements != 0 {
@@ -79,13 +79,13 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 	}
 
 	fake := borrowedFilterTarget{Relation: j.Peers}
-	rejected := expr.RelationFilter(fake, expr.TextRow(j.Parents.Name).Contains("x"))
+	rejected := expr.RelationFilter(fake, expr.TextRow(orm.TextExpr(j.Parents.Name)).Contains("x"))
 	if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Parents.Query().Where(rejected)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("borrowed target accepted", err)
 	}
 	var nilRelation *orm.ThroughRelation[j.Parent, j.Target, j.Pivot]
 	for _, r := range []orm.ExistenceRelation[j.Parent, j.Target]{nil, nilRelation, orm.HasMany[j.Parent, j.Target]{}} {
-		p := expr.RelationFilter(r, expr.TextRow(j.Targets.Name).Contains("x"))
+		p := expr.RelationFilter(r, expr.TextRow(orm.TextExpr(j.Targets.Name)).Contains("x"))
 		if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query().Where(p)))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("nil/zero relation accepted", err)
 		}

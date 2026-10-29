@@ -1,5 +1,7 @@
 package articles_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"fmt"
@@ -108,11 +110,11 @@ func seedArticles(tb testing.TB, store *extensions.Store, runtime slots.Runtime,
 	for i := range count {
 		var article articles.Article
 		if err := store.Write(tb.Context(), func(ctx context.Context, tx *database.Tx) error {
-			author, err := articles.Authors.Insert(ctx, tx, articles.Authors.Name.Set("Author"))
+			author, err := orm.Insert(ctx, tx, articles.Authors.Table, orm.TextSet(articles.Authors.Name, "Author"))
 			if err != nil {
 				return err
 			}
-			article, err = articles.Articles.Insert(ctx, tx, articles.Articles.Slug.Set(fmt.Sprintf("slug-%05d", i)), articles.Articles.AuthorID.Set(author.ID))
+			article, err = orm.Insert(ctx, tx, articles.Articles.Table, orm.TextSet(articles.Articles.Slug, fmt.Sprintf("slug-%05d", i)), orm.ColumnSet(articles.Articles.AuthorID, author.ID))
 			if err != nil {
 				return err
 			}

@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var _ = orm.UUIDGreater(models.Orders.ID, model.ID[models.User]{})
+var _ = orm.UUIDGreater(orm.KeyExpr(models.Orders.ID), model.ID[models.User]{})

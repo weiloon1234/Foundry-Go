@@ -17,12 +17,12 @@ transaction/session sequential.
 
 | Terminal | Result and behavior |
 | --- | --- |
-| `All(ctx, executor)` | Complete `[]M`; no partial collected result on failure |
-| `First(ctx, executor)` | `value.Optional[M]`; no match is absence, not a zero model |
-| `Require(ctx, executor)` | Complete `M`, or `database.NotFound` |
-| `Query.Count(ctx, executor)` | Selected-window count without model hydration |
-| `Exists(ctx, executor)` | Whether the selected window has a row |
-| `Query.Each(ctx, executor, callback)` | Bounded iteration with cleanup on all exits |
+| `orm.All(ctx, executor, query)` | Complete `[]M`; no partial collected result on failure |
+| `orm.First(ctx, executor, query)` | `value.Optional[M]`; no match is absence, not a zero model |
+| `orm.Require(ctx, executor, query)` | Complete `M`, or `database.NotFound` |
+| `orm.Count(ctx, executor, query)` | Selected-window count without model hydration |
+| `orm.Exists(ctx, executor, query)` | Whether the selected window has a row |
+| `orm.Each(ctx, executor, query, callback)` | Bounded iteration with cleanup on all exits |
 | `orm.Compile(query)` | Redacted `orm.Statement`, no I/O |
 
 Use `rows.Read`/`ReadScalar`/`ReadRecord` and the package terminals for
@@ -36,14 +36,15 @@ page after reading it does not order the full matching dataset.
 ## First rows and typed identities
 
 Filter with the declared primary-key column to retrieve a typed identity.
-`Table.Find` is the direct key lookup; natural keys keep their declared type.
+`orm.Find(ctx, executor, table, key)` is the direct key lookup; natural keys keep their declared type.
 `First` and `Require` preserve filters/offset and respect a zero limit. Supply
 ordering when row choice matters. Missing and database failure remain different
 outcomes through the framework's typed errors.
 
 ## Typed predicates and expression ordering
 
-Columns expose capabilities appropriate to their declaration: equality/membership,
+Methodless column handles use per-kind functions, such as `orm.TextEq(column, value)`
+and `orm.NumberGt(column, value)`. Each family preserves its declared equality/membership,
 NULL checks, ordered comparisons or text patterns. Enums remain equality-only;
 model IDs retain their model owner. Empty membership is false. NULL comparisons
 follow SQL three-valued logic; use explicit NULL checks for absence. Empty
@@ -54,7 +55,10 @@ NULL rows should match.
 `Contains`, `StartsWith` and `EndsWith` escape pattern metacharacters for literal
 search. `Like`/`ILike` accept SQL patterns. Values are bound, never interpolated.
 Use `expr.Where` and `expr.OrderBy` to apply computed row predicates/orders; adapt
-a model predicate with `expr.ModelPredicate` when composing expressions.
+a model predicate with `expr.ModelPredicate` when composing expressions. Pass an
+explicit sealed adapter when an expression API accepts a column, for example
+`expr.Value(orm.TextExpr(Users.Email))`. Adapters preserve the column family,
+model, value and role constraints.
 
 [Conditional values](conditional-expressions.md), [arithmetic/text](scalar-calculations.md),
 [temporal values](temporal-calculations.md) and [JSON paths](json-models.md) preserve

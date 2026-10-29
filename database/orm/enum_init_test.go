@@ -27,17 +27,17 @@ func TestEnumsInitializeAfterModelDeclaration(t *testing.T) {
 	})
 
 	for index := range 3 {
-		as := []orm.Assignment[enuminit.Model]{enuminit.Models.Key().Set(enuminit.Active), enuminit.Models.State.Set(enuminit.Active), enuminit.Models.Nullable.Set(enuminit.Active)}
+		as := []orm.Assignment[enuminit.Model]{orm.KeySet(enuminit.Models.Key(), enuminit.Active), orm.EnumSet(enuminit.Models.State, enuminit.Active), orm.NullableEnumSet(enuminit.Models.Nullable, enuminit.Active)}
 		bad := enuminit.Status("unknown")
 		switch index {
 		case 0:
-			as[0] = enuminit.Models.Key().Set(bad)
+			as[0] = orm.KeySet(enuminit.Models.Key(), bad)
 		case 1:
-			as[1] = enuminit.Models.State.Set(bad)
+			as[1] = orm.EnumSet(enuminit.Models.State, bad)
 		case 2:
-			as[2] = enuminit.Models.Nullable.Set(bad)
+			as[2] = orm.NullableEnumSet(enuminit.Models.Nullable, bad)
 		}
-		if _, err := enuminit.Models.Insert(t.Context(), db, as...); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.Insert(t.Context(), db, enuminit.Models.Table, as...); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}

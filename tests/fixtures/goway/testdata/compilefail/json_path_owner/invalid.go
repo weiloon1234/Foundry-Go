@@ -8,7 +8,7 @@ import (
 )
 
 func root() expr.JSONPath[jsonpaths.Document, jsonpaths.Preferences] {
-	return expr.JSONRoot(expr.Value(jsonpaths.Documents.Settings))
+	return expr.JSONRoot(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings)))
 }
 
 type Other struct{}

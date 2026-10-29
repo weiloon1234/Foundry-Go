@@ -70,19 +70,19 @@ var Memberships = orm.Define("read_memberships", func(b orm.Builder[Membership],
 func MemberTenant(t MemberTable) orm.GlobalScope[Member] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[Member], error) {
 		id, err := coremodels.TenantID(ctx)
-		return t.TenantID.Eq(id), err
+		return orm.NumberEq(t.TenantID, id), err
 	})
 }
 func GroupTenant(t GroupTable) orm.GlobalScope[Group] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[Group], error) {
 		id, err := coremodels.TenantID(ctx)
-		return t.TenantID.Eq(id), err
+		return orm.NumberEq(t.TenantID, id), err
 	})
 }
 func MembershipTenant(t MembershipTable) orm.GlobalScope[Membership] {
 	return orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[Membership], error) {
 		id, err := coremodels.TenantID(ctx)
-		return t.TenantID.Eq(id), err
+		return orm.NumberEq(t.TenantID, id), err
 	})
 }
 func LocalReads() orm.RetrievalHooks[Member] { return ReadHooks("local") }
@@ -93,5 +93,5 @@ func ReadHooks(label string) orm.RetrievalHooks[Member] {
 	}}
 }
 
-var Manager = orm.BelongsToOf(Members.Manager, Members.ManagerID, Members.ID)
-var MemberGroups = orm.ManyToManyOf(Members.Groups, Members.ID, Memberships.MemberID, Memberships.GroupID, Groups.ID)
+var Manager = orm.BelongsToOf(Members.Manager, orm.NullableNumberExpr(Members.ManagerID), orm.KeyExpr(Members.ID))
+var MemberGroups = orm.ManyToManyOf(Members.Groups, orm.KeyExpr(Members.ID), orm.NumberExpr(Memberships.MemberID), orm.NumberExpr(Memberships.GroupID), orm.KeyExpr(Groups.ID))

@@ -48,7 +48,7 @@ func TestModelTimestampsUseOneSampleAndPreserveInputs(t *testing.T) {
 	calls := 0
 	transferTimedMutator(d, &calls)
 	c := &transferClock{now: time.Date(2030, 1, 2, 3, 4, 5, 123456789, time.FixedZone("test", 10800))}
-	raw := []Assignment[timed]{d.Key().Set(1)}
+	raw := []Assignment[timed]{KeySet(d.Key(), 1)}
 	for range 2 {
 		p, e := planWrite(d.Query().state, querycore.InsertModel, raw, false)
 		if e != nil {
@@ -72,7 +72,7 @@ func TestModelTimestampsPreserveExplicitCreationAndSkipPhysicalDelete(t *testing
 	if e != nil {
 		t.Fatal(e)
 	}
-	p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[timed]{d.Key().Set(1), d.CreatedAt.Set(old)}, false)
+	p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[timed]{KeySet(d.Key(), 1), TimeSet(d.CreatedAt, old)}, false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -80,7 +80,7 @@ func TestModelTimestampsPreserveExplicitCreationAndSkipPhysicalDelete(t *testing
 	if !reflect.DeepEqual(s.Bindings, []any{int64(1), old.UTC(), c.now}) {
 		t.Fatal(s.Bindings)
 	}
-	p, e = planWrite(d.Query().Where(d.Key().Eq(3)).state, querycore.UpdateModel, []Assignment[timed](nil), false)
+	p, e = planWrite(d.Query().Where(KeyEq(d.Key(), 3)).state, querycore.UpdateModel, []Assignment[timed](nil), false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -88,7 +88,7 @@ func TestModelTimestampsPreserveExplicitCreationAndSkipPhysicalDelete(t *testing
 	if len(p.assignments) != 1 || p.assignments[0].Field.Column != "updated_at" || !strings.Contains(s.SQLText, `SET "updated_at" = $1 WHERE`) {
 		t.Fatal(s.SQLText)
 	}
-	p, e = planWrite(d.Query().WithTrashed().Where(d.Key().Eq(3)).state, querycore.ForceDeleteModel, []Assignment[timed](nil), false)
+	p, e = planWrite(d.Query().WithTrashed().Where(KeyEq(d.Key(), 3)).state, querycore.ForceDeleteModel, []Assignment[timed](nil), false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -102,13 +102,13 @@ func TestModelTimestampsBulkAndConflictUseNormalizedProposedValue(t *testing.T) 
 	calls := 0
 	transferTimedMutator(d, &calls)
 	c := &transferClock{now: time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)}
-	p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[timed]{d.Key().Set(1)}, false)
+	p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[timed]{KeySet(d.Key(), 1)}, false)
 	if e != nil {
 		t.Fatal(e)
 	}
 	p.batch = [][]querycore.MutationAssignment{p.assignments, p.assignments}
 	p.assignments = nil
-	policy := OnConflict(ConflictKey(d.Key())).DoUpdate(ConflictIncoming(d.UpdatedAt))
+	policy := OnConflict(ConflictKey(KeyExpr(d.Key()))).DoUpdate(ConflictIncoming(TimeExpr(d.UpdatedAt)))
 	p, e = p.withConflict(&policy.state)
 	if e != nil {
 		t.Fatal(e)
@@ -125,7 +125,7 @@ func TestModelTimestampsBulkAndConflictUseNormalizedProposedValue(t *testing.T) 
 	if c.calls != 2 || calls != 4 {
 		t.Fatal(c.calls, calls)
 	}
-	for _, bad := range []Conflict[timed]{OnConflict(ConflictKey(d.Key())).DoUpdate(), OnConflict(ConflictKey(d.Key())).DoUpdate(ConflictIncoming(d.UpdatedAt), ConflictIncoming(d.UpdatedAt))} {
+	for _, bad := range []Conflict[timed]{OnConflict(ConflictKey(KeyExpr(d.Key()))).DoUpdate(), OnConflict(ConflictKey(KeyExpr(d.Key()))).DoUpdate(ConflictIncoming(TimeExpr(d.UpdatedAt)), ConflictIncoming(TimeExpr(d.UpdatedAt)))} {
 		if _, e := p.withConflict(&bad.state); !errors.Is(e, fault.Invalid) {
 			t.Fatal("timestamp repaired invalid policy", e)
 		}
@@ -134,13 +134,13 @@ func TestModelTimestampsBulkAndConflictUseNormalizedProposedValue(t *testing.T) 
 		t.Fatal("invalid policy sampled")
 	}
 	writer := &noEachWriter{}
-	if out, e := d.InsertMany(t.Context(), writer, nil); e != nil || len(out) != 0 || writer.calls != 0 || c.calls != 2 {
+	if out, e := InsertMany(t.Context(), writer, d.Table, nil); e != nil || len(out) != 0 || writer.calls != 0 || c.calls != 2 {
 		t.Fatal(out, e, writer.calls)
 	}
 }
 func TestModelTimestampsRejectInvalidTimeAndCancellation(t *testing.T) {
 	d := timedRecords()
-	p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[timed]{d.Key().Set(1)}, false)
+	p, e := planWrite(d.Query().state, querycore.InsertModel, []Assignment[timed]{KeySet(d.Key(), 1)}, false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -161,7 +161,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 	cfield.mutator = querycore.NewNullableFieldMutator("deleted_at", codec.DateTime(), func(v temporal.DateTime) (temporal.DateTime, error) { calls++; return v.Add(time.Minute) })
 	d.core.mutators = []querycore.FieldMutator{cfield.mutator}
 	c := &transferClock{now: time.Date(2030, 1, 2, 3, 4, 5, 123456789, time.UTC)}
-	p, e := planWrite(d.Query().Where(d.Key().Eq(4)).state, querycore.DeleteModel, []Assignment[timed](nil), false)
+	p, e := planWrite(d.Query().Where(KeyEq(d.Key(), 4)).state, querycore.DeleteModel, []Assignment[timed](nil), false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -171,7 +171,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 		t.Fatal(s.SQLText, s.Bindings, c.calls, calls)
 	}
 	c.now = c.now.Add(time.Hour)
-	p, e = planWrite(d.Query().OnlyTrashed().Where(d.Key().Eq(4)).state, querycore.RestoreModel, []Assignment[timed](nil), false)
+	p, e = planWrite(d.Query().OnlyTrashed().Where(KeyEq(d.Key(), 4)).state, querycore.RestoreModel, []Assignment[timed](nil), false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -179,7 +179,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 	if !reflect.DeepEqual(s.Bindings, []any{c.now.Truncate(time.Microsecond), nil, int64(4)}) || c.calls != 2 || calls != 1 || !strings.Contains(s.SQLText, `"deleted_at" IS NOT NULL`) || p.kind.Operation() != lifecycle.Restore {
 		t.Fatal(s.SQLText, s.Bindings, c.calls, calls)
 	}
-	p, e = planWrite(d.Query().WithTrashed().Where(d.Key().Eq(4)).state, querycore.ForceDeleteModel, []Assignment[timed](nil), false)
+	p, e = planWrite(d.Query().WithTrashed().Where(KeyEq(d.Key(), 4)).state, querycore.ForceDeleteModel, []Assignment[timed](nil), false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -190,7 +190,7 @@ func TestSoftDeleteConventionsShareTimeAndRunMutatorsOnce(t *testing.T) {
 }
 func TestSoftDeleteRestoreWithoutTimestampsDoesNotReadClock(t *testing.T) {
 	d := people()
-	p, e := planWrite(d.Query().OnlyTrashed().Where(d.ID.Eq(8)).state, querycore.RestoreModel, []Assignment[relationPerson](nil), false)
+	p, e := planWrite(d.Query().OnlyTrashed().Where(KeyEq(d.ID, 8)).state, querycore.RestoreModel, []Assignment[relationPerson](nil), false)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -204,7 +204,7 @@ func TestSoftDeleteRestoreWithoutTimestampsDoesNotReadClock(t *testing.T) {
 	}
 	plain := scopeTransferFields()
 	for _, kind := range []querycore.MutationKind{querycore.SoftDeleteModel, querycore.RestoreModel, querycore.ForceDeleteModel, 255} {
-		if _, e := planWrite(plain.Query().Where(plain.Key().Eq(8)).state, kind, []Assignment[scopeTransferRow](nil), false); !errors.Is(e, fault.Invalid) {
+		if _, e := planWrite(plain.Query().Where(KeyEq(plain.Key(), 8)).state, kind, []Assignment[scopeTransferRow](nil), false); !errors.Is(e, fault.Invalid) {
 			t.Fatal(kind, e)
 		}
 	}

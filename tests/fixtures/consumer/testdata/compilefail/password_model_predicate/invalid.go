@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "foundry.test/consumer/passwords"
 
-func bad() { _ = passwords.AccountRecords.Digest.Eq("plaintext") }
+func bad() { _ = orm.ColumnEq(passwords.AccountRecords.Digest, "plaintext") }

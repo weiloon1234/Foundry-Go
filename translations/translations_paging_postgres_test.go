@@ -200,7 +200,7 @@ func TestPostgresTranslationMatchingUsesValueHashIndex(t *testing.T) {
 		}
 		var count int64
 		if err := fixture.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-			count, err = extensiontest.MemberQuery().Where(predicate).Count(ctx, tx)
+			count, err = orm.Count(ctx, tx, extensiontest.MemberQuery().Where(predicate))
 			return err
 		}); err != nil || count != want {
 			t.Fatal("matching", want, count, err)
@@ -211,7 +211,7 @@ func TestPostgresTranslationMatchingUsesValueHashIndex(t *testing.T) {
 			return err
 		}
 		f := store.Translations
-		statement, err := orm.Compile(orm.WithScopeContext(store.Translations.Query().Where(f.Value.Eq("Red")), ctx))
+		statement, err := orm.Compile(orm.WithScopeContext(store.Translations.Query().Where(orm.TextEq(f.Value, "Red")), ctx))
 		if err != nil {
 			return err
 		}

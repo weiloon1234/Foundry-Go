@@ -26,48 +26,46 @@ func InputColumnOf[M, I any, V any](b Builder[M], ptr *V, transform func(I) (V, 
 	return InputColumn[M, I, V]{inputColumnStorage: stored, input: input}
 }
 
-// Eq retains the stored column operation; Set alone accepts I.
-// Example: members.Email.Eq(StoredEmail("ada@example.test")).
-func (c InputColumn[M, I, V]) Eq(v V) Predicate[M] {
+// InputColumnEq retains the stored column operation; Set alone accepts I.
+// Example: InputColumnEq(members.Email, StoredEmail("ada@example.test")).
+func InputColumnEq[M, I any, V any](c InputColumn[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputColumnStorage, querycore.Equal, []V{v})
 }
 
-// Ne retains the stored column operation; Set alone accepts I.
-// Example: members.Email.Ne(StoredEmail("ada@example.test")).
-func (c InputColumn[M, I, V]) Ne(v V) Predicate[M] {
+// InputColumnNe retains the stored column operation; Set alone accepts I.
+// Example: InputColumnNe(members.Email, StoredEmail("ada@example.test")).
+func InputColumnNe[M, I any, V any](c InputColumn[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputColumnStorage, querycore.NotEqual, []V{v})
 }
 
-// In retains the stored column operation; Set alone accepts I.
-// Example: members.Email.In(StoredEmail("ada@example.test")).
-func (c InputColumn[M, I, V]) In(v ...V) Predicate[M] {
+// InputColumnIn retains the stored column operation; Set alone accepts I.
+// Example: InputColumnIn(members.Email, StoredEmail("ada@example.test")).
+func InputColumnIn[M, I any, V any](c InputColumn[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.inputColumnStorage, querycore.In, v)
 }
 
-// NotIn retains the stored column operation; Set alone accepts I.
-// Example: members.Email.NotIn(StoredEmail("ada@example.test")).
-func (c InputColumn[M, I, V]) NotIn(v ...V) Predicate[M] {
+// InputColumnNotIn retains the stored column operation; Set alone accepts I.
+// Example: InputColumnNotIn(members.Email, StoredEmail("ada@example.test")).
+func InputColumnNotIn[M, I any, V any](c InputColumn[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.inputColumnStorage, querycore.NotIn, v)
 }
 
-// Asc retains the stored column operation; Set alone accepts I.
-// Example: members.Email.Asc().
-func (c InputColumn[M, I, V]) Asc() Order[M] { return columnOrder[M](c.inputColumnStorage, false) }
-
-// Desc retains the stored column operation; Set alone accepts I.
-// Example: members.Email.Desc().
-func (c InputColumn[M, I, V]) Desc() Order[M] { return columnOrder[M](c.inputColumnStorage, true) }
-
-// Set captures a typed input without invoking its transform.
-// Example: members.Email.Set(EmailInput{Address: "ada@example.test"}).
-func (c InputColumn[M, I, V]) Set(v I) Assignment[M] {
-	return inputAssignment[M](c.inputColumnStorage.core, c.input, v)
+// InputColumnAsc retains the stored column operation; Set alone accepts I.
+// Example: InputColumnAsc(members.Email).
+func InputColumnAsc[M, I any, V any](c InputColumn[M, I, V]) Order[M] {
+	return columnOrder[M](c.inputColumnStorage, false)
 }
 
-func (c InputColumn[M, I, V]) ormColumn(*M) columnData[V] { return c.inputColumnStorage }
+// InputColumnDesc retains the stored column operation; Set alone accepts I.
+// Example: InputColumnDesc(members.Email).
+func InputColumnDesc[M, I any, V any](c InputColumn[M, I, V]) Order[M] {
+	return columnOrder[M](c.inputColumnStorage, true)
+}
 
-func (c InputColumn[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
-	return requiredExpression(c.inputColumnStorage)
+// InputColumnSet captures a typed input without invoking its transform.
+// Example: InputColumnSet(members.Email, EmailInput{Address: "ada@example.test"}).
+func InputColumnSet[M, I any, V any](c InputColumn[M, I, V], v I) Assignment[M] {
+	return inputAssignment[M](c.inputColumnStorage.core, c.input, v)
 }
 
 // NullableInputColumn accepts I for writes and retains V for stored operations.
@@ -87,72 +85,64 @@ func NullableInputColumnOf[M, I any, V any](b Builder[M], ptr *value.Nullable[V]
 	return NullableInputColumn[M, I, V]{nullableInputColumnStorage: stored, input: input}
 }
 
-// Eq retains the stored column operation; Set alone accepts I.
-// Example: members.Note.Eq(StoredLabel("ada@example.test")).
-func (c NullableInputColumn[M, I, V]) Eq(v V) Predicate[M] {
+// NullableInputColumnEq retains the stored column operation; Set alone accepts I.
+// Example: NullableInputColumnEq(members.Note, StoredLabel("ada@example.test")).
+func NullableInputColumnEq[M, I any, V any](c NullableInputColumn[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputColumnStorage.base, querycore.Equal, []V{v})
 }
 
-// Ne retains the stored column operation; Set alone accepts I.
-// Example: members.Note.Ne(StoredLabel("ada@example.test")).
-func (c NullableInputColumn[M, I, V]) Ne(v V) Predicate[M] {
+// NullableInputColumnNe retains the stored column operation; Set alone accepts I.
+// Example: NullableInputColumnNe(members.Note, StoredLabel("ada@example.test")).
+func NullableInputColumnNe[M, I any, V any](c NullableInputColumn[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputColumnStorage.base, querycore.NotEqual, []V{v})
 }
 
-// In retains the stored column operation; Set alone accepts I.
-// Example: members.Note.In(StoredLabel("ada@example.test")).
-func (c NullableInputColumn[M, I, V]) In(v ...V) Predicate[M] {
+// NullableInputColumnIn retains the stored column operation; Set alone accepts I.
+// Example: NullableInputColumnIn(members.Note, StoredLabel("ada@example.test")).
+func NullableInputColumnIn[M, I any, V any](c NullableInputColumn[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.nullableInputColumnStorage.base, querycore.In, v)
 }
 
-// NotIn retains the stored column operation; Set alone accepts I.
-// Example: members.Note.NotIn(StoredLabel("ada@example.test")).
-func (c NullableInputColumn[M, I, V]) NotIn(v ...V) Predicate[M] {
+// NullableInputColumnNotIn retains the stored column operation; Set alone accepts I.
+// Example: NullableInputColumnNotIn(members.Note, StoredLabel("ada@example.test")).
+func NullableInputColumnNotIn[M, I any, V any](c NullableInputColumn[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.nullableInputColumnStorage.base, querycore.NotIn, v)
 }
 
-// Asc retains the stored column operation; Set alone accepts I.
-// Example: members.Note.Asc().
-func (c NullableInputColumn[M, I, V]) Asc() Order[M] {
+// NullableInputColumnAsc retains the stored column operation; Set alone accepts I.
+// Example: NullableInputColumnAsc(members.Note).
+func NullableInputColumnAsc[M, I any, V any](c NullableInputColumn[M, I, V]) Order[M] {
 	return columnOrder[M](c.nullableInputColumnStorage.base, false)
 }
 
-// Desc retains the stored column operation; Set alone accepts I.
-// Example: members.Note.Desc().
-func (c NullableInputColumn[M, I, V]) Desc() Order[M] {
+// NullableInputColumnDesc retains the stored column operation; Set alone accepts I.
+// Example: NullableInputColumnDesc(members.Note).
+func NullableInputColumnDesc[M, I any, V any](c NullableInputColumn[M, I, V]) Order[M] {
 	return columnOrder[M](c.nullableInputColumnStorage.base, true)
 }
 
-// Set captures a typed input without invoking its transform.
-// Example: members.Note.Set(LabelInput{Text: "ada@example.test"}).
-func (c NullableInputColumn[M, I, V]) Set(v I) Assignment[M] {
+// NullableInputColumnSet captures a typed input without invoking its transform.
+// Example: NullableInputColumnSet(members.Note, LabelInput{Text: "ada@example.test"}).
+func NullableInputColumnSet[M, I any, V any](c NullableInputColumn[M, I, V], v I) Assignment[M] {
 	return inputAssignment[M](c.nullableInputColumnStorage.base.core, c.input, v)
 }
 
-// IsNull retains the stored column operation; Set alone accepts I.
-// Example: members.Note.IsNull().
-func (c NullableInputColumn[M, I, V]) IsNull() Predicate[M] {
+// NullableInputColumnIsNull retains the stored column operation; Set alone accepts I.
+// Example: NullableInputColumnIsNull(members.Note).
+func NullableInputColumnIsNull[M, I any, V any](c NullableInputColumn[M, I, V]) Predicate[M] {
 	return comparison[M](c.nullableInputColumnStorage.base, querycore.IsNull, nil)
 }
 
-// IsNotNull retains the stored column operation; Set alone accepts I.
-// Example: members.Note.IsNotNull().
-func (c NullableInputColumn[M, I, V]) IsNotNull() Predicate[M] {
+// NullableInputColumnIsNotNull retains the stored column operation; Set alone accepts I.
+// Example: NullableInputColumnIsNotNull(members.Note).
+func NullableInputColumnIsNotNull[M, I any, V any](c NullableInputColumn[M, I, V]) Predicate[M] {
 	return comparison[M](c.nullableInputColumnStorage.base, querycore.IsNotNull, nil)
 }
 
-// SetNull retains the stored column operation; Set alone accepts I.
-// Example: members.Note.SetNull().
-func (c NullableInputColumn[M, I, V]) SetNull() Assignment[M] {
+// NullableInputColumnSetNull retains the stored column operation; Set alone accepts I.
+// Example: NullableInputColumnSetNull(members.Note).
+func NullableInputColumnSetNull[M, I any, V any](c NullableInputColumn[M, I, V]) Assignment[M] {
 	return nullAssignment[M](c.nullableInputColumnStorage.base)
-}
-
-func (c NullableInputColumn[M, I, V]) ormColumn(*M) columnData[V] {
-	return c.nullableInputColumnStorage.base
-}
-
-func (c NullableInputColumn[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
-	return nullableExpression(c.nullableInputColumnStorage)
 }
 
 // InputText accepts I for writes and retains V for stored operations.
@@ -172,126 +162,124 @@ func InputTextOf[M, I any, V ~string](b Builder[M], ptr *V, transform func(I) (V
 	return InputText[M, I, V]{inputTextStorage: stored, input: input}
 }
 
-// Eq retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Eq(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) Eq(v V) Predicate[M] {
+// InputTextEq retains the stored text operation; Set alone accepts I.
+// Example: InputTextEq(members.Email, StoredEmail("ada@example.test")).
+func InputTextEq[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.Equal, []V{v})
 }
 
-// Ne retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Ne(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) Ne(v V) Predicate[M] {
+// InputTextNe retains the stored text operation; Set alone accepts I.
+// Example: InputTextNe(members.Email, StoredEmail("ada@example.test")).
+func InputTextNe[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.NotEqual, []V{v})
 }
 
-// In retains the stored text operation; Set alone accepts I.
-// Example: members.Email.In(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) In(v ...V) Predicate[M] {
+// InputTextIn retains the stored text operation; Set alone accepts I.
+// Example: InputTextIn(members.Email, StoredEmail("ada@example.test")).
+func InputTextIn[M, I any, V ~string](c InputText[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.In, v)
 }
 
-// NotIn retains the stored text operation; Set alone accepts I.
-// Example: members.Email.NotIn(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) NotIn(v ...V) Predicate[M] {
+// InputTextNotIn retains the stored text operation; Set alone accepts I.
+// Example: InputTextNotIn(members.Email, StoredEmail("ada@example.test")).
+func InputTextNotIn[M, I any, V ~string](c InputText[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.NotIn, v)
 }
 
-// Asc retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Asc().
-func (c InputText[M, I, V]) Asc() Order[M] { return columnOrder[M](c.inputTextStorage, false) }
+// InputTextAsc retains the stored text operation; Set alone accepts I.
+// Example: InputTextAsc(members.Email).
+func InputTextAsc[M, I any, V ~string](c InputText[M, I, V]) Order[M] {
+	return columnOrder[M](c.inputTextStorage, false)
+}
 
-// Desc retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Desc().
-func (c InputText[M, I, V]) Desc() Order[M] { return columnOrder[M](c.inputTextStorage, true) }
+// InputTextDesc retains the stored text operation; Set alone accepts I.
+// Example: InputTextDesc(members.Email).
+func InputTextDesc[M, I any, V ~string](c InputText[M, I, V]) Order[M] {
+	return columnOrder[M](c.inputTextStorage, true)
+}
 
-// Set captures a typed input without invoking its transform.
-// Example: members.Email.Set(EmailInput{Address: "ada@example.test"}).
-func (c InputText[M, I, V]) Set(v I) Assignment[M] {
+// InputTextSet captures a typed input without invoking its transform.
+// Example: InputTextSet(members.Email, EmailInput{Address: "ada@example.test"}).
+func InputTextSet[M, I any, V ~string](c InputText[M, I, V], v I) Assignment[M] {
 	return inputAssignment[M](c.inputTextStorage.core, c.input, v)
 }
 
-// Gt retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Gt(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) Gt(v V) Predicate[M] {
+// InputTextGt retains the stored text operation; Set alone accepts I.
+// Example: InputTextGt(members.Email, StoredEmail("ada@example.test")).
+func InputTextGt[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.Greater, []V{v})
 }
 
-// Gte retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Gte(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) Gte(v V) Predicate[M] {
+// InputTextGte retains the stored text operation; Set alone accepts I.
+// Example: InputTextGte(members.Email, StoredEmail("ada@example.test")).
+func InputTextGte[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.GreaterOrEqual, []V{v})
 }
 
-// Lt retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Lt(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) Lt(v V) Predicate[M] {
+// InputTextLt retains the stored text operation; Set alone accepts I.
+// Example: InputTextLt(members.Email, StoredEmail("ada@example.test")).
+func InputTextLt[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.Less, []V{v})
 }
 
-// Lte retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Lte(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) Lte(v V) Predicate[M] {
+// InputTextLte retains the stored text operation; Set alone accepts I.
+// Example: InputTextLte(members.Email, StoredEmail("ada@example.test")).
+func InputTextLte[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.LessOrEqual, []V{v})
 }
 
-// Between retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Between(StoredEmail("a"), StoredEmail("z")).
-func (c InputText[M, I, V]) Between(a, b V) Predicate[M] { return between[M](c.inputTextStorage, a, b) }
+// InputTextBetween retains the stored text operation; Set alone accepts I.
+// Example: InputTextBetween(members.Email, StoredEmail("a"), StoredEmail("z")).
+func InputTextBetween[M, I any, V ~string](c InputText[M, I, V], a, b V) Predicate[M] {
+	return between[M](c.inputTextStorage, a, b)
+}
 
-// Contains retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Contains(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) Contains(v V) Predicate[M] {
+// InputTextContains retains the stored text operation; Set alone accepts I.
+// Example: InputTextContains(members.Email, StoredEmail("ada@example.test")).
+func InputTextContains[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.Contains, []V{v}, true)
 }
 
-// IContains retains the stored text operation; Set alone accepts I.
-// Example: members.Email.IContains(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) IContains(v V) Predicate[M] {
+// InputTextIContains retains the stored text operation; Set alone accepts I.
+// Example: InputTextIContains(members.Email, StoredEmail("ada@example.test")).
+func InputTextIContains[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.InsensitiveContains, []V{v}, true)
 }
 
-// StartsWith retains the stored text operation; Set alone accepts I.
-// Example: members.Email.StartsWith(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) StartsWith(v V) Predicate[M] {
+// InputTextStartsWith retains the stored text operation; Set alone accepts I.
+// Example: InputTextStartsWith(members.Email, StoredEmail("ada@example.test")).
+func InputTextStartsWith[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.StartsWith, []V{v}, true)
 }
 
-// EndsWith retains the stored text operation; Set alone accepts I.
-// Example: members.Email.EndsWith(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) EndsWith(v V) Predicate[M] {
+// InputTextEndsWith retains the stored text operation; Set alone accepts I.
+// Example: InputTextEndsWith(members.Email, StoredEmail("ada@example.test")).
+func InputTextEndsWith[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.EndsWith, []V{v}, true)
 }
 
-// Like retains the stored text operation; Set alone accepts I.
-// Example: members.Email.Like(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) Like(v V) Predicate[M] {
+// InputTextLike retains the stored text operation; Set alone accepts I.
+// Example: InputTextLike(members.Email, StoredEmail("ada@example.test")).
+func InputTextLike[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.Like, []V{v}, true)
 }
 
-// ILike retains the stored text operation; Set alone accepts I.
-// Example: members.Email.ILike(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) ILike(v V) Predicate[M] {
+// InputTextILike retains the stored text operation; Set alone accepts I.
+// Example: InputTextILike(members.Email, StoredEmail("ada@example.test")).
+func InputTextILike[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.InsensitiveLike, []V{v}, true)
 }
 
-// IStartsWith retains the stored text operation; Set alone accepts I.
-// Example: members.Email.IStartsWith(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) IStartsWith(v V) Predicate[M] {
+// InputTextIStartsWith retains the stored text operation; Set alone accepts I.
+// Example: InputTextIStartsWith(members.Email, StoredEmail("ada@example.test")).
+func InputTextIStartsWith[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.InsensitiveStartsWith, []V{v}, true)
 }
 
-// IEndsWith retains the stored text operation; Set alone accepts I.
-// Example: members.Email.IEndsWith(StoredEmail("ada@example.test")).
-func (c InputText[M, I, V]) IEndsWith(v V) Predicate[M] {
+// InputTextIEndsWith retains the stored text operation; Set alone accepts I.
+// Example: InputTextIEndsWith(members.Email, StoredEmail("ada@example.test")).
+func InputTextIEndsWith[M, I any, V ~string](c InputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTextStorage, querycore.InsensitiveEndsWith, []V{v}, true)
-}
-
-func (c InputText[M, I, V]) ormColumn(*M) columnData[V] { return c.inputTextStorage }
-
-func (c InputText[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
-	comparison, projection := requiredExpression(c.inputTextStorage)
-	comparison.Text, projection.Text = true, true
-	return comparison, projection
 }
 
 // NullableInputText accepts I for writes and retains V for stored operations.
@@ -311,152 +299,142 @@ func NullableInputTextOf[M, I any, V ~string](b Builder[M], ptr *value.Nullable[
 	return NullableInputText[M, I, V]{nullableInputTextStorage: stored, input: input}
 }
 
-// Eq retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Eq(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) Eq(v V) Predicate[M] {
+// NullableInputTextEq retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextEq(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextEq[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.Equal, []V{v})
 }
 
-// Ne retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Ne(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) Ne(v V) Predicate[M] {
+// NullableInputTextNe retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextNe(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextNe[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.NotEqual, []V{v})
 }
 
-// In retains the stored text operation; Set alone accepts I.
-// Example: members.Note.In(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) In(v ...V) Predicate[M] {
+// NullableInputTextIn retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextIn(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextIn[M, I any, V ~string](c NullableInputText[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.In, v)
 }
 
-// NotIn retains the stored text operation; Set alone accepts I.
-// Example: members.Note.NotIn(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) NotIn(v ...V) Predicate[M] {
+// NullableInputTextNotIn retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextNotIn(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextNotIn[M, I any, V ~string](c NullableInputText[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.NotIn, v)
 }
 
-// Asc retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Asc().
-func (c NullableInputText[M, I, V]) Asc() Order[M] {
+// NullableInputTextAsc retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextAsc(members.Note).
+func NullableInputTextAsc[M, I any, V ~string](c NullableInputText[M, I, V]) Order[M] {
 	return columnOrder[M](c.nullableInputTextStorage.base, false)
 }
 
-// Desc retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Desc().
-func (c NullableInputText[M, I, V]) Desc() Order[M] {
+// NullableInputTextDesc retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextDesc(members.Note).
+func NullableInputTextDesc[M, I any, V ~string](c NullableInputText[M, I, V]) Order[M] {
 	return columnOrder[M](c.nullableInputTextStorage.base, true)
 }
 
-// Set captures a typed input without invoking its transform.
-// Example: members.Note.Set(LabelInput{Text: "ada@example.test"}).
-func (c NullableInputText[M, I, V]) Set(v I) Assignment[M] {
+// NullableInputTextSet captures a typed input without invoking its transform.
+// Example: NullableInputTextSet(members.Note, LabelInput{Text: "ada@example.test"}).
+func NullableInputTextSet[M, I any, V ~string](c NullableInputText[M, I, V], v I) Assignment[M] {
 	return inputAssignment[M](c.nullableInputTextStorage.base.core, c.input, v)
 }
 
-// Gt retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Gt(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) Gt(v V) Predicate[M] {
+// NullableInputTextGt retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextGt(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextGt[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.Greater, []V{v})
 }
 
-// Gte retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Gte(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) Gte(v V) Predicate[M] {
+// NullableInputTextGte retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextGte(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextGte[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.GreaterOrEqual, []V{v})
 }
 
-// Lt retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Lt(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) Lt(v V) Predicate[M] {
+// NullableInputTextLt retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextLt(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextLt[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.Less, []V{v})
 }
 
-// Lte retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Lte(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) Lte(v V) Predicate[M] {
+// NullableInputTextLte retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextLte(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextLte[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.LessOrEqual, []V{v})
 }
 
-// Between retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Between(StoredLabel("a"), StoredLabel("z")).
-func (c NullableInputText[M, I, V]) Between(a, b V) Predicate[M] {
+// NullableInputTextBetween retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextBetween(members.Note, StoredLabel("a"), StoredLabel("z")).
+func NullableInputTextBetween[M, I any, V ~string](c NullableInputText[M, I, V], a, b V) Predicate[M] {
 	return between[M](c.nullableInputTextStorage.base, a, b)
 }
 
-// Contains retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Contains(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) Contains(v V) Predicate[M] {
+// NullableInputTextContains retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextContains(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextContains[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.Contains, []V{v}, true)
 }
 
-// IContains retains the stored text operation; Set alone accepts I.
-// Example: members.Note.IContains(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) IContains(v V) Predicate[M] {
+// NullableInputTextIContains retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextIContains(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextIContains[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveContains, []V{v}, true)
 }
 
-// StartsWith retains the stored text operation; Set alone accepts I.
-// Example: members.Note.StartsWith(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) StartsWith(v V) Predicate[M] {
+// NullableInputTextStartsWith retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextStartsWith(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextStartsWith[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.StartsWith, []V{v}, true)
 }
 
-// EndsWith retains the stored text operation; Set alone accepts I.
-// Example: members.Note.EndsWith(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) EndsWith(v V) Predicate[M] {
+// NullableInputTextEndsWith retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextEndsWith(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextEndsWith[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.EndsWith, []V{v}, true)
 }
 
-// Like retains the stored text operation; Set alone accepts I.
-// Example: members.Note.Like(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) Like(v V) Predicate[M] {
+// NullableInputTextLike retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextLike(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextLike[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.Like, []V{v}, true)
 }
 
-// ILike retains the stored text operation; Set alone accepts I.
-// Example: members.Note.ILike(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) ILike(v V) Predicate[M] {
+// NullableInputTextILike retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextILike(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextILike[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveLike, []V{v}, true)
 }
 
-// IStartsWith retains the stored text operation; Set alone accepts I.
-// Example: members.Note.IStartsWith(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) IStartsWith(v V) Predicate[M] {
+// NullableInputTextIStartsWith retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextIStartsWith(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextIStartsWith[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveStartsWith, []V{v}, true)
 }
 
-// IEndsWith retains the stored text operation; Set alone accepts I.
-// Example: members.Note.IEndsWith(StoredLabel("ada@example.test")).
-func (c NullableInputText[M, I, V]) IEndsWith(v V) Predicate[M] {
+// NullableInputTextIEndsWith retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextIEndsWith(members.Note, StoredLabel("ada@example.test")).
+func NullableInputTextIEndsWith[M, I any, V ~string](c NullableInputText[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.InsensitiveEndsWith, []V{v}, true)
 }
 
-// IsNull retains the stored text operation; Set alone accepts I.
-// Example: members.Note.IsNull().
-func (c NullableInputText[M, I, V]) IsNull() Predicate[M] {
+// NullableInputTextIsNull retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextIsNull(members.Note).
+func NullableInputTextIsNull[M, I any, V ~string](c NullableInputText[M, I, V]) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.IsNull, nil)
 }
 
-// IsNotNull retains the stored text operation; Set alone accepts I.
-// Example: members.Note.IsNotNull().
-func (c NullableInputText[M, I, V]) IsNotNull() Predicate[M] {
+// NullableInputTextIsNotNull retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextIsNotNull(members.Note).
+func NullableInputTextIsNotNull[M, I any, V ~string](c NullableInputText[M, I, V]) Predicate[M] {
 	return comparison[M](c.nullableInputTextStorage.base, querycore.IsNotNull, nil)
 }
 
-// SetNull retains the stored text operation; Set alone accepts I.
-// Example: members.Note.SetNull().
-func (c NullableInputText[M, I, V]) SetNull() Assignment[M] {
+// NullableInputTextSetNull retains the stored text operation; Set alone accepts I.
+// Example: NullableInputTextSetNull(members.Note).
+func NullableInputTextSetNull[M, I any, V ~string](c NullableInputText[M, I, V]) Assignment[M] {
 	return nullAssignment[M](c.nullableInputTextStorage.base)
-}
-
-func (c NullableInputText[M, I, V]) ormColumn(*M) columnData[V] {
-	return c.nullableInputTextStorage.base
-}
-
-func (c NullableInputText[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
-	comparison, projection := nullableExpression(c.nullableInputTextStorage)
-	comparison.Text, projection.Text = true, true
-	return comparison, projection
 }
 
 // InputNumber accepts I for writes and retains V for stored operations.
@@ -476,78 +454,76 @@ func InputNumberOf[M, I any, V NumberValue](b Builder[M], ptr *V, transform func
 	return InputNumber[M, I, V]{inputNumberStorage: stored, input: input}
 }
 
-// Eq retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.Eq(int64(100)).
-func (c InputNumber[M, I, V]) Eq(v V) Predicate[M] {
+// InputNumberEq retains the stored number operation; Set alone accepts I.
+// Example: InputNumberEq(invoices.Amount, int64(100)).
+func InputNumberEq[M, I any, V NumberValue](c InputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputNumberStorage, querycore.Equal, []V{v})
 }
 
-// Ne retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.Ne(int64(100)).
-func (c InputNumber[M, I, V]) Ne(v V) Predicate[M] {
+// InputNumberNe retains the stored number operation; Set alone accepts I.
+// Example: InputNumberNe(invoices.Amount, int64(100)).
+func InputNumberNe[M, I any, V NumberValue](c InputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputNumberStorage, querycore.NotEqual, []V{v})
 }
 
-// In retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.In(int64(100)).
-func (c InputNumber[M, I, V]) In(v ...V) Predicate[M] {
+// InputNumberIn retains the stored number operation; Set alone accepts I.
+// Example: InputNumberIn(invoices.Amount, int64(100)).
+func InputNumberIn[M, I any, V NumberValue](c InputNumber[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.inputNumberStorage, querycore.In, v)
 }
 
-// NotIn retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.NotIn(int64(100)).
-func (c InputNumber[M, I, V]) NotIn(v ...V) Predicate[M] {
+// InputNumberNotIn retains the stored number operation; Set alone accepts I.
+// Example: InputNumberNotIn(invoices.Amount, int64(100)).
+func InputNumberNotIn[M, I any, V NumberValue](c InputNumber[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.inputNumberStorage, querycore.NotIn, v)
 }
 
-// Asc retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.Asc().
-func (c InputNumber[M, I, V]) Asc() Order[M] { return columnOrder[M](c.inputNumberStorage, false) }
+// InputNumberAsc retains the stored number operation; Set alone accepts I.
+// Example: InputNumberAsc(invoices.Amount).
+func InputNumberAsc[M, I any, V NumberValue](c InputNumber[M, I, V]) Order[M] {
+	return columnOrder[M](c.inputNumberStorage, false)
+}
 
-// Desc retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.Desc().
-func (c InputNumber[M, I, V]) Desc() Order[M] { return columnOrder[M](c.inputNumberStorage, true) }
+// InputNumberDesc retains the stored number operation; Set alone accepts I.
+// Example: InputNumberDesc(invoices.Amount).
+func InputNumberDesc[M, I any, V NumberValue](c InputNumber[M, I, V]) Order[M] {
+	return columnOrder[M](c.inputNumberStorage, true)
+}
 
-// Set captures a typed input without invoking its transform.
-// Example: invoices.Amount.Set(AmountInput{Cents: 100}).
-func (c InputNumber[M, I, V]) Set(v I) Assignment[M] {
+// InputNumberSet captures a typed input without invoking its transform.
+// Example: InputNumberSet(invoices.Amount, AmountInput{Cents: 100}).
+func InputNumberSet[M, I any, V NumberValue](c InputNumber[M, I, V], v I) Assignment[M] {
 	return inputAssignment[M](c.inputNumberStorage.core, c.input, v)
 }
 
-// Gt retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.Gt(int64(100)).
-func (c InputNumber[M, I, V]) Gt(v V) Predicate[M] {
+// InputNumberGt retains the stored number operation; Set alone accepts I.
+// Example: InputNumberGt(invoices.Amount, int64(100)).
+func InputNumberGt[M, I any, V NumberValue](c InputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputNumberStorage, querycore.Greater, []V{v})
 }
 
-// Gte retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.Gte(int64(100)).
-func (c InputNumber[M, I, V]) Gte(v V) Predicate[M] {
+// InputNumberGte retains the stored number operation; Set alone accepts I.
+// Example: InputNumberGte(invoices.Amount, int64(100)).
+func InputNumberGte[M, I any, V NumberValue](c InputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputNumberStorage, querycore.GreaterOrEqual, []V{v})
 }
 
-// Lt retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.Lt(int64(100)).
-func (c InputNumber[M, I, V]) Lt(v V) Predicate[M] {
+// InputNumberLt retains the stored number operation; Set alone accepts I.
+// Example: InputNumberLt(invoices.Amount, int64(100)).
+func InputNumberLt[M, I any, V NumberValue](c InputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputNumberStorage, querycore.Less, []V{v})
 }
 
-// Lte retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.Lte(int64(100)).
-func (c InputNumber[M, I, V]) Lte(v V) Predicate[M] {
+// InputNumberLte retains the stored number operation; Set alone accepts I.
+// Example: InputNumberLte(invoices.Amount, int64(100)).
+func InputNumberLte[M, I any, V NumberValue](c InputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputNumberStorage, querycore.LessOrEqual, []V{v})
 }
 
-// Between retains the stored number operation; Set alone accepts I.
-// Example: invoices.Amount.Between(int64(0), int64(1000)).
-func (c InputNumber[M, I, V]) Between(a, b V) Predicate[M] {
+// InputNumberBetween retains the stored number operation; Set alone accepts I.
+// Example: InputNumberBetween(invoices.Amount, int64(0), int64(1000)).
+func InputNumberBetween[M, I any, V NumberValue](c InputNumber[M, I, V], a, b V) Predicate[M] {
 	return between[M](c.inputNumberStorage, a, b)
-}
-
-func (c InputNumber[M, I, V]) ormColumn(*M) columnData[V] { return c.inputNumberStorage }
-
-func (c InputNumber[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
-	return requiredExpression(c.inputNumberStorage)
 }
 
 // NullableInputNumber accepts I for writes and retains V for stored operations.
@@ -567,102 +543,94 @@ func NullableInputNumberOf[M, I any, V NumberValue](b Builder[M], ptr *value.Nul
 	return NullableInputNumber[M, I, V]{nullableInputNumberStorage: stored, input: input}
 }
 
-// Eq retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.Eq(int64(100)).
-func (c NullableInputNumber[M, I, V]) Eq(v V) Predicate[M] {
+// NullableInputNumberEq retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberEq(invoices.OptionalAmount, int64(100)).
+func NullableInputNumberEq[M, I any, V NumberValue](c NullableInputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.Equal, []V{v})
 }
 
-// Ne retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.Ne(int64(100)).
-func (c NullableInputNumber[M, I, V]) Ne(v V) Predicate[M] {
+// NullableInputNumberNe retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberNe(invoices.OptionalAmount, int64(100)).
+func NullableInputNumberNe[M, I any, V NumberValue](c NullableInputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.NotEqual, []V{v})
 }
 
-// In retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.In(int64(100)).
-func (c NullableInputNumber[M, I, V]) In(v ...V) Predicate[M] {
+// NullableInputNumberIn retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberIn(invoices.OptionalAmount, int64(100)).
+func NullableInputNumberIn[M, I any, V NumberValue](c NullableInputNumber[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.In, v)
 }
 
-// NotIn retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.NotIn(int64(100)).
-func (c NullableInputNumber[M, I, V]) NotIn(v ...V) Predicate[M] {
+// NullableInputNumberNotIn retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberNotIn(invoices.OptionalAmount, int64(100)).
+func NullableInputNumberNotIn[M, I any, V NumberValue](c NullableInputNumber[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.NotIn, v)
 }
 
-// Asc retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.Asc().
-func (c NullableInputNumber[M, I, V]) Asc() Order[M] {
+// NullableInputNumberAsc retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberAsc(invoices.OptionalAmount).
+func NullableInputNumberAsc[M, I any, V NumberValue](c NullableInputNumber[M, I, V]) Order[M] {
 	return columnOrder[M](c.nullableInputNumberStorage.base, false)
 }
 
-// Desc retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.Desc().
-func (c NullableInputNumber[M, I, V]) Desc() Order[M] {
+// NullableInputNumberDesc retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberDesc(invoices.OptionalAmount).
+func NullableInputNumberDesc[M, I any, V NumberValue](c NullableInputNumber[M, I, V]) Order[M] {
 	return columnOrder[M](c.nullableInputNumberStorage.base, true)
 }
 
-// Set captures a typed input without invoking its transform.
-// Example: invoices.OptionalAmount.Set(AmountInput{Cents: 100}).
-func (c NullableInputNumber[M, I, V]) Set(v I) Assignment[M] {
+// NullableInputNumberSet captures a typed input without invoking its transform.
+// Example: NullableInputNumberSet(invoices.OptionalAmount, AmountInput{Cents: 100}).
+func NullableInputNumberSet[M, I any, V NumberValue](c NullableInputNumber[M, I, V], v I) Assignment[M] {
 	return inputAssignment[M](c.nullableInputNumberStorage.base.core, c.input, v)
 }
 
-// Gt retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.Gt(int64(100)).
-func (c NullableInputNumber[M, I, V]) Gt(v V) Predicate[M] {
+// NullableInputNumberGt retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberGt(invoices.OptionalAmount, int64(100)).
+func NullableInputNumberGt[M, I any, V NumberValue](c NullableInputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.Greater, []V{v})
 }
 
-// Gte retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.Gte(int64(100)).
-func (c NullableInputNumber[M, I, V]) Gte(v V) Predicate[M] {
+// NullableInputNumberGte retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberGte(invoices.OptionalAmount, int64(100)).
+func NullableInputNumberGte[M, I any, V NumberValue](c NullableInputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.GreaterOrEqual, []V{v})
 }
 
-// Lt retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.Lt(int64(100)).
-func (c NullableInputNumber[M, I, V]) Lt(v V) Predicate[M] {
+// NullableInputNumberLt retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberLt(invoices.OptionalAmount, int64(100)).
+func NullableInputNumberLt[M, I any, V NumberValue](c NullableInputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.Less, []V{v})
 }
 
-// Lte retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.Lte(int64(100)).
-func (c NullableInputNumber[M, I, V]) Lte(v V) Predicate[M] {
+// NullableInputNumberLte retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberLte(invoices.OptionalAmount, int64(100)).
+func NullableInputNumberLte[M, I any, V NumberValue](c NullableInputNumber[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.LessOrEqual, []V{v})
 }
 
-// Between retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.Between(int64(0), int64(1000)).
-func (c NullableInputNumber[M, I, V]) Between(a, b V) Predicate[M] {
+// NullableInputNumberBetween retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberBetween(invoices.OptionalAmount, int64(0), int64(1000)).
+func NullableInputNumberBetween[M, I any, V NumberValue](c NullableInputNumber[M, I, V], a, b V) Predicate[M] {
 	return between[M](c.nullableInputNumberStorage.base, a, b)
 }
 
-// IsNull retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.IsNull().
-func (c NullableInputNumber[M, I, V]) IsNull() Predicate[M] {
+// NullableInputNumberIsNull retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberIsNull(invoices.OptionalAmount).
+func NullableInputNumberIsNull[M, I any, V NumberValue](c NullableInputNumber[M, I, V]) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.IsNull, nil)
 }
 
-// IsNotNull retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.IsNotNull().
-func (c NullableInputNumber[M, I, V]) IsNotNull() Predicate[M] {
+// NullableInputNumberIsNotNull retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberIsNotNull(invoices.OptionalAmount).
+func NullableInputNumberIsNotNull[M, I any, V NumberValue](c NullableInputNumber[M, I, V]) Predicate[M] {
 	return comparison[M](c.nullableInputNumberStorage.base, querycore.IsNotNull, nil)
 }
 
-// SetNull retains the stored number operation; Set alone accepts I.
-// Example: invoices.OptionalAmount.SetNull().
-func (c NullableInputNumber[M, I, V]) SetNull() Assignment[M] {
+// NullableInputNumberSetNull retains the stored number operation; Set alone accepts I.
+// Example: NullableInputNumberSetNull(invoices.OptionalAmount).
+func NullableInputNumberSetNull[M, I any, V NumberValue](c NullableInputNumber[M, I, V]) Assignment[M] {
 	return nullAssignment[M](c.nullableInputNumberStorage.base)
-}
-
-func (c NullableInputNumber[M, I, V]) ormColumn(*M) columnData[V] {
-	return c.nullableInputNumberStorage.base
-}
-
-func (c NullableInputNumber[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
-	return nullableExpression(c.nullableInputNumberStorage)
 }
 
 // InputTime accepts I for writes and retains V for stored operations.
@@ -682,76 +650,76 @@ func InputTimeOf[M, I any, V TimeValue](b Builder[M], ptr *V, transform func(I) 
 	return InputTime[M, I, V]{inputTimeStorage: stored, input: input}
 }
 
-// Eq retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.Eq(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c InputTime[M, I, V]) Eq(v V) Predicate[M] {
+// InputTimeEq retains the stored time operation; Set alone accepts I.
+// Example: InputTimeEq(events.StartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func InputTimeEq[M, I any, V TimeValue](c InputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTimeStorage, querycore.Equal, []V{v})
 }
 
-// Ne retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.Ne(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c InputTime[M, I, V]) Ne(v V) Predicate[M] {
+// InputTimeNe retains the stored time operation; Set alone accepts I.
+// Example: InputTimeNe(events.StartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func InputTimeNe[M, I any, V TimeValue](c InputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTimeStorage, querycore.NotEqual, []V{v})
 }
 
-// In retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.In(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c InputTime[M, I, V]) In(v ...V) Predicate[M] {
+// InputTimeIn retains the stored time operation; Set alone accepts I.
+// Example: InputTimeIn(events.StartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func InputTimeIn[M, I any, V TimeValue](c InputTime[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.inputTimeStorage, querycore.In, v)
 }
 
-// NotIn retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.NotIn(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c InputTime[M, I, V]) NotIn(v ...V) Predicate[M] {
+// InputTimeNotIn retains the stored time operation; Set alone accepts I.
+// Example: InputTimeNotIn(events.StartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func InputTimeNotIn[M, I any, V TimeValue](c InputTime[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.inputTimeStorage, querycore.NotIn, v)
 }
 
-// Asc retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.Asc().
-func (c InputTime[M, I, V]) Asc() Order[M] { return columnOrder[M](c.inputTimeStorage, false) }
+// InputTimeAsc retains the stored time operation; Set alone accepts I.
+// Example: InputTimeAsc(events.StartsAt).
+func InputTimeAsc[M, I any, V TimeValue](c InputTime[M, I, V]) Order[M] {
+	return columnOrder[M](c.inputTimeStorage, false)
+}
 
-// Desc retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.Desc().
-func (c InputTime[M, I, V]) Desc() Order[M] { return columnOrder[M](c.inputTimeStorage, true) }
+// InputTimeDesc retains the stored time operation; Set alone accepts I.
+// Example: InputTimeDesc(events.StartsAt).
+func InputTimeDesc[M, I any, V TimeValue](c InputTime[M, I, V]) Order[M] {
+	return columnOrder[M](c.inputTimeStorage, true)
+}
 
-// Set captures a typed input without invoking its transform.
-// Example: events.StartsAt.Set(TimestampInput{Time: startsAt}).
-func (c InputTime[M, I, V]) Set(v I) Assignment[M] {
+// InputTimeSet captures a typed input without invoking its transform.
+// Example: InputTimeSet(events.StartsAt, TimestampInput{Time: startsAt}).
+func InputTimeSet[M, I any, V TimeValue](c InputTime[M, I, V], v I) Assignment[M] {
 	return inputAssignment[M](c.inputTimeStorage.core, c.input, v)
 }
 
-// Gt retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.Gt(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c InputTime[M, I, V]) Gt(v V) Predicate[M] {
+// InputTimeGt retains the stored time operation; Set alone accepts I.
+// Example: InputTimeGt(events.StartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func InputTimeGt[M, I any, V TimeValue](c InputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTimeStorage, querycore.Greater, []V{v})
 }
 
-// Gte retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.Gte(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c InputTime[M, I, V]) Gte(v V) Predicate[M] {
+// InputTimeGte retains the stored time operation; Set alone accepts I.
+// Example: InputTimeGte(events.StartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func InputTimeGte[M, I any, V TimeValue](c InputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTimeStorage, querycore.GreaterOrEqual, []V{v})
 }
 
-// Lt retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.Lt(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c InputTime[M, I, V]) Lt(v V) Predicate[M] {
+// InputTimeLt retains the stored time operation; Set alone accepts I.
+// Example: InputTimeLt(events.StartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func InputTimeLt[M, I any, V TimeValue](c InputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTimeStorage, querycore.Less, []V{v})
 }
 
-// Lte retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.Lte(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c InputTime[M, I, V]) Lte(v V) Predicate[M] {
+// InputTimeLte retains the stored time operation; Set alone accepts I.
+// Example: InputTimeLte(events.StartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func InputTimeLte[M, I any, V TimeValue](c InputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.inputTimeStorage, querycore.LessOrEqual, []V{v})
 }
 
-// Between retains the stored time operation; Set alone accepts I.
-// Example: events.StartsAt.Between(startsAt, endsAt).
-func (c InputTime[M, I, V]) Between(a, b V) Predicate[M] { return between[M](c.inputTimeStorage, a, b) }
-
-func (c InputTime[M, I, V]) ormColumn(*M) columnData[V] { return c.inputTimeStorage }
-
-func (c InputTime[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
-	return requiredExpression(c.inputTimeStorage)
+// InputTimeBetween retains the stored time operation; Set alone accepts I.
+// Example: InputTimeBetween(events.StartsAt, startsAt, endsAt).
+func InputTimeBetween[M, I any, V TimeValue](c InputTime[M, I, V], a, b V) Predicate[M] {
+	return between[M](c.inputTimeStorage, a, b)
 }
 
 // NullableInputTime accepts I for writes and retains V for stored operations.
@@ -771,102 +739,94 @@ func NullableInputTimeOf[M, I any, V TimeValue](b Builder[M], ptr *value.Nullabl
 	return NullableInputTime[M, I, V]{nullableInputTimeStorage: stored, input: input}
 }
 
-// Eq retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.Eq(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c NullableInputTime[M, I, V]) Eq(v V) Predicate[M] {
+// NullableInputTimeEq retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeEq(events.OptionalStartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func NullableInputTimeEq[M, I any, V TimeValue](c NullableInputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.Equal, []V{v})
 }
 
-// Ne retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.Ne(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c NullableInputTime[M, I, V]) Ne(v V) Predicate[M] {
+// NullableInputTimeNe retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeNe(events.OptionalStartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func NullableInputTimeNe[M, I any, V TimeValue](c NullableInputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.NotEqual, []V{v})
 }
 
-// In retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.In(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c NullableInputTime[M, I, V]) In(v ...V) Predicate[M] {
+// NullableInputTimeIn retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeIn(events.OptionalStartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func NullableInputTimeIn[M, I any, V TimeValue](c NullableInputTime[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.In, v)
 }
 
-// NotIn retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.NotIn(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c NullableInputTime[M, I, V]) NotIn(v ...V) Predicate[M] {
+// NullableInputTimeNotIn retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeNotIn(events.OptionalStartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func NullableInputTimeNotIn[M, I any, V TimeValue](c NullableInputTime[M, I, V], v ...V) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.NotIn, v)
 }
 
-// Asc retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.Asc().
-func (c NullableInputTime[M, I, V]) Asc() Order[M] {
+// NullableInputTimeAsc retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeAsc(events.OptionalStartsAt).
+func NullableInputTimeAsc[M, I any, V TimeValue](c NullableInputTime[M, I, V]) Order[M] {
 	return columnOrder[M](c.nullableInputTimeStorage.base, false)
 }
 
-// Desc retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.Desc().
-func (c NullableInputTime[M, I, V]) Desc() Order[M] {
+// NullableInputTimeDesc retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeDesc(events.OptionalStartsAt).
+func NullableInputTimeDesc[M, I any, V TimeValue](c NullableInputTime[M, I, V]) Order[M] {
 	return columnOrder[M](c.nullableInputTimeStorage.base, true)
 }
 
-// Set captures a typed input without invoking its transform.
-// Example: events.OptionalStartsAt.Set(TimestampInput{Time: startsAt}).
-func (c NullableInputTime[M, I, V]) Set(v I) Assignment[M] {
+// NullableInputTimeSet captures a typed input without invoking its transform.
+// Example: NullableInputTimeSet(events.OptionalStartsAt, TimestampInput{Time: startsAt}).
+func NullableInputTimeSet[M, I any, V TimeValue](c NullableInputTime[M, I, V], v I) Assignment[M] {
 	return inputAssignment[M](c.nullableInputTimeStorage.base.core, c.input, v)
 }
 
-// Gt retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.Gt(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c NullableInputTime[M, I, V]) Gt(v V) Predicate[M] {
+// NullableInputTimeGt retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeGt(events.OptionalStartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func NullableInputTimeGt[M, I any, V TimeValue](c NullableInputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.Greater, []V{v})
 }
 
-// Gte retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.Gte(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c NullableInputTime[M, I, V]) Gte(v V) Predicate[M] {
+// NullableInputTimeGte retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeGte(events.OptionalStartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func NullableInputTimeGte[M, I any, V TimeValue](c NullableInputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.GreaterOrEqual, []V{v})
 }
 
-// Lt retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.Lt(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c NullableInputTime[M, I, V]) Lt(v V) Predicate[M] {
+// NullableInputTimeLt retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeLt(events.OptionalStartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func NullableInputTimeLt[M, I any, V TimeValue](c NullableInputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.Less, []V{v})
 }
 
-// Lte retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.Lte(time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
-func (c NullableInputTime[M, I, V]) Lte(v V) Predicate[M] {
+// NullableInputTimeLte retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeLte(events.OptionalStartsAt, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)).
+func NullableInputTimeLte[M, I any, V TimeValue](c NullableInputTime[M, I, V], v V) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.LessOrEqual, []V{v})
 }
 
-// Between retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.Between(startsAt, endsAt).
-func (c NullableInputTime[M, I, V]) Between(a, b V) Predicate[M] {
+// NullableInputTimeBetween retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeBetween(events.OptionalStartsAt, startsAt, endsAt).
+func NullableInputTimeBetween[M, I any, V TimeValue](c NullableInputTime[M, I, V], a, b V) Predicate[M] {
 	return between[M](c.nullableInputTimeStorage.base, a, b)
 }
 
-// IsNull retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.IsNull().
-func (c NullableInputTime[M, I, V]) IsNull() Predicate[M] {
+// NullableInputTimeIsNull retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeIsNull(events.OptionalStartsAt).
+func NullableInputTimeIsNull[M, I any, V TimeValue](c NullableInputTime[M, I, V]) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.IsNull, nil)
 }
 
-// IsNotNull retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.IsNotNull().
-func (c NullableInputTime[M, I, V]) IsNotNull() Predicate[M] {
+// NullableInputTimeIsNotNull retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeIsNotNull(events.OptionalStartsAt).
+func NullableInputTimeIsNotNull[M, I any, V TimeValue](c NullableInputTime[M, I, V]) Predicate[M] {
 	return comparison[M](c.nullableInputTimeStorage.base, querycore.IsNotNull, nil)
 }
 
-// SetNull retains the stored time operation; Set alone accepts I.
-// Example: events.OptionalStartsAt.SetNull().
-func (c NullableInputTime[M, I, V]) SetNull() Assignment[M] {
+// NullableInputTimeSetNull retains the stored time operation; Set alone accepts I.
+// Example: NullableInputTimeSetNull(events.OptionalStartsAt).
+func NullableInputTimeSetNull[M, I any, V TimeValue](c NullableInputTime[M, I, V]) Assignment[M] {
 	return nullAssignment[M](c.nullableInputTimeStorage.base)
-}
-
-func (c NullableInputTime[M, I, V]) ormColumn(*M) columnData[V] {
-	return c.nullableInputTimeStorage.base
-}
-
-func (c NullableInputTime[M, I, V]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[value.Nullable[V]]) {
-	return nullableExpression(c.nullableInputTimeStorage)
 }
 
 // InputEnum accepts I for writes and retains E for stored operations.
@@ -894,48 +854,67 @@ func InputEnumOf[M, I any, E interface {
 	return InputEnum[M, I, E]{inputEnumStorage: stored, input: input}
 }
 
-// Eq retains the stored enum operation; Set alone accepts I.
-// Example: members.Status.Eq(StatusActive).
-func (c InputEnum[M, I, E]) Eq(v E) Predicate[M] {
+// InputEnumEq retains the stored enum operation; Set alone accepts I.
+// Example: InputEnumEq(members.Status, StatusActive).
+func InputEnumEq[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c InputEnum[M, I, E], v E) Predicate[M] {
 	return comparison[M](c.inputEnumStorage, querycore.Equal, []E{v})
 }
 
-// Ne retains the stored enum operation; Set alone accepts I.
-// Example: members.Status.Ne(StatusActive).
-func (c InputEnum[M, I, E]) Ne(v E) Predicate[M] {
+// InputEnumNe retains the stored enum operation; Set alone accepts I.
+// Example: InputEnumNe(members.Status, StatusActive).
+func InputEnumNe[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c InputEnum[M, I, E], v E) Predicate[M] {
 	return comparison[M](c.inputEnumStorage, querycore.NotEqual, []E{v})
 }
 
-// In retains the stored enum operation; Set alone accepts I.
-// Example: members.Status.In(StatusActive).
-func (c InputEnum[M, I, E]) In(v ...E) Predicate[M] {
+// InputEnumIn retains the stored enum operation; Set alone accepts I.
+// Example: InputEnumIn(members.Status, StatusActive).
+func InputEnumIn[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c InputEnum[M, I, E], v ...E) Predicate[M] {
 	return comparison[M](c.inputEnumStorage, querycore.In, v)
 }
 
-// NotIn retains the stored enum operation; Set alone accepts I.
-// Example: members.Status.NotIn(StatusActive).
-func (c InputEnum[M, I, E]) NotIn(v ...E) Predicate[M] {
+// InputEnumNotIn retains the stored enum operation; Set alone accepts I.
+// Example: InputEnumNotIn(members.Status, StatusActive).
+func InputEnumNotIn[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c InputEnum[M, I, E], v ...E) Predicate[M] {
 	return comparison[M](c.inputEnumStorage, querycore.NotIn, v)
 }
 
-// Asc retains the stored enum operation; Set alone accepts I.
-// Example: members.Status.Asc().
-func (c InputEnum[M, I, E]) Asc() Order[M] { return columnOrder[M](c.inputEnumStorage, false) }
-
-// Desc retains the stored enum operation; Set alone accepts I.
-// Example: members.Status.Desc().
-func (c InputEnum[M, I, E]) Desc() Order[M] { return columnOrder[M](c.inputEnumStorage, true) }
-
-// Set captures a typed input without invoking its transform.
-// Example: members.Status.Set(StatusInput{Value: StatusActive}).
-func (c InputEnum[M, I, E]) Set(v I) Assignment[M] {
-	return inputAssignment[M](c.inputEnumStorage.core, c.input, v)
+// InputEnumAsc retains the stored enum operation; Set alone accepts I.
+// Example: InputEnumAsc(members.Status).
+func InputEnumAsc[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c InputEnum[M, I, E]) Order[M] {
+	return columnOrder[M](c.inputEnumStorage, false)
 }
 
-func (c InputEnum[M, I, E]) ormColumn(*M) columnData[E] { return c.inputEnumStorage }
+// InputEnumDesc retains the stored enum operation; Set alone accepts I.
+// Example: InputEnumDesc(members.Status).
+func InputEnumDesc[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c InputEnum[M, I, E]) Order[M] {
+	return columnOrder[M](c.inputEnumStorage, true)
+}
 
-func (c InputEnum[M, I, E]) expressionColumn(*M) (ormcore.Column[E], ormcore.Column[E]) {
-	return requiredExpression(c.inputEnumStorage)
+// InputEnumSet captures a typed input without invoking its transform.
+// Example: InputEnumSet(members.Status, StatusInput{Value: StatusActive}).
+func InputEnumSet[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c InputEnum[M, I, E], v I) Assignment[M] {
+	return inputAssignment[M](c.inputEnumStorage.core, c.input, v)
 }
 
 // NullableInputEnum accepts I for writes and retains E for stored operations.
@@ -963,72 +942,94 @@ func NullableInputEnumOf[M, I any, E interface {
 	return NullableInputEnum[M, I, E]{nullableInputEnumStorage: stored, input: input}
 }
 
-// Eq retains the stored enum operation; Set alone accepts I.
-// Example: members.OptionalStatus.Eq(StatusActive).
-func (c NullableInputEnum[M, I, E]) Eq(v E) Predicate[M] {
+// NullableInputEnumEq retains the stored enum operation; Set alone accepts I.
+// Example: NullableInputEnumEq(members.OptionalStatus, StatusActive).
+func NullableInputEnumEq[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E], v E) Predicate[M] {
 	return comparison[M](c.nullableInputEnumStorage.base, querycore.Equal, []E{v})
 }
 
-// Ne retains the stored enum operation; Set alone accepts I.
-// Example: members.OptionalStatus.Ne(StatusActive).
-func (c NullableInputEnum[M, I, E]) Ne(v E) Predicate[M] {
+// NullableInputEnumNe retains the stored enum operation; Set alone accepts I.
+// Example: NullableInputEnumNe(members.OptionalStatus, StatusActive).
+func NullableInputEnumNe[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E], v E) Predicate[M] {
 	return comparison[M](c.nullableInputEnumStorage.base, querycore.NotEqual, []E{v})
 }
 
-// In retains the stored enum operation; Set alone accepts I.
-// Example: members.OptionalStatus.In(StatusActive).
-func (c NullableInputEnum[M, I, E]) In(v ...E) Predicate[M] {
+// NullableInputEnumIn retains the stored enum operation; Set alone accepts I.
+// Example: NullableInputEnumIn(members.OptionalStatus, StatusActive).
+func NullableInputEnumIn[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E], v ...E) Predicate[M] {
 	return comparison[M](c.nullableInputEnumStorage.base, querycore.In, v)
 }
 
-// NotIn retains the stored enum operation; Set alone accepts I.
-// Example: members.OptionalStatus.NotIn(StatusActive).
-func (c NullableInputEnum[M, I, E]) NotIn(v ...E) Predicate[M] {
+// NullableInputEnumNotIn retains the stored enum operation; Set alone accepts I.
+// Example: NullableInputEnumNotIn(members.OptionalStatus, StatusActive).
+func NullableInputEnumNotIn[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E], v ...E) Predicate[M] {
 	return comparison[M](c.nullableInputEnumStorage.base, querycore.NotIn, v)
 }
 
-// Asc retains the stored enum operation; Set alone accepts I.
-// Example: members.OptionalStatus.Asc().
-func (c NullableInputEnum[M, I, E]) Asc() Order[M] {
+// NullableInputEnumAsc retains the stored enum operation; Set alone accepts I.
+// Example: NullableInputEnumAsc(members.OptionalStatus).
+func NullableInputEnumAsc[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E]) Order[M] {
 	return columnOrder[M](c.nullableInputEnumStorage.base, false)
 }
 
-// Desc retains the stored enum operation; Set alone accepts I.
-// Example: members.OptionalStatus.Desc().
-func (c NullableInputEnum[M, I, E]) Desc() Order[M] {
+// NullableInputEnumDesc retains the stored enum operation; Set alone accepts I.
+// Example: NullableInputEnumDesc(members.OptionalStatus).
+func NullableInputEnumDesc[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E]) Order[M] {
 	return columnOrder[M](c.nullableInputEnumStorage.base, true)
 }
 
-// Set captures a typed input without invoking its transform.
-// Example: members.OptionalStatus.Set(StatusInput{Value: StatusActive}).
-func (c NullableInputEnum[M, I, E]) Set(v I) Assignment[M] {
+// NullableInputEnumSet captures a typed input without invoking its transform.
+// Example: NullableInputEnumSet(members.OptionalStatus, StatusInput{Value: StatusActive}).
+func NullableInputEnumSet[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E], v I) Assignment[M] {
 	return inputAssignment[M](c.nullableInputEnumStorage.base.core, c.input, v)
 }
 
-// IsNull retains the stored enum operation; Set alone accepts I.
-// Example: members.OptionalStatus.IsNull().
-func (c NullableInputEnum[M, I, E]) IsNull() Predicate[M] {
+// NullableInputEnumIsNull retains the stored enum operation; Set alone accepts I.
+// Example: NullableInputEnumIsNull(members.OptionalStatus).
+func NullableInputEnumIsNull[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E]) Predicate[M] {
 	return comparison[M](c.nullableInputEnumStorage.base, querycore.IsNull, nil)
 }
 
-// IsNotNull retains the stored enum operation; Set alone accepts I.
-// Example: members.OptionalStatus.IsNotNull().
-func (c NullableInputEnum[M, I, E]) IsNotNull() Predicate[M] {
+// NullableInputEnumIsNotNull retains the stored enum operation; Set alone accepts I.
+// Example: NullableInputEnumIsNotNull(members.OptionalStatus).
+func NullableInputEnumIsNotNull[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E]) Predicate[M] {
 	return comparison[M](c.nullableInputEnumStorage.base, querycore.IsNotNull, nil)
 }
 
-// SetNull retains the stored enum operation; Set alone accepts I.
-// Example: members.OptionalStatus.SetNull().
-func (c NullableInputEnum[M, I, E]) SetNull() Assignment[M] {
+// NullableInputEnumSetNull retains the stored enum operation; Set alone accepts I.
+// Example: NullableInputEnumSetNull(members.OptionalStatus).
+func NullableInputEnumSetNull[M, I any, E interface {
+	enum.Scalar
+	EnumDescriptor() enum.Descriptor[E]
+}](c NullableInputEnum[M, I, E]) Assignment[M] {
 	return nullAssignment[M](c.nullableInputEnumStorage.base)
-}
-
-func (c NullableInputEnum[M, I, E]) ormColumn(*M) columnData[E] {
-	return c.nullableInputEnumStorage.base
-}
-
-func (c NullableInputEnum[M, I, E]) expressionColumn(*M) (ormcore.Column[E], ormcore.Column[value.Nullable[E]]) {
-	return nullableExpression(c.nullableInputEnumStorage)
 }
 
 // InputJSON accepts I for writes and retains value.JSON[T] for stored operations.
@@ -1048,64 +1049,64 @@ func InputJSONOf[M, I any, T any](b Builder[M], ptr *value.JSON[T], transform fu
 	return InputJSON[M, I, T]{inputJSONStorage: stored, input: input}
 }
 
-// Eq retains the stored json operation; Set alone accepts I.
-// Example: members.Settings.Eq(storedPreferences).
-func (c InputJSON[M, I, T]) Eq(v value.JSON[T]) Predicate[M] {
+// InputJSONEq retains the stored json operation; Set alone accepts I.
+// Example: InputJSONEq(members.Settings, storedPreferences).
+func InputJSONEq[M, I any, T any](c InputJSON[M, I, T], v value.JSON[T]) Predicate[M] {
 	return comparison[M](c.inputJSONStorage, querycore.Equal, []value.JSON[T]{v})
 }
 
-// Ne retains the stored json operation; Set alone accepts I.
-// Example: members.Settings.Ne(storedPreferences).
-func (c InputJSON[M, I, T]) Ne(v value.JSON[T]) Predicate[M] {
+// InputJSONNe retains the stored json operation; Set alone accepts I.
+// Example: InputJSONNe(members.Settings, storedPreferences).
+func InputJSONNe[M, I any, T any](c InputJSON[M, I, T], v value.JSON[T]) Predicate[M] {
 	return comparison[M](c.inputJSONStorage, querycore.NotEqual, []value.JSON[T]{v})
 }
 
-// In retains the stored json operation; Set alone accepts I.
-// Example: members.Settings.In(storedPreferences).
-func (c InputJSON[M, I, T]) In(v ...value.JSON[T]) Predicate[M] {
+// InputJSONIn retains the stored json operation; Set alone accepts I.
+// Example: InputJSONIn(members.Settings, storedPreferences).
+func InputJSONIn[M, I any, T any](c InputJSON[M, I, T], v ...value.JSON[T]) Predicate[M] {
 	return comparison[M](c.inputJSONStorage, querycore.In, v)
 }
 
-// NotIn retains the stored json operation; Set alone accepts I.
-// Example: members.Settings.NotIn(storedPreferences).
-func (c InputJSON[M, I, T]) NotIn(v ...value.JSON[T]) Predicate[M] {
+// InputJSONNotIn retains the stored json operation; Set alone accepts I.
+// Example: InputJSONNotIn(members.Settings, storedPreferences).
+func InputJSONNotIn[M, I any, T any](c InputJSON[M, I, T], v ...value.JSON[T]) Predicate[M] {
 	return comparison[M](c.inputJSONStorage, querycore.NotIn, v)
 }
 
-// Asc retains the stored json operation; Set alone accepts I.
-// Example: members.Settings.Asc().
-func (c InputJSON[M, I, T]) Asc() Order[M] { return columnOrder[M](c.inputJSONStorage, false) }
+// InputJSONAsc retains the stored json operation; Set alone accepts I.
+// Example: InputJSONAsc(members.Settings).
+func InputJSONAsc[M, I any, T any](c InputJSON[M, I, T]) Order[M] {
+	return columnOrder[M](c.inputJSONStorage, false)
+}
 
-// Desc retains the stored json operation; Set alone accepts I.
-// Example: members.Settings.Desc().
-func (c InputJSON[M, I, T]) Desc() Order[M] { return columnOrder[M](c.inputJSONStorage, true) }
+// InputJSONDesc retains the stored json operation; Set alone accepts I.
+// Example: InputJSONDesc(members.Settings).
+func InputJSONDesc[M, I any, T any](c InputJSON[M, I, T]) Order[M] {
+	return columnOrder[M](c.inputJSONStorage, true)
+}
 
-// Contains retains the stored json operation; Set alone accepts I.
-// Example: members.Settings.Contains(storedPreferences).
-func (c InputJSON[M, I, T]) Contains(v value.JSON[T]) Predicate[M] {
+// InputJSONContains retains the stored json operation; Set alone accepts I.
+// Example: InputJSONContains(members.Settings, storedPreferences).
+func InputJSONContains[M, I any, T any](c InputJSON[M, I, T], v value.JSON[T]) Predicate[M] {
 	return jsonContainment[M](c.inputJSONStorage, querycore.JsonContainsOperation, v)
 }
 
-// ContainedBy retains the stored json operation; Set alone accepts I.
-// Example: members.Settings.ContainedBy(storedPreferences).
-func (c InputJSON[M, I, T]) ContainedBy(v value.JSON[T]) Predicate[M] {
+// InputJSONContainedBy retains the stored json operation; Set alone accepts I.
+// Example: InputJSONContainedBy(members.Settings, storedPreferences).
+func InputJSONContainedBy[M, I any, T any](c InputJSON[M, I, T], v value.JSON[T]) Predicate[M] {
 	return jsonContainment[M](c.inputJSONStorage, querycore.JsonContainedByOperation, v)
 }
 
-// IsJSONNull retains the stored json operation; Set alone accepts I.
-// Example: members.Settings.IsJSONNull().
-func (c InputJSON[M, I, T]) IsJSONNull() Predicate[M] { return jsonNull[M](c.inputJSONStorage) }
-
-// Set captures a typed input without invoking its transform.
-// Example: members.Settings.Set(PreferencesInput{Theme: "dark"}).
-func (c InputJSON[M, I, T]) Set(v I) Assignment[M] {
-	return inputAssignment[M](c.inputJSONStorage.core, c.input, v)
+// InputJSONIsJSONNull retains the stored json operation; Set alone accepts I.
+// Example: InputJSONIsJSONNull(members.Settings).
+func InputJSONIsJSONNull[M, I any, T any](c InputJSON[M, I, T]) Predicate[M] {
+	return jsonNull[M](c.inputJSONStorage)
 }
 
-func (c InputJSON[M, I, T]) ormColumn(*M) columnData[value.JSON[T]] { return c.inputJSONStorage }
-
-func (c InputJSON[M, I, T]) expressionColumn(*M) (ormcore.Column[value.JSON[T]], ormcore.Column[value.JSON[T]]) {
-	return requiredExpression(c.inputJSONStorage)
+// InputJSONSet captures a typed input without invoking its transform.
+// Example: InputJSONSet(members.Settings, PreferencesInput{Theme: "dark"}).
+func InputJSONSet[M, I any, T any](c InputJSON[M, I, T], v I) Assignment[M] {
+	return inputAssignment[M](c.inputJSONStorage.core, c.input, v)
 }
 
 // NullableInputJSON accepts I for writes and retains value.JSON[T] for stored operations.
@@ -1125,90 +1126,82 @@ func NullableInputJSONOf[M, I any, T any](b Builder[M], ptr *value.Nullable[valu
 	return NullableInputJSON[M, I, T]{nullableInputJSONStorage: stored, input: input}
 }
 
-// Eq retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.Eq(storedPreferences).
-func (c NullableInputJSON[M, I, T]) Eq(v value.JSON[T]) Predicate[M] {
+// NullableInputJSONEq retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONEq(members.BackupSettings, storedPreferences).
+func NullableInputJSONEq[M, I any, T any](c NullableInputJSON[M, I, T], v value.JSON[T]) Predicate[M] {
 	return comparison[M](c.nullableInputJSONStorage.base, querycore.Equal, []value.JSON[T]{v})
 }
 
-// Ne retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.Ne(storedPreferences).
-func (c NullableInputJSON[M, I, T]) Ne(v value.JSON[T]) Predicate[M] {
+// NullableInputJSONNe retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONNe(members.BackupSettings, storedPreferences).
+func NullableInputJSONNe[M, I any, T any](c NullableInputJSON[M, I, T], v value.JSON[T]) Predicate[M] {
 	return comparison[M](c.nullableInputJSONStorage.base, querycore.NotEqual, []value.JSON[T]{v})
 }
 
-// In retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.In(storedPreferences).
-func (c NullableInputJSON[M, I, T]) In(v ...value.JSON[T]) Predicate[M] {
+// NullableInputJSONIn retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONIn(members.BackupSettings, storedPreferences).
+func NullableInputJSONIn[M, I any, T any](c NullableInputJSON[M, I, T], v ...value.JSON[T]) Predicate[M] {
 	return comparison[M](c.nullableInputJSONStorage.base, querycore.In, v)
 }
 
-// NotIn retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.NotIn(storedPreferences).
-func (c NullableInputJSON[M, I, T]) NotIn(v ...value.JSON[T]) Predicate[M] {
+// NullableInputJSONNotIn retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONNotIn(members.BackupSettings, storedPreferences).
+func NullableInputJSONNotIn[M, I any, T any](c NullableInputJSON[M, I, T], v ...value.JSON[T]) Predicate[M] {
 	return comparison[M](c.nullableInputJSONStorage.base, querycore.NotIn, v)
 }
 
-// Asc retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.Asc().
-func (c NullableInputJSON[M, I, T]) Asc() Order[M] {
+// NullableInputJSONAsc retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONAsc(members.BackupSettings).
+func NullableInputJSONAsc[M, I any, T any](c NullableInputJSON[M, I, T]) Order[M] {
 	return columnOrder[M](c.nullableInputJSONStorage.base, false)
 }
 
-// Desc retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.Desc().
-func (c NullableInputJSON[M, I, T]) Desc() Order[M] {
+// NullableInputJSONDesc retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONDesc(members.BackupSettings).
+func NullableInputJSONDesc[M, I any, T any](c NullableInputJSON[M, I, T]) Order[M] {
 	return columnOrder[M](c.nullableInputJSONStorage.base, true)
 }
 
-// Contains retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.Contains(storedPreferences).
-func (c NullableInputJSON[M, I, T]) Contains(v value.JSON[T]) Predicate[M] {
+// NullableInputJSONContains retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONContains(members.BackupSettings, storedPreferences).
+func NullableInputJSONContains[M, I any, T any](c NullableInputJSON[M, I, T], v value.JSON[T]) Predicate[M] {
 	return jsonContainment[M](c.nullableInputJSONStorage.base, querycore.JsonContainsOperation, v)
 }
 
-// ContainedBy retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.ContainedBy(storedPreferences).
-func (c NullableInputJSON[M, I, T]) ContainedBy(v value.JSON[T]) Predicate[M] {
+// NullableInputJSONContainedBy retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONContainedBy(members.BackupSettings, storedPreferences).
+func NullableInputJSONContainedBy[M, I any, T any](c NullableInputJSON[M, I, T], v value.JSON[T]) Predicate[M] {
 	return jsonContainment[M](c.nullableInputJSONStorage.base, querycore.JsonContainedByOperation, v)
 }
 
-// IsJSONNull retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.IsJSONNull().
-func (c NullableInputJSON[M, I, T]) IsJSONNull() Predicate[M] {
+// NullableInputJSONIsJSONNull retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONIsJSONNull(members.BackupSettings).
+func NullableInputJSONIsJSONNull[M, I any, T any](c NullableInputJSON[M, I, T]) Predicate[M] {
 	return jsonNull[M](c.nullableInputJSONStorage.base)
 }
 
-// IsNull retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.IsNull().
-func (c NullableInputJSON[M, I, T]) IsNull() Predicate[M] {
+// NullableInputJSONIsNull retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONIsNull(members.BackupSettings).
+func NullableInputJSONIsNull[M, I any, T any](c NullableInputJSON[M, I, T]) Predicate[M] {
 	return comparison[M](c.nullableInputJSONStorage.base, querycore.IsNull, nil)
 }
 
-// IsNotNull retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.IsNotNull().
-func (c NullableInputJSON[M, I, T]) IsNotNull() Predicate[M] {
+// NullableInputJSONIsNotNull retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONIsNotNull(members.BackupSettings).
+func NullableInputJSONIsNotNull[M, I any, T any](c NullableInputJSON[M, I, T]) Predicate[M] {
 	return comparison[M](c.nullableInputJSONStorage.base, querycore.IsNotNull, nil)
 }
 
-// Set captures a typed input without invoking its transform.
-// Example: members.BackupSettings.Set(PreferencesInput{Theme: "dark"}).
-func (c NullableInputJSON[M, I, T]) Set(v I) Assignment[M] {
+// NullableInputJSONSet captures a typed input without invoking its transform.
+// Example: NullableInputJSONSet(members.BackupSettings, PreferencesInput{Theme: "dark"}).
+func NullableInputJSONSet[M, I any, T any](c NullableInputJSON[M, I, T], v I) Assignment[M] {
 	return inputAssignment[M](c.nullableInputJSONStorage.base.core, c.input, v)
 }
 
-// SetNull retains the stored json operation; Set alone accepts I.
-// Example: members.BackupSettings.SetNull().
-func (c NullableInputJSON[M, I, T]) SetNull() Assignment[M] {
+// NullableInputJSONSetNull retains the stored json operation; Set alone accepts I.
+// Example: NullableInputJSONSetNull(members.BackupSettings).
+func NullableInputJSONSetNull[M, I any, T any](c NullableInputJSON[M, I, T]) Assignment[M] {
 	return nullAssignment[M](c.nullableInputJSONStorage.base)
-}
-
-func (c NullableInputJSON[M, I, T]) ormColumn(*M) columnData[value.JSON[T]] {
-	return c.nullableInputJSONStorage.base
-}
-
-func (c NullableInputJSON[M, I, T]) expressionColumn(*M) (ormcore.Column[value.JSON[T]], ormcore.Column[value.Nullable[value.JSON[T]]]) {
-	return nullableExpression(c.nullableInputJSONStorage)
 }
 
 // InputInterval accepts I for writes and retains temporal.Interval for stored operations.
@@ -1228,80 +1221,76 @@ func InputIntervalOf[M, I any](b Builder[M], ptr *temporal.Interval, transform f
 	return InputInterval[M, I]{inputIntervalStorage: stored, input: input}
 }
 
-// Eq retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.Eq(temporal.Days(1)).
-func (c InputInterval[M, I]) Eq(v temporal.Interval) Predicate[M] {
+// InputIntervalEq retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalEq(bookings.Period, temporal.Days(1)).
+func InputIntervalEq[M, I any](c InputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.inputIntervalStorage, querycore.Equal, []temporal.Interval{v})
 }
 
-// Ne retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.Ne(temporal.Days(1)).
-func (c InputInterval[M, I]) Ne(v temporal.Interval) Predicate[M] {
+// InputIntervalNe retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalNe(bookings.Period, temporal.Days(1)).
+func InputIntervalNe[M, I any](c InputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.inputIntervalStorage, querycore.NotEqual, []temporal.Interval{v})
 }
 
-// In retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.In(temporal.Days(1)).
-func (c InputInterval[M, I]) In(v ...temporal.Interval) Predicate[M] {
+// InputIntervalIn retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalIn(bookings.Period, temporal.Days(1)).
+func InputIntervalIn[M, I any](c InputInterval[M, I], v ...temporal.Interval) Predicate[M] {
 	return comparison[M](c.inputIntervalStorage, querycore.In, v)
 }
 
-// NotIn retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.NotIn(temporal.Days(1)).
-func (c InputInterval[M, I]) NotIn(v ...temporal.Interval) Predicate[M] {
+// InputIntervalNotIn retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalNotIn(bookings.Period, temporal.Days(1)).
+func InputIntervalNotIn[M, I any](c InputInterval[M, I], v ...temporal.Interval) Predicate[M] {
 	return comparison[M](c.inputIntervalStorage, querycore.NotIn, v)
 }
 
-// Asc retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.Asc().
-func (c InputInterval[M, I]) Asc() Order[M] { return columnOrder[M](c.inputIntervalStorage, false) }
+// InputIntervalAsc retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalAsc(bookings.Period).
+func InputIntervalAsc[M, I any](c InputInterval[M, I]) Order[M] {
+	return columnOrder[M](c.inputIntervalStorage, false)
+}
 
-// Desc retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.Desc().
-func (c InputInterval[M, I]) Desc() Order[M] { return columnOrder[M](c.inputIntervalStorage, true) }
+// InputIntervalDesc retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalDesc(bookings.Period).
+func InputIntervalDesc[M, I any](c InputInterval[M, I]) Order[M] {
+	return columnOrder[M](c.inputIntervalStorage, true)
+}
 
-// Set captures a typed input without invoking its transform.
-// Example: bookings.Period.Set(PeriodInput{Days: 1}).
-func (c InputInterval[M, I]) Set(v I) Assignment[M] {
+// InputIntervalSet captures a typed input without invoking its transform.
+// Example: InputIntervalSet(bookings.Period, PeriodInput{Days: 1}).
+func InputIntervalSet[M, I any](c InputInterval[M, I], v I) Assignment[M] {
 	return inputAssignment[M](c.inputIntervalStorage.core, c.input, v)
 }
 
-// Gt retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.Gt(temporal.Days(1)).
-func (c InputInterval[M, I]) Gt(v temporal.Interval) Predicate[M] {
+// InputIntervalGt retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalGt(bookings.Period, temporal.Days(1)).
+func InputIntervalGt[M, I any](c InputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.inputIntervalStorage, querycore.Greater, []temporal.Interval{v})
 }
 
-// Gte retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.Gte(temporal.Days(1)).
-func (c InputInterval[M, I]) Gte(v temporal.Interval) Predicate[M] {
+// InputIntervalGte retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalGte(bookings.Period, temporal.Days(1)).
+func InputIntervalGte[M, I any](c InputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.inputIntervalStorage, querycore.GreaterOrEqual, []temporal.Interval{v})
 }
 
-// Lt retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.Lt(temporal.Days(1)).
-func (c InputInterval[M, I]) Lt(v temporal.Interval) Predicate[M] {
+// InputIntervalLt retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalLt(bookings.Period, temporal.Days(1)).
+func InputIntervalLt[M, I any](c InputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.inputIntervalStorage, querycore.Less, []temporal.Interval{v})
 }
 
-// Lte retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.Lte(temporal.Days(1)).
-func (c InputInterval[M, I]) Lte(v temporal.Interval) Predicate[M] {
+// InputIntervalLte retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalLte(bookings.Period, temporal.Days(1)).
+func InputIntervalLte[M, I any](c InputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.inputIntervalStorage, querycore.LessOrEqual, []temporal.Interval{v})
 }
 
-// Between retains the stored interval operation; Set alone accepts I.
-// Example: bookings.Period.Between(temporal.Days(1), temporal.Days(7)).
-func (c InputInterval[M, I]) Between(a, b temporal.Interval) Predicate[M] {
+// InputIntervalBetween retains the stored interval operation; Set alone accepts I.
+// Example: InputIntervalBetween(bookings.Period, temporal.Days(1), temporal.Days(7)).
+func InputIntervalBetween[M, I any](c InputInterval[M, I], a, b temporal.Interval) Predicate[M] {
 	return between[M](c.inputIntervalStorage, a, b)
-}
-
-func (c InputInterval[M, I]) ormColumn(*M) columnData[temporal.Interval] {
-	return c.inputIntervalStorage
-}
-
-func (c InputInterval[M, I]) expressionColumn(*M) (ormcore.Column[temporal.Interval], ormcore.Column[temporal.Interval]) {
-	return requiredExpression(c.inputIntervalStorage)
 }
 
 // NullableInputInterval accepts I for writes and retains temporal.Interval for stored operations.
@@ -1321,102 +1310,94 @@ func NullableInputIntervalOf[M, I any](b Builder[M], ptr *value.Nullable[tempora
 	return NullableInputInterval[M, I]{nullableInputIntervalStorage: stored, input: input}
 }
 
-// Eq retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.Eq(temporal.Days(1)).
-func (c NullableInputInterval[M, I]) Eq(v temporal.Interval) Predicate[M] {
+// NullableInputIntervalEq retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalEq(bookings.OptionalPeriod, temporal.Days(1)).
+func NullableInputIntervalEq[M, I any](c NullableInputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.Equal, []temporal.Interval{v})
 }
 
-// Ne retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.Ne(temporal.Days(1)).
-func (c NullableInputInterval[M, I]) Ne(v temporal.Interval) Predicate[M] {
+// NullableInputIntervalNe retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalNe(bookings.OptionalPeriod, temporal.Days(1)).
+func NullableInputIntervalNe[M, I any](c NullableInputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.NotEqual, []temporal.Interval{v})
 }
 
-// In retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.In(temporal.Days(1)).
-func (c NullableInputInterval[M, I]) In(v ...temporal.Interval) Predicate[M] {
+// NullableInputIntervalIn retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalIn(bookings.OptionalPeriod, temporal.Days(1)).
+func NullableInputIntervalIn[M, I any](c NullableInputInterval[M, I], v ...temporal.Interval) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.In, v)
 }
 
-// NotIn retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.NotIn(temporal.Days(1)).
-func (c NullableInputInterval[M, I]) NotIn(v ...temporal.Interval) Predicate[M] {
+// NullableInputIntervalNotIn retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalNotIn(bookings.OptionalPeriod, temporal.Days(1)).
+func NullableInputIntervalNotIn[M, I any](c NullableInputInterval[M, I], v ...temporal.Interval) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.NotIn, v)
 }
 
-// Asc retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.Asc().
-func (c NullableInputInterval[M, I]) Asc() Order[M] {
+// NullableInputIntervalAsc retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalAsc(bookings.OptionalPeriod).
+func NullableInputIntervalAsc[M, I any](c NullableInputInterval[M, I]) Order[M] {
 	return columnOrder[M](c.nullableInputIntervalStorage.base, false)
 }
 
-// Desc retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.Desc().
-func (c NullableInputInterval[M, I]) Desc() Order[M] {
+// NullableInputIntervalDesc retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalDesc(bookings.OptionalPeriod).
+func NullableInputIntervalDesc[M, I any](c NullableInputInterval[M, I]) Order[M] {
 	return columnOrder[M](c.nullableInputIntervalStorage.base, true)
 }
 
-// Set captures a typed input without invoking its transform.
-// Example: bookings.OptionalPeriod.Set(PeriodInput{Days: 1}).
-func (c NullableInputInterval[M, I]) Set(v I) Assignment[M] {
+// NullableInputIntervalSet captures a typed input without invoking its transform.
+// Example: NullableInputIntervalSet(bookings.OptionalPeriod, PeriodInput{Days: 1}).
+func NullableInputIntervalSet[M, I any](c NullableInputInterval[M, I], v I) Assignment[M] {
 	return inputAssignment[M](c.nullableInputIntervalStorage.base.core, c.input, v)
 }
 
-// Gt retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.Gt(temporal.Days(1)).
-func (c NullableInputInterval[M, I]) Gt(v temporal.Interval) Predicate[M] {
+// NullableInputIntervalGt retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalGt(bookings.OptionalPeriod, temporal.Days(1)).
+func NullableInputIntervalGt[M, I any](c NullableInputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.Greater, []temporal.Interval{v})
 }
 
-// Gte retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.Gte(temporal.Days(1)).
-func (c NullableInputInterval[M, I]) Gte(v temporal.Interval) Predicate[M] {
+// NullableInputIntervalGte retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalGte(bookings.OptionalPeriod, temporal.Days(1)).
+func NullableInputIntervalGte[M, I any](c NullableInputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.GreaterOrEqual, []temporal.Interval{v})
 }
 
-// Lt retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.Lt(temporal.Days(1)).
-func (c NullableInputInterval[M, I]) Lt(v temporal.Interval) Predicate[M] {
+// NullableInputIntervalLt retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalLt(bookings.OptionalPeriod, temporal.Days(1)).
+func NullableInputIntervalLt[M, I any](c NullableInputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.Less, []temporal.Interval{v})
 }
 
-// Lte retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.Lte(temporal.Days(1)).
-func (c NullableInputInterval[M, I]) Lte(v temporal.Interval) Predicate[M] {
+// NullableInputIntervalLte retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalLte(bookings.OptionalPeriod, temporal.Days(1)).
+func NullableInputIntervalLte[M, I any](c NullableInputInterval[M, I], v temporal.Interval) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.LessOrEqual, []temporal.Interval{v})
 }
 
-// Between retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.Between(temporal.Days(1), temporal.Days(7)).
-func (c NullableInputInterval[M, I]) Between(a, b temporal.Interval) Predicate[M] {
+// NullableInputIntervalBetween retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalBetween(bookings.OptionalPeriod, temporal.Days(1), temporal.Days(7)).
+func NullableInputIntervalBetween[M, I any](c NullableInputInterval[M, I], a, b temporal.Interval) Predicate[M] {
 	return between[M](c.nullableInputIntervalStorage.base, a, b)
 }
 
-// IsNull retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.IsNull().
-func (c NullableInputInterval[M, I]) IsNull() Predicate[M] {
+// NullableInputIntervalIsNull retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalIsNull(bookings.OptionalPeriod).
+func NullableInputIntervalIsNull[M, I any](c NullableInputInterval[M, I]) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.IsNull, nil)
 }
 
-// IsNotNull retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.IsNotNull().
-func (c NullableInputInterval[M, I]) IsNotNull() Predicate[M] {
+// NullableInputIntervalIsNotNull retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalIsNotNull(bookings.OptionalPeriod).
+func NullableInputIntervalIsNotNull[M, I any](c NullableInputInterval[M, I]) Predicate[M] {
 	return comparison[M](c.nullableInputIntervalStorage.base, querycore.IsNotNull, nil)
 }
 
-// SetNull retains the stored interval operation; Set alone accepts I.
-// Example: bookings.OptionalPeriod.SetNull().
-func (c NullableInputInterval[M, I]) SetNull() Assignment[M] {
+// NullableInputIntervalSetNull retains the stored interval operation; Set alone accepts I.
+// Example: NullableInputIntervalSetNull(bookings.OptionalPeriod).
+func NullableInputIntervalSetNull[M, I any](c NullableInputInterval[M, I]) Assignment[M] {
 	return nullAssignment[M](c.nullableInputIntervalStorage.base)
-}
-
-func (c NullableInputInterval[M, I]) ormColumn(*M) columnData[temporal.Interval] {
-	return c.nullableInputIntervalStorage.base
-}
-
-func (c NullableInputInterval[M, I]) expressionColumn(*M) (ormcore.Column[temporal.Interval], ormcore.Column[value.Nullable[temporal.Interval]]) {
-	return nullableExpression(c.nullableInputIntervalStorage)
 }
 
 // InputBytesOf binds owned stored bytes and a concrete input.

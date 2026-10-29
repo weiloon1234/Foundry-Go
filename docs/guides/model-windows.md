@@ -14,8 +14,9 @@ predicates. Filter a declared derived result to select rows by their computed ra
 ```go
 base := models.Orders.Query()
 o := models.Orders
-peers := expr.WindowFor(rows.ModelScope(base)).PartitionBy(expr.Group(expr.Value(o.BuyerID))).OrderBy(expr.Value(o.TotalCents).Asc())
-ordered := peers.OrderBy(expr.Value(o.ID).Asc())
+peers := expr.WindowFor(rows.ModelScope(base)).PartitionBy(expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID)))).OrderBy(expr.Value(orm.NumberExpr(o.TotalCents)).Asc())
+ordered := peers.OrderBy(expr.Value(orm.KeyExpr(o.ID)).Asc())
+return rows.OrderBy(rows.Select(rows.From(base), windowqueries.Rankings, rows.MapSelected(windowqueries.Rankings.ID, expr.Row(expr.Value(orm.KeyExpr(o.ID))).Value()), rows.MapSelected(windowqueries.Rankings.BuyerID, expr.Row(expr.Value(orm.ColumnExpr(o.BuyerID))).Value()), rows.MapSelected(windowqueries.Rankings.Number, expr.RowNumber(ordered)), rows.MapSelected(windowqueries.Rankings.Rank, expr.Rank(peers)), rows.MapSelected(windowqueries.Rankings.Dense, expr.DenseRank(peers)), rows.MapSelected(windowqueries.Rankings.Percent, expr.PercentRank(peers)), rows.MapSelected(windowqueries.Rankings.Cumulative, expr.CumeDist(peers)), rows.MapSelected(windowqueries.Rankings.Bucket, expr.NTile(2, ordered))), expr.Value(orm.ColumnExpr(o.BuyerID)).Asc(), expr.Value(orm.NumberExpr(o.TotalCents)).Asc(), expr.Value(orm.KeyExpr(o.ID)).Asc())
 ```
 
 `expr.WindowFor(rows.ModelScope(query))` binds a model scope; aliases and joins

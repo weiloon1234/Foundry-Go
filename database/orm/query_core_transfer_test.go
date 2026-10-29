@@ -16,7 +16,7 @@ func TestSharedQueryPlanningKeepsModelAndRequestScopesIsolated(t *testing.T) {
 		return compilerFields{TableOf(b, &m.ID), TextOf(b, &m.Name), NumberOf(b, &m.Age)}
 	}, WithGlobalScopes(func(d compilerFields) []GlobalScope[compilerRecord] {
 		scopes = []GlobalScope[compilerRecord]{Scope(d.Table, "tenant", func(ctx context.Context) (Predicate[compilerRecord], error) {
-			return d.Age.Eq(ctx.Value(requestKey{}).(int)), nil
+			return NumberEq(d.Age, ctx.Value(requestKey{}).(int)), nil
 		})}
 		return scopes
 	}))
@@ -25,13 +25,13 @@ func TestSharedQueryPlanningKeepsModelAndRequestScopesIsolated(t *testing.T) {
 		t.Fatal(e)
 	}
 	scope := scopes[0]
-	scopes[0] = Scope(d.Table, "other", func(context.Context) (Predicate[compilerRecord], error) { return d.Age.Eq(999), nil })
+	scopes[0] = Scope(d.Table, "other", func(context.Context) (Predicate[compilerRecord], error) { return NumberEq(d.Age, 999), nil })
 	other := records()
 	var wg sync.WaitGroup
 	for tenant := 1; tenant <= 12; tenant++ {
 		wg.Go(func() {
 			ctx := context.WithValue(t.Context(), requestKey{}, tenant)
-			s, e := Compile(WithScopeContext(base.OrderBy(d.Age.Asc()).Limit(2), ctx))
+			s, e := Compile(WithScopeContext(base.OrderBy(NumberAsc(d.Age)).Limit(2), ctx))
 			if e != nil || !reflect.DeepEqual(s.Arguments(), []any{int64(tenant), int64(2)}) || !strings.Contains(s.SQL(), `FROM "users"`) {
 				t.Error("scope/model isolation", e, s.Arguments())
 			}
@@ -52,9 +52,9 @@ func TestSharedQueryPlanningKeepsModelAndRequestScopesIsolated(t *testing.T) {
 }
 func TestSharedOrderPlanningOwnsEachDerivedSlice(t *testing.T) {
 	d := records()
-	orders := []Order[record]{d.Note.Asc()}
+	orders := []Order[record]{NullableTextAsc(d.Note)}
 	base := d.Query().OrderBy(orders...)
-	orders[0] = d.ID.Desc()
+	orders[0] = KeyDesc(d.ID)
 	before, e := Compile(base)
 	if e != nil {
 		t.Fatal(e)
@@ -66,7 +66,7 @@ func TestSharedOrderPlanningOwnsEachDerivedSlice(t *testing.T) {
 	reversed := base
 	reversed.state.ast = stable
 	reversed.state.ast.Orders = querycore.CursorOrders(stable.Orders, true)
-	if _, e := Compile(reversed.OrderBy(d.ID.Asc())); e != nil {
+	if _, e := Compile(reversed.OrderBy(KeyAsc(d.ID))); e != nil {
 		t.Fatal(e)
 	}
 	after, e := Compile(base)

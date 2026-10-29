@@ -20,14 +20,14 @@ func TestPostgresJSONPredicatesAndProjections(t *testing.T) {
 			predicate expr.Predicate[jsonqueries.Document]
 			count     int64
 		}{
-			{expr.ModelPredicate(f.Settings.Eq(filter)), 2}, {expr.JSONContains(expr.Value(f.Settings), expr.Param(f.Settings, filter)).Eq(true), 2},
-			{expr.JSONContainedBy(expr.Value(f.Settings), expr.Param(f.Settings, filter)).Eq(true), 3}, {expr.JSONType(expr.Value(f.Settings)).Eq(database.JSONObject), 3},
-			{expr.JSONContains(expr.Value(f.Tags), expr.Param(f.Tags, document(t, []string{"go"}))).Eq(true), 2},
-			{expr.ModelPredicate(f.Tags.Eq(document(t, []string{"db", "go"}))), 1},
-			{expr.ModelPredicate(f.Backup.IsNull()), 2}, {expr.JSONContainsNullable(expr.Value(f.Backup), expr.NullableRow(expr.Param(f.Settings, filter))).Eq(value.Of(true)), 1},
-			{expr.JSONContainedByNullable(expr.Value(f.Backup), expr.NullableRow(expr.Param(f.Settings, filter))).Eq(value.Of(true)), 1}, {expr.JSONTypeNullable(expr.JSONRoot(expr.Value(f.State)).JSON()).Eq(value.Of(database.JSONNull)), 2},
+			{expr.ModelPredicate(orm.JSONEq(f.Settings, filter)), 2}, {expr.JSONContains(expr.Value(orm.JSONExpr(f.Settings)), expr.Param(orm.JSONExpr(f.Settings), filter)).Eq(true), 2},
+			{expr.JSONContainedBy(expr.Value(orm.JSONExpr(f.Settings)), expr.Param(orm.JSONExpr(f.Settings), filter)).Eq(true), 3}, {expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))).Eq(database.JSONObject), 3},
+			{expr.JSONContains(expr.Value(orm.JSONExpr(f.Tags)), expr.Param(orm.JSONExpr(f.Tags), document(t, []string{"go"}))).Eq(true), 2},
+			{expr.ModelPredicate(orm.JSONEq(f.Tags, document(t, []string{"db", "go"}))), 1},
+			{expr.ModelPredicate(orm.NullableJSONIsNull(f.Backup)), 2}, {expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))).Eq(value.Of(true)), 1},
+			{expr.JSONContainedByNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))).Eq(value.Of(true)), 1}, {expr.JSONTypeNullable(expr.JSONRoot(expr.Value(orm.JSONExpr(f.State))).JSON()).Eq(value.Of(database.JSONNull)), 2},
 		} {
-			count, err := expr.Where(q, test.predicate).Count(t.Context(), tx)
+			count, err := orm.Count(t.Context(), tx, expr.Where(q, test.predicate))
 			if err != nil || count != test.count {
 				t.Fatal("unexpected JSON filter count", count, test.count, err)
 			}
@@ -35,7 +35,7 @@ func TestPostgresJSONPredicatesAndProjections(t *testing.T) {
 		if err := checkSnapshotKind(t, tx, original); err != nil {
 			return err
 		}
-		grouped := rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), expr.JSONType(expr.Value(f.Settings)).Value()), expr.Group(expr.Value(f.Settings))), expr.CompareValue(expr.JSONContainsValue(expr.Row(expr.Value(f.Settings)).Value(), expr.Param(f.Settings, filter).Value())).Eq(true))
+		grouped := rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))).Value()), expr.Group(expr.Value(orm.JSONExpr(f.Settings)))), expr.CompareValue(expr.JSONContainsValue(expr.Row(expr.Value(orm.JSONExpr(f.Settings))).Value(), expr.Param(orm.JSONExpr(f.Settings), filter).Value())).Eq(true))
 		if kinds, err := rowset.ReadScalar(grouped).All(t.Context(), tx); err != nil || len(kinds) != 1 || kinds[0] != database.JSONObject {
 			t.Fatal(kinds, err)
 		}
@@ -46,7 +46,7 @@ func TestPostgresJSONPredicatesAndProjections(t *testing.T) {
 func TestPostgresJSONWritesRelationsAndNaturalKeys(t *testing.T) {
 	runJSON(t, func(tx *database.Tx, original []jsonqueries.Document) error {
 		q, f := jsonqueries.Documents.Query(), jsonqueries.Documents
-		loaded, err := q.OrderBy(f.Key().Asc()).With(jsonqueries.DocumentLinks.Policy).All(t.Context(), tx)
+		loaded, err := orm.All(t.Context(), tx, q.OrderBy(orm.KeyAsc(f.Key())).With(jsonqueries.DocumentLinks.Policy))
 		if err != nil || len(loaded) != 3 {
 			t.Fatal(loaded, err)
 		}
@@ -61,22 +61,22 @@ func TestPostgresJSONWritesRelationsAndNaturalKeys(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		policy, err := jsonqueries.Policies.Require(t.Context(), tx, same)
+		policy, err := orm.RequireKey(t.Context(), tx, jsonqueries.Policies.Table, same)
 		if err != nil || policy.ID != original[0].PolicyID {
 			t.Fatal(policy, err)
 		}
-		updated, err := orm.Update(t.Context(), tx, q, f.Key(), 1, f.Backup.Set(original[0].Settings))
+		updated, err := orm.Update(t.Context(), tx, q, f.Key(), 1, orm.NullableJSONSet(f.Backup, original[0].Settings))
 		if err != nil || updated.Backup.IsNull() || updated.Settings != original[0].Settings {
 			t.Fatal(updated, err)
 		}
-		cleared, err := orm.Update(t.Context(), tx, q, f.Key(), 1, f.Backup.SetNull())
+		cleared, err := orm.Update(t.Context(), tx, q, f.Key(), 1, orm.NullableJSONSetNull(f.Backup))
 		if err != nil || !cleared.Backup.IsNull() || cleared.Settings != original[0].Settings {
 			t.Fatal(cleared, err)
 		}
-		if _, err := orm.Update(t.Context(), tx, q, f.Key(), 1, f.Settings.Set(value.JSON[jsonqueries.Preferences]{})); err == nil {
+		if _, err := orm.Update(t.Context(), tx, q, f.Key(), 1, orm.JSONSet(f.Settings, value.JSON[jsonqueries.Preferences]{})); err == nil {
 			t.Fatal("zero JSON wrote")
 		}
-		kept, err := jsonqueries.Documents.Require(t.Context(), tx, 1)
+		kept, err := orm.RequireKey(t.Context(), tx, jsonqueries.Documents.Table, 1)
 		if err != nil || kept.Settings != original[0].Settings {
 			t.Fatal("failed write changed row", err)
 		}
@@ -85,7 +85,7 @@ func TestPostgresJSONWritesRelationsAndNaturalKeys(t *testing.T) {
 			return err
 		}
 		prefs := document(t, jsonqueries.Preferences{Quota: value.Set(price), Labels: value.Set(map[string]string{"lang": "日本語"})})
-		withQuota, err := orm.Update(t.Context(), tx, q, f.Key(), 1, f.Settings.Set(prefs))
+		withQuota, err := orm.Update(t.Context(), tx, q, f.Key(), 1, orm.JSONSet(f.Settings, prefs))
 		if err != nil || withQuota.Settings != prefs {
 			t.Fatal(withQuota, err)
 		}

@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "foundry.test/consumer/models"
 
-var _, _ = models.Users.Query().ForUpdate().Count(nil, nil)
+var _, _ = orm.Count(nil, nil, orm.Lock(models.Users.Query()))

@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/intervalqueries"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -7,5 +9,5 @@ import (
 )
 
 func invalid() {
-	_ = rows.MapSelected(intervalqueries.Summaries.Count, expr.SumInterval(intervalqueries.Samples.Period).Value())
+	_ = rows.MapSelected(intervalqueries.Summaries.Count, expr.SumInterval(orm.IntervalExpr(intervalqueries.Samples.Period)).Value())
 }

@@ -26,7 +26,7 @@ func (b *Backend) RevokeID(ctx context.Context, address token.Address, identity 
 			return err
 		}
 		key := model.IDFromBytes[tokenstore.Family](id.Bytes())
-		found, err := families(subject.Scope, subject.Key).Where(tokenstore.Families.ID.Eq(key)).ForUpdate().First(ctx, tx)
+		found, err := orm.FirstLocked(ctx, tx, orm.Lock(families(subject.Scope, subject.Key).Where(orm.KeyEq(tokenstore.Families.ID, key))))
 		if err != nil {
 			return err
 		}

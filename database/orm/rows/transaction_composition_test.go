@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -32,10 +34,10 @@ type promotedTransactionAlias struct {
 
 func TestTransactionJoinsRetainBoundariesAndNullability(t *testing.T) {
 	m := declareMembers()
-	a := AsTransaction[left](LockedRecord(m.Query().Where(m.ID.Ne(0)).Limit(2).ForUpdate().SkipLocked()), "a")
+	a := AsTransaction[left](LockedRecord(orm.Lock(m.Query().Where(orm.KeyNe(m.ID, 0)).Limit(2)).SkipLocked()), "a")
 	b := AsTransaction[right](TransactionOf(ModelRecord(m.Query().Limit(3))), "b")
 	as, bs := TransactionScope(a), TransactionScope(b)
-	on := On(expr.At(as, m.ID), expr.At(bs, m.ID))
+	on := On(expr.At(as, orm.KeyExpr(m.ID)), expr.At(bs, orm.KeyExpr(m.ID)))
 	l := TransactionLeftJoin(a, b, on)
 	r := TransactionRightJoin(a, b, on)
 	f := TransactionFullJoin(a, b, on)
@@ -43,9 +45,9 @@ func TestTransactionJoinsRetainBoundariesAndNullability(t *testing.T) {
 	queries := []ormcore.Source{
 		SelectTransactionRecord(TransactionInnerJoin(a, b, on), LeftScope(TransactionInnerJoin(a, b, on), as)).core.Source,
 		SelectTransactionRecord(TransactionCrossJoin(a, b), RightScope(TransactionCrossJoin(a, b), bs)).core.Source,
-		SelectTransaction(l, schema, Map(schema.ID, expr.AtNullable(NullableRightScope(l, bs), m.ID)), Map(schema.Nickname, expr.AtNullableValue(NullableRightScope(l, bs), m.Nickname))).core.Source,
-		SelectTransaction(r, schema, Map(schema.ID, expr.AtNullable(NullableLeftScope(r, as), m.ID)), Map(schema.Nickname, expr.AtNullableValue(NullableLeftScope(r, as), m.Nickname))).core.Source,
-		SelectTransaction(f, schema, Map(schema.ID, expr.AtNullable(NullableLeftScope(f, as), m.ID)), Map(schema.Nickname, expr.AtNullableValue(NullableRightScope(f, bs), m.Nickname))).core.Source,
+		SelectTransaction(l, schema, Map(schema.ID, expr.AtNullable(NullableRightScope(l, bs), orm.KeyExpr(m.ID))), Map(schema.Nickname, expr.AtNullableValue(NullableRightScope(l, bs), orm.NullableTextExpr(m.Nickname)))).core.Source,
+		SelectTransaction(r, schema, Map(schema.ID, expr.AtNullable(NullableLeftScope(r, as), orm.KeyExpr(m.ID))), Map(schema.Nickname, expr.AtNullableValue(NullableLeftScope(r, as), orm.NullableTextExpr(m.Nickname)))).core.Source,
+		SelectTransaction(f, schema, Map(schema.ID, expr.AtNullable(NullableLeftScope(f, as), orm.KeyExpr(m.ID))), Map(schema.Nickname, expr.AtNullableValue(NullableRightScope(f, bs), orm.NullableTextExpr(m.Nickname)))).core.Source,
 	}
 	for _, s := range queries {
 		sql := compileTransaction(t, s)
@@ -81,7 +83,7 @@ func TestTransactionJoinsRetainBoundariesAndNullability(t *testing.T) {
 		transactionTableMarker[TransactionAlias[left, member]]
 		promotedTransactionAlias
 	}{promotedTransactionAlias: promotedTransactionAlias{broken}}
-	if j := TransactionLeftJoin(b, promoted, On(expr.At(bs, m.ID), expr.At(as, m.ID))); !errors.Is(j.state.source.Err, fault.Invalid) {
+	if j := TransactionLeftJoin(b, promoted, On(expr.At(bs, orm.KeyExpr(m.ID)), expr.At(as, orm.KeyExpr(m.ID)))); !errors.Is(j.state.source.Err, fault.Invalid) {
 		t.Fatal("promoted source accepted")
 	}
 }
@@ -92,7 +94,7 @@ func TestTransactionCorrelationAndLateralLocks(t *testing.T) {
 	b := AsTransaction[right](TransactionOf(ModelRecord(m.Query())), "b")
 	c := TransactionCorrelate(a, b)
 	outer, inner := TransactionOuterScope(c, TransactionScope(a)), TransactionInnerScope(c, TransactionScope(b))
-	x, y := expr.At(outer, m.ID), expr.At(inner, m.ID)
+	x, y := expr.At(outer, orm.KeyExpr(m.ID)), expr.At(inner, orm.KeyExpr(m.ID))
 	c = c.Where(expr.Less(y, x))
 	record := SelectTransactionCorrelatedRecord(c, inner).OrderBy(y.Desc()).Limit(1).ForUpdate().Of(Target(inner)).SkipLocked()
 	lat := AsTransactionLateral[latestTag](record, "latest")
@@ -117,7 +119,7 @@ func TestTransactionCorrelationAndLateralLocks(t *testing.T) {
 		t.Fatal("foreign lateral parent")
 	}
 	scalar := SelectTransactionCorrelatedScalar(c, expr.Row(y).Value()).Limit(1).ForShare().NoWait()
-	out := SelectTransactionValue(a, TransactionCorrelatedScalarRowQuery(scalar).Value()).Where(scalar.Exists(), TransactionInCorrelatedQuery(expr.At(TransactionScope(a), m.ID), scalar))
+	out := SelectTransactionValue(a, TransactionCorrelatedScalarRowQuery(scalar).Value()).Where(scalar.Exists(), TransactionInCorrelatedQuery(expr.At(TransactionScope(a), orm.KeyExpr(m.ID)), scalar))
 	sql = compileTransaction(t, out.core.Source)
 	if !strings.Contains(sql, `FOR SHARE NOWAIT`) || !strings.Contains(sql, `EXISTS(SELECT`) {
 		t.Fatal(sql)
@@ -126,8 +128,8 @@ func TestTransactionCorrelationAndLateralLocks(t *testing.T) {
 	d := AsTransaction[latestTag](TransactionOf(ModelRecord(m.Query())), "d")
 	nested := TransactionCorrelate(c, d)
 	nestedScope := TransactionOuterScope(nested, inner)
-	nestedID := expr.At(nestedScope, m.ID)
-	childID := expr.At(TransactionInnerScope(nested, TransactionScope(d)), m.ID)
+	nestedID := expr.At(nestedScope, orm.KeyExpr(m.ID))
+	childID := expr.At(TransactionInnerScope(nested, TransactionScope(d)), orm.KeyExpr(m.ID))
 	c = c.Where(nested.Where(expr.Equal(childID, nestedID)).Exists())
 	compileTransaction(t, SelectTransactionRecord(a, TransactionScope(a)).Where(c.Exists()).core.Source)
 	totals := lateralTotalSchema()
@@ -141,8 +143,8 @@ func TestTransactionSubqueriesUseCallerTransaction(t *testing.T) {
 	m := declareMembers()
 	a := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "a")
 	b := AsTransaction[right](TransactionOf(ModelRecord(m.Query())), "b")
-	id := expr.At(TransactionScope(a), m.ID)
-	selected := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), m.ID)).Value()).Limit(1)
+	id := expr.At(TransactionScope(a), orm.KeyExpr(m.ID))
+	selected := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), orm.KeyExpr(m.ID))).Value()).Limit(1)
 	scalar := TransactionScalarOf(selected).ForShare().SkipLocked()
 	q := SelectTransactionValue(a, TransactionScalarRowQuery(a, scalar).Value()).Where(TransactionInQuery(id, scalar), TransactionExistsQuery(a, scalar))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {int64(7)}}}
@@ -164,7 +166,7 @@ func TestTransactionSubqueriesUseCallerTransaction(t *testing.T) {
 	if got, err := q.All(t.Context(), nil); !errors.Is(err, fault.Invalid) || got != nil {
 		t.Fatal(got, err)
 	}
-	nullable := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), m.Nickname)).Value())
+	nullable := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), orm.NullableTextExpr(m.Nickname))).Value())
 	compileTransaction(t, SelectTransactionValue(a, TransactionScalarNullableRowQuery(a, nullable).Value()).core.Source)
 	_ = TransactionScalarNullableRowQuery(a, nullable)
 	_ = TransactionScalarRowQuery(a, selected)

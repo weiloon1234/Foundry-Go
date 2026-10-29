@@ -35,8 +35,8 @@ func TestPostgresORMManyToMany(t *testing.T) {
 			if i == 1 {
 				memberStatus = models.StatusDisabled
 			}
-			draft := []orm.Assignment[models.User]{models.Users.Email.Set("through-fixture"), models.Users.Age.Set(20 + i), models.Users.Status.Set(memberStatus), models.Users.Level.Set(models.LevelBasic)}
-			user, err := models.Users.Insert(t.Context(), tx, draft...)
+			draft := []orm.Assignment[models.User]{orm.TextSet(models.Users.Email, "through-fixture"), orm.NumberSet(models.Users.Age, 20+i), orm.EnumSet(models.Users.Status, memberStatus), orm.EnumSet(models.Users.Level, models.LevelBasic)}
+			user, err := orm.Insert(t.Context(), tx, models.Users.Table, draft...)
 			if err != nil {
 				return err
 			}
@@ -47,7 +47,7 @@ func TestPostgresORMManyToMany(t *testing.T) {
 			if i == 2 {
 				name = "third"
 			}
-			if _, err := models.Groups.Insert(t.Context(), tx, models.Groups.Code.Set(code), models.Groups.Name.Set(name), models.Groups.OwnerID.Set(users[i].ID)); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Groups.Table, orm.KeySet(models.Groups.Code, code), orm.TextSet(models.Groups.Name, name), orm.ColumnSet(models.Groups.OwnerID, users[i].ID)); err != nil {
 				return err
 			}
 		}
@@ -60,20 +60,20 @@ func TestPostgresORMManyToMany(t *testing.T) {
 			{"a", 0, "a", 2}, {"b", 0, "b", 1}, {"c", 0, "a", 1}, {"d", 1, "a", 3}, {"e", 2, "c", 1},
 			{"null", 0, "", 1}, {"orphan", 0, "missing", 1},
 		} {
-			draft := []orm.Assignment[models.Membership]{models.Memberships.ID.Set(edge.id), models.Memberships.UserID.Set(users[edge.owner].ID), models.Memberships.Lookup.Set("same"), models.Memberships.Priority.Set(edge.priority), models.Memberships.Level.Set(models.LevelBasic), models.Memberships.InviterID.Set(users[1].ID)}
+			draft := []orm.Assignment[models.Membership]{orm.KeySet(models.Memberships.ID, edge.id), orm.ColumnSet(models.Memberships.UserID, users[edge.owner].ID), orm.TextSet(models.Memberships.Lookup, "same"), orm.NumberSet(models.Memberships.Priority, edge.priority), orm.EnumSet(models.Memberships.Level, models.LevelBasic), orm.NullableColumnSet(models.Memberships.InviterID, users[1].ID)}
 			if edge.group != "" {
-				draft = append(draft, models.Memberships.GroupCode.Set(edge.group))
+				draft = append(draft, orm.NullableTextSet(models.Memberships.GroupCode, edge.group))
 			}
-			if _, err := models.Memberships.Insert(t.Context(), tx, draft...); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Memberships.Table, draft...); err != nil {
 				return err
 			}
 		}
 		counter := &queryfixture.QueryCounter{Executor: tx}
 		limits := orm.DefaultRelationLimits()
 		limits.BatchSize = 2
-		groups := models.UserLinks.Groups.OrderByPivot(models.Memberships.Priority.Asc()).OrderBy(models.Groups.Code.Desc())
-		base := orm.WithRelationLimits(models.Users.Query().OrderBy(models.Users.Age.Asc()), limits)
-		loaded, err := base.With(groups).All(t.Context(), counter)
+		groups := models.UserLinks.Groups.OrderByPivot(orm.NumberAsc(models.Memberships.Priority)).OrderBy(orm.KeyDesc(models.Groups.Code))
+		base := orm.WithRelationLimits(models.Users.Query().OrderBy(orm.NumberAsc(models.Users.Age)), limits)
+		loaded, err := orm.All(t.Context(), counter, base.With(groups))
 		if err != nil {
 			return err
 		}
@@ -119,8 +119,8 @@ func TestPostgresORMManyToMany(t *testing.T) {
 		}
 
 		counter.Queries.Store(0)
-		nested := groups.With(models.GroupLinks.Owner.Where(models.Users.Status.Eq(models.StatusActive))).WithPivot(models.MembershipLinks.Inviter)
-		loaded, err = base.With(nested).All(t.Context(), counter)
+		nested := groups.With(models.GroupLinks.Owner.Where(orm.EnumEq(models.Users.Status, models.StatusActive))).WithPivot(models.MembershipLinks.Inviter)
+		loaded, err = orm.All(t.Context(), counter, base.With(nested))
 		if err != nil {
 			return err
 		}
@@ -134,7 +134,7 @@ func TestPostgresORMManyToMany(t *testing.T) {
 		if !ownerLoaded || owner.IsSet() || !inviterLoaded || !inviterPresent || inviterModel.ID != users[1].ID {
 			t.Error("target/pivot nested scopes or loaded states incorrect")
 		}
-		filtered, err := base.With(groups.Where(models.Groups.Code.Eq("a")).WherePivot(models.Memberships.Priority.Gt(1))).All(t.Context(), counter)
+		filtered, err := orm.All(t.Context(), counter, base.With(groups.Where(orm.KeyEq(models.Groups.Code, "a")).WherePivot(orm.NumberGt(models.Memberships.Priority, 1))))
 		if err != nil {
 			return err
 		}
@@ -143,12 +143,12 @@ func TestPostgresORMManyToMany(t *testing.T) {
 		}
 
 		for _, link := range []struct{ from, to int }{{0, 1}, {0, 2}, {1, 0}} {
-			if _, err := models.Friendships.Insert(t.Context(), tx, models.Friendships.FromID.Set(users[link.from].ID), models.Friendships.ToID.Set(users[link.to].ID), models.Friendships.Note.Set("friend")); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, models.Friendships.Table, orm.ColumnSet(models.Friendships.FromID, users[link.from].ID), orm.ColumnSet(models.Friendships.ToID, users[link.to].ID), orm.TextSet(models.Friendships.Note, "friend")); err != nil {
 				return err
 			}
 		}
-		friends := models.UserLinks.Friends.Where(models.Users.Status.Eq(models.StatusActive)).OrderBy(models.Users.Age.Asc())
-		self, err := base.With(friends.With(friends)).All(t.Context(), counter)
+		friends := models.UserLinks.Friends.Where(orm.EnumEq(models.Users.Status, models.StatusActive)).OrderBy(orm.NumberAsc(models.Users.Age))
+		self, err := orm.All(t.Context(), counter, base.With(friends.With(friends)))
 		if err != nil {
 			return err
 		}
@@ -196,12 +196,12 @@ func assertThroughFailures(t *testing.T, tx *database.Tx, counter *queryfixture.
 	}
 	limits := orm.DefaultRelationLimits()
 	limits.MaxDepth = 1
-	if result, err := orm.WithRelationLimits(base, limits).With(groups.WithPivot(models.MembershipLinks.Inviter)).All(t.Context(), counter); !errors.Is(err, fault.Invalid) || result != nil || counter.Queries.Load() != 0 {
+	if result, err := orm.All(t.Context(), counter, orm.WithRelationLimits(base, limits).With(groups.WithPivot(models.MembershipLinks.Inviter))); !errors.Is(err, fault.Invalid) || result != nil || counter.Queries.Load() != 0 {
 		t.Error("nested pivot depth was not checked before root query")
 	}
 	// A declared alternate key need not be unique in the physical schema. A
 	// pivot that joins two targets must fail instead of selecting an arbitrary one.
-	ambiguous := orm.ManyToManyOf(models.Users.Groups, models.Users.ID, models.Memberships.UserID, models.Memberships.Lookup, models.Groups.Name).WherePivot(models.Memberships.ID.Eq("a"))
+	ambiguous := orm.ManyToManyOf(models.Users.Groups, orm.KeyExpr(models.Users.ID), orm.ColumnExpr(models.Memberships.UserID), orm.TextExpr(models.Memberships.Lookup), orm.TextExpr(models.Groups.Name)).WherePivot(orm.KeyEq(models.Memberships.ID, "a"))
 	if result, err := orm.LoadFrom(t.Context(), counter, base.With(ambiguous), users); !errors.Is(err, database.TooManyRows) || result != nil {
 		t.Error("ambiguous pivot join did not reject duplicate target rows")
 	}
@@ -218,7 +218,7 @@ func assertThroughFailures(t *testing.T, tx *database.Tx, counter *queryfixture.
 			t.Error("failed branch mutated caller values")
 		}
 	}
-	if _, err := models.Groups.Query().Count(t.Context(), counter); err != nil {
+	if _, err := orm.Count(t.Context(), counter, models.Groups.Query()); err != nil {
 		return err
 	}
 	return nil

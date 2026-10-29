@@ -7,5 +7,5 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var source = rows.MatchNullableSource(models.Users.Email, expr.Value(models.Users.Nickname))
+var source = rows.MatchNullableSource(orm.TextExpr(models.Users.Email), expr.Value(orm.NullableTextExpr(models.Users.Nickname)))
 var _ = orm.InsertMapping[models.User, models.User](source)

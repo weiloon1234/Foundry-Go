@@ -7,11 +7,11 @@ import (
 )
 
 type wrapper struct {
-	orm.NullableInputText[n.Member, coremodels.LabelInput, coremodels.StoredLabel]
+	orm.NullableInputTextAdapter[n.Member, coremodels.LabelInput, coremodels.StoredLabel]
 }
 
 func (w wrapper) Set(coremodels.LabelInput) orm.Assignment[n.Member] {
-	return n.Members.Name.Set("redirected")
+	return orm.InputTextSet(n.Members.Name, "redirected")
 }
 
-var _ = orm.ConflictSet(wrapper{n.Members.Note}, coremodels.LabelInput{Text: "literal"})
+var _ = orm.ConflictSet(wrapper{orm.NullableInputTextExpr(n.Members.Note)}, coremodels.LabelInput{Text: "literal"})

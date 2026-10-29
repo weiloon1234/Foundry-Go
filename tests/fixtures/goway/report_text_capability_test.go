@@ -14,13 +14,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// The reviewer's construction: the shallow enum supplies metadata while a
-// zero-valued, deeper text handle supplies the framework's private marker.
+// The shallow enum adapter supplies metadata while a deeper text witness
+// supplies the framework's private marker. The nil witness must never be called.
 type donor struct {
-	orm.Text[models.User, models.Status]
+	orm.TextExpressionColumn[models.User, models.Status, models.Status]
 }
 type forged struct {
-	orm.Enum[models.User, models.Status]
+	orm.EnumAdapter[models.User, models.Status]
 	donor
 }
 
@@ -37,10 +37,10 @@ type reportNullableEnumFields struct {
 	State orm.NullableEnum[reportNullableEnum, models.Status]
 }
 type nullableDonor struct {
-	orm.NullableText[reportNullableEnum, models.Status]
+	orm.NullableTextAdapter[reportNullableEnum, models.Status]
 }
 type nullableForged struct {
-	orm.NullableEnum[reportNullableEnum, models.Status]
+	orm.NullableEnumAdapter[reportNullableEnum, models.Status]
 	nullableDonor
 }
 
@@ -49,7 +49,7 @@ func (nullableForged) Contains(models.Status) orm.Predicate[reportNullableEnum] 
 }
 
 func TestReportTextNestedEmbedding(t *testing.T) {
-	input := forged{Enum: models.Users.Status}
+	input := forged{EnumAdapter: orm.EnumExpr(models.Users.Status)}
 	// Keep the exact reviewed call, including explicit type arguments and Gt.
 	p := expr.TextRow[models.User, models.Status](input).Gt(models.StatusActive)
 	_, err := rowset.CompileRead(rowset.Read(rowset.FromModel(models.Users.Query()).Where(p)))
@@ -69,7 +69,7 @@ func TestReportTextNestedEmbedding(t *testing.T) {
 				"nullable":       expr.NullableRow(text).Eq(value.Of(models.StatusActive)),
 				"computed":       expr.Lower(text).Gt("active"),
 				"not":            expr.Not(text.Gt(models.StatusActive)),
-				"or":             expr.Or(text.Eq(models.StatusActive), expr.ModelPredicate(models.Users.Age.Gt(1))),
+				"or":             expr.Or(text.Eq(models.StatusActive), expr.ModelPredicate(orm.NumberGt(models.Users.Age, 1))),
 			}
 			for name, p := range checks {
 				t.Run(name, func(t *testing.T) {
@@ -89,7 +89,7 @@ func TestReportNullableTextNestedEmbedding(t *testing.T) {
 	f := orm.Define("report_nullable_enums", func(b orm.Builder[reportNullableEnum], r *reportNullableEnum) reportNullableEnumFields {
 		return reportNullableEnumFields{orm.TableOf(b, &r.ID), orm.NullableEnumOf(b, &r.State)}
 	})
-	input := nullableForged{NullableEnum: f.State}
+	input := nullableForged{NullableEnumAdapter: orm.NullableEnumExpr(f.State)}
 	for name, column := range map[string]orm.TextExpressionColumn[reportNullableEnum, models.Status, value.Nullable[models.Status]]{"value": input, "pointer": &input} {
 		t.Run(name, func(t *testing.T) {
 			text := expr.TextNullableRow(column)
@@ -105,7 +105,7 @@ func TestReportNullableTextNestedEmbedding(t *testing.T) {
 				"null_param":     text.Param(value.Null[models.Status]()).IsNull(),
 				"computed":       expr.LowerNullable(text).Gt("active"),
 				"not":            expr.Not(text.Gt(models.StatusActive)),
-				"or":             expr.Or(text.Eq(models.StatusActive), expr.ModelPredicate(f.State.IsNull())),
+				"or":             expr.Or(text.Eq(models.StatusActive), expr.ModelPredicate(orm.NullableEnumIsNull(f.State))),
 			}
 			for name, p := range checks {
 				t.Run(name, func(t *testing.T) {
@@ -188,11 +188,11 @@ func assertReportTextOperationsRejected[M any](t *testing.T, source orm.Query[M]
 }
 
 func TestReportTextSupportedFamilies(t *testing.T) {
-	ordinary := rowset.FromModel(models.Users.Query()).Where(expr.TextRow(models.Users.Email).Gt("ada@example.test"), expr.TextNullableRow(models.Users.Nickname).Contains("Ada"))
+	ordinary := rowset.FromModel(models.Users.Query()).Where(expr.TextRow(orm.TextExpr(models.Users.Email)).Gt("ada@example.test"), expr.TextNullableRow(orm.NullableTextExpr(models.Users.Nickname)).Contains("Ada"))
 	if _, err := rowset.CompileRead(rowset.Read(ordinary)); err != nil {
 		t.Fatal(err)
 	}
-	input := rowset.FromModel(mutators.Members.Query()).Where(expr.TextRow(mutators.Members.Email).Gt("ada@example.test"), expr.TextNullableRow(mutators.Members.Note).Contains("Ada"))
+	input := rowset.FromModel(mutators.Members.Query()).Where(expr.TextRow(orm.InputTextExpr(mutators.Members.Email)).Gt("ada@example.test"), expr.TextNullableRow(orm.NullableInputTextExpr(mutators.Members.Note)).Contains("Ada"))
 	if _, err := rowset.CompileRead(rowset.Read(input)); err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestReportModelPredicateNestedRelationTargetMarker(t *testing.T) {
 			for name, ps := range map[string][]orm.Predicate[models.User]{
 				"no child":             nil,
 				"reference-free child": {orm.WhereRaw[models.User]("TRUE")},
-				"model child":          {models.Users.Age.Gt(0)},
+				"model child":          {orm.NumberGt(models.Users.Age, 0)},
 			} {
 				for operation, predicate := range map[string]orm.Predicate[models.User]{
 					"Has":        orm.Has[models.User, models.User](relation, ps...),

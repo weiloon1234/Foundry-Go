@@ -20,13 +20,13 @@ func TestStage7ReportProjectionReads(t *testing.T) {
 	table := orm.Define("report_projection_nodes", func(b orm.Builder[treeNode], r *treeNode) treeTable {
 		return treeTable{orm.TableOf(b, &r.ID), orm.NumberOf(b, &r.ParentID)}
 	}, orm.WithGlobalScopes(func(d treeTable) []orm.GlobalScope[treeNode] {
-		return []orm.GlobalScope[treeNode]{orm.Scope(d.Table, "visible", func(context.Context) (orm.Predicate[treeNode], error) { return d.ParentID.Gt(0), nil })}
+		return []orm.GlobalScope[treeNode]{orm.Scope(d.Table, "visible", func(context.Context) (orm.Predicate[treeNode], error) { return orm.NumberGt(d.ParentID, 0), nil })}
 	}))
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO report_projection_nodes VALUES (1,1),(2,1),(3,2),(4,0)`); err != nil {
 			return err
 		}
-		q := rows.ReorderUnwindowed(rows.SelectValue(table.Query(), table.ParentID), expr.Value(table.Key()).Asc())
+		q := rows.ReorderUnwindowed(rows.SelectValue(table.Query(), orm.NumberExpr(table.ParentID)), expr.Value(orm.KeyExpr(table.Key())).Asc())
 		count, err := rows.Read(q).Count(ctx, tx)
 		if err != nil {
 			return err
@@ -48,7 +48,7 @@ func TestStage7ReportProjectionReads(t *testing.T) {
 		if !simple.HasMore || len(simple.Items) != 2 {
 			t.Fatal(simple)
 		}
-		grouped := rows.Having(rows.GroupBy(rows.SelectValue(table.Query(), table.ParentID), expr.Group(expr.Value(table.ParentID))), expr.Count[treeNode]().Gt(1))
+		grouped := rows.Having(rows.GroupBy(rows.SelectValue(table.Query(), orm.NumberExpr(table.ParentID)), expr.Group(expr.Value(orm.NumberExpr(table.ParentID)))), expr.Count[treeNode]().Gt(1))
 		count, err = rows.Read(grouped).Count(ctx, tx)
 		if err != nil {
 			return err

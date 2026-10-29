@@ -6,4 +6,4 @@ import (
 )
 
 var c orm.InputNumber[h.Member, int64, int64]
-var _ = c.Increment(1)
+var _ = orm.NumberIncrement(c, 1)

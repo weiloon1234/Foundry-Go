@@ -1,5 +1,7 @@
 package translations
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"fmt"
@@ -395,7 +397,7 @@ func (s textSlot[M, K]) sync(ctx context.Context, outer *database.Tx, owner M, i
 			return err
 		}
 		fields := store.Translations
-		_, err = deleteRows(ctx, tx, store.Translations.Query().Where(fields.Scope.Eq(owner.Scope()), fields.SubjectKey.Eq(subject), fields.Field.Eq(string(s.field.Name())), fields.Locale.In(removed...)))
+		_, err = deleteRows(ctx, tx, store.Translations.Query().Where(orm.TextEq(fields.Scope, owner.Scope()), orm.TextEq(fields.SubjectKey, subject), orm.TextEq(fields.Field, string(s.field.Name())), orm.TextIn(fields.Locale, removed...)))
 		return err
 	})
 }

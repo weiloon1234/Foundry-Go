@@ -12,31 +12,35 @@ import (
 // Static CI input only: lint must accept every ordinary typed operation even
 // when concrete DB/Tx values are implicitly assigned to executor interfaces.
 func Typed(ctx context.Context, db *database.DB, id model.ID[models.User]) {
-	q := models.Users.Query().Where(models.Users.ID.Eq(id))
-	users, _ := q.All(ctx, db)
-	_, _ = q.First(ctx, db)
-	_, _ = q.Count(ctx, db)
-	all := q.All
+	q := models.Users.Query().Where(orm.KeyEq(models.Users.ID, id))
+	users, _ := orm.All(ctx, db, q)
+	_, _ = orm.First(ctx, db, q)
+	_, _ = orm.Count(ctx, db, q)
+	all := func(ctx context.Context, ex database.Executor) ([]models.User, error) {
+		return orm.All(ctx, ex, q)
+	}
 	_, _ = all(ctx, db)
-	_, _ = models.Users.Insert(ctx, db, models.Users.Email.Set("new"))
-	_, _ = models.Users.Update(ctx, db, id, models.Users.Email.Set("updated"))
-	_, _ = models.Users.Delete(ctx, db, id)
-	_, _ = q.UpdateAll(ctx, db, models.Users.Age.Set(21))
-	_, _ = q.DeleteAll(ctx, db)
-	_, _ = models.Orders.Query().With(models.OrderRelations.Buyer).All(ctx, db)
+	_, _ = orm.Insert(ctx, db, models.Users.Table, orm.TextSet(models.Users.Email, "new"))
+	_, _ = orm.Update(ctx, db, models.Users.Table.Query(), models.Users.Table.Key(), id, orm.TextSet(models.Users.Email, "updated"))
+	_, _ = orm.Delete(ctx, db, models.Users.Table.Query(), models.Users.Table.Key(), id)
+	_, _ = orm.UpdateAll(ctx, db, q, orm.NumberSet(models.Users.Age, 21))
+	_, _ = orm.DeleteAll(ctx, db, q)
+	_, _ = orm.All(ctx, db, models.Orders.Query().With(models.OrderRelations.Buyer))
 	_, _ = orm.LoadFrom(ctx, db, models.Users.Query().With(models.UserRelations.Orders), users)
 	_, _ = orm.CursorPaginate(ctx, db, q, orm.CursorRequest[models.User]{Size: 10})
-	_ = q.Chunk(ctx, db, 10, func([]models.User) error { return nil })
+	_ = orm.Chunk(ctx, db, q, 10, func([]models.User) error { return nil })
 	_ = db.Transaction(ctx, func(tx *database.Tx) error {
-		_, err := q.All(ctx, tx)
+		_, err := orm.All(ctx, tx, q)
 		if err != nil {
 			return err
 		}
-		_, err = models.Users.Update(ctx, tx, id, models.Users.Email.Set("inside"))
+		_, err = orm.Update(ctx, tx, models.Users.Table.Query(), models.Users.Table.Key(), id, orm.TextSet(models.Users.Email, "inside"))
 		return err
 	})
 	var unused = db.Query
 	_ = unused // Taking a raw function value is not a call.
+	unusedRaw := orm.Raw[models.User, model.ID[models.User]]
+	_ = unusedRaw
 }
 
 // Concrete application methods are not framework raw entry points, even if the

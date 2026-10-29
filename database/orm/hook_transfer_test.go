@@ -34,13 +34,13 @@ func TestModelHookFactoryRunsInsideWriteAndAfterShapeValidation(t *testing.T) {
 		t.Fatal("read compiled hook factory")
 	}
 	db := hookDB(t, testConnector{onBegin: func() { begins++; active = true }})
-	if _, e := d.Insert(t.Context(), db); !errors.Is(e, veto) {
+	if _, e := Insert(t.Context(), db, d.Table); !errors.Is(e, veto) {
 		t.Fatal("missing field rejected before hook", e)
 	}
 	active = false
 	foreign := hookedFields(nil)
-	for _, input := range [][]Assignment[hookedRow]{{d.Name.Set("a"), d.Name.Set("b")}, {foreign.Name.Set("x")}} {
-		if _, e := d.Insert(t.Context(), db, input...); !errors.Is(e, fault.Invalid) {
+	for _, input := range [][]Assignment[hookedRow]{{InputTextSet(d.Name, "a"), InputTextSet(d.Name, "b")}, {InputTextSet(foreign.Name, "x")}} {
+		if _, e := Insert(t.Context(), db, d.Table, input...); !errors.Is(e, fault.Invalid) {
 			t.Fatal(e)
 		}
 	}

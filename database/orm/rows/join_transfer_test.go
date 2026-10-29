@@ -14,11 +14,11 @@ import (
 
 func TestJoinSourceWindowsAndParameterOrder(t *testing.T) {
 	m := declareMembers()
-	a := As[left](m.Query().Where(orm.NumberKey(m.Key()).Gt(1)).Limit(2), "a")
-	b := As[right](m.Query().Where(orm.NumberKey(m.Key()).Lt(9)).OrderBy(m.ID.Desc()).Offset(1), "b")
-	x, y := expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID)
+	a := As[left](m.Query().Where(orm.NumberKeyGt(orm.NumberKey(m.Key()), 1)).Limit(2), "a")
+	b := As[right](m.Query().Where(orm.NumberKeyLt(orm.NumberKey(m.Key()), 9)).OrderBy(orm.KeyDesc(m.ID)).Offset(1), "b")
+	x, y := expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))
 	j := LeftJoin(a, b, On(x, y).WhereLeft(x.Ne(5)).WhereRight(y.Ne(6)))
-	id := expr.At(LeftScope(j, Scope(a)), m.ID)
+	id := expr.At(LeftScope(j, Scope(a)), orm.KeyExpr(m.ID))
 	q := LimitScalar(OrderScalar(WhereScalar(SelectScalar(j, expr.Row(id).Value()), id.Ne(7)), id.Asc()), 4)
 	s, e := CompileRead(ReadScalar(q))
 	if e != nil {
@@ -34,9 +34,9 @@ func TestJoinSourceWindowsAndParameterOrder(t *testing.T) {
 	}
 	type third struct{}
 	c := As[third](m.Query(), "c")
-	rightID := expr.AtNullable(NullableRightScope(j, Scope(b)), m.ID)
-	chain := InnerJoin(j, c, On(rightID, expr.At(Scope(c), m.ID)))
-	if _, e := CompileRead(ReadScalar(SelectScalar(chain, expr.Row(expr.AtNullable(LeftNullableScope(chain, NullableRightScope(j, Scope(b))), m.ID)).Value()))); e != nil {
+	rightID := expr.AtNullable(NullableRightScope(j, Scope(b)), orm.KeyExpr(m.ID))
+	chain := InnerJoin(j, c, On(rightID, expr.At(Scope(c), orm.KeyExpr(m.ID))))
+	if _, e := CompileRead(ReadScalar(SelectScalar(chain, expr.Row(expr.AtNullable(LeftNullableScope(chain, NullableRightScope(j, Scope(b))), orm.KeyExpr(m.ID))).Value()))); e != nil {
 		t.Fatal(e)
 	}
 	again, _ := CompileRead(ReadScalar(q))
@@ -47,7 +47,7 @@ func TestJoinSourceWindowsAndParameterOrder(t *testing.T) {
 func TestJoinInvalidAliasesScopesAndDescriptors(t *testing.T) {
 	m := declareMembers()
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
-	x, y := expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID)
+	x, y := expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))
 	var missing *Aliased[left, member]
 	for _, j := range []InnerJoined[Alias[left, member], Alias[right, member]]{
 		InnerJoin(a, b, JoinOn[Alias[left, member], Alias[right, member]]{}), InnerJoin(missing, b, On(x, y)), InnerJoin(a, As[right](m.Query(), "bad.alias"), On(x, y)), InnerJoin(a, As[right](m.Query(), "a"), On(x, y)), InnerJoin(a, As[right](orm.Query[member]{}, "b"), On(x, y)),
@@ -57,22 +57,22 @@ func TestJoinInvalidAliasesScopesAndDescriptors(t *testing.T) {
 		}
 	}
 	duplicate := As[left](m.Query(), "another")
-	if InnerJoin(a, duplicate, On(x, expr.At(Scope(duplicate), m.ID))).source.Err == nil {
+	if InnerJoin(a, duplicate, On(x, expr.At(Scope(duplicate), orm.KeyExpr(m.ID)))).source.Err == nil {
 		t.Fatal("duplicate typed alias")
 	}
 	j := InnerJoin(a, b, On(x, y))
-	wrong := expr.At(LeftScope(j, Scope(duplicate)), m.ID)
+	wrong := expr.At(LeftScope(j, Scope(duplicate)), orm.KeyExpr(m.ID))
 	if _, e := CompileRead(ReadScalar(SelectScalar(j, expr.Row(wrong).Value()))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("foreign alias scope", e)
 	}
-	if _, e := CompileRead(ReadScalar(WhereScalar(SelectScalar(a, expr.Row(x).Value()), expr.At(Scope(duplicate), m.ID).Eq(1)))); !errors.Is(e, fault.Invalid) {
+	if _, e := CompileRead(ReadScalar(WhereScalar(SelectScalar(a, expr.Row(x).Value()), expr.At(Scope(duplicate), orm.KeyExpr(m.ID)).Eq(1)))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("foreign alias predicate", e)
 	}
 }
 func TestComputedJoinAndCrossBoundaries(t *testing.T) {
 	m := declareMembers()
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
-	x, y := expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID)
+	x, y := expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))
 	j := LeftJoin(a, b, OnAnd(OnLess(expr.Add(x, expr.Row(x).Param(1)), y), OnNotEqual(x, y)))
 	s, e := CompileRead(ReadRecord(SelectRecord(j, LeftScope(j, Scope(a)))))
 	if e != nil || !strings.Contains(s.SQL(), ` < "b"."id"`) || !reflect.DeepEqual(s.Arguments(), []any{int64(1)}) {
@@ -93,7 +93,7 @@ func TestComputedJoinAndCrossBoundaries(t *testing.T) {
 	}
 	type third struct{}
 	c := As[third](m.Query(), "c")
-	chain := LeftJoin(cross, c, On(expr.At(LeftScope(cross, Scope(a)), m.ID), expr.At(Scope(c), m.ID)))
+	chain := LeftJoin(cross, c, On(expr.At(LeftScope(cross, Scope(a)), orm.KeyExpr(m.ID)), expr.At(Scope(c), orm.KeyExpr(m.ID))))
 	if _, e := CompileRead(ReadRecord(SelectRecord(chain, LeftScope(chain, RightScope(cross, Scope(b)))))); e != nil {
 		t.Fatal(e)
 	}

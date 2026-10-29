@@ -142,11 +142,11 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 		return store.Envelope{}, err
 	}
 	r := captured.registration
-	draft := []orm.Assignment[store.Envelope]{store.Envelopes.ID.Set(captured.id), store.Envelopes.Recipient.Set(string(r.key.recipient)), store.Envelopes.Scope.Set(r.scope), store.Envelopes.SubjectKey.Set(captured.subject), store.Envelopes.Identity.Set(captured.identity), store.Envelopes.Origin.Set(captured.origin), store.Envelopes.Name.Set(string(r.key.name)), store.Envelopes.Version.Set(uint32(r.key.version)), store.Envelopes.Payload.Set(captured.input), store.Envelopes.Fingerprint.Set(captured.fingerprint), store.Envelopes.CreatedAt.Set(now)}
-	if _, err := orm.Upsert(ctx, tx, store.Envelopes.Query(), orm.OnConflict(orm.ConflictKey(store.Envelopes.ID)).DoNothing(), draft...); err != nil {
+	draft := []orm.Assignment[store.Envelope]{orm.KeySet(store.Envelopes.ID, captured.id), orm.TextSet(store.Envelopes.Recipient, string(r.key.recipient)), orm.TextSet(store.Envelopes.Scope, r.scope), orm.TextSet(store.Envelopes.SubjectKey, captured.subject), orm.JSONSet(store.Envelopes.Identity, captured.identity), orm.JSONSet(store.Envelopes.Origin, captured.origin), orm.TextSet(store.Envelopes.Name, string(r.key.name)), orm.NumberSet(store.Envelopes.Version, uint32(r.key.version)), orm.JSONSet(store.Envelopes.Payload, captured.input), orm.TextSet(store.Envelopes.Fingerprint, captured.fingerprint), orm.TimeSet(store.Envelopes.CreatedAt, now)}
+	if _, err := orm.Upsert(ctx, tx, store.Envelopes.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(store.Envelopes.ID))).DoNothing(), draft...); err != nil {
 		return store.Envelope{}, err
 	}
-	row, err := store.Envelopes.Query().ForUpdate().Where(store.Envelopes.Key().Eq(captured.id)).Require(ctx, tx)
+	row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Envelopes.Query()).Where(orm.KeyEq(store.Envelopes.Key(), captured.id)))
 	if err != nil {
 		return store.Envelope{}, err
 	}
@@ -157,7 +157,7 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 		// A notification captured before its binding's channel set changed keeps
 		// its original channels. Compare the input against the stored channel
 		// list; a differing input is still a conflict.
-		deliveries, err := store.Deliveries.Query().Where(store.Deliveries.NotificationID.Eq(captured.id)).Limit(MaxChannels+1).All(ctx, tx)
+		deliveries, err := orm.All(ctx, tx, store.Deliveries.Query().Where(orm.ColumnEq(store.Deliveries.NotificationID, captured.id)).Limit(MaxChannels+1))
 		if err != nil {
 			return store.Envelope{}, err
 		}
@@ -174,8 +174,8 @@ func (m *Manager) persist(ctx context.Context, tx *database.Tx, captured *captur
 	}
 	for _, channel := range r.channels {
 		key := deliveryKey(captured.id, channel.id)
-		draft := []orm.Assignment[store.Delivery]{store.Deliveries.KeyColumn.Set(key), store.Deliveries.NotificationID.Set(captured.id), store.Deliveries.Channel.Set(string(channel.id)), store.Deliveries.Kind.Set(channel.kind), store.Deliveries.State.Set(string(Pending)), store.Deliveries.Payload.Set(empty), store.Deliveries.Claim.Set(model.ID[store.Delivery]{}), store.Deliveries.Attempts.Set(0), store.Deliveries.UpdatedAt.Set(now)}
-		if _, err := orm.Upsert(ctx, tx, store.Deliveries.Query(), orm.OnConflict(orm.ConflictKey(store.Deliveries.KeyColumn)).DoNothing(), draft...); err != nil {
+		draft := []orm.Assignment[store.Delivery]{orm.TextSet(store.Deliveries.KeyColumn, key), orm.ColumnSet(store.Deliveries.NotificationID, captured.id), orm.TextSet(store.Deliveries.Channel, string(channel.id)), orm.TextSet(store.Deliveries.Kind, channel.kind), orm.TextSet(store.Deliveries.State, string(Pending)), orm.JSONSet(store.Deliveries.Payload, empty), orm.ColumnSet(store.Deliveries.Claim, model.ID[store.Delivery]{}), orm.NumberSet(store.Deliveries.Attempts, 0), orm.TimeSet(store.Deliveries.UpdatedAt, now)}
+		if _, err := orm.Upsert(ctx, tx, store.Deliveries.Query(), orm.OnConflict(orm.ConflictKey(orm.TextExpr(store.Deliveries.KeyColumn))).DoNothing(), draft...); err != nil {
 			return store.Envelope{}, err
 		}
 	}

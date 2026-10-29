@@ -14,8 +14,8 @@ import (
 
 func TestOneOfManyLoadsFirstRowPerKey(t *testing.T) {
 	d := people()
-	base := BelongsToOf(d.Manager, d.ManagerID, d.ID)
-	r := base.OfMany(d.Name.Desc())
+	base := BelongsToOf(d.Manager, NullableNumberExpr(d.ManagerID), KeyExpr(d.ID))
+	r := base.OfMany(TextDesc(d.Name))
 	n, e := relationSelect(r.plan, t.Context())
 	if e != nil {
 		t.Fatal(e)
@@ -41,10 +41,10 @@ func TestOneOfManyLoadsFirstRowPerKey(t *testing.T) {
 }
 func TestRelationBindingsAndCapturedValues(t *testing.T) {
 	d := scopeTransferFields()
-	base := HasManyOf(d.Children, d.Key(), d.Key())
+	base := HasManyOf(d.Children, KeyExpr(d.Key()), KeyExpr(d.Key()))
 	r := base
 	q := d.Query().With(&r)
-	r = r.Where(d.Key().Eq(1))
+	r = r.Where(KeyEq(d.Key(), 1))
 	if len(q.state.relations[0].query.ast.Predicates) != 0 {
 		t.Fatal("captured mutable descriptor")
 	}
@@ -53,7 +53,7 @@ func TestRelationBindingsAndCapturedValues(t *testing.T) {
 	}
 	var missing *HasMany[scopeTransferRow, scopeTransferRow]
 	foreign := scopeTransferFields()
-	for _, q := range []Query[scopeTransferRow]{d.Query().With(missing), d.Query().With(r, r), d.Query().With(HasManyOf(d.Children, foreign.Key(), d.Key())), d.Query().With(HasManyOf(d.Children, Primary[scopeTransferRow, int64]{}, d.Key()))} {
+	for _, q := range []Query[scopeTransferRow]{d.Query().With(missing), d.Query().With(r, r), d.Query().With(HasManyOf(d.Children, KeyExpr(foreign.Key()), KeyExpr(d.Key()))), d.Query().With(HasManyOf(d.Children, KeyExpr(Primary[scopeTransferRow, int64]{}), KeyExpr(d.Key())))} {
 		if e := validateQuery(q.state); !errors.Is(e, fault.Invalid) {
 			t.Fatal("invalid binding", e)
 		}
@@ -73,8 +73,8 @@ func TestRelationBindingsAndCapturedValues(t *testing.T) {
 }
 func TestThroughAliasedScopesAndStableOrder(t *testing.T) {
 	d := scopeTransferFields()
-	base := ManyToManyOf(d.Links, d.Key(), d.Key(), d.Key(), d.Key())
-	r := base.Where(Or(d.Key().Eq(1), Not(d.Rank.Gt(2)))).WherePivot(d.Rank.Gte(3)).OrderByPivot(d.Rank.Desc()).OrderBy(d.Rank.Asc())
+	base := ManyToManyOf(d.Links, KeyExpr(d.Key()), KeyExpr(d.Key()), KeyExpr(d.Key()), KeyExpr(d.Key()))
+	r := base.Where(Or(KeyEq(d.Key(), 1), Not(NumberGt(d.Rank, 2)))).WherePivot(NumberGte(d.Rank, 3)).OrderByPivot(NumberDesc(d.Rank)).OrderBy(NumberAsc(d.Rank))
 	if e := validateQuery(d.Query().With(r).state); e != nil {
 		t.Fatal(e)
 	}
@@ -82,7 +82,7 @@ func TestThroughAliasedScopesAndStableOrder(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	n.Predicates = append(n.Predicates, querycore.Requalify(querycore.PredicateNode(d.Key().In(4, 5).expression), querycore.RelationPivotAlias))
+	n.Predicates = append(n.Predicates, querycore.Requalify(querycore.PredicateNode(KeyIn(d.Key(), 4, 5).expression), querycore.RelationPivotAlias))
 	n.Limit = value.Set(6)
 	s, e := querycore.CompileRead(n, t.Context(), false, nil, true)
 	for _, want := range []string{`FROM "scope_records" AS "foundry_target" INNER JOIN "scope_records" AS "foundry_pivot" ON ("foundry_target"."id" = "foundry_pivot"."id")`, `WHERE (("foundry_target"."id" = $1) OR (NOT ("foundry_target"."rank" > $2))) AND ("foundry_pivot"."rank" >= $3) AND ("foundry_pivot"."id" = ANY($4))`, `ORDER BY "foundry_pivot"."rank" DESC, "foundry_target"."rank" ASC, "foundry_target"."id" ASC, "foundry_pivot"."id" ASC LIMIT $5`} {
@@ -97,25 +97,25 @@ func TestThroughAliasedScopesAndStableOrder(t *testing.T) {
 		t.Fatal("base mutated")
 	}
 	q := d.Query().With(&r)
-	r = r.WherePivot(d.Key().Eq(9))
+	r = r.WherePivot(KeyEq(d.Key(), 9))
 	if len(q.state.relations[0].join.pivot.ast.Predicates) != 1 {
 		t.Fatal("captured pointer changed")
 	}
 }
 func TestThroughInvalidDeclarations(t *testing.T) {
 	d, foreign := scopeTransferFields(), scopeTransferFields()
-	r := ManyToManyOf(d.Links, d.Key(), d.Key(), d.Key(), d.Key())
+	r := ManyToManyOf(d.Links, KeyExpr(d.Key()), KeyExpr(d.Key()), KeyExpr(d.Key()), KeyExpr(d.Key()))
 	var missing *ThroughRelation[scopeTransferRow, scopeTransferRow, scopeTransferRow]
-	bad := d.Key().Eq(1)
+	bad := KeyEq(d.Key(), 1)
 	bad.expression = querycore.RetainPredicate(querycore.Comparison{Operand: querycore.FieldRef{Table: "scope_records", Column: "missing"}, Operator: querycore.IsNull})
-	for _, q := range []Query[scopeTransferRow]{d.Query().With(missing), d.Query().With(r.WherePivot(bad)), d.Query().With(r.WherePivot(foreign.Key().Eq(1))), d.Query().With(r.OrderBy(foreign.Key().Asc())), d.Query().With(r.OrderBy(d.Key().Asc(), d.Key().Desc())), d.Query().With(r.OrderByPivot(foreign.Key().Asc())), d.Query().With(ManyToManyOf(d.Links, Primary[scopeTransferRow, int64]{}, d.Key(), d.Key(), d.Key()))} {
+	for _, q := range []Query[scopeTransferRow]{d.Query().With(missing), d.Query().With(r.WherePivot(bad)), d.Query().With(r.WherePivot(KeyEq(foreign.Key(), 1))), d.Query().With(r.OrderBy(KeyAsc(foreign.Key()))), d.Query().With(r.OrderBy(KeyAsc(d.Key()), KeyDesc(d.Key()))), d.Query().With(r.OrderByPivot(KeyAsc(foreign.Key()))), d.Query().With(ManyToManyOf(d.Links, KeyExpr(Primary[scopeTransferRow, int64]{}), KeyExpr(d.Key()), KeyExpr(d.Key()), KeyExpr(d.Key())))} {
 		if e := validateQuery(q.state); !errors.Is(e, fault.Invalid) {
 			t.Fatal("invalid through", e)
 		}
 	}
 	wide := make([]Predicate[scopeTransferRow], querycore.MaxExpressionNodes/3+1)
 	for i := range wide {
-		wide[i] = d.Key().Eq(1)
+		wide[i] = KeyEq(d.Key(), 1)
 	}
 	if e := validateQuery(d.Query().With(r.Where(wide...)).state); e != nil {
 		t.Fatal("legal half", e)
@@ -163,7 +163,7 @@ func TestRelationWriteBoundsAndUnsupportedReadOptions(t *testing.T) {
 	if n, e := validateRelationWrite(r.plan, pivotAttach); e != nil || n != MaxRelationWriteRows || r.plan.writeLimit != 0 {
 		t.Fatal("descriptor changed", n, e)
 	}
-	for _, bad := range []ThroughRelation[writeParent, writeTarget, writePivot]{WithRelationWriteLimit(r, 0), WithRelationWriteLimit(r, MaxRelationWriteRows+1), r.OrderBy(z.ID.Asc()), r.OrderByPivot(p.ID.Asc()), {}} {
+	for _, bad := range []ThroughRelation[writeParent, writeTarget, writePivot]{WithRelationWriteLimit(r, 0), WithRelationWriteLimit(r, MaxRelationWriteRows+1), r.OrderBy(KeyAsc(z.ID)), r.OrderByPivot(KeyAsc(p.ID)), {}} {
 		if _, e := validateRelationWrite(bad.plan, pivotAttach); !errors.Is(e, fault.Invalid) {
 			t.Fatal("invalid write", e)
 		}
@@ -186,7 +186,7 @@ func TestRelationWriteBoundsAndUnsupportedReadOptions(t *testing.T) {
 			t.Fatal(mode, e)
 		}
 	}
-	if _, e := validateRelationWrite(r.Where(z.ID.Eq(3)).WherePivot(p.ID.Eq(4)).plan, pivotAttach); e != nil {
+	if _, e := validateRelationWrite(r.Where(KeyEq(z.ID, 3)).WherePivot(KeyEq(p.ID, 4)).plan, pivotAttach); e != nil {
 		t.Fatal("valid scopes", e)
 	}
 }
@@ -199,10 +199,10 @@ func TestInvalidRelationWriteFailsBeforeTransaction(t *testing.T) {
 	if _, e := Detach(t.Context(), w, WithRelationWriteLimit(r, 0), writeParent{}, writeTarget{}); !errors.Is(e, fault.Invalid) {
 		t.Fatal(e)
 	}
-	invalidDefaults := [][]Assignment[writePivot]{{p.ID.Set(1), p.ID.Set(2)}}
+	invalidDefaults := [][]Assignment[writePivot]{{KeySet(p.ID, 1), KeySet(p.ID, 2)}}
 	_, _, foreign, _ := writeRelationTables()
-	invalidDefaults = append(invalidDefaults, []Assignment[writePivot]{foreign.ID.Set(1)})
-	bad := p.ID.Set(1)
+	invalidDefaults = append(invalidDefaults, []Assignment[writePivot]{KeySet(foreign.ID, 1)})
+	bad := KeySet(p.ID, 1)
 	bad.core.Field.Column = "missing"
 	invalidDefaults = append(invalidDefaults, []Assignment[writePivot]{bad})
 	for _, as := range invalidDefaults {
@@ -213,7 +213,7 @@ func TestInvalidRelationWriteFailsBeforeTransaction(t *testing.T) {
 	noSoft := Define("plain_pivots", func(b Builder[writePivot], m *writePivot) writePivotTable {
 		return writePivotTable{Table: TableOf(b, &m.ID), ParentID: NumberOf(b, &m.ParentID), TargetID: NumberOf(b, &m.TargetID), Role: TextOf(b, &m.Role)}
 	}, NoSoftDeletes())
-	plain := ManyToManyOf(a.Links, a.ID, noSoft.ParentID, noSoft.TargetID, z.ID)
+	plain := ManyToManyOf(a.Links, KeyExpr(a.ID), NumberExpr(noSoft.ParentID), NumberExpr(noSoft.TargetID), KeyExpr(z.ID))
 	if _, e := validateRelationWrite(plain.plan, pivotForceDetach); !errors.Is(e, fault.Invalid) {
 		t.Fatal("force detach plain pivot", e)
 	}
@@ -223,17 +223,17 @@ func TestInvalidRelationWriteFailsBeforeTransaction(t *testing.T) {
 }
 func TestRelationPredicatesNestWithoutAliasCapture(t *testing.T) {
 	d := scopeTransferFields()
-	base := HasManyOf(d.Children, d.Key(), d.Key())
-	r := base.Where(d.Key().Eq(7))
+	base := HasManyOf(d.Children, KeyExpr(d.Key()), KeyExpr(d.Key()))
+	r := base.Where(KeyEq(d.Key(), 7))
 	for range 5 {
 		r = base.Where(Has(r))
 	}
-	q := d.Query().Where(Has(r), Not(Has(base.Where(d.Key().Eq(9)))))
+	q := d.Query().Where(Has(r), Not(Has(base.Where(KeyEq(d.Key(), 9)))))
 	s, e := Compile(q)
 	if e != nil || strings.Count(s.SQL(), "EXISTS(") != 7 || !strings.Contains(s.SQL(), `AS "foundry_related_6"`) || !reflect.DeepEqual(s.Arguments(), []any{int64(7), int64(9)}) {
 		t.Fatal(s.SQL(), s.Arguments(), e)
 	}
-	r = r.Where(d.Key().Eq(11))
+	r = r.Where(KeyEq(d.Key(), 11))
 	again, e := Compile(q)
 	if e != nil || again.SQL() != s.SQL() || !reflect.DeepEqual(again.Arguments(), s.Arguments()) {
 		t.Fatal("descriptor mutated", e)
@@ -243,7 +243,7 @@ func TestRelationPredicatesNestWithoutAliasCapture(t *testing.T) {
 	node.Selections = querycore.ColumnSelections("foundry_related", d.core.model.Columns)
 	node.Predicates = []querycore.Expression{querycore.BinaryComparison{Left: querycore.FieldRef{Table: "foundry_related", Column: "id"}, Right: querycore.FieldRef{Table: "scope_records", Column: "id"}, Operator: querycore.Equal}}
 	manual := Predicate[scopeTransferRow]{owner: d.core, expression: querycore.RetainPredicate(querycore.SubqueryPredicate{Query: querycore.Subquery{Node: node, Correlation: &querycore.ScopeRequirement{Sources: map[string][]querycore.Column{"scope_records": d.core.model.Columns}}}})}
-	through := ManyToManyOf(d.Links, d.Key(), d.Key(), d.Key(), d.Key())
+	through := ManyToManyOf(d.Links, KeyExpr(d.Key()), KeyExpr(d.Key()), KeyExpr(d.Key()), KeyExpr(d.Key()))
 	for _, p := range []Predicate[scopeTransferRow]{Has(base.Where(manual)), Has(through.Where(manual).WherePivot(Has(base)))} {
 		if s, e := Compile(d.Query().Where(p)); e != nil {
 			t.Fatal("manual alias captured", s.SQL(), e)
@@ -252,8 +252,8 @@ func TestRelationPredicatesNestWithoutAliasCapture(t *testing.T) {
 }
 func TestRelationPredicatesUseOnlyFilterScopes(t *testing.T) {
 	d := scopeTransferFields()
-	base := HasManyOf(d.Children, d.Key(), d.Key())
-	r := base.Where(d.Key().Eq(2)).OrderBy(d.Key().Desc()).With(base)
+	base := HasManyOf(d.Children, KeyExpr(d.Key()), KeyExpr(d.Key()))
+	r := base.Where(KeyEq(d.Key(), 2)).OrderBy(KeyDesc(d.Key())).With(base)
 	s, e := Compile(d.Query().Where(Has(r)))
 	if e != nil || strings.Contains(s.SQL(), "ORDER BY") || strings.Count(s.SQL(), "SELECT") != 2 || !reflect.DeepEqual(s.Arguments(), []any{int64(2)}) {
 		t.Fatal(s.SQL(), e)

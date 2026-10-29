@@ -29,16 +29,16 @@ func TestSourceLiteralInputsNormalizeOnceWithoutBypass(t *testing.T) {
 	calls := 0
 	d := sourceInputArchive(&calls)
 	source := FoundrySource(s.Query(), sqlowner.Metadata())
-	name := transferMapping(d.Name, s.Name)
-	tag := transferMapping(d.Tag, s.Name)
-	key := transferMapping(d.Key(), s.Key())
+	name := transferMapping(TextExpr(d.Name), TextExpr(s.Name))
+	tag := transferMapping(InputTextExpr(d.Tag), TextExpr(s.Name))
+	key := transferMapping(KeyExpr(d.Key()), KeyExpr(s.Key()))
 	for _, kind := range []querycore.MutationKind{querycore.InsertModel, querycore.UpdateModel} {
 		p := newSourceWrite(d.Query().state, source, reflect.TypeFor[transferSource](), kind, sqlowner.Queries())
 		p.key = key
 		if kind == querycore.InsertModel {
 			p.mappings = []ormcore.ModelMapping{name}
 		}
-		p = sourceValues(p, []Assignment[transferArchive]{d.Tag.Set(transferInput{" tag "})})
+		p = sourceValues(p, []Assignment[transferArchive]{InputTextSet(d.Tag, transferInput{" tag "})})
 		before := calls
 		for range 2 {
 			prepared, e := p.prepare(t.Context(), nil)
@@ -69,7 +69,7 @@ func TestSourceManagedTimestampsAndDeletionConventions(t *testing.T) {
 	c := &transferClock{now: time.Date(2030, 1, 2, 3, 4, 5, 123456789, time.UTC)}
 	source := FoundrySource(d.Query().WithTrashed(), sqlowner.Metadata())
 	insertion := newSourceWrite(d.Query().state, source, reflect.TypeFor[timed](), querycore.InsertModel, sqlowner.Queries())
-	insertion.mappings = []ormcore.ModelMapping{transferMapping(d.Key(), d.Key()), transferMapping(d.CreatedAt, d.CreatedAt)}
+	insertion.mappings = []ormcore.ModelMapping{transferMapping(KeyExpr(d.Key()), KeyExpr(d.Key())), transferMapping(TimeExpr(d.CreatedAt), TimeExpr(d.CreatedAt))}
 	p, e := insertion.prepare(t.Context(), c)
 	if e != nil {
 		t.Fatal(e)
@@ -80,13 +80,13 @@ func TestSourceManagedTimestampsAndDeletionConventions(t *testing.T) {
 		t.Fatal(s.SQLText, s.Bindings, e, c.calls, calls)
 	}
 	bad := insertion
-	bad.mappings = append(append([]ormcore.ModelMapping(nil), insertion.mappings...), transferMapping(d.UpdatedAt, d.UpdatedAt))
+	bad.mappings = append(append([]ormcore.ModelMapping(nil), insertion.mappings...), transferMapping(TimeExpr(d.UpdatedAt), TimeExpr(d.UpdatedAt)))
 	if _, e := bad.prepare(t.Context(), c); !errors.Is(e, fault.Invalid) || c.calls != 1 {
 		t.Fatal("mapped update sampled clock", e, c.calls)
 	}
 	update := newSourceWrite(d.Query().state, source, reflect.TypeFor[timed](), querycore.UpdateModel, sqlowner.Queries())
-	update.key = transferMapping(d.Key(), d.Key())
-	update.mappings = []ormcore.ModelMapping{transferMapping(d.CreatedAt, d.CreatedAt)}
+	update.key = transferMapping(KeyExpr(d.Key()), KeyExpr(d.Key()))
+	update.mappings = []ormcore.ModelMapping{transferMapping(TimeExpr(d.CreatedAt), TimeExpr(d.CreatedAt))}
 	p, e = update.prepare(t.Context(), c)
 	if e != nil {
 		t.Fatal(e)
@@ -96,13 +96,13 @@ func TestSourceManagedTimestampsAndDeletionConventions(t *testing.T) {
 		t.Fatal(s.SQLText, s.Bindings, e)
 	}
 	bad = update
-	bad.mappings = append(append([]ormcore.ModelMapping(nil), update.mappings...), transferMapping(d.UpdatedAt, d.UpdatedAt))
+	bad.mappings = append(append([]ormcore.ModelMapping(nil), update.mappings...), transferMapping(TimeExpr(d.UpdatedAt), TimeExpr(d.UpdatedAt)))
 	if _, e := bad.prepare(t.Context(), c); !errors.Is(e, fault.Invalid) || c.calls != 2 {
 		t.Fatal("mapped update sampled clock", e)
 	}
 	soft := people()
 	src := FoundrySource(soft.Query().WithTrashed(), sqlowner.Metadata())
-	key := transferMapping(soft.ID, soft.ID)
+	key := transferMapping(KeyExpr(soft.ID), KeyExpr(soft.ID))
 	deletion := FoundryDeleteUsing[relationPerson](soft.Query().WithTrashed(), src, false, SoftDeletes(soft.DeletedAt), sqlowner.Queries()).Match(FoundrySourceKey[relationPerson, relationPerson](key, sqlowner.Expressions()))
 	before := c.calls
 	p, e = deletion.plan.preflight(t.Context(), &noEachWriter{})

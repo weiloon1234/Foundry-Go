@@ -17,7 +17,7 @@ import (
 // on this table. Failed hooks and uncertain outcomes never trigger recovery or
 // retries. At snapshot isolation a competitor may be invisible; the original
 // violation is then returned. Internal hydration skips Retrieved callbacks.
-// Example: orm.CreateOrFirst(ctx, db, Users.Query().Where(Users.Email.Eq(email)), Users.Name.Set(name)).
+// Example: orm.CreateOrFirst(ctx, db, Users.Query().Where(orm.TextEq(Users.Email, email)), orm.TextSet(Users.Name, name)).
 func CreateOrFirst[M any](ctx context.Context, writer database.Transactor, q Query[M], create ...Assignment[M]) (M, error) {
 	if err := writeContext(ctx, writer); err != nil {
 		return *new(M), err

@@ -15,7 +15,7 @@ import (
 
 func TestCursorRejectsForeignBoundariesBeforeSQL(t *testing.T) {
 	r := records()
-	q := r.Query().Where(r.Name.Ne("hidden")).OrderBy(r.Note.Asc(), r.ID.Desc())
+	q := r.Query().Where(TextNe(r.Name, "hidden")).OrderBy(NullableTextAsc(r.Note), KeyDesc(r.ID))
 	p, err := newCursorPlan(q.state, 2, "", false, false)
 	if err != nil {
 		t.Fatal(err)
@@ -34,8 +34,8 @@ func TestCursorRejectsForeignBoundariesBeforeSQL(t *testing.T) {
 		q       Query[record]
 		request CursorRequest[record]
 	}{
-		{"scope", r.Query().Where(r.Name.Ne("different")).OrderBy(r.Note.Asc(), r.ID.Desc()), CursorRequest[record]{Size: 2, After: value.Set(cursor)}},
-		{"order", r.Query().Where(r.Name.Ne("hidden")).OrderBy(r.Note.Desc(), r.ID.Desc()), CursorRequest[record]{Size: 2, After: value.Set(cursor)}},
+		{"scope", r.Query().Where(TextNe(r.Name, "different")).OrderBy(NullableTextAsc(r.Note), KeyDesc(r.ID)), CursorRequest[record]{Size: 2, After: value.Set(cursor)}},
+		{"order", r.Query().Where(TextNe(r.Name, "hidden")).OrderBy(NullableTextDesc(r.Note), KeyDesc(r.ID)), CursorRequest[record]{Size: 2, After: value.Set(cursor)}},
 		{"size_zero", q, CursorRequest[record]{}},
 		{"size_large", q, CursorRequest[record]{Size: MaxPageSize + 1}},
 		{"both", q, CursorRequest[record]{Size: 2, After: value.Set(cursor), Before: value.Set(cursor)}},
@@ -86,7 +86,7 @@ func TestCursorRejectsForeignBoundariesBeforeSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = CursorPaginate(t.Context(), db, other.Query().Where(name.Ne("hidden")).OrderBy(note.Asc(), other.Key().Desc()), CursorRequest[another]{Size: 2, After: value.Set(foreign)})
+	_, err = CursorPaginate(t.Context(), db, other.Query().Where(TextNe(name, "hidden")).OrderBy(NullableTextAsc(note), KeyDesc(other.Key())), CursorRequest[another]{Size: 2, After: value.Set(foreign)})
 	if !errors.As(err, &input) || len(statements) != 0 {
 		t.Fatal("foreign model accepted", err)
 	}
@@ -103,7 +103,7 @@ func TestCursorReadAndOutputFailurePublishNothing(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := testDB(t, testConnector{columns: []string{"id", "display_name", "note", "amount"}, values: tc.rows})
-			p, err := CursorPaginate(t.Context(), db, r.Query().OrderBy(r.Name.Asc()), CursorRequest[record]{Size: 1})
+			p, err := CursorPaginate(t.Context(), db, r.Query().OrderBy(TextAsc(r.Name)), CursorRequest[record]{Size: 1})
 			if err == nil || p.Items != nil || p.Next.IsSet() {
 				t.Fatal("partial cursor page published")
 			}
@@ -126,7 +126,7 @@ func TestKeyChunksOwnBoundaryAndCloseBeforeCallbacks(t *testing.T) {
 		}
 		return []string{"id", "display_name", "note", "amount"}, batch
 	}})
-	err := ChunkByKey(t.Context(), db, r.Query().OrderBy(r.ID.Desc()), r.ID, 1, func(items []record) error {
+	err := ChunkByKey(t.Context(), db, r.Query().OrderBy(KeyDesc(r.ID)), KeyExpr(r.ID), 1, func(items []record) error {
 		if closed != calls {
 			t.Fatal("callback ran with open rows")
 		}
@@ -136,21 +136,21 @@ func TestKeyChunksOwnBoundaryAndCloseBeforeCallbacks(t *testing.T) {
 	if err != nil || calls != 3 || bindings[1][0] != int64(5) || bindings[2][0] != int64(3) {
 		t.Fatal("boundary changed with callback", err, bindings)
 	}
-	for _, q := range []Query[record]{r.Query().Offset(1), r.Query().OrderBy(r.Name.Asc())} {
+	for _, q := range []Query[record]{r.Query().Offset(1), r.Query().OrderBy(TextAsc(r.Name))} {
 		before := calls
-		if err := ChunkByKey(t.Context(), db, q, r.ID, 1, func([]record) error { return nil }); !errors.Is(err, fault.Invalid) || calls != before {
+		if err := ChunkByKey(t.Context(), db, q, KeyExpr(r.ID), 1, func([]record) error { return nil }); !errors.Is(err, fault.Invalid) || calls != before {
 			t.Fatal("invalid key ordering sent SQL", err)
 		}
 	}
 	for _, size := range []int{0, MaxChunkSize + 1} {
 		before := calls
-		if err := EachByKey(t.Context(), db, r.Query(), r.ID, size, func(record) error { return nil }); !errors.Is(err, fault.Invalid) || calls != before {
+		if err := EachByKey(t.Context(), db, r.Query(), KeyExpr(r.ID), size, func(record) error { return nil }); !errors.Is(err, fault.Invalid) || calls != before {
 			t.Fatal("invalid size sent SQL", err)
 		}
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := EachByKey(ctx, db, r.Query(), r.ID, 1, func(record) error { return nil }); !errors.Is(err, context.Canceled) {
+	if err := EachByKey(ctx, db, r.Query(), KeyExpr(r.ID), 1, func(record) error { return nil }); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 }

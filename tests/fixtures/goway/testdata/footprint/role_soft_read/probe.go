@@ -22,4 +22,6 @@ var Models = orm.Define("role_soft", func(b orm.Builder[Model], m *Model) Fields
 	return Fields{t, d, orm.SoftDeletes(d)}
 })
 
-func Read() orm.Query[Model] { return Models.Query().WithTrashed().Where(Models.DeletedAt.IsNull()) }
+func Read() orm.Query[Model] {
+	return Models.Query().WithTrashed().Where(orm.NullableTimeIsNull(Models.DeletedAt))
+}

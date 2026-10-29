@@ -1,5 +1,7 @@
 package jsonqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/jsonqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -12,11 +14,11 @@ import (
 func checkSnapshotKind(t *testing.T, tx *database.Tx, original []jsonqueries.Document) error {
 	f, r := jsonqueries.Documents, jsonqueries.Snapshots
 	filter := document(t, jsonqueries.Preferences{Theme: value.Set("dark")})
-	selected := rowset.Select(rowset.From(f.Query().OrderBy(f.Key().Asc())), r.Row,
-		rowset.Map(r.ID, expr.Value(f.Key())), rowset.Map(r.Settings, expr.Value(f.Settings)),
-		rowset.MapSelected(r.Kind, expr.JSONType(expr.Value(f.Settings)).Value()),
-		rowset.MapSelected(r.BackupKind, expr.JSONTypeNullable(expr.Value(f.Backup)).Value()),
-		rowset.MapSelected(r.Matches, expr.JSONContainsNullable(expr.Value(f.Backup), expr.NullableRow(expr.Param(f.Settings, filter))).Value()))
+	selected := rowset.Select(rowset.From(f.Query().OrderBy(orm.KeyAsc(f.Key()))), r.Row,
+		rowset.Map(r.ID, expr.Value(orm.KeyExpr(f.Key()))), rowset.Map(r.Settings, expr.Value(orm.JSONExpr(f.Settings))),
+		rowset.MapSelected(r.Kind, expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))).Value()),
+		rowset.MapSelected(r.BackupKind, expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(f.Backup))).Value()),
+		rowset.MapSelected(r.Matches, expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))).Value()))
 	rows, err := rowset.Read(selected).All(t.Context(), tx)
 	if err != nil || len(rows) != 3 {
 		t.Fatal(rows, err)

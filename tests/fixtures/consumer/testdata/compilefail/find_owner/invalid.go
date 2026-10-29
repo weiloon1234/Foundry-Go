@@ -8,4 +8,4 @@ import (
 )
 
 var orderID model.ID[models.Order]
-var invalid, _ = orm.Keyed(models.Users.Query().Where(models.Users.Age.Gt(18)), models.Users.Key()).Find(context.Background(), nil, orderID)
+var invalid, _ = orm.Keyed(models.Users.Query().Where(orm.NumberGt(models.Users.Age, 18)), models.Users.Key()).Find(context.Background(), nil, orderID)

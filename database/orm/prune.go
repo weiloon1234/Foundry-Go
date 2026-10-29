@@ -12,7 +12,7 @@ import (
 // PruneBatch physically removes at most size ordinary models in primary-key order.
 // Mass explicitly skips per-model callbacks; otherwise ordinary deletion lifecycle runs.
 // Soft-delete declarations require ForcePruneBatch and their declaration token.
-// Example: orm.PruneBatch(ctx, db, Logs.Query().Where(Logs.Expired.Eq(true)), 100, false).
+// Example: orm.PruneBatch(ctx, db, Logs.Query().Where(orm.ColumnEq(Logs.Expired, true)), 100, false).
 func PruneBatch[M any](ctx context.Context, writer database.Transactor, q Query[M], size int, mass bool) (int64, error) {
 	if q.state.ast.HasSoftDeletes() {
 		return 0, invalid("soft-model pruning requires ForcePruneBatch and its SoftDeletable token")

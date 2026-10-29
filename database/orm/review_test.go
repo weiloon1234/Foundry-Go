@@ -37,7 +37,7 @@ func TestDerivedKeyCapabilities(t *testing.T) {
 	if err := Check(table); err != nil {
 		t.Fatal(err)
 	}
-	s, err := Compile(table.Query().Where(text.StartsWith("M")))
+	s, err := Compile(table.Query().Where(TextStartsWith(text, "M")))
 	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{"M%"}) {
 		t.Fatalf("text key: %s %v %v", s.SQL(), s.Arguments(), err)
 	}
@@ -48,13 +48,13 @@ func TestDerivedKeyCapabilities(t *testing.T) {
 		t.Fatal("derived core changed")
 	}
 	for _, v := range []int64{0, 5} {
-		a, _ := ints.Key().Set(v).core.Bind()
-		b, _ := number.Set(v).core.Bind()
+		a, _ := KeySet(ints.Key(), v).core.Bind()
+		b, _ := NumberKeySet(number, v).core.Bind()
 		if a != b {
 			t.Fatal("assignment differs")
 		}
 	}
-	if _, err := Compile(ints.Query().Where(number.Gt(1), number.Between(2, 4))); err != nil {
+	if _, err := Compile(ints.Query().Where(NumberKeyGt(number, 1), NumberKeyBetween(number, 2, 4))); err != nil {
 		t.Fatal(err)
 	}
 	type enumerated struct{ ID keyStatus }
@@ -62,11 +62,11 @@ func TestDerivedKeyCapabilities(t *testing.T) {
 	if err := Check(enums); err != nil {
 		t.Fatal(err)
 	}
-	for _, column := range []Column[enumerated, keyStatus]{{column: enums.Key().ormColumn(nil)}, {column: TextKey(enums.Key()).ormColumn(nil)}} {
-		if _, err := Compile(enums.Query().Where(column.Eq("invalid"))); err == nil {
+	for _, column := range []Column[enumerated, keyStatus]{{column: KeyExpr(enums.Key()).ormColumn(nil)}, {column: TextExpr(TextKey(enums.Key())).ormColumn(nil)}} {
+		if _, err := Compile(enums.Query().Where(ColumnEq(column, "invalid"))); err == nil {
 			t.Fatal("invalid enum predicate accepted")
 		}
-		if _, err := column.Set("invalid").core.Bind(); err == nil {
+		if _, err := ColumnSet(column, "invalid").core.Bind(); err == nil {
 			t.Fatal("invalid enum assignment accepted")
 		}
 	}
@@ -272,26 +272,26 @@ func TestForeignIDNullableBytesAndEnums(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Compile(table.Query().Where(foreign.Eq(id), nullable.Eq(id), maybe.IsNull())); err != nil {
+	if _, err := Compile(table.Query().Where(ColumnEq(foreign, id), NullableColumnEq(nullable, id), NullableEnumIsNull(maybe))); err != nil {
 		t.Fatal(err)
 	}
 	bytes := []byte{1, 2}
-	a := binary.Set(bytes)
+	a := NullableColumnSet(binary, bytes)
 	bytes[0] = 9
 	bound, err := a.core.Bind()
 	if err != nil || bound.([]byte)[0] != 1 {
 		t.Fatal("nullable bytes borrowed", err)
 	}
-	if _, err := status.Set("invalid").core.Bind(); err == nil {
+	if _, err := EnumSet(status, "invalid").core.Bind(); err == nil {
 		t.Fatal("invalid enum accepted")
 	}
-	if _, err := maybe.Set("invalid").core.Bind(); err == nil {
+	if _, err := NullableEnumSet(maybe, "invalid").core.Bind(); err == nil {
 		t.Fatal("invalid nullable enum accepted")
 	}
 	var item row
 	source := &testDriverRows{columns: []string{"id", "foreign", "nullable", "bytes", "status", "maybe"}, values: [][]driver.Value{{int64(1), id.String(), id.String(), []byte{3}, "active", nil}}}
 	db := testDB(t, testConnector{columns: source.columns, values: source.values})
-	items, err := table.Query().All(t.Context(), db)
+	items, err := All(t.Context(), db, table.Query())
 	if err != nil || len(items) != 1 {
 		t.Fatal(err)
 	}
@@ -330,19 +330,19 @@ func TestAdjustmentsRejectNonpositiveBeforeSQL(t *testing.T) {
 	r := numericRecords()
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	assignments := []Assignment[numeric]{r.Signed.Increment(-1), r.Signed.Decrement(0), r.Unsigned.Increment(0), r.Float.Increment(-1), r.Float.Decrement(0), r.Float.Increment(math.NaN()), r.Float.Decrement(math.Inf(1)), r.Float.Increment(math.Inf(-1)), r.Float.Decrement(math.Copysign(0, -1)), r.Nullable.Decrement(-1)}
+	assignments := []Assignment[numeric]{NumberIncrement(r.Signed, -1), NumberDecrement(r.Signed, 0), NumberIncrement(r.Unsigned, 0), NumberIncrement(r.Float, -1), NumberDecrement(r.Float, 0), NumberIncrement(r.Float, math.NaN()), NumberDecrement(r.Float, math.Inf(1)), NumberIncrement(r.Float, math.Inf(-1)), NumberDecrement(r.Float, math.Copysign(0, -1)), NullableNumberDecrement(r.Nullable, -1)}
 	for _, text := range []string{"0", "-1"} {
 		d, err := decimal.Parse(text)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assignments = append(assignments, r.Decimal.Increment(d), r.Decimal.Decrement(d))
+		assignments = append(assignments, NumberIncrement(r.Decimal, d), NumberDecrement(r.Decimal, d))
 	}
 	for _, a := range assignments {
-		if _, err := r.Update(t.Context(), db, 1, a); !errors.Is(err, fault.Invalid) {
+		if _, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 1, a); !errors.Is(err, fault.Invalid) {
 			t.Fatalf("per-key amount: %v", err)
 		}
-		if _, err := r.Query().UpdateAll(t.Context(), db, a); !errors.Is(err, fault.Invalid) {
+		if _, err := UpdateAll(t.Context(), db, r.Query(), a); !errors.Is(err, fault.Invalid) {
 			t.Fatalf("set amount: %v", err)
 		}
 	}
@@ -359,18 +359,18 @@ func TestAtomicAdjustmentBounds(t *testing.T) {
 		}
 		return []string{"id", "signed", "unsigned", "float", "decimal", "nullable"}, nil
 	}})
-	_, err := r.Update(t.Context(), db, 1, r.Signed.Decrement(2, AtLeast(int64(0))))
+	_, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 1, NumberDecrement(r.Signed, 2, AtLeast(int64(0))))
 	if !errors.Is(err, ErrBoundExceeded) || !errors.Is(err, fault.Conflict) || errors.Is(err, fault.Invalid) || errors.Is(err, database.NotFound) {
 		t.Fatalf("bound error: %v", err)
 	}
 	if len(statements) != 2 || !strings.Contains(statements[0], `"signed" = "signed" - $1`) || !strings.Contains(statements[0], ` >= `) {
 		t.Fatalf("guard SQL: %v", statements)
 	}
-	n, err := r.Query().UpdateAll(t.Context(), db, r.Float.Increment(1, AtMost(10.0)))
+	n, err := UpdateAll(t.Context(), db, r.Query(), NumberIncrement(r.Float, 1, AtMost(10.0)))
 	if err != nil || n != 1 || !strings.Contains(statements[2], ` <= `) {
 		t.Fatalf("set bound: %v %v", statements, err)
 	}
-	if _, err := r.Query().UpdateAll(t.Context(), db, r.Signed.Decrement(1, AtMost(int64(5)))); !errors.Is(err, fault.Invalid) {
+	if _, err := UpdateAll(t.Context(), db, r.Query(), NumberDecrement(r.Signed, 1, AtMost(int64(5)))); !errors.Is(err, fault.Invalid) {
 		t.Fatalf("wrong bound direction: %v", err)
 	}
 }
@@ -379,14 +379,14 @@ func TestLockedAndPaginationValidationOrder(t *testing.T) {
 	cancel()
 	r := records()
 	db := testDB(t, testConnector{})
-	if _, err := (Query[record]{}).Paginate(canceled, db, Page(0, 0)); !errors.Is(err, context.Canceled) {
+	if _, err := Paginate(canceled, db, (Query[record]{}), Page(0, 0)); !errors.Is(err, context.Canceled) {
 		t.Fatalf("pagination validation order: %v", err)
 	}
 	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-		if _, err := (LockedQuery[record]{}).All(canceled, tx); !errors.Is(err, context.Canceled) {
+		if _, err := AllLocked(canceled, tx, (LockedQuery[record]{})); !errors.Is(err, context.Canceled) {
 			t.Errorf("locked order: %v", err)
 		}
-		if _, err := r.Query().ForShare().Require(t.Context(), tx); !errors.Is(err, database.NotFound) || !strings.Contains(err.Error(), "locked model") {
+		if _, err := RequireLocked(t.Context(), tx, ForShare(r.Query())); !errors.Is(err, database.NotFound) || !strings.Contains(err.Error(), "locked model") {
 			t.Errorf("locked missing: %v", err)
 		}
 		return nil
@@ -394,7 +394,7 @@ func TestLockedAndPaginationValidationOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, q := range []LockedQuery[record]{r.Query().ForUpdate().Where(r.ID.Eq(1)).OrderBy(r.Name.Asc()).Limit(1).Offset(0).WithTrashed().WithoutTrashed().NoWait(), r.Query().ForNoKeyUpdate().SkipLocked(), r.Query().ForKeyShare().Wait(), r.Query().ForShare()} {
+	for _, q := range []LockedQuery[record]{Lock(r.Query()).Where(KeyEq(r.ID, 1)).OrderBy(TextAsc(r.Name)).Limit(1).Offset(0).WithTrashed().WithoutTrashed().NoWait(), ForNoKeyUpdate(r.Query()).SkipLocked(), ForKeyShare(r.Query()).Wait(), ForShare(r.Query())} {
 		if _, err := CompileLocked(q); err != nil {
 			t.Fatal(err)
 		}
@@ -402,7 +402,7 @@ func TestLockedAndPaginationValidationOrder(t *testing.T) {
 }
 func TestRestoreForceDeleteAndDeleteAll(t *testing.T) {
 	r := timedRecords()
-	q := r.Query().Where(r.Key().Eq(1))
+	q := r.Query().Where(KeyEq(r.Key(), 1))
 	for _, kind := range []querycore.MutationKind{querycore.RestoreModel, querycore.ForceDeleteModel} {
 		p, err := planWrite(q.state, kind, []Assignment[timed](nil), false)
 		if err != nil {
@@ -424,7 +424,7 @@ func TestRestoreForceDeleteAndDeleteAll(t *testing.T) {
 		}
 	}
 	db := testDB(t, testConnector{})
-	if n, err := records().Query().DeleteAll(t.Context(), db); err != nil || n != 1 {
+	if n, err := DeleteAll(t.Context(), db, records().Query()); err != nil || n != 1 {
 		t.Fatal(n, err)
 	}
 }
@@ -434,11 +434,11 @@ func TestInsertManyHydratesAndValidatesEmpty(t *testing.T) {
 	db := testDB(t, testConnector{statements: &statements, columns: []string{"id", "display_name", "note", "amount"}, values: [][]driver.Value{{int64(1), "one", nil, "1"}, {int64(2), "two", nil, "2"}}})
 	one, _ := decimal.Parse("1")
 	two, _ := decimal.Parse("2")
-	items, err := r.InsertMany(t.Context(), db, [][]Assignment[record]{{r.Name.Set("one"), r.Amount.Set(one)}, {r.Name.Set("two"), r.Amount.Set(two)}})
+	items, err := InsertMany(t.Context(), db, r.Table, [][]Assignment[record]{{TextSet(r.Name, "one"), NumberSet(r.Amount, one)}, {TextSet(r.Name, "two"), NumberSet(r.Amount, two)}})
 	if err != nil || len(items) != 2 || items[1].Name != "two" || len(statements) != 1 {
 		t.Fatalf("batch: %v %v", items, err)
 	}
-	if _, err := r.InsertMany(t.Context(), db, nil); err != nil || len(statements) != 1 {
+	if _, err := InsertMany(t.Context(), db, r.Table, nil); err != nil || len(statements) != 1 {
 		t.Fatal("empty batch executed", err)
 	}
 }
@@ -470,33 +470,33 @@ func TestQueryTerminalsAndStreaming(t *testing.T) {
 		}
 		return []string{"id", "display_name", "note", "amount"}, [][]driver.Value{{int64(1), "one", nil, "1"}}
 	}})
-	if item, err := r.Query().First(t.Context(), db); err != nil || !item.IsSet() {
+	if item, err := First(t.Context(), db, r.Query()); err != nil || !item.IsSet() {
 		t.Fatal(item, err)
 	}
-	if item, err := r.Query().Require(t.Context(), db); err != nil || item.Name != "one" {
+	if item, err := Require(t.Context(), db, r.Query()); err != nil || item.Name != "one" {
 		t.Fatal(item, err)
 	}
-	if n, err := r.Query().Count(t.Context(), db); err != nil || n != 1 {
+	if n, err := Count(t.Context(), db, r.Query()); err != nil || n != 1 {
 		t.Fatal(n, err)
 	}
-	if yes, err := r.Query().Exists(t.Context(), db); err != nil || !yes {
+	if yes, err := Exists(t.Context(), db, r.Query()); err != nil || !yes {
 		t.Fatal(yes, err)
 	}
-	if page, err := r.Query().Paginate(t.Context(), db, Page(1, 2)); err != nil || page.Total != 1 || len(page.Items) != 1 {
+	if page, err := Paginate(t.Context(), db, r.Query(), Page(1, 2)); err != nil || page.Total != 1 || len(page.Items) != 1 {
 		t.Fatal(page, err)
 	}
-	if page, err := r.Query().SimplePaginate(t.Context(), db, Page(1, 2)); err != nil || page.HasMore || len(page.Items) != 1 {
+	if page, err := SimplePaginate(t.Context(), db, r.Query(), Page(1, 2)); err != nil || page.HasMore || len(page.Items) != 1 {
 		t.Fatal(page, err)
 	}
 	calls := 0
-	if err := r.Query().Each(t.Context(), db, func(item record) error { calls++; return nil }); err != nil || calls != 1 {
+	if err := Each(t.Context(), db, r.Query(), func(item record) error { calls++; return nil }); err != nil || calls != 1 {
 		t.Fatal(calls, err)
 	}
 	if err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-		if item, err := r.Query().ForShare().First(t.Context(), tx); err != nil || !item.IsSet() {
+		if item, err := FirstLocked(t.Context(), tx, ForShare(r.Query())); err != nil || !item.IsSet() {
 			t.Error(item, err)
 		}
-		return r.Query().ForUpdate().Each(t.Context(), tx, func(record) error { return nil })
+		return EachLocked(t.Context(), tx, Lock(r.Query()), func(record) error { return nil })
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -505,7 +505,7 @@ func TestAutocommitInsertUnknownRetainsCandidate(t *testing.T) {
 	r := records()
 	db := testDB(t, testConnector{columns: []string{"id", "display_name", "note", "amount"}, values: [][]driver.Value{{int64(7), "stored", nil, "1"}}, closeErr: errors.New("close interrupted")})
 	amount, _ := decimal.Parse("1")
-	item, err := r.Insert(t.Context(), db, r.Name.Set("stored"), r.Amount.Set(amount))
+	item, err := Insert(t.Context(), db, r.Table, TextSet(r.Name, "stored"), NumberSet(r.Amount, amount))
 	var reconciliation *WriteError[record]
 	if item.ID != 0 || !errors.As(err, &reconciliation) || reconciliation.Candidate().ID != 7 {
 		t.Fatalf("autocommit candidate: %v", err)

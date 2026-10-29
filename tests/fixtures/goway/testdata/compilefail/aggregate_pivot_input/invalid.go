@@ -10,4 +10,4 @@ import (
 var _ = orm.LoadFrom[j.Parent]
 var _ = expr.Count[j.Parent]
 var _ decimal.Decimal
-var invalid = expr.Related(orm.Pivot(j.Peers), expr.CountDistinctField(j.Targets.ID))
+var invalid = expr.Related(orm.Pivot(j.Peers), expr.CountDistinctField(orm.KeyExpr(j.Targets.ID)))

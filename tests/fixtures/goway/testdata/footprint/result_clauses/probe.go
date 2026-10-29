@@ -13,14 +13,14 @@ func Grouped() orm.Query[models.User] {
 	q := models.Users.Query()
 	count := expr.Count[models.User]()
 	scalar := rows.SelectScalar(rows.From(q), count.Value())
-	scalar = rows.DistinctScalar(rows.HavingScalar(rows.GroupByScalar(scalar, expr.Group(expr.Value(models.Users.ID))), count.Gt(0)))
+	scalar = rows.DistinctScalar(rows.HavingScalar(rows.GroupByScalar(scalar, expr.Group(expr.Value(orm.KeyExpr(models.Users.ID)))), count.Gt(0)))
 	byValue := rows.DistinctOnScalarValues(scalar, count.Value().Key())
 	return expr.Where(q, rows.ExistsQuery(rows.From(q), scalar), rows.ExistsQuery(rows.From(q), byValue))
 }
 
 func On() orm.Query[models.User] {
 	q := models.Users.Query()
-	scalar := rows.DistinctOnScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(models.Users.Age)).Value()), expr.Group(expr.Value(models.Users.ID)))
+	scalar := rows.DistinctOnScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value()), expr.Group(expr.Value(orm.KeyExpr(models.Users.ID))))
 	return expr.Where(q, rows.ExistsQuery(rows.From(q), scalar))
 }
 
@@ -33,7 +33,7 @@ func Records() orm.Query[models.User] {
 
 func Values() orm.Query[models.User] {
 	q := models.Users.Query()
-	scalar := rows.Values(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(models.Users.Nickname)).Value()))
+	scalar := rows.Values(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Value()))
 	combined := rows.DistinctValues(rows.UnionAllValues(scalar, scalar))
 	return expr.Where(q, rows.ExistsQuery(rows.From(q), combined))
 }

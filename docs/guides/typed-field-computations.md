@@ -21,7 +21,7 @@ columns do not need a separate summary-method family for each owner/value pair.
 <!-- go-source: tests/fixtures/consumer/expressionqueries/expressions_test.go -->
 ```go
 orders := models.Orders.Query()
-total := expr.Sum(models.Orders.TotalCents)
+total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
 computed := expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())
 ```
 

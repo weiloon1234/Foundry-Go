@@ -1,5 +1,7 @@
 package lateral_on_owner
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -15,7 +17,7 @@ var a = rows.As[parentTag](models.Users.Query(), "a")
 var b = rows.As[childTag](models.Orders.Query(), "b")
 var link = rows.Correlate(a, b)
 var inner = rows.InnerScope(link, rows.Scope(b))
-var innerID = expr.At(inner, models.Orders.ID)
+var innerID = expr.At(inner, orm.KeyExpr(models.Orders.ID))
 var record = rows.SelectCorrelatedRecord(link, inner)
 var lateral = rows.AsLateral[namedTag](record, "lateral_record")
 
@@ -27,4 +29,4 @@ type fields struct {
 
 var schema = rows.Define(func(b rows.Builder[result], r *result) fields { return fields{b.Row(), rows.NumberOf(b, &r.Count)} })
 
-var _ = rows.LeftJoinLateral(a, lateral, rows.On(expr.At(rows.LateralScope(lateral), models.Orders.BuyerID), expr.At(rows.Scope(a), models.Users.ID)))
+var _ = rows.LeftJoinLateral(a, lateral, rows.On(expr.At(rows.LateralScope(lateral), orm.ColumnExpr(models.Orders.BuyerID)), expr.At(rows.Scope(a), orm.KeyExpr(models.Users.ID))))

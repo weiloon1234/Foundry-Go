@@ -13,7 +13,7 @@ var Users = orm.Define("users", func(b orm.Builder[User], m *User) orm.Table[Use
 
 func Create(ctx context.Context, db database.Transactor) ([]User, error) {
 	f, err := factory.Define(Users, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[User], error) {
-		return []orm.Assignment[User]{Users.Key().Set(int64(n))}, nil
+		return []orm.Assignment[User]{orm.KeySet(Users.Key(), int64(n))}, nil
 	})
 	if err != nil {
 		return nil, err

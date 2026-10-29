@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
@@ -7,4 +9,4 @@ import (
 
 type Side struct{}
 
-var _ = rows.As[Side](models.Users.Query().ForUpdate(), "users")
+var _ = rows.As[Side](orm.Lock(models.Users.Query()), "users")

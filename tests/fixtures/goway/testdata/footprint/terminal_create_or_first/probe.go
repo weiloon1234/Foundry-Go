@@ -8,5 +8,5 @@ import (
 )
 
 func Run(ctx context.Context, db database.Transactor) (m.WriteRecord, error) {
-	return orm.CreateOrFirst(ctx, db, m.WriteRecords.Query().Where(m.WriteRecords.Name.Eq("one")))
+	return orm.CreateOrFirst(ctx, db, m.WriteRecords.Query().Where(orm.TextEq(m.WriteRecords.Name, "one")))
 }

@@ -39,7 +39,7 @@ func temporalTransferNode[S, V any](s expr.Selected[S, V]) querycore.ValueExpres
 }
 func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 	d := temporalTransferFields()
-	date, local, at, clock := expr.Value(d.Day), expr.Value(d.Local), expr.Value(d.At), expr.Value(d.Clock)
+	date, local, at, clock := expr.Value(orm.TimeExpr(d.Day)), expr.Value(orm.TimeExpr(d.Local)), expr.Value(orm.TimeExpr(d.At)), expr.Value(orm.TimeExpr(d.Clock))
 	rejectTemporalTransfer(t, d, "date unit zero", expr.TruncateDate(date, 0).Value())
 	rejectTemporalTransfer(t, d, "date clock unit", expr.TruncateDate(date, expr.DateUnit(expr.TimestampHour)).Value())
 	rejectTemporalTransfer(t, d, "timestamp unit", expr.TruncateLocal(local, 255).Value())
@@ -71,7 +71,7 @@ func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 }
 func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 	d := temporalTransferFields()
-	year := expr.Year(expr.LocalAt(expr.Value(d.At), expr.UTCZone()))
+	year := expr.Year(expr.LocalAt(expr.Value(orm.TimeExpr(d.At)), expr.UTCZone()))
 	q := OrderScalar(GroupByScalar(SelectScalar(From(d.Query()), year.Value()), expr.Group(year)), year.Asc())
 	s, e := CompileRead(ReadScalar(q))
 	if e != nil || !strings.Contains(s.SQL(), "EXTRACT(year FROM") || !strings.Contains(s.SQL(), "TIMEZONE(") {
@@ -92,7 +92,7 @@ func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 	if _, e := CompileRead(ReadScalar(HavingScalar(SelectScalar(From(d.Query()), expr.Count[temporalTransferRow]().Value()), p))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("window hidden in HAVING", e)
 	}
-	v := expr.UnixMillisecondsNullableValue(expr.Min(d.At).Value())
+	v := expr.UnixMillisecondsNullableValue(expr.Min(orm.TimeExpr(d.At)).Value())
 	if _, e := CompileRead(ReadScalar(HavingScalar(SelectScalar(From(d.Query()), v), expr.OrderNullableValue(v).Gt(0)))); e != nil {
 		t.Fatal("aggregate phase lost", e)
 	}

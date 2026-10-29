@@ -57,31 +57,31 @@ func TestEncryptedOpenFailurePublication(t *testing.T) {
 		run    func(*database.DB) (int, error)
 	}{
 		{"Raw", false, 0, func(db *database.DB) (int, error) {
-			v, e := r.Raw(ctx, db, "SELECT id,secret,backup FROM secure_records")
+			v, e := Raw(ctx, db, r.Table, "SELECT id,secret,backup FROM secure_records")
 			return len(v), e
 		}},
-		{"All", false, 0, func(db *database.DB) (int, error) { v, e := r.Query().All(ctx, db); return len(v), e }},
+		{"All", false, 0, func(db *database.DB) (int, error) { v, e := All(ctx, db, r.Query()); return len(v), e }},
 		{"First", true, 0, func(db *database.DB) (int, error) {
-			v, e := r.Query().First(ctx, db)
+			v, e := First(ctx, db, r.Query())
 			_, ok := v.Get()
 			if ok {
 				return 1, e
 			}
 			return 0, e
 		}},
-		{"Require", true, 0, func(db *database.DB) (int, error) { v, e := r.Query().Require(ctx, db); return one(v), e }},
+		{"Require", true, 0, func(db *database.DB) (int, error) { v, e := Require(ctx, db, r.Query()); return one(v), e }},
 		{"Find", true, 0, func(db *database.DB) (int, error) {
-			v, e := r.Find(ctx, db, other)
+			v, e := Find(ctx, db, r.Table, other)
 			_, ok := v.Get()
 			if ok {
 				return 1, e
 			}
 			return 0, e
 		}},
-		{"TableRequire", true, 0, func(db *database.DB) (int, error) { v, e := r.Require(ctx, db, other); return one(v), e }},
+		{"TableRequire", true, 0, func(db *database.DB) (int, error) { v, e := RequireKey(ctx, db, r.Table, other); return one(v), e }},
 		{"Each", false, 1, func(db *database.DB) (int, error) {
 			n := 0
-			e := r.Query().Each(ctx, db, func(v secureRecord) error {
+			e := Each(ctx, db, r.Query(), func(v secureRecord) error {
 				if v.ID != id {
 					t.Fatal("yielded failing or subsequent row")
 				}
@@ -92,33 +92,36 @@ func TestEncryptedOpenFailurePublication(t *testing.T) {
 		}},
 		{"Chunk", false, 0, func(db *database.DB) (int, error) {
 			n := 0
-			e := r.Query().Chunk(ctx, db, 10, func(v []secureRecord) error { n += len(v); return nil })
+			e := Chunk(ctx, db, r.Query(), 10, func(v []secureRecord) error { n += len(v); return nil })
 			return n, e
 		}},
 		{"EachChunked", false, 0, func(db *database.DB) (int, error) {
 			n := 0
-			e := r.Query().EachChunked(ctx, db, 10, func(secureRecord) error { n++; return nil })
+			e := EachChunked(ctx, db, r.Query(), 10, func(secureRecord) error { n++; return nil })
 			return n, e
 		}},
 		{"Paginate", false, 0, func(db *database.DB) (int, error) {
-			v, e := r.Query().Paginate(ctx, db, Page(1, 10))
+			v, e := Paginate(ctx, db, r.Query(), Page(1, 10))
 			return len(v.Items), e
 		}},
 		{"SimplePaginate", false, 0, func(db *database.DB) (int, error) {
-			v, e := r.Query().SimplePaginate(ctx, db, Page(1, 10))
+			v, e := SimplePaginate(ctx, db, r.Query(), Page(1, 10))
 			return len(v.Items), e
 		}},
 		{"Insert", true, 0, func(db *database.DB) (int, error) {
-			v, e := r.Insert(ctx, db, r.Secret.Set(encrypted.NewText("assigned")))
+			v, e := Insert(ctx, db, r.Table, EncryptedSet(r.Secret, encrypted.NewText("assigned")))
 			return one(v), e
 		}},
 		{"Update", true, 0, func(db *database.DB) (int, error) {
-			v, e := r.Update(ctx, db, other, r.Secret.Set(encrypted.NewText("assigned")))
+			v, e := Update(ctx, db, r.Table.Query(), r.Table.Key(), other, EncryptedSet(r.Secret, encrypted.NewText("assigned")))
 			return one(v), e
 		}},
-		{"Delete", true, 0, func(db *database.DB) (int, error) { v, e := r.Delete(ctx, db, other); return one(v), e }},
+		{"Delete", true, 0, func(db *database.DB) (int, error) {
+			v, e := Delete(ctx, db, r.Table.Query(), r.Table.Key(), other)
+			return one(v), e
+		}},
 		{"InsertMany", false, 0, func(db *database.DB) (int, error) {
-			v, e := r.InsertMany(ctx, db, [][]Assignment[secureRecord]{{r.Secret.Set(encrypted.NewText("one"))}, {r.Secret.Set(encrypted.NewText("two"))}, {r.Secret.Set(encrypted.NewText("three"))}})
+			v, e := InsertMany(ctx, db, r.Table, [][]Assignment[secureRecord]{{EncryptedSet(r.Secret, encrypted.NewText("one"))}, {EncryptedSet(r.Secret, encrypted.NewText("two"))}, {EncryptedSet(r.Secret, encrypted.NewText("three"))}})
 			return len(v), e
 		}},
 	}
@@ -162,7 +165,7 @@ func TestEncryptedEagerOpenFailureDoesNotPublishParents(t *testing.T) {
 	p := Define("secure_parents", func(b Builder[secureParent], p *secureParent) secureParents {
 		return secureParents{TableOf(b, &p.ID), IDOf(b, &p.RecordID), OneOf(b, &p.Record)}
 	})
-	rel := BelongsToOf(p.Record, p.RecordID, r.Key())
+	rel := BelongsToOf(p.Record, ColumnExpr(p.RecordID), KeyExpr(r.Key()))
 	if err := Check(p, r, rel); err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +192,7 @@ func TestEncryptedEagerOpenFailureDoesNotPublishParents(t *testing.T) {
 		}
 		return []string{"id", "secret", "backup"}, [][]driver.Value{{id.String(), raw, nil}}
 	}}, database.WithEncryption(keys))
-	got, err := p.Query().With(rel).All(t.Context(), db)
+	got, err := All(t.Context(), db, p.Query().With(rel))
 	if !errors.Is(err, fault.Invalid) || got != nil {
 		t.Fatal("eager load published parents after open failure", err)
 	}
@@ -232,9 +235,13 @@ func TestEncryptedSoftWriteReturningFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, run := range map[string]func(*database.DB) (secureSoftRecord, error){
-		"Restore":     func(db *database.DB) (secureSoftRecord, error) { return r.Restore(t.Context(), db, id) },
-		"Delete":      func(db *database.DB) (secureSoftRecord, error) { return r.Delete(t.Context(), db, id) },
-		"ForceDelete": func(db *database.DB) (secureSoftRecord, error) { return r.ForceDelete(t.Context(), db, r.Soft, id) },
+		"Restore": func(db *database.DB) (secureSoftRecord, error) { return Restore(t.Context(), db, r.Table, id) },
+		"Delete": func(db *database.DB) (secureSoftRecord, error) {
+			return Delete(t.Context(), db, r.Table.Query(), r.Table.Key(), id)
+		},
+		"ForceDelete": func(db *database.DB) (secureSoftRecord, error) {
+			return ForceDelete(t.Context(), db, r.Table.Query(), r.Soft, r.Table.Key(), id)
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var statements []string

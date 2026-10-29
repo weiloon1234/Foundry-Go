@@ -7,6 +7,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-type wrapped struct{ orm.Text[models.User, string] }
+type wrapped struct {
+	orm.ExpressionColumn[models.User, string, string]
+}
 
-var _ = rows.MapUpdate(wrapped{models.Users.Email}, expr.Value(models.Users.Email))
+var _ = rows.MapUpdate(wrapped{orm.TextExpr(models.Users.Email)}, expr.Value(orm.TextExpr(models.Users.Email)))

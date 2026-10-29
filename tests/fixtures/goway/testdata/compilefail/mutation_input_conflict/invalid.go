@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.ConflictSet(mutators.Members.Email, coremodels.StoredEmail("already stored"))
+var _ = orm.ConflictSet(orm.InputTextExpr(mutators.Members.Email), coremodels.StoredEmail("already stored"))

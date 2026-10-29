@@ -19,5 +19,5 @@ var _ m.Member
 var _ orm.Hooks[h.Member]
 
 func invalid(db *database.DB) {
-	_, _ = h.KeyedMembers.ForceDelete(context.Background(), db, h.KeyedMembers.Soft, model.ID[m.Member]{})
+	_, _ = orm.ForceDelete(context.Background(), db, h.KeyedMembers.Table.Query(), h.KeyedMembers.Soft, h.KeyedMembers.Table.Key(), model.ID[m.Member]{})
 }

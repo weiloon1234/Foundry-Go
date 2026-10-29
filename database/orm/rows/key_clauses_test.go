@@ -16,10 +16,10 @@ type promotedSelectedClauseOrder[S any] struct{ expr.SelectedOrder[S] }
 func TestCorrelatedSelectedKeysKeepOwnershipPhaseAndOrdering(t *testing.T) {
 	m, o, foreign := declareMembers(), declareOrders(), declareOrders()
 	c := Correlate(From(m.Query()), From(o.Query()))
-	parent := expr.At(OuterScope(c, ModelScope(m.Query())), m.ID)
-	child := expr.At(InnerScope(c, ModelScope(o.Query())), o.MemberID)
+	parent := expr.At(OuterScope(c, ModelScope(m.Query())), orm.KeyExpr(m.ID))
+	child := expr.At(InnerScope(c, ModelScope(o.Query())), orm.NumberExpr(o.MemberID))
 	other := Correlate(From(m.Query()), From(foreign.Query()))
-	foreignChild := expr.At(InnerScope(other, ModelScope(foreign.Query())), foreign.MemberID)
+	foreignChild := expr.At(InnerScope(other, ModelScope(foreign.Query())), orm.NumberExpr(foreign.MemberID))
 	count := expr.Count[Correlation[member, order]]()
 	base := SelectCorrelatedScalar(c.Where(expr.Equal(child, parent)), count.Value())
 	grouped := GroupByCorrelatedScalar(base, expr.Group(child))
@@ -64,7 +64,7 @@ func TestCorrelatedSelectedKeysKeepOwnershipPhaseAndOrdering(t *testing.T) {
 
 func TestValueSetSelectedKeysKeepCodecInputsAndRejectForeignKeys(t *testing.T) {
 	m := declareMembers()
-	input := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Nickname)).Value()))
+	input := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value()))
 	base := UnionAllValues(input, input)
 	key := expr.Row(base.Value()).Value()
 	selected := DistinctOnValueSet(base, key.Key()).OrderBy(key.Asc().NullsLast()).Offset(1).Limit(2)
@@ -76,7 +76,7 @@ func TestValueSetSelectedKeysKeepCodecInputsAndRejectForeignKeys(t *testing.T) {
 	if err != nil || len(got) != 2 || got[0] != value.Of("name") || !got[1].IsNull() {
 		t.Fatal("nullable codec changed", got, err)
 	}
-	otherInput := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Nickname)).Value()))
+	otherInput := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value()))
 	other := UnionAllValues(otherInput, otherInput)
 	for name, q := range map[string]ValueSetQuery[value.Nullable[string]]{
 		"foreign key":         DistinctOnValueSet(base, expr.Row(other.Value()).Value().Key()),

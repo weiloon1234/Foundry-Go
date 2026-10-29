@@ -17,4 +17,6 @@ var Models = orm.Define("role_mutators", func(b orm.Builder[Model], m *Model) Fi
 	return Fields{orm.TableOf(b, &m.ID), orm.InputTextOf(b, &m.Name, func(s string) (string, error) { return s, nil })}
 })
 
-func Read(name string) orm.Query[Model] { return Models.Query().Where(Models.Name.Eq(name)) }
+func Read(name string) orm.Query[Model] {
+	return Models.Query().Where(orm.InputTextEq(Models.Name, name))
+}

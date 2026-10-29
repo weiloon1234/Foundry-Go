@@ -61,14 +61,14 @@ func transferUpdate(s Query[transferSource], d Query[transferArchive]) UpdateSou
 }
 func TestInsertSelectUsesSharedSourceCompilerAndBindings(t *testing.T) {
 	s, d := sourceTransferTables()
-	name := FoundryInsertMapping[transferSource, transferArchive](transferMapping(d.Name, s.Name), sqlowner.Expressions())
+	name := FoundryInsertMapping[transferSource, transferArchive](transferMapping(TextExpr(d.Name), TextExpr(s.Name)), sqlowner.Expressions())
 	nullable := name.core
-	_, note := FoundryColumn(d.Note, sqlowner.Metadata())
+	_, note := FoundryColumn(NullableTextExpr(d.Note), sqlowner.Metadata())
 	nullable.Field = note.Field
 	nullable.Destination = note.Reference
 	nullable.Stored = reflect.TypeFor[value.Nullable[string]]()
 	noteMap := FoundryInsertMapping[transferSource, transferArchive](nullable, sqlowner.Expressions())
-	plan := transferInsertion(s.Query().Where(s.Name.Eq("literal '; --")).OrderBy(s.Name.Asc()).Limit(3).Offset(2), d.Query(), name, noteMap).Values(d.Tag.Set(" batch "))
+	plan := transferInsertion(s.Query().Where(TextEq(s.Name, "literal '; --")).OrderBy(TextAsc(s.Name)).Limit(3).Offset(2), d.Query(), name, noteMap).Values(TextSet(d.Tag, " batch "))
 	statement, err := plan.plan.compile(true)
 	want := `INSERT INTO "archives" ("name", "note", "tag") SELECT "source_records"."name" AS "name", "source_records"."name" AS "note", CAST($1 AS text) AS "tag" FROM "source_records" WHERE ("source_records"."name" = $2) ORDER BY "source_records"."name" ASC LIMIT $3 OFFSET $4 RETURNING "archives"."id", "archives"."name", "archives"."note", "archives"."tag"`
 	if err != nil || statement.SQLText != want || !reflect.DeepEqual(statement.Bindings, []any{" batch ", "literal '; --", int64(3), int64(2)}) {
@@ -79,7 +79,7 @@ func TestInsertSelectUsesSharedSourceCompilerAndBindings(t *testing.T) {
 			t.Fatal("plan formatting leaked")
 		}
 	}
-	changed, err := plan.Values(d.Tag.Set("other")).plan.compile(false)
+	changed, err := plan.Values(TextSet(d.Tag, "other")).plan.compile(false)
 	if err != nil || strings.Contains(changed.SQLText, "RETURNING") || changed.Bindings[0] != "other" {
 		t.Fatal(changed, err)
 	}
@@ -87,7 +87,7 @@ func TestInsertSelectUsesSharedSourceCompilerAndBindings(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(original, statement) {
 		t.Fatal("derived plan changed source", err)
 	}
-	input := transferSourceMetadata(s.Query().Where(s.Name.Eq("in cte")))
+	input := transferSourceMetadata(s.Query().Where(TextEq(s.Name, "in cte")))
 	input.Node.Source = querycore.TableSource{Cte: &querycore.CteNode{Name: "picked", Query: input.Node, Columns: s.core.model.Columns}, Alias: "picked_records", Columns: s.core.model.Columns}
 	input.Node.Selections = nil
 	input.Node.Predicates = nil
@@ -95,7 +95,7 @@ func TestInsertSelectUsesSharedSourceCompilerAndBindings(t *testing.T) {
 	mapping := name
 	mapping.core.Value.Node = querycore.FieldRef{Table: "picked_records", Column: "name"}
 	mapping.core.Value.Refs = []ormcore.Reference{{Scope: reflect.TypeFor[transferSource](), Table: "picked_records", Owner: s.core}}
-	fromCTE := FoundryInsertFrom[transferSource](d.Query(), input, sqlowner.Queries()).Select(mapping).Values(d.Tag.Set("outside"))
+	fromCTE := FoundryInsertFrom[transferSource](d.Query(), input, sqlowner.Queries()).Select(mapping).Values(TextSet(d.Tag, "outside"))
 	statement, err = fromCTE.plan.compile(false)
 	if err != nil || !strings.HasPrefix(statement.SQLText, `WITH "picked"`) || !reflect.DeepEqual(statement.Bindings, []any{"in cte", "outside"}) {
 		t.Fatal(statement.SQLText, statement.Bindings, err)
@@ -104,7 +104,7 @@ func TestInsertSelectUsesSharedSourceCompilerAndBindings(t *testing.T) {
 func TestInsertSelectRejectsIncompleteAndInvalidPlansBeforeTransaction(t *testing.T) {
 	s, d := sourceTransferTables()
 	foreign, _ := sourceTransferTables()
-	mapping := FoundryInsertMapping[transferSource, transferArchive](transferMapping(d.Name, s.Name), sqlowner.Expressions())
+	mapping := FoundryInsertMapping[transferSource, transferArchive](transferMapping(TextExpr(d.Name), TextExpr(s.Name)), sqlowner.Expressions())
 	badTable := mapping
 	badTable.core.Field.Table = "wrong"
 	badType := mapping
@@ -113,7 +113,7 @@ func TestInsertSelectRejectsIncompleteAndInvalidPlansBeforeTransaction(t *testin
 	badInput.core.Value.Node = querycore.FieldRef{Table: "wrong", Column: "name"}
 	empty := mapping
 	empty.core.Value.Node = nil
-	null := d.Tag.Set("x")
+	null := TextSet(d.Tag, "x")
 	null.core.AssignmentValue.Bind = func() (driver.Value, error) { return nil, nil }
 	writer := &noEachWriter{}
 	for label, plan := range map[string]InsertSelect[transferSource, transferArchive]{
@@ -121,9 +121,9 @@ func TestInsertSelectRejectsIncompleteAndInvalidPlansBeforeTransaction(t *testin
 		"missing metadata":     transferInsertion(s.Query(), Query[transferArchive]{}, mapping),
 		"invalid source":       transferInsertion(Query[transferSource]{}, d.Query(), mapping),
 		"nil source":           FoundryInsertFrom[transferSource](d.Query(), ormcore.Source{}, sqlowner.Queries()).Select(mapping),
-		"filtered destination": transferInsertion(s.Query(), d.Query().Where(d.Name.Eq("filter")), mapping),
+		"filtered destination": transferInsertion(s.Query(), d.Query().Where(TextEq(d.Name, "filter")), mapping),
 		"duplicate":            transferInsertion(s.Query(), d.Query(), mapping, mapping),
-		"literal collision":    transferInsertion(s.Query(), d.Query(), mapping).Values(d.Name.Set("literal"), d.Tag.Set("tag")),
+		"literal collision":    transferInsertion(s.Query(), d.Query(), mapping).Values(TextSet(d.Name, "literal"), TextSet(d.Tag, "tag")),
 		"wrong destination":    transferInsertion(s.Query(), d.Query(), badTable),
 		"wrong type":           transferInsertion(s.Query(), d.Query(), badType),
 		"empty expression":     transferInsertion(s.Query(), d.Query(), empty),
@@ -133,7 +133,7 @@ func TestInsertSelectRejectsIncompleteAndInvalidPlansBeforeTransaction(t *testin
 		"NULL required":        transferInsertion(s.Query(), d.Query(), mapping).Values(null),
 	} {
 		if len(plan.plan.values) == 0 {
-			plan = plan.Values(d.Tag.Set("tag"))
+			plan = plan.Values(TextSet(d.Tag, "tag"))
 		}
 		t.Run(label, func(t *testing.T) {
 			if _, err := plan.Exec(t.Context(), writer); !errors.Is(err, fault.Invalid) && !errors.Is(err, fault.Missing) {
@@ -141,7 +141,7 @@ func TestInsertSelectRejectsIncompleteAndInvalidPlansBeforeTransaction(t *testin
 			}
 		})
 	}
-	plan := transferInsertion(s.Query(), d.Query(), mapping).Values(d.Tag.Set("tag"))
+	plan := transferInsertion(s.Query(), d.Query(), mapping).Values(TextSet(d.Tag, "tag"))
 	for _, limit := range []int{-1, 0, querycore.MaxInsertRows + 1} {
 		if _, err := plan.Returning(t.Context(), writer, limit); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid bound", err)
@@ -161,9 +161,9 @@ func TestInsertSelectRejectsIncompleteAndInvalidPlansBeforeTransaction(t *testin
 }
 func TestSourceWritePreservesWindowsBindingsAndCountBoundary(t *testing.T) {
 	s, d := sourceTransferTables()
-	key := FoundrySourceKey[transferSource, transferArchive](transferMapping(d.Key(), s.Key()), sqlowner.Expressions())
-	mapping := FoundryUpdateMapping[transferSource, transferArchive](transferMapping(d.Name, s.Name), sqlowner.Expressions())
-	plan := transferUpdate(s.Query().Where(s.Name.Eq("secret '; --")).OrderBy(s.Name.Asc()).Limit(2).Offset(1), d.Query().Where(d.Name.Ne("excluded"))).Match(key).Select(mapping).Values(d.Tag.Set("fixed"))
+	key := FoundrySourceKey[transferSource, transferArchive](transferMapping(KeyExpr(d.Key()), KeyExpr(s.Key())), sqlowner.Expressions())
+	mapping := FoundryUpdateMapping[transferSource, transferArchive](transferMapping(TextExpr(d.Name), TextExpr(s.Name)), sqlowner.Expressions())
+	plan := transferUpdate(s.Query().Where(TextEq(s.Name, "secret '; --")).OrderBy(TextAsc(s.Name)).Limit(2).Offset(1), d.Query().Where(TextNe(d.Name, "excluded"))).Match(key).Select(mapping).Values(TextSet(d.Tag, "fixed"))
 	statement, err := plan.plan.compile(true)
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +185,7 @@ func TestSourceWritePreservesWindowsBindingsAndCountBoundary(t *testing.T) {
 			t.Fatal("descriptor leaked")
 		}
 	}
-	if _, err := plan.Values(d.Tag.Set("new")).plan.compile(false); err != nil {
+	if _, err := plan.Values(TextSet(d.Tag, "new")).plan.compile(false); err != nil {
 		t.Fatal(err)
 	}
 	unchanged, err := plan.plan.compile(true)
@@ -195,8 +195,8 @@ func TestSourceWritePreservesWindowsBindingsAndCountBoundary(t *testing.T) {
 }
 func TestSourceWriteRejectsInvalidShapesBeforeTransaction(t *testing.T) {
 	s, d := sourceTransferTables()
-	key := FoundrySourceKey[transferSource, transferArchive](transferMapping(d.Key(), s.Key()), sqlowner.Expressions())
-	mapping := FoundryUpdateMapping[transferSource, transferArchive](transferMapping(d.Name, s.Name), sqlowner.Expressions())
+	key := FoundrySourceKey[transferSource, transferArchive](transferMapping(KeyExpr(d.Key()), KeyExpr(s.Key())), sqlowner.Expressions())
+	mapping := FoundryUpdateMapping[transferSource, transferArchive](transferMapping(TextExpr(d.Name), TextExpr(s.Name)), sqlowner.Expressions())
 	base := transferUpdate(s.Query(), d.Query()).Match(key).Select(mapping)
 	badKey := key
 	badKey.core.Field.Column = "name"
@@ -204,13 +204,13 @@ func TestSourceWriteRejectsInvalidShapesBeforeTransaction(t *testing.T) {
 	badType.core.Stored = reflect.TypeFor[string]()
 	wrong := mapping
 	wrong.core.Value.Node = querycore.FieldRef{Table: "elsewhere", Column: "name"}
-	primary := FoundryUpdateMapping[transferSource, transferArchive](transferMapping(d.Key(), s.Key()), sqlowner.Expressions())
+	primary := FoundryUpdateMapping[transferSource, transferArchive](transferMapping(KeyExpr(d.Key()), KeyExpr(s.Key())), sqlowner.Expressions())
 	writer := &noEachWriter{}
 	for label, plan := range map[string]UpdateSource[transferSource, transferArchive]{
 		"missing key":    transferUpdate(s.Query(), d.Query()).Select(mapping),
 		"missing values": transferUpdate(s.Query(), d.Query()).Match(key),
 		"not primary":    base.Match(badKey), "key type": base.Match(badType), "duplicate": base.Select(mapping),
-		"overlap": base.Values(d.Name.Set("repeat")), "primary mapping": base.Select(primary), "primary literal": base.Values(d.Key().Set(1)),
+		"overlap": base.Values(TextSet(d.Name, "repeat")), "primary mapping": base.Select(primary), "primary literal": base.Values(KeySet(d.Key(), 1)),
 		"wrong scope":        transferUpdate(s.Query(), d.Query()).Match(key).Select(wrong),
 		"destination window": transferUpdate(s.Query(), d.Query().Limit(1)).Match(key).Select(mapping),
 		"nil source":         FoundryUpdateFrom[transferSource](d.Query(), ormcore.Source{}, sqlowner.Queries()).Match(key).Select(mapping),

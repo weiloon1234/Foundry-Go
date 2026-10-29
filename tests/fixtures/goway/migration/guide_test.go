@@ -113,7 +113,7 @@ func TestDeclarationsAndReadSQL(t *testing.T) {
 	if err := orm.Check(Users.Table, Archives.Table, models.Users.Table, models.Orders.Table); err != nil {
 		t.Fatal(err)
 	}
-	after, err := orm.Compile(models.Orders.Query().Where(models.Orders.TotalCents.Gt(100)))
+	after, err := orm.Compile(models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)))
 	if err != nil {
 		t.Fatal(err)
 	}

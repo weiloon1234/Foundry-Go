@@ -10,7 +10,7 @@ The independent [audit consumer](../../tests/fixtures/consumer/auditqueries/doma
 ```go
 func registerAudit(r *foundation.Registrar, pool foundation.Key[*database.DB], history foundation.Key[*audit.Recorder]) error {
 	f := hooks.Members
-	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(f.Note, record.Exclude))
+	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(orm.NullableInputTextExpr(f.Note), record.Exclude))
 	return audit.Register(r, pool, history,
 		audit.Config{Area: "accounts", RetentionDays: 90}, orm.Auditing(f.Table, policy))
 }
@@ -89,7 +89,7 @@ func findHistory(ctx context.Context, db database.Executor, recorder *audit.Reco
 <!-- orm-example: audit-field -->
 ```go
 func historicalName(history record.Model[hooks.Member, int64]) (value.Optional[record.FieldChange[string]], error) {
-	return orm.AuditRead(history, hooks.Members.Name)
+	return orm.AuditRead(history, orm.InputTextExpr(hooks.Members.Name))
 }
 ```
 

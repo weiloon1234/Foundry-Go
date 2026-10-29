@@ -1,5 +1,7 @@
 package outboxstore
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"encoding/json"
@@ -50,10 +52,7 @@ func Append(ctx context.Context, tx *database.Tx, address Address, payload strin
 	if err != nil {
 		return Message{}, err
 	}
-	return Messages.Insert(ctx, tx,
-		Messages.Kind.Set(address.Kind), Messages.Destination.Set(address.Destination),
-		Messages.Name.Set(address.Name), Messages.Version.Set(address.Version),
-		Messages.Payload.Set(body), Messages.Origin.Set(capturedOrigin))
+	return orm.Insert(ctx, tx, Messages.Table, orm.TextSet(Messages.Kind, address.Kind), orm.TextSet(Messages.Destination, address.Destination), orm.TextSet(Messages.Name, address.Name), orm.NumberSet(Messages.Version, address.Version), orm.JSONSet(Messages.Payload, body), orm.JSONSet(Messages.Origin, capturedOrigin))
 }
 
 // Find requires the entire routing address in addition to the physical ID. An
@@ -67,10 +66,10 @@ func Find(ctx context.Context, executor database.Executor, address Address, id m
 		return value.Optional[Message]{}, safeerror.NewFault(fault.Invalid, "outbox lookup requires a nonzero message ID")
 	}
 	fields := Messages
-	return Messages.Query().Where(
-		fields.Kind.Eq(address.Kind),
-		fields.Destination.Eq(address.Destination),
-		fields.Name.Eq(address.Name),
-		fields.Version.Eq(address.Version),
-		fields.ID.Eq(id)).First(ctx, executor)
+	return orm.First(ctx, executor, Messages.Query().Where(
+		orm.TextEq(fields.Kind, address.Kind),
+		orm.TextEq(fields.Destination, address.Destination),
+		orm.TextEq(fields.Name, address.Name),
+		orm.NumberEq(fields.Version, address.Version),
+		orm.KeyEq(fields.ID, id)))
 }

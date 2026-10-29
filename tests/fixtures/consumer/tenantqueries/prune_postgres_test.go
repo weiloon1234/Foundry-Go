@@ -20,7 +20,7 @@ func TestPruningRemovesSelectedModelsInBoundedBatches(t *testing.T) {
 	keep := seedDocument(t, db, alpha, "keep", true)
 	documents := tenantqueries.Documents.Query()
 	f := tenantqueries.Documents
-	if _, err := documents.Where(f.Title.Ne("keep")).DeleteAll(ctx, db); err != nil {
+	if _, err := orm.DeleteAll(ctx, db, documents.Where(orm.TextNe(f.Title, "keep"))); err != nil {
 		t.Fatal(err)
 	}
 	registry, err := prune.New(
@@ -41,18 +41,18 @@ func TestPruningRemovesSelectedModelsInBoundedBatches(t *testing.T) {
 	if err := command.Run(t.Context(), dbcommand.Resources{Prunables: registry, Database: db}, &output); err != nil || !strings.Contains(output.String(), "Removed 1 model(s).") {
 		t.Fatal("prune command", output.String(), err)
 	}
-	remaining, err := orm.WithoutGlobalScopes(documents).WithTrashed().All(t.Context(), db)
+	remaining, err := orm.All(t.Context(), db, orm.WithoutGlobalScopes(documents).WithTrashed())
 	if err != nil || len(remaining) != 1 || remaining[0].ID != keep.ID {
 		t.Fatal("prune removed the wrong documents", remaining, err)
 	}
 	// Lifecycle mode removes each pivot through its ordinary delete.
-	if _, err := tenantqueries.Tags.Insert(ctx, db, tenantqueries.Tags.Key().Set("x"), tenantqueries.Tags.Name.Set("x")); err != nil {
+	if _, err := orm.Insert(ctx, db, tenantqueries.Tags.Table, orm.KeySet(tenantqueries.Tags.Key(), "x"), orm.TextSet(tenantqueries.Tags.Name, "x")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := orm.AttachMany(ctx, db, tenantqueries.DocumentLinks, keep, []tenantqueries.Tag{{Code: "x"}}, tenantqueries.DocumentTags.Weight.Set(0)); err != nil {
+	if _, err := orm.AttachMany(ctx, db, tenantqueries.DocumentLinks, keep, []tenantqueries.Tag{{Code: "x"}}, orm.NumberSet(tenantqueries.DocumentTags.Weight, 0)); err != nil {
 		t.Fatal(err)
 	}
-	links, err := prune.New(prune.ORMModel("app.weightless_links", tenantqueries.DocumentTags.Query().Where(tenantqueries.DocumentTags.Weight.Eq(0)), prune.Lifecycle))
+	links, err := prune.New(prune.ORMModel("app.weightless_links", tenantqueries.DocumentTags.Query().Where(orm.NumberEq(tenantqueries.DocumentTags.Weight, 0)), prune.Lifecycle))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -112,99 +112,99 @@ func TestStoreMigrationParity(t *testing.T) {
 		run     func(context.Context, *database.Tx) (string, error)
 	}{
 		{name: "countries_country_read", columns: []string{"iso2", "iso3", "iso_numeric", "name", "official_name", "capital", "region", "subregion", "currencies", "primary_currency_code", "calling_code", "calling_root", "calling_suffixes", "tlds", "timezones", "latitude", "longitude", "independent", "un_member", "flag_emoji", "status", "conversion_rate", "is_default", "reference_version", "created_at", "updated_at"}, values: []driver.Value{"MY", "stored", nil, "stored", nil, nil, nil, nil, `[]`, nil, nil, nil, `[]`, `[]`, `[]`, nil, nil, nil, nil, nil, "disabled", nil, false, "stored", instant, instant}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := countries.Countries.Query().Where(countries.Countries.ISO2.Eq(countries.Code("MY"))).First(ctx, tx)
+			r, e := orm.First(ctx, tx, countries.Countries.Query().Where(orm.KeyEq(countries.Countries.ISO2, countries.Code("MY"))))
 			return fingerprint(r, e)
 		}},
 		{name: "countries_country_write", columns: []string{"iso2", "iso3", "iso_numeric", "name", "official_name", "capital", "region", "subregion", "currencies", "primary_currency_code", "calling_code", "calling_root", "calling_suffixes", "tlds", "timezones", "latitude", "longitude", "independent", "un_member", "flag_emoji", "status", "conversion_rate", "is_default", "reference_version", "created_at", "updated_at"}, values: []driver.Value{"MY", "stored", nil, "stored", nil, nil, nil, nil, `[]`, nil, nil, nil, `[]`, `[]`, `[]`, nil, nil, nil, nil, nil, "disabled", nil, false, "stored", instant, instant}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Update(ctx, tx, countries.Countries.Query(), countries.Countries.ISO2, countries.Code("MY"), countries.Countries.Name.Set("updated"))
+			r, e := orm.Update(ctx, tx, countries.Countries.Query(), countries.Countries.ISO2, countries.Code("MY"), orm.TextSet(countries.Countries.Name, "updated"))
 			return fingerprint(r, e)
 		}},
 		{name: "jobarchive_failure_read", columns: []string{"id", "execution", "queue", "name", "version", "envelope", "reason", "attempts", "exceptions", "retries", "failed_at", "retried_at"}, values: []driver.Value{uuid, uuid, "stored", "stored", int64(1), "stored", "stored", int64(1), int64(1), int64(1), instant, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := jobarchive.Failures.Query().Where(jobarchive.Failures.ID.Eq(model.IDFromBytes[jobarchive.Failure]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))).First(ctx, tx)
+			r, e := orm.First(ctx, tx, jobarchive.Failures.Query().Where(orm.KeyEq(jobarchive.Failures.ID, model.IDFromBytes[jobarchive.Failure]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))))
 			return fingerprint(r, e)
 		}},
 		{name: "jobarchive_failure_write", columns: []string{"id", "execution", "queue", "name", "version", "envelope", "reason", "attempts", "exceptions", "retries", "failed_at", "retried_at"}, values: []driver.Value{uuid, uuid, "stored", "stored", int64(1), "stored", "stored", int64(1), int64(1), int64(1), instant, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Update(ctx, tx, jobarchive.Failures.Query(), jobarchive.Failures.ID, model.IDFromBytes[jobarchive.Failure]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), jobarchive.Failures.Reason.Set("updated"))
+			r, e := orm.Update(ctx, tx, jobarchive.Failures.Query(), jobarchive.Failures.ID, model.IDFromBytes[jobarchive.Failure]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), orm.TextSet(jobarchive.Failures.Reason, "updated"))
 			return fingerprint(r, e)
 		}},
 		{name: "idempotencystore_record_read", columns: []string{"id", "namespace", "operation", "version", "scope_digest", "key_digest", "fingerprint", "result_schema", "result_hash", "representation", "completed_at", "expires_at"}, values: []driver.Value{uuid, "stored", "stored", int64(1), "stored", "stored", "stored", "stored", "stored", []byte("stored"), nil, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := idempotencystore.Records.Query().Where(idempotencystore.Records.ID.Eq(model.IDFromBytes[idempotencystore.Record]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))).First(ctx, tx)
+			r, e := orm.First(ctx, tx, idempotencystore.Records.Query().Where(orm.KeyEq(idempotencystore.Records.ID, model.IDFromBytes[idempotencystore.Record]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))))
 			return fingerprint(r, e)
 		}},
 		{name: "idempotencystore_record_write", columns: []string{"id", "namespace", "operation", "version", "scope_digest", "key_digest", "fingerprint", "result_schema", "result_hash", "representation", "completed_at", "expires_at"}, values: []driver.Value{uuid, "stored", "stored", int64(1), "stored", "stored", "stored", "stored", "stored", []byte("stored"), nil, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Update(ctx, tx, idempotencystore.Records.Query(), idempotencystore.Records.ID, model.IDFromBytes[idempotencystore.Record]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), idempotencystore.Records.ResultHash.Set("updated"))
+			r, e := orm.Update(ctx, tx, idempotencystore.Records.Query(), idempotencystore.Records.ID, model.IDFromBytes[idempotencystore.Record]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), orm.TextSet(idempotencystore.Records.ResultHash, "updated"))
 			return fingerprint(r, e)
 		}},
 		{name: "mfastore_factor_read", columns: []string{"key", "scope", "identity", "generation", "ciphertext", "created_at", "pending_until", "confirmed_at", "last_step", "recovery_hashes"}, values: []driver.Value{"subject", "stored", `{"model":"subjects","key":{"k":"int","t":"7"}}`, uuid, "stored", instant, nil, nil, nil, `[]`}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := mfastore.Factors.Query().Where(mfastore.Factors.Key().Eq("subject")).First(ctx, tx)
+			r, e := orm.First(ctx, tx, mfastore.Factors.Query().Where(orm.KeyEq(mfastore.Factors.Key(), "subject")))
 			return fingerprint(r, e)
 		}},
 		{name: "mfastore_factor_write", columns: []string{"key", "scope", "identity", "generation", "ciphertext", "created_at", "pending_until", "confirmed_at", "last_step", "recovery_hashes"}, values: []driver.Value{"subject", "stored", `{"model":"subjects","key":{"k":"int","t":"7"}}`, uuid, "stored", instant, nil, nil, nil, `[]`}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Update(ctx, tx, mfastore.Factors.Query(), mfastore.Factors.Key(), "subject", mfastore.Factors.Ciphertext.Set("updated"))
+			r, e := orm.Update(ctx, tx, mfastore.Factors.Query(), mfastore.Factors.Key(), "subject", orm.TextSet(mfastore.Factors.Ciphertext, "updated"))
 			return fingerprint(r, e)
 		}},
 		{name: "challengestore_subject_read", columns: []string{"key", "scope", "identity"}, values: []driver.Value{"subject", "stored", `{"model":"subjects","key":{"k":"int","t":"7"}}`}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := challengestore.Subjects.Query().Where(challengestore.Subjects.Key().Eq("subject")).First(ctx, tx)
+			r, e := orm.First(ctx, tx, challengestore.Subjects.Query().Where(orm.KeyEq(challengestore.Subjects.Key(), "subject")))
 			return fingerprint(r, e)
 		}},
 		{name: "challengestore_subject_write", columns: []string{"key", "scope", "identity"}, values: []driver.Value{"subject", "stored", `{"model":"subjects","key":{"k":"int","t":"7"}}`}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Upsert(ctx, tx, challengestore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(challengestore.Subjects.Key())).DoNothing(), challengestore.Subjects.Key().Set("subject"), challengestore.Subjects.Scope.Set("stored"), challengestore.Subjects.Identity.Set(mustIdentity(t)))
+			r, e := orm.Upsert(ctx, tx, challengestore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(challengestore.Subjects.Key()))).DoNothing(), orm.KeySet(challengestore.Subjects.Key(), "subject"), orm.TextSet(challengestore.Subjects.Scope, "stored"), orm.JSONSet(challengestore.Subjects.Identity, mustIdentity(t)))
 			return fingerprint(r, e)
 		}},
 		{name: "challengestore_entry_read", columns: []string{"id", "scope", "subject_key", "secret_hash", "binding_hash", "created_at", "expires_at"}, values: []driver.Value{uuid, "stored", "stored", "stored", "stored", instant, instant}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := challengestore.Entries.Query().Where(challengestore.Entries.ID.Eq(model.IDFromBytes[challengestore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))).First(ctx, tx)
+			r, e := orm.First(ctx, tx, challengestore.Entries.Query().Where(orm.KeyEq(challengestore.Entries.ID, model.IDFromBytes[challengestore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))))
 			return fingerprint(r, e)
 		}},
 		{name: "challengestore_entry_write", columns: []string{"id", "scope", "subject_key", "secret_hash", "binding_hash", "created_at", "expires_at"}, values: []driver.Value{uuid, "stored", "stored", "stored", "stored", instant, instant}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Update(ctx, tx, challengestore.Entries.Query(), challengestore.Entries.ID, model.IDFromBytes[challengestore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), challengestore.Entries.SecretHash.Set("updated"))
+			r, e := orm.Update(ctx, tx, challengestore.Entries.Query(), challengestore.Entries.ID, model.IDFromBytes[challengestore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), orm.TextSet(challengestore.Entries.SecretHash, "updated"))
 			return fingerprint(r, e)
 		}},
 		{name: "sessionstore_subject_read", columns: []string{"key", "scope", "identity"}, values: []driver.Value{"subject", "stored", `{"model":"subjects","key":{"k":"int","t":"7"}}`}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := sessionstore.Subjects.Query().Where(sessionstore.Subjects.Key().Eq("subject")).First(ctx, tx)
+			r, e := orm.First(ctx, tx, sessionstore.Subjects.Query().Where(orm.KeyEq(sessionstore.Subjects.Key(), "subject")))
 			return fingerprint(r, e)
 		}},
 		{name: "sessionstore_subject_write", columns: []string{"key", "scope", "identity"}, values: []driver.Value{"subject", "stored", `{"model":"subjects","key":{"k":"int","t":"7"}}`}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Upsert(ctx, tx, sessionstore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(sessionstore.Subjects.Key())).DoNothing(), sessionstore.Subjects.Key().Set("subject"), sessionstore.Subjects.Scope.Set("stored"), sessionstore.Subjects.Identity.Set(mustIdentity(t)))
+			r, e := orm.Upsert(ctx, tx, sessionstore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(sessionstore.Subjects.Key()))).DoNothing(), orm.KeySet(sessionstore.Subjects.Key(), "subject"), orm.TextSet(sessionstore.Subjects.Scope, "stored"), orm.JSONSet(sessionstore.Subjects.Identity, mustIdentity(t)))
 			return fingerprint(r, e)
 		}},
 		{name: "sessionstore_entry_read", columns: []string{"id", "scope", "subject_key", "secret_hash", "assurance", "remember", "sliding", "idle_nanos", "created_at", "last_seen_at", "idle_expires_at", "expires_at", "client_ip", "user_agent", "confirmed_at", "impersonator_identity", "impersonator_guard", "impersonator_session"}, values: []driver.Value{uuid, "stored", "stored", "stored", int64(1), false, false, int64(1), instant, instant, instant, instant, nil, nil, nil, nil, nil, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := sessionstore.Entries.Query().Where(sessionstore.Entries.ID.Eq(model.IDFromBytes[sessionstore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))).First(ctx, tx)
+			r, e := orm.First(ctx, tx, sessionstore.Entries.Query().Where(orm.KeyEq(sessionstore.Entries.ID, model.IDFromBytes[sessionstore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))))
 			return fingerprint(r, e)
 		}},
 		{name: "sessionstore_entry_write", columns: []string{"id", "scope", "subject_key", "secret_hash", "assurance", "remember", "sliding", "idle_nanos", "created_at", "last_seen_at", "idle_expires_at", "expires_at", "client_ip", "user_agent", "confirmed_at", "impersonator_identity", "impersonator_guard", "impersonator_session"}, values: []driver.Value{uuid, "stored", "stored", "stored", int64(1), false, false, int64(1), instant, instant, instant, instant, nil, nil, nil, nil, nil, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Update(ctx, tx, sessionstore.Entries.Query(), sessionstore.Entries.ID, model.IDFromBytes[sessionstore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), sessionstore.Entries.SecretHash.Set("updated"))
+			r, e := orm.Update(ctx, tx, sessionstore.Entries.Query(), sessionstore.Entries.ID, model.IDFromBytes[sessionstore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), orm.TextSet(sessionstore.Entries.SecretHash, "updated"))
 			return fingerprint(r, e)
 		}},
 		{name: "tokenstore_subject_read", columns: []string{"key", "scope", "identity"}, values: []driver.Value{"subject", "stored", `{"model":"subjects","key":{"k":"int","t":"7"}}`}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := tokenstore.Subjects.Query().Where(tokenstore.Subjects.Key().Eq("subject")).First(ctx, tx)
+			r, e := orm.First(ctx, tx, tokenstore.Subjects.Query().Where(orm.KeyEq(tokenstore.Subjects.Key(), "subject")))
 			return fingerprint(r, e)
 		}},
 		{name: "tokenstore_subject_write", columns: []string{"key", "scope", "identity"}, values: []driver.Value{"subject", "stored", `{"model":"subjects","key":{"k":"int","t":"7"}}`}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Upsert(ctx, tx, tokenstore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(tokenstore.Subjects.Key())).DoNothing(), tokenstore.Subjects.Key().Set("subject"), tokenstore.Subjects.Scope.Set("stored"), tokenstore.Subjects.Identity.Set(mustIdentity(t)))
+			r, e := orm.Upsert(ctx, tx, tokenstore.Subjects.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(tokenstore.Subjects.Key()))).DoNothing(), orm.KeySet(tokenstore.Subjects.Key(), "subject"), orm.TextSet(tokenstore.Subjects.Scope, "stored"), orm.JSONSet(tokenstore.Subjects.Identity, mustIdentity(t)))
 			return fingerprint(r, e)
 		}},
 		{name: "tokenstore_family_read", columns: []string{"id", "scope", "subject_key", "name", "scopes", "mode", "assurance", "access_nanos", "refresh_idle_nanos", "rotation_limit", "generation", "created_at", "expires_at", "client_ip", "user_agent"}, values: []driver.Value{uuid, "stored", "stored", "stored", `[]`, int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), instant, instant, nil, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := tokenstore.Families.Query().Where(tokenstore.Families.ID.Eq(model.IDFromBytes[tokenstore.Family]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))).First(ctx, tx)
+			r, e := orm.First(ctx, tx, tokenstore.Families.Query().Where(orm.KeyEq(tokenstore.Families.ID, model.IDFromBytes[tokenstore.Family]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))))
 			return fingerprint(r, e)
 		}},
 		{name: "tokenstore_family_write", columns: []string{"id", "scope", "subject_key", "name", "scopes", "mode", "assurance", "access_nanos", "refresh_idle_nanos", "rotation_limit", "generation", "created_at", "expires_at", "client_ip", "user_agent"}, values: []driver.Value{uuid, "stored", "stored", "stored", `[]`, int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), instant, instant, nil, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Update(ctx, tx, tokenstore.Families.Query(), tokenstore.Families.ID, model.IDFromBytes[tokenstore.Family]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), tokenstore.Families.Name.Set("updated"))
+			r, e := orm.Update(ctx, tx, tokenstore.Families.Query(), tokenstore.Families.ID, model.IDFromBytes[tokenstore.Family]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), orm.TextSet(tokenstore.Families.Name, "updated"))
 			return fingerprint(r, e)
 		}},
 		{name: "tokenstore_entry_read", columns: []string{"id", "scope", "family_id", "generation", "access_hash", "refresh_hash", "issued_at", "last_seen_at", "access_expires_at", "refresh_expires_at"}, values: []driver.Value{uuid, "stored", uuid, int64(1), "stored", nil, instant, instant, instant, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := tokenstore.Entries.Query().Where(tokenstore.Entries.ID.Eq(model.IDFromBytes[tokenstore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))).First(ctx, tx)
+			r, e := orm.First(ctx, tx, tokenstore.Entries.Query().Where(orm.KeyEq(tokenstore.Entries.ID, model.IDFromBytes[tokenstore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}))))
 			return fingerprint(r, e)
 		}},
 		{name: "tokenstore_entry_write", columns: []string{"id", "scope", "family_id", "generation", "access_hash", "refresh_hash", "issued_at", "last_seen_at", "access_expires_at", "refresh_expires_at"}, values: []driver.Value{uuid, "stored", uuid, int64(1), "stored", nil, instant, instant, instant, nil}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
-			r, e := orm.Update(ctx, tx, tokenstore.Entries.Query(), tokenstore.Entries.ID, model.IDFromBytes[tokenstore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), tokenstore.Entries.AccessHash.Set("updated"))
+			r, e := orm.Update(ctx, tx, tokenstore.Entries.Query(), tokenstore.Entries.ID, model.IDFromBytes[tokenstore.Entry]([16]byte{1, 137, 15, 71, 26, 0, 112, 0, 128, 0, 0, 0, 0, 0, 0, 1}), orm.TextSet(tokenstore.Entries.AccessHash, "updated"))
 			return fingerprint(r, e)
 		}},
 
 		{name: "challenge_prune_projection", columns: []string{"id", "subject_key"}, values: []driver.Value{uuid, "subject"}, run: func(ctx context.Context, tx *database.Tx) (string, error) {
 			at, _ := temporal.NewDateTime(instant)
 			f := challengestore.Entries
-			q := f.Query().Where(f.Scope.Eq("scope"), f.ExpiresAt.Lte(at)).OrderBy(f.SubjectKey.Asc(), f.ID.Asc()).Limit(10)
-			r, e := rows.Read(rows.Select(rows.From(q), challengestore.PruneCandidateRows, rows.Map(challengestore.PruneCandidateRows.ID, expr.Value(f.ID)), rows.Map(challengestore.PruneCandidateRows.SubjectKey, expr.Value(f.SubjectKey)))).All(ctx, tx)
+			q := f.Query().Where(orm.TextEq(f.Scope, "scope"), orm.TimeLte(f.ExpiresAt, at)).OrderBy(orm.TextAsc(f.SubjectKey), orm.KeyAsc(f.ID)).Limit(10)
+			r, e := rows.Read(rows.Select(rows.From(q), challengestore.PruneCandidateRows, rows.Map(challengestore.PruneCandidateRows.ID, expr.Value(orm.KeyExpr(f.ID))), rows.Map(challengestore.PruneCandidateRows.SubjectKey, expr.Value(orm.TextExpr(f.SubjectKey))))).All(ctx, tx)
 			return fingerprint(r, e)
 		}},
 	}

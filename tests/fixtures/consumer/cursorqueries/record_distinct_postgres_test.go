@@ -1,5 +1,7 @@
 package cursorqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"testing"
 
@@ -15,13 +17,13 @@ func TestPostgresCompleteRecordDistinctOnCursor(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, _ []models.User) error {
 		buyerSource := rows.As[buyerAlias](models.Users.Query(), "buyer")
 		orderSource := rows.As[orderAlias](models.Orders.Query(), "purchase")
-		joinedSource := rows.InnerJoin(buyerSource, orderSource, rows.On(expr.At(rows.Scope(buyerSource), models.Users.ID), expr.At(rows.Scope(orderSource), models.Orders.BuyerID)))
+		joinedSource := rows.InnerJoin(buyerSource, orderSource, rows.On(expr.At(rows.Scope(buyerSource), orm.KeyExpr(models.Users.ID)), expr.At(rows.Scope(orderSource), orm.ColumnExpr(models.Orders.BuyerID))))
 		buyerScope := rows.LeftScope(joinedSource, rows.Scope(buyerSource))
 		orderScope := rows.RightScope(joinedSource, rows.Scope(orderSource))
-		buyerID, orderID := expr.At(buyerScope, models.Users.ID), expr.At(orderScope, models.Orders.ID)
+		buyerID, orderID := expr.At(buyerScope, orm.KeyExpr(models.Users.ID)), expr.At(orderScope, orm.KeyExpr(models.Orders.ID))
 		winners := rows.DistinctOnRecord(rows.SelectRecord(joinedSource, buyerScope), expr.Group(buyerID)).OrderBy(buyerID.Asc(), orderID.Desc())
 		winnerCursor := rows.CursorFor(winners)
-		wf := expr.At(winnerCursor.Scope(), models.Users.ID)
+		wf := expr.At(winnerCursor.Scope(), orm.KeyExpr(models.Users.ID))
 		winnerWant, err := rows.ReadRecord(winners).All(t.Context(), tx)
 		if err != nil {
 			return err

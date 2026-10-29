@@ -1,5 +1,7 @@
 package bootstrap
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"crypto/rand"
@@ -217,7 +219,7 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	var profile profilemodel.Profile
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		profile, err = profilemodel.Profiles.Insert(ctx, tx, profilemodel.Profiles.Name.Set("Configured"))
+		profile, err = orm.Insert(ctx, tx, profilemodel.Profiles.Table, orm.TextSet(profilemodel.Profiles.Name, "Configured"))
 		return err
 	}); err != nil {
 		t.Fatal(err)

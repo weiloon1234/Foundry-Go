@@ -12,7 +12,7 @@ func TestORMPivotDeclarationParity(t *testing.T) {
 	if err := orm.Check(append(Tables(), ProjectLinks.Members)...); err != nil {
 		t.Fatal(err)
 	}
-	got, err := orm.Compile(Assignments.Query().Where(Assignments.Role.Eq("member")))
+	got, err := orm.Compile(Assignments.Query().Where(orm.TextEq(Assignments.Role, "member")))
 	if err != nil {
 		t.Fatal(err)
 	}

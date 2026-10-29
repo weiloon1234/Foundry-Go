@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/recovering"
 	"github.com/weiloon1234/Foundry-Go/auth/challenge"
@@ -7,4 +9,4 @@ import (
 
 type Other struct{}
 
-var _ = recovering.MemberRecords.EmailRevision.Set(challenge.Revision[Other]{})
+var _ = orm.ColumnSet(recovering.MemberRecords.EmailRevision, challenge.Revision[Other]{})

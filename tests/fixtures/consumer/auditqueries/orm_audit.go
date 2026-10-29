@@ -27,7 +27,7 @@ var AccountIdentity = orm.IdentityOf(Accounts.Table, Accounts.Key())
 var LabelIdentity = orm.IdentityOf(Labels.Table, Labels.Key())
 
 // AccountPolicy excludes the private note; other fields retain automatic disclosure. Example: orm.Auditing(Accounts.Table,AccountPolicy).
-var AccountPolicy = orm.AuditPolicyOf(Accounts.Table, orm.AuditField(Accounts.Note, record.Exclude))
+var AccountPolicy = orm.AuditPolicyOf(Accounts.Table, orm.AuditField(orm.NullableTextExpr(Accounts.Note), record.Exclude))
 
 // LabelPolicy uses automatic disclosure. Example: orm.Auditing(Labels.Table,LabelPolicy).
 var LabelPolicy = orm.AuditPolicyOf(Labels.Table)
@@ -45,7 +45,7 @@ func ORMEmailAfter(changes orm.Changes[Account]) (value.Optional[string], error)
 	if err != nil {
 		return value.Optional[string]{}, err
 	}
-	field, err := orm.AuditRead(captured, Accounts.Email)
+	field, err := orm.AuditRead(captured, orm.InputTextExpr(Accounts.Email))
 	if err != nil {
 		return value.Optional[string]{}, err
 	}

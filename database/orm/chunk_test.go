@@ -42,7 +42,7 @@ func TestChunkPlanPreservesWindowAndOwnsProgress(t *testing.T) {
 	if q.state.ast.Offset != 5 || len(q.state.ast.Orders) != 0 {
 		t.Fatal("original query changed")
 	}
-	keyed, err := newChunkPlan(r.Query().Where(r.Name.Ne("hidden")).OrderBy(r.ID.Desc()).state, 2)
+	keyed, err := newChunkPlan(r.Query().Where(TextNe(r.Name, "hidden")).OrderBy(KeyDesc(r.ID)).state, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,10 +70,10 @@ func TestChunkNullAndMixedOrdering(t *testing.T) {
 		fragments []string
 		values    []any
 	}{
-		{"ascending present", r.Note.Asc(), value.Of("m"), []string{`"note" >`, `"note" IS NULL`, `"id" >`}, []any{"m", "m", int64(7), int64(1)}},
-		{"ascending null", r.Note.Asc(), value.Null[string](), []string{`"note" IS NULL`, `"id" >`}, []any{int64(7), int64(1)}},
-		{"descending null", r.Note.Desc(), value.Null[string](), []string{`"note" IS NOT NULL`, `"note" IS NULL`, `"id" >`}, []any{int64(7), int64(1)}},
-		{"descending present", r.Note.Desc(), value.Of("m"), []string{`"note" <`, `"note" =`, `"id" >`}, []any{"m", "m", int64(7), int64(1)}},
+		{"ascending present", NullableTextAsc(r.Note), value.Of("m"), []string{`"note" >`, `"note" IS NULL`, `"id" >`}, []any{"m", "m", int64(7), int64(1)}},
+		{"ascending null", NullableTextAsc(r.Note), value.Null[string](), []string{`"note" IS NULL`, `"id" >`}, []any{int64(7), int64(1)}},
+		{"descending null", NullableTextDesc(r.Note), value.Null[string](), []string{`"note" IS NOT NULL`, `"note" IS NULL`, `"id" >`}, []any{int64(7), int64(1)}},
+		{"descending present", NullableTextDesc(r.Note), value.Of("m"), []string{`"note" <`, `"note" =`, `"id" >`}, []any{"m", "m", int64(7), int64(1)}},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -99,7 +99,7 @@ func TestChunkNullAndMixedOrdering(t *testing.T) {
 			}
 		})
 	}
-	p, err := newChunkPlan(r.Query().OrderBy(r.Name.Asc()).state, 1)
+	p, err := newChunkPlan(r.Query().OrderBy(TextAsc(r.Name)).state, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestChunkNullAndMixedOrdering(t *testing.T) {
 
 func TestChunkFallbackAndProgressFailures(t *testing.T) {
 	r := records()
-	p, err := newChunkPlan(r.Query().OrderBy(r.Note.Asc().NullsFirst()).Offset(3).state, 2)
+	p, err := newChunkPlan(r.Query().OrderBy(NullableTextAsc(r.Note).NullsFirst()).Offset(3).state, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestChunkReadsCloseBeforeCallbacksAndCaptureKeys(t *testing.T) {
 		return []string{"id", "display_name", "note", "amount"}, rows
 	}})
 	var delivered []int64
-	err := r.Query().Limit(5).Offset(3).Chunk(t.Context(), db, 2, func(items []record) error {
+	err := Chunk(t.Context(), db, r.Query().Limit(5).Offset(3), 2, func(items []record) error {
 		if !closed {
 			t.Error("callback ran before rows closed")
 		}
@@ -196,42 +196,42 @@ func TestChunkValidationAndCallbackFailures(t *testing.T) {
 	db := testDB(t, testConnector{statements: &statements, columns: []string{"id", "display_name", "note", "amount"}, values: [][]driver.Value{{int64(1), "one", nil, "1"}, {int64(2), "two", nil, "2"}}})
 	callback := func([]record) error { t.Error("unexpected callback"); return nil }
 	for _, size := range []int{-1, 0, MaxChunkSize + 1} {
-		if err := r.Query().Chunk(t.Context(), db, size, callback); !errors.Is(err, fault.Invalid) {
+		if err := Chunk(t.Context(), db, r.Query(), size, callback); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
-	if err := r.Query().Chunk(t.Context(), db, 1, nil); !errors.Is(err, fault.Invalid) {
+	if err := Chunk(t.Context(), db, r.Query(), 1, nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
-	if err := r.Query().EachChunked(t.Context(), db, 1, nil); !errors.Is(err, fault.Invalid) {
+	if err := EachChunked(t.Context(), db, r.Query(), 1, nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
-	if err := r.Query().Limit(0).Chunk(t.Context(), db, 1, callback); err != nil {
+	if err := Chunk(t.Context(), db, r.Query().Limit(0), 1, callback); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Query().Limit(0).Where(Predicate[record]{}).Chunk(t.Context(), db, 1, callback); err == nil {
+	if err := Chunk(t.Context(), db, r.Query().Limit(0).Where(Predicate[record]{}), 1, callback); err == nil {
 		t.Fatal("empty window skipped validation")
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := r.Query().Chunk(ctx, db, 1, callback); !errors.Is(err, context.Canceled) {
+	if err := Chunk(ctx, db, r.Query(), 1, callback); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if len(statements) != 0 {
 		t.Fatal("invalid requests sent SQL", statements)
 	}
 	stop := errors.New("callback stopped")
-	if err := r.Query().Chunk(t.Context(), db, 2, func([]record) error { return stop }); err != stop {
+	if err := Chunk(t.Context(), db, r.Query(), 2, func([]record) error { return stop }); err != stop {
 		t.Fatal(err)
 	}
 	called := 0
 	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
-	err := r.Query().EachChunked(ctx, db, 2, func(record) error { called++; cancel(); return nil })
+	err := EachChunked(ctx, db, r.Query(), 2, func(record) error { called++; cancel(); return nil })
 	if !errors.Is(err, context.Canceled) || called != 1 {
 		t.Fatal(called, err)
 	}
-	if err := r.Query().Chunk(t.Context(), db, 1, callback); !errors.Is(err, fault.Invalid) {
+	if err := Chunk(t.Context(), db, r.Query(), 1, callback); !errors.Is(err, fault.Invalid) {
 		t.Fatal("overfull batch delivered", err)
 	}
 }
@@ -247,7 +247,7 @@ func TestChunkReadFailuresDoNotDeliverPartialBatches(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			closed := false
 			db := testDB(t, testConnector{onClose: func() { closed = true }, closeErr: test.closeErr, columns: []string{"id", "display_name", "note", "amount"}, values: [][]driver.Value{{int64(1), "one", nil, "1"}, {int64(2), "two", nil, test.amount}}})
-			err := r.Query().Chunk(t.Context(), db, 2, func([]record) error { t.Fatal("partial batch delivered"); return nil })
+			err := Chunk(t.Context(), db, r.Query(), 2, func([]record) error { t.Fatal("partial batch delivered"); return nil })
 			if err == nil || !closed {
 				t.Fatal(closed, err)
 			}
@@ -259,27 +259,27 @@ func TestChunkKeyValidationAndEmptyCallbacks(t *testing.T) {
 	r := records()
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	for _, q := range []Query[record]{r.Query().Offset(1), r.Query().OrderBy(r.Note.Asc()), r.Query().OrderBy(r.ID.Asc(), r.ID.Desc()), {}} {
-		if err := ChunkByKey(t.Context(), db, q, r.ID, 2, func([]record) error { return nil }); !errors.Is(err, fault.Invalid) {
+	for _, q := range []Query[record]{r.Query().Offset(1), r.Query().OrderBy(NullableTextAsc(r.Note)), r.Query().OrderBy(KeyAsc(r.ID), KeyDesc(r.ID)), {}} {
+		if err := ChunkByKey(t.Context(), db, q, KeyExpr(r.ID), 2, func([]record) error { return nil }); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid key traversal", err)
 		}
 	}
 	missing := records()
 	missing.ID.key.core.get = nil
-	if err := ChunkByKey(t.Context(), db, missing.Query(), missing.ID, 2, func([]record) error { return nil }); !errors.Is(err, fault.Invalid) {
+	if err := ChunkByKey(t.Context(), db, missing.Query(), KeyExpr(missing.ID), 2, func([]record) error { return nil }); !errors.Is(err, fault.Invalid) {
 		t.Fatal("missing getter", err)
 	}
 	q := r.Query().Limit(0)
-	if err := ChunkByKey(t.Context(), db, q, r.ID, 2, func([]record) error { t.Fatal("empty callback"); return nil }); err != nil {
+	if err := ChunkByKey(t.Context(), db, q, KeyExpr(r.ID), 2, func([]record) error { t.Fatal("empty callback"); return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if err := ChunkByKey(t.Context(), db, q, r.ID, 2, nil); !errors.Is(err, fault.Invalid) {
+	if err := ChunkByKey(t.Context(), db, q, KeyExpr(r.ID), 2, nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil batch callback", err)
 	}
-	if err := EachByKey(t.Context(), db, q, r.ID, 2, nil); !errors.Is(err, fault.Invalid) {
+	if err := EachByKey(t.Context(), db, q, KeyExpr(r.ID), 2, nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil row callback", err)
 	}
-	if err := q.EachChunked(nil, db, 2, func(record) error { return nil }); !errors.Is(err, fault.Invalid) {
+	if err := EachChunked(nil, db, q, 2, func(record) error { return nil }); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil context", err)
 	}
 	if len(statements) != 0 {

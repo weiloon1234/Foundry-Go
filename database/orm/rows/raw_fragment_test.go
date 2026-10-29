@@ -16,7 +16,7 @@ import (
 
 func TestRawFragmentsComposeAndHydrate(t *testing.T) {
 	o := declareOrders()
-	source := FromModel(o.Query().Where(orm.And(o.ID.Eq(1), orm.Not(orm.WhereRaw[order]("member_id = ?", 2)))))
+	source := FromModel(o.Query().Where(orm.And(orm.KeyEq(o.ID, 1), orm.Not(orm.WhereRaw[order]("member_id = ?", 2)))))
 	selected := expr.Raw[order, int64]("COALESCE(member_id, ?)", 0)
 	q := expressionQuery(source, selected, codec.Signed[int64]())
 	q = OrderBy(q, selected.Asc())
@@ -54,7 +54,7 @@ func TestRawFragmentsFailBeforeSQL(t *testing.T) {
 	}
 	for _, p := range []orm.Predicate[order]{orm.WhereRaw[order]("?", struct{}{})} {
 		state := &driverState{}
-		got, err := o.Query().Where(p).All(t.Context(), openTest(t, state))
+		got, err := orm.All(t.Context(), openTest(t, state), o.Query().Where(p))
 		if !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 			t.Fatal(got, err, state.sql)
 		}

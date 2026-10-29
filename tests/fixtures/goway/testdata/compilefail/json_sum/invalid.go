@@ -7,4 +7,4 @@ import (
 
 type doc struct{}
 
-var _ = expr.Sum(orm.JSON[doc, string]{})
+var _ = expr.Sum(orm.JSONExpr(orm.JSON[doc, string]{}))

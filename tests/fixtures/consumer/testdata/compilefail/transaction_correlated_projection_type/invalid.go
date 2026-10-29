@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	f "foundry.test/consumer/transactionqueries"
@@ -17,10 +19,10 @@ var parent = rows.AsTransaction[a](rows.TransactionOf(rows.ModelRecord(f.Records
 var child = rows.AsTransaction[b](rows.TransactionOf(rows.ModelRecord(f.Records.Query())), "child")
 var correlation = rows.TransactionCorrelate(parent, child)
 var fields = rows.TransactionInnerScope(correlation, rows.TransactionScope(child))
-var selected = rows.SelectTransactionCorrelatedScalar(correlation, expr.Row(expr.At(fields, f.Records.ID)).Value()).ForUpdate()
+var selected = rows.SelectTransactionCorrelatedScalar(correlation, expr.Row(expr.At(fields, orm.KeyExpr(f.Records.ID))).Value()).ForUpdate()
 var record = rows.SelectTransactionCorrelatedRecord(correlation, rows.TransactionInnerScope(correlation, rows.TransactionScope(child))).ForShare()
 var lateral = rows.AsTransactionLateral[result](record, "lateral_record")
 var _ context.Context
 var _ *database.Tx
 
-var _ = rows.ProjectTransactionCorrelated(correlation, f.Summaries, rows.MapSelected(f.Summaries.Name, expr.Row(expr.At(fields, f.Records.ID)).Value()))
+var _ = rows.ProjectTransactionCorrelated(correlation, f.Summaries, rows.MapSelected(f.Summaries.Name, expr.Row(expr.At(fields, orm.KeyExpr(f.Records.ID))).Value()))

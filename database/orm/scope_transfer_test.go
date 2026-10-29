@@ -29,7 +29,7 @@ func scopeTransferFields(options ...Option) scopeTransferTable {
 	}, options...)
 }
 func transferPositive(d scopeTransferTable) GlobalScope[scopeTransferRow] {
-	return Scope(d.Table, "positive", func(context.Context) (Predicate[scopeTransferRow], error) { return d.Rank.Gt(0), nil })
+	return Scope(d.Table, "positive", func(context.Context) (Predicate[scopeTransferRow], error) { return NumberGt(d.Rank, 0), nil })
 }
 func transferTenant(d scopeTransferTable) GlobalScope[scopeTransferRow] {
 	return Scope(d.Table, "tenant", func(ctx context.Context) (Predicate[scopeTransferRow], error) {
@@ -37,7 +37,7 @@ func transferTenant(d scopeTransferTable) GlobalScope[scopeTransferRow] {
 		if !ok {
 			return Predicate[scopeTransferRow]{}, tenantMissing
 		}
-		return d.Rank.Lt(n), nil
+		return NumberLt(d.Rank, n), nil
 	})
 }
 func TestGlobalScopesJoinEffectivePredicates(t *testing.T) {
@@ -68,9 +68,9 @@ func TestGlobalScopesJoinEffectivePredicates(t *testing.T) {
 					return Predicate[scopeTransferRow]{}, nil
 				}
 				if mode == "foreign" {
-					return scopeTransferFields().Rank.Gt(0), nil
+					return NumberGt(scopeTransferFields().Rank, 0), nil
 				}
-				return d.Rank.Gt(0), nil
+				return NumberGt(d.Rank, 0), nil
 			})}
 		}))
 		if _, e := Compile(WithScopeContext(bad.Query(), t.Context())); !errors.Is(e, fault.Invalid) {
@@ -86,7 +86,7 @@ func TestGlobalScopesReachRelationsAndAliases(t *testing.T) {
 	target := scopeTransferFields(WithGlobalScopes(func(d scopeTransferTable) []GlobalScope[scopeTransferRow] {
 		return []GlobalScope[scopeTransferRow]{transferPositive(d), transferTenant(d)}
 	}))
-	r := HasManyOf(parent.Children, parent.Key(), target.Rank)
+	r := HasManyOf(parent.Children, KeyExpr(parent.Key()), NumberExpr(target.Rank))
 	ctx := tenantContext(t.Context(), 7)
 	s, e := Compile(WithScopeContext(parent.Query().Where(Has(r)), ctx))
 	if e != nil || strings.Count(s.SQL(), `."rank" > `) != 1 || strings.Count(s.SQL(), `."rank" < `) != 1 || !reflect.DeepEqual(s.Arguments(), []any{int64(0), int64(7)}) {
@@ -96,7 +96,7 @@ func TestGlobalScopesReachRelationsAndAliases(t *testing.T) {
 	if e != nil || strings.Contains(s.SQL(), `."rank" >`) || strings.Contains(s.SQL(), `."rank" <`) {
 		t.Fatal("target removal", s.SQL(), e)
 	}
-	links := ManyToManyOf(parent.Links, parent.Key(), target.Rank, target.Key(), target.Key())
+	links := ManyToManyOf(parent.Links, KeyExpr(parent.Key()), NumberExpr(target.Rank), KeyExpr(target.Key()), KeyExpr(target.Key()))
 	s, e = Compile(WithScopeContext(parent.Query().Where(Has(links)), ctx))
 	if e != nil || strings.Count(s.SQL(), `."rank" < `) != 2 || strings.Count(s.SQL(), `."rank" > `) != 2 {
 		t.Fatal("target/pivot scope qualification", s.SQL(), e)

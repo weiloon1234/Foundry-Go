@@ -14,11 +14,11 @@ type Widget struct {
 
 // WidgetTable holds the model's typed fields. Example: Widgets.Query().
 type WidgetTable struct {
-	// Table owns the primary key and operations. Example: Widgets.Key().Eq(id).
+	// Table owns the primary key and operations. Example: orm.KeyEq(Widgets.Key(), id).
 	orm.Table[Widget, model.ID[Widget]]
 }
 
-// Widgets declares the persisted table. Example: Widgets.Find(ctx,db,id).
+// Widgets declares the persisted table. Example: orm.Find(ctx, db, Widgets.Table, id).
 var Widgets = orm.Define("widgets", func(b orm.Builder[Widget], m *Widget) WidgetTable {
 	return WidgetTable{Table: orm.TableOf(b, &m.ID)}
 })

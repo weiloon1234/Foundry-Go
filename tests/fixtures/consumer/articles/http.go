@@ -140,18 +140,18 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 func (s *Service) Create(ctx context.Context, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ArticleInput]) (ArticleView, error) {
 	var article Article
 	err := s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		author, err := Authors.Insert(ctx, tx, Authors.Name.Set(in.Body.Author))
+		author, err := orm.Insert(ctx, tx, Authors.Table, orm.TextSet(Authors.Name, in.Body.Author))
 		if err != nil {
 			return err
 		}
-		created, err := Articles.Insert(ctx, tx, Articles.Slug.Set(in.Body.Slug), Articles.AuthorID.Set(author.ID))
+		created, err := orm.Insert(ctx, tx, Articles.Table, orm.TextSet(Articles.Slug, in.Body.Slug), orm.ColumnSet(Articles.AuthorID, author.ID))
 		if err != nil {
 			return err
 		}
 		if err := s.writeText(ctx, tx, created, in.Body); err != nil {
 			return err
 		}
-		article, err = Articles.Query().With(s.x.All()...).Where(Articles.Key().Eq(created.ID)).Require(ctx, tx)
+		article, err = orm.Require(ctx, tx, Articles.Query().With(s.x.All()...).Where(orm.KeyEq(Articles.Key(), created.ID)))
 		return err
 	})
 	if err != nil {
@@ -165,18 +165,18 @@ func (s *Service) Create(ctx context.Context, in foundryhttp.Input[foundryhttp.N
 func (s *Service) Update(ctx context.Context, in foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, ArticleInput]) (ArticleView, error) {
 	var article Article
 	err := s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		existing, err := Articles.Query().Where(Articles.Key().Eq(in.Path.Article)).Require(ctx, tx)
+		existing, err := orm.Require(ctx, tx, Articles.Query().Where(orm.KeyEq(Articles.Key(), in.Path.Article)))
 		if err != nil {
 			return err
 		}
-		updated, err := Articles.Update(ctx, tx, existing.ID, Articles.Slug.Set(in.Body.Slug))
+		updated, err := orm.Update(ctx, tx, Articles.Table.Query(), Articles.Table.Key(), existing.ID, orm.TextSet(Articles.Slug, in.Body.Slug))
 		if err != nil {
 			return err
 		}
 		if err := s.writeText(ctx, tx, updated, in.Body); err != nil {
 			return err
 		}
-		article, err = Articles.Query().With(s.x.All()...).Where(Articles.Key().Eq(updated.ID)).Require(ctx, tx)
+		article, err = orm.Require(ctx, tx, Articles.Query().With(s.x.All()...).Where(orm.KeyEq(Articles.Key(), updated.ID)))
 		return err
 	})
 	if err != nil {
@@ -236,7 +236,7 @@ func (s *Service) List(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPa
 	var list []Article
 	if err := s.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		list, err = Articles.Query().With(s.x.Title.Relation(Articles.Title), s.x.Summary.Relation(Articles.Summary), s.x.Logo.Relation(Articles.Logo), s.x.Galleries.Relation(Articles.Galleries), s.x.SEO.Relation(Articles.SEO)).OrderBy(Articles.Slug.Asc()).All(ctx, tx)
+		list, err = orm.All(ctx, tx, Articles.Query().With(s.x.Title.Relation(Articles.Title), s.x.Summary.Relation(Articles.Summary), s.x.Logo.Relation(Articles.Logo), s.x.Galleries.Relation(Articles.Galleries), s.x.SEO.Relation(Articles.SEO)).OrderBy(orm.TextAsc(Articles.Slug)))
 		return err
 	}); err != nil {
 		return ArticleList{}, err
@@ -254,7 +254,7 @@ func (s *Service) List(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPa
 // Delete removes the article; declared cleanup removes its extension data.
 func (s *Service) Delete(ctx context.Context, in foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 	err := s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		_, err := Articles.ForceDelete(ctx, tx, Articles.Soft, in.Path.Article)
+		_, err := orm.ForceDelete(ctx, tx, Articles.Table.Query(), Articles.Soft, Articles.Table.Key(), in.Path.Article)
 		return err
 	})
 	return foundryhttp.NoContent{}, notFound(err)
@@ -264,7 +264,7 @@ func (s *Service) find(ctx context.Context, id model.ID[Article], relations ...o
 	var article Article
 	err := s.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		article, err = Articles.Query().With(relations...).Where(Articles.Key().Eq(id)).Require(ctx, tx)
+		article, err = orm.Require(ctx, tx, Articles.Query().With(relations...).Where(orm.KeyEq(Articles.Key(), id)))
 		return err
 	})
 	return article, notFound(err)

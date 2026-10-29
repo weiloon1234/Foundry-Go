@@ -19,7 +19,7 @@ type GlobalScope[M any] struct {
 }
 
 // Scope resolves a predicate with the executing context on every statement.
-// A missing tenant must return an error. Example: orm.Scope(Orders.Table, "tenant", func(ctx context.Context) (orm.Predicate[Order], error) { id, err := tenantID(ctx); return Orders.TenantID.Eq(id), err }).
+// A missing tenant must return an error. Example: orm.Scope(Orders.Table, "tenant", func(ctx context.Context) (orm.Predicate[Order], error) { id, err := tenantID(ctx); return orm.NumberEq(Orders.TenantID, id), err }).
 func Scope[M any, K comparable](table Table[M, K], name string, resolve func(context.Context) (Predicate[M], error)) GlobalScope[M] {
 	definition := querycore.ScopeDefinition{Name: querycore.GlobalScopeName(name)}
 	if resolve != nil {
@@ -80,7 +80,7 @@ func withoutGlobalScope[M any](q queryState, scopes []GlobalScope[M]) queryState
 }
 
 // WithoutGlobalScopes removes all model defaults from this query only.
-// Example: WithoutGlobalScopes(Orders.Query()).Where(Orders.ID.Eq(id)).
+// Example: WithoutGlobalScopes(Orders.Query()).Where(orm.KeyEq(Orders.ID, id)).
 func WithoutGlobalScopes[M any](q Query[M]) Query[M] { q.state.ast.AllScopesOff = true; return q }
 
 // WithScopeContext supplies context for Compile; execution always uses its own

@@ -9,7 +9,7 @@ import (
 )
 
 // ExistenceRelation retains both source and target owners for predicate inference.
-// Example: orm.Has(UserRelations.Orders, Orders.TotalCents.Gt(100)).
+// Example: orm.Has(UserRelations.Orders, orm.NumberGt(Orders.TotalCents, 100)).
 type ExistenceRelation[M, N any] interface {
 	Relation[M]
 	relationTarget(*N)

@@ -63,7 +63,7 @@ func TestAutocommitModelDecoderFailuresRetainUnknownOutcome(t *testing.T) {
 				}
 				return partial, cause
 			})
-			result, err := model.Insert(t.Context(), db, model.Name.Set("private record name"))
+			result, err := orm.Insert(t.Context(), db, model.Table, orm.TextSet(model.Name, "private record name"))
 			var outcome *database.Error
 			var candidate *orm.WriteError[mutationRecord]
 			if result != (mutationRecord{}) || !errors.Is(err, database.CommitUnknown) || !errors.As(err, &outcome) || outcome.Outcome() != database.Unknown || errors.As(err, &candidate) {
@@ -114,7 +114,7 @@ func TestAutocommitDecoderAndCloseFailuresPreserveOutcomeAndCandidate(t *testing
 				}
 				return decoded, nil
 			})
-			result, err := model.Insert(t.Context(), db, model.Name.Set("private record name"))
+			result, err := orm.Insert(t.Context(), db, model.Table, orm.TextSet(model.Name, "private record name"))
 			var outcome *database.Error
 			var candidate *orm.WriteError[mutationRecord]
 			if result != (mutationRecord{}) || !errors.Is(err, closeCause) || !errors.Is(err, database.CommitUnknown) || !errors.As(err, &outcome) || outcome.Outcome() != database.Unknown {

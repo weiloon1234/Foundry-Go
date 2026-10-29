@@ -7,9 +7,9 @@ import (
 
 // TeamTable declares the stored team fields. Example: Teams.Query().
 type TeamTable struct {
-	// Table owns the primary key. Example: Teams.Key().Eq(id).
+	// Table owns the primary key. Example: orm.KeyEq(Teams.Key(), id).
 	orm.Table[Team, int64]
-	// Tenant binds the Tenant field. Example: Teams.Tenant.Set("tenant").
+	// Tenant binds the Tenant field. Example: orm.TextSet(Teams.Tenant, "tenant").
 	Tenant orm.Text[Team, string]
 	// Projects binds the Projects field. Example: Teams.Query().With(TeamProjects).
 	Projects orm.Many[Team, Project]
@@ -26,17 +26,17 @@ var Teams = orm.Define("workflow_teams", func(b orm.Builder[Team], m *Team) Team
 
 // ProjectTable declares the stored project fields. Example: Projects.Query().
 type ProjectTable struct {
-	// Table owns the primary key. Example: Projects.Key().Eq(id).
+	// Table owns the primary key. Example: orm.KeyEq(Projects.Key(), id).
 	orm.Table[Project, model.ID[Project]]
-	// TeamID binds the TeamID field. Example: Projects.TeamID.Set(1).
+	// TeamID binds the TeamID field. Example: orm.NumberSet(Projects.TeamID, 1).
 	TeamID orm.Number[Project, int64]
-	// Slug binds the Slug field. Example: Projects.Slug.Set("shared").
+	// Slug binds the Slug field. Example: orm.TextSet(Projects.Slug, "shared").
 	Slug orm.Text[Project, Slug]
-	// Title binds the Title field. Example: Projects.Title.Set("Title").
+	// Title binds the Title field. Example: orm.NullableTextSet(Projects.Title, "Title").
 	Title orm.NullableText[Project, string]
-	// Budget binds the Budget field. Example: Projects.Budget.Set(0).
+	// Budget binds the Budget field. Example: orm.NumberSet(Projects.Budget, 0).
 	Budget orm.Number[Project, int64]
-	// Enabled binds the Enabled field. Example: Projects.Enabled.Set(true).
+	// Enabled binds the Enabled field. Example: orm.ColumnSet(Projects.Enabled, true).
 	Enabled orm.Column[Project, bool]
 }
 
@@ -54,11 +54,11 @@ var Projects = orm.Define("workflow_projects", func(b orm.Builder[Project], m *P
 
 // SubmissionTable declares the stored submission fields. Example: Submissions.Query().
 type SubmissionTable struct {
-	// Table owns the primary key. Example: Submissions.Key().Eq(id).
+	// Table owns the primary key. Example: orm.KeyEq(Submissions.Key(), id).
 	orm.Table[Submission, model.ID[Submission]]
-	// ProjectID binds the ProjectID field. Example: Submissions.ProjectID.Set(id).
+	// ProjectID binds the ProjectID field. Example: orm.ColumnSet(Submissions.ProjectID, id).
 	ProjectID orm.Column[Submission, model.ID[Project]]
-	// Name binds the Name field. Example: Submissions.Name.Set("entry").
+	// Name binds the Name field. Example: orm.TextSet(Submissions.Name, "entry").
 	Name orm.Text[Submission, string]
 }
 
@@ -72,7 +72,7 @@ var Submissions = orm.Define("workflow_submissions", func(b orm.Builder[Submissi
 })
 
 // TeamProjects scopes child lookup to its owning team. Example: Teams.Query().With(TeamProjects).
-var TeamProjects = orm.HasManyOf(Teams.Projects, Teams.Key(), Projects.TeamID)
+var TeamProjects = orm.HasManyOf(Teams.Projects, orm.KeyExpr(Teams.Key()), orm.NumberExpr(Projects.TeamID))
 
 // Tables lists declarations for startup validation. Example: orm.Check(Tables()...).
 func Tables() []orm.CheckedTable { return []orm.CheckedTable{Teams, Projects, Submissions} }

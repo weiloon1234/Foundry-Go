@@ -12,12 +12,12 @@ type Member struct{ ID model.ID[Member] }
 // Other is a distinct reference owner. Example: Other{ID: id}.
 type Other struct{ ID model.ID[Other] }
 
-// Members declares the stored member key. Example: Members.Find(ctx, db, id).
+// Members declares the stored member key. Example: orm.Find(ctx, db, Members.Table, id).
 var Members = orm.Define("identity_members", func(b orm.Builder[Member], m *Member) orm.Table[Member, model.ID[Member]] {
 	return orm.TableOf(b, &m.ID)
 })
 
-// Others declares the other owner's key. Example: Others.Find(ctx, db, id).
+// Others declares the other owner's key. Example: orm.Find(ctx, db, Others.Table, id).
 var Others = orm.Define("identity_others", func(b orm.Builder[Other], m *Other) orm.Table[Other, model.ID[Other]] {
 	return orm.TableOf(b, &m.ID)
 })

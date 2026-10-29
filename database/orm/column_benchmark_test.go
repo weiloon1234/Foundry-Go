@@ -29,7 +29,7 @@ func BenchmarkInsertCompile(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		plan, err := planWrite(newQuery(table.core), querycore.InsertModel, []Assignment[item]{table.Key().Set(1), table.Name.Set("item"), table.Amount.Set(10)}, false)
+		plan, err := planWrite(newQuery(table.core), querycore.InsertModel, []Assignment[item]{KeySet(table.Key(), 1), TextSet(table.Name, "item"), NumberSet(table.Amount, 10)}, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -43,16 +43,16 @@ func BenchmarkInsertCompile(b *testing.B) {
 // BenchmarkSharedWritePlanning retains the three legacy compiler workloads.
 func BenchmarkSharedWritePlanning(b *testing.B) {
 	source, dest := sourceTransferTables()
-	mapping := FoundryInsertMapping[transferSource, transferArchive](transferMapping(dest.Name, source.Name), sqlowner.Expressions())
+	mapping := FoundryInsertMapping[transferSource, transferArchive](transferMapping(TextExpr(dest.Name), TextExpr(source.Name)), sqlowner.Expressions())
 	input := transferSourceMetadata(source.Query().Limit(3))
-	insertion := FoundryInsertFrom[transferSource](dest.Query(), input, sqlowner.Queries()).Select(mapping).Values(dest.Tag.Set("fixed"))
-	key := FoundrySourceKey[transferSource, transferArchive](transferMapping(dest.Key(), source.Key()), sqlowner.Expressions())
-	update := FoundryUpdateFrom[transferSource](dest.Query(), input, sqlowner.Queries()).Match(key).Select(FoundryUpdateMapping[transferSource, transferArchive](transferMapping(dest.Name, source.Name), sqlowner.Expressions()))
-	p, e := planWrite(dest.Query().state, querycore.InsertModel, []Assignment[transferArchive]{dest.Name.Set("first"), dest.Tag.Set("fixed")}, false)
+	insertion := FoundryInsertFrom[transferSource](dest.Query(), input, sqlowner.Queries()).Select(mapping).Values(TextSet(dest.Tag, "fixed"))
+	key := FoundrySourceKey[transferSource, transferArchive](transferMapping(KeyExpr(dest.Key()), KeyExpr(source.Key())), sqlowner.Expressions())
+	update := FoundryUpdateFrom[transferSource](dest.Query(), input, sqlowner.Queries()).Match(key).Select(FoundryUpdateMapping[transferSource, transferArchive](transferMapping(TextExpr(dest.Name), TextExpr(source.Name)), sqlowner.Expressions()))
+	p, e := planWrite(dest.Query().state, querycore.InsertModel, []Assignment[transferArchive]{TextSet(dest.Name, "first"), TextSet(dest.Tag, "fixed")}, false)
 	if e != nil {
 		b.Fatal(e)
 	}
-	policy := OnConflict(ConflictKey(dest.Name)).DoUpdate(ConflictSet(dest.Note, "updated"))
+	policy := OnConflict(ConflictKey(TextExpr(dest.Name))).DoUpdate(ConflictSet(NullableTextExpr(dest.Note), "updated"))
 	p, e = p.withConflict(&policy.state)
 	if e != nil {
 		b.Fatal(e)
@@ -98,7 +98,7 @@ func BenchmarkUpdateCompile(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		plan, err := planWrite(table.Query().Where(table.Key().Eq(1)).state, querycore.UpdateModel, []Assignment[item]{table.Amount.Set(10), table.Name.Set("item")}, false)
+		plan, err := planWrite(table.Query().Where(KeyEq(table.Key(), 1)).state, querycore.UpdateModel, []Assignment[item]{NumberSet(table.Amount, 10), TextSet(table.Name, "item")}, false)
 		if err != nil {
 			b.Fatal(err)
 		}

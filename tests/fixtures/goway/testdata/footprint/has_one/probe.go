@@ -21,8 +21,8 @@ type Fields struct {
 var Nodes = orm.Define("nodes", func(b orm.Builder[Node], m *Node) Fields {
 	return Fields{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.ParentID), orm.OneOf(b, &m.Child)}
 })
-var Child = orm.HasOneOf(Nodes.Child, Nodes.Key(), Nodes.ParentID)
+var Child = orm.HasOneOf(Nodes.Child, orm.KeyExpr(Nodes.Key()), orm.NumberExpr(Nodes.ParentID))
 
 func F(ctx context.Context, db database.Executor) ([]Node, error) {
-	return Nodes.Query().With(Child).All(ctx, db)
+	return orm.All(ctx, db, Nodes.Query().With(Child))
 }

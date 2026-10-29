@@ -14,8 +14,8 @@ import (
 
 func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	m := declareMembers()
-	base := CursorFor(ModelRecord(m.Query().Where(m.ID.Ne(0)).OrderBy(m.ID.Desc()).Limit(8).Offset(1)))
-	id := expr.At(base.Scope(), m.ID)
+	base := CursorFor(ModelRecord(m.Query().Where(orm.KeyNe(m.ID, 0)).OrderBy(orm.KeyDesc(m.ID)).Limit(8).Offset(1)))
+	id := expr.At(base.Scope(), orm.KeyExpr(m.ID))
 	valid := base.UniqueBy(expr.Group(id))
 	s, err := CompileCursor(valid)
 	if err != nil {
@@ -39,7 +39,7 @@ func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	for _, bad := range []CursorQuery[member]{
 		{}, base, base.UniqueBy(expr.Group(id), expr.Group(id)),
 		base.UniqueBy(expr.Group(expr.Row(id).Value().Param(1))),
-		base.UniqueBy(expr.Group(expr.At(base.Scope(), foreign.ID))),
+		base.UniqueBy(expr.Group(expr.At(base.Scope(), orm.KeyExpr(foreign.ID)))),
 		valid.OrderBy(expr.Negate(id).Asc()),
 		valid.OrderBy(id.Asc().NullsLast()),
 	} {
@@ -54,7 +54,7 @@ func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	if err != nil || again.SQL() != s.SQL() {
 		t.Fatal("validation mutated cursor", err)
 	}
-	scalar := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Nickname)).Value())))
+	scalar := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value())))
 	scalar = scalar.UniqueBy(expr.Group(scalar.Value()))
 	if _, err := CompileValueCursor(scalar); err != nil {
 		t.Fatal(err)
@@ -87,12 +87,12 @@ func TestCursorPreflightUsesCurrentScopeContext(t *testing.T) {
 			if !ok {
 				return orm.Predicate[member]{}, errors.New("missing tenant")
 			}
-			return d.ID.Eq(id), nil
+			return orm.KeyEq(d.ID, id), nil
 		})}
 	}))
 	bound := context.WithValue(t.Context(), reportTenantKey{}, int64(1))
 	cursor := CursorFor(ModelRecord(orm.WithScopeContext(m.Query(), bound)))
-	cursor = cursor.UniqueBy(expr.Group(expr.At(cursor.Scope(), m.ID)))
+	cursor = cursor.UniqueBy(expr.Group(expr.At(cursor.Scope(), orm.KeyExpr(m.ID))))
 	statement, err := CompileCursor(cursor)
 	if err != nil || statement.Arguments()[0] != int64(1) {
 		t.Fatal(statement, err)

@@ -9,4 +9,4 @@ import (
 
 var db *database.DB
 var ex database.Executor
-var _, _ = orm.ExplainAnalyzeLocked(context.Background(), ex, h.Members.Query().ForUpdate())
+var _, _ = orm.ExplainAnalyzeLocked(context.Background(), ex, orm.Lock(h.Members.Query()))

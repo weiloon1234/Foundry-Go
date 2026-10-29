@@ -1,5 +1,7 @@
 package raw
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/goway/models"
@@ -8,7 +10,7 @@ import (
 )
 
 func Models(ctx context.Context, ex database.Executor) ([]models.Order, error) {
-	return models.Orders.Raw(ctx, ex, "SELECT * FROM orders")
+	return orm.Raw(ctx, ex, models.Orders.Table, "SELECT * FROM orders")
 }
 
 type Summary struct{ ID int64 }

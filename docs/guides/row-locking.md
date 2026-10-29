@@ -4,32 +4,30 @@ Use a locked read when domain work must inspect a row and then change it while e
 
 ```go
 err := db.Transaction(ctx, func(tx *database.Tx) error {
-    user, err := models.Users.Query().Where(models.Users.ID.Eq(userID)).ForUpdate().Require(ctx, tx)
+    user, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Users.Query().Where(orm.KeyEq(models.Users.ID, userID))))
     if err != nil {
         return err
     }
-    _, err = models.Users.Update(ctx, tx, user.ID,
-        models.Users.Age.Set(user.Age + 1))
+    _, err = orm.Update(ctx, tx, models.Users.Query(), models.Users.Key(), user.ID, orm.NumberSet(models.Users.Age, user.Age + 1))
     return err
 })
 ```
 
-Table `Find` and `Require` retain the model's exact primary-key type, including natural keys. `First` returns `value.Optional[models.User]`, `Require` returns a model or `database.NotFound`, and `All` returns `[]models.User`. Model `First` defaults to primary-key order, honors filters/offsets, and preserves a zero limit. Declared projections and single-value selections also support locking, retaining their exact result types.
+`orm.Find` and `orm.RequireKey` retain the model's exact primary-key type, including natural keys. `orm.FirstLocked` returns `value.Optional[models.User]`, `orm.RequireLocked` returns a model or `database.NotFound`, and `orm.AllLocked` returns `[]models.User`. Model `First` defaults to primary-key order, honors filters/offsets, and preserves a zero limit. Declared projections and single-value selections also support locking, retaining their exact result types.
 
 ## Strength and waiting
 
-- `ForUpdate()` requests an exclusive row lock.
-- `ForNoKeyUpdate()` allows concurrent `FOR KEY SHARE` reads.
-- `ForShare()` allows compatible shared locks while preventing row updates/deletion.
-- `ForKeyShare()` prevents deletion and updates that change the relevant key.
+- `orm.Lock(query)` requests an exclusive row lock.
+- `orm.ForNoKeyUpdate(query)` allows concurrent `FOR KEY SHARE` reads.
+- `orm.ForShare(query)` allows compatible shared locks while preventing row updates/deletion.
+- `orm.ForKeyShare(query)` prevents deletion and updates that change the relevant key.
 
 Waiting is the default. `NoWait()` returns the PostgreSQL lock error when a row cannot be locked immediately. `SkipLocked()` omits conflicting rows, which is useful for competing queue consumers. `Wait()` restores normal waiting; the last waiting modifier wins. These policies affect row locks, not every table lock required by PostgreSQL. Use a bounded context for the entire transaction and shorter operation contexts where appropriate.
 
 ```go
-claimed, err := models.Users.Query().
-    Where(models.Users.Status.Eq(models.StatusActive)).
-    OrderBy(models.Users.ID.Asc()).Limit(20).
-    ForUpdate().SkipLocked().All(ctx, tx)
+claimed, err := orm.AllLocked(ctx, tx, orm.Lock(models.Users.Query().
+    Where(orm.EnumEq(models.Users.Status, models.StatusActive)).
+    OrderBy(orm.KeyAsc(models.Users.ID)).Limit(20)).SkipLocked())
 ```
 
 An empty `SkipLocked` result does not prove that no eligible rows exist. Locks protect existing rows; a missing `First` does not reserve an absent key. Use unique constraints and [typed upserts](model-upserts.md) for insert conflicts.
@@ -44,8 +42,8 @@ type orderAlias struct{}
 users := rows.As[userAlias](models.Users.Query(), "u")
 orders := rows.As[orderAlias](models.Orders.Query(), "o")
 joined := rows.LeftJoin(users, orders,
-    rows.On(expr.At(rows.Scope(users), models.Users.ID),
-        expr.At(rows.Scope(orders), models.Orders.BuyerID)))
+    rows.On(expr.At(rows.Scope(users), orm.KeyExpr(models.Users.ID)),
+        expr.At(rows.Scope(orders), orm.ColumnExpr(models.Orders.BuyerID))))
 userScope := rows.LeftScope(joined, rows.Scope(users))
 lockedUsers, err := rows.ForUpdate(rows.ReadRecord(rows.SelectRecord(joined, userScope))).
     Of(rows.Target(userScope)).All(ctx, tx)
@@ -61,8 +59,8 @@ Use `LockRows` on a complete record, projection or single-value selection to dec
 
 ```go
 joined := rows.InnerJoin(users, orders,
-    rows.On(expr.At(rows.Scope(users), models.Users.ID),
-        expr.At(rows.Scope(orders), models.Orders.BuyerID)))
+    rows.On(expr.At(rows.Scope(users), orm.KeyExpr(models.Users.ID)),
+        expr.At(rows.Scope(orders), orm.ColumnExpr(models.Orders.BuyerID))))
 userScope := rows.LeftScope(joined, rows.Scope(users))
 orderScope := rows.RightScope(joined, rows.Scope(orders))
 locked := rows.LockRows(rows.ReadRecord(rows.SelectRecord(joined, userScope)),
@@ -78,6 +76,6 @@ Targets within one clause must be unique. Separate clauses may overlap: PostgreS
 
 Locks belong to the transaction; closing a result cursor is not an unlock operation. Rolling back a nested transaction releases locks acquired in that savepoint; releasing a successful savepoint retains its locks until the outer transaction ends. Client-side decoder/callback failures return without requesting transaction rollback. Return the error from the transaction callback, or isolate a recoverable attempt in a nested transaction. Server errors, context cancellation and connection failure can abort/end the transaction and its locks; do not assume protection survives them. PostgreSQL errors such as `NOWAIT` contention require rollback before that scope can execute more SQL. Foundry preserves `database.Error.SQLState()` and does not automatically retry the protected operation.
 
-`With(...)` loads related models on the same transaction after closing the parent rows. The lock applies to parents; the related queries do not inherit it. Locked `LockedQuery.Each` requires no eager-loading clauses, and its callback runs with the row cursor open. The same transaction cannot execute another operation during that callback; use a bounded `All` collection before processing writes. On callback failure, rows close; a driver may drain unread rows, so callback termination is not an exact bound on acquired locks. Use `Limit` to bound selection. Partial results are discarded on hydration/cleanup/relation failures.
+`With(...)` loads related models on the same transaction after closing the parent rows. The lock applies to parents; the related queries do not inherit it. Locked `orm.EachLocked` requires no eager-loading clauses, and its callback runs with the row cursor open. The same transaction cannot execute another operation during that callback; use a bounded `All` collection before processing writes. On callback failure, rows close; a driver may drain unread rows, so callback termination is not an exact bound on acquired locks. Use `Limit` to bound selection. Partial results are discarded on hydration/cleanup/relation failures.
 
 `OFFSET` can lock skipped rows. `SKIP LOCKED` changes the returned set, and concurrent updates under `READ COMMITTED` can affect order while a query waits. These are database semantics, not promises of snapshot consistency. See PostgreSQL's [locking clause](https://www.postgresql.org/docs/18/sql-select.html#SQL-FOR-UPDATE-SHARE) and [row-level lock modes](https://www.postgresql.org/docs/18/explicit-locking.html#LOCKING-ROWS).

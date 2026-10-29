@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var _ = orm.UUIDLess(models.Orders.TotalCents, model.ID[models.Order]{})
+var _ = orm.UUIDLess(orm.NumberExpr(models.Orders.TotalCents), model.ID[models.Order]{})

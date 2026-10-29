@@ -16,8 +16,14 @@ func TestCurrentEmailAssignmentSuppliesExactInput(t *testing.T) {
 			var assignment orm.Assignment[models.User] = user.CurrentEmailAssignment()
 			user.Email = "changed after assignment"
 			inspectInsertAssignments(t, models.Users.Table, []orm.Assignment[models.User]{assignment}, func(write *orm.Write[models.User]) {
-				actual, present := orm.WriteGet(write, models.Users.Email.Set).Get()
-				if !present || !orm.WriteIsSet(write, models.Users.Email.Set) || actual != email {
+				actual, present := orm.WriteGet(write, func() func(arg0 string) orm.Assignment[models.User] {
+					receiver := models.Users.Email
+					return func(arg0 string) orm.Assignment[models.User] { return orm.TextSet(receiver, arg0) }
+				}()).Get()
+				if !present || !orm.WriteIsSet(write, func() func(arg0 string) orm.Assignment[models.User] {
+					receiver := models.Users.Email
+					return func(arg0 string) orm.Assignment[models.User] { return orm.TextSet(receiver, arg0) }
+				}()) || actual != email {
 					t.Error("email assignment lost presence or its captured value")
 				}
 			})
@@ -36,8 +42,14 @@ func TestCreatorAssignmentSuppliesExactUserKey(t *testing.T) {
 			var assignment orm.Assignment[models.User] = product.CreatorAssignment()
 			product.CreatorID = model.ID[models.User]{}
 			inspectInsertAssignments(t, models.Users.Table, []orm.Assignment[models.User]{assignment}, func(write *orm.Write[models.User]) {
-				actual, present := orm.WriteGet(write, models.Users.ID.Set).Get()
-				if !present || !orm.WriteIsSet(write, models.Users.ID.Set) || actual != id {
+				actual, present := orm.WriteGet(write, func() func(arg0 model.ID[models.User]) orm.Assignment[models.User] {
+					receiver := models.Users.ID
+					return func(arg0 model.ID[models.User]) orm.Assignment[models.User] { return orm.KeySet(receiver, arg0) }
+				}()).Get()
+				if !present || !orm.WriteIsSet(write, func() func(arg0 model.ID[models.User]) orm.Assignment[models.User] {
+					receiver := models.Users.ID
+					return func(arg0 model.ID[models.User]) orm.Assignment[models.User] { return orm.KeySet(receiver, arg0) }
+				}()) || actual != id {
 					t.Error("creator assignment lost presence or its captured User key")
 				}
 			})

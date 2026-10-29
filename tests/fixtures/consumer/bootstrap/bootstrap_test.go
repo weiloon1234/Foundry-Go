@@ -1,5 +1,7 @@
 package bootstrap
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"bytes"
 	"context"
@@ -84,10 +86,10 @@ func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
 				return err
 			}
 		}
-		if _, err := Members.Insert(t.Context(), tx, Members.ID.Set(settings.MemberID), Members.Name.Set("Ada")); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, Members.Table, orm.KeySet(Members.ID, settings.MemberID), orm.TextSet(Members.Name, "Ada")); err != nil {
 			return err
 		}
-		_, err := Operators.Insert(t.Context(), tx, Operators.ID.Set(settings.OperatorID), Operators.Department.Set("Operations"))
+		_, err := orm.Insert(t.Context(), tx, Operators.Table, orm.KeySet(Operators.ID, settings.OperatorID), orm.TextSet(Operators.Department, "Operations"))
 		return err
 	}); err != nil {
 		t.Fatal(err)

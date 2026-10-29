@@ -1,5 +1,7 @@
 package observerqueries_test
 
+import model "github.com/weiloon1234/Foundry-Go/model"
+
 import (
 	"context"
 	"errors"
@@ -70,7 +72,7 @@ func observerAppWith(t *testing.T, useORM bool) (*database.DB, *observerqueries.
 				return func() orm.Hooks[observerqueries.Plain] {
 					stats.Plain.Add(1)
 					return orm.Hooks[observerqueries.Plain]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[observerqueries.Plain]) error {
-						return orm.WriteSet(draft, observerqueries.Plains.Name.Set("registered default"))
+						return orm.WriteSet(draft, orm.TextSet(observerqueries.Plains.Name, "registered default"))
 					}}
 				}, nil
 			}); err != nil {
@@ -148,15 +150,15 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 	var create, update, remove observerqueries.Trace
 	var first observerqueries.Record
 	q := observerqueries.Records
-	input := []orm.Assignment[observerqueries.Record]{observerqueries.Records.Name.Set(" SAMPLE ")}
+	input := []orm.Assignment[observerqueries.Record]{orm.InputTextSet(observerqueries.Records.Name, " SAMPLE ")}
 	err := inSchema(t, wrapped{db}, namespace, func(tx *database.Tx) error {
-		if _, err := q.Query().All(t.Context(), tx); err != nil {
+		if _, err := orm.All(t.Context(), tx, q.Query()); err != nil {
 			return err
 		}
 		if stats.First.Load() != 0 || stats.Second.Load() != 0 {
 			t.Fatal("read instantiated write observers")
 		}
-		item, err := q.Insert(observerqueries.WithTrace(t.Context(), &create), wrapped{tx}, input...)
+		item, err := orm.Insert(observerqueries.WithTrace(t.Context(), &create), wrapped{tx}, q.Table, input...)
 		if err != nil {
 			return err
 		}
@@ -172,7 +174,7 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 			t.Fatal("after callbacks skipped")
 		}
 		for _, changes := range create.ORMChanges {
-			field, err := orm.ChangeOf(changes, observerqueries.Records.Name)
+			field, err := orm.ChangeOf(changes, orm.InputTextExpr(observerqueries.Records.Name))
 			if err != nil {
 				return err
 			}
@@ -180,21 +182,21 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 				t.Fatal("observers received inconsistent change capture")
 			}
 		}
-		item, err = q.Update(observerqueries.WithTrace(t.Context(), &update), tx, item.ID)
+		item, err = orm.Update(observerqueries.WithTrace(t.Context(), &update), tx, q.Table.Query(), q.Table.Key(), item.ID)
 		if err != nil {
 			return err
 		}
 		if !reflect.DeepEqual(update.Calls, stages("saving", "updating", "updated", "saved")) {
 			t.Fatal("update stage order", update.Calls)
 		}
-		if _, err := q.Delete(observerqueries.WithTrace(t.Context(), &remove), wrapped{tx}, item.ID); err != nil {
+		if _, err := orm.Delete(observerqueries.WithTrace(t.Context(), &remove), wrapped{tx}, q.Table.Query(), q.Table.Key(), item.ID); err != nil {
 			return err
 		}
 		if !reflect.DeepEqual(remove.Calls, stages("deleting", "deleted")) {
 			t.Fatal("delete stage order", remove.Calls)
 		}
 		var missing observerqueries.Trace
-		if _, err := q.Update(observerqueries.WithTrace(t.Context(), &missing), wrapped{tx}, item.ID); !errors.Is(err, database.NotFound) || len(missing.Calls) != 0 || stats.First.Load() != 3 || stats.Second.Load() != 3 {
+		if _, err := orm.Update(observerqueries.WithTrace(t.Context(), &missing), wrapped{tx}, q.Table.Query(), q.Table.Key(), item.ID); !errors.Is(err, database.NotFound) || len(missing.Calls) != 0 || stats.First.Load() != 3 || stats.Second.Load() != 3 {
 			t.Fatal("missing model instantiated observers", err)
 		}
 		return nil
@@ -216,14 +218,22 @@ func TestPostgresObserversComposeByStageAndCaptureOnce(t *testing.T) {
 	if err := inSchema(t, db, namespace, func(tx *database.Tx) error {
 		inspected := false
 		inspection := observerqueries.Trace{Inspect: func(w *orm.Write[observerqueries.Record]) error {
-			name, ok := orm.WriteGet(w, q.Name.Set).Get()
-			if !ok || name != " SAMPLE " || orm.WriteIsSet(w, q.Key().Set) {
+			name, ok := orm.WriteGet(w, func() func(arg0 string) orm.Assignment[observerqueries.Record] {
+				receiver := q.Name
+				return func(arg0 string) orm.Assignment[observerqueries.Record] { return orm.InputTextSet(receiver, arg0) }
+			}()).Get()
+			if !ok || name != " SAMPLE " || orm.WriteIsSet(w, func() func(arg0 model.ID[observerqueries.Record]) orm.Assignment[observerqueries.Record] {
+				receiver := q.Key()
+				return func(arg0 model.ID[observerqueries.Record]) orm.Assignment[observerqueries.Record] {
+					return orm.KeySet(receiver, arg0)
+				}
+			}()) {
 				return errors.New("observer changed original values or omission")
 			}
 			inspected = true
 			return nil
 		}}
-		again, err := observerqueries.Records.Insert(observerqueries.WithTrace(t.Context(), &inspection), tx, input...)
+		again, err := orm.Insert(observerqueries.WithTrace(t.Context(), &inspection), tx, observerqueries.Records.Table, input...)
 		if err != nil {
 			return err
 		}
@@ -242,14 +252,14 @@ func TestPostgresRegisteredObserversOnUnannotatedModelsAndBulkSkipping(t *testin
 	q := observerqueries.Records
 	err := db.Session(t.Context(), func(session *database.Session) error {
 		return inSchema(t, wrapped{session}, namespace, func(tx *database.Tx) error {
-			item, err := observerqueries.Plains.Insert(t.Context(), wrapped{tx})
+			item, err := orm.Insert(t.Context(), wrapped{tx}, observerqueries.Plains.Table)
 			if err != nil {
 				return err
 			}
 			if item.Name != "registered default" || stats.Plain.Load() != 1 {
 				t.Fatal("unannotated model skipped registered observer")
 			}
-			batch, err := q.InsertMany(t.Context(), tx, [][]orm.Assignment[observerqueries.Record]{{observerqueries.Records.Name.Set(" BULK ")}})
+			batch, err := orm.InsertMany(t.Context(), tx, q.Table, [][]orm.Assignment[observerqueries.Record]{{orm.InputTextSet(observerqueries.Records.Name, " BULK ")}})
 			if err != nil {
 				return err
 			}
@@ -257,7 +267,7 @@ func TestPostgresRegisteredObserversOnUnannotatedModelsAndBulkSkipping(t *testin
 				t.Fatal("bulk skipped field mutator")
 			}
 			f := observerqueries.Records
-			if _, err := orm.Upsert(t.Context(), wrapped{tx}, q.Query(), orm.OnConflict(orm.ConflictKey(f.Key())).DoNothing(), observerqueries.Records.Key().Set(batch[0].ID), observerqueries.Records.Name.Set(" UPSERT ")); err != nil {
+			if _, err := orm.Upsert(t.Context(), wrapped{tx}, q.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoNothing(), orm.KeySet(observerqueries.Records.Key(), batch[0].ID), orm.InputTextSet(observerqueries.Records.Name, " UPSERT ")); err != nil {
 				return err
 			}
 			if stats.First.Load() != 0 || stats.Second.Load() != 0 {
@@ -277,14 +287,14 @@ func TestPostgresObserverCancellationRollsBackAndStopsLaterStages(t *testing.T) 
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		trace := observerqueries.Trace{FailAt: "first.created", Mode: "cancel", Cancel: cancel}
-		_, err := observerqueries.Records.Insert(observerqueries.WithTrace(ctx, &trace), wrapped{tx})
+		_, err := orm.Insert(observerqueries.WithTrace(ctx, &trace), wrapped{tx}, observerqueries.Records.Table)
 		if !errors.Is(err, context.Canceled) || trace.Calls[len(trace.Calls)-1] != "first.created" {
 			t.Fatal("cancellation did not stop callbacks", err, trace.Calls)
 		}
-		if n, err := observerqueries.Records.Query().Count(t.Context(), tx); err != nil || n != 0 {
+		if n, err := orm.Count(t.Context(), tx, observerqueries.Records.Query()); err != nil || n != 0 {
 			t.Fatal("canceled model write persisted", n, err)
 		}
-		if n, err := observerqueries.Effects.Query().Count(t.Context(), tx); err != nil || n != 0 {
+		if n, err := orm.Count(t.Context(), tx, observerqueries.Effects.Query()); err != nil || n != 0 {
 			t.Fatal("canceled observer effect persisted", n, err)
 		}
 		return nil
@@ -301,16 +311,16 @@ func TestPostgresObserverVetoAndSavepointRollback(t *testing.T) {
 		for _, stage := range []string{"first.saving", "first.creating", "first.created", "first.saved"} {
 			for _, mode := range []string{"error", "panic", "goexit"} {
 				trace := observerqueries.Trace{FailAt: stage, Mode: mode}
-				if _, err := q.Insert(observerqueries.WithTrace(t.Context(), &trace), wrapped{tx}); err == nil {
+				if _, err := orm.Insert(observerqueries.WithTrace(t.Context(), &trace), wrapped{tx}, q.Table); err == nil {
 					t.Fatal("observer failure accepted")
 				}
 				if trace.Calls[len(trace.Calls)-1] != stage {
 					t.Fatal("callbacks continued after veto", trace.Calls)
 				}
-				if n, err := logs.Query().Count(t.Context(), tx); err != nil || n != 0 {
+				if n, err := orm.Count(t.Context(), tx, logs.Query()); err != nil || n != 0 {
 					t.Fatal("related observer writes escaped rollback", n, err)
 				}
-				if n, err := q.Query().Count(t.Context(), tx); err != nil || n != 0 {
+				if n, err := orm.Count(t.Context(), tx, q.Query()); err != nil || n != 0 {
 					t.Fatal("model write escaped rollback", n, err)
 				}
 			}
@@ -323,7 +333,7 @@ func TestPostgresObserverVetoAndSavepointRollback(t *testing.T) {
 	var trace observerqueries.Trace
 	err = inSchema(t, db, namespace, func(tx *database.Tx) error {
 		return tx.Savepoint(t.Context(), func(child *database.Tx) error {
-			if _, err := q.Insert(observerqueries.WithTrace(t.Context(), &trace), child); err != nil {
+			if _, err := orm.Insert(observerqueries.WithTrace(t.Context(), &trace), child, q.Table); err != nil {
 				return err
 			}
 			return observerqueries.Veto
@@ -343,7 +353,7 @@ func TestPostgresObserversAfterCommitFailureKeepsLaterCallbacks(t *testing.T) {
 	db, _, namespace := observerApp(t)
 	trace := observerqueries.Trace{FailAt: "first.committed"}
 	err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-		_, err := observerqueries.Records.Insert(observerqueries.WithTrace(t.Context(), &trace), tx)
+		_, err := orm.Insert(observerqueries.WithTrace(t.Context(), &trace), tx, observerqueries.Records.Table)
 		return err
 	})
 	var outcome *database.Error
@@ -354,7 +364,7 @@ func TestPostgresObserversAfterCommitFailureKeepsLaterCallbacks(t *testing.T) {
 		t.Fatal("later after-commit observer was skipped", trace.Calls)
 	}
 	if err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-		n, err := observerqueries.Records.Query().Count(t.Context(), tx)
+		n, err := orm.Count(t.Context(), tx, observerqueries.Records.Query())
 		if err != nil {
 			return err
 		}
@@ -374,7 +384,7 @@ func TestPostgresObserverFactoriesAreIndependentAcrossConcurrentWrites(t *testin
 		wg.Go(func() {
 			trace := observerqueries.Trace{}
 			err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-				_, err := observerqueries.Records.Insert(observerqueries.WithTrace(t.Context(), &trace), tx)
+				_, err := orm.Insert(observerqueries.WithTrace(t.Context(), &trace), tx, observerqueries.Records.Table)
 				return err
 			})
 			if err != nil {

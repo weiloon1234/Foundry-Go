@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "time"
 
 import (
@@ -62,30 +64,30 @@ func TestSensitiveOldAndNewAgree(t *testing.T) {
 		}
 		{
 			v := newmodels.Vaults
-			_, err = v.Insert(t.Context(), db, v.Key().Set(newID), v.Token.Set(encrypted.NewText("first")), v.Backup.Set(encrypted.NewText("backup")), v.Settings.Set(newJSON), v.Optional.Set(newJSON))
+			_, err = orm.Insert(t.Context(), db, v.Table, orm.KeySet(v.Key(), newID), orm.EncryptedSet(v.Token, encrypted.NewText("first")), orm.NullableEncryptedSet(v.Backup, encrypted.NewText("backup")), orm.EncryptedSet(v.Settings, newJSON), orm.NullableEncryptedSet(v.Optional, newJSON))
 		}
 		if err != nil {
 			t.Fatal(err)
 		}
 		// The native reader opens the exact stored envelopes.
 		{
-			got, e := newmodels.Vaults.Require(t.Context(), db, newID)
+			got, e := orm.RequireKey(t.Context(), db, newmodels.Vaults.Table, newID)
 			if e != nil || got.Token.Reveal() != "first" {
 				t.Fatal("decryption", e)
 			}
 		}
 		{
 			v := newmodels.Vaults
-			_, err = v.Update(t.Context(), db, newID, v.Token.Set(encrypted.NewText("second")), v.Backup.SetNull(), v.Optional.SetNull())
+			_, err = orm.Update(t.Context(), db, v.Table.Query(), v.Table.Key(), newID, orm.EncryptedSet(v.Token, encrypted.NewText("second")), orm.NullableEncryptedSetNull(v.Backup), orm.NullableEncryptedSetNull(v.Optional))
 		}
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if _, err := newmodels.Vaults.Require(t.Context(), db, newID); err != nil {
+		if _, err := orm.RequireKey(t.Context(), db, newmodels.Vaults.Table, newID); err != nil {
 			t.Fatal(err)
 		}
-		newGot, err := newmodels.Vaults.Require(t.Context(), db, newID)
+		newGot, err := orm.RequireKey(t.Context(), db, newmodels.Vaults.Table, newID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -131,17 +133,17 @@ func TestPasswordOldAndNewAgree(t *testing.T) {
 		db := sensitiveDB(t, store, fieldTestKeys(t))
 		{
 			a := newmodels.Accounts
-			_, err = a.Insert(t.Context(), db, a.Key().Set(newID), a.Digest.Set(hash), a.Backup.Set(hash))
+			_, err = orm.Insert(t.Context(), db, a.Table, orm.KeySet(a.Key(), newID), orm.ColumnSet(a.Digest, hash), orm.NullableColumnSet(a.Backup, hash))
 		}
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		a := newmodels.Accounts
-		if _, err := a.Query().Where(a.Digest.Eq(hash)).OrderBy(a.Digest.Asc()).Where(a.Key().Eq(newID)).Require(t.Context(), db); err != nil {
+		if _, err := orm.Require(t.Context(), db, a.Query().Where(orm.ColumnEq(a.Digest, hash)).OrderBy(orm.ColumnAsc(a.Digest)).Where(orm.KeyEq(a.Key(), newID))); err != nil {
 			t.Fatal(err)
 		}
-		current, err := a.Query().Where(a.Digest.Eq(hash), a.Key().Eq(newID)).OrderBy(a.Digest.Asc()).Require(t.Context(), db)
+		current, err := orm.Require(t.Context(), db, a.Query().Where(orm.ColumnEq(a.Digest, hash), orm.KeyEq(a.Key(), newID)).OrderBy(orm.ColumnAsc(a.Digest)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -166,7 +168,7 @@ func TestSensitiveStreamingFailureParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	v := newmodels.Vaults
-	inserted, err := v.Insert(t.Context(), db, v.Token.Set(encrypted.NewText("private")), v.Settings.Set(doc))
+	inserted, err := orm.Insert(t.Context(), db, v.Table, orm.EncryptedSet(v.Token, encrypted.NewText("private")), orm.EncryptedSet(v.Settings, doc))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +187,7 @@ func TestSensitiveStreamingFailureParity(t *testing.T) {
 			values := []any{}
 			var err error
 			{
-				err = v.Query().Each(t.Context(), db, func(m newmodels.Vault) error {
+				err = orm.Each(t.Context(), db, v.Query(), func(m newmodels.Vault) error {
 					if m.ID != inserted.ID || m.Token.Reveal() != "private" {
 						t.Fatal("partial or incorrect row yielded")
 					}

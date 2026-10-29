@@ -1,8 +1,10 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = expr.Sum(models.Orders.TotalCents).Filter(expr.ModelPredicate(models.Orders.TotalCents.Gt("1")))
+var invalid = expr.Sum(orm.NumberExpr(models.Orders.TotalCents)).Filter(expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, "1")))

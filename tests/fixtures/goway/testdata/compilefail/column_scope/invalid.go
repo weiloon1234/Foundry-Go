@@ -1,10 +1,12 @@
 package column_scope
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var age = expr.Value(models.Users.Age)
-var email = expr.Value(models.Users.Email)
-var _ = expr.Equal(expr.Value(models.Users.ID), expr.Value(models.Orders.BuyerID))
+var age = expr.Value(orm.NumberExpr(models.Users.Age))
+var email = expr.Value(orm.TextExpr(models.Users.Email))
+var _ = expr.Equal(expr.Value(orm.KeyExpr(models.Users.ID)), expr.Value(orm.ColumnExpr(models.Orders.BuyerID)))

@@ -17,10 +17,10 @@ SELECT clauses require an `As` boundary; unknown source shapes fail before SQL.
 u := rows.As[userSide](Users.Query(), "u")
 o := rows.As[orderSide](Orders.Query(), "o")
 j := rows.LeftJoin(u, o, rows.On(
-    expr.At(rows.Scope(u), Users.ID),
-    expr.At(rows.Scope(o), Orders.BuyerID),
+    expr.At(rows.Scope(u), orm.KeyExpr(Users.ID)),
+    expr.At(rows.Scope(o), orm.ColumnExpr(Orders.BuyerID)),
 ))
-userEmail := expr.At(rows.LeftScope(j, rows.Scope(u)), Users.Email)
+userEmail := expr.At(rows.LeftScope(j, rows.Scope(u)), orm.TextExpr(Users.Email))
 orderID := expr.AtNullable(rows.NullableRightScope(j, rows.Scope(o)), Orders.ID)
 // Map orderID to a declared value.Nullable[model.ID[Order]] row field.
 ```
@@ -68,8 +68,8 @@ Locked queries require `LockedRecord` and the explicit
 ```go
 outer := rows.From(Users.Query())
 inner := rows.SelectScalar(
-    rows.From(Orders.Query().OrderBy(Orders.TotalCents.Desc()).Limit(1)),
-    expr.Row(expr.Value(Orders.TotalCents)).Value(),
+    rows.From(Orders.Query().OrderBy(orm.NumberDesc(Orders.TotalCents)).Limit(1)),
+    expr.Row(expr.Value(orm.NumberExpr(Orders.TotalCents))).Value(),
 )
 amount := rows.ScalarRowQuery(outer, inner).Value()
 // Map amount with rows.MapSelected to a value.Nullable[int64] row field.
@@ -118,12 +118,12 @@ Distinct SQL names are required: inner sources cannot shadow enclosing sources.
 parent := rows.As[parentSide](Users.Query(), "parent")
 child := rows.As[childSide](Orders.Query(), "child")
 link := rows.Correlate(parent, child)
-parentID := expr.At(rows.OuterScope(link, rows.Scope(parent)), Users.ID)
+parentID := expr.At(rows.OuterScope(link, rows.Scope(parent)), orm.KeyExpr(Users.ID))
 childScope := rows.InnerScope(link, rows.Scope(child))
-buyerID := expr.At(childScope, Orders.BuyerID)
+buyerID := expr.At(childScope, orm.ColumnExpr(Orders.BuyerID))
 link = link.Where(expr.Equal(buyerID, parentID))
 record := rows.SelectCorrelatedRecord(link, childScope).
-    OrderBy(expr.At(childScope, Orders.TotalCents).Desc()).Limit(1)
+    OrderBy(expr.At(childScope, orm.NumberExpr(Orders.TotalCents)).Desc()).Limit(1)
 latest := rows.AsLateral[latestSide](record, "latest")
 joined := rows.LeftJoinLateral(parent, latest)
 amount := expr.AtNullable(

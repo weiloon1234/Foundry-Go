@@ -1,5 +1,7 @@
 package scalarqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/scalarqueries"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -13,11 +15,11 @@ func TestPostgresScalarProjectionAndDerivedAggregation(t *testing.T) {
 	runCalculations(t, func(tx *database.Tx) error {
 		f, r := scalarqueries.Samples, scalarqueries.Calculations
 		selected := rowset.Select(rowset.From(f.Query()), r.Row,
-			rowset.Map(r.ID, expr.Value(f.ID)),
-			rowset.MapSelected(r.Caption, expr.Lower(expr.Trim(expr.Value(f.Name))).Value()),
-			rowset.MapSelected(r.LineTotal, expr.Multiply(expr.DecimalOf(expr.Value(f.Quantity)), expr.Value(f.Amount)).Value()),
-			rowset.MapSelected(r.AmountWithTax, expr.AddNullable(expr.NullableRow(expr.Value(f.Amount)), expr.Value(f.Tax)).Value()))
-		rows, err := rowset.Read(rowset.OrderBy(selected, expr.Value(f.ID).Asc())).All(t.Context(), tx)
+			rowset.Map(r.ID, expr.Value(orm.NumberKeyExpr(f.ID))),
+			rowset.MapSelected(r.Caption, expr.Lower(expr.Trim(expr.Value(orm.TextExpr(f.Name)))).Value()),
+			rowset.MapSelected(r.LineTotal, expr.Multiply(expr.DecimalOf(expr.Value(orm.NumberExpr(f.Quantity))), expr.Value(orm.NumberExpr(f.Amount))).Value()),
+			rowset.MapSelected(r.AmountWithTax, expr.AddNullable(expr.NullableRow(expr.Value(orm.NumberExpr(f.Amount))), expr.Value(orm.NullableNumberExpr(f.Tax))).Value()))
+		rows, err := rowset.Read(rowset.OrderBy(selected, expr.Value(orm.NumberKeyExpr(f.ID)).Asc())).All(t.Context(), tx)
 		if err != nil || len(rows) != 3 {
 			t.Fatal(rows, err)
 		}

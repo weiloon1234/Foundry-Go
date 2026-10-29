@@ -46,7 +46,7 @@ func requestLookup(s *fixture) recovering.RecipientLookup {
 	return func(ctx context.Context, email string) (value.Optional[model.Reference[recovering.Member, model.ID[recovering.Member]]], error) {
 		var result value.Optional[model.Reference[recovering.Member, model.ID[recovering.Member]]]
 		err := s.within(ctx, func(tx *database.Tx) error {
-			found, err := recovering.MemberRecords.Query().Where(recovering.MemberRecords.Email.Eq(email)).First(ctx, tx)
+			found, err := orm.First(ctx, tx, recovering.MemberRecords.Query().Where(orm.TextEq(recovering.MemberRecords.Email, email)))
 			if err != nil {
 				return err
 			}
@@ -74,7 +74,7 @@ func TestPostgresRecoveryLinkRequestsUseCommittedAddressAndQuota(t *testing.T) {
 		// current stored email, and delivery must use that committed snapshot.
 		if found.IsSet() {
 			err = s.within(ctx, func(tx *database.Tx) error {
-				_, err := recovering.MemberRecords.Update(ctx, tx, s.member.ID, recovering.MemberRecords.Email.Set("current@example.test"))
+				_, err := orm.Update(ctx, tx, recovering.MemberRecords.Table.Query(), recovering.MemberRecords.Table.Key(), s.member.ID, orm.TextSet(recovering.MemberRecords.Email, "current@example.test"))
 				return err
 			})
 		}
@@ -175,7 +175,7 @@ func TestPostgresRecoveryRequestHTTPHasUniformAcknowledgements(t *testing.T) {
 	if invalid.Code != 422 || sent != 3 {
 		t.Fatal("invalid email reached lookup", invalid.Code)
 	}
-	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Enabled.Set(false)})
+	update(t, s, []orm.Assignment[recovering.Member]{orm.ColumnSet(recovering.MemberRecords.Enabled, false)})
 	disabled := recoveryHTTP(router, "POST", "https", paths[1], `{"email":"member@example.test"}`, "https://app.test")
 	settle()
 	if disabled.Code != 204 || sent != 3 {

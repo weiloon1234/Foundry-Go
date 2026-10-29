@@ -17,7 +17,7 @@ import (
 func (g newGolden) fixB(ctx context.Context, db *database.DB) {
 	fmt.Fprintln(&g.output, "direct-join")
 	orders, users := ormrows.As[orderSide](models.Orders.Query(), "o"), ormrows.As[memberSide](models.Users.Query(), "u")
-	joined := ormrows.InnerJoin(orders, users, ormrows.On(expr.At(ormrows.Scope(orders), models.Orders.BuyerID), expr.At(ormrows.Scope(users), models.Users.ID)))
+	joined := ormrows.InnerJoin(orders, users, ormrows.On(expr.At(ormrows.Scope(orders), orm.ColumnExpr(models.Orders.BuyerID)), expr.At(ormrows.Scope(users), orm.KeyExpr(models.Users.ID))))
 	type fields struct {
 		ormrows.Row[EmailRow]
 		Email ormrows.Field[EmailRow, string]
@@ -25,13 +25,13 @@ func (g newGolden) fixB(ctx context.Context, db *database.DB) {
 	schema := ormrows.Define(func(b ormrows.Builder[EmailRow], r *EmailRow) fields {
 		return fields{b.Row(), ormrows.TextOf(b, &r.Email)}
 	})
-	g.show(must(ormrows.Read(ormrows.Select(joined, schema, ormrows.Map(schema.Email, expr.At(ormrows.RightScope(joined, ormrows.Scope(users)), models.Users.Email)))).All(ctx, db)))
+	g.show(must(ormrows.Read(ormrows.Select(joined, schema, ormrows.Map(schema.Email, expr.At(ormrows.RightScope(joined, ormrows.Scope(users)), orm.TextExpr(models.Users.Email))))).All(ctx, db)))
 	fmt.Fprintln(&g.output, "load-duplicate-and-missing")
 	buyer := must(model.ParseID[models.User](buyerID))
 	missing := must(model.ParseID[models.User]("01890f47-1a00-7000-8000-000000000009"))
 	g.emitOrders(must(orm.LoadFrom(ctx, db, models.Orders.Query().With(models.OrderRelations.Buyer), []models.Order{{BuyerID: buyer}, {BuyerID: buyer}, {BuyerID: missing}})))
 	fmt.Fprintln(&g.output, "soft-target-relation")
-	reports := must(reporting.Orders.Query().With(reporting.OrderRelations.Member).All(ctx, db))
+	reports := must(orm.All(ctx, db, reporting.Orders.Query().With(reporting.OrderRelations.Member)))
 	for _, o := range reports {
 		g.show(o)
 		v, loaded := o.Member.Get()
@@ -39,17 +39,17 @@ func (g newGolden) fixB(ctx context.Context, db *database.DB) {
 		g.show(v)
 	}
 	fmt.Fprintln(&g.output, "with-first")
-	first := must(models.Orders.Query().With(models.OrderRelations.Buyer).First(ctx, db))
+	first := must(orm.First(ctx, db, models.Orders.Query().With(models.OrderRelations.Buyer)))
 	v, ok := first.Get()
 	fmt.Fprintf(&g.output, "First present: %t\n", ok)
 	g.emitOrders([]models.Order{v})
 	fmt.Fprintln(&g.output, "with-paginate")
-	page := must(models.Orders.Query().With(models.OrderRelations.Buyer).Paginate(ctx, db, orm.PageRequest{Number: 1, Size: 2}))
+	page := must(orm.Paginate(ctx, db, models.Orders.Query().With(models.OrderRelations.Buyer), orm.PageRequest{Number: 1, Size: 2}))
 	fmt.Fprintf(&g.output, "Page: %d %d %d %d\n", page.Number, page.Size, page.Total, page.Pages)
 	g.emitOrders(page.Items)
 	fmt.Fprintln(&g.output, "with-chunk")
 	g.chunkBatches = [][][]driver.Value{{{orderID, buyerID, int64(500)}}, {{"01890f47-1a00-7000-8000-000000000003", buyerID, int64(600)}}, {}}
-	check(models.Orders.Query().With(models.OrderRelations.Buyer).Chunk(ctx, db, 1, func(items []models.Order) error { g.emitOrders(items); return nil }))
+	check(orm.Chunk(ctx, db, models.Orders.Query().With(models.OrderRelations.Buyer), 1, func(items []models.Order) error { g.emitOrders(items); return nil }))
 	g.chunkBatches = nil
 }
 func (g newGolden) emitOrders(items []models.Order) {

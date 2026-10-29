@@ -279,7 +279,7 @@ func (c Collection[M, K]) Discard(ctx context.Context, m *Manager, prepared Prep
 // owner, counting adding intents about to be recorded. Hold the owner lock.
 func ownerIntentBound(ctx context.Context, tx *database.Tx, scope, subject string, adding int64) error {
 	f := store.Files
-	count, err := store.Files.Query().Where(f.Scope.Eq(scope), f.SubjectKey.Eq(subject), f.State.Ne(string(Cleaned)), f.State.Ne(string(Retained))).Count(ctx, tx)
+	count, err := orm.Count(ctx, tx, store.Files.Query().Where(orm.TextEq(f.Scope, scope), orm.TextEq(f.SubjectKey, subject), orm.TextNe(f.State, string(Cleaned)), orm.TextNe(f.State, string(Retained))))
 	if err != nil {
 		return err
 	}
@@ -383,7 +383,7 @@ func (c Collection[M, K]) stage(ctx context.Context, m *Manager, id model.ID[sto
 		if err != nil {
 			return err
 		}
-		result, err = store.Files.Insert(ctx, tx, store.Files.ID.Set(id), store.Files.Owner.Set(string(c.definition.owner.Name())), store.Files.Scope.Set(subject.Scope), store.Files.SubjectKey.Set(subject.Key), store.Files.Identity.Set(subject.Identity), store.Files.Collection.Set(string(c.Name())), store.Files.Locale.Set(locale), store.Files.Single.Set(c.definition.policy.Cardinality == Single), store.Files.Disk.Set(string(c.definition.policy.Disk.ID())), store.Files.ObjectKey.Set(key.String()), store.Files.OriginalName.Set(candidate.info.OriginalName), store.Files.ContentType.Set(string(candidate.info.MediaType)), store.Files.Size.Set(candidate.info.Size), store.Files.Digest.Set(candidate.digest.String()), store.Files.ETag.Set(""), store.Files.ObjectVersion.Set(""), store.Files.Width.Set(int32(candidate.info.Width)), store.Files.Height.Set(int32(candidate.info.Height)), store.Files.Properties.Set(candidate.properties), store.Files.SortOrder.Set(0), store.Files.State.Set(string(Writing)), store.Files.WriterID.Set(m.writer), store.Files.Attempts.Set(0), store.Files.LastFailure.Set(""), store.Files.CreatedAt.Set(now), store.Files.UpdatedAt.Set(now))
+		result, err = orm.Insert(ctx, tx, store.Files.Table, orm.KeySet(store.Files.ID, id), orm.TextSet(store.Files.Owner, string(c.definition.owner.Name())), orm.TextSet(store.Files.Scope, subject.Scope), orm.TextSet(store.Files.SubjectKey, subject.Key), orm.JSONSet(store.Files.Identity, subject.Identity), orm.TextSet(store.Files.Collection, string(c.Name())), orm.TextSet(store.Files.Locale, locale), orm.ColumnSet(store.Files.Single, c.definition.policy.Cardinality == Single), orm.TextSet(store.Files.Disk, string(c.definition.policy.Disk.ID())), orm.TextSet(store.Files.ObjectKey, key.String()), orm.TextSet(store.Files.OriginalName, candidate.info.OriginalName), orm.TextSet(store.Files.ContentType, string(candidate.info.MediaType)), orm.NumberSet(store.Files.Size, candidate.info.Size), orm.TextSet(store.Files.Digest, candidate.digest.String()), orm.TextSet(store.Files.ETag, ""), orm.TextSet(store.Files.ObjectVersion, ""), orm.NumberSet(store.Files.Width, int32(candidate.info.Width)), orm.NumberSet(store.Files.Height, int32(candidate.info.Height)), orm.JSONSet(store.Files.Properties, candidate.properties), orm.NumberSet(store.Files.SortOrder, 0), orm.TextSet(store.Files.State, string(Writing)), orm.ColumnSet(store.Files.WriterID, m.writer), orm.NumberSet(store.Files.Attempts, 0), orm.TextSet(store.Files.LastFailure, ""), orm.TimeSet(store.Files.CreatedAt, now), orm.TimeSet(store.Files.UpdatedAt, now))
 		return err
 	})
 	if err != nil {
@@ -393,7 +393,7 @@ func (c Collection[M, K]) stage(ctx context.Context, m *Manager, id model.ID[sto
 }
 func (m *Manager) pinStored(ctx context.Context, id model.ID[store.File], object storage.ObjectInfo) error {
 	return m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
+		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -411,7 +411,7 @@ func (m *Manager) pinStored(ctx context.Context, id model.ID[store.File], object
 		if err != nil {
 			return err
 		}
-		_, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.ETag.Set(string(object.ETag)), store.Files.ObjectVersion.Set(string(object.Version)), store.Files.State.Set(string(Stored)), store.Files.UpdatedAt.Set(now))
+		_, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.TextSet(store.Files.ETag, string(object.ETag)), orm.TextSet(store.Files.ObjectVersion, string(object.Version)), orm.TextSet(store.Files.State, string(Stored)), orm.TimeSet(store.Files.UpdatedAt, now))
 		return err
 	})
 }
@@ -425,7 +425,7 @@ func (m *Manager) recordPutFailure(ctx context.Context, id model.ID[store.File],
 	cleanupCtx, cancel := m.cleanupContext(ctx)
 	defer cancel()
 	return m.store.Write(cleanupCtx, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
+		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -439,7 +439,7 @@ func (m *Manager) recordPutFailure(ctx context.Context, id model.ID[store.File],
 		if err != nil {
 			return err
 		}
-		_, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.State.Set(string(next)), store.Files.LastFailure.Set("upload_failed"), store.Files.UpdatedAt.Set(now))
+		_, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.TextSet(store.Files.State, string(next)), orm.TextSet(store.Files.LastFailure, "upload_failed"), orm.TimeSet(store.Files.UpdatedAt, now))
 		return err
 	})
 }
@@ -452,7 +452,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 		if err != nil {
 			return err
 		}
-		row, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
+		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), id)))
 		if outer != nil && callback.ErrorIs(err, database.NotFound) {
 			return attachmentFailure(fault.Invalid, "prepared upload is not visible to this transaction; prepare it before the transaction begins")
 		}
@@ -473,7 +473,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 				return err
 			}
 		}
-		existing, err := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(row.Collection), f.Locale.Eq(row.Locale), f.State.Eq(string(Ready))).OrderBy(f.SortOrder.Asc(), f.ID.Asc()).Limit(MaxCollectionFiles+1).All(ctx, tx)
+		existing, err := orm.All(ctx, tx, store.Files.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key), orm.TextEq(f.Collection, row.Collection), orm.TextEq(f.Locale, row.Locale), orm.TextEq(f.State, string(Ready))).OrderBy(orm.NumberAsc(f.SortOrder), orm.KeyAsc(f.ID)).Limit(MaxCollectionFiles+1))
 		if err != nil {
 			return err
 		}
@@ -500,7 +500,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 				if _, err := m.validateRow(previous); err != nil {
 					return err
 				}
-				if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), previous.ID, store.Files.State.Set(string(CleanupPending)), store.Files.UpdatedAt.Set(now)); err != nil {
+				if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), previous.ID, orm.TextSet(store.Files.State, string(CleanupPending)), orm.TimeSet(store.Files.UpdatedAt, now)); err != nil {
 					return err
 				}
 				if err := c.queue.enqueue(ctx, tx, operationID(previous.ID)); err != nil {
@@ -509,7 +509,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 				removed = append(removed, previous.ID)
 			}
 		}
-		row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.State.Set(string(Ready)), store.Files.SortOrder.Set(position), store.Files.UpdatedAt.Set(now))
+		row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.TextSet(store.Files.State, string(Ready)), orm.NumberSet(store.Files.SortOrder, position), orm.TimeSet(store.Files.UpdatedAt, now))
 		if err != nil {
 			return err
 		}
@@ -529,7 +529,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 		if _, err = c.definition.owner.Lock(ctx, tx, m.store.Registry(), owner); err != nil {
 			return err
 		}
-		final, err := store.Files.Query().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
+		final, err := orm.Require(ctx, tx, store.Files.Query().Where(orm.KeyEq(store.Files.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -569,7 +569,7 @@ func (c Collection[M, K]) publish(ctx context.Context, outer *database.Tx, m *Ma
 
 func (m *Manager) scheduleCleanup(ctx context.Context, id model.ID[store.File], queue *Queue, failure string) error {
 	return m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
+		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -586,7 +586,7 @@ func (m *Manager) scheduleCleanup(ctx context.Context, id model.ID[store.File], 
 		if err != nil {
 			return err
 		}
-		if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.State.Set(string(CleanupPending)), store.Files.LastFailure.Set(failure), store.Files.UpdatedAt.Set(now)); err != nil {
+		if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.TextSet(store.Files.State, string(CleanupPending)), orm.TextSet(store.Files.LastFailure, failure), orm.TimeSet(store.Files.UpdatedAt, now)); err != nil {
 			return err
 		}
 		return queue.enqueue(ctx, tx, operationID(id))

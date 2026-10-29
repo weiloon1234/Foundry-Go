@@ -29,10 +29,10 @@ func TestInputBuffersSurviveCallerAndMutatorChanges(t *testing.T) {
 	var bindings [][]any
 	db := testDB(t, testConnector{bindings: &bindings, columns: []string{"id", "body"}, values: [][]driver.Value{{int64(1), []byte{2, 2}}}})
 	input := inputBytes{1, 2}
-	a := fields.Body.Set(input)
+	a := InputColumnSet(fields.Body, input)
 	input[0] = 9
 	for range 2 {
-		_, err := fields.Insert(t.Context(), db, fields.Key().Set(1), a)
+		_, err := Insert(t.Context(), db, fields.Table, KeySet(fields.Key(), 1), a)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,11 +58,11 @@ func TestExplicitInputKeyUsesSinglePrimaryDeclaration(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := testDB(t, testConnector{columns: []string{"code"}, values: [][]driver.Value{{"MY"}}})
-	got, err := fields.Insert(t.Context(), db, fields.Code.Set(naturalKeyInput{Value: "MY"}))
+	got, err := Insert(t.Context(), db, fields.Table, InputKeySet(fields.Code, naturalKeyInput{Value: "MY"}))
 	if err != nil || got.Code != "MY" {
 		t.Fatal("explicit natural input key", err)
 	}
-	_, err = fields.Require(t.Context(), db, "MY")
+	_, err = RequireKey(t.Context(), db, fields.Table, "MY")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestSameTypePrimaryMutatorRetainsUUIDPreparation(t *testing.T) {
 	db := testDB(t, testConnector{respondBound: func(_ string, args []driver.NamedValue) ([]string, [][]driver.Value, error) {
 		return []string{"id"}, [][]driver.Value{{args[0].Value}}, nil
 	}})
-	got, err := fields.Insert(t.Context(), db)
+	got, err := Insert(t.Context(), db, fields)
 	if err != nil || got.ID.IsZero() {
 		t.Fatal("same-type key lost UUID preparation", err)
 	}

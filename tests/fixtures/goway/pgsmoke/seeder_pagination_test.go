@@ -22,7 +22,7 @@ func TestORMSeederAndPageAdapters(t *testing.T) {
 	if len(result.Committed) != 1 || result.Committed[0] != "fixture.records" {
 		t.Fatal("seeder did not commit", result)
 	}
-	page, err := models.WriteRecords.Query().Paginate(ctx, db, orm.Page(1, 10))
+	page, err := orm.Paginate(ctx, db, models.WriteRecords.Query(), orm.Page(1, 10))
 	must(t, err)
 	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].Name != "seeded" || !page.Items[0].Enabled {
 		t.Fatal("seeder lost ORM defaults or page metadata", page)

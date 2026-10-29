@@ -43,22 +43,22 @@ func TestConflictOldAndNewAgree(t *testing.T) {
 		t.Cleanup(func() { check(db.Close(context.Background())) })
 
 		f := n.Members
-		draft := []orm.Assignment[n.Member]{f.Key().Set(1), f.Name.Set(" proposed "), f.Note.Set(coremodels.LabelInput{Text: " input "}), f.Body.Set([]byte{1})}
-		policy := orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(orm.ConflictIncoming(f.Name), orm.ConflictSet(f.Note, coremodels.LabelInput{Text: " literal "}))
+		draft := []orm.Assignment[n.Member]{orm.KeySet(f.Key(), 1), orm.InputTextSet(f.Name, " proposed "), orm.NullableInputTextSet(f.Note, coremodels.LabelInput{Text: " input "}), orm.ColumnSet(f.Body, []byte{1})}
+		policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(f.Name)), orm.ConflictSet(orm.NullableInputTextExpr(f.Note), coremodels.LabelInput{Text: " literal "}))
 		got, e := orm.Upsert(ctx, db, f.Query(), policy, draft...)
 		check(e)
 		fmt.Fprintln(&capture.output, oracleSnapshot([]any{got.IsSet()}))
 		got, e = orm.Upsert(ctx, db, f.Query(), orm.OnConflictConstraint[n.Member]("hook_members_pkey").DoNothing(), draft...)
 		check(e)
 		fmt.Fprintln(&capture.output, oracleSnapshot([]any{got.IsSet()}))
-		second := append([]orm.Assignment[n.Member]{f.Key().Set(2)}, draft[1:]...)
+		second := append([]orm.Assignment[n.Member]{orm.KeySet(f.Key(), 2)}, draft[1:]...)
 		items, e := orm.UpsertMany(ctx, db, f.Query(), policy, [][]orm.Assignment[n.Member]{draft, second})
 		check(e)
 		fmt.Fprintln(&capture.output, oracleSnapshot([]any{len(items)}))
-		got, e = orm.Upsert(ctx, db, f.Query(), policy.DoUpdate(orm.ConflictNull(f.Note)), draft...)
+		got, e = orm.Upsert(ctx, db, f.Query(), policy.DoUpdate(orm.ConflictNull(orm.NullableInputTextExpr(f.Note))), draft...)
 		check(e)
 		fmt.Fprintln(&capture.output, oracleSnapshot([]any{got.IsSet()}))
-		got, e = orm.Upsert(ctx, db, f.Query(), policy.Where(f.Name.Eq("condition")), draft...)
+		got, e = orm.Upsert(ctx, db, f.Query(), policy.Where(orm.InputTextEq(f.Name, "condition")), draft...)
 		check(e)
 		fmt.Fprintln(&capture.output, oracleSnapshot([]any{got.IsSet()}))
 

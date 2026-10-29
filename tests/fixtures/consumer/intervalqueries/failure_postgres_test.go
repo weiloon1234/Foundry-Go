@@ -1,5 +1,7 @@
 package intervalqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"errors"
 	"math"
@@ -17,7 +19,7 @@ func TestPostgresIntervalArithmeticFailure(t *testing.T) {
 	runIntervals(t, func(tx *database.Tx, _ []intervalqueries.Sample) error {
 		q, f := intervalqueries.Samples.Query(), intervalqueries.Samples
 		err := tx.Savepoint(t.Context(), func(inner *database.Tx) error {
-			_, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.NegateInterval(expr.Param(f.Period, temporal.Months(math.MinInt32))).Value())).All(t.Context(), inner)
+			_, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.NegateInterval(expr.Param(orm.IntervalExpr(f.Period), temporal.Months(math.MinInt32))).Value())).All(t.Context(), inner)
 			return err
 		})
 		var pgError *database.Error
@@ -25,11 +27,11 @@ func TestPostgresIntervalArithmeticFailure(t *testing.T) {
 			t.Fatal("calendar overflow was not an interval error", err)
 		}
 		longest := interval(t, 0, 0, (time.Duration(math.MaxInt64)/time.Microsecond)*time.Microsecond)
-		if rows, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.AddIntervals(expr.Param(f.Period, longest), expr.Param(f.Period, longest)).Value())).All(t.Context(), tx); err == nil || rows != nil {
+		if rows, err := rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.AddIntervals(expr.Param(orm.IntervalExpr(f.Period), longest), expr.Param(orm.IntervalExpr(f.Period), longest)).Value())).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("elapsed overflow silently normalized into days", rows, err)
 		}
 		// Arithmetic decode failures do not abort the surrounding SQL transaction.
-		if count, err := q.Count(t.Context(), tx); err != nil || count != 4 {
+		if count, err := orm.Count(t.Context(), tx, q); err != nil || count != 4 {
 			t.Fatal(count, err)
 		}
 		return nil

@@ -8,14 +8,14 @@ import (
 )
 
 // AuditRead reads a required historical field through its stored codec; omitted fields remain absent.
-// Example: field, err := AuditRead(history, Orders.TotalCents).
+// Example: field, err := AuditRead(history, NumberExpr(Orders.TotalCents)).
 func AuditRead[M, K, V any](history auditrecord.Model[M, K], field interface{ ormColumn(*M) columnData[V] }) (value.Optional[auditrecord.FieldChange[V]], error) {
 	c := field.ormColumn(nil)
 	return readAuditField(history, c.core, false, c.decode)
 }
 
 // AuditReadNullable keeps SQL NULL separate from an omitted field or absent model.
-// Example: field, err := AuditReadNullable(history, Orders.Note).
+// Example: field, err := AuditReadNullable(history, NullableTextExpr(Orders.Note)).
 func AuditReadNullable[M, K, V any](history auditrecord.Model[M, K], field interface{ ormColumn(*M) columnData[V] }) (value.Optional[auditrecord.FieldChange[value.Nullable[V]]], error) {
 	c := field.ormColumn(nil)
 	return readAuditField(history, c.core, true, nullableAuditDecode[V](c.core))

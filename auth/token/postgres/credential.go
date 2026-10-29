@@ -18,9 +18,9 @@ import (
 func credentialQuery(scope string, hash token.Digest, refresh bool) orm.Query[tokenstore.Entry] {
 	q := entries(scope, model.ID[tokenstore.Family]{})
 	if refresh {
-		return q.Where(tokenstore.Entries.RefreshHash.Eq(hash.Hex()))
+		return q.Where(orm.NullableTextEq(tokenstore.Entries.RefreshHash, hash.Hex()))
 	}
-	return q.Where(tokenstore.Entries.AccessHash.Eq(hash.Hex()))
+	return q.Where(orm.TextEq(tokenstore.Entries.AccessHash, hash.Hex()))
 }
 
 // credential uses an initial hash lookup solely as a locator. Mutations lock the
@@ -32,7 +32,7 @@ func readCredential(ctx context.Context, tx *database.Tx, address token.Address,
 		return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 	}
 	q := credentialQuery(scope, hash, refresh)
-	found, err := q.First(ctx, tx)
+	found, err := orm.First(ctx, tx, q)
 	if err != nil {
 		return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 	}
@@ -40,7 +40,7 @@ func readCredential(ctx context.Context, tx *database.Tx, address token.Address,
 	if !present {
 		return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, nil
 	}
-	foundFamily, err := families(scope, "").Where(tokenstore.Families.ID.Eq(entry.FamilyID)).First(ctx, tx)
+	foundFamily, err := orm.First(ctx, tx, families(scope, "").Where(orm.KeyEq(tokenstore.Families.ID, entry.FamilyID)))
 	if err != nil {
 		return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 	}
@@ -53,7 +53,7 @@ func readCredential(ctx context.Context, tx *database.Tx, address token.Address,
 		return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 	}
 	if lock {
-		foundFamily, err = families(scope, subject.Key).Where(tokenstore.Families.ID.Eq(family.ID)).ForUpdate().First(ctx, tx)
+		foundFamily, err = orm.FirstLocked(ctx, tx, orm.Lock(families(scope, subject.Key).Where(orm.KeyEq(tokenstore.Families.ID, family.ID))))
 		if err != nil {
 			return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 		}
@@ -61,7 +61,7 @@ func readCredential(ctx context.Context, tx *database.Tx, address token.Address,
 		if !present {
 			return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, nil
 		}
-		found, err = q.Where(tokenstore.Entries.ID.Eq(entry.ID)).ForUpdate().First(ctx, tx)
+		found, err = orm.FirstLocked(ctx, tx, orm.Lock(q.Where(orm.KeyEq(tokenstore.Entries.ID, entry.ID))))
 		if err != nil {
 			return tokenstore.Subject{}, tokenstore.Family{}, tokenstore.Entry{}, false, err
 		}
@@ -279,11 +279,11 @@ func (b *Backend) Refresh(ctx context.Context, address token.Address, old, acces
 		if err != nil {
 			return err
 		}
-		made, err := tokenstore.Entries.Insert(ctx, tx, draft...)
+		made, err := orm.Insert(ctx, tx, tokenstore.Entries.Table, draft...)
 		if err != nil {
 			return err
 		}
-		family, err = orm.Update(ctx, tx, families(subject.Scope, subject.Key), tokenstore.Families.ID, family.ID, tokenstore.Families.Generation.Set(next.Generation))
+		family, err = orm.Update(ctx, tx, families(subject.Scope, subject.Key), tokenstore.Families.ID, family.ID, orm.NumberSet(tokenstore.Families.Generation, next.Generation))
 		if err != nil {
 			return err
 		}

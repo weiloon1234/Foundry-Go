@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/temporalqueries"
@@ -8,5 +10,5 @@ import (
 
 func invalid() {
 	f := temporalqueries.Samples
-	_ = expr.Where(models.Users.Query(), expr.Year(expr.Value(f.Date)).Eq(2024))
+	_ = expr.Where(models.Users.Query(), expr.Year(expr.Value(orm.TimeExpr(f.Date))).Eq(2024))
 }

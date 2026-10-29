@@ -35,27 +35,27 @@ func AtMost[V NumberValue](ceiling V) Bound[V] {
 	return Bound[V]{value: querycore.RetainInput(ceiling), ok: true}
 }
 
-// Increment adds a strictly positive amount in the UPDATE statement.
-// Example: Orders.TotalCents.Increment(100, orm.AtMost[int64](1000)).
-func (c numberColumn[M, V, R]) Increment(amount V, bound ...Bound[V]) Assignment[M] {
+// NumberIncrement adds a strictly positive amount in the UPDATE statement.
+// Example: NumberIncrement(Orders.TotalCents, 100, orm.AtMost[int64](1000)).
+func NumberIncrement[M any, V NumberValue, R columnRole](c numberColumn[M, V, R], amount V, bound ...Bound[V]) Assignment[M] {
 	return adjustment[M](c.number, amount, false, bound)
 }
 
-// Decrement subtracts a strictly positive amount in the UPDATE statement.
-// Example: Orders.TotalCents.Decrement(50, orm.AtLeast[int64](0)).
-func (c numberColumn[M, V, R]) Decrement(amount V, bound ...Bound[V]) Assignment[M] {
+// NumberDecrement subtracts a strictly positive amount in the UPDATE statement.
+// Example: NumberDecrement(Orders.TotalCents, 50, orm.AtLeast[int64](0)).
+func NumberDecrement[M any, V NumberValue, R columnRole](c numberColumn[M, V, R], amount V, bound ...Bound[V]) Assignment[M] {
 	return adjustment[M](c.number, amount, true, bound)
 }
 
-// Increment adds a strictly positive amount; SQL NULL remains NULL.
-// Example: LedgerEntries.Balance.Increment(amount, orm.AtMost(ceiling)).
-func (c NullableNumber[M, V]) Increment(amount V, bound ...Bound[V]) Assignment[M] {
+// NullableNumberIncrement adds a strictly positive amount; SQL NULL remains NULL.
+// Example: NullableNumberIncrement(LedgerEntries.Balance, amount, orm.AtMost(ceiling)).
+func NullableNumberIncrement[M any, V NumberValue](c NullableNumber[M, V], amount V, bound ...Bound[V]) Assignment[M] {
 	return adjustment[M](c.nullableNumber.base, amount, false, bound)
 }
 
-// Decrement subtracts a strictly positive amount; SQL NULL remains NULL.
-// Example: LedgerEntries.Balance.Decrement(amount, orm.AtLeast(floor)).
-func (c NullableNumber[M, V]) Decrement(amount V, bound ...Bound[V]) Assignment[M] {
+// NullableNumberDecrement subtracts a strictly positive amount; SQL NULL remains NULL.
+// Example: NullableNumberDecrement(LedgerEntries.Balance, amount, orm.AtLeast(floor)).
+func NullableNumberDecrement[M any, V NumberValue](c NullableNumber[M, V], amount V, bound ...Bound[V]) Assignment[M] {
 	return adjustment[M](c.nullableNumber.base, amount, true, bound)
 }
 

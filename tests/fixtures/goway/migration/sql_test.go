@@ -20,8 +20,8 @@ import (
 // migration:conflict-after
 func upsert(ctx context.Context, tx *database.Tx) error {
 	f := models.Users
-	policy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictIncoming(f.Age))
-	_, err := orm.Upsert(ctx, tx, f.Query(), policy, f.Email.Set("ada@example.test"), f.Age.Set(30))
+	policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Email))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(f.Age)))
+	_, err := orm.Upsert(ctx, tx, f.Query(), policy, orm.TextSet(f.Email, "ada@example.test"), orm.NumberSet(f.Age, 30))
 	return err
 }
 
@@ -30,10 +30,10 @@ func upsert(ctx context.Context, tx *database.Tx) error {
 // migration:excluded-after
 func excluded() orm.Conflict[models.User] {
 	r := rows.ConflictRowsOf(models.Users.Query())
-	stored := expr.At(r.Stored(), models.Users.Age)
-	proposed := expr.At(r.Proposed(), models.Users.Age)
-	return orm.OnConflict(orm.ConflictKey(models.Users.Email)).DoUpdate(
-		rows.SetConflictValue(models.Users.Age, expr.Add(stored, proposed)))
+	stored := expr.At(r.Stored(), orm.NumberExpr(models.Users.Age))
+	proposed := expr.At(r.Proposed(), orm.NumberExpr(models.Users.Age))
+	return orm.OnConflict(orm.ConflictKey(orm.TextExpr(models.Users.Email))).DoUpdate(
+		rows.SetConflictValue(orm.NumberExpr(models.Users.Age), expr.Add(stored, proposed)))
 }
 
 // migration:end
@@ -42,8 +42,8 @@ func excluded() orm.Conflict[models.User] {
 func insertSelect(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
 	plan := rows.InsertFrom(rows.From(f.Query()), f.Query(),
-		rows.MapInsert(f.ID, expr.Value(f.Key())), rows.MapInsert(f.Body, expr.Value(f.Body)),
-		rows.MapInsert(f.CreatedAt, expr.Value(f.CreatedAt))).Values(f.Name.Set("copy"))
+		rows.MapInsert(orm.KeyExpr(f.ID), expr.Value(orm.KeyExpr(f.Key()))), rows.MapInsert(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body))),
+		rows.MapInsert(orm.TimeExpr(f.CreatedAt), expr.Value(orm.TimeExpr(f.CreatedAt)))).Values(orm.InputTextSet(f.Name, "copy"))
 	_, err := plan.Exec(ctx, tx)
 	return err
 }
@@ -54,8 +54,8 @@ func insertSelect(ctx context.Context, tx *database.Tx) error {
 func updateFrom(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
 	_, err := rows.UpdateFrom(f.Query(), rows.From(f.Query())).
-		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).
-		Select(rows.MapUpdate(f.Body, expr.Value(f.Body))).Values(f.Name.Set("updated")).Exec(ctx, tx)
+		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).
+		Select(rows.MapUpdate(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body)))).Values(orm.InputTextSet(f.Name, "updated")).Exec(ctx, tx)
 	return err
 }
 
@@ -66,7 +66,7 @@ func deleteUsing(ctx context.Context, tx *database.Tx) error {
 	f := hooks.Members
 	q := f.Query().WithTrashed()
 	_, err := rows.ForceDeleteUsing(q, f.Soft, rows.From(q)).
-		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).Exec(ctx, tx)
+		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Exec(ctx, tx)
 	return err
 }
 
@@ -76,7 +76,7 @@ func deleteUsing(ctx context.Context, tx *database.Tx) error {
 func aggregate(ctx context.Context, db database.Executor) error {
 	count := expr.Count[models.Order]()
 	q := rows.GroupByScalar(rows.SelectScalar(rows.From(models.Orders.Query()), count.Value()),
-		expr.Group(expr.Value(models.Orders.BuyerID)))
+		expr.Group(expr.Value(orm.ColumnExpr(models.Orders.BuyerID))))
 	_, err := rows.ReadScalar(rows.HavingScalar(q, count.Gt(1))).All(ctx, db)
 	return err
 }
@@ -89,8 +89,8 @@ type orderSide struct{}
 func window(ctx context.Context, db database.Executor) error {
 	a := rows.As[orderSide](models.Orders.Query(), "o")
 	s := rows.Scope(a)
-	window := expr.WindowFor(s).PartitionBy(expr.Group(expr.At(s, models.Orders.BuyerID))).
-		OrderBy(expr.At(s, models.Orders.TotalCents).Desc())
+	window := expr.WindowFor(s).PartitionBy(expr.Group(expr.At(s, orm.ColumnExpr(models.Orders.BuyerID)))).
+		OrderBy(expr.At(s, orm.NumberExpr(models.Orders.TotalCents)).Desc())
 	_, err := rows.ReadScalar(rows.SelectScalar(a, expr.RowNumber(window))).All(ctx, db)
 	return err
 }
@@ -99,7 +99,7 @@ func window(ctx context.Context, db database.Executor) error {
 
 // migration:cte-after
 func cte(ctx context.Context, db database.Executor) error {
-	cte := rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(models.Orders.TotalCents.Gt(100))))
+	cte := rows.CTE("eligible", rows.ModelRecord(models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100))))
 	a := rows.AsRecord[orderSide](cte, "o")
 	_, err := rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a))).All(ctx, db)
 	return err
@@ -109,7 +109,7 @@ func cte(ctx context.Context, db database.Executor) error {
 
 // migration:sets-after
 func sets(ctx context.Context, db database.Executor) error {
-	a := models.Orders.Query().Where(models.Orders.TotalCents.Gt(100))
+	a := models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100))
 	_, err := rows.ReadSet(rows.Union(rows.ModelRecord(a), rows.ModelRecord(models.Orders.Query()))).All(ctx, db)
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func sets(ctx context.Context, db database.Executor) error {
 var Theme = expr.JSONFieldOf(func(p *jsonpaths.Preferences) *value.Optional[string] { return &p.Theme })
 
 func jsonTheme() expr.NullableTextRowExpression[jsonpaths.Document, string] {
-	root := expr.JSONRoot(expr.Value(jsonpaths.Documents.Settings))
+	root := expr.JSONRoot(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings)))
 	theme := expr.JSONOptional(expr.JSONProperty(root, Theme))
 	return expr.JSONTextScalar(theme, codec.String[string]())
 }
@@ -135,9 +135,9 @@ func jsonTheme() expr.NullableTextRowExpression[jsonpaths.Document, string] {
 func report() rows.Query[reports.Member, reports.MemberRow] {
 	f, r := reports.Members, reports.MemberRows
 	return rows.Select(rows.From(f.Query()), r,
-		rows.Map(r.ID, expr.Value(f.ID)), rows.Map(r.Name, expr.Value(f.Name)),
-		rows.Map(r.Nickname, expr.Value(f.Nickname)), rows.Map(r.State, expr.Value(f.State)),
-		rows.Map(r.Balance, expr.Value(f.Balance)))
+		rows.Map(r.ID, expr.Value(orm.KeyExpr(f.ID))), rows.Map(r.Name, expr.Value(orm.TextExpr(f.Name))),
+		rows.Map(r.Nickname, expr.Value(orm.NullableTextExpr(f.Nickname))), rows.Map(r.State, expr.Value(orm.EnumExpr(f.State))),
+		rows.Map(r.Balance, expr.Value(orm.NumberExpr(f.Balance))))
 }
 
 // migration:end
@@ -150,9 +150,9 @@ func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A
 		if err != nil {
 			return rows.Query[reports.Member, reports.MemberRow]{}, err
 		}
-		return report().Where(expr.Value(reports.Members.TenantID).Eq(id)), nil
+		return report().Where(expr.Value(orm.NumberExpr(reports.Members.TenantID)).Eq(id)), nil
 	}
-	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Value(reports.Members.ID).Asc()}
+	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Value(orm.KeyExpr(reports.Members.ID)).Asc()}
 	return spec
 }
 

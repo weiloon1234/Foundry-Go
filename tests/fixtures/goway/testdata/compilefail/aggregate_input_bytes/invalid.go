@@ -8,4 +8,4 @@ import (
 
 type input struct{ Text string }
 
-var _ = expr.Min(orm.InputColumn[models.User, input, []byte]{})
+var _ = expr.Min(orm.InputColumnExpr(orm.InputColumn[models.User, input, []byte]{}))

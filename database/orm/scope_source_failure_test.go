@@ -31,20 +31,23 @@ func TestScopeSourceFailureNeverReachesSQL(t *testing.T) {
 				var all, count, cursor, chunk, remove, update, setUpdate, setDelete func() error
 				table := hookedFields(nil, WithGlobalScopes(func(table hookedTable) []GlobalScope[hookedRow] {
 					fail()
-					return []GlobalScope[hookedRow]{Scope(table.Table, "tenant", func(context.Context) (Predicate[hookedRow], error) { return table.Key().Eq(7), nil })}
+					return []GlobalScope[hookedRow]{Scope(table.Table, "tenant", func(context.Context) (Predicate[hookedRow], error) { return KeyEq(table.Key(), 7), nil })}
 				}))
 				q := table.Query()
-				all = func() error { _, err := q.All(ctx, db); return err }
-				count = func() error { _, err := q.Count(ctx, db); return err }
+				all = func() error { _, err := All(ctx, db, q); return err }
+				count = func() error { _, err := Count(ctx, db, q); return err }
 				cursor = func() error {
 					_, err := CursorPaginate(ctx, db, q, CursorRequest[hookedRow]{Size: 2})
 					return err
 				}
-				chunk = func() error { return q.Chunk(ctx, db, 2, func([]hookedRow) error { return nil }) }
-				remove = func() error { _, err := table.Delete(ctx, db, 1); return err }
-				update = func() error { _, err := table.Update(ctx, db, 1, table.Name.Set("changed")); return err }
-				setUpdate = func() error { _, err := q.UpdateAll(ctx, db, table.Name.Set("changed")); return err }
-				setDelete = func() error { _, err := q.DeleteAll(ctx, db); return err }
+				chunk = func() error { return Chunk(ctx, db, q, 2, func([]hookedRow) error { return nil }) }
+				remove = func() error { _, err := Delete(ctx, db, table.Table.Query(), table.Table.Key(), 1); return err }
+				update = func() error {
+					_, err := Update(ctx, db, table.Table.Query(), table.Table.Key(), 1, InputTextSet(table.Name, "changed"))
+					return err
+				}
+				setUpdate = func() error { _, err := UpdateAll(ctx, db, q, InputTextSet(table.Name, "changed")); return err }
+				setDelete = func() error { _, err := DeleteAll(ctx, db, q); return err }
 				for _, terminal := range []struct {
 					name string
 					run  func() error

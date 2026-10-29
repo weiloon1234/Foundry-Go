@@ -48,11 +48,11 @@ func TestStage6d3JSONGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	n := expr.Value(jsonpaths.Documents.Settings)
+	n := expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings))
 
-	nb := expr.Value(jsonpaths.Documents.Backup)
+	nb := expr.Value(orm.NullableJSONExpr(jsonpaths.Documents.Backup))
 
-	nt := expr.Value(jsonpaths.Documents.Tags)
+	nt := expr.Value(orm.JSONExpr(jsonpaths.Documents.Tags))
 	t.Run("JSONType/object", func(t *testing.T) {
 		jsonGolden(t, expr.JSONType(n).Value(), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate), "object", nil)
 	})
@@ -164,6 +164,6 @@ func TestStage6d3JSONGolden(t *testing.T) {
 	nq := expr.JSONProperty(np, jsonpaths.Quoted)
 	jsonGolden(t, expr.JSONTextScalar(nq, codec.String[string]()).Value(), codec.Nullable(codec.String[string]()), "quoted", nil)
 
-	newFixed := expr.JSONArrayElement(expr.JSONRoot(expr.Value(jsonpaths.Documents.Fixed)), jsonpaths.FixedElements, -2)
+	newFixed := expr.JSONArrayElement(expr.JSONRoot(expr.Value(orm.JSONExpr(jsonpaths.Documents.Fixed))), jsonpaths.FixedElements, -2)
 	jsonGolden(t, expr.OrderNullableRow(expr.JSONScalar(newFixed, codec.Signed[int64]())).Value(), codec.Nullable(codec.Signed[int64]()), int64(2), nil)
 }

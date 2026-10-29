@@ -10,4 +10,4 @@ import (
 type alias struct{}
 
 var source = rows.As[alias](inputqueries.Members.Query(), "other")
-var _ = orm.ConflictSet(expr.At(rows.Scope(source), inputqueries.Members.Email), inputqueries.EmailInput{})
+var _ = orm.ConflictSet(expr.At(rows.Scope(source), orm.InputTextExpr(inputqueries.Members.Email)), inputqueries.EmailInput{})

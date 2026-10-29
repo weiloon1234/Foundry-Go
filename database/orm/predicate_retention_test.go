@@ -31,15 +31,15 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	table := orm.Define("predicate_owners", func(b orm.Builder[predicateOwner], m *predicateOwner) orm.Table[predicateOwner, string] {
 		return orm.TableOf(b, &m.ID)
 	})
-	p := table.Key().Eq(secret)
+	p := orm.KeyEq(table.Key(), secret)
 	q := table.Query().Where(p)
-	value := expr.Value(table.Key())
-	param := expr.Param(table.Key(), secret)
+	value := expr.Value(orm.KeyExpr(table.Key()))
+	param := expr.Param(orm.KeyExpr(table.Key()), secret)
 	projected := expr.ModelPredicate(p)
 	source := rows.From(q)
 	scalar := rows.SelectScalar(source, param.Value())
 	record := rows.ModelRecord(q)
-	report := rows.SelectValue(q, table.Key())
+	report := rows.SelectValue(q, orm.KeyExpr(table.Key()))
 	window := expr.Window[predicateOwner]{}.PartitionBy(expr.Group(param)).OrderBy(param.Asc())
 	agg := expr.Count[predicateOwner]().Filter(projected)
 
@@ -47,7 +47,7 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapted, err := rows.CompileRead(rows.Read(rows.SelectValue(table.Query(), table.Key()).Where(projected)))
+	adapted, err := rows.CompileRead(rows.Read(rows.SelectValue(table.Query(), orm.KeyExpr(table.Key())).Where(projected)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	assertRetentionRedacted(t, "orm/key-lookup", orm.Keyed(q, table.Key()), secret)
 	assertRetentionRedacted(t, "orm/global-scope", orm.Scope(table, "private_scope", func(context.Context) (orm.Predicate[predicateOwner], error) { return p, nil }), secret)
 	assertRetentionRedacted(t, "orm/query", q, secret)
-	assertRetentionRedacted(t, "orm/locked-query", q.ForUpdate(), secret)
+	assertRetentionRedacted(t, "orm/locked-query", orm.Lock(q), secret)
 	assertRetentionRedacted(t, "orm/bridge", orm.FoundryPredicate(p, sqlowner.Metadata()), secret)
 	assertRetentionRedacted(t, "expr/model-predicate", projected, secret)
 	assertRetentionRedacted(t, "expr/column-predicate", value.Eq(secret), secret)
@@ -92,7 +92,7 @@ func TestPublicPredicateRetentionRedaction(t *testing.T) {
 	assertRetentionRedacted(t, "rows/transaction-subquery", rows.TransactionSubqueryOf(source), secret)
 	assertRetentionRedacted(t, "rows/transaction-cte", rows.TransactionCTE("private_records", rows.TransactionOf(record)), secret)
 	left, right := rows.As[retentionLeft](q, "l"), rows.As[retentionRight](q, "r")
-	lv, rv := expr.At(rows.Scope(left), table.Key()), expr.At(rows.Scope(right), table.Key())
+	lv, rv := expr.At(rows.Scope(left), orm.KeyExpr(table.Key())), expr.At(rows.Scope(right), orm.KeyExpr(table.Key()))
 	on := rows.OnEqual(lv, rv).WhereLeft(lv.Eq(secret)).WhereRight(rv.Eq(secret))
 	assertRetentionRedacted(t, "rows/alias", left, secret)
 	assertRetentionRedacted(t, "rows/join-on", on, secret)

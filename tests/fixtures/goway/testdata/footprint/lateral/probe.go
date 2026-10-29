@@ -1,5 +1,7 @@
 package lateral
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -34,11 +36,11 @@ func F() rows.Query[rows.Left[rows.Alias[parentTag, models.User], rows.Alias[lat
 	c := rows.Correlate(parent, child)
 	is := rows.InnerScope(c, rows.Scope(child))
 	os := rows.OuterScope(c, rows.Scope(parent))
-	c = c.Where(expr.Equal(expr.At(is, models.Orders.BuyerID), expr.At(os, models.Users.ID)))
-	record := rows.SelectCorrelatedRecord(c, is).OrderBy(expr.At(is, models.Orders.TotalCents).Desc()).Limit(1)
+	c = c.Where(expr.Equal(expr.At(is, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(os, orm.KeyExpr(models.Users.ID))))
+	record := rows.SelectCorrelatedRecord(c, is).OrderBy(expr.At(is, orm.NumberExpr(models.Orders.TotalCents)).Desc()).Limit(1)
 	latest := rows.AsLateral[latestTag](record, "latest")
 	joined := rows.LeftJoinLateral(parent, latest)
-	amount := expr.AtNullable(rows.NullableRightScope(joined, rows.LateralScope(latest)), models.Orders.TotalCents)
+	amount := expr.AtNullable(rows.NullableRightScope(joined, rows.LateralScope(latest)), orm.NumberExpr(models.Orders.TotalCents))
 	return rows.Select(joined, schema, rows.Map(schema.Amount, amount))
 }
 

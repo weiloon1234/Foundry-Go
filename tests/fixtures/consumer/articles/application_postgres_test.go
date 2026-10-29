@@ -1,5 +1,7 @@
 package articles_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"bytes"
 	"context"
@@ -142,11 +144,11 @@ func (f fixture) createArticle(t *testing.T, slug string) articles.Article {
 	t.Helper()
 	var article articles.Article
 	if err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		author, err := articles.Authors.Insert(ctx, tx, articles.Authors.Name.Set("Author "+slug))
+		author, err := orm.Insert(ctx, tx, articles.Authors.Table, orm.TextSet(articles.Authors.Name, "Author "+slug))
 		if err != nil {
 			return err
 		}
-		article, err = articles.Articles.Insert(ctx, tx, articles.Articles.Slug.Set(slug), articles.Articles.AuthorID.Set(author.ID))
+		article, err = orm.Insert(ctx, tx, articles.Articles.Table, orm.TextSet(articles.Articles.Slug, slug), orm.ColumnSet(articles.Articles.AuthorID, author.ID))
 		return err
 	}); err != nil {
 		t.Fatal(err)

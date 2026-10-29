@@ -14,9 +14,9 @@ Aggregates and windows cannot become WHERE predicates.
 <!-- go-source: tests/fixtures/consumer/expressionqueries/expressions_test.go -->
 ```go
 u := models.Users
-display := expr.Coalesce(expr.Value(u.Nickname), expr.Value(u.Email))
-choice := expr.When(expr.ModelPredicate(u.Age.Gt(20)), expr.Param(u.Email, "older"))
-label := choice.When(expr.ModelPredicate(u.Age.Eq(20)), expr.Value(u.Email)).Else(expr.Param(u.Email, "unknown"))
+display := expr.Coalesce(expr.Value(orm.NullableTextExpr(u.Nickname)), expr.Value(orm.TextExpr(u.Email)))
+choice := expr.When(expr.ModelPredicate(orm.NumberGt(u.Age, 20)), expr.Param(orm.TextExpr(u.Email), "older"))
+label := choice.When(expr.ModelPredicate(orm.NumberEq(u.Age, 20)), expr.Value(orm.TextExpr(u.Email))).Else(expr.Param(orm.TextExpr(u.Email), "unknown"))
 statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(expr.Where(models.Users.Query(), display.Ne(""))), label.Value()), label.Asc())))
 ```
 
@@ -52,7 +52,7 @@ be hidden inside a conditional to make it legal in HAVING.
 <!-- go-source: tests/fixtures/consumer/expressionqueries/expressions_test.go -->
 ```go
 orders := models.Orders.Query()
-total := expr.Sum(models.Orders.TotalCents)
+total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
 computed := expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())
 ```
 

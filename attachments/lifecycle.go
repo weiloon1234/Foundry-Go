@@ -79,7 +79,7 @@ func (m *Manager) cleanupSubject(ctx context.Context, tx *database.Tx, owner ext
 }
 func (m *Manager) retireOwner(ctx context.Context, tx *database.Tx, subject extensions.Subject, queue *Queue) ([]model.ID[store.File], error) {
 	f := store.Files
-	rows, err := rows.ForUpdate(rows.Read(store.Index(store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.State.In(string(Ready), string(Stored))).OrderBy(f.ID.Asc()).Limit(MaxOwnerIntents+1)))).All(ctx, tx)
+	rows, err := rows.ForUpdate(rows.Read(store.Index(store.Files.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key), orm.TextIn(f.State, string(Ready), string(Stored))).OrderBy(orm.KeyAsc(f.ID)).Limit(MaxOwnerIntents+1)))).All(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (m *Manager) retireOwner(ctx context.Context, tx *database.Tx, subject exte
 		if _, err := m.validateIndex(row); err != nil {
 			return nil, err
 		}
-		if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, store.Files.State.Set(string(CleanupPending)), store.Files.UpdatedAt.Set(now)); err != nil {
+		if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, orm.TextSet(store.Files.State, string(CleanupPending)), orm.TimeSet(store.Files.UpdatedAt, now)); err != nil {
 			return nil, err
 		}
 		if err := queue.enqueue(ctx, tx, operationID(row.ID)); err != nil {

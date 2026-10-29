@@ -13,4 +13,4 @@ type sample struct {
 }
 
 var period orm.Interval[sample]
-var _ = expr.SumInterval(period).Gt(decimal.Decimal{})
+var _ = expr.SumInterval(orm.IntervalExpr(period)).Gt(decimal.Decimal{})

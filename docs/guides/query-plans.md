@@ -5,11 +5,11 @@
 <!-- orm-example: explain -->
 ```go
 func inspectOrders(ctx context.Context, db database.Executor) (orm.Plan, error) {
-	return orm.Explain(ctx, db, models.Orders.Query().Where(models.Orders.TotalCents.Gt(100)))
+	return orm.Explain(ctx, db, models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)))
 }
 
 func analyzeOrders(ctx context.Context, tx *database.Tx) (orm.Plan, error) {
-	return orm.ExplainAnalyzeLocked(ctx, tx, models.Orders.Query().ForUpdate())
+	return orm.ExplainAnalyzeLocked(ctx, tx, orm.Lock(models.Orders.Query()))
 }
 ```
 

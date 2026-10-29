@@ -63,12 +63,12 @@ func TestEachRetainsPredicatesAndUsesExecutingScopeContext(t *testing.T) {
 			if !ok {
 				return orm.Predicate[streamRecord]{}, errors.New("tenant required")
 			}
-			return table.Key().Eq(id), nil
+			return orm.KeyEq(table.Key(), id), nil
 		})}
 	}))
 	bound := context.WithValue(t.Context(), tenantKey{}, int64(1))
 	executing := context.WithValue(t.Context(), tenantKey{}, int64(2))
-	q := rows.SelectValue(orm.WithScopeContext(table.Query().Where(table.Name.Eq("Ada")), bound), table.Key())
+	q := rows.SelectValue(orm.WithScopeContext(table.Query().Where(orm.TextEq(table.Name, "Ada")), bound), orm.KeyExpr(table.Key()))
 	state := &streamState{columns: []string{"value"}, values: [][]driver.Value{{int64(2)}}}
 	var got int64
 	err := rows.EachRead(executing, openStreamDB(t, state), rows.Read(q), func(id int64) error { got = id; return nil })
@@ -138,7 +138,7 @@ func streamProjection() rows.Query[streamRecord, streamRecord] {
 	fields := rows.Define(func(b rows.Builder[streamRecord], r *streamRecord) streamFields {
 		return streamFields{b.Row(), rows.NumberOf(b, &r.ID), rows.TextOf(b, &r.Name)}
 	})
-	return rows.Select(rows.From(table.Query().Where(table.Name.Eq("Ada")).OrderBy(table.Key().Asc())), fields, rows.Map(fields.ID, expr.Value(table.Key())), rows.Map(fields.Name, expr.Value(table.Name)))
+	return rows.Select(rows.From(table.Query().Where(orm.TextEq(table.Name, "Ada")).OrderBy(orm.KeyAsc(table.Key()))), fields, rows.Map(fields.ID, expr.Value(orm.KeyExpr(table.Key()))), rows.Map(fields.Name, expr.Value(orm.TextExpr(table.Name))))
 }
 
 type streamState struct {

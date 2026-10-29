@@ -1,5 +1,7 @@
 package jsonqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"testing"
 
@@ -16,14 +18,14 @@ func TestPostgresJSONInvalidStoredShapeDiscardsCollectedRows(t *testing.T) {
 			return err
 		}
 		q, f := jsonqueries.Documents.Query(), jsonqueries.Documents
-		if rows, err := q.OrderBy(f.Key().Asc()).All(t.Context(), tx); err == nil || rows != nil {
+		if rows, err := orm.All(t.Context(), tx, q.OrderBy(orm.KeyAsc(f.Key()))); err == nil || rows != nil {
 			t.Fatal("bad shape returned partial models", rows, err)
 		}
-		if rows, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.OrderBy(f.Key().Asc())), expr.Row(expr.Value(f.Settings)).Value())).All(t.Context(), tx); err == nil || rows != nil {
+		if rows, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(q.OrderBy(orm.KeyAsc(f.Key()))), expr.Row(expr.Value(orm.JSONExpr(f.Settings))).Value())).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("bad shape returned partial JSON values", rows, err)
 		}
 		// A decode error is not a SQL transaction error; subsequent valid reads work.
-		if row, err := jsonqueries.Documents.Require(t.Context(), tx, 1); err != nil || row.ID != 1 {
+		if row, err := orm.RequireKey(t.Context(), tx, jsonqueries.Documents.Table, 1); err != nil || row.ID != 1 {
 			t.Fatal(row, err)
 		}
 		return nil

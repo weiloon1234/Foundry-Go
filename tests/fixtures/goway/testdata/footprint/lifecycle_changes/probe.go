@@ -7,14 +7,14 @@ import (
 )
 
 func Compare(before, after h.Member) (bool, error) {
-	changes, err := orm.Compare(h.Members.Table, value.Set(before), value.Set(after), h.Members.Name.Set("same"))
+	changes, err := orm.Compare(h.Members.Table, value.Set(before), value.Set(after), orm.InputTextSet(h.Members.Name, "same"))
 	if err != nil {
 		return false, err
 	}
-	name, err := orm.ChangeOf(changes, h.Members.Name)
+	name, err := orm.ChangeOf(changes, orm.InputTextExpr(h.Members.Name))
 	if err != nil {
 		return false, err
 	}
-	note, err := orm.NullableChangeOf(changes, h.Members.Note)
+	note, err := orm.NullableChangeOf(changes, orm.NullableInputTextExpr(h.Members.Note))
 	return name.Assigned() || note.Changed(), err
 }

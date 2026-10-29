@@ -1,5 +1,7 @@
 package scalar_text
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/goway/models"
@@ -26,8 +28,8 @@ var schema = rows.Define(func(b rows.Builder[result], r *result) fields {
 })
 
 func Run(ctx context.Context, db database.Executor) ([]result, error) {
-	name := expr.Lower(expr.Trim(expr.Value(models.Users.Email)))
-	nick := expr.SubstringNullable(expr.Value(models.Users.Nickname), 1, 3)
+	name := expr.Lower(expr.Trim(expr.Value(orm.TextExpr(models.Users.Email))))
+	nick := expr.SubstringNullable(expr.Value(orm.NullableTextExpr(models.Users.Nickname)), 1, 3)
 	q := rows.Select(rows.FromModel(models.Users.Query()), schema, rows.MapSelected(schema.Name, name.Value()), rows.MapSelected(schema.Nick, nick.Value()), rows.MapSelected(schema.Length, expr.Length(name).Value())).Where(name.IContains("@example"))
 	return rows.Read(q).All(ctx, db)
 }

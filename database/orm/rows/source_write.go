@@ -10,17 +10,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// MapInsert maps an exact stored SQL value without running a mutator. Example: rows.MapInsert(Archives.Name,expr.Value(Users.Name)).
+// MapInsert maps an exact stored SQL value without running a mutator. Example: rows.MapInsert(orm.TextExpr(Archives.Name), expr.Value(orm.TextExpr(Users.Name))).
 func MapInsert[S, M, V, P any, C orm.InsertTarget[M, V, P]](field C, expression expr.RowValue[S, P]) orm.InsertMapping[S, M] {
 	return orm.FoundryInsertMapping[S, M](modelMapping(field, expression), sqlowner.Expressions())
 }
 
-// MapUpdate maps an exact stored SQL value to a non-primary field. Example: rows.MapUpdate(Users.Name,expr.Value(Archives.Name)).
+// MapUpdate maps an exact stored SQL value to a non-primary field. Example: rows.MapUpdate(orm.TextExpr(Users.Name), expr.Value(orm.TextExpr(Archives.Name))).
 func MapUpdate[S, M, V, P any, C orm.UpdateTarget[M, V, P]](field C, expression expr.RowValue[S, P]) orm.UpdateMapping[S, M] {
 	return orm.FoundryUpdateMapping[S, M](modelMapping(field, expression), sqlowner.Expressions())
 }
 
-// MatchSource matches compatible stored primary values without assigning them. Example: rows.MatchSource(Users.ID,expr.Value(Archives.UserID)).
+// MatchSource matches compatible stored primary values without assigning them. Example: rows.MatchSource(orm.KeyExpr(Users.ID), expr.Value(orm.ColumnExpr(Archives.UserID))).
 func MatchSource[S, M, V, P any](field orm.ExpressionColumn[M, V, P], expression expr.RowValue[S, P]) orm.SourceKey[S, M] {
 	return orm.FoundrySourceKey[S, M](modelMapping(field, expression), sqlowner.Expressions())
 }

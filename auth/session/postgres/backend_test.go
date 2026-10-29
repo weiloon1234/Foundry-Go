@@ -143,7 +143,7 @@ func stored(t *testing.T, s *setup) []sessionstore.Entry {
 			return err
 		}
 		var err error
-		rows, err = sessionstore.Entries.Query().All(t.Context(), tx)
+		rows, err = orm.All(t.Context(), tx, sessionstore.Entries.Query())
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -542,7 +542,7 @@ func TestSessionCorruptSubjectFailsClosed(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+s.schema+`"`); err != nil {
 			return err
 		}
-		_, err := orm.Update(t.Context(), tx, sessionstore.Subjects.Query(), sessionstore.Subjects.Key(), row.SubjectKey, sessionstore.Subjects.Identity.Set(data))
+		_, err := orm.Update(t.Context(), tx, sessionstore.Subjects.Query(), sessionstore.Subjects.Key(), row.SubjectKey, orm.JSONSet(sessionstore.Subjects.Identity, data))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -578,7 +578,7 @@ func TestSessionLookupDoesNotWaitForSubjectLock(t *testing.T) {
 			if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+s.schema+`"`); err != nil {
 				return err
 			}
-			if _, err := sessionstore.Subjects.Query().Where(sessionstore.Subjects.Key().Eq(row.SubjectKey)).ForUpdate().First(t.Context(), tx); err != nil {
+			if _, err := orm.FirstLocked(t.Context(), tx, orm.Lock(sessionstore.Subjects.Query().Where(orm.KeyEq(sessionstore.Subjects.Key(), row.SubjectKey)))); err != nil {
 				return err
 			}
 			close(locked)

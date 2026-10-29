@@ -1,5 +1,7 @@
 package transactionqueries
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
@@ -11,7 +13,7 @@ func nullableRecordAt[S any](scope expr.NullableScope[S, Record]) struct {
 } {
 	return struct {
 		ID expr.Expression[S, int64, value.Nullable[int64]]
-	}{expr.AtNullable(scope, Records.ID)}
+	}{expr.AtNullable(scope, orm.KeyExpr(Records.ID))}
 }
 
 func nullableSummaryAt[S any](scope expr.NullableScope[S, Summary]) struct {

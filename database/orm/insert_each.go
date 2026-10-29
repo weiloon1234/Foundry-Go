@@ -9,7 +9,7 @@ import (
 
 // InsertEach runs each row's ordinary lifecycle in one bounded transaction.
 // A nested caller gets one savepoint for the batch, never one per row.
-// Example: orm.InsertEach(ctx,db,Users.Table,[][]orm.Assignment[User]{{Users.Name.Set("Ada")}}).
+// Example: orm.InsertEach(ctx,db,Users.Table,[][]orm.Assignment[User]{{orm.TextSet(Users.Name, "Ada")}}).
 func InsertEach[M any, K comparable](ctx context.Context, writer database.Transactor, table Table[M, K], rows [][]Assignment[M]) ([]M, error) {
 	if err := writeContext(ctx, writer); err != nil {
 		return nil, err

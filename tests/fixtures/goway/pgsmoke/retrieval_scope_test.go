@@ -37,7 +37,7 @@ func TestRetrievalClosedTransactionAndTenantIsolation(t *testing.T) {
 	}, orm.WithGlobalScopes(func(t fields) []orm.GlobalScope[member] {
 		return []orm.GlobalScope[member]{orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[member], error) {
 			id, err := coremodels.TenantID(ctx)
-			return t.TenantID.Eq(id), err
+			return orm.NumberEq(t.TenantID, id), err
 		})}
 	}), orm.WithRetrievalHooks(func() orm.RetrievalHooks[member] {
 		factories++
@@ -56,7 +56,7 @@ func TestRetrievalClosedTransactionAndTenantIsolation(t *testing.T) {
 	}))
 	tenant := coremodels.TenantContext(ctx, 7)
 	must(t, db.Transaction(tenant, func(tx *database.Tx) error {
-		items, err := table.Query().All(tenant, tx)
+		items, err := orm.All(tenant, tx, table.Query())
 		if err == nil && (len(items) != 1 || items[0].TenantID != 7) {
 			return errors.New("tenant read escaped")
 		}
@@ -65,23 +65,23 @@ func TestRetrievalClosedTransactionAndTenantIsolation(t *testing.T) {
 	if calls != 1 || factories != 1 {
 		t.Fatal("read factories", calls, factories)
 	}
-	if _, err := table.Query().All(ctx, db); err == nil {
+	if _, err := orm.All(ctx, db, table.Query()); err == nil {
 		t.Fatal("missing tenant opened read")
 	}
-	_, err = table.Update(tenant, db, 2, table.Name.Set("forbidden"))
+	_, err = orm.Update(tenant, db, table.Table.Query(), table.Table.Key(), 2, orm.TextSet(table.Name, "forbidden"))
 	if !errors.Is(err, database.NotFound) {
 		t.Fatal("tenant write escaped", err)
 	}
-	got, err := table.Raw(ctx, db, `SELECT name,id,tenant_id FROM retrieval_members ORDER BY id`)
+	got, err := orm.Raw(ctx, db, table.Table, `SELECT name,id,tenant_id FROM retrieval_members ORDER BY id`)
 	must(t, err)
 	if len(got) != 2 || got[1].Name != "two" || calls != 3 || factories != 2 {
 		t.Fatal("raw retrieval or tenant write", got, calls, factories)
 	}
-	must(t, table.Query().Each(tenant, db, func(member) error { return nil }))
+	must(t, orm.Each(tenant, db, table.Query(), func(member) error { return nil }))
 	if calls != 4 || factories != 3 {
 		t.Fatal("stream retrieval", calls, factories)
 	}
-	count, err := table.Query().Count(tenant, db)
+	count, err := orm.Count(tenant, db, table.Query())
 	must(t, err)
 	if count != 1 || factories != 3 {
 		t.Fatal("scalar retrieved", count, factories)

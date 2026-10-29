@@ -26,7 +26,7 @@ func ExplainAnalyze[M any](ctx context.Context, ex database.Executor, q Query[M]
 }
 
 // ExplainLocked plans a locked SELECT using its required transaction.
-// Example: orm.ExplainLocked(ctx, tx, Users.Query().ForUpdate()).
+// Example: orm.ExplainLocked(ctx, tx, orm.Lock(Users.Query())).
 func ExplainLocked[M any](ctx context.Context, tx *database.Tx, q LockedQuery[M]) (Plan, error) {
 	if err := lockContext(ctx, tx); err != nil {
 		return Plan{}, err
@@ -35,7 +35,7 @@ func ExplainLocked[M any](ctx context.Context, tx *database.Tx, q LockedQuery[M]
 }
 
 // ExplainAnalyzeLocked takes the SELECT locks in the caller's transaction.
-// Example: orm.ExplainAnalyzeLocked(ctx, tx, Users.Query().ForUpdate()).
+// Example: orm.ExplainAnalyzeLocked(ctx, tx, orm.Lock(Users.Query())).
 func ExplainAnalyzeLocked[M any](ctx context.Context, tx *database.Tx, q LockedQuery[M]) (Plan, error) {
 	if err := lockContext(ctx, tx); err != nil {
 		return Plan{}, err

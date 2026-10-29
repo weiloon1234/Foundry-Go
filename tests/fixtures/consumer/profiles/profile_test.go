@@ -142,7 +142,7 @@ func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 	var profile profiles.Profile
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		profile, err = profiles.Profiles.Insert(ctx, tx, profiles.Profiles.Name.Set("Consumer"))
+		profile, err = orm.Insert(ctx, tx, profiles.Profiles.Table, orm.TextSet(profiles.Profiles.Name, "Consumer"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -225,11 +225,11 @@ func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 	matches := []orm.Predicate[profiles.Profile]{attachmentMatch, metadataMatch, translationMatch}
 	for _, predicate := range matches {
 		if err := store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-			count, err := profiles.Profiles.Query().Where(predicate).Count(ctx, tx)
+			count, err := orm.Count(ctx, tx, profiles.Profiles.Query().Where(predicate))
 			if err != nil || count != 1 {
 				t.Fatal("extension match", count, err)
 			}
-			count, err = profiles.Profiles.Query().Where(predicate, profiles.Profiles.Name.Eq("not this profile")).Count(ctx, tx)
+			count, err = orm.Count(ctx, tx, profiles.Profiles.Query().Where(predicate, orm.TextEq(profiles.Profiles.Name, "not this profile")))
 			if err != nil || count != 0 {
 				t.Fatal("matching lost caller filter", count, err)
 			}
@@ -239,14 +239,14 @@ func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 		}
 	}
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := profiles.Profiles.Delete(ctx, tx, profile.ID)
+		_, err := orm.Delete(ctx, tx, profiles.Profiles.Table.Query(), profiles.Profiles.Table.Key(), profile.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	for _, predicate := range matches {
 		if err := store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-			count, err := profiles.Profiles.Query().Where(predicate).Count(ctx, tx)
+			count, err := orm.Count(ctx, tx, profiles.Profiles.Query().Where(predicate))
 			if err != nil || count != 0 {
 				t.Fatal("matching bypassed current soft-delete visibility", count, err)
 			}
@@ -259,7 +259,7 @@ func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 		t.Fatal("ORM soft delete not respected", err)
 	}
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := profiles.Profiles.Restore(ctx, tx, profile.ID)
+		_, err := orm.Restore(ctx, tx, profiles.Profiles.Table, profile.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -269,7 +269,7 @@ func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 	}
 	rollback := errors.New("rollback deletion")
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		if _, err := profiles.Profiles.ForceDelete(ctx, tx, profiles.Profiles.Soft, profile.ID); err != nil {
+		if _, err := orm.ForceDelete(ctx, tx, profiles.Profiles.Table.Query(), profiles.Profiles.Soft, profiles.Profiles.Table.Key(), profile.ID); err != nil {
 			return err
 		}
 		return rollback
@@ -280,7 +280,7 @@ func TestPublicModelExtensionConsumerAndORMLifecycle(t *testing.T) {
 		t.Fatal("parent rollback lost attachment", err)
 	}
 	if err := store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := profiles.Profiles.ForceDelete(ctx, tx, profiles.Profiles.Soft, profile.ID)
+		_, err := orm.ForceDelete(ctx, tx, profiles.Profiles.Table.Query(), profiles.Profiles.Soft, profiles.Profiles.Table.Key(), profile.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)

@@ -35,7 +35,7 @@ func (i Inbox[M, K]) MarkAllRead(ctx context.Context) (int, error) {
 	for {
 		changed := 0
 		err := i.manager.within(ctx, func(tx *database.Tx) error {
-			rows, err := i.rows(subject).Where(f.ReadAt.IsNull()).OrderBy(f.CreatedAt.Asc(), f.ID.Asc()).Limit(inboxBatch).All(ctx, tx)
+			rows, err := orm.All(ctx, tx, i.rows(subject).Where(orm.NullableTimeIsNull(f.ReadAt)).OrderBy(orm.TimeAsc(f.CreatedAt), orm.KeyAsc(f.ID)).Limit(inboxBatch))
 			if err != nil || len(rows) == 0 {
 				return err
 			}
@@ -47,8 +47,8 @@ func (i Inbox[M, K]) MarkAllRead(ctx context.Context) (int, error) {
 			if err != nil {
 				return err
 			}
-			updated, err := orm.UpdateEach(ctx, tx, i.rows(subject).Where(f.ID.In(ids...), f.ReadAt.IsNull()), len(ids), func(context.Context, *database.Tx, store.Inbox) ([]orm.Assignment[store.Inbox], error) {
-				return []orm.Assignment[store.Inbox]{store.Inboxes.ReadAt.Set(now)}, nil
+			updated, err := orm.UpdateEach(ctx, tx, i.rows(subject).Where(orm.KeyIn(f.ID, ids...), orm.NullableTimeIsNull(f.ReadAt)), len(ids), func(context.Context, *database.Tx, store.Inbox) ([]orm.Assignment[store.Inbox], error) {
+				return []orm.Assignment[store.Inbox]{orm.NullableTimeSet(store.Inboxes.ReadAt, now)}, nil
 			})
 			changed = len(updated)
 			return err
@@ -81,7 +81,7 @@ func (i Inbox[M, K]) Delete(ctx context.Context, id ID[M]) (bool, error) {
 	}
 	deleted := false
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
-		removed, err := orm.DeleteEach(ctx, tx, i.rows(subject).Where(store.Inboxes.ID.Eq(model.IDFromBytes[store.Inbox](id.Bytes()))), 1)
+		removed, err := orm.DeleteEach(ctx, tx, i.rows(subject).Where(orm.KeyEq(store.Inboxes.ID, model.IDFromBytes[store.Inbox](id.Bytes()))), 1)
 		deleted = len(removed) == 1
 		return err
 	})
@@ -116,14 +116,14 @@ func (m *Manager) PruneInbox(ctx context.Context, cutoff time.Time, readOnly boo
 	deleted := 0
 	err = m.within(ctx, func(tx *database.Tx) error {
 		deleted = 0
-		predicates := []orm.Predicate[store.Inbox]{f.CreatedAt.Lt(before)}
+		predicates := []orm.Predicate[store.Inbox]{orm.TimeLt(f.CreatedAt, before)}
 		if readOnly {
-			predicates = append(predicates, f.ReadAt.IsNotNull())
+			predicates = append(predicates, orm.NullableTimeIsNotNull(f.ReadAt))
 		}
 		// One bounded DELETE ... WHERE id IN (SELECT id ... LIMIT n): no
 		// rendered inbox data is loaded to choose the batch.
-		oldest := rows.SelectScalar(rows.From(store.Inboxes.Query().Where(predicates...).OrderBy(f.CreatedAt.Asc(), f.ID.Asc()).Limit(limit)), expr.Row(expr.Value(f.ID)).Value())
-		removed, err := expr.Where(store.Inboxes.Query(), rows.InQuery(expr.Value(f.ID), oldest)).DeleteAll(ctx, tx)
+		oldest := rows.SelectScalar(rows.From(store.Inboxes.Query().Where(predicates...).OrderBy(orm.TimeAsc(f.CreatedAt), orm.KeyAsc(f.ID)).Limit(limit)), expr.Row(expr.Value(orm.KeyExpr(f.ID))).Value())
+		removed, err := orm.DeleteAll(ctx, tx, expr.Where(store.Inboxes.Query(), rows.InQuery(expr.Value(orm.KeyExpr(f.ID)), oldest)))
 		deleted = int(removed)
 		return err
 	})

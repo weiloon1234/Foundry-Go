@@ -20,8 +20,8 @@ func TestPostgresPerModelAndBulkSemanticsStayExplicit(t *testing.T) {
 		}
 		ctx := linkqueries.WithTrace(t.Context(), trace)
 		q := linkqueries.Memberships.Query()
-		draft := []orm.Assignment[linkqueries.Membership]{linkqueries.Memberships.MemberID.Set(member.ID), linkqueries.Memberships.GroupCode.Set(group.Code), linkqueries.Memberships.Role.Set(" BULK ")}
-		bulk, err := linkqueries.Memberships.InsertMany(ctx, tx, [][]orm.Assignment[linkqueries.Membership]{draft, draft})
+		draft := []orm.Assignment[linkqueries.Membership]{orm.ColumnSet(linkqueries.Memberships.MemberID, member.ID), orm.TextSet(linkqueries.Memberships.GroupCode, group.Code), orm.InputTextSet(linkqueries.Memberships.Role, " BULK ")}
+		bulk, err := orm.InsertMany(ctx, tx, linkqueries.Memberships.Table, [][]orm.Assignment[linkqueries.Membership]{draft, draft})
 		if err != nil {
 			return err
 		}
@@ -40,7 +40,7 @@ func TestPostgresPerModelAndBulkSemanticsStayExplicit(t *testing.T) {
 		if rows, err := orm.DeleteEach(ctx, tx, q, 3); !errors.Is(err, linkqueries.ErrVeto) || rows != nil {
 			return errors.New("later model hook did not abort the complete batch")
 		}
-		if count, err := q.Count(t.Context(), tx); err != nil || count != 3 {
+		if count, err := orm.Count(t.Context(), tx, q); err != nil || count != 3 {
 			return errors.New("later model hook retained an earlier deletion")
 		}
 		return nil
@@ -61,13 +61,13 @@ func TestPostgresPerModelPhysicalDeletionAndNaturalKeys(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		other, err := linkqueries.Members.Insert(t.Context(), tx, linkqueries.Members.Name.Set("other"))
+		other, err := orm.Insert(t.Context(), tx, linkqueries.Members.Table, orm.TextSet(linkqueries.Members.Name, "other"))
 		if err != nil {
 			return err
 		}
 		q := linkqueries.Friendships.Query()
-		forward := []orm.Assignment[linkqueries.Friendship]{linkqueries.Friendships.FromID.Set(member.ID), linkqueries.Friendships.ToID.Set(other.ID)}
-		reverse := []orm.Assignment[linkqueries.Friendship]{linkqueries.Friendships.FromID.Set(other.ID), linkqueries.Friendships.ToID.Set(member.ID)}
+		forward := []orm.Assignment[linkqueries.Friendship]{orm.ColumnSet(linkqueries.Friendships.FromID, member.ID), orm.ColumnSet(linkqueries.Friendships.ToID, other.ID)}
+		reverse := []orm.Assignment[linkqueries.Friendship]{orm.ColumnSet(linkqueries.Friendships.FromID, other.ID), orm.ColumnSet(linkqueries.Friendships.ToID, member.ID)}
 		links, err := orm.CreateEach(t.Context(), tx, q, [][]orm.Assignment[linkqueries.Friendship]{forward, reverse})
 		if err != nil {
 			return err
@@ -75,17 +75,17 @@ func TestPostgresPerModelPhysicalDeletionAndNaturalKeys(t *testing.T) {
 		if len(links) != 2 {
 			return errors.New("per-model creation lost physical-model rows")
 		}
-		removed, err := orm.DeleteEach(t.Context(), wrappedTransactor{tx}, q.Where(linkqueries.Friendships.FromID.Eq(member.ID)), 2)
+		removed, err := orm.DeleteEach(t.Context(), wrappedTransactor{tx}, q.Where(orm.ColumnEq(linkqueries.Friendships.FromID, member.ID)), 2)
 		if err != nil {
 			return err
 		}
 		if len(removed) != 1 || removed[0].ID != links[0].ID {
 			return errors.New("physical per-model deletion lost its pre-write model or filter")
 		}
-		if count, err := q.Count(t.Context(), tx); err != nil || count != 1 {
+		if count, err := orm.Count(t.Context(), tx, q); err != nil || count != 1 {
 			return errors.New("physical per-model deletion ignored its scope")
 		}
-		groups := linkqueries.Groups.Query().Where(linkqueries.Groups.Key().Eq(group.Code))
+		groups := linkqueries.Groups.Query().Where(orm.KeyEq(linkqueries.Groups.Key(), group.Code))
 		deleted, err := orm.DeleteEach(t.Context(), tx, groups, 1)
 		if err != nil {
 			return err

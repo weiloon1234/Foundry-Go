@@ -44,7 +44,7 @@ func TestPostgresLookupConcurrentAbsenceRetainsUniqueConflict(t *testing.T) {
 	participants := make([]*participant, 2)
 	q := linkqueries.Memberships
 	fields := linkqueries.Memberships
-	selected := q.Query().Where(fields.MemberID.Eq(member.ID), fields.GroupCode.Eq(group.Code))
+	selected := q.Query().Where(orm.ColumnEq(fields.MemberID, member.ID), orm.TextEq(fields.GroupCode, group.Code))
 	for i := range participants {
 		p := &participant{entered: make(chan struct{}), release: make(chan struct{}), done: make(chan outcome, 1), trace: &linkqueries.Trace{}}
 		p.unblock = sync.OnceFunc(func() { close(p.release) })
@@ -71,7 +71,7 @@ func TestPostgresLookupConcurrentAbsenceRetainsUniqueConflict(t *testing.T) {
 			var output outcome
 			output.err = linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
 				var err error
-				output.model, err = orm.FirstOrCreate(linkqueries.WithTrace(ctx, p.trace), tx, selected, linkqueries.Memberships.MemberID.Set(member.ID), linkqueries.Memberships.GroupCode.Set(group.Code), linkqueries.Memberships.Role.Set("admin"))
+				output.model, err = orm.FirstOrCreate(linkqueries.WithTrace(ctx, p.trace), tx, selected, orm.ColumnSet(linkqueries.Memberships.MemberID, member.ID), orm.TextSet(linkqueries.Memberships.GroupCode, group.Code), orm.InputTextSet(linkqueries.Memberships.Role, "admin"))
 				return err
 			})
 			p.done <- output
@@ -109,7 +109,7 @@ func TestPostgresLookupConcurrentAbsenceRetainsUniqueConflict(t *testing.T) {
 		t.Fatal("lookup retry or losing after-commit work changed concurrency semantics")
 	}
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		rows, err := q.Query().All(ctx, tx)
+		rows, err := orm.All(ctx, tx, q.Query())
 		if err != nil {
 			return err
 		}
@@ -129,7 +129,7 @@ func TestPostgresLookupLocksExistingModelBeforeDraftCallback(t *testing.T) {
 	var member linkqueries.Member
 	if err := linkTransaction(t.Context(), db, namespace, func(tx *database.Tx) error {
 		var err error
-		member, err = q.Insert(t.Context(), tx, linkqueries.Members.Name.Set("original"))
+		member, err = orm.Insert(t.Context(), tx, q.Table, orm.TextSet(linkqueries.Members.Name, "original"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -145,14 +145,14 @@ func TestPostgresLookupLocksExistingModelBeforeDraftCallback(t *testing.T) {
 	go func() {
 		defer workers.Done()
 		done <- linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-			_, err := orm.UpdateOrCreate(ctx, tx, q.Query().Where(fields.Key().Eq(member.ID)), []orm.Assignment[linkqueries.Member]{}, func(ctx context.Context, _ *database.Tx, current linkqueries.Member) ([]orm.Assignment[linkqueries.Member], error) {
+			_, err := orm.UpdateOrCreate(ctx, tx, q.Query().Where(orm.KeyEq(fields.Key(), member.ID)), []orm.Assignment[linkqueries.Member]{}, func(ctx context.Context, _ *database.Tx, current linkqueries.Member) ([]orm.Assignment[linkqueries.Member], error) {
 				close(entered)
 				select {
 				case <-release:
 				case <-ctx.Done():
 					return []orm.Assignment[linkqueries.Member]{}, ctx.Err()
 				}
-				return []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set(current.Name + "-updated")}, nil
+				return []orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, current.Name+"-updated")}, nil
 			})
 			return err
 		})
@@ -165,7 +165,7 @@ func TestPostgresLookupLocksExistingModelBeforeDraftCallback(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 	err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		_, err := q.Query().Where(q.Key().Eq(member.ID)).ForUpdate().NoWait().Require(ctx, tx)
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(q.Query().Where(orm.KeyEq(q.Key(), member.ID))).NoWait())
 		return err
 	})
 	var locked *database.Error
@@ -182,7 +182,7 @@ func TestPostgresLookupLocksExistingModelBeforeDraftCallback(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		stored, err := q.Require(ctx, tx, member.ID)
+		stored, err := orm.RequireKey(ctx, tx, q.Table, member.ID)
 		if err != nil {
 			return err
 		}

@@ -51,14 +51,14 @@ func TestMutatorsPreservePresenceOrderAndStoredReads(t *testing.T) {
 	}
 	var bindings [][]any
 	db := testDB(t, testConnector{bindings: &bindings, onBegin: func() { begun = true }, columns: []string{"id", "first", "maybe", "last"}, values: [][]driver.Value{{int64(1), "stored", nil, "last"}}})
-	a := fields.First.Set(" input ")
+	a := InputTextSet(fields.First, " input ")
 	if len(order) != 0 {
 		t.Fatal("Set invoked transform")
 	}
 	for range 2 {
 		order = nil
 		begun = false
-		got, err := fields.Insert(t.Context(), db, fields.Key().Set(1), fields.Last.Set(" last "), fields.Maybe.SetNull(), a)
+		got, err := Insert(t.Context(), db, fields.Table, KeySet(fields.Key(), 1), InputTextSet(fields.Last, " last "), NullableInputTextSetNull(fields.Maybe), a)
 		if err != nil || got.First != "stored" {
 			t.Fatal("stored hydration", err)
 		}
@@ -70,11 +70,11 @@ func TestMutatorsPreservePresenceOrderAndStoredReads(t *testing.T) {
 		t.Fatal("input reuse/binding", bindings)
 	}
 	order = nil
-	_, err := fields.Require(t.Context(), db, 1)
+	_, err := RequireKey(t.Context(), db, fields.Table, 1)
 	if err != nil || len(order) != 0 {
 		t.Fatal("read invoked transform", err)
 	}
-	_, err = fields.Update(t.Context(), db, 1, fields.Maybe.Set(""))
+	_, err = Update(t.Context(), db, fields.Table.Query(), fields.Table.Key(), 1, NullableInputTextSet(fields.Maybe, ""))
 	if err != nil || !reflect.DeepEqual(order, []string{"maybe"}) {
 		t.Fatal("zero value skipped", err, order)
 	}
@@ -92,7 +92,7 @@ func TestMutatorFaultsAbortBeforeSQL(t *testing.T) {
 			var statements []string
 			begun := false
 			db := testDB(t, testConnector{statements: &statements, onBegin: func() { begun = true }})
-			_, err := fields.Insert(t.Context(), db, fields.Key().Set(1), fields.First.Set("private"), fields.Last.Set("last"))
+			_, err := Insert(t.Context(), db, fields.Table, KeySet(fields.Key(), 1), InputTextSet(fields.First, "private"), InputTextSet(fields.Last, "last"))
 			if err == nil || !begun || len(statements) != 0 {
 				t.Fatal("failure escaped transaction or reached SQL", err)
 			}
@@ -114,7 +114,7 @@ func TestMutatorCancellationAndBatchFailure(t *testing.T) {
 	fields := transformFields(first, last, last)
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	_, err := fields.Insert(ctx, db, fields.Key().Set(1), fields.First.Set("x"), fields.Last.Set("y"))
+	_, err := Insert(ctx, db, fields.Table, KeySet(fields.Key(), 1), InputTextSet(fields.First, "x"), InputTextSet(fields.Last, "y"))
 	if !errors.Is(err, context.Canceled) || calls != 1 || len(statements) != 0 {
 		t.Fatal("cancellation", err, calls)
 	}
@@ -135,9 +135,9 @@ func TestMutatorCancellationAndBatchFailure(t *testing.T) {
 		}
 		return v, nil
 	}, func(v string) (string, error) { return v, nil }, func(v string) (string, error) { return v, nil })
-	_, err = fields.InsertMany(t.Context(), db, [][]Assignment[transformRow]{
-		{fields.Key().Set(1), fields.First.Set("x"), fields.Last.Set("y")},
-		{fields.Key().Set(2), fields.First.Set("reject"), fields.Last.Set("y")},
+	_, err = InsertMany(t.Context(), db, fields.Table, [][]Assignment[transformRow]{
+		{KeySet(fields.Key(), 1), InputTextSet(fields.First, "x"), InputTextSet(fields.Last, "y")},
+		{KeySet(fields.Key(), 2), InputTextSet(fields.First, "reject"), InputTextSet(fields.Last, "y")},
 	})
 	if !errors.Is(err, veto) || len(statements) != 0 {
 		t.Fatal("batch failure reached SQL", err)
@@ -287,7 +287,7 @@ func TestNamedMutatorsUseNativeTypedCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := testDB(t, testConnector{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "stored"}}})
-	_, err := fields.Insert(t.Context(), db, fields.Key().Set(1), columnAssignment[nativeMethodRow](columnWithCodec(fields.core.columns[1], scalarCodec[string]()), "input"))
+	_, err := Insert(t.Context(), db, fields, KeySet(fields.Key(), 1), columnAssignment[nativeMethodRow](columnWithCodec(fields.core.columns[1], scalarCodec[string]()), "input"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,7 @@ func TestNumericAssignmentCannotBypassMutator(t *testing.T) {
 	}
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	_, err := table.Update(t.Context(), db, 1, (Number[row, int64]{number: table.Amount.ormColumn(nil)}).Increment(1))
+	_, err := Update(t.Context(), db, table.Table.Query(), table.Table.Key(), 1, NumberIncrement((Number[row, int64]{number: InputNumberExpr(table.Amount).ormColumn(nil)}), 1))
 	if !errors.Is(err, fault.Invalid) || len(statements) != 0 {
 		t.Fatal("numeric mutator bypass", err)
 	}

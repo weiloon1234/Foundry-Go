@@ -13,7 +13,7 @@ func TestORMDeclarationsPreserveStoredQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	prior := cleanupfixture.Read(t).Statements["read"]
-	current, err := orm.Compile(RecordRows.Query().Where(RecordRows.Name.Eq("fixture")))
+	current, err := orm.Compile(RecordRows.Query().Where(orm.TextEq(RecordRows.Name, "fixture")))
 	if err != nil {
 		t.Fatal(err)
 	}

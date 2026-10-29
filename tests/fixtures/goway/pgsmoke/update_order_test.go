@@ -46,7 +46,7 @@ func TestUpdateSetOrderPostgres(t *testing.T) {
 	ctx := t.Context()
 	_, err := db.Exec(ctx, `CREATE TABLE ordered_writes(id bigint PRIMARY KEY,created_at timestamptz NOT NULL,name text NOT NULL,updated_at timestamptz NOT NULL,amount bigint NOT NULL)`)
 	must(t, err)
-	_, err = f.Insert(ctx, db, f.Key().Set(1), f.Name.Set("Ada"), f.Amount.Set(7))
+	_, err = orm.Insert(ctx, db, f.Table, orm.KeySet(f.Key(), 1), orm.TextSet(f.Name, "Ada"), orm.NumberSet(f.Amount, 7))
 	must(t, err)
 	for _, path := range []string{"key", "scoped key", "all", "each", "upsert", "upsert batch", "conflict expression", "source values", "source mappings", "adjustment"} {
 		t.Run(path, func(t *testing.T) {
@@ -55,49 +55,49 @@ func TestUpdateSetOrderPostgres(t *testing.T) {
 				_, err := db.Exec(ctx, `UPDATE ordered_writes SET name='Ada',amount=7 WHERE id=1`)
 				must(t, err)
 				statements = nil
-				assignments := []orm.Assignment[orderedWrite]{f.Name.Set("Ada"), f.Amount.Set(7)}
+				assignments := []orm.Assignment[orderedWrite]{orm.TextSet(f.Name, "Ada"), orm.NumberSet(f.Amount, 7)}
 				if path == "adjustment" {
-					assignments[1] = f.Amount.Increment(7)
+					assignments[1] = orm.NumberIncrement(f.Amount, 7)
 				}
 				if reverse {
 					slices.Reverse(assignments)
 				}
-				q := f.Query().Where(f.Amount.Gte(0))
+				q := f.Query().Where(orm.NumberGte(f.Amount, 0))
 				switch path {
 				case "key", "adjustment":
-					_, err = f.Update(ctx, db, 1, assignments...)
+					_, err = orm.Update(ctx, db, f.Table.Query(), f.Table.Key(), 1, assignments...)
 				case "scoped key":
 					_, err = orm.Update(ctx, db, q, f.Key(), int64(1), assignments...)
 				case "all":
-					_, err = q.UpdateAll(ctx, db, assignments...)
+					_, err = orm.UpdateAll(ctx, db, q, assignments...)
 				case "each":
 					_, err = orm.UpdateEach(ctx, db, q, 1, func(context.Context, *database.Tx, orderedWrite) ([]orm.Assignment[orderedWrite], error) {
 						return assignments, nil
 					})
 				case "upsert", "upsert batch", "conflict expression":
-					updates := []orm.ConflictUpdate[orderedWrite]{orm.ConflictSet(f.Name, "Ada"), orm.ConflictSet(f.Amount, int64(7))}
+					updates := []orm.ConflictUpdate[orderedWrite]{orm.ConflictSet(orm.TextExpr(f.Name), "Ada"), orm.ConflictSet(orm.NumberExpr(f.Amount), int64(7))}
 					if path == "conflict expression" {
 						records := r.ConflictRowsOf(q)
-						updates[1] = r.SetConflictValue(f.Amount, expr.Add(expr.At(records.Stored(), f.Amount), expr.At(records.Proposed(), f.Amount)))
+						updates[1] = r.SetConflictValue(orm.NumberExpr(f.Amount), expr.Add(expr.At(records.Stored(), orm.NumberExpr(f.Amount)), expr.At(records.Proposed(), orm.NumberExpr(f.Amount))))
 					}
 					if reverse {
 						slices.Reverse(updates)
 					}
-					policy := orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(updates...)
-					row := append([]orm.Assignment[orderedWrite]{f.Key().Set(1)}, assignments...)
+					policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(updates...)
+					row := append([]orm.Assignment[orderedWrite]{orm.KeySet(f.Key(), 1)}, assignments...)
 					if path == "upsert batch" {
 						_, err = orm.UpsertMany(ctx, db, f.Query(), policy, [][]orm.Assignment[orderedWrite]{row})
 					} else {
 						_, err = orm.Upsert(ctx, db, f.Query(), policy, row...)
 					}
 				case "source values":
-					_, err = r.UpdateFrom(q, r.From(f.Query())).Match(r.MatchSource(f.Key(), expr.Value(f.Key()))).Values(assignments...).Returning(ctx, db, 1)
+					_, err = r.UpdateFrom(q, r.From(f.Query())).Match(r.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Values(assignments...).Returning(ctx, db, 1)
 				case "source mappings":
-					mappings := []orm.UpdateMapping[orderedWrite, orderedWrite]{r.MapUpdate(f.Name, expr.Value(f.Name)), r.MapUpdate(f.Amount, expr.Value(f.Amount))}
+					mappings := []orm.UpdateMapping[orderedWrite, orderedWrite]{r.MapUpdate(orm.TextExpr(f.Name), expr.Value(orm.TextExpr(f.Name))), r.MapUpdate(orm.NumberExpr(f.Amount), expr.Value(orm.NumberExpr(f.Amount)))}
 					if reverse {
 						slices.Reverse(mappings)
 					}
-					_, err = r.UpdateFrom(q, r.From(f.Query())).Match(r.MatchSource(f.Key(), expr.Value(f.Key()))).Select(mappings...).Returning(ctx, db, 1)
+					_, err = r.UpdateFrom(q, r.From(f.Query())).Match(r.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Select(mappings...).Returning(ctx, db, 1)
 				}
 				must(t, err)
 				if len(statements) != 1 {
@@ -107,7 +107,7 @@ func TestUpdateSetOrderPostgres(t *testing.T) {
 					t.Fatalf("shuffled SET list changed SQL: %v / %v", expected, statements)
 				}
 				expected = slices.Clone(statements)
-				got, err := f.Require(ctx, db, 1)
+				got, err := orm.RequireKey(ctx, db, f.Table, 1)
 				must(t, err)
 				want := int64(7)
 				if path == "adjustment" || path == "conflict expression" {
@@ -142,7 +142,7 @@ func TestRelationUpdateSetOrderPostgres(t *testing.T) {
 	}
 	var expected []string
 	for _, reverse := range []bool{false, true} {
-		assignments := []orm.Assignment[j.Pivot]{j.Pivots.Kind.Set("parent"), j.Pivots.Role.Set("admin")}
+		assignments := []orm.Assignment[j.Pivot]{orm.ColumnSet(j.Pivots.Kind, "parent"), orm.TextSet(j.Pivots.Role, "admin")}
 		if reverse {
 			slices.Reverse(assignments)
 		}

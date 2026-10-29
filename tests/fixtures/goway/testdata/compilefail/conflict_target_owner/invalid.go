@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.OnConflict[models.User](orm.ConflictKey(models.Orders.Key()))
+var _ = orm.OnConflict[models.User](orm.ConflictKey(orm.KeyExpr(models.Orders.Key())))

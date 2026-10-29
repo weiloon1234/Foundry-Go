@@ -48,7 +48,7 @@ func inspectInsertAssignments[M any, K comparable](t *testing.T, table orm.Table
 	if err := db.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	_, err = table.Insert(t.Context(), db, assignments...)
+	_, err = orm.Insert(t.Context(), db, table, assignments...)
 	if !errors.Is(err, stop) || calls != 1 || connection.begins != 1 || connection.rollbacks != 1 {
 		t.Fatalf("assignment inspection did not consume the draft and roll back: calls=%d begin=%d rollback=%d err=%v", calls, connection.begins, connection.rollbacks, err)
 	}

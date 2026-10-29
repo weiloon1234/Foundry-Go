@@ -6,7 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
-// GroupKey is a row-phase key for GROUP BY and DISTINCT ON. Example: expr.Group(expr.Value(Users.Email)).
+// GroupKey is a row-phase key for GROUP BY and DISTINCT ON. Example: expr.Group(expr.Value(orm.TextExpr(Users.Email))).
 type GroupKey[S any] struct {
 	rowKeyPhase [0]struct{}
 	_           [0]*S
@@ -33,7 +33,7 @@ type ProjectionOrder[S any] interface{ projectionOrder(*S) ormcore.Order }
 func (o Order[S]) projectionOrder(*S) ormcore.Order         { return o.core }
 func (o SelectedOrder[S]) projectionOrder(*S) ormcore.Order { return o.core }
 
-// Group constructs a row key without adding methods to columns. Example: expr.Group(expr.Value(Orders.BuyerID)).
+// Group constructs a row key without adding methods to columns. Example: expr.Group(expr.Value(orm.ColumnExpr(Orders.BuyerID))).
 func Group[S, V any](v RowValue[S, V]) GroupKey[S] { return GroupKey[S]{core: rowInput(v).data.core} }
 
 // Key constructs a selected key while preserving source ownership. Example: count.Value().Key().

@@ -20,7 +20,7 @@ type Member struct {
 	ID model.ID[Member]
 	// Delivery address. Email retains the stored email_address value.
 	// Email is the delivery address stored in email_address. Call AccessEmail explicitly for display.
-	// MutateEmail runs during persistence through Members.Email.Set; assigning this field does not invoke it.
+	// MutateEmail runs during persistence through orm.InputTextSet(Members.Email, value); assigning this field does not invoke it.
 	// Custom getter [Member.AccessEmail] is explicit when mapping a DTO.
 	// Custom setter [Member.MutateEmail] transforms supplied values during persistence.
 	// Direct field assignment and input construction do not invoke it.
@@ -29,7 +29,7 @@ type Member struct {
 	// is explicit when mapping a DTO. Custom setter [Member.MutateNickname] runs during
 	// persistence, skipping omitted values and SQL NULL; a supplied scalar zero invokes it.
 	Nickname value.Nullable[string]
-	// Attempts stores the persisted count. MutateAttempts runs during persistence through Members.Attempts.Set.
+	// Attempts stores the persisted count. MutateAttempts runs during persistence through orm.InputNumberSet(Members.Attempts, value).
 	// Direct assignment does not run the mutator.
 	// Attempts retains the stored count. Custom setter [Member.MutateAttempts] runs
 	// during persistence. Direct field assignment and input construction do not invoke it.

@@ -8,5 +8,5 @@ import (
 )
 
 func Page(ctx context.Context, db database.Executor, r orm.CursorRequest[models.User]) (orm.CursorPage[models.User], error) {
-	return orm.CursorPaginate(ctx, db, models.Users.Query().OrderBy(models.Users.Nickname.Asc()), r)
+	return orm.CursorPaginate(ctx, db, models.Users.Query().OrderBy(orm.NullableTextAsc(models.Users.Nickname)), r)
 }

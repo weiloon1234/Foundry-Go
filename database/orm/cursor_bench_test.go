@@ -9,7 +9,7 @@ import (
 
 func BenchmarkCursorPlan(b *testing.B) {
 	r := records()
-	q := r.Query().OrderBy(r.Note.Desc())
+	q := r.Query().OrderBy(NullableTextDesc(r.Note))
 	first, err := newCursorPlan(q.state, 20, "", false, false)
 	if err != nil {
 		b.Fatal(err)

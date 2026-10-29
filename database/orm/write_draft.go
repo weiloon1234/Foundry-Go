@@ -9,7 +9,7 @@ import (
 )
 
 // Write is an operation-local draft. Use it only during Saving/Creating/Updating.
-// Example: WriteSet(write, Orders.TotalCents.Set(0)).
+// Example: WriteSet(write, orm.NumberSet(Orders.TotalCents, 0)).
 type Write[M any] struct {
 	_     [0]*M
 	state *draftState
@@ -28,7 +28,7 @@ func (*Write[M]) String() string { return "orm write draft" }
 func (*Write[M]) GoString() string { return "orm write draft" }
 
 // WriteSet replaces assigned fields; omission remains distinct from zero and NULL.
-// Example: WriteSet(write, Members.Name.Set(""), Members.Note.SetNull()).
+// Example: WriteSet(write, InputTextSet(Members.Name, ""), NullableInputTextSetNull(Members.Note)).
 func WriteSet[M any](write *Write[M], assignments ...Assignment[M]) error {
 	if write == nil || write.state == nil || !write.state.open {
 		return invalid("write draft is outside its callback")
@@ -60,7 +60,7 @@ func WriteSet[M any](write *Write[M], assignments ...Assignment[M]) error {
 }
 
 // WriteGet reads a required field's input without running its mutator.
-// Example: input, supplied := WriteGet(write, Members.Email.Set).Get().
+// Example: input, supplied := WriteGet(write, func(v EmailInput) Assignment[Member] { return InputTextSet(Members.Email, v) }).Get().
 func WriteGet[M, I any](write *Write[M], setter func(I) Assignment[M]) value.Optional[I] {
 	a, ok := draftAssignment(write, setter)
 	if !ok {
@@ -76,7 +76,7 @@ func WriteGet[M, I any](write *Write[M], setter func(I) Assignment[M]) value.Opt
 }
 
 // WriteNullableGet preserves omission, SQL NULL and the distinct mutation input.
-// Example: input := WriteNullableGet(write, Members.Note.Set).
+// Example: input := WriteNullableGet(write, func(v LabelInput) Assignment[Member] { return NullableInputTextSet(Members.Note, v) }).
 func WriteNullableGet[M, I any](write *Write[M], setter func(I) Assignment[M]) value.Optional[value.Nullable[I]] {
 	a, ok := draftAssignment(write, setter)
 	if !ok {
@@ -92,7 +92,7 @@ func WriteNullableGet[M, I any](write *Write[M], setter func(I) Assignment[M]) v
 }
 
 // WriteIsSet reports assignment independently of input value or NULL.
-// Example: WriteIsSet(write, Members.Note.Set).
+// Example: WriteIsSet(write, func(v LabelInput) Assignment[Member] { return NullableInputTextSet(Members.Note, v) }).
 func WriteIsSet[M, I any](write *Write[M], setter func(I) Assignment[M]) bool {
 	_, ok := draftAssignment(write, setter)
 	return ok
@@ -128,7 +128,7 @@ func draftField[M, I any](write *Write[M], setter func(I) Assignment[M]) (queryc
 // WriteUnset removes a pending assignment; the field becomes omitted, not NULL or zero.
 // Unsetting an omitted field is a no-op. Later hooks may assign it again, and
 // conventions may supply an automatic value. Use only during a before-write callback.
-// Example: WriteUnset(write, Members.EmailRevision.Set).
+// Example: WriteUnset(write, func(v EmailInput) Assignment[Member] { return InputTextSet(Members.Email, v) }).
 func WriteUnset[M, I any](write *Write[M], setter func(I) Assignment[M]) error {
 	field, err := draftField(write, setter)
 	if err != nil {

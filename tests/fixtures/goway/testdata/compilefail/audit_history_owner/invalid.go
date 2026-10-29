@@ -7,5 +7,5 @@ import (
 )
 
 func invalid(history record.Model[h.KeyedMember, int64]) {
-	_, _ = orm.AuditRead(history, h.Members.Name)
+	_, _ = orm.AuditRead(history, orm.InputTextExpr(h.Members.Name))
 }

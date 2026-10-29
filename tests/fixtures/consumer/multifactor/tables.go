@@ -9,17 +9,17 @@ import (
 // AccountTable publishes typed stored fields for the handwritten declaration.
 // Example: AccountRecords.Query().
 type AccountTable struct {
-	// Table owns the concrete account key. Example: AccountRecords.Key().Eq(id).
+	// Table owns the concrete account key. Example: orm.KeyEq(AccountRecords.Key(), id).
 	orm.Table[Account, model.ID[Account]]
-	// Email binds the stored field. Example: AccountRecords.Email.Set("member@example.test").
+	// Email binds the stored field. Example: orm.TextSet(AccountRecords.Email, "member@example.test").
 	Email orm.Text[Account, string]
-	// Password binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: AccountRecords.Password.Set(hash).
+	// Password binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.ColumnSet(AccountRecords.Password, hash).
 	Password orm.Column[Account, password.Hash]
-	// Enabled binds the stored field. Example: AccountRecords.Enabled.Set(true).
+	// Enabled binds the stored field. Example: orm.ColumnSet(AccountRecords.Enabled, true).
 	Enabled orm.Column[Account, bool]
-	// MFAEnabled binds the stored field. Example: AccountRecords.MFAEnabled.Set(true).
+	// MFAEnabled binds the stored field. Example: orm.ColumnSet(AccountRecords.MFAEnabled, true).
 	MFAEnabled orm.Column[Account, bool]
-	// RequireMFA binds the stored field. Example: AccountRecords.RequireMFA.Set(true).
+	// RequireMFA binds the stored field. Example: orm.ColumnSet(AccountRecords.RequireMFA, true).
 	RequireMFA orm.Column[Account, bool]
 }
 

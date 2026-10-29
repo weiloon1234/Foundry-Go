@@ -15,7 +15,7 @@ type Product struct {
 
 type ProductTable struct {
 	orm.Table[Product, string]
-	Code  orm.Text[Product, string]
+	Code  orm.TextPrimary[Product, string]
 	Price orm.Number[Product, int64]
 }
 
@@ -23,7 +23,7 @@ var Products = orm.Define("products", func(b orm.Builder[Product], p *Product) P
 	table := orm.TableOf(b, &p.Code)
 	return ProductTable{
 		Table: table,
-		Code:  orm.TextKey(table.Key()),
+		Code:  orm.TextKey(orm.PrimaryOf(b, table.Key())),
 		Price: orm.NumberOf(b, &p.Price),
 	}
 })
@@ -32,22 +32,22 @@ var Products = orm.Define("products", func(b orm.Builder[Product], p *Product) P
 Call `orm.Check(Products)` during startup to report declaration errors together.
 Each query or write also rejects an invalid table.
 
-Use the column handles to read and write models:
+Column handles are methodless. Per-kind functions retain the concrete model,
+value and role types. Use them with the query and table package functions:
 
 ```go
-products, err := Products.Query().
-	Where(Products.Price.Between(100, 500)).
-	OrderBy(Products.Code.Asc()).All(ctx, db)
+products, err := orm.All(ctx, db, Products.Query().
+	Where(orm.NumberBetween(Products.Price, 100, 500)).
+	OrderBy(orm.TextAsc(Products.Code)))
 
-product, err := Products.Find(ctx, db, "SKU-1")
-created, err := Products.Insert(ctx, tx,
-	Products.Code.Set("SKU-1"), Products.Price.Set(100))
-updated, err := Products.Update(ctx, tx, "SKU-1", Products.Price.Set(0))
-page, err := Products.Query().Paginate(ctx, db, orm.Page(2, 20))
+product, err := orm.Find(ctx, db, Products.Table, "SKU-1")
+created, err := orm.Insert(ctx, tx, Products.Table, orm.TextSet(Products.Code, "SKU-1"), orm.NumberSet(Products.Price, 100))
+updated, err := orm.Update(ctx, tx, Products.Query(), Products.Key(), "SKU-1", orm.NumberSet(Products.Price, 0))
+page, err := orm.Paginate(ctx, db, Products.Query(), orm.Page(2, 20))
 ```
 
-Omit an assignment to leave the field unwritten. `Set(0)` writes zero.
-`SetNull()` is available only on nullable columns. Use `NullableTextOf`,
+Omit an assignment to leave the field unwritten. `orm.NumberSet(column, 0)` writes zero.
+Nullable families provide explicit NULL operations, such as `orm.NullableTextSetNull(column)`. Use `NullableTextOf`,
 `NullableNumberOf`, `NullableTimeOf`, `NullableIDOf`, or `NullableColumnOf` for
 `value.Nullable` fields.
 
@@ -72,8 +72,9 @@ convention. Both fields must be `time.Time` or `temporal.DateTime`.
 `DeletedAt` enables soft deletion. Explicit timestamp constructors support
 other field names.
 
-Use `ForUpdate().All(ctx, tx)` or `ForShare().All(ctx, tx)` for row locks.
-Their terminal methods require `*database.Tx`. Ordinary reads accept
+Use `orm.AllLocked(ctx, tx, orm.Lock(q))` or
+`orm.AllLocked(ctx, tx, orm.ForShare(q))` for row locks.
+The locked terminal functions require `*database.Tx`. Ordinary reads accept
 `database.Executor`; writes accept `database.Transactor` and retain nested
 transaction behavior. A `*orm.WriteError[M]` preserves a hydrated candidate when
 transaction confirmation is uncertain. The candidate does not prove persistence.
@@ -90,10 +91,8 @@ its model. `Text` and `NullableText` retain named string types.
 Numeric adjustments require a strictly positive, finite amount:
 
 ```go
-product, err := Products.Update(ctx, tx, "SKU-1",
-    Products.Price.Decrement(10, orm.AtLeast(int64(0))))
-n, err := Products.Query().Where(Products.Price.Lt(500)).UpdateAll(ctx, tx,
-    Products.Price.Increment(10, orm.AtMost(int64(500))))
+product, err := orm.Update(ctx, tx, Products.Query(), Products.Key(), "SKU-1", orm.NumberDecrement(Products.Price, 10, orm.AtLeast(int64(0))))
+n, err := orm.UpdateAll(ctx, tx, Products.Query().Where(orm.NumberLt(Products.Price, 500)), orm.NumberIncrement(Products.Price, 10, orm.AtMost(int64(500))))
 ```
 
 The bound is checked by the same SQL UPDATE. Per-key adjustments return
@@ -113,16 +112,16 @@ PostgreSQL evaluates `column +/- amount` before comparing the bound. An int64 or
 float64 overflow returns a database out-of-range error rather than silently
 passing the guard.
 
-`InsertMany(ctx, tx, [][]orm.Assignment[M]{...})` inserts an atomic bounded batch.
+`orm.InsertMany(ctx, tx, table, [][]orm.Assignment[M]{...})` inserts an atomic bounded batch.
 `NoSoftDeletes()` disables the deletion convention and conflicts with explicit
-`SoftDeleteOf`. `Table.ForceDelete(ctx, db, soft, key)` physically deletes active records by
+`SoftDeleteOf`. `orm.ForceDelete(ctx, db, table.Query(), soft, table.Key(), key)` physically deletes active records by
 default; use package `ForceDelete` with a `WithTrashed` or `OnlyTrashed` query for
-deleted records. `Query.ForceDeleteAll` respects query visibility. Explicit timestamp roles
+deleted records. `orm.ForceDeleteAll` respects query visibility. Explicit timestamp roles
 win over names; explicit timestamp constructors conflict with `NoTimestamps()`.
 `CreatedAt`, `UpdatedAt`, and `SoftDelete` retain the instant type as their second
 type parameter. Upserts use `orm.OnConflict` with typed targets and assignments.
 
-`Query.Chunk(ctx, ex, size, func([]M) error)` reads bounded batches with stable
+`orm.Chunk(ctx, ex, query, size, func([]M) error)` reads bounded batches with stable
 ordering and preserves Limit/Offset. Later batches advance from the last ordered
 values captured before the callback. Nullable ordering uses the same keyset
 predicate as the existing query API; explicit NULL placement falls back to
@@ -135,9 +134,9 @@ Bind slots during `Define`, then declare relationships after both tables exist:
 
 ```go
 var OrderRelations = struct { Buyer orm.BelongsTo[Order, User] }{
-    Buyer: orm.BelongsToOf(Orders.Buyer, Orders.BuyerID, Users.ID),
+    Buyer: orm.BelongsToOf(Orders.Buyer, orm.ColumnExpr(Orders.BuyerID), orm.KeyExpr(Users.ID)),
 }
-orders, err := Orders.Query().With(OrderRelations.Buyer).All(ctx, db)
+orders, err := orm.All(ctx, db, Orders.Query().With(OrderRelations.Buyer))
 loaded, err := orm.LoadFrom(ctx, db, Orders.Query().With(OrderRelations.Buyer), orders)
 ```
 
@@ -145,9 +144,9 @@ loaded, err := orm.LoadFrom(ctx, db, Orders.Query().With(OrderRelations.Buyer), 
 foreign IDs retain their non-null key type. The loader uses the shared engine's
 500-key batches and 10,000-row fetched/attachment budgets. `orm.LoadFrom` returns copies;
 errors publish no partial result. Target soft deletes and context scopes remain
-active. `Query.Each` closes each parent batch before loading relations.
+active. `orm.Each` closes each parent batch before loading relations.
 
-For joins, `rows.As[Tag]` creates a distinct scope, `expr.At` binds a model column
+For joins, `rows.As[Tag]` creates a distinct scope, `expr.At` binds an explicitly adapted model column
 to that scope, and `rows.LeftScope`/`RightScope` move fields into the joined scope.
 `rows.Define` returns a schema embedding `rows.Row[R]` from `b.Row()`;
 `rows.IDOf`, `TextOf`, `NumberOf`, `EnumOf`, `TimeOf`, `BytesOf` and their
@@ -168,20 +167,22 @@ value `P`. Nullable fields compare against `V` and project `value.Nullable[V]`;
 use `IsNull`/`IsNotNull` for nullness. `rows.On` unifies comparable unwrapped keys,
 and `rows.InnerJoin` accepts only an aliased table on its right side.
 
-Column kinds declare their methods directly over shared, method-free state (R9).
-`Number`, `Text`, `Time`, `Enum`, keys and nullable kinds retain their method completion
-lists and value receivers, including calls on `table.Key()` and derived key
-handles returned by value. Private relation adapters carry state without returning
-another public column type. Codec-state construction is shared by value type;
-model markers stay on the public handles and private interface arguments.
-The [surface test](method_surface_test.go) pins the
-exported fields, consumer-visible method signatures and sealed interface methods; fixture budgets cover individual kinds and growth
-from one to three identically shaped models.
+Column handles have no methods. Per-kind functions, such as `orm.TextEq` and
+`orm.NumberGt`, accept the concrete handle first and preserve its model, value,
+input and declaration-role types. Query chains remain methods; read terminals,
+lock transitions and table operations are package functions.
 
-Stage 3.0 deliberately removes the formerly promoted exported `.Column` field
-(including `Orders.ID.Column` and `orm.TextKey(k).Column`) to remove embedding
-chains. Exported methods remain unchanged; this is not preservation of the entire
-public surface. No consumer migration is needed on this branch.
+Expression and source APIs accept explicit sealed adapters, for example
+`expr.Value(orm.TextExpr(Users.Email))`. Each adapter is a defined type with the
+column's existing layout and directly declared private capability methods.
+Conversion allocates no wrapper and adds no capabilities: input columns remain
+ineligible for source mappings, primary roles retain their restrictions, and
+`EncryptedExpr` permits assignments without expression or equality access.
+
+The [surface test](method_surface_test.go) pins methodless columns and the
+retained query/table method sets. Fixture budgets cover individual kinds and
+model-count growth. There are no compatibility methods or promoted `.Column`
+fields; callers use the per-kind operators and explicit adapters.
 
 Stage 3.1a adds `JSONOf`/`NullableJSONOf` for `value.JSON[T]` and
 `IntervalOf`/`NullableIntervalOf` for `temporal.Interval`. JSON handles keep the
@@ -199,7 +200,7 @@ calendar and elapsed components. Use `expr.SumInterval` and `expr.AvgInterval` f
 `BytesOf`/`NullableBytesOf` retain buffer ownership and distinguish empty bytes
 from NULL. `Text.IContains` and `NullableText.IContains` treat `%`, `_` and `\`
 as literal substring characters and match case-insensitively. For example,
-`Users.Email.IContains("@EXAMPLE.com")` binds a value; it never interpolates SQL.
+`orm.TextIContains(Users.Email, "@EXAMPLE.com")` binds a value; it never interpolates SQL.
 Stage 3.1b adds `PasswordOf`/`NullablePasswordOf`, which preserve typed hash
 scalar comparisons, sorting and assignment while rejecting plaintext and text
 patterns. The password codec retains its sensitivity and redaction.
@@ -222,14 +223,14 @@ projections reject encrypted values because they cannot open them yet.
 
 Hydration publishes only complete, successfully opened models. Buffered reads,
 page reads, eager loads, and each chunk discard the failing batch. Streaming
-`Query.Each` retains rows already delivered before an error; it never delivers the
+`orm.Each` retains rows already delivered before an error; it never delivers the
 failing row or any later row. This matches the old API's streaming behavior.
 
 Stage 3.1c adds cursor pagination and primary-key chunking as package functions:
 
 ```go
 page, err := orm.CursorPaginate(ctx, db,
-    models.Users.Query().OrderBy(models.Users.Nickname.Asc()), request.Page)
+    models.Users.Query().OrderBy(orm.NullableTextAsc(models.Users.Nickname)), request.Page)
 // request is pagination.CursorRequest[Path, Filters, models.User].
 // Map the returned orm.CursorPage with pagination.MapCursorPage.
 err = orm.ChunkByKey(ctx, db, models.Orders.Query(), models.Orders.ID, 500,
@@ -250,12 +251,12 @@ delivery. Rows close before callbacks and the next key is captured before callba
 edits. Deleting rows behind the boundary does not shift later batches. Keep keys
 stable; iteration does not provide a snapshot across callbacks.
 
-Locked keyed reads compose `Orders.Query().Where(Orders.ID.Eq(id)).ForUpdate().Require(ctx, tx)`.
+Locked keyed reads compose `orm.RequireLocked(ctx, tx, orm.Lock(Orders.Query().Where(orm.KeyEq(Orders.ID, id))))`.
 The executor remains `*database.Tx`; unlocked reads retain read-pool routing.
 
 ## Typed raw hydration
 
-`Table.Raw` and `rows.Raw` apply **no automatic scopes**: callers must write tenant,
+`orm.Raw` and `rows.Raw` apply **no automatic scopes**: callers must write tenant,
 soft-delete and other scope predicates themselves. Both use the supplied executor
 exactly; raw SQL may write, so they do **not** choose a read replica. For explicit
 read routing, the existing level-1 `db.QueryRead` or `database.ReadQuery` API is
@@ -263,8 +264,7 @@ available; an executor wrapper can deliberately forward `Query` to `QueryRead`
 when its SQL is known to be read-only. There is no implicit SQL classification.
 
 ```go
-orders, err := Orders.Raw(ctx, tx,
-    "SELECT * FROM orders WHERE id=$1", id)
+orders, err := orm.Raw(ctx, tx, Orders.Table, "SELECT * FROM orders WHERE id=$1", id)
 report, err := rows.Raw(ctx, db, OrderRows,
     "SELECT id, label FROM orders WHERE id=$1", id)
 ```
@@ -283,11 +283,11 @@ Declare `BelongsToOf`, `HasOneOf` or `HasManyOf` once, then derive immutable tar
 constraints and finite trees:
 
 ```go
-orders, err := Orders.Query().With(
-    OrderRelations.Buyer.Where(Users.Age.Gt(18)).With(UserRelations.Orders),
-).All(ctx, db)
+orders, err := orm.All(ctx, db, Orders.Query().With(
+    OrderRelations.Buyer.Where(orm.NumberGt(Users.Age, 18)).With(UserRelations.Orders),
+))
 
-q := Users.Query().Where(orm.Has(UserRelations.Orders, Orders.TotalCents.Gt(100)))
+q := Users.Query().Where(orm.Has(UserRelations.Orders, orm.NumberGt(Orders.TotalCents, 100)))
 q = orm.WithRelationLimits(q, orm.RelationLimits{
     BatchSize: 100, MaxRows: 5000, MaxDepth: 4,
 })
@@ -322,7 +322,7 @@ detector, err := database.NewStatementDetector(database.StatementDetectorConfig{
 })
 // Handle err; supply database.WithStatementDetector(detector) when opening db.
 ctx, scope := detector.Begin(t.Context())
-_, err = Users.Query().With(UserRelations.Orders).All(ctx, db)
+_, err = orm.All(ctx, db, Users.Query().With(UserRelations.Orders))
 // Handle err, then check both the operation's exact statement count and shapes.
 dbassert.AssertStatementShapes(t, scope)
 ```
@@ -338,12 +338,12 @@ See [statement instrumentation](../../docs/guides/database-runtime.md#detecting-
 public generic queries in the descriptor:
 
 ```go
-links := orm.ManyToManyOf(Users.Groups, Users.ID,
-    Memberships.UserID, Memberships.GroupID, Groups.ID)
-users, err := Users.Query().With(
-    links.Where(Groups.Active.Eq(true)).WherePivot(Memberships.Role.Eq("admin")).
+links := orm.ManyToManyOf(Users.Groups, orm.KeyExpr(Users.ID),
+    orm.ColumnExpr(Memberships.UserID), orm.ColumnExpr(Memberships.GroupID), orm.KeyExpr(Groups.ID))
+users, err := orm.All(ctx, db, Users.Query().With(
+    links.Where(orm.ColumnEq(Groups.Active, true)).WherePivot(orm.InputTextEq(Memberships.Role, "admin")).
         With(GroupRelations.Owner).WithPivot(MembershipRelations.Inviter),
-).All(ctx, db)
+))
 for _, user := range users {
     for _, link := range user.Groups.All() {
         use(link.Model, link.Pivot)
@@ -432,8 +432,8 @@ table := orm.TableOf(b, &user.ID)
 id := orm.InputKeyOf[User, FreshID](b, table.Key(), nil)
 ```
 
-`id.Set(FreshID{Value: storedID})` takes fresh input. `id.Eq(storedID)` and
-`table.Find(ctx, db, storedID)` retain the stored key type. Declare this adapter
+`orm.InputKeySet(id, FreshID{Value: storedID})` takes fresh input.
+`orm.InputKeyEq(id, storedID)` and `orm.Find(ctx, db, table, storedID)` retain the stored key type. Declare this adapter
 inside `Define`. Its nil transform selects the matching named method. A distinct
 input disables automatic UUID creation, so an omitted required key fails before
 SQL. Ordinary same-type UUID key mutators retain automatic UUID preparation.
@@ -451,17 +451,23 @@ original has been hydrated and its rows closed. It runs once per normal write.
 `Saving` precedes `Creating` or `Updating`. Mutators and conventions follow these
 callbacks. The effective draft is validated before mutators and encryption;
 omitted required fields can be supplied with
-`WriteSet(write, Orders.TotalCents.Set(0))`.
+`WriteSet(write, orm.NumberSet(Orders.TotalCents, 0))`.
 
-Draft getters accept typed setter functions. `WriteGet(write, Orders.TotalCents.Set)`
-returns `Optional[int64]`; `WriteNullableGet(write, Members.Note.Set)` returns
-`Optional[Nullable[LabelInput]]` when `Note` has a distinct `LabelInput` mutation
-input. `WriteIsSet(write, Members.Note.Set)` also reports an explicit NULL as
-assigned. These functions preserve input values without running mutators. Use the
+Draft getters accept typed setter functions. Declare callbacks with the concrete
+model and input types:
+
+```go
+setTotal := func(v int64) orm.Assignment[Order] { return orm.NumberSet(Orders.TotalCents, v) }
+setNote := func(v LabelInput) orm.Assignment[Member] { return orm.NullableInputTextSet(Members.Note, v) }
+```
+
+`orm.WriteGet(write, setTotal)` returns `Optional[int64]`;
+`orm.WriteNullableGet(write, setNote)` returns `Optional[Nullable[LabelInput]]`.
+`orm.WriteIsSet(write, setNote)` also reports an explicit NULL as assigned. These functions preserve input values without running mutators. Use the
 nullable getter for nullable fields. Getter/assignment errors abort the draft even
 if a callback ignores them. Draft pointers are valid only during before hooks.
 
-`orm.WriteUnset(write, Users.EmailRevision.Set)` removes the pending assignment in
+`orm.WriteUnset(write, setNote)` removes the pending assignment in
 Saving/Creating/Updating. Getters then report omission, including after an explicit
 zero or SQL NULL. It does not assign a zero or NULL, invoke mutators, or undo a
 previously persisted value. Unsetting an omitted field is harmless. Later hooks can
@@ -510,7 +516,7 @@ Observer discovery shares the generated API's concrete framework-owner lookup;
 it never invokes a wrapper's observer method or gives it an internal capability.
 Per-model writes through wrappers dispatch observers from the supplied transaction.
 
-`Orders.ForceDelete(ctx, db, Orders.Soft, id)` preserves default active visibility. For deleted
+`orm.ForceDelete(ctx, db, Orders.Query(), Orders.Soft, Orders.Key(), id)` preserves default active visibility. For deleted
 rows use `ForceDelete(ctx, db, Orders.Query().WithTrashed(), Orders.Soft, Orders.Key(), id)`;
 `OnlyTrashed` and other predicates are retained through locking and deletion.
 
@@ -531,12 +537,12 @@ var UserAggregates = struct {
     OrdersCount: Users.OrdersCount.Using(
         expr.Related(UserRelations.Orders, expr.Count[Order]())),
     OrdersTotal: Users.OrdersTotal.Using(
-        expr.Related(UserRelations.Orders, expr.Sum(Orders.TotalCents))),
+        expr.Related(UserRelations.Orders, expr.Sum(orm.NumberExpr(Orders.TotalCents)))),
 }
 
-users, err := Users.Query().With(UserAggregates.OrdersCount).All(ctx, db)
+users, err := orm.All(ctx, db, Users.Query().With(UserAggregates.OrdersCount))
 count := UserAggregates.OrdersCount.Using(expr.Related(
-    UserRelations.Orders.Where(Orders.TotalCents.Gt(minimum)),
+    UserRelations.Orders.Where(orm.NumberGt(Orders.TotalCents, minimum)),
     expr.Count[Order](),
 ))
 users, err = orm.LoadMissingFrom(ctx, db, Users.Query().With(count), users)
@@ -559,13 +565,13 @@ float summaries return nullable float64, interval summaries return nullable inte
 and extrema retain the present field type with one nullable layer. Use the existing
 `SumFloat`/`AvgFloat` and `SumInterval`/`AvgInterval` constructors for those families.
 `Filter` takes expression row predicates, for example
-`expr.Sum(Orders.TotalCents).Filter(expr.OrderRow(expr.Value(Orders.TotalCents)).Gt(0))`.
+`expr.Sum(orm.NumberExpr(Orders.TotalCents)).Filter(expr.OrderRow(expr.Value(orm.NumberExpr(Orders.TotalCents))).Gt(0))`.
 It filters the measure without hiding cardinality errors in the input relation.
 Relation `Where` restricts that input before aggregation.
 
 A joined relation measures targets. `orm.Pivot(UserRelations.Groups)` measures
 its concrete pivot, retaining target and pivot filters and soft-delete visibility.
-Counts include duplicate edges; use `expr.CountDistinctField(Groups.ID)` for distinct
+Counts include duplicate edges; use `expr.CountDistinctField(orm.KeyExpr(Groups.ID))` for distinct
 targets. Missing targets and NULL join keys contribute no edges. Singular relations
 still reject multiple matching rows; many-to-many relations reject a pivot matching
 multiple targets. Direct, through and concrete morph families are supported.
@@ -601,12 +607,12 @@ read observers with `NewRetrievalObserver[Order]("orders.read")` and
 `application.New`. Write and retrieval observer kinds remain distinct.
 
 Reads use the actual rows' frozen observer owner. Unknown executor wrappers
-cannot prove absence and receive no internal capability. `Query.Each` keeps streaming
+cannot prove absence and receive no internal capability. `orm.Each` keeps streaming
 when callbacks cannot run; otherwise it reads bounded, stable, closed batches
 before callbacks and delivery. `All`, pagination, chunks and loaded relation
 roles dispatch retrieval. A failed batch publishes no pending models. Earlier
 delivered batches remain delivered. Write hydration, DTO projections and scalars
-skip retrieval, even when their source has read callbacks. `Table.Raw` dispatches
+skip retrieval, even when their source has read callbacks. `orm.Raw` dispatches
 retrieval for its complete models while bypassing all scopes and read routing.
 A callback failure does not roll back SQL supplied to Raw.
 
@@ -620,7 +626,7 @@ var Orders = orm.Define("orders", declareOrders,
         return []orm.GlobalScope[Order]{
             orm.Scope(t.Table, "tenant", func(ctx context.Context) (orm.Predicate[Order], error) {
                 id, err := tenantID(ctx)
-                return t.TenantID.Eq(id), err
+                return orm.NumberEq(t.TenantID, id), err
             }),
         }
     }),
@@ -651,7 +657,7 @@ choices, especially for tenant scopes.
 ## Audit capture and history
 
 Declare model-owned policy with `orm.AuditPolicyOf(Orders.Table,
- orm.AuditField(Orders.Note, record.Exclude))`. Unspecified fields use
+ orm.AuditField(orm.NullableTextExpr(Orders.Note), record.Exclude))`. Unspecified fields use
 `record.Automatic`; `record.Redact` retains change flags and hides values.
 A zero `orm.AuditPolicy[Order]` applies Automatic everywhere. Policies cannot
 exclude or redact the primary key while retaining it as the subject identity.
@@ -678,8 +684,8 @@ sensitive names are redacted before their capture binder runs. Nested JSON keys
 are redacted by the shared record owner before binding the audit row. Unchanged
 and excluded fields do not invoke their capture codec.
 
-History remains `record.Model[M,K]`; use `orm.AuditRead(history, Orders.Total)`
-or `orm.AuditReadNullable(history, Orders.Note)` with stored column types.
+History remains `record.Model[M,K]`; use `orm.AuditRead(history, orm.NumberExpr(Orders.Total))`
+or `orm.AuditReadNullable(history, orm.NullableTextExpr(Orders.Note))` with stored column types.
 `AuditReadEncrypted` and `AuditReadNullableEncrypted` expose redaction state.
 An omitted field, an absent model snapshot and SQL NULL remain distinct.
 Redacted fields and partially redacted JSON cannot hydrate fabricated values;
@@ -689,15 +695,15 @@ and add no methods or per-column closures to ordinary reads.
 
 ## Pivot relation writes
 
-Relation writes are package functions; `ThroughRelation`, `Query` and `Table`
-keep their existing method sets. Inputs and results retain the concrete source,
+Relation writes are package functions. Relation descriptors retain their own
+chain methods; model queries and tables use the package terminals. Inputs and results retain the concrete source,
 target and pivot types:
 
 ```go
 pivot, err := orm.Attach(ctx, db, UserRelations.Groups, user, group,
-    Memberships.Role.Set("member"))
+    orm.InputTextSet(Memberships.Role, "member"))
 changes, err := orm.Sync(ctx, db, UserRelations.Groups, user, groups,
-    []orm.Assignment[Membership]{Memberships.Role.Set("member")}, nil)
+    []orm.Assignment[Membership]{orm.InputTextSet(Memberships.Role, "member")}, nil)
 removed, err := orm.Detach(ctx, db, UserRelations.Groups, user, group)
 ```
 
@@ -752,19 +758,19 @@ callbacks remain owned by the outer transaction.
 Upserts use package functions and an explicit immutable conflict policy:
 
 ```go
-policy := orm.OnConflict(orm.ConflictKey(Users.Email)).DoUpdate(
-    orm.ConflictIncoming(Users.Name), // EXCLUDED, already transformed
-    orm.ConflictNull(Users.Nickname),
+policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(Users.Email))).DoUpdate(
+    orm.ConflictIncoming(orm.TextExpr(Users.Name)), // EXCLUDED, already transformed
+    orm.ConflictNull(orm.NullableTextExpr(Users.Nickname)),
 )
 item, err := orm.Upsert(ctx, db, Users.Query(), policy,
-    Users.Email.Set("ada@example.test"), Users.Name.Set("Ada"))
+    orm.TextSet(Users.Email, "ada@example.test"), orm.TextSet(Users.Name, "Ada"))
 ```
 
-Conflict captures are framework-owned. `ConflictSet` accepts declared columns;
+Conflict captures are framework-owned. `ConflictSet` accepts explicit declared-column adapters;
 application embedding wrappers cannot replace their setters. `ConflictNull` uses
 sealed nullable metadata and never calls an application `SetNull` override.
 
-`ConflictSet(column, input)` accepts the column's ordinary write input, including
+`orm.ConflictSet(orm.InputTextExpr(column), input)` accepts the column's ordinary write input, including
 its distinct mutator input. Literal updates transform once per policy execution;
 `ConflictIncoming` copies the destination's own proposed value without transforming
 it twice. Omitted proposed fields use database defaults or NULL. Encrypted fields
@@ -790,11 +796,11 @@ Advanced conflict expressions use `orm/rows` and the existing `orm/expr` functio
 
 ```go
 records := rows.ConflictRowsOf(Products.Query())
-stored := expr.At(records.Stored(), Products.Price)
-proposed := expr.At(records.Proposed(), Products.Price)
-policy := rows.OnConflictKeys(expr.Group(expr.Value(Products.Code))).
-    TargetWhere(Products.Price.Gt(0)).
-    DoUpdate(rows.SetConflictValue(Products.Price, expr.Add(stored, proposed)))
+stored := expr.At(records.Stored(), orm.NumberExpr(Products.Price))
+proposed := expr.At(records.Proposed(), orm.NumberExpr(Products.Price))
+policy := rows.OnConflictKeys(expr.Group(expr.Value(orm.TextExpr(Products.Code)))).
+    TargetWhere(orm.NumberGt(Products.Price, 0)).
+    DoUpdate(rows.SetConflictValue(orm.NumberExpr(Products.Price), expr.Add(stored, proposed)))
 policy = rows.ConflictWhereRows(policy, expr.Greater(proposed, stored))
 ```
 
@@ -828,15 +834,15 @@ expressions keep their scope and exact stored type, including nullability.
 Mapping, match-key and operation types cannot be converted into one another:
 
 ```go
-source := rows.From(Products.Query().Where(Products.Price.Gt(0)).Limit(100))
+source := rows.From(Products.Query().Where(orm.NumberGt(Products.Price, 0)).Limit(100))
 insert := rows.InsertFrom(source, Products.Query(),
-    rows.MapInsert(Products.Code, expr.Value(Products.Code)),
-    rows.MapInsert(Products.Price, expr.Value(Products.Price)))
+    rows.MapInsert(orm.TextExpr(Products.Code), expr.Value(orm.TextExpr(Products.Code))),
+    rows.MapInsert(orm.NumberExpr(Products.Price), expr.Value(orm.NumberExpr(Products.Price))))
 inserted, err := insert.Returning(ctx, db, 100)
 
-matched := rows.MatchSource(Products.Key(), expr.Value(Products.Code))
+matched := rows.MatchSource(orm.KeyExpr(Products.Key()), expr.Value(orm.TextExpr(Products.Code)))
 update := rows.UpdateFrom(Products.Query(), source).Match(matched).
-    Select(rows.MapUpdate(Products.Price, expr.Value(Products.Price)))
+    Select(rows.MapUpdate(orm.NumberExpr(Products.Price), expr.Value(orm.NumberExpr(Products.Price))))
 count, err := update.Exec(ctx, db)
 count, err = rows.DeleteUsing(Products.Query(), source).Match(matched).Exec(ctx, db)
 ```
@@ -875,8 +881,8 @@ Use package functions when a primary-key write must also retain an existing
 selection, such as a tenant boundary:
 
 ```go
-visible := Users.Query().Where(Users.TenantID.Eq(tenantID))
-user, err := orm.Update(ctx, tx, visible, Users.Key(), id, Users.Name.Set("Ada"))
+visible := Users.Query().Where(orm.NumberEq(Users.TenantID, tenantID))
+user, err := orm.Update(ctx, tx, visible, Users.Key(), id, orm.TextSet(Users.Name, "Ada"))
 removed, err := orm.Delete(ctx, tx, visible, Users.Key(), id)
 ```
 
@@ -897,7 +903,7 @@ use their `Nullable` variants for nullable row values. They add no column method
 
 ```go
 page := Files.Query().Where(orm.UUIDGreater(Files.Key(), after)).
-    OrderBy(Files.Key().Asc()).Limit(100)
+    OrderBy(orm.KeyAsc(Files.Key())).Limit(100)
 ```
 
 `UpdateEach(ctx, writer, query, limit, draft)` accepts a callback of type
@@ -972,7 +978,8 @@ Every force-delete entry point requires this token, including `ForceDeleteAll`,
 model declaration; zero and foreign-declaration tokens fail before SQL. Query
 visibility remains unchanged. Normal soft deletion does not require the token.
 
-`rows.MapInsert` and `rows.MapUpdate` accept concrete eligible column layouts.
+`rows.MapInsert` and `rows.MapUpdate` accept explicit sealed adapters for eligible
+column layouts, such as `orm.TextExpr(column)`.
 Both reject Input fields and managed update timestamps; creation timestamps remain
 eligible. Embedding a column in an application wrapper does not grant mapping
 eligibility. Runtime declaration, ownership and SQL-mapping checks remain active.
@@ -1081,12 +1088,12 @@ plan canonical cursor ordering without adding a page boundary. Plan formatting i
 redacted; explicit `Root` and `JSON` accessors return
 owned snapshots and may expose server predicates and bound values.
 
-Numeric adjustments retain `Number.Increment`/`Decrement` and nullable equivalents.
+Numeric adjustments use `orm.NumberIncrement`, `orm.NumberDecrement` and their nullable equivalents.
 Amounts are positive and finite; `AtMost` guards increments and `AtLeast` guards
 decrements. Numeric primary and lookup-key adapters expose comparisons, ordering
-and identity assignment, but no adjustment methods. Managed timestamps and input
+and identity assignment, but no numeric adjustment functions. Managed timestamps and input
 columns also have no numeric adjustment capability. A guarded per-key update
-returning no row reports `ErrBoundExceeded` (including missing keys).
+returning no row distinguishes visible bound rejection (`ErrBoundExceeded`) from a missing or hidden key (`database.NotFound`).
 
 
 Projection callbacks use `rows.EachRead(ctx, db, rows.Read(report), consume)`. They receive one
@@ -1100,10 +1107,10 @@ decode or close fails. Use `report.All` when the caller needs an all-or-error sl
 
 ```go
 available := databasevalidation.Unique(db, Users.Query(), Users.Email)
-active := databasevalidation.Exists(db, Users.Query().Where(Users.Status.Eq(StatusActive)), Users.Key())
+active := databasevalidation.Exists(db, Users.Query().Where(orm.EnumEq(Users.Status, StatusActive)), Users.Key())
 ```
 
-`orm.Lookup(Users.Query(), Users.Email)` is the underlying observation handle.
+`orm.Lookup(Users.Query(), orm.TextExpr(Users.Email))` is the underlying observation handle.
 It preserves filters, global scopes, soft-delete visibility and stored codecs,
 without hydrating models, retrieval hooks or implicit transactions. Nullable and
 mutated columns accept their non-null stored value type. Batch observations use

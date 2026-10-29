@@ -108,15 +108,15 @@ Go's process memory. Rate limiting and model login policy remain separate contro
 <!-- compiled-source: tests/fixtures/consumer/passwords/tables.go -->
 ```go
 type AccountTable struct {
-	// Table owns the concrete account key. Example: AccountRecords.Key().Eq(id).
+	// Table owns the concrete account key. Example: orm.KeyEq(AccountRecords.Key(), id).
 	orm.Table[Account, model.ID[Account]]
-	// Email binds the stored field. Example: AccountRecords.Email.Set("member@example.test").
+	// Email binds the stored field. Example: orm.TextSet(AccountRecords.Email, "member@example.test").
 	Email orm.Text[Account, string]
-	// Digest binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: AccountRecords.Digest.Set(hash).
+	// Digest binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.ColumnSet(AccountRecords.Digest, hash).
 	Digest orm.Column[Account, password.Hash]
-	// Backup binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: AccountRecords.Backup.Set(hash).
+	// Backup binds the stored field. Sensitive stored hash; plaintext verification uses password.Hasher. Example: orm.NullableColumnSet(AccountRecords.Backup, hash).
 	Backup orm.NullableColumn[Account, password.Hash]
-	// Enabled binds the stored field. Example: AccountRecords.Enabled.Set(true).
+	// Enabled binds the stored field. Example: orm.ColumnSet(AccountRecords.Enabled, true).
 	Enabled orm.Column[Account, bool]
 }
 
@@ -126,8 +126,8 @@ var AccountRecords = orm.Define("password_accounts", func(b orm.Builder[Account]
 })
 ```
 
-The declaration supplies `AccountRecords.Digest.Set(hash)`, typed hash predicates,
-hydration and nullable `AccountRecords.Backup.Set(hash)`/`SetNull()` operations. Hash fields accept
+The declaration supplies `orm.ColumnSet(AccountRecords.Digest, hash)`, typed hash predicates,
+hydration and nullable `orm.NullableColumnSet(AccountRecords.Backup, hash)`/`orm.NullableColumnSetNull(AccountRecords.Backup)` operations. Hash fields accept
 stored `password.Hash` values, never plaintext or arbitrary strings. They expose
 scalar equality rather than string `LIKE` operators. Use equality for conditional
 replacement; verification of submitted plaintext always belongs to the hasher.
@@ -167,7 +167,7 @@ proof := result.Proof()     // Model/key types retained.
 ```
 
 The [complete consumer binding](../../tests/fixtures/consumer/passwords/login.go)
-uses generated `Where(...).First(...)` and a typed conditional `Update`.
+uses `orm.First(ctx, db, AccountRecords.Query().Where(...))` and a typed conditional `orm.Update`.
 Foundry performs one login lookup, verifies the password, checks provider
 eligibility, rehashes when needed, and evaluates MFA policy. It does not invoke the
 provider's identity lookup again. A normal successful result contains an

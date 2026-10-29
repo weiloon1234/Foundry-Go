@@ -124,13 +124,13 @@ that can delete its owner and supplies `slots.Runtime.Store` for cross-pool clea
 ```go
 func articles(ctx context.Context, db database.Executor, runtime slots.Runtime) ([]ext.Article, error) {
 	bound := ArticleExtensions.From(runtime)
-	return ext.Articles.Query().With(bound.All()...).All(ctx, db)
+	return orm.All(ctx, db, ext.Articles.Query().With(bound.All()...))
 }
 ```
 
 A bound handle's `Relation` participates in `With`, nested relations, `orm.LoadFrom`
 and `orm.LoadMissingFrom`. Both loading functions honor the source query's relation
-limits. `Query.Count` and `Exists` do not load slots.
+limits. `orm.Count` and `Exists` do not load slots.
 Repeated slots fail validation; unbound handles fail before parent SQL.
 
 Each slot uses the manager's batch queries per parent batch: an active-owner check

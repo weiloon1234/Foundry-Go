@@ -8,17 +8,17 @@ Use `orm.CreateEach`, `orm.UpdateEach`, `orm.DeleteEach`, `orm.RestoreEach` and 
 ```go
 func updateMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
-	return orm.UpdateEach(ctx, tx, f.Query().Where(f.Name.Eq("guest")), 100,
+	return orm.UpdateEach(ctx, tx, f.Query().Where(orm.InputTextEq(f.Name, "guest")), 100,
 		func(_ context.Context, _ *database.Tx, current hooks.Member) ([]orm.Assignment[hooks.Member], error) {
-			return []orm.Assignment[hooks.Member]{f.Name.Set("member-" + current.Name)}, nil
+			return []orm.Assignment[hooks.Member]{orm.InputTextSet(f.Name, "member-"+current.Name)}, nil
 		})
 }
 
 func createMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
 	return orm.CreateEach(ctx, tx, f.Query(), [][]orm.Assignment[hooks.Member]{
-		{f.Key().Set(1), f.Name.Set("first"), f.Body.Set([]byte{})},
-		{f.Key().Set(2), f.Name.Set("second"), f.Body.Set([]byte{})},
+		{orm.KeySet(f.Key(), 1), orm.InputTextSet(f.Name, "first"), orm.ColumnSet(f.Body, []byte{})},
+		{orm.KeySet(f.Key(), 2), orm.InputTextSet(f.Name, "second"), orm.ColumnSet(f.Body, []byte{})},
 	})
 }
 ```
@@ -35,7 +35,7 @@ The update callback receives the stored model and the operation's actual transac
 ```go
 func restoreMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
-	return orm.RestoreEach(ctx, tx, f.Query().Where(f.Name.Eq("guest")), f.Soft, 100)
+	return orm.RestoreEach(ctx, tx, f.Query().Where(orm.InputTextEq(f.Name, "guest")), f.Soft, 100)
 }
 
 func removeMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
@@ -59,14 +59,14 @@ Cancellation, panic and `runtime.Goexit` follow ordinary lifecycle failure handl
 <!-- orm-example: set-writes-after -->
 ```go
 func setWrite(ctx context.Context, tx *database.Tx) error {
-	_, err := orm.WithoutModelHooks(hooks.Members.Query()).UpdateAll(ctx, tx, hooks.Members.Name.Set("guest"))
+	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.InputTextSet(hooks.Members.Name, "guest"))
 	return err
 }
 ```
 
-`UpdateAll` and `DeleteAll` return affected counts. `Query.ForceDeleteAll` also requires the soft-delete token. These operations retain filters, global scopes and visibility, but skip per-model hooks, observers and audit. `orm.WithoutModelHooks(q)` acknowledges that choice when callbacks exist or an executor wrapper cannot prove their absence. Per-model operations reject this acknowledgement.
+`UpdateAll` and `DeleteAll` return affected counts. `orm.ForceDeleteAll` also requires the soft-delete token. These operations retain filters, global scopes and visibility, but skip per-model hooks, observers and audit. `orm.WithoutModelHooks(q)` acknowledges that choice when callbacks exist or an executor wrapper cannot prove their absence. Per-model operations reject this acknowledgement.
 
-`Table.InsertMany` and `orm.UpsertMany` use assignment batches with explicit set semantics. They never switch to per-model callbacks based on row count. Choose `CreateEach` when those callbacks are required.
+`orm.InsertMany` and `orm.UpsertMany` use assignment batches with explicit set semantics. They never switch to per-model callbacks based on row count. Choose `CreateEach` when those callbacks are required.
 
 ## Atomic numeric adjustments
 
@@ -74,8 +74,7 @@ func setWrite(ctx context.Context, tx *database.Tx) error {
 ```go
 func addCredit(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := models.Orders
-	return f.Query().Where(f.TotalCents.Lt(1000)).UpdateAll(ctx, tx,
-		f.TotalCents.Increment(100, orm.AtMost[int64](1000)))
+	return orm.UpdateAll(ctx, tx, f.Query().Where(orm.NumberLt(f.TotalCents, 1000)), orm.NumberIncrement(f.TotalCents, 100, orm.AtMost[int64](1000)))
 }
 ```
 

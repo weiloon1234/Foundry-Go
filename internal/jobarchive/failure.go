@@ -39,44 +39,44 @@ type FailureTable struct {
 	// Table provides Failure queries and writes. Example: Failures.Query().Limit(10).
 	orm.Table[Failure, model.ID[Failure]]
 	// ID binds the persisted Failure.ID column.
-	// Example: Failures.ID.Eq(id).
+	// Example: orm.KeyEq(Failures.ID, id).
 	ID orm.Key[Failure, model.ID[Failure]]
 	// Execution binds the persisted Failure.Execution column.
-	// Example: Failures.Execution.Set(execution).
+	// Example: orm.ColumnSet(Failures.Execution, execution).
 	Execution orm.Column[Failure, jobs.ExecutionID]
 	// Queue binds the persisted Failure.Queue column.
-	// Example: Failures.Queue.Set(queue).
+	// Example: orm.TextSet(Failures.Queue, queue).
 	Queue orm.Text[Failure, string]
 	// Name binds the persisted Failure.Name column.
-	// Example: Failures.Name.Set(name).
+	// Example: orm.TextSet(Failures.Name, name).
 	Name orm.Text[Failure, string]
 	// Version binds the persisted Failure.Version column.
-	// Example: Failures.Version.Set(version).
+	// Example: orm.NumberSet(Failures.Version, version).
 	Version orm.Number[Failure, uint32]
 	// Envelope binds the persisted Failure.Envelope column.
-	// Example: Failures.Envelope.Set(envelope).
+	// Example: orm.TextSet(Failures.Envelope, envelope).
 	Envelope orm.Text[Failure, string]
 	// Reason binds the persisted Failure.Reason column.
-	// Example: Failures.Reason.Set(reason).
+	// Example: orm.TextSet(Failures.Reason, reason).
 	Reason orm.Text[Failure, string]
 	// Attempts binds the persisted Failure.Attempts column.
-	// Example: Failures.Attempts.Set(attempts).
+	// Example: orm.NumberSet(Failures.Attempts, attempts).
 	Attempts orm.Number[Failure, uint32]
 	// Exceptions binds the persisted Failure.Exceptions column.
-	// Example: Failures.Exceptions.Set(exceptions).
+	// Example: orm.NumberSet(Failures.Exceptions, exceptions).
 	Exceptions orm.Number[Failure, uint32]
 	// Retries binds the persisted Failure.Retries column.
-	// Example: Failures.Retries.Set(retries).
+	// Example: orm.NumberSet(Failures.Retries, retries).
 	Retries orm.Number[Failure, uint32]
 	// FailedAt binds the persisted Failure.FailedAt column.
-	// Example: Failures.FailedAt.Set(failedAt).
+	// Example: orm.TimeSet(Failures.FailedAt, failedAt).
 	FailedAt orm.Time[Failure, temporal.DateTime]
 	// RetriedAt binds the persisted Failure.RetriedAt column.
-	// Example: Failures.RetriedAt.SetNull().
+	// Example: orm.NullableTimeSetNull(Failures.RetriedAt).
 	RetriedAt orm.NullableTime[Failure, temporal.DateTime]
 }
 
-// Failures owns the immutable Failure declaration. Example: Failures.Query().First(ctx, tx).
+// Failures owns the immutable Failure declaration. Example: orm.First(ctx, tx, Failures.Query()).
 var Failures = orm.Define("foundry_failed_jobs", func(b orm.Builder[Failure], m *Failure) FailureTable {
 	table := orm.TableOf(b, &m.ID)
 	return FailureTable{Table: table,

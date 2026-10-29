@@ -49,7 +49,7 @@ func TestInsertOrFirstRejectsIncompleteConflictIdentity(t *testing.T) {
 				}
 			})
 			name := mutationFields.Name
-			got, err := orm.CreateOrFirst(t.Context(), db, mutationModel().Where(name.Eq("private record name")), mutationValues()...)
+			got, err := orm.CreateOrFirst(t.Context(), db, mutationModel().Where(orm.TextEq(name, "private record name")), mutationValues()...)
 			var failure *database.Error
 			if got != (mutationRecord{}) || !errors.Is(err, cause) || !errors.Is(err, database.UniqueViolation) || !errors.As(err, &failure) || failure.Outcome() != database.RolledBack {
 				t.Fatal("incomplete identity lost the original insert failure", err)
@@ -84,7 +84,7 @@ func TestInsertOrFirstUnknownCommitRetainsReconciliationIdentityWithoutRetry(t *
 	}
 	db := open(t, state, nil)
 	name := mutationFields.Name
-	got, err := orm.CreateOrFirst(t.Context(), db, mutationModel().Where(name.Eq("private record name")), mutationValues()...)
+	got, err := orm.CreateOrFirst(t.Context(), db, mutationModel().Where(orm.TextEq(name, "private record name")), mutationValues()...)
 	var writeError *orm.WriteError[mutationRecord]
 	var failure *database.Error
 	if got != (mutationRecord{}) || !errors.Is(err, cause) || !errors.Is(err, database.CommitUnknown) || !errors.As(err, &failure) || failure.Outcome() != database.Unknown || !errors.As(err, &writeError) {

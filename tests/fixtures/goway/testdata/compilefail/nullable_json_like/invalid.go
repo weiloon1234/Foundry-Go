@@ -1,5 +1,8 @@
 package nullable_json_like
 
-import c "foundry.test/goway/coremodels"
+import (
+	c "foundry.test/goway/coremodels"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+)
 
-var _ = c.Records.MaybeSettings.Like("%x%")
+var _ = orm.NullableTextLike(c.Records.MaybeSettings, "%x%")

@@ -1,5 +1,7 @@
 package wrong_key
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/goway/models"
@@ -10,5 +12,5 @@ import (
 func F() {
 	var ex database.Executor
 	var key model.ID[models.User]
-	models.Orders.Find(context.Background(), ex, key)
+	orm.Find(context.Background(), ex, models.Orders.Table, key)
 }

@@ -70,7 +70,7 @@ func Build(ctx context.Context, s application.Settings, committed func(context.C
 			create.Handle(func(ctx context.Context, input http.Input[http.NoPath, http.NoQuery, Submission]) (Receipt, error) {
 				var receipt Receipt
 				err := db.Transaction(ctx, func(tx *database.Tx) error {
-					record, err := RecordRows.Insert(ctx, tx, RecordRows.Name.Set(input.Body.Name), RecordRows.Text.Set(input.Body.Text))
+					record, err := orm.Insert(ctx, tx, RecordRows.Table, orm.TextSet(RecordRows.Name, input.Body.Name), orm.TextSet(RecordRows.Text, input.Body.Text))
 					if err != nil {
 						return err
 					}
@@ -91,7 +91,7 @@ func Build(ctx context.Context, s application.Settings, committed func(context.C
 				return receipt, err
 			}),
 			get.Handle(func(ctx context.Context, input http.Input[RecordPath, http.NoQuery, http.NoBody]) (Receipt, error) {
-				record, err := RecordRows.Query().Where(RecordRows.Name.Eq(input.Path.Name)).Require(ctx, db)
+				record, err := orm.Require(ctx, db, RecordRows.Query().Where(orm.TextEq(RecordRows.Name, input.Path.Name)))
 				return Receipt{Name: record.Name, Text: record.Text}, err
 			}),
 		}, nil
@@ -100,6 +100,6 @@ func Build(ctx context.Context, s application.Settings, committed func(context.C
 
 func Records(text string) (*factory.Factory[Record, []orm.Assignment[Record]], error) {
 	return factory.Define(RecordRows.Table, func(context.Context, factory.Sequence) ([]orm.Assignment[Record], error) {
-		return []orm.Assignment[Record]{RecordRows.Name.Set("fixture"), RecordRows.Text.Set(text)}, nil
+		return []orm.Assignment[Record]{orm.TextSet(RecordRows.Name, "fixture"), orm.TextSet(RecordRows.Text, text)}, nil
 	})
 }

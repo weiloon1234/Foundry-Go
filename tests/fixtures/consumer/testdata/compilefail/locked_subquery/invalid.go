@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
@@ -7,4 +9,4 @@ import (
 
 type alias struct{}
 
-var invalid = rows.As[alias](models.Users.Query().ForUpdate(), "locked")
+var invalid = rows.As[alias](orm.Lock(models.Users.Query()), "locked")

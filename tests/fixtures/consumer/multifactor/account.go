@@ -36,7 +36,7 @@ var FactorAttempts = lockout.Define("mfa.accounts", keyspace.TextKeys[model.ID[A
 
 func Accounts(db database.Executor) Provider {
 	return auth.DefineProvider("mfa.accounts", AccountIdentity.ReferenceOf(Account{}), func(ctx context.Context, id model.ID[Account]) (value.Optional[Account], error) {
-		return AccountRecords.Find(ctx, db, id)
+		return orm.Find(ctx, db, AccountRecords.Table, id)
 	}, func(_ context.Context, account Account) (bool, error) { return account.Enabled, nil })
 }
 func NewLogin(db interface {
@@ -45,14 +45,14 @@ func NewLogin(db interface {
 }, provider Provider, hasher *password.Hasher) (*Login, error) {
 	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Account, string]{
 		Lookup: func(ctx context.Context, email string) (value.Optional[Account], error) {
-			return AccountRecords.Query().Where(AccountRecords.Email.Eq(email)).First(ctx, db)
+			return orm.First(ctx, db, AccountRecords.Query().Where(orm.TextEq(AccountRecords.Email, email)))
 		},
 		Lock: func(ctx context.Context, tx *database.Tx, prior Account) (value.Optional[Account], error) {
 			return lockAccount(ctx, tx, prior.ID)
 		},
 		Hash: func(account Account) password.Hash { return account.Password },
 		Rehash: func(ctx context.Context, account Account, old, next password.Hash) (value.Optional[Account], error) {
-			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(AccountRecords.Password.Eq(old)), AccountRecords.Key(), account.ID, AccountRecords.Password.Set(next))
+			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(orm.ColumnEq(AccountRecords.Password, old)), AccountRecords.Key(), account.ID, orm.ColumnSet(AccountRecords.Password, next))
 			if errors.Is(err, database.NotFound) {
 				return value.Optional[Account]{}, nil
 			}
@@ -76,7 +76,7 @@ func FactorModel(invalidate func(context.Context, *database.Tx, Account) error) 
 		Lock:    lockAccount,
 		Enabled: func(account Account) bool { return account.MFAEnabled },
 		SetEnabled: func(ctx context.Context, tx *database.Tx, account Account, enabled bool) (Account, error) {
-			return AccountRecords.Update(ctx, tx, account.ID, AccountRecords.MFAEnabled.Set(enabled))
+			return orm.Update(ctx, tx, AccountRecords.Table.Query(), AccountRecords.Table.Key(), account.ID, orm.ColumnSet(AccountRecords.MFAEnabled, enabled))
 		},
 		AccountLabel: func(account Account) (string, error) { return account.Email, nil },
 		CanDisable:   func(_ context.Context, account Account) (bool, error) { return !account.RequireMFA, nil },
@@ -99,5 +99,5 @@ func RotateRecoveryCodes(ctx context.Context, factors *Factors, password Passwor
 }
 
 func lockAccount(ctx context.Context, tx *database.Tx, id model.ID[Account]) (value.Optional[Account], error) {
-	return AccountRecords.Query().Where(AccountRecords.Key().Eq(id)).ForUpdate().First(ctx, tx)
+	return orm.FirstLocked(ctx, tx, orm.Lock(AccountRecords.Query().Where(orm.KeyEq(AccountRecords.Key(), id))))
 }

@@ -73,11 +73,11 @@ func TestSoftTokensRejectZeroAndForeignDeclarationsBeforeSQL(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			for name, run := range map[string]func(context.Context, database.Transactor) error{
 				"table": func(ctx context.Context, db database.Transactor) error {
-					_, err := destination.ForceDelete(ctx, db, test.soft, 1)
+					_, err := ForceDelete(ctx, db, destination.Table.Query(), test.soft, destination.Table.Key(), 1)
 					return err
 				},
 				"query": func(ctx context.Context, db database.Transactor) error {
-					_, err := destination.Query().ForceDeleteAll(ctx, db, test.soft)
+					_, err := ForceDeleteAll(ctx, db, destination.Query(), test.soft)
 					return err
 				},
 				"key": func(ctx context.Context, db database.Transactor) error {
@@ -108,7 +108,7 @@ func TestSourceRoleDefenseInDepthBeforeSQL(t *testing.T) {
 	f := hookedFields(func() Hooks[hookedRow] { return Hooks[hookedRow]{} })
 	q := f.Query()
 	source := FoundrySource(q, sqlowner.Metadata())
-	_, id := FoundryColumn(f.Key(), sqlowner.Metadata())
+	_, id := FoundryColumn(KeyExpr(f.Key()), sqlowner.Metadata())
 	key := FoundrySourceKey[hookedRow, hookedRow](ormcore.ModelMapping{Destination: id.Reference, Field: id.Field, Stored: f.core.primary.field.Type, Value: ormcore.Expression{Node: id.Field, Refs: []ormcore.Reference{id.Reference}}}, sqlowner.Expressions())
 	for _, name := range []string{"name", "updated_at", "id"} {
 		for _, insert := range []bool{false, true} {

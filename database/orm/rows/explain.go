@@ -21,7 +21,7 @@ func ExplainAnalyze[S, R any](ctx context.Context, ex database.Executor, q Resul
 }
 
 // ExplainTransaction plans records retaining nested transaction requirements.
-// Example: rows.ExplainTransaction(ctx, tx, rows.LockedRecord(Users.Query().ForUpdate())).
+// Example: rows.ExplainTransaction(ctx, tx, rows.LockedRecord(orm.Lock(Users.Query()))).
 func ExplainTransaction[R any](ctx context.Context, tx *database.Tx, q TransactionRecordSource[R]) (orm.Plan, error) {
 	return explainRecord(ctx, tx, transactionRecordOf(q), false, true)
 }

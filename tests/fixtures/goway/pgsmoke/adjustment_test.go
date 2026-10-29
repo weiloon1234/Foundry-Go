@@ -50,7 +50,7 @@ func TestAdjustmentVisibilityAndLifecycle(t *testing.T) {
 					if !ok {
 						return orm.Predicate[adjustmentAccount]{}, errors.New("missing tenant")
 					}
-					return f.TenantID.Eq(id), nil
+					return orm.NumberEq(f.TenantID, id), nil
 				})}
 			})}
 			if mode == "hooks" {
@@ -69,7 +69,7 @@ func TestAdjustmentVisibilityAndLifecycle(t *testing.T) {
 				want error
 			}{{1, orm.ErrBoundExceeded}, {99, database.NotFound}, {3, database.NotFound}, {4, database.NotFound}, {2, nil}} {
 				statements = 0
-				row, err := f.Update(ctx, db, tc.key, f.Balance.Decrement(2, orm.AtLeast(int64(0))))
+				row, err := orm.Update(ctx, db, f.Table.Query(), f.Table.Key(), tc.key, orm.NumberDecrement(f.Balance, 2, orm.AtLeast(int64(0))))
 				if !errors.Is(err, tc.want) || tc.want != orm.ErrBoundExceeded && errors.Is(err, orm.ErrBoundExceeded) {
 					t.Fatalf("key=%d: %v", tc.key, err)
 				}

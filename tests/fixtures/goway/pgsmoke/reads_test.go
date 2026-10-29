@@ -37,7 +37,7 @@ func TestCursorChunksAndLocks(t *testing.T) {
 	r := orm.Define("read_records", func(b orm.Builder[readRecord], m *readRecord) readTable {
 		return readTable{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.Rank), orm.NullableTextOf(b, &m.Name)}
 	})
-	q := r.Query().OrderBy(r.Name.Asc(), r.Rank.Desc())
+	q := r.Query().OrderBy(orm.NullableTextAsc(r.Name), orm.NumberDesc(r.Rank))
 	request := orm.CursorRequest[readRecord]{Size: 2}
 	var pages []orm.CursorPage[readRecord]
 	var ids []int64
@@ -66,7 +66,7 @@ func TestCursorChunksAndLocks(t *testing.T) {
 			t.Fatal("backward ties/NULLs")
 		}
 	}
-	foreign := q.Where(r.Rank.Eq(9))
+	foreign := q.Where(orm.NumberEq(r.Rank, 9))
 	if _, err := orm.CursorPaginate(ctx, db, foreign, orm.CursorRequest[readRecord]{Size: 2, After: pages[0].Next}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("foreign cursor accepted", err)
 	}
@@ -79,7 +79,7 @@ func TestCursorChunksAndLocks(t *testing.T) {
 		t.Fatal("malformed token accepted", err)
 	}
 	var chunked []int64
-	err = orm.ChunkByKey(ctx, db, r.Query(), r.Key(), 2, func(batch []readRecord) error {
+	err = orm.ChunkByKey(ctx, db, r.Query(), orm.KeyExpr(r.Key()), 2, func(batch []readRecord) error {
 		for _, m := range batch {
 			chunked = append(chunked, m.ID)
 		}
@@ -95,7 +95,7 @@ func TestCursorChunksAndLocks(t *testing.T) {
 		t.Fatal("deletion shifted later chunks", chunked)
 	}
 	err = db.Transaction(ctx, func(tx *database.Tx) error {
-		got, err := r.Query().Where(r.Key().Eq(2)).ForUpdate().Require(ctx, tx)
+		got, err := orm.RequireLocked(ctx, tx, orm.Lock(r.Query().Where(orm.KeyEq(r.Key(), 2))))
 		if err == nil && got.ID != 2 {
 			t.Fatal("locked lookup wrong row")
 		}
@@ -123,7 +123,7 @@ func TestEditedCursorPositionPreservesPredicates(t *testing.T) {
 		orm.SoftDeleteOf(b, &m.DeletedAt)
 		return orm.TableOf(b, &m.ID)
 	})
-	q := r.Query().Where(tenant.Eq(7)).OrderBy(r.Key().Asc())
+	q := r.Query().Where(orm.NumberEq(tenant, 7)).OrderBy(orm.KeyAsc(r.Key()))
 	first, err := orm.CursorPaginate(ctx, db, q, orm.CursorRequest[record]{Size: 1})
 	must(t, err)
 	token, ok := first.Next.Get()

@@ -6,7 +6,7 @@ The column must be non-primary. Migrations own its nullable SQL column. `NoSoftD
 
 ## Typed writes and visibility
 
-`Table.Delete` and package `orm.Delete` soft-delete configured models, returning the stored post-write model. `Table.Restore` clears the deletion time on one deleted key. `orm.RestoreEach` restores a bounded set and requires the soft token. Ordinary models retain physical deletion.
+`orm.Delete` soft-delete configured models, returning the stored post-write model. `orm.Restore` clears the deletion time on one deleted key. `orm.RestoreEach` restores a bounded set and requires the soft token. Ordinary models retain physical deletion.
 
 <!-- orm-example: force-after -->
 ```go
@@ -16,7 +16,7 @@ func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 }
 ```
 
-Package `orm.ForceDelete` accepts a query, soft token, typed key handle and stored key. `Table.ForceDelete` also requires the token. Both physically remove the model and return its pre-write snapshot. No match returns `database.NotFound`. Zero and foreign-declaration tokens fail before SQL.
+Package `orm.ForceDelete` accepts a query, soft token, typed key handle and stored key. It physically removes the model and returns its pre-write snapshot. No match returns `database.NotFound`. Zero and foreign-declaration tokens fail before SQL.
 
 Default queries select active rows. `WithTrashed()` includes both active and deleted rows, `OnlyTrashed()` selects deleted rows and `WithoutTrashed()` restores default visibility. These immutable choices preserve explicit predicates and global scopes.
 

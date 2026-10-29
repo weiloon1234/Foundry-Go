@@ -11,7 +11,7 @@ import (
 
 func TestStatementDetectorFindsLoopButAcceptsEagerBatch(t *testing.T) {
 	p := people()
-	manager := BelongsToOf(p.Manager, p.ManagerID, p.ID)
+	manager := BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID))
 	d, _ := database.NewStatementDetector(database.StatementDetectorConfig{Threshold: 2, MaxShapes: 16})
 	db := testDB(t, testConnector{respond: func(sql string) ([]string, [][]driver.Value) {
 		if strings.Contains(sql, "ANY(") || strings.Contains(sql, `"id" =`) {
@@ -20,12 +20,12 @@ func TestStatementDetectorFindsLoopButAcceptsEagerBatch(t *testing.T) {
 		return personColumns, [][]driver.Value{{int64(1), int64(2), "a", nil}, {int64(3), int64(2), "b", nil}, {int64(4), int64(2), "c", nil}}
 	}}, database.WithStatementDetector(d))
 	ctx, scope := d.Begin(t.Context())
-	parents, err := p.Query().All(ctx, db)
+	parents, err := All(ctx, db, p.Query())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for range parents {
-		if _, err = p.Require(ctx, db, 2); err != nil {
+		if _, err = RequireKey(ctx, db, p.Table, 2); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -33,7 +33,7 @@ func TestStatementDetectorFindsLoopButAcceptsEagerBatch(t *testing.T) {
 		t.Fatal(r)
 	}
 	ctx, scope = d.Begin(t.Context())
-	parents, err = p.Query().With(manager).All(ctx, db)
+	parents, err = All(ctx, db, p.Query().With(manager))
 	if err != nil || len(parents) != 3 {
 		t.Fatal(err)
 	}

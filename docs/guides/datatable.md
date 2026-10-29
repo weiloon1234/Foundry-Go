@@ -58,17 +58,17 @@ use `orm.PrimaryOf` and `orm.SoftDeleteOf` to retain declaration roles; the
 [row schemas](../../tests/fixtures/consumer/reporting/rows.go) retain exact DTO
 field types. Existing generated DTO descriptors continue to own wire metadata.
 
-Use `expr.Row(expr.Value(Users.Name)).Value()` in `SortBy`, an enum or comparison row
+Use `expr.Row(expr.Value(orm.TextExpr(Users.Name))).Value()` in `SortBy`, an enum or comparison row
 adapter's `.Value()` (such as `expr.CompareRow(expr.Value(Users.State)).Value()`),
 or a computed/aggregate expression's `.Value()`. `Stable` is `[]expr.ProjectionOrder[S]`,
-accepting the short `expr.Value(table.Key()).Asc()` spelling for a unique final key.
+accepting the short `expr.Value(orm.KeyExpr(table.Key())).Asc()` spelling for a unique final key.
 Filters take `expr.Predicate[S]` for WHERE and `expr.HavingPredicate[S]` for HAVING:
 
 | Operand | Filter adapter |
 | --- | --- |
 | Required text | `expr.TextRow(Users.Name)` |
 | Nullable text | `expr.TextNullableRow(Users.Nickname)` |
-| Required number | `expr.OrderRow(expr.Value(Users.Age))` |
+| Required number | `expr.OrderRow(expr.Value(orm.NumberExpr(Users.Age)))` |
 | Nullable number | `expr.OrderNullableRow(expr.Value(Users.Score))` |
 | Enum or equality-only field | `expr.CompareRow(expr.Value(Users.State))` (sort via `.Value()`) |
 | Nullable enum | `expr.CompareNullableRow(expr.Value(Users.State))` (sort via `.Value()`) |
@@ -357,7 +357,7 @@ func memberImports() importer.Definition[MemberImport] {
 			importer.Field("State", foundryhttp.EnumQuery[State, *State](Active.EnumDescriptor()), func(row *MemberImport, v State) { row.State = v }),
 			importer.Field("Balance", foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), func(row *MemberImport, v decimal.Decimal) { row.Balance = v }),
 		},
-		Rules: []validation.Rule[MemberImport]{name.Rules(validation.NonBlank[string](), validation.MaxLength[string](80))},
+		Rules: []validation.Rule[MemberImport]{validation.Rules(name, validation.NonBlank[string](), validation.MaxLength[string](80))},
 	})
 }
 ```

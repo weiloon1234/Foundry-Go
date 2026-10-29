@@ -29,12 +29,12 @@ func CreateAccount(ctx context.Context, writer database.Transactor, hasher *pass
 	if err != nil {
 		return Account{}, err
 	}
-	return AccountRecords.Insert(ctx, writer, AccountRecords.Email.Set(input.Email), AccountRecords.Digest.Set(hash), AccountRecords.Backup.SetNull(), AccountRecords.Enabled.Set(true))
+	return orm.Insert(ctx, writer, AccountRecords.Table, orm.TextSet(AccountRecords.Email, input.Email), orm.ColumnSet(AccountRecords.Digest, hash), orm.NullableColumnSetNull(AccountRecords.Backup), orm.ColumnSet(AccountRecords.Enabled, true))
 }
 
 // ReplaceHash preserves the stored hash type in both a compare-and-swap predicate
 // and its mutation. A concurrent password change cannot be overwritten. Normal
 // per-model update hooks still execute; database.NotFound means the CAS lost.
 func ReplaceHash(ctx context.Context, writer database.Transactor, account Account, next password.Hash) (Account, error) {
-	return orm.Update(ctx, writer, AccountRecords.Query().Where(AccountRecords.Digest.Eq(account.Digest)), AccountRecords.Key(), account.ID, AccountRecords.Digest.Set(next))
+	return orm.Update(ctx, writer, AccountRecords.Query().Where(orm.ColumnEq(AccountRecords.Digest, account.Digest)), AccountRecords.Key(), account.ID, orm.ColumnSet(AccountRecords.Digest, next))
 }

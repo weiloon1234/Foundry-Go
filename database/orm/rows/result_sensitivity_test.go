@@ -24,10 +24,10 @@ func TestResultCursorCompositionPreservesSensitivity(t *testing.T) {
 		return secretFields{orm.TableOf(b, &s.ID), orm.ColumnOf(b, &s.Name, orm.Codec(codec.String[string]().WithSensitiveValues()))}
 	})
 	m, schema := declareMembers(), declareRows()
-	public := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Name)).Value()))
-	sensitive := Values(SelectScalar(From(table.Query()), expr.Row(expr.Value(table.Name)).Value()))
-	report := RecordOf(Select(From(table.Query()), schema, Map(schema.ID, expr.Value(table.Key())), Map(schema.Name, expr.Value(table.Name))))
-	ordinary := RecordOf(Select(From(m.Query()), schema, Map(schema.ID, expr.Value(m.ID)), Map(schema.Name, expr.Value(m.Name))))
+	public := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.TextExpr(m.Name))).Value()))
+	sensitive := Values(SelectScalar(From(table.Query()), expr.Row(expr.Value(orm.ColumnExpr(table.Name))).Value()))
+	report := RecordOf(Select(From(table.Query()), schema, Map(schema.ID, expr.Value(orm.KeyExpr(table.Key()))), Map(schema.Name, expr.Value(orm.ColumnExpr(table.Name)))))
+	ordinary := RecordOf(Select(From(m.Query()), schema, Map(schema.ID, expr.Value(orm.KeyExpr(m.ID))), Map(schema.Name, expr.Value(orm.TextExpr(m.Name)))))
 	for name, source := range map[string]RecordSource[record]{
 		"projection": report, "record set right": UnionAll(ordinary, report), "record set left": UnionAll(report, ordinary), "CTE": CTE("secret_report", report),
 	} {
@@ -95,8 +95,8 @@ func TestResultCursorComputedProjectionSensitivity(t *testing.T) {
 		return secretFields{orm.TableOf(b, &s.ID), orm.ColumnOf(b, &s.Number, orm.Codec(codec.Signed[int64]().WithSensitiveValues()))}
 	})
 	source := From(table.Query())
-	input := expr.Value(table.Number)
-	for name, selected := range map[string]expr.Selected[secret, int64]{"computed": expr.Add(expr.Value(table.Key()), input).Value(), "parameter": expr.Add(expr.Value(table.Key()), expr.Param(table.Number, int64(7))).Value()} {
+	input := expr.Value(orm.ColumnExpr(table.Number))
+	for name, selected := range map[string]expr.Selected[secret, int64]{"computed": expr.Add(expr.Value(orm.KeyExpr(table.Key())), input).Value(), "parameter": expr.Add(expr.Value(orm.KeyExpr(table.Key())), expr.Param(orm.ColumnExpr(table.Number), int64(7))).Value()} {
 		t.Run(name, func(t *testing.T) {
 			c := ValueCursorFor(Values(SelectScalar(source, selected)))
 			state := &driverState{}

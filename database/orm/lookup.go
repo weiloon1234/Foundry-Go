@@ -38,7 +38,7 @@ func Keyed[M any, K comparable](q Query[M], key Key[M, K]) KeyLookup[M, K] {
 }
 
 // Unique binds a stored alternate key, rejecting a second matching row.
-// Example: orm.Unique(Users.Query(),Users.Email).Find(ctx,db,email).
+// Example: orm.Unique(Users.Query(),orm.TextExpr(Users.Email)).Find(ctx,db,email).
 func Unique[M any, K comparable](q Query[M], field KeyColumn[M, K]) KeyLookup[M, K] {
 	if !lookupColumn(field) {
 		return KeyLookup[M, K]{core: &keyLookupState[K]{err: invalid("unique lookup requires a stored field")}}
@@ -111,7 +111,7 @@ type DirectRelation[P, M any] interface {
 }
 
 // RelatedLookup retains the parent, target and alternate-key types.
-// Example: orm.RelatedUnique(TeamRelations.Projects,Projects.Slug).
+// Example: orm.RelatedUnique(TeamRelations.Projects,orm.TextExpr(Projects.Slug)).
 type RelatedLookup[P, M any, K comparable] struct {
 	_      [0]*P
 	_      [0]*M
@@ -120,7 +120,7 @@ type RelatedLookup[P, M any, K comparable] struct {
 }
 
 // RelatedUnique scopes a unique lookup through a loaded parent without a fallback query.
-// Example: orm.RelatedUnique(TeamRelations.Projects,Projects.Slug).Find(ctx,db,team,slug).
+// Example: orm.RelatedUnique(TeamRelations.Projects,orm.TextExpr(Projects.Slug)).Find(ctx,db,team,slug).
 func RelatedUnique[P, M any, K comparable, R DirectRelation[P, M]](relation R, field KeyColumn[M, K]) RelatedLookup[P, M, K] {
 	var p *relationPlan
 	switch r := any(relation).(type) {

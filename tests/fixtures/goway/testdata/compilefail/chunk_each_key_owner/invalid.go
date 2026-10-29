@@ -6,5 +6,5 @@ import (
 )
 
 func wrong() {
-	_ = orm.EachByKey(nil, nil, models.Users.Query(), models.Users.ID, 2, func(models.Order) error { return nil })
+	_ = orm.EachByKey(nil, nil, models.Users.Query(), orm.KeyExpr(models.Users.ID), 2, func(models.Order) error { return nil })
 }

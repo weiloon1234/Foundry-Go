@@ -157,7 +157,7 @@ func TestExtensionMatchingUsesBoundedManagerQueries(t *testing.T) {
 					if err != nil {
 						return
 					}
-					next := must(orm.Compile(e.Articles.Query().Where(e.Articles.Key().Eq(99), current)))
+					next := must(orm.Compile(e.Articles.Query().Where(orm.KeyEq(e.Articles.Key(), 99), current)))
 
 					if !oracleMatch(t, "goway/extension_matching/predicate", oracleSnapshot([]any{next.SQL(), next.Arguments()})) {
 						t.Fatal("owner predicate changed or lost caller scope")

@@ -20,13 +20,13 @@ func TestAdjustmentsGolden(t *testing.T) {
 				defer db.Close(t.Context())
 
 				f := n.Orders
-				a := f.TotalCents.Increment(5, orm.AtMost(int64(100)))
+				a := orm.NumberIncrement(f.TotalCents, 5, orm.AtMost(int64(100)))
 				if subtract {
-					a = f.TotalCents.Decrement(5, orm.AtLeast(int64(0)))
+					a = orm.NumberDecrement(f.TotalCents, 5, orm.AtLeast(int64(0)))
 				}
-				_, err := f.Query().UpdateAll(t.Context(), db, a)
+				_, err := orm.UpdateAll(t.Context(), db, f.Query(), a)
 				check(err)
-				_, err = n.LedgerEntries.Query().UpdateAll(t.Context(), db, n.LedgerEntries.Balance.Decrement(must(decimal.Parse("1.25"))))
+				_, err = orm.UpdateAll(t.Context(), db, n.LedgerEntries.Query(), orm.NullableNumberDecrement(n.LedgerEntries.Balance, must(decimal.Parse("1.25"))))
 				check(err)
 
 				transcripts = append(transcripts, g.output.String())

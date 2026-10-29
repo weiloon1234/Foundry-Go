@@ -26,7 +26,7 @@ type Author struct{ ID int64 }
 
 // ArticleTable binds persisted and extension fields. Example: Articles.Query().
 type ArticleTable struct {
-	// Table owns the primary key. Example: Articles.Key().Eq(1).
+	// Table owns the primary key. Example: orm.KeyEq(Articles.Key(), 1).
 	orm.Table[Article, int64]
 	// Title binds translated text. Example: extensions.BindSlot(Articles.Key(),Articles.Title).
 	Title orm.Slot[Article, translations.Text]
@@ -38,12 +38,12 @@ type ArticleTable struct {
 	SEO orm.Slot[Article, metadata.Value[string]]
 }
 
-// Articles declares the persisted owner. Example: Articles.Find(ctx,db,1).
+// Articles declares the persisted owner. Example: orm.Find(ctx, db, Articles.Table, 1).
 var Articles = orm.Define("extension_articles", func(b orm.Builder[Article], m *Article) ArticleTable {
 	return ArticleTable{orm.TableOf(b, &m.ID), orm.SlotOf(b, &m.Title), orm.SlotOf(b, &m.Cover), orm.SlotOf(b, &m.Gallery), orm.SlotOf(b, &m.SEO)}
 })
 
-// Authors is the unrelated declaration. Example: Authors.Find(ctx,db,1).
+// Authors is the unrelated declaration. Example: orm.Find(ctx, db, Authors.Table, 1).
 var Authors = orm.Define("extension_authors", func(b orm.Builder[Author], m *Author) orm.Table[Author, int64] { return orm.TableOf(b, &m.ID) })
 
 // Owner pins storage identity independently of future table renames. Example: extensions.ORMIdentity(Owner).Reference(1).

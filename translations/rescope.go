@@ -45,9 +45,9 @@ func rescopeTable() extensionmaintenance.RescopeTable[store.TranslationIndex] {
 		Name: "translations.rescope",
 		Scan: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, current, after string, limit int, lock bool) ([]store.TranslationIndex, error) {
 			f := store.Translations
-			q := store.Translations.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Ne(current)).OrderBy(f.KeyColumn.Asc()).Limit(limit)
+			q := store.Translations.Query().Where(orm.TextEq(f.Owner, string(owner)), orm.TextNe(f.Scope, current)).OrderBy(orm.TextAsc(f.KeyColumn)).Limit(limit)
 			if after != "" {
-				q = q.Where(f.KeyColumn.Gt(after))
+				q = q.Where(orm.TextGt(f.KeyColumn, after))
 			}
 			if lock {
 				return rows.ForUpdate(rows.Read(store.TranslationsIndex(q))).All(ctx, tx)
@@ -59,21 +59,21 @@ func rescopeTable() extensionmaintenance.RescopeTable[store.TranslationIndex] {
 		},
 		Exists: func(ctx context.Context, tx *database.Tx, key string) (bool, error) {
 			f := store.Translations
-			return store.Translations.Query().Where(f.KeyColumn.Eq(key)).Exists(ctx, tx)
+			return orm.Exists(ctx, tx, store.Translations.Query().Where(orm.TextEq(f.KeyColumn, key)))
 		},
 		Move: func(ctx context.Context, tx *database.Tx, row store.TranslationIndex, subject extensions.Subject, key string) error {
 			if !identifier.Semantic(row.Field) || i18n.LocaleID(row.Locale).Validate() != nil {
 				return invalid()
 			}
 			q := store.Translations.Query()
-			stored, err := q.Where(store.Translations.Key().Eq(row.Key)).Require(ctx, tx)
+			stored, err := orm.Require(ctx, tx, q.Where(orm.KeyEq(store.Translations.Key(), row.Key)))
 			if err != nil {
 				return err
 			}
 			if _, err := orm.Delete(ctx, tx, q, store.Translations.Key(), row.Key); err != nil {
 				return err
 			}
-			_, err = store.Translations.Insert(ctx, tx, store.Translations.KeyColumn.Set(key), store.Translations.Owner.Set(row.Owner), store.Translations.Scope.Set(subject.Scope), store.Translations.SubjectKey.Set(subject.Key), store.Translations.Identity.Set(subject.Identity), store.Translations.Field.Set(stored.Field), store.Translations.Locale.Set(stored.Locale), store.Translations.Value.Set(stored.Value), store.Translations.CreatedAt.Set(stored.CreatedAt), store.Translations.UpdatedAt.Set(stored.UpdatedAt))
+			_, err = orm.Insert(ctx, tx, store.Translations.Table, orm.TextSet(store.Translations.KeyColumn, key), orm.TextSet(store.Translations.Owner, row.Owner), orm.TextSet(store.Translations.Scope, subject.Scope), orm.TextSet(store.Translations.SubjectKey, subject.Key), orm.JSONSet(store.Translations.Identity, subject.Identity), orm.TextSet(store.Translations.Field, stored.Field), orm.TextSet(store.Translations.Locale, stored.Locale), orm.TextSet(store.Translations.Value, stored.Value), orm.TimeSet(store.Translations.CreatedAt, stored.CreatedAt), orm.TimeSet(store.Translations.UpdatedAt, stored.UpdatedAt))
 			return err
 		},
 	}

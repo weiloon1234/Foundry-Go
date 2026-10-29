@@ -62,7 +62,7 @@ func record(ctx context.Context, tx *database.Tx, trace *Trace, label string) er
 		trace.Calls = append(trace.Calls, label)
 	}
 	if tx != nil {
-		if _, err := Effects.Insert(ctx, tx, Effects.Label.Set(label)); err != nil {
+		if _, err := orm.Insert(ctx, tx, Effects.Table, orm.TextSet(Effects.Label, label)); err != nil {
 			return err
 		}
 	}

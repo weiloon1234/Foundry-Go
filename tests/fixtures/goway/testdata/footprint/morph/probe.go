@@ -1,5 +1,7 @@
 package morph
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	j "foundry.test/goway/models/joined"
@@ -7,5 +9,5 @@ import (
 )
 
 func F(ctx context.Context, db database.Executor) ([]j.Pivot, error) {
-	return j.Pivots.Query().With(j.MorphParent, j.MorphTarget).All(ctx, db)
+	return orm.All(ctx, db, j.Pivots.Query().With(j.MorphParent, j.MorphTarget))
 }

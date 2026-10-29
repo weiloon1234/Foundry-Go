@@ -12,7 +12,7 @@ import (
 
 // CreateEach runs each creation lifecycle in one bounded atomic transaction.
 // Unlike InsertMany, callbacks run per model; a valid empty batch performs no SQL.
-// Example: orm.CreateEach(ctx, db, Users.Query(), [][]orm.Assignment[User]{{Users.Name.Set("Ada")}}).
+// Example: orm.CreateEach(ctx, db, Users.Query(), [][]orm.Assignment[User]{{orm.TextSet(Users.Name, "Ada")}}).
 func CreateEach[M any](ctx context.Context, writer database.Transactor, q Query[M], drafts [][]Assignment[M]) ([]M, error) {
 	if err := writeContext(ctx, writer); err != nil {
 		return nil, err
@@ -68,14 +68,14 @@ func CreateEach[M any](ctx context.Context, writer database.Transactor, q Query[
 // FirstOrCreate locks the first primary-ordered match or creates through its lifecycle.
 // Equality filters and scopes default omitted stored fields; mutator inputs need explicit assignments.
 // Concurrent absence relies on unique constraints, without retries. Internal reads skip Retrieved.
-// Example: orm.FirstOrCreate(ctx, db, Users.Query().Where(Users.Email.Eq(email)), Users.Name.Set(name)).
+// Example: orm.FirstOrCreate(ctx, db, Users.Query().Where(orm.TextEq(Users.Email, email)), orm.TextSet(Users.Name, name)).
 func FirstOrCreate[M any](ctx context.Context, writer database.Transactor, q Query[M], create ...Assignment[M]) (M, error) {
 	return lookupWrite(ctx, writer, q.state, create, nil)
 }
 
 // UpdateOrCreate patches the first locked match or creates from separate inputs.
 // Only the chosen branch prepares its assignments. Read windows and eager loads are rejected.
-// Example: orm.UpdateOrCreate(ctx,db,Users.Query(),create,func(ctx context.Context,tx *database.Tx,u User)([]orm.Assignment[User],error){return []orm.Assignment[User]{Users.Name.Set("Ada")},nil}).
+// Example: orm.UpdateOrCreate(ctx,db,Users.Query(),create,func(ctx context.Context,tx *database.Tx,u User)([]orm.Assignment[User],error){return []orm.Assignment[User]{orm.TextSet(Users.Name, "Ada")},nil}).
 func UpdateOrCreate[M any](ctx context.Context, writer database.Transactor, q Query[M], create []Assignment[M], update func(context.Context, *database.Tx, M) ([]Assignment[M], error)) (M, error) {
 	if update == nil {
 		return *new(M), invalid("lookup update requires a draft callback")

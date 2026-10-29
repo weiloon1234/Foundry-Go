@@ -33,7 +33,7 @@ func (r RecordRead[S, R]) readSource(*S, *R) ormcore.RecordSource      { return 
 func (r TransactionRead[S, R]) readSource(*S, *R) ormcore.RecordSource { return r.core }
 
 // Read adapts complete projections and single-value queries for ordinary terminals.
-// Example: rows.Read(rows.SelectValue(Users.Query(),Users.Name)).First(ctx,db).
+// Example: rows.Read(rows.SelectValue(Users.Query(), orm.TextExpr(Users.Name))).First(ctx,db).
 func Read[S, R any](q Query[S, R]) Result[S, R] {
 	if q.recordOwner != nil {
 		return Result[S, R]{core: RecordOf(q).core}

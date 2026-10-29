@@ -18,7 +18,7 @@ referrals := rows.As[referralAlias](models.Users.Query(), "referral")
 sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")
 r := rows.Scope(referrals)
 s := rows.Scope(sponsors)
-joined := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
+joined := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(s, orm.KeyExpr(models.Users.ID))))
 referralScope := rows.LeftScope(joined, rows.Scope(referrals))
 sponsorScope := rows.NullableRightScope(joined, rows.Scope(sponsors))
 ```

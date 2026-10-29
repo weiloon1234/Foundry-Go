@@ -1,5 +1,7 @@
 package retrievalqueries
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -40,7 +42,12 @@ func memberRetrieved(count func(context.Context, database.Executor) (int64, erro
 // Observe performs scalar I/O on the caller's executor, without recursively
 // hydrating models. Trace state belongs to one sequential read operation.
 func Observe(ctx context.Context, executor database.Executor, label, stored string) error {
-	return observe(ctx, executor, label, stored, Members.Query().Count)
+	return observe(ctx, executor, label, stored, func() func(arg0 context.Context, arg1 database.Executor) (int64, error) {
+		receiver := Members.Query()
+		return func(arg0 context.Context, arg1 database.Executor) (int64, error) {
+			return orm.Count(arg0, arg1, receiver)
+		}
+	}())
 }
 
 func observe(ctx context.Context, executor database.Executor, label, stored string, count func(context.Context, database.Executor) (int64, error)) error {

@@ -1,5 +1,7 @@
 package articles_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"bytes"
 	"context"
@@ -54,7 +56,7 @@ func TestGeneratedDeclarationCleansExtensionDataOnHardDelete(t *testing.T) {
 
 	// Soft deletion keeps extension data for restoration.
 	if err := write(func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.Articles.Delete(ctx, tx, article.ID)
+		_, err := orm.Delete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Table.Key(), article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -63,7 +65,7 @@ func TestGeneratedDeclarationCleansExtensionDataOnHardDelete(t *testing.T) {
 		t.Fatal("soft-deleted owner remained readable", err)
 	}
 	if err := write(func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.Articles.Restore(ctx, tx, article.ID)
+		_, err := orm.Restore(ctx, tx, articles.Articles.Table, article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -76,7 +78,7 @@ func TestGeneratedDeclarationCleansExtensionDataOnHardDelete(t *testing.T) {
 	// A rolled-back hard deletion rolls back its cleanup and keeps the file.
 	rollback := errors.New("rollback deletion")
 	if err := write(func(ctx context.Context, tx *database.Tx) error {
-		if _, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID); err != nil {
+		if _, err := orm.ForceDelete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Soft, articles.Articles.Table.Key(), article.ID); err != nil {
 			return err
 		}
 		return rollback
@@ -92,7 +94,7 @@ func TestGeneratedDeclarationCleansExtensionDataOnHardDelete(t *testing.T) {
 
 	// The committed hard deletion removes rows and schedules file cleanup.
 	if err := write(func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID)
+		_, err := orm.ForceDelete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Soft, articles.Articles.Table.Key(), article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -176,17 +178,17 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	// The cleanup observer observes only deletions, so on every connection a
 	// set-based update needs no WithoutModelHooks while a set-based deletion,
 	// which would skip cleanup, still requires the acknowledgement.
-	only := articles.Articles.Query().Where(articles.Articles.Key().Eq(article.ID))
+	only := articles.Articles.Query().Where(orm.KeyEq(articles.Articles.Key(), article.ID))
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		_, err := only.UpdateAll(ctx, tx, articles.Articles.Slug.Set(article.Slug))
+		_, err := orm.UpdateAll(ctx, tx, only, orm.TextSet(articles.Articles.Slug, article.Slug))
 		return err
 	}); err != nil {
 		t.Fatal("a set-based update was refused because of the deletion observer", err)
 	}
 	for name, remove := range map[string]func(context.Context, *database.Tx) (int64, error){
-		"soft": func(ctx context.Context, tx *database.Tx) (int64, error) { return only.DeleteAll(ctx, tx) },
+		"soft": func(ctx context.Context, tx *database.Tx) (int64, error) { return orm.DeleteAll(ctx, tx, only) },
 		"force": func(ctx context.Context, tx *database.Tx) (int64, error) {
-			return only.ForceDeleteAll(ctx, tx, articles.Articles.Soft)
+			return orm.ForceDeleteAll(ctx, tx, only, articles.Articles.Soft)
 		},
 	} {
 		if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error { _, err := remove(ctx, tx); return err }); !errors.Is(err, fault.Invalid) {
@@ -195,7 +197,7 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	}
 	rollback := errors.New("rollback deletion")
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		if _, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID); err != nil {
+		if _, err := orm.ForceDelete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Soft, articles.Articles.Table.Key(), article.ID); err != nil {
 			return err
 		}
 		return rollback
@@ -206,10 +208,10 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 
 	// Deleted and created again before commit: the owner exists, so nothing is removed.
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		if _, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID); err != nil {
+		if _, err := orm.ForceDelete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Soft, articles.Articles.Table.Key(), article.ID); err != nil {
 			return err
 		}
-		_, err := articles.Articles.Insert(ctx, tx, articles.Articles.Key().Set(article.ID), articles.Articles.Slug.Set(article.Slug), articles.Articles.AuthorID.Set(article.AuthorID))
+		_, err := orm.Insert(ctx, tx, articles.Articles.Table, orm.KeySet(articles.Articles.Key(), article.ID), orm.TextSet(articles.Articles.Slug, article.Slug), orm.ColumnSet(articles.Articles.AuthorID, article.AuthorID))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -217,7 +219,7 @@ func TestCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
 	kept("a re-created owner")
 
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID)
+		_, err := orm.ForceDelete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Soft, articles.Articles.Table.Key(), article.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -249,7 +251,7 @@ func TestCleanupThroughAnotherPoolWithOneStoreSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := f.throughWriter(t, func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.Articles.ForceDelete(ctx, tx, articles.Articles.Soft, article.ID)
+		_, err := orm.ForceDelete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Soft, articles.Articles.Table.Key(), article.ID)
 		return err
 	}); err != nil {
 		t.Fatal("cleanup after the deletion failed with one store slot", err)

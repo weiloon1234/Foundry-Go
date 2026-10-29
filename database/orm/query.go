@@ -54,7 +54,7 @@ func keyOf[M any, K comparable](b Builder[M], ptr *K, opts ...ColumnOption[K]) K
 func (t *Table[M, K]) ormAttach(core *tableCore) *tableCore { old := t.core; t.core = core; return old }
 func (t Table[M, K]) ormError() error                       { return tableError(t.core) }
 
-// Key returns the already bound primary column. Example: tbl.Key().Set(id).
+// Key returns the already bound primary column. Example: orm.KeySet(tbl.Key(), id).
 func (t Table[M, K]) Key() Key[M, K] {
 	if t.key == nil {
 		return Key[M, K]{}
@@ -65,23 +65,23 @@ func (t Table[M, K]) Key() Key[M, K] {
 // Query starts an immutable model query. Example: Orders.Query().Limit(20).
 func (t Table[M, K]) Query() Query[M] { return Query[M]{state: newQuery(t.core)} }
 
-// Find selects by a typed primary key. Example: Orders.Find(ctx,db,id).
-func (t Table[M, K]) Find(ctx context.Context, ex database.Executor, key K) (value.Optional[M], error) {
-	return t.Query().Where(t.Key().Eq(key)).First(ctx, ex)
+// Find selects by a typed primary key. Example: orm.Find(ctx, db, Orders.Table, id).
+func Find[M any, K comparable](ctx context.Context, ex database.Executor, t Table[M, K], key K) (value.Optional[M], error) {
+	return First(ctx, ex, t.Query().Where(KeyEq(t.Key(), key)))
 }
 
-// Require selects a key or returns database.NotFound. Example: Orders.Require(ctx,db,id).
-func (t Table[M, K]) Require(ctx context.Context, ex database.Executor, key K) (M, error) {
-	return t.Query().Where(t.Key().Eq(key)).Require(ctx, ex)
+// RequireKey selects a key or returns database.NotFound. Example: orm.RequireKey(ctx, db, Orders.Table, id).
+func RequireKey[M any, K comparable](ctx context.Context, ex database.Executor, t Table[M, K], key K) (M, error) {
+	return Require(ctx, ex, t.Query().Where(KeyEq(t.Key(), key)))
 }
 
-// Query stores only a model-independent AST and table binding. Example: Orders.Query().Where(Orders.ID.Eq(id)).
+// Query stores only a model-independent AST and table binding. Example: Orders.Query().Where(orm.KeyEq(Orders.ID, id)).
 type Query[M any] struct {
 	_     [0]*M
 	state queryState
 }
 
-// LockedQuery requires a transaction for every terminal. Example: Orders.Query().ForUpdate().All(ctx,tx).
+// LockedQuery requires a transaction for every terminal. Example: orm.AllLocked(ctx, tx, orm.Lock(Orders.Query())).
 type LockedQuery[M any] struct {
 	_                [0]*M
 	lockedQueryPhase [0]struct{}
@@ -118,7 +118,7 @@ func validateQuery(q queryState) error {
 	return safeerror.Join("operation failed", tableError(q.table), q.err, q.ast.Validate(), validateRelations(q))
 }
 
-// Where appends AND predicates. Example: Orders.Query().Where(Orders.TotalCents.Gt(0)).
+// Where appends AND predicates. Example: Orders.Query().Where(orm.NumberGt(Orders.TotalCents, 0)).
 func (q Query[M]) Where(ps ...Predicate[M]) Query[M] { q.state = where(q.state, ps); return q }
 func where[M any](q queryState, ps []Predicate[M]) queryState {
 	q.ast.Predicates = slices.Clone(q.ast.Predicates)
@@ -134,7 +134,7 @@ func where[M any](q queryState, ps []Predicate[M]) queryState {
 	return q
 }
 
-// OrderBy appends sort directions. Example: Orders.Query().OrderBy(Orders.ID.Asc()).
+// OrderBy appends sort directions. Example: Orders.Query().OrderBy(orm.KeyAsc(Orders.ID)).
 func (q Query[M]) OrderBy(os ...Order[M]) Query[M] {
 	q.state = orderBy(q.state, os)
 	return q
@@ -157,75 +157,75 @@ func (q Query[M]) Limit(n int) Query[M] { q.state.ast.Limit = value.Set(n); retu
 // Offset skips rows. Example: Orders.Query().Offset(10).
 func (q Query[M]) Offset(n int) Query[M] { q.state.ast.Offset = n; return q }
 
-// WithTrashed includes deleted records. Example: records.Query().WithTrashed().All(ctx,db).
+// WithTrashed includes deleted records. Example: orm.All(ctx, db, records.Query().WithTrashed()).
 func (q Query[M]) WithTrashed() Query[M] {
 	q.state.ast.SoftDeleteScope = querycore.AllRecords
 	return q
 }
 
-// OnlyTrashed selects deleted records. Example: records.Query().OnlyTrashed().All(ctx,db).
+// OnlyTrashed selects deleted records. Example: orm.All(ctx, db, records.Query().OnlyTrashed()).
 func (q Query[M]) OnlyTrashed() Query[M] {
 	q.state.ast.SoftDeleteScope = querycore.TrashedRecords
 	return q
 }
 
-// ForUpdate requests update locks. Example: Orders.Query().ForUpdate().All(ctx,tx).
-func (q Query[M]) ForUpdate() LockedQuery[M] {
+// Lock requests update locks. Example: orm.AllLocked(ctx, tx, orm.Lock(Orders.Query())).
+func Lock[M any](q Query[M]) LockedQuery[M] {
 	q.state.lock = querycore.LockUpdate
 	return LockedQuery[M]{state: q.state}
 }
 
-// ForShare requests share locks. Example: Orders.Query().ForShare().All(ctx,tx).
-func (q Query[M]) ForShare() LockedQuery[M] {
+// ForShare requests share locks. Example: orm.AllLocked(ctx, tx, orm.ForShare(Orders.Query())).
+func ForShare[M any](q Query[M]) LockedQuery[M] {
 	q.state.lock = querycore.LockShare
 	return LockedQuery[M]{state: q.state}
 }
 
-// All hydrates complete models, discarding partial results on failure. Example: Orders.Query().All(ctx,db).
-func (q Query[M]) All(ctx context.Context, ex database.Executor) ([]M, error) {
+// All hydrates complete models, discarding partial results on failure. Example: orm.All(ctx, db, Orders.Query()).
+func All[M any](ctx context.Context, ex database.Executor, q Query[M]) ([]M, error) {
 	return all[M](ctx, ex, q.state)
 }
 
-// First returns an omitted Optional on no match. Example: Orders.Query().First(ctx,db).
-func (q Query[M]) First(ctx context.Context, ex database.Executor) (value.Optional[M], error) {
+// First returns an omitted Optional on no match. Example: orm.First(ctx, db, Orders.Query()).
+func First[M any](ctx context.Context, ex database.Executor, q Query[M]) (value.Optional[M], error) {
 	return first[M](ctx, ex, q.state)
 }
 
-// Require returns database.NotFound on no match. Example: Orders.Query().Require(ctx,db).
-func (q Query[M]) Require(ctx context.Context, ex database.Executor) (M, error) {
+// Require returns database.NotFound on no match. Example: orm.Require(ctx, db, Orders.Query()).
+func Require[M any](ctx context.Context, ex database.Executor, q Query[M]) (M, error) {
 	return require[M](ctx, ex, q.state)
 }
 
-// Count counts the selected window. Example: Orders.Query().Count(ctx,db).
-func (q Query[M]) Count(ctx context.Context, ex database.Executor) (int64, error) {
+// Count counts the selected window. Example: orm.Count(ctx, db, Orders.Query()).
+func Count[M any](ctx context.Context, ex database.Executor, q Query[M]) (int64, error) {
 	return count(ctx, ex, q.state)
 }
 
-// Exists checks the selected window. Example: Orders.Query().Exists(ctx,db).
-func (q Query[M]) Exists(ctx context.Context, ex database.Executor) (bool, error) {
+// Exists checks the selected window. Example: orm.Exists(ctx, db, Orders.Query()).
+func Exists[M any](ctx context.Context, ex database.Executor, q Query[M]) (bool, error) {
 	var result bool
 	err := scalarRead(ctx, ex, q.state, querycore.ReadExists, &result)
 	return result, err
 }
 
-// All reads locked rows within a transaction. Example: Orders.Query().ForUpdate().All(ctx,tx).
-func (q LockedQuery[M]) All(ctx context.Context, tx *database.Tx) ([]M, error) {
+// AllLocked reads locked rows within a transaction. Example: orm.AllLocked(ctx, tx, orm.Lock(Orders.Query())).
+func AllLocked[M any](ctx context.Context, tx *database.Tx, q LockedQuery[M]) ([]M, error) {
 	if err := lockContext(ctx, tx); err != nil {
 		return nil, err
 	}
 	return all[M](ctx, tx, q.state)
 }
 
-// First reads at most one locked row. Example: Orders.Query().ForShare().First(ctx,tx).
-func (q LockedQuery[M]) First(ctx context.Context, tx *database.Tx) (value.Optional[M], error) {
+// FirstLocked reads at most one locked row. Example: orm.FirstLocked(ctx, tx, orm.ForShare(Orders.Query())).
+func FirstLocked[M any](ctx context.Context, tx *database.Tx, q LockedQuery[M]) (value.Optional[M], error) {
 	if err := lockContext(ctx, tx); err != nil {
 		return value.Optional[M]{}, err
 	}
 	return first[M](ctx, tx, q.state)
 }
 
-// Require reads one locked row or fails. Example: Orders.Query().ForUpdate().Require(ctx,tx).
-func (q LockedQuery[M]) Require(ctx context.Context, tx *database.Tx) (M, error) {
+// RequireLocked reads one locked row or fails. Example: orm.RequireLocked(ctx, tx, orm.Lock(Orders.Query())).
+func RequireLocked[M any](ctx context.Context, tx *database.Tx, q LockedQuery[M]) (M, error) {
 	if err := lockContext(ctx, tx); err != nil {
 		return *new(M), err
 	}
@@ -443,7 +443,7 @@ func Compile[M any](q Query[M]) (Statement, error) {
 	return Statement{querycore.RetainStatement(s)}, err
 }
 
-// CompileLocked inspects a locked read without I/O. Example: CompileLocked(Orders.Query().ForUpdate()).
+// CompileLocked inspects a locked read without I/O. Example: CompileLocked(orm.Lock(Orders.Query())).
 func CompileLocked[M any](q LockedQuery[M]) (Statement, error) {
 	s, err := compileRead(q.state, querycore.ReadModels)
 	return Statement{querycore.RetainStatement(s)}, err
@@ -463,13 +463,13 @@ func (q Query[M]) WithoutTrashed() Query[M] {
 }
 
 // ForNoKeyUpdate requests a lock compatible with key-share locks.
-func (q Query[M]) ForNoKeyUpdate() LockedQuery[M] {
+func ForNoKeyUpdate[M any](q Query[M]) LockedQuery[M] {
 	q.state.lock = querycore.LockNoKeyUpdate
 	return LockedQuery[M]{state: q.state}
 }
 
 // ForKeyShare protects selected keys against deletion and key changes.
-func (q Query[M]) ForKeyShare() LockedQuery[M] {
+func ForKeyShare[M any](q Query[M]) LockedQuery[M] {
 	q.state.lock = querycore.LockKeyShare
 	return LockedQuery[M]{state: q.state}
 }
@@ -522,15 +522,15 @@ func (q LockedQuery[M]) Wait() LockedQuery[M] { q.state.behavior = querycore.Loc
 // Each streams models while rows remain open when retrieval cannot run. Otherwise
 // it uses closed complete batches, dispatching Retrieved before yielding models.
 // Rows yielded before a later failed batch remain yielded.
-func (q Query[M]) Each(ctx context.Context, ex database.Executor, yield func(M) error) error {
+func Each[M any](ctx context.Context, ex database.Executor, q Query[M], yield func(M) error) error {
 	if len(q.state.relations) > 0 {
-		return q.EachChunked(ctx, ex, querycore.DefaultChunkSize, yield)
+		return EachChunked(ctx, ex, q, querycore.DefaultChunkSize, yield)
 	}
 	return each(ctx, ex, q.state, yield)
 }
 
-// Each streams locked models in the transaction.
-func (q LockedQuery[M]) Each(ctx context.Context, tx *database.Tx, yield func(M) error) error {
+// EachLocked streams locked models in the transaction.
+func EachLocked[M any](ctx context.Context, tx *database.Tx, q LockedQuery[M], yield func(M) error) error {
 	if err := lockContext(ctx, tx); err != nil {
 		return err
 	}

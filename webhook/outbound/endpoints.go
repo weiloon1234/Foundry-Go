@@ -87,7 +87,7 @@ func (s *Service) CreateEndpoint(ctx context.Context, options EndpointOptions) (
 	var signing secret.String
 	err = s.calls.Run(ctx, "webhook endpoint registration", func(ctx context.Context) error {
 		return s.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-			count, err := store.Endpoints.Query().Count(ctx, tx)
+			count, err := orm.Count(ctx, tx, store.Endpoints.Query())
 			if err != nil {
 				return err
 			}
@@ -98,7 +98,7 @@ func (s *Service) CreateEndpoint(ctx context.Context, options EndpointOptions) (
 			if err != nil {
 				return err
 			}
-			if _, err := store.Endpoints.Insert(ctx, tx, store.Endpoints.ID.Set(id), store.Endpoints.URL.Set(options.URL), store.Endpoints.Events.Set(events), store.Endpoints.Active.Set(true), store.Endpoints.CreatedAt.Set(now), store.Endpoints.UpdatedAt.Set(now)); err != nil {
+			if _, err := orm.Insert(ctx, tx, store.Endpoints.Table, orm.KeySet(store.Endpoints.ID, id), orm.TextSet(store.Endpoints.URL, options.URL), orm.JSONSet(store.Endpoints.Events, events), orm.ColumnSet(store.Endpoints.Active, true), orm.TimeSet(store.Endpoints.CreatedAt, now), orm.TimeSet(store.Endpoints.UpdatedAt, now)); err != nil {
 				return err
 			}
 			signing, err = s.addSecret(ctx, tx, id, now)
@@ -134,7 +134,7 @@ func (s *Service) UpdateEndpoint(ctx context.Context, id EndpointID, options End
 			if err != nil {
 				return err
 			}
-			row, err := orm.Update(ctx, tx, store.Endpoints.Query(), store.Endpoints.Key(), endpointKey(id), store.Endpoints.URL.Set(options.URL), store.Endpoints.Events.Set(events), store.Endpoints.Active.Set(active), store.Endpoints.UpdatedAt.Set(now))
+			row, err := orm.Update(ctx, tx, store.Endpoints.Query(), store.Endpoints.Key(), endpointKey(id), orm.TextSet(store.Endpoints.URL, options.URL), orm.JSONSet(store.Endpoints.Events, events), orm.ColumnSet(store.Endpoints.Active, active), orm.TimeSet(store.Endpoints.UpdatedAt, now))
 			if err != nil {
 				return err
 			}
@@ -153,7 +153,7 @@ func (s *Service) Endpoint(ctx context.Context, id EndpointID) (EndpointInfo, er
 	var result EndpointInfo
 	err := s.calls.Run(ctx, "webhook endpoint lookup", func(ctx context.Context) error {
 		return s.transaction(ctx, true, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.Endpoints.Query().Where(store.Endpoints.Key().Eq(endpointKey(id))).Require(ctx, tx)
+			row, err := orm.Require(ctx, tx, store.Endpoints.Query().Where(orm.KeyEq(store.Endpoints.Key(), endpointKey(id))))
 			if err != nil {
 				return err
 			}
@@ -178,9 +178,9 @@ func (s *Service) Endpoints(ctx context.Context, after EndpointID, limit int) ([
 			f := store.Endpoints
 			q := store.Endpoints.Query()
 			if !after.IsZero() {
-				q = q.Where(orm.UUIDGreater(f.ID, endpointKey(after)))
+				q = q.Where(orm.UUIDGreater(orm.KeyExpr(f.ID), endpointKey(after)))
 			}
-			rows, err := q.OrderBy(f.ID.Asc()).Limit(limit).All(ctx, tx)
+			rows, err := orm.All(ctx, tx, q.OrderBy(orm.KeyAsc(f.ID)).Limit(limit))
 			if err != nil {
 				return err
 			}
@@ -220,7 +220,7 @@ func (s *Service) RotateSecretWithGrace(ctx context.Context, id EndpointID, grac
 	var signing secret.String
 	err := s.calls.Run(ctx, "webhook secret rotation", func(ctx context.Context) error {
 		return s.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-			if _, err := store.Endpoints.Query().ForUpdate().Where(store.Endpoints.Key().Eq(endpointKey(id))).Require(ctx, tx); err != nil {
+			if _, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Endpoints.Query()).Where(orm.KeyEq(store.Endpoints.Key(), endpointKey(id)))); err != nil {
 				return err
 			}
 			now, err := s.now()
@@ -241,7 +241,7 @@ func (s *Service) RotateSecretWithGrace(ctx context.Context, id EndpointID, grac
 			for _, row := range active {
 				current, present := row.ExpiresAt.Get()
 				if !present || current.UTC().After(expires.UTC()) {
-					if _, err := orm.Update(ctx, tx, store.Secrets.Query(), store.Secrets.Key(), row.ID, store.Secrets.ExpiresAt.Set(expires)); err != nil {
+					if _, err := orm.Update(ctx, tx, store.Secrets.Query(), store.Secrets.Key(), row.ID, orm.NullableTimeSet(store.Secrets.ExpiresAt, expires)); err != nil {
 						return err
 					}
 				}
@@ -272,7 +272,7 @@ func (s *Service) addSecret(ctx context.Context, tx *database.Tx, endpoint model
 	if err != nil {
 		return secret.String{}, err
 	}
-	_, err = store.Secrets.Insert(ctx, tx, store.Secrets.ID.Set(id), store.Secrets.EndpointID.Set(endpoint), store.Secrets.Ciphertext.Set(sealed.Encoded()), store.Secrets.ExpiresAt.SetNull(), store.Secrets.CreatedAt.Set(now))
+	_, err = orm.Insert(ctx, tx, store.Secrets.Table, orm.KeySet(store.Secrets.ID, id), orm.ColumnSet(store.Secrets.EndpointID, endpoint), orm.TextSet(store.Secrets.Ciphertext, sealed.Encoded()), orm.NullableTimeSetNull(store.Secrets.ExpiresAt), orm.TimeSet(store.Secrets.CreatedAt, now))
 	if err != nil {
 		return secret.String{}, err
 	}
@@ -287,7 +287,7 @@ func secretContext(endpoint model.ID[store.Endpoint], id model.ID[store.Secret])
 // signingSecrets returns unexpired secrets, newest first.
 func (s *Service) signingSecrets(ctx context.Context, tx *database.Tx, endpoint model.ID[store.Endpoint], now temporal.DateTime) ([]store.Secret, error) {
 	f := store.Secrets
-	rows, err := store.Secrets.Query().Where(f.EndpointID.Eq(endpoint), orm.Or(f.ExpiresAt.IsNull(), f.ExpiresAt.Gt(now))).OrderBy(f.CreatedAt.Desc(), f.ID.Desc()).Limit(MaxSigningSecrets+1).All(ctx, tx)
+	rows, err := orm.All(ctx, tx, store.Secrets.Query().Where(orm.ColumnEq(f.EndpointID, endpoint), orm.Or(orm.NullableTimeIsNull(f.ExpiresAt), orm.NullableTimeGt(f.ExpiresAt, now))).OrderBy(orm.TimeDesc(f.CreatedAt), orm.KeyDesc(f.ID)).Limit(MaxSigningSecrets+1))
 	if err != nil {
 		return nil, err
 	}

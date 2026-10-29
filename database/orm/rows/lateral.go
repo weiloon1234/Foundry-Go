@@ -23,7 +23,7 @@ func AsLateral[A, O, I, R any](record CorrelatedRecord[O, I, R], alias string) L
 	return LateralSource[A, O, R]{source: ormcore.AliasLateral(record.core, alias, reflect.TypeFor[Alias[A, R]]()), outer: record.core.Correlation.Outer}
 }
 
-// LateralScope exposes the named complete record for ON and result mapping. Example: expr.At(rows.LateralScope(latest),Orders.ID).
+// LateralScope exposes the named complete record for ON and result mapping. Example: expr.At(rows.LateralScope(latest), orm.KeyExpr(Orders.ID)).
 func LateralScope[A, O, R any](source LateralSource[A, O, R]) expr.Scope[Alias[A, R], R] {
 	return expr.FoundryScope[Alias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: source.source.Node.Source.Name(), Owner: source.source.Owners[source.source.Node.Source.Name()]}, Err: source.source.Err}, sqlowner.Expressions())
 }

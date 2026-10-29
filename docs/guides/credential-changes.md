@@ -47,7 +47,7 @@ must not be used inside a credential-changing transaction.
 ## Password verification cannot outlive a reset into a new credential
 
 `auth.PasswordModel` now requires a `Lock(ctx, tx, priorModel)` callback. It uses
-the prior model's typed primary key with a scoped `Where(key.Eq(id)).ForUpdate().First` query.
+the prior model's typed primary key with a scoped `orm.FirstLocked(ctx, tx, orm.Lock(q.Where(orm.KeyEq(key, id))))` read.
 Password verification still performs its normal login lookup and optional rehash.
 The resulting proof captures a check of that post-rehash snapshot.
 

@@ -1,5 +1,7 @@
 package teamworkflow
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"bytes"
 	"foundry.test/consumer/internal/clientfixture"
@@ -52,7 +54,7 @@ func TestGeneratedWorkflowClientAgainstCompleteApplication(t *testing.T) {
 	}
 	tools.Check(t, source, app.client.URL, "testdata")
 	db, _ := app.app.Resources().Database()
-	project, err := Projects.Query().Where(Projects.TeamID.Eq(1)).Require(t.Context(), db)
+	project, err := orm.Require(t.Context(), db, Projects.Query().Where(orm.NumberEq(Projects.TeamID, 1)))
 	if err != nil {
 		t.Fatal(err)
 	}

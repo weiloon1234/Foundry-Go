@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.OnConflict[models.User]().DoUpdate(orm.ConflictIncoming(models.Orders.TotalCents))
+var _ = orm.OnConflict[models.User]().DoUpdate(orm.ConflictIncoming(orm.NumberExpr(models.Orders.TotalCents)))

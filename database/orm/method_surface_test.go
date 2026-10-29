@@ -46,6 +46,24 @@ func TestPublicMethodSurface(t *testing.T) {
 				sig := pkg.Scope().Lookup(name).Type().(*types.Signature)
 				recordMethodSurface(&out, "orm."+name+" result", sig.Results().At(0).Type())
 			}
+			for _, name := range pkg.Scope().Names() {
+				fn, ok := pkg.Scope().Lookup(name).(*types.Func)
+				if !ok || !fn.Exported() {
+					continue
+				}
+				sig := fn.Type().(*types.Signature)
+				for i := 0; i < sig.Params().Len(); i++ {
+					named, ok := types.Unalias(sig.Params().At(i).Type()).(*types.Named)
+					if !ok || named.Obj().Pkg() != pkg {
+						continue
+					}
+					if isDeclarationColumn(named.Obj().Name()) || (i == 0 || i == 2) && (named.Obj().Name() == "Query" || named.Obj().Name() == "LockedQuery" || named.Obj().Name() == "Table") {
+						out.WriteString("orm.operation " + name + " " + types.TypeString(sig, nil) + "\n")
+						break
+					}
+				}
+			}
+
 		}
 	}
 	const path = "testdata/public-methods.txt"
@@ -124,7 +142,7 @@ func TestPublicGenericMethodsAreDirect(t *testing.T) {
 			t.Fatal(strings.Join(violations, "\n"))
 		}
 	}
-	pkg := surfacePackage(t, `package orm; type Promoted[M any] struct { Column[M,int] }`)
+	pkg := surfacePackage(t, `package orm; type Promoted[M any] struct { Query[M] }`)
 	if len(promotedPublicMethods(pkg)) == 0 {
 		t.Fatal("R9 guard accepted promoted generic methods")
 	}
@@ -188,5 +206,76 @@ func TestSurfaceIncludesPromotedFields(t *testing.T) {
 	}
 	if strings.Join(got, ", ") != "Own bool, Shadow string, Visible int" {
 		t.Fatalf("incorrect visible fields: %v", got)
+	}
+}
+
+// These are the 33 declaration receiver families from the approved D2 surface.
+// Inspect value and pointer method sets, including private witnesses: adapters
+// must be requested explicitly rather than reached by every declaration.
+func isDeclarationColumn(name string) bool {
+	switch name {
+	case "Column", "keyColumn", "numberColumn", "textColumn", "timeColumn", "Enum", "NullableColumn", "NullableNumber", "NullableText", "nullableTimeColumn", "NullableEnum", "InputColumn", "NullableInputColumn", "InputText", "NullableInputText", "InputNumber", "NullableInputNumber", "InputTime", "NullableInputTime", "InputEnum", "NullableInputEnum", "InputJSON", "NullableInputJSON", "InputInterval", "NullableInputInterval", "JSON", "NullableJSON", "Interval", "NullableInterval", "Encrypted", "NullableEncrypted", "numberKeyColumn", "InputKey":
+		return true
+	}
+	return false
+}
+
+func TestDeclarationColumnsAreMethodless(t *testing.T) {
+	pkg := surfacePackageIn(t, ".", "")
+	count := 0
+	for _, name := range pkg.Scope().Names() {
+		if !isDeclarationColumn(name) {
+			continue
+		}
+		count++
+		typ := pkg.Scope().Lookup(name).Type()
+		for _, receiver := range []types.Type{typ, types.NewPointer(typ)} {
+			if methods := types.NewMethodSet(receiver); methods.Len() != 0 {
+				t.Errorf("%s has %d methods; D2 requires explicit expression adapters", receiver, methods.Len())
+			}
+		}
+	}
+	if count != 33 {
+		t.Fatalf("declaration family set changed: got %d, want 33", count)
+	}
+}
+
+func TestExpressionAdaptersKeepLayoutAndSealedCapabilities(t *testing.T) {
+	pkg := surfacePackageIn(t, ".", "")
+	count := 0
+	for _, name := range pkg.Scope().Names() {
+		fn, ok := pkg.Scope().Lookup(name).(*types.Func)
+		if !ok || !fn.Exported() || !strings.HasSuffix(name, "Expr") {
+			continue
+		}
+		sig := fn.Type().(*types.Signature)
+		if sig.Params().Len() != 1 || sig.Results().Len() != 1 {
+			t.Fatalf("%s must be a value adapter", name)
+		}
+		handle := sig.Params().At(0).Type()
+		adapter := sig.Results().At(0).Type()
+		if !types.Identical(handle.Underlying(), adapter.Underlying()) {
+			t.Errorf("%s changed the model/value/role layout", name)
+		}
+		fields := adapter.Underlying().(*types.Struct)
+		for i := 0; i < fields.NumFields(); i++ {
+			if fields.Field(i).Embedded() {
+				t.Errorf("%s embeds a method-bearing type", name)
+			}
+		}
+		methods := types.NewMethodSet(adapter)
+		if methods.Len() == 0 {
+			t.Errorf("%s has no sealed capabilities", name)
+		}
+		for i := 0; i < methods.Len(); i++ {
+			m := methods.At(i)
+			if m.Obj().Exported() || len(m.Index()) != 1 {
+				t.Errorf("%s must declare only private direct witnesses: %s", name, m.Obj().Name())
+			}
+		}
+		count++
+	}
+	if count != 33 {
+		t.Fatalf("adapter family set changed: got %d, want 33", count)
 	}
 }

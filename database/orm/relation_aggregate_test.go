@@ -40,7 +40,7 @@ func aggregateCount(source AggregateSource[aggregateModel, aggregateModel], seal
 
 func TestAggregateCapabilityAndDeclarationIdentity(t *testing.T) {
 	a, b := aggregateModels(), aggregateModels()
-	source := HasManyOf(a.Children, a.Key(), a.ParentID)
+	source := HasManyOf(a.Children, KeyExpr(a.Key()), NumberExpr(a.ParentID))
 	valid := a.Count.Using(aggregateCount(source, sqlowner.Expressions()))
 	if err := Check(a, valid); err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestAggregateCapabilityAndDeclarationIdentity(t *testing.T) {
 			t.Fatal("bad capability/binding accepted", err)
 		}
 	}
-	column, _ := FoundryColumn(b.ParentID, sqlowner.Metadata())
+	column, _ := FoundryColumn(NumberExpr(b.ParentID), sqlowner.Metadata())
 	wrong := FoundryRelated(source, ormcore.Expression{Node: querycore.AggregateNode{Kind: querycore.CountValues, Field: column.Field}, Refs: []ormcore.Reference{column.Reference}}, ormcore.Column[int64]{Scan: func(v *int64) any { return codec.Signed[int64]().Scan(v) }}, sqlowner.Expressions())
 	if err := Check(a.Count.Using(wrong)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("same Go type/different declaration accepted", err)
@@ -68,9 +68,9 @@ func TestAggregateCapabilityAndDeclarationIdentity(t *testing.T) {
 
 func TestAggregateUsingKeepsSlotAndSnapshots(t *testing.T) {
 	a := aggregateModels()
-	source := HasManyOf(a.Children, a.Key(), a.ParentID)
+	source := HasManyOf(a.Children, KeyExpr(a.Key()), NumberExpr(a.ParentID))
 	base := a.Count.Using(aggregateCount(source, sqlowner.Expressions()))
-	derived := base.Using(aggregateCount(source.Where(a.ParentID.Gt(1)), sqlowner.Expressions()))
+	derived := base.Using(aggregateCount(source.Where(NumberGt(a.ParentID, 1)), sqlowner.Expressions()))
 	if base.plan.slot != derived.plan.slot || len(base.plan.aggregate.input.plan.query.ast.Predicates) != 0 || len(derived.plan.aggregate.input.plan.query.ast.Predicates) != 1 {
 		t.Fatal("Using mutated source or changed destination")
 	}
@@ -112,7 +112,7 @@ func TestAggregateSlotDeclarationErrors(t *testing.T) {
 
 func TestAggregateThroughKeepsInputPredicates(t *testing.T) {
 	a := aggregateModels()
-	source := HasManyThroughOf(a.Children, a.Key(), a.ParentID, a.Key(), a.ParentID).Where(a.ParentID.Gt(0))
+	source := HasManyThroughOf(a.Children, KeyExpr(a.Key()), NumberExpr(a.ParentID), KeyExpr(a.Key()), NumberExpr(a.ParentID)).Where(NumberGt(a.ParentID, 0))
 	before := source.plan.query.ast.Predicates[0].(querycore.Comparison)
 	r := a.Count.Using(aggregateCount(source, sqlowner.Expressions()))
 	for range 2 {
@@ -136,7 +136,7 @@ func (s aggregateMetadataSource) aggregateInput(*aggregateModel, *aggregateModel
 
 func TestAggregateSourceMetadataIdentity(t *testing.T) {
 	a := aggregateModels()
-	native := HasManyOf(a.Children, a.Key(), a.ParentID)
+	native := HasManyOf(a.Children, KeyExpr(a.Key()), NumberExpr(a.ParentID))
 	source := aggregateMetadataSource{plan: native.plan, input: native.aggregateInput(nil, nil)}
 	source.input.identity = reflect.TypeFor[aggregateMetadataSource]()
 	for _, change := range []func(*aggregateInput){
@@ -157,8 +157,8 @@ func TestAggregateSourceMetadataIdentity(t *testing.T) {
 
 func TestAggregateValidationAndCapturedScopes(t *testing.T) {
 	a := aggregateModels()
-	r := ManyToManyOf(a.Links, a.Key(), a.ParentID, a.Key(), a.Key())
-	child := HasManyOf(a.Children, a.Key(), a.ParentID)
+	r := ManyToManyOf(a.Links, KeyExpr(a.Key()), NumberExpr(a.ParentID), KeyExpr(a.Key()), KeyExpr(a.Key()))
+	child := HasManyOf(a.Children, KeyExpr(a.Key()), NumberExpr(a.ParentID))
 	count := a.Count.Using(aggregateCount(r, sqlowner.Expressions()))
 	if err := validateQuery(a.Query().With(count).state); err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestAggregateValidationAndCapturedScopes(t *testing.T) {
 			t.Fatal("invalid aggregate accepted", err)
 		}
 	}
-	derived := count.Using(aggregateCount(r.WherePivot(a.ParentID.Eq(1)), sqlowner.Expressions()))
+	derived := count.Using(aggregateCount(r.WherePivot(NumberEq(a.ParentID, 1)), sqlowner.Expressions()))
 	if err := validateQuery(a.Query().With(derived).state); err != nil {
 		t.Fatal(err)
 	}

@@ -20,17 +20,35 @@ func TestBinaryDraftAndSnapshotsOwnBuffers(t *testing.T) {
 	table = declareRecords(orm.WithHooks(func() orm.Hooks[Record] {
 		return orm.Hooks[Record]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[Record]) error {
 			called = true
-			body, _ := orm.WriteGet(draft, table.Body.Set).Get()
-			storedRaw, _ := orm.WriteGet(draft, table.RawBytes.Set).Get()
-			note, _ := orm.WriteNullableGet(draft, table.Note.Set).Get()
+			body, _ := orm.WriteGet(draft, func() func(arg0 Input) orm.Assignment[Record] {
+				receiver := table.Body
+				return func(arg0 Input) orm.Assignment[Record] { return orm.InputColumnSet(receiver, arg0) }
+			}()).Get()
+			storedRaw, _ := orm.WriteGet(draft, func() func(arg0 []byte) orm.Assignment[Record] {
+				receiver := table.RawBytes
+				return func(arg0 []byte) orm.Assignment[Record] { return orm.ColumnSet(receiver, arg0) }
+			}()).Get()
+			note, _ := orm.WriteNullableGet(draft, func() func(arg0 Input) orm.Assignment[Record] {
+				receiver := table.Note
+				return func(arg0 Input) orm.Assignment[Record] { return orm.NullableInputColumnSet(receiver, arg0) }
+			}()).Get()
 			nullable, _ := note.Get()
 			if body[0] != 1 || storedRaw[0] != 3 || nullable[0] != 1 {
 				return errors.New("draft retained caller storage")
 			}
 			body[0], storedRaw[0], nullable[0] = 8, 8, 8
-			body, _ = orm.WriteGet(draft, table.Body.Set).Get()
-			storedRaw, _ = orm.WriteGet(draft, table.RawBytes.Set).Get()
-			note, _ = orm.WriteNullableGet(draft, table.Note.Set).Get()
+			body, _ = orm.WriteGet(draft, func() func(arg0 Input) orm.Assignment[Record] {
+				receiver := table.Body
+				return func(arg0 Input) orm.Assignment[Record] { return orm.InputColumnSet(receiver, arg0) }
+			}()).Get()
+			storedRaw, _ = orm.WriteGet(draft, func() func(arg0 []byte) orm.Assignment[Record] {
+				receiver := table.RawBytes
+				return func(arg0 []byte) orm.Assignment[Record] { return orm.ColumnSet(receiver, arg0) }
+			}()).Get()
+			note, _ = orm.WriteNullableGet(draft, func() func(arg0 Input) orm.Assignment[Record] {
+				receiver := table.Note
+				return func(arg0 Input) orm.Assignment[Record] { return orm.NullableInputColumnSet(receiver, arg0) }
+			}()).Get()
 			nullable, _ = note.Get()
 			if body[0] != 1 || storedRaw[0] != 3 || nullable[0] != 1 {
 				return errors.New("draft getter exposed owned storage")
@@ -38,9 +56,9 @@ func TestBinaryDraftAndSnapshotsOwnBuffers(t *testing.T) {
 			return stop
 		}}
 	}))
-	draft := []orm.Assignment[Record]{table.Key().Set(1), table.Body.Set(input), table.RawBytes.Set(raw), table.Note.Set(input), table.Encoded.Set(input)}
+	draft := []orm.Assignment[Record]{orm.KeySet(table.Key(), 1), orm.InputColumnSet(table.Body, input), orm.ColumnSet(table.RawBytes, raw), orm.NullableInputColumnSet(table.Note, input), orm.InputTextSet(table.Encoded, input)}
 	input[0], raw[0] = 9, 9
-	if _, err := table.Insert(t.Context(), draftPool(t), draft...); !errors.Is(err, stop) || !called {
+	if _, err := orm.Insert(t.Context(), draftPool(t), table.Table, draft...); !errors.Is(err, stop) || !called {
 		t.Fatal("draft inspection did not run", err)
 	}
 	before := Record{ID: 1, Body: Payload{1}, Raw: []byte{}, Note: value.Of(Payload{2})}
@@ -49,11 +67,11 @@ func TestBinaryDraftAndSnapshotsOwnBuffers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bodyChange, err := orm.ChangeOf(change, Records.Body)
+	bodyChange, err := orm.ChangeOf(change, orm.InputColumnExpr(Records.Body))
 	if err != nil {
 		t.Fatal(err)
 	}
-	noteChange, err := orm.NullableChangeOf(change, Records.Note)
+	noteChange, err := orm.NullableChangeOf(change, orm.NullableInputColumnExpr(Records.Note))
 	if err != nil || !bodyChange.Changed() || !noteChange.Changed() {
 		t.Fatal("binary changes incorrect", err)
 	}

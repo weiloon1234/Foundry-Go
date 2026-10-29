@@ -13,7 +13,7 @@ import (
 )
 
 // TransactionRecordSource carries complete results and nested locks in one getter.
-// Example: rows.AsTransaction[tag](rows.LockedRecord(q.ForUpdate()),"claim").
+// Example: rows.AsTransaction[tag](rows.LockedRecord(orm.Lock(q)),"claim").
 type TransactionRecordSource[R any] interface{ transactionRecord(*R) ormcore.RecordSource }
 
 // TransactionSelectionSource exposes only transaction-required input scopes.
@@ -40,7 +40,7 @@ func TransactionOf[R any](source RecordSource[R]) TransactionRecord[R] {
 }
 
 // LockedRecord retains all model locks and their wait policy inside the source.
-// Example: rows.LockedRecord(Users.Query().ForUpdate().SkipLocked()).
+// Example: rows.LockedRecord(orm.Lock(Users.Query()).SkipLocked()).
 func LockedRecord[M any](q orm.LockedQuery[M]) TransactionRecord[M] {
 	return TransactionRecord[M]{core: orm.FoundryLockedRecord(q, sqlowner.Metadata())}
 }
@@ -86,7 +86,7 @@ func transactionSelectionOf[S any](source TransactionSelectionSource[S]) ormcore
 }
 
 // AsTransaction retains locks within the aliased SELECT and its executor kind.
-// Example: rows.AsTransaction[claimed](rows.LockedRecord(q.ForUpdate()),"claimed").
+// Example: rows.AsTransaction[claimed](rows.LockedRecord(orm.Lock(q)),"claimed").
 func AsTransaction[A, R any](source TransactionRecordSource[R], alias string) TransactionAliased[A, R] {
 	r := transactionRecordOf(source)
 	r.Source = ormcore.AliasRecord(r, alias, reflect.TypeFor[R](), reflect.TypeFor[TransactionAlias[A, R]](), true)
@@ -96,7 +96,7 @@ func AsTransaction[A, R any](source TransactionRecordSource[R], alias string) Tr
 }
 
 // TransactionScope exposes preserved transaction-owned model or projection fields.
-// Example: expr.At(rows.TransactionScope(source),Orders.ID).
+// Example: expr.At(rows.TransactionScope(source), orm.KeyExpr(Orders.ID)).
 func TransactionScope[A, R any](source TransactionAliased[A, R]) expr.Scope[TransactionAlias[A, R], R] {
 	s := source.core.Source
 	return expr.FoundryScope[TransactionAlias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: s.Node.Source.Name(), Owner: s.Owners[s.Node.Source.Name()]}, Err: s.Err}, sqlowner.Expressions())

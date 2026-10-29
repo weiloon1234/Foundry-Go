@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
@@ -18,4 +20,4 @@ var c = rows.Correlate(a, b)
 var scope = rows.InnerScope(c, rows.Scope(b))
 var selected = rows.SelectCorrelatedRecord(c, scope)
 var lateral = rows.AsLateral[named](selected, "lateral")
-var _ = rows.ProjectCorrelated(c, reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Count, expr.SumAt(scope, models.Orders.TotalCents).Value()))
+var _ = rows.ProjectCorrelated(c, reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Count, expr.SumAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()))

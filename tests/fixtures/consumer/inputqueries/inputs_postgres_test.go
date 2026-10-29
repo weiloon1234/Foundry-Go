@@ -1,5 +1,7 @@
 package inputqueries_test
 
+import model "github.com/weiloon1234/Foundry-Go/model"
+
 import (
 	"errors"
 	"testing"
@@ -40,8 +42,8 @@ func TestPostgresMutationInputsPreserveHookAndStoredTypes(t *testing.T) {
 		state := &inputqueries.State{}
 		ctx := inputqueries.WithState(t.Context(), state)
 		raw := inputqueries.EmailInput{Address: " ADA@EXAMPLE.TEST "}
-		draft := []orm.Assignment[inputqueries.Member]{inputqueries.Members.Email.Set(raw), inputqueries.Members.Note.Set(inputqueries.LabelInput{Text: " note "})}
-		member, err := q.Insert(ctx, tx, draft...)
+		draft := []orm.Assignment[inputqueries.Member]{orm.InputTextSet(inputqueries.Members.Email, raw), orm.NullableInputTextSet(inputqueries.Members.Note, inputqueries.LabelInput{Text: " note "})}
+		member, err := orm.Insert(ctx, tx, q.Table, draft...)
 		if err != nil {
 			return err
 		}
@@ -49,7 +51,7 @@ func TestPostgresMutationInputsPreserveHookAndStoredTypes(t *testing.T) {
 		if !ok || beforeInput != raw || member.Email != "ada@example.test" || len(state.ORMCaptured) != 1 {
 			return errors.New("create lost its typed input or stored output")
 		}
-		created, err := orm.ChangeOf(state.ORMCaptured[0], q.Email)
+		created, err := orm.ChangeOf(state.ORMCaptured[0], orm.InputTextExpr(q.Email))
 		if err != nil {
 			return err
 		}
@@ -58,21 +60,36 @@ func TestPostgresMutationInputsPreserveHookAndStoredTypes(t *testing.T) {
 			return errors.New("create changes did not retain stored types")
 		}
 		state.Inspect = func(w *orm.Write[inputqueries.Member]) error {
-			note, set := orm.WriteNullableGet(w, q.Note.Set).Get()
+			note, set := orm.WriteNullableGet(w, func() func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
+				receiver := q.Note
+				return func(arg0 inputqueries.LabelInput) orm.Assignment[inputqueries.Member] {
+					return orm.NullableInputTextSet(receiver, arg0)
+				}
+			}()).Get()
 			label, nonnull := note.Get()
-			if orm.WriteIsSet(w, q.Key().Set) || orm.WriteGet(w, q.Email.Set) != value.Set(raw) || !set || !nonnull || label.Text != " note " {
+			if orm.WriteIsSet(w, func() func(arg0 model.ID[inputqueries.Member]) orm.Assignment[inputqueries.Member] {
+				receiver := q.Key()
+				return func(arg0 model.ID[inputqueries.Member]) orm.Assignment[inputqueries.Member] {
+					return orm.KeySet(receiver, arg0)
+				}
+			}()) || orm.WriteGet(w, func() func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
+				receiver := q.Email
+				return func(arg0 inputqueries.EmailInput) orm.Assignment[inputqueries.Member] {
+					return orm.InputTextSet(receiver, arg0)
+				}
+			}()) != value.Set(raw) || !set || !nonnull || label.Text != " note " {
 				return errors.New("create changed caller inputs or omissions")
 			}
 			return nil
 		}
-		if _, err := q.Update(ctx, tx, member.ID, draft...); err != nil {
+		if _, err := orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), member.ID, draft...); err != nil {
 			return err
 		}
 		state.Inspect = nil
 		if state.BeforeInput != value.Set(raw) {
 			return errors.New("create changed the caller's draft")
 		}
-		found, err := q.Require(ctx, tx, member.ID)
+		found, err := orm.RequireKey(ctx, tx, q.Table, member.ID)
 		if err != nil {
 			return err
 		}
@@ -85,18 +102,18 @@ func TestPostgresMutationInputsPreserveHookAndStoredTypes(t *testing.T) {
 		}
 
 		state.ORMCaptured = nil
-		member, err = q.Update(ctx, tx, member.ID, inputqueries.Members.Email.Set(inputqueries.EmailInput{Address: "  ADA@EXAMPLE.TEST  "}))
+		member, err = orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: "  ADA@EXAMPLE.TEST  "}))
 		if err != nil {
 			return err
 		}
 		if len(state.ORMCaptured) != 1 {
 			return errors.New("missing update changes")
 		}
-		emailChange, err := orm.ChangeOf(state.ORMCaptured[0], q.Email)
+		emailChange, err := orm.ChangeOf(state.ORMCaptured[0], orm.InputTextExpr(q.Email))
 		if err != nil {
 			return err
 		}
-		noteChange, err := orm.NullableChangeOf(state.ORMCaptured[0], q.Note)
+		noteChange, err := orm.NullableChangeOf(state.ORMCaptured[0], orm.NullableInputTextExpr(q.Note))
 		if err != nil {
 			return err
 		}
@@ -106,21 +123,21 @@ func TestPostgresMutationInputsPreserveHookAndStoredTypes(t *testing.T) {
 		if note, ok := member.Note.Get(); !ok || note != "note" {
 			return errors.New("omitted input changed the nullable field")
 		}
-		member, err = q.Update(ctx, tx, member.ID, inputqueries.Members.Note.SetNull())
+		member, err = orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), member.ID, orm.NullableInputTextSetNull(inputqueries.Members.Note))
 		if err != nil {
 			return err
 		}
 		if !member.Note.IsNull() {
 			return errors.New("input NULL became a scalar zero")
 		}
-		member, err = q.Update(ctx, tx, member.ID, inputqueries.Members.Note.Set(inputqueries.LabelInput{}))
+		member, err = orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), member.ID, orm.NullableInputTextSet(inputqueries.Members.Note, inputqueries.LabelInput{}))
 		if err != nil {
 			return err
 		}
 		if note, ok := member.Note.Get(); !ok || note != "" {
 			return errors.New("explicit zero input became NULL")
 		}
-		defaults, err := q.Insert(ctx, tx)
+		defaults, err := orm.Insert(ctx, tx, q.Table)
 		if err != nil {
 			return err
 		}
@@ -135,27 +152,27 @@ func TestPostgresMutationInputFailuresRollBack(t *testing.T) {
 	runInputs(t, func(tx *database.Tx) error {
 		q := inputqueries.Members
 		f := inputqueries.Members
-		member, err := q.Insert(t.Context(), tx, inputqueries.Members.Email.Set(inputqueries.EmailInput{Address: "original@example.test"}))
+		member, err := orm.Insert(t.Context(), tx, q.Table, orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: "original@example.test"}))
 		if err != nil {
 			return err
 		}
-		if _, err := q.Update(t.Context(), tx, member.ID, inputqueries.Members.Email.Set(inputqueries.EmailInput{Address: "reject"})); !errors.Is(err, inputqueries.Veto) {
+		if _, err := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: "reject"})); !errors.Is(err, inputqueries.Veto) {
 			return errors.New("input mutator veto was lost")
 		}
 		state := &inputqueries.State{VetoAfter: true}
 		ctx := inputqueries.WithState(t.Context(), state)
-		if _, err := q.Update(ctx, tx, member.ID, inputqueries.Members.Email.Set(inputqueries.EmailInput{Address: "pending@example.test"})); !errors.Is(err, inputqueries.Veto) {
+		if _, err := orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: "pending@example.test"})); !errors.Is(err, inputqueries.Veto) {
 			return errors.New("post-write veto was lost")
 		}
-		unchanged, err := q.Require(t.Context(), tx, member.ID)
+		unchanged, err := orm.RequireKey(t.Context(), tx, q.Table, member.ID)
 		if err != nil {
 			return err
 		}
 		if unchanged.Email != member.Email {
 			return errors.New("failed input write escaped its savepoint")
 		}
-		bad := orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(rows.SetConflictValue(f.Email, expr.Row(expr.At(rows.ConflictRowsOf(q.Query()).Proposed(), f.Email)).Value().Param(inputqueries.StoredEmail("already stored"))))
-		if _, err := orm.Upsert(t.Context(), tx, q.Query(), bad, inputqueries.Members.Key().Set(member.ID), inputqueries.Members.Email.Set(inputqueries.EmailInput{Address: "fresh@example.test"})); !errors.Is(err, fault.Invalid) {
+		bad := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(rows.SetConflictValue(orm.InputTextExpr(f.Email), expr.Row(expr.At(rows.ConflictRowsOf(q.Query()).Proposed(), orm.InputTextExpr(f.Email))).Value().Param(inputqueries.StoredEmail("already stored"))))
+		if _, err := orm.Upsert(t.Context(), tx, q.Query(), bad, orm.KeySet(inputqueries.Members.Key(), member.ID), orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: "fresh@example.test"})); !errors.Is(err, fault.Invalid) {
 			return errors.New("explicit stored-value conflict bypassed the input boundary")
 		}
 		return nil
@@ -165,15 +182,15 @@ func TestPostgresMutationInputFailuresRollBack(t *testing.T) {
 func TestPostgresMutationInputBulkAndReusableConflict(t *testing.T) {
 	runInputs(t, func(tx *database.Tx) error {
 		q := inputqueries.Members
-		member, err := q.Insert(t.Context(), tx)
+		member, err := orm.Insert(t.Context(), tx, q.Table)
 		if err != nil {
 			return err
 		}
 		state := &inputqueries.State{}
 		ctx := inputqueries.WithState(t.Context(), state)
 		f := inputqueries.Members
-		policy := orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(orm.ConflictSet(f.Email, inputqueries.EmailInput{Address: " CONFLICT@EXAMPLE.TEST "}), orm.ConflictIncoming(f.Note))
-		draft := []orm.Assignment[inputqueries.Member]{inputqueries.Members.Key().Set(member.ID), inputqueries.Members.Email.Set(inputqueries.EmailInput{Address: " PROPOSED@EXAMPLE.TEST "}), inputqueries.Members.Note.Set(inputqueries.LabelInput{Text: " bulk note "})}
+		policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(orm.ConflictSet(orm.InputTextExpr(f.Email), inputqueries.EmailInput{Address: " CONFLICT@EXAMPLE.TEST "}), orm.ConflictIncoming(orm.NullableInputTextExpr(f.Note)))
+		draft := []orm.Assignment[inputqueries.Member]{orm.KeySet(inputqueries.Members.Key(), member.ID), orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: " PROPOSED@EXAMPLE.TEST "}), orm.NullableInputTextSet(inputqueries.Members.Note, inputqueries.LabelInput{Text: " bulk note "})}
 		for range 2 {
 			result, err := orm.Upsert(ctx, tx, q.Query(), policy, draft...)
 			if err != nil {
@@ -187,9 +204,9 @@ func TestPostgresMutationInputBulkAndReusableConflict(t *testing.T) {
 				return errors.New("Incoming did not retain normalized stored output")
 			}
 		}
-		members, err := q.InsertMany(ctx, tx, [][]orm.Assignment[inputqueries.Member]{
-			[]orm.Assignment[inputqueries.Member]{inputqueries.Members.Email.Set(inputqueries.EmailInput{Address: " FIRST@EXAMPLE.TEST "})},
-			[]orm.Assignment[inputqueries.Member]{inputqueries.Members.Email.Set(inputqueries.EmailInput{Address: " SECOND@EXAMPLE.TEST "}), inputqueries.Members.Note.SetNull()},
+		members, err := orm.InsertMany(ctx, tx, q.Table, [][]orm.Assignment[inputqueries.Member]{
+			[]orm.Assignment[inputqueries.Member]{orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: " FIRST@EXAMPLE.TEST "})},
+			[]orm.Assignment[inputqueries.Member]{orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: " SECOND@EXAMPLE.TEST "}), orm.NullableInputTextSetNull(inputqueries.Members.Note)},
 		})
 		if err != nil {
 			return err

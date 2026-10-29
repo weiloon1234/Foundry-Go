@@ -13,7 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// RowValue is a sealed value evaluated before grouping. Example: expr.Add(expr.Value(Users.Age),expr.Value(Users.Age)).
+// RowValue is a sealed value evaluated before grouping. Example: expr.Add(expr.Value(orm.NumberExpr(Users.Age)),expr.Value(orm.NumberExpr(Users.Age))).
 type RowValue[S, V any] interface{ rowValue(*S) rowData[V] }
 
 type rowData[V any] struct {
@@ -21,7 +21,7 @@ type rowData[V any] struct {
 	column ormcore.Column[V]
 }
 
-// RowExpression is a computed row value with exact owner and result types. Example: expr.Param(Users.Age,2).
+// RowExpression is a computed row value with exact owner and result types. Example: expr.Param(orm.NumberExpr(Users.Age), 2).
 type RowExpression[S, V any] struct {
 	rowPhase [0]struct{}
 	_        [0]*S
@@ -51,7 +51,7 @@ func rowInput[S, V any](v RowValue[S, V]) RowExpression[S, V] {
 }
 
 // Row adapts a row-phase value without changing its scope or projection type.
-// Example: expr.Row(expr.At(scope, Users.Age)).Param(18).
+// Example: expr.Row(expr.At(scope, orm.NumberExpr(Users.Age))).Param(18).
 func Row[S, V any](v RowValue[S, V]) RowExpression[S, V] { return rowInput(v) }
 
 // Constant snapshots a bound value using its explicit codec, without an exemplar column.
@@ -63,7 +63,7 @@ func Constant[S, V any](c codec.Codec[V], v V) RowExpression[S, V] {
 // Value promotes a computed row value to the selected phase. Example: expr.Add(a,b).Value().
 func (e RowExpression[S, V]) Value() Selected[S, V] { return Selected[S, V]{data: e.data} }
 
-// Param snapshots a bound non-null value using a column's comparison codec. Example: expr.Param(Users.Nickname,"Ada").
+// Param snapshots a bound non-null value using a column's comparison codec. Example: expr.Param(orm.NullableTextExpr(Users.Nickname), "Ada").
 func Param[S, V, P any](column orm.ExpressionColumn[S, V, P], v V) RowExpression[S, V] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return parameter[S](rowData[V]{column: c, core: ormcore.Expression{Refs: []ormcore.Reference{c.Reference}, Err: c.Err}}, v)
@@ -100,7 +100,7 @@ func columnCodec[V any](c codec.Codec[V]) ormcore.Column[V] {
 	return ormcore.Column[V]{Text: c.ParameterType() == codec.TypeText, Sensitive: c.SensitiveValues(), Kind: c.ParameterType(), Nullable: value.IsNullableType[V](), Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: c.Validate()}
 }
 
-// NullableRow explicitly widens a row value by one nullable layer. Example: expr.NullableRow(expr.Value(Users.Age)).
+// NullableRow explicitly widens a row value by one nullable layer. Example: expr.NullableRow(expr.Value(orm.NumberExpr(Users.Age))).
 func NullableRow[S, V any](v RowValue[S, V]) RowExpression[S, value.Nullable[V]] {
 	return RowExpression[S, value.Nullable[V]]{data: nullableData(rowInput(v).data)}
 }

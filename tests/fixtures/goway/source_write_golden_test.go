@@ -51,22 +51,22 @@ func TestSourceWriteOldAndNewAgree(t *testing.T) {
 
 		f := n.Members
 		q := f.Query()
-		source := r.From(q.Where(f.Key().Eq(1)).OrderBy(f.Key().Asc()).Limit(2))
-		insertion := r.InsertFrom(source, q, r.MapInsert(f.ID, expr.Value(f.Key())), r.MapInsert(f.Body, expr.Value(f.Body)), r.MapInsert(f.CreatedAt, expr.Value(f.CreatedAt))).Values(f.Name.Set(" normalized "), f.Note.Set(coremodels.LabelInput{Text: " label "}))
+		source := r.From(q.Where(orm.KeyEq(f.Key(), 1)).OrderBy(orm.KeyAsc(f.Key())).Limit(2))
+		insertion := r.InsertFrom(source, q, r.MapInsert(orm.KeyExpr(f.ID), expr.Value(orm.KeyExpr(f.Key()))), r.MapInsert(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body))), r.MapInsert(orm.TimeExpr(f.CreatedAt), expr.Value(orm.TimeExpr(f.CreatedAt)))).Values(orm.InputTextSet(f.Name, " normalized "), orm.NullableInputTextSet(f.Note, coremodels.LabelInput{Text: " label "}))
 		_, err = insertion.Returning(ctx, db, 2)
 		check(err)
 		_, err = insertion.Exec(ctx, db)
 		check(err)
-		update := r.UpdateFrom(q.Where(f.Name.Ne("excluded")), source).Match(r.MatchSource(f.Key(), expr.Value(f.Key()))).Select(r.MapUpdate(f.Body, expr.Value(f.Body))).Values(f.Name.Set(" updated "), f.Note.Set(coremodels.LabelInput{Text: " updated "}))
+		update := r.UpdateFrom(q.Where(orm.InputTextNe(f.Name, "excluded")), source).Match(r.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Select(r.MapUpdate(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body)))).Values(orm.InputTextSet(f.Name, " updated "), orm.NullableInputTextSet(f.Note, coremodels.LabelInput{Text: " updated "}))
 		_, err = update.Returning(ctx, db, 2)
 		check(err)
 		_, err = update.Exec(ctx, db)
 		check(err)
-		_, err = r.UpdateFrom(q, source).Match(r.MatchNullableSource(f.Key(), expr.NullableRow(expr.Value(f.Key())))).Values(f.Name.Set(" literal ")).Exec(ctx, db)
+		_, err = r.UpdateFrom(q, source).Match(r.MatchNullableSource(orm.KeyExpr(f.Key()), expr.NullableRow(expr.Value(orm.KeyExpr(f.Key()))))).Values(orm.InputTextSet(f.Name, " literal ")).Exec(ctx, db)
 		check(err)
-		_, err = r.DeleteUsing(q.WithTrashed(), source).Match(r.MatchSource(f.Key(), expr.Value(f.Key()))).Returning(ctx, db, 2)
+		_, err = r.DeleteUsing(q.WithTrashed(), source).Match(r.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Returning(ctx, db, 2)
 		check(err)
-		_, err = r.ForceDeleteUsing(q.WithTrashed(), f.Soft, source).Match(r.MatchSource(f.Key(), expr.Value(f.Key()))).Returning(ctx, db, 2)
+		_, err = r.ForceDeleteUsing(q.WithTrashed(), f.Soft, source).Match(r.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Returning(ctx, db, 2)
 		check(err)
 
 		if len(trace) != 0 || closed != 5 {

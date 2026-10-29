@@ -1,5 +1,7 @@
 package reporting
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
@@ -35,11 +37,11 @@ func SelectOrders(tenant int64) rows.Query[OrderScope, OrderRow] {
 	members := rows.As[memberSide](Members.Query(), "members")
 	orders := rows.As[orderSide](Orders.Query(), "orders")
 	m, o := rows.Scope(members), rows.Scope(orders)
-	joined := rows.InnerJoin(members, orders, rows.On(expr.At(m, Members.ID), expr.At(o, Orders.MemberID)))
+	joined := rows.InnerJoin(members, orders, rows.On(expr.At(m, orm.KeyExpr(Members.ID)), expr.At(o, orm.ColumnExpr(Orders.MemberID))))
 	member := rows.LeftScope(joined, m)
 	order := rows.RightScope(joined, o)
-	id := expr.At(order, Orders.ID)
+	id := expr.At(order, orm.KeyExpr(Orders.ID))
 	return rows.OrderBy(rows.Select(joined, OrderRows,
-		rows.Map(OrderRows.ID, id), rows.Map(OrderRows.MemberName, expr.At(member, Members.Name)), rows.Map(OrderRows.Label, expr.At(order, Orders.Label)), rows.Map(OrderRows.Amount, expr.At(order, Orders.Amount)),
-	).Where(expr.At(member, Members.TenantID).Eq(tenant), expr.At(order, Orders.TenantID).Eq(tenant)), id.Asc())
+		rows.Map(OrderRows.ID, id), rows.Map(OrderRows.MemberName, expr.At(member, orm.TextExpr(Members.Name))), rows.Map(OrderRows.Label, expr.At(order, orm.TextExpr(Orders.Label))), rows.Map(OrderRows.Amount, expr.At(order, orm.NumberExpr(Orders.Amount))),
+	).Where(expr.At(member, orm.NumberExpr(Members.TenantID)).Eq(tenant), expr.At(order, orm.NumberExpr(Orders.TenantID)).Eq(tenant)), id.Asc())
 }

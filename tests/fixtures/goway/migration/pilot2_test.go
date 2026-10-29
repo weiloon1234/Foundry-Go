@@ -33,14 +33,14 @@ var CountryFlags = rows.Define(func(b rows.Builder[CountryFlag], r *CountryFlag)
 
 // migration:pilot2-row-constant
 func enabledAdmins() rows.Scalar[Admin, bool] {
-	enabled := expr.When(expr.Value(Admins.Username).Eq("active"),
+	enabled := expr.When(expr.Value(orm.TextExpr(Admins.Username)).Eq("active"),
 		expr.Constant[Admin](codec.Bool[bool](), true)).Else(expr.Constant[Admin](codec.Bool[bool](), false))
 	return rows.SelectScalar(rows.From(Admins.Query()), enabled.Value())
 }
 func scopedUsername() {
 	type adminScope struct{}
 	source := rows.As[adminScope](Admins.Query(), "admin")
-	parameter := expr.Row(expr.At(rows.Scope(source), Admins.Username)).Param("Ada")
+	parameter := expr.Row(expr.At(rows.Scope(source), orm.TextExpr(Admins.Username))).Param("Ada")
 	_ = parameter
 }
 

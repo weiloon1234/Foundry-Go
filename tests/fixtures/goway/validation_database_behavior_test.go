@@ -20,15 +20,15 @@ func TestValidationDatabaseRejectsBadSourcesAndRedacts(t *testing.T) {
 	g := &goldenCapture{}
 	db := g.open(t.Context())
 	defer db.Close(t.Context())
-	for _, q := range []orm.Query[models.User]{{}, models.Users.Query().Limit(1), models.Users.Query().Offset(1), models.Users.Query().OrderBy(models.Users.ID.Asc()), orm.WithRelationLimits(models.Users.Query(), orm.DefaultRelationLimits())} {
-		if validation.ValidateRule(dbvalidation.Unique(db, q, models.Users.Email)) == nil {
+	for _, q := range []orm.Query[models.User]{{}, models.Users.Query().Limit(1), models.Users.Query().Offset(1), models.Users.Query().OrderBy(orm.KeyAsc(models.Users.ID)), orm.WithRelationLimits(models.Users.Query(), orm.DefaultRelationLimits())} {
+		if validation.ValidateRule(dbvalidation.Unique(db, q, orm.TextExpr(models.Users.Email))) == nil {
 			t.Fatal("invalid source accepted")
 		}
 	}
 	type fake struct {
 		orm.KeyColumn[models.User, string]
 	}
-	for _, column := range []orm.KeyColumn[models.User, string]{nil, orm.Text[models.User, string]{}, fake{}, fake{models.Users.Email}} {
+	for _, column := range []orm.KeyColumn[models.User, string]{nil, orm.TextExpr(orm.Text[models.User, string]{}), fake{}, fake{orm.TextExpr(models.Users.Email)}} {
 		if validation.ValidateRule(dbvalidation.Exists(db, models.Users.Query(), column)) == nil {
 			t.Fatal("invalid column accepted")
 		}
@@ -38,7 +38,7 @@ func TestValidationDatabaseRejectsBadSourcesAndRedacts(t *testing.T) {
 		t.Fatal("zero lookup accepted")
 	}
 	scopeErr := errors.New("scope unavailable")
-	scoped := dbvalidation.Scoped(db, func(context.Context) (orm.Query[models.User], error) { return models.Users.Query(), scopeErr }, models.Users.Email)
+	scoped := dbvalidation.Scoped(db, func(context.Context) (orm.Query[models.User], error) { return models.Users.Query(), scopeErr }, orm.TextExpr(models.Users.Email))
 	if _, err := scoped.Exists(t.Context(), "secret"); !errors.Is(err, scopeErr) {
 		t.Fatal("scope failure became an observation")
 	}
@@ -46,8 +46,8 @@ func TestValidationDatabaseRejectsBadSourcesAndRedacts(t *testing.T) {
 		t.Fatal("invalid sources performed IO")
 	}
 	const secret = "retained-private-tenant"
-	q := models.Users.Query().Where(models.Users.Email.Eq(secret))
-	a, b := orm.Lookup(q, models.Users.Email), dbvalidation.Lookup(db, q, models.Users.Email)
+	q := models.Users.Query().Where(orm.TextEq(models.Users.Email, secret))
+	a, b := orm.Lookup(q, orm.TextExpr(models.Users.Email)), dbvalidation.Lookup(db, q, orm.TextExpr(models.Users.Email))
 	for _, v := range []any{a, b, struct {
 		lookup orm.ValueLookup[models.User, string]
 	}{a}, struct {
@@ -76,7 +76,7 @@ func TestValidationDatabaseCheckTimeScopesAndExclusions(t *testing.T) {
 	defer db.Close(t.Context())
 	slot := validation.NewSlot[int64]()
 	// Both the retained scope and the request-specific key exclusion must survive.
-	ignored := dbvalidation.UniqueIgnoring(db, reads.Members.Query().Where(reads.Members.Name.Ne("tenant-private")), reads.Members.Name, reads.Members.ID, slot)
+	ignored := dbvalidation.UniqueIgnoring(db, reads.Members.Query().Where(orm.TextNe(reads.Members.Name, "tenant-private")), orm.TextExpr(reads.Members.Name), orm.KeyExpr(reads.Members.ID), func(id int64) orm.Predicate[reads.Member] { return orm.KeyNe(reads.Members.ID, id) }, slot)
 	if validation.ValidateRule(ignored) == nil {
 		t.Fatal("missing provider accepted")
 	}
@@ -101,8 +101,8 @@ func TestValidationDatabaseCheckTimeScopesAndExclusions(t *testing.T) {
 	scoped := dbvalidation.Scoped(db, func(ctx context.Context) (orm.Query[reads.Member], error) {
 		calls++
 		tenant, err := coremodels.TenantID(ctx)
-		return reads.Members.Query().Where(reads.Members.ID.Ne(tenant)), err
-	}, reads.Members.Name)
+		return reads.Members.Query().Where(orm.KeyNe(reads.Members.ID, tenant)), err
+	}, orm.TextExpr(reads.Members.Name))
 	for _, tenant := range []int64{7, 19} {
 		_, err := scoped.Exists(coremodels.TenantContext(t.Context(), tenant), "candidate")
 		if err != nil {

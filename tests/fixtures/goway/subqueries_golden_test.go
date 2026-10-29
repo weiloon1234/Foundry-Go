@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -46,15 +48,15 @@ func runSubqueryNew(g *goldenCapture) {
 	db := g.open(ctx)
 	defer db.Close(ctx)
 	u, o := models.Users, models.Orders
-	outer := rowset.From(u.Query().Where(u.Age.Gt(18)))
-	amount := rowset.SelectScalar(rowset.From(o.Query().Where(o.TotalCents.Gt(5)).OrderBy(o.TotalCents.Desc()).Limit(1)), expr.Row(expr.Value(o.TotalCents)).Value())
+	outer := rowset.From(u.Query().Where(orm.NumberGt(u.Age, 18)))
+	amount := rowset.SelectScalar(rowset.From(o.Query().Where(orm.NumberGt(o.TotalCents, 5)).OrderBy(orm.NumberDesc(o.TotalCents)).Limit(1)), expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value())
 	count := rowset.SelectScalar(rowset.From(o.Query()), expr.Count[models.Order]().Value())
-	name := rowset.SelectScalar(rowset.From(u.Query().Where(u.Age.Lt(90)).Limit(1)), expr.Row(expr.Value(u.Nickname)).Value())
-	ids := rowset.WhereScalar(rowset.SelectScalar(rowset.From(u.Query()), expr.Row(expr.Value(u.ID)).Value()), expr.OrderRow(expr.Value(u.Age)).Gt(20))
-	age := rowset.SelectScalar(rowset.From(u.Query().Where(u.Age.Lt(99)).Limit(1)), expr.Row(expr.Value(u.Age)).Value())
+	name := rowset.SelectScalar(rowset.From(u.Query().Where(orm.NumberLt(u.Age, 90)).Limit(1)), expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))).Value())
+	ids := rowset.WhereScalar(rowset.SelectScalar(rowset.From(u.Query()), expr.Row(expr.Value(orm.KeyExpr(u.ID))).Value()), expr.OrderRow(expr.Value(orm.NumberExpr(u.Age))).Gt(20))
+	age := rowset.SelectScalar(rowset.From(u.Query().Where(orm.NumberLt(u.Age, 99)).Limit(1)), expr.Row(expr.Value(orm.NumberExpr(u.Age))).Value())
 	countZero := rowset.SelectScalar(rowset.From(o.Query().Limit(0)), expr.Count[models.Order]().Value())
-	exists := rowset.As[joinC](o.Query().Where(o.TotalCents.Gt(3)), "exists_orders")
+	exists := rowset.As[joinC](o.Query().Where(orm.NumberGt(o.TotalCents, 3)), "exists_orders")
 	s := subqueryRows
-	q := rowset.OrderBy(rowset.Select(outer, s, rowset.MapSelected(s.Amount, rowset.ScalarRowQuery(outer, amount).Value()), rowset.MapSelected(s.Count, rowset.ScalarRowQuery(outer, count).Value()), rowset.MapSelected(s.Name, rowset.ScalarNullableRowQuery(outer, name).Value())).Where(rowset.InQuery(expr.Value(u.ID), ids), expr.Not(rowset.InNullableQuery(expr.Value(u.Email), name)), rowset.ExistsQuery(outer, exists), expr.GreaterNullable(expr.NullableRow(expr.Value(u.Age)), rowset.ScalarRowQuery(outer, age)), expr.Not(rowset.ExistsQuery(outer, countZero))), expr.Value(u.Age).Asc())
+	q := rowset.OrderBy(rowset.Select(outer, s, rowset.MapSelected(s.Amount, rowset.ScalarRowQuery(outer, amount).Value()), rowset.MapSelected(s.Count, rowset.ScalarRowQuery(outer, count).Value()), rowset.MapSelected(s.Name, rowset.ScalarNullableRowQuery(outer, name).Value())).Where(rowset.InQuery(expr.Value(orm.KeyExpr(u.ID)), ids), expr.Not(rowset.InNullableQuery(expr.Value(orm.TextExpr(u.Email)), name)), rowset.ExistsQuery(outer, exists), expr.GreaterNullable(expr.NullableRow(expr.Value(orm.NumberExpr(u.Age))), rowset.ScalarRowQuery(outer, age)), expr.Not(rowset.ExistsQuery(outer, countZero))), expr.Value(orm.NumberExpr(u.Age)).Asc())
 	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(q).All(ctx, db))}))
 }

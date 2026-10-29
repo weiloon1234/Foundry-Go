@@ -1,5 +1,7 @@
 package keyqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 
@@ -27,7 +29,7 @@ func TestCursorCompileSQLParity(t *testing.T) {
 		t.Fatal("recorded SQL parity changed")
 	}
 
-	values := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query().Limit(5)), expr.Row(expr.Value(models.Users.Nickname)).Value())))
+	values := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query().Limit(5)), expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Value())))
 	valueCursor := values.OrderBy(values.Value().Desc()).UniqueBy(expr.Group(values.Value()))
 	scalar, err := rows.CompileValueCursor(valueCursor)
 	if err != nil {

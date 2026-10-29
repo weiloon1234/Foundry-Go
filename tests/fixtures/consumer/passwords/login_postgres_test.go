@@ -1,5 +1,7 @@
 package passwords_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -46,7 +48,7 @@ func TestPostgresModelFirstPasswordLoginAndRehash(t *testing.T) {
 		if result.Subject().ID != account.ID || result.Subject().Digest == account.Digest || result.Proof().Assurance() != auth.Authenticated {
 			return errors.New("login lost model or rehash result")
 		}
-		current, err := passwords.AccountRecords.Require(t.Context(), tx, account.ID)
+		current, err := orm.RequireKey(t.Context(), tx, passwords.AccountRecords.Table, account.ID)
 		if err != nil {
 			return err
 		}
@@ -64,7 +66,7 @@ func TestPostgresModelFirstPasswordLoginAndRehash(t *testing.T) {
 		if result.Proof().Assurance() != auth.PendingMFA || result.Subject().Digest != current.Digest {
 			return errors.New("MFA policy ignored or current hash rewritten")
 		}
-		if _, err := passwords.AccountRecords.Update(t.Context(), tx, account.ID, passwords.AccountRecords.Enabled.Set(false)); err != nil {
+		if _, err := orm.Update(t.Context(), tx, passwords.AccountRecords.Table.Query(), passwords.AccountRecords.Table.Key(), account.ID, orm.ColumnSet(passwords.AccountRecords.Enabled, false)); err != nil {
 			return err
 		}
 		result, err = passwords.Authenticate(t.Context(), login, request)

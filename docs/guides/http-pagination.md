@@ -27,7 +27,7 @@ var List = pagination.DefineNumbered(
 ```go
 func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResult[MemberResponse], error) {
 	builder := memberQuery(in.Filters)
-	page, err := builder.Paginate(ctx, s.DB, in.Page)
+	page, err := orm.Paginate(ctx, s.DB, builder, in.Page)
 	if err != nil {
 		return orm.PageResult[MemberResponse]{}, err
 	}

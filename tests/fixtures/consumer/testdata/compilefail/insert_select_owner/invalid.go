@@ -1,9 +1,11 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/linkqueries"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.InsertFrom(rows.From(linkqueries.Members.Query()), linkqueries.Archives.Query()).Select(rows.MapInsert(linkqueries.Archives.Name, expr.Value(linkqueries.Groups.Name)))
+var _ = rows.InsertFrom(rows.From(linkqueries.Members.Query()), linkqueries.Archives.Query()).Select(rows.MapInsert(orm.TextExpr(linkqueries.Archives.Name), expr.Value(orm.TextExpr(linkqueries.Groups.Name))))

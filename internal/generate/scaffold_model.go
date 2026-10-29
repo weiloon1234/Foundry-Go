@@ -56,14 +56,14 @@ func renderORMModel(pkg string, o ScaffoldOptions) (string, error) {
 		fmt.Fprintf(&s, "// %s holds %s. Example: record.%s.IsLoaded().\n%s %s\n", slot.name, extensionSlotDescription(slot), slot.name, slot.name, valueType(slot))
 	}
 	s.WriteString("}\n\n")
-	fmt.Fprintf(&s, "// %s holds the model's typed fields. Example: %s.Query().\ntype %s struct {\n// Table owns the primary key and operations. Example: %s.Key().Eq(id).\norm.Table[%s,%s]\n", names.tableType, table, names.tableType, table, name, key)
+	fmt.Fprintf(&s, "// %s holds the model's typed fields. Example: %s.Query().\ntype %s struct {\n// Table owns the primary key and operations. Example: orm.KeyEq(%s.Key(), id).\norm.Table[%s,%s]\n", names.tableType, table, names.tableType, table, name, key)
 	// Slot handles use a suffix so every previously accepted model field name
 	// (including Table, Key and Query) remains usable beside embedded operations.
 	for _, slot := range slots {
 		fmt.Fprintf(&s, "// %sSlot binds the external value. Example: extensions.BindSlot(%s.Key(),%s.%sSlot).\n%sSlot orm.Slot[%s,%s]\n", slot.name, table, table, slot.name, slot.name, name, valueType(slot))
 	}
 	s.WriteString("}\n\n")
-	fmt.Fprintf(&s, "// %s declares the persisted table. Example: %s.Find(ctx,db,id).\nvar %s = orm.Define(%q,func(b orm.Builder[%s],m *%s)%s {\nreturn %s{Table:orm.TableOf(b,&m.ID),\n", table, table, table, o.Table, name, name, names.tableType, names.tableType)
+	fmt.Fprintf(&s, "// %s declares the persisted table. Example: orm.Find(ctx, db, %s.Table, id).\nvar %s = orm.Define(%q,func(b orm.Builder[%s],m *%s)%s {\nreturn %s{Table:orm.TableOf(b,&m.ID),\n", table, table, table, o.Table, name, name, names.tableType, names.tableType)
 	for _, slot := range slots {
 		fmt.Fprintf(&s, "%sSlot:orm.SlotOf(b,&m.%s),\n", slot.name, slot.name)
 	}

@@ -108,24 +108,24 @@ func TestPostgresTypedModelValidation(t *testing.T) {
 		if err := checkRejected(validation.Check(active, t.Context(), second, validation.DefaultLimits()), "foundry.exists"); err != nil {
 			return err
 		}
-		if err := validation.Check(databasevalidation.Exists(executor, modelvalidation.Countries.Query(), modelvalidation.Countries.Code), t.Context(), models.CountryCode("MY"), validation.DefaultLimits()); err != nil {
+		if err := validation.Check(databasevalidation.Exists(executor, modelvalidation.Countries.Query(), orm.KeyExpr(modelvalidation.Countries.Code)), t.Context(), models.CountryCode("MY"), validation.DefaultLimits()); err != nil {
 			return err
 		}
 		amount, err := decimal.Parse(exact)
 		if err != nil {
 			return err
 		}
-		if err := validation.Check(databasevalidation.Exists(executor, modelvalidation.LedgerEntries.Query(), modelvalidation.LedgerEntries.Amount), t.Context(), amount, validation.DefaultLimits()); err != nil {
+		if err := validation.Check(databasevalidation.Exists(executor, modelvalidation.LedgerEntries.Query(), orm.NumberExpr(modelvalidation.LedgerEntries.Amount)), t.Context(), amount, validation.DefaultLimits()); err != nil {
 			return err
 		}
-		if err := validation.Check(databasevalidation.Exists(executor, modelvalidation.Users.Query(), modelvalidation.Users.Nickname), t.Context(), "member", validation.DefaultLimits()); err != nil {
+		if err := validation.Check(databasevalidation.Exists(executor, modelvalidation.Users.Query(), orm.NullableTextExpr(modelvalidation.Users.Nickname)), t.Context(), "member", validation.DefaultLimits()); err != nil {
 			return err
 		}
 		groups := modelvalidation.Groups.Query()
-		if err := validation.Check(databasevalidation.Unique(executor, groups, modelvalidation.Groups.Name), t.Context(), "reserved", validation.DefaultLimits()); err != nil {
+		if err := validation.Check(databasevalidation.Unique(executor, groups, orm.TextExpr(modelvalidation.Groups.Name)), t.Context(), "reserved", validation.DefaultLimits()); err != nil {
 			return err
 		}
-		if err := checkRejected(validation.Check(databasevalidation.Unique(executor, groups.WithTrashed(), modelvalidation.Groups.Name), t.Context(), "reserved", validation.DefaultLimits()), "foundry.unique"); err != nil {
+		if err := checkRejected(validation.Check(databasevalidation.Unique(executor, groups.WithTrashed(), orm.TextExpr(modelvalidation.Groups.Name)), t.Context(), "reserved", validation.DefaultLimits()), "foundry.unique"); err != nil {
 			return err
 		}
 		if executor.queries != 11 {
@@ -150,15 +150,15 @@ func TestPostgresTypedModelValidation(t *testing.T) {
 			return err
 		}
 		// Existing but invisible soft-deleted rows remain inaccessible.
-		softBatch := databasevalidation.ExistsAll(executor, groups, modelvalidation.Groups.Name)
+		softBatch := databasevalidation.ExistsAll(executor, groups, orm.TextExpr(modelvalidation.Groups.Name))
 		if err := checkRejected(validation.Check(softBatch, t.Context(), []string{"reserved"}, validation.DefaultLimits()), "foundry.exists_all"); err != nil {
 			return err
 		}
-		if err := validation.Check(databasevalidation.ExistsAll(executor, groups.WithTrashed(), modelvalidation.Groups.Name), t.Context(), []string{"reserved", "reserved"}, validation.DefaultLimits()); err != nil {
+		if err := validation.Check(databasevalidation.ExistsAll(executor, groups.WithTrashed(), orm.TextExpr(modelvalidation.Groups.Name)), t.Context(), []string{"reserved", "reserved"}, validation.DefaultLimits()); err != nil {
 			return err
 		}
 		// Stored codecs and SQL equality, including exact decimals, are reused.
-		if err := validation.Check(databasevalidation.ExistsAll(executor, modelvalidation.LedgerEntries.Query(), modelvalidation.LedgerEntries.Amount), t.Context(), []decimal.Decimal{amount, amount}, validation.DefaultLimits()); err != nil {
+		if err := validation.Check(databasevalidation.ExistsAll(executor, modelvalidation.LedgerEntries.Query(), orm.NumberExpr(modelvalidation.LedgerEntries.Amount)), t.Context(), []decimal.Decimal{amount, amount}, validation.DefaultLimits()); err != nil {
 			return err
 		}
 		count := executor.queries
@@ -192,18 +192,18 @@ func TestModelValidationRejectsInvalidSourcesWithoutIO(t *testing.T) {
 	executor := &readOnlyValidationExecutor{}
 	for _, source := range []orm.Query[models.User]{
 		{}, modelvalidation.Users.Query().Limit(0), modelvalidation.Users.Query().Offset(1),
-		modelvalidation.Users.Query().OrderBy(fields.ID.Asc()),
+		modelvalidation.Users.Query().OrderBy(orm.KeyAsc(fields.ID)),
 		orm.WithRelationLimits(modelvalidation.Users.Query(), orm.DefaultRelationLimits()),
 	} {
-		if validation.ValidateRule(databasevalidation.Unique(executor, source, fields.Email)) == nil {
+		if validation.ValidateRule(databasevalidation.Unique(executor, source, orm.TextExpr(fields.Email))) == nil {
 			t.Fatal("invalid source accepted")
 		}
 	}
-	if validation.ValidateRule(databasevalidation.Exists(executor, modelvalidation.Users.Query(), orm.Text[models.User, string]{})) == nil {
+	if validation.ValidateRule(databasevalidation.Exists(executor, modelvalidation.Users.Query(), orm.TextExpr(orm.Text[models.User, string]{}))) == nil {
 		t.Fatal("zero field accepted")
 	}
 	var missing *database.DB
-	if validation.ValidateRule(databasevalidation.Exists(missing, modelvalidation.Users.Query(), fields.ID)) == nil {
+	if validation.ValidateRule(databasevalidation.Exists(missing, modelvalidation.Users.Query(), orm.KeyExpr(fields.ID))) == nil {
 		t.Fatal("nil executor accepted")
 	}
 	if executor.queries != 0 {
@@ -279,7 +279,7 @@ func TestPostgresCheckTimeScopesAndElementLookups(t *testing.T) {
 		if err := validation.Check(assignments, t.Context(), invalid, validation.DefaultLimits()); !errors.As(err, &rejected) || len(rejected.Issues()) != 1 || rejected.Issues()[0].Path != "/2/assignee_id" {
 			return fmt.Errorf("element path rejection: %v", err)
 		}
-		emails := databasevalidation.UniqueAll(executor, modelvalidation.Users.Query(), modelvalidation.Users.Email)
+		emails := databasevalidation.UniqueAll(executor, modelvalidation.Users.Query(), orm.TextExpr(modelvalidation.Users.Email))
 		before = executor.queries
 		if err := validation.Check(emails, t.Context(), []string{"new@example.test", "other@example.test"}, validation.DefaultLimits()); err != nil || executor.queries != before+1 {
 			return fmt.Errorf("unique list used %d statements: %v", executor.queries-before, err)

@@ -10,7 +10,7 @@ import (
 
 // Define builds an ORM factory from an explicit table and typed assignments.
 // States, composition and after-create hooks share the ordinary factory contract.
-// Example: factory.Define(Users.Table,func(ctx context.Context,n factory.Sequence)([]orm.Assignment[User],error){return []orm.Assignment[User]{Users.Name.Set("Ada")},nil}).
+// Example: factory.Define(Users.Table,func(ctx context.Context,n factory.Sequence)([]orm.Assignment[User],error){return []orm.Assignment[User]{orm.TextSet(Users.Name, "Ada")},nil}).
 func Define[M any, K comparable](table orm.Table[M, K], build Build[[]orm.Assignment[M]]) (*Factory[M, []orm.Assignment[M]], error) {
 	if build == nil {
 		return nil, fault.New(fault.Invalid, "factory requires a typed draft builder")
@@ -25,7 +25,7 @@ func Define[M any, K comparable](table orm.Table[M, K], build Build[[]orm.Assign
 		}
 		return func(ctx context.Context, writer database.Transactor) ([]M, error) {
 			if single {
-				created, err := table.Insert(ctx, writer, rows[0]...)
+				created, err := orm.Insert(ctx, writer, table, rows[0]...)
 				if err != nil {
 					return nil, err
 				}

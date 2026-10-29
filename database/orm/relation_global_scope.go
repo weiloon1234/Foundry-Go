@@ -15,7 +15,7 @@ func (r ThroughRelation[M, N, P]) withScopePlan(p *relationPlan) ThroughRelation
 }
 
 // WithoutRelationGlobalScope removes named target defaults without changing the
-// relation kind or its pivot defaults. Example: WithoutRelationGlobalScope(UserRelations.Orders, orderTenantScope).Where(Orders.Active.Eq(true)).
+// relation kind or its pivot defaults. Example: WithoutRelationGlobalScope(UserRelations.Orders, orderTenantScope).Where(orm.ColumnEq(Orders.Active, true)).
 func WithoutRelationGlobalScope[M, N any, R scopeRelation[M, N, R]](r R, scopes ...GlobalScope[N]) R {
 	p := copyRelationPlan(r.relationPlan(nil))
 	p.query = withoutGlobalScope(p.query, scopes)

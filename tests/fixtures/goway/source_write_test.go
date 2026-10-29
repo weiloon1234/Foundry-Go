@@ -33,8 +33,8 @@ func sourceTestDB(t *testing.T, c *goldenCapture) *database.DB {
 func TestSourceWriteDeclarationRestrictionsBeforeSQL(t *testing.T) {
 	f := h.Members
 	src := r.From(f.Query())
-	key := r.MatchSource(f.Key(), expr.Value(f.Key()))
-	insert := r.InsertFrom(src, f.Query(), r.MapInsert(f.ID, expr.Value(f.Key())), r.MapInsert(f.Body, expr.Value(f.Body)))
+	key := r.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))
+	insert := r.InsertFrom(src, f.Query(), r.MapInsert(orm.KeyExpr(f.ID), expr.Value(orm.KeyExpr(f.Key()))), r.MapInsert(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body))))
 	update := r.UpdateFrom(f.Query(), src).Match(key)
 	w := m.WriteRecords
 	ws := r.From(w.Query())
@@ -43,18 +43,18 @@ func TestSourceWriteDeclarationRestrictionsBeforeSQL(t *testing.T) {
 		return m.WriteRecordTable{Table: table, Code: orm.NumberKey(table.Key()), Name: orm.TextOf(b, &v.Name), Enabled: orm.ColumnOf(b, &v.Enabled), Note: orm.NullableTextOf(b, &v.Note), Amount: orm.NumberOf(b, &v.Amount)}
 	})
 	tests := map[string]sourceTerminal{
-		"source_delete_force":          r.ForceDeleteUsing(w.Query(), orm.SoftDeletable[m.WriteRecord]{}, ws).Match(r.MatchSource(w.Key(), expr.Value(w.Key()))),
+		"source_delete_force":          r.ForceDeleteUsing(w.Query(), orm.SoftDeletable[m.WriteRecord]{}, ws).Match(r.MatchSource(orm.KeyExpr(w.Key()), expr.Value(orm.KeyExpr(w.Key())))),
 		"missing required":             r.InsertFrom(src, f.Query()),
-		"overlap":                      insert.Values(f.Key().Set(1)),
-		"duplicate":                    insert.Select(r.MapInsert(f.Body, expr.Value(f.Body))),
-		"missing key":                  r.UpdateFrom(w.Query(), ws).Values(w.Name.Set("x")),
-		"nonprimary match":             r.UpdateFrom(w.Query(), ws).Match(r.MatchSource(w.Name, expr.Value(w.Name))).Values(w.Name.Set("x")),
-		"primary literal":              update.Values(f.Key().Set(1)),
-		"foreign destination":          r.InsertFrom(ws, w.Query(), r.MapInsert(other.Name, expr.Value(w.Name))),
-		"foreign source":               r.InsertFrom(ws, w.Query(), r.MapInsert(w.Name, expr.Value(other.Name))),
-		"empty values":                 r.UpdateFrom(w.Query(), ws).Match(r.MatchSource(w.Key(), expr.Value(w.Key()))),
-		"destination window":           r.DeleteUsing(w.Query().Limit(1), ws).Match(r.MatchSource(w.Key(), expr.Value(w.Key()))),
-		"destination insertion filter": r.InsertFrom(ws, w.Query().Where(w.Name.Eq("x"))).Values(w.Name.Set("x")),
+		"overlap":                      insert.Values(orm.KeySet(f.Key(), 1)),
+		"duplicate":                    insert.Select(r.MapInsert(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body)))),
+		"missing key":                  r.UpdateFrom(w.Query(), ws).Values(orm.TextSet(w.Name, "x")),
+		"nonprimary match":             r.UpdateFrom(w.Query(), ws).Match(r.MatchSource(orm.TextExpr(w.Name), expr.Value(orm.TextExpr(w.Name)))).Values(orm.TextSet(w.Name, "x")),
+		"primary literal":              update.Values(orm.KeySet(f.Key(), 1)),
+		"foreign destination":          r.InsertFrom(ws, w.Query(), r.MapInsert(orm.TextExpr(other.Name), expr.Value(orm.TextExpr(w.Name)))),
+		"foreign source":               r.InsertFrom(ws, w.Query(), r.MapInsert(orm.TextExpr(w.Name), expr.Value(orm.TextExpr(other.Name)))),
+		"empty values":                 r.UpdateFrom(w.Query(), ws).Match(r.MatchSource(orm.KeyExpr(w.Key()), expr.Value(orm.KeyExpr(w.Key())))),
+		"destination window":           r.DeleteUsing(w.Query().Limit(1), ws).Match(r.MatchSource(orm.KeyExpr(w.Key()), expr.Value(orm.KeyExpr(w.Key())))),
+		"destination insertion filter": r.InsertFrom(ws, w.Query().Where(orm.TextEq(w.Name, "x"))).Values(orm.TextSet(w.Name, "x")),
 		"zero plan":                    orm.InsertSelect[m.WriteRecord, m.WriteRecord]{},
 	}
 	for name, p := range tests {
@@ -91,16 +91,16 @@ func scopedSourceTable(name string) sourceScopedTable {
 			if !ok {
 				return orm.Predicate[sourceScoped]{}, errors.New("tenant missing")
 			}
-			return f.Tenant.Eq(tenant), nil
+			return orm.NumberEq(f.Tenant, tenant), nil
 		})}
 	}))
 }
 func TestSourceWriteScopesDefaultsAndImmutableValues(t *testing.T) {
 	f, g := scopedSourceTable("source_records"), scopedSourceTable("destination_records")
-	source := r.From(f.Query().Where(f.Name.Ne("filtered")).Limit(3))
-	insertion := r.InsertFrom(source, g.Query(), r.MapInsert(g.ID, expr.Value(f.Key())), r.MapInsert(g.Tenant, expr.Value(f.Tenant)), r.MapInsert(g.Name, expr.Value(f.Name)))
-	update := r.UpdateFrom(g.Query(), source).Match(r.MatchSource(g.Key(), expr.Value(f.Key()))).Values(g.Name.Set("updated"))
-	for _, p := range []sourceTerminal{insertion, update, r.DeleteUsing(g.Query(), source).Match(r.MatchNullableSource(g.Key(), expr.NullableRow(expr.Value(f.Key()))))} {
+	source := r.From(f.Query().Where(orm.TextNe(f.Name, "filtered")).Limit(3))
+	insertion := r.InsertFrom(source, g.Query(), r.MapInsert(orm.KeyExpr(g.ID), expr.Value(orm.KeyExpr(f.Key()))), r.MapInsert(orm.NumberExpr(g.Tenant), expr.Value(orm.NumberExpr(f.Tenant))), r.MapInsert(orm.TextExpr(g.Name), expr.Value(orm.TextExpr(f.Name))))
+	update := r.UpdateFrom(g.Query(), source).Match(r.MatchSource(orm.KeyExpr(g.Key()), expr.Value(orm.KeyExpr(f.Key())))).Values(orm.TextSet(g.Name, "updated"))
+	for _, p := range []sourceTerminal{insertion, update, r.DeleteUsing(g.Query(), source).Match(r.MatchNullableSource(orm.KeyExpr(g.Key()), expr.NullableRow(expr.Value(orm.KeyExpr(f.Key())))))} {
 		c := &goldenCapture{}
 		db := sourceTestDB(t, c)
 		if _, err := p.Exec(t.Context(), db); err == nil || c.statements != 0 {
@@ -122,8 +122,8 @@ func TestSourceWriteScopesDefaultsAndImmutableValues(t *testing.T) {
 	}
 	// Replacement Values must not mutate an existing plan, and zero is supplied.
 	w := m.WriteRecords
-	plan := r.InsertFrom(r.From(w.Query()), w.Query()).Values(w.Name.Set("private-input"), w.Enabled.Set(false))
-	_ = plan.Values(w.Name.Set("unused"))
+	plan := r.InsertFrom(r.From(w.Query()), w.Query()).Values(orm.TextSet(w.Name, "private-input"), orm.ColumnSet(w.Enabled, false))
+	_ = plan.Values(orm.TextSet(w.Name, "unused"))
 	c := &goldenCapture{}
 	_, err := plan.Exec(t.Context(), sourceTestDB(t, c))
 	check(err)
@@ -140,7 +140,7 @@ func TestSourceWriteScopesDefaultsAndImmutableValues(t *testing.T) {
 func TestSourceWriteReturningBoundsAmbiguityAndClosure(t *testing.T) {
 	f := m.WriteRecords
 	source := r.From(f.Query())
-	key := r.MatchSource(f.Key(), expr.Value(f.Key()))
+	key := r.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))
 	for _, test := range []struct {
 		name      string
 		matches   int64
@@ -157,7 +157,7 @@ func TestSourceWriteReturningBoundsAmbiguityAndClosure(t *testing.T) {
 				}
 				return []string{"code", "name", "enabled", "note", "amount", "matches"}, values
 			}}
-			got, err := r.UpdateFrom(f.Query(), source).Match(key).Select(r.MapUpdate(f.Name, expr.Value(f.Name))).Returning(t.Context(), sourceTestDB(t, c), test.limit)
+			got, err := r.UpdateFrom(f.Query(), source).Match(key).Select(r.MapUpdate(orm.TextExpr(f.Name), expr.Value(orm.TextExpr(f.Name)))).Returning(t.Context(), sourceTestDB(t, c), test.limit)
 			if (err != nil) != test.wantError || err != nil && got != nil || closed != 1 {
 				t.Fatal(got, err, closed)
 			}
@@ -166,13 +166,13 @@ func TestSourceWriteReturningBoundsAmbiguityAndClosure(t *testing.T) {
 	c := &goldenCapture{reply: func(string, []driver.NamedValue) ([]string, [][]driver.Value) {
 		return []string{"count", "max"}, [][]driver.Value{{int64(1), int64(2)}}
 	}}
-	_, err := r.UpdateFrom(f.Query(), source).Match(key).Select(r.MapUpdate(f.Name, expr.Value(f.Name))).Exec(t.Context(), sourceTestDB(t, c))
+	_, err := r.UpdateFrom(f.Query(), source).Match(key).Select(r.MapUpdate(orm.TextExpr(f.Name), expr.Value(orm.TextExpr(f.Name)))).Exec(t.Context(), sourceTestDB(t, c))
 	if !errors.Is(err, database.TooManyRows) {
 		t.Fatal(err)
 	}
 	for _, bound := range []int{0, -1, 10001} {
 		c := &goldenCapture{}
-		_, err := r.InsertFrom(source, f.Query()).Values(f.Name.Set("x")).Returning(t.Context(), sourceTestDB(t, c), bound)
+		_, err := r.InsertFrom(source, f.Query()).Values(orm.TextSet(f.Name, "x")).Returning(t.Context(), sourceTestDB(t, c), bound)
 		if !errors.Is(err, fault.Invalid) || c.statements != 0 {
 			t.Fatal(err, c.statements)
 		}

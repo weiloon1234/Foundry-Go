@@ -35,7 +35,7 @@ func (q ValueRecord[V]) valueData(*V) (ormcore.RecordSource, ormcore.Column[V]) 
 type valueRecordDefinition struct{ record ormcore.Record }
 
 // Values adapts a typed scalar selection for value set operations.
-// Example: rows.Values(rows.SelectScalar(rows.From(Users.Query()),expr.Row(expr.Value(Users.ID)).Value())).
+// Example: rows.Values(rows.SelectScalar(rows.From(Users.Query()),expr.Row(expr.Value(orm.KeyExpr(Users.ID))).Value())).
 func Values[S, V any](q Scalar[S, V]) ValueRecord[V] {
 	d := scalarRecord(q.column)
 	r := ormcore.RecordSource{Source: q.source, Record: d.record}

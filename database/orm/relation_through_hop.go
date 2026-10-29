@@ -22,7 +22,7 @@ func hopRelation[M, I, N any, A, B comparable](slot *slotCore, local KeyColumn[M
 	return p, a, f
 }
 
-// HasManyThroughOf unifies both key pairs via an intermediate model. Example: orm.HasManyThroughOf(Countries.Posts,Countries.ID,Users.CountryID,Users.ID,Posts.UserID).
+// HasManyThroughOf unifies both key pairs via an intermediate model. Example: orm.HasManyThroughOf(Countries.Posts, Countries.ID, Users.CountryID, orm.KeyExpr(Users.ID), Posts.UserID).
 func HasManyThroughOf[M, I, N any, A, B comparable](slot Many[M, N], local KeyColumn[M, A], first KeyColumn[I, A], second KeyColumn[I, B], foreign KeyColumn[N, B]) HasMany[M, N] {
 	p, a, f := hopRelation(slot.core, local, first, second, foreign)
 	if p.err == nil {
@@ -37,7 +37,7 @@ func HasManyThroughOf[M, I, N any, A, B comparable](slot Many[M, N], local KeyCo
 	return HasMany[M, N]{plan: p}
 }
 
-// HasOneThroughOf loads at most one target per source via an intermediate. Example: orm.HasOneThroughOf(Countries.LatestPost,Countries.ID,Users.CountryID,Users.ID,Posts.UserID).
+// HasOneThroughOf loads at most one target per source via an intermediate. Example: orm.HasOneThroughOf(Countries.LatestPost, Countries.ID, Users.CountryID, orm.KeyExpr(Users.ID), Posts.UserID).
 func HasOneThroughOf[M, I, N any, A, B comparable](slot One[M, N], local KeyColumn[M, A], first KeyColumn[I, A], second KeyColumn[I, B], foreign KeyColumn[N, B]) HasOne[M, N] {
 	p, a, f := hopRelation(slot.core, local, first, second, foreign)
 	p.singular = true

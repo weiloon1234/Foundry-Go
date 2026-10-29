@@ -49,7 +49,8 @@ package identity, JSON tags and descriptor names when migrating a report.
 ## Select typed values
 
 `rows.Select(rows.From(modelQuery), schema, mappings...)` selects a complete result.
-Use `rows.Map(destination, expr.Value(column))` for row values and
+Use `rows.Map(destination, expr.Value(orm.TextExpr(column)))` for a text column
+and the matching per-kind adapter for other column families. Use
 `rows.MapSelected(destination, selected)` for computations, aggregates and windows.
 Mappings must cover every result field exactly once. Missing, duplicate, foreign
 or incompatible mappings fail before SQL. `expr.Nullable` explicitly widens a
@@ -67,11 +68,11 @@ no model mutations or eager loading. For a reusable query source, wrap it in
 ```go
 o := models.Orders
 totals := rowset.GroupBy(rowset.Select(rowset.From(models.Orders.Query()), reports.BuyerTotalRows.Row,
-	rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(o.BuyerID)),
-	rowset.MapSelected(reports.BuyerTotalRows.Total, expr.Sum(o.TotalCents).Value()),
+	rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(orm.ColumnExpr(o.BuyerID))),
+	rowset.MapSelected(reports.BuyerTotalRows.Total, expr.Sum(orm.NumberExpr(o.TotalCents)).Value()),
 	rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.Count[models.Order]().Value()),
-	rowset.MapSelected(reports.BuyerTotalRows.Average, expr.Avg(o.TotalCents).Value()),
-), expr.Group(expr.Value(o.BuyerID)))
+	rowset.MapSelected(reports.BuyerTotalRows.Average, expr.Avg(orm.NumberExpr(o.TotalCents)).Value()),
+), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID))))
 ```
 
 The `rowset` import names `database/orm/rows`. `rows.GroupBy` requires every selected

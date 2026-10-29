@@ -1,5 +1,7 @@
 package wrong_assignment
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/goway/models"
@@ -8,5 +10,5 @@ import (
 
 func F() {
 	var tx database.Transactor
-	models.Orders.Insert(context.Background(), tx, models.Users.Email.Set("x"))
+	orm.Insert(context.Background(), tx, models.Orders.Table, orm.TextSet(models.Users.Email, "x"))
 }

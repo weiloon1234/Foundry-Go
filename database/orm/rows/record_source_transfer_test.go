@@ -25,7 +25,7 @@ func TestProjectionDerivedSourcesPreserveOutputAndWindows(t *testing.T) {
 		return columns{b.Row(), NumberOf(b, &r.ID), NumberOf(b, &r.Count)}
 	})
 	m := declareMembers()
-	id := expr.Value(m.ID)
+	id := expr.Value(orm.KeyExpr(m.ID))
 	count := expr.Count[member]()
 	report := Select(From(m.Query()), schema, Map(schema.ID, id), MapSelected(schema.Count, count.Value())).Where(expr.OrderRow(id).Gt(2))
 	report = Limit(OrderBy(Having(GroupBy(report, expr.Group(id)), count.Gt(3)), count.Desc()), 4)
@@ -74,10 +74,10 @@ func TestProjectionCompleteTypedMappingAndSourceIsolation(t *testing.T) {
 		return columns{b.Row(), NumberOf(b, &r.ID), NumberOf(b, &r.Count)}
 	})
 	m := declareMembers()
-	id := expr.Value(m.ID)
+	id := expr.Value(orm.KeyExpr(m.ID))
 	count := expr.Count[member]()
 	mappings := []Mapping[member, summary]{MapSelected(schema.Count, count.Value()), Map(schema.ID, id)}
-	base := Select(From(m.Query().OrderBy(m.Key().Asc())), schema, mappings...)
+	base := Select(From(m.Query().OrderBy(orm.KeyAsc(m.Key()))), schema, mappings...)
 	q := GroupBy(base, expr.Group(id))
 	mappings[0] = Mapping[member, summary]{}
 	s, err := CompileRead(Read(q))
@@ -121,12 +121,12 @@ func TestProjectionRejectsEagerLoads(t *testing.T) {
 	d := orm.Define("projection_parents", func(b orm.Builder[model], m *model) table {
 		return table{orm.TableOf(b, &m.ID), orm.ManyOf(b, &m.Children)}
 	})
-	r := orm.HasManyOf(d.Children, d.Key(), d.Key())
+	r := orm.HasManyOf(d.Children, orm.KeyExpr(d.Key()), orm.KeyExpr(d.Key()))
 	if err := orm.Check(r); err != nil {
 		t.Fatal(err)
 	}
 	schema := expressionSchema(codec.Signed[int64]())
-	q := Select(From(d.Query().With(r)), schema, Map(schema.Value, expr.Value(d.Key())))
+	q := Select(From(d.Query().With(r)), schema, Map(schema.Value, expr.Value(orm.KeyExpr(d.Key()))))
 	if _, err := CompileRead(Read(q)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("projection silently lost eager load", err)
 	}
@@ -135,7 +135,7 @@ func TestProjectionRejectsEagerLoads(t *testing.T) {
 	}
 	source := From(d.Query().With(r))
 	base := From(d.Query())
-	id := expr.Value(d.Key())
+	id := expr.Value(orm.KeyExpr(d.Key()))
 	if _, err := CompileRead(ReadScalar(WhereScalar(SelectScalar(base, expr.Row(id).Value()), ExistsQuery(base, source)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("EXISTS lost eager load", err)
 	}
@@ -146,7 +146,7 @@ func TestProjectionRejectsEagerLoads(t *testing.T) {
 		t.Fatal("set lost eager load", err)
 	}
 	a, b := As[left](d.Query(), "a"), As[right](d.Query().With(r), "b")
-	j := InnerJoin(a, b, On(expr.At(Scope(a), d.Key()), expr.At(Scope(b), d.Key())))
+	j := InnerJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(d.Key())), expr.At(Scope(b), orm.KeyExpr(d.Key()))))
 	if _, err := CompileRead(ReadRecord(SelectRecord(j, LeftScope(j, Scope(a))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("join lost eager load", err)
 	}

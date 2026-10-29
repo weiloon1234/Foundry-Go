@@ -79,7 +79,7 @@ func (b *Backend) now() (temporal.DateTime, error) {
 	return now, nil
 }
 func factors(scope string) orm.Query[mfastore.Factor] {
-	return mfastore.Factors.Query().Where(mfastore.Factors.Scope.Eq(scope))
+	return mfastore.Factors.Query().Where(orm.TextEq(mfastore.Factors.Scope, scope))
 }
 
 func (b *Backend) Within(ctx context.Context, address mfa.Address, identity model.Identity, prepare func(context.Context, *database.Tx) error, change func(context.Context, *database.Tx, value.Optional[mfa.Record], temporal.DateTime) (mfa.Change, error)) (value.Optional[mfa.Record], error) {
@@ -115,7 +115,7 @@ func (b *Backend) mutate(ctx context.Context, address mfa.Address, identity mode
 		if err := prepare(ctx, tx); err != nil {
 			return err
 		}
-		found, err := factors(scope).Where(mfastore.Factors.Key().Eq(key)).ForUpdate().First(ctx, tx)
+		found, err := orm.FirstLocked(ctx, tx, orm.Lock(factors(scope).Where(orm.KeyEq(mfastore.Factors.Key(), key))))
 		if err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ func (b *Backend) mutate(ctx context.Context, address mfa.Address, identity mode
 			if found.IsSet() {
 				row, err = orm.Update(ctx, tx, factors(scope), mfastore.Factors.Key(), key, draft...)
 			} else {
-				row, err = mfastore.Factors.Insert(ctx, tx, append(draft, mfastore.Factors.Key().Set(key))...)
+				row, err = orm.Insert(ctx, tx, mfastore.Factors.Table, append(draft, orm.KeySet(mfastore.Factors.Key(), key))...)
 			}
 			if err != nil {
 				return err

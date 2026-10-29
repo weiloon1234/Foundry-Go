@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -47,54 +49,54 @@ func runJoinNew(g *goldenCapture, kind string) {
 	ctx := context.Background()
 	db := g.open(ctx)
 	defer db.Close(ctx)
-	a := rowset.As[joinA](models.Users.Query().Where(models.Users.Age.Gt(10)).OrderBy(models.Users.Age.Desc()).Limit(5), "a")
-	b := rowset.As[joinB](models.Users.Query().Where(models.Users.Email.Ne("hidden")), "b")
-	on := rowset.On(expr.At(rowset.Scope(a), models.Users.IntroducerID), expr.At(rowset.Scope(b), models.Users.ID))
+	a := rowset.As[joinA](models.Users.Query().Where(orm.NumberGt(models.Users.Age, 10)).OrderBy(orm.NumberDesc(models.Users.Age)).Limit(5), "a")
+	b := rowset.As[joinB](models.Users.Query().Where(orm.TextNe(models.Users.Email, "hidden")), "b")
+	on := rowset.On(expr.At(rowset.Scope(a), orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(rowset.Scope(b), orm.KeyExpr(models.Users.ID)))
 	schema := joinRows
 	switch kind {
 	case "Inner":
 		j := rowset.InnerJoin(a, b, on)
 		ls := rowset.LeftScope(j, rowset.Scope(a))
 		rs := rowset.RightScope(j, rowset.Scope(b))
-		lf := expr.At(ls, models.Users.Email)
-		rf := expr.At(rs, models.Users.Email)
-		nick := expr.At(rs, models.Users.Nickname)
+		lf := expr.At(ls, orm.TextExpr(models.Users.Email))
+		rf := expr.At(rs, orm.TextExpr(models.Users.Email))
+		nick := expr.At(rs, orm.NullableTextExpr(models.Users.Nickname))
 		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Left":
 		j := rowset.LeftJoin(a, b, on)
 		ls := rowset.LeftScope(j, rowset.Scope(a))
 		rs := rowset.NullableRightScope(j, rowset.Scope(b))
-		lf := expr.At(ls, models.Users.Email)
-		rf := expr.AtNullable(rs, models.Users.Email)
-		nick := expr.AtNullableValue(rs, models.Users.Nickname)
+		lf := expr.At(ls, orm.TextExpr(models.Users.Email))
+		rf := expr.AtNullable(rs, orm.TextExpr(models.Users.Email))
+		nick := expr.AtNullableValue(rs, orm.NullableTextExpr(models.Users.Nickname))
 		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Row(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Right":
 		j := rowset.RightJoin(a, b, on)
 		ls := rowset.NullableLeftScope(j, rowset.Scope(a))
 		rs := rowset.RightScope(j, rowset.Scope(b))
-		lf := expr.AtNullable(ls, models.Users.Email)
-		rf := expr.At(rs, models.Users.Email)
-		nick := expr.At(rs, models.Users.Nickname)
+		lf := expr.AtNullable(ls, orm.TextExpr(models.Users.Email))
+		rf := expr.At(rs, orm.TextExpr(models.Users.Email))
+		nick := expr.At(rs, orm.NullableTextExpr(models.Users.Nickname))
 		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.Row(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Full":
 		j := rowset.FullJoin(a, b, on)
 		ls := rowset.NullableLeftScope(j, rowset.Scope(a))
 		rs := rowset.NullableRightScope(j, rowset.Scope(b))
-		lf := expr.AtNullable(ls, models.Users.Email)
-		rf := expr.AtNullable(rs, models.Users.Email)
-		nick := expr.AtNullableValue(rs, models.Users.Nickname)
+		lf := expr.AtNullable(ls, orm.TextExpr(models.Users.Email))
+		rf := expr.AtNullable(rs, orm.TextExpr(models.Users.Email))
+		nick := expr.AtNullableValue(rs, orm.NullableTextExpr(models.Users.Nickname))
 		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.Row(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Row(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Cross":
 		j := rowset.CrossJoin(a, b)
 		ls := rowset.LeftScope(j, rowset.Scope(a))
 		rs := rowset.RightScope(j, rowset.Scope(b))
-		lf := expr.At(ls, models.Users.Email)
-		rf := expr.At(rs, models.Users.Email)
-		nick := expr.At(rs, models.Users.Nickname)
+		lf := expr.At(ls, orm.TextExpr(models.Users.Email))
+		rf := expr.At(rs, orm.TextExpr(models.Users.Email))
+		nick := expr.At(rs, orm.NullableTextExpr(models.Users.Nickname))
 		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.NullableRow(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	case "Chain":
@@ -103,9 +105,9 @@ func runJoinNew(g *goldenCapture, kind string) {
 		j := rowset.CrossJoin(base, c)
 		ls := rowset.LeftScope(j, rowset.LeftScope(base, rowset.Scope(a)))
 		rs := rowset.LeftNullableScope(j, rowset.NullableRightScope(base, rowset.Scope(b)))
-		lf := expr.At(ls, models.Users.Email)
-		rf := expr.AtNullable(rs, models.Users.Email)
-		nick := expr.AtNullableValue(rs, models.Users.Nickname)
+		lf := expr.At(ls, orm.TextExpr(models.Users.Email))
+		rf := expr.AtNullable(rs, orm.TextExpr(models.Users.Email))
+		nick := expr.AtNullableValue(rs, orm.NullableTextExpr(models.Users.Nickname))
 		got := must(rowset.Read(rowset.OrderBy(rowset.Select(j, schema, rowset.MapSelected(schema.LeftEmail, expr.NullableRow(lf).Value()), rowset.MapSelected(schema.RightEmail, expr.Row(rf).Value()), rowset.Map(schema.Nickname, nick)), lf.Asc())).All(ctx, db))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{got}))
 	}

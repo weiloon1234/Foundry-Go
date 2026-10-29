@@ -146,7 +146,7 @@ func TestScaffoldedSlots(t *testing.T){
  if err:=ArticleExtensions.Logo.Validate();!errors.Is(err,fault.Invalid){t.Fatal("policy accepting nothing was valid",err)}
  if err:=orm.Check(Tables()...);err!=nil{t.Fatal(err)}
  if _,err:=orm.Compile(Plains.Query());err!=nil{t.Fatal(err)}
- if _,err:=orm.Compile(Specials.Query().Where(Specials.Key().Eq(Special{}.ID)));err!=nil{t.Fatal(err)}
+ if _,err:=orm.Compile(Specials.Query().Where(orm.KeyEq(Specials.Key(),Special{}.ID)));err!=nil{t.Fatal(err)}
 }
 `)
 	command := exec.CommandContext(t.Context(), "go", "test", "-mod=readonly", "./...")

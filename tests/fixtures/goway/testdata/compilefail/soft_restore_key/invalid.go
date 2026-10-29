@@ -19,5 +19,5 @@ var _ m.Member
 var _ orm.Hooks[h.Member]
 
 func invalid(db *database.DB) {
-	_, _ = h.KeyedMembers.Restore(context.Background(), db, model.ID[m.Member]{})
+	_, _ = orm.Restore(context.Background(), db, h.KeyedMembers.Table, model.ID[m.Member]{})
 }

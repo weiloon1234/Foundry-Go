@@ -1,5 +1,7 @@
 package correlation_inner_scope
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -11,8 +13,8 @@ var child = rows.From(models.Orders.Query())
 var link = rows.Correlate(parent, child)
 var parentScope = rows.OuterScope(link, rows.ModelScope(models.Users.Query()))
 var childScope = rows.InnerScope(link, rows.ModelScope(models.Orders.Query()))
-var parentID = expr.At(parentScope, models.Users.ID)
-var buyerID = expr.At(childScope, models.Orders.BuyerID)
+var parentID = expr.At(parentScope, orm.KeyExpr(models.Users.ID))
+var buyerID = expr.At(childScope, orm.ColumnExpr(models.Orders.BuyerID))
 var selected = rows.SelectCorrelatedScalar(link.Where(expr.Equal(buyerID, parentID)), expr.Row(buyerID).Value())
 
 var _ = rows.InnerScope(link, rows.ModelScope(models.Users.Query()))

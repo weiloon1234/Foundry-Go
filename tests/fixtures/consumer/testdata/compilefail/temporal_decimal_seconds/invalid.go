@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/temporalqueries"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -7,5 +9,5 @@ import (
 
 func invalid() {
 	f := temporalqueries.Samples
-	_ = expr.Second(expr.Value(f.Clock)).Eq(1)
+	_ = expr.Second(expr.Value(orm.TimeExpr(f.Clock))).Eq(1)
 }

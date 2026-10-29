@@ -1,5 +1,7 @@
 package reporting
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "github.com/weiloon1234/Foundry-Go/validation"
 
 import (
@@ -29,32 +31,32 @@ func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
 	text := foundryhttp.StringQuery[string]()
 	state := foundryhttp.EnumQuery[State, *State](Active.EnumDescriptor())
 	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
-	name := expr.Trim(expr.Value(fields.Name))
+	name := expr.Trim(expr.Value(orm.TextExpr(fields.Name)))
 	return datatable.Spec[Member, MemberRow, Authority]{
 		ID: "reports.members", Row: MemberRowJSON(), Exports: true,
 		Columns: []datatable.ColumnRegistration[Member, MemberRow]{
-			datatable.DefineColumn[Member](wire.ID, MemberIDLabel).SortBy(expr.Row(expr.Value(fields.ID)).Value()).ExportAs(datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]())).Registration(),
+			datatable.DefineColumn[Member](wire.ID, MemberIDLabel).SortBy(expr.Row(expr.Value(orm.KeyExpr(fields.ID))).Value()).ExportAs(datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]())).Registration(),
 			datatable.DefineColumn[Member](wire.Name, MemberNameLabel).SortBy(name.Value()).FilterBy(datatable.Where(text, name)).Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
-			datatable.DefineColumn[Member](wire.Nickname, NicknameLabel).SortBy(expr.Row(expr.Value(fields.Nickname)).Value()).FilterBy(datatable.NullableWhere(text, expr.TextNullableRow(fields.Nickname))).ExportAs(datatable.NullableCell(text)).Registration(),
-			datatable.DefineColumn[Member](wire.State, StateLabel).FilterBy(datatable.Where(state, expr.CompareRow(expr.Value(fields.State)))).ExportAs(datatable.ScalarCell(state)).Registration(),
-			datatable.DefineColumn[Member](wire.Balance, BalanceLabel).SortBy(expr.Row(expr.Value(fields.Balance)).Value()).FilterBy(datatable.Where(amount, expr.OrderRow(expr.Value(fields.Balance)))).ExportAs(datatable.ScalarCell(amount)).Registration(),
+			datatable.DefineColumn[Member](wire.Nickname, NicknameLabel).SortBy(expr.Row(expr.Value(orm.NullableTextExpr(fields.Nickname))).Value()).FilterBy(datatable.NullableWhere(text, expr.TextNullableRow(orm.NullableTextExpr(fields.Nickname)))).ExportAs(datatable.NullableCell(text)).Registration(),
+			datatable.DefineColumn[Member](wire.State, StateLabel).FilterBy(datatable.Where(state, expr.CompareRow(expr.Value(orm.EnumExpr(fields.State))))).ExportAs(datatable.ScalarCell(state)).Registration(),
+			datatable.DefineColumn[Member](wire.Balance, BalanceLabel).SortBy(expr.Row(expr.Value(orm.NumberExpr(fields.Balance))).Value()).FilterBy(datatable.Where(amount, expr.OrderRow(expr.Value(orm.NumberExpr(fields.Balance))))).ExportAs(datatable.ScalarCell(amount)).Registration(),
 		},
 		Filters: []datatable.FilterRegistration[Member]{
-			datatable.DefineFilter("orderLabel", OrderLabel, datatable.Related(datatable.Where(text, expr.TextRow(OrderModels.Label)), func(predicate expr.Predicate[Order]) expr.Predicate[Member] {
+			datatable.DefineFilter("orderLabel", OrderLabel, datatable.Related(datatable.Where(text, expr.TextRow(orm.TextExpr(OrderModels.Label))), func(predicate expr.Predicate[Order]) expr.Predicate[Member] {
 				return expr.Has(MemberModelRelations.Orders, predicate)
 			})),
 		},
 		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.Name), Direction: datatable.Ascending}},
-		Stable:      []expr.ProjectionOrder[Member]{expr.Value(fields.ID).Asc()},
+		Stable:      []expr.ProjectionOrder[Member]{expr.Value(orm.KeyExpr(fields.ID)).Asc()},
 		Authorize:   authorize,
 		Source: func(ctx context.Context, authority Authority) (rows.Query[Member, MemberRow], error) {
 			actor, err := authority.subject(ctx)
 			if err != nil {
 				return rows.Query[Member, MemberRow]{}, err
 			}
-			return rows.Select(rows.From(MemberModels.Query().Where(fields.TenantID.Eq(actor.TenantID))), MemberRows,
-				rows.Map(MemberRows.ID, expr.Value(fields.ID)), rows.MapSelected(MemberRows.Name, name.Value()),
-				rows.Map(MemberRows.Nickname, expr.Value(fields.Nickname)), rows.Map(MemberRows.State, expr.Value(fields.State)), rows.Map(MemberRows.Balance, expr.Value(fields.Balance))), nil
+			return rows.Select(rows.From(MemberModels.Query().Where(orm.NumberEq(fields.TenantID, actor.TenantID))), MemberRows,
+				rows.Map(MemberRows.ID, expr.Value(orm.KeyExpr(fields.ID))), rows.MapSelected(MemberRows.Name, name.Value()),
+				rows.Map(MemberRows.Nickname, expr.Value(orm.NullableTextExpr(fields.Nickname))), rows.Map(MemberRows.State, expr.Value(orm.EnumExpr(fields.State))), rows.Map(MemberRows.Balance, expr.Value(orm.NumberExpr(fields.Balance)))), nil
 		},
 	}
 }

@@ -27,7 +27,7 @@ func TestPostgresORMModelWrites(t *testing.T) {
 			}
 		}
 		q := models.WriteRecords.Query()
-		first, err := models.WriteRecords.Insert(t.Context(), tx, models.WriteRecords.Name.Set("first"))
+		first, err := orm.Insert(t.Context(), tx, models.WriteRecords.Table, orm.TextSet(models.WriteRecords.Name, "first"))
 		if err != nil {
 			return err
 		}
@@ -38,15 +38,15 @@ func TestPostgresORMModelWrites(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		draft := []orm.Assignment[models.WriteRecord]{models.WriteRecords.Code.Set(models.RecordKey(1000)), models.WriteRecords.Name.Set("second"), models.WriteRecords.Enabled.Set(false), models.WriteRecords.Note.SetNull(), models.WriteRecords.Amount.Set(amount)}
-		second, err := models.WriteRecords.Insert(t.Context(), tx, draft...)
+		draft := []orm.Assignment[models.WriteRecord]{orm.KeySet(models.WriteRecords.Code, models.RecordKey(1000)), orm.TextSet(models.WriteRecords.Name, "second"), orm.ColumnSet(models.WriteRecords.Enabled, false), orm.NullableTextSetNull(models.WriteRecords.Note), orm.NumberSet(models.WriteRecords.Amount, amount)}
+		second, err := orm.Insert(t.Context(), tx, models.WriteRecords.Table, draft...)
 		if err != nil {
 			return err
 		}
 		if second.Code != 1000 || second.Enabled || !second.Note.IsNull() || second.Amount != amount {
 			t.Error("explicit zero/null/decimal values were replaced by defaults")
 		}
-		patched, err := orm.Update(t.Context(), tx, q, models.WriteRecords.Key(), first.Code, models.WriteRecords.Name.Set(""), models.WriteRecords.Enabled.Set(false), models.WriteRecords.Note.SetNull())
+		patched, err := orm.Update(t.Context(), tx, q, models.WriteRecords.Key(), first.Code, orm.TextSet(models.WriteRecords.Name, ""), orm.ColumnSet(models.WriteRecords.Enabled, false), orm.NullableTextSetNull(models.WriteRecords.Note))
 		if err != nil {
 			return err
 		}
@@ -56,19 +56,19 @@ func TestPostgresORMModelWrites(t *testing.T) {
 		if _, err := orm.Update(t.Context(), tx, q, models.WriteRecords.Key(), first.Code); !errors.Is(err, fault.Invalid) {
 			t.Error("empty patch was accepted")
 		}
-		if _, err := orm.Update(t.Context(), tx, q, models.WriteRecords.Key(), first.Code, models.WriteRecords.Code.Set(99)); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.Update(t.Context(), tx, q, models.WriteRecords.Key(), first.Code, orm.KeySet(models.WriteRecords.Code, 99)); !errors.Is(err, fault.Invalid) {
 			t.Error("primary-key patch was accepted")
 		}
-		if _, err := orm.Update(t.Context(), tx, q.Where(models.WriteRecords.Name.Eq("not allowed")), models.WriteRecords.Key(), second.Code, models.WriteRecords.Name.Set("forbidden")); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Update(t.Context(), tx, q.Where(orm.TextEq(models.WriteRecords.Name, "not allowed")), models.WriteRecords.Key(), second.Code, orm.TextSet(models.WriteRecords.Name, "forbidden")); !errors.Is(err, database.NotFound) {
 			t.Error("write ignored query authorization scope")
 		}
-		if _, err := models.WriteRecords.Insert(t.Context(), tx); !errors.Is(err, fault.Missing) {
+		if _, err := orm.Insert(t.Context(), tx, models.WriteRecords.Table); !errors.Is(err, fault.Missing) {
 			t.Error("missing required field reached SQL")
 		}
-		if _, err := models.WriteRecords.Insert(t.Context(), tx, draft...); !errors.Is(err, database.UniqueViolation) {
+		if _, err := orm.Insert(t.Context(), tx, models.WriteRecords.Table, draft...); !errors.Is(err, database.UniqueViolation) {
 			t.Error("duplicate key did not roll back its savepoint")
 		}
-		count, err := q.Count(t.Context(), tx)
+		count, err := orm.Count(t.Context(), tx, q)
 		if err != nil {
 			return err
 		}
@@ -90,10 +90,10 @@ func TestPostgresORMModelWrites(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `ALTER TABLE write_records ALTER COLUMN amount SET DEFAULT 'NaN'::numeric`); err != nil {
 			return err
 		}
-		if model, err := models.WriteRecords.Insert(t.Context(), tx, models.WriteRecords.Name.Set("invalid default")); err == nil || model.Code != 0 {
+		if model, err := orm.Insert(t.Context(), tx, models.WriteRecords.Table, orm.TextSet(models.WriteRecords.Name, "invalid default")); err == nil || model.Code != 0 {
 			t.Error("invalid returned model was published")
 		}
-		count, err = q.Count(t.Context(), tx)
+		count, err = orm.Count(t.Context(), tx, q)
 		if err != nil {
 			return err
 		}
@@ -103,8 +103,8 @@ func TestPostgresORMModelWrites(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `ALTER TABLE write_records ALTER COLUMN amount SET DEFAULT 0`); err != nil {
 			return err
 		}
-		ledgerDraft := []orm.Assignment[models.LedgerEntry]{models.LedgerEntries.Amount.Set(amount)}
-		entry, err := models.LedgerEntries.Insert(t.Context(), tx, ledgerDraft...)
+		ledgerDraft := []orm.Assignment[models.LedgerEntry]{orm.NumberSet(models.LedgerEntries.Amount, amount)}
+		entry, err := orm.Insert(t.Context(), tx, models.LedgerEntries.Table, ledgerDraft...)
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func TestPostgresORMModelWrites(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		keyChange, err := orm.ChangeOf(supplied, models.LedgerEntries.ID)
+		keyChange, err := orm.ChangeOf(supplied, orm.KeyExpr(models.LedgerEntries.ID))
 		if err != nil {
 			return err
 		}
@@ -121,14 +121,14 @@ func TestPostgresORMModelWrites(t *testing.T) {
 		}
 		rollback := errors.New("abort model work")
 		if err := tx.Transaction(t.Context(), func(child *database.Tx) error {
-			if _, err := models.WriteRecords.Insert(t.Context(), child, models.WriteRecords.Name.Set("rolled back")); err != nil {
+			if _, err := orm.Insert(t.Context(), child, models.WriteRecords.Table, orm.TextSet(models.WriteRecords.Name, "rolled back")); err != nil {
 				return err
 			}
 			return rollback
 		}); !errors.Is(err, rollback) {
 			t.Error("outer savepoint did not retain callback error")
 		}
-		count, err = q.Count(t.Context(), tx)
+		count, err = orm.Count(t.Context(), tx, q)
 		if err != nil {
 			return err
 		}

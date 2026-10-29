@@ -128,18 +128,18 @@ func checkMorphDeclarations[K model.Morphable](t *testing.T, invalidName bool) {
 	a, n, z, p := morphTables[K]()
 	for _, missing := range []bool{false, true} {
 		t.Run(fmt.Sprint("missing=", missing), func(t *testing.T) {
-			var noteKind KeyColumn[morphNote[K], model.MorphName] = n.Kind
-			var pivotKind KeyColumn[morphPivotRow, model.MorphName] = p.Kind
+			var noteKind KeyColumn[morphNote[K], model.MorphName] = TextExpr(n.Kind)
+			var pivotKind KeyColumn[morphPivotRow, model.MorphName] = TextExpr(p.Kind)
 			if missing {
 				noteKind = nil
 				pivotKind = nil
 			}
 			invalid := invalidName || missing
-			checkMorphRelation(t, n.Query(), MorphToOf(n.Subject, n.OwnerID, noteKind, a.Key()), invalid)
-			checkMorphRelation(t, a.Query(), MorphManyOf(a.Notes, a.Key(), n.OwnerID, noteKind), invalid)
-			checkMorphRelation(t, a.Query(), MorphOneOf(a.Cover, a.Key(), n.OwnerID, noteKind), invalid)
-			forward := MorphToManyOf(a.Tags, a.Key(), p.OwnerID, pivotKind, p.TargetID, z.Key())
-			reverse := MorphedByManyOf(z.Posts, z.Key(), p.TargetID, pivotKind, p.OwnerID, a.Key())
+			checkMorphRelation(t, n.Query(), MorphToOf(n.Subject, NumberExpr(n.OwnerID), noteKind, KeyExpr(a.Key())), invalid)
+			checkMorphRelation(t, a.Query(), MorphManyOf(a.Notes, KeyExpr(a.Key()), NumberExpr(n.OwnerID), noteKind), invalid)
+			checkMorphRelation(t, a.Query(), MorphOneOf(a.Cover, KeyExpr(a.Key()), NumberExpr(n.OwnerID), noteKind), invalid)
+			forward := MorphToManyOf(a.Tags, KeyExpr(a.Key()), NumberExpr(p.OwnerID), pivotKind, NumberExpr(p.TargetID), KeyExpr(z.Key()))
+			reverse := MorphedByManyOf(z.Posts, KeyExpr(z.Key()), NumberExpr(p.TargetID), pivotKind, NumberExpr(p.OwnerID), KeyExpr(a.Key()))
 			checkMorphRelation(t, a.Query(), forward, invalid)
 			checkMorphRelation(t, z.Query(), reverse, invalid)
 			if invalid {
@@ -180,8 +180,8 @@ func assertPrivatePivotFormatting[T any](t *testing.T, input T) {
 }
 func TestMorphPivotBindingsStayPrivate(t *testing.T) {
 	a, _, z, p := morphTables[validMorphKind]()
-	forward := MorphToManyOf(a.Tags, a.Key(), p.OwnerID, p.Kind, p.TargetID, z.Key())
-	reverse := MorphedByManyOf(z.Posts, z.Key(), p.TargetID, p.Kind, p.OwnerID, a.Key())
+	forward := MorphToManyOf(a.Tags, KeyExpr(a.Key()), NumberExpr(p.OwnerID), TextExpr(p.Kind), NumberExpr(p.TargetID), KeyExpr(z.Key()))
+	reverse := MorphedByManyOf(z.Posts, KeyExpr(z.Key()), NumberExpr(p.TargetID), TextExpr(p.Kind), NumberExpr(p.OwnerID), KeyExpr(a.Key()))
 	assertPrivatePivotFormatting(t, forward)
 	assertPrivatePivotFormatting(t, reverse)
 	for _, plan := range []*relationPlan{forward.plan, reverse.plan} {
@@ -199,8 +199,8 @@ func TestMorphPivotSingleAndBulkDefaults(t *testing.T) {
 		for _, bulk := range []bool{false, true} {
 			t.Run(fmt.Sprintf("reverse=%v/bulk=%v", reverse, bulk), func(t *testing.T) {
 				a, _, z, p := morphTables[validMorphKind]()
-				forward := MorphToManyOf(a.Tags, a.Key(), p.OwnerID, p.Kind, p.TargetID, z.Key())
-				inverse := MorphedByManyOf(z.Posts, z.Key(), p.TargetID, p.Kind, p.OwnerID, a.Key())
+				forward := MorphToManyOf(a.Tags, KeyExpr(a.Key()), NumberExpr(p.OwnerID), TextExpr(p.Kind), NumberExpr(p.TargetID), KeyExpr(z.Key()))
+				inverse := MorphedByManyOf(z.Posts, KeyExpr(z.Key()), NumberExpr(p.TargetID), TextExpr(p.Kind), NumberExpr(p.OwnerID), KeyExpr(a.Key()))
 				n := 1
 				if bulk {
 					n = 2

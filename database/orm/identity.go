@@ -136,7 +136,7 @@ func identityKeys[M any, K comparable](ctx context.Context, ex database.Executor
 	if len(keys) == 0 {
 		return []K{}, nil
 	}
-	q := Query[M]{state: newQuery(d.table)}.Where(d.Scope(keys...)).OrderBy(Key[M, K]{key: d.key}.Asc())
+	q := Query[M]{state: newQuery(d.table)}.Where(d.Scope(keys...)).OrderBy(KeyAsc(Key[M, K]{key: d.key}))
 	if retained && d.table.model.SoftDelete != nil {
 		q = q.WithTrashed()
 	}

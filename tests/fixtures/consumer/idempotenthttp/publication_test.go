@@ -1,5 +1,7 @@
 package idempotenthttp
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"crypto/hmac"
@@ -88,7 +90,7 @@ func TestVerifiedWebhookReauthenticatesEveryReplay(t *testing.T) {
 		return idempotency.NewScope(string(delivery.Provider()), strconv.FormatInt(int64(account), 10))
 	}, func(ctx context.Context, tx *database.Tx, in input) (http.NoContent, error) {
 		calls.Add(1)
-		_, err := Orders.Insert(ctx, tx, Orders.WorkspaceID.Set(1), Orders.Caller.Set(99), Orders.Name.Set(in.Body.Name))
+		_, err := orm.Insert(ctx, tx, Orders.Table, orm.NumberSet(Orders.WorkspaceID, 1), orm.NumberSet(Orders.Caller, 99), orm.TextSet(Orders.Name, in.Body.Name))
 		return http.NoContent{}, err
 	}))
 	if err != nil {

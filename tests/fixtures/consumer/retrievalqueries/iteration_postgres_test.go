@@ -17,18 +17,23 @@ func TestPostgresRetrievalIterationClosesBoundedBatches(t *testing.T) {
 		q := retrievalqueries.Members.Query()
 		f := retrievalqueries.Members
 		for i := range orm.DefaultChunkSize + 3 {
-			if _, err := retrievalqueries.Members.Insert(t.Context(), tx, retrievalqueries.Members.Name.Set(fmt.Sprintf("stream %03d", i))); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, retrievalqueries.Members.Table, orm.InputTextSet(retrievalqueries.Members.Name, fmt.Sprintf("stream %03d", i))); err != nil {
 				return err
 			}
 		}
-		base := q.Where(f.Name.Like("stream %"))
-		window := base.OrderBy(f.Name.Asc()).Offset(1).Limit(orm.DefaultChunkSize + 1)
+		base := q.Where(orm.InputTextLike(f.Name, "stream %"))
+		window := base.OrderBy(orm.InputTextAsc(f.Name)).Offset(1).Limit(orm.DefaultChunkSize + 1)
 
 		for _, test := range []struct {
 			name string
 			run  func(context.Context, database.Executor, func(retrievalqueries.Member) error) error
 		}{
-			{"model", window.Each},
+			{"model", func() func(arg0 context.Context, arg1 database.Executor, arg2 func(retrievalqueries.Member) error) error {
+				receiver := window
+				return func(arg0 context.Context, arg1 database.Executor, arg2 func(retrievalqueries.Member) error) error {
+					return orm.Each(arg0, arg1, receiver, arg2)
+				}
+			}()},
 		} {
 			for _, stopEarly := range []bool{false, true} {
 				var trace retrievalqueries.Trace
@@ -44,7 +49,7 @@ func TestPostgresRetrievalIterationClosesBoundedBatches(t *testing.T) {
 					if member.Name != fmt.Sprintf("stream %03d", visits) {
 						return errors.New("iteration changed its stored order or selected window")
 					}
-					if _, err := q.Count(ctx, tx); err != nil {
+					if _, err := orm.Count(ctx, tx, q); err != nil {
 						return err
 					}
 					if stopEarly {

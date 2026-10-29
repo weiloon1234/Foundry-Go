@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
@@ -7,4 +9,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var invalid = rows.Having(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows), expr.ModelPredicate(models.Orders.TotalCents.Gt(1)))
+var invalid = rows.Having(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows), expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 1)))

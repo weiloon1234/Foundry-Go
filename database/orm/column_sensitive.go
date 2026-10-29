@@ -12,26 +12,26 @@ import (
 )
 
 // PasswordOf binds a stored hash with scalar comparisons, sorting and assignment.
-// Plaintext verification belongs to password.Hasher. Example: Accounts.Digest.Eq(hash).
+// Plaintext verification belongs to password.Hasher. Example: ColumnEq(Accounts.Digest, hash).
 func PasswordOf[M any](b Builder[M], ptr *password.Hash) Column[M, password.Hash] {
 	return Column[M, password.Hash]{column: bindModel[M](b.state, ptr, password.Codec(), false)}
 }
 
 // NullablePasswordOf adds SQL NULL operations to a sensitive stored hash.
-// Example: Accounts.Backup.SetNull().
+// Example: NullableColumnSetNull(Accounts.Backup).
 func NullablePasswordOf[M any](b Builder[M], ptr *value.Nullable[password.Hash]) NullableColumn[M, password.Hash] {
 	return NullableColumn[M, password.Hash]{nullableColumn: bindNullableModel[M](b.state, ptr, password.Codec())}
 }
 
 // Encrypted exposes only typed assignment; ciphertext has no predicate or ordering capabilities.
-// Example: Vaults.Secret.Set(encrypted.NewText("private")).
+// Example: EncryptedSet(Vaults.Secret, encrypted.NewText("private")).
 type Encrypted[M any, V encrypted.Value[V]] struct {
 	_         [0]*M
 	encrypted columnData[V]
 }
 
 // NullableEncrypted adds only SQL NULL predicates and assignments.
-// Example: Vaults.Backup.IsNull().
+// Example: NullableEncryptedIsNull(Vaults.Backup).
 type NullableEncrypted[M any, V encrypted.Value[V]] struct {
 	_         [0]*M
 	encrypted nullableColumnData[V]
@@ -58,9 +58,9 @@ func NullableEncryptedJSONOf[M, T any](b Builder[M], ptr *value.Nullable[encrypt
 	return NullableEncrypted[M, encrypted.JSON[T]]{encrypted: bindNullableEncrypted(b.state, ptr, encrypted.JSONCodec[T]())}
 }
 
-// Set captures a typed value for sealing inside the write transaction.
-// Example: Vaults.Secret.Set(encrypted.NewText("private")).
-func (c Encrypted[M, V]) Set(v V) Assignment[M] {
+// EncryptedSet captures a typed value for sealing inside the write transaction.
+// Example: EncryptedSet(Vaults.Secret, encrypted.NewText("private")).
+func EncryptedSet[M any, V encrypted.Value[V]](c Encrypted[M, V], v V) Assignment[M] {
 	a := columnAssignment[M](c.encrypted, v)
 	if a.err == nil {
 		a.core.Seal = querycore.EncryptedSealer(v, c.encrypted.assign)
@@ -68,8 +68,8 @@ func (c Encrypted[M, V]) Set(v V) Assignment[M] {
 	return a
 }
 
-// Set captures a present encrypted value. Example: Vaults.Backup.Set(encrypted.NewText("private")).
-func (c NullableEncrypted[M, V]) Set(v V) Assignment[M] {
+// NullableEncryptedSet captures a present encrypted value. Example: NullableEncryptedSet(Vaults.Backup, encrypted.NewText("private")).
+func NullableEncryptedSet[M any, V encrypted.Value[V]](c NullableEncrypted[M, V], v V) Assignment[M] {
 	a := columnAssignment[M](c.encrypted.base, v)
 	if a.err == nil {
 		a.core.Seal = querycore.EncryptedSealer(v, c.encrypted.base.assign)
@@ -77,8 +77,8 @@ func (c NullableEncrypted[M, V]) Set(v V) Assignment[M] {
 	return a
 }
 
-// SetNull clears the encrypted column inside a keyed write. Example: Vaults.Backup.SetNull().
-func (c NullableEncrypted[M, V]) SetNull() Assignment[M] {
+// NullableEncryptedSetNull clears the encrypted column inside a keyed write. Example: NullableEncryptedSetNull(Vaults.Backup).
+func NullableEncryptedSetNull[M any, V encrypted.Value[V]](c NullableEncrypted[M, V]) Assignment[M] {
 	if c.encrypted.nullable == nil {
 		return Assignment[M]{err: invalid("uninitialized column")}
 	}
@@ -90,13 +90,13 @@ func (c NullableEncrypted[M, V]) SetNull() Assignment[M] {
 	return a
 }
 
-// IsNull matches SQL NULL without comparing ciphertext. Example: Vaults.Backup.IsNull().
-func (c NullableEncrypted[M, V]) IsNull() Predicate[M] {
+// NullableEncryptedIsNull matches SQL NULL without comparing ciphertext. Example: NullableEncryptedIsNull(Vaults.Backup).
+func NullableEncryptedIsNull[M any, V encrypted.Value[V]](c NullableEncrypted[M, V]) Predicate[M] {
 	return comparison[M](c.encrypted.base, querycore.IsNull, nil)
 }
 
-// IsNotNull excludes SQL NULL without comparing ciphertext. Example: Vaults.Backup.IsNotNull().
-func (c NullableEncrypted[M, V]) IsNotNull() Predicate[M] {
+// NullableEncryptedIsNotNull excludes SQL NULL without comparing ciphertext. Example: NullableEncryptedIsNotNull(Vaults.Backup).
+func NullableEncryptedIsNotNull[M any, V encrypted.Value[V]](c NullableEncrypted[M, V]) Predicate[M] {
 	return comparison[M](c.encrypted.base, querycore.IsNotNull, nil)
 }
 

@@ -44,11 +44,11 @@ func (c Collection[M, K]) detach(ctx context.Context, m *Manager, owner model.Re
 				return err
 			}
 			f := store.Files
-			q := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready)))
+			q := store.Files.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key), orm.TextEq(f.Collection, string(c.Name())), orm.TextEq(f.Locale, locale), orm.TextEq(f.State, string(Ready)))
 			if id, ok := only.Get(); ok {
-				q = q.Where(f.ID.Eq(model.IDFromBytes[store.File](id.Bytes())))
+				q = q.Where(orm.KeyEq(f.ID, model.IDFromBytes[store.File](id.Bytes())))
 			}
-			rows, err := q.OrderBy(f.ID.Asc()).Limit(MaxCollectionFiles+1).All(ctx, tx)
+			rows, err := orm.All(ctx, tx, q.OrderBy(orm.KeyAsc(f.ID)).Limit(MaxCollectionFiles+1))
 			if err != nil {
 				return err
 			}
@@ -63,7 +63,7 @@ func (c Collection[M, K]) detach(ctx context.Context, m *Manager, owner model.Re
 				if _, err := c.attachment(m, row); err != nil {
 					return err
 				}
-				if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, store.Files.State.Set(string(CleanupPending)), store.Files.UpdatedAt.Set(now)); err != nil {
+				if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, orm.TextSet(store.Files.State, string(CleanupPending)), orm.TimeSet(store.Files.UpdatedAt, now)); err != nil {
 					return err
 				}
 				if err := c.queue.enqueue(ctx, tx, operationID(row.ID)); err != nil {
@@ -142,7 +142,7 @@ func (c Collection[M, K]) Reorder(ctx context.Context, m *Manager, owner model.R
 				return err
 			}
 			f := store.Files
-			rows, err := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).OrderBy(f.ID.Asc()).Limit(MaxCollectionFiles+1).All(ctx, tx)
+			rows, err := orm.All(ctx, tx, store.Files.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key), orm.TextEq(f.Collection, string(c.Name())), orm.TextEq(f.Locale, locale), orm.TextEq(f.State, string(Ready))).OrderBy(orm.KeyAsc(f.ID)).Limit(MaxCollectionFiles+1))
 			if err != nil {
 				return err
 			}
@@ -162,7 +162,7 @@ func (c Collection[M, K]) Reorder(ctx context.Context, m *Manager, owner model.R
 				return err
 			}
 			for i, id := range ids {
-				row, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.SortOrder.Set(int32(i)), store.Files.UpdatedAt.Set(now))
+				row, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.NumberSet(store.Files.SortOrder, int32(i)), orm.TimeSet(store.Files.UpdatedAt, now))
 				if err != nil {
 					return err
 				}
@@ -206,8 +206,8 @@ func (c Collection[M, K]) SetProperties(ctx context.Context, m *Manager, owner m
 				return err
 			}
 			f := store.Files
-			q := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready)))
-			row, err := q.Where(store.Files.Key().Eq(model.IDFromBytes[store.File](id.Bytes()))).Require(ctx, tx)
+			q := store.Files.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key), orm.TextEq(f.Collection, string(c.Name())), orm.TextEq(f.Locale, locale), orm.TextEq(f.State, string(Ready)))
+			row, err := orm.Require(ctx, tx, q.Where(orm.KeyEq(store.Files.Key(), model.IDFromBytes[store.File](id.Bytes()))))
 			if err != nil {
 				return err
 			}
@@ -218,7 +218,7 @@ func (c Collection[M, K]) SetProperties(ctx context.Context, m *Manager, owner m
 			if err != nil {
 				return err
 			}
-			row, err = orm.Update(ctx, tx, q, store.Files.Key(), row.ID, store.Files.Properties.Set(properties), store.Files.UpdatedAt.Set(now))
+			row, err = orm.Update(ctx, tx, q, store.Files.Key(), row.ID, orm.JSONSet(store.Files.Properties, properties), orm.TimeSet(store.Files.UpdatedAt, now))
 			if err != nil {
 				return err
 			}

@@ -1,5 +1,7 @@
 package linkqueries_test
 
+import temporal "github.com/weiloon1234/Foundry-Go/temporal"
+
 import (
 	"context"
 	"errors"
@@ -29,26 +31,26 @@ func archiveValues(t *testing.T) []orm.Assignment[linkqueries.Archive] {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return []orm.Assignment[linkqueries.Archive]{linkqueries.Archives.Tag.Set(linkqueries.ArchiveTagInput{Text: " BATCH "}), linkqueries.Archives.Amount.Set(amount), linkqueries.Archives.Payload.Set(payload)}
+	return []orm.Assignment[linkqueries.Archive]{orm.InputTextSet(linkqueries.Archives.Tag, linkqueries.ArchiveTagInput{Text: " BATCH "}), orm.NumberSet(linkqueries.Archives.Amount, amount), orm.JSONSet(linkqueries.Archives.Payload, payload)}
 }
 
 func archiveMembers(source orm.Query[linkqueries.Member]) orm.InsertSelect[linkqueries.Member, linkqueries.Archive] {
 	fields := linkqueries.Members
-	return sqlrows.InsertFrom(sqlrows.From(source), linkqueries.Archives.Query(), sqlrows.MapInsert(linkqueries.Archives.MemberID, expr.Value(fields.ID)), sqlrows.MapInsert(linkqueries.Archives.Name, expr.Value(fields.Name)), sqlrows.MapInsert(linkqueries.Archives.Alias, expr.Value(fields.Alias)))
+	return sqlrows.InsertFrom(sqlrows.From(source), linkqueries.Archives.Query(), sqlrows.MapInsert(orm.ColumnExpr(linkqueries.Archives.MemberID), expr.Value(orm.KeyExpr(fields.ID))), sqlrows.MapInsert(orm.TextExpr(linkqueries.Archives.Name), expr.Value(orm.TextExpr(fields.Name))), sqlrows.MapInsert(orm.NullableTextExpr(linkqueries.Archives.Alias), expr.Value(orm.NullableTextExpr(fields.Alias))))
 }
 
 func TestPostgresInsertSelectPreservesTypesDefaultsAndBulkSemantics(t *testing.T) {
 	trace := &linkqueries.Trace{}
 	runORMLinks(t, func(tx *database.Tx, clock *testkit.Clock) error {
-		members, err := linkqueries.Members.InsertMany(t.Context(), tx, [][]orm.Assignment[linkqueries.Member]{
-			[]orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("alpha")}, []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("beta"), linkqueries.Members.Alias.Set("Bee")},
+		members, err := orm.InsertMany(t.Context(), tx, linkqueries.Members.Table, [][]orm.Assignment[linkqueries.Member]{
+			[]orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "alpha")}, []orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "beta"), orm.NullableTextSet(linkqueries.Members.Alias, "Bee")},
 		})
 		if err != nil {
 			return err
 		}
 		ctx := linkqueries.WithTrace(t.Context(), trace)
 		old := clock.Now().Add(-24 * time.Hour).UTC().Truncate(time.Microsecond)
-		draft := append(archiveValues(t), linkqueries.Archives.CreatedAt.Set(old))
+		draft := append(archiveValues(t), orm.TimeSet(linkqueries.Archives.CreatedAt, old))
 		inserted, err := archiveMembers(linkqueries.Members.Query()).Values(draft...).Returning(ctx, wrappedTransactor{tx}, 2)
 		if err != nil {
 			return err
@@ -89,19 +91,43 @@ func TestPostgresInsertSelectPreservesTypesDefaultsAndBulkSemantics(t *testing.T
 		inspected := false
 		trace.InspectArchive = func(w *orm.Write[linkqueries.Archive]) error {
 			fields := linkqueries.Archives
-			tag, tagOK := orm.WriteGet(w, fields.Tag.Set).Get()
-			a, amountOK := orm.WriteGet(w, fields.Amount.Set).Get()
-			payload, payloadOK := orm.WriteGet(w, fields.Payload.Set).Get()
+			tag, tagOK := orm.WriteGet(w, func() func(arg0 linkqueries.ArchiveTagInput) orm.Assignment[linkqueries.Archive] {
+				receiver := fields.Tag
+				return func(arg0 linkqueries.ArchiveTagInput) orm.Assignment[linkqueries.Archive] {
+					return orm.InputTextSet(receiver, arg0)
+				}
+			}()).Get()
+			a, amountOK := orm.WriteGet(w, func() func(arg0 decimal.Decimal) orm.Assignment[linkqueries.Archive] {
+				receiver := fields.Amount
+				return func(arg0 decimal.Decimal) orm.Assignment[linkqueries.Archive] { return orm.NumberSet(receiver, arg0) }
+			}()).Get()
+			payload, payloadOK := orm.WriteGet(w, func() func(arg0 value.JSON[[]string]) orm.Assignment[linkqueries.Archive] {
+				receiver := fields.Payload
+				return func(arg0 value.JSON[[]string]) orm.Assignment[linkqueries.Archive] {
+					return orm.JSONSet(receiver, arg0)
+				}
+			}()).Get()
 			decoded, err := payload.Decode()
-			created, createdOK := orm.WriteGet(w, fields.CreatedAt.Set).Get()
-			if !tagOK || tag.Text != " BATCH " || !amountOK || a != amount || !payloadOK || err != nil || !slices.Equal(decoded, []string{"first", "quoted '"}) || !createdOK || created != old || orm.WriteIsSet(w, fields.Key().Set) || orm.WriteIsSet(w, fields.UpdatedAt.Set) {
+			created, createdOK := orm.WriteGet(w, func() func(arg0 time.Time) orm.Assignment[linkqueries.Archive] {
+				receiver := fields.CreatedAt
+				return func(arg0 time.Time) orm.Assignment[linkqueries.Archive] { return orm.TimeSet(receiver, arg0) }
+			}()).Get()
+			if !tagOK || tag.Text != " BATCH " || !amountOK || a != amount || !payloadOK || err != nil || !slices.Equal(decoded, []string{"first", "quoted '"}) || !createdOK || created != old || orm.WriteIsSet(w, func() func(arg0 model.ID[linkqueries.Archive]) orm.Assignment[linkqueries.Archive] {
+				receiver := fields.Key()
+				return func(arg0 model.ID[linkqueries.Archive]) orm.Assignment[linkqueries.Archive] {
+					return orm.KeySet(receiver, arg0)
+				}
+			}()) || orm.WriteIsSet(w, func() func(arg0 temporal.DateTime) orm.Assignment[linkqueries.Archive] {
+				receiver := fields.UpdatedAt
+				return func(arg0 temporal.DateTime) orm.Assignment[linkqueries.Archive] { return orm.TimeSet(receiver, arg0) }
+			}()) {
 				return errors.New("insert preparation changed the source draft values or omissions")
 			}
 			inspected = true
 			return nil
 		}
-		ordinary := append(slices.Clone(draft), linkqueries.Archives.MemberID.Set(members[0].ID), linkqueries.Archives.Name.Set("ordinary"))
-		if _, err := linkqueries.Archives.Insert(ctx, tx, ordinary...); !errors.Is(err, linkqueries.ErrVeto) {
+		ordinary := append(slices.Clone(draft), orm.ColumnSet(linkqueries.Archives.MemberID, members[0].ID), orm.TextSet(linkqueries.Archives.Name, "ordinary"))
+		if _, err := orm.Insert(ctx, tx, linkqueries.Archives.Table, ordinary...); !errors.Is(err, linkqueries.ErrVeto) {
 			return errors.New("fixture did not exercise real creation hooks")
 		}
 		if !inspected {
@@ -118,7 +144,7 @@ func TestPostgresInsertSelectBoundsVetoAndOuterRollback(t *testing.T) {
 	for _, mode := range []string{"return_bound", "mutator_veto", "outer_rollback", "unique_violation"} {
 		t.Run(mode, func(t *testing.T) {
 			runORMLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
-				if _, err := linkqueries.Members.InsertMany(t.Context(), tx, [][]orm.Assignment[linkqueries.Member]{[]orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("one")}, []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("two")}}); err != nil {
+				if _, err := orm.InsertMany(t.Context(), tx, linkqueries.Members.Table, [][]orm.Assignment[linkqueries.Member]{[]orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "one")}, []orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "two")}}); err != nil {
 					return err
 				}
 				draft := archiveValues(t)
@@ -130,7 +156,7 @@ func TestPostgresInsertSelectBoundsVetoAndOuterRollback(t *testing.T) {
 						return errors.New("excess insertion results did not fail atomically")
 					}
 				case "mutator_veto":
-					count, err := plan.Values(linkqueries.Archives.Tag.Set(linkqueries.ArchiveTagInput{Text: "reject"}), draft[1], draft[2]).Exec(t.Context(), tx)
+					count, err := plan.Values(orm.InputTextSet(linkqueries.Archives.Tag, linkqueries.ArchiveTagInput{Text: "reject"}), draft[1], draft[2]).Exec(t.Context(), tx)
 					if !errors.Is(err, linkqueries.ErrVeto) || count != 0 {
 						return errors.New("literal setter veto was bypassed")
 					}
@@ -139,7 +165,7 @@ func TestPostgresInsertSelectBoundsVetoAndOuterRollback(t *testing.T) {
 					if err != nil {
 						return err
 					}
-					count, err := plan.Values(append(slices.Clone(draft), linkqueries.Archives.Key().Set(id))...).Exec(t.Context(), tx)
+					count, err := plan.Values(append(slices.Clone(draft), orm.KeySet(linkqueries.Archives.Key(), id))...).Exec(t.Context(), tx)
 					if !errors.Is(err, database.UniqueViolation) || count != 0 {
 						return errors.New("repeated literal primary key did not fail atomically")
 					}
@@ -158,7 +184,7 @@ func TestPostgresInsertSelectBoundsVetoAndOuterRollback(t *testing.T) {
 						return errors.New("insert selection lost outer transaction rollback")
 					}
 				}
-				count, err := linkqueries.Archives.Query().Count(t.Context(), tx)
+				count, err := orm.Count(t.Context(), tx, linkqueries.Archives.Query())
 				if err != nil || count != 0 {
 					return errors.New("failed insert retained rows or damaged reusable parent transaction")
 				}
@@ -177,8 +203,8 @@ type archiveSourceAlias struct{}
 
 func TestPostgresInsertSelectScopesWindowsCTEsAndEmptySources(t *testing.T) {
 	runORMLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
-		members, err := linkqueries.Members.InsertMany(t.Context(), tx, [][]orm.Assignment[linkqueries.Member]{
-			[]orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("alpha")}, []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("beta")}, []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("gamma")},
+		members, err := orm.InsertMany(t.Context(), tx, linkqueries.Members.Table, [][]orm.Assignment[linkqueries.Member]{
+			[]orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "alpha")}, []orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "beta")}, []orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "gamma")},
 		})
 		if err != nil {
 			return err
@@ -188,10 +214,10 @@ func TestPostgresInsertSelectScopesWindowsCTEsAndEmptySources(t *testing.T) {
 		if alpha < 0 {
 			return errors.New("fixture did not return its alpha member")
 		}
-		if _, err := linkqueries.Members.Delete(t.Context(), tx, members[alpha].ID); err != nil {
+		if _, err := orm.Delete(t.Context(), tx, linkqueries.Members.Table.Query(), linkqueries.Members.Table.Key(), members[alpha].ID); err != nil {
 			return err
 		}
-		source := linkqueries.Members.Query().OrderBy(fields.Name.Asc()).Offset(1).Limit(1)
+		source := linkqueries.Members.Query().OrderBy(orm.TextAsc(fields.Name)).Offset(1).Limit(1)
 		inserted, err := archiveMembers(source).Values(archiveValues(t)...).Returning(t.Context(), tx, 2)
 		if err != nil || len(inserted) != 1 || inserted[0].Name != "gamma" {
 			return errors.New("source soft visibility or ordered window changed")
@@ -199,11 +225,11 @@ func TestPostgresInsertSelectScopesWindowsCTEsAndEmptySources(t *testing.T) {
 		cte := sqlrows.CTE("archivable", sqlrows.ModelRecord(linkqueries.Members.Query().OnlyTrashed()))
 		aliased := sqlrows.AsRecord[archiveSourceAlias](cte, "archived_member")
 
-		count, err := sqlrows.InsertFrom(aliased, linkqueries.Archives.Query(), sqlrows.MapInsert(linkqueries.Archives.MemberID, expr.At(sqlrows.Scope(aliased), linkqueries.Members.ID)), sqlrows.MapInsert(linkqueries.Archives.Name, expr.At(sqlrows.Scope(aliased), linkqueries.Members.Name)), sqlrows.MapInsert(linkqueries.Archives.Alias, expr.At(sqlrows.Scope(aliased), linkqueries.Members.Alias))).Values(archiveValues(t)...).Exec(t.Context(), tx)
+		count, err := sqlrows.InsertFrom(aliased, linkqueries.Archives.Query(), sqlrows.MapInsert(orm.ColumnExpr(linkqueries.Archives.MemberID), expr.At(sqlrows.Scope(aliased), orm.KeyExpr(linkqueries.Members.ID))), sqlrows.MapInsert(orm.TextExpr(linkqueries.Archives.Name), expr.At(sqlrows.Scope(aliased), orm.TextExpr(linkqueries.Members.Name))), sqlrows.MapInsert(orm.NullableTextExpr(linkqueries.Archives.Alias), expr.At(sqlrows.Scope(aliased), orm.NullableTextExpr(linkqueries.Members.Alias)))).Values(archiveValues(t)...).Exec(t.Context(), tx)
 		if err != nil || count != 1 {
 			return errors.New("insert selection lost aliased CTE or explicit deleted scope")
 		}
-		empty := archiveMembers(linkqueries.Members.Query().Where(fields.Name.Eq("absent"))).Values(archiveValues(t)...)
+		empty := archiveMembers(linkqueries.Members.Query().Where(orm.TextEq(fields.Name, "absent"))).Values(archiveValues(t)...)
 		rows, err := empty.Returning(t.Context(), tx, 1)
 		if err != nil || len(rows) != 0 {
 			return errors.New("empty source did not return an empty model slice")
@@ -231,12 +257,12 @@ func TestPostgresInsertSelectReturningDoesNotTruncateSuppressedSourceRows(t *tes
 				return err
 			}
 		}
-		if _, err := linkqueries.Members.InsertMany(t.Context(), tx, [][]orm.Assignment[linkqueries.Member]{
-			[]orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("skip2")}, []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("skip1")}, []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("keep")},
+		if _, err := orm.InsertMany(t.Context(), tx, linkqueries.Members.Table, [][]orm.Assignment[linkqueries.Member]{
+			[]orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "skip2")}, []orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "skip1")}, []orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "keep")},
 		}); err != nil {
 			return err
 		}
-		source := linkqueries.Members.Query().OrderBy(linkqueries.Members.Name.Desc())
+		source := linkqueries.Members.Query().OrderBy(orm.TextDesc(linkqueries.Members.Name))
 		rows, err := archiveMembers(source).Values(archiveValues(t)...).Returning(t.Context(), tx, 1)
 		if err != nil {
 			return err
@@ -252,12 +278,12 @@ func TestPostgresInsertSelectCountDoesNotCollectOrCapSourceRows(t *testing.T) {
 	runORMLinks(t, func(tx *database.Tx, _ *testkit.Clock) error {
 		drafts := make([][]orm.Assignment[linkqueries.Member], orm.MaxPerModelWriteRows)
 		for i := range drafts {
-			drafts[i] = []orm.Assignment[linkqueries.Member]{linkqueries.Members.Name.Set("source")}
+			drafts[i] = []orm.Assignment[linkqueries.Member]{orm.TextSet(linkqueries.Members.Name, "source")}
 		}
-		if _, err := linkqueries.Members.InsertMany(t.Context(), tx, drafts); err != nil {
+		if _, err := orm.InsertMany(t.Context(), tx, linkqueries.Members.Table, drafts); err != nil {
 			return err
 		}
-		if _, err := linkqueries.Members.Insert(t.Context(), tx, linkqueries.Members.Name.Set("last")); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, linkqueries.Members.Table, orm.TextSet(linkqueries.Members.Name, "last")); err != nil {
 			return err
 		}
 		count, err := archiveMembers(linkqueries.Members.Query()).Values(archiveValues(t)...).Exec(t.Context(), tx)

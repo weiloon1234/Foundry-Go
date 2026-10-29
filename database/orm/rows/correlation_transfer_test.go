@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -15,11 +17,11 @@ func TestCorrelationSQLAndNestedOwnership(t *testing.T) {
 	m := declareMembers()
 	outer, inner := As[left](m.Query(), "parent"), As[right](m.Query(), "child")
 	link := Correlate(outer, inner)
-	p := expr.At(OuterScope(link, Scope(outer)), m.ID)
-	c := expr.At(InnerScope(link, Scope(inner)), m.ID)
+	p := expr.At(OuterScope(link, Scope(outer)), orm.KeyExpr(m.ID))
+	c := expr.At(InnerScope(link, Scope(inner)), orm.KeyExpr(m.ID))
 	values := SelectCorrelatedScalar(link, expr.Row(c).Value()).Where(expr.Equal(c, p), c.Ne(2)).Limit(1)
 	v := CorrelatedScalarRowQuery(values).Value()
-	q := OrderScalar(WhereScalar(SelectScalar(outer, v), expr.At(Scope(outer), m.ID).Ne(8)), v.Asc())
+	q := OrderScalar(WhereScalar(SelectScalar(outer, v), expr.At(Scope(outer), orm.KeyExpr(m.ID)).Ne(8)), v.Asc())
 	s, e := CompileRead(ReadScalar(q))
 	if e != nil || !strings.Contains(s.SQL(), `("child"."id" = "parent"."id")`) || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(1), int64(8), int64(2), int64(1)}) {
 		t.Fatal(s.SQL(), s.Arguments(), e)
@@ -27,11 +29,11 @@ func TestCorrelationSQLAndNestedOwnership(t *testing.T) {
 	type third struct{}
 	grandchild := As[third](m.Query(), "grandchild")
 	nested := Correlate(link, grandchild)
-	grandparentID := expr.At(OuterScope(nested, OuterScope(link, Scope(outer))), m.ID)
-	parentID := expr.At(OuterScope(nested, InnerScope(link, Scope(inner))), m.ID)
-	childID := expr.At(InnerScope(nested, Scope(grandchild)), m.ID)
+	grandparentID := expr.At(OuterScope(nested, OuterScope(link, Scope(outer))), orm.KeyExpr(m.ID))
+	parentID := expr.At(OuterScope(nested, InnerScope(link, Scope(inner))), orm.KeyExpr(m.ID))
+	childID := expr.At(InnerScope(nested, Scope(grandchild)), orm.KeyExpr(m.ID))
 	pred := nested.Where(expr.Equal(childID, parentID), expr.NotEqual(childID, grandparentID)).Exists()
-	s, e = CompileRead(ReadScalar(WhereScalar(SelectScalar(outer, expr.Row(expr.At(Scope(outer), m.ID)).Value()), link.Where(pred).Exists())))
+	s, e = CompileRead(ReadScalar(WhereScalar(SelectScalar(outer, expr.Row(expr.At(Scope(outer), orm.KeyExpr(m.ID))).Value()), link.Where(pred).Exists())))
 	if e != nil || !strings.Contains(s.SQL(), `("grandchild"."id" <> "parent"."id")`) {
 		t.Fatal(s.SQL(), e)
 	}
@@ -40,10 +42,10 @@ func TestCorrelationGroupingAndIsolation(t *testing.T) {
 	m := declareMembers()
 	a, b := As[left](m.Query(), "parent"), As[right](m.Query(), "child")
 	c := Correlate(a, b)
-	x, y := expr.At(OuterScope(c, Scope(a)), m.ID), expr.At(InnerScope(c, Scope(b)), m.ID)
+	x, y := expr.At(OuterScope(c, Scope(a)), orm.KeyExpr(m.ID)), expr.At(InnerScope(c, Scope(b)), orm.KeyExpr(m.ID))
 	count := SelectCorrelatedScalar(c, expr.CountRow(expr.Row(y)).Value()).Where(expr.Equal(y, x))
 	v := CorrelatedScalarRowQuery(count).Value()
-	if _, e := CompileRead(ReadScalar(GroupByScalar(SelectScalar(a, v), expr.Group(expr.At(Scope(a), m.ID))))); e != nil {
+	if _, e := CompileRead(ReadScalar(GroupByScalar(SelectScalar(a, v), expr.Group(expr.At(Scope(a), orm.KeyExpr(m.ID)))))); e != nil {
 		t.Fatal(e)
 	}
 	aggregate := expr.Count[Alias[left, member]]()
@@ -77,14 +79,14 @@ func TestCorrelationInvalidBoundariesAndRequalification(t *testing.T) {
 	outer := From(m.Query())
 	inner := As[right](m.Query(), "child")
 	c := Correlate(outer, inner)
-	x, y := expr.At(OuterScope(c, ModelScope(m.Query())), m.ID), expr.At(InnerScope(c, Scope(inner)), m.ID)
+	x, y := expr.At(OuterScope(c, ModelScope(m.Query())), orm.KeyExpr(m.ID)), expr.At(InnerScope(c, Scope(inner)), orm.KeyExpr(m.ID))
 	p := expr.FoundryPredicate(c.Where(expr.Equal(y, x)).Exists(), sqlowner.Expressions()).Node.(querycore.SubqueryPredicate)
 	changed := querycore.Requalify(p, "parent_alias").(querycore.SubqueryPredicate)
 	if changed.Query.Correlation.Sources["parent_alias"] == nil || p.Query.Correlation.Sources["members"] == nil {
 		t.Fatal("scope mutation")
 	}
 	alias := As[left](m.Query(), "parent_alias")
-	q := SelectScalar(alias, expr.Row(expr.At(Scope(alias), m.ID)).Value())
+	q := SelectScalar(alias, expr.Row(expr.At(Scope(alias), orm.KeyExpr(m.ID))).Value())
 	q.source.Node.Predicates = []querycore.Expression{changed}
 	s, e := CompileRead(ReadScalar(q))
 	if e != nil || !strings.Contains(s.SQL(), `("child"."id" = "parent_alias"."id")`) {
@@ -92,7 +94,7 @@ func TestCorrelationInvalidBoundariesAndRequalification(t *testing.T) {
 	}
 	wrong := As[left](m.Query(), "wrong")
 	link := Correlate(alias, inner)
-	if _, e := CompileRead(ReadScalar(WhereScalar(SelectScalar(wrong, expr.Row(expr.At(Scope(wrong), m.ID)).Value()), link.Exists()))); !errors.Is(e, fault.Invalid) {
+	if _, e := CompileRead(ReadScalar(WhereScalar(SelectScalar(wrong, expr.Row(expr.At(Scope(wrong), orm.KeyExpr(m.ID))).Value()), link.Exists()))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("alias identity mismatch", e)
 	}
 }

@@ -61,8 +61,8 @@ func TestReportEachStreamsAndOwnsClosure(t *testing.T) {
 
 func TestReportPreflightRejectsBeforeIO(t *testing.T) {
 	m := declareMembers()
-	id := expr.Value(m.ID)
-	base := SelectValue(m.Query(), m.ID)
+	id := expr.Value(orm.KeyExpr(m.ID))
+	base := SelectValue(m.Query(), orm.KeyExpr(m.ID))
 	ordered := OrderBy(base, id.Asc())
 	state := &driverState{}
 	db := openTest(t, state)
@@ -109,7 +109,7 @@ func TestReportPreflightRejectsBeforeIO(t *testing.T) {
 
 func TestReportSimplePageAndCount(t *testing.T) {
 	m := declareMembers()
-	q := OrderBy(SelectValue(m.Query(), m.ID), expr.Value(m.ID).Asc())
+	q := OrderBy(SelectValue(m.Query(), orm.KeyExpr(m.ID)), expr.Value(orm.KeyExpr(m.ID)).Asc())
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(1)}, {int64(2)}}}
 	page, err := Read(q).SimplePaginate(t.Context(), openTest(t, state), orm.Page(1, 1))
 	if err != nil || len(page.Items) != 1 || !page.HasMore || cap(page.Items) != 1 {
@@ -130,7 +130,7 @@ func TestProjectionBridgeCapabilitiesFailClosed(t *testing.T) {
 	if _, err := orm.FoundryStatement(querycore.Statement{}, sqlowner.MetadataSeal{}); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
-	p := orm.FoundryPredicate(m.ID.Eq(1), sqlowner.MetadataSeal{})
+	p := orm.FoundryPredicate(orm.KeyEq(m.ID, 1), sqlowner.MetadataSeal{})
 	if !errors.Is(p.Err, fault.Invalid) {
 		t.Fatal(p.Err)
 	}
@@ -145,8 +145,8 @@ func TestProjectionBridgeCapabilitiesFailClosed(t *testing.T) {
 	}
 
 	own, foreign := declareMembers(), declareMembers()
-	for _, p := range []expr.Predicate[member]{expr.ModelPredicate(foreign.ID.Eq(1)), expr.ModelPredicate(orm.Predicate[member]{})} {
-		if _, err := CompileRead(Read(SelectValue(own.Query(), own.ID).Where(p))); !errors.Is(err, fault.Invalid) {
+	for _, p := range []expr.Predicate[member]{expr.ModelPredicate(orm.KeyEq(foreign.ID, 1)), expr.ModelPredicate(orm.Predicate[member]{})} {
+		if _, err := CompileRead(Read(SelectValue(own.Query(), orm.KeyExpr(own.ID)).Where(p))); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
@@ -164,12 +164,12 @@ func TestReportScopeContextIsFreshAtPreflightAndExecution(t *testing.T) {
 			if !ok {
 				return orm.Predicate[member]{}, errors.New("missing tenant")
 			}
-			return d.ID.Eq(id), nil
+			return orm.KeyEq(d.ID, id), nil
 		})}
 	}))
 	bound := context.WithValue(t.Context(), reportTenantKey{}, int64(1))
 	current := context.WithValue(t.Context(), reportTenantKey{}, int64(2))
-	q := SelectValue(orm.WithScopeContext(m.Query(), bound), m.ID)
+	q := SelectValue(orm.WithScopeContext(m.Query(), bound), orm.KeyExpr(m.ID))
 	s, err := CompileRead(Read(q))
 	if err != nil || s.Arguments()[0] != int64(1) {
 		t.Fatal(s, err)

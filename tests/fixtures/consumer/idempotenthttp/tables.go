@@ -7,11 +7,11 @@ import (
 
 // WorkspaceTable declares the stored workspace fields. Example: Workspaces.Query().
 type WorkspaceTable struct {
-	// Table owns the primary key. Example: Workspaces.Key().Eq(id).
+	// Table owns the primary key. Example: orm.KeyEq(Workspaces.Key(), id).
 	orm.Table[Workspace, int64]
-	// Tenant binds the Tenant field. Example: Workspaces.Tenant.Set("tenant").
+	// Tenant binds the Tenant field. Example: orm.TextSet(Workspaces.Tenant, "tenant").
 	Tenant orm.Text[Workspace, string]
-	// Enabled binds the Enabled field. Example: Workspaces.Enabled.Set(true).
+	// Enabled binds the Enabled field. Example: orm.ColumnSet(Workspaces.Enabled, true).
 	Enabled orm.Column[Workspace, bool]
 }
 
@@ -26,13 +26,13 @@ var Workspaces = orm.Define("idem_workspaces", func(b orm.Builder[Workspace], m 
 
 // OrderTable declares the stored order fields. Example: Orders.Query().
 type OrderTable struct {
-	// Table owns the primary key. Example: Orders.Key().Eq(id).
+	// Table owns the primary key. Example: orm.KeyEq(Orders.Key(), id).
 	orm.Table[Order, model.ID[Order]]
-	// WorkspaceID binds the WorkspaceID field. Example: Orders.WorkspaceID.Set(1).
+	// WorkspaceID binds the WorkspaceID field. Example: orm.NumberSet(Orders.WorkspaceID, 1).
 	WorkspaceID orm.Number[Order, int64]
-	// Caller binds the Caller field. Example: Orders.Caller.Set(1).
+	// Caller binds the Caller field. Example: orm.NumberSet(Orders.Caller, 1).
 	Caller orm.Number[Order, int64]
-	// Name binds the Name field. Example: Orders.Name.Set("order").
+	// Name binds the Name field. Example: orm.TextSet(Orders.Name, "order").
 	Name orm.Text[Order, string]
 }
 

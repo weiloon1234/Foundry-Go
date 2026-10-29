@@ -8,5 +8,5 @@ import (
 )
 
 func F(ctx context.Context, db database.Transactor, p j.Parent, t []j.Target) (orm.PivotChanges[j.Pivot], error) {
-	return orm.Sync(ctx, db, j.Peers, p, t, []orm.Assignment[j.Pivot]{j.Pivots.ID.Set(100), j.Pivots.Kind.Set("parent"), j.Pivots.Role.Set("member")}, nil)
+	return orm.Sync(ctx, db, j.Peers, p, t, []orm.Assignment[j.Pivot]{orm.KeySet(j.Pivots.ID, 100), orm.ColumnSet(j.Pivots.Kind, "parent"), orm.TextSet(j.Pivots.Role, "member")}, nil)
 }

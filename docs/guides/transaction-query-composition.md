@@ -14,7 +14,7 @@ are shared with ordinary reads.
 <!-- go-source: tests/fixtures/consumer/transactionqueries/models.go -->
 ```go
 func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
-	definition := rows.TransactionCTE("claimed", rows.LockedRecord(Records.Query().OrderBy(Records.ID.Asc()).Limit(1).ForUpdate().SkipLocked()))
+	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query().OrderBy(orm.KeyAsc(Records.ID)).Limit(1)).SkipLocked()))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
 	fields := recordAt(rows.TransactionScope(source))
 	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.Row(fields.ID).Value()), rows.MapSelected(Summaries.Name, expr.Row(fields.Name).Value())).All(ctx, tx)

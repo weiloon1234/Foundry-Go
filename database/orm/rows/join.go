@@ -78,7 +78,7 @@ func As[A, M any](q orm.Query[M], alias string) Aliased[A, M] {
 	return Aliased[A, M]{source: ormcore.Source{Scope: reflect.TypeFor[Alias[A, M]](), Node: node.Node, Aliases: node.Aliases, Owners: map[string]any{alias: owner}, Err: node.Err, Checks: s.Checks}, scope: ormcore.Scope{Reference: ormcore.Reference{Table: alias, Owner: owner}, Err: node.Err}}
 }
 
-// Scope selects the model scope of an alias. Example: expr.At(rows.Scope(members),Members.ID).
+// Scope selects the model scope of an alias. Example: expr.At(rows.Scope(members),orm.KeyExpr(Members.ID)).
 func Scope[A, M any](a Aliased[A, M]) expr.Scope[Alias[A, M], M] {
 	return expr.FoundryScope[Alias[A, M], M](a.scope, sqlowner.Expressions())
 }

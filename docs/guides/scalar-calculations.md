@@ -8,9 +8,9 @@ Row calculations preserve their model or alias scope and compose with handwritte
 
 <!-- go-source: tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go -->
 ```go
-quantity := expr.Value(f.Quantity)
-incremented := expr.Add(quantity, expr.Param(f.Quantity, 1))
-if rows, err := expr.Where(scalarqueries.Samples.Query(), incremented.Gte(3)).All(t.Context(), tx); err != nil || len(rows) != 2 {
+quantity := expr.Value(orm.NumberExpr(f.Quantity))
+incremented := expr.Add(quantity, expr.Param(orm.NumberExpr(f.Quantity), 1))
+if rows, err := orm.All(t.Context(), tx, expr.Where(scalarqueries.Samples.Query(), incremented.Gte(3))); err != nil || len(rows) != 2 {
 	t.Fatal("typed arithmetic predicate", rows, err)
 }
 ```

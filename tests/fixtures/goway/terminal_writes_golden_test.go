@@ -79,20 +79,20 @@ func TestTerminalWritesGolden(t *testing.T) {
 
 				f := n.Members
 				q := f.Query()
-				draft := []orm.Assignment[n.Member]{f.Key().Set(1), f.Name.Set(" input "), f.Body.Set([]byte{1})}
+				draft := []orm.Assignment[n.Member]{orm.KeySet(f.Key(), 1), orm.InputTextSet(f.Name, " input "), orm.ColumnSet(f.Body, []byte{1})}
 				switch operation {
 				case "create_each":
 					_, err := orm.CreateEach(ctx, db, q, [][]orm.Assignment[n.Member]{draft, draft})
 					check(err)
 				case "create_or_first", "create_or_first_conflict":
-					_, err := orm.CreateOrFirst(ctx, db, q.Where(f.ID.Eq(1)), draft...)
+					_, err := orm.CreateOrFirst(ctx, db, q.Where(orm.KeyEq(f.ID, 1)), draft...)
 					check(err)
 				case "lookup_found", "lookup_create":
-					_, err := orm.FirstOrCreate(ctx, db, q.Where(f.ID.Eq(1)), draft...)
+					_, err := orm.FirstOrCreate(ctx, db, q.Where(orm.KeyEq(f.ID, 1)), draft...)
 					check(err)
 				case "lookup_update":
-					_, err := orm.UpdateOrCreate(ctx, db, q.Where(f.ID.Eq(1)), draft, func(context.Context, *database.Tx, n.Member) ([]orm.Assignment[n.Member], error) {
-						return []orm.Assignment[n.Member]{f.Name.Set(" changed ")}, nil
+					_, err := orm.UpdateOrCreate(ctx, db, q.Where(orm.KeyEq(f.ID, 1)), draft, func(context.Context, *database.Tx, n.Member) ([]orm.Assignment[n.Member], error) {
+						return []orm.Assignment[n.Member]{orm.InputTextSet(f.Name, " changed ")}, nil
 					})
 					check(err)
 				case "prune", "mass_prune":
@@ -109,10 +109,10 @@ func TestTerminalWritesGolden(t *testing.T) {
 				case "locked_explain", "locked_analyze":
 					check(db.Transaction(ctx, func(tx *database.Tx) error {
 						if operation == "locked_analyze" {
-							_, err := orm.ExplainAnalyzeLocked(ctx, tx, q.ForUpdate())
+							_, err := orm.ExplainAnalyzeLocked(ctx, tx, orm.Lock(q))
 							return err
 						}
-						_, err := orm.ExplainLocked(ctx, tx, q.ForUpdate())
+						_, err := orm.ExplainLocked(ctx, tx, orm.Lock(q))
 						return err
 					}))
 				}

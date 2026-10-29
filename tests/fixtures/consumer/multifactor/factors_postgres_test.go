@@ -1,5 +1,7 @@
 package multifactor_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"crypto/hmac"
@@ -116,7 +118,7 @@ func mfaSetup(t *testing.T) *mfaFixture {
 		if _, err := tx.Exec(t.Context(), `CREATE TABLE mfa_accounts(id uuid PRIMARY KEY,email text NOT NULL,password text NOT NULL,enabled boolean NOT NULL,mfa_enabled boolean NOT NULL,require_mfa boolean NOT NULL)`); err != nil {
 			return err
 		}
-		s.account, err = multifactor.AccountRecords.Insert(t.Context(), tx, multifactor.AccountRecords.Email.Set("member@example.test"), multifactor.AccountRecords.Password.Set(hash), multifactor.AccountRecords.Enabled.Set(true), multifactor.AccountRecords.MFAEnabled.Set(false), multifactor.AccountRecords.RequireMFA.Set(false))
+		s.account, err = orm.Insert(t.Context(), tx, multifactor.AccountRecords.Table, orm.TextSet(multifactor.AccountRecords.Email, "member@example.test"), orm.ColumnSet(multifactor.AccountRecords.Password, hash), orm.ColumnSet(multifactor.AccountRecords.Enabled, true), orm.ColumnSet(multifactor.AccountRecords.MFAEnabled, false), orm.ColumnSet(multifactor.AccountRecords.RequireMFA, false))
 		return err
 	})
 	if err != nil {
@@ -127,7 +129,7 @@ func mfaSetup(t *testing.T) *mfaFixture {
 		var found value.Optional[multifactor.Account]
 		err := s.within(ctx, func(tx *database.Tx) error {
 			var err error
-			found, err = multifactor.AccountRecords.Find(ctx, tx, id)
+			found, err = orm.Find(ctx, tx, multifactor.AccountRecords.Table, id)
 			return err
 		})
 		return found, err
@@ -236,7 +238,7 @@ func (s *mfaFixture) current(t *testing.T) multifactor.Account {
 	t.Helper()
 	var account multifactor.Account
 	err := s.within(t.Context(), func(tx *database.Tx) error {
-		found, err := multifactor.AccountRecords.Find(t.Context(), tx, s.account.ID)
+		found, err := orm.Find(t.Context(), tx, multifactor.AccountRecords.Table, s.account.ID)
 		if err != nil {
 			return err
 		}
@@ -498,7 +500,7 @@ func TestPostgresMFAPrunesOnlyPendingAndPreservesRequiredPolicy(t *testing.T) {
 		t.Fatal("confirmed factor pruned", removed, err)
 	}
 	err = s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := multifactor.AccountRecords.Update(t.Context(), tx, s.account.ID, multifactor.AccountRecords.RequireMFA.Set(true))
+		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.ColumnSet(multifactor.AccountRecords.RequireMFA, true))
 		return err
 	})
 	if err != nil {

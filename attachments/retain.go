@@ -64,7 +64,7 @@ func (c Collection[M, K]) DetachKeepFile(ctx context.Context, m *Manager, owner 
 				return err
 			}
 			f := store.Files
-			row, err := store.Files.Query().Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).Where(store.Files.Key().Eq(model.IDFromBytes[store.File](id.Bytes()))).Require(ctx, tx)
+			row, err := orm.Require(ctx, tx, store.Files.Query().Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key), orm.TextEq(f.Collection, string(c.Name())), orm.TextEq(f.Locale, locale), orm.TextEq(f.State, string(Ready))).Where(orm.KeyEq(store.Files.Key(), model.IDFromBytes[store.File](id.Bytes()))))
 			if err != nil {
 				return err
 			}
@@ -75,7 +75,7 @@ func (c Collection[M, K]) DetachKeepFile(ctx context.Context, m *Manager, owner 
 			if err != nil {
 				return err
 			}
-			row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, store.Files.State.Set(string(Retained)), store.Files.UpdatedAt.Set(now))
+			row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, orm.TextSet(store.Files.State, string(Retained)), orm.TimeSet(store.Files.UpdatedAt, now))
 			if err != nil {
 				return err
 			}
@@ -116,7 +116,7 @@ func (m *Manager) RetainedObject(ctx context.Context, id OperationID) (RetainedF
 	var result RetainedFile
 	err := m.reads.Run(ctx, "retained attachment lookup", func(ctx context.Context) error {
 		return m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.Files.Query().Where(store.Files.Key().Eq(fileID(id))).Require(ctx, tx)
+			row, err := orm.Require(ctx, tx, store.Files.Query().Where(orm.KeyEq(store.Files.Key(), fileID(id))))
 			if err != nil {
 				return err
 			}

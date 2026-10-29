@@ -18,28 +18,18 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// Insert creates and hydrates one model. Example: Orders.Insert(ctx,tx,Orders.TotalCents.Set(10),Orders.BuyerID.Set(buyer)).
-func (t Table[M, K]) Insert(ctx context.Context, tx database.Transactor, as ...Assignment[M]) (M, error) {
+// Insert creates and hydrates one model. Example: orm.Insert(ctx, tx, Orders.Table, orm.NumberSet(Orders.TotalCents, 10), orm.ColumnSet(Orders.BuyerID, buyer)).
+func Insert[M any, K comparable](ctx context.Context, tx database.Transactor, t Table[M, K], as ...Assignment[M]) (M, error) {
 	return writeOne[M](ctx, tx, newQuery(t.core), querycore.InsertModel, as)
 }
 
-// Update patches one typed key and hydrates it. Example: Orders.Update(ctx,tx,id,Orders.TotalCents.Set(20)).
-func (t Table[M, K]) Update(ctx context.Context, tx database.Transactor, key K, as ...Assignment[M]) (M, error) {
-	return writeOne[M](ctx, tx, t.Query().Where(t.Key().Eq(key)).state, querycore.UpdateModel, as)
-}
-
-// Delete removes one key, using soft deletion when declared. Example: Orders.Delete(ctx,tx,id).
-func (t Table[M, K]) Delete(ctx context.Context, tx database.Transactor, key K) (M, error) {
-	return writeOne[M](ctx, tx, t.Query().Where(t.Key().Eq(key)).state, querycore.DeleteModel, nil)
-}
-
-// UpdateAll patches every matching row. Example: Orders.Query().Where(Orders.TotalCents.Eq(0)).UpdateAll(ctx,tx,Orders.TotalCents.Set(1)).
-func (q Query[M]) UpdateAll(ctx context.Context, tx database.Transactor, as ...Assignment[M]) (int64, error) {
+// UpdateAll patches every matching row. Example: orm.UpdateAll(ctx, tx, Orders.Query().Where(orm.NumberEq(Orders.TotalCents, 0)), orm.NumberSet(Orders.TotalCents, 1)).
+func UpdateAll[M any](ctx context.Context, tx database.Transactor, q Query[M], as ...Assignment[M]) (int64, error) {
 	return writeAll(ctx, tx, q.state, querycore.UpdateModel, as)
 }
 
-// DeleteAll removes matching rows, respecting soft deletion. Example: Orders.Query().Where(Orders.ID.Eq(id)).DeleteAll(ctx,tx).
-func (q Query[M]) DeleteAll(ctx context.Context, tx database.Transactor) (int64, error) {
+// DeleteAll removes matching rows, respecting soft deletion. Example: orm.DeleteAll(ctx, tx, Orders.Query().Where(orm.KeyEq(Orders.ID, id))).
+func DeleteAll[M any](ctx context.Context, tx database.Transactor, q Query[M]) (int64, error) {
 	return writeAll[M](ctx, tx, q.state, querycore.DeleteModel, nil)
 }
 
@@ -557,7 +547,7 @@ func (p writePlan) compileBatch(c querycore.Compiler) (querycore.Statement, erro
 }
 
 // InsertMany inserts one bounded atomic batch and hydrates RETURNING rows.
-func (t Table[M, K]) InsertMany(ctx context.Context, tx database.Transactor, rows [][]Assignment[M]) ([]M, error) {
+func InsertMany[M any, K comparable](ctx context.Context, tx database.Transactor, t Table[M, K], rows [][]Assignment[M]) ([]M, error) {
 	return insertMany[M](ctx, tx, newQuery(t.core), rows, nil)
 }
 func insertMany[M any](ctx context.Context, writer database.Transactor, q queryState, rows [][]Assignment[M], policy *conflictPolicy) ([]M, error) {
@@ -676,21 +666,12 @@ func writeContext(ctx context.Context, writer database.Transactor) error {
 }
 
 // Restore clears the deletion instant of one deleted key.
-func (t Table[M, K]) Restore(ctx context.Context, tx database.Transactor, key K) (M, error) {
-	return writeOne[M](ctx, tx, t.Query().Where(t.Key().Eq(key)).state, querycore.RestoreModel, nil)
-}
-
-// ForceDelete physically deletes one active key. Use the package ForceDelete function for other visibility.
-func (t Table[M, K]) ForceDelete(ctx context.Context, tx database.Transactor, soft SoftDeletable[M], key K) (M, error) {
-	if err := checkSoftDelete(soft.capability, t.core); err != nil {
-		var zero M
-		return zero, err
-	}
-	return writeOne[M](ctx, tx, t.Query().Where(t.Key().Eq(key)).state, querycore.ForceDeleteModel, nil)
+func Restore[M any, K comparable](ctx context.Context, tx database.Transactor, t Table[M, K], key K) (M, error) {
+	return writeOne[M](ctx, tx, t.Query().Where(KeyEq(t.Key(), key)).state, querycore.RestoreModel, nil)
 }
 
 // ForceDeleteAll physically deletes matching rows within the selected scope.
-func (q Query[M]) ForceDeleteAll(ctx context.Context, tx database.Transactor, soft SoftDeletable[M]) (int64, error) {
+func ForceDeleteAll[M any](ctx context.Context, tx database.Transactor, q Query[M], soft SoftDeletable[M]) (int64, error) {
 	if err := checkSoftDelete(soft.capability, q.state.table); err != nil {
 		return 0, err
 	}

@@ -44,7 +44,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers.Where(j.Targets.Rank.Gt(0)).WherePivot(j.Pivots.Role.Eq("admin")).OrderByPivot(j.Pivots.Role.Desc()).OrderBy(j.Targets.Name.Asc()).With(j.TargetParent).WithPivot(j.PivotParent)), []j.Parent{{ID: 1}, {ID: 2}})
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers.Where(orm.NumberGt(j.Targets.Rank, 0)).WherePivot(orm.TextEq(j.Pivots.Role, "admin")).OrderByPivot(orm.TextDesc(j.Pivots.Role)).OrderBy(orm.TextAsc(j.Targets.Name)).With(j.TargetParent).WithPivot(j.PivotParent)), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -113,7 +113,7 @@ func TestJoinedFamiliesSQLMatchesOldAPI(t *testing.T) {
 		for _, g := range captures {
 			db := g.open(ctx)
 
-			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.OfMany(j.Targets.Rank.Desc())), []j.Parent{{ID: 1}, {ID: 2}})
+			hydrated, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.OfMany(orm.NumberDesc(j.Targets.Rank))), []j.Parent{{ID: 1}, {ID: 2}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -315,13 +315,13 @@ func TestJoinedExistenceSQLMatchesOldAPI(t *testing.T) {
 
 				switch family {
 				case "pivot":
-					_, err = j.Parents.Query().Where(orm.Has(j.Peers.WherePivot(j.Pivots.Role.Eq("admin")), j.Targets.Rank.Gt(1))).Count(ctx, db)
+					_, err = orm.Count(ctx, db, j.Parents.Query().Where(orm.Has(j.Peers.WherePivot(orm.TextEq(j.Pivots.Role, "admin")), orm.NumberGt(j.Targets.Rank, 1))))
 				case "hop":
-					_, err = j.Parents.Query().Where(orm.Not(orm.Has(j.TargetsThrough, j.Targets.Rank.Gt(1)))).Count(ctx, db)
+					_, err = orm.Count(ctx, db, j.Parents.Query().Where(orm.Not(orm.Has(j.TargetsThrough, orm.NumberGt(j.Targets.Rank, 1)))))
 				case "morph_pivot":
-					_, err = j.Parents.Query().Where(orm.Has(j.MorphPeers)).Count(ctx, db)
+					_, err = orm.Count(ctx, db, j.Parents.Query().Where(orm.Has(j.MorphPeers)))
 				case "morph_to":
-					_, err = j.Pivots.Query().Where(orm.Has(j.MorphParent)).Count(ctx, db)
+					_, err = orm.Count(ctx, db, j.Pivots.Query().Where(orm.Has(j.MorphParent)))
 				}
 
 				if err != nil {

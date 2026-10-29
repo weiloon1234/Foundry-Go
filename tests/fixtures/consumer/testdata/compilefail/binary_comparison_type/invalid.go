@@ -1,5 +1,7 @@
 package compilefail
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "foundry.test/consumer/binarymodels"
 
-var _ = binarymodels.Records.Body.Eq("text")
+var _ = orm.InputColumnEq(binarymodels.Records.Body, "text")

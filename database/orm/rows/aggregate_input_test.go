@@ -100,201 +100,201 @@ func TestOrderedInputAggregatesUseStoredValues(t *testing.T) {
 	storedSource, inputSource := FromModel(stored.Query()), FromModel(input.Query())
 	storedAlias, inputAlias := As[left](stored.Query(), "source"), As[left](input.Query(), "source")
 	t.Run("Number/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.Number).Value(), expr.Min(stored.Number).Value(), codec.Signed[int64](), int64(7), int64(7))
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.InputNumberExpr(input.Number)).Value(), expr.Min(orm.NumberExpr(stored.Number)).Value(), codec.Signed[int64](), int64(7), int64(7))
 	})
 	t.Run("Number/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.Number).Value(), expr.MinAt(Scope(storedAlias), stored.Number).Value(), codec.Signed[int64](), int64(7), int64(7))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.InputNumberExpr(input.Number)).Value(), expr.MinAt(Scope(storedAlias), orm.NumberExpr(stored.Number)).Value(), codec.Signed[int64](), int64(7), int64(7))
 	})
 	t.Run("Number/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.Number).Value(), expr.Max(stored.Number).Value(), codec.Signed[int64](), int64(7), int64(7))
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.InputNumberExpr(input.Number)).Value(), expr.Max(orm.NumberExpr(stored.Number)).Value(), codec.Signed[int64](), int64(7), int64(7))
 	})
 	t.Run("Number/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.Number).Value(), expr.MaxAt(Scope(storedAlias), stored.Number).Value(), codec.Signed[int64](), int64(7), int64(7))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.InputNumberExpr(input.Number)).Value(), expr.MaxAt(Scope(storedAlias), orm.NumberExpr(stored.Number)).Value(), codec.Signed[int64](), int64(7), int64(7))
 	})
 	t.Run("Number/Sum", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Sum(input.Number).Value(), expr.Sum(stored.Number).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
+		checkInputAggregate(t, inputSource, storedSource, expr.Sum(orm.InputNumberExpr(input.Number)).Value(), expr.Sum(orm.NumberExpr(stored.Number)).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
 	})
 	t.Run("Number/SumAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.SumAt(Scope(inputAlias), input.Number).Value(), expr.SumAt(Scope(storedAlias), stored.Number).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.SumAt(Scope(inputAlias), orm.InputNumberExpr(input.Number)).Value(), expr.SumAt(Scope(storedAlias), orm.NumberExpr(stored.Number)).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
 	})
 	t.Run("Number/Avg", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Avg(input.Number).Value(), expr.Avg(stored.Number).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
+		checkInputAggregate(t, inputSource, storedSource, expr.Avg(orm.InputNumberExpr(input.Number)).Value(), expr.Avg(orm.NumberExpr(stored.Number)).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
 	})
 	t.Run("Number/AvgAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgAt(Scope(inputAlias), input.Number).Value(), expr.AvgAt(Scope(storedAlias), stored.Number).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgAt(Scope(inputAlias), orm.InputNumberExpr(input.Number)).Value(), expr.AvgAt(Scope(storedAlias), orm.NumberExpr(stored.Number)).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
 	})
 	t.Run("MaybeNumber/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.MaybeNumber).Value(), expr.Min(stored.MaybeNumber).Value(), codec.Signed[int64](), int64(7), int64(7))
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.NullableInputNumberExpr(input.MaybeNumber)).Value(), expr.Min(orm.NullableNumberExpr(stored.MaybeNumber)).Value(), codec.Signed[int64](), int64(7), int64(7))
 	})
 	t.Run("MaybeNumber/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.MaybeNumber).Value(), expr.MinAt(Scope(storedAlias), stored.MaybeNumber).Value(), codec.Signed[int64](), int64(7), int64(7))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.NullableInputNumberExpr(input.MaybeNumber)).Value(), expr.MinAt(Scope(storedAlias), orm.NullableNumberExpr(stored.MaybeNumber)).Value(), codec.Signed[int64](), int64(7), int64(7))
 	})
 	t.Run("MaybeNumber/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.MaybeNumber).Value(), expr.Max(stored.MaybeNumber).Value(), codec.Signed[int64](), int64(7), int64(7))
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.NullableInputNumberExpr(input.MaybeNumber)).Value(), expr.Max(orm.NullableNumberExpr(stored.MaybeNumber)).Value(), codec.Signed[int64](), int64(7), int64(7))
 	})
 	t.Run("MaybeNumber/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.MaybeNumber).Value(), expr.MaxAt(Scope(storedAlias), stored.MaybeNumber).Value(), codec.Signed[int64](), int64(7), int64(7))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.NullableInputNumberExpr(input.MaybeNumber)).Value(), expr.MaxAt(Scope(storedAlias), orm.NullableNumberExpr(stored.MaybeNumber)).Value(), codec.Signed[int64](), int64(7), int64(7))
 	})
 	t.Run("MaybeNumber/Sum", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Sum(input.MaybeNumber).Value(), expr.Sum(stored.MaybeNumber).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
+		checkInputAggregate(t, inputSource, storedSource, expr.Sum(orm.NullableInputNumberExpr(input.MaybeNumber)).Value(), expr.Sum(orm.NullableNumberExpr(stored.MaybeNumber)).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
 	})
 	t.Run("MaybeNumber/SumAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.SumAt(Scope(inputAlias), input.MaybeNumber).Value(), expr.SumAt(Scope(storedAlias), stored.MaybeNumber).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.SumAt(Scope(inputAlias), orm.NullableInputNumberExpr(input.MaybeNumber)).Value(), expr.SumAt(Scope(storedAlias), orm.NullableNumberExpr(stored.MaybeNumber)).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
 	})
 	t.Run("MaybeNumber/Avg", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Avg(input.MaybeNumber).Value(), expr.Avg(stored.MaybeNumber).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
+		checkInputAggregate(t, inputSource, storedSource, expr.Avg(orm.NullableInputNumberExpr(input.MaybeNumber)).Value(), expr.Avg(orm.NullableNumberExpr(stored.MaybeNumber)).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
 	})
 	t.Run("MaybeNumber/AvgAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgAt(Scope(inputAlias), input.MaybeNumber).Value(), expr.AvgAt(Scope(storedAlias), stored.MaybeNumber).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgAt(Scope(inputAlias), orm.NullableInputNumberExpr(input.MaybeNumber)).Value(), expr.AvgAt(Scope(storedAlias), orm.NullableNumberExpr(stored.MaybeNumber)).Value(), codec.Decimal(), "7", decimal.FromInt64(7))
 	})
 	t.Run("Approx/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.Approx).Value(), expr.Min(stored.Approx).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.InputNumberExpr(input.Approx)).Value(), expr.Min(orm.NumberExpr(stored.Approx)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("Approx/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.Approx).Value(), expr.MinAt(Scope(storedAlias), stored.Approx).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.InputNumberExpr(input.Approx)).Value(), expr.MinAt(Scope(storedAlias), orm.NumberExpr(stored.Approx)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("Approx/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.Approx).Value(), expr.Max(stored.Approx).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.InputNumberExpr(input.Approx)).Value(), expr.Max(orm.NumberExpr(stored.Approx)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("Approx/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.Approx).Value(), expr.MaxAt(Scope(storedAlias), stored.Approx).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.InputNumberExpr(input.Approx)).Value(), expr.MaxAt(Scope(storedAlias), orm.NumberExpr(stored.Approx)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("Approx/SumFloat", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.SumFloat(input.Approx).Value(), expr.SumFloat(stored.Approx).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputSource, storedSource, expr.SumFloat(orm.InputNumberExpr(input.Approx)).Value(), expr.SumFloat(orm.NumberExpr(stored.Approx)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("Approx/SumFloatAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.SumFloatAt(Scope(inputAlias), input.Approx).Value(), expr.SumFloatAt(Scope(storedAlias), stored.Approx).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.SumFloatAt(Scope(inputAlias), orm.InputNumberExpr(input.Approx)).Value(), expr.SumFloatAt(Scope(storedAlias), orm.NumberExpr(stored.Approx)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("Approx/AvgFloat", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.AvgFloat(input.Approx).Value(), expr.AvgFloat(stored.Approx).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputSource, storedSource, expr.AvgFloat(orm.InputNumberExpr(input.Approx)).Value(), expr.AvgFloat(orm.NumberExpr(stored.Approx)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("Approx/AvgFloatAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgFloatAt(Scope(inputAlias), input.Approx).Value(), expr.AvgFloatAt(Scope(storedAlias), stored.Approx).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgFloatAt(Scope(inputAlias), orm.InputNumberExpr(input.Approx)).Value(), expr.AvgFloatAt(Scope(storedAlias), orm.NumberExpr(stored.Approx)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("MaybeApprox/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.MaybeApprox).Value(), expr.Min(stored.MaybeApprox).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.NullableInputNumberExpr(input.MaybeApprox)).Value(), expr.Min(orm.NullableNumberExpr(stored.MaybeApprox)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("MaybeApprox/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.MaybeApprox).Value(), expr.MinAt(Scope(storedAlias), stored.MaybeApprox).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.NullableInputNumberExpr(input.MaybeApprox)).Value(), expr.MinAt(Scope(storedAlias), orm.NullableNumberExpr(stored.MaybeApprox)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("MaybeApprox/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.MaybeApprox).Value(), expr.Max(stored.MaybeApprox).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.NullableInputNumberExpr(input.MaybeApprox)).Value(), expr.Max(orm.NullableNumberExpr(stored.MaybeApprox)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("MaybeApprox/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.MaybeApprox).Value(), expr.MaxAt(Scope(storedAlias), stored.MaybeApprox).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.NullableInputNumberExpr(input.MaybeApprox)).Value(), expr.MaxAt(Scope(storedAlias), orm.NullableNumberExpr(stored.MaybeApprox)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("MaybeApprox/SumFloat", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.SumFloat(input.MaybeApprox).Value(), expr.SumFloat(stored.MaybeApprox).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputSource, storedSource, expr.SumFloat(orm.NullableInputNumberExpr(input.MaybeApprox)).Value(), expr.SumFloat(orm.NullableNumberExpr(stored.MaybeApprox)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("MaybeApprox/SumFloatAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.SumFloatAt(Scope(inputAlias), input.MaybeApprox).Value(), expr.SumFloatAt(Scope(storedAlias), stored.MaybeApprox).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.SumFloatAt(Scope(inputAlias), orm.NullableInputNumberExpr(input.MaybeApprox)).Value(), expr.SumFloatAt(Scope(storedAlias), orm.NullableNumberExpr(stored.MaybeApprox)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("MaybeApprox/AvgFloat", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.AvgFloat(input.MaybeApprox).Value(), expr.AvgFloat(stored.MaybeApprox).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputSource, storedSource, expr.AvgFloat(orm.NullableInputNumberExpr(input.MaybeApprox)).Value(), expr.AvgFloat(orm.NullableNumberExpr(stored.MaybeApprox)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("MaybeApprox/AvgFloatAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgFloatAt(Scope(inputAlias), input.MaybeApprox).Value(), expr.AvgFloatAt(Scope(storedAlias), stored.MaybeApprox).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgFloatAt(Scope(inputAlias), orm.NullableInputNumberExpr(input.MaybeApprox)).Value(), expr.AvgFloatAt(Scope(storedAlias), orm.NullableNumberExpr(stored.MaybeApprox)).Value(), codec.Float[float64](), float64(7.5), float64(7.5))
 	})
 	t.Run("Time/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.Time).Value(), expr.Min(stored.Time).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.InputTimeExpr(input.Time)).Value(), expr.Min(orm.TimeExpr(stored.Time)).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
 	})
 	t.Run("Time/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.Time).Value(), expr.MinAt(Scope(storedAlias), stored.Time).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.InputTimeExpr(input.Time)).Value(), expr.MinAt(Scope(storedAlias), orm.TimeExpr(stored.Time)).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
 	})
 	t.Run("Time/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.Time).Value(), expr.Max(stored.Time).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.InputTimeExpr(input.Time)).Value(), expr.Max(orm.TimeExpr(stored.Time)).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
 	})
 	t.Run("Time/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.Time).Value(), expr.MaxAt(Scope(storedAlias), stored.Time).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.InputTimeExpr(input.Time)).Value(), expr.MaxAt(Scope(storedAlias), orm.TimeExpr(stored.Time)).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
 	})
 	t.Run("MaybeTime/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.MaybeTime).Value(), expr.Min(stored.MaybeTime).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.NullableInputTimeExpr(input.MaybeTime)).Value(), expr.Min(orm.NullableTimeExpr(stored.MaybeTime)).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
 	})
 	t.Run("MaybeTime/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.MaybeTime).Value(), expr.MinAt(Scope(storedAlias), stored.MaybeTime).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.NullableInputTimeExpr(input.MaybeTime)).Value(), expr.MinAt(Scope(storedAlias), orm.NullableTimeExpr(stored.MaybeTime)).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
 	})
 	t.Run("MaybeTime/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.MaybeTime).Value(), expr.Max(stored.MaybeTime).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.NullableInputTimeExpr(input.MaybeTime)).Value(), expr.Max(orm.NullableTimeExpr(stored.MaybeTime)).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
 	})
 	t.Run("MaybeTime/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.MaybeTime).Value(), expr.MaxAt(Scope(storedAlias), stored.MaybeTime).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.NullableInputTimeExpr(input.MaybeTime)).Value(), expr.MaxAt(Scope(storedAlias), orm.NullableTimeExpr(stored.MaybeTime)).Value(), codec.Time(), time.Unix(7, 0).UTC(), time.Unix(7, 0).UTC())
 	})
 	t.Run("Period/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.Period).Value(), expr.Min(stored.Period).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.InputIntervalExpr(input.Period)).Value(), expr.Min(orm.IntervalExpr(stored.Period)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("Period/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.Period).Value(), expr.MinAt(Scope(storedAlias), stored.Period).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.InputIntervalExpr(input.Period)).Value(), expr.MinAt(Scope(storedAlias), orm.IntervalExpr(stored.Period)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("Period/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.Period).Value(), expr.Max(stored.Period).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.InputIntervalExpr(input.Period)).Value(), expr.Max(orm.IntervalExpr(stored.Period)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("Period/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.Period).Value(), expr.MaxAt(Scope(storedAlias), stored.Period).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.InputIntervalExpr(input.Period)).Value(), expr.MaxAt(Scope(storedAlias), orm.IntervalExpr(stored.Period)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("Period/SumInterval", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.SumInterval(input.Period).Value(), expr.SumInterval(stored.Period).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputSource, storedSource, expr.SumInterval(orm.InputIntervalExpr(input.Period)).Value(), expr.SumInterval(orm.IntervalExpr(stored.Period)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("Period/SumIntervalAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.SumIntervalAt(Scope(inputAlias), input.Period).Value(), expr.SumIntervalAt(Scope(storedAlias), stored.Period).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.SumIntervalAt(Scope(inputAlias), orm.InputIntervalExpr(input.Period)).Value(), expr.SumIntervalAt(Scope(storedAlias), orm.IntervalExpr(stored.Period)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("Period/AvgInterval", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.AvgInterval(input.Period).Value(), expr.AvgInterval(stored.Period).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputSource, storedSource, expr.AvgInterval(orm.InputIntervalExpr(input.Period)).Value(), expr.AvgInterval(orm.IntervalExpr(stored.Period)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("Period/AvgIntervalAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgIntervalAt(Scope(inputAlias), input.Period).Value(), expr.AvgIntervalAt(Scope(storedAlias), stored.Period).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgIntervalAt(Scope(inputAlias), orm.InputIntervalExpr(input.Period)).Value(), expr.AvgIntervalAt(Scope(storedAlias), orm.IntervalExpr(stored.Period)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("MaybePeriod/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.MaybePeriod).Value(), expr.Min(stored.MaybePeriod).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.NullableInputIntervalExpr(input.MaybePeriod)).Value(), expr.Min(orm.NullableIntervalExpr(stored.MaybePeriod)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("MaybePeriod/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.MaybePeriod).Value(), expr.MinAt(Scope(storedAlias), stored.MaybePeriod).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.NullableInputIntervalExpr(input.MaybePeriod)).Value(), expr.MinAt(Scope(storedAlias), orm.NullableIntervalExpr(stored.MaybePeriod)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("MaybePeriod/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.MaybePeriod).Value(), expr.Max(stored.MaybePeriod).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.NullableInputIntervalExpr(input.MaybePeriod)).Value(), expr.Max(orm.NullableIntervalExpr(stored.MaybePeriod)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("MaybePeriod/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.MaybePeriod).Value(), expr.MaxAt(Scope(storedAlias), stored.MaybePeriod).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.NullableInputIntervalExpr(input.MaybePeriod)).Value(), expr.MaxAt(Scope(storedAlias), orm.NullableIntervalExpr(stored.MaybePeriod)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("MaybePeriod/SumInterval", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.SumInterval(input.MaybePeriod).Value(), expr.SumInterval(stored.MaybePeriod).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputSource, storedSource, expr.SumInterval(orm.NullableInputIntervalExpr(input.MaybePeriod)).Value(), expr.SumInterval(orm.NullableIntervalExpr(stored.MaybePeriod)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("MaybePeriod/SumIntervalAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.SumIntervalAt(Scope(inputAlias), input.MaybePeriod).Value(), expr.SumIntervalAt(Scope(storedAlias), stored.MaybePeriod).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.SumIntervalAt(Scope(inputAlias), orm.NullableInputIntervalExpr(input.MaybePeriod)).Value(), expr.SumIntervalAt(Scope(storedAlias), orm.NullableIntervalExpr(stored.MaybePeriod)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("MaybePeriod/AvgInterval", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.AvgInterval(input.MaybePeriod).Value(), expr.AvgInterval(stored.MaybePeriod).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputSource, storedSource, expr.AvgInterval(orm.NullableInputIntervalExpr(input.MaybePeriod)).Value(), expr.AvgInterval(orm.NullableIntervalExpr(stored.MaybePeriod)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("MaybePeriod/AvgIntervalAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgIntervalAt(Scope(inputAlias), input.MaybePeriod).Value(), expr.AvgIntervalAt(Scope(storedAlias), stored.MaybePeriod).Value(), codec.Interval(), "2 days", temporal.Days(2))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.AvgIntervalAt(Scope(inputAlias), orm.NullableInputIntervalExpr(input.MaybePeriod)).Value(), expr.AvgIntervalAt(Scope(storedAlias), orm.NullableIntervalExpr(stored.MaybePeriod)).Value(), codec.Interval(), "2 days", temporal.Days(2))
 	})
 	t.Run("Text/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.Text).Value(), expr.Min(stored.Text).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.InputTextExpr(input.Text)).Value(), expr.Min(orm.TextExpr(stored.Text)).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
 	})
 	t.Run("Text/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.Text).Value(), expr.MinAt(Scope(storedAlias), stored.Text).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.InputTextExpr(input.Text)).Value(), expr.MinAt(Scope(storedAlias), orm.TextExpr(stored.Text)).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
 	})
 	t.Run("Text/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.Text).Value(), expr.Max(stored.Text).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.InputTextExpr(input.Text)).Value(), expr.Max(orm.TextExpr(stored.Text)).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
 	})
 	t.Run("Text/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.Text).Value(), expr.MaxAt(Scope(storedAlias), stored.Text).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.InputTextExpr(input.Text)).Value(), expr.MaxAt(Scope(storedAlias), orm.TextExpr(stored.Text)).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
 	})
 	t.Run("MaybeText/Min", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Min(input.MaybeText).Value(), expr.Min(stored.MaybeText).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
+		checkInputAggregate(t, inputSource, storedSource, expr.Min(orm.NullableInputTextExpr(input.MaybeText)).Value(), expr.Min(orm.NullableTextExpr(stored.MaybeText)).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
 	})
 	t.Run("MaybeText/MinAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), input.MaybeText).Value(), expr.MinAt(Scope(storedAlias), stored.MaybeText).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MinAt(Scope(inputAlias), orm.NullableInputTextExpr(input.MaybeText)).Value(), expr.MinAt(Scope(storedAlias), orm.NullableTextExpr(stored.MaybeText)).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
 	})
 	t.Run("MaybeText/Max", func(t *testing.T) {
-		checkInputAggregate(t, inputSource, storedSource, expr.Max(input.MaybeText).Value(), expr.Max(stored.MaybeText).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
+		checkInputAggregate(t, inputSource, storedSource, expr.Max(orm.NullableInputTextExpr(input.MaybeText)).Value(), expr.Max(orm.NullableTextExpr(stored.MaybeText)).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
 	})
 	t.Run("MaybeText/MaxAt", func(t *testing.T) {
-		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), input.MaybeText).Value(), expr.MaxAt(Scope(storedAlias), stored.MaybeText).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
+		checkInputAggregate(t, inputAlias, storedAlias, expr.MaxAt(Scope(inputAlias), orm.NullableInputTextExpr(input.MaybeText)).Value(), expr.MaxAt(Scope(storedAlias), orm.NullableTextExpr(stored.MaybeText)).Value(), codec.String[aggregateName](), "Ada", aggregateName("Ada"))
 	})
 
 	// Ordered input columns also retain the pre-integration comparison capability.
-	comparison := expr.GreaterColumn(input.Number, input.Number)
-	if _, err := expr.Where(input.Query(), comparison).Count(t.Context(), openTest(t, &driverState{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}})); err != nil {
+	comparison := expr.GreaterColumn(orm.InputNumberExpr(input.Number), orm.InputNumberExpr(input.Number))
+	if _, err := orm.Count(t.Context(), openTest(t, &driverState{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}), expr.Where(input.Query(), comparison)); err != nil {
 		t.Fatal(err)
 	}
 }

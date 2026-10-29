@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ orm.Query[n.Project] = n.ProjectRecords.Query().ForUpdate()
+var _ orm.Query[n.Project] = orm.Lock(n.ProjectRecords.Query())

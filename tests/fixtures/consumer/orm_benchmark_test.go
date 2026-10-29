@@ -66,7 +66,7 @@ func ormBenchmarkStore(t testing.TB) (*database.DB, *sql.DB) {
 
 func ormBenchmarkQuery(size int) orm.Query[models.User] {
 	f := models.Users
-	return models.Users.Query().Where(f.Age.Gte(1), f.Status.Eq(models.StatusActive)).OrderBy(f.Age.Asc()).Limit(size)
+	return models.Users.Query().Where(orm.NumberGte(f.Age, 1), orm.EnumEq(f.Status, models.StatusActive)).OrderBy(orm.NumberAsc(f.Age)).Limit(size)
 }
 
 // Keep concrete scanners identical to the persisted types in the declaration.
@@ -125,7 +125,7 @@ func TestORMBenchmarkReadsAgree(t *testing.T) {
 			t.Fatal(err)
 		}
 		counter := &queryfixture.QueryCounter{Executor: db}
-		want, err := q.All(t.Context(), counter)
+		want, err := orm.All(t.Context(), counter, q)
 		if err != nil || len(want) != size || counter.Queries.Load() != 1 {
 			t.Fatal("ORM benchmark read failed", err)
 		}
@@ -155,7 +155,7 @@ func BenchmarkORMPostgresReads(b *testing.B) {
 		}{
 			{"direct-sql", func() ([]models.User, error) { return ormBenchmarkRaw(b.Context(), raw, statement) }},
 			{"framework-sql", func() ([]models.User, error) { return ormBenchmarkFrameworkSQL(b.Context(), db, statement) }},
-			{"typed-orm", func() ([]models.User, error) { return ormBenchmarkQuery(size).All(b.Context(), db) }},
+			{"typed-orm", func() ([]models.User, error) { return orm.All(b.Context(), db, ormBenchmarkQuery(size)) }},
 		} {
 			b.Run(fmt.Sprintf("%d/%s", size, variant.name), func(b *testing.B) {
 				// Warm both PostgreSQL buffers and the driver's statement cache.
@@ -187,7 +187,7 @@ func BenchmarkORMCompile(b *testing.B) {
 	}{
 		{"list", func() orm.Query[models.User] { return ormBenchmarkQuery(100) }},
 		{"filters", func() orm.Query[models.User] {
-			return models.Users.Query().Where(orm.Or(f.Email.Contains("_%!'"), f.Age.In(21, 35, 42)), f.Nickname.IsNotNull(), f.Birthday.Gte(date)).OrderBy(f.Age.Desc(), f.ID.Asc()).Limit(100).Offset(20)
+			return models.Users.Query().Where(orm.Or(orm.TextContains(f.Email, "_%!'"), orm.NumberIn(f.Age, 21, 35, 42)), orm.NullableTextIsNotNull(f.Nickname), orm.NullableTimeGte(f.Birthday, date)).OrderBy(orm.NumberDesc(f.Age), orm.KeyAsc(f.ID)).Limit(100).Offset(20)
 		}},
 	} {
 		b.Run(variant.name, func(b *testing.B) {

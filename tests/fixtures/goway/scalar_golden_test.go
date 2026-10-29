@@ -42,37 +42,37 @@ func scalarGolden[V any](t *testing.T, nv expr.Selected[scalars.Record, V], c co
 	}
 }
 func TestStage6d2ScalarGolden(t *testing.T) {
-	nName := expr.Value(scalars.Records.Name)
+	nName := expr.Value(orm.TextExpr(scalars.Records.Name))
 
-	nMaybeName := expr.Value(scalars.Records.MaybeName)
+	nMaybeName := expr.Value(orm.NullableTextExpr(scalars.Records.MaybeName))
 
-	nDate := expr.Value(scalars.Records.Date)
+	nDate := expr.Value(orm.TimeExpr(scalars.Records.Date))
 
-	nMaybeDate := expr.Value(scalars.Records.MaybeDate)
+	nMaybeDate := expr.Value(orm.NullableTimeExpr(scalars.Records.MaybeDate))
 
-	nLocal := expr.Value(scalars.Records.Local)
+	nLocal := expr.Value(orm.TimeExpr(scalars.Records.Local))
 
-	nMaybeLocal := expr.Value(scalars.Records.MaybeLocal)
+	nMaybeLocal := expr.Value(orm.NullableTimeExpr(scalars.Records.MaybeLocal))
 
-	nInstant := expr.Value(scalars.Records.Instant)
+	nInstant := expr.Value(orm.TimeExpr(scalars.Records.Instant))
 
-	nMaybeInstant := expr.Value(scalars.Records.MaybeInstant)
+	nMaybeInstant := expr.Value(orm.NullableTimeExpr(scalars.Records.MaybeInstant))
 
-	nClock := expr.Value(scalars.Records.Clock)
+	nClock := expr.Value(orm.TimeExpr(scalars.Records.Clock))
 
-	nMaybeClock := expr.Value(scalars.Records.MaybeClock)
+	nMaybeClock := expr.Value(orm.NullableTimeExpr(scalars.Records.MaybeClock))
 
-	nPeriod := expr.Value(scalars.Records.Period)
+	nPeriod := expr.Value(orm.IntervalExpr(scalars.Records.Period))
 
-	nMaybePeriod := expr.Value(scalars.Records.MaybePeriod)
+	nMaybePeriod := expr.Value(orm.NullableIntervalExpr(scalars.Records.MaybePeriod))
 
-	nMillis := expr.Value(scalars.Records.Millis)
+	nMillis := expr.Value(orm.NumberExpr(scalars.Records.Millis))
 
-	nMaybeMillis := expr.Value(scalars.Records.MaybeMillis)
+	nMaybeMillis := expr.Value(orm.NullableNumberExpr(scalars.Records.MaybeMillis))
 
-	nLatitude := expr.Value(scalars.Records.Latitude)
+	nLatitude := expr.Value(orm.NumberExpr(scalars.Records.Latitude))
 
-	nMaybeLatitude := expr.Value(scalars.Records.MaybeLatitude)
+	nMaybeLatitude := expr.Value(orm.NullableNumberExpr(scalars.Records.MaybeLatitude))
 	t.Run("Lower", func(t *testing.T) {
 		scalarGolden(t, expr.Lower(nName).Value(), codec.String[string](), "héllo")
 	})

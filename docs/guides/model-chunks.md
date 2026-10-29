@@ -2,7 +2,7 @@
 
 <!-- compiled-examples -->
 
-Use `All` for a bounded collection, `Query.Each` for iteration or explicit model chunks
+Use `All` for a bounded collection, `orm.Each` for iteration or explicit model chunks
 when callbacks must run after the current row stream closes. The
 [consumer examples](../../tests/fixtures/consumer/chunkqueries/chunks_postgres_test.go)
 exercise typed callbacks, windows, eager loading and failure boundaries.
@@ -11,9 +11,9 @@ exercise typed callbacks, windows, eager loading and failure boundaries.
 
 | API | Delivery and ownership |
 | --- | --- |
-| `Query.Each(ctx, ex, visit)` | Direct stream when safe; bounded batches for retrieval/loading behavior |
-| `Query.Chunk(ctx, ex, size, visit)` | `func([]M) error`, rows closed before callback |
-| `Query.EachChunked(ctx, ex, size, visit)` | Individual models from closed, complete batches |
+| `orm.Each(ctx, ex, q, visit)` | Direct stream when safe; bounded batches for retrieval/loading behavior |
+| `orm.Chunk(ctx, ex, q, size, visit)` | `func([]M) error`, rows closed before callback |
+| `orm.EachChunked(ctx, ex, q, size, visit)` | Individual models from closed, complete batches |
 | `orm.ChunkByKey(ctx, ex, q, key, size, visit)` | Primary-key batches with an explicit typed key |
 | `orm.EachByKey(ctx, ex, q, key, size, visit)` | Individual models from primary-key batches |
 
@@ -37,7 +37,7 @@ processing. Use an appropriate transaction/isolation level for one snapshot.
 
 Each batch is fully decoded and its parent rows closed before relations/aggregate
 slots load and callbacks run. The same transaction can then do sequential work in
-the callback. A direct `Query.Each` stream still owns its connection during callbacks;
+the callback. A direct `orm.Each` stream still owns its connection during callbacks;
 use chunks for callbacks that need that connection.
 
 Relation budgets apply per batch, including attached/nested results. A total query

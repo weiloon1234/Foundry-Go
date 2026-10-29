@@ -16,7 +16,7 @@ type TeamTable struct {
 	Projects orm.Many[Team, Project]
 }
 
-// ProjectTable retains soft visibility and the concrete parent. Example: ProjectRecords.Slug.Eq(slug).
+// ProjectTable retains soft visibility and the concrete parent. Example: orm.TextEq(ProjectRecords.Slug, slug).
 type ProjectTable struct {
 	orm.Table[Project, model.ID[Project]]
 	TeamID    orm.Column[Project, model.ID[Team]]
@@ -35,7 +35,7 @@ type TaskTable struct {
 	Slug      orm.Text[Task, Slug]
 }
 
-// TeamRecords preserves the teams table. Example: TeamRecords.Key().Eq(id).
+// TeamRecords preserves the teams table. Example: orm.KeyEq(TeamRecords.Key(), id).
 var TeamRecords = orm.Define("teams", func(b orm.Builder[Team], m *Team) TeamTable {
 	return TeamTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), orm.ManyOf(b, &m.Projects)}
 })
@@ -51,20 +51,20 @@ var ProjectRecords = orm.Define("projects", func(b orm.Builder[Project], m *Proj
 	return ProjectTable{orm.TableOf(b, &m.ID), orm.ColumnOf(b, &m.TeamID), orm.TextOf(b, &m.Slug), orm.ColumnOf(b, &m.Enabled), deleted, orm.SoftDeletes(deleted), orm.OneOf(b, &m.Team), orm.ManyOf(b, &m.Tasks)}
 }, orm.WithRetrievalHooks(func() orm.RetrievalHooks[Project] { return orm.RetrievalHooks[Project]{Retrieved: retrievedProject} }))
 
-// TaskRecords preserves the tasks table. Example: TaskRecords.Slug.Set(slug).
+// TaskRecords preserves the tasks table. Example: orm.TextSet(TaskRecords.Slug, slug).
 var TaskRecords = orm.Define("tasks", func(b orm.Builder[Task], m *Task) TaskTable {
 	return TaskTable{orm.TableOf(b, &m.ID), orm.ColumnOf(b, &m.ProjectID), orm.TextOf(b, &m.Slug)}
 })
 
-// TeamLinks owns the nested project scope. Example: TeamLinks.Projects.Where(ProjectRecords.Enabled.Eq(true)).
-var TeamLinks = struct{ Projects orm.HasMany[Team, Project] }{orm.HasManyOf(TeamRecords.Projects, TeamRecords.Key(), ProjectRecords.TeamID)}
+// TeamLinks owns the nested project scope. Example: TeamLinks.Projects.Where(orm.ColumnEq(ProjectRecords.Enabled, true)).
+var TeamLinks = struct{ Projects orm.HasMany[Team, Project] }{orm.HasManyOf(TeamRecords.Projects, orm.KeyExpr(TeamRecords.Key()), orm.ColumnExpr(ProjectRecords.TeamID))}
 
 // ProjectLinks owns the parent and task scopes. Example: ProjectLinks.Tasks.
 var ProjectLinks = struct {
 	Team  orm.BelongsTo[Project, Team]
 	Tasks orm.HasMany[Project, Task]
 }{
-	orm.BelongsToOf(ProjectRecords.Team, ProjectRecords.TeamID, TeamRecords.Key()), orm.HasManyOf(ProjectRecords.Tasks, ProjectRecords.Key(), TaskRecords.ProjectID),
+	orm.BelongsToOf(ProjectRecords.Team, orm.ColumnExpr(ProjectRecords.TeamID), orm.KeyExpr(TeamRecords.Key())), orm.HasManyOf(ProjectRecords.Tasks, orm.KeyExpr(ProjectRecords.Key()), orm.ColumnExpr(TaskRecords.ProjectID)),
 }
 
 func retrievedProject(ctx context.Context, _ database.Executor, _ Project) error {

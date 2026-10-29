@@ -51,7 +51,7 @@ func recordIterationQuery(kind string, factory func(), retrieved func(context.Co
 	q := table.Query()
 	if kind == "join" || kind == "cte-join" {
 		a, b := rows.As[iterationAlias](q, "r"), rows.As[iterationOther](q, "s")
-		j := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), table.Key()), expr.At(rows.Scope(b), table.Key())))
+		j := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(table.Key())), expr.At(rows.Scope(b), orm.KeyExpr(table.Key()))))
 		selected := rows.SelectRecord(j, rows.LeftScope(j, rows.Scope(a)))
 		if kind == "cte-join" {
 			boundary := rows.AsRecord[iterationAlias](rows.CTE("joined", selected), "result")
@@ -69,7 +69,7 @@ func recordIterationQuery(kind string, factory func(), retrieved func(context.Co
 	var source rows.RecordSource[retrievalFixtureRecord] = rows.ModelRecord(q)
 	switch kind {
 	case "cte", "ordered":
-		source = rows.CTE("eligible", rows.ModelRecord(q.OrderBy(table.Name.Asc()).Limit(231)))
+		source = rows.CTE("eligible", rows.ModelRecord(q.OrderBy(orm.TextAsc(table.Name)).Limit(231)))
 	case "recursive":
 		source = rows.RecursiveCTE("eligible", rows.ModelRecord(q), func(self rows.RecursiveSelf[retrievalFixtureRecord]) rows.RecordSource[retrievalFixtureRecord] {
 			return self
@@ -80,7 +80,7 @@ func recordIterationQuery(kind string, factory func(), retrieved func(context.Co
 	a := rows.AsRecord[iterationAlias](source, "r")
 	r := rows.SelectRecord(a, rows.Scope(a)).Offset(3).Limit(205)
 	if kind == "ordered" {
-		r = r.OrderBy(expr.At(rows.Scope(a), table.Name).Desc())
+		r = r.OrderBy(expr.At(rows.Scope(a), orm.TextExpr(table.Name)).Desc())
 	}
 	if kind == "record-adapter" {
 		return ormIterator(rows.ReadRecord(r))

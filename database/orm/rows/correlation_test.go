@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"database/sql/driver"
 	"errors"
@@ -29,13 +31,13 @@ func TestCorrelatedScalarMembershipAndExists(t *testing.T) {
 	m, o := declareMembers(), declareOrders()
 	outer, inner := From(m.Query()), From(o.Query())
 	c := Correlate(outer, inner)
-	parent := expr.At(OuterScope(c, ModelScope(m.Query())), m.ID)
-	child := expr.At(InnerScope(c, ModelScope(o.Query())), o.MemberID)
+	parent := expr.At(OuterScope(c, ModelScope(m.Query())), orm.KeyExpr(m.ID))
+	child := expr.At(InnerScope(c, ModelScope(o.Query())), orm.NumberExpr(o.MemberID))
 	c = c.Where(expr.Equal(child, parent))
 	count := SelectCorrelatedScalar(c, expr.Count[Correlation[member, order]]().Value())
 	ids := SelectCorrelatedScalar(c, expr.Row(child).Value())
 	schema := correlationCountSchema()
-	q := Select(outer, schema, MapSelected(schema.Count, CorrelatedScalarRowQuery(count).Value())).Where(c.Exists(), count.Exists(), InCorrelatedQuery(expr.Value(m.ID), ids))
+	q := Select(outer, schema, MapSelected(schema.Count, CorrelatedScalarRowQuery(count).Value())).Where(c.Exists(), count.Exists(), InCorrelatedQuery(expr.Value(orm.KeyExpr(m.ID)), ids))
 	state := &driverState{columns: []string{"count"}, rows: [][]driver.Value{{int64(2)}, {nil}}}
 	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || got[0].Count != value.Of(int64(2)) || !got[1].Count.IsNull() {
@@ -58,13 +60,13 @@ func TestNestedCorrelationUsesOnlyEnclosingScopes(t *testing.T) {
 	a, b, d := As[left](m.Query(), "a"), As[right](m.Query(), "b"), As[third](m.Query(), "d")
 	first := Correlate(a, b)
 	nested := Correlate(first, d)
-	grandparent := expr.At(OuterScope(nested, OuterScope(first, Scope(a))), m.ID)
-	parent := expr.At(OuterScope(nested, InnerScope(first, Scope(b))), m.ID)
-	child := expr.At(InnerScope(nested, Scope(d)), m.ID)
+	grandparent := expr.At(OuterScope(nested, OuterScope(first, Scope(a))), orm.KeyExpr(m.ID))
+	parent := expr.At(OuterScope(nested, InnerScope(first, Scope(b))), orm.KeyExpr(m.ID))
+	child := expr.At(InnerScope(nested, Scope(d)), orm.KeyExpr(m.ID))
 	nested = nested.Where(expr.Greater(child, grandparent), expr.Less(child, parent)).Limit(1)
 	first = first.Where(nested.Exists())
 	schema := declareRows()
-	q := Select(a, schema, Map(schema.ID, expr.At(Scope(a), m.ID)), Map(schema.Name, expr.At(Scope(a), m.Name))).Where(first.Exists())
+	q := Select(a, schema, Map(schema.ID, expr.At(Scope(a), orm.KeyExpr(m.ID))), Map(schema.Name, expr.At(Scope(a), orm.TextExpr(m.Name)))).Where(first.Exists())
 	state := &driverState{columns: []string{"id", "name"}}
 	if _, err := Read(q).All(t.Context(), openTest(t, state)); err != nil {
 		t.Fatal(err)
@@ -119,10 +121,10 @@ func TestCorrelationRejectsForeignOwnersShadowingAndZeroDescriptors(t *testing.T
 func TestCorrelationNullableScopesAndDeferredChecks(t *testing.T) {
 	m, o := declareMembers(), declareOrders()
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
-	j := LeftJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID)))
+	j := LeftJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))))
 	c := Correlate(j, From(o.Query()))
 	nullable := OuterNullableScope(c, NullableRightScope(j, Scope(b)))
-	v := expr.AtNullable(nullable, m.ID)
+	v := expr.AtNullable(nullable, orm.KeyExpr(m.ID))
 	if expr.FoundrySelectedColumn(expr.Row(v).Value(), sqlowner.Expressions()).Nullable != true {
 		t.Fatal("outer nullability lost")
 	}
@@ -133,7 +135,7 @@ func TestCorrelationNullableScopesAndDeferredChecks(t *testing.T) {
 	checks := 0
 	c.core.Source.Checks = append(c.core.Source.Checks, func() error { checks++; return ormcore.Invalid("deferred declaration") })
 	schema := declareRows()
-	q := Select(j, schema, Map(schema.ID, expr.At(LeftScope(j, Scope(a)), m.ID)), Map(schema.Name, expr.At(LeftScope(j, Scope(a)), m.Name))).Where(c.Exists())
+	q := Select(j, schema, Map(schema.ID, expr.At(LeftScope(j, Scope(a)), orm.KeyExpr(m.ID))), Map(schema.Name, expr.At(LeftScope(j, Scope(a)), orm.TextExpr(m.Name)))).Where(c.Exists())
 	if checks != 0 {
 		t.Fatal("eager validation")
 	}

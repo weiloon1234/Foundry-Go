@@ -8,4 +8,4 @@ import (
 )
 
 var db *database.DB
-var _, _ = orm.ExplainLocked(context.Background(), db, h.Members.Query().ForUpdate())
+var _, _ = orm.ExplainLocked(context.Background(), db, orm.Lock(h.Members.Query()))

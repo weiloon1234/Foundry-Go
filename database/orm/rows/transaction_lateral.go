@@ -24,7 +24,7 @@ func AsTransactionLateral[A any, O, I TransactionScopeType, R any](record Transa
 	return TransactionLateralSource[A, O, R]{source: ormcore.AliasLateral(record.core, alias, reflect.TypeFor[TransactionAlias[A, R]]()), outer: record.core.Correlation.Outer}
 }
 
-// TransactionLateralScope exposes the named complete record for ON and result mapping. Example: expr.At(rows.TransactionLateralScope(latest),Orders.ID).
+// TransactionLateralScope exposes the named complete record for ON and result mapping. Example: expr.At(rows.TransactionLateralScope(latest), orm.KeyExpr(Orders.ID)).
 func TransactionLateralScope[A any, O TransactionScopeType, R any](source TransactionLateralSource[A, O, R]) expr.Scope[TransactionAlias[A, R], R] {
 	return expr.FoundryScope[TransactionAlias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: source.source.Node.Source.Name(), Owner: source.source.Owners[source.source.Node.Source.Name()]}, Err: source.source.Err}, sqlowner.Expressions())
 }

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.ConflictSet(inputqueries.Members.Email, inputqueries.StoredEmail("stored"))
+var _ = orm.ConflictSet(orm.InputTextExpr(inputqueries.Members.Email), inputqueries.StoredEmail("stored"))

@@ -1,5 +1,7 @@
 package postgres_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -184,7 +186,7 @@ func TestPostgresTokenRotationRetainsHistoryAndReuseRevokesFamily(t *testing.T) 
 		t.Fatal("generation before the previous one authenticated", err)
 	}
 	within(t, s, func(tx *database.Tx) error {
-		rows, err := tokenstore.Entries.Query().All(t.Context(), tx)
+		rows, err := orm.All(t.Context(), tx, tokenstore.Entries.Query())
 		if err != nil {
 			return err
 		}
@@ -219,7 +221,7 @@ func TestPostgresTokenRotationRetainsHistoryAndReuseRevokesFamily(t *testing.T) 
 		t.Fatal("unrelated family revoked", err)
 	}
 	within(t, s, func(tx *database.Tx) error {
-		n, err := tokenstore.Entries.Query().Count(t.Context(), tx)
+		n, err := orm.Count(t.Context(), tx, tokenstore.Entries.Query())
 		if n != 1 {
 			t.Error("family history orphaned", n)
 		}
@@ -381,7 +383,7 @@ func TestPruneCurrentIdleExpiryAndRefreshProviderState(t *testing.T) {
 		t.Fatal(err)
 	}
 	within(t, s, func(tx *database.Tx) error {
-		n, err := tokenstore.Entries.Query().Count(t.Context(), tx)
+		n, err := orm.Count(t.Context(), tx, tokenstore.Entries.Query())
 		if n != 0 {
 			t.Error("prune left generations", n)
 		}
@@ -394,7 +396,7 @@ func TestTokenRefreshChecksExpiryAfterSubjectLock(t *testing.T) {
 	first := issue(t, s, 7, true)
 	var family tokenstore.Family
 	within(t, s, func(tx *database.Tx) error {
-		rows, err := tokenstore.Families.Query().All(t.Context(), tx)
+		rows, err := orm.All(t.Context(), tx, tokenstore.Families.Query())
 		if err != nil {
 			return err
 		}
@@ -418,7 +420,7 @@ func TestTokenRefreshChecksExpiryAfterSubjectLock(t *testing.T) {
 			if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+s.schema+`"`); err != nil {
 				return err
 			}
-			if _, err := tokenstore.Subjects.Query().Where(tokenstore.Subjects.Key().Eq(family.SubjectKey)).ForUpdate().First(t.Context(), tx); err != nil {
+			if _, err := orm.FirstLocked(t.Context(), tx, orm.Lock(tokenstore.Subjects.Query().Where(orm.KeyEq(tokenstore.Subjects.Key(), family.SubjectKey)))); err != nil {
 				return err
 			}
 			close(locked)

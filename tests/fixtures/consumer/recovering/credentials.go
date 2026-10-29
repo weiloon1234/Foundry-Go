@@ -41,14 +41,14 @@ func NewLogin(db interface {
 }, provider Provider, hasher *password.Hasher) (*Login, error) {
 	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Member, string]{
 		Lookup: func(ctx context.Context, email string) (value.Optional[Member], error) {
-			return MemberRecords.Query().Where(MemberRecords.Email.Eq(email)).First(ctx, db)
+			return orm.First(ctx, db, MemberRecords.Query().Where(orm.TextEq(MemberRecords.Email, email)))
 		},
 		Lock: func(ctx context.Context, tx *database.Tx, prior Member) (value.Optional[Member], error) {
 			return lock(ctx, tx, prior.ID)
 		},
 		Hash: func(member Member) password.Hash { return member.Password },
 		Rehash: func(ctx context.Context, member Member, old, next password.Hash) (value.Optional[Member], error) {
-			updated, err := orm.Update(ctx, db, MemberRecords.Query().Where(MemberRecords.Password.Eq(old)), MemberRecords.Key(), member.ID, MemberRecords.Password.Set(next))
+			updated, err := orm.Update(ctx, db, MemberRecords.Query().Where(orm.ColumnEq(MemberRecords.Password, old)), MemberRecords.Key(), member.ID, orm.ColumnSet(MemberRecords.Password, next))
 			if errors.Is(err, database.NotFound) {
 				return value.Optional[Member]{}, nil
 			}

@@ -35,7 +35,7 @@ The outer order is explicit and independent of an inner order. An inner order ma
 
 ```go
 values := rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()),
-    expr.Row(expr.Value(models.Users.Nickname)).Value()))
+    expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Value()))
 cursor := rows.ValueCursorFor(values)
 ordered := cursor.OrderBy(cursor.Value().Asc()).UniqueBy(expr.Group(cursor.Value()))
 page, err := ordered.Paginate(ctx, db, orm.CursorRequest[value.Nullable[string]]{Size: 20})

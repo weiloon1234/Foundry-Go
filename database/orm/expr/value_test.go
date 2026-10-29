@@ -67,7 +67,7 @@ func TestRowPreservesProjectionAndScope(t *testing.T) {
 	table := orm.Define("constant_owners", func(b orm.Builder[constantOwner], m *constantOwner) fields {
 		return fields{orm.TableOf(b, &m.ID), orm.NullableTextOf(b, &m.Label)}
 	})
-	scoped := Value(table.Label)
+	scoped := Value(orm.NullableTextExpr(table.Label))
 	var row RowExpression[constantOwner, value.Nullable[string]] = Row(scoped)
 	if !reflect.DeepEqual(row.data.core, scoped.core) {
 		t.Fatal("row changed expression")

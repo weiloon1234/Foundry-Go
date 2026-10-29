@@ -1,7 +1,9 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "foundry.test/consumer/models"
 
 func wrong() {
-	_ = models.Users.Query().EachChunked(nil, nil, 2, func(models.Order) error { return nil })
+	_ = orm.EachChunked(nil, nil, models.Users.Query(), 2, func(models.Order) error { return nil })
 }

@@ -1,5 +1,7 @@
 package nullable_join_chain
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -22,8 +24,8 @@ var schema = rows.Define(func(b rows.Builder[result], r *result) fields {
 
 func F() rows.Query[rows.Cross[rows.Left[rows.Alias[left, models.User], rows.Alias[right, models.User]], rows.Alias[third, models.User]], result] {
 	a, b, c := rows.As[left](models.Users.Query(), "a"), rows.As[right](models.Users.Query(), "b"), rows.As[third](models.Users.Query(), "c")
-	j := rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(a), models.Users.ID), expr.At(rows.Scope(b), models.Users.ID)))
+	j := rows.LeftJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(models.Users.ID)), expr.At(rows.Scope(b), orm.KeyExpr(models.Users.ID))))
 	chain := rows.CrossJoin(j, c)
 	scope := rows.LeftNullableScope(chain, rows.NullableRightScope(j, rows.Scope(b)))
-	return rows.Select(chain, schema, rows.Map(schema.Email, expr.AtNullable(scope, models.Users.Email)))
+	return rows.Select(chain, schema, rows.Map(schema.Email, expr.AtNullable(scope, orm.TextExpr(models.Users.Email))))
 }

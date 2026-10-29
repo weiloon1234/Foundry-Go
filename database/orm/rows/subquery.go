@@ -51,7 +51,7 @@ func sourceOf[S any](s SelectionSource[S]) ormcore.Source {
 	return s.rowSource(nil)
 }
 
-// SelectScalar selects one exact value for scalar, IN or EXISTS composition. Example: rows.SelectScalar(rows.From(q),expr.Row(expr.Value(Users.Age)).Value()).
+// SelectScalar selects one exact value for scalar, IN or EXISTS composition. Example: rows.SelectScalar(rows.From(q),expr.Row(expr.Value(orm.NumberExpr(Users.Age))).Value()).
 func SelectScalar[S, V any](source SelectionSource[S], selected expr.Selected[S, V]) Scalar[S, V] {
 	c := expr.FoundrySelectedColumn(selected, sqlowner.Expressions())
 	s := ormcore.SelectScalar(sourceOf(source), expr.FoundrySelected(selected, sqlowner.Expressions()))
@@ -73,12 +73,12 @@ func ExistsQuery[S, I any](outer SelectionSource[S], inner SelectionSource[I]) e
 	return expr.FoundryPredicateValue[S](ormcore.ExistsPredicate(sourceOf(outer), sourceOf(inner)), sqlowner.Expressions())
 }
 
-// InQuery requires an exact row/result type, including nullability. Example: rows.InQuery(expr.Value(Users.ID),inner).
+// InQuery requires an exact row/result type, including nullability. Example: rows.InQuery(expr.Value(orm.KeyExpr(Users.ID)),inner).
 func InQuery[S, I, V any](left expr.RowValue[S, V], inner Scalar[I, V]) expr.Predicate[S] {
 	return expr.FoundryPredicateValue[S](ormcore.MembershipPredicate(expr.FoundryRowValue(left, sqlowner.Expressions()), inner.source), sqlowner.Expressions())
 }
 
-// InNullableQuery explicitly admits nullable inner results without replacing NULLs. Example: rows.InNullableQuery(expr.Value(Users.ID),nullableIDs).
+// InNullableQuery explicitly admits nullable inner results without replacing NULLs. Example: rows.InNullableQuery(expr.Value(orm.KeyExpr(Users.ID)),nullableIDs).
 func InNullableQuery[S, I, V any](left expr.RowValue[S, V], inner Scalar[I, value.Nullable[V]]) expr.Predicate[S] {
 	return expr.FoundryPredicateValue[S](ormcore.MembershipPredicate(expr.FoundryRowValue(left, sqlowner.Expressions()), inner.source), sqlowner.Expressions())
 }

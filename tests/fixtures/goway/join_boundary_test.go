@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"database/sql/driver"
 	"errors"
@@ -56,11 +58,11 @@ func requireRejectedJoin[S any](t *testing.T, source rowset.Source[S]) {
 }
 
 func TestJoinRejectsBorrowedMarkersAndPromotedAdapters(t *testing.T) {
-	q := models.Users.Query().Where(models.Users.Age.Gt(18)).Limit(1).Offset(1)
+	q := models.Users.Query().Where(orm.NumberGt(models.Users.Age, 18)).Limit(1).Offset(1)
 	input := rowset.From(q)
-	scalar := rowset.SelectScalar(input, expr.Row(expr.Value(models.Users.Age)).Value())
+	scalar := rowset.SelectScalar(input, expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value())
 	right := rowset.As[joinB](models.Users.Query(), "boundary_right")
-	on := rowset.OnEqual(expr.Value(models.Users.Age), expr.At(rowset.Scope(right), models.Users.Age))
+	on := rowset.OnEqual(expr.Value(orm.NumberExpr(models.Users.Age)), expr.At(rowset.Scope(right), orm.NumberExpr(models.Users.Age)))
 	for _, item := range []struct {
 		name   string
 		source rowset.Source[models.User]
@@ -86,7 +88,7 @@ func TestJoinRejectsBorrowedRightTableMarker(t *testing.T) {
 	type rightScope = rowset.Alias[joinB, models.User]
 	projected := rowset.Select(right, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.Count[rightScope]().Value()))
 	input := rowset.FromRows(projected)
-	on := rowset.OnEqual(expr.At(rowset.Scope(left), models.Users.Age), expr.At(rowset.Scope(right), models.Users.Age))
+	on := rowset.OnEqual(expr.At(rowset.Scope(left), orm.NumberExpr(models.Users.Age)), expr.At(rowset.Scope(right), orm.NumberExpr(models.Users.Age)))
 	for _, item := range []struct {
 		name   string
 		source rowset.JoinTable[rightScope]
@@ -103,9 +105,9 @@ func TestJoinRejectsBorrowedRightTableMarker(t *testing.T) {
 }
 
 func TestJoinAllowsPromotedAliasBoundary(t *testing.T) {
-	left := rowset.As[joinA](models.Users.Query().Where(models.Users.Age.Gt(18)).Limit(1), "boundary_left")
+	left := rowset.As[joinA](models.Users.Query().Where(orm.NumberGt(models.Users.Age, 18)).Limit(1), "boundary_left")
 	right := rowset.As[joinB](models.Users.Query(), "boundary_right")
-	joined := rowset.RightJoin(promotedAlias[joinA, models.User]{left}, promotedAlias[joinB, models.User]{right}, rowset.OnEqual(expr.At(rowset.Scope(left), models.Users.Age), expr.At(rowset.Scope(right), models.Users.Age)))
+	joined := rowset.RightJoin(promotedAlias[joinA, models.User]{left}, promotedAlias[joinB, models.User]{right}, rowset.OnEqual(expr.At(rowset.Scope(left), orm.NumberExpr(models.Users.Age)), expr.At(rowset.Scope(right), orm.NumberExpr(models.Users.Age))))
 	type joinedScope = rowset.Right[rowset.Alias[joinA, models.User], rowset.Alias[joinB, models.User]]
 	capture := &goldenCapture{scriptedColumns: []string{"count"}, scriptedBatches: [][][]driver.Value{{{int64(2)}}}}
 	db := capture.open(t.Context())

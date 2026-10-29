@@ -65,7 +65,7 @@ type ChildTable struct {
 var Children = orm.Define("children", func(b orm.Builder[Child], m *Child) ChildTable {
 	return ChildTable{orm.TableOf(b, &m.ID), orm.ColumnOf(b, &m.WidgetID)}
 })
-var WidgetChildren = orm.HasManyOf(Widgets.Children, Widgets.Key(), Children.WidgetID)
+var WidgetChildren = orm.HasManyOf(Widgets.Children, orm.KeyExpr(Widgets.Key()), orm.ColumnExpr(Children.WidgetID))
 
 func WidgetTables() []orm.CheckedTable { return []orm.CheckedTable{Widgets} }
 func ChildTables() []orm.CheckedTable  { return []orm.CheckedTable{Children} }

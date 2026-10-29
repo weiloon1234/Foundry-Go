@@ -1,5 +1,7 @@
 package observerqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -49,7 +51,7 @@ func TestPostgresReadsRetainObserversWithoutConstructingWriteHooks(t *testing.T)
 	db, stats, namespace := observerApp(t)
 	var streams []*database.Rows
 	read := func(tx *database.Tx) error {
-		items, err := observerqueries.Records.Query().All(t.Context(), forwardingReader{tx, &streams})
+		items, err := orm.All(t.Context(), forwardingReader{tx, &streams}, observerqueries.Records.Query())
 		if err != nil {
 			return err
 		}

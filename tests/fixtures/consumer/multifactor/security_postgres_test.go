@@ -1,5 +1,7 @@
 package multifactor_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -182,7 +184,7 @@ func TestPostgresMFARetirementSharesOuterRollbackAndAcceptsDisabledAccounts(t *t
 	}
 	// A disabled account can still be retired by an authorized administrator.
 	if err := s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := multifactor.AccountRecords.Update(t.Context(), tx, s.account.ID, multifactor.AccountRecords.Enabled.Set(false), multifactor.AccountRecords.RequireMFA.Set(true))
+		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.ColumnSet(multifactor.AccountRecords.Enabled, false), orm.ColumnSet(multifactor.AccountRecords.RequireMFA, true))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -210,7 +212,7 @@ func TestPostgresMFARetirementSharesOuterRollbackAndAcceptsDisabledAccounts(t *t
 		t.Fatal("retirement event missing")
 	}
 	if err := s.within(t.Context(), func(tx *database.Tx) error {
-		found, err := multifactor.AccountRecords.Find(t.Context(), tx, s.account.ID)
+		found, err := orm.Find(t.Context(), tx, multifactor.AccountRecords.Table, s.account.ID)
 		if err != nil {
 			return err
 		}

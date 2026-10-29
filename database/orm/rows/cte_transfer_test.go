@@ -87,7 +87,7 @@ func TestCTEDependenciesAndValidation(t *testing.T) {
 	d := orm.Define("cte_parents", func(b orm.Builder[model], m *model) table {
 		return table{orm.TableOf(b, &m.ID), orm.ManyOf(b, &m.Children)}
 	})
-	eager := ModelRecord(d.Query().With(orm.HasManyOf(d.Children, d.Key(), d.Key())))
+	eager := ModelRecord(d.Query().With(orm.HasManyOf(d.Children, orm.KeyExpr(d.Key()), orm.KeyExpr(d.Key()))))
 	alias := AsRecord[left](CTE("eager", eager), "a")
 	if _, e := CompileRead(ReadRecord(SelectRecord(alias, Scope(alias)))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("eager load silently lost inside CTE", e)

@@ -10,9 +10,9 @@ func updateMemberBodies(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := hooks.Members
 	destination := f.Query()
 	return rows.UpdateFrom(destination, rows.From(f.Query())).
-		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).
-		Select(rows.MapUpdate(f.Body, expr.Value(f.Body))).
-		Values(f.Name.Set("updated")).Exec(ctx, tx)
+		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).
+		Select(rows.MapUpdate(orm.ColumnExpr(f.Body), expr.Value(orm.ColumnExpr(f.Body)))).
+		Values(orm.InputTextSet(f.Name, "updated")).Exec(ctx, tx)
 }
 ```
 
@@ -36,7 +36,7 @@ func deleteMatchingMembers(ctx context.Context, tx *database.Tx) (int64, error) 
 	f := hooks.Members
 	destination := f.Query().OnlyTrashed()
 	return rows.ForceDeleteUsing(destination, f.Soft, rows.From(f.Query().OnlyTrashed())).
-		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).Exec(ctx, tx)
+		Match(rows.MatchSource(orm.KeyExpr(f.Key()), expr.Value(orm.KeyExpr(f.Key())))).Exec(ctx, tx)
 }
 ```
 

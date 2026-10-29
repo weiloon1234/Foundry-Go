@@ -5,4 +5,4 @@ import (
 	orm "github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _, _ = m.Users.InsertMany(nil, nil, [][]orm.Assignment[m.Order]{})
+var _, _ = orm.InsertMany(nil, nil, m.Users.Table, [][]orm.Assignment[m.Order]{})

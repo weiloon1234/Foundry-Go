@@ -26,7 +26,7 @@ func TestSourceInsertNormalizesLiteralsOnceAndRetainsPlan(t *testing.T) {
 		return strings.TrimSpace(s), nil
 	}
 	f := transformFields(transform, transform, transform)
-	plan := FoundryInsertFrom[transformRow](f.Query(), FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(f.Key().Set(1), f.First.Set(" first "), f.Last.Set(" last "), f.Maybe.SetNull())
+	plan := FoundryInsertFrom[transformRow](f.Query(), FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(KeySet(f.Key(), 1), InputTextSet(f.First, " first "), InputTextSet(f.Last, " last "), NullableInputTextSetNull(f.Maybe))
 	var bindings [][]any
 	db := testDB(t, testConnector{onBegin: func() { begun++ }, bindings: &bindings, columns: []string{"id", "first", "maybe", "last"}, values: [][]driver.Value{{int64(1), "first", nil, "last"}, {int64(2), "second", nil, "last"}}})
 	for range 2 {
@@ -51,7 +51,7 @@ func TestSourceInsertDoesNotSynthesizeSharedUUID(t *testing.T) {
 	f := Define("uuid_source", func(b Builder[row], m *row) fields { return fields{TableOf(b, &m.ID), TextOf(b, &m.Name)} })
 	begun := 0
 	db := testDB(t, testConnector{onBegin: func() { begun++ }})
-	_, err := FoundryInsertFrom[row](f.Query(), FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(f.Name.Set("value")).Exec(t.Context(), db)
+	_, err := FoundryInsertFrom[row](f.Query(), FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(TextSet(f.Name, "value")).Exec(t.Context(), db)
 	if err == nil || begun != 0 {
 		t.Fatal(err, begun)
 	}
@@ -59,7 +59,7 @@ func TestSourceInsertDoesNotSynthesizeSharedUUID(t *testing.T) {
 func TestSourceInsertOutcomeAndClosure(t *testing.T) {
 	identity := func(s string) (string, error) { return s, nil }
 	f := transformFields(identity, identity, identity)
-	plan := FoundryInsertFrom[transformRow](f.Query(), FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(f.Key().Set(1), f.First.Set("first"), f.Last.Set("last"))
+	plan := FoundryInsertFrom[transformRow](f.Query(), FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(KeySet(f.Key(), 1), InputTextSet(f.First, "first"), InputTextSet(f.Last, "last"))
 	for _, closeFailure := range []bool{false, true} {
 		closed := 0
 		cfg := testConnector{onClose: func() { closed++ }, columns: []string{"id", "first", "maybe", "last"}, values: [][]driver.Value{{int64(1), "first", nil, "last"}}}
@@ -88,7 +88,7 @@ func (noSourceTransaction) Transaction(context.Context, func(*database.Tx) error
 func TestSourceWriteRejectsTransactorWithoutCallback(t *testing.T) {
 	identity := func(s string) (string, error) { return s, nil }
 	f := transformFields(identity, identity, identity)
-	_, err := FoundryInsertFrom[transformRow](f.Query(), FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(f.Key().Set(1), f.First.Set("first"), f.Last.Set("last")).Exec(t.Context(), noSourceTransaction{})
+	_, err := FoundryInsertFrom[transformRow](f.Query(), FoundrySource(f.Query(), sqlowner.Metadata()), sqlowner.Queries()).Values(KeySet(f.Key(), 1), InputTextSet(f.First, "first"), InputTextSet(f.Last, "last")).Exec(t.Context(), noSourceTransaction{})
 	if err == nil {
 		t.Fatal("false success")
 	}
@@ -110,9 +110,9 @@ func TestSourceWriteRejectsNullableKeyAssignmentsBeforeSQL(t *testing.T) {
 	f := Define("nullable_mapping", func(b Builder[row], m *row) fields {
 		return fields{TableOf(b, &m.ID), TextOf(b, &m.Name), NullableTextOf(b, &m.Note)}
 	})
-	_, name := FoundryColumn(f.Name, sqlowner.Metadata())
-	_, note := FoundryColumn(f.Note, sqlowner.Metadata())
-	_, id := FoundryColumn(f.Key(), sqlowner.Metadata())
+	_, name := FoundryColumn(TextExpr(f.Name), sqlowner.Metadata())
+	_, note := FoundryColumn(NullableTextExpr(f.Note), sqlowner.Metadata())
+	_, id := FoundryColumn(KeyExpr(f.Key()), sqlowner.Metadata())
 	malformed := ormcore.ModelMapping{
 		Destination: name.Reference, Field: name.Field, Stored: reflect.TypeFor[string](),
 		Value:       ormcore.Expression{Node: note.Field, Refs: []ormcore.Reference{note.Reference}},

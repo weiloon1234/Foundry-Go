@@ -31,15 +31,17 @@ type View struct {
 
 // Draft captures input buffers; assignments preserve omitted, NULL and empty values.
 func Draft(id int, input Input) []orm.Assignment[Record] {
-	return []orm.Assignment[Record]{Records.Key().Set(id), Records.Body.Set(input), Records.RawBytes.Set([]byte{}), Records.Note.SetNull(), Records.Encoded.Set(input)}
+	return []orm.Assignment[Record]{orm.KeySet(Records.Key(), id), orm.InputColumnSet(Records.Body, input), orm.ColumnSet(Records.RawBytes, []byte{}), orm.NullableInputColumnSetNull(Records.Note), orm.InputTextSet(Records.Encoded, input)}
 }
 
-func Matching(body Payload) orm.Predicate[Record] { return Records.Body.Eq(body) }
+func Matching(body Payload) orm.Predicate[Record] { return orm.InputColumnEq(Records.Body, body) }
 func NullableView() expr.Expression[Record, Payload, value.Nullable[Payload]] {
-	return expr.Value(Records.Note)
+	return expr.Value(orm.NullableInputColumnExpr(Records.Note))
 }
-func Nulls() orm.Predicate[Record]                      { return Records.Note.IsNull() }
-func ChangeBody(input Input) orm.ConflictUpdate[Record] { return orm.ConflictSet(Records.Body, input) }
+func Nulls() orm.Predicate[Record] { return orm.NullableInputColumnIsNull(Records.Note) }
+func ChangeBody(input Input) orm.ConflictUpdate[Record] {
+	return orm.ConflictSet(orm.InputColumnExpr(Records.Body), input)
+}
 func BinaryChanges(before, after Record) (orm.Changes[Record], error) {
-	return orm.Compare(Records.Table, value.Set(before), value.Set(after), Records.Body.Set(Input(after.Body)))
+	return orm.Compare(Records.Table, value.Set(before), value.Set(after), orm.InputColumnSet(Records.Body, Input(after.Body)))
 }

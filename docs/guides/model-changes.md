@@ -5,7 +5,7 @@
 <!-- orm-example: changes-after -->
 ```go
 func changes(changes orm.Changes[hooks.Member]) (bool, error) {
-	field, err := orm.ChangeOf(changes, hooks.Members.Name)
+	field, err := orm.ChangeOf(changes, orm.InputTextExpr(hooks.Members.Name))
 	return field.Changed(), err
 }
 ```
@@ -22,7 +22,7 @@ For a comparison outside a write:
 ```go
 func compareStored(before, after hooks.Member) (orm.Changes[hooks.Member], error) {
 	return orm.Compare(hooks.Members.Table, value.Set(before), value.Set(after),
-		hooks.Members.Name.Set(after.Name))
+		orm.InputTextSet(hooks.Members.Name, after.Name))
 }
 ```
 

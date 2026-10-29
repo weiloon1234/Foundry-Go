@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
@@ -13,10 +15,10 @@ func TestResultCursorFingerprintIncludesInputAndIdentity(t *testing.T) {
 	base := d.Query()
 	fingerprint := func(q Record[aggregateRecord], both bool) string {
 		c := CursorFor(q)
-		id := expr.At(c.Scope(), d.Key())
+		id := expr.At(c.Scope(), orm.KeyExpr(d.Key()))
 		keys := []expr.GroupKey[CursorScope[aggregateRecord]]{expr.Group(id)}
 		if both {
-			keys = append(keys, expr.Group(expr.At(c.Scope(), d.Exact)))
+			keys = append(keys, expr.Group(expr.At(c.Scope(), orm.NumberExpr(d.Exact))))
 		}
 		plan, err := ormcore.PlanResultCursor(t.Context(), c.UniqueBy(keys...).core, 2, "", false, false)
 		if err != nil {
@@ -25,7 +27,7 @@ func TestResultCursorFingerprintIncludesInputAndIdentity(t *testing.T) {
 		return plan.Scope
 	}
 	want := fingerprint(ModelRecord(base), false)
-	for _, changed := range []Record[aggregateRecord]{ModelRecord(base.Where(d.Exact.Gt(1))), ModelRecord(base.OrderBy(d.Exact.Asc())), ModelRecord(base.Limit(1)), ModelRecord(base.Offset(1))} {
+	for _, changed := range []Record[aggregateRecord]{ModelRecord(base.Where(orm.NumberGt(d.Exact, 1))), ModelRecord(base.OrderBy(orm.NumberAsc(d.Exact))), ModelRecord(base.Limit(1)), ModelRecord(base.Offset(1))} {
 		if fingerprint(changed, false) == want {
 			t.Fatal("changed input retained cursor fingerprint")
 		}
@@ -34,7 +36,7 @@ func TestResultCursorFingerprintIncludesInputAndIdentity(t *testing.T) {
 		t.Fatal("identity omitted from fingerprint")
 	}
 	c := CursorFor(ModelRecord(base))
-	c = c.UniqueBy(expr.Group(expr.At(c.Scope(), d.Key())))
+	c = c.UniqueBy(expr.Group(expr.At(c.Scope(), orm.KeyExpr(d.Key()))))
 	statement, err := ormcore.CompileResultCursor(t.Context(), c.core)
 	if err != nil {
 		t.Fatal(err)

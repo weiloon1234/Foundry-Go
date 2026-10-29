@@ -14,4 +14,4 @@ var _ *database.DB
 var _ *foundation.Registrar
 var _ h.Member
 var _ n.Member
-var _ = orm.WithoutRelationGlobalScope(n.Manager, orm.Scope(n.Groups.Table, "tenant", func(context.Context) (orm.Predicate[n.Group], error) { return n.Groups.ID.Eq(1), nil }))
+var _ = orm.WithoutRelationGlobalScope(n.Manager, orm.Scope(n.Groups.Table, "tenant", func(context.Context) (orm.Predicate[n.Group], error) { return orm.KeyEq(n.Groups.ID, 1), nil }))

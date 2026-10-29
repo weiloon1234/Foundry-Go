@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.ConflictNull[sensitive.Vault, encrypted.Text](sensitive.Vaults.Backup)
+var _ = orm.ConflictNull[sensitive.Vault, encrypted.Text](orm.NullableEncryptedExpr(sensitive.Vaults.Backup))

@@ -29,7 +29,7 @@ func TestRelationExistenceGlobalScope(t *testing.T) {
 		office officequeries.Office
 		label  string
 	}{{f.alpha, "a1"}, {f.alpha, "a2"}, {f.beta, "b1"}} {
-		if _, err := officequeries.Desks.Insert(ctx, f.db, officequeries.Desks.OfficeID.Set(desk.office.ID), officequeries.Desks.Label.Set(desk.label)); err != nil {
+		if _, err := orm.Insert(ctx, f.db, officequeries.Desks.Table, orm.ColumnSet(officequeries.Desks.OfficeID, desk.office.ID), orm.TextSet(officequeries.Desks.Label, desk.label)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -38,7 +38,7 @@ func TestRelationExistenceGlobalScope(t *testing.T) {
 	failures := make(chan error, 8)
 	for range 8 {
 		wg.Go(func() {
-			desks, err := officequeries.Desks.Query().All(ctx, f.db)
+			desks, err := orm.All(ctx, f.db, officequeries.Desks.Query())
 			if err == nil && len(desks) != 3 {
 				t.Error("desks of open offices", deskLabels(desks))
 			}
@@ -52,32 +52,32 @@ func TestRelationExistenceGlobalScope(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := officequeries.Offices.Delete(ctx, f.db, f.beta.ID); err != nil {
+	if _, err := orm.Delete(ctx, f.db, officequeries.Offices.Table.Query(), officequeries.Offices.Table.Key(), f.beta.ID); err != nil {
 		t.Fatal(err)
 	}
-	desks, err := officequeries.Desks.Query().All(ctx, f.db)
+	desks, err := orm.All(ctx, f.db, officequeries.Desks.Query())
 	if err != nil || !slices.Equal(deskLabels(desks), []string{"a1", "a2"}) {
 		t.Fatal("desk of a deleted office stayed visible", deskLabels(desks), err)
 	}
-	if count, err := officequeries.Desks.Query().Count(ctx, f.db); err != nil || count != 2 {
+	if count, err := orm.Count(ctx, f.db, officequeries.Desks.Query()); err != nil || count != 2 {
 		t.Fatal("scoped count", count, err)
 	}
-	all, err := orm.WithoutGlobalScope(officequeries.Desks.Query(), officequeries.OpenOfficeScope(officequeries.Desks)).All(ctx, f.db)
+	all, err := orm.All(ctx, f.db, orm.WithoutGlobalScope(officequeries.Desks.Query(), officequeries.OpenOfficeScope(officequeries.Desks)))
 	if err != nil || len(all) != 3 {
 		t.Fatal("removing the relation scope", deskLabels(all), err)
 	}
 	// The related model's scope applies inside WhereHas too: the deleted
 	// office's desk is hidden, so only alpha has desks even WithTrashed.
-	withDesks, err := officequeries.Offices.Query().WithTrashed().Where(orm.Has(officequeries.OfficeLinks.Desks)).All(ctx, f.db)
+	withDesks, err := orm.All(ctx, f.db, officequeries.Offices.Query().WithTrashed().Where(orm.Has(officequeries.OfficeLinks.Desks)))
 	if err != nil || len(withDesks) != 1 || withDesks[0].ID != f.alpha.ID {
 		t.Fatal("desk scope inside WhereHas", len(withDesks), err)
 	}
 	// Scoped writes cannot reach desks outside the scope.
-	changed, err := officequeries.Desks.Query().UpdateAll(ctx, f.db, officequeries.Desks.Label.Set("moved"))
+	changed, err := orm.UpdateAll(ctx, f.db, officequeries.Desks.Query(), orm.TextSet(officequeries.Desks.Label, "moved"))
 	if err != nil || changed != 2 {
 		t.Fatal("scoped update", changed, err)
 	}
-	all, err = orm.WithoutGlobalScopes(officequeries.Desks.Query()).All(ctx, f.db)
+	all, err = orm.All(ctx, f.db, orm.WithoutGlobalScopes(officequeries.Desks.Query()))
 	if err != nil || !slices.Equal(deskLabels(all), []string{"b1", "moved", "moved"}) {
 		t.Fatal("scoped update reached a hidden desk", deskLabels(all), err)
 	}

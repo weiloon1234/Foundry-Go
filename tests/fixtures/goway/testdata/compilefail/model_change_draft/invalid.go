@@ -17,4 +17,4 @@ var _ value.Optional[h.Member]
 var _ m.Member
 var _ orm.Hooks[h.Member]
 
-var _, _ = orm.Compare(h.Members.Table, value.Set(h.Member{}), value.Set(h.Member{}), m.Members.Name.Set("wrong"))
+var _, _ = orm.Compare(h.Members.Table, value.Set(h.Member{}), value.Set(h.Member{}), orm.InputTextSet(m.Members.Name, "wrong"))

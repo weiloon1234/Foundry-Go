@@ -16,7 +16,7 @@ type CommonTable[R any] struct {
 func (c CommonTable[R]) recordData(*R) ormcore.RecordSource { return ormcore.CommonTableRecord(c.core) }
 
 // CTE names a complete model or projection; dependencies are emitted once per statement.
-// Example: rows.CTE("active",rows.ModelRecord(Users.Query().Where(Users.Active.Eq(true)))).
+// Example: rows.CTE("active",rows.ModelRecord(Users.Query().Where(orm.ColumnEq(Users.Active, true)))).
 func CTE[R any](name string, source RecordSource[R]) CommonTable[R] {
 	return CommonTable[R]{core: ormcore.NewCommonTable(name, recordOf(source))}
 }
@@ -46,7 +46,7 @@ func (c TransactionCommonTable[R]) transactionRecord(*R) ormcore.RecordSource {
 }
 
 // TransactionCTE names a transaction-required complete record.
-// Example: rows.TransactionCTE("claimed",rows.LockedRecord(Orders.Query().ForUpdate())).
+// Example: rows.TransactionCTE("claimed",rows.LockedRecord(orm.Lock(Orders.Query()))).
 func TransactionCTE[R any](name string, source TransactionRecordSource[R]) TransactionCommonTable[R] {
 	return TransactionCommonTable[R]{core: ormcore.NewCommonTable(name, transactionRecordOf(source))}
 }

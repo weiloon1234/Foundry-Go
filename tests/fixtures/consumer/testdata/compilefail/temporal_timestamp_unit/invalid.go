@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/temporalqueries"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -7,5 +9,5 @@ import (
 
 func invalid() {
 	f := temporalqueries.Samples
-	_ = expr.TruncateLocal(expr.Value(f.Local), expr.DateDay)
+	_ = expr.TruncateLocal(expr.Value(orm.TimeExpr(f.Local)), expr.DateDay)
 }

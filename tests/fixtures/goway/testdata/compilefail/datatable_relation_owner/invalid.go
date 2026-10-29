@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/reporting"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -7,4 +9,4 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var invalid = datatable.Related[reporting.Member, reporting.Order, string](datatable.Where(foundryhttp.StringQuery[string](), expr.TextRow(reporting.Orders.Label)), func(p expr.Predicate[reporting.Member]) expr.Predicate[reporting.Member] { return p })
+var invalid = datatable.Related[reporting.Member, reporting.Order, string](datatable.Where(foundryhttp.StringQuery[string](), expr.TextRow(orm.TextExpr(reporting.Orders.Label))), func(p expr.Predicate[reporting.Member]) expr.Predicate[reporting.Member] { return p })

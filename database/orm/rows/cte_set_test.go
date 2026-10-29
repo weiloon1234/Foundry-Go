@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"database/sql/driver"
 	"errors"
@@ -23,7 +25,7 @@ func compileComposition(r ormcore.RecordSource) (string, error) {
 
 func TestCommonTableDependenciesAndImmutability(t *testing.T) {
 	m := declareMembers()
-	first := CTE("first", ModelRecord(m.Query().Where(m.ID.Ne(0)).Limit(3)))
+	first := CTE("first", ModelRecord(m.Query().Where(orm.KeyNe(m.ID, 0)).Limit(3)))
 	a := AsRecord[left](first, "a")
 	second := CTE("second", SelectRecord(a, Scope(a)))
 	b := AsRecord[right](second, "b")
@@ -66,9 +68,9 @@ func TestRecursiveScopeRestrictions(t *testing.T) {
 	step := func(self RecursiveSelf[member]) RecordSource[member] {
 		captured = self
 		a := AsRecord[left](self, "parent")
-		return SelectRecord(a, Scope(a)).Where(expr.At(Scope(a), m.ID).Ne(0))
+		return SelectRecord(a, Scope(a)).Where(expr.At(Scope(a), orm.KeyExpr(m.ID)).Ne(0))
 	}
-	c := RecursiveCTE("tree", ModelRecord(m.Query().Where(m.ID.Eq(1))), step)
+	c := RecursiveCTE("tree", ModelRecord(m.Query().Where(orm.KeyEq(m.ID, 1))), step)
 	a := AsRecord[left](c, "tree_rows")
 	text, err := compileComposition(SelectRecord(a, Scope(a)).core)
 	if err != nil || !strings.HasPrefix(text, "WITH RECURSIVE ") || !strings.Contains(text, " UNION ") {
@@ -99,9 +101,9 @@ func TestRecursiveScopeRestrictions(t *testing.T) {
 
 func TestRecordSetsPreserveWindowsAndDecoder(t *testing.T) {
 	m := declareMembers()
-	a, b := ModelRecord(m.Query().Where(m.ID.Eq(1)).Limit(2)), ModelRecord(m.Query().Where(m.ID.Eq(2)).Offset(1))
+	a, b := ModelRecord(m.Query().Where(orm.KeyEq(m.ID, 1)).Limit(2)), ModelRecord(m.Query().Where(orm.KeyEq(m.ID, 2)).Offset(1))
 	for i, q := range []SetQuery[member]{Union(a, b), UnionAll(a, b), Intersect(a, b), IntersectAll(a, b), Except(a, b), ExceptAll(a, b)} {
-		q = q.Where(expr.At(q.Scope(), m.ID).Ne(0)).OrderBy(expr.At(q.Scope(), m.ID).Asc()).Limit(3).Offset(2)
+		q = q.Where(expr.At(q.Scope(), orm.KeyExpr(m.ID)).Ne(0)).OrderBy(expr.At(q.Scope(), orm.KeyExpr(m.ID)).Asc()).Limit(3).Offset(2)
 		state := &driverState{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "Ada", nil}}}
 		got, err := ReadSet(q).All(t.Context(), openTest(t, state))
 		op := []string{" UNION ", " UNION ALL ", " INTERSECT ", " INTERSECT ALL ", " EXCEPT ", " EXCEPT ALL "}[i]
@@ -131,8 +133,8 @@ func TestRecordSetsPreserveWindowsAndDecoder(t *testing.T) {
 
 func TestScalarSetsKeepCodecAndNullability(t *testing.T) {
 	m := declareMembers()
-	a := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.ID)).Value()))
-	b := Values(SelectScalar(From(m.Query().Limit(1)), expr.Row(expr.Value(m.ID)).Value()))
+	a := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()))
+	b := Values(SelectScalar(From(m.Query().Limit(1)), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()))
 	for _, q := range []ValueSetQuery[int64]{UnionValues(a, b), UnionAllValues(a, b), IntersectValues(a, b), IntersectAllValues(a, b), ExceptValues(a, b), ExceptAllValues(a, b)} {
 		q = q.Where(q.Value().Ne(0)).OrderBy(q.Value().Asc()).Limit(2).Offset(1)
 		state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(4)}}}
@@ -142,12 +144,12 @@ func TestScalarSetsKeepCodecAndNullability(t *testing.T) {
 		}
 		inner := SelectScalar(q, expr.Row(q.Value()).Value())
 		alias := AsRecord[left](ModelRecord(m.Query()), "m")
-		selected := SelectRecord(alias, Scope(alias)).Where(InQuery(expr.At(Scope(alias), m.ID), inner))
+		selected := SelectRecord(alias, Scope(alias)).Where(InQuery(expr.At(Scope(alias), orm.KeyExpr(m.ID)), inner))
 		if _, err := compileComposition(selected.core); err != nil {
 			t.Fatal(err)
 		}
 	}
-	n := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Nickname)).Value()))
+	n := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value()))
 	nullable := UnionAllValues(n, n)
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"Ada"}}}
 	got, err := ReadValues(nullable).All(t.Context(), openTest(t, state))

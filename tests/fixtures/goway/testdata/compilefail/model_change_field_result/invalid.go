@@ -18,6 +18,6 @@ var _ m.Member
 var _ orm.Hooks[h.Member]
 
 func invalid(c orm.Changes[h.Member]) {
-	change, _ := orm.NullableChangeOf(c, h.Members.Note)
+	change, _ := orm.NullableChangeOf(c, orm.NullableInputTextExpr(h.Members.Note))
 	var _ value.Optional[string] = change.After()
 }

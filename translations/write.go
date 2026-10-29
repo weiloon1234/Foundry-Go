@@ -111,7 +111,7 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 		return err
 	}
 	q, f := store.Translations.Query(), store.Translations
-	existing, err := rows.Read(store.TranslationsIndex(q.Where(f.KeyColumn.In(keys...)))).All(ctx, tx)
+	existing, err := rows.Read(store.TranslationsIndex(q.Where(orm.TextIn(f.KeyColumn, keys...)))).All(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 			return err
 		}
 	}
-	count, err := q.Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)).Count(ctx, tx)
+	count, err := orm.Count(ctx, tx, q.Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key)))
 	if err != nil {
 		return err
 	}
@@ -136,9 +136,9 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 	// (MaxAssignments is below orm.MaxInsertRows).
 	drafts := make([][]orm.Assignment[store.Translation], len(assignments))
 	for i, a := range assignments {
-		drafts[i] = []orm.Assignment[store.Translation]{store.Translations.KeyColumn.Set(keys[i]), store.Translations.Owner.Set(string(owner.Name())), store.Translations.Scope.Set(subject.Scope), store.Translations.SubjectKey.Set(subject.Key), store.Translations.Identity.Set(subject.Identity), store.Translations.Field.Set(string(a.field.Name())), store.Translations.Locale.Set(string(a.locale)), store.Translations.Value.Set(a.text), store.Translations.CreatedAt.Set(now), store.Translations.UpdatedAt.Set(now)}
+		drafts[i] = []orm.Assignment[store.Translation]{orm.TextSet(store.Translations.KeyColumn, keys[i]), orm.TextSet(store.Translations.Owner, string(owner.Name())), orm.TextSet(store.Translations.Scope, subject.Scope), orm.TextSet(store.Translations.SubjectKey, subject.Key), orm.JSONSet(store.Translations.Identity, subject.Identity), orm.TextSet(store.Translations.Field, string(a.field.Name())), orm.TextSet(store.Translations.Locale, string(a.locale)), orm.TextSet(store.Translations.Value, a.text), orm.TimeSet(store.Translations.CreatedAt, now), orm.TimeSet(store.Translations.UpdatedAt, now)}
 	}
-	_, err = orm.UpsertMany(ctx, tx, q, orm.OnConflict(orm.ConflictKey(f.KeyColumn)).DoUpdate(orm.ConflictIncoming(f.Value), orm.ConflictIncoming(f.UpdatedAt)), drafts)
+	_, err = orm.UpsertMany(ctx, tx, q, orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.KeyColumn))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(f.Value)), orm.ConflictIncoming(orm.TimeExpr(f.UpdatedAt))), drafts)
 	return err
 }
 func (f Field[M, K]) Forget(ctx context.Context, m *Manager, owner model.Reference[M, K], locale i18n.LocaleID) (bool, error) {
@@ -171,6 +171,6 @@ func (f Field[M, K]) forget(ctx context.Context, tx *database.Tx, m *Manager, ow
 		return false, err
 	}
 	q, fields := store.Translations.Query(), store.Translations
-	rows, err := orm.DeleteEach(ctx, tx, q.Where(fields.KeyColumn.Eq(extensions.Digest(subject.Scope, subject.Key, string(f.Name()), string(locale)))), 1)
+	rows, err := orm.DeleteEach(ctx, tx, q.Where(orm.TextEq(fields.KeyColumn, extensions.Digest(subject.Scope, subject.Key, string(f.Name()), string(locale)))), 1)
 	return len(rows) == 1, err
 }

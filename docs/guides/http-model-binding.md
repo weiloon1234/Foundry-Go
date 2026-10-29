@@ -15,7 +15,7 @@ type ShowRequest = modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, 
 <!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go -->
 ```go
 func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, models.User] {
-	return modelbinding.ByKey(db, orm.Keyed(models.Users.Query().Where(models.Users.Status.Eq(models.StatusActive)), models.Users.Key()),
+	return modelbinding.ByKey(db, orm.Keyed(models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)), models.Users.Key()),
 		func(p httpkernel.UserPath) model.ID[models.User] { return p.User })
 }
 
@@ -78,7 +78,7 @@ The consumer's child resolver uses ordinary typed predicates:
 ```go
 func OrderWithinUser(db database.Executor) modelbinding.Resolver[OrderPath, models.Order] {
 	return modelbinding.Define(func(ctx context.Context, p OrderPath) (value.Optional[models.Order], error) {
-		return orm.Keyed(models.Orders.Query().Where(models.Orders.BuyerID.Eq(p.User)), models.Orders.Key()).Find(ctx, db, p.Order)
+		return orm.Keyed(models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, p.User)), models.Orders.Key()).Find(ctx, db, p.Order)
 	})
 }
 ```

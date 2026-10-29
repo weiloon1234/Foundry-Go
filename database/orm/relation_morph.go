@@ -23,7 +23,7 @@ func morphTarget[N any](p *relationPlan, kind KeyColumn[N, model.MorphName], nam
 	return p
 }
 
-// MorphManyOf filters targets by the source discriminator. Example: orm.MorphManyOf(Posts.Comments,Posts.ID,Comments.OwnerID,Comments.OwnerType).
+// MorphManyOf filters targets by the source discriminator. Example: orm.MorphManyOf(Offices.Notes,orm.TextExpr(Offices.Code),orm.TextExpr(Notes.SubjectID),orm.ColumnExpr(Notes.SubjectType)).
 func MorphManyOf[M model.Morphable, N any, K comparable](slot Many[M, N], local KeyColumn[M, K], id KeyColumn[N, K], kind KeyColumn[N, model.MorphName]) HasMany[M, N] {
 	r := HasManyOf(slot, local, id)
 	name, err := relationMorphName[M]()
@@ -31,7 +31,7 @@ func MorphManyOf[M model.Morphable, N any, K comparable](slot Many[M, N], local 
 	return r
 }
 
-// MorphOneOf loads at most one target of the source discriminator. Example: orm.MorphOneOf(Posts.Cover,Posts.ID,Images.OwnerID,Images.OwnerType).
+// MorphOneOf loads at most one target of the source discriminator. Example: orm.MorphOneOf(slot,orm.TextExpr(Offices.Code),orm.TextExpr(Notes.SubjectID),orm.ColumnExpr(Notes.SubjectType)).
 func MorphOneOf[M model.Morphable, N any, K comparable](slot One[M, N], local KeyColumn[M, K], id KeyColumn[N, K], kind KeyColumn[N, model.MorphName]) HasOne[M, N] {
 	r := HasOneOf(slot, local, id)
 	name, err := relationMorphName[M]()
@@ -39,7 +39,7 @@ func MorphOneOf[M model.Morphable, N any, K comparable](slot One[M, N], local Ke
 	return r
 }
 
-// MorphToOf loads one concrete target only for matching source rows. Declare one slot per target type. Example: orm.MorphToOf(Comments.Post,Comments.OwnerID,Comments.OwnerType,Posts.ID).
+// MorphToOf loads one concrete target only for matching source rows. Declare one slot per target type. Example: orm.MorphToOf(Notes.Office,orm.TextExpr(Notes.SubjectID),orm.ColumnExpr(Notes.SubjectType),orm.TextExpr(Offices.Code)).
 func MorphToOf[M any, N model.Morphable, K comparable](slot One[M, N], id KeyColumn[M, K], kind KeyColumn[M, model.MorphName], key KeyColumn[N, K]) BelongsTo[M, N] {
 	r := BelongsToOf(slot, id, key)
 	r.plan = copyRelationPlan(r.plan)
@@ -67,7 +67,7 @@ func morphPivot[P any](p *relationPlan, kind KeyColumn[P, model.MorphName], name
 	return p
 }
 
-// MorphToManyOf filters the shared pivot by the source discriminator. Example: orm.MorphToManyOf(Posts.Tags,Posts.ID,Taggables.OwnerID,Taggables.OwnerType,Taggables.TagID,Tags.ID).
+// MorphToManyOf filters the shared pivot by the source discriminator. Example: orm.MorphToManyOf(Offices.Labels,orm.TextExpr(Offices.Code),orm.TextExpr(Labelings.LabelableID),orm.ColumnExpr(Labelings.LabelableType),orm.ColumnExpr(Labelings.LabelID),orm.KeyExpr(Labels.ID)).
 func MorphToManyOf[M model.Morphable, N, P any, A, B comparable](slot Through[M, N, P], local KeyColumn[M, A], pivotLocal KeyColumn[P, A], kind KeyColumn[P, model.MorphName], pivotForeign KeyColumn[P, B], foreign KeyColumn[N, B]) ThroughRelation[M, N, P] {
 	r := ManyToManyOf(slot, local, pivotLocal, pivotForeign, foreign)
 	name, err := relationMorphName[M]()
@@ -75,7 +75,7 @@ func MorphToManyOf[M model.Morphable, N, P any, A, B comparable](slot Through[M,
 	return r
 }
 
-// MorphedByManyOf filters the shared pivot by one concrete target discriminator. Example: orm.MorphedByManyOf(Tags.Posts,Tags.ID,Taggables.TagID,Taggables.OwnerType,Taggables.OwnerID,Posts.ID).
+// MorphedByManyOf filters the shared pivot by one concrete target discriminator. Example: orm.MorphedByManyOf(Labels.Offices,orm.KeyExpr(Labels.ID),orm.ColumnExpr(Labelings.LabelID),orm.ColumnExpr(Labelings.LabelableType),orm.TextExpr(Labelings.LabelableID),orm.TextExpr(Offices.Code)).
 func MorphedByManyOf[M any, N model.Morphable, P any, A, B comparable](slot Through[M, N, P], local KeyColumn[M, A], pivotLocal KeyColumn[P, A], kind KeyColumn[P, model.MorphName], pivotForeign KeyColumn[P, B], foreign KeyColumn[N, B]) ThroughRelation[M, N, P] {
 	r := ManyToManyOf(slot, local, pivotLocal, pivotForeign, foreign)
 	name, err := relationMorphName[N]()

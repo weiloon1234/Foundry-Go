@@ -15,11 +15,11 @@ type PageRequest = querycore.PageRequest
 // PageResult retains the existing pagination response contract. Example: page.Items.
 type PageResult[M any] = querycore.Page[M]
 
-// Page selects a one-based page. Example: Orders.Query().Paginate(ctx,db,Page(2,20)).
+// Page selects a one-based page. Example: orm.Paginate(ctx, db, Orders.Query(), Page(2,20)).
 func Page(number, size int) PageRequest { return PageRequest{Number: number, Size: size} }
 
-// Paginate reads a matching total and a stable page. Example: Orders.Query().Paginate(ctx,db,Page(1,20)).
-func (q Query[M]) Paginate(ctx context.Context, ex database.Executor, request PageRequest) (PageResult[M], error) {
+// Paginate reads a matching total and a stable page. Example: orm.Paginate(ctx, db, Orders.Query(), Page(1,20)).
+func Paginate[M any](ctx context.Context, ex database.Executor, q Query[M], request PageRequest) (PageResult[M], error) {
 	return paginate[M](ctx, ex, q.state, request)
 }
 func pageStates(q queryState, r PageRequest) (queryState, queryState, error) {
@@ -74,7 +74,7 @@ func paginate[M any](ctx context.Context, ex database.Executor, q queryState, r 
 type SimplePage[M any] = querycore.SimplePage[M]
 
 // SimplePaginate fetches one extra row to determine whether another page exists.
-func (q Query[M]) SimplePaginate(ctx context.Context, ex database.Executor, request PageRequest) (SimplePage[M], error) {
+func SimplePaginate[M any](ctx context.Context, ex database.Executor, q Query[M], request PageRequest) (SimplePage[M], error) {
 	return simplePaginate[M](ctx, ex, q.state, request)
 }
 func simplePaginate[M any](ctx context.Context, ex database.Executor, q queryState, r PageRequest) (SimplePage[M], error) {

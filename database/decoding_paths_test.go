@@ -31,7 +31,7 @@ func TestJSONScalarDecodingRedactsInORM(t *testing.T) {
 			return &resultRows{state: state, values: [][]driver.Value{{"private"}}}, nil
 		}
 		db := open(t, state, nil)
-		selected := expr.JSONScalar(expr.JSONRoot(expr.Value(fields.Payload)), c)
+		selected := expr.JSONScalar(expr.JSONRoot(expr.Value(orm.JSONExpr(fields.Payload))), c)
 		result, err := rows.ReadScalar(rows.SelectScalar(rows.From(fields.Query()), selected.Value())).All(t.Context(), db)
 		if len(result) != 0 {
 			t.Fatal("partial scalar results published")
@@ -68,7 +68,7 @@ func TestRelationBatchDecodingRedactsInORM(t *testing.T) {
 		fields := orm.Define("records", func(b orm.Builder[row], m *row) table {
 			return table{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.ParentID), orm.ColumnOf(b, &m.Name, orm.Codec(c)), orm.ManyOf(b, &m.Children)}
 		})
-		result, err := orm.LoadFrom(t.Context(), db, fields.Query().With(orm.HasManyOf(fields.Children, fields.Key(), fields.ParentID)), parents)
+		result, err := orm.LoadFrom(t.Context(), db, fields.Query().With(orm.HasManyOf(fields.Children, orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID))), parents)
 		assertSQLCause(t, err, private)
 		if len(result) != 0 || parents[0].Children.IsLoaded() || state.rowsClosed.Load() != 1 {
 			t.Fatal("failed relation batch published partial models or leaked rows")

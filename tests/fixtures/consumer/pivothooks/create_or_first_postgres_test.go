@@ -42,17 +42,17 @@ func TestCreateOrFirstResolvesOnlyTheModelInsertConflict(t *testing.T) {
 		}
 	}
 	a := pivothooks.Assignments
-	lead, err := pivothooks.Assignments.Insert(ctx, f.db, pivothooks.Assignments.ProjectID.Set(f.project.ID), pivothooks.Assignments.PersonID.Set(f.people["ann"].ID), pivothooks.Assignments.Role.Set("lead"))
+	lead, err := orm.Insert(ctx, f.db, pivothooks.Assignments.Table, orm.ColumnSet(pivothooks.Assignments.ProjectID, f.project.ID), orm.ColumnSet(pivothooks.Assignments.PersonID, f.people["ann"].ID), orm.TextSet(pivothooks.Assignments.Role, "lead"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Every lookup below matches ann's existing assignment.
-	project := pivothooks.Assignments.Query().Where(a.ProjectID.Eq(f.project.ID))
+	project := pivothooks.Assignments.Query().Where(orm.ColumnEq(a.ProjectID, f.project.ID))
 	draft := func(person, role string) []orm.Assignment[pivothooks.Assignment] {
-		return []orm.Assignment[pivothooks.Assignment]{pivothooks.Assignments.ProjectID.Set(f.project.ID), pivothooks.Assignments.PersonID.Set(f.people[person].ID), pivothooks.Assignments.Role.Set(role)}
+		return []orm.Assignment[pivothooks.Assignment]{orm.ColumnSet(pivothooks.Assignments.ProjectID, f.project.ID), orm.ColumnSet(pivothooks.Assignments.PersonID, f.people[person].ID), orm.TextSet(pivothooks.Assignments.Role, role)}
 	}
 	// The model's own INSERT conflicting on its own unique index resolves.
-	found, err := orm.CreateOrFirst(ctx, f.db, project.Where(a.PersonID.Eq(f.people["ann"].ID)), draft("ann", "member")...)
+	found, err := orm.CreateOrFirst(ctx, f.db, project.Where(orm.ColumnEq(a.PersonID, f.people["ann"].ID)), draft("ann", "member")...)
 	if err != nil || found.ID != lead.ID || found.Role != "lead" {
 		t.Fatal("own unique conflict did not resolve to the stored model", found, err)
 	}
@@ -62,7 +62,7 @@ func TestCreateOrFirstResolvesOnlyTheModelInsertConflict(t *testing.T) {
 		want      func(error) bool
 	}{
 		"hook write violation": {role: "member", onCreated: func(ctx context.Context, tx *database.Tx) error {
-			_, err := pivothooks.People.Insert(ctx, tx, pivothooks.People.Name.Set("ann"))
+			_, err := orm.Insert(ctx, tx, pivothooks.People.Table, orm.TextSet(pivothooks.People.Name, "ann"))
 			return err
 		}, want: func(err error) bool { return errors.Is(err, database.UniqueViolation) }},
 		"hook claims violation": {role: "member", onCreated: func(context.Context, *database.Tx) error {

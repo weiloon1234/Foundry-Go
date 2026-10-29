@@ -101,7 +101,7 @@ func TestExportedTypesPreventPhaseConversions(t *testing.T) {
 	seen := map[string]bool{}
 	for _, pair := range exportedLayoutConversions(t, pkgs...) {
 		seen[pair] = true
-		if allowedPhaseConversions[pair] == "" {
+		if allowedPhaseConversions[pair] == "" && !explicitColumnAdapterConversion(pair) {
 			t.Errorf("unapproved exported type conversion: %s", pair)
 		}
 	}
@@ -110,6 +110,25 @@ func TestExportedTypesPreventPhaseConversions(t *testing.T) {
 			t.Errorf("stale conversion exception: %s", pair)
 		}
 	}
+}
+
+// D2 adapters intentionally retain exactly their own handle's layout. A value
+// conversion grants the same capabilities as its explicit Expr constructor;
+// cross-family, model, value, role and query-phase conversions remain forbidden.
+func explicitColumnAdapterConversion(pair string) bool {
+	for _, name := range []string{
+		"Column", "Enum", "NullableColumn", "NullableNumber", "NullableText", "NullableEnum",
+		"InputColumn", "NullableInputColumn", "InputText", "NullableInputText",
+		"InputNumber", "NullableInputNumber", "InputTime", "NullableInputTime",
+		"InputEnum", "NullableInputEnum", "InputJSON", "NullableInputJSON",
+		"InputInterval", "NullableInputInterval", "JSON", "NullableJSON",
+		"Interval", "NullableInterval", "Encrypted", "NullableEncrypted", "InputKey",
+	} {
+		if pair == "orm."+name+" <-> orm."+name+"Adapter" {
+			return true
+		}
+	}
+	return false
 }
 
 func TestTransactionLayoutSweepDetectsOriginalRecordConversion(t *testing.T) {

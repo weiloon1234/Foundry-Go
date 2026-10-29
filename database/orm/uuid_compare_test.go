@@ -25,12 +25,12 @@ func uuidFields() uuidTable {
 func TestUUIDComparisonDeclarationOwnership(t *testing.T) {
 	d, foreign := uuidFields(), uuidFields()
 	id := model.ID[uuidRecord]{}
-	for _, p := range []Predicate[uuidRecord]{UUIDGreater(foreign.Key(), id), UUIDLess(Key[uuidRecord, model.ID[uuidRecord]]{}, id), UUIDGreater[uuidRecord, uuidRecord](nil, id)} {
+	for _, p := range []Predicate[uuidRecord]{UUIDGreater(KeyExpr(foreign.Key()), id), UUIDLess(KeyExpr(Key[uuidRecord, model.ID[uuidRecord]]{}), id), UUIDGreater[uuidRecord, uuidRecord](nil, id)} {
 		if _, err := Compile(d.Query().Where(p)); err == nil {
 			t.Fatal("foreign/zero UUID comparison accepted")
 		}
 	}
-	for _, p := range []Predicate[uuidRecord]{UUIDLess(d.Key(), id), UUIDLessOrEqual(d.Other, id), UUIDGreater(d.Key(), id), UUIDGreaterOrEqual(d.Other, id)} {
+	for _, p := range []Predicate[uuidRecord]{UUIDLess(KeyExpr(d.Key()), id), UUIDLessOrEqual(NullableColumnExpr(d.Other), id), UUIDGreater(KeyExpr(d.Key()), id), UUIDGreaterOrEqual(NullableColumnExpr(d.Other), id)} {
 		s, err := Compile(d.Query().Where(p))
 		if err != nil || !strings.Contains(s.SQL(), "$1") {
 			t.Fatal(s, err)

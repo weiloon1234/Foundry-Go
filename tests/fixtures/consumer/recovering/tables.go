@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// MemberTable owns the stored recovery state. Example: MemberRecords.Email.Set(email).
+// MemberTable owns the stored recovery state. Example: orm.TextSet(MemberRecords.Email, email).
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	Email         orm.Text[Member, string]

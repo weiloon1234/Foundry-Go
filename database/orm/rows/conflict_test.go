@@ -31,8 +31,8 @@ func (conflictTx) Rollback() error { return nil }
 func TestConflictPolicyConcurrentReuseAndRowClosure(t *testing.T) {
 	m := declareMembers()
 	records := ConflictRowsOf(m.Query())
-	policy := OnConflictKeys(expr.Group(expr.Value(m.Name))).DoUpdate(SetConflictValue(m.Nickname, expr.At(records.Proposed(), m.Nickname)))
-	policy = ConflictWhereRows(policy, expr.At(records.Stored(), m.Name).Ne("blocked"))
+	policy := OnConflictKeys(expr.Group(expr.Value(orm.TextExpr(m.Name)))).DoUpdate(SetConflictValue(orm.NullableTextExpr(m.Nickname), expr.At(records.Proposed(), orm.NullableTextExpr(m.Nickname))))
+	policy = ConflictWhereRows(policy, expr.At(records.Stored(), orm.TextExpr(m.Name)).Ne("blocked"))
 	for i := 0; i < 3; i++ {
 		t.Run(string(rune('a'+i)), func(t *testing.T) {
 			t.Parallel()
@@ -42,8 +42,8 @@ func TestConflictPolicyConcurrentReuseAndRowClosure(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = db.Close(context.Background()) })
-			_ = ConflictWhereRows(policy, expr.At(records.Proposed(), m.Name).Eq("unused"))
-			got, err := orm.Upsert(t.Context(), db, m.Query(), policy, m.ID.Set(1), m.Name.Set("input"))
+			_ = ConflictWhereRows(policy, expr.At(records.Proposed(), orm.TextExpr(m.Name)).Eq("unused"))
+			got, err := orm.Upsert(t.Context(), db, m.Query(), policy, orm.KeySet(m.ID, 1), orm.TextSet(m.Name, "input"))
 			if err != nil || !got.IsSet() || !state.closed || strings.Contains(state.sql, "unused") || !strings.Contains(state.sql, `"nickname" = "excluded"."nickname"`) {
 				t.Fatal(err, got, state.sql, state.closed)
 			}
@@ -55,17 +55,17 @@ func TestConflictRejectsOtherDeclarationsBeforeTransaction(t *testing.T) {
 	m, other := declareMembers(), declareMembers()
 	records := ConflictRowsOf(other.Query())
 	state := &driverState{}
-	policy := orm.OnConflict(orm.ConflictKey(m.ID)).DoUpdate(SetConflictValue(m.Name, expr.At(records.Proposed(), other.Name)))
-	_, err := orm.Upsert(t.Context(), openTest(t, state), m.Query(), policy, m.ID.Set(1), m.Name.Set("input"))
+	policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(m.ID))).DoUpdate(SetConflictValue(orm.TextExpr(m.Name), expr.At(records.Proposed(), orm.TextExpr(other.Name))))
+	_, err := orm.Upsert(t.Context(), openTest(t, state), m.Query(), policy, orm.KeySet(m.ID, 1), orm.TextSet(m.Name, "input"))
 	if !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal(err, state.sql)
 	}
 }
 func TestSharedWritePlanningOwnsCapturedPoliciesDuringConcurrentCompilation(t *testing.T) {
 	m := declareMembers()
-	updates := []orm.ConflictUpdate[member]{orm.ConflictSet(m.Nickname, "captured")}
-	policy := ConflictTargetWhere(OnConflictKeys(expr.Group(expr.Lower(expr.Value(m.Name)))), expr.Value(m.Name).Ne("")).DoUpdate(updates...)
-	updates[0] = orm.ConflictNull(m.Nickname)
+	updates := []orm.ConflictUpdate[member]{orm.ConflictSet(orm.NullableTextExpr(m.Nickname), "captured")}
+	policy := ConflictTargetWhere(OnConflictKeys(expr.Group(expr.Lower(expr.Value(orm.TextExpr(m.Name))))), expr.Value(orm.TextExpr(m.Name)).Ne("")).DoUpdate(updates...)
+	updates[0] = orm.ConflictNull(orm.NullableTextExpr(m.Nickname))
 	for i := range 12 {
 		t.Run(string(rune('a'+i)), func(t *testing.T) {
 			t.Parallel()
@@ -75,9 +75,9 @@ func TestSharedWritePlanningOwnsCapturedPoliciesDuringConcurrentCompilation(t *t
 				t.Fatal(e)
 			}
 			t.Cleanup(func() { db.Close(context.Background()) })
-			_ = ConflictTargetWhere(policy.Where(m.Name.Eq("allowed")), expr.Value(m.Name).Ne("other")).DoUpdate(orm.ConflictIncoming(m.Nickname))
+			_ = ConflictTargetWhere(policy.Where(orm.TextEq(m.Name, "allowed")), expr.Value(orm.TextExpr(m.Name)).Ne("other")).DoUpdate(orm.ConflictIncoming(orm.NullableTextExpr(m.Nickname)))
 			for range 2 {
-				if _, e := orm.Upsert(t.Context(), db, m.Query(), policy, m.ID.Set(1), m.Name.Set("inserted")); e != nil {
+				if _, e := orm.Upsert(t.Context(), db, m.Query(), policy, orm.KeySet(m.ID, 1), orm.TextSet(m.Name, "inserted")); e != nil {
 					t.Fatal(e)
 				}
 				if !strings.Contains(state.sql, `WHERE ("name" <> E'')`) || strings.Contains(state.sql, "allowed") || len(state.arguments) != 3 || state.arguments[0].Value != int64(1) || state.arguments[1].Value != "inserted" || state.arguments[2].Value != "captured" {

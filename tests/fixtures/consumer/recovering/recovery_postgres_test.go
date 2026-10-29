@@ -78,7 +78,7 @@ func prepare(t *testing.T) *fixture {
 		if _, err := tx.Exec(t.Context(), `CREATE TABLE recovery_members(id uuid PRIMARY KEY,email text NOT NULL,email_revision uuid NOT NULL,password text NOT NULL,email_verified boolean NOT NULL,enabled boolean NOT NULL)`); err != nil {
 			return err
 		}
-		s.member, err = recovering.MemberRecords.Insert(t.Context(), tx, recovering.MemberRecords.Email.Set("member@example.test"), recovering.MemberRecords.Password.Set(old), recovering.MemberRecords.EmailVerified.Set(false), recovering.MemberRecords.Enabled.Set(true))
+		s.member, err = orm.Insert(t.Context(), tx, recovering.MemberRecords.Table, orm.TextSet(recovering.MemberRecords.Email, "member@example.test"), orm.ColumnSet(recovering.MemberRecords.Password, old), orm.ColumnSet(recovering.MemberRecords.EmailVerified, false), orm.ColumnSet(recovering.MemberRecords.Enabled, true))
 		return err
 	})
 	if err != nil {
@@ -98,7 +98,7 @@ func prepare(t *testing.T) *fixture {
 		var found value.Optional[recovering.Member]
 		err := s.within(ctx, func(tx *database.Tx) error {
 			var err error
-			found, err = recovering.MemberRecords.Find(ctx, tx, id)
+			found, err = orm.Find(ctx, tx, recovering.MemberRecords.Table, id)
 			return err
 		})
 		return found, err
@@ -138,7 +138,7 @@ func current(t *testing.T, s *fixture) recovering.Member {
 	var result recovering.Member
 	err := s.within(t.Context(), func(tx *database.Tx) error {
 		var err error
-		result, err = recovering.MemberRecords.Require(t.Context(), tx, s.member.ID)
+		result, err = orm.RequireKey(t.Context(), tx, recovering.MemberRecords.Table, s.member.ID)
 		return err
 	})
 	if err != nil {
@@ -149,7 +149,7 @@ func current(t *testing.T, s *fixture) recovering.Member {
 func update(t *testing.T, s *fixture, draft []orm.Assignment[recovering.Member]) {
 	t.Helper()
 	if err := s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := recovering.MemberRecords.Update(t.Context(), tx, s.member.ID, draft...)
+		_, err := orm.Update(t.Context(), tx, recovering.MemberRecords.Table.Query(), recovering.MemberRecords.Table.Key(), s.member.ID, draft...)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -269,15 +269,15 @@ func TestRecoveryRejectsChangedEmailPasswordAndDisabledModels(t *testing.T) {
 			}
 			switch change {
 			case "email":
-				update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Email.Set("changed@example.test")})
+				update(t, s, []orm.Assignment[recovering.Member]{orm.TextSet(recovering.MemberRecords.Email, "changed@example.test")})
 			case "password":
 				hash, err := s.hasher.Hash(t.Context(), plain(t, "other long password"))
 				if err != nil {
 					t.Fatal(err)
 				}
-				update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Password.Set(hash)})
+				update(t, s, []orm.Assignment[recovering.Member]{orm.ColumnSet(recovering.MemberRecords.Password, hash)})
 			case "disabled":
-				update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Enabled.Set(false)})
+				update(t, s, []orm.Assignment[recovering.Member]{orm.ColumnSet(recovering.MemberRecords.Enabled, false)})
 			}
 			if _, err := s.reset.Complete(t.Context(), reset.Token(), plain(t, "new long password")); !errors.Is(err, auth.Unauthenticated) {
 				t.Fatal("stale reset accepted", err)
@@ -334,7 +334,7 @@ func TestRevocationAndPruningSeparatePurposeAndBoundWork(t *testing.T) {
 	if _, err := s.verification.Complete(t.Context(), verify.Token()); err != nil {
 		t.Fatal("reset revoke affected verification", err)
 	}
-	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.EmailVerified.Set(false)})
+	update(t, s, []orm.Assignment[recovering.Member]{orm.ColumnSet(recovering.MemberRecords.EmailVerified, false)})
 	_ = issue(t, s)
 	if _, err := s.verification.Issue(t.Context(), recovering.MemberIdentity.ReferenceOf(s.member)); err != nil {
 		t.Fatal(err)

@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"database/sql/driver"
 	"errors"
@@ -18,10 +20,10 @@ func TestSubqueryHydrationAndPhaseBoundary(t *testing.T) {
 	m := declareMembers()
 	o := declareOrders()
 	outer := From(m.Query())
-	inner := SelectScalar(From(o.Query().Where(o.MemberID.Gt(4)).Limit(1)), expr.Row(expr.Value(o.ID)).Value())
-	nullable := SelectScalar(From(m.Query().Where(m.ID.Eq(1))), expr.Row(expr.Value(m.Nickname)).Value())
+	inner := SelectScalar(From(o.Query().Where(orm.NumberGt(o.MemberID, 4)).Limit(1)), expr.Row(expr.Value(orm.KeyExpr(o.ID))).Value())
+	nullable := SelectScalar(From(m.Query().Where(orm.KeyEq(m.ID, 1))), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value())
 	s := outerSchema()
-	q := Select(outer, s, MapSelected(s.ID, ScalarRowQuery(outer, inner).Value()), MapSelected(s.Nickname, ScalarNullableRowQuery(outer, nullable).Value())).Where(ExistsQuery(outer, inner), InQuery(expr.Value(m.ID), inner), expr.Not(InNullableQuery(expr.Value(m.Name), nullable)))
+	q := Select(outer, s, MapSelected(s.ID, ScalarRowQuery(outer, inner).Value()), MapSelected(s.Nickname, ScalarNullableRowQuery(outer, nullable).Value())).Where(ExistsQuery(outer, inner), InQuery(expr.Value(orm.KeyExpr(m.ID)), inner), expr.Not(InNullableQuery(expr.Value(orm.TextExpr(m.Name)), nullable)))
 	state := &driverState{columns: []string{"id", "nickname"}, rows: [][]driver.Value{{nil, nil}, {int64(9), "nick"}}}
 	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].ID.IsNull() || !got[0].Nickname.IsNull() || got[1].ID != value.Of(int64(9)) {
@@ -45,14 +47,14 @@ func TestSubqueriesRetainErrorsAndOuterDeclarations(t *testing.T) {
 	m, other := declareMembers(), declareMembers()
 	outer := From(m.Query())
 	foreign := From(other.Query())
-	valid := SelectScalar(outer, expr.Row(expr.Value(m.ID)).Value())
-	bad := SelectScalar(outer, expr.Row(expr.Value(other.ID)).Value())
-	nullable := SelectScalar(outer, expr.Row(expr.Value(m.Nickname)).Value())
+	valid := SelectScalar(outer, expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value())
+	bad := SelectScalar(outer, expr.Row(expr.Value(orm.KeyExpr(other.ID))).Value())
+	nullable := SelectScalar(outer, expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value())
 	s := outerSchema()
 	for _, q := range []Query[member, outerRecord]{
 		Select(outer, s, MapSelected(s.ID, ScalarRowQuery(outer, bad).Value()), MapSelected(s.Nickname, ScalarNullableRowQuery(outer, nullable).Value())),
 		Select(outer, s, MapSelected(s.ID, ScalarRowQuery(foreign, valid).Value()), MapSelected(s.Nickname, ScalarNullableRowQuery(outer, nullable).Value())),
-		Select(outer, s, MapSelected(s.ID, ScalarRowQuery(outer, valid).Value()), MapSelected(s.Nickname, ScalarRowQuery(outer, SelectScalar(outer, expr.Row(expr.Value(m.Name)).Value())).Value())).Where(ExistsQuery(foreign, outer)),
+		Select(outer, s, MapSelected(s.ID, ScalarRowQuery(outer, valid).Value()), MapSelected(s.Nickname, ScalarRowQuery(outer, SelectScalar(outer, expr.Row(expr.Value(orm.TextExpr(m.Name))).Value())).Value())).Where(ExistsQuery(foreign, outer)),
 	} {
 		state := &driverState{}
 		got, err := Read(q).All(t.Context(), openTest(t, state))
@@ -77,18 +79,18 @@ func TestSubqueriesRetainErrorsAndOuterDeclarations(t *testing.T) {
 func TestScalarFiltersSnapshotAndSubqueryChecks(t *testing.T) {
 	m := declareMembers()
 	source := From(m.Query())
-	base := SelectScalar(source, expr.Row(expr.Value(m.ID)).Value())
-	a := WhereScalar(base, expr.Value(m.ID).Eq(1))
-	b := WhereScalar(base, expr.Value(m.ID).Eq(2))
+	base := SelectScalar(source, expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value())
+	a := WhereScalar(base, expr.Value(orm.KeyExpr(m.ID)).Eq(1))
+	b := WhereScalar(base, expr.Value(orm.KeyExpr(m.ID)).Eq(2))
 	if len(base.source.Node.Predicates) != 0 || len(a.source.Node.Predicates) != 1 || len(b.source.Node.Predicates) != 1 {
 		t.Fatal("scalar filters mutated parent")
 	}
 	checks := 0
 	source.source.Checks = []func() error{func() error { checks++; return ormcore.Invalid("deferred inner declaration") }}
-	bad := SelectScalar(source, expr.Row(expr.Value(m.ID)).Value())
+	bad := SelectScalar(source, expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value())
 	outer := From(m.Query())
 	schema := declareRows()
-	q := Select(outer, schema, Map(schema.ID, expr.Value(m.ID)), Map(schema.Name, expr.Value(m.Name))).Where(InQuery(expr.Value(m.ID), bad))
+	q := Select(outer, schema, Map(schema.ID, expr.Value(orm.KeyExpr(m.ID))), Map(schema.Name, expr.Value(orm.TextExpr(m.Name)))).Where(InQuery(expr.Value(orm.KeyExpr(m.ID)), bad))
 	if checks != 0 {
 		t.Fatal("eager declaration check")
 	}
@@ -101,7 +103,7 @@ func TestScalarFiltersSnapshotAndSubqueryChecks(t *testing.T) {
 func TestSubqueryErrorsSurviveParametersAndDepthIsShared(t *testing.T) {
 	m, other := declareMembers(), declareMembers()
 	source := From(m.Query())
-	invalid := SelectScalar(source, expr.Row(expr.Value(other.ID)).Value())
+	invalid := SelectScalar(source, expr.Row(expr.Value(orm.KeyExpr(other.ID))).Value())
 	zero := ScalarRowQuery(source, Scalar[member, int64]{}).Param(value.Null[int64]())
 	if expr.FoundryRowValue(zero, sqlowner.Expressions()).Err == nil {
 		t.Fatal("scalar parameter erased zero descriptor")
@@ -114,12 +116,12 @@ func TestSubqueryErrorsSurviveParametersAndDepthIsShared(t *testing.T) {
 	if expr.FoundryRowValue(p, sqlowner.Expressions()).Err == nil {
 		t.Fatal("scalar parameter erased invalid source")
 	}
-	inner := SelectScalar(source, expr.Row(expr.Value(m.ID)).Value())
+	inner := SelectScalar(source, expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value())
 	for i := 0; i < querycore.MaxExpressionDepth; i++ {
-		inner = WhereScalar(SelectScalar(source, expr.Row(expr.Value(m.ID)).Value()), InQuery(expr.Value(m.ID), inner))
+		inner = WhereScalar(SelectScalar(source, expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()), InQuery(expr.Value(orm.KeyExpr(m.ID)), inner))
 	}
 	s := declareRows()
-	q := Select(source, s, Map(s.ID, expr.Value(m.ID)), Map(s.Name, expr.Value(m.Name))).Where(InQuery(expr.Value(m.ID), inner))
+	q := Select(source, s, Map(s.ID, expr.Value(orm.KeyExpr(m.ID))), Map(s.Name, expr.Value(orm.TextExpr(m.Name)))).Where(InQuery(expr.Value(orm.KeyExpr(m.ID)), inner))
 	state := &driverState{}
 	if _, err := Read(q).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal("nested SELECT escaped shared bounds", err)

@@ -36,7 +36,7 @@ func TestStage5bRelationWritesPostgres(t *testing.T) {
 	}
 	parent, target := j.Parent{ID: 1}, j.Target{ID: 10}
 	create := func(id int64) []orm.Assignment[j.Pivot] {
-		return []orm.Assignment[j.Pivot]{j.Pivots.ID.Set(id), j.Pivots.Kind.Set("parent"), j.Pivots.Role.Set("member")}
+		return []orm.Assignment[j.Pivot]{orm.KeySet(j.Pivots.ID, id), orm.ColumnSet(j.Pivots.Kind, "parent"), orm.TextSet(j.Pivots.Role, "member")}
 	}
 	for _, id := range []int64{100, 101} {
 		statements = 0
@@ -47,12 +47,12 @@ func TestStage5bRelationWritesPostgres(t *testing.T) {
 		}
 	}
 	statements = 0
-	updated, err := orm.UpdatePivot(ctx, db, j.Peers, parent, target, j.Pivots.Role.Set("admin"))
+	updated, err := orm.UpdatePivot(ctx, db, j.Peers, parent, target, orm.TextSet(j.Pivots.Role, "admin"))
 	must(t, err)
 	if len(updated) != 2 || statements != 4 {
 		t.Fatal(len(updated), statements)
 	}
-	persisted, err := j.Pivots.Query().Where(j.Pivots.Role.Eq("admin")).Count(ctx, db)
+	persisted, err := orm.Count(ctx, db, j.Pivots.Query().Where(orm.TextEq(j.Pivots.Role, "admin")))
 	must(t, err)
 	if persisted != 2 {
 		t.Fatal(persisted)
@@ -62,7 +62,7 @@ func TestStage5bRelationWritesPostgres(t *testing.T) {
 	if len(removed) != 2 {
 		t.Fatal(removed)
 	}
-	n, err := j.Pivots.Query().OnlyTrashed().Count(ctx, db)
+	n, err := orm.Count(ctx, db, j.Pivots.Query().OnlyTrashed())
 	must(t, err)
 	if n != 2 {
 		t.Fatal(n)
@@ -87,24 +87,24 @@ func TestStage5bRelationWritesPostgres(t *testing.T) {
 	if len(changes.Attached) != 1 {
 		t.Fatal(changes)
 	}
-	_, err = orm.Attach(ctx, db, j.Peers.WherePivot(j.Pivots.Role.Eq("admin")), parent, target, create(104)...)
+	_, err = orm.Attach(ctx, db, j.Peers.WherePivot(orm.TextEq(j.Pivots.Role, "admin")), parent, target, create(104)...)
 	if !errors.Is(err, fault.Invalid) {
 		t.Fatal("filtered attachment", err)
 	}
-	missing, err := j.Pivots.Find(ctx, db, 104)
+	missing, err := orm.Find(ctx, db, j.Pivots.Table, 104)
 	must(t, err)
 	if missing.IsSet() {
 		t.Fatal("failed postcondition persisted")
 	}
 	// Caller-supplied endpoint defaults may be overridden, but single-attach postconditions must reject a different endpoint.
-	defaults := append(create(104), j.Pivots.TargetID.Set(11))
+	defaults := append(create(104), orm.NullableNumberSet(j.Pivots.TargetID, 11))
 	_, err = orm.Attach(ctx, db, j.Peers, parent, target, defaults...)
 	if !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
-	_, err = orm.Attach(ctx, db, j.MorphPeers, parent, target, j.Pivots.ID.Set(105), j.Pivots.Role.Set("member"))
+	_, err = orm.Attach(ctx, db, j.MorphPeers, parent, target, orm.KeySet(j.Pivots.ID, 105), orm.TextSet(j.Pivots.Role, "member"))
 	must(t, err)
-	morph, err := j.Pivots.Require(ctx, db, 105)
+	morph, err := orm.RequireKey(ctx, db, j.Pivots.Table, 105)
 	must(t, err)
 	if morph.Kind != "parent" {
 		t.Fatal(morph.Kind)
@@ -115,11 +115,11 @@ func TestStage5bRelationWritesPostgres(t *testing.T) {
 		if e != nil {
 			return e
 		}
-		_, e = orm.Attach(ctx, tx, j.Peers.WherePivot(j.Pivots.Role.Eq("admin")), parent, target, create(107)...)
+		_, e = orm.Attach(ctx, tx, j.Peers.WherePivot(orm.TextEq(j.Pivots.Role, "admin")), parent, target, create(107)...)
 		if !errors.Is(e, fault.Invalid) {
 			t.Fatalf("savepoint failure: %v", e)
 		}
-		if _, e = j.Pivots.Require(ctx, tx, 106); e != nil {
+		if _, e = orm.RequireKey(ctx, tx, j.Pivots.Table, 106); e != nil {
 			return e
 		}
 		return rollback
@@ -127,7 +127,7 @@ func TestStage5bRelationWritesPostgres(t *testing.T) {
 	if !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	missing, err = j.Pivots.Find(ctx, db, 106)
+	missing, err = orm.Find(ctx, db, j.Pivots.Table, 106)
 	must(t, err)
 	if missing.IsSet() {
 		t.Fatal("outer rollback persisted")
@@ -158,25 +158,25 @@ func TestStage5bAttachEndpointHookRollbackPostgres(t *testing.T) {
 					Created: func(ctx context.Context, tx *database.Tx, _ orm.Changes[j.Pivot]) error {
 						called = true
 						if endpoint == "source" {
-							_, err := j.Parents.Delete(ctx, tx, 1)
+							_, err := orm.Delete(ctx, tx, j.Parents.Table.Query(), j.Parents.Table.Key(), 1)
 							return err
 						}
-						_, err := j.Targets.Delete(ctx, tx, 10)
+						_, err := orm.Delete(ctx, tx, j.Targets.Table.Query(), j.Targets.Table.Key(), 10)
 						return err
 					},
 					AfterCommit: func(context.Context, lifecycle.Operation, orm.Changes[j.Pivot]) error { committed = true; return nil },
 				}
 			}))
-			r := orm.ManyToManyOf(j.Parents.Peers, j.Parents.ID, p.ParentID, p.TargetID, j.Targets.ID)
-			out, err := orm.Attach(ctx, db, r, j.Parent{ID: 1}, j.Target{ID: 10}, p.ID.Set(100), p.Kind.Set("parent"), p.Role.Set("member"))
+			r := orm.ManyToManyOf(j.Parents.Peers, orm.KeyExpr(j.Parents.ID), orm.NullableNumberExpr(p.ParentID), orm.NullableNumberExpr(p.TargetID), orm.KeyExpr(j.Targets.ID))
+			out, err := orm.Attach(ctx, db, r, j.Parent{ID: 1}, j.Target{ID: 10}, orm.KeySet(p.ID, 100), orm.ColumnSet(p.Kind, "parent"), orm.TextSet(p.Role, "member"))
 			if !errors.Is(err, fault.Invalid) || out.ID != 0 || !called || committed {
 				t.Fatal("endpoint hook accepted", err, called, committed)
 			}
-			_, err = j.Parents.Require(ctx, db, 1)
+			_, err = orm.RequireKey(ctx, db, j.Parents.Table, 1)
 			must(t, err)
-			_, err = j.Targets.Require(ctx, db, 10)
+			_, err = orm.RequireKey(ctx, db, j.Targets.Table, 10)
 			must(t, err)
-			candidate, err := j.Pivots.Find(ctx, db, 100)
+			candidate, err := orm.Find(ctx, db, j.Pivots.Table, 100)
 			must(t, err)
 			if candidate.IsSet() {
 				t.Fatal("rejected attachment persisted")

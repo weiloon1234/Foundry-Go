@@ -56,7 +56,7 @@ func TestRegisteredObserverAfterCommitDiagnostics(t *testing.T) {
 				var result mutationRecord
 				err = callback.Isolated("consume database result", func() error {
 					var err error
-					result, err = mutationFields.Insert(t.Context(), db, mutationValues()...)
+					result, err = orm.Insert(t.Context(), db, mutationFields.Table, mutationValues()...)
 					return err
 				})
 				innerWant := "after commit: database after commit: after_commit_failed"

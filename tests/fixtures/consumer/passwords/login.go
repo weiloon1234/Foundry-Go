@@ -23,7 +23,7 @@ type AccountStore interface {
 
 func Accounts(db database.Executor) AccountProvider {
 	return auth.DefineProvider("password.accounts", AccountIdentity.ReferenceOf(Account{}), func(ctx context.Context, id model.ID[Account]) (value.Optional[Account], error) {
-		return AccountRecords.Find(ctx, db, id)
+		return orm.Find(ctx, db, AccountRecords.Table, id)
 	}, func(_ context.Context, account Account) (bool, error) { return account.Enabled, nil })
 }
 
@@ -32,14 +32,14 @@ func Accounts(db database.Executor) AccountProvider {
 func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*Login, error) {
 	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Account, string]{
 		Lock: func(ctx context.Context, tx *database.Tx, account Account) (value.Optional[Account], error) {
-			return AccountRecords.Query().Where(AccountRecords.Key().Eq(account.ID)).ForUpdate().First(ctx, tx)
+			return orm.FirstLocked(ctx, tx, orm.Lock(AccountRecords.Query().Where(orm.KeyEq(AccountRecords.Key(), account.ID))))
 		},
 		Lookup: func(ctx context.Context, email string) (value.Optional[Account], error) {
-			return AccountRecords.Query().Where(AccountRecords.Email.Eq(email)).First(ctx, db)
+			return orm.First(ctx, db, AccountRecords.Query().Where(orm.TextEq(AccountRecords.Email, email)))
 		},
 		Hash: func(account Account) password.Hash { return account.Digest },
 		Rehash: func(ctx context.Context, account Account, old, next password.Hash) (value.Optional[Account], error) {
-			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(AccountRecords.Digest.Eq(old)), AccountRecords.Key(), account.ID, AccountRecords.Digest.Set(next))
+			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(orm.ColumnEq(AccountRecords.Digest, old)), AccountRecords.Key(), account.ID, orm.ColumnSet(AccountRecords.Digest, next))
 			if errors.Is(err, database.NotFound) {
 				return value.Optional[Account]{}, nil
 			}

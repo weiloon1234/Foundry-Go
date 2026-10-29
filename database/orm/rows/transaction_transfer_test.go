@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -13,7 +15,7 @@ import (
 
 func TestTransactionCTEPreservesInnerLocksAndOuterAggregates(t *testing.T) {
 	m := declareMembers()
-	a := AsTransaction[left](TransactionCTE("claimed", LockedRecord(m.Query().Limit(2).ForUpdate().SkipLocked())), "c")
+	a := AsTransaction[left](TransactionCTE("claimed", LockedRecord(orm.Lock(m.Query().Limit(2)).SkipLocked())), "c")
 	r := SelectTransactionRecord(a, TransactionScope(a))
 	sql := compileTransaction(t, r.core.Source)
 	if !strings.Contains(sql, "LIMIT $1 FOR UPDATE SKIP LOCKED)") || strings.HasSuffix(sql, "SKIP LOCKED") {
@@ -37,7 +39,7 @@ func TestTransactionCorrelatedSourceValidationAndImmutability(t *testing.T) {
 	a, b := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "parent"), AsTransaction[right](TransactionOf(ModelRecord(m.Query())), "child")
 	c := TransactionCorrelate(a, b)
 	inner, outer := TransactionInnerScope(c, TransactionScope(b)), TransactionOuterScope(c, TransactionScope(a))
-	field := expr.At(inner, m.ID)
+	field := expr.At(inner, orm.KeyExpr(m.ID))
 	base := SelectTransactionCorrelatedScalar(c, expr.Row(field).Value())
 	locked := base.ForUpdate().Of(Target(inner))
 	q := SelectTransactionRecord(a, TransactionScope(a))
@@ -86,8 +88,8 @@ func TestTransactionCorrelatedSourceValidationAndImmutability(t *testing.T) {
 func TestTransactionComputedMembershipQualificationAndBindings(t *testing.T) {
 	m := declareMembers()
 	a := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "outer_records")
-	f := expr.At(TransactionScope(a), m.ID)
-	inner := TransactionValueOf(Values(WhereScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.ID)).Value()), expr.Greater(expr.Value(m.ID), expr.Param(m.ID, 9)))))
+	f := expr.At(TransactionScope(a), orm.KeyExpr(m.ID))
+	inner := TransactionValueOf(Values(WhereScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()), expr.Greater(expr.Value(orm.KeyExpr(m.ID)), expr.Param(orm.KeyExpr(m.ID), 9)))))
 	p := TransactionInQuery(expr.Add(f, expr.Row(f).Param(7)), inner)
 	q := SelectTransactionRecord(a, TransactionScope(a)).Where(p)
 	s, e := querycore.CompileRead(q.core.Source.Node, t.Context(), true, q.core.Source.Err, true)
@@ -118,8 +120,8 @@ func TestTransactionComputedMembershipQualificationAndBindings(t *testing.T) {
 	if _, e := querycore.CompileRead(bad.core.Source.Node, t.Context(), true, bad.core.Source.Err, true); !errors.Is(e, fault.Invalid) {
 		t.Fatal("missing IN became EXISTS", e)
 	}
-	b := AsTransaction[right](LockedRecord(m.Query().ForUpdate()), "inner_records")
-	locked := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), m.ID)).Value())
+	b := AsTransaction[right](LockedRecord(orm.Lock(m.Query())), "inner_records")
+	locked := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), orm.KeyExpr(m.ID))).Value())
 	for _, s := range []querycore.SelectNode{SelectTransactionValue(a, TransactionScalarRowQuery(a, locked).Value()).core.Source.Node, q.Where(TransactionInQuery(f, locked)).core.Source.Node, q.Where(TransactionExistsQuery(a, locked)).core.Source.Node} {
 		if _, e := querycore.CompileRead(s, t.Context(), false, nil, true); !errors.Is(e, fault.Invalid) || !strings.Contains(e.Error(), "transaction-scoped") {
 			t.Fatal("ordinary locked value", e)

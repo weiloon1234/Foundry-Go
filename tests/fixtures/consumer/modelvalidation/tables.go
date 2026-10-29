@@ -12,13 +12,13 @@ import (
 // UserTable binds the existing consumer model identity to advisory validation.
 type UserTable struct {
 	orm.Table[models.User, model.ID[models.User]]
-	// ID selects the stored user key. Example: Users.ID.Eq(id).
+	// ID selects the stored user key. Example: orm.KeyEq(Users.ID, id).
 	ID orm.Key[models.User, model.ID[models.User]]
-	// Email selects the stored address. Example: Users.Email.Eq(email).
+	// Email selects the stored address. Example: orm.TextEq(Users.Email, email).
 	Email orm.Text[models.User, string]
-	// Status selects the stored enum. Example: Users.Status.Eq(models.StatusActive).
+	// Status selects the stored enum. Example: orm.EnumEq(Users.Status, models.StatusActive).
 	Status orm.Enum[models.User, models.Status]
-	// Nickname selects non-null nicknames. Example: Users.Nickname.Eq("member").
+	// Nickname selects non-null nicknames. Example: orm.NullableTextEq(Users.Nickname, "member").
 	Nickname orm.NullableText[models.User, string]
 }
 
@@ -35,9 +35,9 @@ var Users = orm.Define("users", func(b orm.Builder[models.User], u *models.User)
 // CountryTable retains the consumer's natural key.
 type CountryTable struct {
 	orm.Table[models.Country, models.CountryCode]
-	// Code selects the stored natural key. Example: Countries.Code.Eq(models.CountryCode("MY")).
+	// Code selects the stored natural key. Example: orm.KeyEq(Countries.Code, models.CountryCode("MY")).
 	Code orm.Key[models.Country, models.CountryCode]
-	// Name selects a stored name. Example: Countries.Name.Eq("Malaysia").
+	// Name selects a stored name. Example: orm.TextEq(Countries.Name, "Malaysia").
 	Name orm.Text[models.Country, string]
 }
 
@@ -50,7 +50,7 @@ var Countries = orm.Define("countries", func(b orm.Builder[models.Country], c *m
 // LedgerTable retains exact decimal field codecs.
 type LedgerTable struct {
 	orm.Table[models.LedgerEntry, model.ID[models.LedgerEntry]]
-	// Amount selects exact stored decimals. Example: LedgerEntries.Amount.Eq(amount).
+	// Amount selects exact stored decimals. Example: orm.NumberEq(LedgerEntries.Amount, amount).
 	Amount orm.Number[models.LedgerEntry, decimal.Decimal]
 }
 
@@ -64,7 +64,7 @@ var LedgerEntries = orm.Define("ledger_entries", func(b orm.Builder[models.Ledge
 // GroupTable retains the soft-delete visibility of the old source.
 type GroupTable struct {
 	orm.Table[softqueries.Group, softqueries.GroupCode]
-	// Name selects the stored group name. Example: Groups.Name.Eq("reserved").
+	// Name selects the stored group name. Example: orm.TextEq(Groups.Name, "reserved").
 	Name orm.Text[softqueries.Group, string]
 	// DeletedAt controls soft-delete visibility. Delete sets it and Restore clears it.
 	// Example: Groups.Query().WithTrashed().

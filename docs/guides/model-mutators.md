@@ -7,7 +7,7 @@ The [complete declaration](model-declarations.md) uses `InputText[User, EmailInp
 <!-- orm-example: inputs-after -->
 ```go
 func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
-	return mutators.Members.Email.Set(input)
+	return orm.InputTextSet(mutators.Members.Email, input)
 }
 ```
 

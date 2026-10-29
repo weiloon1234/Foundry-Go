@@ -8,6 +8,6 @@ import (
 )
 
 func Read(ctx context.Context, db *database.DB) ([]n.Member, error) {
-	return n.Members.Query().All(ctx, db)
+	return orm.All(ctx, db, n.Members.Query())
 }
 func Observe(observer orm.RetrievalObserver[n.Member]) { _, _ = observer.Declare(n.LocalReads) }

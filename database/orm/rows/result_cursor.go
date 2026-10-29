@@ -16,7 +16,7 @@ import (
 )
 
 // CursorScope identifies completed output independently of the input scope.
-// Example: expr.At(cursor.Scope(),Users.ID).
+// Example: expr.At(cursor.Scope(), orm.KeyExpr(Users.ID)).
 type CursorScope[R any] struct{ _ [0]*R }
 
 // CursorQuery pages complete results using an explicit unique output identity.
@@ -54,7 +54,7 @@ func (q ValueCursorQuery[V]) Value() expr.RowExpression[CursorScope[V], V] {
 	return expr.FoundryRowExpression[CursorScope[V]](ormcore.Expression{Node: querycore.FieldRef{Table: ref.Table, Column: "value"}, Refs: []ormcore.Reference{ref}, Err: r.Source.Err}, q.column, sqlowner.Expressions())
 }
 
-// Scope exposes completed output fields. Example: expr.At(c.Scope(),Users.ID).
+// Scope exposes completed output fields. Example: expr.At(c.Scope(), orm.KeyExpr(Users.ID)).
 func (q CursorQuery[R]) Scope() expr.Scope[CursorScope[R], R] {
 	r := q.core.Record
 	return expr.FoundryScope[CursorScope[R], R](ormcore.Scope{Reference: ormcore.Reference{Table: r.Source.Node.Source.Name(), Owner: r.Record.Owner}, Err: r.Source.Err}, sqlowner.Expressions())
@@ -85,7 +85,7 @@ func (q CursorQuery[R]) Paginate(ctx context.Context, ex database.Executor, r or
 	return cursorPage(ctx, ex, q.core, r)
 }
 
-// Scope exposes completed output fields. Example: expr.At(c.Scope(),Users.ID).
+// Scope exposes completed output fields. Example: expr.At(c.Scope(), orm.KeyExpr(Users.ID)).
 func (q ValueCursorQuery[V]) Scope() expr.Scope[CursorScope[V], V] {
 	r := q.core.Record
 	return expr.FoundryScope[CursorScope[V], V](ormcore.Scope{Reference: ormcore.Reference{Table: r.Source.Node.Source.Name(), Owner: r.Record.Owner}, Err: r.Source.Err}, sqlowner.Expressions())

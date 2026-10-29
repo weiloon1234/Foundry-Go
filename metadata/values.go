@@ -48,7 +48,7 @@ func (k Key[M, K, V]) set(ctx context.Context, tx *database.Tx, m *Manager, owne
 	}
 	id := extensions.Digest(subject.Scope, subject.Key, string(k.Name()))
 	q, f := store.Metadata.Query(), store.Metadata
-	existing, err := q.Where(f.KeyColumn.Eq(id)).First(ctx, tx)
+	existing, err := orm.First(ctx, tx, q.Where(orm.TextEq(f.KeyColumn, id)))
 	if err != nil {
 		return err
 	}
@@ -56,17 +56,17 @@ func (k Key[M, K, V]) set(ctx context.Context, tx *database.Tx, m *Manager, owne
 		if err := k.checkRow(extensionrow.ForSubject(k.definition.owner, subject), row, subject.Key); err != nil {
 			return err
 		}
-		_, err = orm.Update(ctx, tx, q, store.Metadata.Key(), id, store.Metadata.Value.Set(snapshot), store.Metadata.Version.Set(uint32(k.Version())), store.Metadata.UpdatedAt.Set(now))
+		_, err = orm.Update(ctx, tx, q, store.Metadata.Key(), id, orm.JSONSet(store.Metadata.Value, snapshot), orm.NumberSet(store.Metadata.Version, uint32(k.Version())), orm.TimeSet(store.Metadata.UpdatedAt, now))
 		return err
 	}
-	count, err := q.Where(f.Scope.Eq(subject.Scope), f.SubjectKey.Eq(subject.Key)).Count(ctx, tx)
+	count, err := orm.Count(ctx, tx, q.Where(orm.TextEq(f.Scope, subject.Scope), orm.TextEq(f.SubjectKey, subject.Key)))
 	if err != nil {
 		return err
 	}
 	if count >= MaxKeysPerOwner {
 		return safeerror.NewFault(fault.Conflict, "model metadata key limit reached")
 	}
-	_, err = store.Metadata.Insert(ctx, tx, store.Metadata.KeyColumn.Set(id), store.Metadata.Owner.Set(string(k.definition.owner.Name())), store.Metadata.Scope.Set(subject.Scope), store.Metadata.SubjectKey.Set(subject.Key), store.Metadata.Identity.Set(subject.Identity), store.Metadata.Name.Set(string(k.Name())), store.Metadata.Version.Set(uint32(k.Version())), store.Metadata.Value.Set(snapshot), store.Metadata.CreatedAt.Set(now), store.Metadata.UpdatedAt.Set(now))
+	_, err = orm.Insert(ctx, tx, store.Metadata.Table, orm.TextSet(store.Metadata.KeyColumn, id), orm.TextSet(store.Metadata.Owner, string(k.definition.owner.Name())), orm.TextSet(store.Metadata.Scope, subject.Scope), orm.TextSet(store.Metadata.SubjectKey, subject.Key), orm.JSONSet(store.Metadata.Identity, subject.Identity), orm.TextSet(store.Metadata.Name, string(k.Name())), orm.NumberSet(store.Metadata.Version, uint32(k.Version())), orm.JSONSet(store.Metadata.Value, snapshot), orm.TimeSet(store.Metadata.CreatedAt, now), orm.TimeSet(store.Metadata.UpdatedAt, now))
 	return err
 }
 
@@ -168,7 +168,7 @@ func (k Key[M, K, V]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, o
 	slices.Sort(keys)
 	f := store.Metadata
 	var budget extensionvalue.BatchBudget
-	err = store.Metadata.Query().Where(f.Scope.Eq(k.definition.owner.Scope()), f.SubjectKey.In(keys...), f.Name.Eq(string(k.Name()))).Each(ctx, tx, func(row store.Meta) error {
+	err = orm.Each(ctx, tx, store.Metadata.Query().Where(orm.TextEq(f.Scope, k.definition.owner.Scope()), orm.TextIn(f.SubjectKey, keys...), orm.TextEq(f.Name, string(k.Name()))), func(row store.Meta) error {
 		if !active[row.SubjectKey] {
 			return invalid()
 		}
@@ -223,7 +223,7 @@ func (k Key[M, K, V]) forget(ctx context.Context, tx *database.Tx, m *Manager, o
 	}
 	q, f := store.Metadata.Query(), store.Metadata
 	id := extensions.Digest(subject.Scope, subject.Key, string(k.Name()))
-	found, err := q.Where(f.KeyColumn.Eq(id)).First(ctx, tx)
+	found, err := orm.First(ctx, tx, q.Where(orm.TextEq(f.KeyColumn, id)))
 	if err != nil {
 		return false, err
 	}

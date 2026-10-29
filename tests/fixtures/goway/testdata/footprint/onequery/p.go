@@ -1,5 +1,7 @@
 package onequery
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/goway/models"
@@ -7,5 +9,5 @@ import (
 )
 
 func F(ctx context.Context, db database.Executor) ([]models.Order, error) {
-	return models.Orders.Query().Where(models.Orders.TotalCents.Gt(100)).Limit(10).All(ctx, db)
+	return orm.All(ctx, db, models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)).Limit(10))
 }

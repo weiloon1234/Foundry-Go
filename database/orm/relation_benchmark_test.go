@@ -11,7 +11,7 @@ import (
 // grandchild per parent, batches of 500. Driver work and five statements are timed.
 func BenchmarkRelationTree1000Depth2(b *testing.B) {
 	p := people()
-	r := HasManyOf(p.Reports, p.ID, p.ManagerID)
+	r := HasManyOf(p.Reports, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID))
 	o := &relationOracle{}
 	for i := int64(1); i <= 1000; i++ {
 		o.rows = append(o.rows, relationRow(i, nil, "parent"), relationRow(1000+i, i, "child"), relationRow(2000+i, 1000+i, "grandchild"))
@@ -26,15 +26,15 @@ func BenchmarkRelationTree1000Depth2(b *testing.B) {
 			b.Error(err)
 		}
 	})
-	q := p.Query().Where(p.Name.Eq("parent")).With(r.With(r))
-	if _, err := q.All(ctx, db); err != nil {
+	q := p.Query().Where(TextEq(p.Name, "parent")).With(r.With(r))
+	if _, err := All(ctx, db, q); err != nil {
 		b.Fatal(err)
 	}
 	o.calls, o.closed = 0, 0
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parents, err := q.All(ctx, db)
+		parents, err := All(ctx, db, q)
 		if err != nil || len(parents) != 1000 {
 			b.Fatalf("rows=%d: %v", len(parents), err)
 		}

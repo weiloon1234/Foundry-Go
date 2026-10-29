@@ -11,7 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
-// InsertMapping maps one exact stored source value. Example: rows.MapInsert(Archives.Name,expr.Value(Users.Name)).
+// InsertMapping maps one exact stored source value. Example: rows.MapInsert(orm.TextExpr(Archives.Name), expr.Value(orm.TextExpr(Users.Name))).
 type InsertMapping[S, M any] struct {
 	insertMappingPhase [0]struct{}
 	_                  [0]*S
@@ -19,7 +19,7 @@ type InsertMapping[S, M any] struct {
 	core               ormcore.ModelMapping
 }
 
-// UpdateMapping maps a non-primary stored value. Example: rows.MapUpdate(Users.Name,expr.Value(Archives.Name)).
+// UpdateMapping maps a non-primary stored value. Example: rows.MapUpdate(orm.TextExpr(Users.Name), expr.Value(orm.TextExpr(Archives.Name))).
 type UpdateMapping[S, M any] struct {
 	updateMappingPhase [0]struct{}
 	_                  [0]*S
@@ -27,7 +27,7 @@ type UpdateMapping[S, M any] struct {
 	core               ormcore.ModelMapping
 }
 
-// SourceKey matches a stored primary value without assigning it. Example: rows.MatchSource(Users.ID,expr.Value(Archives.UserID)).
+// SourceKey matches a stored primary value without assigning it. Example: rows.MatchSource(orm.KeyExpr(Users.ID),expr.Value(orm.ColumnExpr(Archives.UserID))).
 type SourceKey[S, M any] struct {
 	sourceKeyPhase [0]struct{}
 	_              [0]*S
@@ -83,7 +83,7 @@ func (DeleteSource[S, M]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("orm delete using query"))
 }
 
-// Select appends mappings; duplicates and overlap with Values are rejected. Example: plan.Select(rows.MapInsert(Archives.Name,expr.Value(Users.Name))).
+// Select appends mappings; duplicates and overlap with Values are rejected. Example: plan.Select(rows.MapInsert(orm.TextExpr(Archives.Name), expr.Value(orm.TextExpr(Users.Name)))).
 func (p InsertSelect[S, M]) Select(mappings ...InsertMapping[S, M]) InsertSelect[S, M] {
 	p.plan.mappings = slices.Clone(p.plan.mappings)
 	for _, m := range mappings {
@@ -92,7 +92,7 @@ func (p InsertSelect[S, M]) Select(mappings ...InsertMapping[S, M]) InsertSelect
 	return p
 }
 
-// Select appends stored-value mappings without bypassing mutators. Example: plan.Select(rows.MapUpdate(Users.Name,expr.Value(Archives.Name))).
+// Select appends stored-value mappings without bypassing mutators. Example: plan.Select(rows.MapUpdate(orm.TextExpr(Users.Name), expr.Value(orm.TextExpr(Archives.Name)))).
 func (p UpdateSource[S, M]) Select(mappings ...UpdateMapping[S, M]) UpdateSource[S, M] {
 	p.plan.mappings = slices.Clone(p.plan.mappings)
 	for _, m := range mappings {
@@ -101,25 +101,25 @@ func (p UpdateSource[S, M]) Select(mappings ...UpdateMapping[S, M]) UpdateSource
 	return p
 }
 
-// Values replaces literal inputs, normalized once per statement. Example: plan.Values(Archives.Tag.Set(input)).
+// Values replaces literal inputs, normalized once per statement. Example: plan.Values(orm.TextSet(Archives.Tag, input)).
 func (p InsertSelect[S, M]) Values(values ...Assignment[M]) InsertSelect[S, M] {
 	p.plan = sourceValues(p.plan, values)
 	return p
 }
 
-// Values replaces literal inputs; repeated source keys are allowed without mappings. Example: plan.Values(Users.Name.Set("archived")).
+// Values replaces literal inputs; repeated source keys are allowed without mappings. Example: plan.Values(orm.TextSet(Users.Name, "archived")).
 func (p UpdateSource[S, M]) Values(values ...Assignment[M]) UpdateSource[S, M] {
 	p.plan = sourceValues(p.plan, values)
 	return p
 }
 
-// Match replaces the source-to-primary match. Example: plan.Match(rows.MatchSource(Users.ID,expr.Value(Archives.UserID))).
+// Match replaces the source-to-primary match. Example: plan.Match(rows.MatchSource(orm.KeyExpr(Users.ID),expr.Value(orm.ColumnExpr(Archives.UserID)))).
 func (p UpdateSource[S, M]) Match(key SourceKey[S, M]) UpdateSource[S, M] {
 	p.plan.key = key.core
 	return p
 }
 
-// Match replaces the source-to-primary match. Example: plan.Match(rows.MatchSource(Users.ID,expr.Value(Archives.UserID))).
+// Match replaces the source-to-primary match. Example: plan.Match(rows.MatchSource(orm.KeyExpr(Users.ID),expr.Value(orm.ColumnExpr(Archives.UserID)))).
 func (p DeleteSource[S, M]) Match(key SourceKey[S, M]) DeleteSource[S, M] {
 	p.plan.key = key.core
 	return p

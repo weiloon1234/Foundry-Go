@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -44,10 +46,10 @@ func runCompositionNew(g *goldenCapture, kind string) {
 	ctx := context.Background()
 	db := g.open(ctx)
 	defer db.Close(ctx)
-	a := models.Orders.Query().Where(models.Orders.TotalCents.Gt(10)).OrderBy(models.Orders.TotalCents.Desc()).Limit(2).Offset(1)
-	b := models.Orders.Query().Where(models.Orders.TotalCents.Gt(20))
+	a := models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 10)).OrderBy(orm.NumberDesc(models.Orders.TotalCents)).Limit(2).Offset(1)
+	b := models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 20))
 	if strings.HasPrefix(kind, "value_") {
-		x, y := rowset.Values(rowset.SelectScalar(rowset.From(a), expr.Row(expr.Value(models.Orders.TotalCents)).Value())), rowset.Values(rowset.SelectScalar(rowset.From(b), expr.Row(expr.Value(models.Orders.TotalCents)).Value()))
+		x, y := rowset.Values(rowset.SelectScalar(rowset.From(a), expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Value())), rowset.Values(rowset.SelectScalar(rowset.From(b), expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Value()))
 		var q rowset.ValueSetQuery[int64]
 		switch kind {
 		case "value_Union":
@@ -83,7 +85,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 		case "set_ExceptAll":
 			q = rowset.ExceptAll(x, y)
 		}
-		got := must(rowset.ReadSet(q.Where(expr.At(q.Scope(), models.Orders.TotalCents).Ne(0)).OrderBy(expr.At(q.Scope(), models.Orders.TotalCents).Asc()).Limit(3).Offset(2)).All(ctx, db))
+		got := must(rowset.ReadSet(q.Where(expr.At(q.Scope(), orm.NumberExpr(models.Orders.TotalCents)).Ne(0)).OrderBy(expr.At(q.Scope(), orm.NumberExpr(models.Orders.TotalCents)).Asc()).Limit(3).Offset(2)).All(ctx, db))
 		for _, r := range got {
 			fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
 		}
@@ -91,7 +93,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 	}
 	if kind == "transaction" {
 		check(db.Transaction(ctx, func(tx *database.Tx) error {
-			c := rowset.TransactionCTE("claimed", rowset.LockedRecord(a.ForUpdate().SkipLocked())).Materialized()
+			c := rowset.TransactionCTE("claimed", rowset.LockedRecord(orm.Lock(a).SkipLocked())).Materialized()
 			alias := rowset.AsTransaction[joinA](c, "r")
 			for _, r := range must(rowset.SelectTransactionRecord(alias, rowset.TransactionScope(alias)).All(ctx, tx)) {
 				fmt.Fprintln(&g.output, oracleSnapshot([]any{r.ID, r.BuyerID, r.TotalCents}))
@@ -101,7 +103,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 		return
 	}
 	if kind == "projection" {
-		p := rowset.Select(rowset.From(a), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.Value(models.Orders.TotalCents)).Value())))
+		p := rowset.Select(rowset.From(a), correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Value())))
 		alias := rowset.AsRecord[joinA](rowset.CTE("summary", rowset.RecordOf(p)), "r")
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.ReadRecord(rowset.SelectRecord(alias, rowset.Scope(alias))).All(ctx, db))}))
 		return
@@ -115,7 +117,7 @@ func runCompositionNew(g *goldenCapture, kind string) {
 	case "recursive", "recursive_all":
 		step := func(self rowset.RecursiveSelf[models.Order]) rowset.RecordSource[models.Order] {
 			p := rowset.AsRecord[joinB](self, "parent")
-			return rowset.SelectRecord(p, rowset.Scope(p)).Where(expr.At(rowset.Scope(p), models.Orders.TotalCents).Eq(0))
+			return rowset.SelectRecord(p, rowset.Scope(p)).Where(expr.At(rowset.Scope(p), orm.NumberExpr(models.Orders.TotalCents)).Eq(0))
 		}
 		if kind == "recursive" {
 			c = rowset.RecursiveCTE("eligible", rowset.ModelRecord(a), step)

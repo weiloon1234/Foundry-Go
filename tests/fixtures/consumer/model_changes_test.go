@@ -23,7 +23,7 @@ func TestORMModelChangesKeepOnlyPersistedSnapshots(t *testing.T) {
 	after := before
 	after.Email = "private-after"
 	after.Nickname = value.Of("")
-	changes, err := orm.Compare(models.Users.Table, value.Set(before), value.Set(after), models.Users.Email.Set("input transformed elsewhere"), models.Users.Nickname.Set(""))
+	changes, err := orm.Compare(models.Users.Table, value.Set(before), value.Set(after), orm.TextSet(models.Users.Email, "input transformed elsewhere"), orm.NullableTextSet(models.Users.Nickname, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,11 +33,11 @@ func TestORMModelChangesKeepOnlyPersistedSnapshots(t *testing.T) {
 			t.Fatal("snapshot retained ignored/relation state or lost persisted identity")
 		}
 	}
-	emailChange, err := orm.ChangeOf(changes, models.Users.Email)
+	emailChange, err := orm.ChangeOf(changes, orm.TextExpr(models.Users.Email))
 	if err != nil {
 		t.Fatal(err)
 	}
-	idChange, err := orm.ChangeOf(changes, models.Users.ID)
+	idChange, err := orm.ChangeOf(changes, orm.KeyExpr(models.Users.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestORMModelChangesKeepOnlyPersistedSnapshots(t *testing.T) {
 	}
 	fieldCopy := emailChange
 	fieldCopy = lifecycle.FieldChange[string]{}
-	reloaded, err := orm.ChangeOf(changes, models.Users.Email)
+	reloaded, err := orm.ChangeOf(changes, orm.TextExpr(models.Users.Email))
 	if err != nil || fieldCopy.Changed() || !reloaded.Changed() {
 		t.Fatal("editing returned field data changed its source")
 	}
@@ -74,8 +74,8 @@ func TestORMModelChangesRejectMixedIdentityAndInvalidSnapshots(t *testing.T) {
 		draft         []orm.Assignment[models.User]
 	}{
 		{value.Set(before), value.Set(other), nil},
-		{value.Set(before), value.Set(before), []orm.Assignment[models.User]{models.Users.ID.Set(before.ID)}},
-		{value.Set(before), value.Optional[models.User]{}, []orm.Assignment[models.User]{models.Users.Email.Set("invalid deletion")}},
+		{value.Set(before), value.Set(before), []orm.Assignment[models.User]{orm.KeySet(models.Users.ID, before.ID)}},
+		{value.Set(before), value.Optional[models.User]{}, []orm.Assignment[models.User]{orm.TextSet(models.Users.Email, "invalid deletion")}},
 		{value.Optional[models.User]{}, value.Optional[models.User]{}, nil},
 		{value.Set(before), value.Set(invalid), nil},
 		{value.Set(invalid), value.Set(before), nil},

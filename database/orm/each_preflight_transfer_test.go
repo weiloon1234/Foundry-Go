@@ -15,16 +15,16 @@ import (
 
 func TestPerModelWriteCompilerRetainsScopesAndPrimaryRules(t *testing.T) {
 	d := eachFields(Hooks[eachRow]{})
-	scoped := d.Query().Where(d.Name.Ne("excluded"))
+	scoped := d.Query().Where(TextNe(d.Name, "excluded"))
 	if _, _, err := planEach(scoped.state, querycore.UpdateModel, 3); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := planWrite(scoped.state, querycore.UpdateModel, []Assignment[eachRow]{d.Name.Set("new")}, false); !errors.Is(err, fault.Invalid) {
+	if _, err := planWrite(scoped.state, querycore.UpdateModel, []Assignment[eachRow]{TextSet(d.Name, "new")}, false); !errors.Is(err, fault.Invalid) {
 		t.Fatal("single-model write lost primary requirement", err)
 	}
 	selected := scoped.state
 	selected.ast.Predicates = append(selected.ast.Predicates, eachPrimary(selected, int64(8)))
-	p, err := planWrite(selected, querycore.UpdateModel, []Assignment[eachRow]{d.Name.Set("new")}, false)
+	p, err := planWrite(selected, querycore.UpdateModel, []Assignment[eachRow]{TextSet(d.Name, "new")}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestPerModelWriteRejectsNullIdentityBeforeCallbacks(t *testing.T) {
 	db := testDB(t, testConnector{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "a"}}})
 	got, err := UpdateEach(t.Context(), db, d.Query(), 1, func(context.Context, *database.Tx, eachRow) ([]Assignment[eachRow], error) {
 		calls++
-		return []Assignment[eachRow]{d.Name.Set("new")}, nil
+		return []Assignment[eachRow]{TextSet(d.Name, "new")}, nil
 	})
 	if !errors.Is(err, fault.Invalid) || got != nil || calls != 0 {
 		t.Fatal("NULL identity reached lifecycle", got, err, calls)
@@ -80,7 +80,7 @@ func TestLookupWriteValidationBeforeTransaction(t *testing.T) {
 	d := eachFields(Hooks[eachRow]{})
 	writer := &noEachWriter{}
 	calls := 0
-	for _, q := range []Query[eachRow]{{}, d.Query().OrderBy(d.Key().Asc()), d.Query().Limit(1), d.Query().Offset(1), WithRelationLimits(d.Query(), DefaultRelationLimits())} {
+	for _, q := range []Query[eachRow]{{}, d.Query().OrderBy(KeyAsc(d.Key())), d.Query().Limit(1), d.Query().Offset(1), WithRelationLimits(d.Query(), DefaultRelationLimits())} {
 		if _, err := FirstOrCreate(t.Context(), writer, q); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid lookup", err)
 		}

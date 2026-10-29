@@ -32,10 +32,10 @@ func TestJoinedHasCompilesEachLevelOnce(t *testing.T) {
 	nodes := Define("joined_nodes", func(b Builder[node], n *node) fields {
 		return fields{TableOf(b, &n.ID, Codec(counted)), ThroughOf(b, &n.Links)}
 	})
-	links := ManyToManyOf(nodes.Links, nodes.Key(), nodes.Key(), nodes.Key(), nodes.Key())
+	links := ManyToManyOf(nodes.Links, KeyExpr(nodes.Key()), KeyExpr(nodes.Key()), KeyExpr(nodes.Key()), KeyExpr(nodes.Key()))
 	var nested Predicate[node]
 	for i := depth - 1; i >= 0; i-- {
-		p := nodes.Key().Eq(int64(i + 1))
+		p := KeyEq(nodes.Key(), int64(i+1))
 		if i == depth-1 {
 			nested = Has(links, p)
 		} else {

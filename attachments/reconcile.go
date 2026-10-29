@@ -49,7 +49,7 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 	var row store.File
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		row, err = store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
+		row, err = orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,7 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 			if !allowStored || m.isWriting(id) || now.UTC().Sub(row.UpdatedAt.UTC()) < m.config.StoredGrace {
 				return attachmentFailure(fault.Conflict, "stored upload is still reserved for publication")
 			}
-			row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, store.Files.State.Set(string(CleanupPending)), store.Files.LastFailure.Set("publication_abandoned"), store.Files.UpdatedAt.Set(now))
+			row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.TextSet(store.Files.State, string(CleanupPending)), orm.TextSet(store.Files.LastFailure, "publication_abandoned"), orm.TimeSet(store.Files.UpdatedAt, now))
 			return err
 		case CleanupPending:
 			return nil
@@ -111,7 +111,7 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 	defer cancel()
 	var result ReconcileResult
 	journalErr := m.store.Write(journalCtx, func(ctx context.Context, tx *database.Tx) error {
-		current, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(id)).Require(ctx, tx)
+		current, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -134,11 +134,11 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 		if attempts < math.MaxUint32 {
 			attempts++
 		}
-		draft := []orm.Assignment[store.File]{store.Files.Attempts.Set(attempts), store.Files.UpdatedAt.Set(now)}
+		draft := []orm.Assignment[store.File]{orm.NumberSet(store.Files.Attempts, attempts), orm.TimeSet(store.Files.UpdatedAt, now)}
 		if deleteErr == nil {
-			draft = append(draft, store.Files.State.Set(string(Cleaned)), store.Files.LastFailure.Set(""))
+			draft = append(draft, orm.TextSet(store.Files.State, string(Cleaned)), orm.TextSet(store.Files.LastFailure, ""))
 		} else {
-			draft = append(draft, store.Files.LastFailure.Set("storage_delete_failed"))
+			draft = append(draft, orm.TextSet(store.Files.LastFailure, "storage_delete_failed"))
 		}
 		current, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, draft...)
 		if err != nil {
@@ -223,7 +223,7 @@ func (m *Manager) ReconcilePending(ctx context.Context, limit int) ([]ReconcileR
 		m.mu.Unlock()
 		err = m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 			f := store.Files
-			q := store.Files.Query().Where(orm.Or(f.State.Eq(string(CleanupPending)), orm.And(f.State.Eq(string(Stored)), f.UpdatedAt.Lte(cutoff)), orm.And(f.State.In(string(Writing), string(Uncertain)), f.UpdatedAt.Lte(settleCutoff)))).OrderBy(f.UpdatedAt.Asc(), f.ID.Asc()).Limit(limit + len(active))
+			q := store.Files.Query().Where(orm.Or(orm.TextEq(f.State, string(CleanupPending)), orm.And(orm.TextEq(f.State, string(Stored)), orm.TimeLte(f.UpdatedAt, cutoff)), orm.And(orm.TextIn(f.State, string(Writing), string(Uncertain)), orm.TimeLte(f.UpdatedAt, settleCutoff)))).OrderBy(orm.TimeAsc(f.UpdatedAt), orm.KeyAsc(f.ID)).Limit(limit + len(active))
 			found, err := rowset.Read(store.Index(q)).All(ctx, tx)
 			if err != nil {
 				return err
@@ -309,7 +309,7 @@ func (m *Manager) settle(ctx context.Context, target model.ID[store.File], polic
 	var row store.File
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		row, err = store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(target)).Require(ctx, tx)
+		row, err = orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), target)))
 		if err != nil {
 			return err
 		}
@@ -327,7 +327,7 @@ func (m *Manager) settle(ctx context.Context, target model.ID[store.File], polic
 			return err
 		}
 		// Fence the original writer: it can no longer pin or record this intent.
-		row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), target, store.Files.State.Set(string(Uncertain)), store.Files.WriterID.Set(m.writer), store.Files.LastFailure.Set(marker), store.Files.UpdatedAt.Set(now))
+		row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), target, orm.TextSet(store.Files.State, string(Uncertain)), orm.ColumnSet(store.Files.WriterID, m.writer), orm.TextSet(store.Files.LastFailure, marker), orm.TimeSet(store.Files.UpdatedAt, now))
 		return err
 	})
 	if err != nil {
@@ -358,7 +358,7 @@ func (m *Manager) settle(ctx context.Context, target model.ID[store.File], polic
 		}
 	}
 	err = m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		current, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(target)).Require(ctx, tx)
+		current, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), target)))
 		if err != nil {
 			return err
 		}
@@ -369,11 +369,11 @@ func (m *Manager) settle(ctx context.Context, target model.ID[store.File], polic
 		if err != nil {
 			return err
 		}
-		draft := []orm.Assignment[store.File]{store.Files.UpdatedAt.Set(now), store.Files.LastFailure.Set("")}
+		draft := []orm.Assignment[store.File]{orm.TimeSet(store.Files.UpdatedAt, now), orm.TextSet(store.Files.LastFailure, "")}
 		if absent {
-			draft = append(draft, store.Files.State.Set(string(Cleaned)))
+			draft = append(draft, orm.TextSet(store.Files.State, string(Cleaned)))
 		} else {
-			draft = append(draft, store.Files.State.Set(string(CleanupPending)), store.Files.ETag.Set(string(info.ETag)), store.Files.ObjectVersion.Set(string(info.Version)))
+			draft = append(draft, orm.TextSet(store.Files.State, string(CleanupPending)), orm.TextSet(store.Files.ETag, string(info.ETag)), orm.TextSet(store.Files.ObjectVersion, string(info.Version)))
 		}
 		current, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), target, draft...)
 		if err != nil {
@@ -426,7 +426,7 @@ func (m *Manager) matchesIntent(ctx context.Context, disk *storage.Disk, key sto
 func (m *Manager) markAmbiguous(ctx context.Context, target model.ID[store.File], fallback ReconcileResult) (ReconcileResult, error) {
 	result := fallback
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
-		current, err := store.Files.Query().ForUpdate().Where(store.Files.Key().Eq(target)).Require(ctx, tx)
+		current, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), target)))
 		if err != nil {
 			return err
 		}
@@ -437,7 +437,7 @@ func (m *Manager) markAmbiguous(ctx context.Context, target model.ID[store.File]
 		if err != nil {
 			return err
 		}
-		current, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), target, store.Files.LastFailure.Set("settlement_ambiguous"), store.Files.UpdatedAt.Set(now))
+		current, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), target, orm.TextSet(store.Files.LastFailure, "settlement_ambiguous"), orm.TimeSet(store.Files.UpdatedAt, now))
 		if err != nil {
 			return err
 		}

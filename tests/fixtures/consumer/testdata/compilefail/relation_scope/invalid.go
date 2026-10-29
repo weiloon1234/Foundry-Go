@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "foundry.test/consumer/models"
 
-var invalid = models.UserLinks.Orders.Where(models.Users.Age.Gt(18))
+var invalid = models.UserLinks.Orders.Where(orm.NumberGt(models.Users.Age, 18))

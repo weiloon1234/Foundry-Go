@@ -1,6 +1,6 @@
 # Typed conflicts and batch inserts
 
-`orm.Upsert` and `orm.UpsertMany` combine insertion with an explicit conflict policy. `Table.InsertMany` inserts a batch without a conflict action. All use typed assignments, codecs, complete returned models and ordinary transaction outcomes.
+`orm.Upsert` and `orm.UpsertMany` combine insertion with an explicit conflict policy. `orm.InsertMany` inserts a batch without a conflict action. All use typed assignments, codecs, complete returned models and ordinary transaction outcomes.
 
 ## Select conflict behavior
 
@@ -8,10 +8,10 @@
 ```go
 func upsertUser(ctx context.Context, tx *database.Tx) (value.Optional[models.User], error) {
 	f := models.Users
-	policy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictIncoming(f.Age))
+	policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Email))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(f.Age)))
 	return orm.Upsert(ctx, tx, f.Query(), policy,
-		f.Email.Set("ada@example.test"), f.Age.Set(30),
-		f.Status.Set(models.StatusActive), f.Level.Set(models.LevelBasic))
+		orm.TextSet(f.Email, "ada@example.test"), orm.NumberSet(f.Age, 30),
+		orm.EnumSet(f.Status, models.StatusActive), orm.EnumSet(f.Level, models.LevelBasic))
 }
 ```
 
@@ -29,10 +29,10 @@ Active destination scopes join conflict update conditions. An unconditional upda
 ```go
 func excluded() orm.Conflict[models.User] {
 	r := rows.ConflictRowsOf(models.Users.Query())
-	stored := expr.At(r.Stored(), models.Users.Age)
-	proposed := expr.At(r.Proposed(), models.Users.Age)
-	return orm.OnConflict(orm.ConflictKey(models.Users.Email)).DoUpdate(
-		rows.SetConflictValue(models.Users.Age, expr.Add(stored, proposed)))
+	stored := expr.At(r.Stored(), orm.NumberExpr(models.Users.Age))
+	proposed := expr.At(r.Proposed(), orm.NumberExpr(models.Users.Age))
+	return orm.OnConflict(orm.ConflictKey(orm.TextExpr(models.Users.Email))).DoUpdate(
+		rows.SetConflictValue(orm.NumberExpr(models.Users.Age), expr.Add(stored, proposed)))
 }
 ```
 

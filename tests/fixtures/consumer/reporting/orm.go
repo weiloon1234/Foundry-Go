@@ -42,9 +42,9 @@ var OrderModels = orm.Define("report_orders", func(b orm.Builder[Order], o *Orde
 	return OrderModelColumns{Table: tbl, ID: orm.PrimaryOf(b, tbl.Key()), TenantID: orm.NumberOf(b, &o.TenantID), MemberID: orm.IDOf(b, &o.MemberID), Label: orm.TextOf(b, &o.Label), Amount: orm.NumberOf(b, &o.Amount), DeletedAt: orm.SoftDeleteOf(b, &o.DeletedAt), Member: orm.OneOf(b, &o.Member)}
 })
 
-var OrderModelRelations = struct{ Member orm.BelongsTo[Order, Member] }{orm.BelongsToOf(OrderModels.Member, OrderModels.MemberID, MemberModels.ID)}
+var OrderModelRelations = struct{ Member orm.BelongsTo[Order, Member] }{orm.BelongsToOf(OrderModels.Member, orm.ColumnExpr(OrderModels.MemberID), orm.KeyExpr(MemberModels.ID))}
 
-var MemberModelRelations = struct{ Orders orm.HasMany[Member, Order] }{orm.HasManyOf(MemberModels.Orders, MemberModels.ID, OrderModels.MemberID)}
+var MemberModelRelations = struct{ Orders orm.HasMany[Member, Order] }{orm.HasManyOf(MemberModels.Orders, orm.KeyExpr(MemberModels.ID), orm.ColumnExpr(OrderModels.MemberID))}
 
 // OperatorModels owns authentication lookups and current report permissions.
 var OperatorModels = orm.Define("report_operators", func(b orm.Builder[Operator], o *Operator) OperatorModelColumns {

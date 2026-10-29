@@ -20,7 +20,7 @@ var NameRules = validation.All(validation.NonBlank[string](), validation.MinLeng
 
 func projectResolver[P any](db database.Executor, team func(P) int64, slug func(P) Slug) modelbinding.Resolver[P, Resources] {
 	parents := modelbinding.ByKey(db, orm.Keyed(Teams.Query(), Teams.Key()), team)
-	return modelbinding.ThroughRelation(db, parents, TeamProjects, Projects.Slug, slug)
+	return modelbinding.ThroughRelation(db, parents, TeamProjects, orm.TextExpr(Projects.Slug), slug)
 }
 func authorized(actor Actor, resources Resources) error {
 	if actor.Tenant != resources.Parent.Tenant || !resources.Child.Enabled {
@@ -84,11 +84,11 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 			return ProjectEnvelope{Data: present(in.Model.Child), Trace: "workflow"}, nil
 		}),
 		catalogue.Handle(func(ctx context.Context, in pagination.Request[http.NoPath, CatalogueFilters]) (orm.PageResult[CatalogueItem], error) {
-			rows := Projects.Query().Where(Projects.Enabled.Eq(true)).OrderBy(Projects.Key().Asc())
+			rows := Projects.Query().Where(orm.ColumnEq(Projects.Enabled, true)).OrderBy(orm.KeyAsc(Projects.Key()))
 			if team, set := in.Filters.Team.Get(); set {
-				rows = rows.Where(Projects.TeamID.Eq(team))
+				rows = rows.Where(orm.NumberEq(Projects.TeamID, team))
 			}
-			page, err := rows.Paginate(ctx, s.db, in.Page)
+			page, err := orm.Paginate(ctx, s.db, rows, in.Page)
 			if err != nil {
 				return orm.PageResult[CatalogueItem]{}, err
 			}

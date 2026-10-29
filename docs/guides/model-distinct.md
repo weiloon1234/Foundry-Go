@@ -19,10 +19,10 @@ record selected from a join:
 people := rows.As[personAlias](models.Users.Query(), "person")
 orders := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
 p, o := rows.Scope(people), rows.Scope(orders)
-joined := rows.InnerJoin(people, orders, rows.On(expr.At(p, models.Users.ID), expr.At(o, models.Orders.BuyerID)))
+joined := rows.InnerJoin(people, orders, rows.On(expr.At(p, orm.KeyExpr(models.Users.ID)), expr.At(o, orm.ColumnExpr(models.Orders.BuyerID))))
 scope := rows.LeftScope(joined, rows.Scope(people))
 fields := scope
-base := rows.SelectRecord(joined, scope).OrderBy(expr.At(fields, models.Users.Email).Asc())
+base := rows.SelectRecord(joined, scope).OrderBy(expr.At(fields, orm.TextExpr(models.Users.Email)).Asc())
 unique := rows.DistinctRecord(base)
 items, err := rows.ReadRecord(unique).All(t.Context(), tx)
 ```

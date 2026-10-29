@@ -19,4 +19,6 @@ var accounts = orm.Define("accounts", func(b orm.Builder[account], m *account) f
 	return fields{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Email)}
 })
 
-func invalid(history record.Model[label, int]) { _, _ = orm.AuditRead(history, accounts.Email) }
+func invalid(history record.Model[label, int]) {
+	_, _ = orm.AuditRead(history, orm.TextExpr(accounts.Email))
+}

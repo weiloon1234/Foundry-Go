@@ -1,9 +1,11 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.DistinctOnScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Age)).Value()), expr.Group(expr.Value(models.Orders.ID)))
+var _ = rows.DistinctOnScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value()), expr.Group(expr.Value(orm.KeyExpr(models.Orders.ID))))

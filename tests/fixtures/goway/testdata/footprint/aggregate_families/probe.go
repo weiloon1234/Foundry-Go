@@ -52,5 +52,5 @@ type side struct{}
 func Query() rows.Query[rows.Alias[side, Model], Result] {
 	a := rows.As[side](table.Query(), "s")
 	scope := rows.Scope(a)
-	return rows.Select(a, schema, rows.MapSelected(schema.Exact, expr.AvgAt(scope, table.Exact).Value()), rows.MapSelected(schema.Float, expr.SumFloatAt(scope, table.Float).Value()), rows.MapSelected(schema.Period, expr.AvgIntervalAt(scope, table.Period).Value()), rows.MapSelected(schema.Name, expr.MaxAt(scope, table.Name).Value()))
+	return rows.Select(a, schema, rows.MapSelected(schema.Exact, expr.AvgAt(scope, orm.NullableNumberExpr(table.Exact)).Value()), rows.MapSelected(schema.Float, expr.SumFloatAt(scope, orm.NullableNumberExpr(table.Float)).Value()), rows.MapSelected(schema.Period, expr.AvgIntervalAt(scope, orm.NullableIntervalExpr(table.Period)).Value()), rows.MapSelected(schema.Name, expr.MaxAt(scope, orm.NullableTextExpr(table.Name)).Value()))
 }

@@ -34,7 +34,7 @@ func runJSON(t *testing.T, check func(*database.Tx, []jsonqueries.Document) erro
 			}
 		}
 		key := document(t, jsonqueries.PolicyKey{Version: 9007199254740993, Region: "apac"})
-		if _, err := jsonqueries.Policies.Insert(t.Context(), tx, jsonqueries.Policies.Key().Set(key), jsonqueries.Policies.Name.Set("primary")); err != nil {
+		if _, err := orm.Insert(t.Context(), tx, jsonqueries.Policies.Table, orm.KeySet(jsonqueries.Policies.Key(), key), orm.TextSet(jsonqueries.Policies.Name, "primary")); err != nil {
 			return err
 		}
 		var rows []jsonqueries.Document
@@ -51,11 +51,11 @@ func runJSON(t *testing.T, check func(*database.Tx, []jsonqueries.Document) erro
 			if i == 0 {
 				state = document(t, value.Of("ready"))
 			}
-			draft := []orm.Assignment[jsonqueries.Document]{f.Key().Set(i + 1), f.Settings.Set(document(t, prefs)), f.Tags.Set(document(t, tags)), f.State.Set(state), f.PolicyID.Set(key)}
+			draft := []orm.Assignment[jsonqueries.Document]{orm.KeySet(f.Key(), i+1), orm.JSONSet(f.Settings, document(t, prefs)), orm.JSONSet(f.Tags, document(t, tags)), orm.JSONSet(f.State, state), orm.ColumnSet(f.PolicyID, key)}
 			if i == 2 {
-				draft = append(draft, f.Backup.Set(document(t, prefs)))
+				draft = append(draft, orm.NullableJSONSet(f.Backup, document(t, prefs)))
 			}
-			row, err := jsonqueries.Documents.Insert(t.Context(), tx, draft...)
+			row, err := orm.Insert(t.Context(), tx, jsonqueries.Documents.Table, draft...)
 			if err != nil {
 				return err
 			}

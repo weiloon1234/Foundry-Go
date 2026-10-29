@@ -1,5 +1,7 @@
 package lockqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"testing"
 
@@ -26,10 +28,10 @@ func TestUnlockedSourcesCanBeAliased(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			scope := rows.Scope(test.alias)
 			selected := rows.Select(test.alias, reports.UserSummaries,
-				rows.Map(reports.UserSummaries.ID, expr.At(scope, models.Users.ID)),
-				rows.Map(reports.UserSummaries.Email, expr.At(scope, models.Users.Email)),
-				rows.Map(reports.UserSummaries.Nickname, expr.At(scope, models.Users.Nickname)),
-				rows.Map(reports.UserSummaries.Status, expr.At(scope, models.Users.Status)))
+				rows.Map(reports.UserSummaries.ID, expr.At(scope, orm.KeyExpr(models.Users.ID))),
+				rows.Map(reports.UserSummaries.Email, expr.At(scope, orm.TextExpr(models.Users.Email))),
+				rows.Map(reports.UserSummaries.Nickname, expr.At(scope, orm.NullableTextExpr(models.Users.Nickname))),
+				rows.Map(reports.UserSummaries.Status, expr.At(scope, orm.EnumExpr(models.Users.Status))))
 			if _, err := rows.CompileRead(rows.Read(selected)); err != nil {
 				t.Fatalf("ordinary alias rejected: %v", err)
 			}

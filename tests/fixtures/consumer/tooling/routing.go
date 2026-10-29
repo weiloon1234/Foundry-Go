@@ -1,5 +1,7 @@
 package tooling
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 
@@ -16,11 +18,11 @@ func RoutedDatabase(name foundation.ProviderID, key foundation.Key[*database.DB]
 }
 
 func ReadUsers(ctx context.Context, db *database.DB) ([]models.User, error) {
-	return models.Users.Query().Limit(10).All(ctx, db)
+	return orm.All(ctx, db, models.Users.Query().Limit(10))
 }
 
 func ReadPrimaryUsers(ctx context.Context, db *database.DB) ([]models.User, error) {
-	return models.Users.Query().Limit(10).All(ctx, db.Primary())
+	return orm.All(ctx, db.Primary(), models.Users.Query().Limit(10))
 }
 
 func DatabaseEndpoints(ctx context.Context, db *database.DB) ([]database.PoolHealth, database.RoutingStats) {

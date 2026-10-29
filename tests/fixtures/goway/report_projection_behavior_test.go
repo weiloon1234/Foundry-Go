@@ -16,7 +16,7 @@ func TestReportRelationAdapterRejectsForeignDeclaration(t *testing.T) {
 		table := orm.TableOf(b, &o.ID)
 		return models.OrderTable{Table: table, ID: table.Key(), BuyerID: orm.IDOf(b, &o.BuyerID), TotalCents: orm.NumberOf(b, &o.TotalCents), Buyer: orm.OneOf(b, &o.Buyer)}
 	})
-	p := expr.Has(models.UserRelations.Orders, expr.ModelPredicate(foreign.TotalCents.Gt(1)))
+	p := expr.Has(models.UserRelations.Orders, expr.ModelPredicate(orm.NumberGt(foreign.TotalCents, 1)))
 	if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(models.Users.Query()).Where(p))); err == nil {
 		t.Fatal("foreign child declaration accepted")
 	}
@@ -39,8 +39,8 @@ func TestReportEnumPatternCompilerDefense(t *testing.T) {
 	f := orm.Define("report_enum_records", func(b orm.Builder[record], r *record) fields {
 		return fields{orm.TableOf(b, &r.ID), orm.EnumOf(b, &r.State), orm.NullableEnumOf(b, &r.Maybe)}
 	})
-	state, maybe := expr.Value(f.State), expr.Value(f.Maybe)
-	grouped := rowset.GroupBy(rowset.FromModel(f.Query()), expr.Group(expr.Value(f.Key())), expr.Group(state), expr.Group(maybe))
+	state, maybe := expr.Value(orm.EnumExpr(f.State)), expr.Value(orm.NullableEnumExpr(f.Maybe))
+	grouped := rowset.GroupBy(rowset.FromModel(f.Query()), expr.Group(expr.Value(orm.KeyExpr(f.Key()))), expr.Group(state), expr.Group(maybe))
 	for _, p := range []expr.HavingPredicate[record]{
 		expr.TextValue(expr.Row(state).Value()).Contains(models.StatusActive),
 		expr.TextValue(expr.Row(state).Value()).Like(models.StatusActive),

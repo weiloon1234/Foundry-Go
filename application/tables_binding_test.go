@@ -83,10 +83,10 @@ func TestTablesRedactCompiledAndCapturedBindingErrors(t *testing.T) {
 			if cause.formatted != 0 {
 				t.Fatal("table structure validation executed binding")
 			}
-			direct := orm.HasManyOf(fields.Children, fields.Key(), fields.ParentID)
-			through := orm.HasManyThroughOf(fields.Children, fields.Key(), fields.ParentID, fields.Key(), fields.ParentID).Where(fields.Name.Eq("private input"))
-			filtered := fields.Count.Using(expr.Related(direct, expr.Count[row]().Filter(expr.Value(fields.Name).Eq("private input"))))
-			captured := fields.Count.Using(expr.Related(direct, expr.Count[row]().Filter(expr.Param(fields.Name, "private input").IsNull())))
+			direct := orm.HasManyOf(fields.Children, orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID))
+			through := orm.HasManyThroughOf(fields.Children, orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID), orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID)).Where(orm.ColumnEq(fields.Name, "private input"))
+			filtered := fields.Count.Using(expr.Related(direct, expr.Count[row]().Filter(expr.Value(orm.ColumnExpr(fields.Name)).Eq("private input"))))
+			captured := fields.Count.Using(expr.Related(direct, expr.Count[row]().Filter(expr.Param(orm.ColumnExpr(fields.Name), "private input").IsNull())))
 			for _, tc := range []struct {
 				name        string
 				declaration orm.CheckedTable
@@ -104,7 +104,7 @@ func TestTablesRedactCompiledAndCapturedBindingErrors(t *testing.T) {
 					}
 					assertPrivateBindingError(t, err, cause)
 					executor := &bindingExecutor{}
-					_, err = fields.Query().With(tc.relation).All(t.Context(), executor)
+					_, err = orm.All(t.Context(), executor, fields.Query().With(tc.relation))
 					assertPrivateBindingError(t, err, cause)
 					if executor.calls != 0 {
 						t.Fatal("invalid relation acquired database resources")
@@ -112,7 +112,7 @@ func TestTablesRedactCompiledAndCapturedBindingErrors(t *testing.T) {
 				})
 			}
 			executor := &bindingExecutor{}
-			_, err := fields.Query().Where(fields.Name.Eq("private input")).All(t.Context(), executor)
+			_, err := orm.All(t.Context(), executor, fields.Query().Where(orm.ColumnEq(fields.Name, "private input")))
 			assertPrivateBindingError(t, err, cause)
 			if executor.calls != 0 {
 				t.Fatal("invalid predicate acquired database resources")

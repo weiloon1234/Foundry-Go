@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// MemberTable declares stored columns and their write roles. Example: Members.Key().Eq(key).
+// MemberTable declares stored columns and their write roles. Example: orm.KeyEq(Members.Key(), key).
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	Name      orm.InputText[Member, string, string]
@@ -15,7 +15,7 @@ type MemberTable struct {
 	UpdatedAt orm.UpdatedAt[Member, temporal.DateTime]
 }
 
-// Members preserves the persisted time_members model. Example: Members.Query().All(ctx,db).
+// Members preserves the persisted time_members model. Example: orm.All(ctx, db, Members.Query()).
 var Members = declareMembers()
 
 func declareMembers() MemberTable {
@@ -30,14 +30,14 @@ func declareMembers() MemberTable {
 	return fields
 }
 
-// ManualTable declares stored columns and their write roles. Example: Manuals.Key().Eq(key).
+// ManualTable declares stored columns and their write roles. Example: orm.KeyEq(Manuals.Key(), key).
 type ManualTable struct {
 	orm.Table[Manual, model.ID[Manual]]
 	CreatedAt orm.Time[Manual, time.Time]
 	UpdatedAt orm.Time[Manual, temporal.DateTime]
 }
 
-// Manuals preserves the persisted time_manual model. Example: Manuals.Query().All(ctx,db).
+// Manuals preserves the persisted time_manual model. Example: orm.All(ctx, db, Manuals.Query()).
 var Manuals = orm.Define("time_manual", func(b orm.Builder[Manual], m *Manual) ManualTable {
 	return ManualTable{Table: orm.TableOf(b, &m.ID),
 		CreatedAt: orm.TimeOf(b, &m.CreatedAt),

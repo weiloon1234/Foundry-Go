@@ -43,7 +43,7 @@ func TestRetrievalFactoriesAndCallbacksRunAfterCompleteClosedBatch(t *testing.T)
 	db := hookDB(t, testConnector{columns: hookColumns, values: values, onClose: func() { closed++ }}, declaration)
 	wrapper := catchObservers(db, db.FoundryObservers)
 	expected = wrapper
-	items, err := q.Query().All(t.Context(), wrapper)
+	items, err := All(t.Context(), wrapper, q.Query())
 	if err != nil || len(items) != 2 || wrapper.calls != 0 {
 		t.Fatal(err, len(items), wrapper.calls)
 	}
@@ -74,11 +74,11 @@ func TestRetrievalSkipsEmptyFailedAndWriteBatches(t *testing.T) {
 			var err error
 			switch mode {
 			case "write":
-				_, err = q.Insert(t.Context(), db, q.Key().Set(1), q.Name.Set("stored"), q.Body.Set([]byte{1}))
+				_, err = Insert(t.Context(), db, q.Table, KeySet(q.Key(), 1), InputTextSet(q.Name, "stored"), ColumnSet(q.Body, []byte{1}))
 			case "scalar":
-				_, err = q.Query().Count(t.Context(), db)
+				_, err = Count(t.Context(), db, q.Query())
 			default:
-				_, err = q.Query().All(t.Context(), db)
+				_, err = All(t.Context(), db, q.Query())
 			}
 			if (mode == "decode" || mode == "close") != (err != nil) || factories != 0 {
 				t.Fatal(err, factories)
@@ -108,9 +108,9 @@ func TestRetrievalRawAndObserverOnlyStreaming(t *testing.T) {
 			var statements []string
 			db := hookDB(t, testConnector{statements: &statements, columns: hookColumns, values: hookValues("stored", nil, nil), onClose: func() { closed++ }}, declaration)
 			if raw {
-				_, err = q.Raw(t.Context(), db, `SELECT * FROM hooked`)
+				_, err = Raw(t.Context(), db, q.Table, `SELECT * FROM hooked`)
 			} else {
-				err = q.Query().Each(t.Context(), db, func(hookedRow) error {
+				err = Each(t.Context(), db, q.Query(), func(hookedRow) error {
 					if closed != 1 || calls != 1 {
 						t.Error("stream delivered before retrieval/closure")
 					}
@@ -152,7 +152,7 @@ func TestRetrievalFailureRedactionIsolationAndReuse(t *testing.T) {
 				}
 				return hookColumns, hookValues("stored", nil, nil)
 			}})
-			items, err := q.Query().All(ctx, db)
+			items, err := All(ctx, db, q.Query())
 			if err == nil || items != nil {
 				t.Fatal("failed callback published results", err)
 			}
@@ -165,7 +165,7 @@ func TestRetrievalFailureRedactionIsolationAndReuse(t *testing.T) {
 				}
 			}
 			// Scope failure releases ownership and leaves the same pool usable.
-			if _, err = q.Query().Count(t.Context(), db); err != nil {
+			if _, err = Count(t.Context(), db, q.Query()); err != nil {
 				t.Fatal(err)
 			}
 		})

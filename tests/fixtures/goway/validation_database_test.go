@@ -85,18 +85,18 @@ func compareObservation[V comparable](t *testing.T, ctx context.Context, current
 }
 
 func TestValidationDatabaseObservationParity(t *testing.T) {
-	compareObservation(t, t.Context(), orm.Lookup(models.Users.Query().Where(models.Users.Status.Eq(models.StatusActive)), models.Users.Email), "literal_%!'@example.test")
-	compareObservation(t, t.Context(), orm.Lookup(models.Users.Query(), models.Users.Nickname), "member")
+	compareObservation(t, t.Context(), orm.Lookup(models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)), orm.TextExpr(models.Users.Email)), "literal_%!'@example.test")
+	compareObservation(t, t.Context(), orm.Lookup(models.Users.Query(), orm.NullableTextExpr(models.Users.Nickname)), "member")
 	amount := must(decimal.Parse("9007199254740993.123456789012345678901"))
-	compareObservation(t, t.Context(), orm.Lookup(models.LedgerEntries.Query(), models.LedgerEntries.Amount), amount)
-	compareObservation(t, t.Context(), orm.Lookup(hooks.Members.Query(), hooks.Members.Note), coremodels.StoredLabel("stored"))
-	compareObservation(t, t.Context(), orm.Lookup(hooks.Members.Query().WithTrashed(), hooks.Members.Name), "name")
+	compareObservation(t, t.Context(), orm.Lookup(models.LedgerEntries.Query(), orm.NumberExpr(models.LedgerEntries.Amount)), amount)
+	compareObservation(t, t.Context(), orm.Lookup(hooks.Members.Query(), orm.NullableInputTextExpr(hooks.Members.Note)), coremodels.StoredLabel("stored"))
+	compareObservation(t, t.Context(), orm.Lookup(hooks.Members.Query().WithTrashed(), orm.InputTextExpr(hooks.Members.Name)), "name")
 }
 func TestValidationDatabaseGlobalScopesWithoutRetrieval(t *testing.T) {
 	for _, tenant := range []int64{7, 19} {
 		trace := []string{}
 		ctx := coremodels.LifecycleContext(coremodels.TenantContext(t.Context(), tenant), &trace)
-		compareObservation(t, ctx, orm.Lookup(reads.Members.Query(), reads.Members.Name), "member")
+		compareObservation(t, ctx, orm.Lookup(reads.Members.Query(), orm.TextExpr(reads.Members.Name)), "member")
 		if len(trace) != 0 {
 			t.Fatalf("observation ran model lifecycle: %v", trace)
 		}
@@ -110,8 +110,8 @@ func TestValidationDatabaseRulesAndDescriptions(t *testing.T) {
 		g.reply = func(string, []driver.NamedValue) ([]string, [][]driver.Value) {
 			return []string{"exists"}, [][]driver.Value{{found}}
 		}
-		current := dbvalidation.Lookup(db, models.Users.Query(), models.Users.Email)
-		for _, rule := range []validation.Rule[string]{dbvalidation.Exists(db, models.Users.Query(), models.Users.Email), dbvalidation.Unique(db, models.Users.Query(), models.Users.Email)} {
+		current := dbvalidation.Lookup(db, models.Users.Query(), orm.TextExpr(models.Users.Email))
+		for _, rule := range []validation.Rule[string]{dbvalidation.Exists(db, models.Users.Query(), orm.TextExpr(models.Users.Email)), dbvalidation.Unique(db, models.Users.Query(), orm.TextExpr(models.Users.Email))} {
 			before := g.statements
 			if !oracleEqual(t, "validation_database/value1", oracleSnapshot(must(validation.DescribeRule(rule)))) {
 				t.Fatal("rule metadata changed")

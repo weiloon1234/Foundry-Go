@@ -9,4 +9,4 @@ import (
 
 type input struct{ Text string }
 
-var _ = expr.Avg(orm.InputTime[models.User, input, time.Time]{})
+var _ = expr.Avg(orm.InputTimeExpr(orm.InputTime[models.User, input, time.Time]{}))

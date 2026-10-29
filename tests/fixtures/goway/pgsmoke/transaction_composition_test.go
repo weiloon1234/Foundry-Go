@@ -23,15 +23,15 @@ func TestStage6b4TransactionComposition(t *testing.T) {
 		return treeTable{orm.TableOf(b, &r.ID), orm.NumberOf(b, &r.ParentID)}
 	})
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
-		a := rows.AsTransaction[joinLeft](rows.LockedRecord(table.Query().Where(table.ParentID.Eq(0)).ForUpdate()), "parent")
+		a := rows.AsTransaction[joinLeft](rows.LockedRecord(orm.Lock(table.Query().Where(orm.NumberEq(table.ParentID, 0)))), "parent")
 		b := rows.AsTransaction[joinRight](rows.TransactionOf(rows.ModelRecord(table.Query())), "child")
 		c := rows.TransactionCorrelate(a, b)
 		os, is := rows.TransactionOuterScope(c, rows.TransactionScope(a)), rows.TransactionInnerScope(c, rows.TransactionScope(b))
-		c = c.Where(expr.Equal(expr.At(is, table.ParentID), expr.At(os, table.Key())))
-		record := rows.SelectTransactionCorrelatedRecord(c, is).OrderBy(expr.At(is, table.Key()).Desc()).Limit(1).ForUpdate().Of(rows.Target(is)).SkipLocked()
+		c = c.Where(expr.Equal(expr.At(is, orm.NumberExpr(table.ParentID)), expr.At(os, orm.KeyExpr(table.Key()))))
+		record := rows.SelectTransactionCorrelatedRecord(c, is).OrderBy(expr.At(is, orm.KeyExpr(table.Key())).Desc()).Limit(1).ForUpdate().Of(rows.Target(is)).SkipLocked()
 		lat := rows.AsTransactionLateral[joinThird](record, "latest")
 		joined := rows.TransactionLeftJoinLateral(a, lat)
-		selected := rows.SelectTransactionValue(joined, expr.Row(expr.AtNullable(rows.NullableRightScope(joined, rows.TransactionLateralScope(lat)), table.Key())).Value()).OrderBy(expr.At(rows.LeftScope(joined, rows.TransactionScope(a)), table.Key()).Asc())
+		selected := rows.SelectTransactionValue(joined, expr.Row(expr.AtNullable(rows.NullableRightScope(joined, rows.TransactionLateralScope(lat)), orm.KeyExpr(table.Key()))).Value()).OrderBy(expr.At(rows.LeftScope(joined, rows.TransactionScope(a)), orm.KeyExpr(table.Key())).Asc())
 		got, err := selected.All(ctx, tx)
 		if err != nil {
 			return err
@@ -39,7 +39,7 @@ func TestStage6b4TransactionComposition(t *testing.T) {
 		if !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(3)), value.Null[int64]()}) {
 			t.Fatal(got)
 		}
-		scalar := rows.SelectTransactionCorrelatedScalar(c, expr.Row(expr.At(is, table.Key())).Value()).OrderBy(expr.At(is, table.Key()).Asc()).Limit(1).ForShare()
+		scalar := rows.SelectTransactionCorrelatedScalar(c, expr.Row(expr.At(is, orm.KeyExpr(table.Key()))).Value()).OrderBy(expr.At(is, orm.KeyExpr(table.Key())).Asc()).Limit(1).ForShare()
 		got, err = rows.SelectTransactionValue(a, rows.TransactionCorrelatedScalarRowQuery(scalar).Value()).Where(c.Exists()).All(ctx, tx)
 		if err != nil {
 			return err
@@ -47,9 +47,9 @@ func TestStage6b4TransactionComposition(t *testing.T) {
 		if !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(2))}) {
 			t.Fatal(got)
 		}
-		ids := rows.SelectTransactionValue(b, expr.Row(expr.At(rows.TransactionScope(b), table.ParentID)).Value()).Where(expr.Greater(expr.At(rows.TransactionScope(b), table.ParentID), expr.Row(expr.At(rows.TransactionScope(b), table.ParentID)).Value().Param(0)))
+		ids := rows.SelectTransactionValue(b, expr.Row(expr.At(rows.TransactionScope(b), orm.NumberExpr(table.ParentID))).Value()).Where(expr.Greater(expr.At(rows.TransactionScope(b), orm.NumberExpr(table.ParentID)), expr.Row(expr.At(rows.TransactionScope(b), orm.NumberExpr(table.ParentID))).Value().Param(0)))
 		independent := rows.TransactionScalarOf(ids).ForShare()
-		parents, err := rows.SelectTransactionRecord(a, rows.TransactionScope(a)).Where(rows.TransactionInQuery(expr.At(rows.TransactionScope(a), table.Key()), independent), rows.TransactionExistsQuery(a, independent)).All(ctx, tx)
+		parents, err := rows.SelectTransactionRecord(a, rows.TransactionScope(a)).Where(rows.TransactionInQuery(expr.At(rows.TransactionScope(a), orm.KeyExpr(table.Key())), independent), rows.TransactionExistsQuery(a, independent)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func TestStage6b4TransactionComposition(t *testing.T) {
 		return nil
 	}))
 	// Reads and nested locks must leave persisted data intact after the caller commits.
-	n, err := table.Query().Count(ctx, db)
+	n, err := orm.Count(ctx, db, table.Query())
 	must(t, err)
 	if n != 4 {
 		t.Fatal(n)

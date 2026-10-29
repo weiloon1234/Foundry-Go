@@ -27,12 +27,12 @@ func TestScopePropagationProjectionJoinsAggregatesAndRelationBypasses(t *testing
 	db := capture.open(ctx)
 	defer db.Close(context.Background())
 	// Projection and scalar results carry model source predicates, never retrieval.
-	_, err := rowset.Read(rowset.SelectValue(n.Members.Query(), n.Members.Name)).All(ctx, db)
+	_, err := rowset.Read(rowset.SelectValue(n.Members.Query(), orm.TextExpr(n.Members.Name))).All(ctx, db)
 	check(err)
 	left := rowset.As[readSide](orm.WithScopeContext(n.Members.Query(), coremodels.TenantContext(ctx, 99)), "m")
 	right := rowset.As[groupSide](n.Groups.Query(), "g")
-	joined := rowset.InnerJoin(left, right, rowset.On(expr.At(rowset.Scope(left), n.Members.ID), expr.At(rowset.Scope(right), n.Groups.ID)))
-	name := expr.At(rowset.LeftScope(joined, rowset.Scope(left)), n.Members.Name)
+	joined := rowset.InnerJoin(left, right, rowset.On(expr.At(rowset.Scope(left), orm.KeyExpr(n.Members.ID)), expr.At(rowset.Scope(right), orm.KeyExpr(n.Groups.ID))))
+	name := expr.At(rowset.LeftScope(joined, rowset.Scope(left)), orm.TextExpr(n.Members.Name))
 	_, err = rowset.Read(rowset.Select(joined, readNames, rowset.Map(readNames.Name, name))).All(ctx, db)
 	check(err)
 	_, err = rowset.Read(rowset.Select(left, readCounts, rowset.MapSelected(readCounts.Count, expr.Count[rowset.Alias[readSide, n.Member]]().Value()))).All(ctx, db)
@@ -41,10 +41,10 @@ func TestScopePropagationProjectionJoinsAggregatesAndRelationBypasses(t *testing
 		t.Fatal("projection lost scope or retrieved", trace, capture.output.String())
 	}
 	// A relation keeps its concrete methods after the package-level bypass.
-	targetOff := orm.WithoutRelationGlobalScope(n.MemberGroups, n.GroupTenant(n.Groups)).Where(n.Groups.Name.Eq("group"))
+	targetOff := orm.WithoutRelationGlobalScope(n.MemberGroups, n.GroupTenant(n.Groups)).Where(orm.TextEq(n.Groups.Name, "group"))
 	pivotOff := orm.WithoutPivotGlobalScope(n.MemberGroups, n.MembershipTenant(n.Memberships))
 	allOff := orm.WithoutPivotGlobalScopes(orm.WithoutRelationGlobalScopes(n.MemberGroups))
-	directOff := orm.WithoutRelationGlobalScopes(n.Manager).Where(n.Members.Name.Eq("manager"))
+	directOff := orm.WithoutRelationGlobalScopes(n.Manager).Where(orm.TextEq(n.Members.Name, "manager"))
 	for i, p := range []orm.Predicate[n.Member]{orm.Has(targetOff), orm.Has(pivotOff), orm.Has(allOff), orm.Has(directOff)} {
 		s, err := orm.Compile(orm.WithScopeContext(n.Members.Query().Where(p), ctx))
 		check(err)
@@ -98,7 +98,7 @@ func TestJoinedRetrievalCallbacksVisitOnlyCurrentBatch(t *testing.T) {
 	check(db.Start(ctx))
 	limits := orm.DefaultRelationLimits()
 	limits.BatchSize = 1
-	items, err := orm.WithRelationLimits(n.Members.Query().With(n.MemberGroups), limits).All(ctx, db)
+	items, err := orm.All(ctx, db, orm.WithRelationLimits(n.Members.Query().With(n.MemberGroups), limits))
 	check(err)
 	if len(items) != 2 || batches != 2 || !reflect.DeepEqual(targets, []int64{11, 12}) || !reflect.DeepEqual(pivots, []int64{21, 22}) {
 		t.Fatalf("batch callbacks repeated or lost rows: parents=%d batches=%d targets=%v pivots=%v", len(items), batches, targets, pivots)

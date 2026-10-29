@@ -1,5 +1,7 @@
 package nullable_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"testing"
 
@@ -21,14 +23,14 @@ func checkNullableCorrelation(t *testing.T, tx *database.Tx) error {
 	users := rows.As[buyerAlias](models.Users.Query(), "outer_user")
 	sponsors := rows.As[sponsorQueryAlias](models.Users.Query(), "outer_sponsor")
 	u, s := rows.Scope(users), rows.Scope(sponsors)
-	joined := rows.LeftJoin(users, sponsors, rows.On(expr.At(u, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
+	joined := rows.LeftJoin(users, sponsors, rows.On(expr.At(u, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(s, orm.KeyExpr(models.Users.ID))))
 	link := rows.Correlate(joined, rows.From(models.Orders.Query()))
 	sponsorScope := rows.NullableRightScope(joined, rows.Scope(sponsors))
 	sponsor := rows.OuterNullableScope(link, sponsorScope)
 	order := rows.InnerScope(link, rows.ModelScope(models.Orders.Query()))
-	count := rows.SelectCorrelatedScalar(link, expr.CountFieldAt(order, models.Orders.ID).Value()).Where(expr.Equal(expr.NullableRow(expr.At(order, models.Orders.BuyerID)), expr.AtNullable(sponsor, models.Users.ID)))
+	count := rows.SelectCorrelatedScalar(link, expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID)).Value()).Where(expr.Equal(expr.NullableRow(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID))), expr.AtNullable(sponsor, orm.KeyExpr(models.Users.ID))))
 	outerUser := rows.LeftScope(joined, rows.Scope(users))
-	values, err := rows.ReadScalar(rows.SelectScalar(joined, rows.CorrelatedScalarRowQuery(count).Value())).OrderBy(expr.At(outerUser, models.Users.Email).Asc()).All(t.Context(), tx)
+	values, err := rows.ReadScalar(rows.SelectScalar(joined, rows.CorrelatedScalarRowQuery(count).Value())).OrderBy(expr.At(outerUser, orm.TextExpr(models.Users.Email)).Asc()).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
@@ -46,9 +48,9 @@ func checkNullableCorrelation(t *testing.T, tx *database.Tx) error {
 	outerOrder := rows.OuterScope(innerJoin, rows.ModelScope(models.Orders.Query()))
 	innerUser := rows.InnerScope(innerJoin, rows.LeftScope(joined, rows.Scope(users)))
 	innerSponsor := rows.InnerNullableScope(innerJoin, sponsorScope)
-	emails := rows.SelectCorrelatedScalar(innerJoin, expr.Row(expr.AtNullable(innerSponsor, models.Users.Email)).Value()).Where(expr.Equal(expr.At(innerUser, models.Users.ID), expr.At(outerOrder, models.Orders.BuyerID)))
+	emails := rows.SelectCorrelatedScalar(innerJoin, expr.Row(expr.AtNullable(innerSponsor, orm.TextExpr(models.Users.Email))).Value()).Where(expr.Equal(expr.At(innerUser, orm.KeyExpr(models.Users.ID)), expr.At(outerOrder, orm.ColumnExpr(models.Orders.BuyerID))))
 	selected, err := rows.ReadScalar(rows.SelectScalar(rows.From(models.Orders.Query()), rows.CorrelatedScalarNullableRowQuery(emails).Value())).
-		OrderBy(expr.Value(models.Orders.TotalCents).Asc()).All(t.Context(), tx)
+		OrderBy(expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Asc()).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}

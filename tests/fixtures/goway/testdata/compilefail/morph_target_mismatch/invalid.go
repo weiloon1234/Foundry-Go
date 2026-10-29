@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.MorphToOf(j.Pivots.MorphParent, j.Pivots.ParentID, j.Pivots.Kind, j.Targets.ID)
+var _ = orm.MorphToOf(j.Pivots.MorphParent, orm.NullableNumberExpr(j.Pivots.ParentID), orm.ColumnExpr(j.Pivots.Kind), orm.KeyExpr(j.Targets.ID))

@@ -10,6 +10,6 @@ import (
 
 func Run(ctx context.Context, ex database.Executor) ([]models.User, error) {
 	r := models.UserRelations.Orders
-	r = r.Where(expr.RelationFilter(r, expr.OrderRow(expr.Value(models.Orders.TotalCents)).Gt(100)))
-	return models.Users.Query().Where(orm.Has(r)).With(r).All(ctx, ex)
+	r = r.Where(expr.RelationFilter(r, expr.OrderRow(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Gt(100)))
+	return orm.All(ctx, ex, models.Users.Query().Where(orm.Has(r)).With(r))
 }

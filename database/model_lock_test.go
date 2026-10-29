@@ -1,5 +1,7 @@
 package database_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -13,8 +15,8 @@ import (
 )
 
 func TestLockedReadsRequireTransactionAndDiscardPartialHydration(t *testing.T) {
-	q := mutationModel().ForUpdate()
-	if _, err := q.All(t.Context(), nil); !errors.Is(err, fault.Invalid) {
+	q := orm.Lock(mutationModel())
+	if _, err := orm.AllLocked(t.Context(), nil, q); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil lock transaction accepted", err)
 	}
 	for _, test := range []struct {
@@ -35,7 +37,7 @@ func TestLockedReadsRequireTransactionAndDiscardPartialHydration(t *testing.T) {
 			}
 			db := open(t, state, nil)
 			err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-				items, err := q.All(t.Context(), tx)
+				items, err := orm.AllLocked(t.Context(), tx, q)
 				if err == nil || items != nil {
 					t.Fatal("failed locked read exposed partial models", err)
 				}
@@ -64,7 +66,7 @@ func TestLockedFirstSharesOrderingAndCallerTransaction(t *testing.T) {
 	var escaped *database.Tx
 	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
 		escaped = tx
-		m, err := mutationModel().ForKeyShare().Require(t.Context(), tx)
+		m, err := orm.RequireLocked(t.Context(), tx, orm.ForKeyShare(mutationModel()))
 		if err != nil || m.ID != 7 {
 			t.Fatal("locked hydration failed", err)
 		}
@@ -73,19 +75,19 @@ func TestLockedFirstSharesOrderingAndCallerTransaction(t *testing.T) {
 	if err != nil || state.committed.Load() != 1 {
 		t.Fatal("lock read owns another transaction", err)
 	}
-	if _, err := mutationModel().ForUpdate().All(t.Context(), escaped); !errors.Is(err, database.Closed) {
+	if _, err := orm.AllLocked(t.Context(), escaped, orm.Lock(mutationModel())); !errors.Is(err, database.Closed) {
 		t.Fatal("escaped transaction reused", err)
 	}
-	if _, err := mutationModel().ForUpdate().All(nil, escaped); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.AllLocked(nil, escaped, orm.Lock(mutationModel())); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil context accepted", err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := mutationModel().ForUpdate().All(ctx, escaped); !errors.Is(err, context.Canceled) {
+	if _, err := orm.AllLocked(ctx, escaped, orm.Lock(mutationModel())); !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled query changed error", err)
 	}
 	id := mutationFields.Key()
-	if _, err := rows.ForUpdate(rows.Read(rows.SelectValue(mutationModel(), id))).All(t.Context(), nil); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.ForUpdate(rows.Read(rows.SelectValue(mutationModel(), orm.KeyExpr(id)))).All(t.Context(), nil); !errors.Is(err, fault.Invalid) {
 		t.Fatal("scalar locked read accepted nil transaction", err)
 	}
 }

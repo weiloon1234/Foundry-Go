@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/consumer/models"
@@ -9,5 +11,5 @@ import (
 )
 
 func invalid(ctx context.Context, executor *database.Session) {
-	_, _ = rows.LockRows(rows.ReadScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Email)).Value())), rows.UpdateLock(rows.Target(rows.ModelScope(models.Users.Query())))).All(ctx, executor)
+	_, _ = rows.LockRows(rows.ReadScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(orm.TextExpr(models.Users.Email))).Value())), rows.UpdateLock(rows.Target(rows.ModelScope(models.Users.Query())))).All(ctx, executor)
 }

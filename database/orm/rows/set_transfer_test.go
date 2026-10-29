@@ -13,10 +13,10 @@ import (
 
 func TestSetInputAndOutputWindows(t *testing.T) {
 	m := declareMembers()
-	a := ModelRecord(m.Query().Where(orm.NumberKey(m.Key()).Gt(5)).OrderBy(m.ID.Asc()).Limit(2).Offset(1))
-	b := ModelRecord(m.Query().Where(m.ID.Eq(9)))
+	a := ModelRecord(m.Query().Where(orm.NumberKeyGt(orm.NumberKey(m.Key()), 5)).OrderBy(orm.KeyAsc(m.ID)).Limit(2).Offset(1))
+	b := ModelRecord(m.Query().Where(orm.KeyEq(m.ID, 9)))
 	base := Union(a, b)
-	id := expr.At(base.Scope(), m.ID)
+	id := expr.At(base.Scope(), orm.KeyExpr(m.ID))
 	q := base.Where(expr.OrderRow(id).Gt(20)).OrderBy(id.Desc()).Limit(7)
 	s, e := CompileRead(ReadSet(q))
 	if e != nil || !reflect.DeepEqual(s.Arguments(), []any{int64(5), int64(2), int64(1), int64(9), int64(20), int64(7)}) || !strings.Contains(s.SQL(), `LIMIT $2 OFFSET $3) UNION (`) || !strings.Contains(s.SQL(), `ORDER BY "foundry_set"."id" DESC LIMIT $6`) {
@@ -61,7 +61,7 @@ func TestSetRejectsInvalidLayoutsAndBounds(t *testing.T) {
 	}
 	d := recursionTable
 	source := From(d.Query())
-	wide := WhereScalar(SelectScalar(source, expr.Row(expr.Value(d.Key())).Value()), recursionWide(ModelScope(d.Query()), querycore.MaxParameters/2+1))
+	wide := WhereScalar(SelectScalar(source, expr.Row(expr.Value(orm.KeyExpr(d.Key()))).Value()), recursionWide(ModelScope(d.Query()), querycore.MaxParameters/2+1))
 	v := Values(wide)
 	if _, e := CompileRead(ReadScalar(wide)); e != nil {
 		t.Fatal("half budget", e)

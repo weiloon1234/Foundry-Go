@@ -24,13 +24,13 @@ func TestScopeBridgeRejectsZeroCapabilityWithValidMetadata(t *testing.T) {
 
 func TestModelBridgesRejectZeroCapabilityWithValidMetadata(t *testing.T) {
 	o := declareOrders()
-	amount := expr.Value(o.MemberID)
+	amount := expr.Value(orm.NumberExpr(o.MemberID))
 	predicate := expr.FoundryPredicate(amount.Eq(1), sqlowner.Expressions())
 	orderBy := expr.FoundryOrder(amount.Asc(), sqlowner.Expressions())
 	var zero sqlowner.QuerySeal
 	for _, q := range []orm.Query[order]{orm.FoundryWhere(o.Query(), predicate, zero), orm.FoundryOrderBy(o.Query(), orderBy, zero)} {
 		state := &driverState{}
-		got, err := q.All(t.Context(), openTest(t, state))
+		got, err := orm.All(t.Context(), openTest(t, state), q)
 		if !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 			t.Fatal("zero capability applied valid metadata", got, err, state.sql)
 		}
@@ -40,7 +40,7 @@ func TestModelBridgesRejectZeroCapabilityWithValidMetadata(t *testing.T) {
 func TestNullableScopeBridgesRejectZeroCapability(t *testing.T) {
 	m := declareMembers()
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
-	j := LeftJoin(a, b, On(expr.At(Scope(a), m.ID), expr.At(Scope(b), m.ID)))
+	j := LeftJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))))
 	scope := NullableRightScope(j, Scope(b))
 	metadata := expr.FoundryNullableScopeData(scope, sqlowner.Expressions())
 	var zero sqlowner.ExpressionSeal
@@ -57,8 +57,8 @@ func TestNullableScopeBridgesRejectZeroCapability(t *testing.T) {
 
 func TestSubqueryBridgesRejectZeroCapabilities(t *testing.T) {
 	m := declareMembers()
-	v := expr.Row(expr.Value(m.ID)).Value()
-	row := expr.Value(m.ID)
+	v := expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()
+	row := expr.Value(orm.KeyExpr(m.ID))
 	core := expr.FoundrySelected(v, sqlowner.Expressions())
 	column := expr.FoundrySelectedColumn(v, sqlowner.Expressions())
 	var zero sqlowner.ExpressionSeal

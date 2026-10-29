@@ -60,46 +60,83 @@ func TestHandwrittenModelsAndAssignments(t *testing.T) {
 		t.Fatal(err)
 	}
 	fields := models.Users
-	q := fields.Query().Where(fields.ID.Eq(id), orm.Or(fields.Email.Contains("@example.test"), fields.Nickname.IsNull()), fields.Age.Gte(18), fields.Status.Eq(models.StatusActive)).OrderBy(fields.Age.Desc())
+	q := fields.Query().Where(orm.KeyEq(fields.ID, id), orm.Or(orm.TextContains(fields.Email, "@example.test"), orm.NullableTextIsNull(fields.Nickname)), orm.NumberGte(fields.Age, 18), orm.EnumEq(fields.Status, models.StatusActive)).OrderBy(orm.NumberDesc(fields.Age))
 	if statement, err := orm.Compile(q); err != nil || !strings.Contains(statement.SQL(), `"users"`) {
 		t.Fatalf("query declaration: %v", err)
 	}
-	if _, err := orm.Compile(models.Countries.Query().Where(models.Countries.Code.Eq(models.CountryCode("MY")))); err != nil {
+	if _, err := orm.Compile(models.Countries.Query().Where(orm.KeyEq(models.Countries.Code, models.CountryCode("MY")))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := orm.Compile(fields.Query().Where(fields.IntroducerID.Eq(id))); err != nil {
+	if _, err := orm.Compile(fields.Query().Where(orm.NullableColumnEq(fields.IntroducerID, id))); err != nil {
 		t.Fatal("self-reference lost its owner")
 	}
 	var base []orm.Assignment[models.User]
-	changed := append(base, userIdentityAssignment(id), fields.Age.Set(0), fields.Email.Set(""), fields.Nickname.SetNull(), fields.IntroducerID.Set(id))
+	changed := append(base, userIdentityAssignment(id), orm.NumberSet(fields.Age, 0), orm.TextSet(fields.Email, ""), orm.NullableTextSetNull(fields.Nickname), orm.NullableColumnSet(fields.IntroducerID, id))
 	if len(base) != 0 || len(changed) != 5 {
 		t.Fatal("assignment derivation mutated original")
 	}
 	inspectInsertAssignments(t, fields.Table, changed, func(write *orm.Write[models.User]) {
-		if v, ok := orm.WriteGet(write, fields.ID.Set).Get(); !ok || v != id {
+		if v, ok := orm.WriteGet(write, func() func(arg0 model.ID[models.User]) orm.Assignment[models.User] {
+			receiver := fields.ID
+			return func(arg0 model.ID[models.User]) orm.Assignment[models.User] { return orm.KeySet(receiver, arg0) }
+		}()).Get(); !ok || v != id {
 			t.Error("typed identity input lost")
 		}
-		if v, ok := orm.WriteGet(write, fields.Age.Set).Get(); !ok || v != 0 {
+		if v, ok := orm.WriteGet(write, func() func(arg0 int) orm.Assignment[models.User] {
+			receiver := fields.Age
+			return func(arg0 int) orm.Assignment[models.User] { return orm.NumberSet(receiver, arg0) }
+		}()).Get(); !ok || v != 0 {
 			t.Error("explicit zero lost")
 		}
-		if v, ok := orm.WriteGet(write, fields.Email.Set).Get(); !ok || v != "" {
+		if v, ok := orm.WriteGet(write, func() func(arg0 string) orm.Assignment[models.User] {
+			receiver := fields.Email
+			return func(arg0 string) orm.Assignment[models.User] { return orm.TextSet(receiver, arg0) }
+		}()).Get(); !ok || v != "" {
 			t.Error("explicit empty string lost")
 		}
-		if v, ok := orm.WriteNullableGet(write, fields.Nickname.Set).Get(); !ok || !v.IsNull() {
+		if v, ok := orm.WriteNullableGet(write, func() func(arg0 string) orm.Assignment[models.User] {
+			receiver := fields.Nickname
+			return func(arg0 string) orm.Assignment[models.User] { return orm.NullableTextSet(receiver, arg0) }
+		}()).Get(); !ok || !v.IsNull() {
 			t.Error("explicit null lost")
 		}
-		if v, ok := orm.WriteNullableGet(write, fields.IntroducerID.Set).Get(); !ok || v != value.Of(id) {
+		if v, ok := orm.WriteNullableGet(write, func() func(arg0 model.ID[models.User]) orm.Assignment[models.User] {
+			receiver := fields.IntroducerID
+			return func(arg0 model.ID[models.User]) orm.Assignment[models.User] {
+				return orm.NullableColumnSet(receiver, arg0)
+			}
+		}()).Get(); !ok || v != value.Of(id) {
 			t.Error("typed self-reference input lost")
 		}
-		if err := orm.WriteUnset(write, fields.Nickname.Set); err != nil {
+		if err := orm.WriteUnset(write, func() func(arg0 string) orm.Assignment[models.User] {
+			receiver := fields.Nickname
+			return func(arg0 string) orm.Assignment[models.User] { return orm.NullableTextSet(receiver, arg0) }
+		}()); err != nil {
 			t.Error(err)
 		}
-		if orm.WriteNullableGet(write, fields.Nickname.Set).IsSet() {
+		if orm.WriteNullableGet(write, func() func(arg0 string) orm.Assignment[models.User] {
+			receiver := fields.Nickname
+			return func(arg0 string) orm.Assignment[models.User] { return orm.NullableTextSet(receiver, arg0) }
+		}()).IsSet() {
 			t.Error("unset nickname remained supplied")
 		}
 	})
 	inspectInsertAssignments(t, fields.Table, base, func(write *orm.Write[models.User]) {
-		if orm.WriteIsSet(write, fields.Age.Set) || orm.WriteIsSet(write, fields.Email.Set) || orm.WriteIsSet(write, fields.Nickname.Set) || orm.WriteIsSet(write, fields.IntroducerID.Set) {
+		if orm.WriteIsSet(write, func() func(arg0 int) orm.Assignment[models.User] {
+			receiver := fields.Age
+			return func(arg0 int) orm.Assignment[models.User] { return orm.NumberSet(receiver, arg0) }
+		}()) || orm.WriteIsSet(write, func() func(arg0 string) orm.Assignment[models.User] {
+			receiver := fields.Email
+			return func(arg0 string) orm.Assignment[models.User] { return orm.TextSet(receiver, arg0) }
+		}()) || orm.WriteIsSet(write, func() func(arg0 string) orm.Assignment[models.User] {
+			receiver := fields.Nickname
+			return func(arg0 string) orm.Assignment[models.User] { return orm.NullableTextSet(receiver, arg0) }
+		}()) || orm.WriteIsSet(write, func() func(arg0 model.ID[models.User]) orm.Assignment[models.User] {
+			receiver := fields.IntroducerID
+			return func(arg0 model.ID[models.User]) orm.Assignment[models.User] {
+				return orm.NullableColumnSet(receiver, arg0)
+			}
+		}()) {
 			t.Error("assignment derivation populated the original input")
 		}
 	})
@@ -109,7 +146,10 @@ func TestBusinessAssignmentHelpers(t *testing.T) {
 	for _, email := range []string{"typed", ""} {
 		assignment := (models.User{Email: email}).CurrentEmailAssignment()
 		inspectInsertAssignments(t, models.Users.Table, []orm.Assignment[models.User]{assignment}, func(write *orm.Write[models.User]) {
-			if got, set := orm.WriteGet(write, models.Users.Email.Set).Get(); !set || got != email {
+			if got, set := orm.WriteGet(write, func() func(arg0 string) orm.Assignment[models.User] {
+				receiver := models.Users.Email
+				return func(arg0 string) orm.Assignment[models.User] { return orm.TextSet(receiver, arg0) }
+			}()).Get(); !set || got != email {
 				t.Error("handwritten business method lost its supplied input")
 			}
 		})

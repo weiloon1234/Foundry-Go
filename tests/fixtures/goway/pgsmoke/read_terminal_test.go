@@ -31,7 +31,7 @@ func TestStage9ReadTerminalsReleaseSessions(t *testing.T) {
 		}}
 	}))
 	a := rows.AsRecord[joinLeft](rows.CTE("eligible", rows.ModelRecord(table.Query())), "n")
-	q := rows.SelectRecord(a, rows.Scope(a)).OrderBy(expr.At(rows.Scope(a), table.Key()).Asc()).Offset(3).Limit(205)
+	q := rows.SelectRecord(a, rows.Scope(a)).OrderBy(expr.At(rows.Scope(a), orm.KeyExpr(table.Key())).Asc()).Offset(3).Limit(205)
 	must(t, rows.PreflightRead(ctx, q))
 	if _, err := rows.CompileRead(q); err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestStage9ReadTerminalsReleaseSessions(t *testing.T) {
 		if err := rows.EachRead(ctx, s, q, func(treeNode) error { return stop }); !errors.Is(err, stop) {
 			t.Fatal(err)
 		}
-		scalar := rows.ReadScalar(rows.SelectScalar(a, expr.Row(expr.At(rows.Scope(a), table.Key())).Value()))
+		scalar := rows.ReadScalar(rows.SelectScalar(a, expr.Row(expr.At(rows.Scope(a), orm.KeyExpr(table.Key()))).Value()))
 		if err := rows.EachRead(ctx, s, scalar, func(int64) error { return stop }); !errors.Is(err, stop) {
 			t.Fatal(err)
 		}

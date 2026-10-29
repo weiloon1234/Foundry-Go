@@ -147,7 +147,7 @@ before both recipient quota and lookup.
 
 `passwordreset.Model[M,K]` requires:
 
-- `Lock(ctx, tx, key)` using a scoped `Where(key.Eq(id)).ForUpdate().First` query.
+- `Lock(ctx, tx, key)` using a scoped `orm.FirstLocked(ctx, tx, orm.Lock(q.Where(orm.KeyEq(key, id))))` read.
 - `Email(model)`, `EmailRevision(model)` and `Hash(model)` reading stored fields.
   The revision is a nonzero persisted `challenge.Revision[M]`, replaced in the
   model transaction whenever its email changes.

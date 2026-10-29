@@ -39,9 +39,9 @@ A pool read has no implicit write transaction, so earlier callback side effects 
 
 Model reads, complete-record selections, pages and relation loads carry retrieval metadata. Set results use the first input's decoder and lifecycle declaration; SQL inputs do not dispatch independently. Through relations dispatch target and pivot roles. `orm.LoadFrom` and `orm.LoadMissingFrom` do not redispatch retrieval for supplied parent models.
 
-`Table.Raw` hydrates complete models and dispatches retrieval, but bypasses all automatic scopes. Callers must supply tenant and visibility predicates themselves. DTO projections, scalars, `rows.Raw`, write candidate hydration and SQL `RETURNING` skip retrieval callbacks.
+`orm.Raw` hydrates complete models and dispatches retrieval, but bypasses all automatic scopes. Callers must supply tenant and visibility predicates themselves. DTO projections, scalars, `rows.Raw`, write candidate hydration and SQL `RETURNING` skip retrieval callbacks.
 
-`Query.Each` and complete-record `rows.EachRead` use bounded closed batches when callbacks may run. Unknown executor wrappers count as potentially observed. Concrete owners with no callbacks can stream directly where no eager load is requested. Each batch constructs its own factories. Pagination lookahead rows can dispatch before being trimmed.
+`orm.Each` and complete-record `rows.EachRead` use bounded closed batches when callbacks may run. Unknown executor wrappers count as potentially observed. Concrete owners with no callbacks can stream directly where no eager load is requested. Each batch constructs its own factories. Pagination lookahead rows can dispatch before being trimmed.
 
 Offset batches do not share a database snapshot: concurrent changes can shift later results. Use the typed keyset traversal APIs when that traversal suits the operation. `All` collects its selected result, so apply a query limit when the collection must be bounded.
 

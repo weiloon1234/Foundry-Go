@@ -68,17 +68,17 @@ func TestReadRoutingPreservesRawPrimaryAndActualTransaction(t *testing.T) {
 		t.Fatal("raw RETURNING changed routing", err)
 	}
 	q := routedQuery()
-	rows, err := q.All(t.Context(), db)
+	rows, err := orm.All(t.Context(), db, q)
 	if err != nil || len(rows) != 1 || rows[0].ID != 22 {
 		t.Fatal("SELECT did not route to configured read pool", err)
 	}
-	if n, err := q.Count(t.Context(), db); err != nil || n != 22 {
+	if n, err := orm.Count(t.Context(), db, q); err != nil || n != 22 {
 		t.Fatal("count did not route to read pool", err)
 	}
-	if exists, err := q.Exists(t.Context(), db); err != nil || !exists {
+	if exists, err := orm.Exists(t.Context(), db, q); err != nil || !exists {
 		t.Fatal("exists failed", err)
 	}
-	if err := q.Each(t.Context(), db, func(item routedRecord) error {
+	if err := orm.Each(t.Context(), db, q, func(item routedRecord) error {
 		if item.ID != 22 {
 			return errors.New("stream escaped read routing")
 		}
@@ -86,13 +86,13 @@ func TestReadRoutingPreservesRawPrimaryAndActualTransaction(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	rows, err = q.All(t.Context(), db.Primary())
+	rows, err = orm.All(t.Context(), db.Primary(), q)
 	if err != nil || len(rows) != 1 || rows[0].ID != 11 {
 		t.Fatal("explicit primary read was routed to replica", err)
 	}
 	readsBefore := readQueries.Load()
 	if err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-		items, err := q.ForUpdate().All(t.Context(), tx)
+		items, err := orm.AllLocked(t.Context(), tx, orm.Lock(q))
 		if err != nil {
 			return err
 		}
@@ -100,14 +100,14 @@ func TestReadRoutingPreservesRawPrimaryAndActualTransaction(t *testing.T) {
 			return errors.New("locked read escaped transaction")
 		}
 		return tx.Transaction(t.Context(), func(nested *database.Tx) error {
-			_, err := q.All(t.Context(), nested)
+			_, err := orm.All(t.Context(), nested, q)
 			return err
 		})
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Session(t.Context(), func(session *database.Session) error {
-		items, err := q.All(t.Context(), session)
+		items, err := orm.All(t.Context(), session, q)
 		if err != nil {
 			return err
 		}
@@ -141,10 +141,10 @@ func TestReadPoolFailureDoesNotFallbackAndHealthNamesBothEndpoints(t *testing.T)
 	read.query = func(context.Context, string, []driver.NamedValue) (driver.Rows, error) { return nil, driver.ErrBadConn }
 	db := routedPool(t, primary, read)
 	unavailable.Store(true)
-	if _, err := routedQuery().All(t.Context(), db); err == nil {
+	if _, err := orm.All(t.Context(), db, routedQuery()); err == nil {
 		t.Fatal("unavailable replica silently fell back")
 	}
-	if _, err := routedQuery().All(t.Context(), db.Primary()); err != nil {
+	if _, err := orm.All(t.Context(), db.Primary(), routedQuery()); err != nil {
 		t.Fatal("primary unusable after replica query failure", err)
 	}
 	health := db.Health(t.Context())
@@ -242,7 +242,7 @@ func TestReadPoolBoundsArePureAndShutdownDrainsBothEndpoints(t *testing.T) {
 
 func TestUnconfiguredReadPoolUsesPrimary(t *testing.T) {
 	db := open(t, &driverState{}, nil)
-	items, err := routedQuery().All(t.Context(), db)
+	items, err := orm.All(t.Context(), db, routedQuery())
 	if err != nil || len(items) != 1 || items[0].ID != 42 || db.HasReadPool() || db.RoutingStats().Read.IsSet() {
 		t.Fatal("single-pool behavior changed", err)
 	}

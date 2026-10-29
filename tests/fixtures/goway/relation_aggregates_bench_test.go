@@ -62,7 +62,7 @@ func BenchmarkRelationAggregateSlots1000(b *testing.B) {
 		root, direct, pivot = 0, 0, 0
 		directKeys, pivotKeys = [parents]bool{}, [parents]bool{}
 		before := g.statements
-		out, err := q.All(b.Context(), db)
+		out, err := orm.All(b.Context(), db, q)
 		if err != nil {
 			b.Fatal(err)
 		}

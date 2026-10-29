@@ -8,4 +8,4 @@ import (
 
 var field orm.NullableEnum[models.User, models.Status]
 
-var _ = expr.CompareNullableRow(expr.Value(field)).Contains(models.StatusActive)
+var _ = expr.CompareNullableRow(expr.Value(orm.NullableEnumExpr(field))).Contains(models.StatusActive)

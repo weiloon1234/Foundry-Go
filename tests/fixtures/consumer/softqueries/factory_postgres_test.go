@@ -19,7 +19,7 @@ func TestPostgresFactoryUsesORMDraftsHooksAndTransaction(t *testing.T) {
 	trace := &softqueries.Trace{}
 	runSoft(t, func(tx *database.Tx, clock *testkit.Clock) error {
 		members, err := factory.Define(softqueries.Members.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[softqueries.Member], error) {
-			return []orm.Assignment[softqueries.Member]{softqueries.Members.Name.Set(fmt.Sprintf(" member-%d ", n))}, nil
+			return []orm.Assignment[softqueries.Member]{orm.InputTextSet(softqueries.Members.Name, fmt.Sprintf(" member-%d ", n))}, nil
 		})
 		if err != nil {
 			return err
@@ -40,7 +40,7 @@ func TestPostgresFactoryUsesORMDraftsHooksAndTransaction(t *testing.T) {
 			return errors.New("factory committed before its caller")
 		}
 		duplicate, err := members.WithStates(func(_ context.Context, d []orm.Assignment[softqueries.Member]) ([]orm.Assignment[softqueries.Member], error) {
-			return []orm.Assignment[softqueries.Member]{softqueries.Members.Name.Set("duplicate")}, nil
+			return []orm.Assignment[softqueries.Member]{orm.InputTextSet(softqueries.Members.Name, "duplicate")}, nil
 		})
 		if err != nil {
 			return err
@@ -48,7 +48,7 @@ func TestPostgresFactoryUsesORMDraftsHooksAndTransaction(t *testing.T) {
 		if items, err := duplicate.CreateMany(ctx, tx, 2); !errors.Is(err, database.UniqueViolation) || len(items) != 0 {
 			return errors.New("factory published a partially failed batch")
 		}
-		count, err := softqueries.Members.Query().Count(t.Context(), tx)
+		count, err := orm.Count(t.Context(), tx, softqueries.Members.Query())
 		if err != nil {
 			return err
 		}
@@ -75,7 +75,7 @@ func TestPostgresFactoryUsesORMDraftsHooksAndTransaction(t *testing.T) {
 func TestPostgresFactoryHookFailureLeavesNoRows(t *testing.T) {
 	runSoft(t, func(tx *database.Tx, _ *testkit.Clock) error {
 		members, err := factory.Define(softqueries.Members.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[softqueries.Member], error) {
-			return []orm.Assignment[softqueries.Member]{softqueries.Members.Name.Set(fmt.Sprintf("hooked-%d", n))}, nil
+			return []orm.Assignment[softqueries.Member]{orm.InputTextSet(softqueries.Members.Name, fmt.Sprintf("hooked-%d", n))}, nil
 		})
 		if err != nil {
 			return err
@@ -89,7 +89,7 @@ func TestPostgresFactoryHookFailureLeavesNoRows(t *testing.T) {
 			if !ok {
 				return member, errors.New("hook did not receive the insert transaction")
 			}
-			visible, err := softqueries.Members.Query().Count(ctx, scoped)
+			visible, err := orm.Count(ctx, scoped, softqueries.Members.Query())
 			if err != nil {
 				return member, err
 			}
@@ -110,7 +110,7 @@ func TestPostgresFactoryHookFailureLeavesNoRows(t *testing.T) {
 		if _, err := hooked.Create(t.Context(), tx); !errors.Is(err, failure) || !reflect.DeepEqual(seen, []int64{1}) {
 			return fmt.Errorf("failing hook create: %v, saw %v", err, seen)
 		}
-		count, err := softqueries.Members.Query().Count(t.Context(), tx)
+		count, err := orm.Count(t.Context(), tx, softqueries.Members.Query())
 		if err != nil {
 			return err
 		}

@@ -49,7 +49,7 @@ func runResultNew(g *goldenCapture, kind string) {
 	ctx := context.Background()
 	db := g.open(ctx)
 	defer db.Close(ctx)
-	base := models.Orders.Query().Where(models.Orders.TotalCents.Gt(10))
+	base := models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 10))
 	if strings.HasPrefix(kind, "cursor_") && kind != "cursor_value" {
 		var source rowset.RecordSource[models.Order] = rowset.ModelRecord(base.Limit(9).Offset(1))
 		if kind == "cursor_set" {
@@ -59,8 +59,8 @@ func runResultNew(g *goldenCapture, kind string) {
 			source = rowset.CTE("report", source)
 		}
 		c := rowset.CursorFor(source)
-		id := expr.At(c.Scope(), models.Orders.ID)
-		amount := expr.At(c.Scope(), models.Orders.TotalCents)
+		id := expr.At(c.Scope(), orm.KeyExpr(models.Orders.ID))
+		amount := expr.At(c.Scope(), orm.NumberExpr(models.Orders.TotalCents))
 		c = c.OrderBy(amount.Asc()).UniqueBy(expr.Group(id))
 		p := must(c.Paginate(ctx, db, orm.CursorRequest[models.Order]{Size: 1}))
 		printNewCursor(g, p)
@@ -70,7 +70,7 @@ func runResultNew(g *goldenCapture, kind string) {
 		printNewCursor(g, p)
 		return
 	}
-	selected := rowset.SelectScalar(rowset.From(base.OrderBy(models.Orders.TotalCents.Asc())), expr.Row(expr.Value(models.Orders.TotalCents)).Value())
+	selected := rowset.SelectScalar(rowset.From(base.OrderBy(orm.NumberAsc(models.Orders.TotalCents))), expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Value())
 	q := rowset.ReadScalar(selected)
 	switch kind {
 	case "cursor_value":
@@ -97,7 +97,7 @@ func runResultNew(g *goldenCapture, kind string) {
 	default:
 		check(db.Transaction(ctx, func(tx *database.Tx) error {
 			a := rowset.AsTransaction[joinA](rowset.TransactionOf(rowset.ModelRecord(base)), "selected")
-			v := rowset.SelectTransactionValue(a, expr.Row(expr.At(rowset.TransactionScope(a), models.Orders.TotalCents)).Value())
+			v := rowset.SelectTransactionValue(a, expr.Row(expr.At(rowset.TransactionScope(a), orm.NumberExpr(models.Orders.TotalCents))).Value())
 			if kind == "transaction_value_lock" {
 				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.ForShare(v).All(ctx, tx))}))
 			} else {

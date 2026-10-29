@@ -26,7 +26,7 @@ func TestPostgresConflictCalculationsDefaultsAndTriggers(t *testing.T) {
 			}
 		}
 		q, f := models.WriteRecords, models.WriteRecords
-		initial, err := q.Insert(t.Context(), tx, models.WriteRecords.Name.Set("counter"), models.WriteRecords.Note.Set("kept"), models.WriteRecords.Amount.Set(conflictDecimal(t, "1000000000000000000.1")))
+		initial, err := orm.Insert(t.Context(), tx, q.Table, orm.TextSet(models.WriteRecords.Name, "counter"), orm.NullableTextSet(models.WriteRecords.Note, "kept"), orm.NumberSet(models.WriteRecords.Amount, conflictDecimal(t, "1000000000000000000.1")))
 		if err != nil {
 			return err
 		}
@@ -41,12 +41,12 @@ func TestPostgresConflictCalculationsDefaultsAndTriggers(t *testing.T) {
 		roles := rows.ConflictRowsOf(q.Query())
 		stored := roles.Stored()
 		proposed := roles.Proposed()
-		policy := orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(
-			rows.SetConflictValue(f.Amount, expr.Add(expr.At(stored, f.Amount), expr.At(proposed, f.Amount))),
-			rows.SetConflictValue(f.Note, expr.CoalesceNullable(expr.At(proposed, f.Note), expr.At(stored, f.Note))),
-		).Where(f.Enabled.Eq(true))
-		policy = rows.ConflictWhereRows(policy, expr.At(proposed, f.Enabled).Eq(true))
-		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, models.WriteRecords.Name.Set("counter"), models.WriteRecords.Amount.Set(conflictDecimal(t, "0.2")))
+		policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(
+			rows.SetConflictValue(orm.NumberExpr(f.Amount), expr.Add(expr.At(stored, orm.NumberExpr(f.Amount)), expr.At(proposed, orm.NumberExpr(f.Amount)))),
+			rows.SetConflictValue(orm.NullableTextExpr(f.Note), expr.CoalesceNullable(expr.At(proposed, orm.NullableTextExpr(f.Note)), expr.At(stored, orm.NullableTextExpr(f.Note)))),
+		).Where(orm.ColumnEq(f.Enabled, true))
+		policy = rows.ConflictWhereRows(policy, expr.At(proposed, orm.ColumnExpr(f.Enabled)).Eq(true))
+		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.TextSet(models.WriteRecords.Name, "counter"), orm.NumberSet(models.WriteRecords.Amount, conflictDecimal(t, "0.2")))
 		if err != nil {
 			return err
 		}
@@ -55,12 +55,12 @@ func TestPostgresConflictCalculationsDefaultsAndTriggers(t *testing.T) {
 		if !ok || actual.Code != initial.Code || actual.Amount.String() != "1000000000000000000.8" || !hasNote || note != "kept" {
 			t.Fatal("calculation lost exact value, proposed trigger changes or nullable fallback", actual.Amount.String())
 		}
-		skipped, err := orm.Upsert(t.Context(), tx, q.Query(), policy, models.WriteRecords.Name.Set("counter"), models.WriteRecords.Enabled.Set(false))
+		skipped, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.TextSet(models.WriteRecords.Name, "counter"), orm.ColumnSet(models.WriteRecords.Enabled, false))
 		if err != nil || skipped.IsSet() {
 			t.Fatal("proposed condition did not skip update", err)
 		}
 		many, err := orm.UpsertMany(t.Context(), tx, q.Query(), policy, [][]orm.Assignment[models.WriteRecord]{
-			{models.WriteRecords.Name.Set("counter")}, {models.WriteRecords.Name.Set("new")},
+			{orm.TextSet(models.WriteRecords.Name, "counter")}, {orm.TextSet(models.WriteRecords.Name, "new")},
 		})
 		if err != nil {
 			return err
@@ -73,7 +73,7 @@ func TestPostgresConflictCalculationsDefaultsAndTriggers(t *testing.T) {
 			t.Fatal(amounts)
 		}
 		cleared, err := orm.Upsert(t.Context(), tx, q.Query(),
-			orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(rows.SetConflictValue(f.Note, expr.At(proposed, f.Note))), models.WriteRecords.Name.Set("counter"), models.WriteRecords.Note.SetNull())
+			orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(rows.SetConflictValue(orm.NullableTextExpr(f.Note), expr.At(proposed, orm.NullableTextExpr(f.Note)))), orm.TextSet(models.WriteRecords.Name, "counter"), orm.NullableTextSetNull(models.WriteRecords.Note))
 		if err != nil {
 			return err
 		}
@@ -91,21 +91,21 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 			return err
 		}
 		q, f := models.WriteRecords, models.WriteRecords
-		if _, err := q.InsertMany(t.Context(), tx, [][]orm.Assignment[models.WriteRecord]{
-			{models.WriteRecords.Name.Set("counter")},
-			{models.WriteRecords.Name.Set("reference"), models.WriteRecords.Amount.Set(conflictDecimal(t, "91.125"))},
+		if _, err := orm.InsertMany(t.Context(), tx, q.Table, [][]orm.Assignment[models.WriteRecord]{
+			{orm.TextSet(models.WriteRecords.Name, "counter")},
+			{orm.TextSet(models.WriteRecords.Name, "reference"), orm.NumberSet(models.WriteRecords.Amount, conflictDecimal(t, "91.125"))},
 		}); err != nil {
 			return err
 		}
 		roles := rows.ConflictRowsOf(q.Query())
 		proposed := roles.Proposed()
-		lookup := rows.AsRecord[conflictLookup](rows.CTE("foundry_upsert", rows.RecordOf(rows.FromModel(q.Query().Where(f.Name.Eq("reference"))))), "lookup")
+		lookup := rows.AsRecord[conflictLookup](rows.CTE("foundry_upsert", rows.RecordOf(rows.FromModel(q.Query().Where(orm.TextEq(f.Name, "reference"))))), "lookup")
 		link := rows.Correlate(roles, lookup)
 		outer := rows.OuterScope(link, roles.Stored())
 		inner := rows.InnerScope(link, rows.Scope(lookup))
-		selected := rows.SelectCorrelatedScalar(link, expr.Row(expr.At(inner, f.Amount)).Value()).Where(expr.Greater(expr.At(inner, f.Amount), expr.At(outer, f.Amount))).Limit(1)
-		policy := orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(rows.SetConflictValue(f.Amount, expr.Coalesce(rows.CorrelatedScalarRowQuery(selected), expr.At(proposed, f.Amount))))
-		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, models.WriteRecords.Name.Set("counter"))
+		selected := rows.SelectCorrelatedScalar(link, expr.Row(expr.At(inner, orm.NumberExpr(f.Amount))).Value()).Where(expr.Greater(expr.At(inner, orm.NumberExpr(f.Amount)), expr.At(outer, orm.NumberExpr(f.Amount)))).Limit(1)
+		policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(rows.SetConflictValue(orm.NumberExpr(f.Amount), expr.Coalesce(rows.CorrelatedScalarRowQuery(selected), expr.At(proposed, orm.NumberExpr(f.Amount)))))
+		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.TextSet(models.WriteRecords.Name, "counter"))
 		if err != nil {
 			return err
 		}
@@ -114,7 +114,7 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 			t.Fatal("correlated assignment lost outer scope or CTE", actual.Amount.String())
 		}
 		// With no matching lookup, the nullable scalar falls back to the proposed value.
-		result, err = orm.Upsert(t.Context(), tx, q.Query(), policy, models.WriteRecords.Name.Set("counter"), models.WriteRecords.Amount.Set(conflictDecimal(t, "2.5")))
+		result, err = orm.Upsert(t.Context(), tx, q.Query(), policy, orm.TextSet(models.WriteRecords.Name, "counter"), orm.NumberSet(models.WriteRecords.Amount, conflictDecimal(t, "2.5")))
 		if err != nil {
 			return err
 		}
@@ -126,14 +126,14 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		// A scalar with multiple results must preserve the database error and roll back.
 		allLink := rows.Correlate(roles, rows.From(q.Query()))
 		allFields := rows.InnerScope(allLink, rows.ModelScope(q.Query()))
-		multiple := rows.SelectCorrelatedScalar(allLink, expr.Row(expr.At(allFields, f.Amount)).Value())
-		invalid := orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(rows.SetConflictValue(f.Amount, expr.Coalesce(rows.CorrelatedScalarRowQuery(multiple), expr.At(proposed, f.Amount))))
-		_, err = orm.Upsert(t.Context(), tx, q.Query(), invalid, models.WriteRecords.Name.Set("counter"))
+		multiple := rows.SelectCorrelatedScalar(allLink, expr.Row(expr.At(allFields, orm.NumberExpr(f.Amount))).Value())
+		invalid := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(rows.SetConflictValue(orm.NumberExpr(f.Amount), expr.Coalesce(rows.CorrelatedScalarRowQuery(multiple), expr.At(proposed, orm.NumberExpr(f.Amount)))))
+		_, err = orm.Upsert(t.Context(), tx, q.Query(), invalid, orm.TextSet(models.WriteRecords.Name, "counter"))
 		var dbErr *database.Error
 		if !errors.As(err, &dbErr) || dbErr.SQLState() != "21000" {
 			t.Fatal("scalar cardinality was hidden", err)
 		}
-		current, err := q.Query().Where(f.Name.Eq("counter")).First(t.Context(), tx)
+		current, err := orm.First(t.Context(), tx, q.Query().Where(orm.TextEq(f.Name, "counter")))
 		if err != nil {
 			return err
 		}
@@ -141,10 +141,10 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		if !present || kept.Amount.String() != "2.5" {
 			t.Fatal("failed calculation persisted")
 		}
-		independent := rows.ConflictScalarRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(f.Name.Eq("reference"))), expr.Row(expr.Value(f.Amount)).Value()))
-		nullable := rows.ConflictScalarNullableRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(f.Name.Eq("reference"))), expr.Row(expr.Value(f.Note)).Value()))
+		independent := rows.ConflictScalarRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(orm.TextEq(f.Name, "reference"))), expr.Row(expr.Value(orm.NumberExpr(f.Amount))).Value()))
+		nullable := rows.ConflictScalarNullableRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(orm.TextEq(f.Name, "reference"))), expr.Row(expr.Value(orm.NullableTextExpr(f.Note))).Value()))
 		result, err = orm.Upsert(t.Context(), tx, q.Query(),
-			orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(rows.SetConflictValue(f.Amount, expr.Coalesce(independent, expr.At(proposed, f.Amount))), rows.SetConflictValue(f.Note, nullable)), models.WriteRecords.Name.Set("counter"))
+			orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(rows.SetConflictValue(orm.NumberExpr(f.Amount), expr.Coalesce(independent, expr.At(proposed, orm.NumberExpr(f.Amount)))), rows.SetConflictValue(orm.NullableTextExpr(f.Note), nullable)), orm.TextSet(models.WriteRecords.Name, "counter"))
 		if err != nil {
 			return err
 		}
@@ -162,16 +162,16 @@ func TestPostgresConflictCalculationOnExcludedTable(t *testing.T) {
 			return err
 		}
 		q := upsertqueries.ExcludedRecords
-		original, err := q.Insert(t.Context(), tx, q.Name.Set("before"))
+		original, err := orm.Insert(t.Context(), tx, q.Table, orm.TextSet(q.Name, "before"))
 		if err != nil {
 			return err
 		}
 		roles := rows.ConflictRowsOf(q.Query())
-		stored := expr.At(roles.Stored(), q.Name)
-		proposed := expr.At(roles.Proposed(), q.Name)
-		policy := orm.OnConflict(orm.ConflictKey(q.Key())).DoUpdate(rows.SetConflictValue(q.Name, expr.Concat(stored, proposed)))
+		stored := expr.At(roles.Stored(), orm.TextExpr(q.Name))
+		proposed := expr.At(roles.Proposed(), orm.TextExpr(q.Name))
+		policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(q.Key()))).DoUpdate(rows.SetConflictValue(orm.TextExpr(q.Name), expr.Concat(stored, proposed)))
 		policy = rows.ConflictWhereRows(policy, expr.NotEqual(stored, proposed))
-		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, q.Key().Set(original.ID), q.Name.Set("after"))
+		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.KeySet(q.Key(), original.ID), orm.TextSet(q.Name, "after"))
 		if err != nil {
 			return err
 		}

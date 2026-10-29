@@ -49,14 +49,14 @@ func TestPostgresORMObserversComposeAndRollback(t *testing.T) {
 	var trace observerqueries.Trace
 	ctx := observerqueries.WithTrace(t.Context(), &trace)
 	err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-		plain, err := observerqueries.Plains.Insert(ctx, tx)
+		plain, err := orm.Insert(ctx, tx, observerqueries.Plains.Table)
 		if err != nil {
 			return err
 		}
 		if plain.Name != "registered default" || stats.Plain.Load() != 1 {
 			return errors.New("unannotated model skipped observer")
 		}
-		item, err := observerqueries.Records.Insert(ctx, tx, observerqueries.Records.Name.Set(" SAMPLE "))
+		item, err := orm.Insert(ctx, tx, observerqueries.Records.Table, orm.InputTextSet(observerqueries.Records.Name, " SAMPLE "))
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func TestPostgresORMObserversComposeAndRollback(t *testing.T) {
 			return errors.New("shared draft, mutator or capture changed")
 		}
 		for _, changes := range trace.ORMChanges {
-			field, err := orm.ChangeOf(changes, observerqueries.Records.Name)
+			field, err := orm.ChangeOf(changes, orm.InputTextExpr(observerqueries.Records.Name))
 			if err != nil {
 				return err
 			}
@@ -76,7 +76,7 @@ func TestPostgresORMObserversComposeAndRollback(t *testing.T) {
 		if stats.Retrieval.Load() != 0 {
 			return errors.New("write dispatched retrieval")
 		}
-		if _, err = observerqueries.Records.Find(ctx, tx, item.ID); err != nil {
+		if _, err = orm.Find(ctx, tx, observerqueries.Records.Table, item.ID); err != nil {
 			return err
 		}
 		if stats.Retrieval.Load() != 1 {
@@ -92,24 +92,24 @@ func TestPostgresORMObserversComposeAndRollback(t *testing.T) {
 	}
 	for _, mode := range []string{"error", "panic", "goexit"} {
 		err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-			before, err := observerqueries.Records.Query().Count(t.Context(), tx)
+			before, err := orm.Count(t.Context(), tx, observerqueries.Records.Query())
 			if err != nil {
 				return err
 			}
-			effects, err := observerqueries.Effects.Query().Count(t.Context(), tx)
+			effects, err := orm.Count(t.Context(), tx, observerqueries.Effects.Query())
 			if err != nil {
 				return err
 			}
 			veto := observerqueries.Trace{FailAt: "first.created", Mode: mode}
-			_, err = observerqueries.Records.Insert(observerqueries.WithTrace(t.Context(), &veto), tx)
+			_, err = orm.Insert(observerqueries.WithTrace(t.Context(), &veto), tx, observerqueries.Records.Table)
 			if err == nil || (mode == "error" && !errors.Is(err, observerqueries.Veto)) || veto.Calls[len(veto.Calls)-1] != "first.created" {
 				return errors.New("observer failure lost identity or continued")
 			}
-			after, err := observerqueries.Records.Query().Count(t.Context(), tx)
+			after, err := orm.Count(t.Context(), tx, observerqueries.Records.Query())
 			if err != nil {
 				return err
 			}
-			afterEffects, err := observerqueries.Effects.Query().Count(t.Context(), tx)
+			afterEffects, err := orm.Count(t.Context(), tx, observerqueries.Effects.Query())
 			if err != nil {
 				return err
 			}

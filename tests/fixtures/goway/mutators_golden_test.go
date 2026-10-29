@@ -27,7 +27,7 @@ func TestMutatorsOldAndNewAgree(t *testing.T) {
 		if err := orm.Check(q); err != nil {
 			t.Fatal(err)
 		}
-		member, err := q.Insert(t.Context(), db, q.Key().Set(7), q.Email.Set(coremodels.EmailInput{Address: " ADA@EXAMPLE.TEST "}), q.Name.Set(" Ada "), q.Body.Set(coremodels.BinaryInput{1, 2}), q.Enabled.Set(false))
+		member, err := orm.Insert(t.Context(), db, q.Table, orm.KeySet(q.Key(), 7), orm.InputTextSet(q.Email, coremodels.EmailInput{Address: " ADA@EXAMPLE.TEST "}), orm.InputTextSet(q.Name, " Ada "), orm.InputColumnSet(q.Body, coremodels.BinaryInput{1, 2}), orm.ColumnSet(q.Enabled, false))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,11 +35,11 @@ func TestMutatorsOldAndNewAgree(t *testing.T) {
 		if err != nil || link != "mailto:ada@example.test" {
 			t.Fatal("new accessor", err)
 		}
-		_, err = q.Update(t.Context(), db, 7, q.Note.Set(coremodels.LabelInput{Text: " note "}))
+		_, err = orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 7, orm.NullableInputTextSet(q.Note, coremodels.LabelInput{Text: " note "}))
 		if err != nil {
 			t.Fatal(err)
 		}
-		member, err = q.Update(t.Context(), db, 7, q.Note.SetNull())
+		member, err = orm.Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 7, orm.NullableInputTextSetNull(q.Note))
 		if err != nil || !member.Note.IsNull() {
 			t.Fatal("new null", err)
 		}
@@ -70,15 +70,15 @@ func TestInputPrimaryKeyOldAndNewAgree(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := q.Insert(t.Context(), db, q.ID.Set(newmodels.FreshID{Value: id}))
+		got, err := orm.Insert(t.Context(), db, q.Table, orm.InputKeySet(q.ID, newmodels.FreshID{Value: id}))
 		if err != nil || got.ID != id {
 			t.Fatal("new key input", err)
 		}
-		_, err = q.Require(t.Context(), db, id)
+		_, err = orm.RequireKey(t.Context(), db, q.Table, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = q.Insert(t.Context(), db)
+		_, err = orm.Insert(t.Context(), db, q.Table)
 		if !errors.Is(err, fault.Missing) {
 			t.Fatal("new distinct input synthesized UUID", err)
 		}

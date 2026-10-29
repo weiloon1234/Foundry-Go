@@ -6,4 +6,4 @@ import (
 )
 
 var slot orm.Through[models.User, models.User, models.Membership]
-var invalid = orm.ManyToManyOf(slot, models.Users.ID, models.Memberships.UserID, models.Memberships.GroupCode, models.Users.ID)
+var invalid = orm.ManyToManyOf(slot, orm.KeyExpr(models.Users.ID), orm.ColumnExpr(models.Memberships.UserID), orm.NullableTextExpr(models.Memberships.GroupCode), orm.KeyExpr(models.Users.ID))

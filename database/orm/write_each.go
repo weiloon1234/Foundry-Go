@@ -21,7 +21,7 @@ const MaxPerModelWriteRows = querycore.MaxPerModelWriteRows
 // typed assignments and runs each ordinary model lifecycle in one transaction.
 // Read ordering, pagination, eager loading and WithoutModelHooks are rejected.
 // The callback gets the actual transaction; propagate its context to nested work.
-// Example: orm.UpdateEach(ctx,db,Users.Query(),100,func(ctx context.Context,tx *database.Tx,u User)([]orm.Assignment[User],error){return []orm.Assignment[User]{Users.Name.Set(u.Name)},nil}).
+// Example: orm.UpdateEach(ctx,db,Users.Query(),100,func(ctx context.Context,tx *database.Tx,u User)([]orm.Assignment[User],error){return []orm.Assignment[User]{orm.TextSet(Users.Name, u.Name)},nil}).
 func UpdateEach[M any](ctx context.Context, writer database.Transactor, q Query[M], limit int, draft func(context.Context, *database.Tx, M) ([]Assignment[M], error)) ([]M, error) {
 	if draft == nil {
 		return nil, invalid("per-model update requires a draft callback")
@@ -32,7 +32,7 @@ func UpdateEach[M any](ctx context.Context, writer database.Transactor, q Query[
 // DeleteEach removes each active candidate through ordinary delete/soft-delete
 // lifecycle callbacks. Overflow fails before callbacks, and later failures roll
 // back the complete batch and its after-commit work. Results follow primary keys.
-// Example: orm.DeleteEach(ctx,db,Notifications.Query().Where(Notifications.Read.Eq(true)),100).
+// Example: orm.DeleteEach(ctx,db,Notifications.Query().Where(orm.ColumnEq(Notifications.Read, true)),100).
 func DeleteEach[M any](ctx context.Context, writer database.Transactor, q Query[M], limit int) ([]M, error) {
 	return writeEach[M](ctx, writer, q.state, querycore.DeleteModel, limit, nil)
 }

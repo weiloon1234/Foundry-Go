@@ -33,32 +33,32 @@ func TestPersistence(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	u, err := models.Users.Insert(ctx, db, models.Users.Email.Set("smoke@example.test"), models.Users.Age.Set(30), models.Users.Status.Set(models.StatusActive), models.Users.Level.Set(models.LevelBasic))
+	u, err := orm.Insert(ctx, db, models.Users.Table, orm.TextSet(models.Users.Email, "smoke@example.test"), orm.NumberSet(models.Users.Age, 30), orm.EnumSet(models.Users.Status, models.StatusActive), orm.EnumSet(models.Users.Level, models.LevelBasic))
 	must(t, err)
 	if u.ID.IsZero() || u.Email != "smoke@example.test" {
 		t.Fatal("insert RETURNING user")
 	}
-	o, err := models.Orders.Insert(ctx, db, models.Orders.BuyerID.Set(u.ID), models.Orders.TotalCents.Set(100))
+	o, err := orm.Insert(ctx, db, models.Orders.Table, orm.ColumnSet(models.Orders.BuyerID, u.ID), orm.NumberSet(models.Orders.TotalCents, 100))
 	must(t, err)
 	if o.ID.IsZero() || o.TotalCents != 100 {
 		t.Fatal("insert RETURNING order")
 	}
-	found, err := models.Orders.Find(ctx, db, o.ID)
+	found, err := orm.Find(ctx, db, models.Orders.Table, o.ID)
 	must(t, err)
 	v, ok := found.Get()
 	if !ok || v.ID != o.ID || v.TotalCents != 100 {
 		t.Fatal("find persisted order")
 	}
-	_, err = models.Orders.Update(ctx, db, o.ID, models.Orders.TotalCents.Set(120))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberSet(models.Orders.TotalCents, 120))
 	must(t, err)
-	n, err := models.Orders.Query().Where(models.Orders.BuyerID.Eq(u.ID)).UpdateAll(ctx, db, models.Orders.TotalCents.Set(150))
+	n, err := orm.UpdateAll(ctx, db, models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, u.ID)), orm.NumberSet(models.Orders.TotalCents, 150))
 	must(t, err)
 	if n != 1 {
 		t.Fatal("update-all count", n)
 	}
 	assertTotal := func(want int64) {
 		t.Helper()
-		got, err := models.Orders.Require(ctx, db, o.ID)
+		got, err := orm.RequireKey(ctx, db, models.Orders.Table, o.ID)
 		must(t, err)
 		if got.TotalCents != want {
 			t.Fatalf("persisted total=%d want=%d", got.TotalCents, want)
@@ -67,32 +67,32 @@ func TestPersistence(t *testing.T) {
 	assertTotal(150)
 	// Approved security contract: floor guards apply to Decrement, ceiling guards
 	// to Increment. An Increment with AtLeast is invalid, not an alternate API.
-	_, err = models.Orders.Update(ctx, db, o.ID, models.Orders.TotalCents.Increment(1, orm.AtLeast[int64](0)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberIncrement(models.Orders.TotalCents, 1, orm.AtLeast[int64](0)))
 	if !errors.Is(err, fault.Invalid) {
 		t.Fatal("increment floor must reject", err)
 	}
-	_, err = models.Orders.Update(ctx, db, o.ID, models.Orders.TotalCents.Decrement(50, orm.AtLeast[int64](100)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberDecrement(models.Orders.TotalCents, 50, orm.AtLeast[int64](100)))
 	must(t, err)
 	assertTotal(100)
-	_, err = models.Orders.Update(ctx, db, o.ID, models.Orders.TotalCents.Decrement(1, orm.AtLeast[int64](100)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberDecrement(models.Orders.TotalCents, 1, orm.AtLeast[int64](100)))
 	if !errors.Is(err, orm.ErrBoundExceeded) || !errors.Is(err, fault.Conflict) {
 		t.Fatal("bound conflict", err)
 	}
 	assertTotal(100)
-	_, err = models.Orders.Update(ctx, db, o.ID, models.Orders.TotalCents.Increment(20, orm.AtMost[int64](120)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberIncrement(models.Orders.TotalCents, 20, orm.AtMost[int64](120)))
 	must(t, err)
 	assertTotal(120)
-	_, err = models.Orders.Update(ctx, db, o.ID, models.Orders.TotalCents.Increment(1, orm.AtMost[int64](120)))
+	_, err = orm.Update(ctx, db, models.Orders.Table.Query(), models.Orders.Table.Key(), o.ID, orm.NumberIncrement(models.Orders.TotalCents, 1, orm.AtMost[int64](120)))
 	if !errors.Is(err, orm.ErrBoundExceeded) {
 		t.Fatal("ceiling violation", err)
 	}
 	assertTotal(120)
-	page, err := models.Orders.Query().Paginate(ctx, db, orm.Page(1, 10))
+	page, err := orm.Paginate(ctx, db, models.Orders.Query(), orm.Page(1, 10))
 	must(t, err)
 	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != o.ID {
 		t.Fatal("pagination")
 	}
-	loaded, err := models.Orders.Query().With(models.OrderRelations.Buyer).All(ctx, db)
+	loaded, err := orm.All(ctx, db, models.Orders.Query().With(models.OrderRelations.Buyer))
 	must(t, err)
 	if len(loaded) != 1 {
 		t.Fatal("eager parent count")
@@ -102,7 +102,7 @@ func TestPersistence(t *testing.T) {
 	if !loadedBuyer || !ok || buyer.ID != u.ID || buyer.Email != u.Email {
 		t.Fatal("eager buyer")
 	}
-	users, err := models.Users.Query().With(models.UserRelations.Orders).All(ctx, db)
+	users, err := orm.All(ctx, db, models.Users.Query().With(models.UserRelations.Orders))
 	must(t, err)
 	if len(users) != 1 {
 		t.Fatal("users")
@@ -112,57 +112,57 @@ func TestPersistence(t *testing.T) {
 		t.Fatal("eager orders")
 	}
 	amount := decimal.FromInt64(25)
-	ledger, err := models.LedgerEntries.Insert(ctx, db, models.LedgerEntries.Amount.Set(amount))
+	ledger, err := orm.Insert(ctx, db, models.LedgerEntries.Table, orm.NumberSet(models.LedgerEntries.Amount, amount))
 	must(t, err)
-	storedLedger, err := models.LedgerEntries.Require(ctx, db, ledger.ID)
+	storedLedger, err := orm.RequireKey(ctx, db, models.LedgerEntries.Table, ledger.ID)
 	must(t, err)
 	if storedLedger.Amount.Cmp(amount) != 0 || !storedLedger.Balance.IsNull() {
 		t.Fatal("decimal/null persistence")
 	}
-	wr, err := models.WriteRecords.Insert(ctx, db, models.WriteRecords.Name.Set("defaults"))
+	wr, err := orm.Insert(ctx, db, models.WriteRecords.Table, orm.TextSet(models.WriteRecords.Name, "defaults"))
 	must(t, err)
-	storedWrite, err := models.WriteRecords.Require(ctx, db, wr.Code)
+	storedWrite, err := orm.RequireKey(ctx, db, models.WriteRecords.Table, wr.Code)
 	must(t, err)
 	if !storedWrite.Enabled || storedWrite.Code <= 0 || !storedWrite.Amount.IsZero() {
 		t.Fatal("database defaults")
 	}
-	m, err := reporting.Members.Insert(ctx, db, reporting.Members.TenantID.Set(7), reporting.Members.Name.Set("Member"), reporting.Members.State.Set(reporting.Active), reporting.Members.Balance.Set(amount))
+	m, err := orm.Insert(ctx, db, reporting.Members.Table, orm.NumberSet(reporting.Members.TenantID, 7), orm.TextSet(reporting.Members.Name, "Member"), orm.EnumSet(reporting.Members.State, reporting.Active), orm.NumberSet(reporting.Members.Balance, amount))
 	must(t, err)
-	ro, err := reporting.Orders.Insert(ctx, db, reporting.Orders.TenantID.Set(7), reporting.Orders.MemberID.Set(m.ID), reporting.Orders.Label.Set("Report"), reporting.Orders.Amount.Set(amount))
+	ro, err := orm.Insert(ctx, db, reporting.Orders.Table, orm.NumberSet(reporting.Orders.TenantID, 7), orm.ColumnSet(reporting.Orders.MemberID, m.ID), orm.TextSet(reporting.Orders.Label, "Report"), orm.NumberSet(reporting.Orders.Amount, amount))
 	must(t, err)
 	projected, err := rows.Read(reporting.SelectOrders(7)).All(ctx, db)
 	must(t, err)
 	if len(projected) != 1 || projected[0].ID != ro.ID || projected[0].MemberName != "Member" || projected[0].Label != "Report" || projected[0].Amount.Cmp(amount) != 0 {
 		t.Fatal("projection persisted values")
 	}
-	_, err = reporting.Orders.Delete(ctx, db, ro.ID)
+	_, err = orm.Delete(ctx, db, reporting.Orders.Table.Query(), reporting.Orders.Table.Key(), ro.ID)
 	must(t, err)
-	gone, err := reporting.Orders.Find(ctx, db, ro.ID)
+	gone, err := orm.Find(ctx, db, reporting.Orders.Table, ro.ID)
 	must(t, err)
 	if gone.IsSet() {
 		t.Fatal("soft deleted row visible")
 	}
-	deleted, err := reporting.Orders.Query().WithTrashed().Where(reporting.Orders.ID.Eq(ro.ID)).Require(ctx, db)
+	deleted, err := orm.Require(ctx, db, reporting.Orders.Query().WithTrashed().Where(orm.KeyEq(reporting.Orders.ID, ro.ID)))
 	must(t, err)
 	if deleted.DeletedAt.IsNull() {
 		t.Fatal("soft delete not persisted")
 	}
-	_, err = reporting.Orders.Restore(ctx, db, ro.ID)
+	_, err = orm.Restore(ctx, db, reporting.Orders.Table, ro.ID)
 	must(t, err)
-	restored, err := reporting.Orders.Require(ctx, db, ro.ID)
+	restored, err := orm.RequireKey(ctx, db, reporting.Orders.Table, ro.ID)
 	must(t, err)
 	if !restored.DeletedAt.IsNull() {
 		t.Fatal("restore not persisted")
 	}
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
-		locked, err := models.Orders.Query().Where(models.Orders.ID.Eq(o.ID)).ForUpdate().Require(ctx, tx)
+		locked, err := orm.RequireLocked(ctx, tx, orm.Lock(models.Orders.Query().Where(orm.KeyEq(models.Orders.ID, o.ID))))
 		if err != nil {
 			return err
 		}
 		if locked.TotalCents != 120 {
 			return errors.New("locked read changed value")
 		}
-		shared, err := models.Orders.Query().Where(models.Orders.ID.Eq(o.ID)).ForShare().All(ctx, tx)
+		shared, err := orm.AllLocked(ctx, tx, orm.ForShare(models.Orders.Query().Where(orm.KeyEq(models.Orders.ID, o.ID))))
 		if err != nil {
 			return err
 		}

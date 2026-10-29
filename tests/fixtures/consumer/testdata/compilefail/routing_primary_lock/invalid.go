@@ -1,5 +1,7 @@
 package compilefail
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/consumer/models"
@@ -7,5 +9,5 @@ import (
 )
 
 func invalid(ctx context.Context, db *database.DB) {
-	_, _ = models.Users.Query().ForUpdate().All(ctx, db.Primary())
+	_, _ = orm.AllLocked(ctx, db.Primary(), orm.Lock(models.Users.Query()))
 }

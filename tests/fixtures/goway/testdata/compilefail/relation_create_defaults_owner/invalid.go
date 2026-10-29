@@ -8,6 +8,6 @@ import (
 )
 
 func invalid(ctx context.Context, db *database.DB) {
-	defaults := []orm.Assignment[j.Parent]{j.Parents.Name.Set("wrong")}
+	defaults := []orm.Assignment[j.Parent]{orm.TextSet(j.Parents.Name, "wrong")}
 	_, _ = orm.AttachMany(ctx, db, j.Peers, j.Parent{}, []j.Target{}, defaults...)
 }

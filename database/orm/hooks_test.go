@@ -111,15 +111,24 @@ func TestHooksStageOrderLockedSnapshotsAndReturning(t *testing.T) {
 					if b.Name != "old" || b.Scratch != "" {
 						t.Error("original")
 					}
-					input := WriteNullableGet(w, q.Note.Set)
+					input := WriteNullableGet(w, func() func(arg0 hookedInput) Assignment[hookedRow] {
+						receiver := q.Note
+						return func(arg0 hookedInput) Assignment[hookedRow] { return NullableInputTextSet(receiver, arg0) }
+					}())
 					v, ok := input.Get()
 					if !ok || v.IsNull() {
 						t.Error("nullable input lost")
 					}
-					if !WriteIsSet(w, q.Name.Set) {
+					if !WriteIsSet(w, func() func(arg0 string) Assignment[hookedRow] {
+						receiver := q.Name
+						return func(arg0 string) Assignment[hookedRow] { return InputTextSet(receiver, arg0) }
+					}()) {
 						t.Error("assignment lost")
 					}
-					raw, _ := WriteGet(w, q.Name.Set).Get()
+					raw, _ := WriteGet(w, func() func(arg0 string) Assignment[hookedRow] {
+						receiver := q.Name
+						return func(arg0 string) Assignment[hookedRow] { return InputTextSet(receiver, arg0) }
+					}()).Get()
 					if raw != " new " {
 						t.Error("getter ran mutator")
 					}
@@ -135,7 +144,7 @@ func TestHooksStageOrderLockedSnapshotsAndReturning(t *testing.T) {
 					if closed != 2 {
 						t.Error("after hook before RETURNING closed")
 					}
-					nameChange, err := ChangeOf(c, q.Name)
+					nameChange, err := ChangeOf(c, InputTextExpr(q.Name))
 					if err != nil || !nameChange.Assigned() || !nameChange.Changed() {
 						t.Error("change", err)
 					}
@@ -143,7 +152,7 @@ func TestHooksStageOrderLockedSnapshotsAndReturning(t *testing.T) {
 					if after.Name != "trigger" || after.Body[0] != 1 {
 						t.Error("RETURNING/snapshot ownership")
 					}
-					note, err := NullableChangeOf(c, q.Note)
+					note, err := NullableChangeOf(c, NullableInputTextExpr(q.Note))
 					if err != nil || !note.Assigned() {
 						t.Error(err)
 					}
@@ -183,7 +192,7 @@ func TestHooksStageOrderLockedSnapshotsAndReturning(t *testing.T) {
 	if factories != 0 {
 		t.Fatal("eager factory")
 	}
-	_, err = q.Update(t.Context(), db, 1, q.Name.Set(" new "), q.Note.Set(hookedInput{" new note "}))
+	_, err = Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, InputTextSet(q.Name, " new "), NullableInputTextSet(q.Note, hookedInput{" new note "}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +219,7 @@ func TestObserverOnlyWritesAndSetAcknowledgement(t *testing.T) {
 	declaration, err := NewObserver[hookedRow]("observer.only").Declare(func() Hooks[hookedRow] {
 		calls++
 		return Hooks[hookedRow]{Creating: func(ctx context.Context, tx *database.Tx, w *Write[hookedRow]) error {
-			return WriteSet(w, q.Name.Set(" supplied "))
+			return WriteSet(w, InputTextSet(q.Name, " supplied "))
 		}}
 	})
 	if err != nil {
@@ -218,21 +227,21 @@ func TestObserverOnlyWritesAndSetAcknowledgement(t *testing.T) {
 	}
 	var statements []string
 	db := hookDB(t, testConnector{statements: &statements, columns: hookColumns, values: hookValues("supplied", nil, nil)}, declaration)
-	_, err = q.Insert(t.Context(), db, q.Key().Set(1), q.Body.Set([]byte{1, 2}))
+	_, err = Insert(t.Context(), db, q.Table, KeySet(q.Key(), 1), ColumnSet(q.Body, []byte{1, 2}))
 	if err != nil || calls != 1 {
 		t.Fatal(err, calls)
 	}
-	if _, err = q.Query().UpdateAll(t.Context(), db, q.Name.Set("x")); !errors.Is(err, fault.Invalid) {
+	if _, err = UpdateAll(t.Context(), db, q.Query(), InputTextSet(q.Name, "x")); !errors.Is(err, fault.Invalid) {
 		t.Fatal("set silently skipped observers", err)
 	}
-	if _, err = WithoutModelHooks(q.Query()).UpdateAll(t.Context(), db, q.Name.Set("x")); err != nil || calls != 1 {
+	if _, err = UpdateAll(t.Context(), db, WithoutModelHooks(q.Query()), InputTextSet(q.Name, "x")); err != nil || calls != 1 {
 		t.Fatal(err, calls)
 	}
-	if _, err = writeOne[hookedRow](t.Context(), db, WithoutModelHooks(q.Query()).state, 0, []Assignment[hookedRow]{q.Key().Set(1)}); !errors.Is(err, fault.Invalid) {
+	if _, err = writeOne[hookedRow](t.Context(), db, WithoutModelHooks(q.Query()).state, 0, []Assignment[hookedRow]{KeySet(q.Key(), 1)}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("ack disabled local hooks", err)
 	}
 	other := hookDB(t, testConnector{columns: hookColumns, values: hookValues("database", nil, nil)})
-	_, err = q.Insert(t.Context(), other, q.Key().Set(2), q.Body.Set([]byte{1, 2}))
+	_, err = Insert(t.Context(), other, q.Table, KeySet(q.Key(), 2), ColumnSet(q.Body, []byte{1, 2}))
 	if err != nil || calls != 1 {
 		t.Fatal("observer registry leaked", err, calls)
 	}
@@ -269,7 +278,7 @@ func TestSpecialHookStagesAndForceDeleteVisibility(t *testing.T) {
 			var want []string
 			switch op {
 			case lifecycle.Create:
-				_, err = q.Insert(t.Context(), db, q.Key().Set(1), q.Body.Set([]byte{1, 2}))
+				_, err = Insert(t.Context(), db, q.Table, KeySet(q.Key(), 1), ColumnSet(q.Body, []byte{1, 2}))
 				want = []string{"creating", "created", "saved", "commit"}
 			case lifecycle.Delete:
 				q = hookedFields(func() Hooks[hookedRow] {
@@ -278,13 +287,13 @@ func TestSpecialHookStagesAndForceDeleteVisibility(t *testing.T) {
 						return nil
 					}}
 				}, NoSoftDeletes())
-				_, err = q.Delete(t.Context(), db, 1)
+				_, err = Delete(t.Context(), db, q.Table.Query(), q.Table.Key(), 1)
 				want = []string{"deleting", "deleted", "commit"}
 			case lifecycle.SoftDelete:
-				_, err = q.Delete(t.Context(), db, 1)
+				_, err = Delete(t.Context(), db, q.Table.Query(), q.Table.Key(), 1)
 				want = []string{"deleting", "deleted", "commit"}
 			case lifecycle.Restore:
-				_, err = q.Restore(t.Context(), db, 1)
+				_, err = Restore(t.Context(), db, q.Table, 1)
 				want = []string{"restoring", "restored", "commit"}
 			case lifecycle.ForceDelete:
 				_, err = ForceDelete(t.Context(), db, q.Query().OnlyTrashed(), SoftDeletes(q.Deleted), q.Key(), int64(1))
@@ -343,7 +352,7 @@ func TestHookFaultsRollbackAndNoCandidate(t *testing.T) {
 					return
 				} // Factories return hooks, not an error.
 				db := hookDB(t, testConnector{columns: hookColumns, values: hookValues("name", nil, nil)})
-				got, err := q.Insert(t.Context(), db, q.Key().Set(1), q.Body.Set([]byte{1, 2}))
+				got, err := Insert(t.Context(), db, q.Table, KeySet(q.Key(), 1), ColumnSet(q.Body, []byte{1, 2}))
 				if err == nil || got.ID != 0 {
 					t.Fatal("callback fault published", err)
 				}
@@ -372,7 +381,7 @@ func TestHookSavepointsDiscardAndMergeAfterCommit(t *testing.T) {
 	veto := errors.New("rollback child")
 	err := db.Transaction(t.Context(), func(tx *database.Tx) error {
 		err := tx.Transaction(t.Context(), func(child *database.Tx) error {
-			_, e := q.Insert(t.Context(), child, q.Key().Set(1), q.Body.Set([]byte{1, 2}))
+			_, e := Insert(t.Context(), child, q.Table, KeySet(q.Key(), 1), ColumnSet(q.Body, []byte{1, 2}))
 			if e != nil {
 				return e
 			}
@@ -381,7 +390,7 @@ func TestHookSavepointsDiscardAndMergeAfterCommit(t *testing.T) {
 		if !errors.Is(err, veto) {
 			return fmt.Errorf("child: %w", err)
 		}
-		_, err = q.Insert(t.Context(), tx, q.Key().Set(1), q.Body.Set([]byte{1, 2}))
+		_, err = Insert(t.Context(), tx, q.Table, KeySet(q.Key(), 1), ColumnSet(q.Body, []byte{1, 2}))
 		if err != nil {
 			return err
 		}
@@ -398,11 +407,11 @@ func TestHookSavepointsDiscardAndMergeAfterCommit(t *testing.T) {
 func TestChangesCanonicalAssignedPersistedAndDraftInputs(t *testing.T) {
 	q := hookedFields(nil)
 	before := hookedRow{ID: 1, Name: "same", Body: []byte{1, 2}, Scratch: "ignored"}
-	c, err := Compare(q.Table, value.Set(before), value.Set(before), q.Name.Set("same"), q.Note.SetNull())
+	c, err := Compare(q.Table, value.Set(before), value.Set(before), InputTextSet(q.Name, "same"), NullableInputTextSetNull(q.Note))
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := ChangeOf(c, q.Body)
+	body, err := ChangeOf(c, ColumnExpr(q.Body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +421,7 @@ func TestChangesCanonicalAssignedPersistedAndDraftInputs(t *testing.T) {
 	if bodyBefore[0] != 1 {
 		t.Fatal("field-change buffer alias")
 	}
-	name, err := ChangeOf(c, q.Name)
+	name, err := ChangeOf(c, InputTextExpr(q.Name))
 	if err != nil || !name.Assigned() || name.Changed() || c.Changed() || !c.Assigned() || c.Operation().IsSet() {
 		t.Fatal("assignment/change", err)
 	}
@@ -425,27 +434,39 @@ func TestChangesCanonicalAssignedPersistedAndDraftInputs(t *testing.T) {
 	if b.Body[0] != 1 {
 		t.Fatal("snapshot alias")
 	}
-	if _, err = Compare(q.Table, value.Set(before), value.Set(before), q.Key().Set(1)); !errors.Is(err, fault.Invalid) {
+	if _, err = Compare(q.Table, value.Set(before), value.Set(before), KeySet(q.Key(), 1)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("key assignment", err)
 	}
 	var captured *Write[hookedRow]
 	q = hookedFields(func() Hooks[hookedRow] {
 		return Hooks[hookedRow]{Creating: func(ctx context.Context, tx *database.Tx, w *Write[hookedRow]) error {
 			captured = w
-			if WriteIsSet(w, q.Name.Set) || WriteGet(w, q.Name.Set).IsSet() {
+			if WriteIsSet(w, func() func(arg0 string) Assignment[hookedRow] {
+				receiver := q.Name
+				return func(arg0 string) Assignment[hookedRow] { return InputTextSet(receiver, arg0) }
+			}()) || WriteGet(w, func() func(arg0 string) Assignment[hookedRow] {
+				receiver := q.Name
+				return func(arg0 string) Assignment[hookedRow] { return InputTextSet(receiver, arg0) }
+			}()).IsSet() {
 				return errors.New("omitted input present")
 			}
-			if err := WriteSet(w, q.Note.SetNull(), q.Name.Set("")); err != nil {
+			if err := WriteSet(w, NullableInputTextSetNull(q.Note), InputTextSet(q.Name, "")); err != nil {
 				return err
 			}
-			note, ok := WriteNullableGet(w, q.Note.Set).Get()
+			note, ok := WriteNullableGet(w, func() func(arg0 hookedInput) Assignment[hookedRow] {
+				receiver := q.Note
+				return func(arg0 hookedInput) Assignment[hookedRow] { return NullableInputTextSet(receiver, arg0) }
+			}()).Get()
 			if !ok || !note.IsNull() {
 				return errors.New("null lost")
 			}
-			if err := WriteSet(w, q.Note.Set(hookedInput{"input"})); err != nil {
+			if err := WriteSet(w, NullableInputTextSet(q.Note, hookedInput{"input"})); err != nil {
 				return err
 			}
-			note, _ = WriteNullableGet(w, q.Note.Set).Get()
+			note, _ = WriteNullableGet(w, func() func(arg0 hookedInput) Assignment[hookedRow] {
+				receiver := q.Note
+				return func(arg0 hookedInput) Assignment[hookedRow] { return NullableInputTextSet(receiver, arg0) }
+			}()).Get()
 			v, ok := note.Get()
 			if !ok || v.Text != "input" {
 				return errors.New("distinct input lost")
@@ -454,10 +475,10 @@ func TestChangesCanonicalAssignedPersistedAndDraftInputs(t *testing.T) {
 		}}
 	})
 	db := hookDB(t, testConnector{columns: hookColumns, values: hookValues("", "input", nil)})
-	if _, err = q.Insert(t.Context(), db, q.Key().Set(1), q.Body.Set([]byte{1, 2})); err != nil {
+	if _, err = Insert(t.Context(), db, q.Table, KeySet(q.Key(), 1), ColumnSet(q.Body, []byte{1, 2})); err != nil {
 		t.Fatal(err)
 	}
-	if err = WriteSet(captured, q.Name.Set("late")); !errors.Is(err, fault.Invalid) {
+	if err = WriteSet(captured, InputTextSet(q.Name, "late")); !errors.Is(err, fault.Invalid) {
 		t.Fatal("retained draft writable", err)
 	}
 }
@@ -473,7 +494,7 @@ func TestHookDepthAndDeclarationValidation(t *testing.T) {
 	}
 	q := hookedFields(func() Hooks[hookedRow] { return Hooks[hookedRow]{} })
 	db := hookDB(t, testConnector{})
-	if _, err := q.Insert(ctx, db, q.Key().Set(1)); !errors.Is(err, fault.Invalid) {
+	if _, err := Insert(ctx, db, q.Table, KeySet(q.Key(), 1)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("depth", err)
 	}
 	bad := Define("bad", func(b Builder[hookedRow], m *hookedRow) Table[hookedRow, int64] { return TableOf(b, &m.ID) }, WithHooks[hookedRow](nil))
@@ -487,7 +508,7 @@ func TestEncryptedChangesUseDecodedEqualityAndRedactedDiagnostics(t *testing.T) 
 	before := secureRecord{Secret: encrypted.NewText("private value"), Backup: value.Of(encrypted.NewText("backup private"))}
 	after := before
 	after.Secret = encrypted.NewText("private value")
-	changes, err := Compare(q.Table, value.Set(before), value.Set(after), q.Secret.Set(encrypted.NewText("private value")))
+	changes, err := Compare(q.Table, value.Set(before), value.Set(after), EncryptedSet(q.Secret, encrypted.NewText("private value")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,19 +536,19 @@ func TestDeletionObserversDispatchOnlyDeletionStages(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := hookDB(t, testConnector{columns: hookColumns, values: hookValues("name", nil, nil)}, declaration)
-	if _, err = q.Insert(t.Context(), db, q.Key().Set(1), q.Body.Set([]byte{1, 2})); err != nil {
+	if _, err = Insert(t.Context(), db, q.Table, KeySet(q.Key(), 1), ColumnSet(q.Body, []byte{1, 2})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = q.Query().UpdateAll(t.Context(), db, q.Name.Set("name")); err != nil {
+	if _, err = UpdateAll(t.Context(), db, q.Query(), InputTextSet(q.Name, "name")); err != nil {
 		t.Fatal(err)
 	}
 	if factories != 0 || calls != 0 {
 		t.Fatal("deletion observer ran on save")
 	}
-	if _, err = q.Delete(t.Context(), db, 1); err != nil || factories != 1 || calls != 1 {
+	if _, err = Delete(t.Context(), db, q.Table.Query(), q.Table.Key(), 1); err != nil || factories != 1 || calls != 1 {
 		t.Fatal(err, factories, calls)
 	}
-	if _, err = q.Query().DeleteAll(t.Context(), db); !errors.Is(err, fault.Invalid) {
+	if _, err = DeleteAll(t.Context(), db, q.Query()); !errors.Is(err, fault.Invalid) {
 		t.Fatal("deletion set bypass", err)
 	}
 }
@@ -547,7 +568,7 @@ func TestHookOriginalMustBeUniqueAndClosedBeforeFactory(t *testing.T) {
 			factories, closes := 0, 0
 			q := hookedFields(func() Hooks[hookedRow] { factories++; return Hooks[hookedRow]{} })
 			db := hookDB(t, testConnector{columns: hookColumns, values: tc.rows, closeErr: tc.close, onClose: func() { closes++ }})
-			if _, err := q.Update(t.Context(), db, 1, q.Name.Set("new")); !errors.Is(err, tc.want) {
+			if _, err := Update(t.Context(), db, q.Table.Query(), q.Table.Key(), 1, InputTextSet(q.Name, "new")); !errors.Is(err, tc.want) {
 				t.Fatal(err)
 			}
 			if factories != 0 || closes == 0 {
@@ -568,7 +589,7 @@ func TestHookCancellationStopsBeforeSQL(t *testing.T) {
 		}, Creating: func(context.Context, *database.Tx, *Write[hookedRow]) error { later = true; return nil }}
 	})
 	db := hookDB(t, testConnector{statements: &statements})
-	_, err := q.Insert(ctx, db, q.Key().Set(1))
+	_, err := Insert(ctx, db, q.Table, KeySet(q.Key(), 1))
 	if !errors.Is(err, context.Canceled) || later || len(statements) != 0 {
 		t.Fatal("cancelled hook progressed", err)
 	}

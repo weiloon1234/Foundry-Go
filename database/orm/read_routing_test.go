@@ -18,14 +18,14 @@ func TestCursorChunksAndLockedLookupRouting(t *testing.T) {
 	if _, err := CursorPaginate(t.Context(), db, r.Query(), CursorRequest[record]{Size: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if err := ChunkByKey(t.Context(), db, r.Query().Limit(1), r.ID, 2, func([]record) error { return nil }); err != nil {
+	if err := ChunkByKey(t.Context(), db, r.Query().Limit(1), KeyExpr(r.ID), 2, func([]record) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if len(replica) != 2 || len(primary) != 0 {
 		t.Fatal("unlocked reads did not route to read pool", primary, replica)
 	}
 	if err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := r.Query().Where(r.ID.Eq(1)).ForUpdate().Require(t.Context(), tx)
+		_, err := RequireLocked(t.Context(), tx, Lock(r.Query().Where(KeyEq(r.ID, 1))))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -33,7 +33,7 @@ func TestCursorChunksAndLockedLookupRouting(t *testing.T) {
 	if len(primary) != 1 || len(replica) != 2 {
 		t.Fatal("locked lookup left transaction", primary, replica)
 	}
-	if _, err := r.Raw(t.Context(), db, "SELECT id,display_name,note,amount FROM records"); err != nil {
+	if _, err := Raw(t.Context(), db, r.Table, "SELECT id,display_name,note,amount FROM records"); err != nil {
 		t.Fatal(err)
 	}
 	if len(primary) != 2 || len(replica) != 2 {

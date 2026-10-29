@@ -34,7 +34,7 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	_, err = db.Exec(ctx, `INSERT INTO json_documents VALUES(1,'{"profile":{"name":"Ada","age":"42","nickname":null,"scores":[1,2,3],"attributes":{"2":"two"},"next":null,"quoted":"\"hello\"","odd%path":"odd"}}',NULL,'["a","b"]','[1,2,3]','null')`)
 	must(t, err)
 	d := jsonpaths.Documents
-	root := expr.JSONRoot(expr.Value(d.Settings))
+	root := expr.JSONRoot(expr.Value(orm.JSONExpr(d.Settings)))
 	profile := expr.JSONOptional(expr.JSONProperty(root, jsonpaths.UserProfile))
 	theme := expr.JSONOptional(expr.JSONProperty(root, jsonpaths.Theme))
 	nick := expr.JSONProperty(profile, jsonpaths.Nickname)
@@ -42,10 +42,10 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	scores := expr.JSONProperty(profile, jsonpaths.Scores)
 	fragment, err := value.NewJSON([]int64{2})
 	must(t, err)
-	if k := readJSON(t, db, expr.JSONType(expr.Value(d.Settings)).Value(), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)); k != database.JSONObject {
+	if k := readJSON(t, db, expr.JSONType(expr.Value(orm.JSONExpr(d.Settings))).Value(), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)); k != database.JSONObject {
 		t.Fatal(k)
 	}
-	if v := readJSON(t, db, expr.JSONTypeNullable(expr.Value(d.Backup)).Value(), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
+	if v := readJSON(t, db, expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(d.Backup))).Value(), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
 		t.Fatal(v)
 	}
 	if v := readJSON(t, db, expr.JSONTypeNullable(theme.JSON()).Value(), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
@@ -78,7 +78,7 @@ func TestStage6d3JSONPaths(t *testing.T) {
 		t.Fatal(v)
 	}
 	for _, p := range []expr.Predicate[jsonpaths.Document]{theme.JSON().IsNull(), nick.JSON().IsNotNull(), expr.JSONTypeNullable(nick.JSON()).Eq(value.Of(database.JSONNull)), expr.JSONContainsNullable(scores.JSON(), scores.JSON().Param(value.Of(fragment))).Eq(value.Of(true))} {
-		n, err := expr.Where(d.Query(), p).Count(ctx, db)
+		n, err := orm.Count(ctx, db, expr.Where(d.Query(), p))
 		must(t, err)
 		if n != 1 {
 			t.Fatal(n)
@@ -88,7 +88,7 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	for _, json := range []string{`null`, `{}`, `"text"`, `42`, `true`, `[]`, `[null,1]`} {
 		_, err = db.Exec(ctx, `UPDATE json_documents SET tags=$1::jsonb`, json)
 		must(t, err)
-		got := readJSON(t, db, expr.JSONLength(expr.Value(d.Tags)).Value(), codec.Nullable(codec.Signed[int64]()))
+		got := readJSON(t, db, expr.JSONLength(expr.Value(orm.JSONExpr(d.Tags))).Value(), codec.Nullable(codec.Signed[int64]()))
 		switch json {
 		case `[]`:
 			if got != value.Of(int64(0)) {

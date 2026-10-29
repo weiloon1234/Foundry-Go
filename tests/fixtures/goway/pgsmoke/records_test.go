@@ -36,13 +36,13 @@ func TestStage6c1CompleteRecords(t *testing.T) {
 	schema := rows.Define(func(b rows.Builder[recordSummary], r *recordSummary) recordFields {
 		return recordFields{b.Row(), rows.TextOf(b, &r.Name)}
 	})
-	a := rows.AsRecord[joinLeft](rows.ModelRecord(table.Query().OrderBy(table.Key().Asc()).Limit(1)), "item")
+	a := rows.AsRecord[joinLeft](rows.ModelRecord(table.Query().OrderBy(orm.KeyAsc(table.Key())).Limit(1)), "item")
 	got, err := rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a))).All(ctx, db)
 	must(t, err)
 	if len(got) != 1 || got[0].ID != 1 {
 		t.Fatal(got)
 	}
-	p := rows.Select(rows.From(table.Query().Where(table.Key().Eq(2))), schema, rows.Map(schema.Name, expr.Value(table.Name)))
+	p := rows.Select(rows.From(table.Query().Where(orm.KeyEq(table.Key(), 2))), schema, rows.Map(schema.Name, expr.Value(orm.TextExpr(table.Name))))
 	derived := rows.AsRecord[joinRight](rows.RecordOf(p), "summary")
 	summaries, err := rows.ReadRecord(rows.SelectRecord(derived, rows.Scope(derived))).All(ctx, db)
 	must(t, err)
@@ -50,7 +50,7 @@ func TestStage6c1CompleteRecords(t *testing.T) {
 		t.Fatal(summaries)
 	}
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
-		locked := rows.AsTransaction[joinLeft](rows.LockedRecord(table.Query().Where(table.Key().Eq(1)).ForUpdate()), "claimed")
+		locked := rows.AsTransaction[joinLeft](rows.LockedRecord(orm.Lock(table.Query().Where(orm.KeyEq(table.Key(), 1)))), "claimed")
 		records, err := rows.SelectTransactionRecord(locked, rows.TransactionScope(locked)).All(ctx, tx)
 		if err != nil {
 			return err
@@ -60,7 +60,7 @@ func TestStage6c1CompleteRecords(t *testing.T) {
 		}
 		// A separate transaction cannot acquire the retained inner lock.
 		return db.Transaction(ctx, func(other *database.Tx) error {
-			next := rows.AsTransaction[joinRight](rows.LockedRecord(table.Query().Where(table.Key().Eq(1)).ForUpdate().SkipLocked()), "next")
+			next := rows.AsTransaction[joinRight](rows.LockedRecord(orm.Lock(table.Query().Where(orm.KeyEq(table.Key(), 1))).SkipLocked()), "next")
 			remaining, err := rows.SelectTransactionRecord(next, rows.TransactionScope(next)).All(ctx, other)
 			if err == nil && len(remaining) != 0 {
 				t.Fatal("lock escaped derived source", remaining)

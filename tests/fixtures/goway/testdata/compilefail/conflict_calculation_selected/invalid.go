@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -7,4 +9,4 @@ import (
 )
 
 var records = rows.ConflictRowsOf(models.Users.Query())
-var _ = rows.SetConflictValue(models.Users.Age, expr.Row(expr.At(records.Proposed(), models.Users.Age)).Value())
+var _ = rows.SetConflictValue(orm.NumberExpr(models.Users.Age), expr.Row(expr.At(records.Proposed(), orm.NumberExpr(models.Users.Age))).Value())

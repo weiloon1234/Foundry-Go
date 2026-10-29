@@ -1,5 +1,7 @@
 package postgres_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -56,7 +58,7 @@ func families(t *testing.T, s *setup) int64 {
 	var n int64
 	within(t, s, func(tx *database.Tx) error {
 		var err error
-		n, err = tokenstore.Families.Query().Count(t.Context(), tx)
+		n, err = orm.Count(t.Context(), tx, tokenstore.Families.Query())
 		return err
 	})
 	return n

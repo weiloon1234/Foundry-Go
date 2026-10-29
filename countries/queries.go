@@ -1,5 +1,7 @@
 package countries
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 
@@ -19,7 +21,7 @@ func Find(ctx context.Context, store *extensions.Store, code Code) (value.Option
 	var result value.Optional[Country]
 	err := store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		result, err = Countries.Find(ctx, tx, code)
+		result, err = orm.Find(ctx, tx, Countries.Table, code)
 		return err
 	})
 	if err != nil {
@@ -34,7 +36,7 @@ func Exists(ctx context.Context, store *extensions.Store, code Code) (bool, erro
 	result := false
 	err := store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		result, err = Countries.Query().Where(Countries.ISO2.Eq(code)).Exists(ctx, tx)
+		result, err = orm.Exists(ctx, tx, Countries.Query().Where(orm.KeyEq(Countries.ISO2, code)))
 		return err
 	})
 	if err != nil {
@@ -54,9 +56,9 @@ func list(ctx context.Context, store *extensions.Store, enabled bool) ([]Country
 		f := Countries
 		q := Countries.Query()
 		if enabled {
-			q = q.Where(f.Status.Eq(EnabledStatus))
+			q = q.Where(orm.EnumEq(f.Status, EnabledStatus))
 		}
-		rows, err := q.OrderBy(f.Name.Asc(), f.ISO2.Asc()).Limit(MaxCountries+1).All(ctx, tx)
+		rows, err := orm.All(ctx, tx, q.OrderBy(orm.TextAsc(f.Name), orm.KeyAsc(f.ISO2)).Limit(MaxCountries+1))
 		if err != nil {
 			return err
 		}
@@ -78,7 +80,7 @@ func Default(ctx context.Context, store *extensions.Store) (value.Optional[Count
 	var result value.Optional[Country]
 	err := store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		result, err = Countries.Query().Where(Countries.IsDefault.Eq(true)).First(ctx, tx)
+		result, err = orm.First(ctx, tx, Countries.Query().Where(orm.ColumnEq(Countries.IsDefault, true)))
 		return err
 	})
 	if err != nil {
@@ -97,7 +99,7 @@ func SetDefault(ctx context.Context, store *extensions.Store, code Code) error {
 	}
 	return store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		q, f := Countries.Query(), Countries
-		current, err := q.Where(f.IsDefault.Eq(true)).ForUpdate().All(ctx, tx)
+		current, err := orm.AllLocked(ctx, tx, orm.Lock(q.Where(orm.ColumnEq(f.IsDefault, true))))
 		if err != nil {
 			return err
 		}
@@ -105,11 +107,11 @@ func SetDefault(ctx context.Context, store *extensions.Store, code Code) error {
 			if country.ISO2 == code {
 				continue
 			}
-			if _, err := Countries.Update(ctx, tx, country.ISO2, Countries.IsDefault.Set(false)); err != nil {
+			if _, err := orm.Update(ctx, tx, Countries.Table.Query(), Countries.Table.Key(), country.ISO2, orm.ColumnSet(Countries.IsDefault, false)); err != nil {
 				return err
 			}
 		}
-		_, err = Countries.Update(ctx, tx, code, Countries.IsDefault.Set(true))
+		_, err = orm.Update(ctx, tx, Countries.Table.Query(), Countries.Table.Key(), code, orm.ColumnSet(Countries.IsDefault, true))
 		return err
 	})
 }

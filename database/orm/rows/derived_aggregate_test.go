@@ -44,15 +44,15 @@ func derivedAggregateSource() (Aliased[left, aggregateRecord], aggregateRowField
 		}
 	})
 	q := Select(From(d.Query()), r.Row,
-		Map(r.ID, expr.Value(d.Key())),
-		Map(r.Exact, expr.Value(d.Exact)),
-		Map(r.MaybeExact, expr.Value(d.MaybeExact)),
-		Map(r.Approx, expr.Value(d.Approx)),
-		Map(r.MaybeApprox, expr.Value(d.MaybeApprox)),
-		Map(r.Period, expr.Value(d.Period)),
-		Map(r.MaybePeriod, expr.Value(d.MaybePeriod)),
-		Map(r.Name, expr.Value(d.Name)),
-		Map(r.MaybeName, expr.Value(d.MaybeName)),
+		Map(r.ID, expr.Value(orm.KeyExpr(d.Key()))),
+		Map(r.Exact, expr.Value(orm.NumberExpr(d.Exact))),
+		Map(r.MaybeExact, expr.Value(orm.NullableNumberExpr(d.MaybeExact))),
+		Map(r.Approx, expr.Value(orm.NumberExpr(d.Approx))),
+		Map(r.MaybeApprox, expr.Value(orm.NullableNumberExpr(d.MaybeApprox))),
+		Map(r.Period, expr.Value(orm.IntervalExpr(d.Period))),
+		Map(r.MaybePeriod, expr.Value(orm.NullableIntervalExpr(d.MaybePeriod))),
+		Map(r.Name, expr.Value(orm.TextExpr(d.Name))),
+		Map(r.MaybeName, expr.Value(orm.NullableTextExpr(d.MaybeName))),
 	)
 	return AsRecord[left](RecordOf(q), "derived"), r
 }

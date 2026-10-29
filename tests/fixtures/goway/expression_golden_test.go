@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -52,7 +54,7 @@ func runExpressionNew(g *goldenCapture) {
 	db := g.open(ctx)
 	defer db.Close(ctx)
 	a := rowset.As[expressionSide](models.Orders.Query(), "o")
-	f := expr.At(rowset.Scope(a), models.Orders.TotalCents)
+	f := expr.At(rowset.Scope(a), orm.NumberExpr(models.Orders.TotalCents))
 	x := expr.Add(f, f)
 	result := expr.Divide(x, x.Param(2))
 	s := expressionRows

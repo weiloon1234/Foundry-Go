@@ -8,5 +8,5 @@ import (
 )
 
 func invalid(ctx context.Context, db *database.DB) {
-	_, _ = orm.Attach(ctx, db, j.Peers, j.Parent{}, j.Target{}, j.Targets.Name.Set("wrong"))
+	_, _ = orm.Attach(ctx, db, j.Peers, j.Parent{}, j.Target{}, orm.TextSet(j.Targets.Name, "wrong"))
 }

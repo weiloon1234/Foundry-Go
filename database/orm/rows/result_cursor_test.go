@@ -15,8 +15,8 @@ import (
 
 func TestResultCursorWindowAndBidirectionalNavigation(t *testing.T) {
 	m := declareMembers()
-	c := CursorFor(ModelRecord(m.Query().Where(m.ID.Ne(0)).OrderBy(m.ID.Desc()).Limit(8).Offset(1)))
-	id := expr.At(c.Scope(), m.ID)
+	c := CursorFor(ModelRecord(m.Query().Where(orm.KeyNe(m.ID, 0)).OrderBy(orm.KeyDesc(m.ID)).Limit(8).Offset(1)))
+	id := expr.At(c.Scope(), orm.KeyExpr(m.ID))
 	c = c.UniqueBy(expr.Group(id))
 	state := &driverState{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "one", nil}, {int64(2), "two", nil}}}
 	db := openTest(t, state)
@@ -47,7 +47,7 @@ func TestResultCursorWindowAndBidirectionalNavigation(t *testing.T) {
 
 func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 	m := declareMembers()
-	c := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Nickname)).Value())))
+	c := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value())))
 	c = c.UniqueBy(expr.Group(c.Value()))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"nick"}}}
 	db := openTest(t, state)
@@ -64,9 +64,9 @@ func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 		t.Fatal(err, state.sql)
 	}
 	base := CursorFor(ModelRecord(m.Query()))
-	id := expr.At(base.Scope(), m.ID)
+	id := expr.At(base.Scope(), orm.KeyExpr(m.ID))
 	foreign := CursorFor(ModelRecord(declareMembers().Query()))
-	cases := []CursorQuery[member]{base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc(), id.Desc()), base.UniqueBy(expr.Group(expr.At(foreign.Scope(), m.ID))), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc().NullsLast()), {}, base.UniqueBy(expr.Group(id)).OrderBy(expr.AddValue(expr.Row(id).Value(), expr.Row(id).Value()).Asc())}
+	cases := []CursorQuery[member]{base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc(), id.Desc()), base.UniqueBy(expr.Group(expr.At(foreign.Scope(), orm.KeyExpr(m.ID)))), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc().NullsLast()), {}, base.UniqueBy(expr.Group(id)).OrderBy(expr.AddValue(expr.Row(id).Value(), expr.Row(id).Value()).Asc())}
 	for i, bad := range cases {
 		if _, err := bad.Paginate(t.Context(), db, orm.CursorRequest[member]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 			t.Fatal(i, err, state.sql)
@@ -77,7 +77,7 @@ func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 func TestResultCursorFailureDiscardsPageAndRejectsSensitiveKeys(t *testing.T) {
 	m := declareMembers()
 	c := CursorFor(ModelRecord(m.Query()))
-	c = c.UniqueBy(expr.Group(expr.At(c.Scope(), m.ID)))
+	c = c.UniqueBy(expr.Group(expr.At(c.Scope(), orm.KeyExpr(m.ID))))
 	for _, state := range []*driverState{{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "one", nil}}, closeErr: errors.New("close failure")}, {columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "one", nil}, {"bad", "two", nil}}}} {
 		page, err := c.Paginate(t.Context(), openTest(t, state), orm.CursorRequest[member]{Size: 1})
 		if err == nil || page.Items != nil || page.Next.IsSet() || !state.closed {
@@ -95,7 +95,7 @@ func TestResultCursorFailureDiscardsPageAndRejectsSensitiveKeys(t *testing.T) {
 	table := orm.Define("secrets", func(b orm.Builder[secret], s *secret) secretFields {
 		return secretFields{orm.TableOf(b, &s.ID), orm.ColumnOf(b, &s.Name, orm.Codec(codec.String[string]().WithSensitiveValues()))}
 	})
-	scalar := ValueCursorFor(Values(SelectScalar(From(table.Query()), expr.Row(expr.Value(table.Name)).Value())))
+	scalar := ValueCursorFor(Values(SelectScalar(From(table.Query()), expr.Row(expr.Value(orm.ColumnExpr(table.Name))).Value())))
 	state := &driverState{}
 	if _, err := scalar.UniqueBy(expr.Group(scalar.Value())).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal(err, state.sql)
@@ -105,7 +105,7 @@ func TestResultCursorFailureDiscardsPageAndRejectsSensitiveKeys(t *testing.T) {
 func TestResultCursorProjectionFieldCodecs(t *testing.T) {
 	m := declareMembers()
 	schema := declareRows()
-	report := Select(From(m.Query()), schema, Map(schema.ID, expr.Value(m.ID)), Map(schema.Name, expr.Value(m.Name)))
+	report := Select(From(m.Query()), schema, Map(schema.ID, expr.Value(orm.KeyExpr(m.ID))), Map(schema.Name, expr.Value(orm.TextExpr(m.Name))))
 	c := CursorFor(RecordOf(report))
 	c = c.UniqueBy(expr.Group(At(c.Scope(), schema.ID)))
 	state := &driverState{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(1), "one"}, {int64(2), "two"}}}

@@ -21,4 +21,4 @@ var Products = orm.Define("products", func(b orm.Builder[Product], p *Product) P
 })
 var ProductLinks = struct {
 	Creator orm.BelongsTo[Product, models.User]
-}{orm.BelongsToOf(Products.Creator, Products.CreatorID, models.Users.ID)}
+}{orm.BelongsToOf(Products.Creator, orm.ColumnExpr(Products.CreatorID), orm.KeyExpr(models.Users.ID))}

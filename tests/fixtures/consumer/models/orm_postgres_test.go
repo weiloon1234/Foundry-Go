@@ -1,5 +1,7 @@
 package models_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"github.com/weiloon1234/Foundry-Go/tests/oracle"
 
@@ -12,7 +14,7 @@ import (
 
 func TestPostgresSharedDeclarationRelationParity(t *testing.T) {
 	queryfixture.RunStable(t, func(tx *database.Tx, _ []models.User) error {
-		got, err := models.Users.Query().With(models.UserLinks.Introducer, models.UserLinks.Referrals, models.UserLinks.Orders, models.UserValues.OrderCount, models.UserValues.OrderTotal, models.UserValues.OrderAverage, models.UserValues.OrderMinimum, models.UserValues.OrderMaximum).OrderBy(models.Users.Email.Asc()).All(t.Context(), tx)
+		got, err := orm.All(t.Context(), tx, models.Users.Query().With(models.UserLinks.Introducer, models.UserLinks.Referrals, models.UserLinks.Orders, models.UserValues.OrderCount, models.UserValues.OrderTotal, models.UserValues.OrderAverage, models.UserValues.OrderMinimum, models.UserValues.OrderMaximum).OrderBy(orm.TextAsc(models.Users.Email)))
 		if err != nil {
 			return err
 		}

@@ -33,7 +33,7 @@ func TestFactoryORMAndGeneratedParity(t *testing.T) {
 				hook := func() { trace = append(trace, "factory.after") }
 
 				f, err := factory.Define(n.Members.Table, func(_ context.Context, seq factory.Sequence) ([]orm.Assignment[n.Member], error) {
-					return []orm.Assignment[n.Member]{n.Members.Key().Set(int64(seq)), n.Members.Name.Set(" input "), n.Members.Body.Set([]byte{1})}, nil
+					return []orm.Assignment[n.Member]{orm.KeySet(n.Members.Key(), int64(seq)), orm.InputTextSet(n.Members.Name, " input "), orm.ColumnSet(n.Members.Body, []byte{1})}, nil
 				})
 				if err != nil {
 					t.Fatal(err)
@@ -94,7 +94,7 @@ func TestORMModelBindingScopeAndDuplicateParity(t *testing.T) {
 			db := readDB(t, g)
 			var err error
 
-			r := modelbinding.ByColumn(db, n.Members.Query().Where(n.Members.Key().Eq(1)), n.Members.Name, func(string) string { return "visible" })
+			r := modelbinding.ByColumn(db, n.Members.Query().Where(orm.KeyEq(n.Members.Key(), 1)), orm.InputTextExpr(n.Members.Name), func(string) string { return "visible" })
 			_, err = r.Resolve(t.Context(), "visible")
 
 			transcripts = append(transcripts, g.output.String())

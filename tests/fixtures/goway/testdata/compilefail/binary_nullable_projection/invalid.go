@@ -29,4 +29,4 @@ type resultFields struct {
 var result = rows.Define(func(b rows.Builder[output], r *output) resultFields {
 	return resultFields{b.Row(), rows.BytesOf(b, &r.Value)}
 })
-var invalid = rows.Map(result.Value, expr.Value(table.Value))
+var invalid = rows.Map(result.Value, expr.Value(orm.NullableColumnExpr(table.Value)))

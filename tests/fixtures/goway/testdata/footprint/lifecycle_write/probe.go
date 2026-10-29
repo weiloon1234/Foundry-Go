@@ -8,7 +8,7 @@ import (
 )
 
 func Update(ctx context.Context, db *database.DB) (h.Member, error) {
-	return h.Members.Update(ctx, db, 1, h.Members.Name.Set("name"))
+	return orm.Update(ctx, db, h.Members.Table.Query(), h.Members.Table.Key(), 1, orm.InputTextSet(h.Members.Name, "name"))
 }
 func Register(observer orm.Observer[h.Member]) {
 	_, _ = observer.Declare(func() orm.Hooks[h.Member] { return h.LocalHooks() })

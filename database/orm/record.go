@@ -42,7 +42,7 @@ func modelRecord(table *tableCore) ormcore.Record {
 }
 
 // FoundryLockedRecord retains the model's lock inside a transaction-only record.
-// Example: FoundryLockedRecord(Orders.Query().ForUpdate(),sqlowner.Metadata()).
+// Example: FoundryLockedRecord(orm.Lock(Orders.Query()),sqlowner.Metadata()).
 func FoundryLockedRecord[M any](q LockedQuery[M], seal sqlowner.MetadataSeal) ormcore.RecordSource {
 	if !seal.Valid() {
 		return ormcore.RecordSource{Source: ormcore.Source{Err: invalid("invalid SQL owner capability")}}

@@ -10,4 +10,4 @@ import (
 var _ = orm.LoadFrom[j.Parent]
 var _ = expr.Count[j.Parent]
 var _ decimal.Decimal
-var invalid = expr.Related(j.DirectTargets, expr.Sum(orm.NumberKey(j.Parents.ID)))
+var invalid = expr.Related(j.DirectTargets, expr.Sum(orm.NumberKeyExpr(orm.NumberKey(j.Parents.ID))))

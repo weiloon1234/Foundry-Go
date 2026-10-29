@@ -72,7 +72,7 @@ func Select[S, R any](source SelectionSource[S], schema Schema[R], mappings ...M
 	return q
 }
 
-// SelectValue selects just a column's value type. Example: rows.SelectValue(Orders.Query(),Orders.TotalCents).
+// SelectValue selects just a column's value type. Example: rows.SelectValue(Orders.Query(), orm.NumberExpr(Orders.TotalCents)).
 func SelectValue[M, V, P any](source orm.Query[M], column orm.ExpressionColumn[M, V, P]) Query[M, P] {
 	s := orm.FoundrySource(source, sqlowner.Metadata())
 	_, c := orm.FoundryColumn(column, sqlowner.Metadata())

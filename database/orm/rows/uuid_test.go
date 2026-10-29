@@ -27,12 +27,12 @@ func uuidSchema() uuidFields {
 func TestUUIDExpressionAliasAndNullable(t *testing.T) {
 	d, foreign := uuidSchema(), uuidSchema()
 	a := As[left](d.Query(), "u")
-	id := expr.At(Scope(a), d.Key())
-	parent := expr.At(Scope(a), d.Parent)
+	id := expr.At(Scope(a), orm.KeyExpr(d.Key()))
+	parent := expr.At(Scope(a), orm.NullableColumnExpr(d.Parent))
 	for _, p := range []expr.Predicate[Alias[left, uuidRow]]{expr.UUIDGreater(id, model.ID[uuidRow]{}), expr.UUIDLessNullable(parent, model.ID[uuidRow]{}), expr.UUIDLessOrEqualNullable(parent, model.ID[uuidRow]{}), expr.UUIDGreaterNullable(parent, model.ID[uuidRow]{}), expr.UUIDGreaterOrEqualNullable(parent, model.ID[uuidRow]{})} {
 		expressionSQL(t, expressionQuery(a, expr.Row(id).Value(), codec.ID[uuidRow]()).Where(p))
 	}
-	bad := expr.At(Scope(a), foreign.Key())
+	bad := expr.At(Scope(a), orm.KeyExpr(foreign.Key()))
 	q := expressionQuery(a, expr.Row(id).Value(), codec.ID[uuidRow]()).Where(expr.UUIDGreater(bad, model.ID[uuidRow]{}))
 	state := &driverState{}
 	if _, err := Read(q).All(t.Context(), openTest(t, state)); err == nil || state.sql != "" {

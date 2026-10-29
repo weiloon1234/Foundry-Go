@@ -53,7 +53,7 @@ func TestPostgresRelationEndpointLocksSurvivePivotHooks(t *testing.T) {
 		var result attachmentResult
 		result.err = linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
 			var err error
-			result.pivot, err = orm.Attach(linkqueries.WithTrace(ctx, trace), tx, linkqueries.MemberLinks.Groups, member, group, linkqueries.Memberships.Role.Set("admin"))
+			result.pivot, err = orm.Attach(linkqueries.WithTrace(ctx, trace), tx, linkqueries.MemberLinks.Groups, member, group, orm.InputTextSet(linkqueries.Memberships.Role, "admin"))
 			return err
 		})
 		done <- result
@@ -67,11 +67,11 @@ func TestPostgresRelationEndpointLocksSurvivePivotHooks(t *testing.T) {
 	}
 	for name, attempt := range map[string]func(*database.Tx) error{
 		"source": func(tx *database.Tx) error {
-			_, err := linkqueries.Members.Query().Where(linkqueries.Members.Key().Eq(member.ID)).ForUpdate().NoWait().Require(ctx, tx)
+			_, err := orm.RequireLocked(ctx, tx, orm.Lock(linkqueries.Members.Query().Where(orm.KeyEq(linkqueries.Members.Key(), member.ID))).NoWait())
 			return err
 		},
 		"target": func(tx *database.Tx) error {
-			_, err := linkqueries.Groups.Query().Where(linkqueries.Groups.Key().Eq(group.Code)).ForUpdate().NoWait().Require(ctx, tx)
+			_, err := orm.RequireLocked(ctx, tx, orm.Lock(linkqueries.Groups.Query().Where(orm.KeyEq(linkqueries.Groups.Key(), group.Code))).NoWait())
 			return err
 		},
 	} {
@@ -91,10 +91,10 @@ func TestPostgresRelationEndpointLocksSurvivePivotHooks(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		if _, err := linkqueries.Members.Query().Where(linkqueries.Members.Key().Eq(member.ID)).ForUpdate().NoWait().Require(ctx, tx); err != nil {
+		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(linkqueries.Members.Query().Where(orm.KeyEq(linkqueries.Members.Key(), member.ID))).NoWait()); err != nil {
 			return err
 		}
-		_, err := linkqueries.Groups.Query().Where(linkqueries.Groups.Key().Eq(group.Code)).ForUpdate().NoWait().Require(ctx, tx)
+		_, err := orm.RequireLocked(ctx, tx, orm.Lock(linkqueries.Groups.Query().Where(orm.KeyEq(linkqueries.Groups.Key(), group.Code))).NoWait())
 		return err
 	}); err != nil {
 		t.Fatal("relation completion retained endpoint locks", err)
@@ -148,7 +148,7 @@ func TestPostgresCompetingRelationAttachmentsRetainUniqueness(t *testing.T) {
 		var result attachmentResult
 		result.err = linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
 			var err error
-			result.pivot, err = orm.Attach(linkqueries.WithTrace(ctx, trace), tx, linkqueries.MemberLinks.Groups, member, group, linkqueries.Memberships.Role.Set("admin"))
+			result.pivot, err = orm.Attach(linkqueries.WithTrace(ctx, trace), tx, linkqueries.MemberLinks.Groups, member, group, orm.InputTextSet(linkqueries.Memberships.Role, "admin"))
 			return err
 		})
 		done <- result
@@ -193,7 +193,7 @@ func TestPostgresCompetingRelationAttachmentsRetainUniqueness(t *testing.T) {
 		t.Fatal("failed competitor retained after-commit callbacks")
 	}
 	if err := linkTransaction(ctx, db, namespace, func(tx *database.Tx) error {
-		count, err := linkqueries.Memberships.Query().Count(ctx, tx)
+		count, err := orm.Count(ctx, tx, linkqueries.Memberships.Query())
 		if err != nil {
 			return err
 		}

@@ -30,21 +30,21 @@ func TestAdvancedConflictInvalidPoliciesSendNoSQL(t *testing.T) {
 	f, other := n.WriteRecords, anotherConflictDeclaration()
 	records := r.ConflictRowsOf(f.Query())
 	foreign := r.ConflictRowsOf(other.Query())
-	valid := orm.OnConflict(orm.ConflictKey(f.Name)).DoUpdate(orm.ConflictIncoming(f.Name))
-	inner := r.SelectScalar(r.From(f.Query()), expr.Row(expr.Value(f.Amount)).Value())
-	computed := expr.Group(expr.Add(expr.Value(f.Amount), expr.Value(f.Amount)))
+	valid := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(f.Name)))
+	inner := r.SelectScalar(r.From(f.Query()), expr.Row(expr.Value(orm.NumberExpr(f.Amount))).Value())
+	computed := expr.Group(expr.Add(expr.Value(orm.NumberExpr(f.Amount)), expr.Value(orm.NumberExpr(f.Amount))))
 	for name, p := range map[string]orm.Conflict[n.WriteRecord]{
-		"foreign target":           r.OnConflictKeys(expr.Group(expr.Value(other.Name))).DoNothing(),
-		"foreign calculation":      valid.DoUpdate(r.SetConflictValue(f.Amount, expr.At(foreign.Proposed(), other.Amount))),
-		"foreign condition":        r.ConflictWhereRows(valid, expr.At(foreign.Proposed(), other.Enabled).Eq(true)),
-		"foreign partial index":    r.ConflictTargetWhere(valid, expr.Value(other.Enabled).Eq(true)),
-		"zero calculation":         valid.DoUpdate(r.SetConflictValue(f.Amount, expr.RowExpression[r.ConflictRow[n.WriteRecord], decimal.Decimal]{})),
-		"zero rows":                valid.DoUpdate(r.SetConflictValue(f.Amount, expr.At(r.ConflictRows[n.WriteRecord]{}.Stored(), f.Amount))),
+		"foreign target":           r.OnConflictKeys(expr.Group(expr.Value(orm.TextExpr(other.Name)))).DoNothing(),
+		"foreign calculation":      valid.DoUpdate(r.SetConflictValue(orm.NumberExpr(f.Amount), expr.At(foreign.Proposed(), orm.NumberExpr(other.Amount)))),
+		"foreign condition":        r.ConflictWhereRows(valid, expr.At(foreign.Proposed(), orm.ColumnExpr(other.Enabled)).Eq(true)),
+		"foreign partial index":    r.ConflictTargetWhere(valid, expr.Value(orm.ColumnExpr(other.Enabled)).Eq(true)),
+		"zero calculation":         valid.DoUpdate(r.SetConflictValue(orm.NumberExpr(f.Amount), expr.RowExpression[r.ConflictRow[n.WriteRecord], decimal.Decimal]{})),
+		"zero rows":                valid.DoUpdate(r.SetConflictValue(orm.NumberExpr(f.Amount), expr.At(r.ConflictRows[n.WriteRecord]{}.Stored(), orm.NumberExpr(f.Amount)))),
 		"duplicate index":          r.OnConflictKeys(computed, computed).DoNothing(),
 		"scalar index":             r.OnConflictKeys(expr.Group(r.ScalarRowQuery(r.From(f.Query()), inner))).DoNothing(),
 		"subquery index condition": r.ConflictTargetWhere(valid, r.ExistsQuery(r.From(f.Query()), r.From(f.Query()))),
-		"named partial":            orm.OnConflictConstraint[n.WriteRecord]("write_records_pkey").TargetWhere(f.Enabled.Eq(true)).DoNothing(),
-		"do nothing condition":     r.ConflictWhereRows(orm.OnConflict(orm.ConflictKey(f.Name)).DoNothing(), expr.At(records.Proposed(), f.Enabled).Eq(true)),
+		"named partial":            orm.OnConflictConstraint[n.WriteRecord]("write_records_pkey").TargetWhere(orm.ColumnEq(f.Enabled, true)).DoNothing(),
+		"do nothing condition":     r.ConflictWhereRows(orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoNothing(), expr.At(records.Proposed(), orm.ColumnExpr(f.Enabled)).Eq(true)),
 	} {
 		t.Run(name, func(t *testing.T) {
 			capture := &goldenCapture{}
@@ -54,7 +54,7 @@ func TestAdvancedConflictInvalidPoliciesSendNoSQL(t *testing.T) {
 			}
 			check(db.Start(t.Context()))
 			t.Cleanup(func() { check(db.Close(context.Background())) })
-			_, err = orm.Upsert(t.Context(), db, f.Query(), p, f.Name.Set("input"))
+			_, err = orm.Upsert(t.Context(), db, f.Query(), p, orm.TextSet(f.Name, "input"))
 			if !errors.Is(err, fault.Invalid) || capture.statements != 0 {
 				t.Fatal(err, capture.output.String())
 			}
@@ -70,8 +70,8 @@ func TestAdvancedConflictInvalidPoliciesSendNoSQL(t *testing.T) {
 	}
 	check(db.Start(t.Context()))
 	t.Cleanup(func() { check(db.Close(context.Background())) })
-	p := orm.OnConflict(orm.ConflictKey(hf.Key())).DoUpdate(r.SetConflictValue(hf.Name, expr.At(hr.Stored(), hf.Name)))
-	_, err = orm.Upsert(t.Context(), db, hf.Query(), p, hf.Key().Set(1), hf.Name.Set("input"), hf.Body.Set([]byte{1}))
+	p := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(hf.Key()))).DoUpdate(r.SetConflictValue(orm.InputTextExpr(hf.Name), expr.At(hr.Stored(), orm.InputTextExpr(hf.Name))))
+	_, err = orm.Upsert(t.Context(), db, hf.Query(), p, orm.KeySet(hf.Key(), 1), orm.InputTextSet(hf.Name, "input"), orm.ColumnSet(hf.Body, []byte{1}))
 	if !errors.Is(err, fault.Invalid) || capture.statements != 0 {
 		t.Fatal(err, capture.output.String())
 	}
@@ -79,8 +79,8 @@ func TestAdvancedConflictInvalidPoliciesSendNoSQL(t *testing.T) {
 	capture.scriptedColumns = []string{"id", "name", "note", "body", "created_at", "updated_at", "deleted_at"}
 	now := time.Now().UTC()
 	capture.scriptedBatches = [][][]driver.Value{{{int64(1), "input", nil, []byte{1}, now, now, nil}}}
-	p = p.DoUpdate(r.SetConflictValue(hf.Name, expr.At(hr.Proposed(), hf.Name)))
-	got, err := orm.Upsert(t.Context(), db, hf.Query(), p, hf.Key().Set(1), hf.Name.Set(" input "), hf.Body.Set([]byte{1}))
+	p = p.DoUpdate(r.SetConflictValue(orm.InputTextExpr(hf.Name), expr.At(hr.Proposed(), orm.InputTextExpr(hf.Name))))
+	got, err := orm.Upsert(t.Context(), db, hf.Query(), p, orm.KeySet(hf.Key(), 1), orm.InputTextSet(hf.Name, " input "), orm.ColumnSet(hf.Body, []byte{1}))
 	if err != nil || !got.IsSet() || !strings.Contains(capture.sql.String(), `"name" = "excluded"."name"`) {
 		t.Fatal(got, err, capture.output.String())
 	}
@@ -108,7 +108,7 @@ func advancedScopedDeclaration(name string, scoped bool) advancedScopedTable {
 				if !ok {
 					return orm.Predicate[advancedScoped]{}, errors.New("tenant required")
 				}
-				return t.Tenant.Eq(tenant), nil
+				return orm.NumberEq(t.Tenant, tenant), nil
 			})}
 		}))
 	}
@@ -120,8 +120,8 @@ func TestAdvancedConflictSubqueryScopesFailClosed(t *testing.T) {
 	dest := advancedScopedDeclaration("conflict_dest", false)
 	source := advancedScopedDeclaration("conflict_source", true)
 	records := r.ConflictRowsOf(dest.Query())
-	scalar := r.SelectScalar(r.From(source.Query().Limit(1)), expr.Row(expr.Value(source.Amount)).Value())
-	policy := orm.OnConflict(orm.ConflictKey(dest.Key())).DoUpdate(r.SetConflictValue(dest.Note, r.ConflictScalarRowQuery(records, scalar)))
+	scalar := r.SelectScalar(r.From(source.Query().Limit(1)), expr.Row(expr.Value(orm.NumberExpr(source.Amount))).Value())
+	policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(dest.Key()))).DoUpdate(r.SetConflictValue(orm.NullableNumberExpr(dest.Note), r.ConflictScalarRowQuery(records, scalar)))
 	capture := &goldenCapture{scriptedColumns: []string{"id", "tenant", "amount", "note"}, scriptedBatches: [][][]driver.Value{{{int64(1), int64(9), int64(3), int64(7)}}}}
 	db, err := database.Prepare(database.Adapter{Connector: connector{capture}}, database.DefaultPoolConfig())
 	if err != nil {
@@ -129,7 +129,7 @@ func TestAdvancedConflictSubqueryScopesFailClosed(t *testing.T) {
 	}
 	check(db.Start(t.Context()))
 	t.Cleanup(func() { check(db.Close(context.Background())) })
-	draft := []orm.Assignment[advancedScoped]{dest.Key().Set(1), dest.Tenant.Set(9), dest.Amount.Set(3)}
+	draft := []orm.Assignment[advancedScoped]{orm.KeySet(dest.Key(), 1), orm.NumberSet(dest.Tenant, 9), orm.NumberSet(dest.Amount, 3)}
 	_, err = orm.Upsert(t.Context(), db, dest.Query(), policy, draft...)
 	if err == nil || capture.statements != 0 {
 		t.Fatal("missing scope executed", err, capture.output.String())

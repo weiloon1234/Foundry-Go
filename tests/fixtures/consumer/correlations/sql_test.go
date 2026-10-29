@@ -19,8 +19,8 @@ func TestORMCorrelatedGroupingAndRelationParity(t *testing.T) {
 	link := rows.Correlate(rows.From(models.Users.Query()), rows.From(models.Orders.Query()))
 	buyer := rows.OuterScope(link, rows.ModelScope(models.Users.Query()))
 	order := rows.InnerScope(link, rows.ModelScope(models.Orders.Query()))
-	matched := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)))
-	grouped := rows.Having(rows.GroupBy(rows.FromModel(models.Users.Query()), expr.Group(expr.Value(models.Users.ID))), expr.Grouped(matched.Exists()))
+	matched := link.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(buyer, orm.KeyExpr(models.Users.ID))))
+	grouped := rows.Having(rows.GroupBy(rows.FromModel(models.Users.Query()), expr.Group(expr.Value(orm.KeyExpr(models.Users.ID)))), expr.Grouped(matched.Exists()))
 	got, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.FromRows(grouped), expr.Count[models.User]().Value())))
 	if err != nil {
 		t.Fatal(err)

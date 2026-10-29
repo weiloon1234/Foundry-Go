@@ -1,5 +1,7 @@
 package audit
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 
@@ -28,7 +30,7 @@ func FindModel[M, K any](ctx context.Context, executor database.Executor, record
 		return value.Optional[ModelRecord[M, K]]{}, safeerror.NewFault(fault.Invalid, "model audit lookup requires a nonzero ID")
 	}
 	f := auditstore.Entries
-	selected, err := auditstore.Entries.Query().Where(f.Area.Eq(string(area)), f.Operation.Ne(0)).Where(auditstore.Entries.Key().Eq(model.IDFromBytes[auditstore.Entry](id.Bytes()))).First(ctx, executor)
+	selected, err := orm.First(ctx, executor, auditstore.Entries.Query().Where(orm.TextEq(f.Area, string(area)), orm.ColumnNe(f.Operation, 0)).Where(orm.KeyEq(auditstore.Entries.Key(), model.IDFromBytes[auditstore.Entry](id.Bytes()))))
 	if err != nil {
 		return value.Optional[ModelRecord[M, K]]{}, err
 	}

@@ -52,7 +52,7 @@ func TestAggregateResultFamiliesAndReusableCodecs(t *testing.T) {
 	d := declareAggregateRecords()
 	source := FromModel(d.Query())
 	for name, selected := range map[string]expr.Selected[aggregateRecord, value.Nullable[decimal.Decimal]]{
-		"sum": expr.Sum(d.Exact).Value(), "avg": expr.Avg(d.Exact).Value(), "nullable_sum": expr.Sum(d.MaybeExact).Value(), "nullable_avg": expr.Avg(d.MaybeExact).Value(),
+		"sum": expr.Sum(orm.NumberExpr(d.Exact)).Value(), "avg": expr.Avg(orm.NumberExpr(d.Exact)).Value(), "nullable_sum": expr.Sum(orm.NullableNumberExpr(d.MaybeExact)).Value(), "nullable_avg": expr.Avg(orm.NullableNumberExpr(d.MaybeExact)).Value(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			q := expressionQuery(source, selected, codec.Nullable(codec.Decimal()))
@@ -70,13 +70,13 @@ func TestAggregateResultFamiliesAndReusableCodecs(t *testing.T) {
 			}
 		})
 	}
-	for _, selected := range []expr.Selected[aggregateRecord, value.Nullable[float64]]{expr.SumFloat(d.Approx).Value(), expr.AvgFloat(d.Approx).Value(), expr.SumFloat(d.MaybeApprox).Value(), expr.AvgFloat(d.MaybeApprox).Value()} {
+	for _, selected := range []expr.Selected[aggregateRecord, value.Nullable[float64]]{expr.SumFloat(orm.NumberExpr(d.Approx)).Value(), expr.AvgFloat(orm.NumberExpr(d.Approx)).Value(), expr.SumFloat(orm.NullableNumberExpr(d.MaybeApprox)).Value(), expr.AvgFloat(orm.NullableNumberExpr(d.MaybeApprox)).Value()} {
 		s := expressionSQL(t, expressionQuery(source, selected, codec.Nullable(codec.Float[float64]())))
 		if !strings.Contains(s.SQLText, " AS double precision)") {
 			t.Fatal(s.SQLText)
 		}
 	}
-	for _, selected := range []expr.Selected[aggregateRecord, value.Nullable[temporal.Interval]]{expr.SumInterval(d.Period).Value(), expr.AvgInterval(d.Period).Value(), expr.SumInterval(d.MaybePeriod).Value(), expr.AvgInterval(d.MaybePeriod).Value()} {
+	for _, selected := range []expr.Selected[aggregateRecord, value.Nullable[temporal.Interval]]{expr.SumInterval(orm.IntervalExpr(d.Period)).Value(), expr.AvgInterval(orm.IntervalExpr(d.Period)).Value(), expr.SumInterval(orm.NullableIntervalExpr(d.MaybePeriod)).Value(), expr.AvgInterval(orm.NullableIntervalExpr(d.MaybePeriod)).Value()} {
 		s := expressionSQL(t, expressionQuery(source, selected, codec.Nullable(codec.Interval())))
 		if !strings.Contains(s.SQLText, " AS interval)") {
 			t.Fatal(s.SQLText)
@@ -84,7 +84,7 @@ func TestAggregateResultFamiliesAndReusableCodecs(t *testing.T) {
 	}
 	// Reusable aggregate descriptors give relation loaders an actual result scanner,
 	// preserving named scalar types and NULL without rebuilding a parallel codec.
-	for _, aggregate := range []expr.AggregateExpression[aggregateRecord, value.Nullable[aggregateName]]{expr.Min(d.Name), expr.Max(d.MaybeName)} {
+	for _, aggregate := range []expr.AggregateExpression[aggregateRecord, value.Nullable[aggregateName]]{expr.Min(orm.TextExpr(d.Name)), expr.Max(orm.NullableTextExpr(d.MaybeName))} {
 		core, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
 		if core.Err != nil || column.Scan == nil {
 			t.Fatal(core.Err, column)
@@ -101,10 +101,10 @@ func TestAggregateResultFamiliesAndReusableCodecs(t *testing.T) {
 			t.Fatal(decoded, err)
 		}
 	}
-	for _, selected := range []expr.Selected[aggregateRecord, value.Nullable[aggregateName]]{expr.Min(d.Name).Value(), expr.Max(d.Name).Value(), expr.Min(d.MaybeName).Value(), expr.Max(d.MaybeName).Value()} {
+	for _, selected := range []expr.Selected[aggregateRecord, value.Nullable[aggregateName]]{expr.Min(orm.TextExpr(d.Name)).Value(), expr.Max(orm.TextExpr(d.Name)).Value(), expr.Min(orm.NullableTextExpr(d.MaybeName)).Value(), expr.Max(orm.NullableTextExpr(d.MaybeName)).Value()} {
 		expressionSQL(t, expressionQuery(source, selected, codec.Nullable(codec.String[aggregateName]())))
 	}
-	for _, a := range []expr.AggregateExpression[aggregateRecord, int64]{expr.Count[aggregateRecord](), expr.CountField(d.MaybeExact), expr.CountDistinctField(d.Name)} {
+	for _, a := range []expr.AggregateExpression[aggregateRecord, int64]{expr.Count[aggregateRecord](), expr.CountField(orm.NullableNumberExpr(d.MaybeExact)), expr.CountDistinctField(orm.TextExpr(d.Name))} {
 		core, column := expr.FoundryAggregate(a, sqlowner.Expressions())
 		if core.Err != nil || column.Scan == nil {
 			t.Fatal(core, column)
@@ -117,22 +117,22 @@ func TestAggregateResultFamiliesAndReusableCodecs(t *testing.T) {
 func TestNullableAggregateParamRequiredFallback(t *testing.T) {
 	d := declareAggregateRecords()
 	source := FromModel(d.Query())
-	for _, aggregate := range []expr.NullableOrderedAggregate[aggregateRecord, decimal.Decimal]{expr.Sum(d.Exact), expr.Avg(d.MaybeExact)} {
+	for _, aggregate := range []expr.NullableOrderedAggregate[aggregateRecord, decimal.Decimal]{expr.Sum(orm.NumberExpr(d.Exact)), expr.Avg(orm.NullableNumberExpr(d.MaybeExact))} {
 		var fallback expr.RowExpression[aggregateRecord, decimal.Decimal] = aggregate.Param(decimal.FromInt64(0))
 		checkAggregateFallback(t, source, aggregate.Value(), fallback, codec.Decimal(), "0", decimal.FromInt64(0))
 	}
-	for _, aggregate := range []expr.NullableOrderedAggregate[aggregateRecord, float64]{expr.SumFloat(d.Approx), expr.AvgFloat(d.MaybeApprox)} {
+	for _, aggregate := range []expr.NullableOrderedAggregate[aggregateRecord, float64]{expr.SumFloat(orm.NumberExpr(d.Approx)), expr.AvgFloat(orm.NullableNumberExpr(d.MaybeApprox))} {
 		checkAggregateFallback(t, source, aggregate.Value(), aggregate.Param(0), codec.Float[float64](), float64(0), float64(0))
 	}
-	for _, aggregate := range []expr.NullableOrderedAggregate[aggregateRecord, temporal.Interval]{expr.SumInterval(d.Period), expr.AvgInterval(d.MaybePeriod)} {
+	for _, aggregate := range []expr.NullableOrderedAggregate[aggregateRecord, temporal.Interval]{expr.SumInterval(orm.IntervalExpr(d.Period)), expr.AvgInterval(orm.NullableIntervalExpr(d.MaybePeriod))} {
 		zero := temporal.Interval{}
 		checkAggregateFallback(t, source, aggregate.Value(), aggregate.Param(zero), codec.Interval(), zero.String(), zero)
 	}
-	for _, aggregate := range []expr.NullableOrderedAggregate[aggregateRecord, aggregateName]{expr.Min(d.Name), expr.Max(d.MaybeName)} {
+	for _, aggregate := range []expr.NullableOrderedAggregate[aggregateRecord, aggregateName]{expr.Min(orm.TextExpr(d.Name)), expr.Max(orm.NullableTextExpr(d.MaybeName))} {
 		checkAggregateFallback(t, source, aggregate.Value(), aggregate.Param(aggregateName("")), codec.String[aggregateName](), "", aggregateName(""))
 	}
 	alias := As[left](d.Query(), "a")
-	total := expr.SumAt(Scope(alias), d.MaybeExact).Filter(expr.At(Scope(alias), d.Exact).Eq(1))
+	total := expr.SumAt(Scope(alias), orm.NullableNumberExpr(d.MaybeExact)).Filter(expr.At(Scope(alias), orm.NumberExpr(d.Exact)).Eq(1))
 	fallback := total.Param(decimal.FromInt64(0))
 	// Param captures a standalone value; it must not evaluate the aggregate or its filter.
 	expressionSQL(t, expressionQuery(alias, fallback.Value(), codec.Decimal()))
@@ -157,8 +157,8 @@ func TestGroupedFilteredAggregatesAndSelectedOrdering(t *testing.T) {
 	o := declareOrders()
 	source := As[right](o.Query(), "o")
 	scope := Scope(source)
-	amount := expr.At(scope, o.MemberID)
-	base := expr.SumAt(scope, o.MemberID).Filter(expr.OrderRow(amount).Gt(0))
+	amount := expr.At(scope, orm.NumberExpr(o.MemberID))
+	base := expr.SumAt(scope, orm.NumberExpr(o.MemberID)).Filter(expr.OrderRow(amount).Gt(0))
 
 	derived := base.Filter(amount.Ne(2))
 	originalCore, _ := expr.FoundryAggregate(base, sqlowner.Expressions())
@@ -199,28 +199,28 @@ func TestAggregateScopedFamiliesAndOwnership(t *testing.T) {
 	d, other := declareAggregateRecords(), declareAggregateRecords()
 	a := As[left](d.Query(), "a")
 	scope := Scope(a)
-	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], value.Nullable[decimal.Decimal]]{expr.SumAt(scope, d.Exact).Value(), expr.AvgAt(scope, d.MaybeExact).Value()} {
+	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], value.Nullable[decimal.Decimal]]{expr.SumAt(scope, orm.NumberExpr(d.Exact)).Value(), expr.AvgAt(scope, orm.NullableNumberExpr(d.MaybeExact)).Value()} {
 		expressionSQL(t, expressionQuery(a, selected, codec.Nullable(codec.Decimal())))
 	}
-	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], value.Nullable[float64]]{expr.SumFloatAt(scope, d.Approx).Value(), expr.AvgFloatAt(scope, d.MaybeApprox).Value()} {
+	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], value.Nullable[float64]]{expr.SumFloatAt(scope, orm.NumberExpr(d.Approx)).Value(), expr.AvgFloatAt(scope, orm.NullableNumberExpr(d.MaybeApprox)).Value()} {
 		expressionSQL(t, expressionQuery(a, selected, codec.Nullable(codec.Float[float64]())))
 	}
-	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], value.Nullable[temporal.Interval]]{expr.SumIntervalAt(scope, d.Period).Value(), expr.AvgIntervalAt(scope, d.MaybePeriod).Value()} {
+	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], value.Nullable[temporal.Interval]]{expr.SumIntervalAt(scope, orm.IntervalExpr(d.Period)).Value(), expr.AvgIntervalAt(scope, orm.NullableIntervalExpr(d.MaybePeriod)).Value()} {
 		expressionSQL(t, expressionQuery(a, selected, codec.Nullable(codec.Interval())))
 	}
-	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], value.Nullable[aggregateName]]{expr.MinAt(scope, d.Name).Value(), expr.MaxAt(scope, d.MaybeName).Value()} {
+	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], value.Nullable[aggregateName]]{expr.MinAt(scope, orm.TextExpr(d.Name)).Value(), expr.MaxAt(scope, orm.NullableTextExpr(d.MaybeName)).Value()} {
 		expressionSQL(t, expressionQuery(a, selected, codec.Nullable(codec.String[aggregateName]())))
 	}
-	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], int64]{expr.CountFieldAt(scope, d.MaybeName).Value(), expr.CountDistinctFieldAt(scope, d.Name).Value()} {
+	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], int64]{expr.CountFieldAt(scope, orm.NullableTextExpr(d.MaybeName)).Value(), expr.CountDistinctFieldAt(scope, orm.TextExpr(d.Name)).Value()} {
 		expressionSQL(t, expressionQuery(a, selected, codec.Signed[int64]()))
 	}
-	own := expr.At(scope, d.Exact)
-	foreign := expr.At(scope, other.Exact)
+	own := expr.At(scope, orm.NumberExpr(d.Exact))
+	foreign := expr.At(scope, orm.NumberExpr(other.Exact))
 	for _, selected := range []expr.Selected[Alias[left, aggregateRecord], value.Nullable[decimal.Decimal]]{
-		expr.SumAt(scope, other.Exact).Value(),
-		expr.SumAt(scope, d.Exact).Filter(foreign.Eq(1)).Value(),
-		expr.SumAt(scope, d.Exact).Filter(expr.Predicate[Alias[left, aggregateRecord]]{}).Value(),
-		expr.Nullable(expr.SumAt(scope, other.Exact).Param(decimal.FromInt64(1)).Value()),
+		expr.SumAt(scope, orm.NumberExpr(other.Exact)).Value(),
+		expr.SumAt(scope, orm.NumberExpr(d.Exact)).Filter(foreign.Eq(1)).Value(),
+		expr.SumAt(scope, orm.NumberExpr(d.Exact)).Filter(expr.Predicate[Alias[left, aggregateRecord]]{}).Value(),
+		expr.Nullable(expr.SumAt(scope, orm.NumberExpr(other.Exact)).Param(decimal.FromInt64(1)).Value()),
 	} {
 		state := &driverState{}
 		got, err := Read(expressionQuery(a, selected, codec.Nullable(codec.Decimal()))).All(t.Context(), openTest(t, state))
@@ -247,8 +247,8 @@ func TestAggregateScopedFamiliesAndOwnership(t *testing.T) {
 func TestDistinctReadOnlyModelsAndGroupingRules(t *testing.T) {
 	o := declareOrders()
 	original := FromModel(o.Query())
-	key := expr.Value(o.MemberID)
-	on := OrderBy(DistinctOn(original, expr.Group(key)), key.Asc(), expr.Value(o.ID).Desc())
+	key := expr.Value(orm.NumberExpr(o.MemberID))
+	on := OrderBy(DistinctOn(original, expr.Group(key)), key.Asc(), expr.Value(orm.KeyExpr(o.ID)).Desc())
 	plain := Distinct(on)
 	if original.source.Node.Distinct.Kind != querycore.NoDistinct || on.source.Node.Distinct.Kind != querycore.DistinctOn || plain.source.Node.Distinct.Kind != querycore.DistinctRows {
 		t.Fatal("DISTINCT derivation mutated ancestors")
@@ -262,7 +262,7 @@ func TestDistinctReadOnlyModelsAndGroupingRules(t *testing.T) {
 		t.Fatal(got, err, state.sql)
 	}
 	// DISTINCT computed ordering reuses selected parameter identities.
-	x := expr.Add(expr.Value(o.MemberID), expr.Param(o.MemberID, 1))
+	x := expr.Add(expr.Value(orm.NumberExpr(o.MemberID)), expr.Param(orm.NumberExpr(o.MemberID), 1))
 	q := OrderBy(Distinct(expressionQuery(original, x.Value(), codec.Signed[int64]())), x.Value().Desc())
 	s := expressionSQL(t, q)
 	if !strings.Contains(s.SQLText, "ORDER BY 1 DESC") || !reflect.DeepEqual(s.Bindings, []any{int64(1)}) {
@@ -273,9 +273,9 @@ func TestDistinctReadOnlyModelsAndGroupingRules(t *testing.T) {
 	expressionSQL(t, OrderBy(DistinctOnValues(selected, count.Value().Key()), count.Desc()))
 	// Shared PostgreSQL validation rejects incomplete grouping and ON/order conflicts.
 	for _, invalid := range []Query[order, expressionRow[int64]]{
-		GroupBy(expressionQuery(original, expr.Row(expr.Value(o.ID)).Value(), codec.Signed[int64]()), expr.Group(key)),
+		GroupBy(expressionQuery(original, expr.Row(expr.Value(orm.KeyExpr(o.ID))).Value(), codec.Signed[int64]()), expr.Group(key)),
 		Having(expressionQuery(original, expr.Row(key).Value(), codec.Signed[int64]()), count.Gt(1)),
-		OrderBy(DistinctOn(expressionQuery(original, expr.Row(key).Value(), codec.Signed[int64]()), expr.Group(key)), expr.Value(o.ID).Asc()),
+		OrderBy(DistinctOn(expressionQuery(original, expr.Row(key).Value(), codec.Signed[int64]()), expr.Group(key)), expr.Value(orm.KeyExpr(o.ID)).Asc()),
 		DistinctOn(selected),
 	} {
 		state := &driverState{}
@@ -289,14 +289,14 @@ func TestDistinctReadOnlyModelsAndGroupingRules(t *testing.T) {
 func TestAggregateResultRepresentations(t *testing.T) {
 	d := declareAggregateRecords()
 	source := From(d.Query())
-	avg := ReadScalar(SelectScalar(source, expr.Avg(d.Exact).Value()))
+	avg := ReadScalar(SelectScalar(source, expr.Avg(orm.NumberExpr(d.Exact)).Value()))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{"1.5000000000000000"}}}
 	got, err := avg.RequireFirst(t.Context(), openTest(t, state))
 	v, ok := got.Get()
 	if err != nil || !ok || v.String() != "1.5" {
 		t.Fatal("integer average precision", got, err)
 	}
-	sum := ReadScalar(SelectScalar(source, expr.Sum(d.Exact).Value()))
+	sum := ReadScalar(SelectScalar(source, expr.Sum(orm.NumberExpr(d.Exact)).Value()))
 	state = &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}}}
 	null, err := sum.RequireFirst(t.Context(), openTest(t, state))
 	if err != nil || !null.IsNull() {
@@ -317,7 +317,7 @@ func TestAggregateResultRepresentations(t *testing.T) {
 	f := orm.Define("floats", func(b orm.Builder[row], r *row) table {
 		return table{orm.TableOf(b, &r.ID), orm.NumberOf(b, &r.Amount)}
 	})
-	floating := ReadScalar(SelectScalar(From(f.Query()), expr.AvgFloat(f.Amount).Value()))
+	floating := ReadScalar(SelectScalar(From(f.Query()), expr.AvgFloat(orm.NumberExpr(f.Amount)).Value()))
 	state = &driverState{columns: []string{"value"}, rows: [][]driver.Value{{float64(1.5)}}}
 	result, err := floating.RequireFirst(t.Context(), openTest(t, state))
 	n, present := result.Get()
@@ -330,7 +330,7 @@ func TestHavingCapturesMembershipAndDerivations(t *testing.T) {
 	d := declareAggregateRecords()
 	source := From(d.Query())
 	count := expr.Count[aggregateRecord]()
-	id := expr.Value(d.Exact)
+	id := expr.Value(orm.NumberExpr(d.Exact))
 	values := []int64{1, 2}
 	q := GroupByScalar(SelectScalar(source, count.Value()), expr.Group(id))
 	q = HavingScalar(q, expr.HavingAnd(count.Gt(2), expr.Grouped(expr.OrderRow(id).In(values...)).Not()))

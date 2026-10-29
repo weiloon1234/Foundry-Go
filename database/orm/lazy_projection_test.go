@@ -102,8 +102,8 @@ func TestLazyProjectionErrorsBeforeSQL(t *testing.T) {
 		return table{orm.TableOf(b, &m.ID), orm.EnumOf(b, &m.State)}
 	})
 	alias := rows.As[struct{}](tbl.Query(), "b")
-	_ = expr.At(rows.Scope(alias), tbl.State)
-	q := rows.SelectValue(tbl.Query(), tbl.Key()) // Even an unselected invalid enum must be checked.
+	_ = expr.At(rows.Scope(alias), orm.EnumExpr(tbl.State))
+	q := rows.SelectValue(tbl.Query(), orm.KeyExpr(tbl.Key())) // Even an unselected invalid enum must be checked.
 	if badDescriptorCalls != 0 {
 		t.Fatal("descriptor resolved during construction")
 	}
@@ -136,7 +136,7 @@ func TestLazyProjectionErrorsBeforeSQL(t *testing.T) {
 	})
 	a := rows.As[struct{}](text.Query(), "t")
 	before := badDescriptorCalls
-	selected := rows.Select(a, schema, rows.Map(schema.State, expr.At(rows.Scope(a), text.State)))
+	selected := rows.Select(a, schema, rows.Map(schema.State, expr.At(rows.Scope(a), orm.TextExpr(text.State))))
 	if badDescriptorCalls != before {
 		t.Fatal("row checked during Select")
 	}

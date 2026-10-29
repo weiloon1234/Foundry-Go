@@ -1,5 +1,7 @@
 package rows_each
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 
@@ -9,5 +11,5 @@ import (
 )
 
 func Stream(ctx context.Context, db database.Executor, yield func(int64) error) error {
-	return rows.EachRead(ctx, db, rows.Read(rows.SelectValue(models.Orders.Query(), models.Orders.TotalCents)), yield)
+	return rows.EachRead(ctx, db, rows.Read(rows.SelectValue(models.Orders.Query(), orm.NumberExpr(models.Orders.TotalCents))), yield)
 }

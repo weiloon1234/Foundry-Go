@@ -36,8 +36,8 @@ func TestStage6a2Conditionals(t *testing.T) {
 		return arithmeticTable{orm.TableOf(b, &r.ID), orm.NumberOf(b, &r.Amount), orm.NullableNumberOf(b, &r.Missing), orm.SoftDeleteOf(b, &r.DeletedAt)}
 	})
 	source := rows.As[arithmeticSide](table.Query(), "r")
-	amount := expr.OrderRow(expr.At(rows.Scope(source), table.Amount))
-	missing := expr.At(rows.Scope(source), table.Missing)
+	amount := expr.OrderRow(expr.At(rows.Scope(source), orm.NumberExpr(table.Amount)))
+	missing := expr.At(rows.Scope(source), orm.NullableNumberExpr(table.Missing))
 	zero := expr.OrderRow(amount).Param(0)
 	fields := rows.Define(func(b rows.Builder[conditionalRecordResult], r *conditionalRecordResult) conditionalRecordFields {
 		return conditionalRecordFields{b.Row(), rows.NumberOf(b, &r.Required), rows.NumberOf(b, &r.Choice), rows.NullableNumberOf(b, &r.NullChoice), rows.NullableNumberOf(b, &r.Equal), rows.NullableNumberOf(b, &r.Missing)}
@@ -49,7 +49,7 @@ func TestStage6a2Conditionals(t *testing.T) {
 		rows.MapSelected(fields.NullChoice, expr.When(amount.Gt(5), amount).ElseNull().Value()),
 		rows.MapSelected(fields.Equal, expr.NullIf(choice, zero).Value()),
 		rows.MapSelected(fields.Missing, expr.NullIfNullable(expr.CoalesceNullable(missing, expr.NullableRow(amount).Param(value.Null[int64]())), expr.NullableRow(zero)).Value()),
-	), expr.At(rows.Scope(source), table.Key()).Asc())
+	), expr.At(rows.Scope(source), orm.KeyExpr(table.Key())).Asc())
 	got, err := rows.Read(q).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 || got[0].Required != 7 || got[0].Choice != 7 || !got[0].Missing.IsNull() || got[1].Required != 0 || got[1].Choice != 0 || !got[1].NullChoice.IsNull() || !got[1].Equal.IsNull() || !got[1].Missing.IsNull() {
@@ -77,7 +77,7 @@ func TestStage6a2Conditionals(t *testing.T) {
 		t.Helper()
 		input := table.Query()
 		if empty {
-			input = input.Where(table.Amount.Lt(0))
+			input = input.Where(orm.NumberLt(table.Amount, 0))
 		}
 		a := rows.As[arithmeticSide](input, "r")
 		count := expr.Count[rows.Alias[arithmeticSide, arithmeticRecord]]()
@@ -99,7 +99,7 @@ func TestStage6a2Conditionals(t *testing.T) {
 	}
 	rollback := errors.New("rollback conditional transaction")
 	err = db.Transaction(ctx, func(tx *database.Tx) error {
-		_, e := table.Insert(ctx, tx, table.Key().Set(4), table.Amount.Set(9))
+		_, e := orm.Insert(ctx, tx, table.Table, orm.KeySet(table.Key(), 4), orm.NumberSet(table.Amount, 9))
 		if e != nil {
 			return e
 		}

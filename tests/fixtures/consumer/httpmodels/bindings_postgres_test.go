@@ -61,18 +61,18 @@ func TestPostgresModelBindingHydratesUUIDOnceAndPreservesScope(t *testing.T) {
 			}
 		}
 		// Refresh model state on the next request; no request-global model cache.
-		if _, err := models.Users.Update(ctx, tx, users[0].ID, models.Users.Status.Set(models.StatusDisabled)); err != nil {
+		if _, err := orm.Update(ctx, tx, models.Users.Table.Query(), models.Users.Table.Key(), users[0].ID, orm.EnumSet(models.Users.Status, models.StatusDisabled)); err != nil {
 			return err
 		}
 		request(t, ctx, r, "/api/users/"+users[0].ID.String(), 404)
-		orders, err := models.Orders.Query().Where(models.Orders.BuyerID.Eq(users[2].ID)).All(ctx, tx)
+		orders, err := orm.All(ctx, tx, models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, users[2].ID)))
 		if err != nil {
 			return err
 		}
 		if len(orders) != 0 {
 			return errors.New("unexpected seeded child")
 		}
-		order, err := models.Orders.Query().Where(models.Orders.BuyerID.Eq(users[0].ID)).Require(ctx, tx)
+		order, err := orm.Require(ctx, tx, models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, users[0].ID)))
 		if err != nil {
 			return err
 		}
@@ -99,10 +99,10 @@ func TestPostgresModelBindingNaturalKeysAndSoftDeleteVisibility(t *testing.T) {
 				return err
 			}
 		}
-		if _, err := models.Countries.Insert(ctx, tx, models.Countries.Key().Set("a/b + %"), models.Countries.Name.Set("country")); err != nil {
+		if _, err := orm.Insert(ctx, tx, models.Countries.Table, orm.KeySet(models.Countries.Key(), "a/b + %"), orm.TextSet(models.Countries.Name, "country")); err != nil {
 			return err
 		}
-		if _, err := models.WriteRecords.Insert(ctx, tx, models.WriteRecords.Key().Set(42), models.WriteRecords.Name.Set("record")); err != nil {
+		if _, err := orm.Insert(ctx, tx, models.WriteRecords.Table, orm.KeySet(models.WriteRecords.Key(), 42), orm.TextSet(models.WriteRecords.Name, "record")); err != nil {
 			return err
 		}
 		countries := foundryhttp.DefineEndpoint(
@@ -140,11 +140,11 @@ func TestPostgresModelBindingNaturalKeysAndSoftDeleteVisibility(t *testing.T) {
 		request(t, ctx, r, "/records/99", 404)
 		request(t, ctx, r, "/records/no-number", 400)
 		groups := softqueries.Groups.Query()
-		group, err := softqueries.Groups.Insert(ctx, tx, softqueries.Groups.Key().Set("hidden"), softqueries.Groups.Name.Set("group"))
+		group, err := orm.Insert(ctx, tx, softqueries.Groups.Table, orm.KeySet(softqueries.Groups.Key(), "hidden"), orm.TextSet(softqueries.Groups.Name, "group"))
 		if err != nil {
 			return err
 		}
-		if _, err := softqueries.Groups.Delete(ctx, tx, group.Code); err != nil {
+		if _, err := orm.Delete(ctx, tx, softqueries.Groups.Table.Query(), softqueries.Groups.Table.Key(), group.Code); err != nil {
 			return err
 		}
 		type groupPath struct{ Code softqueries.GroupCode }
@@ -167,11 +167,11 @@ func TestPostgresModelBindingRetainsRetrievedHooksAndStoredFields(t *testing.T) 
 			return err
 		}
 		q := retrievalqueries.Members.Query()
-		parent, err := retrievalqueries.Members.Insert(ctx, tx, retrievalqueries.Members.Name.Set(" PARENT "))
+		parent, err := orm.Insert(ctx, tx, retrievalqueries.Members.Table, orm.InputTextSet(retrievalqueries.Members.Name, " PARENT "))
 		if err != nil {
 			return err
 		}
-		child, err := retrievalqueries.Members.Insert(ctx, tx, retrievalqueries.Members.Name.Set(" CHILD "), retrievalqueries.Members.ParentID.Set(parent.ID))
+		child, err := orm.Insert(ctx, tx, retrievalqueries.Members.Table, orm.InputTextSet(retrievalqueries.Members.Name, " CHILD "), orm.NullableColumnSet(retrievalqueries.Members.ParentID, parent.ID))
 		if err != nil {
 			return err
 		}

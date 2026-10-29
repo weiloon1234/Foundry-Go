@@ -20,10 +20,10 @@ func TestModelPaginationValidatesBeforeExecution(t *testing.T) {
 		return nil, errors.New("unexpected query")
 	}
 	db := open(t, state, nil)
-	if _, err := mutationModel().Paginate(t.Context(), db, orm.PageRequest{}); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.Paginate(t.Context(), db, mutationModel(), orm.PageRequest{}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("invalid page accepted")
 	}
-	if _, err := mutationModel().Limit(0).Paginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.Paginate(t.Context(), db, mutationModel().Limit(0), orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("window was discarded")
 	}
 	if _, err := orm.CursorPaginate(t.Context(), db, mutationModel(), orm.CursorRequest[mutationRecord]{}); !errors.Is(err, fault.Invalid) {
@@ -31,7 +31,7 @@ func TestModelPaginationValidatesBeforeExecution(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := mutationModel().Paginate(ctx, db, orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, context.Canceled) {
+	if _, err := orm.Paginate(ctx, db, mutationModel(), orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled page accepted")
 	}
 	if calls.Load() != 0 {
@@ -67,7 +67,7 @@ func TestModelPaginationDiscardsPartialResultOnFailure(t *testing.T) {
 				return rows, nil
 			}
 			db := open(t, state, nil)
-			page, err := mutationModel().Paginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 2})
+			page, err := orm.Paginate(t.Context(), db, mutationModel(), orm.PageRequest{Number: 1, Size: 2})
 			if err == nil || page.Items != nil || page.Total != 0 || page.Number != 0 {
 				t.Fatal("failed pagination published partial models/metadata")
 			}

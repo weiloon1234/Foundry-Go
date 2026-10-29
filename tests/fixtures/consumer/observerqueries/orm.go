@@ -11,13 +11,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// RecordTable declares the mutating field and per-write local hooks. Example: Records.Name.Set("new").
+// RecordTable declares the mutating field and per-write local hooks. Example: orm.InputTextSet(Records.Name, "new").
 type RecordTable struct {
 	orm.Table[Record, model.ID[Record]]
 	Name orm.InputText[Record, string, string]
 }
 
-// Records dispatches local hooks before registered ORM observers. Example: Records.Insert(ctx,db,Records.Name.Set("new")).
+// Records dispatches local hooks before registered ORM observers. Example: orm.Insert(ctx, db, Records.Table,orm.InputTextSet(Records.Name, "new")).
 var Records = declareRecords()
 
 func declareRecords() RecordTable {
@@ -28,24 +28,24 @@ func declareRecords() RecordTable {
 	return fields
 }
 
-// PlainTable has no local hook factory. Example: Plains.Name.Eq("stored").
+// PlainTable has no local hook factory. Example: orm.TextEq(Plains.Name, "stored").
 type PlainTable struct {
 	orm.Table[Plain, model.ID[Plain]]
 	Name orm.Text[Plain, string]
 }
 
-// Plains still dispatches application-owned observers. Example: Plains.Insert(ctx,db).
+// Plains still dispatches application-owned observers. Example: orm.Insert(ctx, db, Plains.Table).
 var Plains = orm.Define("observed_plain", func(b orm.Builder[Plain], m *Plain) PlainTable {
 	return PlainTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
 })
 
-// EffectTable declares transactional observer side effects. Example: Effects.Label.Set("saved").
+// EffectTable declares transactional observer side effects. Example: orm.TextSet(Effects.Label, "saved").
 type EffectTable struct {
 	orm.Table[Effect, model.ID[Effect]]
 	Label orm.Text[Effect, string]
 }
 
-// Effects uses the caller's transaction. Example: Effects.Insert(ctx,tx,Effects.Label.Set("saved")).
+// Effects uses the caller's transaction. Example: orm.Insert(ctx, tx, Effects.Table,orm.TextSet(Effects.Label, "saved")).
 var Effects = orm.Define("observed_effects", func(b orm.Builder[Effect], m *Effect) EffectTable {
 	return EffectTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Label)}
 })
@@ -64,11 +64,14 @@ func observerHooksFor(name string, fields RecordTable) orm.Hooks[Record] {
 		if err := record(ctx, tx, trace, name+"."+stage); err != nil {
 			return err
 		}
-		current, set := orm.WriteGet(draft, fields.Name.Set).Get()
+		current, set := orm.WriteGet(draft, func() func(arg0 string) orm.Assignment[Record] {
+			receiver := fields.Name
+			return func(arg0 string) orm.Assignment[Record] { return orm.InputTextSet(receiver, arg0) }
+		}()).Get()
 		if !set {
 			current = "anonymous"
 		}
-		return orm.WriteSet(draft, fields.Name.Set(current+"|"+name+"."+stage))
+		return orm.WriteSet(draft, orm.InputTextSet(fields.Name, current+"|"+name+"."+stage))
 	}
 	after := func(ctx context.Context, tx *database.Tx, stage string, changes orm.Changes[Record]) error {
 		if trace != nil {

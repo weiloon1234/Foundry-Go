@@ -8,4 +8,4 @@ import (
 )
 
 var key orm.KeyColumn[h.Member, int64] = h.Members.ID
-var _ = rows.MapUpdate(key, expr.Value(h.Members.ID))
+var _ = rows.MapUpdate(key, expr.Value(orm.KeyExpr(h.Members.ID)))

@@ -34,7 +34,7 @@ func (e *pageTransferExecutor) Query(ctx context.Context, s string, args ...any)
 
 func TestResultPageValidationAndImmutableWindows(t *testing.T) {
 	d := declareMembers()
-	base := Read(FromModel(d.Query())).OrderBy(expr.Value(d.ID).Asc())
+	base := Read(FromModel(d.Query())).OrderBy(expr.Value(orm.KeyExpr(d.ID)).Asc())
 	original, e := CompileRead(base)
 	if e != nil {
 		t.Fatal(e)
@@ -60,7 +60,7 @@ func TestResultPageValidationAndImmutableWindows(t *testing.T) {
 		t.Fatal("page mutated source", again, e)
 	}
 	foreign := declareMembers()
-	for _, bad := range []Result[member, member]{base.Limit(0), base.Offset(1), base.Offset(-1), Read(FromModel(d.Query())), {}, base.OrderBy(expr.Value(foreign.ID).Asc())} {
+	for _, bad := range []Result[member, member]{base.Limit(0), base.Offset(1), base.Offset(-1), Read(FromModel(d.Query())), {}, base.OrderBy(expr.Value(orm.KeyExpr(foreign.ID)).Asc())} {
 		if p, e := bad.Paginate(t.Context(), ex, orm.Page(1, 2)); e == nil || p.Items != nil || p.Total != 0 {
 			t.Fatal(p, e)
 		}
@@ -75,7 +75,7 @@ func TestResultPageValidationAndImmutableWindows(t *testing.T) {
 		if _, e := base.SimplePaginate(t.Context(), ex, request); !errors.Is(e, fault.Invalid) {
 			t.Fatal(e)
 		}
-		if _, e := d.Query().SimplePaginate(t.Context(), ex, request); !errors.Is(e, fault.Invalid) {
+		if _, e := orm.SimplePaginate(t.Context(), ex, d.Query(), request); !errors.Is(e, fault.Invalid) {
 			t.Fatal(e)
 		}
 	}
@@ -85,7 +85,7 @@ func TestResultPageValidationAndImmutableWindows(t *testing.T) {
 }
 func TestPageFailuresAndLookaheadOwnership(t *testing.T) {
 	d := declareMembers()
-	q := Read(FromModel(d.Query())).OrderBy(expr.Value(d.ID).Asc())
+	q := Read(FromModel(d.Query())).OrderBy(expr.Value(orm.KeyExpr(d.ID)).Asc())
 	stop := errors.New("read failed")
 	for _, total := range []int64{-1, 0, math.MaxInt64} {
 		state := &driverState{}
@@ -155,7 +155,7 @@ func TestPageFailuresAndLookaheadOwnership(t *testing.T) {
 		if p, e := q.SimplePaginate(ctx, ex, orm.Page(1, 2)); e == nil || p.Items != nil {
 			t.Fatal(p, e)
 		}
-		if p, e := d.Query().SimplePaginate(ctx, ex, orm.Page(1, 2)); e == nil || p.Items != nil {
+		if p, e := orm.SimplePaginate(ctx, ex, d.Query(), orm.Page(1, 2)); e == nil || p.Items != nil {
 			t.Fatal(p, e)
 		}
 		if ctx == nil || ctx.Err() != nil {

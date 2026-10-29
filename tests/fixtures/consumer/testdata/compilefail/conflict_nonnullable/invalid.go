@@ -1,5 +1,8 @@
 package invalid
 
-import "foundry.test/consumer/models"
+import (
+	"foundry.test/consumer/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
+)
 
-var _ = models.Users.Email.SetNull()
+var _ = orm.NullableTextSetNull(models.Users.Email)

@@ -36,17 +36,17 @@ func seed(ctx context.Context, tx *database.Tx) (fixture, error) {
 		}
 	}
 	for _, name := range []string{"Alpha", "Beta"} {
-		team, err := n.TeamRecords.Insert(ctx, tx, n.TeamRecords.Name.Set(name))
+		team, err := orm.Insert(ctx, tx, n.TeamRecords.Table, orm.TextSet(n.TeamRecords.Name, name))
 		if err != nil {
 			return f, err
 		}
 		f.teams = append(f.teams, team)
-		project, err := n.ProjectRecords.Insert(ctx, tx, n.ProjectRecords.TeamID.Set(team.ID), n.ProjectRecords.Slug.Set("shared"), n.ProjectRecords.Enabled.Set(true))
+		project, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.ColumnSet(n.ProjectRecords.TeamID, team.ID), orm.TextSet(n.ProjectRecords.Slug, "shared"), orm.ColumnSet(n.ProjectRecords.Enabled, true))
 		if err != nil {
 			return f, err
 		}
 		f.projects = append(f.projects, project)
-		task, err := n.TaskRecords.Insert(ctx, tx, n.TaskRecords.ProjectID.Set(project.ID), n.TaskRecords.Slug.Set("same"))
+		task, err := orm.Insert(ctx, tx, n.TaskRecords.Table, orm.ColumnSet(n.TaskRecords.ProjectID, project.ID), orm.TextSet(n.TaskRecords.Slug, "same"))
 		if err != nil {
 			return f, err
 		}
@@ -99,7 +99,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 			}
 			return url
 		}
-		if _, err := n.ProjectRecords.Insert(ctx, tx, n.ProjectRecords.TeamID.Set(f.teams[0].ID), n.ProjectRecords.Slug.Set("disabled"), n.ProjectRecords.Enabled.Set(false)); err != nil {
+		if _, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.ColumnSet(n.ProjectRecords.TeamID, f.teams[0].ID), orm.TextSet(n.ProjectRecords.Slug, "disabled"), orm.ColumnSet(n.ProjectRecords.Enabled, false)); err != nil {
 			return err
 		}
 		missing, err := model.NewIDAt[n.Team](time.Now())
@@ -131,7 +131,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 				return errors.New("nested key escaped its parent")
 			}
 		}
-		onlyBeta, err := n.ProjectRecords.Insert(ctx, tx, n.ProjectRecords.TeamID.Set(f.teams[1].ID), n.ProjectRecords.Slug.Set("beta-only"), n.ProjectRecords.Enabled.Set(true))
+		onlyBeta, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.ColumnSet(n.ProjectRecords.TeamID, f.teams[1].ID), orm.TextSet(n.ProjectRecords.Slug, "beta-only"), orm.ColumnSet(n.ProjectRecords.Enabled, true))
 		if err != nil {
 			return err
 		}
@@ -152,7 +152,7 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		if veto.Projects != 1 {
 			return errors.New("retrieval error changed scope behavior")
 		}
-		eager := orm.RelatedUnique(n.TeamLinks.Projects.With(n.ProjectLinks.Team), n.ProjectRecords.Slug)
+		eager := orm.RelatedUnique(n.TeamLinks.Projects.With(n.ProjectLinks.Team), orm.TextExpr(n.ProjectRecords.Slug))
 		before := counter.Queries.Load()
 		loaded, err := eager.Find(ctx, counter, f.teams[0], "shared")
 		if err != nil {
@@ -164,16 +164,16 @@ func TestPostgresNestedBindingScopesUniquenessAndHooks(t *testing.T) {
 		if !ok || !set || !present || team.ID != f.teams[0].ID || counter.Queries.Load()-before != 2 {
 			return errors.New("declared eager load or its accounting lost")
 		}
-		if _, err := n.ProjectRecords.Delete(ctx, tx, f.projects[0].ID); err != nil {
+		if _, err := orm.Delete(ctx, tx, n.ProjectRecords.Table.Query(), n.ProjectRecords.Table.Key(), f.projects[0].ID); err != nil {
 			return err
 		}
 		route(t, router, ctx, location(f.teams[0].ID, "shared", "same"), "", 404)
-		visible := orm.RelatedUnique(n.TeamLinks.Projects.WithTrashed(), n.ProjectRecords.Slug)
+		visible := orm.RelatedUnique(n.TeamLinks.Projects.WithTrashed(), orm.TextExpr(n.ProjectRecords.Slug))
 		if got, err := visible.Find(ctx, tx, f.teams[0], "shared"); err != nil || !got.IsSet() {
 			return errors.New("explicit soft-delete visibility lost")
 		}
 		// A second duplicate inside the same parent fails closed, with no domain call.
-		if _, err := n.ProjectRecords.Insert(ctx, tx, n.ProjectRecords.TeamID.Set(f.teams[1].ID), n.ProjectRecords.Slug.Set("shared"), n.ProjectRecords.Enabled.Set(true)); err != nil {
+		if _, err := orm.Insert(ctx, tx, n.ProjectRecords.Table, orm.ColumnSet(n.ProjectRecords.TeamID, f.teams[1].ID), orm.TextSet(n.ProjectRecords.Slug, "shared"), orm.ColumnSet(n.ProjectRecords.Enabled, true)); err != nil {
 			return err
 		}
 		route(t, router, ctx, location(f.teams[1].ID, "shared", "same"), "", 500)

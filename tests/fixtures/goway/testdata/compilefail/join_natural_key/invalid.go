@@ -19,4 +19,4 @@ type locations struct {
 
 var cs = orm.Define("countries", func(b orm.Builder[country], r *country) countries { return countries{orm.TableOf(b, &r.Code)} })
 var ls = orm.Define("locations", func(b orm.Builder[location], r *location) locations { return locations{orm.TableOf(b, &r.Code)} })
-var _ = rows.On(expr.Value(cs.Key()), expr.Value(ls.Key()))
+var _ = rows.On(expr.Value(orm.KeyExpr(cs.Key())), expr.Value(orm.KeyExpr(ls.Key())))

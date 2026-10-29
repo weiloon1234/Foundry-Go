@@ -38,13 +38,13 @@ func WithRelationWriteLimit[M, N, P any](r ThroughRelation[M, N, P], limit int) 
 }
 
 // Attach creates one pivot with omitted endpoint keys supplied from locked models.
-// Example: orm.Attach(ctx,db,UserRelations.Groups,user,group,Memberships.Role.Set("member")).
+// Example: orm.Attach(ctx,db,UserRelations.Groups,user,group,orm.InputTextSet(Memberships.Role, "member")).
 func Attach[M, N, P any](ctx context.Context, writer database.Transactor, r ThroughRelation[M, N, P], source M, target N, create ...Assignment[P]) (P, error) {
 	return relationMutation(ctx, writer, r, source, []N{target}, create, nil, pivotAttachOne, func(out pivotWriteResult) P { return *(*P)(out.attached[0]) })
 }
 
 // AttachMany creates one pivot per distinct refreshed target key, retaining duplicate existing links.
-// Example: orm.AttachMany(ctx,db,UserRelations.Groups,user,groups,Memberships.Role.Set("member")).
+// Example: orm.AttachMany(ctx,db,UserRelations.Groups,user,groups,orm.InputTextSet(Memberships.Role, "member")).
 func AttachMany[M, N, P any](ctx context.Context, writer database.Transactor, r ThroughRelation[M, N, P], source M, targets []N, create ...Assignment[P]) ([]P, error) {
 	return relationMutation(ctx, writer, r, source, targets, create, nil, pivotAttach, func(out pivotWriteResult) []P { return pivotModels[P](out.attached) })
 }
@@ -92,13 +92,13 @@ func SyncWithoutDetaching[M, N, P any](ctx context.Context, writer database.Tran
 }
 
 // Toggle removes linked targets and attaches unlinked targets atomically.
-// Example: orm.Toggle(ctx,db,links,user,groups,Memberships.Role.Set("member")).
+// Example: orm.Toggle(ctx,db,links,user,groups,orm.InputTextSet(Memberships.Role, "member")).
 func Toggle[M, N, P any](ctx context.Context, writer database.Transactor, r ThroughRelation[M, N, P], source M, targets []N, create ...Assignment[P]) (PivotChanges[P], error) {
 	return relationMutation(ctx, writer, r, source, targets, create, nil, pivotToggle, pivotChanges[P])
 }
 
 // UpdatePivot patches every matching pivot to one target, including duplicate links.
-// Example: orm.UpdatePivot(ctx,db,links,user,group,Memberships.Role.Set("admin")).
+// Example: orm.UpdatePivot(ctx,db,links,user,group,orm.InputTextSet(Memberships.Role, "admin")).
 func UpdatePivot[M, N, P any](ctx context.Context, writer database.Transactor, r ThroughRelation[M, N, P], source M, target N, update ...Assignment[P]) ([]P, error) {
 	return relationMutation(ctx, writer, r, source, []N{target}, nil, update, pivotUpdate, func(out pivotWriteResult) []P { return pivotModels[P](out.updated) })
 }

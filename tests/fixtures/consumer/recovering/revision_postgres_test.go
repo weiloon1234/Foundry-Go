@@ -22,13 +22,13 @@ func TestRestoredEmailDoesNotRestoreRecoveryLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Email.Set("changed@example.test"), recovering.MemberRecords.EmailVerified.Set(true)})
+	update(t, s, []orm.Assignment[recovering.Member]{orm.TextSet(recovering.MemberRecords.Email, "changed@example.test"), orm.ColumnSet(recovering.MemberRecords.EmailVerified, true)})
 	changed := current(t, s)
 	if changed.EmailRevision == original.EmailRevision || changed.EmailVerified {
 		t.Fatal("email changed without fresh unverified state")
 	}
 	// Even explicitly submitting a stale revision cannot revive it.
-	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Email.Set(original.Email), recovering.MemberRecords.EmailRevision.Set(original.EmailRevision)})
+	update(t, s, []orm.Assignment[recovering.Member]{orm.TextSet(recovering.MemberRecords.Email, original.Email), orm.ColumnSet(recovering.MemberRecords.EmailRevision, original.EmailRevision)})
 	restored := current(t, s)
 	if restored.EmailRevision == original.EmailRevision || restored.EmailRevision == changed.EmailRevision {
 		t.Fatal("restoration reused a generation")
@@ -60,13 +60,13 @@ func TestUnchangedEmailAndRolledBackChangesPreserveRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Email.Set(original.Email), recovering.MemberRecords.EmailRevision.Set(fabricated), recovering.MemberRecords.Enabled.Set(true)})
+	update(t, s, []orm.Assignment[recovering.Member]{orm.TextSet(recovering.MemberRecords.Email, original.Email), orm.ColumnSet(recovering.MemberRecords.EmailRevision, fabricated), orm.ColumnSet(recovering.MemberRecords.Enabled, true)})
 	if current(t, s).EmailRevision != original.EmailRevision {
 		t.Fatal("unchanged email replaced managed revision")
 	}
 	rollback := errors.New("rollback email mutation")
 	err = s.within(t.Context(), func(tx *database.Tx) error {
-		changed, err := recovering.MemberRecords.Update(t.Context(), tx, original.ID, recovering.MemberRecords.Email.Set("rolled-back@example.test"))
+		changed, err := orm.Update(t.Context(), tx, recovering.MemberRecords.Table.Query(), recovering.MemberRecords.Table.Key(), original.ID, orm.TextSet(recovering.MemberRecords.Email, "rolled-back@example.test"))
 		if err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func TestRecoveryWaitsForEmailChangeThenRejectsOldRevision(t *testing.T) {
 	writeDone := make(chan error, 1)
 	go func() {
 		writeDone <- s.within(t.Context(), func(tx *database.Tx) error {
-			_, err := recovering.MemberRecords.Update(t.Context(), tx, s.member.ID, recovering.MemberRecords.Email.Set("while-locked@example.test"))
+			_, err := orm.Update(t.Context(), tx, recovering.MemberRecords.Table.Query(), recovering.MemberRecords.Table.Key(), s.member.ID, orm.TextSet(recovering.MemberRecords.Email, "while-locked@example.test"))
 			if err != nil {
 				return err
 			}
@@ -146,7 +146,7 @@ func TestUnchangedEmailOmitsSubmittedRevision(t *testing.T) {
 				return err
 			}
 		}
-		_, err := recovering.MemberRecords.Update(t.Context(), tx, original.ID, recovering.MemberRecords.Email.Set(original.Email), recovering.MemberRecords.EmailRevision.Set(fabricated), recovering.MemberRecords.Enabled.Set(false))
+		_, err := orm.Update(t.Context(), tx, recovering.MemberRecords.Table.Query(), recovering.MemberRecords.Table.Key(), original.ID, orm.TextSet(recovering.MemberRecords.Email, original.Email), orm.ColumnSet(recovering.MemberRecords.EmailRevision, fabricated), orm.ColumnSet(recovering.MemberRecords.Enabled, false))
 		return err
 	}); err != nil {
 		t.Fatal(err)

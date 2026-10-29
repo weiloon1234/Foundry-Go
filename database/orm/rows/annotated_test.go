@@ -58,8 +58,8 @@ func TestAnnotatedHydrationAndRetrieval(t *testing.T) {
 					return nil
 				}}
 			}))
-			rel := orm.HasManyOf(table.Children, table.Key(), table.ParentID)
-			q := rows.WithValue(table.Query().OrderBy(table.Key().Asc()).Offset(2).Limit(3), expr.RelatedValue(rel, expr.Count[annotatedModel]()))
+			rel := orm.HasManyOf(table.Children, orm.KeyExpr(table.Key()), orm.NumberExpr(table.ParentID))
+			q := rows.WithValue(table.Query().OrderBy(orm.KeyAsc(table.Key())).Offset(2).Limit(3), expr.RelatedValue(rel, expr.Count[annotatedModel]()))
 			if _, err := rows.CompileRead(q); err != nil {
 				t.Fatal(err)
 			}
@@ -143,7 +143,7 @@ func TestAnnotatedEagerLoadsAfterRetrieval(t *testing.T) {
 					state.values = [][]driver.Value{{int64(2), int64(1), "child"}}
 				}
 			}
-			rel := orm.HasManyOf(table.Children, table.Key(), table.ParentID)
+			rel := orm.HasManyOf(table.Children, orm.KeyExpr(table.Key()), orm.NumberExpr(table.ParentID))
 			q := rows.WithValue(table.Query().With(rel), expr.RelatedValue(rel, expr.Count[annotatedModel]()))
 			got, err := rows.ReadRecord(q).All(t.Context(), openStreamDB(t, state))
 			if err != nil || len(got) != 1 || got[0].Value != 1 {
@@ -161,12 +161,12 @@ func TestAnnotatedEagerLoadsAfterRetrieval(t *testing.T) {
 }
 func TestAnnotatedRejectsDifferentDeclarationAndFailedRelation(t *testing.T) {
 	a, b := annotatedModels(), annotatedModels()
-	good := orm.HasManyOf(a.Children, a.Key(), a.ParentID)
-	bad := orm.HasManyOf(a.Children, b.Key(), a.ParentID)
+	good := orm.HasManyOf(a.Children, orm.KeyExpr(a.Key()), orm.NumberExpr(a.ParentID))
+	bad := orm.HasManyOf(a.Children, orm.KeyExpr(b.Key()), orm.NumberExpr(a.ParentID))
 	for _, q := range []rows.RecordRead[annotatedModel, rows.Annotated[annotatedModel, int64]]{
 		rows.WithValue(b.Query(), expr.RelatedValue(good, expr.Count[annotatedModel]())),
 		rows.WithValue(a.Query(), expr.RelatedValue(bad, expr.Count[annotatedModel]())),
-		rows.WithValue(a.Query(), expr.RelatedValue(good, expr.CountField(b.ParentID))),
+		rows.WithValue(a.Query(), expr.RelatedValue(good, expr.CountField(orm.NumberExpr(b.ParentID)))),
 		rows.WithValue(a.Query(), expr.RowExpression[annotatedModel, int64]{}),
 		rows.WithValue(orm.Query[annotatedModel]{}, expr.RelatedValue(good, expr.Count[annotatedModel]())),
 	} {

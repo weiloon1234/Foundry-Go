@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -58,9 +60,9 @@ func runConditionalNew(g *goldenCapture) {
 	db := g.open(ctx)
 	defer db.Close(ctx)
 	a := rowset.As[expressionSide](models.Users.Query(), "u")
-	age := expr.OrderRow(expr.At(rowset.Scope(a), models.Users.Age))
-	email := expr.At(rowset.Scope(a), models.Users.Email)
-	nickname := expr.At(rowset.Scope(a), models.Users.Nickname)
+	age := expr.OrderRow(expr.At(rowset.Scope(a), orm.NumberExpr(models.Users.Age)))
+	email := expr.At(rowset.Scope(a), orm.TextExpr(models.Users.Email))
+	nickname := expr.At(rowset.Scope(a), orm.NullableTextExpr(models.Users.Nickname))
 	fallback := expr.Row(email).Value().Param("")
 	choice := expr.When(age.Gt(18), expr.Coalesce(nickname, email)).When(age.Gt(10), fallback).Else(email)
 	nullable := expr.When(age.Gt(0), choice).ElseNull()

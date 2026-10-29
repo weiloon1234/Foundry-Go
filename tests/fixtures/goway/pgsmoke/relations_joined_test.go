@@ -35,7 +35,7 @@ func TestJoinedRelationFamilies(t *testing.T) {
 	scopeCtx, scope := detector.Begin(ctx)
 	statements = 0
 	r := j.Peers.With(j.TargetParent).WithPivot(j.PivotParent)
-	parents, err := orm.WithRelationLimits(j.Parents.Query().Where(j.Parents.ID.In(1, 2, 3)).OrderBy(j.Parents.ID.Asc()).With(r), orm.RelationLimits{BatchSize: 2, MaxRows: 100, MaxDepth: 3}).All(scopeCtx, db)
+	parents, err := orm.All(scopeCtx, db, orm.WithRelationLimits(j.Parents.Query().Where(orm.KeyIn(j.Parents.ID, 1, 2, 3)).OrderBy(orm.KeyAsc(j.Parents.ID)).With(r), orm.RelationLimits{BatchSize: 2, MaxRows: 100, MaxDepth: 3}))
 	must(t, err)
 	// parent + two joined batches + one complete target branch + one pivot branch.
 	if statements != 5 || len(parents) != 3 || parents[0].Peers.Len() != 3 || parents[1].Peers.Len() != 1 || parents[2].Peers.Len() != 0 {
@@ -59,7 +59,7 @@ func TestJoinedRelationFamilies(t *testing.T) {
 		t.Fatal("shared target pivot contaminated")
 	}
 	statements = 0
-	filtered, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers.Where(j.Targets.Name.Eq("ten")).WherePivot(j.Pivots.Role.Eq("c"))), []j.Parent{{ID: 1}})
+	filtered, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Peers.Where(orm.TextEq(j.Targets.Name, "ten")).WherePivot(orm.TextEq(j.Pivots.Role, "c"))), []j.Parent{{ID: 1}})
 	must(t, err)
 	if statements != 1 || filtered[0].Peers.Len() != 1 {
 		t.Fatal("constraints")
@@ -82,7 +82,7 @@ func TestJoinedRelationFamilies(t *testing.T) {
 	for _, tc := range []struct {
 		r  orm.HasOne[j.Parent, j.Target]
 		id int64
-	}{{j.Chosen.LatestOfMany(), 11}, {j.Chosen.OldestOfMany(), 10}, {j.Chosen.OfMany(j.Targets.Rank.Desc()), 10}, {j.ChosenThrough.OfMany(j.Targets.Rank.Desc()), 10}} {
+	}{{j.Chosen.LatestOfMany(), 11}, {j.Chosen.OldestOfMany(), 10}, {j.Chosen.OfMany(orm.NumberDesc(j.Targets.Rank)), 10}, {j.ChosenThrough.OfMany(orm.NumberDesc(j.Targets.Rank)), 10}} {
 		statements = 0
 		got, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(tc.r), []j.Parent{{ID: 1}})
 		must(t, err)
@@ -138,20 +138,20 @@ func TestJoinedRelationFamilies(t *testing.T) {
 	}
 	// Both joined families support nested EXISTS without extra statements.
 	statements = 0
-	matches, err := j.Parents.Query().Where(orm.Has(j.Peers, j.Targets.ID.Eq(11))).All(ctx, db)
+	matches, err := orm.All(ctx, db, j.Parents.Query().Where(orm.Has(j.Peers, orm.KeyEq(j.Targets.ID, 11))))
 	must(t, err)
 	if len(matches) != 1 || matches[0].ID != 1 || statements != 1 {
 		t.Fatal("pivot exists", statements)
 	}
 	statements = 0
-	matches, err = j.Parents.Query().Where(orm.Has(j.TargetsThrough, j.Targets.ID.Eq(11))).All(ctx, db)
+	matches, err = orm.All(ctx, db, j.Parents.Query().Where(orm.Has(j.TargetsThrough, orm.KeyEq(j.Targets.ID, 11))))
 	must(t, err)
 	if len(matches) != 1 || matches[0].ID != 1 || statements != 1 {
 		t.Fatal("through exists", statements)
 	}
 	_, err = db.Exec(ctx, `INSERT INTO joined_pivots VALUES (200,1,7,'parent','ambiguous',NULL)`)
 	must(t, err)
-	ambiguous := orm.ManyToManyOf(j.Parents.Peers, j.Parents.ID, j.Pivots.ParentID, j.Pivots.TargetID, j.Targets.Rank)
+	ambiguous := orm.ManyToManyOf(j.Parents.Peers, orm.KeyExpr(j.Parents.ID), orm.NullableNumberExpr(j.Pivots.ParentID), orm.NullableNumberExpr(j.Pivots.TargetID), orm.NumberExpr(j.Targets.Rank))
 	if result, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(ambiguous), []j.Parent{{ID: 1}}); result != nil || !errors.Is(err, database.TooManyRows) {
 		t.Fatal("pivot matched multiple targets", err)
 	}

@@ -9,4 +9,4 @@ import (
 )
 
 var destination orm.Primary[models.User, model.ID[models.User]]
-var _ = rows.MapInsert(destination, expr.Value(models.Orders.ID))
+var _ = rows.MapInsert(orm.KeyExpr(destination), expr.Value(orm.KeyExpr(models.Orders.ID)))

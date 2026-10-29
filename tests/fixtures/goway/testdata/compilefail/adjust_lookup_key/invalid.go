@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.NumberKey(h.Members.Key()).Increment(1)
+var _ = orm.NumberIncrement(orm.NumberKey(h.Members.Key()), 1)

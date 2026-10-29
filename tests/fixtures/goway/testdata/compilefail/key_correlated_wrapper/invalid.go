@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -8,7 +10,7 @@ import (
 
 var c = rows.Correlate(rows.From(models.Users.Query()), rows.From(models.Orders.Query()))
 var scope = rows.InnerScope(c, rows.ModelScope(models.Orders.Query()))
-var child = expr.At(scope, models.Orders.TotalCents)
+var child = expr.At(scope, orm.NumberExpr(models.Orders.TotalCents))
 var scalar = rows.SelectCorrelatedScalar(c, expr.Row(child).Value())
 
 type forged struct {

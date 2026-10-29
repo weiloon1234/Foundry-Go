@@ -9,6 +9,6 @@ import (
 )
 
 func invalid(history record.Model[auditqueries.Account, model.ID[auditqueries.Account]]) {
-	field, _ := orm.AuditRead(history, auditqueries.Accounts.Email)
+	field, _ := orm.AuditRead(history, orm.InputTextExpr(auditqueries.Accounts.Email))
 	var _ value.Optional[record.FieldChange[int]] = field
 }

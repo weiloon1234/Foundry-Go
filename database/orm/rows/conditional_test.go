@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"database/sql/driver"
 	"errors"
@@ -18,7 +20,7 @@ import (
 func TestConditionalBindingsAndImmutableCase(t *testing.T) {
 	o := declareOrders()
 	a := As[right](o.Query(), "o")
-	id := expr.At(Scope(a), o.MemberID)
+	id := expr.At(Scope(a), orm.NumberExpr(o.MemberID))
 	parameter := expr.OrderRow(id).Param
 	base := expr.When(id.Eq(1), parameter(10))
 	first := base.Else(parameter(20))
@@ -49,8 +51,8 @@ func TestConditionalBindingsAndImmutableCase(t *testing.T) {
 func TestConditionalNullableResultsAndComposition(t *testing.T) {
 	m := declareMembers()
 	a := As[left](m.Query(), "m")
-	name := expr.At(Scope(a), m.Name)
-	nickname := expr.At(Scope(a), m.Nickname)
+	name := expr.At(Scope(a), orm.TextExpr(m.Name))
+	nickname := expr.At(Scope(a), orm.NullableTextExpr(m.Nickname))
 	fallback := expr.Row(name).Value().Param("")
 	required := expr.Coalesce(nickname, fallback)
 	for _, selected := range []expr.Selected[Alias[left, member], string]{required.Value(), expr.CoalesceValue(expr.Row(nickname).Value(), fallback.Value())} {
@@ -101,7 +103,7 @@ func TestSelectedCaseAndGroupConditions(t *testing.T) {
 	}
 	expressionSQL(t, expressionQuery(a, nullable, codec.Nullable(codec.Signed[int64]())))
 	// Explicitly lifting a row condition does not make its column grouped.
-	invalid := expr.WhenValue(expr.Grouped(expr.OrderRow(expr.At(Scope(a), o.MemberID)).Gt(0)), count.Value()).Else(count.Param(0).Value())
+	invalid := expr.WhenValue(expr.Grouped(expr.OrderRow(expr.At(Scope(a), orm.NumberExpr(o.MemberID))).Gt(0)), count.Value()).Else(count.Param(0).Value())
 	state = &driverState{}
 	result, err := Read(expressionQuery(a, invalid, codec.Signed[int64]())).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || result != nil || state.sql != "" {
@@ -112,7 +114,7 @@ func TestSelectedCaseAndGroupConditions(t *testing.T) {
 func TestConditionalsPreserveAllOwnersAndErrors(t *testing.T) {
 	o, other := declareOrders(), declareOrders()
 	a := As[right](o.Query(), "o")
-	own, foreign := expr.At(Scope(a), o.MemberID), expr.At(Scope(a), other.MemberID)
+	own, foreign := expr.At(Scope(a), orm.NumberExpr(o.MemberID)), expr.At(Scope(a), orm.NumberExpr(other.MemberID))
 	p := expr.OrderRow(own).Param(1)
 	for name, selected := range map[string]expr.Selected[Alias[right, order], int64]{
 		"condition":          expr.When(foreign.Eq(1), p).Else(p).Value(),
@@ -149,8 +151,8 @@ func TestConditionalsPreserveAllOwnersAndErrors(t *testing.T) {
 
 func TestEmptyMembershipRejectsInvalidOperand(t *testing.T) {
 	m := declareMembers()
-	invalid := expr.Param(m.Name, "\x00")
-	q := WhereScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.ID)).Value()), invalid.In())
+	invalid := expr.Param(orm.TextExpr(m.Name), "\x00")
+	q := WhereScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()), invalid.In())
 	if _, err := CompileRead(ReadScalar(q)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty IN concealed invalid operand", err)
 	}
@@ -187,25 +189,25 @@ func TestParameterCaptureAndCodecTypes(t *testing.T) {
 			t.Fatal("invalid parameter metadata", err)
 		}
 	}
-	if _, err := CompileRead(ReadScalar(SelectScalar(From(m.Query()), expr.Param(m.Name, "\x00").Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := CompileRead(ReadScalar(SelectScalar(From(m.Query()), expr.Param(orm.TextExpr(m.Name), "\x00").Value()))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("invalid parameter value", err)
 	}
 	if got := codec.Nullable(codec.Signed[int64]().Validated(func(int64) error { return nil })).ParameterType(); got != codec.TypeInteger {
 		t.Fatal("adapter lost parameter type", got)
 	}
-	qbad := WhereScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.ID)).Value()), expr.NullableRow(expr.Value(m.ID)).Param(value.Null[int64]()).Eq(value.Null[int64]()))
+	qbad := WhereScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()), expr.NullableRow(expr.Value(orm.KeyExpr(m.ID))).Param(value.Null[int64]()).Eq(value.Null[int64]()))
 	if _, err := CompileRead(ReadScalar(qbad)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("literal NULL equality accepted", err)
 	}
 }
 func TestZeroCaseAndDistinctParameterIdentity(t *testing.T) {
 	m := declareMembers()
-	id := expr.Value(m.ID)
+	id := expr.Value(orm.KeyExpr(m.ID))
 	q := From(m.Query())
 	if _, err := CompileRead(ReadScalar(SelectScalar(q, (expr.Case[member, int64]{}).When(id.Eq(1), id).ElseNull().Value()))); err != nil {
 		t.Fatal("zero CASE failed to acquire branch", err)
 	}
-	first := expr.When(id.Eq(1), expr.Param(m.ID, int64(10))).Else(expr.Param(m.ID, int64(20)))
+	first := expr.When(id.Eq(1), expr.Param(orm.KeyExpr(m.ID), int64(10))).Else(expr.Param(orm.KeyExpr(m.ID), int64(20)))
 	s, err := CompileRead(ReadScalar(OrderScalar(DistinctScalar(SelectScalar(q, first.Value())), expr.OrderRow(first).Asc())))
 	if err != nil || !strings.Contains(s.SQL(), "ORDER BY 1 ASC") || len(s.Arguments()) != 3 {
 		t.Fatal("DISTINCT CASE rebound parameters", s.SQL(), s.Arguments(), err)
@@ -214,7 +216,7 @@ func TestZeroCaseAndDistinctParameterIdentity(t *testing.T) {
 func TestConditionalValuePhaseAndBounds(t *testing.T) {
 	d := declareMembers()
 	source := From(d.Query())
-	id := expr.Value(d.ID)
+	id := expr.Value(orm.KeyExpr(d.ID))
 	count := expr.Count[member]()
 	grouped := expr.WhenValue(expr.Grouped(id.Eq(1)), count.Value()).Else(count.Param(0).Value())
 	if _, err := CompileRead(ReadScalar(GroupByScalar(SelectScalar(source, grouped), expr.Group(id)))); err != nil {
@@ -266,7 +268,7 @@ func TestConditionalValuePhaseAndBounds(t *testing.T) {
 
 func TestConditionalRejectsNestedNullability(t *testing.T) {
 	m := declareMembers()
-	id := expr.Value(m.ID)
+	id := expr.Value(orm.KeyExpr(m.ID))
 	for _, v := range []expr.Selected[member, value.Nullable[value.Nullable[int64]]]{expr.When(id.Eq(1), expr.NullableRow(id)).ElseNull().Value(), expr.NullIf(expr.NullableRow(id), expr.NullableRow(id)).Value()} {
 		state := &driverState{}
 		if _, err := ReadScalar(SelectScalar(From(m.Query().Limit(0)), v)).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {

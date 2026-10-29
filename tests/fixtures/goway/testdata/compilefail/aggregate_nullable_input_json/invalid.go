@@ -8,4 +8,4 @@ import (
 
 type input struct{ Text string }
 
-var _ = expr.Min(orm.NullableInputJSON[models.User, input, string]{})
+var _ = expr.Min(orm.NullableInputJSONExpr(orm.NullableInputJSON[models.User, input, string]{}))

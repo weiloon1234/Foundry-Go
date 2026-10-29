@@ -58,14 +58,14 @@ func TestPasswordConstructorsBindRequiredAndNullableMutators(t *testing.T) {
 		}
 		return []string{"id", "digest", "backup"}, [][]driver.Value{{int64(1), encoded, backup}}, nil
 	}})
-	got, err := fields.Insert(t.Context(), db, fields.Key().Set(1), fields.Digest.Set(input), fields.Backup.Set(input))
+	got, err := Insert(t.Context(), db, fields.Table, KeySet(fields.Key(), 1), InputColumnSet(fields.Digest, input), NullableInputColumnSet(fields.Backup, input))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Digest.Encoded().Reveal() != encoded || bindings[0][1] != encoded || bindings[0][2] != encoded {
 		t.Fatal("password mutators did not transform stored values")
 	}
-	got, err = fields.Update(t.Context(), db, 1, fields.Backup.SetNull())
+	got, err = Update(t.Context(), db, fields.Table.Query(), fields.Table.Key(), 1, NullableInputColumnSetNull(fields.Backup))
 	if err != nil || !got.Backup.IsNull() || bindings[1][0] != nil {
 		t.Fatal("nullable hash mutator changed explicit NULL", err)
 	}

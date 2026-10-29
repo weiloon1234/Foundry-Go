@@ -20,17 +20,17 @@ func TestConcurrentPivotSynchronizationSerializesPerSource(t *testing.T) {
 	document := seedDocument(t, db, alpha, "shared", true)
 	tags := make([]tenantqueries.Tag, 0, 3)
 	for _, code := range []tenantqueries.TagCode{"a", "b", "c"} {
-		tag, err := tenantqueries.Tags.Insert(ctx, db, tenantqueries.Tags.Key().Set(code), tenantqueries.Tags.Name.Set(string(code)))
+		tag, err := orm.Insert(ctx, db, tenantqueries.Tags.Table, orm.KeySet(tenantqueries.Tags.Key(), code), orm.TextSet(tenantqueries.Tags.Name, string(code)))
 		if err != nil {
 			t.Fatal(err)
 		}
 		tags = append(tags, tag)
 	}
 	link := tenantqueries.DocumentLinks
-	draft := []orm.Assignment[tenantqueries.DocumentTag]{tenantqueries.DocumentTags.Weight.Set(1)}
+	draft := []orm.Assignment[tenantqueries.DocumentTag]{orm.NumberSet(tenantqueries.DocumentTags.Weight, 1)}
 	stored := func() []tenantqueries.TagCode {
 		t.Helper()
-		pivots, err := tenantqueries.DocumentTags.Query().Where(tenantqueries.DocumentTags.DocumentID.Eq(document.ID)).All(ctx, db)
+		pivots, err := orm.All(ctx, db, tenantqueries.DocumentTags.Query().Where(orm.ColumnEq(tenantqueries.DocumentTags.DocumentID, document.ID)))
 		if err != nil {
 			t.Fatal(err)
 		}

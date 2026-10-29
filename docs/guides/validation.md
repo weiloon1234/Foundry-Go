@@ -422,13 +422,13 @@ ORM declarations and typed column handles:
 <!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
 ```go
 func availableEmail(db database.Executor) validation.Rule[string] {
-	return databasevalidation.Unique(db, models.Users.Query(), models.Users.Email)
+	return databasevalidation.Unique(db, models.Users.Query(), orm.TextExpr(models.Users.Email))
 }
 
 func activeUsers(db database.Executor) validation.Rule[[]model.ID[models.User]] {
 	return databasevalidation.ExistsAll(db,
-		models.Users.Query().Where(models.Users.Status.Eq(models.StatusActive)),
-		models.Users.Key())
+		models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)),
+		orm.KeyExpr(models.Users.Key()))
 }
 ```
 
@@ -475,7 +475,7 @@ type EmailChange struct {
 
 func updateRules(db database.Executor) validation.Rule[EmailChange] {
 	current := validation.NewSlot[model.ID[models.User]]()
-	email := databasevalidation.UniqueIgnoring(db, models.Users.Query(), models.Users.Email, models.Users.Key(), current)
+	email := databasevalidation.UniqueIgnoring(db, models.Users.Query(), orm.TextExpr(models.Users.Email), orm.KeyExpr(models.Users.Key()), func(id model.ID[models.User]) orm.Predicate[models.User] { return orm.KeyNe(models.Users.Key(), id) }, current)
 	field := validation.DefineField("email", func(in EmailChange) string { return in.Email })
 	return validation.Provide(current,
 		func(_ context.Context, in EmailChange) (model.ID[models.User], error) { return in.ID, nil },
@@ -499,8 +499,8 @@ every check, for example from typed request metadata:
 func enabledAccounts(db database.Executor, enabled func(context.Context) (bool, error)) validation.Rule[int64] {
 	lookup := databasevalidation.Scoped(db, func(ctx context.Context) (orm.Query[Account], error) {
 		value, err := enabled(ctx)
-		return Accounts.Query().Where(Accounts.Enabled.Eq(value)), err
-	}, Accounts.Key())
+		return Accounts.Query().Where(orm.ColumnEq(Accounts.Enabled, value)), err
+	}, orm.KeyExpr(Accounts.Key()))
 	return validation.Exists(lookup)
 }
 ```

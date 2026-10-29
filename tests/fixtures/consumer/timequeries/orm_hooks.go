@@ -1,5 +1,8 @@
 package timequeries
 
+import temporal "github.com/weiloon1234/Foundry-Go/temporal"
+import time "time"
+
 import (
 	"context"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -24,14 +27,23 @@ func ormMemberHooks(fields MemberTable) orm.Hooks[Member] {
 		Saving: func(ctx context.Context, _ *database.Tx, _ value.Optional[Member], draft *orm.Write[Member]) error {
 			state, _ = ctx.Value(stateKey{}).(*State)
 			if state != nil {
-				state.ORMCreatedAt = orm.WriteGet(draft, fields.CreatedAt.Set)
-				state.ORMUpdatedAt = orm.WriteGet(draft, fields.UpdatedAt.Set)
+				state.ORMCreatedAt = orm.WriteGet(draft, func() func(arg0 time.Time) orm.Assignment[Member] {
+					receiver := fields.CreatedAt
+					return func(arg0 time.Time) orm.Assignment[Member] { return orm.TimeSet(receiver, arg0) }
+				}())
+				state.ORMUpdatedAt = orm.WriteGet(draft, func() func(arg0 temporal.DateTime) orm.Assignment[Member] {
+					receiver := fields.UpdatedAt
+					return func(arg0 temporal.DateTime) orm.Assignment[Member] { return orm.TimeSet(receiver, arg0) }
+				}())
 			}
 			return nil
 		},
 		Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[Member]) error {
-			if !orm.WriteIsSet(draft, fields.Name.Set) {
-				return orm.WriteSet(draft, fields.Name.Set(" default "))
+			if !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[Member] {
+				receiver := fields.Name
+				return func(arg0 string) orm.Assignment[Member] { return orm.InputTextSet(receiver, arg0) }
+			}()) {
+				return orm.WriteSet(draft, orm.InputTextSet(fields.Name, " default "))
 			}
 			return nil
 		},

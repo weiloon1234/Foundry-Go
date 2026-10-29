@@ -9,7 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/testkit/dbassert"
 )
 
-// rows is a typed stand-in for a generated soft-deleting model query.
+// rows supplies callbacks for ordinary and soft-deleted row counts.
 type rows struct {
 	visible, trashed int64
 	onlyTrashed      bool
@@ -39,18 +39,18 @@ func (r *recorder) Errorf(string, ...any) { r.failures++ }
 
 func TestAssertionsReportOnlyMismatches(t *testing.T) {
 	ctx := t.Context()
-	dbassert.AssertExists(t, ctx, nil, rows{visible: 1})
-	dbassert.AssertMissing(t, ctx, nil, rows{trashed: 3})
-	dbassert.AssertCount(t, ctx, nil, rows{visible: 2}, 2)
-	dbassert.AssertSoftDeleted(t, ctx, nil, rows{trashed: 1})
+	dbassert.AssertExists(t, ctx, nil, rows{visible: 1}.Exists)
+	dbassert.AssertMissing(t, ctx, nil, rows{trashed: 3}.Count)
+	dbassert.AssertCount(t, ctx, nil, rows{visible: 2}.Count, 2)
+	dbassert.AssertSoftDeleted(t, ctx, nil, rows{trashed: 1}.Count, rows{trashed: 1}.OnlyTrashed().Exists)
 
 	failed := &recorder{TB: t}
-	dbassert.AssertExists(failed, ctx, nil, rows{})
-	dbassert.AssertMissing(failed, ctx, nil, rows{visible: 1})
-	dbassert.AssertCount(failed, ctx, nil, rows{visible: 1}, 2)
-	dbassert.AssertSoftDeleted(failed, ctx, nil, rows{visible: 1, trashed: 1})
-	dbassert.AssertSoftDeleted(failed, ctx, nil, rows{})
-	dbassert.AssertCount(failed, ctx, nil, rows{err: errors.New("query failed")}, 0)
+	dbassert.AssertExists(failed, ctx, nil, rows{}.Exists)
+	dbassert.AssertMissing(failed, ctx, nil, rows{visible: 1}.Count)
+	dbassert.AssertCount(failed, ctx, nil, rows{visible: 1}.Count, 2)
+	dbassert.AssertSoftDeleted(failed, ctx, nil, rows{visible: 1, trashed: 1}.Count, rows{visible: 1, trashed: 1}.OnlyTrashed().Exists)
+	dbassert.AssertSoftDeleted(failed, ctx, nil, rows{}.Count, rows{}.OnlyTrashed().Exists)
+	dbassert.AssertCount(failed, ctx, nil, rows{err: errors.New("query failed")}.Count, 0)
 	if failed.failures != 6 {
 		t.Fatalf("reported %d failure(s), want 6", failed.failures)
 	}

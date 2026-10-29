@@ -1,5 +1,7 @@
 package conditional_row
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -25,8 +27,8 @@ var schema = rows.Define(func(b rows.Builder[Result], r *Result) fields {
 // Query exercises row CASE, COALESCE, NULLIF and nullable result composition.
 func Query() rows.Query[rows.Alias[side, models.User], Result] {
 	source := rows.As[side](models.Users.Query(), "u")
-	name := expr.At(rows.Scope(source), models.Users.Email)
-	nickname := expr.At(rows.Scope(source), models.Users.Nickname)
+	name := expr.At(rows.Scope(source), orm.TextExpr(models.Users.Email))
+	nickname := expr.At(rows.Scope(source), orm.NullableTextExpr(models.Users.Nickname))
 	choice := expr.When(nickname.IsNull(), name).When(name.Eq(""), expr.Row(name).Value().Param("fallback")).Else(name)
 	nullable := expr.When(name.Ne(""), choice).ElseNull()
 	missing := expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.NullableRow(name).Param(value.Null[string]()))

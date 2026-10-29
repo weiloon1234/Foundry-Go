@@ -70,4 +70,4 @@ var Orders = orm.Define("report_orders", func(b orm.Builder[Order], o *Order) Or
 	return OrderTable{Table: tbl, ID: tbl.Key(), TenantID: orm.NumberOf(b, &o.TenantID), MemberID: orm.IDOf(b, &o.MemberID), Label: orm.TextOf(b, &o.Label), Amount: orm.NumberOf(b, &o.Amount), DeletedAt: orm.SoftDeleteOf(b, &o.DeletedAt), Member: orm.OneOf(b, &o.Member)}
 })
 
-var OrderRelations = struct{ Member orm.BelongsTo[Order, Member] }{orm.BelongsToOf(Orders.Member, Orders.MemberID, Members.ID)}
+var OrderRelations = struct{ Member orm.BelongsTo[Order, Member] }{orm.BelongsToOf(Orders.Member, orm.ColumnExpr(Orders.MemberID), orm.KeyExpr(Members.ID))}

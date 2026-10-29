@@ -17,15 +17,15 @@ import (
 
 func TestScalarOperationsComposeAndBind(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(d.ID)
-	text := expr.Value(d.Name)
-	calculation := expr.Multiply(expr.Add(id, expr.Param(d.ID, 2)), expr.Param(d.ID, 3))
+	id := expr.Value(orm.KeyExpr(d.ID))
+	text := expr.Value(orm.TextExpr(d.Name))
+	calculation := expr.Multiply(expr.Add(id, expr.Param(orm.KeyExpr(d.ID), 2)), expr.Param(orm.KeyExpr(d.ID), 3))
 	q := expr.OrderBy(expr.Where(d.Query(), calculation.Gte(20)), calculation.Desc())
 	s, err := orm.Compile(q)
 	if err != nil || !strings.Contains(s.SQL(), " + ") || !strings.Contains(s.SQL(), " * ") || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(3), int64(20), int64(2), int64(3)}) {
 		t.Fatal(s.SQL(), s.Arguments(), err)
 	}
-	label := expr.Lower(expr.Trim(expr.Concat(text, expr.Param(d.Name, "_%"))))
+	label := expr.Lower(expr.Trim(expr.Concat(text, expr.Param(orm.TextExpr(d.Name), "_%"))))
 	selected := WhereScalar(SelectScalar(From(d.Query()), label.Value()), label.Contains("_%"))
 	s, err = CompileRead(ReadScalar(selected))
 	if err != nil || !strings.Contains(s.SQL(), "LOWER(") || !strings.Contains(s.SQL(), "BTRIM(") || !reflect.DeepEqual(s.Arguments(), []any{"_%", "_%", "%!_!%%"}) {
@@ -47,8 +47,8 @@ func TestScalarOperationsComposeAndBind(t *testing.T) {
 }
 func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(d.ID)
-	text := expr.Value(d.Name)
+	id := expr.Value(orm.KeyExpr(d.ID))
+	text := expr.Value(orm.TextExpr(d.Name))
 	source := From(d.Query().Limit(0))
 	for _, v := range []expr.Selected[member, int64]{
 		expr.Add[member, int64](nil, id).Value(),
@@ -59,16 +59,16 @@ func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 	for _, v := range []expr.Selected[member, string]{expr.Substring(text, 1, -1).Value(), expr.ConcatWS("\x00", text).Value()} {
 		rejectScalar(t, source, v, codec.String[string]())
 	}
-	window := expr.AddValue(expr.RowNumber(expr.WindowFor(ModelScope(d.Query()))), expr.Param(d.ID, 1).Value())
+	window := expr.AddValue(expr.RowNumber(expr.WindowFor(ModelScope(d.Query()))), expr.Param(orm.KeyExpr(d.ID), 1).Value())
 	if _, err := CompileRead(ReadScalar(HavingScalar(SelectScalar(From(d.Query()), expr.Count[member]().Value()), expr.OrderValue(window).Gt(1)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("arithmetic hid window in HAVING", err)
 	}
 	if _, err := CompileRead(ReadScalar(SelectScalar(From(d.Query()), expr.RowNumber(expr.WindowFor(ModelScope(d.Query())).OrderBy(window.Asc()))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("arithmetic hid nested window", err)
 	}
-	deep := expr.Param(d.ID, 1)
+	deep := expr.Param(orm.KeyExpr(d.ID), 1)
 	for range querycore.MaxExpressionDepth + 1 {
-		deep = expr.Row(expr.Add(deep, expr.Param(d.ID, 1)))
+		deep = expr.Row(expr.Add(deep, expr.Param(orm.KeyExpr(d.ID), 1)))
 	}
 	rejectScalar(t, source, deep.Value(), codec.Signed[int64]())
 	for name, node := range map[string]querycore.ValueExpression{
@@ -76,7 +76,7 @@ func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 		"result":  querycore.OperationNode{Kind: querycore.LowerOperation, Result: codec.TypeInteger, Arguments: []querycore.OperationArgument{{Value: querycore.FieldRef{Table: "members", Column: "name"}, Kind: codec.TypeText}}},
 		"unknown": querycore.OperationNode{Kind: 255},
 	} {
-		q := SelectScalar(source, expr.Param(d.ID, 1).Value())
+		q := SelectScalar(source, expr.Param(orm.KeyExpr(d.ID), 1).Value())
 		q.source.Node.Selections[0].Expression = node
 		if _, err := CompileRead(ReadScalar(q)); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
@@ -85,16 +85,16 @@ func TestScalarOperationsRejectInvalidDeclarations(t *testing.T) {
 }
 func TestScalarOrderPaginationAndAliasPreservation(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(d.ID)
-	computed := expr.Add(id, expr.Param(d.ID, 1))
+	id := expr.Value(orm.KeyExpr(d.ID))
+	computed := expr.Add(id, expr.Param(orm.KeyExpr(d.ID), 1))
 	order := computed.Asc()
 	copy := order
 	if !reflect.DeepEqual(order, copy) {
 		t.Fatal("copy changed order")
 	}
-	q := expr.OrderBy(d.Query(), computed.Desc(), expr.Subtract(id, expr.Param(d.ID, 2)).Asc())
+	q := expr.OrderBy(d.Query(), computed.Desc(), expr.Subtract(id, expr.Param(orm.KeyExpr(d.ID), 2)).Asc())
 	state := &driverState{columns: []string{"id", "name", "nickname"}}
-	if _, err := q.SimplePaginate(t.Context(), openTest(t, state), orm.Page(1, 2)); err != nil || !strings.Contains(state.sql, `"members"."id" ASC LIMIT`) {
+	if _, err := orm.SimplePaginate(t.Context(), openTest(t, state), q, orm.Page(1, 2)); err != nil || !strings.Contains(state.sql, `"members"."id" ASC LIMIT`) {
 		t.Fatal("stable order lost primary", state.sql, err)
 	}
 	state = &driverState{}

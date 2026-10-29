@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.ManyToManyOf(j.Parents.Peers, j.Parents.ID, j.Pivots.ParentID, j.Pivots.Kind, j.Targets.ID)
+var _ = orm.ManyToManyOf(j.Parents.Peers, orm.KeyExpr(j.Parents.ID), orm.NullableNumberExpr(j.Pivots.ParentID), orm.ColumnExpr(j.Pivots.Kind), orm.KeyExpr(j.Targets.ID))

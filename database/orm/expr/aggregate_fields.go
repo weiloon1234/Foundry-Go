@@ -14,7 +14,7 @@ import (
 )
 
 // NullableOrderedAggregate retains a nullable aggregate with present-value comparisons.
-// Example: expr.Sum(Orders.Total).Gt(decimal.FromInt64(1)).
+// Example: expr.Sum(orm.NumberExpr(Orders.Total)).Gt(decimal.FromInt64(1)).
 type NullableOrderedAggregate[S any, V orderedScalar] struct {
 	selectedPhase [0]struct{}
 	_             [0]*S
@@ -63,7 +63,7 @@ func nullableAggregateField[S, V any, R orderedScalar](input ormcore.Column[V], 
 }
 
 // Sum returns nullable decimal.Decimal; empty/all-NULL input is NULL.
-// Example: expr.Sum(Records.Amount).
+// Example: expr.Sum(orm.NumberExpr(Records.Amount)).
 func Sum[S any, V interface{ exactNumber }, P any, C orderedColumn[S, V, P]](column C) NullableOrderedAggregate[S, decimal.Decimal] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return nullableAggregateField[S](c, querycore.SumValues, querycore.ExactNumberCast, columnCodec(codec.Decimal()))
@@ -189,7 +189,7 @@ func CountFieldAt[S, M any, V, P any](scope Scope[S, M], column orm.ExpressionCo
 }
 
 // CountDistinctField counts non-NULL stored values; empty input is zero.
-// Example: expr.CountDistinctField(Records.Amount).
+// Example: expr.CountDistinctField(orm.NumberExpr(Records.Amount)).
 func CountDistinctField[S any, V, P any](column orm.ExpressionColumn[S, V, P]) OrderedAggregate[S, int64] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return OrderedAggregate[S, int64]{data: aggregateField[S](c, querycore.CountDistinct, querycore.NativeNumber, columnCodec(codec.Signed[int64]()))}
@@ -203,7 +203,7 @@ func CountDistinctFieldAt[S, M any, V, P any](scope Scope[S, M], column orm.Expr
 }
 
 // Filter appends same-scope row predicates joined by AND, for this aggregate only.
-// Example: aggregate.Filter(expr.Value(Orders.Total).Eq(1)).
+// Example: aggregate.Filter(expr.Value(orm.NumberExpr(Orders.Total)).Eq(1)).
 func (a Aggregate[S, V]) Filter(predicates ...Predicate[S]) Aggregate[S, V] {
 	a.data.core = filterAggregate(a.data.core, predicates)
 	return a
@@ -220,7 +220,7 @@ func (a Aggregate[S, V]) Desc() SelectedOrder[S] {
 }
 
 // Filter appends same-scope row predicates joined by AND, for this aggregate only.
-// Example: aggregate.Filter(expr.Value(Orders.Total).Eq(1)).
+// Example: aggregate.Filter(expr.Value(orm.NumberExpr(Orders.Total)).Eq(1)).
 func (a OrderedAggregate[S, V]) Filter(predicates ...Predicate[S]) OrderedAggregate[S, V] {
 	a.data.core = filterAggregate(a.data.core, predicates)
 	return a
@@ -237,7 +237,7 @@ func (a OrderedAggregate[S, V]) Desc() SelectedOrder[S] {
 }
 
 // Filter appends same-scope row predicates joined by AND, for this aggregate only.
-// Example: aggregate.Filter(expr.Value(Orders.Total).Eq(1)).
+// Example: aggregate.Filter(expr.Value(orm.NumberExpr(Orders.Total)).Eq(1)).
 func (a NullableOrderedAggregate[S, V]) Filter(predicates ...Predicate[S]) NullableOrderedAggregate[S, V] {
 	a.data.core = filterAggregate(a.data.core, predicates)
 	return a
@@ -267,7 +267,7 @@ func filterAggregate[S any](input ormcore.Expression, predicates []Predicate[S])
 	return ormcore.FilterAggregate(input, ps)
 }
 
-// Value preserves empty-input nullability. Example: expr.Sum(Orders.Total).Value().
+// Value preserves empty-input nullability. Example: expr.Sum(orm.NumberExpr(Orders.Total)).Value().
 func (a NullableOrderedAggregate[S, V]) Value() Selected[S, value.Nullable[V]] {
 	return Selected[S, value.Nullable[V]]{data: a.data}
 }

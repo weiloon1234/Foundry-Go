@@ -1,5 +1,7 @@
 package bench
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -85,7 +87,7 @@ func BenchmarkHydrate1000(b *testing.B) {
 	db, d := allocDB(b, false)
 	ctx := context.Background()
 	q := models.Orders.Query()
-	if _, err := q.All(ctx, db); err != nil {
+	if _, err := orm.All(ctx, db, q); err != nil {
 		b.Fatal(err)
 	}
 	ids := make([]model.ID[models.Order], 1000)
@@ -104,7 +106,7 @@ func BenchmarkHydrate1000(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		items, err := q.All(ctx, db)
+		items, err := orm.All(ctx, db, q)
 		if err != nil || len(items) != 1000 {
 			b.Fatalf("hydrate: %v rows=%d", err, len(items))
 		}

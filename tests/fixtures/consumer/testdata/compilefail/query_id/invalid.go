@@ -1,8 +1,10 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var invalid = models.Users.ID.Eq(model.ID[models.Order]{})
+var invalid = orm.KeyEq(models.Users.ID, model.ID[models.Order]{})

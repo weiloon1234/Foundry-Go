@@ -12,7 +12,7 @@ only executable result belongs to the enclosing transaction query.
 
 <!-- go-source: tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go -->
 ```go
-parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(Records.ID.In(1, 3)))), "parent")
+parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyIn(Records.ID, 1, 3)))), "parent")
 child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
 c := rows.TransactionCorrelate(parent, child)
 p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))

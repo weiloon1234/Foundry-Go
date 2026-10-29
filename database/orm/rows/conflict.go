@@ -28,12 +28,12 @@ func ConflictRowsOf[M any](q orm.Query[M]) ConflictRows[M] {
 	return ConflictRows[M]{core: ormcore.ConflictVisibility(orm.FoundrySource(q, sqlowner.Metadata()), reflect.TypeFor[ConflictRow[M]]())}
 }
 
-// Stored identifies the existing conflicting row. Example: expr.At(records.Stored(),Users.Age).
+// Stored identifies the existing conflicting row. Example: expr.At(records.Stored(), orm.NumberExpr(Users.Age)).
 func (r ConflictRows[M]) Stored() expr.Scope[ConflictRow[M], M] {
 	return expr.FoundryScope[ConflictRow[M], M](ormcore.ConflictScope(r.core, querycore.ConflictStoredTable), sqlowner.Expressions())
 }
 
-// Proposed identifies EXCLUDED, including defaults and trigger changes. Example: expr.At(records.Proposed(),Users.Age).
+// Proposed identifies EXCLUDED, including defaults and trigger changes. Example: expr.At(records.Proposed(), orm.NumberExpr(Users.Age)).
 func (r ConflictRows[M]) Proposed() expr.Scope[ConflictRow[M], M] {
 	return expr.FoundryScope[ConflictRow[M], M](ormcore.ConflictScope(r.core, querycore.ConflictProposedTable), sqlowner.Expressions())
 }
@@ -49,7 +49,7 @@ func OnConflictKeys[M any](keys ...expr.GroupKey[M]) orm.Conflict[M] {
 	return orm.FoundryConflict[M](ormcore.ConflictKeys(reflect.TypeFor[M](), inputs), sqlowner.Expressions())
 }
 
-// ConflictTargetWhere declares a partial index predicate using fixed migration values. Example: rows.ConflictTargetWhere(policy,expr.Value(Users.Active).Eq(true)).
+// ConflictTargetWhere declares a partial index predicate using fixed migration values. Example: rows.ConflictTargetWhere(policy,expr.Value(orm.ColumnExpr(Users.Active)).Eq(true)).
 func ConflictTargetWhere[M any](policy orm.Conflict[M], predicates ...expr.Predicate[M]) orm.Conflict[M] {
 	return orm.FoundryConflict[M](ormcore.ConflictPredicates(orm.FoundryConflictData(policy, sqlowner.Expressions()), reflect.TypeFor[M](), conflictPredicates(predicates), false), sqlowner.Expressions())
 }
@@ -67,7 +67,7 @@ func conflictPredicates[S any](predicates []expr.Predicate[S]) []ormcore.Predica
 	return out
 }
 
-// SetConflictValue assigns an exact stored type, including nullability, from the conflict row phase. Example: rows.SetConflictValue(Users.Age,expr.Add(stored,proposed)).
+// SetConflictValue assigns an exact stored type, including nullability, from the conflict row phase. Example: rows.SetConflictValue(orm.NumberExpr(Users.Age), expr.Add(stored,proposed)).
 func SetConflictValue[M, V, P any](field orm.ExpressionColumn[M, V, P], calculation expr.RowValue[ConflictRow[M], P]) orm.ConflictUpdate[M] {
 	column, _ := orm.FoundryColumn(field, sqlowner.Metadata())
 	input := expr.FoundryRowValue(calculation, sqlowner.Expressions())

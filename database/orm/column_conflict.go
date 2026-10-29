@@ -96,14 +96,14 @@ type primaryLayouts[M, V any] interface {
 }
 
 // InsertTarget admits unmutated stored assignments, creation timestamps and declared primary mappings.
-// Example: rows.MapInsert(Archives.ID, expr.Value(Users.ID)).
+// Example: rows.MapInsert(orm.KeyExpr(Archives.ID), expr.Value(orm.KeyExpr(Users.ID))).
 type InsertTarget[M, V, P any] interface {
 	ExpressionColumn[M, V, P]
 	ordinaryLayouts[M, V] | createdLayouts[M, V] | primaryLayouts[M, V]
 }
 
 // UpdateTarget excludes all primary keys, mutators and managed update timestamps.
-// Example: rows.MapUpdate(Users.Name, expr.Value(Archives.Name)).
+// Example: rows.MapUpdate(orm.TextExpr(Users.Name), expr.Value(orm.TextExpr(Archives.Name))).
 type UpdateTarget[M, V, P any] interface {
 	ExpressionColumn[M, V, P]
 	ordinaryLayouts[M, V] | createdLayouts[M, V]
@@ -111,7 +111,7 @@ type UpdateTarget[M, V, P any] interface {
 
 type conflictAssignment[M, I, V any] interface {
 	ormColumn(*M) columnData[V]
-	Set(I) Assignment[M]
+	ormSet(I) Assignment[M]
 	ordinaryLayouts[M, V] | createdLayouts[M, V] | primaryLayouts[M, V] |
 		~struct {
 			_    [0]*M

@@ -38,7 +38,7 @@ func TestResultCursorOwnsRowsAndDiscardsFailure(t *testing.T) {
 			}
 			db := open(t, state, nil)
 			c := rows.CursorFor(rows.ModelRecord(mutationModel()))
-			id := expr.At(c.Scope(), mutationFields.Key())
+			id := expr.At(c.Scope(), orm.KeyExpr(mutationFields.Key()))
 			page, err := c.UniqueBy(expr.Group(id)).Paginate(t.Context(), db, orm.CursorRequest[mutationRecord]{Size: 1})
 			if kind == "success" {
 				if err != nil || !reflect.DeepEqual(page.Items, []mutationRecord{{ID: 1, Name: "first"}}) || !page.Next.IsSet() || page.Previous.IsSet() {

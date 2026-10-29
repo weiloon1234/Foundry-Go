@@ -25,7 +25,7 @@ var DeveloperEvents = orm.Define("developer_events", func(b orm.Builder[Develope
 }, orm.NoTimestamps())
 
 func insertDeveloperEvent(ctx context.Context, tx *database.Tx, createdAt time.Time) error {
-	_, err := DeveloperEvents.Insert(ctx, tx, DeveloperEvents.CreatedAt.Set(createdAt))
+	_, err := orm.Insert(ctx, tx, DeveloperEvents.Table, orm.TimeSet(DeveloperEvents.CreatedAt, createdAt))
 	return err
 }
 

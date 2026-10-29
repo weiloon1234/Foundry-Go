@@ -35,15 +35,15 @@ func (e *pageExecutor) Query(ctx context.Context, sql string, args ...any) (*dat
 
 func summaries() rows.Query[models.User, reports.UserSummary] {
 	u, r := models.Users, reports.UserSummaries
-	return rows.OrderBy(rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.Row(expr.Value(u.Key())).Value()), rows.MapSelected(r.Email, expr.Row(expr.Value(u.Email)).Value()), rows.MapSelected(r.Nickname, expr.Row(expr.Value(u.Nickname)).Value()), rows.MapSelected(r.Status, expr.Row(expr.Value(u.Status)).Value())), expr.Value(u.Email).Asc(), expr.Value(u.Key()).Asc())
+	return rows.OrderBy(rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.Row(expr.Value(orm.KeyExpr(u.Key()))).Value()), rows.MapSelected(r.Email, expr.Row(expr.Value(orm.TextExpr(u.Email))).Value()), rows.MapSelected(r.Nickname, expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))).Value()), rows.MapSelected(r.Status, expr.Row(expr.Value(orm.EnumExpr(u.Status))).Value())), expr.Value(orm.TextExpr(u.Email)).Asc(), expr.Value(orm.KeyExpr(u.Key())).Asc())
 }
 
 func TestPostgresSimpleModelsAndEagerLookahead(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
-		base := models.Users.Query().OrderBy(models.Users.Age.Asc())
+		base := models.Users.Query().OrderBy(orm.NumberAsc(models.Users.Age))
 		for _, number := range []int{1, 2, 3, 4, 99} {
 			e := &pageExecutor{Executor: tx}
-			page, err := base.SimplePaginate(t.Context(), e, orm.PageRequest{Number: number, Size: 1})
+			page, err := orm.SimplePaginate(t.Context(), e, base, orm.PageRequest{Number: number, Size: 1})
 			if err != nil {
 				return err
 			}
@@ -65,7 +65,7 @@ func TestPostgresSimpleModelsAndEagerLookahead(t *testing.T) {
 		limits.MaxRows = 2
 		eager := orm.WithRelationLimits(base.With(models.UserLinks.Orders), limits)
 		e := &pageExecutor{Executor: tx}
-		page, err := eager.SimplePaginate(t.Context(), e, orm.PageRequest{Number: 1, Size: 1})
+		page, err := orm.SimplePaginate(t.Context(), e, eager, orm.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func TestPostgresSimpleModelsAndEagerLookahead(t *testing.T) {
 		}
 		stop := errors.New("related query failed")
 		failed := &pageExecutor{Executor: tx, failAt: 2, err: stop}
-		if result, err := eager.SimplePaginate(t.Context(), failed, orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, stop) || !reflect.DeepEqual(result, orm.SimplePage[models.User]{}) {
+		if result, err := orm.SimplePaginate(t.Context(), failed, eager, orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, stop) || !reflect.DeepEqual(result, orm.SimplePage[models.User]{}) {
 			t.Fatal("partial eager page escaped", err)
 		}
 		return nil
@@ -138,7 +138,7 @@ func TestPostgresProjectionPagesAndFailureDisposal(t *testing.T) {
 		if p, err := rows.Read(q).SimplePaginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1}); err == nil || p.Items != nil {
 			t.Fatal("invalid projection lookahead escaped")
 		}
-		if p, err := models.Users.Query().OrderBy(models.Users.Email.Asc()).SimplePaginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1}); err == nil || p.Items != nil {
+		if p, err := orm.SimplePaginate(t.Context(), tx, models.Users.Query().OrderBy(orm.TextAsc(models.Users.Email)), orm.PageRequest{Number: 1, Size: 1}); err == nil || p.Items != nil {
 			t.Fatal("invalid model lookahead escaped")
 		}
 		return nil
@@ -159,7 +159,7 @@ func TestPageRejectsInvalidInputsBeforeExecution(t *testing.T) {
 	if _, err := rows.Read(rows.Limit(q, 1)).SimplePaginate(t.Context(), queryfixture.NoQueries(t), orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
-	if _, err := models.Users.Query().SimplePaginate(t.Context(), queryfixture.NoQueries(t), orm.PageRequest{}); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.SimplePaginate(t.Context(), queryfixture.NoQueries(t), models.Users.Query(), orm.PageRequest{}); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 }

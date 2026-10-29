@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.Keyed(a.Articles.Query().ForUpdate(), a.Articles.Key())
+var _ = orm.Keyed(orm.Lock(a.Articles.Query()), a.Articles.Key())

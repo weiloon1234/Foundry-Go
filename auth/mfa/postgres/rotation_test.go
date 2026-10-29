@@ -107,18 +107,18 @@ func TestFactorKeyRotationReencryptsStoredFactors(t *testing.T) {
 				keys = goneRing // Retired key no longer retained.
 			}
 			draft := []orm.Assignment[mfastore.Factor]{
-				mfastore.Factors.Key().Set(owners[i]),
-				mfastore.Factors.Scope.Set(strings.Repeat("a", 64)),
-				mfastore.Factors.Identity.Set(stored),
-				mfastore.Factors.Generation.Set(generation),
-				mfastore.Factors.Ciphertext.Set(storedFactor(t, keys, owners[i], generation)),
-				mfastore.Factors.CreatedAt.Set(created),
-				mfastore.Factors.ConfirmedAt.Set(created),
-				mfastore.Factors.LastStep.Set(1),
-				mfastore.Factors.RecoveryHashes.Set(hashes),
-				mfastore.Factors.PendingUntil.SetNull(),
+				orm.KeySet(mfastore.Factors.Key(), owners[i]),
+				orm.TextSet(mfastore.Factors.Scope, strings.Repeat("a", 64)),
+				orm.JSONSet(mfastore.Factors.Identity, stored),
+				orm.ColumnSet(mfastore.Factors.Generation, generation),
+				orm.TextSet(mfastore.Factors.Ciphertext, storedFactor(t, keys, owners[i], generation)),
+				orm.TimeSet(mfastore.Factors.CreatedAt, created),
+				orm.NullableTimeSet(mfastore.Factors.ConfirmedAt, created),
+				orm.NullableNumberSet(mfastore.Factors.LastStep, 1),
+				orm.JSONSet(mfastore.Factors.RecoveryHashes, hashes),
+				orm.NullableTimeSetNull(mfastore.Factors.PendingUntil),
 			}
-			if _, err := mfastore.Factors.Insert(t.Context(), tx, draft...); err != nil {
+			if _, err := orm.Insert(t.Context(), tx, mfastore.Factors.Table, draft...); err != nil {
 				return err
 			}
 		}
@@ -162,7 +162,7 @@ func TestFactorKeyRotationReencryptsStoredFactors(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `SET LOCAL search_path TO "`+schema+`"`); err != nil {
 			return err
 		}
-		rows, err := mfastore.Factors.Query().All(t.Context(), tx)
+		rows, err := orm.All(t.Context(), tx, mfastore.Factors.Query())
 		if err != nil {
 			return err
 		}

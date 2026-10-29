@@ -16,10 +16,10 @@ func TestPostgresCompleteRecordDistinctOnPage(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, _ []models.User) error {
 		buyerSource := rows.As[buyerAlias](models.Users.Query(), "buyer")
 		orderSource := rows.As[orderAlias](models.Orders.Query(), "purchase")
-		joinedSource := rows.InnerJoin(buyerSource, orderSource, rows.On(expr.At(rows.Scope(buyerSource), models.Users.ID), expr.At(rows.Scope(orderSource), models.Orders.BuyerID)))
+		joinedSource := rows.InnerJoin(buyerSource, orderSource, rows.On(expr.At(rows.Scope(buyerSource), orm.KeyExpr(models.Users.ID)), expr.At(rows.Scope(orderSource), orm.ColumnExpr(models.Orders.BuyerID))))
 		buyerScope := rows.LeftScope(joinedSource, rows.Scope(buyerSource))
 		orderScope := rows.RightScope(joinedSource, rows.Scope(orderSource))
-		buyerID, orderID := expr.At(buyerScope, models.Users.ID), expr.At(orderScope, models.Orders.ID)
+		buyerID, orderID := expr.At(buyerScope, orm.KeyExpr(models.Users.ID)), expr.At(orderScope, orm.KeyExpr(models.Orders.ID))
 		winners := rows.DistinctOnRecord(rows.SelectRecord(joinedSource, buyerScope), expr.Group(buyerID)).OrderBy(buyerID.Asc(), orderID.Desc())
 		if p, err := rows.ReadRecord(winners).Paginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1}); err != nil || p.Total != 2 {
 			t.Fatal("distinct-on page lost winner ordering", err)

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var _ = orm.Has(models.UserRelations.Orders, models.Users.Age.Gt(18))
+var _ = orm.Has(models.UserRelations.Orders, orm.NumberGt(models.Users.Age, 18))

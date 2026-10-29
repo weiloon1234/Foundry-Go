@@ -1,5 +1,7 @@
 package attachments
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 
@@ -25,7 +27,7 @@ func (c Collection[M, K]) matchingKeys(ctx context.Context, m *Manager) ([]K, er
 				return err
 			}
 			f := store.Files
-			rows, err := rows.Read(store.Index(store.Files.Query().Where(f.Scope.Eq(c.definition.owner.Scope()), f.Collection.Eq(string(c.Name())), f.Locale.Eq(locale), f.State.Eq(string(Ready))).OrderBy(f.SubjectKey.Asc(), f.ID.Asc()).Limit(MaxBatchFiles+1))).All(ctx, tx)
+			rows, err := rows.Read(store.Index(store.Files.Query().Where(orm.TextEq(f.Scope, c.definition.owner.Scope()), orm.TextEq(f.Collection, string(c.Name())), orm.TextEq(f.Locale, locale), orm.TextEq(f.State, string(Ready))).OrderBy(orm.TextAsc(f.SubjectKey), orm.KeyAsc(f.ID)).Limit(MaxBatchFiles+1))).All(ctx, tx)
 			if err != nil {
 				return err
 			}

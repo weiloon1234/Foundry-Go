@@ -25,7 +25,7 @@ func ThroughOf[M, N, P any](b Builder[M], ptr *relation.Through[N, P]) Through[M
 }
 
 // ThroughRelation retains source, target and pivot owners in a thin immutable plan.
-// Example: UserRelations.Groups.WherePivot(Memberships.Role.Eq("admin")).
+// Example: UserRelations.Groups.WherePivot(orm.InputTextEq(Memberships.Role, "admin")).
 type ThroughRelation[M, N, P any] struct {
 	_    [0]*M
 	_    [0]*N
@@ -44,7 +44,7 @@ func relationColumn[M any, K comparable](c KeyColumn[M, K]) columnData[K] {
 }
 
 // ManyToManyOf unifies both key pairs and binds a concrete pivot slot.
-// Example: orm.ManyToManyOf(Users.Groups,Users.ID,Memberships.UserID,Memberships.GroupID,Groups.ID).
+// Example: orm.ManyToManyOf(Users.Groups,orm.KeyExpr(Users.ID),orm.ColumnExpr(Memberships.UserID),orm.ColumnExpr(Memberships.GroupID),orm.KeyExpr(Groups.ID)).
 func ManyToManyOf[M, N, P any, A, B comparable](slot Through[M, N, P], local KeyColumn[M, A], pivotLocal KeyColumn[P, A], pivotForeign KeyColumn[P, B], foreign KeyColumn[N, B]) ThroughRelation[M, N, P] {
 	a, pa, pb, b := relationColumn(local), relationColumn(pivotLocal), relationColumn(pivotForeign), relationColumn(foreign)
 	p := newRelationCore(slot.core, a.core, b.core, reflect.TypeFor[M](), reflect.TypeFor[N]())
@@ -68,13 +68,13 @@ func ManyToManyOf[M, N, P any, A, B comparable](slot Through[M, N, P], local Key
 	return ThroughRelation[M, N, P]{plan: p}
 }
 
-// Where derives an immutable joined descriptor for its typed side. Example: links.Where(Groups.Name.Eq("maintainers")).
+// Where derives an immutable joined descriptor for its typed side. Example: links.Where(orm.TextEq(Groups.Name, "maintainers")).
 func (r ThroughRelation[M, N, P]) Where(ps ...Predicate[N]) ThroughRelation[M, N, P] {
 	r.plan = relationWhere(r.plan, ps)
 	return r
 }
 
-// OrderBy derives an immutable joined descriptor for its typed side. Example: links.OrderBy(Groups.Name.Asc()).
+// OrderBy derives an immutable joined descriptor for its typed side. Example: links.OrderBy(orm.TextAsc(Groups.Name)).
 func (r ThroughRelation[M, N, P]) OrderBy(orders ...Order[N]) ThroughRelation[M, N, P] {
 	r.plan = relationThroughOrder(r.plan, orders, false)
 	return r
@@ -86,13 +86,13 @@ func (r ThroughRelation[M, N, P]) With(children ...Relation[N]) ThroughRelation[
 	return r
 }
 
-// WherePivot derives an immutable joined descriptor for its typed side. Example: links.WherePivot(Memberships.Role.Eq("admin")).
+// WherePivot derives an immutable joined descriptor for its typed side. Example: links.WherePivot(orm.InputTextEq(Memberships.Role, "admin")).
 func (r ThroughRelation[M, N, P]) WherePivot(ps ...Predicate[P]) ThroughRelation[M, N, P] {
 	r.plan = relationPivotWhere(r.plan, ps)
 	return r
 }
 
-// OrderByPivot derives an immutable joined descriptor for its typed side. Example: links.OrderByPivot(Memberships.ID.Asc()).
+// OrderByPivot derives an immutable joined descriptor for its typed side. Example: links.OrderByPivot(orm.KeyAsc(Memberships.ID)).
 func (r ThroughRelation[M, N, P]) OrderByPivot(orders ...Order[P]) ThroughRelation[M, N, P] {
 	r.plan = relationThroughOrder(r.plan, orders, true)
 	return r

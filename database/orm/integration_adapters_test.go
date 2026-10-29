@@ -163,7 +163,7 @@ func TestUniqueAdapterPreservesScopeAndDuplicateFailure(t *testing.T) {
 		var sql []string
 		var args [][]any
 		db := hookDB(t, testConnector{statements: &sql, bindings: &args, columns: []string{"id", "scope", "name"}, values: rows})
-		got, err := Unique(fields.Query().Where(fields.Scope.Eq("tenant")), fields.Name).Find(t.Context(), db, "name")
+		got, err := Unique(fields.Query().Where(TextEq(fields.Scope, "tenant")), TextExpr(fields.Name)).Find(t.Context(), db, "name")
 		if count == 2 {
 			if !errors.Is(err, fault.Internal) || got.IsSet() {
 				t.Fatal("duplicate escaped", err)
@@ -175,7 +175,7 @@ func TestUniqueAdapterPreservesScopeAndDuplicateFailure(t *testing.T) {
 			t.Fatal("scope or statement count", sql, args)
 		}
 	}
-	if err := Unique(fields.Query().Limit(1), fields.Name).Validate(); !errors.Is(err, fault.Invalid) {
+	if err := Unique(fields.Query().Limit(1), TextExpr(fields.Name)).Validate(); !errors.Is(err, fault.Invalid) {
 		t.Fatal("hidden duplicate", err)
 	}
 }
@@ -199,7 +199,7 @@ func TestInsertEachLifecycleCountsAndUnknownOutcome(t *testing.T) {
 			connector.commitErr = errors.New("commit acknowledgement lost")
 		}
 		db := hookDB(t, connector)
-		draft := []Assignment[keyedRow]{fields.Key().Set(1), fields.Scope.Set("tenant"), fields.Name.Set("input")}
+		draft := []Assignment[keyedRow]{KeySet(fields.Key(), 1), TextSet(fields.Scope, "tenant"), TextSet(fields.Name, "input")}
 		result, err := InsertEach(t.Context(), db, fields.Table, [][]Assignment[keyedRow]{draft, draft})
 		if unknown {
 			var outcome *WriteError[[]keyedRow]
@@ -216,11 +216,13 @@ func TestInsertEachLifecycleCountsAndUnknownOutcome(t *testing.T) {
 }
 
 type fakeLookupColumn struct{ KeyColumn[keyedRow, string] }
-type promotedLookupColumn struct{ Text[keyedRow, string] }
+type promotedLookupColumn struct {
+	textColumnAdapter[keyedRow, string, ordinaryRole]
+}
 
 func TestUniqueRejectsPromotedColumnsBeforeDispatch(t *testing.T) {
 	fields := keyedFields()
-	for _, field := range []KeyColumn[keyedRow, string]{fakeLookupColumn{}, fakeLookupColumn{fields.Name}, promotedLookupColumn{fields.Name}} {
+	for _, field := range []KeyColumn[keyedRow, string]{fakeLookupColumn{}, fakeLookupColumn{TextExpr(fields.Name)}, promotedLookupColumn{TextExpr(fields.Name)}} {
 		if err := Unique(fields.Query(), field).Validate(); !errors.Is(err, fault.Invalid) {
 			t.Fatal("foreign column wrapper accepted", err)
 		}
@@ -229,10 +231,10 @@ func TestUniqueRejectsPromotedColumnsBeforeDispatch(t *testing.T) {
 
 func TestLookupDiagnosticsRedactScopes(t *testing.T) {
 	p := people()
-	scoped := p.Query().Where(p.Name.Eq("private-scope-literal"))
+	scoped := p.Query().Where(TextEq(p.Name, "private-scope-literal"))
 	keyed := Keyed(scoped, p.ID)
-	unique := Unique(scoped, p.Name)
-	related := RelatedUnique(BelongsToOf(p.Manager, p.ManagerID, p.ID).Where(p.Name.Eq("private-scope-literal")), p.Name)
+	unique := Unique(scoped, TextExpr(p.Name))
+	related := RelatedUnique(BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID)).Where(TextEq(p.Name, "private-scope-literal")), TextExpr(p.Name))
 	for _, tc := range []struct {
 		value any
 		text  string
@@ -262,10 +264,10 @@ type nestedLookupWrapper[T any] struct{ inner privateLookupWrapper[T] }
 func TestLookupPrivateDiagnosticsRedactScopes(t *testing.T) {
 	p := people()
 	const secret = "private-scope-literal"
-	scoped := p.Query().Where(p.Name.Eq(secret))
+	scoped := p.Query().Where(TextEq(p.Name, secret))
 	keyed := Keyed(scoped, p.ID)
-	unique := Unique(scoped, p.Name)
-	related := RelatedUnique(BelongsToOf(p.Manager, p.ManagerID, p.ID).Where(p.Name.Eq(secret)), p.Name)
+	unique := Unique(scoped, TextExpr(p.Name))
+	related := RelatedUnique(BelongsToOf(p.Manager, NullableNumberExpr(p.ManagerID), KeyExpr(p.ID)).Where(TextEq(p.Name, secret)), TextExpr(p.Name))
 	keyedWrapper := privateLookupWrapper[KeyLookup[relationPerson, int64]]{keyed}
 	uniqueWrapper := privateLookupWrapper[KeyLookup[relationPerson, string]]{unique}
 	relatedWrapper := privateLookupWrapper[RelatedLookup[relationPerson, relationPerson, string]]{related}
@@ -302,7 +304,7 @@ func TestLookupPrivateDiagnosticsRedactScopes(t *testing.T) {
 
 func TestRelatedLookupReuseKeepsParentScopesIndependent(t *testing.T) {
 	p := people()
-	lookup := RelatedUnique(HasManyOf(p.Reports, p.ID, p.ManagerID).Where(p.Name.Eq("scope")), p.Name)
+	lookup := RelatedUnique(HasManyOf(p.Reports, KeyExpr(p.ID), NullableNumberExpr(p.ManagerID)).Where(TextEq(p.Name, "scope")), TextExpr(p.Name))
 	copy := lookup
 	var statements []string
 	var bindings [][]any

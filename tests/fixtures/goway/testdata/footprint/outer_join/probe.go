@@ -1,5 +1,7 @@
 package outer_join
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -24,7 +26,7 @@ var schema = rows.Define(func(b rows.Builder[result], r *result) fields {
 
 func F() rows.Query[rows.Full[rows.Alias[left, models.User], rows.Alias[right, models.User]], result] {
 	a, b := rows.As[left](models.Users.Query(), "a"), rows.As[right](models.Users.Query(), "b")
-	j := rows.FullJoin(a, b, rows.On(expr.At(rows.Scope(a), models.Users.ID), expr.At(rows.Scope(b), models.Users.ID)))
+	j := rows.FullJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(models.Users.ID)), expr.At(rows.Scope(b), orm.KeyExpr(models.Users.ID))))
 	l, r := rows.NullableLeftScope(j, rows.Scope(a)), rows.NullableRightScope(j, rows.Scope(b))
-	return rows.Select(j, schema, rows.Map(schema.Email, expr.AtNullable(l, models.Users.Email)), rows.Map(schema.Nickname, expr.AtNullableValue(r, models.Users.Nickname)))
+	return rows.Select(j, schema, rows.Map(schema.Email, expr.AtNullable(l, orm.TextExpr(models.Users.Email))), rows.Map(schema.Nickname, expr.AtNullableValue(r, orm.NullableTextExpr(models.Users.Nickname))))
 }

@@ -1,8 +1,10 @@
 package report_text_required_enum_value
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.TextRow(expr.Value(models.Users.Status)).Contains(models.StatusActive)
+var _ = expr.TextRow(expr.Value(orm.EnumExpr(models.Users.Status))).Contains(models.StatusActive)

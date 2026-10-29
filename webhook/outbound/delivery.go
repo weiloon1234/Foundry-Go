@@ -219,7 +219,7 @@ func Send[P any](ctx context.Context, tx *database.Tx, queue Queue, endpoint End
 			return err
 		}
 		return queue.service.join(ctx, tx, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.Endpoints.Query().Where(store.Endpoints.Key().Eq(endpointKey(endpoint))).Require(ctx, tx)
+			row, err := orm.Require(ctx, tx, store.Endpoints.Query().Where(orm.KeyEq(store.Endpoints.Key(), endpointKey(endpoint))))
 			if err != nil {
 				return err
 			}
@@ -261,7 +261,7 @@ func Publish[P any](ctx context.Context, tx *database.Tx, queue Queue, event Eve
 		}
 		return queue.service.join(ctx, tx, func(ctx context.Context, tx *database.Tx) error {
 			f := store.Endpoints
-			rows, err := store.Endpoints.Query().Where(f.Active.Eq(true)).OrderBy(f.ID.Asc()).Limit(queue.service.config.MaxEndpoints+1).All(ctx, tx)
+			rows, err := orm.All(ctx, tx, store.Endpoints.Query().Where(orm.ColumnEq(f.Active, true)).OrderBy(orm.KeyAsc(f.ID)).Limit(queue.service.config.MaxEndpoints+1))
 			if err != nil {
 				return err
 			}
@@ -303,7 +303,7 @@ func (q Queue) record(ctx context.Context, tx *database.Tx, endpoint model.ID[st
 	if err != nil {
 		return id, err
 	}
-	if _, err := store.Deliveries.Insert(ctx, tx, store.Deliveries.ID.Set(id), store.Deliveries.EndpointID.Set(endpoint), store.Deliveries.Event.Set(string(kind)), store.Deliveries.Payload.Set(body), store.Deliveries.State.Set(string(Pending)), store.Deliveries.Attempts.Set(0), store.Deliveries.LastStatus.Set(0), store.Deliveries.LastFailure.Set(""), store.Deliveries.CreatedAt.Set(now), store.Deliveries.UpdatedAt.Set(now)); err != nil {
+	if _, err := orm.Insert(ctx, tx, store.Deliveries.Table, orm.KeySet(store.Deliveries.ID, id), orm.ColumnSet(store.Deliveries.EndpointID, endpoint), orm.TextSet(store.Deliveries.Event, string(kind)), orm.TextSet(store.Deliveries.Payload, body), orm.TextSet(store.Deliveries.State, string(Pending)), orm.NumberSet(store.Deliveries.Attempts, 0), orm.NumberSet(store.Deliveries.LastStatus, 0), orm.TextSet(store.Deliveries.LastFailure, ""), orm.TimeSet(store.Deliveries.CreatedAt, now), orm.TimeSet(store.Deliveries.UpdatedAt, now)); err != nil {
 		return id, err
 	}
 	return id, q.enqueue(ctx, tx, id)
@@ -345,13 +345,13 @@ func (s *Service) Deliver(ctx context.Context, id DeliveryID) error {
 		category := "store_failed"
 		err := s.transaction(ctx, true, func(ctx context.Context, tx *database.Tx) error {
 			var err error
-			if delivery, err = store.Deliveries.Query().Where(store.Deliveries.Key().Eq(deliveryKey(id))).Require(ctx, tx); err != nil {
+			if delivery, err = orm.Require(ctx, tx, store.Deliveries.Query().Where(orm.KeyEq(store.Deliveries.Key(), deliveryKey(id)))); err != nil {
 				return err
 			}
 			if delivery.State != string(Pending) {
 				return nil
 			}
-			if endpoint, err = store.Endpoints.Query().Where(store.Endpoints.Key().Eq(delivery.EndpointID)).Require(ctx, tx); err != nil {
+			if endpoint, err = orm.Require(ctx, tx, store.Endpoints.Query().Where(orm.KeyEq(store.Endpoints.Key(), delivery.EndpointID))); err != nil {
 				return err
 			}
 			if !endpoint.Active {
@@ -464,7 +464,7 @@ func classify(status int, err error) (int32, string, bool) {
 
 func (s *Service) recordAttempt(ctx context.Context, id model.ID[store.Delivery], status int32, category string, state DeliveryState) error {
 	return s.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.Deliveries.Query().ForUpdate().Where(store.Deliveries.Key().Eq(id)).Require(ctx, tx)
+		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Deliveries.Query()).Where(orm.KeyEq(store.Deliveries.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -480,9 +480,9 @@ func (s *Service) recordAttempt(ctx context.Context, id model.ID[store.Delivery]
 		if attempts < 1<<32-1 {
 			attempts++
 		}
-		draft := []orm.Assignment[store.Delivery]{store.Deliveries.Attempts.Set(attempts), store.Deliveries.LastStatus.Set(status), store.Deliveries.LastFailure.Set(category), store.Deliveries.State.Set(string(state)), store.Deliveries.UpdatedAt.Set(now)}
+		draft := []orm.Assignment[store.Delivery]{orm.NumberSet(store.Deliveries.Attempts, attempts), orm.NumberSet(store.Deliveries.LastStatus, status), orm.TextSet(store.Deliveries.LastFailure, category), orm.TextSet(store.Deliveries.State, string(state)), orm.TimeSet(store.Deliveries.UpdatedAt, now)}
 		if state == Succeeded {
-			draft = append(draft, store.Deliveries.DeliveredAt.Set(now))
+			draft = append(draft, orm.NullableTimeSet(store.Deliveries.DeliveredAt, now))
 		}
 		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), id, draft...)
 		return err
@@ -493,7 +493,7 @@ func (s *Service) recordAttempt(ctx context.Context, id model.ID[store.Delivery]
 // its last attempt's category when one was logged.
 func (s *Service) finalize(ctx context.Context, id model.ID[store.Delivery], reason string) error {
 	return s.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-		row, err := store.Deliveries.Query().ForUpdate().Where(store.Deliveries.Key().Eq(id)).Require(ctx, tx)
+		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Deliveries.Query()).Where(orm.KeyEq(store.Deliveries.Key(), id)))
 		if err != nil {
 			return err
 		}
@@ -508,7 +508,7 @@ func (s *Service) finalize(ctx context.Context, id model.ID[store.Delivery], rea
 		if category == "" {
 			category = reason[:min(len(reason), failureCategoryBytes)]
 		}
-		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), id, store.Deliveries.State.Set(string(Failed)), store.Deliveries.LastFailure.Set(category), store.Deliveries.UpdatedAt.Set(now))
+		_, err = orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), id, orm.TextSet(store.Deliveries.State, string(Failed)), orm.TextSet(store.Deliveries.LastFailure, category), orm.TimeSet(store.Deliveries.UpdatedAt, now))
 		return err
 	})
 }
@@ -525,7 +525,7 @@ func (q Queue) Replay(ctx context.Context, id DeliveryID) error {
 	}
 	return q.service.calls.Run(ctx, "webhook replay", func(ctx context.Context) error {
 		return q.service.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
-			row, err := store.Deliveries.Query().ForUpdate().Where(store.Deliveries.Key().Eq(deliveryKey(id))).Require(ctx, tx)
+			row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Deliveries.Query()).Where(orm.KeyEq(store.Deliveries.Key(), deliveryKey(id))))
 			if err != nil {
 				return err
 			}
@@ -550,23 +550,23 @@ func (q Queue) ReplayFailed(ctx context.Context, endpoint value.Optional[Endpoin
 		return q.service.transaction(ctx, false, func(ctx context.Context, tx *database.Tx) error {
 			count = 0
 			e := store.Endpoints
-			endpoints := store.Endpoints.Query().Where(e.Active.Eq(true))
+			endpoints := store.Endpoints.Query().Where(orm.ColumnEq(e.Active, true))
 			if id, ok := endpoint.Get(); ok {
-				row, err := store.Endpoints.Query().Where(store.Endpoints.Key().Eq(endpointKey(id))).Require(ctx, tx)
+				row, err := orm.Require(ctx, tx, store.Endpoints.Query().Where(orm.KeyEq(store.Endpoints.Key(), endpointKey(id))))
 				if err != nil {
 					return err
 				}
 				if !row.Active {
 					return safeerror.NewFault(fault.Conflict, "webhook endpoint is inactive")
 				}
-				endpoints = endpoints.Where(e.ID.Eq(row.ID))
+				endpoints = endpoints.Where(orm.KeyEq(e.ID, row.ID))
 			}
-			active, err := rows.Read(rows.SelectValue(endpoints.OrderBy(e.ID.Asc()).Limit(q.service.config.MaxEndpoints+1), e.ID)).All(ctx, tx)
+			active, err := rows.Read(rows.SelectValue(endpoints.OrderBy(orm.KeyAsc(e.ID)).Limit(q.service.config.MaxEndpoints+1), orm.KeyExpr(e.ID))).All(ctx, tx)
 			if err != nil || len(active) == 0 {
 				return err
 			}
 			f := store.Deliveries
-			rows, err := store.Deliveries.Query().Where(f.State.Eq(string(Failed)), f.EndpointID.In(active...)).OrderBy(f.ID.Asc()).Limit(limit).ForUpdate().All(ctx, tx)
+			rows, err := orm.AllLocked(ctx, tx, orm.Lock(store.Deliveries.Query().Where(orm.TextEq(f.State, string(Failed)), orm.ColumnIn(f.EndpointID, active...)).OrderBy(orm.KeyAsc(f.ID)).Limit(limit)))
 			if err != nil {
 				return err
 			}
@@ -587,7 +587,7 @@ func (q Queue) ReplayFailed(ctx context.Context, endpoint value.Optional[Endpoin
 	return count, nil
 }
 func (q Queue) reset(ctx context.Context, tx *database.Tx, row store.Delivery) error {
-	endpoint, err := store.Endpoints.Query().Where(store.Endpoints.Key().Eq(row.EndpointID)).Require(ctx, tx)
+	endpoint, err := orm.Require(ctx, tx, store.Endpoints.Query().Where(orm.KeyEq(store.Endpoints.Key(), row.EndpointID)))
 	if err != nil {
 		return err
 	}
@@ -598,7 +598,7 @@ func (q Queue) reset(ctx context.Context, tx *database.Tx, row store.Delivery) e
 	if err != nil {
 		return err
 	}
-	if _, err := orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.ID, store.Deliveries.State.Set(string(Pending)), store.Deliveries.UpdatedAt.Set(now)); err != nil {
+	if _, err := orm.Update(ctx, tx, store.Deliveries.Query(), store.Deliveries.Key(), row.ID, orm.TextSet(store.Deliveries.State, string(Pending)), orm.TimeSet(store.Deliveries.UpdatedAt, now)); err != nil {
 		return err
 	}
 	return q.enqueue(ctx, tx, row.ID)
@@ -629,15 +629,15 @@ func (s *Service) Deliveries(ctx context.Context, selection DeliveryQuery) ([]De
 			f := store.Deliveries
 			q := store.Deliveries.Query()
 			if id, ok := selection.Endpoint.Get(); ok {
-				q = q.Where(f.EndpointID.Eq(endpointKey(id)))
+				q = q.Where(orm.ColumnEq(f.EndpointID, endpointKey(id)))
 			}
 			if state, ok := selection.State.Get(); ok {
-				q = q.Where(f.State.Eq(string(state)))
+				q = q.Where(orm.TextEq(f.State, string(state)))
 			}
 			if !selection.After.IsZero() {
-				q = q.Where(orm.UUIDGreater(f.ID, deliveryKey(selection.After)))
+				q = q.Where(orm.UUIDGreater(orm.KeyExpr(f.ID), deliveryKey(selection.After)))
 			}
-			rows, err := q.OrderBy(f.ID.Asc()).Limit(selection.Limit).All(ctx, tx)
+			rows, err := orm.All(ctx, tx, q.OrderBy(orm.KeyAsc(f.ID)).Limit(selection.Limit))
 			for _, row := range rows {
 				result = append(result, deliveryInfo(row))
 			}
@@ -673,11 +673,11 @@ func (s *Service) PruneDeliveries(ctx context.Context, olderThan time.Duration, 
 				return err
 			}
 			f := store.Deliveries
-			ids, err := rows.Read(rows.SelectValue(store.Deliveries.Query().Where(f.State.In(string(Succeeded), string(Failed)), f.UpdatedAt.Lt(cutoff)).OrderBy(f.UpdatedAt.Asc(), f.ID.Asc()).Limit(limit), f.ID)).All(ctx, tx)
+			ids, err := rows.Read(rows.SelectValue(store.Deliveries.Query().Where(orm.TextIn(f.State, string(Succeeded), string(Failed)), orm.TimeLt(f.UpdatedAt, cutoff)).OrderBy(orm.TimeAsc(f.UpdatedAt), orm.KeyAsc(f.ID)).Limit(limit), orm.KeyExpr(f.ID))).All(ctx, tx)
 			if err != nil || len(ids) == 0 {
 				return err
 			}
-			deleted, err := store.Deliveries.Query().Where(f.ID.In(ids...), f.State.In(string(Succeeded), string(Failed))).DeleteAll(ctx, tx)
+			deleted, err := orm.DeleteAll(ctx, tx, store.Deliveries.Query().Where(orm.KeyIn(f.ID, ids...), orm.TextIn(f.State, string(Succeeded), string(Failed))))
 			count = int(deleted)
 			return err
 		})

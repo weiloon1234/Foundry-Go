@@ -79,7 +79,7 @@ func bindSlot(d *declaration, ptr unsafe.Pointer, typ, target reflect.Type) *slo
 }
 
 // KeyColumn retains comparable relation key types, including nullable FKs.
-// Example: BelongsToOf(Orders.Buyer,Orders.BuyerID,Users.ID).
+// Example: BelongsToOf(Orders.Buyer,ColumnExpr(Orders.BuyerID),KeyExpr(Users.ID)).
 type KeyColumn[M any, K comparable] interface{ ormColumn(*M) columnData[K] }
 
 type relationBudget struct {
@@ -142,13 +142,13 @@ func (r BelongsTo[M, N]) ormError() error               { return validateRelatio
 func (r HasOne[M, N]) ormError() error                  { return validateRelation(r.plan, nil) }
 func (r HasMany[M, N]) ormError() error                 { return validateRelation(r.plan, nil) }
 
-// BelongsToOf unifies local and target key types. Example: BelongsToOf(Orders.Buyer,Orders.BuyerID,Users.ID).
+// BelongsToOf unifies local and target key types. Example: BelongsToOf(Orders.Buyer,ColumnExpr(Orders.BuyerID),KeyExpr(Users.ID)).
 func BelongsToOf[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) BelongsTo[M, N] {
 	return BelongsTo[M, N]{plan: singularRelation(slot, local, foreign)}
 }
 
 // HasOneOf unifies the parent key and target FK and rejects multiple matches.
-// Example: HasOneOf(Users.Profile,Users.ID,Profiles.UserID).
+// Example: HasOneOf(Users.Profile,KeyExpr(Users.ID),ColumnExpr(Profiles.UserID)).
 func HasOneOf[M, N any, K comparable](slot One[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) HasOne[M, N] {
 	return HasOne[M, N]{plan: singularRelation(slot, local, foreign)}
 }
@@ -172,7 +172,7 @@ func singularRelation[M, N any, K comparable](slot One[M, N], local KeyColumn[M,
 	return p
 }
 
-// HasManyOf unifies parent keys with target FKs. Example: HasManyOf(Users.Orders,Users.ID,Orders.BuyerID).
+// HasManyOf unifies parent keys with target FKs. Example: HasManyOf(Users.Orders,KeyExpr(Users.ID),ColumnExpr(Orders.BuyerID)).
 func HasManyOf[M, N any, K comparable](slot Many[M, N], local KeyColumn[M, K], foreign KeyColumn[N, K]) HasMany[M, N] {
 	p := newRelation(slot.core, local, foreign)
 	if p.err == nil {

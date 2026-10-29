@@ -14,7 +14,7 @@ partitioning. Neither operation erases scope or makes an aggregate a row operand
 ```go
 func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
 	u := models.Users
-	bucket := expr.When(expr.ModelPredicate(u.Age.Gt(20)), expr.Param(u.Age, 1)).Else(expr.Param(u.Age, 0))
+	bucket := expr.When(expr.ModelPredicate(orm.NumberGt(u.Age, 20)), expr.Param(orm.NumberExpr(u.Age), 1)).Else(expr.Param(orm.NumberExpr(u.Age), 0))
 	return rowset.OrderBy(rowset.GroupBy(rowset.Select(rowset.From(models.Users.Query()), keyqueries.BucketCounts.Row,
 		rowset.MapSelected(keyqueries.BucketCounts.Bucket, bucket.Value()),
 		rowset.MapSelected(keyqueries.BucketCounts.Count, expr.Count[models.User]().Value()),

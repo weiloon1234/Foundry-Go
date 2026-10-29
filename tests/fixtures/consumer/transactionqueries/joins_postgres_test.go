@@ -12,8 +12,8 @@ import (
 
 func TestPostgresTransactionOuterAndCrossJoins(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
-	left := rows.AsTransaction[claimedAlias](rows.LockedRecord(Records.Query().Where(orm.NumberKey(Records.ID).Lte(2)).ForKeyShare()), "left_records")
-	right := rows.AsTransaction[otherAlias](rows.LockedRecord(Records.Query().Where(orm.NumberKey(Records.ID).Gte(2)).ForKeyShare()), "right_records")
+	left := rows.AsTransaction[claimedAlias](rows.LockedRecord(orm.ForKeyShare(Records.Query().Where(orm.NumberKeyLte(orm.NumberKey(Records.ID), 2)))), "left_records")
+	right := rows.AsTransaction[otherAlias](rows.LockedRecord(orm.ForKeyShare(Records.Query().Where(orm.NumberKeyGte(orm.NumberKey(Records.ID), 2)))), "right_records")
 	on := rows.OnEqual(recordAt(rows.TransactionScope(left)).ID, recordAt(rows.TransactionScope(right)).ID)
 	for _, kind := range []string{"left", "right", "full", "cross"} {
 		t.Run(kind, func(t *testing.T) {

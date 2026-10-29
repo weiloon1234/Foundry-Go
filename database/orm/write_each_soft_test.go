@@ -62,7 +62,7 @@ func TestEachSoftPreflight(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			for _, q := range []Query[eachSoftRow]{{}, WithoutModelHooks(d.Query()), d.Query().Limit(1), d.Query().OrderBy(d.Key().Asc())} {
+			for _, q := range []Query[eachSoftRow]{{}, WithoutModelHooks(d.Query()), d.Query().Limit(1), d.Query().OrderBy(KeyAsc(d.Key()))} {
 				if _, err := op.run(t.Context(), w, q, d.Soft, 1); !errors.Is(err, fault.Invalid) {
 					t.Fatal(err)
 				}
@@ -156,7 +156,7 @@ func TestEachSoftLifecycleVisibilityAndOutcomes(t *testing.T) {
 						connector.commitErr = errors.New("connection lost")
 					}
 					db := hookDB(t, connector, observer)
-					q := d.Query().Where(d.Name.Ne("excluded"))
+					q := d.Query().Where(TextNe(d.Name, "excluded"))
 					if visibility == "trashed" {
 						q = q.OnlyTrashed()
 					}

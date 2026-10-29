@@ -112,7 +112,7 @@ func TestPostgresRecoveryHTTPExpiredAndDisabledResponsesAgree(t *testing.T) {
 				s.clock.Advance(passwordreset.DefaultLifetime)
 			}
 			if mode == "disabled" {
-				update(t, s, []orm.Assignment[recovering.Member]{recovering.MemberRecords.Enabled.Set(false)})
+				update(t, s, []orm.Assignment[recovering.Member]{orm.ColumnSet(recovering.MemberRecords.Enabled, false)})
 			}
 			raw := reset.Token().Secret().Reveal()
 			if mode == "absent" {

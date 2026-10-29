@@ -11,10 +11,10 @@ import (
 // Raw hydrates the exact declared column set, matched by name in any order.
 // It applies NO scopes, including soft-delete and tenant/global scopes, and uses
 // ex directly without read routing: raw SQL may write. Supply bound arguments.
-// Example: Orders.Raw(ctx, tx, "UPDATE orders SET total_cents=$1 RETURNING *", cents).
+// Example: orm.Raw(ctx, tx, Orders.Table, "UPDATE orders SET total_cents=$1 RETURNING *", cents).
 // Retrieved hooks and observers run after complete hydration and row closure.
 // Decode/open/hook failure discards results; this does not imply a raw write rolled back.
-func (t Table[M, K]) Raw(ctx context.Context, ex database.Executor, sql string, args ...any) ([]M, error) {
+func Raw[M any, K comparable](ctx context.Context, ex database.Executor, t Table[M, K], sql string, args ...any) ([]M, error) {
 	if err := tableError(t.core); err != nil {
 		return nil, err
 	}

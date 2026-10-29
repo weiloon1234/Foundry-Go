@@ -15,7 +15,7 @@ import (
 func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 	runTimed(t, func(tx *database.Tx, clock *countingClock) error {
 		q, f := timequeries.Members, timequeries.Members
-		member, err := q.Insert(t.Context(), tx, timequeries.Members.Name.Set("original"))
+		member, err := orm.Insert(t.Context(), tx, q.Table, orm.InputTextSet(timequeries.Members.Name, "original"))
 		if err != nil {
 			return err
 		}
@@ -25,13 +25,13 @@ func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 				before := clock.calls.Load()
 				clock.nextAction.Store(action)
 				if bulk {
-					result, failure := orm.Upsert(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(f.Key())).DoUpdate(orm.ConflictIncoming(f.Name)), timequeries.Members.Key().Set(member.ID), timequeries.Members.Name.Set("failed"))
+					result, failure := orm.Upsert(t.Context(), tx, q.Query(), orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(orm.ConflictIncoming(orm.InputTextExpr(f.Name))), orm.KeySet(timequeries.Members.Key(), member.ID), orm.InputTextSet(timequeries.Members.Name, "failed"))
 					if result.IsSet() {
 						return errors.New("failed clock returned an upsert result")
 					}
 					err = failure
 				} else {
-					result, failure := q.Update(t.Context(), tx, member.ID, timequeries.Members.Name.Set("failed"))
+					result, failure := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(timequeries.Members.Name, "failed"))
 					if result != (timequeries.Member{}) {
 						return errors.New("failed clock returned a model")
 					}
@@ -40,7 +40,7 @@ func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 				if !errors.Is(err, fault.Panicked) || strings.Contains(err.Error(), "private clock fixture payload") || clock.calls.Load() != before+1 {
 					return errors.New("clock panic or Goexit escaped isolation, leaked its payload, or was retried")
 				}
-				current, err := q.Require(t.Context(), tx, member.ID)
+				current, err := orm.RequireKey(t.Context(), tx, q.Table, member.ID)
 				if err != nil {
 					return err
 				}
@@ -49,7 +49,7 @@ func TestPostgresTimestampClockCallbackFailures(t *testing.T) {
 				}
 			}
 		}
-		updated, err := q.Update(t.Context(), tx, member.ID, timequeries.Members.Name.Set("recovered"))
+		updated, err := orm.Update(t.Context(), tx, q.Table.Query(), q.Table.Key(), member.ID, orm.InputTextSet(timequeries.Members.Name, "recovered"))
 		if err != nil {
 			return err
 		}

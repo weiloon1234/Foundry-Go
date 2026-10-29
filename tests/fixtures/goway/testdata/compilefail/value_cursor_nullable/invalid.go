@@ -11,9 +11,9 @@ type a struct{}
 type b struct{}
 
 var source = rows.AsTransaction[a](rows.TransactionOf(rows.ModelRecord(models.Users.Query())), "users_alias")
-var selected = rows.SelectTransactionValue(source, expr.Row(expr.At(rows.TransactionScope(source), models.Users.ID)).Value())
+var selected = rows.SelectTransactionValue(source, expr.Row(expr.At(rows.TransactionScope(source), orm.KeyExpr(models.Users.ID))).Value())
 var c = rows.CursorFor(rows.ModelRecord(models.Users.Query()))
-var normal = rows.Read(rows.SelectValue(models.Users.Query(), models.Users.Email))
+var normal = rows.Read(rows.SelectValue(models.Users.Query(), orm.TextExpr(models.Users.Email)))
 var input = rows.As[a](models.Users.Query(), "u")
 var other = rows.As[b](models.Orders.Query(), "o")
-var _, _ = rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Nickname)).Value()))).Paginate(nil, nil, orm.CursorRequest[string]{Size: 1})
+var _, _ = rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Value()))).Paginate(nil, nil, orm.CursorRequest[string]{Size: 1})

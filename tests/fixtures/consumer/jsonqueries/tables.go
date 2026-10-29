@@ -39,7 +39,7 @@ var Policies = orm.Define("json_policies", func(b orm.Builder[Policy], p *Policy
 var DocumentLinks = struct {
 	Policy orm.BelongsTo[Document, Policy]
 }{
-	Policy: orm.BelongsToOf(Documents.Policy, Documents.PolicyID, Policies.Key()),
+	Policy: orm.BelongsToOf(Documents.Policy, orm.ColumnExpr(Documents.PolicyID), orm.KeyExpr(Policies.Key())),
 }
 
 // Theme chooses the reader appearance; omitted uses the application default.

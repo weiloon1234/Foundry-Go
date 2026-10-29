@@ -1,5 +1,7 @@
 package publisher_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -30,7 +32,7 @@ func appendPublicationAt(t *testing.T, writer outboxtest.Writer, address outboxs
 		if err != nil {
 			return err
 		}
-		_, err = outboxstore.Messages.Update(t.Context(), tx, row.ID, outboxstore.Messages.PublishAfter.Set(instant))
+		_, err = orm.Update(t.Context(), tx, outboxstore.Messages.Table.Query(), outboxstore.Messages.Table.Key(), row.ID, orm.TimeSet(outboxstore.Messages.PublishAfter, instant))
 		return err
 	}); err != nil {
 		t.Fatal(err)

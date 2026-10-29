@@ -1,5 +1,7 @@
 package attachments
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"bytes"
 	"context"
@@ -54,7 +56,7 @@ func variantRows(t *testing.T, f attachmentFixture, id OperationID) []store.Vari
 	err := f.Store.Read(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		v := store.Variants
 		var err error
-		rows, err = store.Variants.Query().Where(v.FileID.Eq(fileID(id))).OrderBy(v.Name.Asc(), v.CreatedAt.Asc()).All(ctx, tx)
+		rows, err = orm.All(ctx, tx, store.Variants.Query().Where(orm.ColumnEq(v.FileID, fileID(id))).OrderBy(orm.TextAsc(v.Name), orm.TimeAsc(v.CreatedAt)))
 		return err
 	})
 	if err != nil {

@@ -20,7 +20,7 @@ func TestReadTerminalsScalarAndDTOStreams(t *testing.T) {
 	table := orm.Define("members", func(b orm.Builder[streamRecord], m *streamRecord) streamTable {
 		return streamTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name)}
 	})
-	scalar := rows.SelectScalar(rows.From(table.Query()), expr.Row(expr.Value(table.Name)).Value())
+	scalar := rows.SelectScalar(rows.From(table.Query()), expr.Row(expr.Value(orm.TextExpr(table.Name))).Value())
 	values := rows.Values(scalar)
 	cte := rows.AsRecord[readAlias](rows.CTE("names", rows.ModelRecord(table.Query())), "n")
 	for _, kind := range []string{"scalar", "values", "cte"} {
@@ -66,7 +66,7 @@ func TestReadTerminalsScalarAndDTOStreams(t *testing.T) {
 				case "values":
 					err = rows.EachRead(ctx, db, rows.ReadValues(rows.UnionAllValues(values, values)), yield)
 				case "cte":
-					err = rows.EachRead(ctx, db, rows.ReadScalar(rows.SelectScalar(cte, expr.Row(expr.At(rows.Scope(cte), table.Name)).Value())), yield)
+					err = rows.EachRead(ctx, db, rows.ReadScalar(rows.SelectScalar(cte, expr.Row(expr.At(rows.Scope(cte), orm.TextExpr(table.Name))).Value())), yield)
 				}
 				switch mode {
 				case "stop", "close":
@@ -153,7 +153,7 @@ func TestReadTerminalsDoNotEraseTransactionsOrZeroWindowValidation(t *testing.T)
 		t.Error("zero window constructed factory")
 		return orm.RetrievalHooks[streamRecord]{}
 	}))
-	locked := rows.AsTransaction[readAlias](rows.LockedRecord(table.Query().ForUpdate()), "r")
+	locked := rows.AsTransaction[readAlias](rows.LockedRecord(orm.Lock(table.Query())), "r")
 	transaction := rows.SelectTransactionRecord(locked, rows.TransactionScope(locked))
 	if _, err := rows.CompileRead(transaction); !errors.Is(err, fault.Invalid) {
 		t.Fatal("transaction escaped", err)
@@ -183,12 +183,12 @@ func TestReadPreflightAndIterationUseExecutingContext(t *testing.T) {
 			if !ok {
 				return orm.Predicate[streamRecord]{}, errors.New("tenant required")
 			}
-			return table.Key().Eq(id), nil
+			return orm.KeyEq(table.Key(), id), nil
 		})}
 	}))
 	bound := context.WithValue(t.Context(), tenantKey{}, int64(1))
 	executing := context.WithValue(t.Context(), tenantKey{}, int64(2))
-	q := rows.ReadScalar(rows.SelectScalar(rows.From(orm.WithScopeContext(table.Query(), bound)), expr.Row(expr.Value(table.Key())).Value()))
+	q := rows.ReadScalar(rows.SelectScalar(rows.From(orm.WithScopeContext(table.Query(), bound)), expr.Row(expr.Value(orm.KeyExpr(table.Key()))).Value()))
 	if err := rows.PreflightRead(t.Context(), q); err == nil {
 		t.Fatal("preflight used bound context")
 	}

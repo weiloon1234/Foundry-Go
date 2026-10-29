@@ -27,7 +27,7 @@ func lockSubject(ctx context.Context, tx *database.Tx, address challenge.Address
 		if err != nil {
 			return challengestore.Subject{}, false, err
 		}
-		draft := []orm.Assignment[challengestore.Subject]{challengestore.Subjects.Key().Set(key), challengestore.Subjects.Scope.Set(scope), challengestore.Subjects.Identity.Set(data)}
+		draft := []orm.Assignment[challengestore.Subject]{orm.KeySet(challengestore.Subjects.Key(), key), orm.TextSet(challengestore.Subjects.Scope, scope), orm.JSONSet(challengestore.Subjects.Identity, data)}
 		// First-subject races can hit the primary key or UNIQUE (key, scope).
 		// Cover both, then retain the scoped locking read and identity checks.
 		if _, err := orm.Upsert(ctx, tx, challengestore.Subjects.Query(), orm.OnConflict[challengestore.Subject]().DoNothing(), draft...); err != nil {
@@ -41,7 +41,7 @@ func subjectByKey(ctx context.Context, tx *database.Tx, address challenge.Addres
 	if err != nil {
 		return challengestore.Subject{}, false, err
 	}
-	found, err := challengestore.Subjects.Query().Where(challengestore.Subjects.Scope.Eq(scope)).Where(challengestore.Subjects.Key().Eq(key)).ForUpdate().First(ctx, tx)
+	found, err := orm.FirstLocked(ctx, tx, orm.Lock(challengestore.Subjects.Query().Where(orm.TextEq(challengestore.Subjects.Scope, scope)).Where(orm.KeyEq(challengestore.Subjects.Key(), key))))
 	if err != nil {
 		return challengestore.Subject{}, false, err
 	}

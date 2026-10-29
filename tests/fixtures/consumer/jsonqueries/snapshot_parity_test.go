@@ -1,5 +1,7 @@
 package jsonqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "github.com/weiloon1234/Foundry-Go/database"
 
 import (
@@ -18,11 +20,11 @@ import (
 func TestSnapshotJSONKindIdentityAndSQLParity(t *testing.T) {
 	f, r := jsonqueries.Documents, jsonqueries.Snapshots
 	filter := document(t, jsonqueries.Preferences{Theme: value.Set("dark")})
-	selected := rows.Select(rows.From(f.Query().OrderBy(f.Key().Asc())), r.Row,
-		rows.Map(r.ID, expr.Value(f.Key())), rows.Map(r.Settings, expr.Value(f.Settings)),
-		rows.MapSelected(r.Kind, expr.JSONType(expr.Value(f.Settings)).Value()),
-		rows.MapSelected(r.BackupKind, expr.JSONTypeNullable(expr.Value(f.Backup)).Value()),
-		rows.MapSelected(r.Matches, expr.JSONContainsNullable(expr.Value(f.Backup), expr.NullableRow(expr.Param(f.Settings, filter))).Value()))
+	selected := rows.Select(rows.From(f.Query().OrderBy(orm.KeyAsc(f.Key()))), r.Row,
+		rows.Map(r.ID, expr.Value(orm.KeyExpr(f.Key()))), rows.Map(r.Settings, expr.Value(orm.JSONExpr(f.Settings))),
+		rows.MapSelected(r.Kind, expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))).Value()),
+		rows.MapSelected(r.BackupKind, expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(f.Backup))).Value()),
+		rows.MapSelected(r.Matches, expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))).Value()))
 	got, err := rows.CompileRead(rows.Read(selected))
 	if err != nil {
 		t.Fatal(err)

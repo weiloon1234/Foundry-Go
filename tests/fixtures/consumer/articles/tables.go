@@ -17,26 +17,26 @@ import (
 
 // AuthorTable exposes stored author fields and the article slot. Example: Authors.Query().
 type AuthorTable struct {
-	// Table owns the concrete author key. Example: Authors.Key().Eq(id).
+	// Table owns the concrete author key. Example: orm.KeyEq(Authors.Key(), id).
 	orm.Table[Author, model.ID[Author]]
-	// Name stores the author name. Example: Authors.Name.Set("Writer").
+	// Name stores the author name. Example: orm.TextSet(Authors.Name, "Writer").
 	Name orm.Text[Author, string]
 	// Articles binds the eager collection. Example: AuthorArticles.Using(Articles.Query()).
 	Articles orm.Many[Author, Article]
 }
 
-// Authors publishes the author declaration. Example: Authors.Insert(ctx,tx,Authors.Name.Set("Writer")).
+// Authors publishes the author declaration. Example: orm.Insert(ctx, tx, Authors.Table,orm.TextSet(Authors.Name, "Writer")).
 var Authors = orm.Define("article_authors", func(b orm.Builder[Author], m *Author) AuthorTable {
 	return AuthorTable{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.Name), orm.ManyOf(b, &m.Articles)}
 })
 
 // ArticleTable exposes stored fields and external slots. Example: Articles.Query().
 type ArticleTable struct {
-	// Table owns the concrete article key. Example: Articles.Key().Eq(id).
+	// Table owns the concrete article key. Example: orm.KeyEq(Articles.Key(), id).
 	orm.Table[Article, model.ID[Article]]
-	// Slug stores the public slug. Example: Articles.Slug.Eq("welcome").
+	// Slug stores the public slug. Example: orm.TextEq(Articles.Slug, "welcome").
 	Slug orm.Text[Article, string]
-	// AuthorID retains the author key type. Example: Articles.AuthorID.Set(author.ID).
+	// AuthorID retains the author key type. Example: orm.ColumnSet(Articles.AuthorID, author.ID).
 	AuthorID orm.Column[Article, model.ID[Author]]
 	// DeletedAt stores soft deletion; Restore clears it. Example: Articles.DeletedAt.IsNull().
 	DeletedAt orm.SoftDelete[Article, temporal.DateTime]
@@ -63,10 +63,10 @@ var Articles = orm.Define("articles", func(b orm.Builder[Article], m *Article) A
 })
 
 // AuthorArticles loads the author's articles. Example: Authors.Query().With(AuthorArticles).
-var AuthorArticles = orm.HasManyOf(Authors.Articles, Authors.Key(), Articles.AuthorID)
+var AuthorArticles = orm.HasManyOf(Authors.Articles, orm.KeyExpr(Authors.Key()), orm.ColumnExpr(Articles.AuthorID))
 
 // ArticleAuthor loads the article's author. Example: Articles.Query().With(ArticleAuthor).
-var ArticleAuthor = orm.BelongsToOf(Articles.Author, Articles.AuthorID, Authors.Key())
+var ArticleAuthor = orm.BelongsToOf(Articles.Author, orm.ColumnExpr(Articles.AuthorID), orm.KeyExpr(Authors.Key()))
 
 // ArticleIdentity preserves the concrete stored identity. Example: ArticleIdentity.ReferenceOf(article).
 var ArticleIdentity = orm.IdentityOf(Articles.Table, Articles.Key())

@@ -17,5 +17,5 @@ var Models = orm.Define("role_inputs", func(b orm.Builder[Model], m *Model) Fiel
 })
 
 func Read(id int64) orm.Query[Model] {
-	return Models.Query().Where(orm.NumberKey(Models.Key()).Eq(id), Models.ID.Eq(id))
+	return Models.Query().Where(orm.NumberKeyEq(orm.NumberKey(Models.Key()), id), orm.InputKeyEq(Models.ID, id))
 }

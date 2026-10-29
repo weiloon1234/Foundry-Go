@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = expr.Related(orm.Pivot(models.UserLinks.Groups), expr.CountDistinctField(models.Groups.Code))
+var invalid = expr.Related(orm.Pivot(models.UserLinks.Groups), expr.CountDistinctField(orm.KeyExpr(models.Groups.Code)))

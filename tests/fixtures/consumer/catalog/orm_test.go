@@ -10,7 +10,7 @@ import (
 )
 
 func TestProductORMParity(t *testing.T) {
-	got, err := orm.Compile(Products.Query().Where(Products.Status.Eq(status.Available), orm.Has(ProductLinks.Creator)))
+	got, err := orm.Compile(Products.Query().Where(orm.EnumEq(Products.Status, status.Available), orm.Has(ProductLinks.Creator)))
 	if err != nil {
 		t.Fatal(err)
 	}

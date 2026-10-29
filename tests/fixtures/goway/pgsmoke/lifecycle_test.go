@@ -28,8 +28,11 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 	q = h.Declare(func() orm.Hooks[h.Member] {
 		return orm.Hooks[h.Member]{
 			Creating: func(ctx context.Context, tx *database.Tx, w *orm.Write[h.Member]) error {
-				if !orm.WriteIsSet(w, q.Name.Set) {
-					return orm.WriteSet(w, q.Name.Set(" supplied "))
+				if !orm.WriteIsSet(w, func() func(arg0 string) orm.Assignment[h.Member] {
+					receiver := q.Name
+					return func(arg0 string) orm.Assignment[h.Member] { return orm.InputTextSet(receiver, arg0) }
+				}()) {
+					return orm.WriteSet(w, orm.InputTextSet(q.Name, " supplied "))
 				}
 				return nil
 			},
@@ -48,16 +51,16 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 			AfterCommit: func(context.Context, lifecycle.Operation, orm.Changes[h.Member]) error { commits++; return nil },
 		}
 	})
-	got, err := q.Insert(ctx, db, q.Key().Set(1), q.Body.Set([]byte{1, 2}))
+	got, err := orm.Insert(ctx, db, q.Table, orm.KeySet(q.Key(), 1), orm.ColumnSet(q.Body, []byte{1, 2}))
 	must(t, err)
 	if got.Name != "supplied" || got.CreatedAt.IsZero() || got.UpdatedAt.IsZero() || commits != 1 {
 		t.Fatal("hook/convention integration")
 	}
-	_, err = q.Update(ctx, db, 1, q.Name.Set(" reject "))
+	_, err = orm.Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, " reject "))
 	if !errors.Is(err, veto) {
 		t.Fatal(err)
 	}
-	persisted, err := q.Require(ctx, db, 1)
+	persisted, err := orm.RequireKey(ctx, db, q.Table, 1)
 	must(t, err)
 	if persisted.Name != "supplied" || commits != 1 {
 		t.Fatal("aborted after hook persisted")
@@ -74,7 +77,7 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 		t.Fatal("outbox-style transaction effect escaped rollback")
 	}
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
-		_, err := q.Update(ctx, tx, 1, q.Name.Set(" changed "))
+		_, err := orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), 1, orm.InputTextSet(q.Name, " changed "))
 		if err != nil {
 			return err
 		}
@@ -85,29 +88,29 @@ func TestLifecyclePersistedChangesRollbackAndCommit(t *testing.T) {
 	}))
 	before, _ := captured.Before().Get()
 	after, _ := captured.After().Get()
-	name, err := orm.ChangeOf(captured, q.Name)
+	name, err := orm.ChangeOf(captured, orm.InputTextExpr(q.Name))
 	must(t, err)
 	if before.Name != "supplied" || after.Name != "changed" || !name.Assigned() || !name.Changed() || commits != 2 {
 		t.Fatal("locked original/returning/commit")
 	}
-	_, err = q.Query().UpdateAll(ctx, db, q.Name.Set("set"))
+	_, err = orm.UpdateAll(ctx, db, q.Query(), orm.InputTextSet(q.Name, "set"))
 	if !errors.Is(err, fault.Invalid) {
 		t.Fatal("silent set bypass")
 	}
-	count, err = orm.WithoutModelHooks(q.Query()).UpdateAll(ctx, db, q.Name.Set("set"))
+	count, err = orm.UpdateAll(ctx, db, orm.WithoutModelHooks(q.Query()), orm.InputTextSet(q.Name, "set"))
 	must(t, err)
 	if count != 1 || commits != 2 {
 		t.Fatal("set acknowledgement")
 	}
-	_, err = q.Delete(ctx, db, 1)
+	_, err = orm.Delete(ctx, db, q.Table.Query(), q.Table.Key(), 1)
 	must(t, err)
-	_, err = q.ForceDelete(ctx, db, q.Soft, 1)
+	_, err = orm.ForceDelete(ctx, db, q.Table.Query(), q.Soft, q.Table.Key(), 1)
 	if !errors.Is(err, database.NotFound) {
 		t.Fatal("force-delete visibility", err)
 	}
-	_, err = q.Restore(ctx, db, 1)
+	_, err = orm.Restore(ctx, db, q.Table, 1)
 	must(t, err)
-	_, err = q.Delete(ctx, db, 1)
+	_, err = orm.Delete(ctx, db, q.Table.Query(), q.Table.Key(), 1)
 	must(t, err)
 	_, err = orm.ForceDelete(ctx, db, q.Query().WithTrashed(), q.Soft, q.Key(), int64(1))
 	must(t, err)

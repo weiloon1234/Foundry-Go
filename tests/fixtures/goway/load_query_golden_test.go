@@ -15,8 +15,8 @@ func TestLoadFromQuerySQLMatchesLegacy(t *testing.T) {
 	for _, g := range captures {
 		db := g.open(t.Context())
 
-		rel := models.UserRelations.Orders.OrderBy(models.Orders.TotalCents.Desc()).With(models.OrderRelations.Buyer)
-		q := orm.WithRelationLimits(models.Users.Query().Where(models.Users.Age.Gt(999)).Limit(0).With(rel), orm.RelationLimits{BatchSize: 1, MaxRows: 10, MaxDepth: 2})
+		rel := models.UserRelations.Orders.OrderBy(orm.NumberDesc(models.Orders.TotalCents)).With(models.OrderRelations.Buyer)
+		q := orm.WithRelationLimits(models.Users.Query().Where(orm.NumberGt(models.Users.Age, 999)).Limit(0).With(rel), orm.RelationLimits{BatchSize: 1, MaxRows: 10, MaxDepth: 2})
 		parents := []models.User{{ID: must(model.ParseID[models.User](buyerID))}}
 		loaded, err := orm.LoadFrom(t.Context(), db, q, parents)
 		if err != nil || len(loaded) != 1 || loaded[0].Orders.Len() != 1 || parents[0].Orders.IsLoaded() {

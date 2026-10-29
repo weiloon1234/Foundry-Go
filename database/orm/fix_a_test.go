@@ -22,7 +22,7 @@ func TestForceDeleteKeyPreservesDefaultAndExplicitVisibility(t *testing.T) {
 		var statements []string
 		var bindings [][]any
 		db := testDB(t, testConnector{statements: &statements, bindings: &bindings, columns: []string{"id", "created_at", "updated_at", "deleted_at"}, values: [][]driver.Value{{int64(1), now, now, deleted}}})
-		got, err := r.ForceDelete(t.Context(), db, SoftDeletes(r.DeletedAt), 1)
+		got, err := ForceDelete(t.Context(), db, r.Table.Query(), SoftDeletes(r.DeletedAt), r.Table.Key(), 1)
 		if err != nil || got.ID != 1 || got.DeletedAt.IsNull() != (deleted == nil) {
 			t.Fatalf("ForceDelete: %+v, %v", got, err)
 		}
@@ -40,7 +40,7 @@ func TestForceDeleteKeyPreservesDefaultAndExplicitVisibility(t *testing.T) {
 	} {
 		var statements []string
 		db := testDB(t, testConnector{statements: &statements})
-		n, err := tc.q.Where(r.Key().Eq(1)).ForceDeleteAll(t.Context(), db, SoftDeletes(r.DeletedAt))
+		n, err := ForceDeleteAll(t.Context(), db, tc.q.Where(KeyEq(r.Key(), 1)), SoftDeletes(r.DeletedAt))
 		if err != nil || n != 1 || !reflect.DeepEqual(statements, []string{tc.want}) {
 			t.Fatalf("ForceDeleteAll: %d, %v, %v", n, err, statements)
 		}
@@ -52,12 +52,12 @@ func TestAdjustmentZeroBoundRejectedBeforeSQL(t *testing.T) {
 	var statements []string
 	begins := 0
 	db := testDB(t, testConnector{statements: &statements, onBegin: func() { begins++ }})
-	for _, a := range []Assignment[numeric]{r.Signed.Increment(1, Bound[int64]{}), r.Signed.Decrement(1, Bound[int64]{}), r.Nullable.Increment(1, Bound[int64]{})} {
-		_, err := r.Update(t.Context(), db, 1, a)
+	for _, a := range []Assignment[numeric]{NumberIncrement(r.Signed, 1, Bound[int64]{}), NumberDecrement(r.Signed, 1, Bound[int64]{}), NullableNumberIncrement(r.Nullable, 1, Bound[int64]{})} {
+		_, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 1, a)
 		if !errors.Is(err, fault.Invalid) || !strings.Contains(err.Error(), "uninitialized adjustment bound") {
 			t.Fatal(err)
 		}
-		_, err = r.Query().UpdateAll(t.Context(), db, a)
+		_, err = UpdateAll(t.Context(), db, r.Query(), a)
 		if !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
@@ -99,18 +99,18 @@ func TestAdjustmentTargetsValidatedBeforeTransactionAndClock(t *testing.T) {
 	var statements []string
 	begins, calls := 0, 0
 	db := testDB(t, testConnector{statements: &statements, onBegin: func() { begins++ }}, database.WithClock(observedClock{&calls}))
-	managed := r.Amount.Increment(1)
+	managed := NumberIncrement(r.Amount, 1)
 	managed.adjust.Field.Column = r.core.model.Timestamps.Updated
 	for _, as := range [][]Assignment[item]{
 		{managed},
 		{adjustment[item](r.Key().key, int64(1), false, nil)},
-		{r.Amount.Set(10), r.Amount.Increment(1)},
-		{r.Amount.Increment(1), r.Amount.Set(10)},
+		{NumberSet(r.Amount, 10), NumberIncrement(r.Amount, 1)},
+		{NumberIncrement(r.Amount, 1), NumberSet(r.Amount, 10)},
 	} {
-		if _, err := r.Update(t.Context(), db, 1, as...); !errors.Is(err, fault.Invalid) {
+		if _, err := Update(t.Context(), db, r.Table.Query(), r.Table.Key(), 1, as...); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
-		if _, err := r.Query().UpdateAll(t.Context(), db, as...); !errors.Is(err, fault.Invalid) {
+		if _, err := UpdateAll(t.Context(), db, r.Query(), as...); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
 	}
@@ -134,7 +134,7 @@ func TestExplicitSoftDeleteConflictsWithNoSoftDeletes(t *testing.T) {
 	}
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	if _, err := tbl.Query().All(t.Context(), db); err == nil || !strings.Contains(err.Error(), "NoSoftDeletes conflicts with explicit SoftDeleteOf") {
+	if _, err := All(t.Context(), db, tbl.Query()); err == nil || !strings.Contains(err.Error(), "NoSoftDeletes conflicts with explicit SoftDeleteOf") {
 		t.Fatal(err)
 	}
 	if len(statements) != 0 {
@@ -156,7 +156,7 @@ func TestStartupErrorsClassifyAsInvalid(t *testing.T) {
 	}
 	var statements []string
 	db := testDB(t, testConnector{statements: &statements})
-	if _, err := tbl.Query().All(t.Context(), db); !errors.Is(err, fault.Invalid) {
+	if _, err := All(t.Context(), db, tbl.Query()); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
 	if len(statements) != 0 {

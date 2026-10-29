@@ -92,7 +92,7 @@ func codecArgumentParameters(typ types.Type, parameters []*types.TypeParam) []in
 // function values, not just call syntax. Summaries propagate to a fixed point
 // across package boundaries so helper names and helper depth cannot hide costs.
 func codecBodyViolations(files []*ast.File, info *types.Info, bodies map[string]*codecBody) []string {
-	families := map[string]bool{"Signed": true, "Unsigned": true, "Float": true, "String": true, "Bool": true, "ID": true, "Decimal": true, "Time": true, "DateTime": true, "Date": true, "WallTime": true, "LocalDateTime": true, "Bytes": true}
+	families := map[string]bool{"Signed": true, "Unsigned": true, "Float": true, "String": true, "Bool": true, "ID": true, "FoundryID": true, "Decimal": true, "Time": true, "DateTime": true, "Date": true, "WallTime": true, "LocalDateTime": true, "Bytes": true}
 	var bad []string
 	for _, file := range files {
 		for _, decl := range file.Decls {

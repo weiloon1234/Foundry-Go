@@ -81,11 +81,11 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 			}
 			var as []Assignment[auditRow]
 			if right != nil {
-				as = []Assignment[auditRow]{table.Name.Set("stored"), table.Note.SetNull()}
+				as = []Assignment[auditRow]{TextSet(table.Name, "stored"), NullableTextSetNull(table.Note)}
 			}
 			changes := auditChanges(t, table, op, left, right, as...)
 			bindings = 0
-			policy := AuditPolicyOf(table.Table, AuditField(table.Quiet, auditrecord.Exclude))
+			policy := AuditPolicyOf(table.Table, AuditField(TextExpr(table.Quiet), auditrecord.Exclude))
 			history, err := Audit(table.Table, changes, policy)
 			if err != nil {
 				t.Fatal(err)
@@ -101,7 +101,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 			if err != nil || subject.Key() != 7 {
 				t.Fatal("persisted identity", err)
 			}
-			n, err := AuditRead(history, table.Name)
+			n, err := AuditRead(history, TextExpr(table.Name))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -119,7 +119,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 			if v, ok := nval.Get(); right != nil && (!ok || v != "stored") {
 				t.Fatal("stored value changed")
 			}
-			note, err := AuditReadNullable(history, table.Note)
+			note, err := AuditReadNullable(history, NullableTextExpr(table.Note))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -134,7 +134,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 					t.Fatal("NULL confused with absence")
 				}
 			}
-			digest, err := AuditRead(history, table.Digest)
+			digest, err := AuditRead(history, ColumnExpr(table.Digest))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -168,7 +168,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 					t.Fatal("unsealed encryption was bound")
 				}
 			}
-			jsonField, err := AuditRead(history, table.Prefs)
+			jsonField, err := AuditRead(history, JSONExpr(table.Prefs))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -193,7 +193,7 @@ func TestAuditStoredSnapshotsPoliciesAndHistoricalFields(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = AuditRead(restored, table.Key()); err != nil {
+			if _, err = AuditRead(restored, KeyExpr(table.Key())); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -206,11 +206,11 @@ func TestAuditRejectsInvalidPolicyAndStandaloneChanges(t *testing.T) {
 	m := auditRow{ID: 1}
 	state := Changes[auditRow]{state: &changeState{table: table.core, after: unsafe.Pointer(&m), operation: value.Set(lifecycle.Create)}}
 	for _, p := range []AuditPolicy[auditRow]{
-		AuditPolicyOf(table.Table, AuditField(table.Key(), auditrecord.Exclude)),
-		AuditPolicyOf(table.Table, AuditField(table.Key(), auditrecord.Redact)),
-		AuditPolicyOf(table.Table, AuditField(table.Name, auditrecord.Disclosure(99))),
-		AuditPolicyOf(table.Table, AuditField(other.Name, auditrecord.Automatic)),
-		AuditPolicyOf(table.Table, AuditField(table.Name, auditrecord.Redact), AuditField(table.Name, auditrecord.Exclude)),
+		AuditPolicyOf(table.Table, AuditField(KeyExpr(table.Key()), auditrecord.Exclude)),
+		AuditPolicyOf(table.Table, AuditField(KeyExpr(table.Key()), auditrecord.Redact)),
+		AuditPolicyOf(table.Table, AuditField(TextExpr(table.Name), auditrecord.Disclosure(99))),
+		AuditPolicyOf(table.Table, AuditField(TextExpr(other.Name), auditrecord.Automatic)),
+		AuditPolicyOf(table.Table, AuditField(TextExpr(table.Name), auditrecord.Redact), AuditField(TextExpr(table.Name), auditrecord.Exclude)),
 		AuditPolicyOf(other.Table),
 	} {
 		if _, err := Audit(table.Table, state, p); err == nil {
@@ -236,7 +236,7 @@ func TestAuditCodecErrorsAreSafeAndDoNotRebindUntouchedFields(t *testing.T) {
 		t.Fatal("unsafe codec error", err)
 	}
 	// Explicit redaction also suppresses an otherwise failing binder.
-	if _, err = Audit(table.Table, Changes[auditRow]{state: state}, AuditPolicyOf(table.Table, AuditField(table.Name, auditrecord.Redact))); err != nil {
+	if _, err = Audit(table.Table, Changes[auditRow]{state: state}, AuditPolicyOf(table.Table, AuditField(TextExpr(table.Name), auditrecord.Redact))); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -269,7 +269,7 @@ func TestAuditKeepsPersistedPrimaryCodec(t *testing.T) {
 	if err != nil || subject.Key() != m.ID {
 		t.Fatal("typed subject codec", err)
 	}
-	field, err := AuditRead(history, table.Key())
+	field, err := AuditRead(history, KeyExpr(table.Key()))
 	if err != nil {
 		t.Fatal(err)
 	}

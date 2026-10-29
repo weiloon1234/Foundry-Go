@@ -79,7 +79,7 @@ func (i Inbox[M, K]) subject(ctx context.Context) (string, error) {
 }
 func (i Inbox[M, K]) rows(subject string) orm.Query[store.Inbox] {
 	f := store.Inboxes
-	return store.Inboxes.Query().Where(f.Scope.Eq(i.recipient.scope()), f.SubjectKey.Eq(subject))
+	return store.Inboxes.Query().Where(orm.TextEq(f.Scope, i.recipient.scope()), orm.TextEq(f.SubjectKey, subject))
 }
 func inboxRecord[M any](row store.Inbox) (Record[M], error) {
 	text, err := row.Data.Text()
@@ -103,9 +103,9 @@ func (i Inbox[M, K]) List(ctx context.Context, page orm.PageRequest, unreadOnly 
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
 		q := i.rows(subject)
 		if unreadOnly {
-			q = q.Where(store.Inboxes.ReadAt.IsNull())
+			q = q.Where(orm.NullableTimeIsNull(store.Inboxes.ReadAt))
 		}
-		page, err := q.OrderBy(store.Inboxes.CreatedAt.Desc(), store.Inboxes.ID.Desc()).Paginate(ctx, tx, page)
+		page, err := orm.Paginate(ctx, tx, q.OrderBy(orm.TimeDesc(store.Inboxes.CreatedAt), orm.KeyDesc(store.Inboxes.ID)), page)
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (i Inbox[M, K]) UnreadCount(ctx context.Context) (int64, error) {
 	var count int64
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
 		var err error
-		count, err = i.rows(subject).Where(store.Inboxes.ReadAt.IsNull()).Count(ctx, tx)
+		count, err = orm.Count(ctx, tx, i.rows(subject).Where(orm.NullableTimeIsNull(store.Inboxes.ReadAt)))
 		return err
 	})
 	return count, err
@@ -168,7 +168,7 @@ func (i Inbox[M, K]) mark(ctx context.Context, id ID[M], read bool) (bool, error
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
 		q := i.rows(subject)
 		key := model.IDFromBytes[store.Inbox](id.Bytes())
-		optional, err := q.ForUpdate().Where(store.Inboxes.Key().Eq(key)).First(ctx, tx)
+		optional, err := orm.FirstLocked(ctx, tx, orm.Lock(q).Where(orm.KeyEq(store.Inboxes.Key(), key)))
 		if err != nil {
 			return err
 		}
@@ -180,13 +180,13 @@ func (i Inbox[M, K]) mark(ctx context.Context, id ID[M], read bool) (bool, error
 		if read == !row.ReadAt.IsNull() {
 			return nil
 		}
-		draft := []orm.Assignment[store.Inbox]{store.Inboxes.ReadAt.SetNull()}
+		draft := []orm.Assignment[store.Inbox]{orm.NullableTimeSetNull(store.Inboxes.ReadAt)}
 		if read {
 			now, err := i.manager.now()
 			if err != nil {
 				return err
 			}
-			draft[0] = store.Inboxes.ReadAt.Set(now)
+			draft[0] = orm.NullableTimeSet(store.Inboxes.ReadAt, now)
 		}
 		_, err = orm.Update(ctx, tx, q, store.Inboxes.Key(), key, draft...)
 		return err
@@ -209,7 +209,7 @@ func (i Inbox[M, K]) Status(ctx context.Context, id ID[M]) (Report[M], error) {
 	key := model.IDFromBytes[store.Envelope](id.Bytes())
 	err = i.manager.within(ctx, func(tx *database.Tx) error {
 		f := store.Envelopes
-		_, err := store.Envelopes.Query().Where(f.Scope.Eq(i.recipient.scope()), f.SubjectKey.Eq(subject)).Where(store.Envelopes.Key().Eq(key)).Require(ctx, tx)
+		_, err := orm.Require(ctx, tx, store.Envelopes.Query().Where(orm.TextEq(f.Scope, i.recipient.scope()), orm.TextEq(f.SubjectKey, subject)).Where(orm.KeyEq(store.Envelopes.Key(), key)))
 		return err
 	})
 	if err != nil {

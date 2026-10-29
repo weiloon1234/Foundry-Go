@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	f "foundry.test/consumer/transactionqueries"
@@ -11,9 +13,9 @@ import (
 type a struct{}
 type b struct{}
 
-var source = rows.AsTransaction[a](rows.TransactionCTE("claimed", rows.LockedRecord(f.Records.Query().ForUpdate())), "claim")
+var source = rows.AsTransaction[a](rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(f.Records.Query()))), "claim")
 var selected = rows.SelectTransactionRecord(source, rows.TransactionScope(source))
 var _ context.Context
 var _ *database.Tx
 
-var _ = rows.TransactionCTE[f.Summary]("bad", rows.LockedRecord(f.Records.Query().ForUpdate()))
+var _ = rows.TransactionCTE[f.Summary]("bad", rows.LockedRecord(orm.Lock(f.Records.Query())))

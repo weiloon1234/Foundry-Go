@@ -12,4 +12,4 @@ import (
 type alias struct{}
 
 var source = rows.As[alias](mutators.Members.Query(), "other")
-var _ = orm.ConflictSet(expr.At(rows.Scope(source), mutators.Members.Email), coremodels.EmailInput{})
+var _ = orm.ConflictSet(expr.At(rows.Scope(source), orm.InputTextExpr(mutators.Members.Email)), coremodels.EmailInput{})

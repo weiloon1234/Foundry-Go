@@ -11,7 +11,7 @@ import (
 
 // Upsert inserts or applies a conflict policy. Skipped rows return an omitted value.
 // Like the old upsert API, it transforms inputs but skips per-model hooks and observers.
-// Example: orm.Upsert(ctx,db,Users.Query(),policy,Users.Email.Set("ada@example.test")).
+// Example: orm.Upsert(ctx,db,Users.Query(),policy,orm.TextSet(Users.Email, "ada@example.test")).
 func Upsert[M any](ctx context.Context, writer database.Transactor, q Query[M], policy Conflict[M], assignments ...Assignment[M]) (value.Optional[M], error) {
 	items, err := insertMany(ctx, writer, q.state, [][]Assignment[M]{assignments}, &policy.state)
 	if err != nil {
@@ -28,7 +28,7 @@ func Upsert[M any](ctx context.Context, writer database.Transactor, q Query[M], 
 
 // UpsertMany applies one reusable policy to a bounded atomic batch. Skipped rows
 // are absent; RETURNING order is not an input-row mapping. Per-model callbacks are skipped.
-// Example: orm.UpsertMany(ctx,db,Users.Query(),policy,[][]orm.Assignment[User]{{Users.Email.Set("ada@example.test")}}).
+// Example: orm.UpsertMany(ctx,db,Users.Query(),policy,[][]orm.Assignment[User]{{orm.TextSet(Users.Email, "ada@example.test")}}).
 func UpsertMany[M any](ctx context.Context, writer database.Transactor, q Query[M], policy Conflict[M], rows [][]Assignment[M]) ([]M, error) {
 	return insertMany(ctx, writer, q.state, rows, &policy.state)
 }

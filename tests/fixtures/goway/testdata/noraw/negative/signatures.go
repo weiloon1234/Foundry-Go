@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/model"
 )
 
 type queryValue func(context.Context, string, ...any) (*db.Rows, error)
@@ -45,14 +46,14 @@ func Reassignment(ctx context.Context, ex db.Executor) {
 }
 
 func GenericSignatures(ctx context.Context, ex db.Executor,
-	table func(context.Context, db.Executor, string, ...any) ([]models.User, error),
+	table func(context.Context, db.Executor, orm.Table[models.User, model.ID[models.User]], string, ...any) ([]models.User, error),
 	row func(context.Context, db.Executor, rows.Schema[models.User], string, ...any) ([]models.User, error),
 	raw func(string, ...any) expr.Selected[models.User, int64],
 	coded func(codec.Codec[int64], string, ...any) expr.Selected[models.User, int64],
 	predicate func(string, ...any) orm.Predicate[models.User],
 	each func(context.Context, db.Executor, string, []any, func(db.Row) (int, error), func(int) error) error,
 ) {
-	_, _ = table(ctx, ex, "private_sql_canary")                                                                               // want orm.Table.Raw
+	_, _ = table(ctx, ex, models.Users.Table, "private_sql_canary")                                                           // want orm.Raw
 	_, _ = row(ctx, ex, rows.Row[models.User]{}, "private_sql_canary")                                                        // want rows.Raw
 	_ = raw("private_sql_canary")                                                                                             // want expr.Raw
 	_ = coded(codec.Signed[int64](), "private_sql_canary")                                                                    // want expr.RawWithCodec
@@ -62,15 +63,15 @@ func GenericSignatures(ctx context.Context, ex db.Executor,
 	_, _ = read(ctx, ex, "private_sql_canary") // want database.ReadQuery
 }
 
-type genericRawTable[R any] interface {
-	Raw(context.Context, db.Executor, string, ...any) ([]R, error)
+type genericRawTable[R any, K comparable] interface {
+	Raw(context.Context, db.Executor, orm.Table[R, K], string, ...any) ([]R, error)
 }
 
-func TableContracts[R any, T genericRawTable[R]](ctx context.Context, ex db.Executor, table T, r genericRawTable[R]) {
-	_, _ = table.Raw(ctx, ex, "private_sql_canary") // want orm.Table.Raw
-	_, _ = r.Raw(ctx, ex, "private_sql_canary")     // want orm.Table.Raw
+func TableContracts[R any, K comparable, T genericRawTable[R, K]](ctx context.Context, ex db.Executor, table T, r genericRawTable[R, K], definition orm.Table[R, K]) {
+	_, _ = table.Raw(ctx, ex, definition, "private_sql_canary") // want orm.Raw
+	_, _ = r.Raw(ctx, ex, definition, "private_sql_canary")     // want orm.Raw
 	call := table.Raw
-	_, _ = call(ctx, ex, "private_sql_canary") // want orm.Table.Raw
+	_, _ = call(ctx, ex, definition, "private_sql_canary") // want orm.Raw
 }
 
 func Invoke[F ~func(context.Context, string, ...any) (*db.Rows, error)](ctx context.Context, f F) {
@@ -97,4 +98,9 @@ func InvokeExact[F func(context.Context, string, ...any) (*db.Rows, error)](ctx 
 }
 func InvokeRaw[S, V any, F ~func(string, ...any) expr.Selected[S, V]](f F) {
 	_ = f("private_sql_canary") // want expr.Raw
+}
+
+func InvokeORMRaw[M any, K comparable, F ~func(context.Context, db.Executor, orm.Table[M, K], string, ...any) ([]M, error)](ctx context.Context, ex db.Executor, table orm.Table[M, K], f F) {
+	_, _ = f(ctx, ex, table, "private_sql_canary")       // want orm.Raw
+	_, _ = (*(&f))(ctx, ex, table, "private_sql_canary") // want orm.Raw
 }

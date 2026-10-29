@@ -14,7 +14,7 @@ import (
 
 func TestDistinctKeepsSelectedRowsAndParameters(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(d.ID)
+	id := expr.Value(orm.KeyExpr(d.ID))
 	base := FromModel(d.Query())
 	q := Offset(Limit(OrderBy(Distinct(base.Where(id.Ne(7))), id.Desc()), 2), 1)
 	s, err := CompileRead(Read(q))
@@ -42,7 +42,7 @@ func TestDistinctKeepsSelectedRowsAndParameters(t *testing.T) {
 }
 func TestDistinctOrderingReusesSelectedScalarBindings(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(d.ID)
+	id := expr.Value(orm.KeyExpr(d.ID))
 	base := From(d.Query())
 	inner := LimitScalar(WhereScalar(SelectScalar(base, expr.Row(id).Value()), id.Ne(9)), 1)
 	scalar := ScalarRowQuery(base, inner).Value()
@@ -55,8 +55,8 @@ func TestDistinctOrderingReusesSelectedScalarBindings(t *testing.T) {
 	if _, err := CompileRead(ReadScalar(OrderScalar(DistinctScalar(SelectScalar(base, scalar)), wrong.Asc()))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("different scalar bindings matched", err)
 	}
-	a := AsRecord[left](CTE("filtered", ModelRecord(d.Query().Where(d.ID.Ne(3)))), "a")
-	aid := expr.At(Scope(a), d.ID)
+	a := AsRecord[left](CTE("filtered", ModelRecord(d.Query().Where(orm.KeyNe(d.ID, 3)))), "a")
+	aid := expr.At(Scope(a), orm.KeyExpr(d.ID))
 	if _, err := CompileRead(ReadRecord(DistinctRecord(SelectRecord(a, Scope(a))).OrderBy(aid.Asc()))); err != nil {
 		t.Fatal("CTE arguments changed ordinal", err)
 	}
@@ -70,7 +70,7 @@ func TestDistinctOrderingReusesSelectedScalarBindings(t *testing.T) {
 }
 func TestDistinctOnKeysOrderingAndReplacement(t *testing.T) {
 	d := declareMembers()
-	id, rank := expr.Value(d.ID), expr.Value(d.Nickname)
+	id, rank := expr.Value(orm.KeyExpr(d.ID)), expr.Value(orm.NullableTextExpr(d.Nickname))
 	base := FromModel(d.Query())
 	q := OrderBy(DistinctOn(base, expr.Group(rank)), rank.Asc(), id.Desc())
 	s, err := CompileRead(Read(q))
@@ -95,13 +95,13 @@ func TestDistinctOnKeysOrderingAndReplacement(t *testing.T) {
 }
 func TestDistinctRejectsInvalidSelectionsBeforeExecution(t *testing.T) {
 	d, other := declareMembers(), declareMembers()
-	id, rank := expr.Value(d.ID), expr.Value(d.Nickname)
+	id, rank := expr.Value(orm.KeyExpr(d.ID)), expr.Value(orm.NullableTextExpr(d.Nickname))
 	base := FromModel(d.Query())
 	invalidKind := Distinct(base)
 	invalidKind.source.Node.Distinct.Kind = 99
 	for name, q := range map[string]Query[member, member]{
 		"empty keys": DistinctOn(base), "zero key": DistinctOn(base, expr.GroupKey[member]{}), "duplicate": DistinctOn(base, expr.Group(id), expr.Group(id)),
-		"foreign": DistinctOn(base, expr.Group(expr.Value(other.ID))), "missing metadata": Distinct(FromModel(orm.Query[member]{})),
+		"foreign": DistinctOn(base, expr.Group(expr.Value(orm.KeyExpr(other.ID)))), "missing metadata": Distinct(FromModel(orm.Query[member]{})),
 		"too many": DistinctOn(base, make([]expr.GroupKey[member], querycore.MaxExpressionNodes+1)...),
 		"prefix":   OrderBy(DistinctOn(base, expr.Group(rank)), id.Asc(), rank.Asc()), "unknown kind": invalidKind,
 	} {
@@ -121,8 +121,8 @@ func TestDistinctCorrelatedKeysFollowOuterQualification(t *testing.T) {
 	base := From(d.Query())
 	a := As[left](d.Query(), "inner_record")
 	link := Correlate(base, a)
-	outer := expr.At(OuterScope(link, ModelScope(d.Query())), d.ID)
-	inner := expr.At(InnerScope(link, Scope(a)), d.ID)
+	outer := expr.At(OuterScope(link, ModelScope(d.Query())), orm.KeyExpr(d.ID))
+	inner := expr.At(InnerScope(link, Scope(a)), orm.KeyExpr(d.ID))
 	q := DistinctOnCorrelatedScalar(SelectCorrelatedScalar(link, expr.Row(inner).Value()).Where(expr.Equal(inner, outer)), expr.Group(outer)).OrderBy(outer.Asc(), inner.Asc())
 	sub := expr.FoundrySelected(CorrelatedScalarRowQuery(q).Value(), sqlowner.Expressions()).Node.(querycore.ScalarSubquery).Query
 	changed := querycore.RequalifyCorrelation(sub, "qualified")

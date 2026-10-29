@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"encoding/base64"
 	"encoding/json"
@@ -19,7 +21,7 @@ import (
 func TestResultCursorCanonicalOrderAndBoundary(t *testing.T) {
 	m := declareMembers()
 	base := CursorFor(ModelRecord(m.Query().Limit(7).Offset(2)))
-	id, rank := expr.At(base.Scope(), m.ID), expr.At(base.Scope(), m.Nickname)
+	id, rank := expr.At(base.Scope(), orm.KeyExpr(m.ID)), expr.At(base.Scope(), orm.NullableTextExpr(m.Nickname))
 	q := base.OrderBy(rank.Desc()).UniqueBy(expr.Group(id))
 	s, e := ormcore.CompileResultCursor(t.Context(), q.core)
 	if e != nil || !strings.HasSuffix(s.SQLText, `ORDER BY "foundry_cursor"."nickname" DESC, "foundry_cursor"."id" ASC`) || !strings.Contains(s.SQLText, `LIMIT $1 OFFSET $2) AS "foundry_cursor"`) || !reflect.DeepEqual(s.Bindings, []any{int64(7), int64(2)}) {
@@ -65,7 +67,7 @@ func TestResultCursorCanonicalOrderAndBoundary(t *testing.T) {
 func TestResultCursorRejectsAmbiguousDeclarations(t *testing.T) {
 	m := declareMembers()
 	base := CursorFor(ModelRecord(m.Query()))
-	id := expr.At(base.Scope(), m.ID)
+	id := expr.At(base.Scope(), orm.KeyExpr(m.ID))
 	good := base.UniqueBy(expr.Group(id))
 	for _, q := range []CursorQuery[member]{
 		{}, CursorFor[member](nil), base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.GroupKey[CursorScope[member]]{}),
@@ -101,7 +103,7 @@ func TestResultCursorRejectsAmbiguousDeclarations(t *testing.T) {
 }
 func TestNullableCursorTerminalBoundaryCompilesFalse(t *testing.T) {
 	m := declareMembers()
-	v := Values(DistinctScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(m.Nickname)).Value())))
+	v := Values(DistinctScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value())))
 	c := ValueCursorFor(v)
 	c = c.UniqueBy(expr.Group(c.Value()))
 	plan, e := ormcore.PlanResultCursor(t.Context(), c.core, 2, "", false, false)
@@ -146,7 +148,7 @@ func TestResultCursorCountsAppendedIdentityAgainstFieldBound(t *testing.T) {
 func TestProjectionCursorGetterValidation(t *testing.T) {
 	m := declareMembers()
 	schema := declareRows()
-	r := RecordOf(Select(From(m.Query()), schema, Map(schema.ID, expr.Value(m.ID)), Map(schema.Name, expr.Value(m.Name))))
+	r := RecordOf(Select(From(m.Query()), schema, Map(schema.ID, expr.Value(orm.KeyExpr(m.ID))), Map(schema.Name, expr.Value(orm.TextExpr(m.Name)))))
 	c := CursorFor(r).UniqueBy(expr.Group(At(CursorFor(r).Scope(), schema.ID)))
 	fields := r.core.Record.Fields()
 	if _, e := ormcore.CompileResultCursor(t.Context(), c.core); e != nil {
@@ -177,7 +179,7 @@ func TestProjectionCursorGetterValidation(t *testing.T) {
 	fc := *field.core
 	fc.column.Typ = reflect.TypeFor[string]()
 	field.core = &fc
-	bad := Select(From(m.Query()), schema, Map(field, expr.Value(m.ID)), Map(schema.Name, expr.Value(m.Name)))
+	bad := Select(From(m.Query()), schema, Map(field, expr.Value(orm.KeyExpr(m.ID))), Map(schema.Name, expr.Value(orm.TextExpr(m.Name))))
 	if _, e := CompileRead(Read(bad)); !errors.Is(e, fault.Invalid) {
 		t.Fatal("inconsistent getter type", e)
 	}

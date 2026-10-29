@@ -56,7 +56,7 @@ func TestAllDiscardsBatchAndClosesRowsAfterApplicationDecodeFailure(t *testing.T
 			for range 10 {
 				calls = 0
 				before := closed
-				items, err := table.Query().All(t.Context(), db)
+				items, err := All(t.Context(), db, table.Query())
 				if err == nil || items != nil || calls != 2 || active.Load() != 0 || closed != before+1 {
 					t.Fatal("partial batch escaped or callback/rows ownership leaked")
 				}
@@ -74,7 +74,7 @@ func TestAllDiscardsBatchAndClosesRowsAfterApplicationDecodeFailure(t *testing.T
 				}
 			}
 			failed = false
-			items, err := table.Query().All(t.Context(), db)
+			items, err := All(t.Context(), db, table.Query())
 			if err != nil || len(items) != 3 || items[0].ID != 1 || items[0].Name != "first" || items[1].Name != "second" || items[2].Name != "third" {
 				t.Fatal("scratch row alias or unhealthy pool after failure")
 			}

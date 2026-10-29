@@ -17,7 +17,7 @@ func descendants(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[mod
 	parent := rowset.AsRecord[parentAlias](self, "parent")
 	child := rowset.As[childAlias](models.Users.Query(), "child")
 	p, c := rowset.Scope(parent), rowset.Scope(child)
-	joined := rowset.InnerJoin(child, parent, rowset.OnEqual(expr.At(c, models.Users.IntroducerID), expr.NullableRow(expr.At(p, models.Users.ID))))
+	joined := rowset.InnerJoin(child, parent, rowset.OnEqual(expr.At(c, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.NullableRow(expr.At(p, orm.KeyExpr(models.Users.ID)))))
 	return rowset.SelectRecord(joined, rowset.LeftScope(joined, rowset.Scope(child)))
 }
 ```

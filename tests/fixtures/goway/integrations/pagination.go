@@ -31,7 +31,7 @@ var Cursor = pagination.DefineCursor[models.User](route, query, item, pagination
 
 func Present(user models.User) (Response, error) { return Response{Email: user.Email}, nil }
 func Read(ctx context.Context, db database.Executor, request Request) (orm.PageResult[Response], error) {
-	page, err := models.Users.Query().Paginate(ctx, db, request.Page)
+	page, err := orm.Paginate(ctx, db, models.Users.Query(), request.Page)
 	if err != nil {
 		return orm.PageResult[Response]{}, err
 	}

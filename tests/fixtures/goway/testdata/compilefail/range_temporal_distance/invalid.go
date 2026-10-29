@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -7,4 +9,4 @@ import (
 	"time"
 )
 
-var _ = expr.NullableTemporalRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.Row(expr.Value(models.Users.Birthday)).Value()).Preceding(time.Hour)
+var _ = expr.NullableTemporalRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.Row(expr.Value(orm.NullableTimeExpr(models.Users.Birthday))).Value()).Preceding(time.Hour)

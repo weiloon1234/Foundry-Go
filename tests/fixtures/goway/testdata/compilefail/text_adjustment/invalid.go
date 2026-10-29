@@ -2,6 +2,7 @@ package text_adjustment
 
 import (
 	"foundry.test/goway/models"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func F() { models.Users.Email.Increment(1) }
+func F() { orm.NumberIncrement(models.Users.Email, 1) }

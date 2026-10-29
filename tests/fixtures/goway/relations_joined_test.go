@@ -67,7 +67,7 @@ func TestJoinedBatchTreeCountsAndPivotOwnership(t *testing.T) {
 	q := orm.WithRelationLimits(j.Parents.Query().With(r), orm.RelationLimits{BatchSize: 1, MaxRows: 100, MaxDepth: 3})
 	// Load uses defaults, so use a query to exercise the custom batch size, then
 	// inspect the same tree using explicit parent loading without a parent read.
-	parents, err := q.Where(j.Parents.ID.In(1, 2)).All(ctx, db)
+	parents, err := orm.All(ctx, db, q.Where(orm.KeyIn(j.Parents.ID, 1, 2)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestJoinedFailuresPublishNoPartialParents(t *testing.T) {
 				}
 				want = nil
 			case "duplicate_order":
-				r = r.OrderByPivot(j.Pivots.Role.Asc(), j.Pivots.Role.Desc())
+				r = r.OrderByPivot(orm.TextAsc(j.Pivots.Role), orm.TextDesc(j.Pivots.Role))
 			}
 			if mode == "of_many_empty" {
 				_, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Chosen.OfMany()), []j.Parent{{ID: 1}})
@@ -154,7 +154,7 @@ func TestJoinedFailuresPublishNoPartialParents(t *testing.T) {
 					limits.MaxDepth = 1
 					r = r.With(j.TargetParent)
 				}
-				result, err = orm.WithRelationLimits(j.Parents.Query().With(r), limits).All(ctx, db)
+				result, err = orm.All(ctx, db, orm.WithRelationLimits(j.Parents.Query().With(r), limits))
 			} else {
 				result, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(r), []j.Parent{{ID: 1}})
 			}
@@ -204,12 +204,12 @@ func TestInvalidMorphDiscriminatorFailsBeforeSQL(t *testing.T) {
 	table := orm.Define("invalid_morph", func(b orm.Builder[invalidJoinedMorph], m *invalidJoinedMorph) fields {
 		return fields{orm.TableOf(b, &m.ID), orm.ManyOf(b, &m.Children)}
 	})
-	r := orm.MorphManyOf(table.Children, table.Key(), j.Pivots.ParentID, j.Pivots.Kind)
+	r := orm.MorphManyOf(table.Children, orm.KeyExpr(table.Key()), orm.NullableNumberExpr(j.Pivots.ParentID), orm.ColumnExpr(j.Pivots.Kind))
 	g := &goldenCapture{reply: joinedReply}
 	ctx := t.Context()
 	db := g.open(ctx)
 	t.Cleanup(func() { _ = db.Close(context.Background()) })
-	if result, err := table.Query().With(r).All(ctx, db); result != nil || !errors.Is(err, fault.Invalid) || g.statements != 0 {
+	if result, err := orm.All(ctx, db, table.Query().With(r)); result != nil || !errors.Is(err, fault.Invalid) || g.statements != 0 {
 		t.Fatal("invalid morph declaration sent SQL", err, g.statements)
 	}
 }
@@ -222,7 +222,7 @@ func TestJoinedLockedTransactionAndEmptySets(t *testing.T) {
 	db := g.open(ctx)
 	t.Cleanup(func() { _ = db.Close(context.Background()) })
 	err := db.Transaction(ctx, func(tx *database.Tx) error {
-		rows, err := j.Parents.Query().Where(j.Parents.ID.Eq(1)).With(j.Peers).ForUpdate().All(ctx, tx)
+		rows, err := orm.AllLocked(ctx, tx, orm.Lock(j.Parents.Query().Where(orm.KeyEq(j.Parents.ID, 1)).With(j.Peers)))
 		if err != nil {
 			return err
 		}

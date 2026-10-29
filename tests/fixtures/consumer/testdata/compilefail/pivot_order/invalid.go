@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import "foundry.test/consumer/models"
 
-var invalid = models.UserLinks.Groups.OrderByPivot(models.Groups.Name.Asc())
+var invalid = models.UserLinks.Groups.OrderByPivot(orm.TextAsc(models.Groups.Name))

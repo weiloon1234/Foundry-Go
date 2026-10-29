@@ -46,7 +46,7 @@ func TestRawModelColumnContract(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			closed := false
 			db := testDB(t, testConnector{columns: tc.columns, values: tc.data, onClose: func() { closed = true }})
-			got, err := r.Raw(t.Context(), db, "raw statement", "argument-canary")
+			got, err := Raw(t.Context(), db, r, "raw statement", "argument-canary")
 			if !closed {
 				t.Fatal("rows not closed")
 			}
@@ -75,7 +75,7 @@ func TestRawModelExecutorsAndCancellation(t *testing.T) {
 		return []string{"id", "name"}, [][]driver.Value{{int64(9), "Ada"}}, nil
 	}})
 	run := func(ex database.Executor) error {
-		got, err := r.Raw(t.Context(), ex, "UPDATE raw_records SET name=$1 RETURNING id,name", "Ada")
+		got, err := Raw(t.Context(), ex, r, "UPDATE raw_records SET name=$1 RETURNING id,name", "Ada")
 		if err == nil && len(got) != 1 {
 			t.Fatal(got)
 		}
@@ -92,11 +92,11 @@ func TestRawModelExecutorsAndCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if got, err := r.Raw(ctx, db, "unused"); !errors.Is(err, context.Canceled) || got != nil || calls != 2 {
+	if got, err := Raw(ctx, db, r, "unused"); !errors.Is(err, context.Canceled) || got != nil || calls != 2 {
 		t.Fatal(got, err, calls)
 	}
 	var invalid Table[rawRecord, int64]
-	if got, err := invalid.Raw(t.Context(), db, "unused"); err == nil || got != nil || calls != 2 {
+	if got, err := Raw(t.Context(), db, invalid, "unused"); err == nil || got != nil || calls != 2 {
 		t.Fatal("invalid declaration sent SQL", err)
 	}
 }
@@ -104,7 +104,7 @@ func TestRawModelExecutorsAndCancellation(t *testing.T) {
 func TestRawModelCloseFailure(t *testing.T) {
 	sentinel := errors.New("close failure")
 	db := testDB(t, testConnector{columns: []string{"id", "name"}, closeErr: sentinel})
-	got, err := rawRecords().Raw(t.Context(), db, "raw")
+	got, err := Raw(t.Context(), db, rawRecords(), "raw")
 	if got != nil || !errors.Is(err, sentinel) {
 		t.Fatal(got, err)
 	}
@@ -130,7 +130,7 @@ func TestRawEncryptedModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := testDB(t, testConnector{columns: []string{"secret", "backup", "id"}, values: [][]driver.Value{{raw, nil, id.String()}}}, database.WithEncryption(keys))
-	got, err := r.Raw(t.Context(), db, "SELECT secret,backup,id FROM secure_records")
+	got, err := Raw(t.Context(), db, r.Table, "SELECT secret,backup,id FROM secure_records")
 	if err != nil || len(got) != 1 || got[0].Secret.Reveal() != "private" || got[0].ID != id {
 		t.Fatal("encrypted raw hydration", err)
 	}
@@ -152,7 +152,7 @@ func TestRawCancellationClosesAcquiredRows(t *testing.T) {
 	db := testDB(t, testConnector{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(1), "private"}}, onClose: func() { closed = true }})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	got, err := rawRecords().Raw(ctx, cancelRawExecutor{db, cancel, t.Context()}, "raw")
+	got, err := Raw(ctx, cancelRawExecutor{db, cancel, t.Context()}, rawRecords(), "raw")
 	if !errors.Is(err, context.Canceled) || got != nil || !closed {
 		t.Fatal(got, err, closed)
 	}
@@ -169,7 +169,7 @@ func TestRawQuotedAliasesAreCaseSensitive(t *testing.T) {
 				}
 				return []string{alias, "name"}, [][]driver.Value{{int64(9), "Ada"}}
 			}})
-			got, err := rawRecords().Raw(t.Context(), db, statement)
+			got, err := Raw(t.Context(), db, rawRecords(), statement)
 			if !closed {
 				t.Fatal("rows not closed")
 			}
@@ -199,7 +199,7 @@ func TestRawColumnsFailureClosesAndPublishesNothing(t *testing.T) {
 	sentinel := errors.New("injected driver close failure")
 	closes := 0
 	db := testDB(t, testConnector{columns: []string{"id", "name"}, values: [][]driver.Value{{int64(9), "Ada"}}, closeErr: sentinel, onClose: func() { closes++ }})
-	got, err := rawRecords().Raw(t.Context(), closedRawExecutor{db}, "SELECT id,name FROM raw_records")
+	got, err := Raw(t.Context(), closedRawExecutor{db}, rawRecords(), "SELECT id,name FROM raw_records")
 	if got != nil || !errors.Is(err, database.Closed) || !errors.Is(err, sentinel) || closes != 1 {
 		t.Fatal(got, err, closes)
 	}

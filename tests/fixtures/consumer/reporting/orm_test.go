@@ -29,7 +29,7 @@ func TestOperatorORMIdentityAndLookupParity(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(roundtrip, got) || !oracleEqual(t, "consumer/reporting/identity_roundtrip", oracle.Snapshot(roundtrip)) {
 		t.Fatal("operator identity roundtrip changed", err)
 	}
-	statement, err := orm.Compile(OperatorModels.Query().Where(OperatorModels.Key().Eq(id)).Limit(1))
+	statement, err := orm.Compile(OperatorModels.Query().Where(orm.KeyEq(OperatorModels.Key(), id)).Limit(1))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,7 @@ func hookTenant(t hookedTable) GlobalScope[hookedRow] {
 		if !ok {
 			return Predicate[hookedRow]{}, tenantMissing
 		}
-		return t.Key().Eq(id), nil
+		return KeyEq(t.Key(), id), nil
 	})
 }
 func scopedHooks(factory func() RetrievalHooks[hookedRow], calls *atomic.Int32) hookedTable {
@@ -56,7 +56,7 @@ func TestScopesAreLazyImmutableFailClosedAndContextFresh(t *testing.T) {
 	if _, err := Compile(WithScopeContext(q.Query(), t.Context())); !errors.Is(err, tenantMissing) {
 		t.Fatal("missing tenant opened scope", err)
 	}
-	original := WithScopeContext(q.Query().Where(q.Name.Eq("explicit")), tenantContext(t.Context(), 1))
+	original := WithScopeContext(q.Query().Where(InputTextEq(q.Name, "explicit")), tenantContext(t.Context(), 1))
 	s, err := Compile(original)
 	if err != nil || !reflect.DeepEqual(s.Arguments(), []any{"explicit", int64(1)}) {
 		t.Fatal(s.Arguments(), err)
@@ -64,7 +64,7 @@ func TestScopesAreLazyImmutableFailClosedAndContextFresh(t *testing.T) {
 	// A compiler snapshot is not a request: terminal context must win.
 	var bindings [][]any
 	db := hookDB(t, testConnector{bindings: &bindings, columns: hookColumns, values: hookValues("stored", nil, nil)})
-	if _, err = original.All(tenantContext(t.Context(), 2), db); err != nil {
+	if _, err = All(tenantContext(t.Context(), 2), db, original); err != nil {
 		t.Fatal(err)
 	}
 	if got := bindings[0]; !reflect.DeepEqual(got, []any{"explicit", int64(2)}) {
@@ -109,7 +109,7 @@ func TestScopeFailuresAndInvalidDeclarationsNeverReachSQL(t *testing.T) {
 					case "zero":
 						return Predicate[hookedRow]{}, nil
 					case "wrong-owner":
-						return other.Key().Eq(1), nil
+						return KeyEq(other.Key(), 1), nil
 					case "resolve-panic":
 						panic("private model")
 					}
@@ -117,7 +117,7 @@ func TestScopeFailuresAndInvalidDeclarationsNeverReachSQL(t *testing.T) {
 					if !ok {
 						return Predicate[hookedRow]{}, tenantMissing
 					}
-					return table.Key().Eq(id), nil
+					return KeyEq(table.Key(), id), nil
 				}
 				if mode == "nil" {
 					resolver = nil
@@ -131,7 +131,7 @@ func TestScopeFailuresAndInvalidDeclarationsNeverReachSQL(t *testing.T) {
 			q := hookedFields(nil, WithGlobalScopes(source))
 			query := q.Query()
 			if mode == "unknown-removal" {
-				query = WithoutGlobalScope(query, Scope(q.Table, "missing", func(context.Context) (Predicate[hookedRow], error) { return q.Key().Eq(1), nil }))
+				query = WithoutGlobalScope(query, Scope(q.Table, "missing", func(context.Context) (Predicate[hookedRow], error) { return KeyEq(q.Key(), 1), nil }))
 			}
 			var statements []string
 			db := hookDB(t, testConnector{statements: &statements, columns: hookColumns, values: hookValues("stored", nil, nil)})
@@ -139,7 +139,7 @@ func TestScopeFailuresAndInvalidDeclarationsNeverReachSQL(t *testing.T) {
 			if mode != "missing" {
 				ctx = tenantContext(ctx, 1)
 			}
-			_, err := query.All(ctx, db)
+			_, err := All(ctx, db, query)
 			if err == nil || len(statements) != 0 {
 				t.Fatal("scope failure reached SQL", err, statements)
 			}
@@ -176,19 +176,19 @@ func TestScopesApplyAcrossReadAndWriteTerminalsAndRawBypasses(t *testing.T) {
 		return hookColumns, hookValues("stored", nil, nil)
 	}})
 	ctx := tenantContext(t.Context(), 7)
-	if _, err := q.Query().Paginate(ctx, db, Page(1, 2)); err != nil {
+	if _, err := Paginate(ctx, db, q.Query(), Page(1, 2)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.Query().SimplePaginate(ctx, db, Page(1, 2)); err != nil {
+	if _, err := SimplePaginate(ctx, db, q.Query(), Page(1, 2)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.Query().Exists(ctx, db); err != nil {
+	if _, err := Exists(ctx, db, q.Query()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.Update(ctx, db, 1, q.Name.Set("updated")); err != nil {
+	if _, err := Update(ctx, db, q.Table.Query(), q.Table.Key(), 1, InputTextSet(q.Name, "updated")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := WithoutModelHooks(q.Query()).DeleteAll(ctx, db); err != nil {
+	if _, err := DeleteAll(ctx, db, WithoutModelHooks(q.Query())); err != nil {
 		t.Fatal(err)
 	}
 	// Every executed read, lock and write so far must carry the tenant key.
@@ -203,13 +203,13 @@ func TestScopesApplyAcrossReadAndWriteTerminalsAndRawBypasses(t *testing.T) {
 	}
 	// Inserts do not resolve scopes, and write hydration skips retrieval.
 	before := retrieved
-	if _, err := q.Insert(t.Context(), db, q.Key().Set(1), q.Name.Set("stored"), q.Body.Set([]byte{1})); err != nil || retrieved != before {
+	if _, err := Insert(t.Context(), db, q.Table, KeySet(q.Key(), 1), InputTextSet(q.Name, "stored"), ColumnSet(q.Body, []byte{1})); err != nil || retrieved != before {
 		t.Fatal("insert resolved a scope or retrieved", err)
 	}
-	if _, err := q.Raw(t.Context(), db, "SELECT * FROM hooked"); err != nil || retrieved != before+1 {
+	if _, err := Raw(t.Context(), db, q.Table, "SELECT * FROM hooked"); err != nil || retrieved != before+1 {
 		t.Fatal("raw failed to retrieve scoped model", err)
 	}
-	if _, err := q.Query().All(t.Context(), db); !errors.Is(err, tenantMissing) {
+	if _, err := All(t.Context(), db, q.Query()); !errors.Is(err, tenantMissing) {
 		t.Fatal("raw changed query scope", err)
 	}
 }

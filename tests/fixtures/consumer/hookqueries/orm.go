@@ -5,7 +5,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-// MemberTable declares stored columns and their write roles. Example: Members.Key().Eq(key).
+// MemberTable declares stored columns and their write roles. Example: orm.KeyEq(Members.Key(), key).
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	Email        orm.InputText[Member, string, string]
@@ -15,7 +15,7 @@ type MemberTable struct {
 	Rank         orm.Number[Member, int]
 }
 
-// Members preserves the persisted hook_members model. Example: Members.Query().All(ctx,db).
+// Members preserves the persisted hook_members model. Example: orm.All(ctx, db, Members.Query()).
 var Members = declareMembers()
 
 func declareMembers() MemberTable {
@@ -32,13 +32,13 @@ func declareMembers() MemberTable {
 	return fields
 }
 
-// LogTable declares stored columns and their write roles. Example: Logs.Key().Eq(key).
+// LogTable declares stored columns and their write roles. Example: orm.KeyEq(Logs.Key(), key).
 type LogTable struct {
 	orm.Table[Log, model.ID[Log]]
 	Label orm.Text[Log, string]
 }
 
-// Logs preserves the persisted hook_logs model. Example: Logs.Query().All(ctx,db).
+// Logs preserves the persisted hook_logs model. Example: orm.All(ctx, db, Logs.Query()).
 var Logs = orm.Define("hook_logs", func(b orm.Builder[Log], m *Log) LogTable {
 	return LogTable{Table: orm.TableOf(b, &m.ID),
 		Label: orm.TextOf(b, &m.Label),

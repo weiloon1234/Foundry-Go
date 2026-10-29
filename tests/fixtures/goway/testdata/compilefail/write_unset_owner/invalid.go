@@ -5,4 +5,9 @@ import "github.com/weiloon1234/Foundry-Go/database/orm"
 type member struct{}
 type other struct{}
 
-func bad(w *orm.Write[member], field orm.Text[other, string]) { _ = orm.WriteUnset(w, field.Set) }
+func bad(w *orm.Write[member], field orm.Text[other, string]) {
+	_ = orm.WriteUnset(w, func() func(arg0 string) orm.Assignment[other] {
+		receiver := field
+		return func(arg0 string) orm.Assignment[other] { return orm.TextSet(receiver, arg0) }
+	}())
+}

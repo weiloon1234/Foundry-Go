@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/reporting"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -7,4 +9,4 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var invalid = datatable.DefineColumn[reporting.Member](reporting.MemberRowValidationFields().Nickname, reporting.NicknameLabel).FilterBy(datatable.Where(foundryhttp.StringQuery[string](), expr.TextRow(reporting.MemberModels.Name)))
+var invalid = datatable.DefineColumn[reporting.Member](reporting.MemberRowValidationFields().Nickname, reporting.NicknameLabel).FilterBy(datatable.Where(foundryhttp.StringQuery[string](), expr.TextRow(orm.TextExpr(reporting.MemberModels.Name))))

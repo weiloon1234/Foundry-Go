@@ -43,7 +43,7 @@ func TestReadSQLAndCursorTokensAgree(t *testing.T) {
 		t.Run(map[bool]string{false: "primary", true: "nullable_mixed"}[mixed], func(t *testing.T) {
 			q := u.Query()
 			if mixed {
-				q = q.OrderBy(u.Nickname.Asc(), u.Age.Desc())
+				q = q.OrderBy(orm.NullableTextAsc(u.Nickname), orm.NumberDesc(u.Age))
 			}
 			a, b := readUser(orderID, 30, nil), readUser(buyerID, 20, "Ada")
 			capture := &goldenCapture{scriptedColumns: readUserColumns}
@@ -84,13 +84,13 @@ func TestReadSQLAndCursorTokensAgree(t *testing.T) {
 	capture.scriptedBatches = [][][]driver.Value{{readUser(orderID, 1, nil)}, {readUser(buyerID, 2, nil)}, {}}
 	seen := 0
 	visit := func(items []cursorUser) error { seen += len(items); capture.show(items); return nil }
-	err = orm.ChunkByKey(t.Context(), db, u.Query(), u.Key(), 1, visit)
+	err = orm.ChunkByKey(t.Context(), db, u.Query(), orm.KeyExpr(u.Key()), 1, visit)
 	if err != nil || seen != 2 {
 		t.Fatal("key chunks", err, seen)
 	}
 	capture.scriptedBatches = [][][]driver.Value{{readUser(orderID, 1, nil)}}
 	err = db.Transaction(t.Context(), func(tx *database.Tx) error {
-		_, err := u.Query().Where(u.Key().Eq(id)).ForUpdate().Require(t.Context(), tx)
+		_, err := orm.RequireLocked(t.Context(), tx, orm.Lock(u.Query().Where(orm.KeyEq(u.Key(), id))))
 		return err
 	})
 	if err != nil {

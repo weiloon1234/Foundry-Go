@@ -8,8 +8,8 @@
 ```go
 func firstOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users
-	return orm.FirstOrCreate(ctx, tx, f.Query().Where(f.Email.Eq("ada@example.test")),
-		f.Age.Set(30), f.Status.Set(models.StatusActive), f.Level.Set(models.LevelBasic))
+	return orm.FirstOrCreate(ctx, tx, f.Query().Where(orm.TextEq(f.Email, "ada@example.test")),
+		orm.NumberSet(f.Age, 30), orm.EnumSet(f.Status, models.StatusActive), orm.EnumSet(f.Level, models.LevelBasic))
 }
 ```
 
@@ -25,15 +25,15 @@ After creation, the stored identity must satisfy the original predicates and vis
 ```go
 func createOrFindUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users
-	return orm.CreateOrFirst(ctx, tx, f.Query().Where(f.Email.Eq("ada@example.test")), f.Age.Set(30), f.Status.Set(models.StatusActive), f.Level.Set(models.LevelBasic))
+	return orm.CreateOrFirst(ctx, tx, f.Query().Where(orm.TextEq(f.Email, "ada@example.test")), orm.NumberSet(f.Age, 30), orm.EnumSet(f.Status, models.StatusActive), orm.EnumSet(f.Level, models.LevelBasic))
 }
 
 func updateOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users
-	return orm.UpdateOrCreate(ctx, tx, f.Query().Where(f.Email.Eq("ada@example.test")),
-		[]orm.Assignment[models.User]{f.Age.Set(30), f.Status.Set(models.StatusActive), f.Level.Set(models.LevelBasic)},
+	return orm.UpdateOrCreate(ctx, tx, f.Query().Where(orm.TextEq(f.Email, "ada@example.test")),
+		[]orm.Assignment[models.User]{orm.NumberSet(f.Age, 30), orm.EnumSet(f.Status, models.StatusActive), orm.EnumSet(f.Level, models.LevelBasic)},
 		func(context.Context, *database.Tx, models.User) ([]orm.Assignment[models.User], error) {
-			return []orm.Assignment[models.User]{f.Age.Set(31)}, nil
+			return []orm.Assignment[models.User]{orm.NumberSet(f.Age, 31)}, nil
 		})
 }
 ```

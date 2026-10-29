@@ -1,9 +1,11 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.MapUpdate(models.Users.Email, expr.Value(models.Users.Age))
+var _ = rows.MapUpdate(orm.TextExpr(models.Users.Email), expr.Value(orm.NumberExpr(models.Users.Age)))

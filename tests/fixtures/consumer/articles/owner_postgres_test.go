@@ -1,5 +1,7 @@
 package articles_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"testing"
@@ -16,7 +18,7 @@ func TestOwnerActiveSubjectsFollowReferenceOrder(t *testing.T) {
 	f := startApplication(t)
 	first, second := f.createArticle(t, "first"), f.createArticle(t, "second")
 	if err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-		_, err := articles.Articles.Delete(ctx, tx, second.ID)
+		_, err := orm.Delete(ctx, tx, articles.Articles.Table.Query(), articles.Articles.Table.Key(), second.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)

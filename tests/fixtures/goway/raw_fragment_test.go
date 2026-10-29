@@ -23,7 +23,7 @@ func TestStage6a4RawFragmentsOpaque(t *testing.T) {
 	db := g.open(ctx)
 	defer db.Close(context.Background())
 	for range 2 {
-		_, err := models.Orders.Query().Where(orm.WhereRaw[models.Order]("total_cents > ? /* private_sql_canary */", 1)).Count(ctx, db)
+		_, err := orm.Count(ctx, db, models.Orders.Query().Where(orm.WhereRaw[models.Order]("total_cents > ? /* private_sql_canary */", 1)))
 		if err != nil {
 			t.Fatal(err)
 		}

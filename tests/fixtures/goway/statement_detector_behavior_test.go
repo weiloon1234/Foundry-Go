@@ -1,5 +1,7 @@
 package goway_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"database/sql/driver"
@@ -35,7 +37,7 @@ func TestStatementDetectorExternalSitesAndBatchLengths(t *testing.T) {
 			batch[i] = []driver.Value{orderID, fmt.Sprintf("01890f47-1a00-7000-8000-%012d", i+2), int64(500)}
 		}
 		g.chunkBatches = [][][]driver.Value{batch}
-		parents, err := models.Orders.Query().With(models.OrderRelations.Buyer).All(ctx, db)
+		parents, err := orm.All(ctx, db, models.Orders.Query().With(models.OrderRelations.Buyer))
 		if err != nil || len(parents) != n {
 			t.Fatalf("parents=%d: %v", len(parents), err)
 		}
@@ -69,12 +71,12 @@ func BenchmarkStatementDetectorConsumer(b *testing.B) {
 			}
 			db := g.open(ctx)
 			defer db.Close(context.Background())
-			q := models.Orders.Query().Where(models.Orders.TotalCents.Gt(100))
+			q := models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100))
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
 				if strings.HasPrefix(name, "compiled") {
-					if _, err := q.Count(ctx, db); err != nil {
+					if _, err := orm.Count(ctx, db, q); err != nil {
 						b.Fatal(err)
 					}
 				} else {

@@ -6,10 +6,10 @@
 
 ```go
 orders := models.UserLinks.Orders.
-    Where(models.Orders.TotalCents.Gte(1000))
+    Where(orm.NumberGte(models.Orders.TotalCents, 1000))
 
-buyers, err := models.Users.Query().Where(orm.Has(orders)).All(ctx, db)
-others, err := models.Users.Query().Where(orm.Not(orm.Has(orders))).All(ctx, db)
+buyers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)))
+others, err := orm.All(ctx, db, models.Users.Query().Where(orm.Not(orm.Has(orders))))
 ```
 
 This selects users with, or without, an order satisfying the filter. It uses one parent SQL statement, without loading related models or collecting IDs first. Several matching children do not multiply the parent rows. An absent nullable relationship key does not match SQL equality, so its parent qualifies for `orm.Not(orm.Has(...))`.
@@ -24,10 +24,10 @@ Existence asks whether any matching row exists. It does not hydrate a singular r
 
 ```go
 u := models.Users
-users, err := models.Users.Query().Where(orm.Or(
+users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Or(
     orm.Has(orders),
-    u.Status.Eq(models.StatusActive),
-)).All(ctx, db)
+    orm.EnumEq(u.Status, models.StatusActive),
+)))
 ```
 
 Nested related filters use the same descriptors:
@@ -35,9 +35,9 @@ Nested related filters use the same descriptors:
 ```go
 referralsWithOrders := models.UserLinks.Referrals.
     Where(orm.Has(models.UserLinks.Orders.
-        Where(models.Orders.TotalCents.Gte(1000))))
+        Where(orm.NumberGte(models.Orders.TotalCents, 1000))))
 
-introducers, err := models.Users.Query().Where(orm.Has(referralsWithOrders)).All(ctx, db)
+introducers, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(referralsWithOrders)))
 ```
 
 Each `Where` accepts the related model's predicates. Nested self-relations work without application alias tags or SQL strings. Foundry chooses deterministic aliases that avoid names in the complete supplied query tree, including [explicit correlated subqueries](model-correlations.md).
@@ -46,10 +46,10 @@ Each `Where` accepts the related model's predicates. Nested self-relations work 
 
 ```go
 groups := models.UserLinks.Groups.
-    Where(models.Groups.Name.Like("team%")).
-    WherePivot(models.Memberships.Priority.Gte(2))
+    Where(orm.TextLike(models.Groups.Name, "team%")).
+    WherePivot(orm.NumberGte(models.Memberships.Priority, 2))
 
-members, err := models.Users.Query().Where(orm.Has(groups)).All(ctx, db)
+members, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(groups)))
 ```
 
 Target and pivot predicates retain their separate model types. Both must match the same joined link. A pivot with a NULL key or absent target does not count as a related model. Duplicate links can satisfy existence without duplicating parents. Named natural keys retain their existing relation compatibility and codec contracts.
@@ -59,7 +59,7 @@ Target and pivot filters may themselves contain relationship predicates, such as
 ## Reuse a descriptor for loading
 
 ```go
-users, err := models.Users.Query().Where(orm.Has(orders)).With(orders).All(ctx, db)
+users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Has(orders)).With(orders))
 ```
 
 `orm.Has` filters parents; `With` loads the matching orders into those returned models. Existence alone leaves relation slots unloaded. A descriptor's ordering and eager-loading clauses do not contribute to its existence test. They remain intact for `With`; existence construction does not mutate the descriptor. Use nested `.Where(orm.Has(child))` to filter by a deeper relationship, rather than relying on `.With(child)`.

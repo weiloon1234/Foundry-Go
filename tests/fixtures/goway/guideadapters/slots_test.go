@@ -1,5 +1,7 @@
 package guideadapters_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 
@@ -32,7 +34,7 @@ var RecoverAccountOwner = extensions.DefineORMOwner("accounts", AccountIdentity,
 // guide:slot-load
 func articles(ctx context.Context, db database.Executor, runtime slots.Runtime) ([]ext.Article, error) {
 	bound := ArticleExtensions.From(runtime)
-	return ext.Articles.Query().With(bound.All()...).All(ctx, db)
+	return orm.All(ctx, db, ext.Articles.Query().With(bound.All()...))
 }
 
 // guide:end

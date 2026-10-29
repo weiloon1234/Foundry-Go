@@ -50,8 +50,8 @@ func TestNestedORMBindingHasNoGlobalFallback(t *testing.T) {
 			}}
 			db := readDB(t, capture)
 			var resolver modelbinding.Resolver[int64, modelbinding.Models[bindingParent, bindingChild]]
-			rel := orm.HasManyOf(parents.Children, parents.Key(), children.ParentID)
-			resolver = modelbinding.ThroughRelation(db, parent, rel, children.Slug, func(int64) string { return "visible" })
+			rel := orm.HasManyOf(parents.Children, orm.KeyExpr(parents.Key()), orm.NumberExpr(children.ParentID))
+			resolver = modelbinding.ThroughRelation(db, parent, rel, orm.TextExpr(children.Slug), func(int64) string { return "visible" })
 			result, err := resolver.Resolve(t.Context(), id)
 
 			if !oracleMatch(t, "nested_binding/sql", capture.output.String()) || !oracleMatch(t, "nested_binding/results", oracleSnapshot(result)) || !oracleMatch(t, "nested_binding/absence", oracleSnapshot(err != nil)) || (err != nil) != (id == 2) {

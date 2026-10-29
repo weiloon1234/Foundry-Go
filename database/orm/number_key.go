@@ -1,7 +1,6 @@
 package orm
 
 import (
-	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
@@ -12,61 +11,62 @@ type numberKeyColumn[M any, V NumberValue, R keyRole] struct {
 	number columnData[V]
 }
 
-func (numberKeyColumn[M, V, R]) orderedColumn() {}
-
-// Eq compares a concrete value. Example: Orders.ID.Eq(100).
-func (c numberKeyColumn[M, V, R]) Eq(v V) Predicate[M] {
+// NumberKeyEq compares a concrete value. Example: NumberKeyEq(Orders.ID, 100).
+func NumberKeyEq[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v V) Predicate[M] {
 	return comparison[M](c.number, querycore.Equal, []V{v})
 }
 
-// Ne excludes a concrete value. Example: Orders.ID.Ne(100).
-func (c numberKeyColumn[M, V, R]) Ne(v V) Predicate[M] {
+// NumberKeyNe excludes a concrete value. Example: NumberKeyNe(Orders.ID, 100).
+func NumberKeyNe[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v V) Predicate[M] {
 	return comparison[M](c.number, querycore.NotEqual, []V{v})
 }
 
-// In tests membership. Example: Orders.ID.In(a, b).
-func (c numberKeyColumn[M, V, R]) In(v ...V) Predicate[M] {
+// NumberKeyIn tests membership. Example: NumberKeyIn(Orders.ID, a, b).
+func NumberKeyIn[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v ...V) Predicate[M] {
 	return comparison[M](c.number, querycore.In, v)
 }
 
-// NotIn excludes membership. Example: Orders.ID.NotIn(a, b).
-func (c numberKeyColumn[M, V, R]) NotIn(v ...V) Predicate[M] {
+// NumberKeyNotIn excludes membership. Example: NumberKeyNotIn(Orders.ID, a, b).
+func NumberKeyNotIn[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v ...V) Predicate[M] {
 	return comparison[M](c.number, querycore.NotIn, v)
 }
 
-// Asc sorts ascending. Example: Orders.ID.Asc().
-func (c numberKeyColumn[M, V, R]) Asc() Order[M] { return columnOrder[M](c.number, false) }
+// NumberKeyAsc sorts ascending. Example: NumberKeyAsc(Orders.ID).
+func NumberKeyAsc[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R]) Order[M] {
+	return columnOrder[M](c.number, false)
+}
 
-// Desc sorts descending. Example: Orders.ID.Desc().
-func (c numberKeyColumn[M, V, R]) Desc() Order[M] { return columnOrder[M](c.number, true) }
+// NumberKeyDesc sorts descending. Example: NumberKeyDesc(Orders.ID).
+func NumberKeyDesc[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R]) Order[M] {
+	return columnOrder[M](c.number, true)
+}
 
-// Set assigns a value, including zero. Example: Orders.ID.Set(100).
-func (c numberKeyColumn[M, V, R]) Set(v V) Assignment[M] { return columnAssignment[M](c.number, v) }
+// NumberKeySet assigns a value, including zero. Example: NumberKeySet(Orders.ID, 100).
+func NumberKeySet[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v V) Assignment[M] {
+	return columnAssignment[M](c.number, v)
+}
 
-// Gt compares ordered values. Example: Orders.ID.Gt(100).
-func (c numberKeyColumn[M, V, R]) Gt(v V) Predicate[M] {
+// NumberKeyGt compares ordered values. Example: NumberKeyGt(Orders.ID, 100).
+func NumberKeyGt[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v V) Predicate[M] {
 	return comparison[M](c.number, querycore.Greater, []V{v})
 }
 
-// Gte compares ordered values. Example: Orders.ID.Gte(100).
-func (c numberKeyColumn[M, V, R]) Gte(v V) Predicate[M] {
+// NumberKeyGte compares ordered values. Example: NumberKeyGte(Orders.ID, 100).
+func NumberKeyGte[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v V) Predicate[M] {
 	return comparison[M](c.number, querycore.GreaterOrEqual, []V{v})
 }
 
-// Lt compares ordered values. Example: Orders.ID.Lt(100).
-func (c numberKeyColumn[M, V, R]) Lt(v V) Predicate[M] {
+// NumberKeyLt compares ordered values. Example: NumberKeyLt(Orders.ID, 100).
+func NumberKeyLt[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v V) Predicate[M] {
 	return comparison[M](c.number, querycore.Less, []V{v})
 }
 
-// Lte compares ordered values. Example: Orders.ID.Lte(100).
-func (c numberKeyColumn[M, V, R]) Lte(v V) Predicate[M] {
+// NumberKeyLte compares ordered values. Example: NumberKeyLte(Orders.ID, 100).
+func NumberKeyLte[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], v V) Predicate[M] {
 	return comparison[M](c.number, querycore.LessOrEqual, []V{v})
 }
 
-// Between includes both endpoints. Example: Orders.ID.Between(a, b).
-func (c numberKeyColumn[M, V, R]) Between(a, b V) Predicate[M] { return between[M](c.number, a, b) }
-
-func (c numberKeyColumn[M, V, R]) ormColumn(*M) columnData[V] { return c.number }
-func (c numberKeyColumn[M, V, R]) expressionColumn(*M) (ormcore.Column[V], ormcore.Column[V]) {
-	return requiredExpression(c.number)
+// NumberKeyBetween includes both endpoints. Example: NumberKeyBetween(Orders.ID, a, b).
+func NumberKeyBetween[M any, V NumberValue, R keyRole](c numberKeyColumn[M, V, R], a, b V) Predicate[M] {
+	return between[M](c.number, a, b)
 }

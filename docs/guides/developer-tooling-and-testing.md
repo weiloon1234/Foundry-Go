@@ -198,10 +198,10 @@ The same pattern is compiled for users:
 func usersFactory() (*factory.Factory[models.User, []orm.Assignment[models.User]], error) {
 	return factory.Define(models.Users.Table, func(_ context.Context, n factory.Sequence) ([]orm.Assignment[models.User], error) {
 		return []orm.Assignment[models.User]{
-			models.Users.Email.Set(fmt.Sprintf("reader-%d@example.test", n)),
-			models.Users.Age.Set(18),
-			models.Users.Status.Set(models.StatusActive),
-			models.Users.Level.Set(models.LevelBasic),
+			orm.TextSet(models.Users.Email, fmt.Sprintf("reader-%d@example.test", n)),
+			orm.NumberSet(models.Users.Age, 18),
+			orm.EnumSet(models.Users.Status, models.StatusActive),
+			orm.EnumSet(models.Users.Level, models.LevelBasic),
 		}, nil
 	})
 }
@@ -243,8 +243,11 @@ the standard library.
 
 `testkit/dbassert` asserts persisted state through the typed ORM queries
 applications already use: `AssertExists`, `AssertMissing`, `AssertCount` and
-`AssertSoftDeleted` take a declaration query (for example
-`models.Users.Query().Where(models.Users.Age.Gte(18))`) and the test's executor or transaction. Model scopes,
+`AssertSoftDeleted` take typed callbacks and the test's executor or transaction.
+For example, pass `func(ctx context.Context, ex database.Executor) (bool, error) { return orm.Exists(ctx, ex, q) }`
+to `AssertExists`. `AssertMissing` and `AssertCount` take a count callback using
+`orm.Count`; `AssertSoftDeleted` takes the ordinary count and an existence callback
+using `q.OnlyTrashed()`. Model scopes,
 including soft-delete visibility, apply as in application code; the helpers only
 read and never reset or seed data.
 

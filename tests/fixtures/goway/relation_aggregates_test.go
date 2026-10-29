@@ -106,13 +106,13 @@ func TestRelationAggregateStatementContract(t *testing.T) {
 			var parents []j.Parent
 			var err error
 			if mode == "pool" {
-				parents, err = q.All(t.Context(), db)
+				parents, err = orm.All(t.Context(), db, q)
 			} else {
 				err = db.Transaction(t.Context(), func(tx *database.Tx) error {
 					if mode == "locked" {
-						parents, err = q.ForUpdate().All(t.Context(), tx)
+						parents, err = orm.AllLocked(t.Context(), tx, orm.Lock(q))
 					} else {
-						parents, err = q.All(t.Context(), tx)
+						parents, err = orm.All(t.Context(), tx, q)
 					}
 					return err
 				})
@@ -232,7 +232,7 @@ func TestRelationAggregateValidationBeforeSQL(t *testing.T) {
 	if _, err := orm.LoadFrom(t.Context(), db, j.Pivots.Query().With(morph), []j.Pivot{{ParentID: value.Of(int64(1)), Kind: "parent"}}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("MorphTo", err)
 	}
-	if _, err := j.Parents.Query().With(j.ParentAggregates.Count, j.ParentAggregates.Count).All(t.Context(), db); !errors.Is(err, fault.Invalid) {
+	if _, err := orm.All(t.Context(), db, j.Parents.Query().With(j.ParentAggregates.Count, j.ParentAggregates.Count)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("duplicate slots", err)
 	}
 	if g.statements != 0 {
@@ -247,8 +247,8 @@ func TestRelationAggregateFailuresDiscardResults(t *testing.T) {
 		rel   orm.Relation[j.Parent]
 		cause error
 	}{
-		{"singular", [][]driver.Value{{int64(1), int64(0), int64(2)}}, j.Parents.Count.Using(expr.Related(j.Chosen, expr.Count[j.Target]().Filter(expr.Value(j.Targets.Rank).Eq(-1)))), database.TooManyRows},
-		{"ambiguous_pivot", [][]driver.Value{{int64(1), int64(0), int64(2), int64(1)}}, j.Parents.Count.Using(expr.Related(j.Peers, expr.Count[j.Target]().Filter(expr.Value(j.Targets.Rank).Eq(-1)))), database.TooManyRows},
+		{"singular", [][]driver.Value{{int64(1), int64(0), int64(2)}}, j.Parents.Count.Using(expr.Related(j.Chosen, expr.Count[j.Target]().Filter(expr.Value(orm.NumberExpr(j.Targets.Rank)).Eq(-1)))), database.TooManyRows},
+		{"ambiguous_pivot", [][]driver.Value{{int64(1), int64(0), int64(2), int64(1)}}, j.Parents.Count.Using(expr.Related(j.Peers, expr.Count[j.Target]().Filter(expr.Value(orm.NumberExpr(j.Targets.Rank)).Eq(-1)))), database.TooManyRows},
 		{"foreign_key", [][]driver.Value{{int64(999), int64(1)}}, j.ParentAggregates.Count, fault.Invalid},
 		{"duplicate_key", [][]driver.Value{{int64(1), int64(1)}, {int64(1), int64(1)}}, j.ParentAggregates.Count, fault.Invalid},
 		{"decode", [][]driver.Value{{int64(1), "bad"}}, j.ParentAggregates.Count, nil},
@@ -269,7 +269,7 @@ func TestRelationAggregateFailuresDiscardResults(t *testing.T) {
 		t.Run(fmt.Sprint("budget_", limit), func(t *testing.T) {
 			g := &goldenCapture{reply: aggregateReply}
 			db := aggregateDB(t, g)
-			out, err := orm.WithRelationLimits(j.Parents.Query().With(j.ParentAggregates.Count), orm.RelationLimits{BatchSize: 500, MaxRows: limit, MaxDepth: 2}).All(t.Context(), db)
+			out, err := orm.All(t.Context(), db, orm.WithRelationLimits(j.Parents.Query().With(j.ParentAggregates.Count), orm.RelationLimits{BatchSize: 500, MaxRows: limit, MaxDepth: 2}))
 			if out != nil || !errors.Is(err, fault.Invalid) {
 				t.Fatal("group/attachment budget", err)
 			}
@@ -326,11 +326,11 @@ func TestRelationAggregateThousandParentsAndChunkBudgets(t *testing.T) {
 				return nil
 			}
 			if chunked {
-				if err := q.Chunk(t.Context(), db, 200, read); err != nil {
+				if err := orm.Chunk(t.Context(), db, q, 200, read); err != nil {
 					t.Fatal(err, g.output.String())
 				}
 			} else {
-				out, err := q.All(t.Context(), db)
+				out, err := orm.All(t.Context(), db, q)
 				if err != nil {
 					t.Fatal(err, g.output.String())
 				}

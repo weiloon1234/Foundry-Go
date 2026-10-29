@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"database/sql/driver"
 	"errors"
@@ -30,13 +32,13 @@ func TestLateralModelNullabilityAndWindows(t *testing.T) {
 	m := declareMembers()
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
 	c := Correlate(a, b)
-	parent, child := expr.At(OuterScope(c, Scope(a)), m.ID), expr.At(InnerScope(c, Scope(b)), m.ID)
+	parent, child := expr.At(OuterScope(c, Scope(a)), orm.KeyExpr(m.ID)), expr.At(InnerScope(c, Scope(b)), orm.KeyExpr(m.ID))
 	record := SelectCorrelatedRecord(c.Where(expr.Less(child, parent)), InnerScope(c, Scope(b))).OrderBy(child.Desc()).Limit(1)
 	latest := AsLateral[latestTag](record, "latest")
 	j := LeftJoinLateral(a, latest)
 	nullable := NullableRightScope(j, LateralScope(latest))
 	schema := outerSchema()
-	q := Select(j, schema, Map(schema.ID, expr.AtNullable(nullable, m.ID)), Map(schema.Nickname, expr.AtNullableValue(nullable, m.Nickname)))
+	q := Select(j, schema, Map(schema.ID, expr.AtNullable(nullable, orm.KeyExpr(m.ID))), Map(schema.Nickname, expr.AtNullableValue(nullable, orm.NullableTextExpr(m.Nickname))))
 	state := &driverState{columns: []string{"id", "nickname"}, rows: [][]driver.Value{{nil, nil}, {int64(3), "name"}}}
 	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].ID.IsNull() || got[1].ID.IsNull() {
@@ -107,7 +109,7 @@ func TestLateralSharedCompilerRejectsMissingForwardAndUnsupportedJoins(t *testin
 	lat := AsLateral[latestTag](SelectCorrelatedRecord(c, InnerScope(c, Scope(b))).Limit(0), "latest")
 	j := LeftJoinLateral(a, lat)
 	schema := declareRows()
-	valid := Select(j, schema, Map(schema.ID, expr.At(LeftScope(j, Scope(a)), m.ID)), Map(schema.Name, expr.At(LeftScope(j, Scope(a)), m.Name)))
+	valid := Select(j, schema, Map(schema.ID, expr.At(LeftScope(j, Scope(a)), orm.KeyExpr(m.ID))), Map(schema.Name, expr.At(LeftScope(j, Scope(a)), orm.TextExpr(m.Name))))
 	for _, kind := range []string{"right", "full", "missing", "self", "forward", "not_derived", "cross_on"} {
 		t.Run(kind, func(t *testing.T) {
 			q := valid

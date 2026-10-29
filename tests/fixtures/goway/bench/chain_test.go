@@ -18,8 +18,8 @@ func BenchmarkChainCompile(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		stmt, err := orm.Compile(models.Orders.Query().
-			Where(models.Orders.TotalCents.Gt(100)).
-			OrderBy(models.Orders.ID.Desc()).
+			Where(orm.NumberGt(models.Orders.TotalCents, 100)).
+			OrderBy(orm.KeyDesc(models.Orders.ID)).
 			Limit(10).
 			Offset(5))
 		if err != nil {
@@ -35,8 +35,8 @@ func BenchmarkChainBuild(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		q := models.Orders.Query().
-			Where(models.Orders.TotalCents.Gt(100)).
-			OrderBy(models.Orders.ID.Desc()).
+			Where(orm.NumberGt(models.Orders.TotalCents, 100)).
+			OrderBy(orm.KeyDesc(models.Orders.ID)).
 			Limit(10).
 			Offset(5)
 		sinkQuery = q

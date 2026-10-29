@@ -31,7 +31,7 @@ func TestPageRequestBounds(t *testing.T) {
 	if err != nil || len(paged.ast.Orders) != 1 || paged.ast.Orders[0].Field.Column != "id" || len(base.state.ast.Orders) != 0 {
 		t.Fatal("stable ordering mutated base", err)
 	}
-	for _, q := range []Query[record]{base.Limit(0), base.Offset(1), base.OrderBy(d.ID.Asc(), d.ID.Asc())} {
+	for _, q := range []Query[record]{base.Limit(0), base.Offset(1), base.OrderBy(KeyAsc(d.ID), KeyAsc(d.ID))} {
 		if _, _, err := pageStates(q.state, Page(1, 2)); !errors.Is(err, fault.Invalid) {
 			t.Fatal("ambiguous pagination", err)
 		}
@@ -54,7 +54,7 @@ func cursorTransferTable() cursorTransferFields {
 }
 func TestCursorBoundaryCompilationAndScope(t *testing.T) {
 	d := cursorTransferTable()
-	base := d.Query().OrderBy(d.Rank.Asc())
+	base := d.Query().OrderBy(NullableNumberAsc(d.Rank))
 	first, err := newCursorPlan(base.state, 2, "", false, false)
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestCursorBoundaryCompilationAndScope(t *testing.T) {
 			t.Fatal(s.SQLText, s.Bindings)
 		}
 	}
-	for _, q := range []Query[cursorTransferRecord]{d.Query().OrderBy(d.Rank.Desc()), base.Where(d.Rank.Gt(3)), base.Limit(1)} {
+	for _, q := range []Query[cursorTransferRecord]{d.Query().OrderBy(NullableNumberDesc(d.Rank)), base.Where(NullableNumberGt(d.Rank, 3)), base.Limit(1)} {
 		if _, err := newCursorPlan(q.state, 2, token, true, false); !errors.Is(err, fault.Invalid) {
 			t.Fatal("foreign token scope accepted", err)
 		}

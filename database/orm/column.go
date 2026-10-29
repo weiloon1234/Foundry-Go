@@ -15,7 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Column exposes equality, ordering and assignments. Example: Orders.BuyerID.Eq(id).
+// Column exposes equality, ordering and assignments. Example: orm.ColumnEq(Orders.BuyerID, id).
 type Column[M, V any] struct {
 	_      [0]*M
 	column columnData[V]
@@ -33,7 +33,7 @@ type columnData[V any] struct {
 	assign      func(V) querycore.AssignmentValue
 }
 
-// Key identifies a table's primary column. Example: Orders.Key().Eq(id).
+// Key identifies a table's primary column. Example: orm.KeyEq(Orders.Key(), id).
 type Key[M any, K comparable] = keyColumn[M, K, lookupKeyRole]
 
 type keyColumn[M any, K comparable, R columnRole] struct {
@@ -42,7 +42,7 @@ type keyColumn[M any, K comparable, R columnRole] struct {
 	key  columnData[K]
 }
 
-// Predicate is a model-owned SQL condition. Example: Orders.ID.Eq(id).
+// Predicate is a model-owned SQL condition. Example: orm.KeyEq(Orders.ID, id).
 type Predicate[M any] struct {
 	_          [0]*M
 	expression *querycore.PredicateState
@@ -51,7 +51,7 @@ type Predicate[M any] struct {
 	err        error
 }
 
-// Order is a model-owned sort direction. Example: Orders.ID.Asc().
+// Order is a model-owned sort direction. Example: orm.KeyAsc(Orders.ID).
 type Order[M any] struct {
 	_     [0]*M
 	core  querycore.QueryOrder
@@ -59,7 +59,7 @@ type Order[M any] struct {
 	err   error
 }
 
-// Assignment preserves omitted/null/value semantics. Example: Orders.TotalCents.Set(0).
+// Assignment preserves omitted/null/value semantics. Example: orm.NumberSet(Orders.TotalCents, 0).
 type Assignment[M any] struct {
 	_      [0]*M
 	adjust *querycore.Adjustment
@@ -69,7 +69,7 @@ type Assignment[M any] struct {
 	err    error
 }
 
-// String redacts pending values. Example: fmt.Sprint(Orders.TotalCents.Set(10)).
+// String redacts pending values. Example: fmt.Sprint(orm.NumberSet(Orders.TotalCents, 10)).
 func (Assignment[M]) String() string { return "orm assignment" }
 
 // GoString redacts pending values in diagnostics. Example: fmt.Sprintf("%#v", assignment).
@@ -180,7 +180,7 @@ type timeColumn[M any, V TimeValue, R columnRole] struct {
 	time columnData[V]
 }
 
-// Text exposes literal and pattern matching. Example: Users.Email.Contains("@").
+// Text exposes literal and pattern matching. Example: orm.TextContains(Users.Email, "@").
 type Text[M any, V ~string] = textColumn[M, V, ordinaryRole]
 
 type textColumn[M any, V ~string, R columnRole] struct {
@@ -189,13 +189,13 @@ type textColumn[M any, V ~string, R columnRole] struct {
 	text columnData[V]
 }
 
-// Enum restricts values to an enum's descriptor. Example: Users.Status.Eq(StatusActive).
+// Enum restricts values to an enum's descriptor. Example: orm.EnumEq(Users.Status, StatusActive).
 type Enum[M any, E enum.Scalar] struct {
 	_    [0]*M
 	enum columnData[E]
 }
 
-// NullableColumn exposes explicit NULL. Example: Users.IntroducerID.SetNull().
+// NullableColumn exposes explicit NULL. Example: orm.NullableColumnSetNull(Users.IntroducerID).
 type NullableColumn[M, V any] struct {
 	_              [0]*M
 	nullableColumn nullableColumnData[V]
@@ -206,13 +206,13 @@ type nullableColumnData[V any] struct {
 	nullable func() columnData[value.Nullable[V]]
 }
 
-// NullableNumber exposes nullable numeric values. Example: LedgerEntries.Balance.IsNull().
+// NullableNumber exposes nullable numeric values. Example: orm.NullableNumberIsNull(LedgerEntries.Balance).
 type NullableNumber[M any, V NumberValue] struct {
 	_              [0]*M
 	nullableNumber nullableColumnData[V]
 }
 
-// NullableTime exposes nullable temporal values. Example: Users.Birthday.IsNull().
+// NullableTime exposes nullable temporal values. Example: orm.NullableTimeIsNull(Users.Birthday).
 type NullableTime[M any, V TimeValue] = nullableTimeColumn[M, V, ordinaryRole]
 
 type nullableTimeColumn[M any, V TimeValue, R columnRole] struct {
@@ -221,13 +221,13 @@ type nullableTimeColumn[M any, V TimeValue, R columnRole] struct {
 	nullableTime nullableColumnData[V]
 }
 
-// NullableText exposes nullable text. Example: Users.Nickname.SetNull().
+// NullableText exposes nullable text. Example: orm.NullableTextSetNull(Users.Nickname).
 type NullableText[M any, V ~string] struct {
 	_            [0]*M
 	nullableText nullableColumnData[V]
 }
 
-// NullableEnum exposes nullable enums. Example: records.Status.SetNull().
+// NullableEnum exposes nullable enums. Example: orm.NullableEnumSetNull(records.Status).
 type NullableEnum[M any, E enum.Scalar] struct {
 	_            [0]*M
 	nullableEnum nullableColumnData[E]
@@ -383,10 +383,10 @@ func SoftDeleteOf[M any, V InstantValue](b Builder[M], ptr *value.Nullable[V]) S
 	return c
 }
 
-// And combines model-owned conditions. Example: And(Orders.ID.Eq(id),Orders.TotalCents.Gt(0)).
+// And combines model-owned conditions. Example: And(orm.KeyEq(Orders.ID, id),orm.NumberGt(Orders.TotalCents, 0)).
 func And[M any](ps ...Predicate[M]) Predicate[M] { return junction(false, ps) }
 
-// Or matches any supplied condition. Example: Or(users.Age.Lt(18), users.Age.Gt(65)).
+// Or matches any supplied condition. Example: Or(orm.NumberLt(users.Age, 18), orm.NumberGt(users.Age, 65)).
 func Or[M any](ps ...Predicate[M]) Predicate[M] { return junction(true, ps) }
 
 // Not negates a condition. Example: Not(users.Email.Like("%@example.com")).

@@ -12,7 +12,7 @@ import (
 )
 
 // ExpressionColumn preserves a column's model and SQL value type.
-// Example: rows.SelectValue(Orders.Query(),Orders.TotalCents).
+// Example: rows.SelectValue(Orders.Query(),orm.NumberExpr(Orders.TotalCents)).
 type ExpressionColumn[M, V, P any] interface {
 	expressionColumn(*M) (ormcore.Column[V], ormcore.Column[P])
 }

@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -13,4 +15,4 @@ var a = rows.As[aTag](models.Users.Query(), "a")
 var b = rows.As[bTag](models.Users.Query(), "b")
 var af = rows.Scope(a)
 var bf = rows.Scope(b)
-var _ = rows.InnerJoin(a, b, rows.OnLess(expr.At(bf, models.Users.Age), expr.At(af, models.Users.Age)))
+var _ = rows.InnerJoin(a, b, rows.OnLess(expr.At(bf, orm.NumberExpr(models.Users.Age)), expr.At(af, orm.NumberExpr(models.Users.Age))))

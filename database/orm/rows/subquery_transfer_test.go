@@ -1,5 +1,7 @@
 package rows
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"errors"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -14,11 +16,11 @@ import (
 
 func TestSubqueriesShareScopesAndParameterOrder(t *testing.T) {
 	d := declareMembers()
-	id := expr.Value(d.ID)
+	id := expr.Value(orm.KeyExpr(d.ID))
 	base := From(d.Query())
 	inner := LimitScalar(OrderScalar(WhereScalar(SelectScalar(base, expr.Row(id).Value()), expr.OrderRow(id).Gt(2)), id.Asc()), 3)
 	scalar := ScalarRowQuery(base, inner).Value()
-	q := LimitScalar(OrderScalar(WhereScalar(SelectScalar(From(d.Query().Where(d.ID.Ne(9))), scalar), InQuery(id, inner)), scalar.Asc()), 4)
+	q := LimitScalar(OrderScalar(WhereScalar(SelectScalar(From(d.Query().Where(orm.KeyNe(d.ID, 9))), scalar), InQuery(id, inner)), scalar.Asc()), 4)
 	s, e := CompileRead(ReadScalar(q))
 	if e != nil || strings.Count(s.SQL(), `SELECT "members"."id" AS "value" FROM "members" WHERE ("members"."id" > `) != 3 || !strings.Contains(s.SQL(), `("members"."id" IN (SELECT`) || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(3), int64(9), int64(2), int64(3), int64(2), int64(3), int64(4)}) {
 		t.Fatal(s.SQL(), s.Arguments(), e)
@@ -38,7 +40,7 @@ func TestSubqueriesShareScopesAndParameterOrder(t *testing.T) {
 func TestSubqueryInvalidSourcesAndScalarCycle(t *testing.T) {
 	d := declareMembers()
 	base := From(d.Query())
-	id := expr.Value(d.ID)
+	id := expr.Value(orm.KeyExpr(d.ID))
 	valid := SelectScalar(base, expr.Row(id).Value())
 	var missing *Input[member]
 	for _, p := range []expr.Predicate[member]{ExistsQuery(base, missing), ExistsQuery(base, Input[member]{}), InQuery(id, Scalar[member, int64]{})} {
@@ -67,7 +69,7 @@ func TestSubqueryInvalidSourcesAndScalarCycle(t *testing.T) {
 func TestSubqueryScopesAndExistsPreserveSelectLevels(t *testing.T) {
 	d := declareMembers()
 	base := From(d.Query())
-	id := expr.Value(d.ID)
+	id := expr.Value(orm.KeyExpr(d.ID))
 	outer := As[left](d.Query(), "outer_record")
 	inner := SelectScalar(base, expr.Row(id).Value())
 	inner.source.Node.Predicates = []querycore.Expression{querycore.BinaryComparison{Left: querycore.FieldRef{Table: "members", Column: "id"}, Right: querycore.FieldRef{Table: "outer_record", Column: "id"}, Operator: querycore.Equal}}
@@ -75,7 +77,7 @@ func TestSubqueryScopesAndExistsPreserveSelectLevels(t *testing.T) {
 		t.Fatal("accidental correlation", e)
 	}
 	same := As[left](d.Query(), "members")
-	sid := expr.At(Scope(same), d.ID)
+	sid := expr.At(Scope(same), orm.KeyExpr(d.ID))
 	scalar := ScalarRowQuery(same, LimitScalar(SelectScalar(base, expr.Row(id).Value()), 1)).Value()
 	s, e := CompileRead(ReadScalar(WhereScalar(SelectScalar(same, scalar), sid.Eq(4))))
 	if e != nil || !strings.Contains(s.SQL(), `WHERE ("members"."id" = $2)`) {

@@ -1,5 +1,7 @@
 package joinqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -25,12 +27,12 @@ func TestPostgresTypedJoins(t *testing.T) {
 		sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")
 		r := rows.Scope(referrals)
 		s := rows.Scope(sponsors)
-		joined := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
+		joined := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(s, orm.KeyExpr(models.Users.ID))))
 		referralScope := rows.LeftScope(joined, rows.Scope(referrals))
 		sponsorScope := rows.NullableRightScope(joined, rows.Scope(sponsors))
 		referral := referralScope
 		sponsor := sponsorScope
-		report := rows.OrderBy(rows.Select(joined, reports.ReferralRows, rows.MapSelected(reports.ReferralRows.ID, expr.Row(expr.At(referral, models.Users.ID)).Value()), rows.MapSelected(reports.ReferralRows.Email, expr.Row(expr.At(referral, models.Users.Email)).Value()), rows.MapSelected(reports.ReferralRows.IntroducerID, expr.Row(expr.AtNullable(sponsor, models.Users.ID)).Value()), rows.MapSelected(reports.ReferralRows.IntroducerEmail, expr.Row(expr.AtNullable(sponsor, models.Users.Email)).Value()), rows.MapSelected(reports.ReferralRows.IntroducerNickname, expr.Row(expr.AtNullableValue(sponsor, models.Users.Nickname)).Value()), rows.MapSelected(reports.ReferralRows.IntroducerStatus, expr.Row(expr.AtNullable(sponsor, models.Users.Status)).Value())), expr.At(referral, models.Users.Email).Asc())
+		report := rows.OrderBy(rows.Select(joined, reports.ReferralRows, rows.MapSelected(reports.ReferralRows.ID, expr.Row(expr.At(referral, orm.KeyExpr(models.Users.ID))).Value()), rows.MapSelected(reports.ReferralRows.Email, expr.Row(expr.At(referral, orm.TextExpr(models.Users.Email))).Value()), rows.MapSelected(reports.ReferralRows.IntroducerID, expr.Row(expr.AtNullable(sponsor, orm.KeyExpr(models.Users.ID))).Value()), rows.MapSelected(reports.ReferralRows.IntroducerEmail, expr.Row(expr.AtNullable(sponsor, orm.TextExpr(models.Users.Email))).Value()), rows.MapSelected(reports.ReferralRows.IntroducerNickname, expr.Row(expr.AtNullableValue(sponsor, orm.NullableTextExpr(models.Users.Nickname))).Value()), rows.MapSelected(reports.ReferralRows.IntroducerStatus, expr.Row(expr.AtNullable(sponsor, orm.EnumExpr(models.Users.Status))).Value())), expr.At(referral, orm.TextExpr(models.Users.Email)).Asc())
 		items, err := rows.Read(report).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -54,18 +56,18 @@ func TestPostgresTypedJoins(t *testing.T) {
 		if status, ok := items[3].IntroducerStatus.Get(); !ok || status != models.StatusDisabled {
 			t.Error("nullable imported enum lost its codec")
 		}
-		if n, err := rows.Read(report.Where(expr.AtNullable(sponsor, models.Users.ID).IsNull())).Count(t.Context(), counter); err != nil || n != 1 {
+		if n, err := rows.Read(report.Where(expr.AtNullable(sponsor, orm.KeyExpr(models.Users.ID)).IsNull())).Count(t.Context(), counter); err != nil || n != 1 {
 			t.Error("outer nullable predicate failed", err)
 		}
-		if n, err := rows.Read(report.Where(expr.AtNullable(sponsor, models.Users.Status).Eq(models.StatusActive))).Count(t.Context(), counter); err != nil || n != 2 {
+		if n, err := rows.Read(report.Where(expr.AtNullable(sponsor, orm.EnumExpr(models.Users.Status)).Eq(models.StatusActive))).Count(t.Context(), counter); err != nil || n != 2 {
 			t.Error("post-join WHERE did not filter matched items", err)
 		}
 		// Scope filters and windows belong to the right source before joining.
-		filtered := rows.As[sponsorAlias](models.Users.Query().Where(models.Users.Status.Eq(models.StatusDisabled)).OrderBy(models.Users.Age.Desc()).Limit(1), "sponsor")
-		filteredJoin := rows.LeftJoin(referrals, filtered, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(rows.Scope(filtered), models.Users.ID)))
+		filtered := rows.As[sponsorAlias](models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusDisabled)).OrderBy(orm.NumberDesc(models.Users.Age)).Limit(1), "sponsor")
+		filteredJoin := rows.LeftJoin(referrals, filtered, rows.On(expr.At(r, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(rows.Scope(filtered), orm.KeyExpr(models.Users.ID))))
 		fr := rows.LeftScope(filteredJoin, rows.Scope(referrals))
 		fs := rows.NullableRightScope(filteredJoin, rows.Scope(filtered))
-		filteredReport := rows.Select(filteredJoin, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(fr, models.Users.ID)).Value())), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(fs, models.Users.ID)).Value()))
+		filteredReport := rows.Select(filteredJoin, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(fr, orm.KeyExpr(models.Users.ID))).Value())), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(fs, orm.KeyExpr(models.Users.ID))).Value()))
 		filteredRows, err := rows.Read(filteredReport).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -87,27 +89,27 @@ func TestPostgresTypedJoins(t *testing.T) {
 			t.Error("source window or parameters were not preserved")
 		}
 		// An ON filter preserves outer items; the corresponding final WHERE does not.
-		onJoin := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)).WhereRight(expr.At(s, models.Users.Status).Eq(models.StatusDisabled)))
+		onJoin := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(s, orm.KeyExpr(models.Users.ID))).WhereRight(expr.At(s, orm.EnumExpr(models.Users.Status)).Eq(models.StatusDisabled)))
 		onLeft := rows.LeftScope(onJoin, rows.Scope(referrals))
 		onRight := rows.NullableRightScope(onJoin, rows.Scope(sponsors))
-		onReport := rows.Select(onJoin, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(onLeft, models.Users.ID)).Value())), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(onRight, models.Users.ID)).Value()))
+		onReport := rows.Select(onJoin, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(onLeft, orm.KeyExpr(models.Users.ID))).Value())), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(onRight, orm.KeyExpr(models.Users.ID))).Value()))
 		if n, err := rows.Read(onReport).Count(t.Context(), counter); err != nil || n != 4 {
 			t.Error("ON scope discarded outer items", err)
 		}
-		if n, err := rows.Read(onReport.Where(expr.AtNullable(onRight, models.Users.Status).Eq(models.StatusDisabled))).Count(t.Context(), counter); err != nil || n != 1 {
+		if n, err := rows.Read(onReport.Where(expr.AtNullable(onRight, orm.EnumExpr(models.Users.Status)).Eq(models.StatusDisabled))).Count(t.Context(), counter); err != nil || n != 1 {
 			t.Error("ON and WHERE semantics were conflated", err)
 		}
-		composite := rows.LeftJoin(referrals, sponsors, rows.OnAnd(rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)), rows.On(expr.At(r, models.Users.Status), expr.At(s, models.Users.Status))))
+		composite := rows.LeftJoin(referrals, sponsors, rows.OnAnd(rows.On(expr.At(r, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(s, orm.KeyExpr(models.Users.ID))), rows.On(expr.At(r, orm.EnumExpr(models.Users.Status)), expr.At(s, orm.EnumExpr(models.Users.Status)))))
 		cl := rows.LeftScope(composite, rows.Scope(referrals))
 		csp := rows.NullableRightScope(composite, rows.Scope(sponsors))
-		compositeReport := rows.Select(composite, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(cl, models.Users.ID)).Value())), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(csp, models.Users.ID)).Value()))
-		if n, err := rows.Read(compositeReport.Where(expr.AtNullable(csp, models.Users.ID).IsNotNull())).Count(t.Context(), counter); err != nil || n != 1 {
+		compositeReport := rows.Select(composite, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(cl, orm.KeyExpr(models.Users.ID))).Value())), rows.MapSelected(reports.UserPairs.RightID, expr.Row(expr.AtNullable(csp, orm.KeyExpr(models.Users.ID))).Value()))
+		if n, err := rows.Read(compositeReport.Where(expr.AtNullable(csp, orm.KeyExpr(models.Users.ID)).IsNotNull())).Count(t.Context(), counter); err != nil || n != 1 {
 			t.Error("composite typed join did not preserve AND semantics", err)
 		}
-		alternative := rows.InnerJoin(referrals, sponsors, rows.OnOr(rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)), rows.On(expr.At(r, models.Users.ID), expr.At(s, models.Users.ID))))
+		alternative := rows.InnerJoin(referrals, sponsors, rows.OnOr(rows.On(expr.At(r, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(s, orm.KeyExpr(models.Users.ID))), rows.On(expr.At(r, orm.KeyExpr(models.Users.ID)), expr.At(s, orm.KeyExpr(models.Users.ID)))))
 		al := rows.LeftScope(alternative, rows.Scope(referrals))
 		ar := rows.RightScope(alternative, rows.Scope(sponsors))
-		alternativeReport := rows.Select(alternative, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(al, models.Users.ID)).Value())), rows.MapSelected(reports.UserPairs.RightID, expr.Nullable(expr.Row(expr.At(ar, models.Users.ID)).Value())))
+		alternativeReport := rows.Select(alternative, reports.UserPairs, rows.MapSelected(reports.UserPairs.LeftID, expr.Nullable(expr.Row(expr.At(al, orm.KeyExpr(models.Users.ID))).Value())), rows.MapSelected(reports.UserPairs.RightID, expr.Nullable(expr.Row(expr.At(ar, orm.KeyExpr(models.Users.ID))).Value())))
 		if n, err := rows.Read(alternativeReport).Count(t.Context(), counter); err != nil || n != 7 {
 			t.Error("alternative typed join did not preserve OR semantics", err)
 		}

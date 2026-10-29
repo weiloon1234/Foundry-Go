@@ -14,8 +14,8 @@ Calendar extraction accepts dates or local date-times. Clock extraction accepts 
 
 <!-- go-source: tests/fixtures/consumer/temporalqueries/orm_test.go -->
 ```go
-year := expr.Year(expr.Value(Samples.Date))
-report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, year.Value()), rows.MapSelected(CalendarSummaries.Rows, expr.Count[Sample]().Value()), rows.MapSelected(CalendarSummaries.Latest, expr.Max(Samples.Date).Value())), expr.Group(year)), year.Asc())
+year := expr.Year(expr.Value(orm.TimeExpr(Samples.Date)))
+report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, year.Value()), rows.MapSelected(CalendarSummaries.Rows, expr.Count[Sample]().Value()), rows.MapSelected(CalendarSummaries.Latest, expr.Max(orm.TimeExpr(Samples.Date)).Value())), expr.Group(year)), year.Asc())
 ```
 
 The example is a grouped rows projection over the handwritten `Samples` declaration. Extraction and ordering run in PostgreSQL; sorting an already-loaded slice is a separate Go operation.
@@ -61,7 +61,7 @@ for _, test := range []struct {
 	period temporal.Interval
 	hours  time.Duration
 }{{temporal.Days(1), 23}, {interval(t, 0, 0, 24*time.Hour), 24}} {
-	got := intervalOne(t, tx, expr.ShiftInstant(expr.Value(f.Start), expr.Param(f.Period, test.period), ny).Value())
+	got := intervalOne(t, tx, expr.ShiftInstant(expr.Value(orm.TimeExpr(f.Start)), expr.Param(orm.IntervalExpr(f.Period), test.period), ny).Value())
 	if got.Sub(samples[0].Start) != test.hours*time.Hour {
 		t.Fatal(got, test.hours)
 	}

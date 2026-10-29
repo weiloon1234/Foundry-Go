@@ -1,5 +1,8 @@
 package linkqueries_test
 
+import model "github.com/weiloon1234/Foundry-Go/model"
+import temporal "github.com/weiloon1234/Foundry-Go/temporal"
+
 import (
 	"context"
 	"errors"
@@ -24,7 +27,7 @@ func TestPostgresRelationAttachDetachLifecycle(t *testing.T) {
 		}
 		r := linkqueries.MemberLinks.Groups
 		ctx := linkqueries.WithTrace(t.Context(), trace)
-		draft := []orm.Assignment[linkqueries.Membership]{linkqueries.Memberships.Role.Set(" ADMIN ")}
+		draft := []orm.Assignment[linkqueries.Membership]{orm.InputTextSet(linkqueries.Memberships.Role, " ADMIN ")}
 		first, err := orm.Attach(ctx, tx, r, member, group, draft...)
 		if err != nil {
 			return err
@@ -45,28 +48,51 @@ func TestPostgresRelationAttachDetachLifecycle(t *testing.T) {
 		inspectDone := errors.New("caller draft inspected")
 		trace.InspectMembership = func(w *orm.Write[linkqueries.Membership]) error {
 			fields := linkqueries.Memberships
-			role, ok := orm.WriteGet(w, fields.Role.Set).Get()
-			if !ok || role != " ADMIN " || orm.WriteIsSet(w, fields.MemberID.Set) || orm.WriteIsSet(w, fields.GroupCode.Set) || orm.WriteIsSet(w, fields.Key().Set) || orm.WriteIsSet(w, fields.UpdatedAt.Set) {
+			role, ok := orm.WriteGet(w, func() func(arg0 string) orm.Assignment[linkqueries.Membership] {
+				receiver := fields.Role
+				return func(arg0 string) orm.Assignment[linkqueries.Membership] { return orm.InputTextSet(receiver, arg0) }
+			}()).Get()
+			if !ok || role != " ADMIN " || orm.WriteIsSet(w, func() func(arg0 model.ID[linkqueries.Member]) orm.Assignment[linkqueries.Membership] {
+				receiver := fields.MemberID
+				return func(arg0 model.ID[linkqueries.Member]) orm.Assignment[linkqueries.Membership] {
+					return orm.ColumnSet(receiver, arg0)
+				}
+			}()) || orm.WriteIsSet(w, func() func(arg0 linkqueries.GroupCode) orm.Assignment[linkqueries.Membership] {
+				receiver := fields.GroupCode
+				return func(arg0 linkqueries.GroupCode) orm.Assignment[linkqueries.Membership] {
+					return orm.TextSet(receiver, arg0)
+				}
+			}()) || orm.WriteIsSet(w, func() func(arg0 model.ID[linkqueries.Membership]) orm.Assignment[linkqueries.Membership] {
+				receiver := fields.Key()
+				return func(arg0 model.ID[linkqueries.Membership]) orm.Assignment[linkqueries.Membership] {
+					return orm.KeySet(receiver, arg0)
+				}
+			}()) || orm.WriteIsSet(w, func() func(arg0 temporal.DateTime) orm.Assignment[linkqueries.Membership] {
+				receiver := fields.UpdatedAt
+				return func(arg0 temporal.DateTime) orm.Assignment[linkqueries.Membership] {
+					return orm.TimeSet(receiver, arg0)
+				}
+			}()) {
 				return errors.New("attachment changed caller values or omissions")
 			}
 			inspected = true
 			return inspectDone
 		}
-		_, inspectErr := linkqueries.Memberships.Insert(ctx, tx, draft...)
+		_, inspectErr := orm.Insert(ctx, tx, linkqueries.Memberships.Table, draft...)
 		trace.InspectMembership = nil
 		if !inspected || !errors.Is(inspectErr, inspectDone) {
 			return errors.New("caller draft inspection failed")
 		}
 		changes := trace.ORMChanges[0]
-		memberChange, err := orm.ChangeOf(changes, linkqueries.Memberships.MemberID)
+		memberChange, err := orm.ChangeOf(changes, orm.ColumnExpr(linkqueries.Memberships.MemberID))
 		if err != nil {
 			return err
 		}
-		groupChange, err := orm.ChangeOf(changes, linkqueries.Memberships.GroupCode)
+		groupChange, err := orm.ChangeOf(changes, orm.TextExpr(linkqueries.Memberships.GroupCode))
 		if err != nil {
 			return err
 		}
-		roleChange, err := orm.ChangeOf(changes, linkqueries.Memberships.Role)
+		roleChange, err := orm.ChangeOf(changes, orm.InputTextExpr(linkqueries.Memberships.Role))
 		if err != nil {
 			return err
 		}
@@ -128,7 +154,7 @@ func TestPostgresRelationAttachDetachLifecycle(t *testing.T) {
 				return errors.New("force-detach changes retained an after-model")
 			}
 		}
-		count, err := linkqueries.Memberships.Query().WithTrashed().Count(t.Context(), tx)
+		count, err := orm.Count(t.Context(), tx, linkqueries.Memberships.Query().WithTrashed())
 		if err != nil {
 			return err
 		}
@@ -153,37 +179,37 @@ func TestPostgresRelationScopesAndAtomicRollback(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		other, err := linkqueries.Members.Insert(t.Context(), tx, linkqueries.Members.Name.Set("other"))
+		other, err := orm.Insert(t.Context(), tx, linkqueries.Members.Table, orm.TextSet(linkqueries.Members.Name, "other"))
 		if err != nil {
 			return err
 		}
 		r := linkqueries.MemberLinks.Groups
 		ctx := linkqueries.WithTrace(t.Context(), trace)
-		if _, err := orm.Attach(ctx, tx, r, member, group, linkqueries.Memberships.MemberID.Set(other.ID), linkqueries.Memberships.Role.Set("admin")); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.Attach(ctx, tx, r, member, group, orm.ColumnSet(linkqueries.Memberships.MemberID, other.ID), orm.InputTextSet(linkqueries.Memberships.Role, "admin")); !errors.Is(err, fault.Invalid) {
 			return errors.New("attachment escaped its source endpoint")
 		}
 		trace.Steps = nil
 		target := linkqueries.Groups
-		if _, err := orm.Attach(ctx, tx, r.Where(target.Name.Eq("denied")), member, group, linkqueries.Memberships.Role.Set("admin")); !errors.Is(err, database.NotFound) {
+		if _, err := orm.Attach(ctx, tx, r.Where(orm.TextEq(target.Name, "denied")), member, group, orm.InputTextSet(linkqueries.Memberships.Role, "admin")); !errors.Is(err, database.NotFound) {
 			return errors.New("attachment ignored target scope")
 		}
 		if len(trace.Steps) != 0 {
 			return errors.New("missing endpoint invoked pivot hooks")
 		}
 		pivot := linkqueries.Memberships
-		if _, err := orm.Attach(ctx, tx, r.WherePivot(pivot.Role.Eq("admin")), member, group, linkqueries.Memberships.Role.Set("viewer")); !errors.Is(err, fault.Invalid) {
+		if _, err := orm.Attach(ctx, tx, r.WherePivot(orm.InputTextEq(pivot.Role, "admin")), member, group, orm.InputTextSet(linkqueries.Memberships.Role, "viewer")); !errors.Is(err, fault.Invalid) {
 			return errors.New("attachment ignored stored pivot scope")
 		}
 		trace.VetoAt = "local.created"
-		if _, err := orm.Attach(ctx, tx, r, member, group, linkqueries.Memberships.Role.Set("admin")); !errors.Is(err, linkqueries.ErrVeto) {
+		if _, err := orm.Attach(ctx, tx, r, member, group, orm.InputTextSet(linkqueries.Memberships.Role, "admin")); !errors.Is(err, linkqueries.ErrVeto) {
 			return errors.New("post-insert veto did not abort attachment")
 		}
 		trace.VetoAt = ""
-		if count, err := linkqueries.Memberships.Query().WithTrashed().Count(t.Context(), tx); err != nil || count != 0 {
+		if count, err := orm.Count(t.Context(), tx, linkqueries.Memberships.Query().WithTrashed()); err != nil || count != 0 {
 			return errors.New("failed attachment retained a pivot")
 		}
 		for range 2 {
-			if _, err := orm.Attach(t.Context(), tx, r, member, group, linkqueries.Memberships.Role.Set("admin")); err != nil {
+			if _, err := orm.Attach(t.Context(), tx, r, member, group, orm.InputTextSet(linkqueries.Memberships.Role, "admin")); err != nil {
 				return err
 			}
 		}
@@ -192,7 +218,7 @@ func TestPostgresRelationScopesAndAtomicRollback(t *testing.T) {
 		if _, err := orm.Detach(ctx, tx, r, member, group); !errors.Is(err, linkqueries.ErrVeto) {
 			return errors.New("later pivot veto did not abort detach")
 		}
-		if count, err := linkqueries.Memberships.Query().Count(t.Context(), tx); err != nil || count != 2 {
+		if count, err := orm.Count(t.Context(), tx, linkqueries.Memberships.Query()); err != nil || count != 2 {
 			return errors.New("later veto retained an earlier deletion")
 		}
 		return nil
@@ -213,7 +239,7 @@ func TestPostgresRelationCancellationAndParentReuse(t *testing.T) {
 				}
 				r := linkqueries.MemberLinks.Groups
 				if phase == "local.deleted" {
-					if _, err := orm.Attach(t.Context(), tx, r, member, group, linkqueries.Memberships.Role.Set("admin")); err != nil {
+					if _, err := orm.Attach(t.Context(), tx, r, member, group, orm.InputTextSet(linkqueries.Memberships.Role, "admin")); err != nil {
 						return err
 					}
 				}
@@ -224,12 +250,12 @@ func TestPostgresRelationCancellationAndParentReuse(t *testing.T) {
 				if phase == "local.deleted" {
 					_, err = orm.Detach(ctx, tx, r, member, group)
 				} else {
-					_, err = orm.Attach(ctx, tx, r, member, group, linkqueries.Memberships.Role.Set("admin"))
+					_, err = orm.Attach(ctx, tx, r, member, group, orm.InputTextSet(linkqueries.Memberships.Role, "admin"))
 				}
 				if !errors.Is(err, context.Canceled) {
 					return errors.New("relation write lost cancellation")
 				}
-				count, err := linkqueries.Memberships.Query().Count(t.Context(), tx)
+				count, err := orm.Count(t.Context(), tx, linkqueries.Memberships.Query())
 				if err != nil {
 					return err
 				}

@@ -18,12 +18,12 @@ func TestStatementRetentionRedaction(t *testing.T) {
 	table := orm.Define("predicate_owners", func(b orm.Builder[predicateOwner], m *predicateOwner) orm.Table[predicateOwner, string] {
 		return orm.TableOf(b, &m.ID)
 	})
-	scoped := table.Query().Where(table.Key().Eq(secret))
+	scoped := table.Query().Where(orm.KeyEq(table.Key(), secret))
 	statement, err := orm.Compile(scoped)
 	if err != nil {
 		t.Fatal(err)
 	}
-	projected, err := rows.CompileRead(rows.Read(rows.SelectValue(scoped, table.Key())))
+	projected, err := rows.CompileRead(rows.Read(rows.SelectValue(scoped, orm.KeyExpr(table.Key()))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,8 +74,8 @@ func TestAssignmentAndBoundRetentionRedaction(t *testing.T) {
 	if err := orm.Check(table); err != nil {
 		t.Fatal(err)
 	}
-	assertRetentionRedacted(t, "orm/stored", table.Key().Set(secret), secret)
-	assertRetentionRedacted(t, "orm/input", table.ID.Set(diagnosticInput{secret}), secret)
+	assertRetentionRedacted(t, "orm/stored", orm.KeySet(table.Key(), secret), secret)
+	assertRetentionRedacted(t, "orm/input", orm.InputKeySet(table.ID, diagnosticInput{secret}), secret)
 	assertRetentionRedacted(t, "bound/maximum", orm.AtMost[int64](945817263), "945817263")
 	assertRetentionRedacted(t, "bound/minimum", orm.AtLeast[int64](945817263), "945817263")
 }

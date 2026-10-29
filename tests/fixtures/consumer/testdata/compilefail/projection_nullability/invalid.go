@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/models"
 	"foundry.test/consumer/reports"
@@ -7,4 +9,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var invalid = rows.Map(reports.UserSummaries.Email, expr.Value(models.Users.Nickname))
+var invalid = rows.Map(reports.UserSummaries.Email, expr.Value(orm.NullableTextExpr(models.Users.Nickname)))

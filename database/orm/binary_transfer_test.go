@@ -18,7 +18,7 @@ func TestBinaryPredicatesOwnLazyBindings(t *testing.T) {
 		return fields{TableOf(b, &m.ID), BytesOf(b, &m.Body)}
 	})
 	input := storedBytes{1, 2}
-	predicates := []Predicate[byteInputRow]{f.Body.Eq(input), f.Body.Ne(input), f.Body.In(input)}
+	predicates := []Predicate[byteInputRow]{ColumnEq(f.Body, input), ColumnNe(f.Body, input), ColumnIn(f.Body, input)}
 	input[0] = 9
 	for _, p := range predicates {
 		s, err := Compile(f.Query().Where(p))
@@ -35,12 +35,18 @@ func TestBinaryAssignmentsAndMutatorsOwnReusableInputs(t *testing.T) {
 		return byteInputTable{TableOf(b, &m.ID), InputBytesOf(b, &m.Body, func(v inputBytes) (storedBytes, error) { v[0]++; return storedBytes(v), nil })}
 	}, WithHooks(func() Hooks[byteInputRow] {
 		return Hooks[byteInputRow]{Creating: func(_ context.Context, _ *database.Tx, w *Write[byteInputRow]) error {
-			first, ok := WriteGet(w, f.Body.Set).Get()
+			first, ok := WriteGet(w, func() func(arg0 inputBytes) Assignment[byteInputRow] {
+				receiver := f.Body
+				return func(arg0 inputBytes) Assignment[byteInputRow] { return InputColumnSet(receiver, arg0) }
+			}()).Get()
 			if !ok || !reflect.DeepEqual(first, inputBytes{1, 2}) {
 				t.Fatal("assignment borrowed input", first)
 			}
 			first[0] = 7
-			second, ok := WriteGet(w, f.Body.Set).Get()
+			second, ok := WriteGet(w, func() func(arg0 inputBytes) Assignment[byteInputRow] {
+				receiver := f.Body
+				return func(arg0 inputBytes) Assignment[byteInputRow] { return InputColumnSet(receiver, arg0) }
+			}()).Get()
 			if !ok || !reflect.DeepEqual(second, inputBytes{1, 2}) {
 				t.Fatal("draft reader exposed input", second)
 			}
@@ -51,10 +57,10 @@ func TestBinaryAssignmentsAndMutatorsOwnReusableInputs(t *testing.T) {
 	var bindings [][]any
 	db := hookDB(t, testConnector{bindings: &bindings, columns: []string{"id", "body"}, values: [][]driver.Value{{int64(1), []byte{2, 2}}}})
 	input := inputBytes{1, 2}
-	a := f.Body.Set(input)
+	a := InputColumnSet(f.Body, input)
 	input[0] = 9
 	for range 2 {
-		if _, err := f.Insert(t.Context(), db, f.Key().Set(1), a); err != nil {
+		if _, err := Insert(t.Context(), db, f.Table, KeySet(f.Key(), 1), a); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -98,7 +98,7 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 		},
 		Scan: func(ctx context.Context, tx *database.Tx, owner extensions.OwnerName, scope, after string, limit int) ([]store.FileIndex, error) {
 			f := store.Files
-			q := store.Files.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.State.Ne(string(Cleaned)), f.State.Ne(string(Retained))).OrderBy(f.ID.Asc()).Limit(limit)
+			q := store.Files.Query().Where(orm.TextEq(f.Owner, string(owner)), orm.TextEq(f.Scope, scope), orm.TextNe(f.State, string(Cleaned)), orm.TextNe(f.State, string(Retained))).OrderBy(orm.KeyAsc(f.ID)).Limit(limit)
 			if after != "" {
 				id, err := model.ParseID[store.File](after)
 				if err != nil {
@@ -106,7 +106,7 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 				}
 				// PostgreSQL orders UUID keys bytewise. Reuse the generated field's
 				// exact owner/codec metadata at this explicit range boundary.
-				q = q.Where(orm.UUIDGreater(f.ID, id))
+				q = q.Where(orm.UUIDGreater(orm.KeyExpr(f.ID), id))
 			}
 			return rows.Read(store.Index(q)).All(ctx, tx)
 		},
@@ -120,7 +120,7 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 				ids[i] = id
 			}
 			f := store.Files
-			return rows.ForUpdate(rows.Read(store.Index(store.Files.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope), f.ID.In(ids...), f.State.Ne(string(Cleaned)), f.State.Ne(string(Retained))).OrderBy(f.ID.Asc())))).All(ctx, tx)
+			return rows.ForUpdate(rows.Read(store.Index(store.Files.Query().Where(orm.TextEq(f.Owner, string(owner)), orm.TextEq(f.Scope, scope), orm.KeyIn(f.ID, ids...), orm.TextNe(f.State, string(Cleaned)), orm.TextNe(f.State, string(Retained))).OrderBy(orm.KeyAsc(f.ID))))).All(ctx, tx)
 		},
 		Identity: func(_ *extensions.Registry, owner extensions.OwnerName, scope string, row store.FileIndex) (model.Identity, error) {
 			if row.Owner != string(owner) || row.Scope != scope {
@@ -143,7 +143,7 @@ func (m *Manager) orphanTable(queue *Queue, scheduled *[]model.ID[store.File]) e
 			if err != nil {
 				return err
 			}
-			if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, store.Files.State.Set(string(CleanupPending)), store.Files.UpdatedAt.Set(now)); err != nil {
+			if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), row.ID, orm.TextSet(store.Files.State, string(CleanupPending)), orm.TimeSet(store.Files.UpdatedAt, now)); err != nil {
 				return err
 			}
 			if err := queue.enqueue(ctx, tx, operationID(row.ID)); err != nil {
@@ -168,7 +168,7 @@ func InspectUndeclared(ctx context.Context, m *Manager, owner extensions.OwnerNa
 	}
 	return extensionmaintenance.InspectUndeclared(ctx, m.store, owner, func(ctx context.Context, tx *database.Tx, scope string, limit int) ([]string, error) {
 		f := store.Files
-		return rows.Read(rows.Distinct(rows.SelectValue(store.Files.Query().Where(f.Owner.Eq(string(owner)), f.Scope.Eq(scope)).OrderBy(f.Collection.Asc()).Limit(limit), f.Collection))).All(ctx, tx)
+		return rows.Read(rows.Distinct(rows.SelectValue(store.Files.Query().Where(orm.TextEq(f.Owner, string(owner)), orm.TextEq(f.Scope, scope)).OrderBy(orm.TextAsc(f.Collection)).Limit(limit), orm.TextExpr(f.Collection)))).All(ctx, tx)
 	}, func(scope, name string) bool {
 		_, declared := m.collections[extensions.Digest(scope, name)]
 		return declared

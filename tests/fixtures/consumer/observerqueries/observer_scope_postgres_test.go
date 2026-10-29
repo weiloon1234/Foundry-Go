@@ -1,5 +1,7 @@
 package observerqueries_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -61,11 +63,11 @@ func TestPostgresObserverScopeAllowsTypedCallbackIOOnOneConnection(t *testing.T)
 							return errors.New("stored hydration failed or closing rows canceled observer work")
 						}
 						q := observerqueries.Effects
-						created, err := q.Insert(ctx, tx, observerqueries.Effects.Label.Set(name))
+						created, err := orm.Insert(ctx, tx, q.Table, orm.TextSet(observerqueries.Effects.Label, name))
 						if err != nil {
 							return err
 						}
-						loaded, err := q.Find(ctx, tx, created.ID)
+						loaded, err := orm.Find(ctx, tx, q.Table, created.ID)
 						item, found := loaded.Get()
 						if err != nil || !found || item != created {
 							return errors.Join(errors.New("typed observer I/O did not share its transaction"), err)
@@ -89,7 +91,7 @@ func TestPostgresObserverScopeAllowsTypedCallbackIOOnOneConnection(t *testing.T)
 					t.Fatal("observer retained its context or database resources")
 				}
 				if err := inSchema(t, db, namespace, func(tx *database.Tx) error {
-					items, err := observerqueries.Effects.Query().All(t.Context(), tx)
+					items, err := orm.All(t.Context(), tx, observerqueries.Effects.Query())
 					if err != nil {
 						return err
 					}

@@ -34,27 +34,27 @@ func TestRelationExpressionFilterSQLParity(t *testing.T) {
 			for _, g := range captures {
 				db := g.open(t.Context())
 
-				p := expr.GreaterColumn(j.Targets.Rank, j.Targets.ParentID)
+				p := expr.GreaterColumn(orm.NumberExpr(j.Targets.Rank), orm.NumberExpr(j.Targets.ParentID))
 				if kind == "nested-correlation" {
 					link := rowset.Correlate(rowset.From(j.Targets.Query()), rowset.From(j.Parents.Query()))
 					outer := rowset.OuterScope(link, rowset.ModelScope(j.Targets.Query()))
 					inner := rowset.InnerScope(link, rowset.ModelScope(j.Parents.Query()))
-					p = link.Where(expr.Equal(expr.At(inner, j.Parents.ID), expr.At(outer, j.Targets.ParentID))).Exists()
+					p = link.Where(expr.Equal(expr.At(inner, orm.KeyExpr(j.Parents.ID)), expr.At(outer, orm.NumberExpr(j.Targets.ParentID)))).Exists()
 				}
 				var err error
 				switch kind {
 				case "belongs":
 					r := j.TargetParent
-					_, err = j.Targets.Query().With(r.Where(expr.RelationFilter(r, expr.TextRow(j.Parents.Name).Contains("one")))).All(t.Context(), db)
+					_, err = orm.All(t.Context(), db, j.Targets.Query().With(r.Where(expr.RelationFilter(r, expr.TextRow(orm.TextExpr(j.Parents.Name)).Contains("one")))))
 				case "one":
 					r := j.Chosen
-					_, err = j.Parents.Query().With(r.Where(expr.RelationFilter(r, p))).All(t.Context(), db)
+					_, err = orm.All(t.Context(), db, j.Parents.Query().With(r.Where(expr.RelationFilter(r, p))))
 				case "many":
 					r := j.TargetsThrough
-					_, err = j.Parents.Query().With(r.Where(expr.RelationFilter(r, p))).All(t.Context(), db)
+					_, err = orm.All(t.Context(), db, j.Parents.Query().With(r.Where(expr.RelationFilter(r, p))))
 				default:
 					r := j.Peers.Where(expr.RelationFilter(j.Peers, p))
-					_, err = j.Parents.Query().Where(orm.Has(r)).With(r).All(t.Context(), db)
+					_, err = orm.All(t.Context(), db, j.Parents.Query().Where(orm.Has(r)).With(r))
 				}
 				if err != nil {
 					t.Fatal(err)

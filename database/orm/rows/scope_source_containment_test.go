@@ -56,14 +56,14 @@ func TestScopeSourceFailureCapturedAndLaterComposition(t *testing.T) {
 				panic("private scope payload")
 			}))
 			plain := scopeFailureFields()
-			rel := orm.HasManyOf(plain.Children, plain.Key(), d.Key())
+			rel := orm.HasManyOf(plain.Children, orm.KeyExpr(plain.Key()), orm.KeyExpr(d.Key()))
 			q := d.Query()
 			compilations := func() map[string]func() error {
 				a, b := As[left](plain.Query(), "a"), As[right](q, "b")
-				joined := InnerJoin(a, b, On(expr.At(Scope(a), plain.Key()), expr.At(Scope(b), d.Key())))
-				projection := SelectScalar(joined, expr.Row(expr.At(RightScope(joined, Scope(b)), d.Key())).Value())
-				inner := SelectScalar(From(q), expr.Row(expr.Value(d.Key())).Value())
-				sub := WhereScalar(SelectScalar(From(plain.Query()), expr.Row(expr.Value(plain.Key())).Value()), InQuery(expr.Value(plain.Key()), inner))
+				joined := InnerJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(plain.Key())), expr.At(Scope(b), orm.KeyExpr(d.Key()))))
+				projection := SelectScalar(joined, expr.Row(expr.At(RightScope(joined, Scope(b)), orm.KeyExpr(d.Key()))).Value())
+				inner := SelectScalar(From(q), expr.Row(expr.Value(orm.KeyExpr(d.Key()))).Value())
+				sub := WhereScalar(SelectScalar(From(plain.Query()), expr.Row(expr.Value(orm.KeyExpr(plain.Key()))).Value()), InQuery(expr.Value(orm.KeyExpr(plain.Key())), inner))
 				aggregate := SelectScalar(From(q), expr.Count[scopeFailureRow]().Value())
 				return map[string]func() error{
 					"read":      func() error { _, e := orm.Compile(q); return e },
@@ -72,7 +72,7 @@ func TestScopeSourceFailureCapturedAndLaterComposition(t *testing.T) {
 					"join":      func() error { _, e := CompileRead(ReadScalar(projection)); return e },
 					"subquery":  func() error { _, e := CompileRead(ReadScalar(sub)); return e },
 					"named removal": func() error {
-						_, e := orm.Compile(orm.WithoutGlobalScope(q, orm.Scope(d.Table, "tenant", func(context.Context) (orm.Predicate[scopeFailureRow], error) { return d.Key().Eq(1), nil })))
+						_, e := orm.Compile(orm.WithoutGlobalScope(q, orm.Scope(d.Table, "tenant", func(context.Context) (orm.Predicate[scopeFailureRow], error) { return orm.KeyEq(d.Key(), 1), nil })))
 						return e
 					},
 				}
@@ -96,13 +96,13 @@ func TestScopeSourceFailureCapturedAndLaterComposition(t *testing.T) {
 			}
 			for range 2 {
 				ex := &scopeFailureRecorder{}
-				_, e = q.All(t.Context(), ex)
+				_, e = orm.All(t.Context(), ex, q)
 				check(e)
-				_, e = q.Count(t.Context(), ex)
+				_, e = orm.Count(t.Context(), ex, q)
 				check(e)
 				_, e = orm.CursorPaginate(t.Context(), ex, q, orm.CursorRequest[scopeFailureRow]{Size: 2})
 				check(e)
-				e = q.Chunk(t.Context(), ex, 2, func([]scopeFailureRow) error { t.Error("failed scope yielded"); return nil })
+				e = orm.Chunk(t.Context(), ex, q, 2, func([]scopeFailureRow) error { t.Error("failed scope yielded"); return nil })
 				check(e)
 				_, e = orm.LoadFrom(t.Context(), ex, plain.Query().With(rel), []scopeFailureRow{{ID: 1}})
 				check(e)

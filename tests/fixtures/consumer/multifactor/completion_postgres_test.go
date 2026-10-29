@@ -1,5 +1,7 @@
 package multifactor_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -299,7 +301,7 @@ func TestPostgresMFACompletionChecksDisabledModelsAndProviderIdentity(t *testing
 		t.Fatal("different provider declaration accepted")
 	}
 	err = s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := multifactor.AccountRecords.Update(t.Context(), tx, s.account.ID, multifactor.AccountRecords.Enabled.Set(false))
+		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.ColumnSet(multifactor.AccountRecords.Enabled, false))
 		return err
 	})
 	if err != nil {
@@ -309,7 +311,7 @@ func TestPostgresMFACompletionChecksDisabledModelsAndProviderIdentity(t *testing
 		t.Fatal("disabled model completed MFA", err)
 	}
 	err = s.within(t.Context(), func(tx *database.Tx) error {
-		_, err := multifactor.AccountRecords.Update(t.Context(), tx, s.account.ID, multifactor.AccountRecords.Enabled.Set(true))
+		_, err := orm.Update(t.Context(), tx, multifactor.AccountRecords.Table.Query(), multifactor.AccountRecords.Table.Key(), s.account.ID, orm.ColumnSet(multifactor.AccountRecords.Enabled, true))
 		return err
 	})
 	if err != nil {

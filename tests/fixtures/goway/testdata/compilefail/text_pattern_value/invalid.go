@@ -1,5 +1,7 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/goway/models/scalars"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
@@ -7,4 +9,4 @@ import (
 
 type other struct{}
 
-func invalid() { _ = expr.Lower(expr.Value(scalars.Records.Name)).Like(123) }
+func invalid() { _ = expr.Lower(expr.Value(orm.TextExpr(scalars.Records.Name))).Like(123) }

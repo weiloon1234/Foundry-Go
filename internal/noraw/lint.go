@@ -102,8 +102,8 @@ func frameworkRaw(f *types.Func) string {
 				return "database." + name
 			}
 		case databasePath + "/orm":
-			if name == "WhereRaw" {
-				return "orm.WhereRaw"
+			if name == "Raw" || name == "WhereRaw" {
+				return "orm." + name
 			}
 		case databasePath + "/orm/rows":
 			if name == "Raw" {
@@ -118,15 +118,6 @@ func frameworkRaw(f *types.Func) string {
 	}
 	if path == databasePath && (name == "Exec" || name == "Query" || name == "QueryRead" || name == "ScanOne") {
 		return "database." + name
-	}
-	if path == databasePath+"/orm" && name == "Raw" {
-		typ := sig.Recv().Type()
-		if p, ok := typ.(*types.Pointer); ok {
-			typ = p.Elem()
-		}
-		if n, ok := types.Unalias(typ).(*types.Named); ok && n.Origin().Obj().Name() == "Table" {
-			return "orm.Table.Raw"
-		}
 	}
 	return ""
 }
@@ -159,10 +150,14 @@ func executorMethod(f *types.Func, receiver, contextType, executorType types.Typ
 	}
 	sqlIndex := 1
 	if f.Name() == "Raw" {
-		if executorType == nil || params.Len() != 4 || !types.Identical(params.At(1).Type(), executorType) {
+		if executorType == nil || params.Len() != 5 || !types.Identical(params.At(1).Type(), executorType) {
 			return ""
 		}
-		sqlIndex = 2
+		table, ok := types.Unalias(params.At(2).Type()).(*types.Named)
+		if !ok || table.Obj().Pkg() == nil || table.Obj().Pkg().Path() != databasePath+"/orm" || table.Origin().Obj().Name() != "Table" {
+			return ""
+		}
+		sqlIndex = 3
 	}
 	if !types.Identical(params.At(sqlIndex).Type(), types.Typ[types.String]) {
 		return ""
@@ -178,7 +173,7 @@ func executorMethod(f *types.Func, receiver, contextType, executorType types.Typ
 		}
 	}
 	if f.Name() == "Raw" {
-		return "orm.Table.Raw (interface contract)"
+		return "orm.Raw (interface contract)"
 	}
 
 	return "database." + f.Name() + " (interface contract)"

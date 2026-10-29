@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-var _, _ = orm.Compare(mutatorqueries.Members.Table, value.Set(mutatorqueries.Member{}), value.Set(mutatorqueries.Member{}), linkqueries.Members.Name.Set("wrong"))
+var _, _ = orm.Compare(mutatorqueries.Members.Table, value.Set(mutatorqueries.Member{}), value.Set(mutatorqueries.Member{}), orm.TextSet(linkqueries.Members.Name, "wrong"))

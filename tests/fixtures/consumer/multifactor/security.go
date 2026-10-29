@@ -1,5 +1,7 @@
 package multifactor
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 
@@ -40,6 +42,6 @@ func RetireAccount(ctx context.Context, tx *database.Tx, factors *Factors, accou
 	if _, err := factors.RetireIn(ctx, tx, AccountIdentity.ReferenceOf(account)); err != nil {
 		return err
 	}
-	_, err := AccountRecords.Delete(ctx, tx, account.ID)
+	_, err := orm.Delete(ctx, tx, AccountRecords.Table.Query(), AccountRecords.Table.Key(), account.ID)
 	return err
 }

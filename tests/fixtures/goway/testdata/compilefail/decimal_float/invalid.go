@@ -1,7 +1,9 @@
 package decimal_float
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	m "foundry.test/goway/models"
 )
 
-var _ = m.LedgerEntries.Amount.Set(1.25)
+var _ = orm.NumberSet(m.LedgerEntries.Amount, 1.25)

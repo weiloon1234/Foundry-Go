@@ -79,11 +79,11 @@ var reportRows = rows.Define(func(b rows.Builder[ReportRow], r *ReportRow) repor
 })
 
 func reportFields() (expr.OrderedRowExpression[reportRecord, int64], expr.TextRowExpression[reportRecord, string], expr.NullableTextRowExpression[reportRecord, string], expr.OrderedRowExpression[reportRecord, decimal.Decimal]) {
-	return expr.OrderRow(expr.Value(reportModels.ID)), expr.TextRow(reportModels.Name), expr.TextNullableRow(reportModels.Note), expr.OrderRow(expr.Value(reportModels.Amount))
+	return expr.OrderRow(expr.Value(orm.KeyExpr(reportModels.ID))), expr.TextRow(orm.TextExpr(reportModels.Name)), expr.TextNullableRow(orm.NullableTextExpr(reportModels.Note)), expr.OrderRow(expr.Value(orm.NumberExpr(reportModels.Amount)))
 }
 func reportSource(tenant int64) rows.Query[reportRecord, ReportRow] {
-	base := reportModels.Query().Where(reportModels.TenantID.Eq(tenant))
-	return rows.Select(rows.From(base), reportRows, rows.Map(reportRows.ID, expr.Value(reportModels.ID)), rows.Map(reportRows.Name, expr.Value(reportModels.Name)), rows.Map(reportRows.Note, expr.Value(reportModels.Note)), rows.Map(reportRows.Amount, expr.Value(reportModels.Amount)))
+	base := reportModels.Query().Where(orm.NumberEq(reportModels.TenantID, tenant))
+	return rows.Select(rows.From(base), reportRows, rows.Map(reportRows.ID, expr.Value(orm.KeyExpr(reportModels.ID))), rows.Map(reportRows.Name, expr.Value(orm.TextExpr(reportModels.Name))), rows.Map(reportRows.Note, expr.Value(orm.NullableTextExpr(reportModels.Note))), rows.Map(reportRows.Amount, expr.Value(orm.NumberExpr(reportModels.Amount))))
 }
 
 func reportSpec() Spec[reportRecord, ReportRow, reportActor] {

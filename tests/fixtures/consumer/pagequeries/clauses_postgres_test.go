@@ -18,7 +18,7 @@ func TestPostgresPagesRetainRelationalSemantics(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		o, totals := models.Orders, reports.BuyerTotalRows
 		grouped := rows.OrderBy(rows.Having(rows.GroupBy(rows.Select(rows.From(o.Query()), totals.Row,
-			rows.Map(totals.BuyerID, expr.Value(o.BuyerID)), rows.MapSelected(totals.Total, expr.Sum(o.TotalCents).Value()), rows.MapSelected(totals.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(totals.Average, expr.Avg(o.TotalCents).Value())), expr.Group(expr.Value(o.BuyerID))), expr.Count[models.Order]().Gt(0)), expr.Value(o.BuyerID).Asc())
+			rows.Map(totals.BuyerID, expr.Value(orm.ColumnExpr(o.BuyerID))), rows.MapSelected(totals.Total, expr.Sum(orm.NumberExpr(o.TotalCents)).Value()), rows.MapSelected(totals.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(totals.Average, expr.Avg(orm.NumberExpr(o.TotalCents)).Value())), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID)))), expr.Count[models.Order]().Gt(0)), expr.Value(orm.ColumnExpr(o.BuyerID)).Asc())
 		p, err := rows.Read(grouped).Paginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1})
 		if err != nil {
 			return err
@@ -48,7 +48,7 @@ func TestPostgresPagesRetainRelationalSemantics(t *testing.T) {
 		if simple, err := rows.ReadSet(combined).SimplePaginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 2}); err != nil || !simple.HasMore {
 			t.Fatal("set simple page failed", err)
 		}
-		values := rows.OrderScalar(rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(models.Users.Nickname)).Value())), expr.Value(models.Users.Nickname).Asc())
+		values := rows.OrderScalar(rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Value())), expr.Value(orm.NullableTextExpr(models.Users.Nickname)).Asc())
 		vp, err := rows.ReadScalar(values).Paginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1})
 		if err != nil || vp.Total != 2 || len(vp.Items) != 1 || vp.Items[0] != value.Of("Bee") {
 			t.Fatal("distinct/nullable value page failed", err)
@@ -61,16 +61,16 @@ func TestPostgresPagesRetainRelationalSemantics(t *testing.T) {
 		if p, err := rows.ReadValues(vs).Paginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1}); err != nil || p.Total != 2 {
 			t.Fatal("combined value page failed", err)
 		}
-		window := expr.WindowFor(rows.ModelScope(models.Users.Query())).OrderBy(expr.Value(models.Users.Email).Asc())
+		window := expr.WindowFor(rows.ModelScope(models.Users.Query())).OrderBy(expr.Value(orm.TextExpr(models.Users.Email)).Asc())
 		position := expr.RowNumber(window)
 		if p, err := rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(models.Users.Query()), position), position.Asc())).Paginate(t.Context(), tx, orm.PageRequest{Number: 2, Size: 1}); err != nil || p.Total != 3 || !reflect.DeepEqual(p.Items, []int64{2}) {
 			t.Fatal("window page evaluated after limit", err)
 		}
 		buyers := rows.As[buyerAlias](models.Users.Query(), "buyer")
 		orders := rows.As[orderAlias](models.Orders.Query(), "purchase")
-		joined := rows.InnerJoin(buyers, orders, rows.On(expr.At(rows.Scope(buyers), models.Users.Key()), expr.At(rows.Scope(orders), models.Orders.BuyerID)))
+		joined := rows.InnerJoin(buyers, orders, rows.On(expr.At(rows.Scope(buyers), orm.KeyExpr(models.Users.Key())), expr.At(rows.Scope(orders), orm.ColumnExpr(models.Orders.BuyerID))))
 		left, right := rows.LeftScope(joined, rows.Scope(buyers)), rows.RightScope(joined, rows.Scope(orders))
-		jq := rows.SelectRecord(joined, left).OrderBy(expr.At(left, models.Users.Email).Asc(), expr.At(right, models.Orders.Key()).Asc())
+		jq := rows.SelectRecord(joined, left).OrderBy(expr.At(left, orm.TextExpr(models.Users.Email)).Asc(), expr.At(right, orm.KeyExpr(models.Orders.Key())).Asc())
 		if p, err := rows.ReadRecord(jq).Paginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1}); err != nil || p.Total != 3 || p.Items[0].ID != users[0].ID {
 			t.Fatal("join page lost multiplicity", err)
 		}

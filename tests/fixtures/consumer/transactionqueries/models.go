@@ -1,5 +1,7 @@
 package transactionqueries
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 
@@ -30,14 +32,14 @@ type claimedAlias struct{}
 type otherAlias struct{}
 
 func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
-	definition := rows.TransactionCTE("claimed", rows.LockedRecord(Records.Query().OrderBy(Records.ID.Asc()).Limit(1).ForUpdate().SkipLocked()))
+	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query().OrderBy(orm.KeyAsc(Records.ID)).Limit(1)).SkipLocked()))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
 	fields := recordAt(rows.TransactionScope(source))
 	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.Row(fields.ID).Value()), rows.MapSelected(Summaries.Name, expr.Row(fields.Name).Value())).All(ctx, tx)
 }
 
 func Joined(ctx context.Context, tx *database.Tx) ([]Summary, error) {
-	definition := rows.TransactionCTE("claimed", rows.LockedRecord(Records.Query().ForShare().Limit(1)))
+	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.ForShare(Records.Query()).Limit(1)))
 	left := rows.AsTransaction[claimedAlias](definition, "candidate")
 	right := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "other")
 	a, b := recordAt(rows.TransactionScope(left)), recordAt(rows.TransactionScope(right))
@@ -47,8 +49,8 @@ func Joined(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 }
 
 func CountClaimed(ctx context.Context, tx *database.Tx) (Totals, error) {
-	definition := rows.TransactionCTE("claimed", rows.LockedRecord(Records.Query().ForUpdate()))
+	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query())))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
 	fields := recordAt(rows.TransactionScope(source))
-	return rows.SelectTransaction(source, TotalRows, rows.MapSelected(TotalRows.Count, expr.CountFieldAt(fields.scope, Records.ID).Value())).RequireFirst(ctx, tx)
+	return rows.SelectTransaction(source, TotalRows, rows.MapSelected(TotalRows.Count, expr.CountFieldAt(fields.scope, orm.KeyExpr(Records.ID)).Value())).RequireFirst(ctx, tx)
 }

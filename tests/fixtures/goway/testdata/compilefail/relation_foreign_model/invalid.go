@@ -5,4 +5,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func F() { orm.HasManyOf(models.Users.Orders, models.Users.ID, models.Users.ID) }
+func F() {
+	orm.HasManyOf(models.Users.Orders, orm.KeyExpr(models.Users.ID), orm.KeyExpr(models.Users.ID))
+}

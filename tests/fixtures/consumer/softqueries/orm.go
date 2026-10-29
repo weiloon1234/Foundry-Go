@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// MemberTable declares stored columns and their write roles. Example: Members.Key().Eq(key).
+// MemberTable declares stored columns and their write roles. Example: orm.KeyEq(Members.Key(), key).
 type MemberTable struct {
 	orm.Table[Member, model.ID[Member]]
 	Name       orm.InputText[Member, string, string]
@@ -24,7 +24,7 @@ type MemberTable struct {
 	Soft       orm.SoftDeletable[Member]
 }
 
-// Members preserves the persisted soft_members model. Example: Members.Query().All(ctx,db).
+// Members preserves the persisted soft_members model. Example: orm.All(ctx, db, Members.Query()).
 var Members = orm.Define("soft_members", func(b orm.Builder[Member], m *Member) MemberTable {
 	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
 	return MemberTable{Table: orm.TableOf(b, &m.ID),
@@ -42,7 +42,7 @@ var Members = orm.Define("soft_members", func(b orm.Builder[Member], m *Member) 
 	}
 }, orm.WithHooks(ormMemberHooks))
 
-// GroupTable declares stored columns and their write roles. Example: Groups.Key().Eq(key).
+// GroupTable declares stored columns and their write roles. Example: orm.KeyEq(Groups.Key(), key).
 type GroupTable struct {
 	orm.Table[Group, GroupCode]
 	Name      orm.Text[Group, string]
@@ -50,7 +50,7 @@ type GroupTable struct {
 	Soft      orm.SoftDeletable[Group]
 }
 
-// Groups preserves the persisted soft_groups model. Example: Groups.Query().All(ctx,db).
+// Groups preserves the persisted soft_groups model. Example: orm.All(ctx, db, Groups.Query()).
 var Groups = orm.Define("soft_groups", func(b orm.Builder[Group], m *Group) GroupTable {
 	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
 	return GroupTable{Table: orm.TableOf(b, &m.Code),
@@ -60,7 +60,7 @@ var Groups = orm.Define("soft_groups", func(b orm.Builder[Group], m *Group) Grou
 	}
 })
 
-// MembershipTable declares stored columns and their write roles. Example: Memberships.Key().Eq(key).
+// MembershipTable declares stored columns and their write roles. Example: orm.KeyEq(Memberships.Key(), key).
 type MembershipTable struct {
 	orm.Table[Membership, model.ID[Membership]]
 	MemberID  orm.Column[Membership, model.ID[Member]]
@@ -69,7 +69,7 @@ type MembershipTable struct {
 	Soft      orm.SoftDeletable[Membership]
 }
 
-// Memberships preserves the persisted soft_memberships model. Example: Memberships.Query().All(ctx,db).
+// Memberships preserves the persisted soft_memberships model. Example: orm.All(ctx, db, Memberships.Query()).
 var Memberships = orm.Define("soft_memberships", func(b orm.Builder[Membership], m *Membership) MembershipTable {
 	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
 	return MembershipTable{Table: orm.TableOf(b, &m.ID),
@@ -85,7 +85,7 @@ var MemberLinks = struct {
 	Parent   orm.BelongsTo[Member, Member]
 	Children orm.HasMany[Member, Member]
 	Groups   orm.ThroughRelation[Member, Group, Membership]
-}{orm.BelongsToOf(Members.Parent, Members.ParentID, Members.Key()), orm.HasManyOf(Members.Children, Members.Key(), Members.ParentID), orm.ManyToManyOf(Members.Groups, Members.Key(), Memberships.MemberID, Memberships.GroupCode, Groups.Key())}
+}{orm.BelongsToOf(Members.Parent, orm.NullableColumnExpr(Members.ParentID), orm.KeyExpr(Members.Key())), orm.HasManyOf(Members.Children, orm.KeyExpr(Members.Key()), orm.NullableColumnExpr(Members.ParentID)), orm.ManyToManyOf(Members.Groups, orm.KeyExpr(Members.Key()), orm.ColumnExpr(Memberships.MemberID), orm.TextExpr(Memberships.GroupCode), orm.KeyExpr(Groups.Key()))}
 
 // MemberCounts binds aggregate slots. Example: Members.Query().With(MemberCounts.Children).
 var MemberCounts = struct {

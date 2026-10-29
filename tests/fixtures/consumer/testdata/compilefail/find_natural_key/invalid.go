@@ -1,8 +1,10 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"foundry.test/consumer/models"
 )
 
-var invalid, _ = models.Countries.Find(context.Background(), nil, models.StatusActive)
+var invalid, _ = orm.Find(context.Background(), nil, models.Countries.Table, models.StatusActive)

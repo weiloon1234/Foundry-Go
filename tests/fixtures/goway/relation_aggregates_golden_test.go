@@ -61,7 +61,7 @@ func TestRelationAggregateGoldens(t *testing.T) {
 		{"through", j.TargetsThrough, 0},
 		{"one_through", j.ChosenThrough, 1},
 		{"many_to_many", j.Peers, 2},
-		{"filtered_join", j.Peers.Where(j.Targets.Rank.Gt(0)).WherePivot(j.Pivots.Role.Eq("admin")).OnlyTrashedPivot(), 2},
+		{"filtered_join", j.Peers.Where(orm.NumberGt(j.Targets.Rank, 0)).WherePivot(orm.TextEq(j.Pivots.Role, "admin")).OnlyTrashedPivot(), 2},
 	}
 	for _, tc := range counts {
 		t.Run(tc.name, func(t *testing.T) {
@@ -69,7 +69,7 @@ func TestRelationAggregateGoldens(t *testing.T) {
 		})
 	}
 	t.Run("pivot", func(t *testing.T) {
-		relationAggregateGolden(t, j.Parents.Count.Using(expr.Related(orm.Pivot(j.Peers), expr.CountDistinctField(j.Pivots.Role).Filter(expr.Value(j.Pivots.Role).Eq("admin")))), func(p j.Parent) relation.Value[int64] { return p.Count }, int64(1), 2)
+		relationAggregateGolden(t, j.Parents.Count.Using(expr.Related(orm.Pivot(j.Peers), expr.CountDistinctField(orm.TextExpr(j.Pivots.Role)).Filter(expr.Value(orm.TextExpr(j.Pivots.Role)).Eq("admin")))), func(p j.Parent) relation.Value[int64] { return p.Count }, int64(1), 2)
 	})
 	for _, singular := range []bool{false, true} {
 		t.Run(fmt.Sprint("morph_", singular), func(t *testing.T) {
@@ -84,18 +84,18 @@ func TestRelationAggregateGoldens(t *testing.T) {
 	}
 	for _, average := range []bool{false, true} {
 		t.Run(fmt.Sprint("exact_", average), func(t *testing.T) {
-			after := expr.Sum(j.Targets.Rank)
+			after := expr.Sum(orm.NumberExpr(j.Targets.Rank))
 			if average {
-				after = expr.Avg(j.Targets.Rank)
+				after = expr.Avg(orm.NumberExpr(j.Targets.Rank))
 			}
-			relationAggregateGolden(t, j.Parents.Total.Using(expr.Related(j.DirectTargets, after.Filter(expr.OrderRow(expr.Value(j.Targets.Rank)).Gt(0)))), func(p j.Parent) relation.Value[value.Nullable[decimal.Decimal]] { return p.Total }, "7", 0)
+			relationAggregateGolden(t, j.Parents.Total.Using(expr.Related(j.DirectTargets, after.Filter(expr.OrderRow(expr.Value(orm.NumberExpr(j.Targets.Rank))).Gt(0)))), func(p j.Parent) relation.Value[value.Nullable[decimal.Decimal]] { return p.Total }, "7", 0)
 		})
 	}
 	t.Run("minimum", func(t *testing.T) {
-		relationAggregateGolden(t, j.Parents.Minimum.Using(expr.Related(j.DirectTargets, expr.Min(j.Targets.Name))), func(p j.Parent) relation.Value[value.Nullable[string]] { return p.Minimum }, "seven", 0)
+		relationAggregateGolden(t, j.Parents.Minimum.Using(expr.Related(j.DirectTargets, expr.Min(orm.TextExpr(j.Targets.Name)))), func(p j.Parent) relation.Value[value.Nullable[string]] { return p.Minimum }, "seven", 0)
 	})
 	t.Run("maximum_null", func(t *testing.T) {
-		relationAggregateGolden(t, j.Parents.Minimum.Using(expr.Related(j.DirectTargets, expr.Max(j.Targets.Name))), func(p j.Parent) relation.Value[value.Nullable[string]] { return p.Minimum }, nil, 0)
+		relationAggregateGolden(t, j.Parents.Minimum.Using(expr.Related(j.DirectTargets, expr.Max(orm.TextExpr(j.Targets.Name)))), func(p j.Parent) relation.Value[value.Nullable[string]] { return p.Minimum }, nil, 0)
 	})
 	t.Run("exists", func(t *testing.T) {
 		relationAggregateGolden(t, j.Parents.HasAny.Using(expr.Related(j.DirectTargets, expr.Exists[j.Target]())), func(p j.Parent) relation.Value[bool] { return p.HasAny }, true, 0)

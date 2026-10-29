@@ -1,5 +1,7 @@
 package linkqueries
 
+import model "github.com/weiloon1234/Foundry-Go/model"
+
 import (
 	"context"
 	"errors"
@@ -33,7 +35,13 @@ func membershipORMHooks(owner string, fields MembershipTable) orm.Hooks[Membersh
 					}
 				}
 			}
-			if !prior.IsSet() && (!orm.WriteIsSet(draft, fields.MemberID.Set) || !orm.WriteIsSet(draft, fields.GroupCode.Set)) {
+			if !prior.IsSet() && (!orm.WriteIsSet(draft, func() func(arg0 model.ID[Member]) orm.Assignment[Membership] {
+				receiver := fields.MemberID
+				return func(arg0 model.ID[Member]) orm.Assignment[Membership] { return orm.ColumnSet(receiver, arg0) }
+			}()) || !orm.WriteIsSet(draft, func() func(arg0 GroupCode) orm.Assignment[Membership] {
+				receiver := fields.GroupCode
+				return func(arg0 GroupCode) orm.Assignment[Membership] { return orm.TextSet(receiver, arg0) }
+			}())) {
 				return errors.New("pivot hooks did not receive derived keys")
 			}
 			return before(ctx, "saving")

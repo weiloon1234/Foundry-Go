@@ -6,4 +6,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-func bad() { _ = orm.ConflictIncoming[vault.Entry, encrypted.Text](vault.Entries.Token) }
+func bad() {
+	_ = orm.ConflictIncoming[vault.Entry, encrypted.Text](orm.EncryptedExpr(vault.Entries.Token))
+}

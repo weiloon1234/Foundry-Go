@@ -1,7 +1,9 @@
 package conflict_value
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	m "foundry.test/goway/models"
 )
 
-var _ = m.Users.Age.Set("thirty")
+var _ = orm.NumberSet(m.Users.Age, "thirty")

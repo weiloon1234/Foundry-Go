@@ -65,7 +65,7 @@ func writeRelationTables(opts ...Option) (writeParentTable, writeTargetTable, wr
 		t := TableOf(b, &m.ID)
 		return writePivotTable{t, t.Key(), NumberOf(b, &m.ParentID), NumberOf(b, &m.TargetID), TextOf(b, &m.Role), SoftDeleteOf(b, &m.DeletedAt)}
 	}, opts...)
-	return a, z, p, ManyToManyOf(a.Links, a.ID, p.ParentID, p.TargetID, z.ID)
+	return a, z, p, ManyToManyOf(a.Links, KeyExpr(a.ID), NumberExpr(p.ParentID), NumberExpr(p.TargetID), KeyExpr(z.ID))
 }
 func pivotTestRows(n int) [][]driver.Value {
 	out := make([][]driver.Value, n)
@@ -108,7 +108,10 @@ func TestRelationWriteLifecycleAndStatements(t *testing.T) {
 						if closed < 2 {
 							t.Fatal("endpoints still open")
 						}
-						if v, ok := WriteGet(w, p.ParentID.Set).Get(); !ok || v != 1 {
+						if v, ok := WriteGet(w, func() func(arg0 int64) Assignment[writePivot] {
+							receiver := p.ParentID
+							return func(arg0 int64) Assignment[writePivot] { return NumberSet(receiver, arg0) }
+						}()).Get(); !ok || v != 1 {
 							t.Fatal("missing refreshed source default")
 						}
 						events = append(events, "creating")
@@ -153,7 +156,7 @@ func TestRelationWriteLifecycleAndStatements(t *testing.T) {
 				}
 				return reply(s)
 			}}, declarations...)
-			out, err := AttachMany(t.Context(), db, r, writeParent{ID: 1, Code: 999}, []writeTarget{{ID: 10}, {ID: 11}}, p.ID.Set(100), p.Role.Set("member"))
+			out, err := AttachMany(t.Context(), db, r, writeParent{ID: 1, Code: 999}, []writeTarget{{ID: 10}, {ID: 11}}, KeySet(p.ID, 100), TextSet(p.Role, "member"))
 			if err != nil || len(out) != 2 {
 				t.Fatal(out, err)
 			}
@@ -182,7 +185,7 @@ func TestRelationWriteLifecycleAndStatements(t *testing.T) {
 func TestRelationWriteUnknownOutcomeCandidates(t *testing.T) {
 	_, _, p, r := writeRelationTables()
 	db := hookDB(t, testConnector{commitErr: errors.New("lost commit acknowledgement"), respond: pivotTestReply(1)})
-	out, err := Attach(t.Context(), db, r, writeParent{ID: 1}, writeTarget{ID: 10}, p.ID.Set(100), p.Role.Set("member"))
+	out, err := Attach(t.Context(), db, r, writeParent{ID: 1}, writeTarget{ID: 10}, KeySet(p.ID, 100), TextSet(p.Role, "member"))
 	var candidate *WriteError[writePivot]
 	var outcome *database.Error
 	if out.ID != 0 || !errors.As(err, &candidate) || candidate.Candidate().ID != 100 || !errors.As(err, &outcome) || outcome.Outcome() != database.Unknown {
@@ -193,7 +196,7 @@ func TestRelationWriteUnknownOutcomeCandidates(t *testing.T) {
 	if removed != nil || !errors.As(err, &many) || len(many.Candidate()) != 1 {
 		t.Fatal(removed, err)
 	}
-	changes, err := Sync(t.Context(), db, r, writeParent{ID: 1}, []writeTarget{{ID: 10}}, nil, []Assignment[writePivot]{p.Role.Set("updated")})
+	changes, err := Sync(t.Context(), db, r, writeParent{ID: 1}, []writeTarget{{ID: 10}}, nil, []Assignment[writePivot]{TextSet(p.Role, "updated")})
 	var combined *WriteError[PivotChanges[writePivot]]
 	if len(changes.Updated) != 0 || !errors.As(err, &combined) || len(combined.Candidate().Updated) != 1 {
 		t.Fatal(changes, err)
@@ -202,11 +205,11 @@ func TestRelationWriteUnknownOutcomeCandidates(t *testing.T) {
 func TestRelationWriteValidationAndFailures(t *testing.T) {
 	a, z, p, r := writeRelationTables()
 	_, _, other, _ := writeRelationTables()
-	for name, relation := range map[string]ThroughRelation[writeParent, writeTarget, writePivot]{"zero": {}, "order": r.OrderBy(z.ID.Asc()), "pivot_order": r.OrderByPivot(p.ID.Asc()), "limit": WithRelationWriteLimit(r, 0), "same_key": ManyToManyOf(a.Links, a.ID, p.ParentID, p.ParentID, z.ID)} {
+	for name, relation := range map[string]ThroughRelation[writeParent, writeTarget, writePivot]{"zero": {}, "order": r.OrderBy(KeyAsc(z.ID)), "pivot_order": r.OrderByPivot(KeyAsc(p.ID)), "limit": WithRelationWriteLimit(r, 0), "same_key": ManyToManyOf(a.Links, KeyExpr(a.ID), NumberExpr(p.ParentID), NumberExpr(p.ParentID), KeyExpr(z.ID))} {
 		t.Run(name, func(t *testing.T) {
 			n := 0
 			db := hookDB(t, testConnector{onBegin: func() { n++ }, respond: pivotTestReply(1)})
-			_, err := Attach(t.Context(), db, relation, writeParent{}, writeTarget{}, p.ID.Set(100))
+			_, err := Attach(t.Context(), db, relation, writeParent{}, writeTarget{}, KeySet(p.ID, 100))
 			if !errors.Is(err, fault.Invalid) || n != 0 {
 				t.Fatal(err, n)
 			}
@@ -217,17 +220,17 @@ func TestRelationWriteValidationAndFailures(t *testing.T) {
 			var sql []string
 			ctx := t.Context()
 			relation := r
-			assignment := p.Role.Set("member")
+			assignment := TextSet(p.Role, "member")
 			reply := pivotTestReply(1)
 			if failure == "assignment_owner" {
-				assignment = other.Role.Set("member")
+				assignment = TextSet(other.Role, "member")
 			}
 			if failure == "callback" {
 				_, _, p1, r1 := writeRelationTables(WithHooks(func() Hooks[writePivot] {
 					return Hooks[writePivot]{Creating: func(context.Context, *database.Tx, *Write[writePivot]) error { return errors.New("veto") }}
 				}))
 				relation = r1
-				assignment = p1.Role.Set("member")
+				assignment = TextSet(p1.Role, "member")
 			}
 			if failure == "cancel" {
 				c, cancel := context.WithCancel(ctx)
@@ -284,7 +287,7 @@ func TestRelationWriteSavepointsOwnAfterCommit(t *testing.T) {
 		statements = nil
 		err := db.Transaction(t.Context(), func(tx *database.Tx) error {
 			for range 2 {
-				if _, e := Attach(t.Context(), tx, r, writeParent{ID: 1}, writeTarget{ID: 10}, p.ID.Set(100), p.Role.Set("member")); e != nil {
+				if _, e := Attach(t.Context(), tx, r, writeParent{ID: 1}, writeTarget{ID: 10}, KeySet(p.ID, 100), TextSet(p.Role, "member")); e != nil {
 					return e
 				}
 			}
@@ -316,11 +319,11 @@ func TestRelationWriteSavepointsOwnAfterCommit(t *testing.T) {
 }
 func TestRelationWriteRefreshesStoredKeysAndBoundsResults(t *testing.T) {
 	a, z, p, _ := writeRelationTables()
-	r := ManyToManyOf(a.Links, a.Code, p.ParentID, p.TargetID, z.Code)
+	r := ManyToManyOf(a.Links, NumberExpr(a.Code), NumberExpr(p.ParentID), NumberExpr(p.TargetID), NumberExpr(z.Code))
 	var statements []string
 	var binds [][]any
 	db := hookDB(t, testConnector{statements: &statements, bindings: &binds, respond: pivotTestReply(1)})
-	_, err := Attach(t.Context(), db, r, writeParent{ID: 1, Code: 999}, writeTarget{ID: 10, Code: 888}, p.ID.Set(100), p.Role.Set("member"))
+	_, err := Attach(t.Context(), db, r, writeParent{ID: 1, Code: 999}, writeTarget{ID: 10, Code: 888}, KeySet(p.ID, 100), TextSet(p.Role, "member"))
 	if err != nil {
 		t.Fatal(err)
 	}

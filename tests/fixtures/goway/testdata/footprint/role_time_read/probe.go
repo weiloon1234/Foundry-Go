@@ -25,5 +25,5 @@ var Models = orm.Define("role_times", func(b orm.Builder[Model], m *Model) Field
 })
 
 func Read(at time.Time) orm.Query[Model] {
-	return Models.Query().Where(Models.At.Gt(at), Models.CreatedAt.Lte(at), Models.UpdatedAt.Gte(at)).OrderBy(Models.CreatedAt.Asc(), Models.UpdatedAt.Desc())
+	return Models.Query().Where(orm.TimeGt(Models.At, at), orm.TimeLte(Models.CreatedAt, at), orm.TimeGte(Models.UpdatedAt, at)).OrderBy(orm.TimeAsc(Models.CreatedAt), orm.TimeDesc(Models.UpdatedAt))
 }

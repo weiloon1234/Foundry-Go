@@ -38,7 +38,7 @@ func coreFactory(build Build[draft]) (*Factory[record, draft], error) {
 					return nil, err
 				}
 			}
-			assignments[i] = []orm.Assignment[record]{records.Key().Set(int64(d.number))}
+			assignments[i] = []orm.Assignment[record]{orm.KeySet(records.Key(), int64(d.number))}
 		}
 		return native.prepare(assignments, single)
 	}}, nil
@@ -224,14 +224,14 @@ func TestORMFactoryBuildFailureDoesNotStartBatch(t *testing.T) {
 				if n == 2 {
 					switch mode {
 					case "error":
-						return []orm.Assignment[record]{records.Key().Set(int64(n))}, cause
+						return []orm.Assignment[record]{orm.KeySet(records.Key(), int64(n))}, cause
 					case "panic":
 						panic("private draft input")
 					case "goexit":
 						runtime.Goexit()
 					}
 				}
-				return []orm.Assignment[record]{records.Key().Set(int64(n))}, nil
+				return []orm.Assignment[record]{orm.KeySet(records.Key(), int64(n))}, nil
 			})
 			if err != nil {
 				t.Fatal(err)

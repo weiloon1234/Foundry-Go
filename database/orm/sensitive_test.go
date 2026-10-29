@@ -66,7 +66,7 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 		}
 		return []string{"id", "secret", "backup"}, [][]driver.Value{stored}, nil
 	}}, database.WithEncryption(ring))
-	got, err := r.Insert(t.Context(), db, r.Secret.Set(encrypted.NewText("private primary")), r.Backup.Set(encrypted.NewText("private backup")))
+	got, err := Insert(t.Context(), db, r.Table, EncryptedSet(r.Secret, encrypted.NewText("private primary")), NullableEncryptedSet(r.Backup, encrypted.NewText("private backup")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +79,8 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 		}
 	}
 	statements = nil
-	for _, as := range []Assignment[secureRecord]{r.Secret.Set(encrypted.NewText("change")), r.Backup.SetNull()} {
-		if _, err := r.Query().Where(r.Key().Eq(got.ID)).UpdateAll(t.Context(), db, as); !errors.Is(err, fault.Invalid) {
+	for _, as := range []Assignment[secureRecord]{EncryptedSet(r.Secret, encrypted.NewText("change")), NullableEncryptedSetNull(r.Backup)} {
+		if _, err := UpdateAll(t.Context(), db, r.Query().Where(KeyEq(r.Key(), got.ID)), as); !errors.Is(err, fault.Invalid) {
 			t.Fatal("set-based encrypted write accepted")
 		}
 	}
@@ -88,7 +88,7 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 		t.Fatal("set-based rejection acquired transaction or sent SQL")
 	}
 	noKeys := testDB(t, testConnector{statements: &statements})
-	if _, err := r.Insert(t.Context(), noKeys, r.Secret.Set(encrypted.NewText("secret"))); !errors.Is(err, fault.Missing) {
+	if _, err := Insert(t.Context(), noKeys, r.Table, EncryptedSet(r.Secret, encrypted.NewText("secret"))); !errors.Is(err, fault.Missing) {
 		t.Fatal("missing keyring accepted")
 	}
 	if len(statements) != 0 {
@@ -96,13 +96,13 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 	}
 	// The declaration's table and column are authenticated, not inferred from ciphertext.
 	wrongTable := testDB(t, testConnector{columns: []string{"id", "secret", "backup"}, values: [][]driver.Value{stored}}, database.WithEncryption(ring))
-	if got, err := secureRecordsAt("another_table").Query().All(t.Context(), wrongTable); err == nil || got != nil {
+	if got, err := All(t.Context(), wrongTable, secureRecordsAt("another_table").Query()); err == nil || got != nil {
 		t.Fatal("wrong-table hydration accepted")
 	}
 	wrongColumn := append([]driver.Value(nil), stored...)
 	wrongColumn[1] = stored[2]
 	wrongField := testDB(t, testConnector{columns: []string{"id", "secret", "backup"}, values: [][]driver.Value{wrongColumn}}, database.WithEncryption(ring))
-	if got, err := r.Query().All(t.Context(), wrongField); err == nil || got != nil {
+	if got, err := All(t.Context(), wrongField, r.Query()); err == nil || got != nil {
 		t.Fatal("wrong-column hydration accepted")
 	}
 	// Each row must use its own key; a later failure must discard earlier models.
@@ -113,7 +113,7 @@ func TestEncryptedWriteBoundaries(t *testing.T) {
 	copied := append([]driver.Value(nil), stored...)
 	copied[0] = other.String()
 	bad := testDB(t, testConnector{columns: []string{"id", "secret", "backup"}, values: [][]driver.Value{stored, copied}}, database.WithEncryption(ring))
-	if rows, err := r.Query().All(t.Context(), bad); err == nil || rows != nil {
+	if rows, err := All(t.Context(), bad, r.Query()); err == nil || rows != nil {
 		t.Fatal("wrong-key hydration published partial models")
 	}
 }
@@ -152,8 +152,8 @@ func TestSensitiveDiagnostics(t *testing.T) {
 	_, ringFailure := encryption.NewKeyring("canary-key-material", key)
 	rawCause := errors.New("canary-plaintext canary-key-material")
 	hiddenCause := database.FoundryStatementUnknown(sqlowner.Outcomes(), "write", rawCause)
-	items := []any{sealed, key, ring, binding, r.Secret.Set(sealed), failure, keyFailure, ringFailure, hiddenCause,
-		r.Secret.Set(plain), r.Backup.Set(plain), r.Backup.SetNull(), r.Backup.IsNull(), r.Backup.IsNotNull(), r.Secret, r.Backup,
+	items := []any{sealed, key, ring, binding, EncryptedSet(r.Secret, sealed), failure, keyFailure, ringFailure, hiddenCause,
+		EncryptedSet(r.Secret, plain), NullableEncryptedSet(r.Backup, plain), NullableEncryptedSetNull(r.Backup), NullableEncryptedIsNull(r.Backup), NullableEncryptedIsNotNull(r.Backup), r.Secret, r.Backup,
 		&WriteError[secureRecord]{cause: failure, candidate: secureRecord{Secret: plain, Backup: value.Of(plain)}},
 	}
 	for _, item := range items {
@@ -233,7 +233,7 @@ func TestWriteOutcomeCoverage(t *testing.T) {
 			if tc.callback {
 				writer = afterCommitWriter{db}
 			}
-			got, err := r.Update(t.Context(), writer, 7, r.Name.Set("new"))
+			got, err := Update(t.Context(), writer, r.Table.Query(), r.Table.Key(), 7, TextSet(r.Name, "new"))
 			var outcome *database.Error
 			var write *WriteError[record]
 			if err == nil || got.ID != 0 || !errors.As(err, &outcome) || outcome.Outcome() != tc.outcome || errors.As(err, &write) != tc.candidate || begins != 1 {
@@ -248,7 +248,7 @@ func TestWriteOutcomeCoverage(t *testing.T) {
 		var sql []string
 		db := testDB(t, testConnector{statements: &sql, columns: []string{"id", "display_name", "note", "amount"}, values: [][]driver.Value{}})
 		err := db.Transaction(t.Context(), func(tx *database.Tx) error {
-			if _, err := r.Update(t.Context(), tx, 7, r.Name.Set("new")); err == nil {
+			if _, err := Update(t.Context(), tx, r.Table.Query(), r.Table.Key(), 7, TextSet(r.Name, "new")); err == nil {
 				t.Fatal("missing RETURNING accepted")
 			}
 			return nil
@@ -280,7 +280,7 @@ func TestBatchDefaultsAndReturningOrder(t *testing.T) {
 	var sql []string
 	var args [][]any
 	db := testDB(t, testConnector{statements: &sql, bindings: &args, columns: []string{"id", "name", "enabled"}, values: [][]driver.Value{{int64(20), "first", true}, {int64(10), "second", false}}})
-	got, err := r.InsertMany(t.Context(), db, [][]Assignment[item]{{r.Name.Set("first")}, {r.Name.Set("second"), r.Enabled.Set(false)}})
+	got, err := InsertMany(t.Context(), db, r.Table, [][]Assignment[item]{{TextSet(r.Name, "first")}, {TextSet(r.Name, "second"), ColumnSet(r.Enabled, false)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,13 +329,13 @@ func TestPasswordCodecBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := testDB(t, testConnector{columns: []string{"id", "digest", "backup"}, values: [][]driver.Value{{int64(1), "untrusted-plaintext", nil}}})
-	got, err := r.Query().All(t.Context(), db)
+	got, err := All(t.Context(), db, r.Query())
 	if err == nil || got != nil || strings.Contains(err.Error(), "untrusted-plaintext") {
 		t.Fatal("password codec accepted or disclosed plaintext")
 	}
 	var sent []string
 	writer := testDB(t, testConnector{statements: &sent})
-	if _, err := r.Update(t.Context(), writer, 1, r.Digest.Set(password.Hash{})); err == nil || len(sent) != 0 {
+	if _, err := Update(t.Context(), writer, r.Table.Query(), r.Table.Key(), 1, ColumnSet(r.Digest, password.Hash{})); err == nil || len(sent) != 0 {
 		t.Fatal("zero hash sent SQL")
 	}
 	type bad struct{ Digest password.Hash }
@@ -363,9 +363,9 @@ func TestEncryptedBatchUsesEachGeneratedKey(t *testing.T) {
 		}
 		return []string{"id", "secret", "backup"}, data, nil
 	}}, database.WithEncryption(ring))
-	got, err := r.InsertMany(t.Context(), db, [][]Assignment[secureRecord]{
-		{r.Secret.Set(encrypted.NewText("first")), r.Backup.SetNull()},
-		{r.Secret.Set(encrypted.NewText("second")), r.Backup.SetNull()},
+	got, err := InsertMany(t.Context(), db, r.Table, [][]Assignment[secureRecord]{
+		{EncryptedSet(r.Secret, encrypted.NewText("first")), NullableEncryptedSetNull(r.Backup)},
+		{EncryptedSet(r.Secret, encrypted.NewText("second")), NullableEncryptedSetNull(r.Backup)},
 	})
 	if err != nil {
 		t.Fatal(err)

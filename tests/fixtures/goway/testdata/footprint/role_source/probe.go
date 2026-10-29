@@ -11,6 +11,6 @@ import (
 
 func Plan() orm.InsertSelect[m.Model, m.Model] {
 	f := m.Models
-	return rows.InsertFrom(rows.From(f.Query()), f.Query(), rows.MapInsert(f.ID, expr.Value(f.ID)), rows.MapInsert(f.At, expr.Value(f.At)), rows.MapInsert(f.CreatedAt, expr.Value(f.CreatedAt)))
+	return rows.InsertFrom(rows.From(f.Query()), f.Query(), rows.MapInsert(orm.KeyExpr(f.ID), expr.Value(orm.KeyExpr(f.ID))), rows.MapInsert(orm.TimeExpr(f.At), expr.Value(orm.TimeExpr(f.At))), rows.MapInsert(orm.TimeExpr(f.CreatedAt), expr.Value(orm.TimeExpr(f.CreatedAt))))
 }
 func Write(ctx context.Context, db database.Transactor) (int64, error) { return Plan().Exec(ctx, db) }

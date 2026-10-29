@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 )
 
-var invalid = orm.BelongsToOf(models.Orders.Buyer, models.Orders.BuyerID, models.Orders.ID)
+var invalid = orm.BelongsToOf(models.Orders.Buyer, orm.ColumnExpr(models.Orders.BuyerID), orm.KeyExpr(models.Orders.ID))

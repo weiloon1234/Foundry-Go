@@ -1,5 +1,7 @@
 package consumer_test
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"context"
 	"errors"
@@ -87,8 +89,8 @@ func TestPostgresParallelValidationKeepsNamedConnections(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	rules := validation.Parallel(
-		databasevalidation.Unique(heldValidationExecutor{accounts, "accounts", entered, release}, modelvalidation.Countries.Query(), field),
-		databasevalidation.Exists(heldValidationExecutor{legacy, "legacy", entered, release}, modelvalidation.Countries.Query(), field),
+		databasevalidation.Unique(heldValidationExecutor{accounts, "accounts", entered, release}, modelvalidation.Countries.Query(), orm.KeyExpr(field)),
+		databasevalidation.Exists(heldValidationExecutor{legacy, "legacy", entered, release}, modelvalidation.Countries.Query(), orm.KeyExpr(field)),
 	)
 	done := make(chan error, 1)
 	go func() { done <- validation.Check(rules, ctx, models.CountryCode("SG"), validation.DefaultLimits()) }()
@@ -110,13 +112,13 @@ func TestPostgresParallelValidationKeepsNamedConnections(t *testing.T) {
 
 	// A custom rule can borrow both named pools while retaining the field type.
 	custom := validation.Custom(validation.Spec{ID: "consumer.available_legacy_country", Message: "Country is unavailable."}, func(ctx context.Context, code models.CountryCode) (bool, error) {
-		used, err := modelvalidation.Countries.Query().Where(field.Eq(code)).Exists(ctx, accounts)
+		used, err := orm.Exists(ctx, accounts, modelvalidation.Countries.Query().Where(orm.KeyEq(field, code)))
 		if err != nil || used {
 			return false, err
 		}
-		return modelvalidation.Countries.Query().Where(field.Eq(code)).Exists(ctx, legacy)
+		return orm.Exists(ctx, legacy, modelvalidation.Countries.Query().Where(orm.KeyEq(field, code)))
 	})
-	batch := databasevalidation.ExistsAll(legacy, modelvalidation.Countries.Query(), field)
+	batch := databasevalidation.ExistsAll(legacy, modelvalidation.Countries.Query(), orm.KeyExpr(field))
 	for _, code := range []models.CountryCode{"SG", "MY"} {
 		for _, err := range []error{validation.Check(custom, t.Context(), code, validation.DefaultLimits()), validation.Check(batch, t.Context(), []models.CountryCode{code, code}, validation.DefaultLimits())} {
 			if code == "SG" && err != nil {
@@ -128,7 +130,7 @@ func TestPostgresParallelValidationKeepsNamedConnections(t *testing.T) {
 			}
 		}
 	}
-	combined := validation.Parallel(custom, databasevalidation.Unique(accounts, modelvalidation.Countries.Query(), field), databasevalidation.Exists(legacy, modelvalidation.Countries.Query(), field))
+	combined := validation.Parallel(custom, databasevalidation.Unique(accounts, modelvalidation.Countries.Query(), orm.KeyExpr(field)), databasevalidation.Exists(legacy, modelvalidation.Countries.Query(), orm.KeyExpr(field)))
 	if err := validation.Check(combined, t.Context(), "SG", validation.DefaultLimits()); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +143,7 @@ func TestPostgresParallelValidationKeepsNamedConnections(t *testing.T) {
 	if err := validation.Check(combined, t.Context(), "SG", validation.DefaultLimits()); !errors.Is(err, fault.Internal) || errors.As(err, &rejected) {
 		t.Fatal("database failure was treated as a validation observation", err)
 	}
-	if err := validation.Check(databasevalidation.Exists(accounts, modelvalidation.Countries.Query(), field), t.Context(), "MY", validation.DefaultLimits()); err != nil {
+	if err := validation.Check(databasevalidation.Exists(accounts, modelvalidation.Countries.Query(), orm.KeyExpr(field)), t.Context(), "MY", validation.DefaultLimits()); err != nil {
 		t.Fatal("failure affected the independent connection", err)
 	}
 }
@@ -155,8 +157,8 @@ func TestPostgresParallelValidationCancellationReleasesNamedPools(t *testing.T) 
 	defer cancel()
 	field := modelvalidation.Countries.Code
 	rules := validation.Parallel(
-		databasevalidation.Unique(heldValidationExecutor{accounts, "accounts", entered, release}, modelvalidation.Countries.Query(), field),
-		databasevalidation.Exists(heldValidationExecutor{legacy, "legacy", entered, release}, modelvalidation.Countries.Query(), field),
+		databasevalidation.Unique(heldValidationExecutor{accounts, "accounts", entered, release}, modelvalidation.Countries.Query(), orm.KeyExpr(field)),
+		databasevalidation.Exists(heldValidationExecutor{legacy, "legacy", entered, release}, modelvalidation.Countries.Query(), orm.KeyExpr(field)),
 	)
 	done := make(chan error, 1)
 	go func() { done <- validation.Check(rules, ctx, models.CountryCode("SG"), validation.DefaultLimits()) }()

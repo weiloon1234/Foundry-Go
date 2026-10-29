@@ -46,7 +46,7 @@ in one transaction, clearing the previous default first. A missing code returns
 `Find`, `Exists`, `All` and `Enabled` borrow the store. `All` and `Enabled` sort by
 name and code and are bounded to 1000 rows. The handwritten `countries.Countries`
 declaration provides typed queries and administrative updates, for example
-`countries.Countries.Update(ctx, tx, code, countries.Countries.Status.Set(countries.EnabledStatus))`. Currency and timezone collections use typed immutable JSON snapshots;
+`orm.Update(ctx, tx, countries.Countries.Query(), countries.Countries.Key(), code, orm.EnumSet(countries.Countries.Status, countries.EnabledStatus))`. Currency and timezone collections use typed immutable JSON snapshots;
 decode them explicitly to obtain fresh slices. Activation status is a generated
 enum, and optional fields retain the distinction between null and zero.
 

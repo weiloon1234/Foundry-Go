@@ -1,5 +1,7 @@
 package teamworkflow
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"bytes"
 	"context"
@@ -60,7 +62,7 @@ func TestNestedPatchPresenceAndNamedIsolation(t *testing.T) {
 				if present != (tc.title != nil) || present && title != *tc.title || project.Budget != tc.budget {
 					t.Fatal("PATCH response changed presence")
 				}
-				stored, err := Projects.Query().Where(Projects.TeamID.Eq(1), Projects.Slug.Eq("shared")).Require(t.Context(), db)
+				stored, err := orm.Require(t.Context(), db, Projects.Query().Where(orm.NumberEq(Projects.TeamID, 1), orm.TextEq(Projects.Slug, "shared")))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -75,7 +77,7 @@ func TestNestedPatchPresenceAndNamedIsolation(t *testing.T) {
 			send(t, app, "PATCH", "/teams/1/projects/foreign", "alice", "", `{}`, 404)
 			send(t, app, "PATCH", "/teams/2/projects/shared", "alice", "", `{}`, 403)
 			send(t, app, "GET", path, "alice", "", "", 200)
-			other, err := Projects.Query().Where(Projects.TeamID.Eq(2), Projects.Slug.Eq("shared")).Require(t.Context(), db)
+			other, err := orm.Require(t.Context(), db, Projects.Query().Where(orm.NumberEq(Projects.TeamID, 2), orm.TextEq(Projects.Slug, "shared")))
 			if err != nil || other.Budget != 99 {
 				t.Fatal("same slug under another parent was changed", err)
 			}
@@ -94,7 +96,7 @@ func TestNestedPatchPresenceAndNamedIsolation(t *testing.T) {
 			}
 			app.stop()
 			retained := main.Open(t)
-			row, err := Projects.Query().Where(Projects.TeamID.Eq(1)).Require(t.Context(), retained)
+			row, err := orm.Require(t.Context(), retained, Projects.Query().Where(orm.NumberEq(Projects.TeamID, 1)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -196,11 +198,11 @@ func TestDuplicateSubmissionAndReceivingTransaction(t *testing.T) {
 	waitFor(t, func() bool {
 		return scalar(t, db, `SELECT count(*) FROM foundry_outbox WHERE publish_state='published'`) == 1
 	})
-	project, err := Projects.Query().Where(Projects.TeamID.Eq(1)).Require(t.Context(), db)
+	project, err := orm.Require(t.Context(), db, Projects.Query().Where(orm.NumberEq(Projects.TeamID, 1)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Projects.Update(t.Context(), db, project.ID, Projects.Enabled.Set(false)); err != nil {
+	if _, err := orm.Update(t.Context(), db, Projects.Table.Query(), Projects.Table.Key(), project.ID, orm.ColumnSet(Projects.Enabled, false)); err != nil {
 		t.Fatal(err)
 	}
 	send(t, second, "POST", path, "alice", key, `{"name":"Example"}`, 403)

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// DocumentTable declares stored columns and their write roles. Example: Documents.Key().Eq(key).
+// DocumentTable declares stored columns and their write roles. Example: orm.KeyEq(Documents.Key(), key).
 type DocumentTable struct {
 	orm.Table[Document, model.ID[Document]]
 	TenantID  orm.Text[Document, TenantID]
@@ -20,7 +20,7 @@ type DocumentTable struct {
 	Soft      orm.SoftDeletable[Document]
 }
 
-// Documents preserves the persisted tenant_documents model. Example: Documents.Query().All(ctx,db).
+// Documents preserves the persisted tenant_documents model. Example: orm.All(ctx, db, Documents.Query()).
 var Documents = orm.Define("tenant_documents", func(b orm.Builder[Document], m *Document) DocumentTable {
 	deleted := orm.SoftDeleteOf(b, &m.DeletedAt)
 	return DocumentTable{Table: orm.TableOf(b, &m.ID),
@@ -36,14 +36,14 @@ var Documents = orm.Define("tenant_documents", func(b orm.Builder[Document], m *
 	}
 }, orm.WithGlobalScopes(documentScopes))
 
-// TagTable declares stored columns and their write roles. Example: Tags.Key().Eq(key).
+// TagTable declares stored columns and their write roles. Example: orm.KeyEq(Tags.Key(), key).
 type TagTable struct {
 	orm.Table[Tag, TagCode]
 	Name      orm.Text[Tag, string]
 	Documents orm.Through[Tag, Document, DocumentTag]
 }
 
-// Tags preserves the persisted tenant_tags model. Example: Tags.Query().All(ctx,db).
+// Tags preserves the persisted tenant_tags model. Example: orm.All(ctx, db, Tags.Query()).
 var Tags = orm.Define("tenant_tags", func(b orm.Builder[Tag], m *Tag) TagTable {
 	return TagTable{Table: orm.TableOf(b, &m.Code),
 		Name:      orm.TextOf(b, &m.Name),
@@ -51,7 +51,7 @@ var Tags = orm.Define("tenant_tags", func(b orm.Builder[Tag], m *Tag) TagTable {
 	}
 })
 
-// DocumentTagTable declares stored columns and their write roles. Example: DocumentTags.Key().Eq(key).
+// DocumentTagTable declares stored columns and their write roles. Example: orm.KeyEq(DocumentTags.Key(), key).
 type DocumentTagTable struct {
 	orm.Table[DocumentTag, model.ID[DocumentTag]]
 	DocumentID orm.Column[DocumentTag, model.ID[Document]]
@@ -61,7 +61,7 @@ type DocumentTagTable struct {
 	UpdatedAt  orm.UpdatedAt[DocumentTag, time.Time]
 }
 
-// DocumentTags preserves the persisted tenant_document_tags model. Example: DocumentTags.Query().All(ctx,db).
+// DocumentTags preserves the persisted tenant_document_tags model. Example: orm.All(ctx, db, DocumentTags.Query()).
 var DocumentTags = orm.Define("tenant_document_tags", func(b orm.Builder[DocumentTag], m *DocumentTag) DocumentTagTable {
 	return DocumentTagTable{Table: orm.TableOf(b, &m.ID),
 		DocumentID: orm.ColumnOf(b, &m.DocumentID),
@@ -73,7 +73,7 @@ var DocumentTags = orm.Define("tenant_document_tags", func(b orm.Builder[Documen
 })
 
 // DocumentLinks declares tenant-scoped document targets. Example: Documents.Query().With(DocumentLinks).
-var DocumentLinks = orm.ManyToManyOf(Documents.Tags, Documents.Key(), DocumentTags.DocumentID, DocumentTags.TagCode, Tags.Key())
+var DocumentLinks = orm.ManyToManyOf(Documents.Tags, orm.KeyExpr(Documents.Key()), orm.ColumnExpr(DocumentTags.DocumentID), orm.TextExpr(DocumentTags.TagCode), orm.KeyExpr(Tags.Key()))
 
 // TagLinks retains document scopes when loaded from a tag. Example: Tags.Query().With(TagLinks).
-var TagLinks = orm.ManyToManyOf(Tags.Documents, Tags.Key(), DocumentTags.TagCode, DocumentTags.DocumentID, Documents.Key())
+var TagLinks = orm.ManyToManyOf(Tags.Documents, orm.KeyExpr(Tags.Key()), orm.TextExpr(DocumentTags.TagCode), orm.ColumnExpr(DocumentTags.DocumentID), orm.KeyExpr(Documents.Key()))

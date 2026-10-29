@@ -114,7 +114,7 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 			if hooks.Calls != nil {
 				hooks.Calls.Add(1)
 			}
-			order, err := Orders.Insert(ctx, tx, Orders.WorkspaceID.Set(in.Model.ID), Orders.Caller.Set(actor.ID), Orders.Name.Set(in.Request.Body.Name))
+			order, err := orm.Insert(ctx, tx, Orders.Table, orm.NumberSet(Orders.WorkspaceID, in.Model.ID), orm.NumberSet(Orders.Caller, actor.ID), orm.TextSet(Orders.Name, in.Request.Body.Name))
 			if err != nil {
 				return Receipt{}, err
 			}

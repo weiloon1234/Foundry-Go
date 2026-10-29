@@ -76,21 +76,27 @@ func TestRelationWriteNullableStoredKeysWithDistinctInputs(t *testing.T) {
 							for _, field := range []struct {
 								setter func(pivotKeyInput) Assignment[inputKeyPivot]
 								want   pivotKeyInput
-							}{{p.ParentID.Set, "91"}, {p.TargetID.Set, "81"}} {
+							}{{func() func(arg0 pivotKeyInput) Assignment[inputKeyPivot] {
+								receiver := p.ParentID
+								return func(arg0 pivotKeyInput) Assignment[inputKeyPivot] { return NullableInputNumberSet(receiver, arg0) }
+							}(), "91"}, {func() func(arg0 pivotKeyInput) Assignment[inputKeyPivot] {
+								receiver := p.TargetID
+								return func(arg0 pivotKeyInput) Assignment[inputKeyPivot] { return NullableInputNumberSet(receiver, arg0) }
+							}(), "81"}} {
 								input, set := WriteNullableGet(w, field.setter).Get()
 								v, nonNull := input.Get()
 								if !WriteIsSet(w, field.setter) || !set || !nonNull || v != field.want {
 									t.Fatal("hook lost typed input", v, set, nonNull)
 								}
 							}
-							return WriteSet(w, p.TargetID.Set("81"))
+							return WriteSet(w, NullableInputNumberSet(p.TargetID, "81"))
 						}}
 					}))
 				}
 				p = Define("input_key_pivots", func(b Builder[inputKeyPivot], m *inputKeyPivot) inputKeyPivotTable {
 					return inputKeyPivotTable{TableOf(b, &m.ID), NullableInputNumberOf(b, &m.ParentID, transform), NullableInputNumberOf(b, &m.TargetID, transform)}
 				}, opts...)
-				r := ManyToManyOf(a.Links, a.Code, p.ParentID, p.TargetID, z.Code)
+				r := ManyToManyOf(a.Links, NullableInputNumberExpr(a.Code), NullableInputNumberExpr(p.ParentID), NullableInputNumberExpr(p.TargetID), NullableInputNumberExpr(z.Code))
 				var statements []string
 				var binds [][]any
 				db := hookDB(t, testConnector{statements: &statements, bindings: &binds, respond: func(s string) ([]string, [][]driver.Value) {
@@ -110,16 +116,16 @@ func TestRelationWriteNullableStoredKeysWithDistinctInputs(t *testing.T) {
 					}
 				}})
 				source, target := inputKeyParent{ID: 1, Code: value.Of(storedPivotKey(999))}, inputKeyTarget{ID: 10, Code: value.Of(storedPivotKey(888))}
-				create := []Assignment[inputKeyPivot]{p.Key().Set(100)}
+				create := []Assignment[inputKeyPivot]{KeySet(p.Key(), 100)}
 				switch mode {
 				case "missing_parent":
-					create = append(create, p.TargetID.Set("81"))
+					create = append(create, NullableInputNumberSet(p.TargetID, "81"))
 				case "missing_target":
-					create = append(create, p.ParentID.Set("91"))
+					create = append(create, NullableInputNumberSet(p.ParentID, "91"))
 				case "explicit", "hook_override":
-					create = append(create, p.ParentID.Set("91"), p.TargetID.Set("81"))
+					create = append(create, NullableInputNumberSet(p.ParentID, "91"), NullableInputNumberSet(p.TargetID, "81"))
 				case "invalid_input":
-					create = append(create, p.ParentID.Set("invalid"), p.TargetID.Set("81"))
+					create = append(create, NullableInputNumberSet(p.ParentID, "invalid"), NullableInputNumberSet(p.TargetID, "81"))
 				}
 				var err error
 				var attached []inputKeyPivot
@@ -258,8 +264,8 @@ func TestAttachRechecksBothEndpointIdentitiesAfterHooks(t *testing.T) {
 			}})
 			// A non-primary relation key ensures the target check uses its original ID,
 			// rather than allowing a replacement target with the same relation key.
-			r := ManyToManyOf(a.Links, a.Key(), p.ParentID, p.TargetID, z.Code)
-			out, err := Attach(t.Context(), db, r, softWriteParent{ID: 1}, writeTarget{ID: 10}, p.ID.Set(100), p.Role.Set("member"))
+			r := ManyToManyOf(a.Links, KeyExpr(a.Key()), NumberExpr(p.ParentID), NumberExpr(p.TargetID), NumberExpr(z.Code))
+			out, err := Attach(t.Context(), db, r, softWriteParent{ID: 1}, writeTarget{ID: 10}, KeySet(p.ID, 100), TextSet(p.Role, "member"))
 			if !errors.Is(err, fault.Invalid) || out.ID != 0 || !hookRan {
 				t.Fatal(out, err, hookRan)
 			}
@@ -334,14 +340,14 @@ func TestRelationWriteSameTypeDefaultsStillRunMutators(t *testing.T) {
 				table := TableOf(b, &m.ID)
 				return inputPivotTable{table, table.Key(), InputNumberOf(b, &m.ParentID, mutate), InputNumberOf(b, &m.TargetID, mutate), TextOf(b, &m.Role), SoftDeleteOf(b, &m.DeletedAt)}
 			})
-			r := ManyToManyOf(a.Links, a.ID, p.ParentID, p.TargetID, z.ID)
+			r := ManyToManyOf(a.Links, KeyExpr(a.ID), InputNumberExpr(p.ParentID), InputNumberExpr(p.TargetID), KeyExpr(z.ID))
 			var statements []string
 			db := hookDB(t, testConnector{statements: &statements, respond: pivotTestReply(1)})
 			var err error
 			if bulk {
-				_, err = AttachMany(t.Context(), db, r, writeParent{ID: 1}, []writeTarget{{ID: 10}}, p.ID.Set(100), p.Role.Set("member"))
+				_, err = AttachMany(t.Context(), db, r, writeParent{ID: 1}, []writeTarget{{ID: 10}}, KeySet(p.ID, 100), TextSet(p.Role, "member"))
 			} else {
-				_, err = Attach(t.Context(), db, r, writeParent{ID: 1}, writeTarget{ID: 10}, p.ID.Set(100), p.Role.Set("member"))
+				_, err = Attach(t.Context(), db, r, writeParent{ID: 1}, writeTarget{ID: 10}, KeySet(p.ID, 100), TextSet(p.Role, "member"))
 			}
 			if err != nil || calls != 2 || len(statements) != 4 {
 				t.Fatal(err, calls, statements)

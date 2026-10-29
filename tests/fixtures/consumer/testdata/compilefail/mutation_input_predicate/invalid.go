@@ -1,7 +1,9 @@
 package invalid
 
+import orm "github.com/weiloon1234/Foundry-Go/database/orm"
+
 import (
 	"foundry.test/consumer/inputqueries"
 )
 
-var _ = inputqueries.Members.Email.Eq(inputqueries.EmailInput{})
+var _ = orm.InputTextEq(inputqueries.Members.Email, inputqueries.EmailInput{})
