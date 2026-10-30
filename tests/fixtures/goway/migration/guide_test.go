@@ -59,9 +59,26 @@ func compiledRegions(t *testing.T, family string) (string, map[string]string) {
 	}
 	dir := filepath.Dir(file)
 	root := filepath.Clean(filepath.Join(dir, "../../../.."))
+	if !filepath.IsAbs(file) {
+		if wd, err := os.Getwd(); err == nil {
+			dir = wd
+			for parent := wd; ; parent = filepath.Dir(parent) {
+				if _, err := os.Stat(filepath.Join(parent, "docs/guides")); err == nil {
+					root = parent
+					break
+				}
+				if p := filepath.Dir(parent); p == parent {
+					break
+				}
+			}
+		}
+	}
 	sources, err := filepath.Glob(filepath.Join(dir, "*_test.go"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(sources) == 0 {
+		t.Fatal("no migration test sources found")
 	}
 	regions := map[string]string{}
 	region := regexp.MustCompile(`(?ms)^// (?:` + family + `):([a-z0-9-]+)\n(.*?)^// (?:` + family + `):end$`)

@@ -6,6 +6,10 @@ FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtu
 export GOWORK := off
 # Nested modules do not inherit the root module's preferred toolchain.
 export GOTOOLCHAIN := $(shell awk '$$1 == "toolchain" { print $$2 }' go.mod)
+# Canonical build flags: -trimpath removes absolute workspace paths from action IDs,
+# ensuring build cache entries are shared across checkouts, worktrees, and CI runners.
+override GOFLAGS := $(strip $(if $(findstring -trimpath,$(GOFLAGS)),$(GOFLAGS),$(GOFLAGS) -trimpath))
+export GOFLAGS
 
 # Compute once, lazily, for this make invocation. The tool prints one validated
 # environment assignment; empty output is a hard failure. External child gates

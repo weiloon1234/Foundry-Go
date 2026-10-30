@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: migration guide workflow now documents running `GOWORK=off go run github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.2.0 codemod` while on v0.1.0 rather than invoking `go tool foundry codemod` before the tool directive is bumped.
+
 ## v0.2.0 — 2026-10-30
 
 - **Breaking (v0.2 compile footprint):** Validation `Field[T,V]` and `Rule[T]`
@@ -38,11 +42,12 @@
   99.0 MB (−25.90%), and marginal model cost fell 739 → 149 functions/model
   (−79.84%) and 39.35 → 7.93 MB (−79.85%). Replaced column, query, locking, and
   table methods are removed, with no shims.
-- Add `go tool foundry codemod`, a type-aware AST and `go/types` migration tool
+- Add `foundry codemod` (runnable via `go run github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.2.0 codemod`
+  during migration or `go tool foundry codemod` once bumped), a type-aware AST and `go/types` migration tool
   that automatically rewrites v0.1 validation, HTTP, and ORM call sites to v0.2.
-  It provides a dry-run inventory by default (`go tool foundry codemod ./...`) and
-  refuses `--apply` if unresolved findings remain, preserving callback receiver
-  capture order before running `go tool foundry generate`.
+  It provides a dry-run inventory by default and refuses `--apply` if unresolved findings
+  remain, preserving callback receiver capture order before upgrading `go.mod` and
+  running `go tool foundry generate`.
 
 - Allow gopls shutdown to finish pending workspace analysis within a separate
   30-second cleanup budget. Preserve caller cancellation, report cleanup deadlines,

@@ -20,9 +20,25 @@ func TestGuideSnippets(t *testing.T) {
 		t.Fatal("cannot locate guide examples")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../../../.."))
+	if !filepath.IsAbs(root) {
+		if wd, err := os.Getwd(); err == nil {
+			for dir := wd; ; dir = filepath.Dir(dir) {
+				if _, err := os.Stat(filepath.Join(dir, "docs/guides")); err == nil {
+					root = dir
+					break
+				}
+				if parent := filepath.Dir(dir); parent == dir {
+					break
+				}
+			}
+		}
+	}
 	guides, err := filepath.Glob(filepath.Join(root, "docs/guides/*.md"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(guides) == 0 {
+		t.Fatal("no guide markdown files found")
 	}
 	complete := map[string]bool{
 		"model-references.md": true, "model-extensions.md": true,

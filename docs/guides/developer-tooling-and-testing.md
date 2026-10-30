@@ -297,6 +297,12 @@ generic-method reduction and ORM test repartitioning, every cold `go vet ./...`
 compile stays under 2 GB peak RSS (largest: `database/orm` at 1.82 GB and
 `database/orm/rows` at 1.54 GB), so the 7 GB macOS runners use default parallel
 compilation without `GOFLAGS=-p=1`; see the [CI budget](developer-resource-measurements.md#developer-and-ci-budgets).
+Both `Makefile` and CI configure canonical `GOFLAGS` containing `-trimpath`.
+Without `-trimpath`, Go includes absolute checkout directories in build action
+IDs, causing each checkout path or worktree to build separate cache copies and
+duplicate `GOCACHE`. With `-trimpath`, recorded source paths are module-relative,
+enabling different checkouts, worktrees, and CI runners to share build cache
+entries safely.
 Dependency update configuration (`.github/dependabot.yml`)
 keeps proposals reviewable; it does not automatically merge or publish them.
 

@@ -61,9 +61,12 @@ provider credentials out of tracked files and command output.
 
 Use ordinary native Go compiler and GC defaults for host development. Do not
 carry historical VM-specific optimization or tiny heap settings into native
-acceptance. If measured capacity requires it, GOFLAGS=-p=1 limits simultaneous
+acceptance. If measured capacity requires it, `GOFLAGS=-p=1` limits simultaneous
 package compilation without removing checks; choose concurrency from available
-host memory. A GC soft limit does not cap total process memory or solve a
+host memory. The `Makefile` canonically exports `GOFLAGS` containing `-trimpath`
+(while preserving any caller-provided flags) so that action IDs omit absolute
+workspace directories and multiple worktrees or checkouts share one build cache.
+A GC soft limit does not cap total process memory or solve a
 compilation unit whose live objects exceed available RAM.
 
 Keep acceptance tests grouped in feature packages, as with the smaller

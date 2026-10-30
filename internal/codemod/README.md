@@ -8,16 +8,17 @@ the integration step.
 Run from a consumer with its **current v0.1 dependency** still installed:
 
 ```sh
-go tool foundry codemod ./...
-go tool foundry codemod --apply ./...
-go tool foundry codemod --dir /path/to/consumer ./...
+GOWORK=off go run github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.2.0 codemod ./...
+GOWORK=off go run github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.2.0 codemod --apply ./...
+GOWORK=off go run github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.2.0 codemod --dir /path/to/consumer ./...
 ```
 
-The tool binary must contain this subcommand. Build or install that tool separately
-if the consumer's pinned tool version predates it; keep the consumer dependency at
-v0.1 during migration. Upgrade to v0.2 and run `go tool foundry generate` after
-applying handwritten changes. The rewritten source intentionally does not compile
-against v0.1, so finish the dependency upgrade before running another inventory.
+Run via `GOWORK=off go run github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.2.0 codemod`
+because the consumer's pinned `go tool foundry` is still v0.1 (which predates codemod);
+the codemod must run before bumping because it resolves calls against the installed v0.1 dependency.
+Upgrade to v0.2 (`go get github.com/weiloon1234/Foundry-Go@v0.2.0 && go mod tidy`) and run
+`go tool foundry generate` after applying handwritten changes. The rewritten source intentionally
+does not compile against v0.1, so finish the dependency upgrade before running another inventory.
 
 Dry run is the default. Each finding includes `file:line`, its status and its
 migration. Apply refuses the entire plan if unresolved findings remain. Generated

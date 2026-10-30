@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -19,6 +20,19 @@ func TestRuntimeErrorConstructionUsesDiagnosticOwners(t *testing.T) {
 		t.Fatal("locate framework source for diagnostic construction contract")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(source), "../.."))
+	if !filepath.IsAbs(root) {
+		if wd, err := os.Getwd(); err == nil {
+			for dir := wd; ; dir = filepath.Dir(dir) {
+				if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+					root = dir
+					break
+				}
+				if parent := filepath.Dir(dir); parent == dir {
+					break
+				}
+			}
+		}
+	}
 	var violations []string
 	var sources []diagnosticSource
 	files := token.NewFileSet()
