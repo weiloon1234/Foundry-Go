@@ -191,7 +191,7 @@ def profile(runner, name, consumer, go, foundry, gopls, base_env, rounds):
     marker = "\t// Measurement harness inserts one field here in its independent copy."
     if original.count(marker) != 1:
         raise ValueError("incremental fixture marker is missing or ambiguous")
-    source.write_text(original.replace(marker, "\tRevision string\n" + marker))
+    source.write_text(original.replace(marker, "\tRevision string `foundry:\"-\"`\n" + marker))
     runner.run(name + "-generation-edited", generate, consumer, generation_env)
     report["generated_edited"] = generated_inventory(consumer)
     runner.run(name + "-build-edited", [go, "build", "./..."], consumer, build_env)
