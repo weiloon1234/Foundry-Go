@@ -3,7 +3,6 @@ package generate
 import (
 	"bytes"
 	"go/ast"
-	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/internal/testinputs"
 )
 
 func TestOriginalFieldHelpCommentForms(t *testing.T) {
@@ -60,7 +61,7 @@ func documentationSource(t *testing.T, text string) *packageInput {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := types.Config{Importer: importer.Default()}
+	config := types.Config{Importer: testinputs.StandardImporter()}
 	checked, err := config.Check("example.test/source", fset, []*ast.File{syntax}, nil)
 	if err != nil {
 		t.Fatal(err)

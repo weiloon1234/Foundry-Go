@@ -69,7 +69,8 @@ func (w *exposureWalker) object(obj types.Object, selector string) {
 }
 
 func (w *exposureWalker) doc(obj types.Object, selector string) {
-	if w.deprecated[declarationAt(w.fset, obj.Pos(), obj.Name())] {
+	loc, ok := objectLocation(w.fset, obj)
+	if ok && w.deprecated[loc] {
 		w.fail("deprecated exposed declaration", selector, obj.Pos())
 	}
 }

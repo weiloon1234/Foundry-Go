@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Removed: the v0.1 → v0.2 codemod (use `go run …@v0.2.0`).
+- Fixed: the retirement exposure check finds deprecated declarations in imported export data built with `-trimpath`; tests no longer depend on the build-time GOROOT.
 - Fixed: migration guide workflow now documents running `GOWORK=off go run github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.2.0 codemod` while on v0.1.0 rather than invoking `go tool foundry codemod` before the tool directive is bumped.
 
 ## v0.2.0 — 2026-10-30

@@ -11,29 +11,37 @@ import (
 // Imported export data and locally checked syntax have different token.Pos
 // values. Declaration locations join both to the original source comments.
 type declarationLocation struct {
-	file, name string
-	line       int
+	pkg, file, name string
+	line            int
 }
 
-func declarationAt(fset *token.FileSet, pos token.Pos, name string) declarationLocation {
-	p := fset.Position(pos)
-	file, _ := filepath.Abs(p.Filename)
-	return declarationLocation{file: file, name: name, line: p.Line}
+func identLocation(fset *token.FileSet, owner string, id *ast.Ident) declarationLocation {
+	p := fset.Position(id.Pos())
+	return declarationLocation{pkg: owner, file: filepath.Base(p.Filename), name: id.Name, line: p.Line}
+}
+
+func objectLocation(fset *token.FileSet, obj types.Object) (declarationLocation, bool) {
+	pkg := obj.Pkg()
+	if pkg == nil {
+		return declarationLocation{}, false
+	}
+	p := fset.Position(obj.Pos())
+	return declarationLocation{pkg: pkg.Path(), file: filepath.Base(p.Filename), name: obj.Name(), line: p.Line}, true
 }
 
 func declarationDocs(fset *token.FileSet, sources map[string]*sourcePackage) map[declarationLocation]bool {
 	docs := make(map[declarationLocation]bool)
-	mark := func(id *ast.Ident, comments ...*ast.CommentGroup) {
-		if id == nil {
-			return
-		}
-		for _, group := range comments {
-			if group != nil && strings.Contains(group.Text(), "Deprecated:") {
-				docs[declarationAt(fset, id.Pos(), id.Name)] = true
+	for _, source := range sources {
+		mark := func(id *ast.Ident, comments ...*ast.CommentGroup) {
+			if id == nil {
+				return
+			}
+			for _, group := range comments {
+				if group != nil && strings.Contains(group.Text(), "Deprecated:") {
+					docs[identLocation(fset, source.owner, id)] = true
+				}
 			}
 		}
-	}
-	for _, source := range sources {
 		for _, file := range source.files {
 			ast.Inspect(file, func(node ast.Node) bool {
 				switch n := node.(type) {

@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -17,7 +15,7 @@ import (
 // downloaded from a private candidate proxy without workspace replacements.
 func TestModulePinnedFoundryTool(t *testing.T) {
 	testkit.TrackExternalInputs(t)
-	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
+	goBinary := "go"
 	run := func(args ...string) []byte {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)

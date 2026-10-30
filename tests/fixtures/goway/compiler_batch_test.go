@@ -10,9 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -127,7 +125,7 @@ func runCompilerBatch(parent context.Context, cases []compilerCase) map[string]c
 	for _, item := range cases {
 		args = append(args, "./testdata/compilefail/"+item.name)
 	}
-	cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
+	cmd := exec.CommandContext(ctx, "go", args...)
 	configureCompilerCommand(cmd)
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local")
 	output := &compilerOutput{limit: compilerBatchOutputBytes, cancel: cancel}

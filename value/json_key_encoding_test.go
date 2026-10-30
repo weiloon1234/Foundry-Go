@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -148,7 +146,7 @@ func TestJSONMapKeyEncodingMatchesEncodingJSON(t *testing.T) {
 	testkit.TrackExternalInputs(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "run", "./testdata/jsonkeyoracle/main.go")
+	cmd := exec.CommandContext(ctx, "go", "run", "./testdata/jsonkeyoracle/main.go")
 	cmd.Env = append(os.Environ(), "GOEXPERIMENT=nojsonv2", "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off")
 	var output limitedOracleOutput
 	cmd.Stdout, cmd.Stderr = &output, &output

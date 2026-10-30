@@ -8,8 +8,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -97,7 +95,7 @@ func TestFootprintBudgets(t *testing.T) {
 	defer cancel()
 
 	listArgs := append([]string{"list", "-export", "-f", "{{.ImportPath}} {{.Export}}"}, pkgArgs...)
-	goBin := filepath.Join(runtime.GOROOT(), "bin", "go")
+	goBin := "go"
 	cmd := exec.CommandContext(ctx, goBin, listArgs...)
 	configureCompilerCommand(cmd)
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local")
