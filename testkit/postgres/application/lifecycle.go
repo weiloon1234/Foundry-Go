@@ -28,10 +28,19 @@ type Application interface {
 // migrations commit through the ordinary runner before providers start. A failed
 // attempt also shuts down immediately. HTTP/worker lifetimes remain app-owned;
 // register test clients afterward so their cleanup precedes app shutdown.
+//
+// Concurrency is bounded to DefaultConcurrency (8) per test process. All apps
+// started within a single top-level test (including subtests) share that test's
+// single concurrency slot. The slot is released after the application has
+// completely shut down.
 func (e *Environment) Start(t testing.TB, app Application, domain ...infrastructure.MigrationTarget) error {
 	t.Helper()
 	if app == nil || (reflect.ValueOf(app).Kind() == reflect.Pointer && reflect.ValueOf(app).IsNil()) || app.ShutdownTimeout() <= 0 {
 		return fault.New(fault.Invalid, "test environment requires a prepared application")
+	}
+	release, err := acquireSlot(t)
+	if err != nil {
+		return err
 	}
 	stop := func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), app.ShutdownTimeout())
@@ -39,17 +48,20 @@ func (e *Environment) Start(t testing.TB, app Application, domain ...infrastruct
 		return app.Shutdown(ctx)
 	}
 	var cleanup sync.Once
+	closeCleanup := func() (err error) {
+		cleanup.Do(func() {
+			err = stop()
+			release()
+		})
+		return err
+	}
 	closeFailed := func(cause error) error {
-		var shutdown error
-		cleanup.Do(func() { shutdown = stop() })
-		return errors.Join(cause, shutdown)
+		return errors.Join(cause, closeCleanup())
 	}
 	t.Cleanup(func() {
-		cleanup.Do(func() {
-			if err := stop(); err != nil {
-				t.Errorf("shutdown scoped application: %v", err)
-			}
-		})
+		if err := closeCleanup(); err != nil {
+			t.Errorf("shutdown scoped application: %v", err)
+		}
 	})
 	started := time.Now()
 	targets := append(app.Migrations(), domain...)

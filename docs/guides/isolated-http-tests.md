@@ -65,6 +65,37 @@ shows client, kernel and application ownership. Register clients after the app
 so client cleanup runs first. The application drains handlers/tasks before pools.
 `testkit/http.New` remains available when a handler-owned test server is enough.
 
+## Parallel execution and application concurrency
+
+When running integration test suites with `t.Parallel()`, multiple applications boot concurrently in the same test process. `Environment.Start` automatically bounds concurrent booted applications to `application.DefaultConcurrency` (8 by default).
+
+Each booted application uses 4 PostgreSQL connections (2 primary + 2 read replica). Bounding concurrency to 8 ensures that 32 pool connections are active at peak, leaving 68 connections headroom below PostgreSQL's default `max_connections` ceiling of 100 for schema creation (`scopePoolSize = 2`), ephemeral migration runners, and assertion pools. The limit may be overridden per test process via the `FOUNDRY_TEST_APP_CONCURRENCY` environment variable with a positive integer. An invalid value fails the test immediately.
+
+Concurrency slots are tracked per top-level test name (`t.Name()` truncated at the first `/`). If a single test or its subtests boot multiple applications (e.g. testing background workers alongside HTTP servers), all applications in that test share the single slot by reference counting. This eliminates self-deadlock without an unbounded burst tier. The slot is released only after all applications in that test have completely shut down and drained their connection pools.
+
+> [!NOTE]
+> Concurrency limits are enforced per test process. When running `go test -p N ./...`, the Go toolchain executes `N` package test binaries in parallel. Each package process enforces its own concurrency limit against the shared database server.
+
+### Parallel isolation contract
+
+Every test running under `t.Parallel()` must maintain strict isolation across the following resources:
+
+| Resource | Parallel Isolation Requirement |
+|---|---|
+| **Database Schema** | Allocate a unique schema with `pgtest.Isolate(t)` and bind it via `pgapp.Bind` / `pgapp.On(scope, ...)`. Handlers execute within their isolated schema; never query unscoped public tables. |
+| **Redis & Keyspace** | Set a unique namespace on `settings.Services.Namespace.Environment` (e.g. `scope.Schema()`). Never run `FLUSHDB` or `FLUSHALL`. |
+| **HTTP Ports** | Bind exclusively to ephemeral ports via `settings.HTTP.Server.Address = "127.0.0.1:0"`. Obtain the assigned port dynamically via `app.HTTPReady(ctx)` or `httptest.NewTLSServer`. |
+| **Storage & Uploads** | Use test-owned temporary directories via `t.TempDir()`. Never write to static or shared filesystem paths. |
+| **Clock** | Inject `testkit.NewClock(time)` via `application.WithClock(source)`. Advance application time deterministically via `source.Advance(...)`; never call `time.Sleep`. |
+| **Environment Variables** | **Never call `t.Setenv` or `os.Setenv` in parallel tests.** Mutating process-wide environment variables causes data races and triggers Go test panics. Configure settings through typed `Settings` structs or CLI options. |
+| **Global State** | Do not mutate package-level variables, `http.DefaultClient`, or `slog.SetDefault`. Pass test-owned clients and loggers explicitly. |
+
+### Marking a test serial
+
+If a test genuinely requires process-wide environment variable mutations or unshareable host state (such as testing CLI commands that read `os.Environ` directly, or spawning external daemon processes), mark the test as serial simply by **omitting `t.Parallel()`**.
+
+Go executes all serial tests sequentially first, before executing parallel tests. Serial tests still acquire a concurrency slot through `Environment.Start`, ensuring safe connection bounds while running in complete isolation from parallel suites.
+
 ## Pool scope and retained data
 
 The typed adapter `postgres.Config.Schema` selects one validated existing schema.
