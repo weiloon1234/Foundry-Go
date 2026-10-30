@@ -51,6 +51,49 @@ shallow `Is`/`As` comparisons; panic and Goexit stay inside owned isolation.
 Handlers and constructors must honor context cancellation; the framework contains
 panic/Goexit, but cannot forcibly stop arbitrary application goroutines.
 
+## Development server supervision loop
+
+`devserver.Run(ctx, opts, streams)` runs the application development loop. It watches
+Go sources and declared application inputs, settles change bursts, rebuilds the target
+binary with link optimizations (`-ldflags=-w`), and restarts the server child process.
+If compilation fails, the previous server keeps running uninterrupted.
+
+Configure `devserver.Options`:
+
+```go
+opts := devserver.Options{
+	Root:    projectRoot,
+	Target:  "./cmd/artisan",
+	Args:    []string{"serve"},
+	Env:     []string{"WEB__ENABLED=true", "WEB__DEV_PROXY=true"},
+	Watched: []string{"config/*.toml", "web/portals/*/portal.json", localEnvPath},
+	Helpers: []devserver.Helper{
+		{
+			Name:       "admin",
+			Executable: "npm",
+			Args:       []string{"--prefix", "web", "run", "dev", "--", "admin", "--port", "5173", "--strictPort"},
+			Banner:     "admin: http://127.0.0.1:8080/admin (Vite on 5173)",
+		},
+	},
+	OnChange: func() error {
+		// Validates dynamic changes before rebuild (e.g. portal folder layout changes).
+		return nil
+	},
+}
+if err := devserver.Run(ctx, opts, streams); err != nil {
+	return err
+}
+```
+
+Standard module conventions (root `*.go`, `cmd/`, `internal/`, `go.mod`, `go.sum`) are
+watched automatically while ignoring test sources, hidden directories, `node_modules`,
+`testdata` and `vendor`. Extra paths in `Watched` support directories, explicit files and
+glob patterns relative to `Root`. Every child process runs in an isolated process group;
+terminal disconnect (`SIGHUP`) and context cancellation terminate all child groups with
+`SIGTERM`, a 5-second drain window, and `SIGKILL` process reaping. `OnChange` runs inside
+isolated callback containment (`internal/callback`) so application panics or `runtime.Goexit`
+do not crash the supervisor unhandled.
+
 ## Individual artifact scaffolds
 
 Prefer the [project-pinned CLI](team-adoption.md) through `go tool foundry`, which
