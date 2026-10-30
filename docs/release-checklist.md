@@ -71,7 +71,9 @@ source and artifact content as well. A failed preparation may leave an incomplet
 private directory; it is not an accepted candidate and is never overwritten.
 
 Run the [native measurements](guides/developer-resource-measurements.md) against
-that directory. Downloads and builds use a new module cache, `GOWORK=off`, no
+that directory. The harness pins `GOTOOLCHAIN=local`, so pass `--go` the binary of
+the root `go.mod` `toolchain` (for example `$(GOTOOLCHAIN=go1.27.3 go env GOROOT)/bin/go`);
+an older local SDK makes the scan report that SDK's fixed standard-library advisories. Downloads and builds use a new module cache, `GOWORK=off`, no
 local replacement, the candidate file proxy, and the public Go proxy for third
 party dependencies. The root and plugin versions must match the candidate, every
 dependency directory must be inside that isolated module cache, `go mod verify`
