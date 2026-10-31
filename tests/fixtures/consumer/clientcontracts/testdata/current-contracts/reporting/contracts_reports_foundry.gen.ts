@@ -3,7 +3,7 @@
 
 import { APIError, ContractError, JSONNumber, ResponseContractError, UnknownEnumValue, WireCodec, checkAbort, createHTTPInvoker, defaultJSONLimits, formatText, immutable, integerPattern, limitsValid, manifestVersion, numberPattern, object, parseWire, pointer, reject, runtimePolicy, textBytes, unsentFailures, validUnicode, writeWire } from "./contracts_runtime_foundry.gen.js";
 import type { CallOptions, ClientOptions, FileResult, HTTPTransport, Identity, Issue, JSONLimits, JSONValue, MultipartPart, Operation, Payload, Presentation, RuleDescription, RuntimeDocument, URLParameter, Upload, ValidationMessages, ValidationReport, WireType, localeKeyed } from "./contracts_runtime_foundry.gen.js";
-export { APIError, ContractError, JSONNumber, ResponseContractError, UnknownEnumValue, catalogTranslations, enumLabel, formatText, idempotencyKey, manifestVersion, newIdentity } from "./contracts_runtime_foundry.gen.js";
+export { APIError, ContractError, JSONNumber, ResponseContractError, UnknownEnumValue, catalogTranslations, enumLabel, formatText, idempotencyKey, isCurrency, isLocale, isTimeZone, manifestVersion, newIdentity } from "./contracts_runtime_foundry.gen.js";
 export type { CallOptions, ClientOptions, CodecOptions, EventStreamResult, FileResult, HTTPRequest, HTTPResponse, HTTPTransport, IdempotencyErrorCode, IdempotencyKey, Identity, Issue, JSONLimits, JSONValue, Presentation, PresentationKind, RawData, RedirectResult, ResponseBody, ServerEvent, StatusResult, URLCodec, Upload, ValidationMessageCatalog, ValidationMessageRecipe, ValidationMessages, ValidationPluralForm, ValidationReport, ValidationTemplate } from "./contracts_runtime_foundry.gen.js";
 
 function metadataLimits(): JSONLimits { return { Bytes: runtimePolicy.metadataBytes, Depth: runtimePolicy.maxDepth, Nodes: 1 << 20, Steps: 1 << 22, Issues: 1 }; }
@@ -992,6 +992,7 @@ export interface API {
   "reportsMembersCsv"(request: Operations["reportsMembersCsv"]["request"], options?: CallOptions): Promise<Operations["reportsMembersCsv"]["response"]>;
   "reportsMembersQuery"(request: Operations["reportsMembersQuery"]["request"], options?: CallOptions): Promise<Operations["reportsMembersQuery"]["response"]>;
 }
+export type Client = API;
 export function createClient(transport: HTTPTransport, options: ClientOptions = {}): API {
   const engine = createHTTPInvoker(runtimeDocument(), transport, options);
   return Object.freeze({

@@ -29,6 +29,29 @@
       "nullable": true
     },
     {
+      "id": "foundry.test/consumer/clientcontracts.BrowserLogin",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "login_id",
+          "type": "string",
+          "required": true,
+          "presentation": {
+            "kind": "email"
+          }
+        },
+        {
+          "name": "password",
+          "type": "string",
+          "required": true,
+          "presentation": {
+            "kind": "password"
+          }
+        }
+      ]
+    },
+    {
       "id": "foundry.test/consumer/clientcontracts.ExplicitLabels",
       "kind": "map",
       "nullable": true,
@@ -910,6 +933,45 @@
       "nullable": false
     },
     {
+      "id": "github.com/weiloon1234/Foundry-Go/internal/authtransport.AccessTokenPair",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "access_token",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "expires_in",
+          "type": "int64",
+          "required": true
+        },
+        {
+          "name": "token_type",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/internal/authtransport.AccessTokenResponse",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "mfa_required",
+          "type": "bool",
+          "required": true
+        },
+        {
+          "name": "tokens",
+          "type": "github.com/weiloon1234/Foundry-Go/internal/authtransport.AccessTokenPair",
+          "required": true
+        }
+      ]
+    },
+    {
       "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.Project]",
       "kind": "string",
       "nullable": false,
@@ -1266,6 +1328,386 @@
         "unsupported_media_type",
         "validation_failed"
       ]
+    },
+    {
+      "route": {
+        "id": "browser.login",
+        "method": "POST",
+        "path": "/browser/login",
+        "parameters": [],
+        "access": "public",
+        "raw": false
+      },
+      "name": "browserLogin",
+      "path": [],
+      "query": [],
+      "body": {
+        "media_type": "application/json",
+        "type": "foundry.test/consumer/clientcontracts.BrowserLogin"
+      },
+      "response": {
+        "media_type": "application/json",
+        "type": "github.com/weiloon1234/Foundry-Go/internal/authtransport.AccessTokenResponse"
+      },
+      "status": 200,
+      "limits": {
+        "Multipart": {
+          "Bytes": 2097152,
+          "FileBytes": 2097152,
+          "Parts": 128,
+          "Files": 16,
+          "Readers": 16,
+          "HeaderBytes": 32768,
+          "FieldBytes": 65536,
+          "FieldsBytes": 262144,
+          "Issues": 16
+        },
+        "Files": {
+          "Bytes": 1073741824,
+          "Ranges": 16,
+          "RangeBytes": 4096
+        },
+        "Query": {
+          "Bytes": 16384,
+          "Pairs": 128,
+          "Issues": 16
+        },
+        "Form": {
+          "Bytes": 2097152,
+          "Pairs": 1024,
+          "Issues": 16
+        },
+        "Body": {
+          "Bytes": 2097152,
+          "Depth": 32,
+          "Nodes": 65536,
+          "Steps": 262144,
+          "Issues": 16
+        },
+        "Response": {
+          "Bytes": 33554432,
+          "Depth": 32,
+          "Nodes": 1048576,
+          "Steps": 4194304,
+          "Issues": 16
+        },
+        "Validation": {
+          "Checks": 65536,
+          "Issues": 32,
+          "Depth": 32,
+          "ValueBytes": 1048576
+        },
+        "Raw": {
+          "Bytes": 2097152
+        }
+      },
+      "errors": [
+        "bad_request",
+        "conflict",
+        "forbidden",
+        "internal_error",
+        "method_not_allowed",
+        "mfa_required",
+        "not_acceptable",
+        "not_found",
+        "payload_too_large",
+        "precondition_failed",
+        "range_not_satisfiable",
+        "rate_limited",
+        "request_timeout",
+        "unauthenticated",
+        "unavailable",
+        "unsupported_media_type",
+        "validation_failed"
+      ],
+      "refresh_cookie": {
+        "name": "__Host-refresh-client",
+        "sets": true
+      }
+    },
+    {
+      "route": {
+        "id": "browser.logout",
+        "method": "POST",
+        "path": "/browser/logout",
+        "parameters": [],
+        "access": "public",
+        "raw": false
+      },
+      "name": "browserLogout",
+      "path": [],
+      "query": [],
+      "status": 204,
+      "limits": {
+        "Multipart": {
+          "Bytes": 2097152,
+          "FileBytes": 2097152,
+          "Parts": 128,
+          "Files": 16,
+          "Readers": 16,
+          "HeaderBytes": 32768,
+          "FieldBytes": 65536,
+          "FieldsBytes": 262144,
+          "Issues": 16
+        },
+        "Files": {
+          "Bytes": 1073741824,
+          "Ranges": 16,
+          "RangeBytes": 4096
+        },
+        "Query": {
+          "Bytes": 16384,
+          "Pairs": 128,
+          "Issues": 16
+        },
+        "Form": {
+          "Bytes": 2097152,
+          "Pairs": 1024,
+          "Issues": 16
+        },
+        "Body": {
+          "Bytes": 2097152,
+          "Depth": 32,
+          "Nodes": 65536,
+          "Steps": 262144,
+          "Issues": 16
+        },
+        "Response": {
+          "Bytes": 33554432,
+          "Depth": 32,
+          "Nodes": 1048576,
+          "Steps": 4194304,
+          "Issues": 16
+        },
+        "Validation": {
+          "Checks": 65536,
+          "Issues": 32,
+          "Depth": 32,
+          "ValueBytes": 1048576
+        },
+        "Raw": {
+          "Bytes": 2097152
+        }
+      },
+      "errors": [
+        "bad_request",
+        "conflict",
+        "forbidden",
+        "internal_error",
+        "method_not_allowed",
+        "mfa_required",
+        "not_acceptable",
+        "not_found",
+        "payload_too_large",
+        "precondition_failed",
+        "range_not_satisfiable",
+        "rate_limited",
+        "request_timeout",
+        "unauthenticated",
+        "unavailable",
+        "unsupported_media_type",
+        "validation_failed"
+      ],
+      "refresh_cookie": {
+        "name": "__Host-refresh-client",
+        "reads": true,
+        "clears": true,
+        "optional": true
+      }
+    },
+    {
+      "route": {
+        "id": "browser.profile",
+        "method": "GET",
+        "path": "/browser/profile",
+        "parameters": [],
+        "access": "guarded",
+        "raw": false,
+        "middlewares": [
+          "foundry.authentication"
+        ],
+        "authentication": {
+          "guard": "browser_accounts",
+          "provider": "client_accounts",
+          "optional": false,
+          "credential": {
+            "source": "client_bearer",
+            "kind": "bearer",
+            "name": "Authorization"
+          }
+        }
+      },
+      "name": "browserProfile",
+      "path": [],
+      "query": [],
+      "response": {
+        "media_type": "application/json",
+        "type": "foundry.test/consumer/clientcontracts.Member"
+      },
+      "status": 200,
+      "limits": {
+        "Multipart": {
+          "Bytes": 2097152,
+          "FileBytes": 2097152,
+          "Parts": 128,
+          "Files": 16,
+          "Readers": 16,
+          "HeaderBytes": 32768,
+          "FieldBytes": 65536,
+          "FieldsBytes": 262144,
+          "Issues": 16
+        },
+        "Files": {
+          "Bytes": 1073741824,
+          "Ranges": 16,
+          "RangeBytes": 4096
+        },
+        "Query": {
+          "Bytes": 16384,
+          "Pairs": 128,
+          "Issues": 16
+        },
+        "Form": {
+          "Bytes": 2097152,
+          "Pairs": 1024,
+          "Issues": 16
+        },
+        "Body": {
+          "Bytes": 2097152,
+          "Depth": 32,
+          "Nodes": 65536,
+          "Steps": 262144,
+          "Issues": 16
+        },
+        "Response": {
+          "Bytes": 33554432,
+          "Depth": 32,
+          "Nodes": 1048576,
+          "Steps": 4194304,
+          "Issues": 16
+        },
+        "Validation": {
+          "Checks": 65536,
+          "Issues": 32,
+          "Depth": 32,
+          "ValueBytes": 1048576
+        },
+        "Raw": {
+          "Bytes": 2097152
+        }
+      },
+      "errors": [
+        "bad_request",
+        "conflict",
+        "forbidden",
+        "internal_error",
+        "method_not_allowed",
+        "mfa_required",
+        "not_acceptable",
+        "not_found",
+        "payload_too_large",
+        "precondition_failed",
+        "range_not_satisfiable",
+        "rate_limited",
+        "request_timeout",
+        "unauthenticated",
+        "unavailable",
+        "unsupported_media_type",
+        "validation_failed"
+      ]
+    },
+    {
+      "route": {
+        "id": "browser.refresh",
+        "method": "POST",
+        "path": "/browser/refresh",
+        "parameters": [],
+        "access": "public",
+        "raw": false
+      },
+      "name": "browserRefresh",
+      "path": [],
+      "query": [],
+      "response": {
+        "media_type": "application/json",
+        "type": "github.com/weiloon1234/Foundry-Go/internal/authtransport.AccessTokenResponse"
+      },
+      "status": 200,
+      "limits": {
+        "Multipart": {
+          "Bytes": 2097152,
+          "FileBytes": 2097152,
+          "Parts": 128,
+          "Files": 16,
+          "Readers": 16,
+          "HeaderBytes": 32768,
+          "FieldBytes": 65536,
+          "FieldsBytes": 262144,
+          "Issues": 16
+        },
+        "Files": {
+          "Bytes": 1073741824,
+          "Ranges": 16,
+          "RangeBytes": 4096
+        },
+        "Query": {
+          "Bytes": 16384,
+          "Pairs": 128,
+          "Issues": 16
+        },
+        "Form": {
+          "Bytes": 2097152,
+          "Pairs": 1024,
+          "Issues": 16
+        },
+        "Body": {
+          "Bytes": 2097152,
+          "Depth": 32,
+          "Nodes": 65536,
+          "Steps": 262144,
+          "Issues": 16
+        },
+        "Response": {
+          "Bytes": 33554432,
+          "Depth": 32,
+          "Nodes": 1048576,
+          "Steps": 4194304,
+          "Issues": 16
+        },
+        "Validation": {
+          "Checks": 65536,
+          "Issues": 32,
+          "Depth": 32,
+          "ValueBytes": 1048576
+        },
+        "Raw": {
+          "Bytes": 2097152
+        }
+      },
+      "errors": [
+        "bad_request",
+        "conflict",
+        "forbidden",
+        "internal_error",
+        "method_not_allowed",
+        "mfa_required",
+        "not_acceptable",
+        "not_found",
+        "payload_too_large",
+        "precondition_failed",
+        "range_not_satisfiable",
+        "rate_limited",
+        "request_timeout",
+        "unauthenticated",
+        "unavailable",
+        "unsupported_media_type",
+        "validation_failed"
+      ],
+      "refresh_cookie": {
+        "name": "__Host-refresh-client",
+        "reads": true,
+        "sets": true
+      }
     },
     {
       "route": {
@@ -5560,6 +6002,31 @@
           }
         ]
       }
+    ],
+    "frontend_messages": [
+      {
+        "key": "auth.notice",
+        "parameters": [
+          {
+            "name": "attempts",
+            "kind": "number"
+          }
+        ],
+        "plural": "attempts",
+        "plural_kind": "cardinal"
+      },
+      {
+        "key": "ui.farewell"
+      },
+      {
+        "key": "ui.welcome",
+        "parameters": [
+          {
+            "name": "name",
+            "kind": "text"
+          }
+        ]
+      }
     ]
   },
   "enums": [
@@ -5584,6 +6051,20 @@
     {
       "name": "consumer.manage",
       "label_key": "permissions.manage"
+    }
+  ],
+  "public_config": [
+    {
+      "name": "appName",
+      "env": "VITE_APP_NAME",
+      "fallback": "ConsumerApp",
+      "kind": "string"
+    },
+    {
+      "name": "defaultLocale",
+      "env": "VITE_DEFAULT_LOCALE",
+      "fallback": "en",
+      "kind": "locale"
     }
   ]
 }

@@ -404,6 +404,27 @@ export function newIdentity<Owner extends string>(_owner: Owner, id?: string): I
   if (!value || !uuidPattern.test(value) || value === "00000000-0000-0000-0000-000000000000") reject("", "invalid_identity");
   return value as Identity<Owner>;
 }
+/** Check whether a string is a valid BCP 47 canonical locale identifier. */
+export function isLocale(value: string): boolean {
+  try {
+    return Intl.getCanonicalLocales(value).length === 1;
+  } catch {
+    return false;
+  }
+}
+/** Check whether a string is an ISO 4217 three-letter currency code supported by Intl. */
+export function isCurrency(value: string): boolean {
+  return /^[A-Z]{3}$/.test(value) && Intl.supportedValuesOf("currency").includes(value);
+}
+/** Check whether a string is an IANA time zone identifier supported by Intl. */
+export function isTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
 export { uuidPattern };
 
 export type ValidationPluralForm = "zero" | "one" | "two" | "few" | "many" | "other";
@@ -707,7 +728,10 @@ interface RealtimeDescription {
 }
 interface RuntimeDocument {
   readonly version: number; readonly types: readonly WireType[]; readonly http: readonly Operation[]; readonly error_type: string;
-  readonly locales?: { readonly messages: readonly { readonly key: string; readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }[] };
+  readonly locales?: {
+    readonly messages: readonly { readonly key: string; readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }[];
+    readonly frontend_messages?: readonly { readonly key: string; readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }[];
+  };
   readonly errors: readonly { readonly error_code: string; readonly status: number; readonly message: string }[]; readonly realtime?: RealtimeDescription;
 }
 declare const idempotencyKeyBrand: unique symbol;
