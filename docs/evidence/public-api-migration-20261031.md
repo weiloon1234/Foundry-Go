@@ -158,7 +158,7 @@ documentation backlog entries are explicitly deferred lanes, as authorized.
 
 ## Files
 
-The [complete worktree file list](public-api-migration-files-20261031.txt) includes
+The complete changed-file list is in the landing commit (`git show --stat`) and includes
 inherited O+D2+C2 changes. This correction adds the operation/capability owner in
 `database/orm/expr/selected_functions.go`, typed group adapters in
 `database/orm/expr/value_filter.go`, the internal SQL scanner and export I/O
