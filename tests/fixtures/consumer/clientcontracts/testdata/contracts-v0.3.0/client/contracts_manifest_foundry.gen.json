@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "types": [
     {
       "id": "[]contract.Issue",
@@ -911,6 +911,50 @@
       ]
     },
     {
+      "id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "data",
+          "type": "pagination:items:foundry.test/consumer/reporting.MemberRow",
+          "required": true
+        },
+        {
+          "name": "links",
+          "type": "github.com/weiloon1234/Foundry-Go/http/pagination.Links",
+          "required": true
+        },
+        {
+          "name": "meta",
+          "type": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.NumericLevelRow]",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "data",
+          "type": "pagination:items:foundry.test/consumer/reporting.NumericLevelRow",
+          "required": true
+        },
+        {
+          "name": "links",
+          "type": "github.com/weiloon1234/Foundry-Go/http/pagination.Links",
+          "required": true
+        },
+        {
+          "name": "meta",
+          "type": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta",
+          "required": true
+        }
+      ]
+    },
+    {
       "id": "github.com/weiloon1234/Foundry-Go/http/pagination.PageLink",
       "kind": "object",
       "nullable": false,
@@ -1244,6 +1288,18 @@
       "kind": "array",
       "nullable": false,
       "element": "foundry.test/consumer/httppagination.MemberResponse"
+    },
+    {
+      "id": "pagination:items:foundry.test/consumer/reporting.MemberRow",
+      "kind": "array",
+      "nullable": false,
+      "element": "foundry.test/consumer/reporting.MemberRow"
+    },
+    {
+      "id": "pagination:items:foundry.test/consumer/reporting.NumericLevelRow",
+      "kind": "array",
+      "nullable": false,
+      "element": "foundry.test/consumer/reporting.NumericLevelRow"
     },
     {
       "id": "quoted:int64",
@@ -5726,6 +5782,7 @@
       "id": "reports.members",
       "row": "foundry.test/consumer/reporting.MemberRow",
       "request": "github.com/weiloon1234/Foundry-Go/datatable.Request",
+      "page": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]",
       "columns": [
         {
           "name": "id",
@@ -5981,6 +6038,7 @@
       "id": "reports.numeric_levels",
       "row": "foundry.test/consumer/reporting.NumericLevelRow",
       "request": "github.com/weiloon1234/Foundry-Go/datatable.Request",
+      "page": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.NumericLevelRow]",
       "columns": [
         {
           "name": "id",
@@ -6193,6 +6251,12 @@
       "env": "VITE_DEFAULT_LOCALE",
       "fallback": "en",
       "kind": "locale"
+    },
+    {
+      "name": "timeZone",
+      "env": "VITE_TIME_ZONE",
+      "optional": true,
+      "kind": "time_zone"
     }
   ]
 }

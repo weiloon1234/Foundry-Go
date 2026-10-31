@@ -1,11 +1,14 @@
 # Changelog
 
-## v0.3.0 — 2026-10-31
+## v0.3.0 — 2026-11-01
 
 **Highlights:** Go declarations now generate the remaining client contract
 surfaces (enum cases and labels, the typed datatable registry, portal sign-in
 sessions, public configuration, schemas, error codes, frontend message keys and
-upload constraints), with deterministic readable TypeScript names. Expression and
+upload constraints), with deterministic readable TypeScript names. Datatable
+query, export and download routes declare their table explicitly in Go (manifest
+7), so generated `tableQueries`, `tableExports` and `tableDownloads` work under any
+route scope without casts, and public settings can be `optional`. Expression and
 datatable column operations become typed `expr`/`datatable` package functions with
 pointer-shaped source scopes, and every public operation is listed by `go doc`.
 With Go 1.27.1 on darwin/arm64, peak compiler RSS for real application datatable

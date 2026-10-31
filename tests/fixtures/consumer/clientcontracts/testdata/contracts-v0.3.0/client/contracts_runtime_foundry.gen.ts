@@ -2,7 +2,7 @@
 // Shared runtime of the generated client entries in this directory. Import an
 // entry module; this module's exports are not a stable API.
 
-export const manifestVersion = 6 as const;
+export const manifestVersion = 7 as const;
 const runtimePolicy: RuntimePolicy = { maxDepth: 64, decimalDigits: 4096, metadataBytes: 16777216, messageBytes: 65536, maxMessages: 10000, semanticBytes: 128 };
 const semanticPattern = /* @__PURE__ */ new RegExp("^[a-z0-9][a-z0-9_.-]*$");
 const idempotencyKeyPattern = "^[A-Za-z0-9._:-]{16,256}$";

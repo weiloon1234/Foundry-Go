@@ -398,6 +398,72 @@
         "type": "object",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]"
       },
+      "NumberedResponse_MemberTotal": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Pagination_Items_MemberTotal"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/NumberedMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberTotal]",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberTotal]"
+      },
+      "NumberedResponse_NumericLevelRow": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Pagination_Items_NumericLevelRow"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/NumberedMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.NumericLevelRow]",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.NumericLevelRow]"
+      },
+      "NumberedResponse_OrderRow": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Pagination_Items_OrderRow"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/NumberedMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.OrderRow]",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.OrderRow]"
+      },
       "NumericLevelRow": {
         "additionalProperties": false,
         "properties": {
@@ -502,6 +568,30 @@
         "title": "pagination:items:foundry.test/consumer/reporting.MemberRow",
         "type": "array",
         "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.MemberRow"
+      },
+      "Pagination_Items_MemberTotal": {
+        "items": {
+          "$ref": "#/components/schemas/MemberTotal"
+        },
+        "title": "pagination:items:foundry.test/consumer/reporting.MemberTotal",
+        "type": "array",
+        "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.MemberTotal"
+      },
+      "Pagination_Items_NumericLevelRow": {
+        "items": {
+          "$ref": "#/components/schemas/NumericLevelRow"
+        },
+        "title": "pagination:items:foundry.test/consumer/reporting.NumericLevelRow",
+        "type": "array",
+        "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.NumericLevelRow"
+      },
+      "Pagination_Items_OrderRow": {
+        "items": {
+          "$ref": "#/components/schemas/OrderRow"
+        },
+        "title": "pagination:items:foundry.test/consumer/reporting.OrderRow",
+        "type": "array",
+        "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.OrderRow"
       },
       "Request": {
         "additionalProperties": false,
@@ -1628,5 +1718,5 @@
       }
     }
   },
-  "x-foundry-manifest-version": 6
+  "x-foundry-manifest-version": 7
 }
