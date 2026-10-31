@@ -22,7 +22,7 @@ type CursorService interface {
 }
 
 func CursorRouter(service CursorService) (*foundryhttp.Router, error) {
-	return foundryhttp.NewRouter(CursorList.Handle(service.CursorList))
+	return foundryhttp.NewRouter(pagination.Handle(CursorList, service.CursorList))
 }
 
 func (s DatabaseService) CursorList(ctx context.Context, in CursorListRequest) (CursorListResult, error) {

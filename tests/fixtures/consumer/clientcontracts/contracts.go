@@ -161,13 +161,13 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 		}),
 		empty.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 			return foundryhttp.NoContent{}, nil
-		}), pagination.ConfigureAuthenticated(pagination.Authenticated(httppagination.GuardedList, pageBinding), foundryhttp.Permissions(Manage)).Handle(func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
+		}), pagination.HandleAuthenticated(pagination.ConfigureAuthenticated(pagination.Authenticated(httppagination.GuardedList, pageBinding), foundryhttp.Permissions(Manage)), func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
 			return orm.PageResult[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{{Email: mutatorqueries.DisplayEmail(actor.Display), ID: modelIDForPage()}}, Number: input.Page.Number, Size: input.Page.Size, Total: 1, Pages: 1}, nil
-		}), pagination.ConfigureAuthenticated(pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding), foundryhttp.Permissions(Manage)).Handle(func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.SimplePage[httppagination.MemberResponse], error) {
+		}), pagination.HandleAuthenticated(pagination.ConfigureAuthenticated(pagination.Authenticated(httppagination.GuardedSimpleList, pageBinding), foundryhttp.Permissions(Manage)), func(_ context.Context, actor Account, input httppagination.ListRequest) (orm.SimplePage[httppagination.MemberResponse], error) {
 			return orm.SimplePage[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{{Email: mutatorqueries.DisplayEmail(actor.Display), ID: modelIDForPage()}}, Number: input.Page.Number, Size: input.Page.Size}, nil
-		}), pagination.ConfigureAuthenticated(pagination.Authenticated(httppagination.GuardedCursorList, pageBinding), foundryhttp.Permissions(Manage)).Handle(func(ctx context.Context, actor Account, input httppagination.CursorListRequest) (httppagination.CursorListResult, error) {
+		}), pagination.HandleAuthenticated(pagination.ConfigureAuthenticated(pagination.Authenticated(httppagination.GuardedCursorList, pageBinding), foundryhttp.Permissions(Manage)), func(ctx context.Context, actor Account, input httppagination.CursorListRequest) (httppagination.CursorListResult, error) {
 			return pagination.MapCursorPage(ctx, orm.CursorPage[mutatorqueries.Member]{Size: input.Page.Size}, httppagination.PresentMember)
-		}), httppagination.List.Handle(func(_ context.Context, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
+		}), pagination.Handle(httppagination.List, func(_ context.Context, input httppagination.ListRequest) (orm.PageResult[httppagination.MemberResponse], error) {
 			return orm.PageResult[httppagination.MemberResponse]{Items: []httppagination.MemberResponse{}, Number: input.Page.Number, Size: input.Page.Size, Total: 0, Pages: 0}, nil
 		}),
 	)...)

@@ -13,7 +13,7 @@ Configure a `Guarded` page declaration, then bind its concrete actor:
 ```go
 secured := pagination.Authenticated(list, binding, http.Scopes(readScopes), http.Permissions(readPermission))
 secured = pagination.AuthorizeActor(secured, service.AuthorizeList)
-registration := secured.Handle(service.List)
+registration := pagination.HandleAuthenticated(secured, service.List)
 ```
 
 `pagination.AuthorizeActor` is optional. Numbered/simple callbacks receive
@@ -56,7 +56,7 @@ contains commands, results, source fingerprints and this correction.
 
 The starter's existing `Service.List(context.Context, identity.User, ListInput)`
 already matches the new adapter. Its agent can declare a numbered `Guarded` route,
-bind the existing identity guard/scopes/permission, register `Handle(s.List)`, then
+bind the existing identity guard/scopes/permission, register `pagination.HandleAuthenticated(secured, s.List)`, then
 regenerate its actual manifest and clients and test cross-owner HTTP listing.
 No starter files were changed by this framework task. Application acceptance,
 resolvable version selection, deployment and SDK design decisions remain separate

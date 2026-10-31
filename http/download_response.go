@@ -33,7 +33,7 @@ func DownloadResponse(media MediaType, additional ...MediaType) Response[Downloa
 	return Response[Download]{prepare: prepareFileResponse[Download], kind: payloadDownload, status: 200, file: descriptor, describe: filePayloadInfo(descriptor), prepareFile: descriptor.prepareDownload}
 }
 
-func (f *fileResponse) Validate() error {
+func (f *fileResponse) validate() error {
 	if f == nil || len(f.media) == 0 || len(f.media) > 16 {
 		return safeerror.NewFault(fault.Invalid, "file response requires bounded declared media types")
 	}
@@ -113,10 +113,10 @@ func (f *fileResponse) prepareDownload(ctx context.Context, download Download, l
 	}
 	_, err = prepared.reader.Seek(0, io.SeekEnd)
 	if err != nil {
-		return prepared, fileReadError(ctx, prepared.reader.Failure())
+		return prepared, fileReadError(ctx, prepared.reader.failure())
 	}
 	if _, err := prepared.reader.Seek(0, io.SeekStart); err != nil {
-		return prepared, fileReadError(ctx, prepared.reader.Failure())
+		return prepared, fileReadError(ctx, prepared.reader.failure())
 	}
 	prepared.modified = content.Modified
 	prepared.tag = content.EntityTag

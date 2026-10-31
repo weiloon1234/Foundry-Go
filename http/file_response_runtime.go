@@ -36,7 +36,7 @@ func (p *preparedFile) finish(w stdhttp.ResponseWriter, r *stdhttp.Request, writ
 	if owned != nil {
 		return safeerror.WrapFailure(fault.Internal, "file response writer failed", owned)
 	}
-	cause := p.reader.Failure()
+	cause := p.reader.failure()
 	if cause == nil && writer != nil {
 		cause = writer.failed
 	}

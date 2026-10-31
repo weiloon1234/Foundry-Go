@@ -39,7 +39,7 @@ func TestPaginationParametersCarryTranslatableLabels(t *testing.T) {
 		"/items?per_page=0":   {Path: "/query/per_page", Label: "Page size", LabelKey: pagination.SizeLabelKey},
 		"/items?per_page=101": {Path: "/query/per_page", Label: "Page size", LabelKey: pagination.SizeLabelKey},
 	} {
-		found := issues(t, serve(t, endpoint.Handle(handler), target))
+		found := issues(t, serve(t, pagination.Handle(endpoint, handler), target))
 		if len(found) != 1 || found[0].Path != want.Path || found[0].Label != want.Label || found[0].LabelKey != want.LabelKey {
 			t.Fatal(target, found)
 		}
@@ -55,7 +55,7 @@ func TestPaginationParametersCarryTranslatableLabels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := foundryhttp.NewRouter(pagination.Configure(endpoint, foundryhttp.Use(foundryhttp.Locale(catalog))).Handle(handler))
+	router, err := foundryhttp.NewRouter(pagination.Handle(pagination.Configure(endpoint, foundryhttp.Use(foundryhttp.Locale(catalog))), handler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestPaginationParametersCarryTranslatableLabels(t *testing.T) {
 func TestCursorPageSizeCarriesItsLabel(t *testing.T) {
 	t.Parallel()
 	endpoint := cursorEndpoint(pagination.DefaultCursorConfig())
-	found := issues(t, serve(t, endpoint.Handle(func(context.Context, cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
+	found := issues(t, serve(t, pagination.Handle(endpoint, func(context.Context, cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 		t.Error("bad input reached service")
 		return pagination.CursorResult[cursorSource, Item]{}, nil
 	}), "/items?per_page=0"))

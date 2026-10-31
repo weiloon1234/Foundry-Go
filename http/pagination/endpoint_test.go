@@ -72,7 +72,7 @@ func decodeNumbered(t *testing.T, response *httptest.ResponseRecorder) paginatio
 func TestNumberedDefaultsScopedLinksAndEmptyPages(t *testing.T) {
 	t.Parallel()
 	endpoint := pagination.Configure(numbered(pagination.DefaultConfig()), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
-	got := decodeNumbered(t, serve(t, endpoint.Handle(func(_ context.Context, in pageInput) (orm.PageResult[Item], error) {
+	got := decodeNumbered(t, serve(t, pagination.Handle(endpoint, func(_ context.Context, in pageInput) (orm.PageResult[Item], error) {
 		if in.Page != (orm.PageRequest{Number: 1, Size: 20}) {
 			t.Error("default ORM request lost")
 		}
@@ -93,7 +93,7 @@ func TestNumberedDefaultsScopedLinksAndEmptyPages(t *testing.T) {
 		t.Fatal("DTO/metadata changed")
 	}
 	for _, number := range []int{1, 5} {
-		got = decodeNumbered(t, serve(t, endpoint.Handle(func(_ context.Context, in pageInput) (orm.PageResult[Item], error) {
+		got = decodeNumbered(t, serve(t, pagination.Handle(endpoint, func(_ context.Context, in pageInput) (orm.PageResult[Item], error) {
 			return orm.PageResult[Item]{Number: in.Page.Number, Size: in.Page.Size}, nil
 		}), "/api/items?page="+strconv.Itoa(number)))
 		if got.Data == nil || len(got.Data) != 0 || got.Meta.Pages != 0 || !got.Links.Next.IsNull() {
@@ -116,7 +116,7 @@ func TestPageInputFailuresDoNotCallService(t *testing.T) {
 		{"page=bad", 400, "/query/page"}, {"page=1&page=2", 400, "/query/page"}, {"per_page=", 400, "/query/per_page"}, {"unknown=secret", 400, "/query"},
 	} {
 		t.Run(tc.raw, func(t *testing.T) {
-			response := serve(t, numbered(pagination.DefaultConfig()).Handle(func(context.Context, pageInput) (orm.PageResult[Item], error) {
+			response := serve(t, pagination.Handle(numbered(pagination.DefaultConfig()), func(context.Context, pageInput) (orm.PageResult[Item], error) {
 				t.Error("bad input reached service")
 				return orm.PageResult[Item]{}, nil
 			}), "/items?"+tc.raw)
@@ -132,21 +132,21 @@ func TestCustomNamesAndFilterValidationCompose(t *testing.T) {
 	config.NumberParam = "p"
 	config.SizeParam = "limit"
 	endpoint := pagination.ValidateFilters(numbered(config), validation.Rules(validation.DefineField("q", func(f filters) value.Optional[string] { return f.Term }), validation.Optional(validation.MinLength[string](3))))
-	response := serve(t, endpoint.Handle(func(context.Context, pageInput) (orm.PageResult[Item], error) {
+	response := serve(t, pagination.Handle(endpoint, func(context.Context, pageInput) (orm.PageResult[Item], error) {
 		t.Error("bad filter accepted")
 		return orm.PageResult[Item]{}, nil
 	}), "/items?q=x&p=1&limit=2")
 	if response.Code != 422 || !strings.Contains(response.Body.String(), "/query/q") || strings.Contains(response.Body.String(), "/filters") {
 		t.Fatalf("filter path=%s", response.Body)
 	}
-	response = serve(t, endpoint.Handle(func(context.Context, pageInput) (orm.PageResult[Item], error) {
+	response = serve(t, pagination.Handle(endpoint, func(context.Context, pageInput) (orm.PageResult[Item], error) {
 		t.Error("page bounds replaced by filters")
 		return orm.PageResult[Item]{}, nil
 	}), "/items?q=okay&p=0")
 	if response.Code != 422 || !strings.Contains(response.Body.String(), "/query/p") {
 		t.Fatal("custom page rule lost")
 	}
-	location, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, filters{}, orm.PageRequest{Number: 2, Size: 7})
+	location, err := pagination.URL(endpoint, t.Context(), foundryhttp.NoPath{}, filters{}, orm.PageRequest{Number: 2, Size: 7})
 	if err != nil || location != "/items?limit=7&p=2" {
 		t.Fatalf("URL=%q err=%v", location, err)
 	}
@@ -169,13 +169,13 @@ func TestServicePageFailuresDoNotPublishSuccess(t *testing.T) {
 	for _, page := range []orm.PageResult[Item]{
 		{}, {Number: 2, Size: 20}, {Number: 1, Size: 2}, {Number: 1, Size: 20, Total: 1, Pages: 0}, {Number: 1, Size: 20, Total: -1}, {Number: 1, Size: 20, Items: make([]Item, 21)},
 	} {
-		response := serve(t, numbered(pagination.DefaultConfig()).Handle(func(context.Context, pageInput) (orm.PageResult[Item], error) { return page, nil }), "/items")
+		response := serve(t, pagination.Handle(numbered(pagination.DefaultConfig()), func(context.Context, pageInput) (orm.PageResult[Item], error) { return page, nil }), "/items")
 		if response.Code != 500 || strings.Contains(response.Body.String(), `"data"`) {
 			t.Fatalf("inconsistent result published: %d %s", response.Code, response.Body)
 		}
 	}
 	private := errors.New("private service error")
-	response := serve(t, numbered(pagination.DefaultConfig()).Handle(func(context.Context, pageInput) (orm.PageResult[Item], error) { return orm.PageResult[Item]{}, private }), "/items")
+	response := serve(t, pagination.Handle(numbered(pagination.DefaultConfig()), func(context.Context, pageInput) (orm.PageResult[Item], error) { return orm.PageResult[Item]{}, private }), "/items")
 	if response.Code != 500 || strings.Contains(response.Body.String(), private.Error()) {
 		t.Fatal("private service failure leaked")
 	}
@@ -183,7 +183,7 @@ func TestServicePageFailuresDoNotPublishSuccess(t *testing.T) {
 func TestSimplePagesDoNotInventTotals(t *testing.T) {
 	t.Parallel()
 	endpoint := pagination.DefineSimple(route(), filterQuery(), itemJSON(), pagination.DefaultConfig())
-	response := serve(t, endpoint.Handle(func(_ context.Context, in pageInput) (orm.SimplePage[Item], error) {
+	response := serve(t, pagination.Handle(endpoint, func(_ context.Context, in pageInput) (orm.SimplePage[Item], error) {
 		return orm.SimplePage[Item]{Items: []Item{{Label: "A"}, {Label: "B"}}, Number: in.Page.Number, Size: in.Page.Size, HasMore: true}, nil
 	}), "/items?page=2&per_page=2&q=search")
 	if response.Code != 200 {
@@ -202,7 +202,7 @@ func TestSimplePagesDoNotInventTotals(t *testing.T) {
 	if _, err := pagination.SimpleJSON(itemJSON()).Decode(t.Context(), response.Body.Bytes(), foundryhttp.DefaultEndpointLimits().Response); err != nil {
 		t.Fatal(err)
 	}
-	response = serve(t, endpoint.Handle(func(context.Context, pageInput) (orm.SimplePage[Item], error) {
+	response = serve(t, pagination.Handle(endpoint, func(context.Context, pageInput) (orm.SimplePage[Item], error) {
 		return orm.SimplePage[Item]{Number: 1, Size: 20, HasMore: true}, nil
 	}), "/items")
 	if response.Code != 500 {
@@ -219,23 +219,23 @@ func TestPaginationPublicLinksUseApprovedOrigin(t *testing.T) {
 	// A public policy approves this native HTTP origin, then chooses its configured
 	// canonical HTTPS base. Missing policy cannot trust an arbitrary request Host.
 	endpoint := numbered(config)
-	missing := serve(t, endpoint.Handle(handler), "http://evil.example/items")
+	missing := serve(t, pagination.Handle(endpoint, handler), "http://evil.example/items")
 	if missing.Code != 500 {
 		t.Fatal("unapproved origin used")
 	}
 	middleware := foundryhttp.PublicURLs(foundryhttp.PublicURLConfig{AllowedOrigins: []foundryhttp.Origin{"http://app.example", "https://app.example"}, Canonical: value.Set(foundryhttp.Origin("https://app.example"))})
-	got := decodeNumbered(t, serve(t, pagination.Configure(endpoint, foundryhttp.Use(middleware)).Handle(handler), "http://app.example/items"))
+	got := decodeNumbered(t, serve(t, pagination.Handle(pagination.Configure(endpoint, foundryhttp.Use(middleware)), handler), "http://app.example/items"))
 	next, _ := got.Links.Next.Get()
 	if !strings.HasPrefix(next, "https://app.example/items?") {
 		t.Fatalf("unapproved link=%s", next)
 	}
-	router, err := foundryhttp.NewRouter(pagination.Configure(endpoint, foundryhttp.Use(middleware)).Handle(handler))
+	router, err := foundryhttp.NewRouter(pagination.Handle(pagination.Configure(endpoint, foundryhttp.Use(middleware)), handler))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var _ stdhttp.Handler = router
 	// Global assembly without PublicURLs fails before serving any request.
-	bare, err := foundryhttp.NewRouter(endpoint.Handle(handler))
+	bare, err := foundryhttp.NewRouter(pagination.Handle(endpoint, handler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestPaginationPublicLinksUseApprovedOrigin(t *testing.T) {
 		t.Fatalf("global public link=%s", next)
 	}
 	// Relative links need no public origin policy.
-	relative, err := foundryhttp.NewRouter(numbered(pagination.DefaultConfig()).Handle(handler))
+	relative, err := foundryhttp.NewRouter(pagination.Handle(numbered(pagination.DefaultConfig()), handler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestNumberedPaginationBoundsOffsetDepth(t *testing.T) {
 	config := pagination.DefaultConfig()
 	config.MaximumPage = 3
 	endpoint := numbered(config)
-	registration := endpoint.Handle(func(_ context.Context, in pageInput) (orm.PageResult[Item], error) {
+	registration := pagination.Handle(endpoint, func(_ context.Context, in pageInput) (orm.PageResult[Item], error) {
 		return orm.PageResult[Item]{Number: in.Page.Number, Size: in.Page.Size, Total: 1000, Pages: 50}, nil
 	})
 	if response := serve(t, registration, "/items?page=4"); response.Code != 422 || !strings.Contains(response.Body.String(), "/query/page") {
@@ -275,7 +275,7 @@ func TestNumberedPaginationBoundsOffsetDepth(t *testing.T) {
 	if !got.Links.Next.IsNull() || got.Links.Previous.IsNull() {
 		t.Fatalf("navigation beyond maximum page: %+v", got.Links)
 	}
-	if _, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, filters{}, orm.PageRequest{Number: 4, Size: 20}); err == nil {
+	if _, err := pagination.URL(endpoint, t.Context(), foundryhttp.NoPath{}, filters{}, orm.PageRequest{Number: 4, Size: 20}); err == nil {
 		t.Fatal("URL generated beyond maximum page")
 	}
 	for _, maximum := range []int{-1, math.MaxInt} {
@@ -290,7 +290,7 @@ func TestNumberedPaginationBoundsOffsetDepth(t *testing.T) {
 	if zero.Validate() != nil {
 		t.Fatal("zero maximum page must select the default")
 	}
-	if response := serve(t, numbered(zero).Handle(func(_ context.Context, in pageInput) (orm.PageResult[Item], error) {
+	if response := serve(t, pagination.Handle(numbered(zero), func(_ context.Context, in pageInput) (orm.PageResult[Item], error) {
 		return orm.PageResult[Item]{Number: in.Page.Number, Size: in.Page.Size}, nil
 	}), "/items?page="+strconv.Itoa(pagination.DefaultMaximumPage+1)); response.Code != 422 {
 		t.Fatalf("default maximum page not enforced: %d", response.Code)
@@ -316,14 +316,14 @@ func TestNumberedEdgeLinksAndPageWindow(t *testing.T) {
 		}
 	}
 	// Disabled by default: the wire shape is unchanged.
-	plain := serve(t, numbered(pagination.DefaultConfig()).Handle(handler(9)), "/items?page=5&q=term")
+	plain := serve(t, pagination.Handle(numbered(pagination.DefaultConfig()), handler(9)), "/items?page=5&q=term")
 	if body := plain.Body.String(); strings.Contains(body, `"first"`) || strings.Contains(body, `"last"`) || strings.Contains(body, `"window"`) {
 		t.Fatalf("navigation links emitted without opt-in: %s", body)
 	}
 	config := pagination.DefaultConfig()
 	config.EdgeLinks = true
 	config.PageWindow = 2
-	got := decodeNumbered(t, serve(t, numbered(config).Handle(handler(9)), "/items?page=5&q=term"))
+	got := decodeNumbered(t, serve(t, pagination.Handle(numbered(config), handler(9)), "/items?page=5&q=term"))
 	first, hasFirst := got.Links.First.Get()
 	last, hasLast := got.Links.Last.Get()
 	if !hasFirst || !hasLast || pageOf(t, first) != 1 || pageOf(t, last) != 9 {
@@ -351,7 +351,7 @@ func TestNumberedEdgeLinksAndPageWindow(t *testing.T) {
 		{"/items?page=1&q=term", 0, []int{1}, 1},
 		{"/items?page=7&q=term", 2, []int{}, 2},
 	} {
-		got := decodeNumbered(t, serve(t, numbered(config).Handle(handler(tc.pages)), tc.target))
+		got := decodeNumbered(t, serve(t, pagination.Handle(numbered(config), handler(tc.pages)), tc.target))
 		window = []int{}
 		for _, link := range got.Links.Window {
 			window = append(window, link.Number)
@@ -363,7 +363,7 @@ func TestNumberedEdgeLinksAndPageWindow(t *testing.T) {
 	}
 	// Links never point beyond MaximumPage.
 	config.MaximumPage = 6
-	got = decodeNumbered(t, serve(t, numbered(config).Handle(handler(50)), "/items?page=5&q=term"))
+	got = decodeNumbered(t, serve(t, pagination.Handle(numbered(config), handler(50)), "/items?page=5&q=term"))
 	window = nil
 	for _, link := range got.Links.Window {
 		window = append(window, link.Number)
@@ -373,7 +373,7 @@ func TestNumberedEdgeLinksAndPageWindow(t *testing.T) {
 	}
 	// Simple pages have no count: only the first link applies.
 	simple := pagination.DefineSimple(route(), filterQuery(), itemJSON(), config)
-	response := serve(t, simple.Handle(func(_ context.Context, in pageInput) (orm.SimplePage[Item], error) {
+	response := serve(t, pagination.Handle(simple, func(_ context.Context, in pageInput) (orm.SimplePage[Item], error) {
 		return orm.SimplePage[Item]{Items: []Item{{Label: "A"}}, Number: in.Page.Number, Size: in.Page.Size, HasMore: true}, nil
 	}), "/items?page=2&per_page=1&q=term")
 	var simpleGot pagination.SimpleResponse[Item]
@@ -405,11 +405,11 @@ func TestInvalidPaginationDeclarationsFailAssembly(t *testing.T) {
 		if pagination.Validate(endpoint) == nil {
 			t.Fatal("invalid config accepted")
 		}
-		if _, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, pageInput) (orm.PageResult[Item], error) { return orm.PageResult[Item]{}, nil })); err == nil {
+		if _, err := foundryhttp.NewRouter(pagination.Handle(endpoint, func(context.Context, pageInput) (orm.PageResult[Item], error) { return orm.PageResult[Item]{}, nil })); err == nil {
 			t.Fatal("invalid config assembled")
 		}
 	}
-	if _, err := foundryhttp.NewRouter(numbered(pagination.DefaultConfig()).Handle(nil)); err == nil {
+	if _, err := foundryhttp.NewRouter(pagination.Handle(numbered(pagination.DefaultConfig()), nil)); err == nil {
 		t.Fatal("nil handler accepted")
 	}
 	overlap := foundryhttp.DefineQuery(foundryhttp.QueryParam("page", foundryhttp.StringQuery[string](), func(f *Item) *string { return &f.Label }))

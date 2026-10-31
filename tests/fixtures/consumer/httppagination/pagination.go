@@ -37,7 +37,7 @@ type Service interface {
 }
 
 func Router(service Service) (*foundryhttp.Router, error) {
-	return foundryhttp.NewRouter(List.Handle(service.List))
+	return foundryhttp.NewRouter(pagination.Handle(List, service.List))
 }
 
 // DatabaseService uses the handwritten ORM declarations with the framework's parsed

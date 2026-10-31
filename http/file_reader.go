@@ -122,7 +122,7 @@ func (r *fileReader) Seek(offset int64, whence int) (int64, error) {
 	return position, nil
 }
 
-func (r *fileReader) Failure() error {
+func (r *fileReader) failure() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.failed

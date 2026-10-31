@@ -67,17 +67,20 @@ func InspectAuthenticated[P, F, W, A, Page, Response any](e authenticatedPageEnd
 	}
 	return foundryhttp.InspectAuthenticated(e.transport)
 }
-func (e authenticatedPageEndpoint[P, F, W, A, Page, Response]) URL(ctx context.Context, path P, filters F, page W) (string, error) {
+
+// AuthenticatedURL validates the guarded endpoint and builds a URL from concrete
+// route, filter and pagination values using the public adapter's link policy.
+func AuthenticatedURL[P, F, W, A, Page, Response any](e authenticatedPageEndpoint[P, F, W, A, Page, Response], ctx context.Context, path P, filters F, page W) (string, error) {
 	if err := ValidateAuthenticated(e); err != nil {
 		return "", err
 	}
-	return e.page.URL(ctx, path, filters, page)
+	return URL(e.page, ctx, path, filters, page)
 }
 
-// Handle preserves actor, request and ORM page types through the ordinary guarded
-// HTTP handler. Page validation, navigation and response completion are shared
+// HandleAuthenticated preserves actor, request and ORM page types through the
+// ordinary guarded HTTP handler. Page validation, navigation and response completion are shared
 // with the public adapter; authority is never inferred from a cursor token.
-func (e authenticatedPageEndpoint[P, F, W, A, Page, Response]) Handle(handler func(context.Context, A, pageRequest[P, F, W]) (Page, error)) foundryhttp.RouteRegistration {
+func HandleAuthenticated[P, F, W, A, Page, Response any](e authenticatedPageEndpoint[P, F, W, A, Page, Response], handler func(context.Context, A, pageRequest[P, F, W]) (Page, error)) foundryhttp.RouteRegistration {
 	if err := ValidateAuthenticated(e); err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)
 	}

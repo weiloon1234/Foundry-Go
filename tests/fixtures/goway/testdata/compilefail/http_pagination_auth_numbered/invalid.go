@@ -10,6 +10,6 @@ import (
 
 type OtherActor struct{ ID int64 }
 
-var _ = pagination.Authenticated(integrations.List, foundryhttp.GuardBinding[OtherActor]{}).Handle(func(context.Context, integrations.Actor, integrations.Request) (orm.PageResult[integrations.Response], error) {
+var _ = pagination.HandleAuthenticated(pagination.Authenticated(integrations.List, foundryhttp.GuardBinding[OtherActor]{}), func(context.Context, integrations.Actor, integrations.Request) (orm.PageResult[integrations.Response], error) {
 	return orm.PageResult[integrations.Response]{}, nil
 })

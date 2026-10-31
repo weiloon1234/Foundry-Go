@@ -7,6 +7,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 )
 
-var _ = integrations.Cursor.Handle(func(context.Context, integrations.CursorRequest) (pagination.CursorResult[models.Order, integrations.Response], error) {
+var _ = pagination.Handle(integrations.Cursor, func(context.Context, integrations.CursorRequest) (pagination.CursorResult[models.Order, integrations.Response], error) {
 	return pagination.CursorResult[models.Order, integrations.Response]{}, nil
 })

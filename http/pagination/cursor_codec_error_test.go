@@ -53,7 +53,7 @@ func TestCursorEncoderAndDecoderInfrastructureFailuresStayHTTP500(t *testing.T) 
 					}
 					return 7, nil
 				})
-				response := serve(t, cursorEndpoint(pagination.DefaultCursorConfig()).Handle(func(context.Context, cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
+				response := serve(t, pagination.Handle(cursorEndpoint(pagination.DefaultCursorConfig()), func(context.Context, cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 					_, err := querycore.ReadCursorBoundary(token, true, false, strings.Repeat("a", 64), []querycore.CursorField{{Decode: func(raw any) (driver.Value, error) {
 						v, err := c.Decode(raw)
 						if err != nil {

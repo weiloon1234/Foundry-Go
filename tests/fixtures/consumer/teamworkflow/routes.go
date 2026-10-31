@@ -76,7 +76,7 @@ func (s *Service) Routes() ([]http.RouteRegistration, error) {
 		boundShow.Handle(func(_ context.Context, _ Actor, in modelbinding.Input[ProjectPath, http.NoQuery, http.NoBody, Resources]) (ProjectEnvelope, error) {
 			return ProjectEnvelope{Data: present(in.Model.Child), Trace: "workflow"}, nil
 		}),
-		catalogue.Handle(func(ctx context.Context, in pagination.Request[http.NoPath, CatalogueFilters]) (orm.PageResult[CatalogueItem], error) {
+		pagination.Handle(catalogue, func(ctx context.Context, in pagination.Request[http.NoPath, CatalogueFilters]) (orm.PageResult[CatalogueItem], error) {
 			rows := Projects.Query().Where(orm.ColumnEq(Projects.Enabled, true)).OrderBy(orm.KeyAsc(Projects.Key()))
 			if team, set := in.Filters.Team.Get(); set {
 				rows = rows.Where(orm.NumberEq(Projects.TeamID, team))

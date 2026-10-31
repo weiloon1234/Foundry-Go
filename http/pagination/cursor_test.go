@@ -49,7 +49,7 @@ func TestCursorEndpointOwnsDefaultsDirectionsAndFilterLinks(t *testing.T) {
 		if direction != "" {
 			target += "&" + direction + "=" + url.QueryEscape(token.Token())
 		}
-		response := serve(t, endpoint.Handle(func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
+		response := serve(t, pagination.Handle(endpoint, func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 			if in.Page.Size != 20 || in.Page.After.IsSet() != (direction == "next") || in.Page.Before.IsSet() != (direction == "previous") {
 				t.Error("typed direction/default lost")
 			}
@@ -112,7 +112,7 @@ func TestCursorInputFailuresStopBeforeService(t *testing.T) {
 		{"after=", 400}, {"after=bad", 400}, {"after=" + token + "&after=" + token, 400},
 		{"after=" + token + "&before=" + token, 422}, {"per_page=0", 422}, {"per_page=101", 422}, {"page=1", 400},
 	} {
-		response := serve(t, cursorEndpoint(pagination.DefaultCursorConfig()).Handle(func(context.Context, cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
+		response := serve(t, pagination.Handle(cursorEndpoint(pagination.DefaultCursorConfig()), func(context.Context, cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 			t.Error("bad cursor reached service")
 			return pagination.CursorResult[cursorSource, Item]{}, nil
 		}), "/items?"+tc.raw)
@@ -139,7 +139,7 @@ func TestCursorMappingKeepsSourceOwnershipAndEmptyShape(t *testing.T) {
 	if mapped.Items()[0].Label != "display:secret" || source.Items[0].Stored != "secret" {
 		t.Fatal("mapped container aliases source/accessor output")
 	}
-	response := serve(t, cursorEndpoint(pagination.DefaultCursorConfig()).Handle(func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
+	response := serve(t, pagination.Handle(cursorEndpoint(pagination.DefaultCursorConfig()), func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 		return pagination.MapCursorPage(ctx, orm.CursorPage[cursorSource]{Size: in.Page.Size}, cursorDTO)
 	}), "/items")
 	var got pagination.CursorResponse[Item]
@@ -168,7 +168,7 @@ func TestCursorEndpointSeparatesInvalidInputAndServerResults(t *testing.T) {
 	}{
 		{badInput, 400}, {fault.New(fault.Invalid, "invalid query declaration"), 500}, {errors.New("private infrastructure error"), 500},
 	} {
-		response := serve(t, cursorEndpoint(pagination.DefaultCursorConfig()).Handle(func(context.Context, cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
+		response := serve(t, pagination.Handle(cursorEndpoint(pagination.DefaultCursorConfig()), func(context.Context, cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 			return pagination.CursorResult[cursorSource, Item]{}, tc.failure
 		}), "/items")
 		if response.Code != tc.status || strings.Contains(response.Body.String(), "private") {
@@ -176,7 +176,7 @@ func TestCursorEndpointSeparatesInvalidInputAndServerResults(t *testing.T) {
 		}
 	}
 	for _, zero := range []bool{true, false} {
-		response := serve(t, cursorEndpoint(pagination.DefaultCursorConfig()).Handle(func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
+		response := serve(t, pagination.Handle(cursorEndpoint(pagination.DefaultCursorConfig()), func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 			if zero {
 				return pagination.CursorResult[cursorSource, Item]{}, nil
 			}
@@ -197,12 +197,12 @@ func TestCursorLinksRequireApprovedPublicOrigins(t *testing.T) {
 	handler := func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 		return pagination.MapCursorPage(ctx, orm.CursorPage[cursorSource]{Items: []cursorSource{{Stored: "raw"}}, Size: in.Page.Size, Next: value.Set(token)}, cursorDTO)
 	}
-	response := serve(t, endpoint.Handle(handler), "http://evil.example/items")
+	response := serve(t, pagination.Handle(endpoint, handler), "http://evil.example/items")
 	if response.Code != 500 {
 		t.Fatal("unapproved origin trusted")
 	}
 	middleware := foundryhttp.PublicURLs(foundryhttp.PublicURLConfig{AllowedOrigins: []foundryhttp.Origin{"https://app.example"}})
-	response = serve(t, pagination.Configure(endpoint, foundryhttp.Use(middleware)).Handle(handler), "https://app.example/items")
+	response = serve(t, pagination.Handle(pagination.Configure(endpoint, foundryhttp.Use(middleware)), handler), "https://app.example/items")
 	if response.Code != 200 || !strings.Contains(response.Body.String(), "https://app.example/items?") {
 		t.Fatalf("approved link: %d %s", response.Code, response.Body)
 	}
@@ -242,7 +242,7 @@ func TestCursorQueryCodecPreservesTypedPosition(t *testing.T) {
 func TestCursorSizeChangesAndInvalidDeclarations(t *testing.T) {
 	token := tokenFor[cursorSource](t)
 	endpoint := cursorEndpoint(pagination.DefaultCursorConfig())
-	response := serve(t, endpoint.Handle(func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
+	response := serve(t, pagination.Handle(endpoint, func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 		if in.Page.Size != 2 {
 			t.Error("explicit size was replaced by default")
 		}
@@ -269,10 +269,10 @@ func TestCursorSizeChangesAndInvalidDeclarations(t *testing.T) {
 			t.Fatal("invalid cursor configuration accepted")
 		}
 	}
-	if _, err := foundryhttp.NewRouter(endpoint.Handle(nil)); err == nil {
+	if _, err := foundryhttp.NewRouter(pagination.Handle(endpoint, nil)); err == nil {
 		t.Fatal("nil cursor handler accepted")
 	}
-	if _, err := endpoint.URL(t.Context(), foundryhttp.NoPath{}, filters{}, orm.CursorRequest[cursorSource]{Size: 20, After: value.Set(orm.Cursor[cursorSource]{})}); err == nil {
+	if _, err := pagination.URL(endpoint, t.Context(), foundryhttp.NoPath{}, filters{}, orm.CursorRequest[cursorSource]{Size: 20, After: value.Set(orm.Cursor[cursorSource]{})}); err == nil {
 		t.Fatal("zero cursor became URL")
 	}
 }
@@ -292,7 +292,7 @@ func TestCursorHandlerErrorInspectionIsBoundedAndNextRequestSucceeds(t *testing.
 	cycle := new(cyclicCursorServiceError)
 	fail := true
 	endpoint := cursorEndpoint(pagination.DefaultCursorConfig())
-	router, err := foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
+	router, err := foundryhttp.NewRouter(pagination.Handle(endpoint, func(ctx context.Context, in cursorInput) (pagination.CursorResult[cursorSource, Item], error) {
 		if fail {
 			return pagination.CursorResult[cursorSource, Item]{}, cycle
 		}

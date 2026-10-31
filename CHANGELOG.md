@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Changed (breaking): HTTP pagination endpoint `Handle` and `URL` methods move to
+  documented package functions: `pagination.Handle`, `pagination.URL`,
+  `pagination.HandleAuthenticated`, and `pagination.AuthenticatedURL`. Pass the
+  endpoint first; the former methods are removed. See the
+  [migration table](docs/guides/http-pagination.md#v03-migration).
+
 - Changed (breaking): Row, selected, and aggregate expression operations move to
   typed `expr` package functions, including `AsSelected`, `ParamOf`, `Key`, `Filter`,
   and the `Value` comparison and ordering functions. Public expression aliases

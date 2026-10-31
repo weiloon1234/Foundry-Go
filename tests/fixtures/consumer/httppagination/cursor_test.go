@@ -49,7 +49,7 @@ func TestGeneratedCursorEndpointPreservesModelAndDTOOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	location, err := httppagination.CursorList.URL(t.Context(), foundryhttp.NoPath{}, httppagination.MemberFilters{Email: value.Set("member+filter@example.test")}, orm.CursorRequest[mutatorqueries.Member]{Size: 20, After: value.Set(token)})
+	location, err := pagination.URL(httppagination.CursorList, t.Context(), foundryhttp.NoPath{}, httppagination.MemberFilters{Email: value.Set("member+filter@example.test")}, orm.CursorRequest[mutatorqueries.Member]{Size: 20, After: value.Set(token)})
 	if err != nil {
 		t.Fatal(err)
 	}

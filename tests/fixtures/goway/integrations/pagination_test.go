@@ -47,7 +47,7 @@ func TestORMPaginationKeepsTransportIdentity(t *testing.T) {
 }
 
 func TestORMPagesReachHTTPWithoutExposingModels(t *testing.T) {
-	registration := integrations.List.Handle(func(ctx context.Context, request integrations.Request) (orm.PageResult[integrations.Response], error) {
+	registration := pagination.Handle(integrations.List, func(ctx context.Context, request integrations.Request) (orm.PageResult[integrations.Response], error) {
 		return pagination.MapPage(ctx, orm.PageResult[models.User]{Items: []models.User{{Email: "visible@example.test"}}, Number: request.Page.Number, Size: request.Page.Size, Total: 1, Pages: 1}, integrations.Present)
 	})
 	router, err := foundryhttp.NewRouter(registration)
@@ -64,7 +64,7 @@ func TestORMPagesReachHTTPWithoutExposingModels(t *testing.T) {
 		t.Fatal(err)
 	}
 	var cursor orm.Cursor[models.User]
-	if _, err := integrations.Cursor.URL(t.Context(), foundryhttp.NoPath{}, integrations.Filters{}, orm.CursorRequest[models.User]{Size: 20, After: value.Set(cursor)}); err == nil {
+	if _, err := pagination.URL(integrations.Cursor, t.Context(), foundryhttp.NoPath{}, integrations.Filters{}, orm.CursorRequest[models.User]{Size: 20, After: value.Set(cursor)}); err == nil {
 		t.Fatal("zero cursor accepted")
 	}
 }

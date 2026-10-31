@@ -112,7 +112,7 @@ func ValidateFilters[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, 
 // URL builds a page URL from concrete route, filter and ORM request values. It
 // uses the same query codecs/default declarations as the handler boundary and
 // never derives an origin from an arbitrary incoming request Host.
-func (e pageEndpoint[P, F, W, Page, Response]) URL(ctx context.Context, path P, filters F, page W) (string, error) {
+func URL[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response], ctx context.Context, path P, filters F, page W) (string, error) {
 	if err := Validate(e); err != nil {
 		return "", err
 	}
@@ -131,7 +131,7 @@ func (e pageEndpoint[P, F, W, Page, Response]) URL(ctx context.Context, path P, 
 
 // Handle binds a domain page read. Input validation completes first; response
 // metadata and links are completed before native JSON commits any success bytes.
-func (e pageEndpoint[P, F, W, Page, Response]) Handle(handler func(context.Context, pageRequest[P, F, W]) (Page, error)) foundryhttp.RouteRegistration {
+func Handle[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response], handler func(context.Context, pageRequest[P, F, W]) (Page, error)) foundryhttp.RouteRegistration {
 	if err := Validate(e); err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)
 	}
@@ -167,7 +167,7 @@ func pageEndpointComplete[P, F, W, Page, Response any](e pageEndpoint[P, F, W, P
 		return *new(Response), err
 	}
 	response, err := e.finish(request, page, func(target W) (string, error) {
-		return e.URL(ctx, request.Path, request.Filters, target)
+		return URL(e, ctx, request.Path, request.Filters, target)
 	})
 	if err != nil {
 		return *new(Response), foundryhttp.InternalError.WithCause(err)

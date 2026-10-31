@@ -35,17 +35,31 @@ func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResu
 }
 ```
 
-`List.Handle(service.List)` registers the endpoint. `PresentMember` selects the
+`pagination.Handle(List, service.List)` registers the endpoint. `PresentMember` selects the
 model's typed accessors explicitly and preserves the stored model ID. Mapping
 errors, panic, Goexit and cancellation return no partial page. Mapping does not
 modify stored fields or invoke write mutators. Ordinary Go ownership applies to
 any pointers/maps a DTO deliberately retains from its source.
 
+## v0.3 migration
+
+Pagination operations are documented package functions. Pass the endpoint first;
+handler, actor, request and response types remain connected. The former methods
+are removed.
+
+| Before | After |
+| --- | --- |
+| `endpoint.Handle(handler)` | `pagination.Handle(endpoint, handler)` |
+| `endpoint.URL(ctx, path, filters, page)` | `pagination.URL(endpoint, ctx, path, filters, page)` |
+| `secured.Handle(handler)` | `pagination.HandleAuthenticated(secured, handler)` |
+| `secured.URL(ctx, path, filters, page)` | `pagination.AuthenticatedURL(secured, ctx, path, filters, page)` |
+
 ## Authenticated page reads
 
 Declare the route with `Access: foundryhttp.Guarded`, configure pagination as
 usual, and pass its concrete `foundryhttp.GuardBinding[Actor]` to
-`pagination.Authenticated`. Numbered, simple and cursor endpoints use the same
+`pagination.Authenticated`, then register it with
+`pagination.HandleAuthenticated(secured, service.List)`. Numbered, simple and cursor endpoints use the same
 adapter and infer all types from the endpoint and binding:
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/authenticated.go -->
@@ -132,7 +146,7 @@ as defined by the ORM's lookahead read.
 
 Links preserve declared filters and use the endpoint's current route scope and
 query codecs. They are navigation hints, not guarantees that data will survive a
-later request. `URL(ctx, path, filters, page)` uses the same declarations. Relative
+later request. `pagination.URL(endpoint, ctx, path, filters, page)` uses the same declarations. Relative
 links ignore arbitrary incoming Host values. For absolute links, select
 `PublicLinks` and register [PublicURLs](http-public-urls.md) with approved origins.
 A `PublicLinks` endpoint marks its route with `RequirePublicURLs()`, so

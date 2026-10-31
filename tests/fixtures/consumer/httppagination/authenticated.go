@@ -38,5 +38,5 @@ type AuthenticatedService interface {
 
 func AuthenticatedRouter(binding foundryhttp.GuardBinding[Actor], service AuthenticatedService) (*foundryhttp.Router, error) {
 	endpoint := AuthenticatedNumbered(binding)
-	return foundryhttp.NewRouter(endpoint.Handle(service.List), AuthenticatedSimple(binding).Handle(service.SimpleList), AuthenticatedCursor(binding).Handle(service.CursorList))
+	return foundryhttp.NewRouter(pagination.HandleAuthenticated(endpoint, service.List), pagination.HandleAuthenticated(AuthenticatedSimple(binding), service.SimpleList), pagination.HandleAuthenticated(AuthenticatedCursor(binding), service.CursorList))
 }

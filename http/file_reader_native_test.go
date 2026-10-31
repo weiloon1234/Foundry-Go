@@ -61,7 +61,7 @@ func TestFileReaderContainsNativeRangeSourceFailures(t *testing.T) {
 					case <-time.After(5 * time.Second):
 						t.Fatal("native range producer failed to terminate")
 					}
-					if reader.Failure() == nil {
+					if reader.failure() == nil {
 						t.Fatal("native discarded the copy error without an owned diagnostic")
 					}
 					if strings.Contains(recorder.Body.String(), "private") {

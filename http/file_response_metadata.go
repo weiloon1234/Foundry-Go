@@ -16,7 +16,7 @@ func (info FileResponseInfo) TransferBytes(limits FileResponseLimits) (int64, er
 	if err := limits.Validate(); err != nil {
 		return 0, err
 	}
-	if err := (&fileResponse{media: info.MediaTypes, stream: !info.Seekable}).Validate(); err != nil {
+	if err := (&fileResponse{media: info.MediaTypes, stream: !info.Seekable}).validate(); err != nil {
 		return 0, err
 	}
 	if !info.Seekable {

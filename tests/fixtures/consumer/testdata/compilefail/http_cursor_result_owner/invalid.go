@@ -7,6 +7,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 )
 
-var _ = httppagination.CursorList.Handle(func(context.Context, httppagination.CursorListRequest) (pagination.CursorResult[models.User, httppagination.MemberResponse], error) {
+var _ = pagination.Handle(httppagination.CursorList, func(context.Context, httppagination.CursorListRequest) (pagination.CursorResult[models.User, httppagination.MemberResponse], error) {
 	return pagination.CursorResult[models.User, httppagination.MemberResponse]{}, nil
 })

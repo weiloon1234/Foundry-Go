@@ -79,7 +79,7 @@ func TestFileReaderOwnsFailuresAndRedactsNativeErrors(t *testing.T) {
 				if wire == nil {
 					t.Fatal("source failure was lost")
 				}
-				cause := reader.Failure()
+				cause := reader.failure()
 				if operation == "close" {
 					cause = wire
 				} else if wire != errFileTransfer || strings.Contains(wire.Error(), "private") {
@@ -130,7 +130,7 @@ func TestFileReaderValidatesNativeReadAndSeekContracts(t *testing.T) {
 					t.Fatal("invalid read escaped", n, err)
 				}
 			}
-			if reader.Failure() == nil {
+			if reader.failure() == nil {
 				t.Fatal("missing private diagnostic")
 			}
 		})
@@ -141,7 +141,7 @@ func TestFileReaderValidatesNativeReadAndSeekContracts(t *testing.T) {
 	}
 	defer reader.Close()
 	_, err = io.Copy(io.Discard, reader)
-	if err != errFileTransfer || !errors.Is(reader.Failure(), io.ErrNoProgress) {
+	if err != errFileTransfer || !errors.Is(reader.failure(), io.ErrNoProgress) {
 		t.Fatal("empty reads not bounded", err)
 	}
 }
@@ -161,8 +161,8 @@ func TestFileReaderPreservesOrdinaryEOFAndSeeks(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, err := io.ReadAll(reader)
-	if err != nil || string(data) != "abcdef" || reader.Failure() != nil {
-		t.Fatal(string(data), err, reader.Failure())
+	if err != nil || string(data) != "abcdef" || reader.failure() != nil {
+		t.Fatal(string(data), err, reader.failure())
 	}
 	if err := reader.Close(); err != nil {
 		t.Fatal(err)
@@ -193,7 +193,7 @@ func TestFileReaderCancellationRetainsReturnedBytesAndCloses(t *testing.T) {
 				cancel()
 			}
 			n, err := reader.Read(make([]byte, 1))
-			if err != errFileTransfer || !errors.Is(reader.Failure(), context.Canceled) {
+			if err != errFileTransfer || !errors.Is(reader.failure(), context.Canceled) {
 				t.Fatal(n, err)
 			}
 			if during && (n != 1 || calls != 1) || !during && (n != 0 || calls != 0) {

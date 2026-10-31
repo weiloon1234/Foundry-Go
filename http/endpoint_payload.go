@@ -162,7 +162,7 @@ func ValidateResponse[R any](r Response[R]) error {
 		if r.status != 200 || r.file == nil || r.prepareFile == nil {
 			return safeerror.NewFault(fault.Invalid, "file response is not defined")
 		}
-		return r.file.Validate()
+		return r.file.validate()
 	case payloadJSON:
 		if r.encodeJSON == nil || r.validateJSON == nil || r.describe == nil || !bodySuccessStatus(r.status) {
 			return safeerror.NewFault(fault.Invalid, "JSON response requires a body-bearing success status")

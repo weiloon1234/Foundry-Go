@@ -34,7 +34,7 @@ func (s DatabaseService) CursorList(ctx context.Context, in CursorListRequest) (
 }
 ```
 
-Register `CursorList.Handle(service.CursorList)`. Foundry owns input parsing,
+Register `pagination.Handle(CursorList, service.CursorList)`. Foundry owns input parsing,
 defaults, validation, response metadata and links. The shared domain query helper
 applies filters once for both numbered and cursor pagination. `PresentMember`
 explicitly selects typed model getters; stored IDs and fields remain unchanged.
@@ -91,7 +91,7 @@ Next links use the returned `Next` cursor as `after`; previous links use `Previo
 as `before`. Each link carries only its direction, preserves domain filters and
 uses the current route scope and page size. Default links are relative. Select
 `PublicLinks` with [approved public origins](http-public-urls.md) for absolute URLs.
-`URL(ctx, path, filters, request)` follows the same typed declarations and policies.
+`pagination.URL(endpoint, ctx, path, filters, request)` follows the same typed declarations and policies.
 
 The [ORM cursor contract](model-pagination.md#typed-transport-boundary) owns token
 format and consistency rules. Tokens include ordered key values and are neither
