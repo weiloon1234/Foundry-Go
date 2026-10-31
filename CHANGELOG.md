@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: `expr.CompareFilter` and `expr.NullableCompareFilter` accept any typed row
+  value, including computed booleans and scalars, while preserving exact scope and
+  value types. Datatable equality and membership filters no longer need local adapters.
+
 - Fixed: Readable schema naming qualifies map keys as well as values and exhausts
   structural name candidates before using identity digests, preventing contract,
   OpenAPI and SDK export hangs on colliding map declarations or reserved names.

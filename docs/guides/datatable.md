@@ -77,13 +77,24 @@ Filters wrap row expressions in typed filter adapters:
 | Nullable text | `expr.NullableTextFilter(expr.TextNullableRow(orm.NullableTextExpr(Users.Nickname)))` |
 | Required number | `expr.OrderFilter(expr.OrderRow(expr.Value(orm.NumberExpr(Users.Age))))` |
 | Nullable number | `expr.NullableOrderFilter(expr.OrderNullableRow(expr.Value(orm.NullableNumberExpr(Users.Score))))` |
-| Enum or equality-only field | `expr.CompareFilter(expr.CompareRow(expr.Value(orm.EnumExpr(Users.State))))` |
-| Nullable enum | `expr.NullableCompareFilter(expr.CompareNullableRow(expr.Value(orm.NullableEnumExpr(Users.OptionalState))))` |
+| Enum or equality-only field | `expr.CompareFilter(expr.Value(orm.EnumExpr(Users.State)))` |
+| Nullable enum | `expr.NullableCompareFilter(expr.Value(orm.NullableEnumExpr(Users.OptionalState)))` |
+| Computed boolean | `expr.CompareFilter(expr.JSONContains(settings, wanted))` |
+| Computed scalar with equality only | `expr.CompareFilter(expr.Length(name))` |
+| Nullable computed value | `expr.NullableCompareFilter(matches)` |
 | Joined text | `expr.TextFilter(expr.TextRowAt(memberScope, orm.TextExpr(Members.Name)))` |
 | Required ordered aggregate | `expr.OrderValueFilter(expr.Count[User]())` |
 | Nullable ordered aggregate | `expr.NullableOrderValueFilter(expr.Sum(orm.NumberExpr(Orders.Amount)))` |
 | Equality-only aggregate | `expr.ValueFilter(expr.Exists[User]())` |
 | Selected text | `expr.TextValueFilter(expr.TextValue(selectedName))` |
+
+`CompareFilter` accepts any `expr.RowValue[S, V]`, including columns and computed
+values. Use it with `datatable.Where(codec, expr.CompareFilter(row))` for equality
+and membership without ordering or text operators. `NullableCompareFilter` accepts
+`expr.RowValue[S, value.Nullable[V]]`; pair it with `datatable.NullableWhere` and a
+codec for present `V` values. It also supplies SQL null tests. Both adapters retain
+the exact scope and value type. Selected values and aggregates cannot enter these
+row filters. Existing `CompareRow` and `CompareNullableRow` inputs still work.
 
 `Related` maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, normally
 with `expr.Has(ParentRelations.Children, predicate)`. `expr.ModelPredicate`

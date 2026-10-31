@@ -4,6 +4,11 @@ package consumer_test
 // diagnostic. Batch execution and named subtest selection use this one catalogue.
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"computed_filter_scope", "cannot use"},
+		{"computed_filter_value", "does not match"},
+		{"computed_filter_phase", "missing method rowValue"},
+		{"computed_nullable_filter_scope", "cannot use"},
+
 		{"each_restore_owner", "does not match inferred type"},
 		{"each_force_owner", "does not match inferred type"},
 		{"each_force_token", "not enough arguments"},

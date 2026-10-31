@@ -5,6 +5,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
+	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -102,5 +103,19 @@ func TestNullableRowComparisonValue(t *testing.T) {
 	zeroCore := expr.FoundrySelected(zeroVal, sqlowner.Expressions())
 	if zeroCore.Node != nil {
 		t.Fatal("expected nil node on zero-value NullableRowComparison.Value()")
+	}
+}
+
+func TestComparisonFiltersRejectMissingRowValues(t *testing.T) {
+	var required expr.RowValue[filterTestRecord, recordState]
+	var nullable expr.RowValue[filterTestRecord, value.Nullable[recordState]]
+	for _, predicate := range []expr.Predicate[filterTestRecord]{
+		expr.CompareFilter(required).Eq(stateActive),
+		expr.NullableCompareFilter(nullable).Eq(stateActive),
+		expr.NullableCompareFilter(nullable).IsNull(),
+	} {
+		if _, err := rows.CompileRead(rows.Read(rows.FromModel(expr.Where(filterTestTable.Query(), predicate)))); err == nil {
+			t.Fatal("missing row value produced a valid filter")
+		}
 	}
 }

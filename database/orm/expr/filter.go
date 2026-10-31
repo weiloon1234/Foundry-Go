@@ -304,9 +304,9 @@ func (a NullableOrderFilterAdapter[S, V]) IsNotNull() Predicate[S] {
 	return Predicate[S]{core: rowCompare(a.data, querycore.IsNotNull)}
 }
 
-// CompareFilterAdapter adapts a row comparison for datatable filters.
+// CompareFilterAdapter adapts a typed row value for datatable equality filters.
 //
-// Example: expr.CompareFilter(expr.CompareRow(state))
+// Example: expr.CompareFilter(state)
 type CompareFilterAdapter[S, V any] struct {
 	comparisonFilterPhase [0]struct{}
 	_                     [0]*S
@@ -328,29 +328,28 @@ func (a CompareFilterAdapter[S, V]) In(vs ...V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(a.data, querycore.In, vs...)}
 }
 
-// NullableCompareFilterAdapter adapts a nullable row comparison for datatable filters.
+// NullableCompareFilterAdapter adapts a nullable row value for datatable equality filters.
 //
-// Example: expr.NullableCompareFilter(expr.CompareNullableRow(state))
+// Example: expr.NullableCompareFilter(state)
 type NullableCompareFilterAdapter[S, V any] struct {
 	nullableComparisonFilterPhase [0]struct{}
 	_                             [0]*S
-	data                          rowData[V]
-	projected                     rowData[value.Nullable[V]]
+	data                          rowData[value.Nullable[V]]
 }
 
 // Eq compares equality within the adapter's row scope.
 func (a NullableCompareFilterAdapter[S, V]) Eq(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(a.data, querycore.Equal, v)}
+	return Predicate[S]{core: rowCompare(a.data, querycore.Equal, presentValues([]V{v})...)}
 }
 
 // Ne compares inequality within the adapter's row scope.
 func (a NullableCompareFilterAdapter[S, V]) Ne(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(a.data, querycore.NotEqual, v)}
+	return Predicate[S]{core: rowCompare(a.data, querycore.NotEqual, presentValues([]V{v})...)}
 }
 
 // In tests membership within the adapter's row scope.
 func (a NullableCompareFilterAdapter[S, V]) In(vs ...V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(a.data, querycore.In, vs...)}
+	return Predicate[S]{core: rowCompare(a.data, querycore.In, presentValues(vs)...)}
 }
 
 // IsNull tests SQL nullness within the adapter's row scope.
@@ -391,18 +390,20 @@ func NullableOrderFilter[S any, V orderedScalar](e NullableOrderedRowExpression[
 	return NullableOrderFilterAdapter[S, V]{data: e.data}
 }
 
-// CompareFilter adapts RowComparison for datatable filters.
+// CompareFilter adapts any typed row value for datatable equality and membership
+// filters, preserving its exact scope and value type. It grants no ordering or text operations.
 //
-// Example: expr.CompareFilter(e)
-func CompareFilter[S, V any](e RowComparison[S, V]) CompareFilterAdapter[S, V] {
-	return CompareFilterAdapter[S, V]{data: e.data}
+// Example: datatable.Where(http.BoolQuery[bool](), expr.CompareFilter(expr.JSONContains(settings, wanted)))
+func CompareFilter[S, V any](e RowValue[S, V]) CompareFilterAdapter[S, V] {
+	return CompareFilterAdapter[S, V]{data: rowInput(e).data}
 }
 
-// NullableCompareFilter adapts NullableRowComparison for datatable filters.
+// NullableCompareFilter adapts any nullable typed row value for datatable
+// present-value equality, membership and SQL null tests, preserving its exact scope and value type.
 //
-// Example: expr.NullableCompareFilter(e)
-func NullableCompareFilter[S, V any](e NullableRowComparison[S, V]) NullableCompareFilterAdapter[S, V] {
-	return NullableCompareFilterAdapter[S, V]{data: e.data, projected: e.projected}
+// Example: datatable.NullableWhere(http.BoolQuery[bool](), expr.NullableCompareFilter(matches))
+func NullableCompareFilter[S, V any](e RowValue[S, value.Nullable[V]]) NullableCompareFilterAdapter[S, V] {
+	return NullableCompareFilterAdapter[S, V]{data: rowInput(e).data}
 }
 
 // TextRow preserves a required text column capability.
