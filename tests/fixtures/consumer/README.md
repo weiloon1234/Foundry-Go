@@ -362,3 +362,9 @@ model directives and ownership manifests remain until the lead's final barrier.
 The existing `make typescript-check` wiring still selects both real client and
 optional form-adapter tests in `clientcontracts`; its public wire artifacts and
 TypeScript sources are unchanged. The lead runs that integration gate.
+
+`reporting.NumericLevelRoutes` exercises `datatable.Routes` with distinct HTTP
+operator and table authority types. The reporting client cohort covers framework
+export request, download query and ticket DTOs. Compiler negatives reject the
+wrong authority result, access-option actor and ticket-issuer actor; Go-way mirrors
+retain all three checks.

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.2 — 2026-11-01
+
+- Added: `datatable.Routes` registers explicitly bound query, ticket-export and
+  download routes with framework-owned DTOs. Typed application callbacks retain
+  credential issuance, redemption and current authority. Guard access options,
+  issuance quota, bounded URL validation, locale propagation and manager-owned
+  download deadlines preserve the shared table workflow.
+
 ## v0.3.1 — 2026-11-01
 
 - Fixed: Browser portal and token sessions construct safely when localStorage is

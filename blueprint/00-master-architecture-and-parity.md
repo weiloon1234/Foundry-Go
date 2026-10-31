@@ -8,6 +8,22 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Framework-owned table routes (Part B) — v0.3.2, 2026-11-01
+
+Status: **implemented and passed the requested targeted gate**.
+
+`datatable.Routes` constructs explicitly bound query, ticket-export and download
+routes with framework-generated DTOs. Applications retain typed guard access,
+authority conversion and ticket issuance/redemption. Query-only tables omit
+export dependencies; export routes preserve credential middleware, quota, bounded
+URL checks, locale propagation and manager-derived download deadlines.
+
+The [evidence](../docs/evidence/table-routes-20261101.md) records the public API,
+PostgreSQL lifecycle regressions, compiler negatives and mirrors, published
+current contracts, strict TypeScript/runtime coverage, guides and release checks.
+Released cohorts and frozen oracles are unchanged. Full `make verify`, races,
+application migrations and release tagging were outside this gate.
+
 ## Explicit datatable operation bindings (Part A) — 2026-10-31
 
 Status: **implemented and passed the requested targeted gate**.

@@ -512,3 +512,61 @@ real completion, hover and definition requests. Select the existing native tools
 as described in the [tooling guide](developer-tooling-and-testing.md).
 
 For declaration and API migration, see the [ORM migration guide](orm-migration.md).
+
+## Register the standard table routes
+
+Use `datatable.Routes` to register a table's query, ticket-export and download
+routes in one call. The parent scope stays application-owned. The helper uses
+explicit Part A bindings, so generated clients derive their table operations
+from the registered endpoints.
+
+<!-- go-source: tests/fixtures/consumer/reporting/table_routes.go -->
+```go
+return datatable.Routes(group, NumericLevels, config,
+    datatable.ReadAccess(read...),
+    datatable.ExportAccess(export...),
+)
+```
+
+Supply `RoutesConfig[M, A]` with the manager, concrete `GuardBinding[M]` and an
+`Authority(context.Context, M) (A, error)` callback. Route guards use `M`; queries
+and exports use `A`. Build read and export guard options from your application's
+permission and credential-scope declarations. Each access option may appear once;
+the helper snapshots its slice. Table authorization still runs for every query
+and export.
+
+Exportable tables also require `Clock`, `Quota` and `Tickets[M, A]`. `Issue`
+returns `IssuedTicket{Secret, ExpiresAt}`. `Redeem` consumes the secret once,
+checks current credentials and actor eligibility, and returns authority usable
+through deferred row loading. Keep revocation, expiry, replay protection and
+fresh auth scopes in those callbacks. Do not return a scope that you close before
+the download opens. Callbacks must honor cancellation; request ownership lasts
+until they exit. Query-only tables need no ticket, clock or quota configuration.
+
+For table ID `reports.numeric_levels`, the helper registers these paths below
+your scope, all with success status 200:
+
+| Method | Suffix | Request | Response |
+| --- | --- | --- | --- |
+| POST | `/reports.numeric_levels` | `Request` | Canonical numbered page |
+| POST | `/reports.numeric_levels/export` | `ExportRequest` | `ExportTicket` |
+| GET | `/reports.numeric_levels/download` | `DownloadQuery` | CSV or XLSX file |
+
+Route IDs append the table ID and `.query`, `.export` or `.download` to the scope
+ID. Issuance alone receives `CredentialRequests()` and your quota middleware.
+It requires secure transport, authorizes the table, validates the bounded request,
+and encodes the download URL before calling `Issue`. It checks the URL again with
+the issued secret; final rejection can leave an unused expiring ticket.
+
+The download is public at the HTTP guard boundary and authenticates through
+`Redeem`. It decodes the request, resolves the optional locale and calls
+`Table.Download`, which authorizes again when the file opens. Set `WithLocale`
+when your authority carries language into deferred row loading. Omitted locale
+uses the download request's negotiated language. The route deadline comes from
+`Manager.DownloadTimeout()` and covers generation and transfer. HTTP owns file
+closure. Filenames use the table ID and the injected clock's UTC timestamp.
+
+The framework generates `ExportRequestJSON`, `ExportRequestValidationFields`,
+`DownloadQueryDescriptor` and `ExportTicketJSON` from its transport declarations.
+The format field carries no application translation key; keep visual labels in
+your UI. For other wire shapes, use the [endpoint constructors and binders](#declare-http-operation-bindings).

@@ -2,6 +2,9 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"datatable_routes_authority", "cannot use"},
+		{"datatable_routes_access_actor", "cannot use"},
+		{"datatable_routes_ticket_actor", "cannot use"},
 		{"datatable_query_handler_row", "cannot use"},
 		{"datatable_query_handler_request", "cannot use"},
 		{"datatable_query_guard_actor", "cannot use"},

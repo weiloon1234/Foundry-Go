@@ -52,3 +52,10 @@ await assert.rejects(sdk.tableQueries["reports.members"](api, { body: {} }), err
 await assert.rejects(sdk.tableDownloads["reports.members"](api, {}), error => error instanceof sdk.APIError && error.status === 401);
 
 console.log("PASS reporting tables, exact/nullable DTO codecs and authenticated HTTP contracts");
+
+const ticketKey = "github.com/weiloon1234/Foundry-Go/datatable.ExportTicket";
+const ticket = {url: "/reports/tables/reports.numeric_levels/download?ticket=one", expires_at: "2026-11-01T12:00:00Z"};
+assert.deepEqual({...sdk.decodeReceived(ticketKey, sdk.encodeContract(ticketKey, sdk.contractValue(ticketKey, ticket)))}, ticket);
+await assert.rejects(sdk.tableQueries["reports.numeric_levels"](api, {body: {}}), error => error instanceof sdk.APIError && error.status === 401);
+await assert.rejects(sdk.tableDownloads["reports.numeric_levels"](api, {query: {ticket: "expired", format: "csv", request: "{}"}}), error => error instanceof sdk.APIError && error.status === 401);
+assert.equal(sdk.tableExportKinds["reports.numeric_levels"], "ticket");

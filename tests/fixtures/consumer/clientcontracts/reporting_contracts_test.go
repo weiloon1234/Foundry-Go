@@ -14,6 +14,7 @@ import (
 	"foundry.test/consumer/internal/clientfixture"
 	"foundry.test/consumer/reporting"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/datatable"
@@ -64,7 +65,30 @@ func reportingContracts(t *testing.T) (*manifest.Manifest, *foundryhttp.Router) 
 			t.Error(err)
 		}
 	})
-	router, err := foundryhttp.NewRouter(reporting.QueryRoute(manager, transport, guard), reporting.DownloadRoute(manager, transport, guard, datatable.Presentation{Locale: "en", TimeZone: "UTC"}))
+	binding, err := foundryhttp.BindGuard(transport, guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes, err := reporting.NumericLevelRoutes(foundryhttp.DefineScope("/reports/tables", "reports.tables"), datatable.RoutesConfig[reporting.Operator, reporting.Authority]{
+		Manager: manager, Guard: binding, Clock: clock.System{},
+		Authority: func(context.Context, reporting.Operator) (reporting.Authority, error) {
+			return reporting.FromGuard(guard), nil
+		},
+		Tickets: datatable.Tickets[reporting.Operator, reporting.Authority]{
+			Issue: func(context.Context, reporting.Operator) (datatable.IssuedTicket, error) {
+				return datatable.IssuedTicket{}, auth.Unauthenticated
+			},
+			Redeem: func(context.Context, secret.String) (reporting.Authority, error) {
+				return reporting.Authority{}, auth.Unauthenticated
+			},
+		},
+		Quota: foundryhttp.DefineMiddleware("reports.quota", func(next http.Handler) (http.Handler, error) { return next, nil }),
+	}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes = append(routes, reporting.QueryRoute(manager, transport, guard), reporting.DownloadRoute(manager, transport, guard, datatable.Presentation{Locale: "en", TimeZone: "UTC"}))
+	router, err := foundryhttp.NewRouter(routes...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,11 +209,11 @@ func TestReportingContractCoverage(t *testing.T) {
 			t.Fatal("report lost export capability", table.ID)
 		}
 	}
-	if !slices.Equal(ids, []string{"reports.members", "reports.numeric_levels", "reports.orders", "reports.totals"}) || len(document.HTTP) != 2 {
+	if !slices.Equal(ids, []string{"reports.members", "reports.numeric_levels", "reports.orders", "reports.totals"}) || len(document.HTTP) != 5 {
 		t.Fatal("incomplete reporting contract", ids, len(document.HTTP))
 	}
 	for _, operation := range document.HTTP {
-		if operation.Route.Authentication == nil {
+		if operation.Route.Access != foundryhttp.Public && operation.Route.Authentication == nil {
 			t.Fatal("report route lost authentication", operation.Name)
 		}
 	}

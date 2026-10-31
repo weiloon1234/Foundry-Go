@@ -204,6 +204,49 @@
       ]
     },
     {
+      "id": "github.com/weiloon1234/Foundry-Go/datatable.ExportFormat",
+      "kind": "string",
+      "nullable": false,
+      "cases": [
+        "csv",
+        "xlsx"
+      ]
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/datatable.ExportRequest",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "format",
+          "type": "github.com/weiloon1234/Foundry-Go/datatable.ExportFormat",
+          "required": true
+        },
+        {
+          "name": "request",
+          "type": "github.com/weiloon1234/Foundry-Go/datatable.Request",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/datatable.ExportTicket",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "expires_at",
+          "type": "github.com/weiloon1234/Foundry-Go/temporal.DateTime",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
       "id": "github.com/weiloon1234/Foundry-Go/datatable.Filter",
       "kind": "object",
       "nullable": false,
@@ -516,6 +559,11 @@
       ]
     },
     {
+      "id": "github.com/weiloon1234/Foundry-Go/i18n.LocaleID",
+      "kind": "string",
+      "nullable": false
+    },
+    {
       "id": "github.com/weiloon1234/Foundry-Go/i18n.MessageKey",
       "kind": "string",
       "nullable": false
@@ -531,6 +579,12 @@
       "kind": "string",
       "nullable": false,
       "format": "uuid"
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/temporal.DateTime",
+      "kind": "string",
+      "nullable": false,
+      "format": "date_time"
     },
     {
       "id": "github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]",
@@ -755,6 +809,354 @@
       "response": {
         "media_type": "application/json",
         "type": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]"
+      },
+      "status": 200,
+      "limits": {
+        "Multipart": {
+          "Bytes": 2097152,
+          "FileBytes": 2097152,
+          "Parts": 128,
+          "Files": 16,
+          "Readers": 16,
+          "HeaderBytes": 32768,
+          "FieldBytes": 65536,
+          "FieldsBytes": 262144,
+          "Issues": 16
+        },
+        "Files": {
+          "Bytes": 1073741824,
+          "Ranges": 16,
+          "RangeBytes": 4096
+        },
+        "Query": {
+          "Bytes": 16384,
+          "Pairs": 128,
+          "Issues": 16
+        },
+        "Form": {
+          "Bytes": 2097152,
+          "Pairs": 1024,
+          "Issues": 16
+        },
+        "Body": {
+          "Bytes": 2097152,
+          "Depth": 32,
+          "Nodes": 65536,
+          "Steps": 262144,
+          "Issues": 16
+        },
+        "Response": {
+          "Bytes": 33554432,
+          "Depth": 32,
+          "Nodes": 1048576,
+          "Steps": 4194304,
+          "Issues": 16
+        },
+        "Validation": {
+          "Checks": 65536,
+          "Issues": 32,
+          "Depth": 32,
+          "ValueBytes": 1048576
+        },
+        "Raw": {
+          "Bytes": 2097152
+        }
+      },
+      "errors": [
+        "bad_request",
+        "conflict",
+        "forbidden",
+        "internal_error",
+        "method_not_allowed",
+        "mfa_required",
+        "not_acceptable",
+        "not_found",
+        "payload_too_large",
+        "precondition_failed",
+        "range_not_satisfiable",
+        "rate_limited",
+        "request_timeout",
+        "unauthenticated",
+        "unavailable",
+        "unsupported_media_type",
+        "validation_failed"
+      ]
+    },
+    {
+      "table_operation": {
+        "table": "reports.numeric_levels",
+        "kind": "download"
+      },
+      "route": {
+        "id": "reports.tables.reports.numeric_levels.download",
+        "method": "GET",
+        "path": "/reports/tables/reports.numeric_levels/download",
+        "parameters": [],
+        "access": "public",
+        "raw": false
+      },
+      "name": "reportsTablesReportsNumericLevelsDownload",
+      "path": [],
+      "query": [
+        {
+          "name": "format",
+          "type": "github.com/weiloon1234/Foundry-Go/datatable.ExportFormat",
+          "syntax": "enum",
+          "required": true,
+          "repeated": false
+        },
+        {
+          "name": "locale",
+          "type": "github.com/weiloon1234/Foundry-Go/i18n.LocaleID",
+          "syntax": "text",
+          "required": false,
+          "repeated": false
+        },
+        {
+          "name": "request",
+          "type": "string",
+          "syntax": "text",
+          "required": true,
+          "repeated": false
+        },
+        {
+          "name": "ticket",
+          "type": "string",
+          "syntax": "text",
+          "required": true,
+          "repeated": false
+        }
+      ],
+      "response": {
+        "file": {
+          "media_types": [
+            "text/csv; charset=utf-8",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ],
+          "seekable": true
+        }
+      },
+      "status": 200,
+      "file_transfer_bytes": 1073745324,
+      "limits": {
+        "Multipart": {
+          "Bytes": 2097152,
+          "FileBytes": 2097152,
+          "Parts": 128,
+          "Files": 16,
+          "Readers": 16,
+          "HeaderBytes": 32768,
+          "FieldBytes": 65536,
+          "FieldsBytes": 262144,
+          "Issues": 16
+        },
+        "Files": {
+          "Bytes": 1073741824,
+          "Ranges": 16,
+          "RangeBytes": 4096
+        },
+        "Query": {
+          "Bytes": 16384,
+          "Pairs": 128,
+          "Issues": 16
+        },
+        "Form": {
+          "Bytes": 2097152,
+          "Pairs": 1024,
+          "Issues": 16
+        },
+        "Body": {
+          "Bytes": 2097152,
+          "Depth": 32,
+          "Nodes": 65536,
+          "Steps": 262144,
+          "Issues": 16
+        },
+        "Response": {
+          "Bytes": 33554432,
+          "Depth": 32,
+          "Nodes": 1048576,
+          "Steps": 4194304,
+          "Issues": 16
+        },
+        "Validation": {
+          "Checks": 65536,
+          "Issues": 32,
+          "Depth": 32,
+          "ValueBytes": 1048576
+        },
+        "Raw": {
+          "Bytes": 2097152
+        }
+      },
+      "errors": [
+        "bad_request",
+        "conflict",
+        "forbidden",
+        "internal_error",
+        "method_not_allowed",
+        "mfa_required",
+        "not_acceptable",
+        "not_found",
+        "payload_too_large",
+        "precondition_failed",
+        "range_not_satisfiable",
+        "rate_limited",
+        "request_timeout",
+        "unauthenticated",
+        "unavailable",
+        "unsupported_media_type",
+        "validation_failed"
+      ]
+    },
+    {
+      "table_operation": {
+        "table": "reports.numeric_levels",
+        "kind": "ticket-export",
+        "request_field": "request"
+      },
+      "route": {
+        "id": "reports.tables.reports.numeric_levels.export",
+        "method": "POST",
+        "path": "/reports/tables/reports.numeric_levels/export",
+        "parameters": [],
+        "access": "guarded",
+        "raw": false,
+        "middlewares": [
+          "foundry.credential-requests",
+          "reports.quota",
+          "foundry.authentication"
+        ],
+        "authentication": {
+          "guard": "report.contract",
+          "provider": "report.operators",
+          "optional": false,
+          "credential": {
+            "source": "report.contract",
+            "kind": "bearer",
+            "name": "Authorization"
+          }
+        }
+      },
+      "name": "reportsTablesReportsNumericLevelsExport",
+      "path": [],
+      "query": [],
+      "body": {
+        "media_type": "application/json",
+        "type": "github.com/weiloon1234/Foundry-Go/datatable.ExportRequest"
+      },
+      "response": {
+        "media_type": "application/json",
+        "type": "github.com/weiloon1234/Foundry-Go/datatable.ExportTicket"
+      },
+      "status": 200,
+      "limits": {
+        "Multipart": {
+          "Bytes": 2097152,
+          "FileBytes": 2097152,
+          "Parts": 128,
+          "Files": 16,
+          "Readers": 16,
+          "HeaderBytes": 32768,
+          "FieldBytes": 65536,
+          "FieldsBytes": 262144,
+          "Issues": 16
+        },
+        "Files": {
+          "Bytes": 1073741824,
+          "Ranges": 16,
+          "RangeBytes": 4096
+        },
+        "Query": {
+          "Bytes": 16384,
+          "Pairs": 128,
+          "Issues": 16
+        },
+        "Form": {
+          "Bytes": 2097152,
+          "Pairs": 1024,
+          "Issues": 16
+        },
+        "Body": {
+          "Bytes": 2097152,
+          "Depth": 32,
+          "Nodes": 65536,
+          "Steps": 262144,
+          "Issues": 16
+        },
+        "Response": {
+          "Bytes": 33554432,
+          "Depth": 32,
+          "Nodes": 1048576,
+          "Steps": 4194304,
+          "Issues": 16
+        },
+        "Validation": {
+          "Checks": 65536,
+          "Issues": 32,
+          "Depth": 32,
+          "ValueBytes": 1048576
+        },
+        "Raw": {
+          "Bytes": 2097152
+        }
+      },
+      "errors": [
+        "bad_request",
+        "conflict",
+        "forbidden",
+        "internal_error",
+        "method_not_allowed",
+        "mfa_required",
+        "not_acceptable",
+        "not_found",
+        "payload_too_large",
+        "precondition_failed",
+        "range_not_satisfiable",
+        "rate_limited",
+        "request_timeout",
+        "unauthenticated",
+        "unavailable",
+        "unsupported_media_type",
+        "validation_failed"
+      ]
+    },
+    {
+      "table_operation": {
+        "table": "reports.numeric_levels",
+        "kind": "query"
+      },
+      "route": {
+        "id": "reports.tables.reports.numeric_levels.query",
+        "method": "POST",
+        "path": "/reports/tables/reports.numeric_levels",
+        "parameters": [],
+        "access": "guarded",
+        "raw": false,
+        "middlewares": [
+          "foundry.authentication"
+        ],
+        "authentication": {
+          "guard": "report.contract",
+          "provider": "report.operators",
+          "optional": false,
+          "credential": {
+            "source": "report.contract",
+            "kind": "bearer",
+            "name": "Authorization"
+          }
+        }
+      },
+      "name": "reportsTablesReportsNumericLevelsQuery",
+      "path": [],
+      "query": [],
+      "body": {
+        "media_type": "application/json",
+        "type": "github.com/weiloon1234/Foundry-Go/datatable.Request"
+      },
+      "response": {
+        "media_type": "application/json",
+        "type": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.NumericLevelRow]"
       },
       "status": 200,
       "limits": {

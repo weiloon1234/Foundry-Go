@@ -6,6 +6,15 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Framework-owned table routes — v0.3.2
+
+`datatable.Routes` is additive; custom protocols continue to use the endpoint
+constructors and binders. Standard routes retain the existing query, export and
+download suffixes and JSON field names. Framework DTO schema identities replace
+application DTO identities when an application adopts this helper. Regenerate
+Go descriptors and clients together and update generated type imports; manifest
+version 7 is unchanged. Format labels remain application-owned.
+
 ## Explicit table operations — manifest 7
 
 Regenerate Go contracts, manifest, OpenAPI, and TypeScript together. Version 7

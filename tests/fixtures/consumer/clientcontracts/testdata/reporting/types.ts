@@ -56,3 +56,23 @@ export function reportingTypes(): void {
   void api.reportsMembersQuery({ body: { filters: [{ op: "raw_sql" }] } });
   void [amount, count, sum, note, memberID, wrongID, rounded, countNumber, tableMember, tableNumericLevel];
 }
+
+// Framework-owned ticket DTOs retain their exact request and expiry types.
+type ExportRequest = sdk.ContractTypes["github.com/weiloon1234/Foundry-Go/datatable.ExportRequest"];
+type ExportTicket = sdk.ContractTypes["github.com/weiloon1234/Foundry-Go/datatable.ExportTicket"];
+export async function standardTableRoutes(body: ExportRequest): Promise<ExportTicket> {
+  const ticket: ExportTicket = await sdk.tableExports["reports.numeric_levels"](api, { body });
+  const expires: string = ticket.expires_at;
+  const file: sdk.FileResult = await sdk.tableDownloads["reports.numeric_levels"](api, {
+    query: { ticket: "one", format: body.format, request: "{}", locale: "ms" },
+  });
+  await file.close();
+  // @ts-expect-error The download requires the serialized table request.
+  void sdk.tableDownloads["reports.numeric_levels"](api, { query: { ticket: "one", format: "csv" } });
+  // @ts-expect-error Framework export formats are closed.
+  void sdk.tableExports["reports.numeric_levels"](api, { body: { format: "pdf", request: {} } });
+  // @ts-expect-error The ticket response is not a file response.
+  const wrong: sdk.FileResult = ticket;
+  void [expires, wrong];
+  return ticket;
+}
