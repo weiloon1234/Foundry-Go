@@ -7,8 +7,8 @@ import (
 	"os/exec"
 )
 
-func configureProcess(*exec.Cmd) func(bool) {
-	return func(bool) {}
+func configureProcess(*exec.Cmd) func() {
+	return func() {}
 }
 
 func notifyHangup(ctx context.Context) (context.Context, context.CancelFunc) {

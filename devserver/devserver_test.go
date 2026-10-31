@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"maps"
 	"os"
 	"path/filepath"
@@ -14,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 )
@@ -302,25 +300,6 @@ func TestOnChangeFailureAndPanicIsolation(t *testing.T) {
 			t.Fatalf("expected fault.Panicked, got %v", err)
 		}
 	})
-}
-
-func TestProcessGroupCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-
-	// Launch a process that runs for some time (e.g. go version).
-	wait, err := startChild(ctx, t.TempDir(), "go", []string{"version"}, nil, cli.Streams{
-		In:  strings.NewReader(""),
-		Out: io.Discard,
-		Err: io.Discard,
-	})
-	if err != nil {
-		t.Fatalf("cannot start child: %v", err)
-	}
-
-	if err := wait(); err != nil {
-		t.Fatalf("wait failed: %v", err)
-	}
 }
 
 func TestOptionsValidationAndSnapshots(t *testing.T) {

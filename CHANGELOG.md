@@ -10,6 +10,8 @@
   expose a `Done()` signal that closes only after cleanup completes.
 - Fixed: Concurrent PostgreSQL test application starts in the same top-level test
   share a pending capacity acquisition, avoiding self-deadlock when the limit is full.
+- Fixed: On Unix, devserver terminates remaining process-group descendants when a
+  child leader exits successfully or fails, preventing orphaned helpers and servers.
 
 - Changed (breaking): HTTP pagination endpoint `Handle` and `URL` methods move to
   documented package functions: `pagination.Handle`, `pagination.URL`,

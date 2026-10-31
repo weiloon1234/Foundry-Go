@@ -11,7 +11,7 @@ import (
 	"syscall"
 )
 
-func configureProcess(cmd *exec.Cmd) func(canceled bool) {
+func configureProcess(cmd *exec.Cmd) func() {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
@@ -20,10 +20,10 @@ func configureProcess(cmd *exec.Cmd) func(canceled bool) {
 		}
 		return err
 	}
-	return func(canceled bool) {
-		if canceled && cmd.Process != nil && cmd.Process.Pid > 0 {
-			// WaitDelay bounds an uncooperative child. Reap any remaining processes
-			// in its group before returning ownership to the caller.
+	return func() {
+		if cmd.Process != nil && cmd.Process.Pid > 0 {
+			// The group remains ours after every leader exit. WaitDelay bounds
+			// waiting for the leader and inherited pipes, not descendant lifetimes.
 			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		}
 	}

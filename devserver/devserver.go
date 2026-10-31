@@ -266,7 +266,7 @@ func startChild(ctx context.Context, dir, executable string, args, env []string,
 	}
 	return func() error {
 		err := cmd.Wait()
-		finish(ctx.Err() != nil)
+		finish()
 		return err
 	}, nil
 }
