@@ -53,6 +53,14 @@ func TestTablePageFamilyPreservesMetadataRow(t *testing.T) {
 		break
 	}
 	doc.Types = append(doc.Types, contract.Type{ID: items, Kind: contract.ArrayKind, Element: row})
+	// The second table keeps an existing query binding when the fixture declares
+	// one; otherwise the regression binds one. A table has one query slot.
+	otherTable, otherOperation := doc.Tables[1].ID, ""
+	for _, op := range doc.HTTP {
+		if op.TableOperation != nil && op.TableOperation.Kind == contract.TableQuery && op.TableOperation.Table == otherTable {
+			otherOperation = op.Name
+		}
+	}
 	firstOperation := ""
 	for i := range doc.HTTP {
 		op := &doc.HTTP[i]
@@ -61,13 +69,16 @@ func TestTablePageFamilyPreservesMetadataRow(t *testing.T) {
 		}
 		firstOperation = op.Name
 		op.Response.Type = table.Page
-		other := *op
-		other.Route.ID, other.Route.Path, other.Name = "test.other", "/test-other", "testOther"
-		other.TableOperation = &contract.TableOperationBinding{Table: doc.Tables[1].ID, Kind: contract.TableQuery}
-		response := *op.Response
-		response.Type = doc.Tables[1].Page
-		other.Response = &response
-		doc.HTTP = append(doc.HTTP, other)
+		if otherOperation == "" {
+			other := *op
+			other.Route.ID, other.Route.Path, other.Name = "test.other", "/test-other", "testOther"
+			other.TableOperation = &contract.TableOperationBinding{Table: otherTable, Kind: contract.TableQuery}
+			response := *op.Response
+			response.Type = doc.Tables[1].Page
+			other.Response = &response
+			doc.HTTP = append(doc.HTTP, other)
+			otherOperation = other.Name
+		}
 		break
 	}
 	data, err = json.Marshal(doc)
@@ -90,8 +101,8 @@ func TestTablePageFamilyPreservesMetadataRow(t *testing.T) {
 	output = append(output, []byte(fmt.Sprintf(`
  export function checkMetadataPage(value: Operations[%q]["response"]): TableQueryOutputs[%q] { return value; }
  export function checkMetadataOperation(value: TableQueryOutputs[%q]): Operations[%q]["response"] { return value; }
- export function checkOtherPage(value: Operations["testOther"]["response"]): TableQueryOutputs[%q] { return value; }
- export function checkOtherOperation(value: TableQueryOutputs[%q]): Operations["testOther"]["response"] { return value; }
- `, firstOperation, table.ID, table.ID, firstOperation, doc.Tables[1].ID, doc.Tables[1].ID))...)
+ export function checkOtherPage(value: Operations[%q]["response"]): TableQueryOutputs[%q] { return value; }
+ export function checkOtherOperation(value: TableQueryOutputs[%q]): Operations[%q]["response"] { return value; }
+ `, firstOperation, table.ID, table.ID, firstOperation, otherOperation, otherTable, otherTable, otherOperation))...)
 	runReleaseTypeScript(t, output, "")
 }
