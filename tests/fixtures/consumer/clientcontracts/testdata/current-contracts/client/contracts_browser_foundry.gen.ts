@@ -151,7 +151,7 @@ function describeField(id: string | undefined, required: boolean, path: string, 
   const descriptor = immutable({
     path, required, nullable: !repeated && (resolved?.nullable ?? false), repeated,
     presentation: hint ?? {}, schema: type, parameter, choices,
-    accept: parameter && "content_types" in parameter && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
+    accept: parameter && "kind" in parameter && parameter.kind === "file" && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
     maxBytes: parameter && "max_bytes" in parameter ? parameter.max_bytes : undefined,
     field(name: string): unknown {
       if (typeof name !== "string" || repeated) reject(path, "unknown_field");
@@ -1017,7 +1017,7 @@ export function formatFrontendMessage<K extends FrontendMessageKey>(messages: Va
 }
 
 import { createPortalSession as runtimeCreatePortalSession } from "./contracts_runtime_auth_foundry.gen.js";
-import type { SurfaceAuthDescriptor, PortalSession, PortalSessionOptions, IssuedAccess } from "./contracts_runtime_auth_foundry.gen.js";
+import type { SurfaceAuthDescriptor, PortalSession, PortalSessionOptions } from "./contracts_runtime_auth_foundry.gen.js";
 
 /** Password credentials accepted by this portal's browser login endpoint. */
 export type PasswordCredentials = BrowserLogin;
@@ -1029,10 +1029,10 @@ export const signInIdentifier: keyof PasswordCredentials = "login_id";
 export const authDescriptor: SurfaceAuthDescriptor<Client, Operations["browserProfile"]["response"], PasswordCredentials> = {
   guard: "browser_accounts",
   identifier: "login_id",
-  login: (client, credentials) => client["browserLogin"]({ body: credentials } as Operations["browserLogin"]["request"]) as Promise<IssuedAccess>,
-  refresh: (client) => client["browserRefresh"]({} as Operations["browserRefresh"]["request"]) as Promise<IssuedAccess>,
-  logout: (client) => client["browserLogout"]({} as Operations["browserLogout"]["request"]).then(() => {}),
-  profile: (client) => client["browserProfile"]({} as Operations["browserProfile"]["request"]),
+  login: (client, credentials) => client["browserLogin"]({ body: credentials }),
+  refresh: (client) => client["browserRefresh"]({}),
+  logout: (client) => client["browserLogout"]({}).then(() => {}),
+  profile: (client) => client["browserProfile"]({}),
 };
 
 /**

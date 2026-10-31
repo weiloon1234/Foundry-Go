@@ -151,7 +151,7 @@ function describeField(id: string | undefined, required: boolean, path: string, 
   const descriptor = immutable({
     path, required, nullable: !repeated && (resolved?.nullable ?? false), repeated,
     presentation: hint ?? {}, schema: type, parameter, choices,
-    accept: parameter && "content_types" in parameter && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
+    accept: parameter && "kind" in parameter && parameter.kind === "file" && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
     maxBytes: parameter && "max_bytes" in parameter ? parameter.max_bytes : undefined,
     field(name: string): unknown {
       if (typeof name !== "string" || repeated) reject(path, "unknown_field");
@@ -1137,9 +1137,8 @@ export const tables = /* @__PURE__ */ Object.freeze({
       return client["reportsMembersCsv"](input, options);
     },
   }),
-  "reports.numeric_levels": createTableDescriptor<NumericLevelRow, "reportsMembersQuery">({
+  "reports.numeric_levels": createTableDescriptor<NumericLevelRow>({
     id: "reports.numeric_levels",
-    queryOperation: "reportsMembersQuery",
     columns: [
       {
         name: "id",
@@ -1177,13 +1176,9 @@ export const tables = /* @__PURE__ */ Object.freeze({
     defaultSort: [
     ],
     exports: true,
-    query(client: API, input: Operations["reportsMembersQuery"]["request"], options?: CallOptions): Promise<Operations["reportsMembersQuery"]["response"]> {
-      return client["reportsMembersQuery"](input, options);
-    },
   }),
-  "reports.orders": createTableDescriptor<OrderRow, "reportsMembersQuery">({
+  "reports.orders": createTableDescriptor<OrderRow>({
     id: "reports.orders",
-    queryOperation: "reportsMembersQuery",
     columns: [
       {
         name: "id",
@@ -1230,13 +1225,9 @@ export const tables = /* @__PURE__ */ Object.freeze({
       { column: "memberName", direction: "asc" },
     ],
     exports: true,
-    query(client: API, input: Operations["reportsMembersQuery"]["request"], options?: CallOptions): Promise<Operations["reportsMembersQuery"]["response"]> {
-      return client["reportsMembersQuery"](input, options);
-    },
   }),
-  "reports.totals": createTableDescriptor<MemberTotal, "reportsMembersQuery">({
+  "reports.totals": createTableDescriptor<MemberTotal>({
     id: "reports.totals",
-    queryOperation: "reportsMembersQuery",
     columns: [
       {
         name: "memberId",
@@ -1273,9 +1264,6 @@ export const tables = /* @__PURE__ */ Object.freeze({
       { column: "total", direction: "desc" },
     ],
     exports: true,
-    query(client: API, input: Operations["reportsMembersQuery"]["request"], options?: CallOptions): Promise<Operations["reportsMembersQuery"]["response"]> {
-      return client["reportsMembersQuery"](input, options);
-    },
   }),
 } as const);
 

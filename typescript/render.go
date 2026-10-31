@@ -7,10 +7,13 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+	"unicode/utf16"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
@@ -25,6 +28,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/websocket"
+	"golang.org/x/text/currency"
 )
 
 //go:embed runtime/*.ts
@@ -184,10 +188,14 @@ func (r *renderer) body(source *manifest.Manifest) error {
 		return err
 	}
 	r.descriptors()
-	r.tables()
+	if err := r.tables(); err != nil {
+		return err
+	}
 	r.messages()
 	r.frontendMessages()
-	r.publicConfig()
+	if err := r.publicConfig(); err != nil {
+		return err
+	}
 	r.realtime()
 	return nil
 }
@@ -272,10 +280,16 @@ export function formatFrontendMessage<K extends FrontendMessageKey>(messages: %s
 }
 
 // publicConfig types the public configuration schema, validator, and decoder.
-func (r *renderer) publicConfig() {
+func (r *renderer) publicConfig() error {
 	if len(r.document.PublicConfig) == 0 {
-		return
+		return nil
 	}
+	for _, setting := range r.document.PublicConfig {
+		if !r.validPublicFallback(setting) {
+			return safeerror.NewFault(fault.Invalid, fmt.Sprintf("public config %q requires a valid fallback for its declared type", setting.Env))
+		}
+	}
+
 	r.out.WriteString(`
 export interface PublicEnvEntry {
   /** What the value controls. Public: bundled into browser code and quoted in guard errors. */
@@ -292,12 +306,19 @@ export const publicEnvSchema = {
 		switch setting.Kind {
 		case "locale":
 			validator = r.ref("isLocale")
+			if r.document.Locales != nil {
+				locales := make([]string, len(r.document.Locales.Supported))
+				for i, locale := range r.document.Locales.Supported {
+					locales[i] = quote(string(locale))
+				}
+				validator = fmt.Sprintf(`(value: string) => %s(value) && ([%s] as readonly string[]).includes(value)`, r.ref("isLocale"), strings.Join(locales, ", "))
+			}
 		case "currency":
 			validator = r.ref("isCurrency")
 		case "time_zone":
 			validator = r.ref("isTimeZone")
 		case "number":
-			validator = "(value: string) => !Number.isNaN(Number(value))"
+			validator = "(value: string) => Number.isFinite(Number(value))"
 		case "boolean":
 			validator = `(value: string) => value === "true" || value === "false" || value === "1" || value === "0"`
 		case "enum":
@@ -376,9 +397,9 @@ export interface PublicEnv {
 export function decodePublicEnv(env: Record<string, string | undefined>): PublicEnv {
   const read = (key: PublicEnvKey): string => {
     const raw = env[key]?.trim();
-    if (!raw) return publicEnvSchema[key].fallback;
-    if (isValidPublicValue(key, raw)) return raw;
-    return publicEnvSchema[key].fallback;
+    const value = raw || publicEnvSchema[key].fallback;
+    if (publicEnvSchema[key].isValid(value)) return value;
+    throw new Error(key + " is invalid: " + publicEnvSchema[key].description);
   };
   return Object.freeze({
 `)
@@ -403,6 +424,42 @@ export function decodePublicEnv(env: Record<string, string | undefined>): Public
 	r.out.WriteString(`  });
 }
 `)
+	return nil
+}
+
+// Validate defaults at the same boundary that determines the emitted client
+// type. The decoder also validates the chosen value before returning it.
+func (r *renderer) validPublicFallback(setting manifest.PublicSetting) bool {
+	value := setting.Fallback
+	if value != strings.TrimSpace(value) {
+		return false
+	}
+	switch setting.Kind {
+	case manifest.PublicEnum:
+		return len(setting.EnumCases) > 0 && slices.Contains(setting.EnumCases, value)
+	case manifest.PublicLocale:
+		if r.document.Locales != nil {
+			return slices.Contains(r.document.Locales.Supported, i18n.LocaleID(value))
+		}
+		_, err := i18n.ParseLocale(value)
+		return err == nil
+	case manifest.PublicCurrency:
+		unit, err := currency.ParseISO(value)
+		return err == nil && unit.String() == value
+	case manifest.PublicTimeZone:
+		if value == "" || value == "Local" {
+			return false
+		}
+		_, err := time.LoadLocation(value)
+		return err == nil
+	case manifest.PublicBoolean:
+		return value == "true" || value == "false" || value == "1" || value == "0"
+	case manifest.PublicNumber:
+		number, err := strconv.ParseFloat(value, 64)
+		return err == nil && !math.IsNaN(number) && !math.IsInf(number, 0)
+	default:
+		return setting.MaxLength <= 0 || len(utf16.Encode([]rune(value))) <= setting.MaxLength
+	}
 }
 
 func quote(value string) string                        { data, _ := json.Marshal(value); return string(data) }

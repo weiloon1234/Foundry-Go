@@ -384,7 +384,17 @@ Each descriptor in `tables` carries:
 - `columns`: readonly array of `TableColumn<Row>` with `name` typed strictly as `keyof Row & string`, `kind` derived from Go `datatable.ColumnKind`, `nullable`, `sortable`, `searchable`, `exportable`, and declared filter `operators`. Enum columns carry `kind: "enum"` and reference the S1 enum value object through `enum`. Read allowed values from `column.enum.cases` and optional label keys from `column.enum.labels`. Integer enums use numbers up to 32 bits and decimal strings for wider integers. Without registered enum metadata, the value object carries schema-owned cases without labels.
 - `defaultSort`: readonly array of `TableSort<keyof Row & string>`.
 - `exports`: boolean flag indicating whether the table supports export operations.
-- `query(client, input, options)` and `export?(client, input, options)`: strongly-typed invokers that call client operations without casts or `any`.
+- `query?(client, input, options)` and `export?(client, input, options)`: strongly-typed invokers that call client operations without casts or `any`.
+
+Table operation bindings use exact route IDs: `<table ID>.query` for queries
+and `<table ID>.export` or `<table ID>.csv` for downloads. The corresponding
+`:query`, `:export`, and `:csv` spellings are also accepted. Declare one route per
+operation; competing routes fail generation. Query bodies must use the table's
+JSON request contract, and responses must contain a required `data` array of
+that table's row type. Export routes require an exportable table and a file
+response; any request body must use the table's JSON request contract.
+Client names and shared request schemas do not establish ownership. Without a
+matching route in the surface, the descriptor omits that operation and helper.
 
 Surfaces without tables omit the `tables` constant. The framework runtime remains strictly decoupled from UI and state management libraries (such as Zustand, table sources, or display formatters).
 
@@ -618,6 +628,11 @@ or Go-field-name conversion. The emitted `signInIdentifier` and
 `authDescriptor.identifier` use that same name, typed as `keyof PasswordCredentials`.
 The login body must declare exactly one password field with `client:"kind=password"`.
 
+Session helpers supply the login body and empty requests for refresh, logout,
+and profile. Generation rejects path inputs, required query parameters, signed
+URLs, idempotency keys, and additional bodies these helpers cannot supply.
+Optional query parameters remain available through direct client calls.
+
 The profile route must use the declared guard. Login uses `TokenCookieResponse`;
 refresh pairs `RefreshTokenCookie` with `TokenCookieResponse`; logout pairs
 `RefreshTokenCookieLogout` with `ClearRefreshCookie`. All three share one
@@ -685,8 +700,10 @@ browser-visible data.
 
 The generated entry exports `PublicEnv`, `publicEnvSchema`, `decodePublicEnv`,
 and `findPublicEnvProblems`. Boolean and numeric settings decode to their
-TypeScript scalar types; enums decode to their declared cases. A locale setting
-uses the catalog's `Locale` union when locale metadata is available. The supported
+TypeScript scalar types; enums decode to their declared cases. Local and imported
+enums read those cases from their enum descriptor, including its alias and
+ignored-constant rules. Enum fields infer `kind=enum` without an explicit tag.
+A locale setting uses the catalog's `Locale` union when locale metadata is available. The supported
 kinds are `string`, `boolean`, `number`, `enum`, `locale`, `currency`, and
 `time_zone`; `max` limits string length.
 
@@ -702,9 +719,12 @@ console.log(settings.appName, settings.defaultLocale);
 Supply the build tool's public environment object as `rawEnvironment`.
 `findPublicEnvProblems` reports unknown prefixed keys and invalid values without
 printing their values. `decodePublicEnv` trims strings, uses declared fallbacks
-for missing, blank, or invalid values, and returns a frozen object. Run the
-problem check when invalid build configuration must fail instead of using a
-fallback.
+for missing or blank values, and returns a frozen object. Invalid supplied values
+throw an error naming the key without printing the value. Generation rejects
+fallbacks outside the setting's declared type, including missing enum fallbacks
+and locale fallbacks outside the catalog. Supply a valid fallback for every
+non-string setting; plain strings may use the empty string. Locale validation
+checks membership in the same catalog used by the emitted `Locale` union.
 
 ## Frontend message keys
 

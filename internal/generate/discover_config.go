@@ -241,7 +241,9 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 					}
 				}
 			} else {
-				if basic, ok := base.Underlying().(*types.Basic); ok {
+				if node.codec == "Enum" {
+					publicKind = config.PublicEnum
+				} else if basic, ok := base.Underlying().(*types.Basic); ok {
 					switch {
 					case basic.Info()&types.IsBoolean != 0:
 						publicKind = config.PublicBoolean
@@ -250,22 +252,8 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 					default:
 						publicKind = config.PublicString
 					}
-				} else if node.codec == "Enum" {
-					publicKind = config.PublicEnum
 				} else {
 					publicKind = config.PublicString
-				}
-			}
-			var enumCases []string
-			if node.codec == "Enum" {
-				if named, ok := base.(*types.Named); ok {
-					for _, name := range p.types.Scope().Names() {
-						v, ok := p.types.Scope().Lookup(name).(*types.Const)
-						if ok && types.Identical(v.Type(), named) && v.Exported() {
-							val := strings.Trim(v.Val().ExactString(), `"`)
-							enumCases = append(enumCases, val)
-						}
-					}
 				}
 			}
 			node.public = &config.PublicSetting{
@@ -275,7 +263,6 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 				Fallback:    fallback,
 				Kind:        publicKind,
 				MaxLength:   maxLen,
-				EnumCases:   enumCases,
 			}
 		}
 		fields = append(fields, node)

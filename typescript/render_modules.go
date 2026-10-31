@@ -275,6 +275,16 @@ func renderSurfaceAuth(prefix string, surface Surface, fullDoc manifest.Document
 	logoutOp := findView(surfaceAuth.Logout)
 	profileOp := findView(surfaceAuth.Profile)
 
+	for _, op := range []*manifest.Operation{loginOp, refreshOp, logoutOp, profileOp} {
+		unsupplied := len(op.Path) > 0 || op.Idempotency != nil || op.Route.SignedURL != nil || op.Body != nil && op.Route.ID != surfaceAuth.Login
+		for _, parameter := range op.Query {
+			unsupplied = unsupplied || parameter.Required
+		}
+		if unsupplied {
+			return nil, safeerror.NewFault(fault.Invalid, fmt.Sprintf("surface %q auth route %q requires inputs the session helper cannot supply", surface.Name, op.Route.ID))
+		}
+	}
+
 	var actualProfileGuard auth.GuardName
 	if profileOp.Route.Authentication != nil {
 		actualProfileGuard = profileOp.Route.Authentication.Guard
@@ -349,7 +359,7 @@ func renderSurfaceAuth(prefix string, surface Surface, fullDoc manifest.Document
 
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "\nimport { createPortalSession as runtimeCreatePortalSession } from %s;\n", specifier(moduleFile(prefix, authSource)))
-	fmt.Fprintf(&b, "import type { SurfaceAuthDescriptor, PortalSession, PortalSessionOptions, IssuedAccess } from %s;\n\n", specifier(moduleFile(prefix, authSource)))
+	fmt.Fprintf(&b, "import type { SurfaceAuthDescriptor, PortalSession, PortalSessionOptions } from %s;\n\n", specifier(moduleFile(prefix, authSource)))
 	fmt.Fprintf(&b, "/** Password credentials accepted by this portal's browser login endpoint. */\n")
 	fmt.Fprintf(&b, "export type PasswordCredentials = %s;\n\n", credentialsType)
 	fmt.Fprintf(&b, "/** The declared login identifier JSON property name for this portal. */\n")
@@ -358,10 +368,10 @@ func renderSurfaceAuth(prefix string, surface Surface, fullDoc manifest.Document
 	fmt.Fprintf(&b, "export const authDescriptor: SurfaceAuthDescriptor<Client, %s, PasswordCredentials> = {\n", profileType)
 	fmt.Fprintf(&b, "  guard: %s,\n", quote(string(surfaceAuth.Guard)))
 	fmt.Fprintf(&b, "  identifier: %s,\n", quote(surfaceAuth.Identifier))
-	fmt.Fprintf(&b, "  login: (client, credentials) => client[%s]({ body: credentials } as Operations[%s][\"request\"]) as Promise<IssuedAccess>,\n", quote(loginOp.Name), quote(loginOp.Name))
-	fmt.Fprintf(&b, "  refresh: (client) => client[%s]({} as Operations[%s][\"request\"]) as Promise<IssuedAccess>,\n", quote(refreshOp.Name), quote(refreshOp.Name))
-	fmt.Fprintf(&b, "  logout: (client) => client[%s]({} as Operations[%s][\"request\"]).then(() => {}),\n", quote(logoutOp.Name), quote(logoutOp.Name))
-	fmt.Fprintf(&b, "  profile: (client) => client[%s]({} as Operations[%s][\"request\"]),\n", quote(profileOp.Name), quote(profileOp.Name))
+	fmt.Fprintf(&b, "  login: (client, credentials) => client[%s]({ body: credentials }),\n", quote(loginOp.Name))
+	fmt.Fprintf(&b, "  refresh: (client) => client[%s]({}),\n", quote(refreshOp.Name))
+	fmt.Fprintf(&b, "  logout: (client) => client[%s]({}).then(() => {}),\n", quote(logoutOp.Name))
+	fmt.Fprintf(&b, "  profile: (client) => client[%s]({}),\n", quote(profileOp.Name))
 	fmt.Fprintf(&b, "};\n\n")
 	fmt.Fprintf(&b, "/**\n * Creates an authenticated session and client for the %s portal.\n * Handles in-memory access tokens, cross-tab Web Locks, cookie refresh,\n * and 401 retry-and-renew transport interception.\n */\n", surface.Name)
 	fmt.Fprintf(&b, "export function createPortalSession(\n  transport: HTTPTransport,\n  options?: PortalSessionOptions & { readonly clientOptions?: ClientOptions },\n): PortalSession<Client, %s, PasswordCredentials> {\n", profileType)

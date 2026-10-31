@@ -25,6 +25,11 @@
 - Fixed: Cross-tab auth messages carry credential transition revisions so delayed sign-in, sign-out, or token messages cannot overwrite a newer login.
 - Fixed: Session restoration rejects profiles superseded by sign-in, sign-out, or disposal with `SessionChangedError`.
 - Fixed: Authenticated requests can cancel their own refresh waits; shared refreshes have a configurable deadline and disposal cancellation while retaining the credential lock until the operation exits.
+- Fixed: TypeScript auth helpers reject endpoints with required inputs they cannot supply and emit requests without type assertions.
+- Fixed: TypeScript datatable helpers bind only exact table route IDs, validate request and row contracts, reject competing bindings, and omit unavailable operations.
+- Fixed: Public enum configuration uses authoritative descriptor cases for local and imported enums, honoring alias and ignored-constant rules while preserving escaped strings and wide integers.
+- Fixed: Public configuration validates catalog locale membership and declared fallbacks before emission; invalid supplied values raise an error instead of escaping the declared TypeScript union.
+- Fixed: Extension-only upload constraints preserve the browser file picker's `accept` hint.
 
 - Changed (breaking): HTTP pagination endpoint `Handle` and `URL` methods move to
   documented package functions: `pagination.Handle`, `pagination.URL`,

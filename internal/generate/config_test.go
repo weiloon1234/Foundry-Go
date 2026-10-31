@@ -219,3 +219,58 @@ type Settings struct {
 		}
 	}
 }
+
+func TestPublicConfigUsesAuthoritativeEnumCases(t *testing.T) {
+	dir := fixture(t, `package sample
+import "foundry.test/generator/shared"
+//foundry:enum
+type Mode string
+const (
+ Live Mode = "li\"ve"
+ Alias = Live
+ //foundry:ignore
+ Ignored Mode = "ignored"
+)
+//foundry:config
+type Settings struct {
+ Local Mode `+"`config:\"local,public\" client:\"env=VITE_LOCAL\"`"+`
+ Imported shared.Mode `+"`config:\"imported,public\" client:\"env=VITE_IMPORTED,kind=enum\"`"+`
+ Wide shared.Wide `+"`config:\"wide,public\" client:\"env=VITE_WIDE\"`"+`
+}
+`)
+	child := filepath.Join(dir, "shared")
+	if err := os.Mkdir(child, 0755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, child, "mode.go", `package shared
+//foundry:enum
+type Mode string
+const (
+ Live Mode = "li\"ve"
+ Alias = Live
+ //foundry:ignore
+ Ignored Mode = "ignored"
+)
+//foundry:enum
+type Wide uint64
+const Large Wide = 18446744073709551615
+`)
+	if _, err := Generate(t.Context(), Options{Dir: dir, Recursive: true}); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "public_runtime_test.go", `package sample
+import("testing";"reflect";"github.com/weiloon1234/Foundry-Go/config")
+func TestPublicEnum(t *testing.T){
+ settings:=SettingsPublicConfig()
+ for _,setting:=range settings {
+  want:=[]string{"li\"ve"};if setting.Name=="wide"{want=[]string{"18446744073709551615"}}
+  if setting.Kind!=config.PublicEnum||!reflect.DeepEqual(setting.EnumCases,want){t.Errorf("%s: kind=%s cases=%q, want enum %q",setting.Name,setting.Kind,setting.EnumCases,want)}
+ }
+}
+`)
+	command := exec.CommandContext(t.Context(), "go", "test", "-count=1", "-run", "^TestPublicEnum$", ".")
+	command.Dir = dir
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("public enum config: %v\n%s", err, output)
+	}
+}

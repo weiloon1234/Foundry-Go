@@ -468,9 +468,9 @@ func TestRenderFrontendMessages(t *testing.T) {
 func TestRenderPublicConfig(t *testing.T) {
 	settings := []manifest.PublicSetting{
 		{Name: "appName", Env: "VITE_APP_NAME", Description: "Product name", Fallback: "Foundry", Kind: "string", MaxLength: 60},
-		{Name: "locale", Env: "VITE_LOCALE", Description: "BCP 47 locale", Kind: "locale"},
+		{Name: "locale", Env: "VITE_LOCALE", Description: "BCP 47 locale", Fallback: "en", Kind: "locale"},
 		{Name: "currency", Env: "VITE_CURRENCY", Description: "ISO currency", Fallback: "USD", Kind: "currency"},
-		{Name: "timeZone", Env: "VITE_TIME_ZONE", Description: "IANA zone", Kind: "time_zone"},
+		{Name: "timeZone", Env: "VITE_TIME_ZONE", Description: "IANA zone", Fallback: "UTC", Kind: "time_zone"},
 	}
 	source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: settings})
 	if err != nil {

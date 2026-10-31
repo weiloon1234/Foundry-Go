@@ -3,7 +3,6 @@ package generate
 import (
 	"fmt"
 	"go/types"
-	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/config"
 )
@@ -88,15 +87,31 @@ func emitConfig(p *packageInput, declaration configDeclaration) ([]byte, error) 
 		e.line("// %sPublicConfig returns the public configuration declared on %s.", declaration.name, declaration.name)
 		e.line("func %sPublicConfig() []%s.PublicSetting {", declaration.name, configuration)
 		e.line("return []%s.PublicSetting{", configuration)
-		for _, s := range declaration.publicSettings {
-			casesLit := "nil"
-			if len(s.EnumCases) > 0 {
-				quoted := make([]string, len(s.EnumCases))
-				for i, c := range s.EnumCases {
-					quoted[i] = fmt.Sprintf("%q", c)
-				}
-				casesLit = fmt.Sprintf("[]string{%s}", strings.Join(quoted, ", "))
+		var publicFields []configField
+		walkConfigLeaves(declaration.fields, func(field configField) {
+			if field.public != nil {
+				publicFields = append(publicFields, field)
 			}
+		})
+		for _, field := range publicFields {
+			s := *field.public
+			casesLit := "nil"
+			if field.codec == "Enum" {
+				valueType := e.typeName(field.typ)
+				base := field.typ.Underlying().(*types.Basic)
+				zero, text := "0", "string(item.Value)"
+				if base.Kind() == types.String {
+					zero = `""`
+				} else {
+					format, convert := "FormatInt", "int64"
+					if base.Info()&types.IsUnsigned != 0 {
+						format, convert = "FormatUint", "uint64"
+					}
+					text = fmt.Sprintf("%s.%s(%s(item.Value),10)", e.use("strconv"), format, convert)
+				}
+				casesLit = fmt.Sprintf("func() []string { cases := (%s(%s)).EnumDescriptor().Cases(); values := make([]string,len(cases)); for i,item := range cases { values[i] = %s }; return values }()", valueType, zero, text)
+			}
+
 			kindConst := ""
 			switch s.Kind {
 			case config.PublicString:

@@ -114,6 +114,11 @@ fields by name; continue separate request/response DTOs and explicit response
 projections.
 OpenAPI publishes `x-foundry-presentation` and marks password fields `writeOnly`.
 
+File field descriptors compose `accept` from the declared MIME types and file
+extensions independently. An extension-only constraint such as `csv` produces
+`.csv` without requiring a MIME constraint. `maxBytes` carries the declared
+upload size limit.
+
 ## Validation and compatibility
 
 Descriptors call the existing `validateRequest`; they do not interpret a second

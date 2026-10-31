@@ -7,11 +7,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-func (r *renderer) tables() {
+func (r *renderer) tables() error {
 	if len(r.document.Tables) == 0 {
-		return
+		return nil
 	}
 
 	tableIDs := make([]string, len(r.document.Tables))
@@ -34,67 +36,95 @@ func (r *renderer) tables() {
 
 	r.out.WriteString("export const tables = /* @__PURE__ */ Object.freeze({\n")
 	for _, t := range r.document.Tables {
-		queryOp, exportOp := r.tableOperations(t)
+		queryOp, exportOp, err := r.tableOperations(t)
+		if err != nil {
+			return err
+		}
 		rowType := r.typeName(t.Row)
 		r.renderTableEntry(t, queryOp, exportOp, rowType)
 	}
 	r.out.WriteString("} as const);\n")
+	return nil
 }
 
-func (r *renderer) tableOperations(table manifest.Table) (queryOp string, exportOp string) {
-	tableIDStr := string(table.ID)
-	pascalTable := ""
-	for _, part := range strings.FieldsFunc(tableIDStr, func(r rune) bool { return r == '.' || r == '-' || r == '_' }) {
-		if part != "" {
-			pascalTable += strings.ToUpper(part[:1]) + part[1:]
-		}
+// Exact route identities declare the table binding. Shared schemas and client
+// names cannot identify a table: every table uses the same request contract.
+func (r *renderer) tableOperations(table manifest.Table) (queryOp string, exportOp string, err error) {
+	invalid := func(message string) (string, string, error) {
+		return "", "", safeerror.NewFault(fault.Invalid, fmt.Sprintf("table %q: %s", table.ID, message))
 	}
-
 	for _, op := range r.document.HTTP {
-		routeID := string(op.Route.ID)
-		if queryOp == "" {
-			if routeID == tableIDStr+".query" || routeID == tableIDStr+":query" || op.Name == clientNameOrEmpty(tableIDStr+".query") || strings.HasSuffix(op.Name, pascalTable+"Query") {
-				queryOp = op.Name
+		id := string(op.Route.ID)
+		switch id {
+		case string(table.ID) + ".query", string(table.ID) + ":query":
+			if queryOp != "" {
+				return invalid("multiple query routes declare this table")
 			}
-		}
-		if exportOp == "" {
-			if routeID == tableIDStr+".export" || routeID == tableIDStr+".csv" || routeID == tableIDStr+":export" || routeID == tableIDStr+":csv" ||
-				op.Name == clientNameOrEmpty(tableIDStr+".export") || op.Name == clientNameOrEmpty(tableIDStr+".csv") ||
-				strings.HasSuffix(op.Name, pascalTable+"Export") || strings.HasSuffix(op.Name, pascalTable+"Csv") {
-				exportOp = op.Name
+			if op.Body == nil || op.Body.Type != table.Request || op.Body.MediaType != "application/json" {
+				return invalid("query route must accept the table request as JSON")
 			}
+			if op.Response == nil || op.Response.MediaType != "application/json" || !r.tableResponseRow(op.Response.Type, table.Row) {
+				return invalid("query route must return a page of the declared table row")
+			}
+			queryOp = op.Name
+		case string(table.ID) + ".export", string(table.ID) + ".csv", string(table.ID) + ":export", string(table.ID) + ":csv":
+			if exportOp != "" {
+				return invalid("multiple export routes declare this table")
+			}
+			if !table.Exports || op.Response == nil || op.Response.File == nil {
+				return invalid("export route requires an exportable table and a file response")
+			}
+			if op.Body != nil && (op.Body.Type != table.Request || op.Body.MediaType != "application/json") {
+				return invalid("export route body must accept the table request as JSON")
+			}
+			exportOp = op.Name
 		}
 	}
-	if queryOp == "" {
-		for _, op := range r.document.HTTP {
-			if op.Body != nil && op.Body.Type == table.Request {
-				queryOp = op.Name
-				break
-			}
-		}
-	}
-	return queryOp, exportOp
+	return queryOp, exportOp, nil
 }
 
-func clientNameOrEmpty(id string) string {
-	parts := strings.FieldsFunc(id, func(r rune) bool { return r == '.' || r == '-' || r == '_' })
-	if len(parts) == 0 {
-		return ""
+func (r *renderer) tableResponseRow(id, row contract.TypeID) bool {
+	types := make(map[contract.TypeID]contract.Type, len(r.document.Types))
+	for _, typ := range r.document.Types {
+		types[typ.ID] = typ
 	}
-	name := parts[0]
-	for _, part := range parts[1:] {
-		name += strings.ToUpper(part[:1]) + part[1:]
+	// Alias traversal is bounded by the number of schemas, including cycles.
+	resolve := func(id contract.TypeID) contract.Type {
+		for range len(types) + 1 {
+			typ := types[id]
+			if typ.Kind != contract.AliasKind {
+				return typ
+			}
+			if typ.Nullable {
+				return contract.Type{}
+			}
+			id = typ.Element
+		}
+		return contract.Type{}
 	}
-	return name
+	page := resolve(id)
+	if page.Kind != contract.ObjectKind || page.Nullable {
+		return false
+	}
+	for _, property := range page.Properties {
+		if property.Name == "data" && property.Required {
+			items := resolve(property.Type)
+			return items.Kind == contract.ArrayKind && items.Element == row
+		}
+	}
+	return false
 }
 
 func (r *renderer) renderTableEntry(t manifest.Table, queryOp, exportOp, rowType string) {
 	typeArgs := rowType
 	if queryOp != "" {
 		typeArgs += ", " + quote(queryOp)
-		if exportOp != "" {
-			typeArgs += ", " + quote(exportOp)
-		}
+	}
+	if queryOp == "" && exportOp != "" {
+		typeArgs += ", never"
+	}
+	if exportOp != "" {
+		typeArgs += ", " + quote(exportOp)
 	}
 	fmt.Fprintf(&r.out, "  %s: createTableDescriptor<%s>({\n", quote(string(t.ID)), typeArgs)
 	fmt.Fprintf(&r.out, "    id: %s,\n", quote(string(t.ID)))

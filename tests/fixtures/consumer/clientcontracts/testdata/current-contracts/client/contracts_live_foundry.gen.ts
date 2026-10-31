@@ -155,7 +155,7 @@ function describeField(id: string | undefined, required: boolean, path: string, 
   const descriptor = immutable({
     path, required, nullable: !repeated && (resolved?.nullable ?? false), repeated,
     presentation: hint ?? {}, schema: type, parameter, choices,
-    accept: parameter && "content_types" in parameter && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
+    accept: parameter && "kind" in parameter && parameter.kind === "file" && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
     maxBytes: parameter && "max_bytes" in parameter ? parameter.max_bytes : undefined,
     field(name: string): unknown {
       if (typeof name !== "string" || repeated) reject(path, "unknown_field");

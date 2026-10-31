@@ -1,0 +1,183 @@
+package typescript
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/weiloon1234/Foundry-Go/contract"
+	"github.com/weiloon1234/Foundry-Go/contract/manifest"
+	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/fault"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/validation"
+)
+
+func TestTableOperationsDoNotBorrowAnotherTableEndpoint(t *testing.T) {
+	r := renderer{document: manifest.Document{HTTP: []manifest.Operation{
+		{Name: "reportsMembersQuery", Route: foundryhttp.RouteInfo{ID: "reports.members.query"}, Body: &manifest.Payload{Type: "request"}},
+		{Name: "otherReportsOrdersQuery", Route: foundryhttp.RouteInfo{ID: "other.reports.orders.query"}, Body: &manifest.Payload{Type: "request"}},
+	}}}
+	query, export, err := r.tableOperations(manifest.Table{ID: datatable.TableID("reports.orders"), Request: "request"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query != "" || export != "" {
+		t.Fatalf("orders borrowed another table's endpoint: %q %q", query, export)
+	}
+}
+
+func TestPublicConfigRejectsInvalidUnionFallback(t *testing.T) {
+	for _, fallback := range []string{"", "other"} {
+		t.Run("fallback="+fallback, func(t *testing.T) {
+			source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: []manifest.PublicSetting{{Name: "mode", Env: "VITE_MODE", Kind: manifest.PublicEnum, EnumCases: []string{"live"}, Fallback: fallback}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = Render(source); err == nil {
+				t.Fatal("invalid enum fallback emitted under a literal union")
+			}
+		})
+	}
+}
+
+func TestPublicConfigLocaleMatchesCatalog(t *testing.T) {
+	locales, err := i18n.NewLocaleSet("en", "en", "ms")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{Locales: locales, PublicConfig: []manifest.PublicSetting{{Name: "locale", Env: "VITE_LOCALE", Kind: manifest.PublicLocale, Fallback: "en"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := source.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	document.Locales = &manifest.Locales{Default: locales.Default(), Supported: locales.Locales()}
+	data, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err = manifest.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := Render(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runReleaseTypeScript(t, output, `assert.equal(sdk.isValidPublicValue("VITE_LOCALE", "de"), false); assert.throws(() => sdk.decodePublicEnv({VITE_LOCALE:"de"})); assert.equal(sdk.decodePublicEnv({}).locale,"en"); assert.equal(sdk.decodePublicEnv({VITE_LOCALE:"ms"}).locale,"ms");`)
+}
+
+func TestExtensionOnlyUploadAcceptHint(t *testing.T) {
+	type form struct{ Document foundryhttp.UploadedFile }
+	field := validation.DefineField("document", func(f form) foundryhttp.UploadedFile { return f.Document })
+	body := foundryhttp.MultipartDirectory(foundryhttp.DefineMultipart(foundryhttp.FilePart("document", func(f *form) *foundryhttp.UploadedFile { return &f.Document })), t.TempDir())
+	endpoint := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "upload", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/upload")), foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(body), foundryhttp.JSONResponse(200, contract.StringJSON[string]())), validation.Rules(field, validation.FileExtensions[foundryhttp.UploadedFile]("csv")))
+	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, form]) (string, error) {
+		return "", nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{HTTP: router})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := Render(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runReleaseTypeScript(t, output, `assert.equal(sdk.operation("upload").field("body", "document").accept,".csv");`)
+}
+
+func runReleaseTypeScript(t *testing.T, source []byte, assertions string) {
+	t.Helper()
+	node, compiler := os.Getenv("FOUNDRY_TEST_NODE"), os.Getenv("FOUNDRY_TEST_TYPESCRIPT")
+	if node == "" || compiler == "" {
+		t.Skip("set FOUNDRY_TEST_NODE and FOUNDRY_TEST_TYPESCRIPT")
+	}
+	dir := t.TempDir()
+	input := filepath.Join(dir, "input.ts")
+	if err := os.WriteFile(input, source, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, compiler, "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--lib", "ES2022,DOM,DOM.Iterable", "--strict", "--exactOptionalPropertyTypes", "--noUncheckedIndexedAccess", "--outDir", filepath.Join(dir, "dist"), input)
+	command.WaitDelay = time.Second
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("strict generated TypeScript: %v\n%s", err, output)
+	}
+	script := `import assert from "node:assert/strict"; import {pathToFileURL} from "node:url"; const sdk=await import(pathToFileURL(process.argv[1])); ` + assertions
+	command = exec.CommandContext(ctx, node, "--input-type=module", "-e", script, filepath.Join(dir, "dist", "input.js"))
+	command.WaitDelay = time.Second
+	if output, err := command.CombinedOutput(); err != nil {
+		text := string(output)
+		if len(text) > 5000 {
+			text = text[len(text)-5000:]
+		}
+		t.Fatalf("generated runtime: %v\n%s", err, text)
+	}
+}
+
+func TestTableOperationBindingsValidateContracts(t *testing.T) {
+	table := manifest.Table{ID: "reports.members", Request: "request", Row: "member", Exports: true}
+	query := manifest.Operation{Name: "membersQuery", Route: foundryhttp.RouteInfo{ID: "reports.members.query"}, Body: &manifest.Payload{MediaType: "application/json", Type: "request"}, Response: &manifest.Payload{MediaType: "application/json", Type: "page"}}
+	types := []contract.Type{{ID: "page", Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "data", Type: "rows", Required: true}}}, {ID: "rows", Kind: contract.ArrayKind, Element: "member"}}
+	for _, scenario := range []string{"valid", "wrong request", "wrong row", "ambiguous query", "ambiguous export", "export only"} {
+		t.Run(scenario, func(t *testing.T) {
+			table := table
+			op := query
+			r := renderer{document: manifest.Document{Types: types, HTTP: []manifest.Operation{op}}}
+			switch scenario {
+			case "wrong request":
+				op.Body = &manifest.Payload{MediaType: "application/json", Type: "other"}
+				r.document.HTTP[0] = op
+			case "wrong row":
+				table.Row = "other"
+			case "ambiguous query":
+				op.Route.ID = "reports.members:query"
+				r.document.HTTP = append(r.document.HTTP, op)
+			case "ambiguous export", "export only":
+				op = manifest.Operation{Name: "membersExport", Route: foundryhttp.RouteInfo{ID: "reports.members.csv"}, Response: &manifest.Payload{File: &foundryhttp.FileResponseInfo{}}}
+				r.document.HTTP = []manifest.Operation{op}
+				if scenario == "ambiguous export" {
+					op.Route.ID = "reports.members.export"
+					r.document.HTTP = append(r.document.HTTP, op)
+				}
+			}
+			queryName, exportName, err := r.tableOperations(table)
+			switch scenario {
+			case "valid":
+				if err != nil || queryName != "membersQuery" || exportName != "" {
+					t.Fatalf("valid binding: %q %q %v", queryName, exportName, err)
+				}
+			case "export only":
+				if err != nil || queryName != "" || exportName != "membersExport" {
+					t.Fatalf("export binding: %q %q %v", queryName, exportName, err)
+				}
+				r.renderTableEntry(table, queryName, exportName, "Member")
+				if !strings.Contains(r.out.String(), `createTableDescriptor<Member, never, "membersExport">`) {
+					t.Fatal("export-only descriptor lost its operation type")
+				}
+			default:
+				if !errors.Is(err, fault.Invalid) {
+					t.Fatalf("invalid table binding accepted: %v", err)
+				}
+			}
+		})
+	}
+}

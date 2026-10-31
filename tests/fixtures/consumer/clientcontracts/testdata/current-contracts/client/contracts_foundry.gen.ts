@@ -155,7 +155,7 @@ function describeField(id: string | undefined, required: boolean, path: string, 
   const descriptor = immutable({
     path, required, nullable: !repeated && (resolved?.nullable ?? false), repeated,
     presentation: hint ?? {}, schema: type, parameter, choices,
-    accept: parameter && "content_types" in parameter && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
+    accept: parameter && "kind" in parameter && parameter.kind === "file" && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
     maxBytes: parameter && "max_bytes" in parameter ? parameter.max_bytes : undefined,
     field(name: string): unknown {
       if (typeof name !== "string" || repeated) reject(path, "unknown_field");
@@ -1547,7 +1547,7 @@ export const publicEnvSchema = {
   VITE_DEFAULT_LOCALE: {
     description: "",
     fallback: "en",
-    isValid: isLocale,
+    isValid: (value: string) => isLocale(value) && (["ar", "en", "ms"] as readonly string[]).includes(value),
   },
 } as const satisfies Record<string, PublicEnvEntry>;
 
@@ -1590,9 +1590,9 @@ export interface PublicEnv {
 export function decodePublicEnv(env: Record<string, string | undefined>): PublicEnv {
   const read = (key: PublicEnvKey): string => {
     const raw = env[key]?.trim();
-    if (!raw) return publicEnvSchema[key].fallback;
-    if (isValidPublicValue(key, raw)) return raw;
-    return publicEnvSchema[key].fallback;
+    const value = raw || publicEnvSchema[key].fallback;
+    if (publicEnvSchema[key].isValid(value)) return value;
+    throw new Error(key + " is invalid: " + publicEnvSchema[key].description);
   };
   return Object.freeze({
     appName: read("VITE_APP_NAME"),
