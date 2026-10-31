@@ -16,7 +16,7 @@ are distinct capabilities. `Query[M]`, predicates and orderings retain owner typ
 See the [compiled migration examples](../docs/guides/orm-migration.md).
 
 ```go
-users, err := models.Users.Query().Where(models.Users.Email.Eq(email)).All(ctx, db)
+users, err := orm.All(ctx, db, models.Users.Query().Where(orm.TextEq(models.Users.Email, email)))
 ```
 
 Wrong-owner predicates, wrong-value assignments and null assignment to a required

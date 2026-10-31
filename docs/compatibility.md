@@ -197,7 +197,7 @@ must preserve a reader capable of consuming formats already written.
 ## Typed query compilation footprint
 
 Handwritten typed tables use `orm/expr` for expressions and `orm/rows` for
-projections, sets and CTEs. Row carriers expose `.Value()` for selection. Shared
+projections, sets and CTEs. Use `expr.AsSelected(row)` for selection. Shared
 lowering preserves bindings, hydration and lifecycle behavior without a parallel
 query runtime. See [typed field computations](guides/typed-field-computations.md)
 and the [migration guide](guides/orm-migration.md#removed-api-spellings).
@@ -210,7 +210,7 @@ also package functions, such as `orm.All(ctx, db, query)` and
 `orm.Find(ctx, db, table, key)`. Expression and source APIs require explicit sealed
 adapters, such as `expr.Value(orm.TextExpr(column))`. The old methods have no
 compatibility aliases; migrate callers together. Model, value, input and role
-constraints remain concrete. Query chains and expression/result methods remain.
+constraints remain concrete. Query chains, CASE builders and window builders remain methods; expression comparisons and ordering are package functions.
 
 Cursor request contract IDs now use the native ORM owner. Regenerate manifests,
 OpenAPI and TypeScript together; cursor token encoding and model identity stay
@@ -281,7 +281,7 @@ adjustments when the corresponding features are enabled:
 | Feature | Upgrade requirement |
 | --- | --- |
 | Password confirmation | Configure `PasswordLogin.WithConfirmationLockout` and the confirmation route's HTTP rate limit; see [password confirmation](guides/browser-sessions.md). |
-| Datatable downloads | Declare the download route with `.WithTimeout(manager.DownloadTimeout())`; see [datatable exports](guides/datatable.md). |
+| Datatable downloads | Declare the download route with `http.Timeout(manager.DownloadTimeout())`; see [datatable exports](guides/datatable.md). |
 | Failed-job archive | Apply its new migration and use cursor paging with `ListOptions.After`; see [archive operations](guides/jobs-operations.md). |
 | Outbound webhook workers | Register `job.FailureSink(service)` with every worker running the delivery job so terminal failures update delivery state; see [outbound delivery](guides/webhooks.md). |
 | Login limits | The per-address ceiling is now opt-in. Review [login lockout](guides/login-lockout.md) before enabling it for shared client addresses. |

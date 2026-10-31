@@ -105,3 +105,6 @@ retention and complete production HTTP kernel usage. Native verification passed;
 
 Application helpers live in `testkit/postgres/application`; lightweight schema
 creation stays in `testkit/postgres` without an infrastructure dependency.
+Parallel-safe application boot is bounded by `Environment.Start` concurrency
+limiter (`DefaultConcurrency`, overridable via `FOUNDRY_TEST_APP_CONCURRENCY`),
+with shared slots across subtests and release after complete shutdown and connection drain.

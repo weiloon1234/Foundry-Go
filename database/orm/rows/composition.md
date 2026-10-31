@@ -29,12 +29,12 @@ step := func(self rows.RecursiveSelf[Node]) rows.RecordSource[Node] {
     parent := rows.AsRecord[parentTag](self, "parent")
     child := rows.As[childTag](Nodes.Query(), "child")
     joined := rows.InnerJoin(child, parent, rows.On(
-        expr.At(rows.Scope(child), Nodes.ParentID),
-        expr.At(rows.Scope(parent), Nodes.ID),
+        expr.At(rows.Scope(child), orm.KeyExpr(Nodes.ParentID)),
+        expr.At(rows.Scope(parent), orm.KeyExpr(Nodes.ID)),
     ))
     return rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child)))
 }
-tree := rows.RecursiveCTE("tree", rows.ModelRecord(Nodes.Query().Where(Nodes.ID.Eq(root))), step)
+tree := rows.RecursiveCTE("tree", rows.ModelRecord(Nodes.Query().Where(orm.KeyEq(Nodes.ID, root))), step)
 ```
 
 The shared compiler requires exactly one self reference in the owning step. It
@@ -52,8 +52,8 @@ stay inside the set operands; result Where/OrderBy/Limit/Offset apply afterward:
 
 ```go
 combined := rows.Union(rows.ModelRecord(first), rows.ModelRecord(second))
-id := expr.At(combined.Scope(), Users.ID)
-users, err := rows.ReadSet(combined.OrderBy(id.Asc()).Limit(20)).All(ctx, db)
+id := expr.At(combined.Scope(), orm.KeyExpr(Users.ID))
+users, err := rows.ReadSet(combined.OrderBy(expr.Asc(id)).Limit(20)).All(ctx, db)
 ```
 
 Declared projection fields use `rows.At(combined.Scope(), Fields.Name)`. Sets also
@@ -67,11 +67,11 @@ For scalars, adapt `SelectScalar` using `Values`, then use the corresponding
 including model-owned identifiers and nullability:
 
 ```go
-ids := rows.Values(rows.SelectScalar(rows.From(Users.Query()), expr.Row(expr.Value(Users.ID)).Value()))
+ids := rows.Values(rows.SelectScalar(rows.From(Users.Query()), expr.AsSelected(expr.Value(orm.KeyExpr(Users.ID)))))
 combined := rows.UnionValues(ids, ids)
-values, err := rows.ReadValues(combined.OrderBy(combined.Value().Asc())).All(ctx, db)
-inner := rows.SelectScalar(combined, expr.Row(combined.Value()).Value())
-condition := rows.InQuery(expr.Value(Users.ID), inner)
+values, err := rows.ReadValues(combined.OrderBy(expr.Asc(combined.Value()))).All(ctx, db)
+inner := rows.SelectScalar(combined, expr.AsSelected(combined.Value()))
+condition := rows.InQuery(expr.Value(orm.KeyExpr(Users.ID)), inner)
 ```
 
 A scalar set also provides its complete single-column record for CTE composition.

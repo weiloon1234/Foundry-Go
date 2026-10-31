@@ -186,19 +186,19 @@ fields; callers use the per-kind operators and explicit adapters.
 
 Stage 3.1a adds `JSONOf`/`NullableJSONOf` for `value.JSON[T]` and
 `IntervalOf`/`NullableIntervalOf` for `temporal.Interval`. JSON handles keep the
-payload type through equality, membership, containment and assignment. They expose
-`Asc`/`Desc` and `IsJSONNull`, but no range comparisons or text patterns. `expr.JSONType` and
+payload type through equality, membership, containment and assignment. They support
+`JSONAsc`/`JSONDesc` and `JSONIsJSONNull`, but no range comparisons or text patterns. `expr.JSONType` and
 `expr.JSONLength` inspect JSON expressions. Interval handles add ordered comparisons
 and sorting, without numeric adjustments or text patterns. Nullable handles distinguish SQL NULL from
 values; JSON null is represented by `value.JSON[value.Nullable[T]]`.
 
 Use `TableOf(b, &m.Period, orm.Codec(codec.Interval()))` for an interval natural
 key. PostgreSQL compares intervals using 30-day months and 24-hour days: an
-`Eq(temporal.Months(1))` predicate also matches stored `30 days`. Interval natural
+`orm.IntervalEq(Users.Period, temporal.Months(1))` predicate also matches stored `30 days`. Interval natural
 keys therefore collide for `1 mon` and `30 days`; hydration preserves their distinct
 calendar and elapsed components. Use `expr.SumInterval` and `expr.AvgInterval` for interval aggregates.
 `BytesOf`/`NullableBytesOf` retain buffer ownership and distinguish empty bytes
-from NULL. `Text.IContains` and `NullableText.IContains` treat `%`, `_` and `\`
+from NULL. `orm.TextIContains` and `orm.NullableTextIContains` treat `%`, `_` and `\`
 as literal substring characters and match case-insensitively. For example,
 `orm.TextIContains(Users.Email, "@EXAMPLE.com")` binds a value; it never interpolates SQL.
 Stage 3.1b adds `PasswordOf`/`NullablePasswordOf`, which preserve typed hash
@@ -564,8 +564,8 @@ The [expression aggregate rules](expr/README.md) apply unchanged: counts return
 float summaries return nullable float64, interval summaries return nullable interval,
 and extrema retain the present field type with one nullable layer. Use the existing
 `SumFloat`/`AvgFloat` and `SumInterval`/`AvgInterval` constructors for those families.
-`Filter` takes expression row predicates, for example
-`expr.Sum(orm.NumberExpr(Orders.TotalCents)).Filter(expr.OrderRow(expr.Value(orm.NumberExpr(Orders.TotalCents))).Gt(0))`.
+`expr.Filter` takes expression row predicates, for example
+`expr.Filter(expr.Sum(orm.NumberExpr(Orders.TotalCents)), expr.Gt(expr.OrderRow(expr.Value(orm.NumberExpr(Orders.TotalCents))), 0))`.
 It filters the measure without hiding cardinality errors in the input relation.
 Relation `Where` restricts that input before aggregation.
 

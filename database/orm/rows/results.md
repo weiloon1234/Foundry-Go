@@ -5,8 +5,8 @@ scope describes output fields, independently of the original input scope:
 
 ```go
 c := rows.CursorFor(rows.ModelRecord(Orders.Query().Limit(200)))
-id := expr.At(c.Scope(), Orders.ID)
-c = c.OrderBy(id.Asc()).UniqueBy(expr.Group(id))
+id := expr.At(c.Scope(), orm.KeyExpr(Orders.ID))
+c = c.OrderBy(expr.Asc(id)).UniqueBy(expr.Group(id))
 page, err := c.Paginate(ctx, db, orm.CursorRequest[Order]{Size: 20})
 ```
 
@@ -62,7 +62,7 @@ iteration waits for a running callback to exit. Use `rows.CompileRead(rows.Read(
 [report reads](README.md#report-reads). Transaction-only sources are rejected by
 these ordinary terminals before I/O.
 
-`SelectTransactionValue(source, expr.Row(field).Value())` keeps the scalar type and
+`SelectTransactionValue(source, expr.AsSelected(field))` keeps the scalar type and
 requires `*database.Tx` for every terminal. `TransactionRead` and
 `TransactionValue` expose `First`, `RequireFirst`, `Count` and `Exists` in addition
 to `All`. There is no conversion to ordinary result sources.

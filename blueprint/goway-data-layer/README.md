@@ -733,8 +733,8 @@ Footprint ceilings are retained; dedicated cursor and key-chunk probes are added
 | `q.CursorPaginate(ctx, ex, request)` | `orm.CursorPaginate(ctx, ex, q, request)` | Shared token format/scope and HTTP adapters |
 | `q.ChunkByID(ctx, ex, size, visit)` | `orm.ChunkByKey(ctx, ex, q, table.Key(), size, visit)` | Primary-key seeks, stable progress before callbacks |
 | `q.EachByID(ctx, ex, size, visit)` | `orm.EachByKey(ctx, ex, q, table.Key(), size, visit)` | Individual rows from closed batches |
-| `q.ForUpdate().Find(ctx, tx, id)` | `q.Where(table.Key().Eq(id)).ForUpdate().First(ctx, tx)` | Typed key and transaction retained |
-| Required locked keyed lookup | `q.Where(table.Key().Eq(id)).ForUpdate().Require(ctx, tx)` | Same transaction SQL |
+| `q.ForUpdate().Find(ctx, tx, id)` | `orm.First(ctx, tx, q.Where(orm.KeyEq(table.Key(), id)).ForUpdate())` | Typed key and transaction retained |
+| Required locked keyed lookup | `orm.Require(ctx, tx, q.Where(orm.KeyEq(table.Key(), id)).ForUpdate())` | Same transaction SQL |
 
 Acceptance: Go build/vet, scoped races (segmented fixes), generation, fixture tests,
 catalogue and pagination contract checks pass. All 28 probes remain within their
@@ -1659,7 +1659,7 @@ event, distinct-input, link, mutator and encrypted-vault consumers to ORM.
 without constructing callbacks or exposing private adapters. Tests retain
 registration inspection after row closure, with one adapter family per application.
 
-`orm.WriteUnset(write, Fields.Email.Set)` restores omission in a live before-write
+`orm.WriteUnset` (such as `orm.WriteUnset(write, func(v string) orm.Assignment[Member] { return orm.TextSet(Fields.Email, v) })`) restores omission in a live before-write
 callback. Omission remains distinct from SQL NULL and a supplied zero. Validation
 and sticky errors use the existing draft owner; mutators, defaults and conventions
 retain their existing execution rules. `orm.RestoreEach` and `orm.ForceDeleteEach`
@@ -1783,7 +1783,7 @@ open framework gap. Its original acceptance assertions remain.
 
 The D3 batch migrates recovery, authentication, nested bindings, notification and
 realtime identities, with an audit of the other service-only consumers. Recovery's
-Saving hook calls `orm.WriteUnset(write, fields.EmailRevision.Set)` when the email
+Saving hook calls `orm.WriteUnset` for the email revision setter when the email
 is unchanged. This removes the assignment: it does not send NULL, zero or the old
 value. The retained PostgreSQL trigger regression proves omission. Model-first
 locking, stored-hash compare-and-swap, request snapshots and unknown-commit

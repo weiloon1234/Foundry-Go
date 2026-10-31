@@ -13,10 +13,10 @@ these aliases. Use `expr.At` for model fields and `rows.At` for projection field
 
 ```go
 summary := rows.Select(rows.From(Orders.Query()), Summary,
-    rows.Map(Summary.Amount, expr.Value(Orders.TotalCents)))
+    rows.Map(Summary.Amount, expr.Value(orm.NumberExpr(Orders.TotalCents))))
 a := rows.AsRecord[summarySide](rows.RecordOf(rows.Limit(summary, 10)), "summary")
 result := rows.SelectRecord(a, rows.Scope(a)).
-    OrderBy(rows.At(rows.Scope(a), Summary.Amount).Asc())
+    OrderBy(expr.Asc(rows.At(rows.Scope(a), Summary.Amount)))
 items, err := rows.ReadRecord(result).All(ctx, db)
 ```
 
@@ -48,7 +48,7 @@ complete := rows.SelectTransactionRecord(claim, scope)
 items, err := complete.All(ctx, tx) // requires *database.Tx
 
 summary := rows.SelectTransaction(claim, Summary,
-    rows.Map(Summary.Amount, expr.At(scope, Orders.TotalCents)))
+    rows.Map(Summary.Amount, expr.At(scope, orm.NumberExpr(Orders.TotalCents))))
 rows, err := summary.All(ctx, tx)
 ```
 
@@ -68,7 +68,7 @@ A model can carry an ad-hoc relation aggregate without adding a model slot:
 
 ```go
 count := expr.RelatedValue(UserRelations.Orders, expr.Count[Order]())
-query := expr.OrderBy(expr.Where(Users.Query(), expr.OrderRow(count).Gte(2)), count.Desc())
+query := expr.OrderBy(expr.Where(Users.Query(), expr.Gte(expr.OrderRow(count), 2)), expr.Desc(count))
 annotated := rows.WithValue(query, count)
 items, err := rows.ReadRecord(annotated).All(ctx, db) // []rows.Annotated[User, int64]
 ```

@@ -48,8 +48,9 @@ Test scaffold collisions/path traversal, fresh-project generation, installed-ver
 The [tooling guide](../docs/guides/developer-tooling-and-testing.md) and
 [query-plan guide](../docs/guides/query-plans.md) document the delivered APIs.
 Typed command/bootstrap and pure inspection, create-only artifact scaffolds,
-offline doctor, owned test clients/fakes, generated-model factories and typed
-PostgreSQL plans passed native verification and independent consumer review.
+offline doctor, owned test clients/fakes, generated-model factories, typed
+PostgreSQL plans, and the `devserver` development supervision loop (`devserver.Run`)
+passed native verification and independent consumer review.
 All implementation, test sources and documentation preceded compilation/tests.
 
 Final `make verify` passed in 430.4s with existing PostgreSQL/Redis required,

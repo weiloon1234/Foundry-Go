@@ -54,7 +54,7 @@ available for advanced composition.
 | Realtime | [Typed WebSocket channels](docs/guides/websocket.md), authorization and presence; [Redis-backed distributed fan-out](docs/guides/websocket-distributed.md) and bounded replay. |
 | Application support | [Localization](docs/guides/localization.md), [settings](docs/guides/settings.md), countries, model extensions, [datatables, CSV/XLSX reporting and imports](docs/guides/datatable.md), money and decimal rounding, and named [outbound HTTP clients](docs/guides/http-client.md). |
 | Operations | [Structured logging](docs/guides/logging.md), typed audit records, public liveness/readiness probes, redacted server-failure diagnostics, [observability](docs/guides/observability.md) with Prometheus metrics and OTLP traces, fleet-wide [maintenance mode](docs/guides/readiness-and-maintenance.md), an opt-in [housekeeping schedule](docs/guides/production-operations.md) and lifecycle-managed shutdown. |
-| Extensibility and tooling | [Typed plugins](docs/guides/plugins.md), CLI scaffolds, generation, inspection, doctor and [testing helpers](docs/guides/developer-tooling-and-testing.md). [Agent/editor tooling](docs/guides/agent-language-tooling.md) inspects actual consumer APIs with gopls. |
+| Extensibility and tooling | [Typed plugins](docs/guides/plugins.md), CLI scaffolds, generation, inspection, doctor, development server supervision (`devserver`), and [testing helpers](docs/guides/developer-tooling-and-testing.md). [Agent/editor tooling](docs/guides/agent-language-tooling.md) inspects actual consumer APIs with gopls. |
 
 Configuration is explicit: the framework reads the environment lookup supplied by
 the application and does not automatically load `.env` files. Go declarations
@@ -73,8 +73,8 @@ The application's registered endpoint and DTO descriptors drive runtime codecs,
 validation metadata, a shared manifest, OpenAPI 3.1.1 and
 [generated TypeScript clients](docs/guides/client-contracts.md). The generated SDK
 includes typed HTTP and realtime operations, route method/path/name metadata,
-request/response fields, enum cases, access requirements, declared errors and
-supported client validation rules.
+request/response fields, enum cases and labels, access requirements, declared errors,
+supported client validation rules, portal sessions, public configuration, and typed datatable descriptors.
 
 The core output has no runtime npm dependencies or React/Vue coupling. Frontend
 teams supply transport and can compile the TypeScript to ordinary JavaScript. The

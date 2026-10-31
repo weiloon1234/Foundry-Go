@@ -7,14 +7,14 @@ projected value `P`, including `value.Nullable[V]`.
 
 `RowValue[S,V]` accepts stored and computed row values. `Selected[S,V]` accepts
 selected results and cannot enter row predicates or row arithmetic. Promote row
-values with `expr.Row(row).Value()`, or use a computed value's `Value` method. Use
+values with `expr.AsSelected(row)`. Use
 `rows.MapSelected` to select an aggregate or a computed result into a declared row
 field. `rows.Map` retains its existing column-expression signature.
 
 ```go
 age := expr.Value(orm.NumberExpr(Users.Age))
-q := expr.Where(Users.Query(), expr.Add(age, expr.Param(orm.NumberExpr(Users.Age), 2)).Gt(18))
-q = expr.OrderBy(q, expr.Negate(age).Asc())
+q := expr.Where(Users.Query(), expr.Gt(expr.Add(age, expr.Param(orm.NumberExpr(Users.Age), 2)), 18))
+q = expr.OrderBy(q, expr.Asc(expr.Negate(age)))
 ```
 
 Arithmetic preserves the concrete numeric type. Integer division truncates toward
@@ -26,8 +26,8 @@ Nullable arithmetic requires nullable operands: explicitly widen required values
 with `NullableRow`. Nullable calculations keep one nullable result layer; their
 literal comparisons take present values. Bound parameters use a column's existing
 codec and are captured when constructed; zero, false and empty values remain supplied
-values. `Param` on a nullable column takes the present value; `expr.NullableRow(v).Param(value.Null[T]())` constructs
-an explicitly typed SQL NULL. Computed/selected `Param` methods take their exact
+values. `Param` on a nullable column takes the present value; `expr.ParamOf(expr.NullableRow(v), value.Null[T]())` constructs
+an explicitly typed SQL NULL. Computed/selected `ParamOf` functions take their exact
 result type.
 
 `Equal`, ordered comparisons, `Like`, `DistinctFrom` and their selected `*Value`
@@ -51,7 +51,7 @@ synthesized through generic inference is rejected before metadata is exposed or
 applied. The framework passes issued capabilities only to verified concrete owners,
 so application wrappers cannot capture one through an inferred method signature.
 Reference-free parameters retain their construction scope and declaration owner.
-An invalid exemplar stays invalid through `Param`, including scoped ownership errors.
+An invalid exemplar stays invalid through `ParamOf`, including scoped ownership errors.
 The ownership core merges references as a bounded, stable, deduplicated set, so
 reusing a calculation does not multiply its retained references.
 
@@ -64,8 +64,8 @@ The `*Value` variants accept `Selected` values and retain the selected phase.
 ```go
 nickname := expr.Value(orm.NullableTextExpr(Users.Nickname))
 email := expr.Value(orm.TextExpr(Users.Email))
-label := expr.When(nickname.IsNull(), email).
-    When(email.Eq(""), expr.Param(orm.TextExpr(Users.Email), "anonymous")).
+label := expr.When(expr.IsNull(nickname), email).
+    When(expr.Eq(email, ""), expr.Param(orm.TextExpr(Users.Email), "anonymous")).
     Else(expr.Coalesce(nickname, email))
 ```
 
@@ -77,11 +77,11 @@ addition leaves existing CASE values unchanged.
 
 `WhenValue` returns unfinished `ValueCase[S,V]`, takes `HavingPredicate[S]` and
 selected branch values, and finishes as `Selected`. For example:
-`expr.WhenValue(count.Gt(0), count.Value()).Else(count.Param(0).Value())`.
+`expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).Else(expr.AsSelected(expr.ParamOf(count, 0)))`.
 `Grouped` explicitly lifts a row predicate for selected CASE; the shared compiler
 still requires its columns to be grouped when aggregates are present. Group keys
 and query HAVING entry points are supplied by `rows.GroupBy` and `rows.Having`. All branches and fallbacks
-retain source ownership, codecs and errors through subsequent composition/`Param`.
+retain source ownership, codecs and errors through subsequent composition/`ParamOf`.
 
 Use `Sum`/`Avg` for exact stored numbers: their result is
 `value.Nullable[decimal.Decimal]`, including integer inputs. `SumFloat`/`AvgFloat`
@@ -96,15 +96,15 @@ types; text input handles support Min/Max. Aggregates never invoke write transfo
 InputEnum, InputJSON, InputColumn and InputBytes remain outside the ordered
 capability. The private framework marker cannot be supplied by an external method
 with the same name.
-`NullableOrderedAggregate.Param(v)` accepts a present value and returns a required
-row expression, for example `expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())`.
+`expr.ParamOf(aggregate, v)` accepts a present value and returns a required
+row expression, for example `expr.CoalesceValue(expr.AsSelected(total), expr.AsSelected(expr.ParamOf(total, decimal.FromInt64(0))))`.
 It preserves the result codec, scope and existing errors. `CountField` and `CountDistinctField` skip NULLs and return
 required `int64`, zero on empty input. `expr.Count` includes NULL rows; `Exists` returns
 false on empty input. There is no general aggregate DISTINCT operation.
 
 Each field aggregate also has an `At` constructor, such as
 `expr.SumAt(rows.Scope(alias), Orders.TotalCents)`, retaining stored-field
-capabilities and the alias's input scope. `.Filter(exprPredicate...)` appends
+capabilities and the alias's input scope. `expr.Filter(aggregate, exprPredicate...)` appends
 same-scope row conditions with AND for that aggregate only; it retains empty-input
 semantics. Query WHERE filters every aggregate; HAVING filters completed groups.
 `AggregateExpression[S,V]` is the sealed reusable descriptor for relation aggregate
@@ -115,18 +115,18 @@ result codec/scanner. Selected calculations do not implement this interface.
 buyer := expr.Value(orm.ColumnExpr(Orders.BuyerID))
 total := expr.Sum(orm.NumberExpr(Orders.TotalCents))
 q := rows.Select(rows.FromModel(Orders.Query()), Totals,
-    rows.Map(Totals.Buyer, buyer), rows.MapSelected(Totals.Amount, total.Value()))
+    rows.Map(Totals.Buyer, buyer), rows.MapSelected(Totals.Amount, expr.AsSelected(total)))
 q = rows.GroupBy(q, expr.Group(buyer))
-q = rows.Having(q, total.Gt(decimal.FromInt64(100)))
-q = rows.OrderBy(q, total.Desc(), buyer.Asc())
+q = rows.Having(q, expr.GtValue(total, decimal.FromInt64(100)))
+q = rows.OrderBy(q, expr.DescValue(total), expr.Asc(buyer))
 ```
 
 `rows.FromModel` exposes complete models through the read-only rows boundary and
 can also supply a projection source. Existing model/row codecs and scopes remain
 applied. Eager relation requests must be collected explicitly. Row keys use
-`expr.Group(rowValue)`. Selected keys use `selected.Key()`; these types and selected
+`expr.Group(rowValue)`. Selected keys use `expr.Key(selected)`; these types and selected
 ordering cannot convert to row keys or model ordering. `HavingAnd`, `HavingOr` and
-`HavingPredicate.Not` retain group scope. The compiler rejects ungrouped selected
+`expr.HavingNot` retain group scope. The compiler rejects ungrouped selected
 columns, nested aggregates, aggregates in row conditions and invalid group keys.
 
 `rows.Distinct(q)` removes duplicate complete results. `rows.DistinctOn(q, rowKeys...)`
@@ -228,13 +228,13 @@ ordering, pagination or rows:
 amount := expr.Value(orm.NumberExpr(Orders.TotalCents))
 w := expr.WindowFor(rows.ModelScope(Orders.Query())).
     PartitionBy(expr.Group(expr.Value(orm.ColumnExpr(Orders.BuyerID)))).
-    OrderBy(amount.Asc()).
+    OrderBy(expr.Asc(amount)).
     RowsBetween(expr.UnboundedPreceding(), expr.CurrentRow())
 
 q := rows.Select(rows.FromModel(Orders.Query()), ReportRows,
     rows.MapSelected(ReportRows.Rank, expr.RowNumber(w)),
     rows.MapSelected(ReportRows.Total, expr.Over(expr.Sum(orm.NumberExpr(Orders.TotalCents)), w)),
-    rows.MapSelected(ReportRows.Previous, expr.Lag(expr.Row(amount).Value(), 1, w)),
+    rows.MapSelected(ReportRows.Previous, expr.Lag(expr.AsSelected(amount), 1, w)),
 )
 ```
 
@@ -254,7 +254,7 @@ ordering when the surrounding grouping is valid.
 
 `PartitionBy` takes row `GroupKey`s; `PartitionByValues` takes selected
 `ProjectionKey`s. `OrderBy` accepts row and selected expression orders. Use
-`expr.Value(orm.TextExpr(column)).Asc()` for a column order. Final result ordering is separate.
+`expr.Asc(expr.Value(orm.TextExpr(column)))` for a column order. Final result ordering is separate.
 Named windows (`w.Named("by_buyer")`) emit each referenced definition once.
 PostgreSQL's inheritance rules apply: extending a framed definition, replacing
 its order or adding a partition fails compilation. Derivation is immutable.
@@ -262,7 +262,7 @@ its order or adding a partition fails compilation. Derivation is immutable.
 `RowsBetween` and `GroupsBetween` accept current/unbounded positions and
 `Preceding(int64)`/`Following(int64)` offsets. `RangeBetween` accepts only
 current/unbounded positions. For value distances, build
-`r := expr.NumericRange(w, expr.Row(amount).Value())` and then
+`r := expr.NumericRange(w, expr.AsSelected(amount))` and then
 `r.Between(r.Preceding(int64(10)), r.CurrentRow())`. Numeric distances retain the
 order value's exact type. `TemporalRange` takes `temporal.Interval` distances;
 nullable range constructors still require present distances. The range builder
@@ -281,14 +281,14 @@ this adds no manifest, OpenAPI or TypeScript schema source.
 
 Scalar functions use the same SQL compiler and codecs as the shared `internal/querycore` compiler.
 Pass `expr.Value(orm.TextExpr(column))` (or `expr.At(scope, orm.TextExpr(column))`) to row functions; promote
-with `.Value()` for `rows.MapSelected`. The `Value` suffixed variants accept
+with `expr.AsSelected` for `rows.MapSelected`. The `Value` suffixed variants accept
 selected values, including aggregates and windows. They never become WHERE
 predicates. Use `expr.TextValue` or `expr.TextNullableValue` for selected text
 conditions in `rows.Having`.
 
 ```go
 name := expr.Lower(expr.Trim(expr.Value(orm.TextExpr(Users.Email))))
-filtered := expr.Where(Users.Query(), name.IContains("example_"))
+filtered := expr.Where(Users.Query(), expr.TextIContains(name, "example_"))
 // Contains/IContains/StartsWith/EndsWith treat wildcards literally;
 // Like/ILike accept SQL patterns. Collation belongs to the database.
 ```
@@ -338,7 +338,7 @@ var Theme = expr.JSONFieldOf(func(p *Preferences) *value.Optional[string] {
 root := expr.JSONRoot(expr.Value(orm.JSONExpr(Documents.Settings)))
 path := expr.JSONOptional(expr.JSONProperty(root, Theme))
 theme := expr.JSONTextScalar(path, codec.String[string]())
-q := expr.Where(Documents.Query(), theme.Eq("dark"))
+q := expr.Where(Documents.Query(), expr.Eq(theme, "dark"))
 ```
 
 `JSONFieldOf` runs its selector once against a fresh payload and resolves the
@@ -367,9 +367,9 @@ for ordered payload comparisons. All path predicates retain the original query o
 | --- | --- | --- |
 | `JSON()` | SQL NULL | Present JSON value, if its payload permits null |
 | `expr.JSONTypeNullable(path.JSON())` | SQL NULL | `database.JSONNull` |
-| `path.JSON().IsNotNull()` | false | true |
-| `path.JSON().IsNull()` | true | false |
-| `expr.JSONTypeNullable(path.JSON()).Eq(value.Of(database.JSONNull))` | does not match | true |
+| `expr.IsNotNull(path.JSON())` | false | true |
+| `expr.IsNull(path.JSON())` | true | false |
+| `expr.NullableEq(expr.JSONTypeNullable(path.JSON()), value.Of(database.JSONNull))` | does not match | true |
 | scalar extraction | SQL NULL | SQL NULL |
 | `expr.JSONLengthNullable(path.JSON())` | SQL NULL | SQL NULL |
 
@@ -413,10 +413,10 @@ comparison handles. Present values remain the inputs for nullable comparisons.
 The compiler also rejects literal and expression LIKE predicates without a text
 capability, independently of the codec's string representation.
 
-`Or` and `Not` accept only row predicates; `HavingOr` and `HavingPredicate.Not`
+`Or` and `Not` accept only row predicates; `HavingOr` and `expr.HavingNot`
 retain the group phase. Report filters must reject mixed WHERE/HAVING OR/NOT.
 SQL NOT alone excludes unknown results: null-inclusive report negation uses
-`expr.Or(expr.Not(note.Eq("Ada")), note.IsNull())`. Literal `Contains`/`IContains`
+`expr.Or(expr.Not(expr.Eq(note, "Ada")), expr.IsNull(note))`. Literal `Contains`/`IContains`
 escape wildcards, while `Like` deliberately accepts patterns. The datatable
 request policy continues to require explicit `AllowLike` and owns mixed-phase
 validation and null-inclusive negation; its API cutover is a separate slice.
@@ -448,7 +448,7 @@ and `rows.WithValue` to read a complete model alongside the value. See the
 [complete model and computed value recipe](../rows/records.md).
 
 Computed relation ordering uses `relation.OrderBy(expr.RelationOrder(relation,
-expr.Negate(expr.Value(orm.NumberExpr(Orders.Total))).Asc()))`. For pivot fields, use
+expr.Asc(expr.Negate(expr.Value(orm.NumberExpr(Orders.Total))))))`. For pivot fields, use
 `relation.OrderByPivot(expr.RelationPivotOrder(relation, order))`. Both adapters
 validate the relation's actual source/target metadata and the field declaration;
 pivot ordering additionally validates the bound pivot. These row-phase adapters

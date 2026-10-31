@@ -18,15 +18,15 @@ children := rows.AsTransaction[childTag](
 c := rows.TransactionCorrelate(parents, children)
 outer := rows.TransactionOuterScope(c, rows.TransactionScope(parents))
 inner := rows.TransactionInnerScope(c, rows.TransactionScope(children))
-c = c.Where(expr.Equal(expr.At(inner, Orders.BuyerID), expr.At(outer, Users.ID)))
+c = c.Where(expr.Equal(expr.At(inner, orm.ColumnExpr(Orders.BuyerID)), expr.At(outer, orm.KeyExpr(Users.ID))))
 record := rows.SelectTransactionCorrelatedRecord(c, inner).
-    OrderBy(expr.At(inner, Orders.ID).Desc()).Limit(1).
+    OrderBy(expr.Desc(expr.At(inner, orm.KeyExpr(Orders.ID)))).Limit(1).
     ForUpdate().Of(rows.Target(inner)).SkipLocked()
 latest := rows.AsTransactionLateral[latestTag](record, "latest")
 joined := rows.TransactionLeftJoinLateral(parents, latest)
-ids := rows.SelectTransactionValue(joined, expr.Row(
+ids := rows.SelectTransactionValue(joined, expr.AsSelected(
     expr.AtNullable(rows.NullableRightScope(joined,
-        rows.TransactionLateralScope(latest)), Orders.ID)).Value())
+        rows.TransactionLateralScope(latest)), orm.KeyExpr(Orders.ID))))
 items, err := ids.All(ctx, tx)
 ```
 
@@ -46,7 +46,7 @@ ordinary scalar, retaining its codec and clauses. Missing scalar rows become NUL
 added, and multiple rows retain PostgreSQL's cardinality error.
 
 The `TransactionCorrelatedScalarRowQuery` family and `TransactionInCorrelatedQuery`
-retain the required enclosing scope. Call `.Value()` on a scalar row expression
+retain the required enclosing scope. Call `expr.AsSelected` on a scalar row expression
 to use its selected result. Correlated selections support inner ordering,
 grouping, HAVING and locks. Correlated records also support DISTINCT variants.
 Lock policy changes without an existing lock fail validation. Results execute

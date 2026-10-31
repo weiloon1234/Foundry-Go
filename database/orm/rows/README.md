@@ -21,7 +21,7 @@ j := rows.LeftJoin(u, o, rows.On(
     expr.At(rows.Scope(o), orm.ColumnExpr(Orders.BuyerID)),
 ))
 userEmail := expr.At(rows.LeftScope(j, rows.Scope(u)), orm.TextExpr(Users.Email))
-orderID := expr.AtNullable(rows.NullableRightScope(j, rows.Scope(o)), Orders.ID)
+orderID := expr.AtNullable(rows.NullableRightScope(j, rows.Scope(o)), orm.KeyExpr(Orders.ID))
 // Map orderID to a declared value.Nullable[model.ID[Order]] row field.
 ```
 
@@ -69,9 +69,9 @@ Locked queries require `LockedRecord` and the explicit
 outer := rows.From(Users.Query())
 inner := rows.SelectScalar(
     rows.From(Orders.Query().OrderBy(orm.NumberDesc(Orders.TotalCents)).Limit(1)),
-    expr.Row(expr.Value(orm.NumberExpr(Orders.TotalCents))).Value(),
+    expr.AsSelected(expr.Value(orm.NumberExpr(Orders.TotalCents))),
 )
-amount := rows.ScalarRowQuery(outer, inner).Value()
+amount := expr.AsSelected(rows.ScalarRowQuery(outer, inner))
 // Map amount with rows.MapSelected to a value.Nullable[int64] row field.
 ```
 
@@ -85,7 +85,7 @@ No rows becomes SQL NULL; multiple rows produce PostgreSQL cardinality error
 `21000`. The API adds no implicit LIMIT. `ScalarNullableRowQuery` retains one existing
 nullable layer. Passing already nullable input to `ScalarRowQuery` fails validation,
 as with `expr.Nullable`. Both constructors produce row expressions for comparisons
-or arithmetic; call `.Value()` to use the same result in a selected phase.
+or arithmetic; call `expr.AsSelected` to use the same result in a selected phase.
 An aggregate inside that SELECT stays in the inner phase.
 
 `InQuery(rowValue, scalar)` requires matching exact types, including nullability.
@@ -123,11 +123,11 @@ childScope := rows.InnerScope(link, rows.Scope(child))
 buyerID := expr.At(childScope, orm.ColumnExpr(Orders.BuyerID))
 link = link.Where(expr.Equal(buyerID, parentID))
 record := rows.SelectCorrelatedRecord(link, childScope).
-    OrderBy(expr.At(childScope, orm.NumberExpr(Orders.TotalCents)).Desc()).Limit(1)
+    OrderBy(expr.Desc(expr.At(childScope, orm.NumberExpr(Orders.TotalCents)))).Limit(1)
 latest := rows.AsLateral[latestSide](record, "latest")
 joined := rows.LeftJoinLateral(parent, latest)
 amount := expr.AtNullable(
-    rows.NullableRightScope(joined, rows.LateralScope(latest)), Orders.TotalCents)
+    rows.NullableRightScope(joined, rows.LateralScope(latest)), orm.NumberExpr(Orders.TotalCents))
 // Map amount into a declared value.Nullable[int64] row field.
 ```
 
@@ -179,7 +179,7 @@ See [transaction composition](transactions.md) for transaction joins, subqueries
 Adapt a `rows.Query[S, R]` with `rows.Read` for collection and pagination:
 
 ```go
-q := rows.ReorderUnwindowed(report, name.Asc(), id.Asc())
+q := rows.ReorderUnwindowed(report, expr.Asc(name), expr.Asc(id))
 if err := rows.PreflightRead(ctx, rows.Read(q)); err != nil { return err }
 total, err := rows.Read(q).Count(ctx, tx)
 page, err := rows.Read(q).Paginate(ctx, tx, orm.Page(1, 20))
@@ -234,7 +234,7 @@ when ordering by aggregates or windows; its leading orders must match the DISTIN
 ON keys. These functions preserve the enclosing scope and inner limit/offset.
 
 `DistinctOnValueSet` accepts selected keys in the combined `Set[V]` scope. For
-example, `rows.DistinctOnValueSet(values, expr.Row(values.Value()).Value().Key())`
+example, `rows.DistinctOnValueSet(values, expr.Key(expr.AsSelected(expr.Row(values.Value()))))`
 retains the scalar codec, including nullability. Group keys cannot be substituted
 for selected keys, and keys from either input query cannot enter the combined
 scope. Both families reuse the ordinary rows clause and compiler validation.

@@ -5,7 +5,7 @@ Register handwritten ORM selections with `ORMModel` for ordinary models or
 
 ```go
 registry, err := prune.New(
-    prune.ORMModel("app.logs", Logs.Query().Where(Logs.Expired.Eq(true)), prune.Lifecycle),
+    prune.ORMModel("app.logs", Logs.Query().Where(orm.ColumnEq(Logs.Expired, true)), prune.Lifecycle),
     prune.ORMSoftModel("app.users", Users.Query().OnlyTrashed(), Users.Soft, prune.Mass),
 )
 if err != nil {

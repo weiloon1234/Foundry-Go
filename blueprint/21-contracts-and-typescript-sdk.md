@@ -137,13 +137,20 @@ document can reuse it later; this milestone does not emit one.
 - `<prefix>_foundry.gen.ts` keeps its full API.
 - `<prefix>_<surface>_foundry.gen.ts` exports the same names and types, restricted
   to the surface. Its `contractMetadata()` returns the projection.
-- Two shared runtime modules are imported by every entry:
+- Shared runtime modules are imported by entry modules:
   `<prefix>_runtime_foundry.gen.ts` (the Go-owned constants and shared brands,
-  wire codecs, formats, validation and the HTTP invoker) and
-  `<prefix>_runtime_realtime_foundry.gen.ts`. An entry imports exactly the
-  runtime names its code refers to and re-exports the public runtime API, so
-  imports from the full SDK keep working. Only entries with channels load the
-  realtime module; the full entry always re-exports its API.
+  wire codecs, formats, validation and the HTTP invoker),
+  `<prefix>_runtime_realtime_foundry.gen.ts` (when channels are present), and
+  `<prefix>_runtime_auth_foundry.gen.ts` (when at least one surface declares `Auth`,
+  providing `createPortalSession` and Web Locks / BroadcastChannel coordination).
+  An entry imports exactly the runtime names its code refers to and re-exports the
+  public runtime API, so imports from the full SDK keep working.
+- Entry modules export deterministic readable type names (`<Model>ID`, `List_<T>`,
+  `Array_<N>_<T>`, `Map_<K>_<V>`, `LocaleMap_<V>`, `Nullable_<T>`, `GoString`, `GoError`),
+  a frozen `tables` registry for surfaces registering datatables, surface-filtered
+  `schemas` mapping type names to Go `TypeID` strings, an application-wide `ErrorCode`
+  const object and union type, `FrontendMessageKey` and `FrontendMessageArguments`,
+  enum `cases` and `labels` mappings, and public configuration (`PublicEnv`).
 - The metadata, descriptor and form runtime stay inlined in each entry: their
   types and caches belong to that entry's operations and embedded manifest.
   Bundlers drop them when unused, so no per-entry contract object was needed.
