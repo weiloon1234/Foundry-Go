@@ -4,6 +4,11 @@
 
 - Added: `devserver` package providing a framework-owned development supervision loop (file watching, debouncing, zero-downtime rebuild with `-ldflags=-w`, graceful child restart, process group isolation, SIGHUP termination, and auxiliary helper supervision).
 - Added: parallel-safe test application boot concurrency in `testkit/postgres/application`. `Environment.Start` bounds concurrently booted applications to `DefaultConcurrency` (8 by default, overridable via `FOUNDRY_TEST_APP_CONCURRENCY`). Multiple applications within the same top-level test or its subtests share that test's slot, eliminating self-deadlock, and the slot is released only after the application completely shuts down and drains its database connections.
+- Added: TypeScript client generator gap additions S1, S5, S7, and S8:
+  - Enums (S1): declaration merging on enum types emitting `const <Enum>` with `cases` and `labels` mapping (typed with `Record<E, CatalogMessageKey>` or `Partial<Record<E, CatalogMessageKey>>`, omitted when no labels), wide integers stringified, and generic `enumLabel` runtime helper.
+  - Upload constraints (S5): `manifest.Part` captures structured `content_types`, `extensions`, and `max_bytes` from validation rules and multipart limits; TypeScript runtime composes `FieldDescriptor.accept` and `FieldDescriptor.maxBytes`.
+  - Schema constants & identity (S7): each entry module exports surface-filtered `schemas` mapping type names to Go `TypeID` strings; shared runtime exports generic `newIdentity(owner, id?)` helper.
+  - Error codes (S8): application-wide `ErrorCode` const object and union type derived from manifest errors, with deterministic collision detection on PascalCase keys.
 - Removed: the v0.1 → v0.2 codemod (use `go run …@v0.2.0`).
 - Fixed: the retirement exposure check finds deprecated declarations in imported export data built with `-trimpath`; tests no longer depend on the build-time GOROOT.
 - Fixed: migration guide workflow now documents running `GOWORK=off go run github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.2.0 codemod` while on v0.1.0 rather than invoking `go tool foundry codemod` before the tool directive is bumped.

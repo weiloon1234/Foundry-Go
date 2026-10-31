@@ -36,9 +36,13 @@ parts or no JSON root: `body()` is a type error there and a `ContractError` at
 runtime.
 
 `schema(typeID)` describes an explicitly public schema without a route or submit
-method. `operation(name).metadata` exposes route identity, access, media types,
+method, accepting a declared schema identity string or a typed `schemas.<Name>` constant
+(such as `schema(schemas.Payload)`). `operation(name).metadata` exposes route identity, access, media types,
 statuses and declared endpoint limits. These are the exported endpoint limits;
 inherited server/proxy limits and file MIME detection remain server policy.
+Upload field descriptors (`part.kind === "file"`) expose `accept` (MIME media types
+and dot-prefixed extensions formatted for HTML file inputs) and `maxBytes` (maximum file byte size),
+composed from the endpoint's validation rules and multipart limits.
 Unsafe-size metadata numbers remain `import("./generated/contracts_foundry.gen.js").JSONNumber` values instead of being rounded
 or clamped. Enum `choices` use the existing codec's client values, including wide
 integers as strings; each type's choices are decoded once and shared. Metadata

@@ -88,7 +88,10 @@ type Parameter struct {
 
 type Part struct {
 	Parameter
-	Kind foundryhttp.MultipartKind `json:"kind"`
+	Kind         foundryhttp.MultipartKind `json:"kind"`
+	ContentTypes []string                  `json:"content_types,omitempty"`
+	Extensions   []string                  `json:"extensions,omitempty"`
+	MaxBytes     int64                     `json:"max_bytes,omitempty"`
 }
 
 // Example is a documented JSON example encoded by the payload's own contract.

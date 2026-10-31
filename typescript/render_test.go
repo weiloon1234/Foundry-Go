@@ -3,6 +3,8 @@ package typescript_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,9 +12,12 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
+	"github.com/weiloon1234/Foundry-Go/enum"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/openapi"
 	"github.com/weiloon1234/Foundry-Go/typescript"
+	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
 func clientManifest(t *testing.T) *manifest.Manifest {
@@ -206,5 +211,212 @@ func TestRenderTypesStatusesRedirectsAndRawBodies(t *testing.T) {
 		if !strings.Contains(string(output), expected) {
 			t.Fatal("missing generated contract", expected)
 		}
+	}
+}
+
+func TestRenderEnumDeclarationMerging(t *testing.T) {
+	statusDesc := enum.Describe("app", "Status",
+		enum.Case[string]{Name: "Draft", Value: "draft", LabelKey: "status.draft"},
+		enum.Case[string]{Name: "Ready", Value: "ready", LabelKey: "status.ready"},
+	)
+	statusDef, err := statusDesc.Definition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	roleDesc := enum.Describe("app", "Role",
+		enum.Case[string]{Name: "Admin", Value: "admin", LabelKey: "role.admin"},
+		enum.Case[string]{Name: "User", Value: "user"},
+	)
+	roleDef, err := roleDesc.Definition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	priorityDesc := enum.Describe("app", "Priority",
+		enum.Case[string]{Name: "Low", Value: "low"},
+		enum.Case[string]{Name: "High", Value: "high"},
+	)
+	priorityDef, err := priorityDesc.Definition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wideDesc := enum.Describe("app", "Wide",
+		enum.Case[int64]{Name: "First", Value: 9007199254740993, LabelKey: "wide.first"},
+		enum.Case[int64]{Name: "Second", Value: 9007199254740994},
+	)
+	wideDef, err := wideDesc.Definition()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	schemas := []contract.Schema{
+		{Root: "app.Status", Types: []contract.Type{{ID: "app.Status", Kind: contract.StringKind, Cases: []json.RawMessage{json.RawMessage(`"draft"`), json.RawMessage(`"ready"`)}}}},
+		{Root: "app.Role", Types: []contract.Type{{ID: "app.Role", Kind: contract.StringKind, Cases: []json.RawMessage{json.RawMessage(`"admin"`), json.RawMessage(`"user"`)}}}},
+		{Root: "app.Priority", Types: []contract.Type{{ID: "app.Priority", Kind: contract.StringKind, Cases: []json.RawMessage{json.RawMessage(`"low"`), json.RawMessage(`"high"`)}}}},
+		{Root: "app.Wide", Types: []contract.Type{{ID: "app.Wide", Kind: contract.IntegerKind, Bits: 64, Signed: true, Cases: []json.RawMessage{json.RawMessage("9007199254740993"), json.RawMessage("9007199254740994")}}}},
+	}
+
+	endpoint := foundryhttp.DefineEndpoint(
+		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "health.read", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/health")),
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]()),
+	)
+	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {
+		return "", nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := manifest.Build(t.Context(), manifest.Sources{
+		HTTP:    router,
+		Schemas: schemas,
+		Enums:   []enum.Definition{statusDef, roleDef, priorityDef, wideDef},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outputBytes, err := typescript.Render(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(outputBytes)
+
+	// Status enum: full labels -> satisfies Record<Status, CatalogMessageKey>
+	if !strings.Contains(output, `export type Status = "draft" | "ready";`) {
+		t.Error("missing Status type declaration")
+	}
+	if !strings.Contains(output, `export const Status = /* @__PURE__ */ Object.freeze({
+  cases: ["draft", "ready"] as const,
+  labels: /* @__PURE__ */ Object.freeze({
+    draft: "status.draft",
+    ready: "status.ready",
+  }) satisfies Record<Status, CatalogMessageKey>,
+});`) {
+		t.Error("missing or incorrect Status const declaration")
+	}
+
+	// Role enum: partial labels -> satisfies Partial<Record<Role, CatalogMessageKey>>
+	if !strings.Contains(output, `export const Role = /* @__PURE__ */ Object.freeze({
+  cases: ["admin", "user"] as const,
+  labels: /* @__PURE__ */ Object.freeze({
+    admin: "role.admin",
+  }) satisfies Partial<Record<Role, CatalogMessageKey>>,
+});`) {
+		t.Error("missing or incorrect Role const declaration")
+	}
+
+	// Priority enum: no labels -> no labels property
+	if !strings.Contains(output, `export const Priority = /* @__PURE__ */ Object.freeze({
+  cases: ["low", "high"] as const,
+});`) {
+		t.Error("missing or incorrect Priority const declaration")
+	}
+
+	// Wide integer enum: wide integers are quoted strings in cases and labels
+	if !strings.Contains(output, `export type Wide = "9007199254740993" | "9007199254740994";`) {
+		t.Error("missing Wide type declaration")
+	}
+	if !strings.Contains(output, `export const Wide = /* @__PURE__ */ Object.freeze({
+  cases: ["9007199254740993", "9007199254740994"] as const,
+  labels: /* @__PURE__ */ Object.freeze({
+    "9007199254740993": "wide.first",
+  }) satisfies Partial<Record<Wide, CatalogMessageKey>>,
+});`) {
+		t.Error("missing or incorrect Wide const declaration")
+	}
+
+	// Generic enumLabel helper exported
+	if !strings.Contains(output, "export function enumLabel<V extends string | number, K extends string = string>") {
+		t.Error("missing enumLabel helper")
+	}
+
+	// schemas object
+	if !strings.Contains(output, "export const schemas = /* @__PURE__ */ Object.freeze({") {
+		t.Error("missing schemas mapping")
+	}
+	if !strings.Contains(output, `Status: "app.Status"`) {
+		t.Error("missing Status in schemas")
+	}
+
+	// newIdentity helper
+	if !strings.Contains(output, "export function newIdentity<Owner extends string>") {
+		t.Error("missing newIdentity helper")
+	}
+
+	// ErrorCode object and type
+	if !strings.Contains(output, "export const ErrorCode = /* @__PURE__ */ Object.freeze({") {
+		t.Error("missing ErrorCode const")
+	}
+	if !strings.Contains(output, "export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];") {
+		t.Error("missing ErrorCode type")
+	}
+	if !strings.Contains(output, `ValidationFailed: "validation_failed"`) {
+		t.Error("missing ValidationFailed in ErrorCode")
+	}
+}
+
+func TestRenderErrorCodeCollisionFails(t *testing.T) {
+	source := clientManifest(t)
+	doc, err := source.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.Errors = append(doc.Errors,
+		foundryhttp.ErrorDefinition{Code: "user_not_found", Status: 404, Message: "User not found."},
+		foundryhttp.ErrorDefinition{Code: "user.not-found", Status: 404, Message: "User not found."},
+	)
+	data, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := manifest.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = typescript.Render(m)
+	if err == nil {
+		t.Fatal("expected conflict error on colliding error codes, got nil")
+	}
+	if !errors.Is(err, fault.Conflict) {
+		t.Fatalf("expected fault.Conflict, got %v", err)
+	}
+}
+
+func TestRenderFileUploadConstraints(t *testing.T) {
+	type uploadForm struct {
+		Doc foundryhttp.UploadedFile
+	}
+	docField := validation.DefineField("doc", func(u uploadForm) foundryhttp.UploadedFile { return u.Doc })
+	rules := validation.Rules(
+		docField,
+		validation.FileMaxSize[foundryhttp.UploadedFile](2048),
+		validation.FileContentTypes[foundryhttp.UploadedFile]("image/jpeg", "application/pdf"),
+		validation.FileExtensions[foundryhttp.UploadedFile]("jpg", "pdf"),
+	)
+	body := foundryhttp.MultipartDirectory(
+		foundryhttp.DefineMultipart(
+			foundryhttp.FilePart("doc", func(u *uploadForm) *foundryhttp.UploadedFile { return &u.Doc }),
+		),
+		t.TempDir(),
+	)
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "doc.upload", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/doc"))
+	endpoint := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(body), foundryhttp.JSONResponse(201, contract.StringJSON[string]())), rules)
+	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, uploadForm]) (string, error) {
+		return "", nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{HTTP: router})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputBytes, err := typescript.Render(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(outputBytes)
+	if !strings.Contains(output, "accept") || !strings.Contains(output, "maxBytes") {
+		t.Error("expected accept and maxBytes in descriptor implementation")
 	}
 }

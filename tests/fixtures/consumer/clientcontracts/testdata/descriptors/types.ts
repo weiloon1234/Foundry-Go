@@ -36,4 +36,18 @@ titles.at("fr");
 const rootCard = sdk.operation("unionsMethod").body().variant("kind", "card").field("token");
 // @ts-expect-error Multipart and form bodies have no JSON root to describe.
 sdk.operation("uploadsProfile").body();
-void [values, quoted, limit, readers, issues, ranges, rangeBytes, numbers, rounded, ownerTemplate, ownerValue, second, state, card, rootCard, title, anyTitle];
+// S1: Enums cases and label helper
+const statusCases: readonly ("draft" | "ready")[] = sdk.Status.cases;
+const labeledStatus: string = sdk.enumLabel(sdk.Status.labels, "draft" as sdk.Status, (k: string) => k);
+// S5: Upload constraints
+const uploadDoc = sdk.operation("uploadsProfile").field("body", "document");
+const docAccept: string | undefined = uploadDoc.accept;
+const docMaxBytes: number | undefined = uploadDoc.maxBytes;
+// S7: Named schemas and newIdentity
+const schemaOwnerIndex: "foundry.test/consumer/clientcontracts.OwnerIndex" = sdk.schemas.OwnerIndex;
+const fromSchema = sdk.schema(sdk.schemas.OwnerIndex);
+const generatedId: sdk.Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]"> = sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7);
+const customId: sdk.Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]"> = sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7, "11111111-1111-4111-8111-111111111111");
+// S8: ErrorCode
+const errCode: "validation_failed" = sdk.ErrorCode.ValidationFailed;
+void [values, quoted, limit, readers, issues, ranges, rangeBytes, numbers, rounded, ownerTemplate, ownerValue, second, state, card, rootCard, title, anyTitle, statusCases, labeledStatus, docAccept, docMaxBytes, schemaOwnerIndex, fromSchema, generatedId, customId, errCode];

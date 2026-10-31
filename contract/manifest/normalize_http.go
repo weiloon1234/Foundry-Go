@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/httppath"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
 type typeIndex map[contract.TypeID]contract.Type
@@ -168,6 +169,18 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 				return err
 			}
 			op.Validation = &rule
+		}
+		if op.Body != nil && op.Body.MediaType == "multipart/form-data" {
+			for i := range op.Body.Parts {
+				part := &op.Body.Parts[i]
+				if part.Kind == foundryhttp.MultipartFile {
+					if op.Validation != nil {
+						part.ContentTypes, part.Extensions, part.MaxBytes = extractFileConstraints(op.Validation, part.Name, op.Limits.Multipart)
+					} else if part.MaxBytes == 0 && op.Limits.Multipart.FileBytes > 0 {
+						part.MaxBytes = op.Limits.Multipart.FileBytes
+					}
+				}
+			}
 		}
 		if err := types.operationPresentation(*op, passwords); err != nil {
 			return err
@@ -427,4 +440,80 @@ func (types typeIndex) payload(payload *Payload, input bool) error {
 		}
 	}
 	return nil
+}
+
+func extractFileConstraints(val *validation.Description, fieldName string, multipartLimits foundryhttp.MultipartLimits) ([]string, []string, int64) {
+	maxBytes := multipartLimits.FileBytes
+	if val == nil {
+		return nil, nil, maxBytes
+	}
+	var fileMaxSize int64
+	var mimes []string
+	var exts []string
+
+	var walk func(node validation.Description)
+	walk = func(node validation.Description) {
+		if node.Spec != nil {
+			switch node.Spec.ID {
+			case "foundry.file_content_types":
+				for _, p := range node.Spec.Parameters {
+					if p.Name == "values" {
+						var list []string
+						if err := json.Unmarshal(p.Value, &list); err == nil {
+							mimes = append(mimes, list...)
+						}
+					}
+				}
+			case "foundry.file_extensions":
+				for _, p := range node.Spec.Parameters {
+					if p.Name == "values" {
+						var list []string
+						if err := json.Unmarshal(p.Value, &list); err == nil {
+							exts = append(exts, list...)
+						}
+					}
+				}
+			case "foundry.file_max_size":
+				for _, p := range node.Spec.Parameters {
+					if p.Name == "bytes" {
+						var size int64
+						if err := json.Unmarshal(p.Value, &size); err == nil && size > 0 {
+							if fileMaxSize == 0 || size < fileMaxSize {
+								fileMaxSize = size
+							}
+						}
+					}
+				}
+			}
+		}
+		for _, child := range node.Children {
+			walk(child)
+		}
+	}
+
+	var findField func(node validation.Description)
+	findField = func(node validation.Description) {
+		if node.Kind == validation.FieldKind && node.Field == fieldName {
+			walk(node)
+			return
+		}
+		for _, child := range node.Children {
+			findField(child)
+		}
+	}
+	findField(*val)
+
+	if fileMaxSize > 0 && (maxBytes == 0 || fileMaxSize < maxBytes) {
+		maxBytes = fileMaxSize
+	}
+	var contentTypes, extensions []string
+	if len(mimes) > 0 {
+		slices.Sort(mimes)
+		contentTypes = slices.Compact(mimes)
+	}
+	if len(exts) > 0 {
+		slices.Sort(exts)
+		extensions = slices.Compact(exts)
+	}
+	return contentTypes, extensions, maxBytes
 }

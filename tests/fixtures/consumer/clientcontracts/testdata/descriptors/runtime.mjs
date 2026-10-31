@@ -64,3 +64,23 @@ for (const key of ["abc", "01", "9223372036854775808"]) assert.throws(() => echo
 // An owned generic snapshot cannot mutate shared descriptors or client state.
 metadata.http.find(op => op.name === "itemsEcho").route.path = "/changed";
 assert.equal(sdk.operation("itemsEcho").metadata.route.path, "/items/{key}");
+// S1: Enums cases and label helper
+assert.deepEqual(sdk.Status.cases, ["draft", "ready"]);
+assert.equal(sdk.enumLabel(sdk.Status.labels, "draft", k => `translated:${k}`), "translated:enum.localization.status.draft");
+assert.equal(sdk.enumLabel(sdk.Status.labels, new sdk.UnknownEnumValue("foundry.test/consumer/clientcontracts.Status", "unknown_status"), k => `translated:${k}`), "unknown_status");
+assert.equal(sdk.enumLabel(undefined, "draft", k => `translated:${k}`), "draft");
+// S5: Upload constraints
+const uploadDoc = sdk.operation("uploadsProfile").field("body", "document");
+assert.equal(uploadDoc.accept, "image/png, text/plain, .png, .txt");
+assert.equal(uploadDoc.maxBytes, 1048576);
+// S7: Named schemas and newIdentity
+assert.equal(sdk.schemas.OwnerIndex, "foundry.test/consumer/clientcontracts.OwnerIndex");
+assert.equal(sdk.schema(sdk.schemas.OwnerIndex).field("pair").path, "/pair");
+const genId = sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7);
+assert.match(genId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+const customId = sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7, "11111111-1111-4111-8111-111111111111");
+assert.equal(customId, "11111111-1111-4111-8111-111111111111");
+assert.throws(() => sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7, "not-a-uuid"), sdk.ContractError);
+// S8: ErrorCode
+assert.equal(sdk.ErrorCode.ValidationFailed, "validation_failed");
+assert.equal(sdk.ErrorCode.NotFound, "not_found");

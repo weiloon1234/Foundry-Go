@@ -27,6 +27,15 @@ func TestClientDescriptorsPreserveExtremeMetadata(t *testing.T) {
 		if doc.HTTP[i].Name == "itemsEcho" {
 			doc.HTTP[i].Limits.Body.Bytes = math.MaxInt
 		}
+		if doc.HTTP[i].Name == "uploadsProfile" && doc.HTTP[i].Body != nil {
+			for j := range doc.HTTP[i].Body.Parts {
+				if doc.HTTP[i].Body.Parts[j].Name == "document" {
+					doc.HTTP[i].Body.Parts[j].ContentTypes = []string{"image/png", "text/plain"}
+					doc.HTTP[i].Body.Parts[j].Extensions = []string{"png", "txt"}
+					doc.HTTP[i].Body.Parts[j].MaxBytes = 1048576
+				}
+			}
+		}
 	}
 	doc.Types = append(doc.Types,
 		contract.Type{ID: "client.ExactEnum", Kind: contract.IntegerKind, Bits: 64, Signed: true, Cases: []json.RawMessage{json.RawMessage("9223372036854775807")}},

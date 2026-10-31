@@ -3,11 +3,14 @@ package typescript
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
+	"github.com/weiloon1234/Foundry-Go/enum"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 )
 
@@ -76,5 +79,22 @@ func TestConcurrentRenderingReturnsOwnedModules(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRenderEnumValueCollisionFails(t *testing.T) {
+	r := &renderer{
+		document: manifest.Document{
+			Types: []contract.Type{{ID: "app.ErrorCode", Kind: contract.StringKind, Cases: []json.RawMessage{json.RawMessage(`"a"`)}}},
+			Enums: []enum.Definition{{PackagePath: "app", Name: "ErrorCode", Cases: []enum.WireCase{{Name: "A", Value: json.RawMessage(`"a"`)}}}},
+		},
+		naming: naming{names: map[contract.TypeID]string{"app.ErrorCode": "ErrorCode"}},
+	}
+	err := r.types()
+	if err == nil {
+		t.Fatal("expected collision error, got nil")
+	}
+	if !errors.Is(err, fault.Conflict) {
+		t.Fatalf("expected fault.Conflict, got %v", err)
 	}
 }

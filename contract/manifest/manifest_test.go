@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
@@ -203,4 +205,52 @@ func FuzzManifestDecoder(f *testing.F) {
 			t.Fatal("decoder is not idempotent")
 		}
 	})
+}
+
+func TestExtractFileConstraints(t *testing.T) {
+	type form struct {
+		Avatar foundryhttp.UploadedFile
+	}
+	avatarField := validation.DefineField("avatar", func(f form) foundryhttp.UploadedFile { return f.Avatar })
+	rules := validation.Rules(
+		avatarField,
+		validation.FileMaxSize[foundryhttp.UploadedFile](1024),
+		validation.FileContentTypes[foundryhttp.UploadedFile]("image/png", "text/plain"),
+		validation.FileExtensions[foundryhttp.UploadedFile]("txt", "png"),
+	)
+	body := foundryhttp.MultipartDirectory(
+		foundryhttp.DefineMultipart(
+			foundryhttp.FilePart("avatar", func(f *form) *foundryhttp.UploadedFile { return &f.Avatar }),
+		),
+		t.TempDir(),
+	)
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "avatar.upload", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/avatar"))
+	endpoint := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(body), foundryhttp.JSONResponse(201, contract.StringJSON[string]())), rules)
+	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, form]) (string, error) {
+		return "", nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{HTTP: router})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := source.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.HTTP) != 1 || doc.HTTP[0].Body == nil || len(doc.HTTP[0].Body.Parts) != 1 {
+		t.Fatalf("unexpected operations: %+v", doc.HTTP)
+	}
+	part := doc.HTTP[0].Body.Parts[0]
+	if !slices.Equal(part.ContentTypes, []string{"image/png", "text/plain"}) {
+		t.Errorf("content types = %v, want [image/png, text/plain]", part.ContentTypes)
+	}
+	if !slices.Equal(part.Extensions, []string{"png", "txt"}) {
+		t.Errorf("extensions = %v, want [png, txt]", part.Extensions)
+	}
+	if part.MaxBytes != 1024 {
+		t.Errorf("max bytes = %d, want 1024", part.MaxBytes)
+	}
 }

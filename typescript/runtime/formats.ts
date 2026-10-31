@@ -98,4 +98,10 @@ function intervalValid(input: string): boolean {
 }
 const goSpacePattern = /[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/;
 function trimGoSpace(text: string): string { return text.replace(/^[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g, ""); }
+/** Brand a string as a model Identity, or generate a fresh UUID v4 if omitted. */
+export function newIdentity<Owner extends string>(_owner: Owner, id?: string): Identity<Owner> {
+  const value = id ?? (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "");
+  if (!value || !uuidPattern.test(value) || value === "00000000-0000-0000-0000-000000000000") reject("", "invalid_identity");
+  return value as Identity<Owner>;
+}
 export { uuidPattern };

@@ -302,6 +302,64 @@ Set `strictResponses: true` in `ClientOptions` (or `strictEvents: true` in
 `decodeContract` stays strict. The embedded manifest is parsed once, on first
 use rather than at import.
 
+## Enums, schemas and error codes
+
+### Enum declaration merging and label helpers
+
+Each declared enum emits a TypeScript union type and a companion constant value sharing the same name:
+
+```typescript
+export type AdminType = "superadmin" | "developer" | "admin";
+export const AdminType = /* @__PURE__ */ Object.freeze({
+  cases: ["superadmin", "developer", "admin"] as const,
+  labels: /* @__PURE__ */ Object.freeze({
+    superadmin: "admins.type.superadmin",
+    developer: "admins.type.developer",
+    admin: "admins.type.admin",
+  }) satisfies Record<AdminType, CatalogMessageKey>,
+});
+```
+
+When an enum defines labels for a subset of cases, `labels` satisfies `Partial<Record<AdminType, CatalogMessageKey>>`. If no cases declare a label, the `labels` property is omitted. Wide integers (64-bit) preserve string representations in both `cases` and `labels`.
+
+The shared runtime provides a generic helper `enumLabel` to resolve an enum's display label:
+
+```typescript
+import { AdminType, enumLabel, formatMessage } from "./generated/contracts_foundry.gen.js";
+
+const label = enumLabel(AdminType.labels, user.type, key => formatMessage(messages, key));
+```
+
+`enumLabel` returns the raw value when given an `UnknownEnumValue` or an unmapped case, and never accepts arbitrary strings.
+
+### Named schema constants and brand identities
+
+Each entry module exports `schemas`, a frozen map of declared schema names to their Go type-path strings, filtered to types reachable by that surface:
+
+```typescript
+import { decodeContract, newIdentity, schemas } from "./generated/contracts_foundry.gen.js";
+
+const payload = decodeContract(schemas.Payload, networkData);
+const orderId = newIdentity(schemas.ID_Order); // generates a fresh UUID v4
+const existingId = newIdentity(schemas.ID_Order, "0190a8f0-0000-7000-8000-000000000001");
+```
+
+`newIdentity<Owner>(owner, id?)` brands a UUID string as `Identity<Owner>`. When `id` is omitted, it generates a fresh UUID v4 via `crypto.randomUUID()`. It validates UUID v4 syntax and rejects nil UUIDs.
+
+### Application error codes
+
+Each client exports the application-wide `ErrorCode` constant and type:
+
+```typescript
+import { ErrorCode } from "./generated/contracts_foundry.gen.js";
+
+if (error.code === ErrorCode.ValidationFailed) {
+  // handle validation failure
+}
+```
+
+Error codes defined in the manifest are transformed to PascalCase keys (e.g. `validation_failed` → `ValidationFailed`). If two error codes in the manifest collide on the same PascalCase key, code generation fails with a conflict error.
+
 ## Injected HTTP transport
 
 `createClient(transport, options)` owns endpoint paths, query defaults/cardinality,

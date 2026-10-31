@@ -3,7 +3,7 @@ import type { CallOptions, ClientOptions, Identity, MultipartPart, Operation, Pa
 /** Unsafe-size metadata numbers stay exact instead of being rounded or clamped. */
 export type ExactMetadataNumber = number | JSONNumber;
 type ExactMetadata<T> = T extends number ? ExactMetadataNumber : T extends readonly (infer V)[] ? readonly ExactMetadata<V>[] : T extends object ? { readonly [K in keyof T]: ExactMetadata<T[K]> } : T;
-export type ParameterMetadata = Omit<URLParameter, "type" | "syntax"> & { readonly type?: string; readonly syntax?: string; readonly kind?: string };
+export type ParameterMetadata = Omit<URLParameter, "type" | "syntax"> & { readonly type?: string; readonly syntax?: string; readonly kind?: string; readonly content_types?: readonly string[]; readonly extensions?: readonly string[]; readonly max_bytes?: number };
 export type PayloadMetadata = Omit<Payload, "parts"> & { readonly parts?: readonly ParameterMetadata[] };
 export type OperationMetadata = Omit<Operation, "limits" | "file_transfer_bytes" | "body" | "response"> & { readonly body?: PayloadMetadata; readonly response?: PayloadMetadata; readonly limits: ExactMetadata<Operation["limits"]>; readonly file_transfer_bytes?: ExactMetadataNumber };
 export type SchemaMetadata = Readonly<WireType>;
@@ -34,6 +34,8 @@ export interface FieldDescriptor<T, Owner = unknown> {
   readonly schema: SchemaMetadata | undefined;
   readonly parameter: ParameterMetadata | undefined;
   readonly choices: readonly NonNullable<T>[];
+  readonly accept?: string;
+  readonly maxBytes?: number;
   field<K extends ObjectFields<T>>(name: K): FieldDescriptor<NonNullable<T>[K], readonly [Owner, K]>;
   /** Select a declared union payload; the discriminator stays on the parent. */
   variant<D extends Discriminator<T>, V extends Extract<NonNullable<T>[D], string>>(discriminator: D, tag: V): FieldDescriptor<Omit<Extract<NonNullable<T>, Record<D, V>>, D>, readonly [Owner, D, V]>;
@@ -117,6 +119,8 @@ function describeField(id: string | undefined, required: boolean, path: string, 
   const descriptor = immutable({
     path, required, nullable: !repeated && (resolved?.nullable ?? false), repeated,
     presentation: hint ?? {}, schema: type, parameter, choices,
+    accept: parameter && "content_types" in parameter && (parameter.content_types?.length || parameter.extensions?.length) ? [...(parameter.content_types ?? []), ...(parameter.extensions ?? []).map(ext => ext.startsWith(".") ? ext : "." + ext)].join(", ") : undefined,
+    maxBytes: parameter && "max_bytes" in parameter ? parameter.max_bytes : undefined,
     field(name: string): unknown {
       if (typeof name !== "string" || repeated) reject(path, "unknown_field");
       if (type?.kind === "map" && type.key?.value.cases?.some(value => String(value instanceof JSONNumber ? value.text : value) === name)) {

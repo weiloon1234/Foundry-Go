@@ -129,3 +129,9 @@ export function formatText(messages: ValidationMessages | undefined, key: string
   }
   return key;
 }
+/** Resolves an enum value's display label from a label mapping, or returns the raw value for an UnknownEnumValue or an unmapped case. */
+export function enumLabel<V extends string | number, K extends string = string>(labels: Readonly<Partial<Record<V, K>>> | undefined, value: V | UnknownEnumValue, translate: (key: K) => string): string {
+  if (value instanceof UnknownEnumValue) return value.value;
+  const key = labels?.[value];
+  return key !== undefined ? translate(key) : String(value);
+}

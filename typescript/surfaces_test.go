@@ -117,6 +117,24 @@ func TestSurfacesPublishPortalEntriesBesideSharedRuntimeModules(t *testing.T) {
 			t.Fatal("schema name differs between entries")
 		}
 	}
+	if !strings.Contains(admin, `Admin_Row: "consumer/admin.Row"`) || strings.Contains(admin, `Web_Row: "consumer/web.Row"`) {
+		t.Fatal("admin schemas not restricted to reached types")
+	}
+	if !strings.Contains(web, `Web_Row: "consumer/web.Row"`) || strings.Contains(web, `Admin_Row: "consumer/admin.Row"`) {
+		t.Fatal("web schemas not restricted to reached types")
+	}
+	if !strings.Contains(full, `Admin_Row: "consumer/admin.Row"`) || !strings.Contains(full, `Web_Row: "consumer/web.Row"`) {
+		t.Fatal("full schemas missing types")
+	}
+	for name, entry := range map[string]string{"full": full, "admin": admin, "web": web} {
+		if !strings.Contains(entry, "export const ErrorCode = /* @__PURE__ */ Object.freeze({") {
+			t.Fatal(name, "missing ErrorCode")
+		}
+	}
+	runtimeModule := read("api_runtime_foundry.gen.ts")
+	if !strings.Contains(runtimeModule, "export function newIdentity") || !strings.Contains(runtimeModule, "export function enumLabel") {
+		t.Fatal("runtime missing newIdentity or enumLabel")
+	}
 	if !strings.Contains(admin, "export const catalogLocales: { readonly default: Locale; readonly supported: readonly Locale[] } | undefined = undefined;") {
 		t.Fatal("an entry without a catalog exports locales")
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/decimal"
+	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -176,8 +177,12 @@ func (r *renderer) body(source *manifest.Manifest) error {
 	}
 	literal, _ := json.Marshal(compact.String())
 	fmt.Fprintf(&r.out, "\nexport const manifestJSON = %s;\nlet runtimeDocumentCache: %s | undefined;\nfunction runtimeDocument(): RuntimeDocument { return runtimeDocumentCache ??= loadRuntimeDocument(); }\nlet contractsCache: %s | undefined;\nfunction contracts(): WireCodec { return contractsCache ??= new WireCodec(runtimeDocument().types); }\n\n", literal, r.ref("RuntimeDocument"), r.ref("WireCodec"))
-	r.types()
-	r.http()
+	if err := r.types(); err != nil {
+		return err
+	}
+	if err := r.http(); err != nil {
+		return err
+	}
 	r.descriptors()
 	r.messages()
 	r.realtime()
@@ -445,7 +450,7 @@ func (r *renderer) renderExpression(typ contract.Type, received bool) string {
 	return result
 }
 
-func (r *renderer) types() {
+func (r *renderer) types() error {
 	locales := "string"
 	if r.document.Locales != nil && len(r.document.Locales.Supported) != 0 {
 		values := make([]string, 0, len(r.document.Locales.Supported))
@@ -466,8 +471,19 @@ func (r *renderer) types() {
 	}
 	fmt.Fprintf(&r.out, "/** The exported catalog's default and supported locales, without parsing the manifest; undefined when no catalog is exported. */\nexport const catalogLocales: { readonly default: Locale; readonly supported: readonly Locale[] } | undefined = %s;\n", catalog)
 	fmt.Fprintf(&r.out, "/** Input keyed by supported locales; descriptors bind its entries with at() and element(). Received values keep string keys. */\nexport type LocaleMap<V> = Readonly<Partial<Record<Locale, V>>> & { readonly [%s]?: never };\n\n", r.ref("localeKeyed"))
+	enumsByID := make(map[contract.TypeID]enum.Definition, len(r.document.Enums))
+	for _, def := range r.document.Enums {
+		enumsByID[contract.TypeID(def.PackagePath+"."+def.Name)] = def
+	}
 	for _, typ := range r.document.Types {
-		fmt.Fprintf(&r.out, "export type %s = %s;\n", r.typeName(typ.ID), r.expression(typ))
+		typeName := r.typeName(typ.ID)
+		fmt.Fprintf(&r.out, "export type %s = %s;\n", typeName, r.expression(typ))
+		if def, ok := enumsByID[typ.ID]; ok {
+			if topLevelValueNames[typeName] {
+				return safeerror.NewFault(fault.Conflict, fmt.Sprintf("generated enum value name %q collides with top-level declaration", typeName))
+			}
+			r.renderEnumConst(typeName, typ, def)
+		}
 	}
 	for _, typ := range r.document.Types {
 		if name, ok := r.received[typ.ID]; ok {
@@ -487,6 +503,26 @@ func (r *renderer) types() {
 		fmt.Fprintf(&r.out, "  readonly %s: %s;\n", quote(string(typ.ID)), r.receivedName(typ.ID))
 	}
 	r.out.WriteString("}\n\n")
+	type schemaEntry struct {
+		name string
+		id   string
+	}
+	schemaList := make([]schemaEntry, 0, len(r.document.Types))
+	for _, typ := range r.document.Types {
+		schemaList = append(schemaList, schemaEntry{name: r.typeName(typ.ID), id: string(typ.ID)})
+	}
+	slices.SortFunc(schemaList, func(a, b schemaEntry) int {
+		return strings.Compare(a.name, b.name)
+	})
+	r.out.WriteString("/** Named schema identity mapping for decodeContract, decodeReceived, encodeContract and schema(). */\nexport const schemas = /* @__PURE__ */ Object.freeze({\n")
+	for _, entry := range schemaList {
+		keyProp := entry.name
+		if !isJSIdentifier(entry.name) {
+			keyProp = quote(entry.name)
+		}
+		fmt.Fprintf(&r.out, "  %s: %s,\n", keyProp, quote(entry.id))
+	}
+	r.out.WriteString("} as const);\n\n")
 	r.ref("JSONLimits")
 	r.ref("defaultJSONLimits")
 	r.out.WriteString(`/** Decode a raw network value using a declared schema and resource bounds. */
@@ -505,6 +541,102 @@ export function contractValue<K extends keyof ContractTypes>(type: K, input: unk
   return decodeContract(type, contracts().encode(type, input, limits), limits);
 }
 `)
+	return nil
+}
+
+func (r *renderer) renderEnumConst(typeName string, typ contract.Type, def enum.Definition) {
+	caseLiterals := make([]string, 0, len(def.Cases))
+	labelEntries := make([]struct{ key, labelKey string }, 0, len(def.Cases))
+	for _, c := range def.Cases {
+		literal := string(c.Value)
+		if typ.Kind == contract.IntegerKind && typ.Bits > 32 {
+			literal = quote(literal)
+		}
+		caseLiterals = append(caseLiterals, literal)
+
+		if c.LabelKey != "" {
+			var key string
+			if typ.Kind == contract.StringKind {
+				_ = json.Unmarshal(c.Value, &key)
+			} else {
+				key = string(c.Value)
+			}
+			labelEntries = append(labelEntries, struct{ key, labelKey string }{key: key, labelKey: string(c.LabelKey)})
+		}
+	}
+	r.out.WriteString(fmt.Sprintf("export const %s = /* @__PURE__ */ Object.freeze({\n", typeName))
+	r.out.WriteString(fmt.Sprintf("  cases: [%s] as const,\n", strings.Join(caseLiterals, ", ")))
+	if len(labelEntries) > 0 {
+		satisfiesType := fmt.Sprintf("Record<%s, CatalogMessageKey>", typeName)
+		if len(labelEntries) < len(def.Cases) {
+			satisfiesType = fmt.Sprintf("Partial<Record<%s, CatalogMessageKey>>", typeName)
+		}
+		r.out.WriteString("  labels: /* @__PURE__ */ Object.freeze({\n")
+		for _, entry := range labelEntries {
+			keyProp := entry.key
+			if typ.Kind == contract.IntegerKind && typ.Bits > 32 {
+				keyProp = quote(entry.key)
+			} else if !isJSIdentifier(entry.key) {
+				keyProp = quote(entry.key)
+			}
+			fmt.Fprintf(&r.out, "    %s: %s,\n", keyProp, quote(entry.labelKey))
+		}
+		fmt.Fprintf(&r.out, "  }) satisfies %s,\n", satisfiesType)
+	}
+	r.out.WriteString("});\n")
+}
+
+var topLevelValueNames = map[string]bool{
+	"manifestVersion": true, "runtimePolicy": true, "defaultJSONLimits": true,
+	"manifestJSON": true, "catalogLocales": true, "createClient": true,
+	"validateRequest": true, "operation": true, "schema": true,
+	"decodeContract": true, "decodeReceived": true, "encodeContract": true,
+	"contractValue": true, "formatMessage": true, "createRealtime": true,
+	"realtimeProtocols": true, "realtimeSubprotocol": true,
+	"schemas": true, "ErrorCode": true,
+	"API": true, "UnknownEnumValue": true, "JSONNumber": true,
+	"ContractError": true, "ResponseContractError": true,
+	"HTTPTransportError": true, "AbortError": true, "RealtimeError": true,
+	"enumLabel": true, "newIdentity": true, "catalogTranslations": true, "formatText": true,
+}
+
+func isJSIdentifier(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, r := range name {
+		if i == 0 {
+			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '_' || r == '$') {
+				return false
+			}
+		} else {
+			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '$') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func errorCodeKey(code string) string {
+	parts := strings.FieldsFunc(code, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+	})
+	var b strings.Builder
+	for _, part := range parts {
+		if len(part) == 0 {
+			continue
+		}
+		b.WriteString(strings.ToUpper(part[:1]))
+		b.WriteString(strings.ToLower(part[1:]))
+	}
+	res := b.String()
+	if res == "" {
+		res = "Error"
+	} else if res[0] >= '0' && res[0] <= '9' {
+		res = "Error_" + res
+	}
+	return res
 }
 
 func (r *renderer) parameters(parameters []manifest.Parameter) string {
@@ -609,10 +741,33 @@ func (r *renderer) response(op manifest.Operation) string {
 	return value
 }
 
-func (r *renderer) http() {
+func (r *renderer) http() error {
 	for _, name := range []string{"HTTPTransport", "ClientOptions", "CallOptions", "createHTTPInvoker", "ValidationReport"} {
 		r.ref(name)
 	}
+	seen := make(map[string]string, len(r.document.Errors))
+	type errEntry struct {
+		key  string
+		code string
+	}
+	entries := make([]errEntry, 0, len(r.document.Errors))
+	for _, def := range r.document.Errors {
+		codeStr := string(def.Code)
+		key := errorCodeKey(codeStr)
+		if existing, dup := seen[key]; dup {
+			return safeerror.NewFault(fault.Conflict, fmt.Sprintf("error codes %q and %q map to the same PascalCase key %q", existing, codeStr, key))
+		}
+		seen[key] = codeStr
+		entries = append(entries, errEntry{key: key, code: codeStr})
+	}
+	slices.SortFunc(entries, func(a, b errEntry) int {
+		return strings.Compare(a.key, b.key)
+	})
+	r.out.WriteString("\n/** Application and framework error codes defined in the Go manifest. */\nexport const ErrorCode = /* @__PURE__ */ Object.freeze({\n")
+	for _, entry := range entries {
+		fmt.Fprintf(&r.out, "  %s: %s,\n", entry.key, quote(entry.code))
+	}
+	r.out.WriteString("} as const);\nexport type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];\n")
 	fmt.Fprintf(&r.out, "\nexport type ErrorResponse = %s;\nexport interface Operations {\n", r.receivedName(r.document.ErrorType))
 	for _, op := range r.document.HTTP {
 		codes := make([]string, len(op.Errors))
@@ -635,6 +790,7 @@ func (r *renderer) http() {
   return createHTTPInvoker(runtimeDocument(), async () => { throw new Error("Validation cannot send requests"); }, options).validate(operation, input);
 }
 `)
+	return nil
 }
 
 func (r *renderer) realtime() {
