@@ -46,8 +46,8 @@ const docMaxBytes: number | undefined = uploadDoc.maxBytes;
 // S7: Named schemas and newIdentity
 const schemaOwnerIndex: "foundry.test/consumer/clientcontracts.OwnerIndex" = sdk.schemas.OwnerIndex;
 const fromSchema = sdk.schema(sdk.schemas.OwnerIndex);
-const generatedId: sdk.Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]"> = sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7);
-const customId: sdk.Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]"> = sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7, "11111111-1111-4111-8111-111111111111");
+const generatedId: sdk.Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]"> = sdk.newIdentity(sdk.schemas.Models_UserID);
+const customId: sdk.Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]"> = sdk.newIdentity(sdk.schemas.Models_UserID, "11111111-1111-4111-8111-111111111111");
 // S8: ErrorCode
 const errCode: "validation_failed" = sdk.ErrorCode.ValidationFailed;
 void [values, quoted, limit, readers, issues, ranges, rangeBytes, numbers, rounded, ownerTemplate, ownerValue, second, state, card, rootCard, title, anyTitle, statusCases, labeledStatus, docAccept, docMaxBytes, schemaOwnerIndex, fromSchema, generatedId, customId, errCode];

@@ -76,11 +76,11 @@ assert.equal(uploadDoc.maxBytes, 1048576);
 // S7: Named schemas and newIdentity
 assert.equal(sdk.schemas.OwnerIndex, "foundry.test/consumer/clientcontracts.OwnerIndex");
 assert.equal(sdk.schema(sdk.schemas.OwnerIndex).field("pair").path, "/pair");
-const genId = sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7);
+const genId = sdk.newIdentity(sdk.schemas.Models_UserID);
 assert.match(genId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-const customId = sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7, "11111111-1111-4111-8111-111111111111");
+const customId = sdk.newIdentity(sdk.schemas.Models_UserID, "11111111-1111-4111-8111-111111111111");
 assert.equal(customId, "11111111-1111-4111-8111-111111111111");
-assert.throws(() => sdk.newIdentity(sdk.schemas.User_e5b5e89e3b570ab7, "not-a-uuid"), sdk.ContractError);
+assert.throws(() => sdk.newIdentity(sdk.schemas.Models_UserID, "not-a-uuid"), sdk.ContractError);
 // S8: ErrorCode
 assert.equal(sdk.ErrorCode.ValidationFailed, "validation_failed");
 assert.equal(sdk.ErrorCode.NotFound, "not_found");
