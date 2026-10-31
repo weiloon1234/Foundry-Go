@@ -81,7 +81,10 @@ export interface TokenSession {
    * tabs), or null when signed out.
    */
   accessToken(signal?: AbortSignal): Promise<string | null>;
-  /** Serialize login/logout cookie writes with renewal across this portal's tabs. */
+  /**
+   * Serialize login/logout cookie writes with renewal across this portal's tabs.
+   * Invalidates the previous identity before work; finish with signIn/signOut.
+   */
   runCredentials<T>(work: () => Promise<T>): Promise<T>;
   /** Adopts the access token from a sign-in response and shares it with other tabs. */
   signIn(token: AccessToken): void;
@@ -123,6 +126,7 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
   let refreshController: AbortController | null = null;
   let identity = 0;
   let appliedRevision = 0;
+  let publicationFailed = false;
 
   const fresh = (candidate: AccessToken | null): candidate is AccessToken =>
     candidate !== null && candidate.expiresAt - marginMs > now();
@@ -132,6 +136,9 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
     for (const listener of [...listeners]) listener(next);
   };
   const synchronize = () => {
+    // A failed write can leave the old active record readable. Only a new
+    // successful local publication can release this session's failure latch.
+    if (publicationFailed) return null;
     const transition = coordination.read();
     if (transition !== null && transition.identity !== identity) {
       identity = transition.identity;
@@ -144,7 +151,8 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
     return transition;
   };
   const apply = (message: SessionMessage) => {
-    if (message.transition.identity !== identity) {
+    const changedIdentity = message.transition.identity !== identity;
+    if (changedIdentity) {
       identity = message.transition.identity;
       version++;
     }
@@ -154,7 +162,7 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
       setStatus("signed-out");
     } else {
       token = message.token;
-      setStatus("signed-in", message.type === "signed-in");
+      setStatus("signed-in", changedIdentity || message.type === "signed-in");
     }
   };
   const advance = (status: SessionTransition["status"], changeIdentity: boolean) => {
@@ -169,10 +177,20 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
     return transition;
   };
   const publish = (event: SessionEvent, uncertain = false) => {
-    const transition = advance(
-      uncertain ? "uncertain" : event.type === "signed-out" ? "signed-out" : "active",
-      event.type !== "token",
-    );
+    let transition: SessionTransition;
+    try {
+      transition = advance(
+        uncertain ? "uncertain" : event.type === "signed-out" ? "signed-out" : "active",
+        event.type !== "token",
+      );
+    } catch (error) {
+      publicationFailed = true;
+      version++;
+      token = null;
+      setStatus("signed-out");
+      throw error;
+    }
+    publicationFailed = false;
     const message: SessionMessage = { ...event, transition };
     if (!disposed) {
       apply(message);
@@ -181,7 +199,7 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
   };
 
   const stopListening = channel?.listen((message) => {
-    if (disposed) return;
+    if (disposed || publicationFailed) return;
     const latest = coordination.read();
     if (latest === null || message.transition.revision !== latest.revision ||
         message.transition.identity !== latest.identity || message.transition.status !== latest.status ||
@@ -263,7 +281,10 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
       }
       return waitForToken(renewing, signal);
     },
-    runCredentials: (work) => lock.run(lockName, work),
+    runCredentials: (work) => lock.run(lockName, async () => {
+      publish({ type: "signed-out" }, true);
+      return work();
+    }),
     signIn(next) {
       if (disposed) return;
       publish({ type: "signed-in", token: next });

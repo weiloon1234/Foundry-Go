@@ -154,6 +154,60 @@ describe("createTokenSession", () => {
     },
   );
 
+  for (const operation of ["signIn", "signOut"]) it(
+    `N1 invalidates local credentials when ${operation} cannot publish metadata`,
+    async () => {
+      const lock = sharedLock();
+      let fail = false;
+      const unavailable = new Error("storage unavailable");
+      const refresh = mock.fn(async () => renewed(at("unsafe", 60_000)));
+      const session = createTokenSession({
+        name: "failed-transition", channel: null, now: () => 0, lock, refresh,
+        coordination: {
+          read: lock.coordination.read,
+          write: next => { if (fail) throw unavailable; lock.coordination.write(next); },
+        },
+      });
+      session.signIn(at("account-a", 60_000));
+      const version = session.version();
+      fail = true;
+      assert.throws(() => session[operation](at("account-b", 60_000)), error => error === unavailable);
+      assert.equal(session.status(), "signed-out", `N1 ${operation} local invalidation`);
+      assert.notEqual(session.version(), version);
+      assert.equal(await session.accessToken(), null);
+      assert.equal(refresh.mock.callCount(), 0);
+      fail = false;
+      assert.equal(await session.accessToken(), null, "storage recovery must not revive the old identity");
+      session.signIn(at("new-login", 60_000));
+      assert.equal(await session.accessToken(), "new-login");
+      session.dispose();
+    },
+  );
+
+  it("N2 notifies an account change when refresh supersedes its sign-in message", async () => {
+    const shared = { lock: sharedLock(), channel: sharedChannel(true) };
+    const one = tab(async () => renewed(at("account-b-refresh", 60_000)), shared);
+    const two = tab(async () => ({ kind: "signed-out" }), shared);
+    await one.runCredentials(async () => one.signIn(at("account-a", 60_000)));
+    shared.channel.deliver();
+    const version = two.version();
+    const statuses = [];
+    two.subscribe(status => statuses.push(status));
+    await one.runCredentials(async () => one.signIn(at("account-b", 60_000)));
+    one.rejected("account-b");
+    assert.equal(await one.accessToken(), "account-b-refresh");
+    shared.channel.deliver();
+    assert.equal(await two.accessToken(), "account-b-refresh");
+    assert.notEqual(two.version(), version);
+    assert.deepEqual(statuses, ["signed-in"], "N2 account change must notify even without a status change");
+    one.rejected("account-b-refresh");
+    await one.accessToken();
+    shared.channel.deliver();
+    assert.deepEqual(statuses, ["signed-in"], "same-identity renewal must remain silent");
+    one.dispose();
+    two.dispose();
+  });
+
   it("M5 bounds time queued for the credential lock without starting refresh", async () => {
     const lock = sharedLock();
     const release = Promise.withResolvers();

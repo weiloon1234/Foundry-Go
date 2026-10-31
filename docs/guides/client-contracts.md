@@ -675,9 +675,27 @@ tab out and is never resent.
 The authenticated transport renews after a 401 and retries once for replayable
 bodies. Streams are never retried. Explicit Authorization headers pass through.
 Credential versions prevent a request from replaying under a later login;
-a superseded sign-in profile throws `SessionChangedError` from the auth runtime
-without assigning an HTTP status or UI message. Logout clears local state after
-the server call succeeds. Applications own error presentation and disposal.
+a superseded sign-in or restoration profile throws `SessionChangedError` from the
+auth runtime without assigning an HTTP status or UI message. Subscribers are
+notified when the identity changes, even if a newer renewal supersedes the
+sign-in message; renewals of the same identity remain silent.
+
+`runCredentials` invalidates the previous identity and persists an uncertain
+transition under the shared lock before invoking login/logout work. Finish that
+work with `signIn` or `signOut`, as the portal helpers do. If the initial metadata
+write fails, the server operation is not sent. A failed server operation or
+completion write leaves the session signed out; a failed publication clears its
+in-memory token and invalidates pending profiles even when old metadata remains
+readable. That session requires a successful local credential publication before
+it can adopt credentials again. Applications own error presentation and disposal.
+
+Browser coordination defaults to localStorage and stores only revision, identity
+and status metadata, never tokens. Custom coordination must provide synchronous
+shared reads and writes under the same credential lock. Direct synchronous
+`signIn`/`signOut` calls do not acquire that lock; custom integrations should use
+`runCredentials` around server credential changes. Shared uncertainty prevents
+other tabs from retrying a possibly changed cookie, including tabs without
+messages. Outside a browser, default coordination is session-owned memory.
 
 ## Public browser configuration
 

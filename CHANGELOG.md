@@ -5,6 +5,12 @@
 - Fixed: Public numeric configuration fallbacks and generated validators share
   JavaScript-compatible finite-number spellings, accepting hexadecimal, octal and
   binary integers while rejecting Go hex floats and numeric separators.
+- Fixed: Browser login/logout invalidates the previous identity and records shared
+  uncertainty before changing server credentials. Metadata publication failures
+  clear local bearer tokens and reject superseded restoration profiles with
+  `SessionChangedError`, while other tabs remain unable to retry uncertain cookies.
+- Fixed: Cross-tab account changes notify subscribers even when a newer refresh
+  supersedes the sign-in message; same-identity renewals remain silent.
 
 - Fixed: `expr.CompareFilter` and `expr.NullableCompareFilter` accept any typed row
   value, including computed booleans and scalars, while preserving exact scope and

@@ -9,7 +9,7 @@
   "artifacts": {
     "client/.foundry-gen.json": {
       "old_sha256": "739799610c98bf1ab9d69653078e11fac4dc99ffc9f5abc73e4f57ccd2bb2651",
-      "new_sha256": "739799610c98bf1ab9d69653078e11fac4dc99ffc9f5abc73e4f57ccd2bb2651"
+      "new_sha256": "f75d3746c63fae3dfd97d7c3f2f4d4624cb2aadbda2b26d391be3d468e465198"
     },
     "client/contracts_browser_foundry.gen.ts": {
       "old_sha256": "15425316a29b21c3d4022b9862b716b89fdcc9f9151b03267f78ea48ca9f37d1",
@@ -41,7 +41,7 @@
     },
     "client/contracts_runtime_auth_foundry.gen.ts": {
       "old_sha256": "773d0ae2acd3c1be5e03de16e591294cb2a6a3bb0f6c56b0547f8f5d9fed0277",
-      "new_sha256": "773d0ae2acd3c1be5e03de16e591294cb2a6a3bb0f6c56b0547f8f5d9fed0277"
+      "new_sha256": "36808a7603f977bbb22f32fed2c1b3625935c5eaa1727963bcde4ad9fc66deaa"
     },
     "client/contracts_runtime_foundry.gen.ts": {
       "old_sha256": "e87b306c7844b518ffe1896ab4e87d9b3fac2ae5c94fe7f746d2ddbf9b277c11",

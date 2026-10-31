@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { it } from "node:test";
 import { pathToFileURL } from "node:url";
 
 const auth = await import(pathToFileURL(process.argv[2]).href);
@@ -73,7 +74,7 @@ assert.equal("cookieName" in portal.authDescriptor, false);
   api.respond(async () => ({ status: 401, payload: { status: 401, error_code: "unauthenticated", message: "Fixture denial" } }));
   const instance = portal.createPortalSession(api.transport, { channel: null });
   await assert.rejects(instance.signInWithPassword({ login_id: "member@example.test", password: "fixture-password" }), APIError);
-  assert.equal(instance.session.status(), "unknown");
+  assert.equal(instance.session.status(), "signed-out");
   assert.equal(api.sent.length, 1);
   instance.session.dispose();
 }
@@ -149,3 +150,81 @@ for (const cancellation of ["timeout", "dispose"]) {
 }
 
 console.log("portal auth descriptor and sessions ok");
+
+// N1/M3: successful server credential changes must invalidate pending profiles
+// even when completion metadata cannot be written; sibling tabs must fail closed.
+for (const operation of ["signOut", "signInWithPassword"]) it(
+  `N1/M3 rejects a superseded profile after ${operation} completion write fails`,
+  async () => {
+    const api = backend();
+    const profile = deferred();
+    const entered = deferred();
+    const unavailable = new Error("storage unavailable");
+    let transition = null;
+    let fail = false;
+    let remoteChanges = 0;
+    let refreshes = 0;
+    const coordination = {
+      read: () => transition,
+      write: next => { if (fail) throw unavailable; transition = next; },
+    };
+    const instance = portal.createPortalSession(api.transport, { channel: null, coordination, now: () => 0 });
+    const sibling = portal.createPortalSession(api.transport, { channel: null, coordination, now: () => 0 });
+    instance.session.signIn(auth.accessTokenExpiring("account-a", 900, () => 0));
+    assert.equal(await sibling.session.accessToken(), "access");
+    api.sent.length = 0;
+    api.respond(async path => {
+      if (path === "/browser/profile") { entered.resolve(); return profile.promise; }
+      if (path === "/browser/refresh") refreshes++;
+      else {
+        assert.equal(transition.status, "uncertain", "N1 must persist uncertainty before sending a credential change");
+        remoteChanges++;
+        fail = true;
+      }
+      if (path === "/browser/logout") return { status: 204 };
+      return { status: 200, payload: { tokens: { access_token: "account-b", expires_in: 900, token_type: "Bearer" }, mfa_required: false } };
+    });
+    const restoring = instance.restoreSession();
+    await entered.promise;
+    assert.equal(api.sent[0].headers.authorization, "Bearer account-a");
+    await assert.rejects(instance[operation]({ login_id: "b@example.test", password: "fixture-password" }), error => error === unavailable);
+    assert.equal(remoteChanges, 1);
+    profile.resolve({ status: 200, payload: { display: "Private account A" } });
+    await assert.rejects(restoring, auth.SessionChangedError, `M3 ${operation} completion write failure`);
+    assert.equal(instance.session.status(), "signed-out");
+    assert.equal(await instance.session.accessToken(), null);
+    assert.equal(transition.status, "uncertain", "N1 shared identity must stop describing account A as active");
+    assert.deepEqual(Object.keys(transition).sort(), ["identity", "revision", "status"]);
+    assert.equal(await sibling.session.accessToken(), null);
+    const newcomer = portal.createPortalSession(api.transport, { channel: null, coordination, now: () => 0 });
+    assert.equal(await newcomer.session.accessToken(), null);
+    assert.equal(refreshes, 0);
+    instance.session.dispose();
+    sibling.session.dispose();
+    newcomer.session.dispose();
+  },
+);
+
+for (const operation of ["signOut", "signInWithPassword"]) it(
+  `N1 refuses ${operation} when its shared uncertainty marker cannot be written`,
+  async () => {
+    const api = backend();
+    let transition = null;
+    let fail = false;
+    const unavailable = new Error("storage unavailable");
+    const instance = portal.createPortalSession(api.transport, {
+      channel: null, now: () => 0,
+      coordination: {
+        read: () => transition,
+        write: next => { if (fail) throw unavailable; transition = next; },
+      },
+    });
+    instance.session.signIn(auth.accessTokenExpiring("account-a", 900, () => 0));
+    fail = true;
+    await assert.rejects(instance[operation]({ login_id: "b@example.test", password: "fixture-password" }), error => error === unavailable);
+    assert.equal(api.sent.length, 0);
+    assert.equal(instance.session.status(), "signed-out");
+    assert.equal(await instance.session.accessToken(), null);
+    instance.session.dispose();
+  },
+);

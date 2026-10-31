@@ -60,6 +60,27 @@ function session(...tokens) {
 const authorization = (sent) => sent.headers["authorization"];
 
 describe("authenticatedTransport", () => {
+  it("N1 never sends the previous bearer after a failed identity publication", async () => {
+    let transition = null;
+    let fail = false;
+    const unavailable = new Error("storage unavailable");
+    const tokens = createTokenSession({
+      name: "failed-login", channel: null,
+      refresh: async () => { throw new Error("must not refresh the mismatched cookie"); },
+      coordination: {
+        read: () => transition,
+        write: next => { if (fail) throw unavailable; transition = next; },
+      },
+    });
+    tokens.signIn({ value: "account-a", expiresAt: Date.now() + 60_000 });
+    fail = true;
+    assert.throws(() => tokens.signIn({ value: "account-b", expiresAt: Date.now() + 60_000 }), error => error === unavailable);
+    const api = backend(200);
+    await authenticatedTransport(api.transport, tokens)(request());
+    assert.deepEqual(api.sent.map(authorization), [undefined], "N1 old bearer must not escape through transport");
+    tokens.dispose();
+  });
+
   it("M5 cancels one refresh waiter without canceling the shared renewal", async () => {
     let finish;
     const entered = Promise.withResolvers();
