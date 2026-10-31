@@ -56,13 +56,14 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 	}
 
 	type fieldDocChunk struct {
-		probes  []fieldDocProbe
-		once    sync.Once
-		results []Result
-		err     error
+		probes    []fieldDocProbe
+		once      sync.Once
+		results   []Result
+		err       error
+		sourceErr error
 	}
 
-	runFieldDocChunk := func(c *fieldDocChunk, ctx context.Context) ([]Result, error) {
+	runFieldDocChunk := func(c *fieldDocChunk, ctx context.Context) ([]Result, error, error) {
 		c.once.Do(func() {
 			select {
 			case realGoplsSlots <- struct{}{}:
@@ -100,9 +101,11 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 					})
 				}
 			}
-			c.results, c.err = InspectBatch(ctx, operations, 45*time.Second)
+			c.results, c.err, c.sourceErr = inspectConsumerEditorBatch(operations, func() ([]Result, error) {
+				return InspectBatch(ctx, operations, 45*time.Second)
+			})
 		})
-		return c.results, c.err
+		return c.results, c.err, c.sourceErr
 	}
 
 	const fieldDocChunkLimit = 5
@@ -114,7 +117,10 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 			probe := probe
 			t.Run(probe.name, func(t *testing.T) {
 				t.Parallel()
-				results, batchErr := runFieldDocChunk(chunk, t.Context())
+				results, batchErr, sourceErr := runFieldDocChunk(chunk, t.Context())
+				if sourceErr != nil {
+					t.Error(sourceErr)
+				}
 				startOp := pIdx * 3
 				endOp := startOp + 3
 				if batchErr != nil {
@@ -133,11 +139,7 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 				if len(results) < endOp {
 					t.Fatalf("incomplete field documentation scenario: got %d results, need at least %d", len(results), endOp)
 				}
-				path := filepath.Join(workspace, probe.file)
-				data, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatal(err)
-				}
+				var err error
 				for _, result := range results[startOp:endOp] {
 					operation := result.Operation
 					if operation == "definition" {
@@ -198,10 +200,6 @@ func TestRealGoplsFieldBehaviorDocumentation(t *testing.T) {
 							t.Fatalf("readable %s lost %q", operation, want)
 						}
 					}
-				}
-				current, err := os.ReadFile(path)
-				if err != nil || !bytes.Equal(current, data) {
-					t.Fatal("language inspection changed consumer source")
 				}
 			})
 		}

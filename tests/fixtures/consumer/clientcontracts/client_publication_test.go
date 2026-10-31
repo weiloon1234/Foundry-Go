@@ -211,6 +211,51 @@ func testVerifyCohortProvenanceHarness(t *testing.T) {
 		t.Fatalf("expected valid cohort to pass: %v", err)
 	}
 
+	t.Run("DeletedArtifact", func(t *testing.T) {
+		relative := "client/contracts_optional_foundry.gen.ts"
+		deletedPath := filepath.Join(cohortDir, relative)
+		evidence.Artifacts[relative] = contractHashChange{Old: artHash, New: ""}
+		t.Cleanup(func() {
+			delete(evidence.Artifacts, relative)
+			if err := os.WriteFile(provenancePath, append(pData, '\n'), 0644); err != nil {
+				t.Error(err)
+			}
+		})
+		deletionData, err := json.MarshalIndent(evidence, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(provenancePath, append(deletionData, '\n'), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := verifyCohortProvenance(cohortDir); err != nil {
+			t.Fatalf("expected recorded artifact deletion to pass: %v", err)
+		}
+		for _, kind := range []string{"file", "directory", "dangling-symlink"} {
+			t.Run(kind, func(t *testing.T) {
+				switch kind {
+				case "file":
+					err = os.WriteFile(deletedPath, content, 0644)
+				case "directory":
+					err = os.Mkdir(deletedPath, 0755)
+				case "dangling-symlink":
+					err = os.Symlink("missing-artifact", deletedPath)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if err := os.Remove(deletedPath); err != nil {
+						t.Error(err)
+					}
+				})
+				if err := verifyCohortProvenance(cohortDir); err == nil {
+					t.Fatal("expected artifact recorded as deleted but still present to fail")
+				}
+			})
+		}
+	})
+
 	// 2. Tampered artifact file is detected.
 	if err := os.WriteFile(artPath, []byte("// tampered!\n"), 0644); err != nil {
 		t.Fatal(err)
@@ -277,6 +322,14 @@ func verifyCohortProvenance(cohort string) error {
 	}
 	for relative, change := range evidence.Artifacts {
 		actualPath := filepath.Join(cohort, relative)
+		if change.New == "" {
+			if _, err := os.Lstat(actualPath); err == nil {
+				return fmt.Errorf("artifact recorded as deleted still present in %s: %s", cohort, relative)
+			} else if !os.IsNotExist(err) {
+				return fmt.Errorf("checking deleted artifact in %s: %s (%w)", cohort, relative, err)
+			}
+			continue
+		}
 		fileData, err := os.ReadFile(actualPath)
 		if err != nil {
 			return fmt.Errorf("artifact listed in provenance missing from %s: %s (%w)", cohort, relative, err)

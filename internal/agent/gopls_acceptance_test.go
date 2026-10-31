@@ -114,13 +114,14 @@ func TestRealGoplsConsumer(t *testing.T) {
 		})
 	}
 	type probeChunk struct {
-		probes  []consumerEditorProbe
-		once    sync.Once
-		results []Result
-		err     error
+		probes    []consumerEditorProbe
+		once      sync.Once
+		results   []Result
+		err       error
+		sourceErr error
 	}
 
-	runChunk := func(c *probeChunk, ctx context.Context) ([]Result, error) {
+	runChunk := func(c *probeChunk, ctx context.Context) ([]Result, error, error) {
 		c.once.Do(func() {
 			select {
 			case realGoplsSlots <- struct{}{}:
@@ -159,9 +160,11 @@ func TestRealGoplsConsumer(t *testing.T) {
 					})
 				}
 			}
-			c.results, c.err = InspectBatch(ctx, operations, 45*time.Second)
+			c.results, c.err, c.sourceErr = inspectConsumerEditorBatch(operations, func() ([]Result, error) {
+				return InspectBatch(ctx, operations, 45*time.Second)
+			})
 		})
-		return c.results, c.err
+		return c.results, c.err, c.sourceErr
 	}
 
 	allProbes := consumerEditorProbes()
@@ -174,7 +177,10 @@ func TestRealGoplsConsumer(t *testing.T) {
 			probe := probe
 			t.Run(probe.name, func(t *testing.T) {
 				t.Parallel()
-				results, batchErr := runChunk(chunk, t.Context())
+				results, batchErr, sourceErr := runChunk(chunk, t.Context())
+				if sourceErr != nil {
+					t.Error(sourceErr)
+				}
 				startOp := pIdx * 3
 				endOp := startOp + 3
 				if batchErr != nil {
@@ -193,12 +199,6 @@ func TestRealGoplsConsumer(t *testing.T) {
 				if len(results) < endOp {
 					t.Fatalf("incomplete editor scenario: got %d results, need at least %d", len(results), endOp)
 				}
-				path := filepath.Join(workspace, probe.file)
-				data, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				source := string(data)
 				for _, result := range results[startOp:endOp] {
 					switch result.Operation {
 					case "complete":
@@ -230,10 +230,6 @@ func TestRealGoplsConsumer(t *testing.T) {
 							t.Fatal("query definition missed the handwritten ORM method")
 						}
 					}
-				}
-				current, err := os.ReadFile(path)
-				if err != nil || string(current) != source {
-					t.Fatal("query semantic inspection edited the consumer")
 				}
 			})
 		}

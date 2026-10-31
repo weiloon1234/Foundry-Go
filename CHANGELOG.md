@@ -17,6 +17,10 @@
   placeholder names or encounter order. Plural forms must use one distinct
   placeholder; messages with additional arguments need an explicit shared-catalog
   plural declaration.
+- Fixed: Editor acceptance batches capture consumer source before inspection and
+  report source mutations independently of editor results.
+- Fixed: Released client contract cohorts accept recorded artifact deletions and
+  reject deleted artifacts that remain on disk.
 
 - Changed (breaking): HTTP pagination endpoint `Handle` and `URL` methods move to
   documented package functions: `pagination.Handle`, `pagination.URL`,
