@@ -16,7 +16,7 @@ import (
 var updateScaffoldGoldens = flag.Bool("update-scaffold-goldens", false, "refresh handwritten ORM scaffold golden output")
 
 func TestORMScaffoldSymbolCollisions(t *testing.T) {
-	for _, tc := range []struct {
+	cases := []struct {
 		name    string
 		options ScaffoldOptions
 		want    []string
@@ -43,15 +43,17 @@ func TestORMScaffoldSymbolCollisions(t *testing.T) {
 		{"codec_namespace", ScaffoldOptions{Name: "Article", Table: "article_seo_json", Metadata: []string{"SEO"}}, []string{"var ArticleSeoJson =", "type ArticleSEO struct{}"}},
 		{"codec_and_validation_families", ScaffoldOptions{Name: "Article", Table: "article_foo_json", Metadata: []string{"Foo", "FooJSON", "FooJSON1", "FooValidationFields", "FooValidationFieldSet"}}, []string{"type ArticleFooJSON2 struct{}", "type ArticleFooJSON1 struct{}", "type ArticleFooValidationFields1 struct{}", "type ArticleFooValidationFieldSet1 struct{}"}},
 		{"exact_codec_namespace", ScaffoldOptions{Name: "Article", Table: "article_foo_j_s_o_n", Metadata: []string{"Foo", "Foo1"}}, []string{"var ArticleFooJSON =", "type ArticleFoo2 struct{}", "type ArticleFoo1 struct{}"}},
-	} {
+	}
+	baseDir := fixture(t, "package fixture\n")
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			o := tc.options
 			o.Kind = ModelScaffold
-			first, err := renderScaffold("sample", o)
+			first, err := renderScaffold(tc.name, o)
 			if err != nil {
 				t.Fatal(err)
 			}
-			second, err := renderScaffold("sample", o)
+			second, err := renderScaffold(tc.name, o)
 			if err != nil || !bytes.Equal(first, second) {
 				t.Fatal("nondeterministic scaffold", err)
 			}
@@ -60,23 +62,27 @@ func TestORMScaffoldSymbolCollisions(t *testing.T) {
 					t.Fatalf("missing %q in scaffold:\n%s", want, first)
 				}
 			}
-			dir := fixture(t, "package sample\n")
-			o.Dir = dir
+			pkgDir := filepath.Join(baseDir, tc.name)
+			if err := os.Mkdir(pkgDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			write(t, pkgDir, "doc.go", "package "+tc.name+"\n")
+			o.Dir = pkgDir
 			if _, err := Scaffold(t.Context(), o); err != nil {
 				t.Fatal(err)
 			}
-			write(t, dir, "scaffold_test.go", fmt.Sprintf(`package sample
+			write(t, pkgDir, "scaffold_test.go", fmt.Sprintf(`package %s
 import ("testing"; "github.com/weiloon1234/Foundry-Go/database/orm")
 func TestDeclaration(t *testing.T) {
  if err := orm.Check(%sTables()...); err != nil { t.Fatal(err) }
 }
-`, o.Name))
-			cmd := exec.CommandContext(t.Context(), "go", "test", "-mod=readonly", "./...")
-			cmd.Dir = dir
-			if output, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("scaffold compilation and orm.Check: %s %v", output, err)
-			}
+`, tc.name, o.Name))
 		})
+	}
+	cmd := exec.CommandContext(t.Context(), "go", "test", "-mod=readonly", "./...")
+	cmd.Dir = baseDir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("batched scaffold compilation and orm.Check: %v\n%s", err, output)
 	}
 }
 

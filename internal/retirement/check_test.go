@@ -264,3 +264,87 @@ func TestRetirementGuardBuildVariants(t *testing.T) {
 		})
 	}
 }
+
+func TestRetirementGuardSharedViolationsAndCycles(t *testing.T) {
+	t.Run("direct sharing deprecated field", func(t *testing.T) {
+		root := t.TempDir()
+		writeSource(t, root, "go.mod", "module example\n")
+		writeSource(t, root, "sample.go", `package sample
+type hidden struct {
+	// Deprecated: old.
+	Field int
+}
+var First hidden
+var Second hidden
+`)
+		err := Check(root)
+		if err == nil {
+			t.Fatal("expected deprecation errors")
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "example.First.Field") || !strings.Contains(msg, "example.Second.Field") {
+			t.Fatalf("expected both First and Second to be reported, got: %v", err)
+		}
+	})
+
+	t.Run("direct sharing deprecated method", func(t *testing.T) {
+		root := t.TempDir()
+		writeSource(t, root, "go.mod", "module example\n")
+		writeSource(t, root, "sample.go", `package sample
+type hidden struct{}
+// Deprecated: old method.
+func (hidden) Call() {}
+var First hidden
+var Second hidden
+`)
+		err := Check(root)
+		if err == nil {
+			t.Fatal("expected deprecation errors on method")
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "example.First.Call") || !strings.Contains(msg, "example.Second.Call") {
+			t.Fatalf("expected both First and Second Call methods to be reported, got: %v", err)
+		}
+	})
+
+	t.Run("cycle reaching deprecated", func(t *testing.T) {
+		root := t.TempDir()
+		writeSource(t, root, "go.mod", "module example\n")
+		writeSource(t, root, "sample.go", `package sample
+type Node struct {
+	Next *Node
+	Leaf *hidden
+}
+type hidden struct {
+	// Deprecated: old.
+	Field int
+}
+var First Node
+var Second Node
+`)
+		err := Check(root)
+		if err == nil {
+			t.Fatal("expected deprecation errors through cycle")
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "example.First.Leaf.Field") || !strings.Contains(msg, "example.Second.Leaf.Field") {
+			t.Fatalf("expected both First and Second to be reported through cycle, got: %v", err)
+		}
+	})
+
+	t.Run("clean cycle does not report false positive", func(t *testing.T) {
+		root := t.TempDir()
+		writeSource(t, root, "go.mod", "module example\n")
+		writeSource(t, root, "sample.go", `package sample
+type Node struct {
+	Next *Node
+	Value int
+}
+var First Node
+var Second Node
+`)
+		if err := Check(root); err != nil {
+			t.Fatalf("unexpected error on clean cycle: %v", err)
+		}
+	})
+}

@@ -14,7 +14,12 @@ func checkExposures(fset *token.FileSet, sources map[string]*sourcePackage, deni
 	if err != nil {
 		return err
 	}
-	w := exposureWalker{fset: fset, denied: denied, deprecated: declarationDocs(fset, sources)}
+	w := exposureWalker{
+		fset:       fset,
+		denied:     denied,
+		deprecated: declarationDocs(fset, sources),
+		clean:      make(map[types.Type]bool),
+	}
 	for _, key := range sortedKeys(sources) {
 		source := sources[key]
 		config := types.Config{
@@ -41,7 +46,16 @@ func checkExposures(fset *token.FileSet, sources map[string]*sourcePackage, deni
 			}
 			w.seen = make(map[types.Type]bool)
 			w.reported = make(map[string]bool)
+			w.visited = w.visited[:0]
+			before := len(w.failures)
+
 			w.object(obj, name)
+
+			if len(w.failures) == before {
+				for _, t := range w.visited {
+					w.clean[t] = true
+				}
+			}
 		}
 	}
 	return safeerror.Join("operation failed", w.failures...)
@@ -55,6 +69,8 @@ type exposureWalker struct {
 	owner         string
 	seen          map[types.Type]bool
 	reported      map[string]bool
+	clean         map[types.Type]bool
+	visited       []types.Type
 	failures      []error
 }
 
@@ -84,10 +100,11 @@ func (w *exposureWalker) fail(reason, selector string, pos token.Pos) {
 }
 
 func (w *exposureWalker) typ(typ types.Type, selector string) {
-	if typ == nil || w.seen[typ] {
+	if typ == nil || w.seen[typ] || w.clean[typ] {
 		return
 	}
 	w.seen[typ] = true
+	w.visited = append(w.visited, typ)
 	w.interfaceAnnotations(typ, selector)
 	// Keep the alias chain long enough to inspect each declaration's docs.
 	if alias, ok := typ.(*types.Alias); ok {

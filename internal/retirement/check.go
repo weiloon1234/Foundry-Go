@@ -58,9 +58,11 @@ func Check(root string) error {
 			return err
 		}
 		relative = filepath.ToSlash(relative)
-		// Ignore only the repository's local cache, not nested source directories.
-		if relative == ".cache" && d.IsDir() {
-			return filepath.SkipDir
+		// Ignore the repository's local cache, Git metadata, and non-Go tool directories.
+		if d.IsDir() {
+			if relative == ".cache" || relative == ".git" || strings.HasSuffix(relative, "/.git") || relative == ".github" || relative == ".agents" {
+				return filepath.SkipDir
+			}
 		}
 		// Reserve the removed path itself, including a symlink to a package.
 		if relative == retiredPath || strings.HasSuffix(relative, "/"+retiredPath) {
