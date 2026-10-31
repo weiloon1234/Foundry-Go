@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## v0.3.0 — 2026-10-31
+
+**Highlights:** Go declarations now generate the remaining client contract
+surfaces (enum cases and labels, the typed datatable registry, portal sign-in
+sessions, public configuration, schemas, error codes, frontend message keys and
+upload constraints), with deterministic readable TypeScript names. Expression and
+datatable column operations become typed `expr`/`datatable` package functions with
+pointer-shaped source scopes, and every public operation is listed by `go doc`.
+With Go 1.27.1 on darwin/arm64, peak compiler RSS for real application datatable
+packages fell 19.6% (ooo) and 12.9% (Boss Club, whose code also grew); on identical
+Boss Club datatable code the prototype measured −28% compiled functions and −23%
+peak RSS. The framework-owned `devserver` supervises the development build loop.
+This release is breaking; see the entries below, the
+[API migration table](docs/evidence/public-api-migration-20261031.md) and the
+[readable-name migration](docs/guides/client-contracts.md#migrating-from-v02-to-v03).
+The first immutable client contract cohort is `contracts-v0.3.0`.
 
 - Fixed: Public numeric configuration fallbacks and generated validators share
   JavaScript-compatible finite-number spellings, accepting hexadecimal, octal and
