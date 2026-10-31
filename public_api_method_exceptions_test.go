@@ -7,12 +7,10 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	// Existing schema transaction adapter; outside the approved DSL migration.
 	"application.schemaTransactor": "Transaction",
 	// Existing slot API implementations and owned-reader adapters; lead review deferred.
-	"attachments.manySlot":       "Add AddFile AddIn Format From PublicURLs Reorder",
-	"attachments.oneSlot":        "Format From PublicURL",
-	"attachments.slotDefinition": "Accepts Clear Collection Describe Detach Discard Name Prepare PrepareFile Registration Replace ReplaceFile ReplaceIn TemporaryURL URL Validate VariantURL",
+	"attachments.manySlot":       "Format",
+	"attachments.oneSlot":        "Format",
 	"attachments.verifiedReader": "Close Read",
 	// Existing audit metadata interface implementation; lead review deferred.
-	"audit.metadata": "Area Correlation CreatedAt Origin Route Sequence",
 	// Existing typed error adapters; outside the approved DSL migration.
 	"auth.failure": "Error Is Unwrap",
 	// Existing availability error adapter; outside the approved DSL migration.
@@ -67,7 +65,7 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	// Existing io.Writer implementation; outside the approved DSL migration.
 	"devserver.prefixWriter": "Write",
 	// Existing bounded buffer and MIME io.Writer implementations; lead review deferred.
-	"email.boundedBuffer":   "Bytes Reset String Write WriteString",
+	"email.boundedBuffer":   "String Write WriteString",
 	"email.childPartWriter": "Write",
 	// Existing net/smtp.Auth implementations; outside the approved DSL migration.
 	"email/smtp.loginAuth": "Next Start",
@@ -90,8 +88,7 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	"http.etagConditionWriter":     "WriteHeader",
 	"http.etagResponse":            "FlushError Header ReadFrom Unwrap Write WriteHeader",
 	"http.fileRangeErrorWriter":    "WriteHeader",
-	"http.fileReader":              "Close Failure Read Seek",
-	"http.fileResponse":            "Validate",
+	"http.fileReader":              "Close Read Seek",
 	"http.fileResponseWriter":      "Header ReadFrom Write WriteHeader",
 	"http.floatPathCodec":          "Format FoundryAdapter Parse",
 	"http.idempotencyRetryError":   "Unwrap",
@@ -115,9 +112,7 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	"http.stringPathCodec":         "Format FoundryAdapter Parse",
 	"http.textPathCodec":           "Format Parse",
 	// Existing endpoint and cursor codec adapters; lead review deferred.
-	"http/pagination.authenticatedPageEndpoint": "Handle URL",
-	"http/pagination.cursorCodec":               "Format Parse",
-	"http/pagination.pageEndpoint":              "Handle URL",
+	"http/pagination.cursorCodec": "Format Parse",
 	// Existing bounded io.Writer and image protocol adapters; lead review deferred.
 	"imaging.boundedOutput": "Write",
 	"imaging.rgbaPNGFrame":  "Opaque",
@@ -136,7 +131,7 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	"logging.stackHandler":       "Enabled Handle WithAttrs WithGroup",
 	"logging.syslogConnection":   "Close",
 	// Existing typed metadata slot implementation; lead review deferred.
-	"metadata.valueSlot": "Describe Forget ForgetIn Format From Key Name Registration Save SaveIn Validate",
+	"metadata.valueSlot": "Format",
 	// Existing handler error adapter; outside the approved DSL migration.
 	"pubsub.handlerFailure": "Error Unwrap",
 	// Existing stream interface implementation; lead review deferred.
@@ -151,7 +146,6 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	"redis.tlsSigner":        "Public Sign SignMessage",
 	"redis.tlsWriter":        "Write",
 	// Existing typed data-handle implementation; lead review deferred.
-	"redis/data.handle": "AdapterKey Count Delete DeleteMany Exists Expire Name Version",
 	// Existing bounded I/O implementations; outside the approved DSL migration.
 	"sanitize.boundedOutput": "Write",
 	"sanitize.contextInput":  "Read",
@@ -167,7 +161,7 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	// Existing fault-injection io.Reader implementation; outside the approved DSL migration.
 	"testkit/storage.brokenReader": "Read",
 	// Existing typed translation slot implementation; lead review deferred.
-	"translations.textSlot": "Clear ClearIn Describe Field Forget ForgetIn Format From MergeRule Name Options Registration Rule Save SaveIn Sync SyncIn Validate",
+	"translations.textSlot": "Format",
 	// Existing JSON encoding io.Writer implementation; outside the approved DSL migration.
 	"value.jsonOutput": "Write",
 	// Existing failure sink implementation; lead review deferred.

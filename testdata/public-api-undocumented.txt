@@ -271,11 +271,6 @@ audit/timeline.go	method	Activity.Format
 audit/timeline.go	method	Activity.IsAction
 audit/timeline.go	method	Activity.Subject
 audit/timeline.go	method	TimelineRequest.Validate
-audit/timeline.go	method	metadata.Area
-audit/timeline.go	method	metadata.Correlation
-audit/timeline.go	method	metadata.CreatedAt
-audit/timeline.go	method	metadata.Origin
-audit/timeline.go	method	metadata.Sequence
 auth/access_scopes.go	func	DefineAccessScope
 auth/access_scopes.go	func	NewAccessScopes
 auth/access_scopes.go	method	AccessScope.Name
@@ -1353,8 +1348,6 @@ email/template.go	method	Body.LogValue
 email/template.go	method	Body.Message
 email/template.go	method	DynamicTemplate.Render
 email/template.go	method	Template.Render
-email/template.go	method	boundedBuffer.Bytes
-email/template.go	method	boundedBuffer.Reset
 email/template.go	method	boundedBuffer.String
 email/template.go	method	boundedBuffer.Write
 email/template.go	method	boundedBuffer.WriteString
@@ -1635,7 +1628,6 @@ http/download.go	func	DownloadFrom
 http/download.go	method	Download.WithDisposition
 http/download.go	method	Download.WithEntityTag
 http/download.go	method	Download.WithMediaType
-http/download_response.go	method	fileResponse.Validate
 http/endpoint.go	func	DefineEndpoint
 http/endpoint.go	func	EndpointID
 http/endpoint.go	func	EndpointMethod
@@ -1669,7 +1661,6 @@ http/etag_response.go	method	etagResponse.WriteHeader
 http/file_metadata.go	method	EntityTag.Validate
 http/file_metadata.go	method	MediaType.Validate
 http/file_reader.go	method	fileReader.Close
-http/file_reader.go	method	fileReader.Failure
 http/file_reader.go	method	fileReader.Read
 http/file_reader.go	method	fileReader.Seek
 http/file_response_limits.go	func	DefaultFileResponseLimits
@@ -1780,7 +1771,6 @@ http/pagination/authenticated_endpoint.go	func	AuthenticatedEndpointMethod
 http/pagination/authenticated_endpoint.go	func	AuthenticatedEndpointPattern
 http/pagination/authenticated_endpoint.go	func	InspectAuthenticated
 http/pagination/authenticated_endpoint.go	func	ValidateAuthenticated
-http/pagination/authenticated_endpoint.go	method	authenticatedPageEndpoint.URL
 http/pagination/config.go	func	DefaultConfig
 http/pagination/config.go	method	Config.Validate
 http/pagination/config.go	type	LinkMode
@@ -2865,10 +2855,6 @@ redis/data/declaration.go	method	HashDeclaration.Bind
 redis/data/declaration.go	method	ListDeclaration.Bind
 redis/data/declaration.go	method	SetDeclaration.Bind
 redis/data/declaration.go	method	SortedSetDeclaration.Bind
-redis/data/entry.go	method	handle.Count
-redis/data/entry.go	method	handle.Delete
-redis/data/entry.go	method	handle.Name
-redis/data/entry.go	method	handle.Version
 redis/data/hash.go	method	Hash.DeleteField
 redis/data/hash.go	method	Hash.Get
 redis/data/hash.go	method	Hash.Set
